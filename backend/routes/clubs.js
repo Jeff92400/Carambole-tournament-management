@@ -62,7 +62,7 @@ router.get('/:id', authenticateToken, (req, res) => {
 
 // Add new club
 router.post('/', authenticateToken, upload.single('logo'), (req, res) => {
-  const { name, display_name } = req.body;
+  const { name, display_name, street, city, zip_code, phone, email } = req.body;
   const logo_filename = req.file ? req.file.filename : null;
 
   if (!name || !display_name) {
@@ -70,8 +70,8 @@ router.post('/', authenticateToken, upload.single('logo'), (req, res) => {
   }
 
   db.run(
-    'INSERT INTO clubs (name, display_name, logo_filename) VALUES (?, ?, ?)',
-    [name, display_name, logo_filename],
+    'INSERT INTO clubs (name, display_name, logo_filename, street, city, zip_code, phone, email) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    [name, display_name, logo_filename, street || null, city || null, zip_code || null, phone || null, email || null],
     function(err) {
       if (err) {
         if (err.message.includes('UNIQUE')) {
@@ -83,7 +83,12 @@ router.post('/', authenticateToken, upload.single('logo'), (req, res) => {
         id: this.lastID,
         name,
         display_name,
-        logo_filename
+        logo_filename,
+        street,
+        city,
+        zip_code,
+        phone,
+        email
       });
     }
   );
@@ -91,7 +96,7 @@ router.post('/', authenticateToken, upload.single('logo'), (req, res) => {
 
 // Update club
 router.put('/:id', authenticateToken, upload.single('logo'), (req, res) => {
-  const { name, display_name } = req.body;
+  const { name, display_name, street, city, zip_code, phone, email } = req.body;
   const clubId = req.params.id;
 
   // Get current club data
@@ -106,10 +111,15 @@ router.put('/:id', authenticateToken, upload.single('logo'), (req, res) => {
     const newLogoFilename = req.file ? req.file.filename : club.logo_filename;
     const newName = name || club.name;
     const newDisplayName = display_name || club.display_name;
+    const newStreet = street !== undefined ? street : club.street;
+    const newCity = city !== undefined ? city : club.city;
+    const newZipCode = zip_code !== undefined ? zip_code : club.zip_code;
+    const newPhone = phone !== undefined ? phone : club.phone;
+    const newEmail = email !== undefined ? email : club.email;
 
     db.run(
-      'UPDATE clubs SET name = ?, display_name = ?, logo_filename = ? WHERE id = ?',
-      [newName, newDisplayName, newLogoFilename, clubId],
+      'UPDATE clubs SET name = ?, display_name = ?, logo_filename = ?, street = ?, city = ?, zip_code = ?, phone = ?, email = ? WHERE id = ?',
+      [newName, newDisplayName, newLogoFilename, newStreet, newCity, newZipCode, newPhone, newEmail, clubId],
       function(err) {
         if (err) {
           if (err.message.includes('UNIQUE')) {
@@ -130,7 +140,12 @@ router.put('/:id', authenticateToken, upload.single('logo'), (req, res) => {
           id: clubId,
           name: newName,
           display_name: newDisplayName,
-          logo_filename: newLogoFilename
+          logo_filename: newLogoFilename,
+          street: newStreet,
+          city: newCity,
+          zip_code: newZipCode,
+          phone: newPhone,
+          email: newEmail
         });
       }
     );

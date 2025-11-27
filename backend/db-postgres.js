@@ -129,9 +129,24 @@ async function initializeDatabase() {
         name TEXT NOT NULL UNIQUE,
         display_name TEXT NOT NULL,
         logo_filename TEXT,
+        street TEXT,
+        city TEXT,
+        zip_code TEXT,
+        phone TEXT,
+        email TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
+
+    // Add new columns to clubs if they don't exist (migration)
+    const clubColumns = ['street', 'city', 'zip_code', 'phone', 'email'];
+    for (const col of clubColumns) {
+      try {
+        await client.query(`ALTER TABLE clubs ADD COLUMN IF NOT EXISTS ${col} TEXT`);
+      } catch (e) {
+        // Column might already exist
+      }
+    }
 
     // External tournament definitions table (from CDBHS external DB)
     await client.query(`

@@ -110,9 +110,22 @@ function initializeDatabase() {
         name TEXT NOT NULL UNIQUE,
         display_name TEXT NOT NULL,
         logo_filename TEXT,
+        street TEXT,
+        city TEXT,
+        zip_code TEXT,
+        phone TEXT,
+        email TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `);
+
+    // Add new columns to clubs if they don't exist (migration for existing databases)
+    const clubColumns = ['street', 'city', 'zip_code', 'phone', 'email'];
+    clubColumns.forEach(col => {
+      db.run(`ALTER TABLE clubs ADD COLUMN ${col} TEXT`, [], (err) => {
+        // Ignore error if column already exists
+      });
+    });
 
     // Initialize default admin password (admin123 - should be changed)
     db.get('SELECT COUNT(*) as count FROM admin', [], (err, row) => {

@@ -136,15 +136,38 @@
     <div class="card">
       <h3>Ajouter un nouveau club</h3>
       <form id="addClubForm">
-        <div class="form-group">
-          <label for="clubName">Nom du club (identifiant unique) :</label>
-          <input type="text" id="clubName" required>
-          <small>Utilisé pour faire correspondre les clubs dans les imports</small>
-        </div>
-        <div class="form-group">
-          <label for="clubDisplayName">Nom d'affichage :</label>
-          <input type="text" id="clubDisplayName" required>
-          <small>Nom affiché dans l'application</small>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+          <div class="form-group">
+            <label for="clubName">Nom du club (identifiant) :</label>
+            <input type="text" id="clubName" required>
+            <small>Utilisé pour les correspondances</small>
+          </div>
+          <div class="form-group">
+            <label for="clubDisplayName">Nom d'affichage :</label>
+            <input type="text" id="clubDisplayName" required>
+          </div>
+          <div class="form-group">
+            <label for="clubStreet">Adresse (rue) :</label>
+            <input type="text" id="clubStreet" placeholder="Ex: 8 rue Bonnet">
+          </div>
+          <div class="form-group" style="display: grid; grid-template-columns: 1fr 2fr; gap: 10px;">
+            <div>
+              <label for="clubZipCode">Code postal :</label>
+              <input type="text" id="clubZipCode" placeholder="92000">
+            </div>
+            <div>
+              <label for="clubCity">Ville :</label>
+              <input type="text" id="clubCity" placeholder="Clichy">
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="clubPhone">Téléphone :</label>
+            <input type="text" id="clubPhone" placeholder="01 23 45 67 89">
+          </div>
+          <div class="form-group">
+            <label for="clubEmail">Email :</label>
+            <input type="email" id="clubEmail" placeholder="contact@club.fr">
+          </div>
         </div>
         <div class="form-group">
           <label for="clubLogo">Logo du club :</label>
@@ -170,18 +193,42 @@
 
   <!-- Edit Club Modal -->
   <div id="editModal" class="modal">
-    <div class="modal-content">
+    <div class="modal-content" style="max-width: 600px;">
       <span class="close">&times;</span>
       <h3>Modifier le club</h3>
       <form id="editClubForm">
         <input type="hidden" id="editClubId">
-        <div class="form-group">
-          <label for="editClubName">Nom du club :</label>
-          <input type="text" id="editClubName" required>
-        </div>
-        <div class="form-group">
-          <label for="editClubDisplayName">Nom d'affichage :</label>
-          <input type="text" id="editClubDisplayName" required>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+          <div class="form-group">
+            <label for="editClubName">Nom du club :</label>
+            <input type="text" id="editClubName" required>
+          </div>
+          <div class="form-group">
+            <label for="editClubDisplayName">Nom d'affichage :</label>
+            <input type="text" id="editClubDisplayName" required>
+          </div>
+          <div class="form-group">
+            <label for="editClubStreet">Adresse (rue) :</label>
+            <input type="text" id="editClubStreet" placeholder="Ex: 8 rue Bonnet">
+          </div>
+          <div class="form-group" style="display: grid; grid-template-columns: 1fr 2fr; gap: 10px;">
+            <div>
+              <label for="editClubZipCode">Code postal :</label>
+              <input type="text" id="editClubZipCode">
+            </div>
+            <div>
+              <label for="editClubCity">Ville :</label>
+              <input type="text" id="editClubCity">
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="editClubPhone">Téléphone :</label>
+            <input type="text" id="editClubPhone">
+          </div>
+          <div class="form-group">
+            <label for="editClubEmail">Email :</label>
+            <input type="email" id="editClubEmail">
+          </div>
         </div>
         <div class="form-group">
           <label for="editClubLogo">Nouveau logo (optionnel) :</label>
@@ -268,10 +315,27 @@
              <div class="no-logo" style="display: none;">🏢</div>`
           : `<div class="no-logo">🏢</div>`;
 
+        const addressParts = [];
+        if (club.street) addressParts.push(club.street);
+        if (club.zip_code || club.city) addressParts.push(`${club.zip_code || ''} ${club.city || ''}`.trim());
+        const addressHtml = addressParts.length > 0
+          ? `<div style="font-size: 12px; color: #666; margin-bottom: 5px;">📍 ${addressParts.join(', ')}</div>`
+          : '';
+
+        const contactHtml = (club.phone || club.email)
+          ? `<div style="font-size: 11px; color: #888; margin-bottom: 5px;">
+               ${club.phone ? `📞 ${club.phone}` : ''}
+               ${club.phone && club.email ? ' | ' : ''}
+               ${club.email ? `✉️ ${club.email}` : ''}
+             </div>`
+          : '';
+
         card.innerHTML = `
           ${logoHtml}
           <div class="club-name">${club.name}</div>
           <div class="club-display-name">${club.display_name}</div>
+          ${addressHtml}
+          ${contactHtml}
           <div class="club-actions">
             <button class="btn-edit" onclick="openEditModal(${club.id})">✏️ Modifier</button>
             <button class="btn-delete" onclick="deleteClub(${club.id}, '${club.display_name.replace(/'/g, "\\'")}')">🗑️ Supprimer</button>
@@ -337,6 +401,11 @@
       const formData = new FormData();
       formData.append('name', document.getElementById('clubName').value);
       formData.append('display_name', document.getElementById('clubDisplayName').value);
+      formData.append('street', document.getElementById('clubStreet').value);
+      formData.append('city', document.getElementById('clubCity').value);
+      formData.append('zip_code', document.getElementById('clubZipCode').value);
+      formData.append('phone', document.getElementById('clubPhone').value);
+      formData.append('email', document.getElementById('clubEmail').value);
 
       const logoFile = document.getElementById('clubLogo').files[0];
       if (logoFile) {
@@ -377,6 +446,11 @@
       document.getElementById('editClubId').value = club.id;
       document.getElementById('editClubName').value = club.name;
       document.getElementById('editClubDisplayName').value = club.display_name;
+      document.getElementById('editClubStreet').value = club.street || '';
+      document.getElementById('editClubCity').value = club.city || '';
+      document.getElementById('editClubZipCode').value = club.zip_code || '';
+      document.getElementById('editClubPhone').value = club.phone || '';
+      document.getElementById('editClubEmail').value = club.email || '';
       document.getElementById('editLogoPreview').style.display = 'none';
       document.getElementById('editClubLogo').value = '';
 
@@ -407,6 +481,11 @@
       const formData = new FormData();
       formData.append('name', document.getElementById('editClubName').value);
       formData.append('display_name', document.getElementById('editClubDisplayName').value);
+      formData.append('street', document.getElementById('editClubStreet').value);
+      formData.append('city', document.getElementById('editClubCity').value);
+      formData.append('zip_code', document.getElementById('editClubZipCode').value);
+      formData.append('phone', document.getElementById('editClubPhone').value);
+      formData.append('email', document.getElementById('editClubEmail').value);
 
       const logoFile = document.getElementById('editClubLogo').files[0];
       if (logoFile) {
