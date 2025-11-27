@@ -254,11 +254,13 @@ router.get('/tournoi', authenticateToken, (req, res) => {
   const conditions = [];
 
   if (mode) {
-    conditions.push(`mode = $${params.length + 1}`);
+    // Case-insensitive matching for mode
+    conditions.push(`UPPER(mode) = UPPER($${params.length + 1})`);
     params.push(mode);
   }
   if (categorie) {
-    conditions.push(`categorie = $${params.length + 1}`);
+    // Case-insensitive matching for categorie
+    conditions.push(`UPPER(categorie) = UPPER($${params.length + 1})`);
     params.push(categorie);
   }
 

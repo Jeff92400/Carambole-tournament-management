@@ -230,6 +230,19 @@
         </div>
       </div>
 
+      <div id="tournamentInfo" style="display: none; margin-bottom: 20px; padding: 15px; background: #e3f2fd; border-radius: 8px; border-left: 4px solid #1F4788;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <strong id="tournamentInfoName" style="color: #1F4788; font-size: 1.1em;">-</strong>
+            <p style="margin: 5px 0 0 0; color: #666;">
+              Date: <strong id="tournamentInfoDate">-</strong> |
+              Lieu: <strong id="tournamentInfoLieu">-</strong> |
+              Inscrits: <strong id="tournamentInfoInscrits">-</strong>
+            </p>
+          </div>
+        </div>
+      </div>
+
       <button class="btn" id="loadPlayersBtn" disabled>Charger les joueurs</button>
     </div>
 
@@ -350,6 +363,8 @@
     let currentCategory = null;
     let currentSeason = null;
     let currentTournament = null;
+    let externalTournois = [];
+    let matchingTournoi = null;
 
     // Poule configuration based on number of players
     const POULE_CONFIG = {
@@ -486,13 +501,73 @@
 
     loadCategories();
 
-    // Update load button state
+    // Update load button state and load tournament info
     function updateLoadButtonState() {
       const categoryId = document.getElementById('categorySelect').value;
       const season = document.getElementById('seasonSelect').value;
       const tournament = document.getElementById('tournamentSelect').value;
 
       document.getElementById('loadPlayersBtn').disabled = !categoryId || !season || !tournament;
+
+      // Load tournament info if all fields are selected
+      if (categoryId && tournament) {
+        loadTournamentInfo(categoryId, tournament);
+      } else {
+        document.getElementById('tournamentInfo').style.display = 'none';
+        matchingTournoi = null;
+      }
+    }
+
+    // Load external tournament info
+    async function loadTournamentInfo(categoryId, tournamentNum) {
+      const category = categories.find(c => c.id == categoryId);
+      if (!category) return;
+
+      try {
+        const response = await fetch(`${API_URL}/inscriptions/tournoi?mode=${category.game_type}&categorie=${category.level}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (response.ok) {
+          externalTournois = await response.json();
+
+          // Find matching tournament by name
+          const targetName = tournamentNum === '4' ? 'FINALE' : `TOURNOI ${tournamentNum}`;
+          matchingTournoi = externalTournois.find(t =>
+            t.nom.toUpperCase().includes(targetName) ||
+            (tournamentNum === '4' && t.nom.toUpperCase().includes('FINALE'))
+          );
+
+          if (matchingTournoi) {
+            // Load inscription count
+            const inscResponse = await fetch(`${API_URL}/inscriptions/tournoi/${matchingTournoi.tournoi_id}/inscriptions`, {
+              headers: { 'Authorization': `Bearer ${token}` }
+            });
+            let inscCount = 0;
+            if (inscResponse.ok) {
+              const inscriptions = await inscResponse.json();
+              inscCount = inscriptions.filter(i => i.forfait !== 1).length;
+            }
+
+            // Format date
+            const dateStr = matchingTournoi.debut
+              ? new Date(matchingTournoi.debut).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+              : 'Non définie';
+
+            document.getElementById('tournamentInfoName').textContent =
+              `${category.display_name} - ${matchingTournoi.nom}`;
+            document.getElementById('tournamentInfoDate').textContent = dateStr;
+            document.getElementById('tournamentInfoLieu').textContent = matchingTournoi.lieu || 'Non défini';
+            document.getElementById('tournamentInfoInscrits').textContent = `${inscCount} joueurs`;
+            document.getElementById('tournamentInfo').style.display = 'block';
+          } else {
+            document.getElementById('tournamentInfo').style.display = 'none';
+          }
+        }
+      } catch (error) {
+        console.error('Error loading tournament info:', error);
+        document.getElementById('tournamentInfo').style.display = 'none';
+      }
     }
 
     document.getElementById('categorySelect').addEventListener('change', updateLoadButtonState);
@@ -536,61 +611,45 @@
           rankedPlayers = [];
         }
 
-        // Try to load inscriptions for this tournament from external data
-        // Match by mode and categorie
-        const mode = currentCategory.game_type;
-        const categorie = currentCategory.level;
+        // Load inscriptions using the already-matched tournament
+        if (matchingTournoi) {
+          const inscriptionsResponse = await fetch(`${API_URL}/inscriptions/tournoi/${matchingTournoi.tournoi_id}/inscriptions`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
 
-        const tournoiResponse = await fetch(`${API_URL}/inscriptions/tournoi?mode=${mode}&categorie=${categorie}`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
+          if (inscriptionsResponse.ok) {
+            const inscriptions = await inscriptionsResponse.json();
 
-        if (tournoiResponse.ok) {
-          const tournois = await tournoiResponse.json();
-          // Find the matching tournament (TOURNOI 2, TOURNOI 3, etc.)
-          const targetName = tournamentNum === '4' ? 'FINALE' : `TOURNOI ${tournamentNum}`;
-          const matchingTournoi = tournois.find(t =>
-            t.nom.toUpperCase().includes(targetName) ||
-            (tournamentNum === '4' && t.nom.toUpperCase().includes('FINALE'))
-          );
+            // Find new players (inscribed but not in ranking)
+            const rankedLicences = new Set(rankedPlayers.map(p => p.licence.replace(/\s/g, '')));
 
-          if (matchingTournoi) {
-            // Load inscriptions for this tournament
-            const inscriptionsResponse = await fetch(`${API_URL}/inscriptions/tournoi/${matchingTournoi.tournoi_id}/inscriptions`, {
-              headers: { 'Authorization': `Bearer ${token}` }
+            newPlayers = inscriptions
+              .filter(i => !rankedLicences.has(i.licence?.replace(/\s/g, '')) && i.forfait !== 1)
+              .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
+              .map((i, index) => ({
+                licence: i.licence,
+                first_name: i.first_name || 'Inconnu',
+                last_name: i.last_name || 'Inconnu',
+                club: i.club || '',
+                timestamp: i.timestamp,
+                isNew: true,
+                forfait: i.forfait
+              }));
+
+            // Mark ranked players who are inscribed or forfait
+            rankedPlayers.forEach(p => {
+              const inscription = inscriptions.find(i =>
+                i.licence?.replace(/\s/g, '') === p.licence?.replace(/\s/g, '')
+              );
+              if (inscription) {
+                p.isInscribed = true;
+                p.forfait = inscription.forfait === 1;
+              }
             });
-
-            if (inscriptionsResponse.ok) {
-              const inscriptions = await inscriptionsResponse.json();
-
-              // Find new players (inscribed but not in ranking)
-              const rankedLicences = new Set(rankedPlayers.map(p => p.licence.replace(/\s/g, '')));
-
-              newPlayers = inscriptions
-                .filter(i => !rankedLicences.has(i.licence?.replace(/\s/g, '')) && i.forfait !== 1)
-                .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
-                .map((i, index) => ({
-                  licence: i.licence,
-                  first_name: i.first_name || 'Inconnu',
-                  last_name: i.last_name || 'Inconnu',
-                  club: i.club || '',
-                  timestamp: i.timestamp,
-                  isNew: true,
-                  forfait: i.forfait
-                }));
-
-              // Mark ranked players who are inscribed or forfait
-              rankedPlayers.forEach(p => {
-                const inscription = inscriptions.find(i =>
-                  i.licence?.replace(/\s/g, '') === p.licence?.replace(/\s/g, '')
-                );
-                if (inscription) {
-                  p.isInscribed = true;
-                  p.forfait = inscription.forfait === 1;
-                }
-              });
-            }
           }
+        } else {
+          // No matching external tournament found - clear new players
+          newPlayers = [];
         }
 
         renderPlayerLists();
