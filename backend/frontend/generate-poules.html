@@ -339,6 +339,88 @@
         <!-- Poules will be rendered here -->
       </div>
 
+      <h4 style="margin-top: 30px;">Lieu et Horaire de la Compétition</h4>
+      <div class="summary-box">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+          <div>
+            <label style="display: block; margin-bottom: 5px; font-weight: 500;">Lieu principal</label>
+            <select id="locationSelect1" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+              <option value="">-- Sélectionner un club --</option>
+            </select>
+          </div>
+          <div>
+            <label style="display: block; margin-bottom: 5px; font-weight: 500;">Heure de début</label>
+            <select id="startTime1" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+              <option value="">-- Sélectionner --</option>
+              <option value="08:00">08:00</option>
+              <option value="08:30">08:30</option>
+              <option value="09:00">09:00</option>
+              <option value="09:30">09:30</option>
+              <option value="10:00">10:00</option>
+              <option value="10:30">10:30</option>
+              <option value="11:00">11:00</option>
+              <option value="11:30">11:30</option>
+              <option value="12:00">12:00</option>
+              <option value="12:30">12:30</option>
+              <option value="13:00">13:00</option>
+              <option value="13:30">13:30</option>
+              <option value="14:00" selected>14:00</option>
+              <option value="14:30">14:30</option>
+              <option value="15:00">15:00</option>
+              <option value="15:30">15:30</option>
+              <option value="16:00">16:00</option>
+              <option value="16:30">16:30</option>
+              <option value="17:00">17:00</option>
+              <option value="17:30">17:30</option>
+              <option value="18:00">18:00</option>
+            </select>
+          </div>
+        </div>
+
+        <div id="location2Container" style="display: none; margin-top: 15px; padding-top: 15px; border-top: 1px dashed #ddd;">
+          <div style="display: grid; grid-template-columns: 1fr 1fr auto; gap: 20px; align-items: end;">
+            <div>
+              <label style="display: block; margin-bottom: 5px; font-weight: 500;">Lieu secondaire (split)</label>
+              <select id="locationSelect2" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                <option value="">-- Sélectionner un club --</option>
+              </select>
+            </div>
+            <div>
+              <label style="display: block; margin-bottom: 5px; font-weight: 500;">Heure de début</label>
+              <select id="startTime2" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                <option value="">-- Sélectionner --</option>
+                <option value="08:00">08:00</option>
+                <option value="08:30">08:30</option>
+                <option value="09:00">09:00</option>
+                <option value="09:30">09:30</option>
+                <option value="10:00">10:00</option>
+                <option value="10:30">10:30</option>
+                <option value="11:00">11:00</option>
+                <option value="11:30">11:30</option>
+                <option value="12:00">12:00</option>
+                <option value="12:30">12:30</option>
+                <option value="13:00">13:00</option>
+                <option value="13:30">13:30</option>
+                <option value="14:00" selected>14:00</option>
+                <option value="14:30">14:30</option>
+                <option value="15:00">15:00</option>
+                <option value="15:30">15:30</option>
+                <option value="16:00">16:00</option>
+                <option value="16:30">16:30</option>
+                <option value="17:00">17:00</option>
+                <option value="17:30">17:30</option>
+                <option value="18:00">18:00</option>
+              </select>
+            </div>
+            <button class="btn" id="removeLocation2Btn" style="background: #dc3545; padding: 10px 15px;">Retirer</button>
+          </div>
+        </div>
+
+        <div style="margin-top: 15px;">
+          <button class="btn" id="addLocation2Btn" style="background: #17a2b8;">+ Ajouter un second lieu (split)</button>
+        </div>
+      </div>
+
       <div class="action-buttons">
         <button class="btn" id="backToStep2Btn" style="background: #6c757d;">Modifier la liste</button>
         <button class="btn btn-success" id="generateExcelBtn" style="background: #28a745;">Générer le fichier Excel</button>
@@ -391,6 +473,7 @@
     let externalTournois = [];
     let matchingTournoi = null;
     let selectedLastMinutePlayer = null;
+    let clubs = [];
 
     // Poule configuration based on number of players
     const POULE_CONFIG = {
@@ -527,6 +610,62 @@
 
     loadCategories();
 
+    // Load clubs for location selection
+    async function loadClubs() {
+      try {
+        const response = await fetch(`${API_URL}/clubs`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          clubs = await response.json();
+          populateLocationDropdowns();
+        }
+      } catch (error) {
+        console.error('Error loading clubs:', error);
+      }
+    }
+
+    function populateLocationDropdowns() {
+      const select1 = document.getElementById('locationSelect1');
+      const select2 = document.getElementById('locationSelect2');
+
+      const options = '<option value="">-- Sélectionner un club --</option>' +
+        clubs.map(c => `<option value="${c.id}" data-name="${c.name}" data-address="${c.address || ''}">${c.name}</option>`).join('');
+
+      select1.innerHTML = options;
+      select2.innerHTML = options;
+    }
+
+    function preselectLocation(locationName) {
+      if (!locationName || clubs.length === 0) return;
+
+      const select1 = document.getElementById('locationSelect1');
+      const locationLower = locationName.toLowerCase();
+
+      // Try to find matching club
+      for (const club of clubs) {
+        if (club.name.toLowerCase().includes(locationLower) ||
+            locationLower.includes(club.name.toLowerCase())) {
+          select1.value = club.id;
+          return;
+        }
+      }
+    }
+
+    loadClubs();
+
+    // Location add/remove handlers
+    document.getElementById('addLocation2Btn').addEventListener('click', () => {
+      document.getElementById('location2Container').style.display = 'block';
+      document.getElementById('addLocation2Btn').style.display = 'none';
+    });
+
+    document.getElementById('removeLocation2Btn').addEventListener('click', () => {
+      document.getElementById('location2Container').style.display = 'none';
+      document.getElementById('addLocation2Btn').style.display = 'inline-block';
+      document.getElementById('locationSelect2').value = '';
+    });
+
     // Update load button state and load tournament info
     function updateLoadButtonState() {
       const categoryId = document.getElementById('categorySelect').value;
@@ -613,25 +752,15 @@
       // Determine which ranking to load based on tournament number
       const previousTournament = parseInt(tournamentNum) - 1;
 
-      console.log('=== DEBUG Loading Players ===');
-      console.log('categoryId:', categoryId);
-      console.log('season:', season);
-      console.log('tournamentNum:', tournamentNum);
-      console.log('previousTournament:', previousTournament);
-
       try {
         // Load ranking from previous tournament(s)
         if (previousTournament >= 1) {
-          console.log('Fetching rankings for categoryId=' + categoryId + ', season=' + season);
           const rankingResponse = await fetch(`${API_URL}/rankings?categoryId=${categoryId}&season=${season}`, {
             headers: { 'Authorization': `Bearer ${token}` }
           });
 
-          console.log('Rankings response status:', rankingResponse.status);
-
           if (rankingResponse.ok) {
             const rankings = await rankingResponse.json();
-            console.log('Rankings returned:', rankings.length, 'players');
             rankedPlayers = rankings.map((r, index) => ({
               licence: r.licence,
               first_name: r.first_name,
@@ -641,12 +770,9 @@
               total_match_points: r.total_match_points,
               isRanked: true
             }));
-          } else {
-            console.log('Rankings response NOT OK');
           }
         } else {
           // T1 - no previous ranking, would need to use player list
-          console.log('T1 selected - no previous ranking');
           rankedPlayers = [];
         }
 
@@ -947,6 +1073,16 @@
       const poules = distributeSerpentine(selectedPlayers, config.poules);
       renderPoulePreview(poules);
 
+      // Pre-select location from tournament file
+      if (matchingTournoi && matchingTournoi.lieu) {
+        preselectLocation(matchingTournoi.lieu);
+      }
+
+      // Reset second location
+      document.getElementById('location2Container').style.display = 'none';
+      document.getElementById('addLocation2Btn').style.display = 'inline-block';
+      document.getElementById('locationSelect2').value = '';
+
       goToStep(3);
     });
 
@@ -971,6 +1107,24 @@
       const config = getPouleConfig(selectedPlayers.length);
       const poules = distributeSerpentine(selectedPlayers, config.poules);
 
+      // Get selected locations and times
+      const location1Select = document.getElementById('locationSelect1');
+      const location1 = location1Select.value ? {
+        id: location1Select.value,
+        name: location1Select.options[location1Select.selectedIndex].dataset.name,
+        address: location1Select.options[location1Select.selectedIndex].dataset.address
+      } : null;
+
+      const location2Select = document.getElementById('locationSelect2');
+      const location2 = location2Select.value ? {
+        id: location2Select.value,
+        name: location2Select.options[location2Select.selectedIndex].dataset.name,
+        address: location2Select.options[location2Select.selectedIndex].dataset.address
+      } : null;
+
+      const startTime1 = document.getElementById('startTime1').value || '14:00';
+      const startTime2 = document.getElementById('startTime2').value || '14:00';
+
       try {
         const response = await fetch(`${API_URL}/inscriptions/generate-poules`, {
           method: 'POST',
@@ -986,7 +1140,11 @@
             poules: poules,
             config: config,
             tournamentDate: matchingTournoi?.debut || null,
-            tournamentLieu: matchingTournoi?.lieu || null
+            tournamentLieu: matchingTournoi?.lieu || null,
+            locations: [
+              location1 ? { ...location1, startTime: startTime1 } : null,
+              location2 ? { ...location2, startTime: startTime2 } : null
+            ].filter(Boolean)
           })
         });
 
