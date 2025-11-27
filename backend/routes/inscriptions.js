@@ -580,6 +580,153 @@ router.post('/generate-poules', authenticateToken, async (req, res) => {
       { width: 18 }   // Classement/Poule
     ];
 
+    // ==========================================
+    // CONVOCATION WORKSHEET
+    // ==========================================
+    const convocationSheet = workbook.addWorksheet('Convocation');
+    const locations = req.body.locations || [];
+
+    // Get location info for each poule
+    const getLocationForPoule = (poule) => {
+      const locNum = poule.locationNum || '1';
+      return locations.find(l => l.locationNum === locNum) || locations[0] || null;
+    };
+
+    // HEADER: Season
+    convocationSheet.mergeCells('A1:F1');
+    convocationSheet.getCell('A1').value = `SAISON ${season}`;
+    convocationSheet.getCell('A1').font = { size: 16, bold: true };
+    convocationSheet.getCell('A1').alignment = { horizontal: 'center' };
+    convocationSheet.getRow(1).height = 30;
+
+    // HEADER: Date in red
+    convocationSheet.mergeCells('A3:F3');
+    const dateStrFull = tournamentDate
+      ? new Date(tournamentDate).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).toUpperCase()
+      : 'DATE À DÉFINIR';
+    convocationSheet.getCell('A3').value = dateStrFull;
+    convocationSheet.getCell('A3').font = { size: 14, bold: true, color: { argb: 'FFFF0000' } };
+    convocationSheet.getCell('A3').alignment = { horizontal: 'center' };
+    convocationSheet.getRow(3).height = 25;
+
+    // HEADER: Tournament info
+    convocationSheet.mergeCells('A5:C5');
+    convocationSheet.getCell('A5').value = `TOURNOI N° ${tournament}`;
+    convocationSheet.getCell('A5').font = { size: 12, bold: true };
+    convocationSheet.getCell('A5').border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+
+    convocationSheet.mergeCells('D5:F5');
+    convocationSheet.getCell('D5').value = category.display_name;
+    convocationSheet.getCell('D5').font = { size: 12, bold: true };
+    convocationSheet.getCell('D5').border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+
+    let convRow = 8;
+
+    // Each poule with its location
+    poules.forEach((poule, pouleIndex) => {
+      const loc = getLocationForPoule(poule);
+      const locName = loc?.name || tournamentLieu || 'À définir';
+      const locAddress = loc?.address ? `${loc.address}` : '';
+      const locCity = loc?.city || '';
+      const fullAddress = [locName, locAddress, locCity].filter(Boolean).join(' ');
+      const locPhone = loc?.phone || '';
+      const locEmail = loc?.email || '';
+      const locTime = loc?.startTime || '14:00';
+
+      // "Au Club de" header
+      convocationSheet.mergeCells(`A${convRow}:B${convRow}`);
+      convocationSheet.getCell(`A${convRow}`).value = 'Au Club de';
+      convocationSheet.getCell(`A${convRow}`).font = { bold: true };
+      convocationSheet.getCell(`A${convRow}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFF00' } };
+      convocationSheet.getCell(`A${convRow}`).border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+
+      convocationSheet.mergeCells(`C${convRow}:F${convRow}`);
+      convocationSheet.getCell(`C${convRow}`).value = fullAddress.toUpperCase();
+      convocationSheet.getCell(`C${convRow}`).font = { bold: true };
+      convocationSheet.getCell(`C${convRow}`).alignment = { horizontal: 'center' };
+      convocationSheet.getCell(`C${convRow}`).border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+      convRow++;
+
+      // Heure + Téléphone + Mail row
+      convocationSheet.getCell(`A${convRow}`).value = 'Heure';
+      convocationSheet.getCell(`A${convRow}`).font = { bold: true };
+      convocationSheet.getCell(`A${convRow}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFF00' } };
+      convocationSheet.getCell(`A${convRow}`).border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+
+      convocationSheet.getCell(`B${convRow}`).value = locTime.replace(':', 'H');
+      convocationSheet.getCell(`B${convRow}`).font = { bold: true, color: { argb: 'FFFF0000' } };
+      convocationSheet.getCell(`B${convRow}`).border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+
+      convocationSheet.getCell(`C${convRow}`).value = `Téléphone  ${locPhone}`;
+      convocationSheet.getCell(`C${convRow}`).border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+
+      convocationSheet.mergeCells(`D${convRow}:F${convRow}`);
+      convocationSheet.getCell(`D${convRow}`).value = `Mail  ${locEmail}`;
+      convocationSheet.getCell(`D${convRow}`).border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+      convRow++;
+
+      // POULE header
+      convocationSheet.mergeCells(`A${convRow}:F${convRow}`);
+      convocationSheet.getCell(`A${convRow}`).value = `POULE ${poule.number}`;
+      convocationSheet.getCell(`A${convRow}`).font = { bold: true };
+      convocationSheet.getCell(`A${convRow}`).alignment = { horizontal: 'left' };
+      convRow++;
+
+      // Column headers
+      const headerCols = ['Rang', 'n° licence', 'Nom', 'Prénom', 'n°', 'CLUB'];
+      headerCols.forEach((header, i) => {
+        const col = String.fromCharCode(65 + i); // A, B, C, D, E, F
+        convocationSheet.getCell(`${col}${convRow}`).value = header;
+        convocationSheet.getCell(`${col}${convRow}`).font = { bold: true, size: 10 };
+        convocationSheet.getCell(`${col}${convRow}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD3D3D3' } };
+        convocationSheet.getCell(`${col}${convRow}`).border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+      });
+      convRow++;
+
+      // Players
+      poule.players.forEach((player) => {
+        convocationSheet.getCell(`A${convRow}`).value = player.finalRank || player.originalRank;
+        convocationSheet.getCell(`A${convRow}`).border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+
+        convocationSheet.getCell(`B${convRow}`).value = player.licence;
+        convocationSheet.getCell(`B${convRow}`).border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+
+        convocationSheet.getCell(`C${convRow}`).value = player.last_name?.toUpperCase();
+        convocationSheet.getCell(`C${convRow}`).font = { bold: true };
+        convocationSheet.getCell(`C${convRow}`).border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+
+        convocationSheet.getCell(`D${convRow}`).value = player.first_name?.toUpperCase();
+        convocationSheet.getCell(`D${convRow}`).border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+
+        convocationSheet.getCell(`E${convRow}`).value = ''; // n° - placeholder
+        convocationSheet.getCell(`E${convRow}`).border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+
+        convocationSheet.getCell(`F${convRow}`).value = player.club?.toUpperCase() || '';
+        convocationSheet.getCell(`F${convRow}`).border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+
+        convRow++;
+      });
+
+      // Note about same club players
+      if (pouleIndex < poules.length - 1) {
+        convocationSheet.mergeCells(`A${convRow}:F${convRow}`);
+        convocationSheet.getCell(`A${convRow}`).value = "Les joueurs d'un même club jouent ensemble au 1er tour";
+        convocationSheet.getCell(`A${convRow}`).font = { italic: true, size: 10, color: { argb: 'FF666666' } };
+        convocationSheet.getCell(`A${convRow}`).alignment = { horizontal: 'center' };
+        convRow += 2;
+      }
+    });
+
+    // Set convocation column widths
+    convocationSheet.columns = [
+      { width: 8 },   // Rang
+      { width: 12 },  // Licence
+      { width: 18 },  // Nom
+      { width: 15 },  // Prénom
+      { width: 8 },   // n°
+      { width: 25 }   // Club
+    ];
+
     // Send file
     res.setHeader(
       'Content-Type',
