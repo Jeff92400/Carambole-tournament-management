@@ -10,18 +10,9 @@
 <body>
   <div class="container">
     <div class="navbar">
-      <h2><img src="images/billiard-icon.png" alt="🎱" style="height: 28px; width: 28px; vertical-align: middle; margin-right: 8px;" onerror="this.style.display='none'; this.nextSibling.style.display='inline';"><span style="display:none;">🎱</span> Import d'un Tournoi</h2>
+      <h2><img src="images/billiard-icon.png" alt="🎱" style="height: 28px; width: 28px; vertical-align: middle; margin-right: 8px;" onerror="this.style.display='none'; this.nextSibling.style.display='inline';"><span style="display:none;">🎱</span> CDBHS Tournois</h2>
       <div class="nav-links">
-        <a href="dashboard.html">Accueil</a>
-        <a href="players-list.html">Joueurs</a>
-        <a href="import-players.html" class="admin-only">Import Joueurs</a>
-        <a href="import-tournament.html" class="admin-only">Import Tournoi</a>
-        <a href="tournaments-list.html">Tournois</a>
-        <a href="rankings.html">Classements</a>
-        <a href="calendar.html">Calendrier</a>
-        <a href="clubs.html">Clubs</a>
-        <a href="settings.html">Parametres</a>
-        <a href="#" id="logoutBtn">Deconnexion</a>
+        <a href="dashboard.html" class="nav-logout" style="background: #667eea !important;">← Accueil</a>
       </div>
     </div>
 
@@ -109,14 +100,6 @@
       window.location.href = 'dashboard.html';
     }
 
-    // Logout
-    document.getElementById('logoutBtn').addEventListener('click', (e) => {
-      e.preventDefault();
-      localStorage.removeItem('token');
-      localStorage.removeItem('userRole');
-      localStorage.removeItem('username');
-      window.location.href = 'login.html';
-    });
 
     // Calculate season from tournament date
     // September to July determines the season

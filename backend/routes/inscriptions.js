@@ -728,6 +728,194 @@ router.post('/generate-poules', authenticateToken, async (req, res) => {
       { width: 25 }   // Club
     ];
 
+    // ==========================================
+    // CONVOCATION V2 - IMPROVED DESIGN
+    // ==========================================
+    const convV2 = workbook.addWorksheet('Convocation v2');
+
+    // Define colors
+    const colors = {
+      primary: 'FF1F4788',      // Dark blue
+      secondary: 'FF667EEA',    // Purple
+      accent: 'FFFFC107',       // Yellow/Gold
+      light: 'FFF8F9FA',        // Light gray
+      white: 'FFFFFFFF',
+      red: 'FFDC3545',
+      darkText: 'FF333333',
+      lightText: 'FF666666'
+    };
+
+    // Set column widths
+    convV2.columns = [
+      { width: 6 },    // A - Rang
+      { width: 12 },   // B - Licence
+      { width: 16 },   // C - Nom
+      { width: 14 },   // D - Prénom
+      { width: 30 },   // E - Club
+      { width: 6 }     // F - empty
+    ];
+
+    let v2Row = 1;
+
+    // === HEADER SECTION ===
+    // Season banner
+    convV2.mergeCells(`A${v2Row}:F${v2Row}`);
+    convV2.getCell(`A${v2Row}`).value = `SAISON ${season}`;
+    convV2.getCell(`A${v2Row}`).font = { size: 20, bold: true, color: { argb: colors.white } };
+    convV2.getCell(`A${v2Row}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: colors.primary } };
+    convV2.getCell(`A${v2Row}`).alignment = { horizontal: 'center', vertical: 'middle' };
+    convV2.getRow(v2Row).height = 40;
+    v2Row++;
+
+    // Empty row
+    convV2.getRow(v2Row).height = 10;
+    v2Row++;
+
+    // Date - prominent display
+    convV2.mergeCells(`A${v2Row}:F${v2Row}`);
+    const v2DateStr = tournamentDate
+      ? new Date(tournamentDate).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).toUpperCase()
+      : 'DATE À DÉFINIR';
+    convV2.getCell(`A${v2Row}`).value = v2DateStr;
+    convV2.getCell(`A${v2Row}`).font = { size: 16, bold: true, color: { argb: colors.red } };
+    convV2.getCell(`A${v2Row}`).alignment = { horizontal: 'center', vertical: 'middle' };
+    convV2.getRow(v2Row).height = 30;
+    v2Row++;
+
+    // Empty row
+    convV2.getRow(v2Row).height = 10;
+    v2Row++;
+
+    // Tournament info box
+    convV2.mergeCells(`A${v2Row}:C${v2Row}`);
+    convV2.getCell(`A${v2Row}`).value = `TOURNOI N° ${tournament}`;
+    convV2.getCell(`A${v2Row}`).font = { size: 14, bold: true, color: { argb: colors.white } };
+    convV2.getCell(`A${v2Row}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: colors.secondary } };
+    convV2.getCell(`A${v2Row}`).alignment = { horizontal: 'center', vertical: 'middle' };
+    convV2.getCell(`A${v2Row}`).border = { top: { style: 'medium' }, left: { style: 'medium' }, bottom: { style: 'medium' }, right: { style: 'medium' } };
+
+    convV2.mergeCells(`D${v2Row}:F${v2Row}`);
+    convV2.getCell(`D${v2Row}`).value = category.display_name;
+    convV2.getCell(`D${v2Row}`).font = { size: 14, bold: true, color: { argb: colors.white } };
+    convV2.getCell(`D${v2Row}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: colors.secondary } };
+    convV2.getCell(`D${v2Row}`).alignment = { horizontal: 'center', vertical: 'middle' };
+    convV2.getCell(`D${v2Row}`).border = { top: { style: 'medium' }, left: { style: 'medium' }, bottom: { style: 'medium' }, right: { style: 'medium' } };
+    convV2.getRow(v2Row).height = 30;
+    v2Row++;
+
+    // Space before poules
+    v2Row += 2;
+
+    // === POULES SECTION ===
+    poules.forEach((poule, pouleIndex) => {
+      const loc = getLocationForPoule(poule);
+      const locName = loc?.name || tournamentLieu || 'À définir';
+      const locStreet = loc?.street || '';
+      const locZipCode = loc?.zip_code || '';
+      const locCity = loc?.city || '';
+      const fullAddress = [locStreet, locZipCode, locCity].filter(Boolean).join(' ');
+      const locPhone = loc?.phone || '';
+      const locEmail = loc?.email || '';
+      const locTime = loc?.startTime || '14:00';
+
+      // Location header bar
+      convV2.mergeCells(`A${v2Row}:F${v2Row}`);
+      convV2.getCell(`A${v2Row}`).value = `📍 ${locName.toUpperCase()}`;
+      convV2.getCell(`A${v2Row}`).font = { size: 13, bold: true, color: { argb: colors.darkText } };
+      convV2.getCell(`A${v2Row}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: colors.accent } };
+      convV2.getCell(`A${v2Row}`).alignment = { horizontal: 'center', vertical: 'middle' };
+      convV2.getCell(`A${v2Row}`).border = { top: { style: 'medium' }, left: { style: 'medium' }, bottom: { style: 'thin' }, right: { style: 'medium' } };
+      convV2.getRow(v2Row).height = 28;
+      v2Row++;
+
+      // Address line
+      if (fullAddress) {
+        convV2.mergeCells(`A${v2Row}:F${v2Row}`);
+        convV2.getCell(`A${v2Row}`).value = fullAddress;
+        convV2.getCell(`A${v2Row}`).font = { size: 11, color: { argb: colors.darkText } };
+        convV2.getCell(`A${v2Row}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: colors.accent } };
+        convV2.getCell(`A${v2Row}`).alignment = { horizontal: 'center', vertical: 'middle' };
+        convV2.getCell(`A${v2Row}`).border = { left: { style: 'medium' }, bottom: { style: 'medium' }, right: { style: 'medium' } };
+        convV2.getRow(v2Row).height = 22;
+        v2Row++;
+      }
+
+      // Time and contact info row
+      convV2.getCell(`A${v2Row}`).value = '🕐';
+      convV2.getCell(`A${v2Row}`).alignment = { horizontal: 'center' };
+      convV2.getCell(`B${v2Row}`).value = locTime.replace(':', 'H');
+      convV2.getCell(`B${v2Row}`).font = { size: 12, bold: true, color: { argb: colors.red } };
+      convV2.getCell(`C${v2Row}`).value = locPhone ? `📞 ${locPhone}` : '';
+      convV2.getCell(`C${v2Row}`).font = { size: 10, color: { argb: colors.lightText } };
+      convV2.mergeCells(`D${v2Row}:F${v2Row}`);
+      convV2.getCell(`D${v2Row}`).value = locEmail ? `✉️ ${locEmail}` : '';
+      convV2.getCell(`D${v2Row}`).font = { size: 10, color: { argb: colors.lightText } };
+      convV2.getRow(v2Row).height = 22;
+      v2Row++;
+
+      // Poule title
+      convV2.mergeCells(`A${v2Row}:F${v2Row}`);
+      convV2.getCell(`A${v2Row}`).value = `POULE ${poule.number}`;
+      convV2.getCell(`A${v2Row}`).font = { size: 12, bold: true, color: { argb: colors.white } };
+      convV2.getCell(`A${v2Row}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: colors.primary } };
+      convV2.getCell(`A${v2Row}`).alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+      convV2.getRow(v2Row).height = 24;
+      v2Row++;
+
+      // Table headers
+      const v2Headers = ['#', 'Licence', 'Nom', 'Prénom', 'Club', ''];
+      v2Headers.forEach((header, i) => {
+        const col = String.fromCharCode(65 + i);
+        convV2.getCell(`${col}${v2Row}`).value = header;
+        convV2.getCell(`${col}${v2Row}`).font = { size: 10, bold: true, color: { argb: colors.white } };
+        convV2.getCell(`${col}${v2Row}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: colors.secondary } };
+        convV2.getCell(`${col}${v2Row}`).alignment = { horizontal: 'center', vertical: 'middle' };
+        convV2.getCell(`${col}${v2Row}`).border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+      });
+      convV2.getRow(v2Row).height = 22;
+      v2Row++;
+
+      // Players with alternating colors
+      poule.players.forEach((player, pIndex) => {
+        const isEven = pIndex % 2 === 0;
+        const rowColor = isEven ? colors.white : colors.light;
+
+        convV2.getCell(`A${v2Row}`).value = player.finalRank || '';
+        convV2.getCell(`B${v2Row}`).value = player.licence || '';
+        convV2.getCell(`C${v2Row}`).value = (player.last_name || '').toUpperCase();
+        convV2.getCell(`C${v2Row}`).font = { bold: true };
+        convV2.getCell(`D${v2Row}`).value = player.first_name || '';
+        convV2.getCell(`E${v2Row}`).value = player.club || '';
+        convV2.getCell(`E${v2Row}`).font = { size: 9 };
+        convV2.getCell(`F${v2Row}`).value = '';
+
+        // Apply styling to all cells in row
+        ['A', 'B', 'C', 'D', 'E', 'F'].forEach(col => {
+          convV2.getCell(`${col}${v2Row}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: rowColor } };
+          convV2.getCell(`${col}${v2Row}`).border = { top: { style: 'thin', color: { argb: 'FFE0E0E0' } }, left: { style: 'thin', color: { argb: 'FFE0E0E0' } }, bottom: { style: 'thin', color: { argb: 'FFE0E0E0' } }, right: { style: 'thin', color: { argb: 'FFE0E0E0' } } };
+          convV2.getCell(`${col}${v2Row}`).alignment = { vertical: 'middle' };
+        });
+        convV2.getCell(`A${v2Row}`).alignment = { horizontal: 'center', vertical: 'middle' };
+        convV2.getRow(v2Row).height = 20;
+        v2Row++;
+      });
+
+      // Note about same club
+      convV2.mergeCells(`A${v2Row}:F${v2Row}`);
+      convV2.getCell(`A${v2Row}`).value = "ℹ️ Les joueurs d'un même club jouent ensemble au 1er tour";
+      convV2.getCell(`A${v2Row}`).font = { size: 9, italic: true, color: { argb: colors.lightText } };
+      convV2.getCell(`A${v2Row}`).alignment = { horizontal: 'center', vertical: 'middle' };
+      convV2.getRow(v2Row).height = 18;
+      v2Row += 2;
+    });
+
+    // Footer
+    v2Row++;
+    convV2.mergeCells(`A${v2Row}:F${v2Row}`);
+    convV2.getCell(`A${v2Row}`).value = `Document généré le ${new Date().toLocaleDateString('fr-FR')} • CDBHS`;
+    convV2.getCell(`A${v2Row}`).font = { size: 9, italic: true, color: { argb: colors.lightText } };
+    convV2.getCell(`A${v2Row}`).alignment = { horizontal: 'center' };
+
     // Send file
     res.setHeader(
       'Content-Type',
