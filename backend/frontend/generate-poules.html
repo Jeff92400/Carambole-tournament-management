@@ -281,6 +281,18 @@
         <p style="padding: 20px; color: #666; text-align: center;">Aucun nouveau joueur</p>
       </div>
 
+      <h4 style="margin-top: 20px;">Ajout last minute</h4>
+      <div style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; padding: 15px;">
+        <p style="color: #666; font-size: 0.9em; margin-bottom: 10px;">Ajouter un joueur qui n'est pas inscrit dans le système externe</p>
+        <div style="display: flex; gap: 10px; align-items: center;">
+          <input type="text" id="lastMinuteSearch" placeholder="Rechercher par nom ou licence..."
+                 style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+          <button class="btn" id="addLastMinuteBtn" style="background: #dc3545;" disabled>Ajouter</button>
+        </div>
+        <div id="lastMinuteResults" style="display: none; max-height: 200px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px; margin-top: 10px; background: white;"></div>
+        <div class="player-list" id="lastMinutePlayersList" style="margin-top: 10px; max-height: 150px;"></div>
+      </div>
+
       <div class="action-buttons">
         <button class="btn" id="backToStep1Btn" style="background: #6c757d;">Retour</button>
         <button class="btn" id="validatePlayersBtn" disabled>Valider la liste</button>
@@ -370,12 +382,15 @@
     let categories = [];
     let rankedPlayers = [];
     let newPlayers = [];
+    let lastMinutePlayers = [];
+    let allSystemPlayers = [];
     let selectedPlayers = [];
     let currentCategory = null;
     let currentSeason = null;
     let currentTournament = null;
     let externalTournois = [];
     let matchingTournoi = null;
+    let selectedLastMinutePlayer = null;
 
     // Poule configuration based on number of players
     const POULE_CONFIG = {
@@ -663,6 +678,22 @@
           newPlayers = [];
         }
 
+        // Load all system players for last minute search (in separate try-catch to avoid breaking main flow)
+        try {
+          const allPlayersResponse = await fetch(`${API_URL}/players`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (allPlayersResponse.ok) {
+            allSystemPlayers = await allPlayersResponse.json();
+          }
+        } catch (e) {
+          console.error('Error loading all players:', e);
+        }
+
+        // Reset last minute players
+        lastMinutePlayers = [];
+        selectedLastMinutePlayer = null;
+
         renderPlayerLists();
         goToStep(2);
 
@@ -710,6 +741,37 @@
         `).join('');
       }
 
+      // Render last minute players
+      const lastMinuteList = document.getElementById('lastMinutePlayersList');
+      if (lastMinuteList) {
+        if (lastMinutePlayers.length === 0) {
+          lastMinuteList.innerHTML = '';
+        } else {
+          lastMinuteList.innerHTML = lastMinutePlayers.map((p, index) => `
+            <div class="player-item new-player ${p.selected ? 'selected' : ''}"
+                 data-licence="${p.licence}" data-type="lastMinute" data-index="${index}">
+              <input type="checkbox" ${p.selected ? 'checked' : ''}>
+              <span class="player-rank">-</span>
+              <span class="player-name">${p.last_name} ${p.first_name}</span>
+              <span class="player-club">${p.club || ''}</span>
+              <span class="player-licence">${p.licence}</span>
+              <span class="badge" style="background: #dc3545; color: white;">Last minute</span>
+              <button class="btn-remove-lastminute" data-index="${index}" style="margin-left: auto; background: none; border: none; color: #dc3545; cursor: pointer; font-size: 18px;" title="Retirer">×</button>
+            </div>
+          `).join('');
+
+          // Add remove handlers for last minute players
+          lastMinuteList.querySelectorAll('.btn-remove-lastminute').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+              e.stopPropagation();
+              const idx = parseInt(btn.dataset.index);
+              lastMinutePlayers.splice(idx, 1);
+              renderPlayerLists();
+            });
+          });
+        }
+      }
+
       // Add click handlers
       document.querySelectorAll('.player-item').forEach(item => {
         item.addEventListener('click', (e) => {
@@ -736,6 +798,8 @@
 
       if (type === 'ranked') {
         rankedPlayers[index].selected = checkbox.checked;
+      } else if (type === 'lastMinute') {
+        lastMinutePlayers[index].selected = checkbox.checked;
       } else {
         newPlayers[index].selected = checkbox.checked;
       }
@@ -747,7 +811,8 @@
     function updateSelectionSummary() {
       const selectedRanked = rankedPlayers.filter(p => p.selected);
       const selectedNew = newPlayers.filter(p => p.selected);
-      const totalSelected = selectedRanked.length + selectedNew.length;
+      const selectedLastMinute = lastMinutePlayers.filter(p => p.selected);
+      const totalSelected = selectedRanked.length + selectedNew.length + selectedLastMinute.length;
 
       document.getElementById('selectedCount').textContent = totalSelected;
 
@@ -767,12 +832,14 @@
     document.getElementById('selectAllBtn').addEventListener('click', () => {
       rankedPlayers.forEach(p => { if (!p.forfait) p.selected = true; });
       newPlayers.forEach(p => p.selected = true);
+      lastMinutePlayers.forEach(p => p.selected = true);
       renderPlayerLists();
     });
 
     document.getElementById('deselectAllBtn').addEventListener('click', () => {
       rankedPlayers.forEach(p => p.selected = false);
       newPlayers.forEach(p => p.selected = false);
+      lastMinutePlayers.forEach(p => p.selected = false);
       renderPlayerLists();
     });
 
@@ -781,6 +848,7 @@
         p.selected = p.isInscribed && !p.forfait;
       });
       newPlayers.forEach(p => p.selected = true);
+      lastMinutePlayers.forEach(p => p.selected = true);
       renderPlayerLists();
     });
 
@@ -803,6 +871,7 @@
       // Reset state
       rankedPlayers = [];
       newPlayers = [];
+      lastMinutePlayers = [];
       selectedPlayers = [];
       goToStep(1);
     });
@@ -826,6 +895,15 @@
         selectedPlayers.push({
           ...p,
           finalRank: newRank++
+        });
+      });
+
+      // Then add last minute players
+      lastMinutePlayers.filter(p => p.selected).forEach(p => {
+        selectedPlayers.push({
+          ...p,
+          finalRank: newRank++,
+          isLastMinute: true
         });
       });
 
@@ -868,7 +946,7 @@
             <div class="poule-player">
               <span class="poule-player-rank">${index + 1}.</span>
               <span>${p.last_name} ${p.first_name} <strong style="color: #1F4788;">(${p.finalRank})</strong></span>
-              ${p.isNew ? '<span class="badge badge-new" style="margin-left: auto;">Nouveau</span>' : ''}
+              ${p.isLastMinute ? '<span class="badge" style="background: #dc3545; color: white; margin-left: auto;">Last minute</span>' : (p.isNew ? '<span class="badge badge-new" style="margin-left: auto;">Nouveau</span>' : '')}
             </div>
           `).join('')}
         </div>
@@ -922,6 +1000,98 @@
         document.getElementById('errorMessage').textContent = 'Erreur lors de la génération du fichier';
         document.getElementById('errorMessage').style.display = 'block';
       }
+    });
+
+    // Last minute player search
+    const lastMinuteSearch = document.getElementById('lastMinuteSearch');
+    const lastMinuteResults = document.getElementById('lastMinuteResults');
+    const addLastMinuteBtn = document.getElementById('addLastMinuteBtn');
+
+    lastMinuteSearch.addEventListener('input', () => {
+      const query = lastMinuteSearch.value.trim().toLowerCase();
+
+      if (query.length < 2) {
+        lastMinuteResults.style.display = 'none';
+        selectedLastMinutePlayer = null;
+        addLastMinuteBtn.disabled = true;
+        return;
+      }
+
+      // Get already selected licences
+      const selectedLicences = new Set([
+        ...rankedPlayers.filter(p => p.selected).map(p => p.licence?.replace(/\s/g, '')),
+        ...newPlayers.filter(p => p.selected).map(p => p.licence?.replace(/\s/g, '')),
+        ...lastMinutePlayers.map(p => p.licence?.replace(/\s/g, ''))
+      ]);
+
+      // Search in all system players
+      const results = allSystemPlayers
+        .filter(p => {
+          const fullName = `${p.last_name} ${p.first_name}`.toLowerCase();
+          const licence = (p.licence || '').toLowerCase();
+          return (fullName.includes(query) || licence.includes(query)) &&
+                 !selectedLicences.has(p.licence?.replace(/\s/g, ''));
+        })
+        .slice(0, 10);
+
+      if (results.length === 0) {
+        lastMinuteResults.innerHTML = '<p style="padding: 10px; color: #666;">Aucun joueur trouvé</p>';
+        lastMinuteResults.style.display = 'block';
+        return;
+      }
+
+      lastMinuteResults.innerHTML = results.map(p => `
+        <div class="search-result-item" data-licence="${p.licence}"
+             style="padding: 10px 15px; border-bottom: 1px solid #eee; cursor: pointer; transition: background 0.2s;">
+          <strong>${p.last_name} ${p.first_name}</strong>
+          <span style="color: #666; margin-left: 10px;">${p.club || ''}</span>
+          <span style="color: #999; margin-left: 10px; font-size: 0.85em;">${p.licence}</span>
+        </div>
+      `).join('');
+
+      lastMinuteResults.style.display = 'block';
+
+      // Add click handlers to search results
+      lastMinuteResults.querySelectorAll('.search-result-item').forEach(item => {
+        item.addEventListener('mouseover', () => item.style.background = '#f5f5f5');
+        item.addEventListener('mouseout', () => {
+          if (selectedLastMinutePlayer?.licence !== item.dataset.licence) {
+            item.style.background = '';
+          }
+        });
+        item.addEventListener('click', () => {
+          // Deselect previous
+          lastMinuteResults.querySelectorAll('.search-result-item').forEach(i => i.style.background = '');
+
+          // Select this one
+          item.style.background = '#e3f2fd';
+          selectedLastMinutePlayer = allSystemPlayers.find(p => p.licence === item.dataset.licence);
+          addLastMinuteBtn.disabled = false;
+        });
+      });
+    });
+
+    addLastMinuteBtn.addEventListener('click', () => {
+      if (!selectedLastMinutePlayer) return;
+
+      // Add to last minute players
+      lastMinutePlayers.push({
+        licence: selectedLastMinutePlayer.licence,
+        first_name: selectedLastMinutePlayer.first_name,
+        last_name: selectedLastMinutePlayer.last_name,
+        club: selectedLastMinutePlayer.club || '',
+        isNew: true,
+        isLastMinute: true,
+        selected: true
+      });
+
+      // Reset search
+      lastMinuteSearch.value = '';
+      lastMinuteResults.style.display = 'none';
+      selectedLastMinutePlayer = null;
+      addLastMinuteBtn.disabled = true;
+
+      renderPlayerLists();
     });
   </script>
 </body>
