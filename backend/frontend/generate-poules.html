@@ -658,13 +658,21 @@
     document.getElementById('addLocation2Btn').addEventListener('click', () => {
       document.getElementById('location2Container').style.display = 'block';
       document.getElementById('addLocation2Btn').style.display = 'none';
+      updatePouleLocationLabels();
     });
 
     document.getElementById('removeLocation2Btn').addEventListener('click', () => {
       document.getElementById('location2Container').style.display = 'none';
       document.getElementById('addLocation2Btn').style.display = 'inline-block';
       document.getElementById('locationSelect2').value = '';
+      // Reset all poules to location 1
+      document.querySelectorAll('.poule-location').forEach(select => select.value = '1');
+      updatePouleLocationLabels();
     });
+
+    // Update poule labels when location dropdowns change
+    document.getElementById('locationSelect1').addEventListener('change', updatePouleLocationLabels);
+    document.getElementById('locationSelect2').addEventListener('change', updatePouleLocationLabels);
 
     // Update load button state and load tournament info
     function updateLoadButtonState() {
@@ -1089,7 +1097,7 @@
     function renderPoulePreview(poules) {
       const container = document.getElementById('poulePreview');
       container.innerHTML = poules.map(poule => `
-        <div class="poule-card">
+        <div class="poule-card" data-poule="${poule.number}">
           <h4>Poule ${poule.number} (${poule.players.length} joueurs)</h4>
           ${poule.players.map((p, index) => `
             <div class="poule-player">
@@ -1098,8 +1106,37 @@
               ${p.isLastMinute ? '<span class="badge" style="background: #dc3545; color: white; margin-left: auto;">Last minute</span>' : (p.isNew ? '<span class="badge badge-new" style="margin-left: auto;">Nouveau</span>' : '')}
             </div>
           `).join('')}
+          <div class="poule-location-select" style="margin-top: 10px; padding-top: 10px; border-top: 1px dashed #ddd;">
+            <select class="poule-location" data-poule="${poule.number}" style="width: 100%; padding: 5px; border: 1px solid #ddd; border-radius: 4px; font-size: 0.85em;">
+              <option value="1">Lieu 1</option>
+              <option value="2">Lieu 2</option>
+            </select>
+          </div>
         </div>
       `).join('');
+
+      // Update location labels when locations change
+      updatePouleLocationLabels();
+    }
+
+    function updatePouleLocationLabels() {
+      const location1Select = document.getElementById('locationSelect1');
+      const location2Select = document.getElementById('locationSelect2');
+      const location2Container = document.getElementById('location2Container');
+
+      const loc1Name = location1Select.value ?
+        location1Select.options[location1Select.selectedIndex]?.text : 'Lieu 1';
+      const loc2Name = location2Select.value ?
+        location2Select.options[location2Select.selectedIndex]?.text : 'Lieu 2';
+
+      const hasSecondLocation = location2Container.style.display !== 'none' && location2Select.value;
+
+      document.querySelectorAll('.poule-location').forEach(select => {
+        select.innerHTML = `
+          <option value="1">${loc1Name || 'Lieu 1'}</option>
+          ${hasSecondLocation ? `<option value="2">${loc2Name || 'Lieu 2'}</option>` : ''}
+        `;
+      });
     }
 
     // Generate Excel
@@ -1125,6 +1162,18 @@
       const startTime1 = document.getElementById('startTime1').value || '14:00';
       const startTime2 = document.getElementById('startTime2').value || '14:00';
 
+      // Get poule location assignments
+      const pouleAssignments = {};
+      document.querySelectorAll('.poule-location').forEach(select => {
+        const pouleNum = select.dataset.poule;
+        pouleAssignments[pouleNum] = select.value; // '1' or '2'
+      });
+
+      // Add location assignment to each poule
+      poules.forEach(poule => {
+        poule.locationNum = pouleAssignments[poule.number] || '1';
+      });
+
       try {
         const response = await fetch(`${API_URL}/inscriptions/generate-poules`, {
           method: 'POST',
@@ -1142,8 +1191,8 @@
             tournamentDate: matchingTournoi?.debut || null,
             tournamentLieu: matchingTournoi?.lieu || null,
             locations: [
-              location1 ? { ...location1, startTime: startTime1 } : null,
-              location2 ? { ...location2, startTime: startTime2 } : null
+              location1 ? { ...location1, startTime: startTime1, locationNum: '1' } : null,
+              location2 ? { ...location2, startTime: startTime2, locationNum: '2' } : null
             ].filter(Boolean)
           })
         });
