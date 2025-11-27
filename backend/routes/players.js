@@ -8,7 +8,7 @@ const { authenticateToken } = require('./auth');
 const router = express.Router();
 
 // Configure multer for file uploads
-const upload = multer({ dest: '/Users/jeffrallet/Library/CloudStorage/OneDrive-Personal/Billard/Ranking App/Player CSV files' });
+const upload = multer({ dest: '/tmp' });
 
 // Import players from CSV
 router.post('/import', authenticateToken, upload.single('file'), async (req, res) => {
