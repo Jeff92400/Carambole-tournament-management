@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: billard-ranking-app
+    env: node
+    buildCommand: ./render-build.sh
+    startCommand: cd backend && node server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000

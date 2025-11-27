@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Connexion - Billard Ranking</title>
+  <link rel="icon" type="image/png" href="images/billiard-icon.png">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <div class="container login-container">
+    <div class="header">
+      <h1><img src="images/billiard-icon.png" alt="🎱" style="height: 40px; width: 40px; vertical-align: middle; margin-right: 10px;" onerror="this.style.display='none'; this.nextSibling.style.display='inline';">
+<span style="display:none;">🎱</span> Billard Ranking</h1>
+      <p>Système de Classement des Tournois</p>
+    </div>
+
+    <div id="errorMessage" class="error" style="display: none;"></div>
+
+    <form id="loginForm">
+      <div class="form-group">
+        <label for="password">Mot de passe administrateur</label>
+        <input type="password" id="password" name="password" required autofocus>
+      </div>
+
+      <button type="submit" class="btn">Se connecter</button>
+    </form>
+  </div>
+
+  <script>
+    const API_URL = '/api';
+
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const password = document.getElementById('password').value;
+      const errorDiv = document.getElementById('errorMessage');
+
+      try {
+        const response = await fetch(`${API_URL}/auth/login`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ password })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          localStorage.setItem('token', data.token);
+          window.location.href = 'dashboard.html';
+        } else {
+          errorDiv.textContent = data.error || 'Erreur de connexion';
+          errorDiv.style.display = 'block';
+        }
+      } catch (error) {
+        errorDiv.textContent = 'Erreur de connexion au serveur';
+        errorDiv.style.display = 'block';
+      }
+    });
+  </script>
+</body>
+</html>
