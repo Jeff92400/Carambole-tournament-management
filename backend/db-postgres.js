@@ -133,6 +133,40 @@ async function initializeDatabase() {
       )
     `);
 
+    // External tournament definitions table (from CDBHS external DB)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS tournoi_ext (
+        tournoi_id INTEGER PRIMARY KEY,
+        nom TEXT NOT NULL,
+        mode TEXT NOT NULL,
+        categorie TEXT NOT NULL,
+        taille INTEGER,
+        debut DATE,
+        fin DATE,
+        grand_coin INTEGER DEFAULT 0,
+        taille_cadre TEXT,
+        lieu TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Player inscriptions table (from CDBHS external DB)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS inscriptions (
+        inscription_id INTEGER PRIMARY KEY,
+        joueur_id INTEGER,
+        tournoi_id INTEGER REFERENCES tournoi_ext(tournoi_id),
+        timestamp TIMESTAMP NOT NULL,
+        email TEXT,
+        telephone TEXT,
+        licence TEXT,
+        convoque INTEGER DEFAULT 0,
+        forfait INTEGER DEFAULT 0,
+        commentaire TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
     await client.query('COMMIT');
 
     // Initialize default admin (legacy)

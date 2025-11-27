@@ -21,6 +21,7 @@ const rankingsRoutes = require('./routes/rankings');
 const calendarRoutes = require('./routes/calendar');
 const clubsRoutes = require('./routes/clubs');
 const backupRoutes = require('./routes/backup');
+const inscriptionsRoutes = require('./routes/inscriptions');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -47,6 +48,7 @@ app.use('/api/rankings', rankingsRoutes);
 app.use('/api/calendar', calendarRoutes);
 app.use('/api/clubs', clubsRoutes);
 app.use('/api/backup', backupRoutes);
+app.use('/api/inscriptions', inscriptionsRoutes);
 
 // Serve frontend pages
 app.get('/', (req, res) => {
