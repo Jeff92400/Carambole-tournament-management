@@ -34,3 +34,6 @@ backend/uploads/*
 *.xlsx
 *.csv
 *.xls
+
+# Build artifacts
+backend/frontend/
