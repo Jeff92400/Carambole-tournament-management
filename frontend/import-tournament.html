@@ -10,15 +10,9 @@
 <body>
   <div class="container">
     <div class="navbar">
-      <h2><img src="images/billiard-icon.png" alt="🎱" style="height: 28px; width: 28px; vertical-align: middle; margin-right: 8px;" onerror="this.style.display='none'; this.nextSibling.style.display='inline';"><span style="display:none;">🎱</span> Import d'un Tournoi</h2>
+      <h2><img src="images/billiard-icon.png" alt="🎱" style="height: 28px; width: 28px; vertical-align: middle; margin-right: 8px;" onerror="this.style.display='none'; this.nextSibling.style.display='inline';"><span style="display:none;">🎱</span> CDBHS Tournois</h2>
       <div class="nav-links">
-        <a href="dashboard.html">Accueil</a>
-        <a href="players-list.html">Joueurs</a>
-        <a href="import-players.html">Import Joueurs</a>
-        <a href="import-tournament.html">Import Tournoi</a>
-        <a href="rankings.html">Classements</a>
-        <a href="calendar.html">Calendrier</a>
-        <a href="#" id="logoutBtn">Déconnexion</a>
+        <a href="dashboard.html" class="nav-logout" style="background: #667eea !important;">← Accueil</a>
       </div>
     </div>
 
@@ -99,12 +93,13 @@
       window.location.href = 'login.html';
     }
 
-    // Logout
-    document.getElementById('logoutBtn').addEventListener('click', (e) => {
-      e.preventDefault();
-      localStorage.removeItem('token');
-      window.location.href = 'login.html';
-    });
+    // Check user role - this page is admin only
+    const userRole = localStorage.getItem('userRole');
+    if (userRole !== 'admin') {
+      alert('Accès réservé aux administrateurs');
+      window.location.href = 'dashboard.html';
+    }
+
 
     // Calculate season from tournament date
     // September to July determines the season
