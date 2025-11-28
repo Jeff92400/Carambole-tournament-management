@@ -764,64 +764,74 @@ router.post('/generate-poules', authenticateToken, async (req, res) => {
 
     // Set column widths - enlarged for better A4 coverage
     convV2.columns = [
-      { width: 8 },    // A - Rang
-      { width: 14 },   // B - Licence
-      { width: 22 },   // C - Nom
-      { width: 18 },   // D - Prénom
-      { width: 38 },   // E - Club
-      { width: 8 }     // F - empty/padding
+      { width: 10 },   // A - Rang
+      { width: 16 },   // B - Licence
+      { width: 28 },   // C - Nom
+      { width: 24 },   // D - Prénom
+      { width: 45 },   // E - Club
+      { width: 5 }     // F - empty/padding
     ];
+
+    // Define standard black border for all cells
+    const blackBorder = {
+      top: { style: 'thin', color: { argb: 'FF000000' } },
+      left: { style: 'thin', color: { argb: 'FF000000' } },
+      bottom: { style: 'thin', color: { argb: 'FF000000' } },
+      right: { style: 'thin', color: { argb: 'FF000000' } }
+    };
 
     let v2Row = 1;
 
     // === HEADER SECTION ===
     // Season banner
-    convV2.mergeCells(`A${v2Row}:F${v2Row}`);
+    convV2.mergeCells(`A${v2Row}:E${v2Row}`);
     convV2.getCell(`A${v2Row}`).value = `SAISON ${season}`;
-    convV2.getCell(`A${v2Row}`).font = { size: 20, bold: true, color: { argb: colors.white } };
+    convV2.getCell(`A${v2Row}`).font = { size: 22, bold: true, color: { argb: colors.white } };
     convV2.getCell(`A${v2Row}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: colors.primary } };
     convV2.getCell(`A${v2Row}`).alignment = { horizontal: 'center', vertical: 'middle' };
-    convV2.getRow(v2Row).height = 40;
+    convV2.getCell(`A${v2Row}`).border = blackBorder;
+    convV2.getRow(v2Row).height = 45;
     v2Row++;
 
     // Empty row
-    convV2.getRow(v2Row).height = 10;
+    convV2.getRow(v2Row).height = 15;
     v2Row++;
 
     // Date - prominent display
-    convV2.mergeCells(`A${v2Row}:F${v2Row}`);
+    convV2.mergeCells(`A${v2Row}:E${v2Row}`);
     const v2DateStr = tournamentDate
       ? new Date(tournamentDate).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).toUpperCase()
       : 'DATE À DÉFINIR';
     convV2.getCell(`A${v2Row}`).value = v2DateStr;
-    convV2.getCell(`A${v2Row}`).font = { size: 16, bold: true, color: { argb: colors.red } };
+    convV2.getCell(`A${v2Row}`).font = { size: 18, bold: true, color: { argb: colors.red } };
     convV2.getCell(`A${v2Row}`).alignment = { horizontal: 'center', vertical: 'middle' };
-    convV2.getRow(v2Row).height = 30;
+    convV2.getCell(`A${v2Row}`).border = blackBorder;
+    convV2.getRow(v2Row).height = 35;
     v2Row++;
 
     // Empty row
-    convV2.getRow(v2Row).height = 10;
+    convV2.getRow(v2Row).height = 15;
     v2Row++;
 
     // Tournament info box
-    convV2.mergeCells(`A${v2Row}:C${v2Row}`);
+    convV2.mergeCells(`A${v2Row}:B${v2Row}`);
     convV2.getCell(`A${v2Row}`).value = `TOURNOI N° ${tournament}`;
     convV2.getCell(`A${v2Row}`).font = { size: 14, bold: true, color: { argb: colors.white } };
     convV2.getCell(`A${v2Row}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: colors.secondary } };
     convV2.getCell(`A${v2Row}`).alignment = { horizontal: 'center', vertical: 'middle' };
-    convV2.getCell(`A${v2Row}`).border = { top: { style: 'medium' }, left: { style: 'medium' }, bottom: { style: 'medium' }, right: { style: 'medium' } };
+    convV2.getCell(`A${v2Row}`).border = blackBorder;
 
-    convV2.mergeCells(`D${v2Row}:F${v2Row}`);
-    convV2.getCell(`D${v2Row}`).value = category.display_name;
-    convV2.getCell(`D${v2Row}`).font = { size: 14, bold: true, color: { argb: colors.white } };
-    convV2.getCell(`D${v2Row}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: colors.secondary } };
-    convV2.getCell(`D${v2Row}`).alignment = { horizontal: 'center', vertical: 'middle' };
-    convV2.getCell(`D${v2Row}`).border = { top: { style: 'medium' }, left: { style: 'medium' }, bottom: { style: 'medium' }, right: { style: 'medium' } };
-    convV2.getRow(v2Row).height = 30;
+    convV2.mergeCells(`C${v2Row}:E${v2Row}`);
+    convV2.getCell(`C${v2Row}`).value = category.display_name;
+    convV2.getCell(`C${v2Row}`).font = { size: 14, bold: true, color: { argb: colors.white } };
+    convV2.getCell(`C${v2Row}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: colors.secondary } };
+    convV2.getCell(`C${v2Row}`).alignment = { horizontal: 'center', vertical: 'middle' };
+    convV2.getCell(`C${v2Row}`).border = blackBorder;
+    convV2.getRow(v2Row).height = 35;
     v2Row++;
 
     // Space before poules
-    v2Row += 2;
+    v2Row += 1;
 
     // === POULES SECTION ===
     poules.forEach((poule, pouleIndex) => {
@@ -836,60 +846,68 @@ router.post('/generate-poules', authenticateToken, async (req, res) => {
       const locTime = loc?.startTime || '14:00';
 
       // Location header bar
-      convV2.mergeCells(`A${v2Row}:F${v2Row}`);
+      convV2.mergeCells(`A${v2Row}:E${v2Row}`);
       convV2.getCell(`A${v2Row}`).value = `📍 ${locName.toUpperCase()}`;
-      convV2.getCell(`A${v2Row}`).font = { size: 13, bold: true, color: { argb: colors.darkText } };
+      convV2.getCell(`A${v2Row}`).font = { size: 14, bold: true, color: { argb: colors.darkText } };
       convV2.getCell(`A${v2Row}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: colors.accent } };
       convV2.getCell(`A${v2Row}`).alignment = { horizontal: 'center', vertical: 'middle' };
-      convV2.getCell(`A${v2Row}`).border = { top: { style: 'medium' }, left: { style: 'medium' }, bottom: { style: 'thin' }, right: { style: 'medium' } };
-      convV2.getRow(v2Row).height = 28;
+      convV2.getCell(`A${v2Row}`).border = blackBorder;
+      convV2.getRow(v2Row).height = 32;
       v2Row++;
 
       // Address line
       if (fullAddress) {
-        convV2.mergeCells(`A${v2Row}:F${v2Row}`);
+        convV2.mergeCells(`A${v2Row}:E${v2Row}`);
         convV2.getCell(`A${v2Row}`).value = fullAddress;
-        convV2.getCell(`A${v2Row}`).font = { size: 11, color: { argb: colors.darkText } };
+        convV2.getCell(`A${v2Row}`).font = { size: 12, color: { argb: colors.darkText } };
         convV2.getCell(`A${v2Row}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: colors.accent } };
         convV2.getCell(`A${v2Row}`).alignment = { horizontal: 'center', vertical: 'middle' };
-        convV2.getCell(`A${v2Row}`).border = { left: { style: 'medium' }, bottom: { style: 'medium' }, right: { style: 'medium' } };
-        convV2.getRow(v2Row).height = 22;
+        convV2.getCell(`A${v2Row}`).border = blackBorder;
+        convV2.getRow(v2Row).height = 26;
         v2Row++;
       }
 
       // Time and contact info row
       convV2.getCell(`A${v2Row}`).value = '🕐';
-      convV2.getCell(`A${v2Row}`).alignment = { horizontal: 'center' };
+      convV2.getCell(`A${v2Row}`).alignment = { horizontal: 'center', vertical: 'middle' };
+      convV2.getCell(`A${v2Row}`).border = blackBorder;
       convV2.getCell(`B${v2Row}`).value = locTime.replace(':', 'H');
-      convV2.getCell(`B${v2Row}`).font = { size: 12, bold: true, color: { argb: colors.red } };
+      convV2.getCell(`B${v2Row}`).font = { size: 14, bold: true, color: { argb: colors.red } };
+      convV2.getCell(`B${v2Row}`).alignment = { vertical: 'middle' };
+      convV2.getCell(`B${v2Row}`).border = blackBorder;
       convV2.getCell(`C${v2Row}`).value = locPhone ? `📞 ${locPhone}` : '';
-      convV2.getCell(`C${v2Row}`).font = { size: 10, color: { argb: colors.lightText } };
-      convV2.mergeCells(`D${v2Row}:F${v2Row}`);
+      convV2.getCell(`C${v2Row}`).font = { size: 11, color: { argb: colors.lightText } };
+      convV2.getCell(`C${v2Row}`).alignment = { vertical: 'middle' };
+      convV2.getCell(`C${v2Row}`).border = blackBorder;
+      convV2.mergeCells(`D${v2Row}:E${v2Row}`);
       convV2.getCell(`D${v2Row}`).value = locEmail ? `✉️ ${locEmail}` : '';
-      convV2.getCell(`D${v2Row}`).font = { size: 10, color: { argb: colors.lightText } };
-      convV2.getRow(v2Row).height = 22;
+      convV2.getCell(`D${v2Row}`).font = { size: 11, color: { argb: colors.lightText } };
+      convV2.getCell(`D${v2Row}`).alignment = { vertical: 'middle' };
+      convV2.getCell(`D${v2Row}`).border = blackBorder;
+      convV2.getRow(v2Row).height = 28;
       v2Row++;
 
       // Poule title
-      convV2.mergeCells(`A${v2Row}:F${v2Row}`);
+      convV2.mergeCells(`A${v2Row}:E${v2Row}`);
       convV2.getCell(`A${v2Row}`).value = `POULE ${poule.number}`;
-      convV2.getCell(`A${v2Row}`).font = { size: 12, bold: true, color: { argb: colors.white } };
+      convV2.getCell(`A${v2Row}`).font = { size: 14, bold: true, color: { argb: colors.white } };
       convV2.getCell(`A${v2Row}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: colors.primary } };
       convV2.getCell(`A${v2Row}`).alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
-      convV2.getRow(v2Row).height = 24;
+      convV2.getCell(`A${v2Row}`).border = blackBorder;
+      convV2.getRow(v2Row).height = 30;
       v2Row++;
 
       // Table headers
-      const v2Headers = ['#', 'Licence', 'Nom', 'Prénom', 'Club', ''];
+      const v2Headers = ['#', 'Licence', 'Nom', 'Prénom', 'Club'];
       v2Headers.forEach((header, i) => {
         const col = String.fromCharCode(65 + i);
         convV2.getCell(`${col}${v2Row}`).value = header;
-        convV2.getCell(`${col}${v2Row}`).font = { size: 10, bold: true, color: { argb: colors.white } };
+        convV2.getCell(`${col}${v2Row}`).font = { size: 11, bold: true, color: { argb: colors.white } };
         convV2.getCell(`${col}${v2Row}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: colors.secondary } };
         convV2.getCell(`${col}${v2Row}`).alignment = { horizontal: 'center', vertical: 'middle' };
-        convV2.getCell(`${col}${v2Row}`).border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+        convV2.getCell(`${col}${v2Row}`).border = blackBorder;
       });
-      convV2.getRow(v2Row).height = 22;
+      convV2.getRow(v2Row).height = 28;
       v2Row++;
 
       // Players with alternating colors
@@ -900,38 +918,40 @@ router.post('/generate-poules', authenticateToken, async (req, res) => {
         convV2.getCell(`A${v2Row}`).value = player.finalRank || '';
         convV2.getCell(`B${v2Row}`).value = player.licence || '';
         convV2.getCell(`C${v2Row}`).value = (player.last_name || '').toUpperCase();
-        convV2.getCell(`C${v2Row}`).font = { bold: true };
+        convV2.getCell(`C${v2Row}`).font = { bold: true, size: 11 };
         convV2.getCell(`D${v2Row}`).value = player.first_name || '';
+        convV2.getCell(`D${v2Row}`).font = { size: 11 };
         convV2.getCell(`E${v2Row}`).value = player.club || '';
-        convV2.getCell(`E${v2Row}`).font = { size: 9 };
-        convV2.getCell(`F${v2Row}`).value = '';
+        convV2.getCell(`E${v2Row}`).font = { size: 10 };
 
         // Apply styling to all cells in row
-        ['A', 'B', 'C', 'D', 'E', 'F'].forEach(col => {
+        ['A', 'B', 'C', 'D', 'E'].forEach(col => {
           convV2.getCell(`${col}${v2Row}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: rowColor } };
-          convV2.getCell(`${col}${v2Row}`).border = { top: { style: 'thin', color: { argb: 'FFE0E0E0' } }, left: { style: 'thin', color: { argb: 'FFE0E0E0' } }, bottom: { style: 'thin', color: { argb: 'FFE0E0E0' } }, right: { style: 'thin', color: { argb: 'FFE0E0E0' } } };
+          convV2.getCell(`${col}${v2Row}`).border = blackBorder;
           convV2.getCell(`${col}${v2Row}`).alignment = { vertical: 'middle' };
         });
         convV2.getCell(`A${v2Row}`).alignment = { horizontal: 'center', vertical: 'middle' };
-        convV2.getRow(v2Row).height = 20;
+        convV2.getCell(`B${v2Row}`).alignment = { horizontal: 'center', vertical: 'middle' };
+        convV2.getRow(v2Row).height = 26;
         v2Row++;
       });
 
       // Note about same club
-      convV2.mergeCells(`A${v2Row}:F${v2Row}`);
+      convV2.mergeCells(`A${v2Row}:E${v2Row}`);
       convV2.getCell(`A${v2Row}`).value = "ℹ️ Les joueurs d'un même club jouent ensemble au 1er tour";
-      convV2.getCell(`A${v2Row}`).font = { size: 9, italic: true, color: { argb: colors.lightText } };
+      convV2.getCell(`A${v2Row}`).font = { size: 10, italic: true, color: { argb: colors.lightText } };
       convV2.getCell(`A${v2Row}`).alignment = { horizontal: 'center', vertical: 'middle' };
-      convV2.getRow(v2Row).height = 18;
+      convV2.getRow(v2Row).height = 24;
       v2Row += 2;
     });
 
     // Footer
     v2Row++;
-    convV2.mergeCells(`A${v2Row}:F${v2Row}`);
+    convV2.mergeCells(`A${v2Row}:E${v2Row}`);
     convV2.getCell(`A${v2Row}`).value = `Document généré le ${new Date().toLocaleDateString('fr-FR')} • CDBHS`;
-    convV2.getCell(`A${v2Row}`).font = { size: 9, italic: true, color: { argb: colors.lightText } };
-    convV2.getCell(`A${v2Row}`).alignment = { horizontal: 'center' };
+    convV2.getCell(`A${v2Row}`).font = { size: 10, italic: true, color: { argb: colors.lightText } };
+    convV2.getCell(`A${v2Row}`).alignment = { horizontal: 'center', vertical: 'middle' };
+    convV2.getRow(v2Row).height = 25;
 
     // Send file
     res.setHeader(
