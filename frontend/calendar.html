@@ -69,8 +69,20 @@
       </div>
     </div>
 
+    <!-- No calendar message -->
+    <div class="card" id="noCalendarContainer" style="display: none;">
+      <h3>Calendrier CDBHS 2025-2026</h3>
+      <div class="download-section">
+        <p style="color: #666; font-size: 18px;">Aucun calendrier n'a encore été téléversé.</p>
+        <p style="font-size: 14px; color: #888;">L'administrateur doit téléverser un fichier PDF ou Excel depuis la page Paramètres.</p>
+        <a href="settings.html" class="btn-download" style="text-decoration: none;">
+          Aller aux Paramètres
+        </a>
+      </div>
+    </div>
+
     <!-- PDF viewer card -->
-    <div class="card" id="calendarContainer">
+    <div class="card" id="calendarContainer" style="display: none;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
         <h3>Calendrier CDBHS 2025-2026</h3>
         <button class="btn-download" id="downloadBtnPdf" style="padding: 10px 20px;">
@@ -81,7 +93,7 @@
     </div>
 
     <!-- Excel download card -->
-    <div class="card" id="downloadContainer">
+    <div class="card" id="downloadContainer" style="display: none;">
       <h3>Calendrier CDBHS 2025-2026</h3>
       <div class="download-section">
         <p>Le calendrier de la saison est disponible au format Excel.</p>
@@ -123,6 +135,11 @@
         });
 
         if (!response.ok) {
+          if (response.status === 404) {
+            // No calendar uploaded yet - show friendly message
+            document.getElementById('noCalendarContainer').style.display = 'block';
+            return;
+          }
           throw new Error('Calendar not found');
         }
 
@@ -138,7 +155,8 @@
         }
       } catch (error) {
         console.error('Error initializing calendar:', error);
-        alert('Erreur lors du chargement du calendrier');
+        // Show no calendar message on any error
+        document.getElementById('noCalendarContainer').style.display = 'block';
       }
     }
 

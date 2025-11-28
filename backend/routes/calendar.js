@@ -1,18 +1,31 @@
 const express = require('express');
-const path = require('path');
-const fs = require('fs');
+const multer = require('multer');
 const jwt = require('jsonwebtoken');
-const { authenticateToken, JWT_SECRET } = require('./auth');
+const db = require('../db-loader');
+const { authenticateToken, requireAdmin, JWT_SECRET } = require('./auth');
 
 const router = express.Router();
 
+// Configure multer for memory storage (we'll save to database)
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype === 'application/pdf' ||
+        file.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+        file.mimetype === 'application/vnd.ms-excel') {
+      cb(null, true);
+    } else {
+      cb(new Error('Only PDF and Excel files are allowed'), false);
+    }
+  }
+});
+
 // Middleware to authenticate via query param or header (for iframe loading)
 function authenticateTokenFlexible(req, res, next) {
-  // Try Authorization header first
   const authHeader = req.headers['authorization'];
   let token = authHeader && authHeader.split(' ')[1];
 
-  // If no header token, try query parameter
   if (!token) {
     token = req.query.token;
   }
@@ -25,91 +38,105 @@ function authenticateTokenFlexible(req, res, next) {
     if (err) {
       return res.status(403).json({ error: 'Invalid or expired token' });
     }
-
     req.user = user;
     next();
   });
 }
 
-// Serve calendar file (PDF or Excel)
-router.get('/view', authenticateTokenFlexible, (req, res) => {
-  try {
-    // Try PDF first, then fall back to Excel
-    const pdfPath = path.join(__dirname, '../Calendrier CDBHS 2025-2026 V5.pdf');
-    const excelPath = path.join(__dirname, '../Calendrier CDBHS 2025-2026 V5.xlsx');
-
-    console.log('Calendar view request - checking paths:');
-    console.log('  PDF path:', pdfPath);
-    console.log('  PDF exists:', fs.existsSync(pdfPath));
-    console.log('  Excel path:', excelPath);
-    console.log('  Excel exists:', fs.existsSync(excelPath));
-    console.log('  __dirname:', __dirname);
-
-    // List files in backend directory for debugging
-    try {
-      const backendFiles = fs.readdirSync(path.join(__dirname, '..'));
-      console.log('  Files in backend directory:', backendFiles.filter(f => f.includes('Calendrier')));
-    } catch (e) {
-      console.log('  Error listing backend directory:', e.message);
-    }
-
-    let filePath, contentType, fileName;
-
-    if (fs.existsSync(pdfPath)) {
-      filePath = pdfPath;
-      contentType = 'application/pdf';
-      fileName = 'Calendrier_CDBHS_2025-2026.pdf';
-    } else if (fs.existsSync(excelPath)) {
-      filePath = excelPath;
-      contentType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-      fileName = 'Calendrier_CDBHS_2025-2026.xlsx';
-    } else {
-      console.log('  Calendar file not found!');
-      return res.status(404).json({ error: 'Calendar file not found' });
-    }
-
-    res.setHeader('Content-Type', contentType);
-    res.setHeader('Content-Disposition', `inline; filename="${fileName}"`);
-
-    const fileStream = fs.createReadStream(filePath);
-    fileStream.pipe(res);
-
-  } catch (error) {
-    console.error('Error serving calendar:', error);
-    res.status(500).json({ error: error.message });
+// Upload calendar (admin only)
+router.post('/upload', authenticateToken, requireAdmin, upload.single('calendar'), (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: 'No file uploaded' });
   }
+
+  const { originalname, mimetype, buffer } = req.file;
+  const uploadedBy = req.user.username || 'admin';
+
+  // Delete existing calendar and insert new one
+  db.run('DELETE FROM calendar', [], (err) => {
+    if (err) {
+      console.error('Error deleting old calendar:', err);
+    }
+
+    db.run(
+      'INSERT INTO calendar (filename, content_type, file_data, uploaded_by) VALUES ($1, $2, $3, $4)',
+      [originalname, mimetype, buffer, uploadedBy],
+      function(err) {
+        if (err) {
+          console.error('Error saving calendar:', err);
+          return res.status(500).json({ error: 'Error saving calendar file' });
+        }
+
+        res.json({
+          message: 'Calendar uploaded successfully',
+          filename: originalname
+        });
+      }
+    );
+  });
 });
 
-// Download calendar file
-router.get('/download', authenticateToken, (req, res) => {
-  try {
-    const pdfPath = path.join(__dirname, '../Calendrier CDBHS 2025-2026 V5.pdf');
-    const excelPath = path.join(__dirname, '../Calendrier CDBHS 2025-2026 V5.xlsx');
-
-    let filePath, contentType, fileName;
-
-    if (fs.existsSync(pdfPath)) {
-      filePath = pdfPath;
-      contentType = 'application/pdf';
-      fileName = 'Calendrier_CDBHS_2025-2026.pdf';
-    } else if (fs.existsSync(excelPath)) {
-      filePath = excelPath;
-      contentType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-      fileName = 'Calendrier_CDBHS_2025-2026.xlsx';
-    } else {
-      return res.status(404).json({ error: 'Calendar file not found' });
+// View calendar (all authenticated users)
+router.get('/view', authenticateTokenFlexible, (req, res) => {
+  db.get('SELECT * FROM calendar ORDER BY created_at DESC LIMIT 1', [], (err, row) => {
+    if (err) {
+      console.error('Error fetching calendar:', err);
+      return res.status(500).json({ error: 'Database error' });
     }
 
-    res.setHeader('Content-Type', contentType);
-    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    if (!row) {
+      return res.status(404).json({ error: 'Calendar not found' });
+    }
 
-    const fileStream = fs.createReadStream(filePath);
-    fileStream.pipe(res);
+    res.setHeader('Content-Type', row.content_type);
+    res.setHeader('Content-Disposition', `inline; filename="${row.filename}"`);
 
-  } catch (error) {
-    console.error('Error serving calendar:', error);
-    res.status(500).json({ error: error.message });
-  }
+    // Handle both Buffer and raw data
+    const fileData = Buffer.isBuffer(row.file_data) ? row.file_data : Buffer.from(row.file_data);
+    res.send(fileData);
+  });
+});
+
+// Download calendar
+router.get('/download', authenticateToken, (req, res) => {
+  db.get('SELECT * FROM calendar ORDER BY created_at DESC LIMIT 1', [], (err, row) => {
+    if (err) {
+      console.error('Error fetching calendar:', err);
+      return res.status(500).json({ error: 'Database error' });
+    }
+
+    if (!row) {
+      return res.status(404).json({ error: 'Calendar not found' });
+    }
+
+    res.setHeader('Content-Type', row.content_type);
+    res.setHeader('Content-Disposition', `attachment; filename="${row.filename}"`);
+
+    const fileData = Buffer.isBuffer(row.file_data) ? row.file_data : Buffer.from(row.file_data);
+    res.send(fileData);
+  });
+});
+
+// Check if calendar exists
+router.get('/info', authenticateToken, (req, res) => {
+  db.get('SELECT id, filename, content_type, uploaded_by, created_at FROM calendar ORDER BY created_at DESC LIMIT 1', [], (err, row) => {
+    if (err) {
+      console.error('Error fetching calendar info:', err);
+      return res.status(500).json({ error: 'Database error' });
+    }
+
+    if (!row) {
+      return res.json({ exists: false });
+    }
+
+    res.json({
+      exists: true,
+      filename: row.filename,
+      contentType: row.content_type,
+      uploadedBy: row.uploaded_by,
+      uploadedAt: row.created_at
+    });
+  });
 });
 
 module.exports = router;

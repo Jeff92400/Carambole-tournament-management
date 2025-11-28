@@ -47,7 +47,29 @@
     </div>
 
     <div class="card">
-      <h3>💾 Sauvegardes et Exports</h3>
+      <h3>Calendrier de la saison</h3>
+      <p style="margin-bottom: 20px; color: #666;">Téléversez le calendrier de la saison (PDF ou Excel) pour le rendre accessible à tous les utilisateurs.</p>
+
+      <div id="currentCalendarInfo" style="display: none; margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-left: 4px solid #28a745; border-radius: 4px;">
+        <strong>Calendrier actuel :</strong>
+        <div id="calendarDetails" style="margin-top: 8px; color: #666;"></div>
+      </div>
+
+      <form id="calendarUploadForm" style="display: flex; gap: 15px; align-items: flex-end; flex-wrap: wrap;">
+        <div class="form-group" style="flex: 1; min-width: 200px; margin-bottom: 0;">
+          <label for="calendarFile">Fichier calendrier (PDF ou Excel) :</label>
+          <input type="file" id="calendarFile" accept=".pdf,.xlsx,.xls" required style="padding: 10px; border: 1px solid #ddd; border-radius: 4px; width: 100%;">
+        </div>
+        <button type="submit" class="btn btn-primary" id="uploadCalendarBtn" style="padding: 12px 25px;">
+          Téléverser
+        </button>
+      </form>
+
+      <div id="calendarUploadStatus" style="display: none; margin-top: 15px; padding: 10px; border-radius: 4px;"></div>
+    </div>
+
+    <div class="card">
+      <h3>Sauvegardes et Exports</h3>
       <p style="margin-bottom: 20px; color: #666;">Exportez vos données au format Excel pour créer des sauvegardes locales.</p>
 
       <div id="lastExportInfo" style="display: none; margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-left: 4px solid #28a745; border-radius: 4px;">
@@ -129,6 +151,108 @@
 
     // Display on page load
     displayLastExport();
+
+    // Load current calendar info
+    async function loadCalendarInfo() {
+      try {
+        const response = await fetch(`${API_URL}/calendar/info`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data.exists) {
+            const uploadDate = new Date(data.uploadedAt);
+            const formattedDate = uploadDate.toLocaleDateString('fr-FR', {
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric'
+            });
+            const formattedTime = uploadDate.toLocaleTimeString('fr-FR', {
+              hour: '2-digit',
+              minute: '2-digit'
+            });
+
+            document.getElementById('calendarDetails').innerHTML = `
+              <strong>${data.filename}</strong><br>
+              Téléversé le ${formattedDate} à ${formattedTime}<br>
+              Par: ${data.uploadedBy || 'admin'}
+            `;
+            document.getElementById('currentCalendarInfo').style.display = 'block';
+          }
+        }
+      } catch (error) {
+        console.error('Error loading calendar info:', error);
+      }
+    }
+
+    // Load calendar info on page load
+    loadCalendarInfo();
+
+    // Calendar upload form
+    document.getElementById('calendarUploadForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const fileInput = document.getElementById('calendarFile');
+      const file = fileInput.files[0];
+      const statusDiv = document.getElementById('calendarUploadStatus');
+      const uploadBtn = document.getElementById('uploadCalendarBtn');
+
+      if (!file) {
+        statusDiv.textContent = 'Veuillez sélectionner un fichier';
+        statusDiv.style.background = '#f8d7da';
+        statusDiv.style.color = '#721c24';
+        statusDiv.style.display = 'block';
+        return;
+      }
+
+      // Show loading state
+      uploadBtn.disabled = true;
+      uploadBtn.textContent = 'Téléversement...';
+      statusDiv.textContent = 'Téléversement en cours...';
+      statusDiv.style.background = '#cce5ff';
+      statusDiv.style.color = '#004085';
+      statusDiv.style.display = 'block';
+
+      try {
+        const formData = new FormData();
+        formData.append('calendar', file);
+
+        const response = await fetch(`${API_URL}/calendar/upload`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          },
+          body: formData
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || 'Erreur lors du téléversement');
+        }
+
+        // Success
+        statusDiv.textContent = `Calendrier "${data.filename}" téléversé avec succès !`;
+        statusDiv.style.background = '#d4edda';
+        statusDiv.style.color = '#155724';
+
+        // Reset form and reload info
+        fileInput.value = '';
+        loadCalendarInfo();
+
+      } catch (error) {
+        console.error('Error uploading calendar:', error);
+        statusDiv.textContent = error.message;
+        statusDiv.style.background = '#f8d7da';
+        statusDiv.style.color = '#721c24';
+      } finally {
+        uploadBtn.disabled = false;
+        uploadBtn.textContent = 'Téléverser';
+      }
+    });
 
     // Logout
     document.getElementById('logoutBtn').addEventListener('click', (e) => {

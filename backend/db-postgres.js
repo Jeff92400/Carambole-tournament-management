@@ -182,6 +182,18 @@ async function initializeDatabase() {
       )
     `);
 
+    // Calendar storage table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS calendar (
+        id SERIAL PRIMARY KEY,
+        filename TEXT NOT NULL,
+        content_type TEXT NOT NULL,
+        file_data BYTEA NOT NULL,
+        uploaded_by TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
     await client.query('COMMIT');
 
     // Initialize default admin (legacy)
