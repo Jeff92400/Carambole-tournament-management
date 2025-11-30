@@ -285,11 +285,11 @@
         <div style="flex: 1;">
           <h3 style="margin: 0 0 10px 0; color: #856404;">Mise à jour des inscriptions</h3>
           <p style="margin: 0 0 10px 0; color: #856404;">
-            Avant de générer les poules, assurez-vous que le fichier des inscriptions est à jour depuis la base IONOS.
+            Avant de générer les poules, assurez-vous que les fichiers sont à jour depuis la base IONOS.
           </p>
-          <p id="lastImportInfo" style="margin: 0 0 15px 0; padding: 8px 12px; background: rgba(255,255,255,0.5); border-radius: 4px; font-weight: 500;">
-            <span style="color: #666;">Chargement...</span>
-          </p>
+          <div id="lastImportInfo" style="margin: 0 0 15px 0; padding: 10px 12px; background: rgba(255,255,255,0.5); border-radius: 4px;">
+            <span style="color: #666;">Chargement des informations...</span>
+          </div>
           <div style="display: flex; gap: 10px; flex-wrap: wrap;">
             <a href="import-external.html" class="btn" style="background: #ffc107; color: #856404; font-weight: bold;">
               📤 Mettre à jour les inscriptions
@@ -608,7 +608,45 @@
       loadUpcomingTournaments();
     });
 
-    // Load and display last inscription import date
+    // Format import age with color coding
+    function formatImportAge(importDate) {
+      if (!importDate) {
+        return { text: 'Jamais importé', color: '#dc3545', isOld: true };
+      }
+
+      const lastDate = new Date(importDate);
+      const now = new Date();
+      const diffMs = now - lastDate;
+      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+      const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+
+      let ageText = '';
+      let ageColor = '#28a745'; // green
+      let isOld = false;
+
+      if (diffDays > 7) {
+        ageText = `il y a ${diffDays} jours`;
+        ageColor = '#dc3545'; // red - very old
+        isOld = true;
+      } else if (diffDays > 2) {
+        ageText = `il y a ${diffDays} jours`;
+        ageColor = '#fd7e14'; // orange - old
+        isOld = true;
+      } else if (diffDays > 0) {
+        ageText = `il y a ${diffDays} jour${diffDays > 1 ? 's' : ''}`;
+        ageColor = '#ffc107'; // yellow - recent
+      } else if (diffHours > 0) {
+        ageText = `il y a ${diffHours} heure${diffHours > 1 ? 's' : ''}`;
+        ageColor = '#28a745'; // green - very recent
+      } else {
+        ageText = "à l'instant";
+        ageColor = '#28a745'; // green
+      }
+
+      return { text: ageText, color: ageColor, isOld };
+    }
+
+    // Load and display last import dates for all file types
     async function loadLastImportDate() {
       try {
         const response = await fetch(`${API_URL}/inscriptions/last-import`, {
@@ -620,54 +658,34 @@
         if (response.ok) {
           const data = await response.json();
 
-          if (data.lastImportDate) {
-            const lastDate = new Date(data.lastImportDate);
-            const now = new Date();
-            const diffMs = now - lastDate;
-            const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-            const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+          const fileTypes = [
+            { key: 'inscriptions', label: 'Inscriptions', icon: '📝' },
+            { key: 'tournois', label: 'Tournois', icon: '🏆' },
+            { key: 'joueurs', label: 'Joueurs', icon: '👥' }
+          ];
 
-            const formattedDate = lastDate.toLocaleDateString('fr-FR', {
-              weekday: 'long',
-              day: 'numeric',
-              month: 'long',
-              year: 'numeric',
-              hour: '2-digit',
-              minute: '2-digit'
-            });
+          let html = '<div style="display: grid; gap: 8px;">';
 
-            let ageText = '';
-            let ageColor = '#28a745'; // green
+          fileTypes.forEach(ft => {
+            const info = data[ft.key];
+            const age = formatImportAge(info?.importDate);
 
-            if (diffDays > 7) {
-              ageText = `il y a ${diffDays} jours`;
-              ageColor = '#dc3545'; // red - very old
-            } else if (diffDays > 2) {
-              ageText = `il y a ${diffDays} jours`;
-              ageColor = '#fd7e14'; // orange - old
-            } else if (diffDays > 0) {
-              ageText = `il y a ${diffDays} jour${diffDays > 1 ? 's' : ''}`;
-              ageColor = '#ffc107'; // yellow - recent
-            } else if (diffHours > 0) {
-              ageText = `il y a ${diffHours} heure${diffHours > 1 ? 's' : ''}`;
-              ageColor = '#28a745'; // green - very recent
-            } else {
-              ageText = "à l'instant";
-              ageColor = '#28a745'; // green
-            }
-
-            infoElement.innerHTML = `
-              <span style="color: #856404;">📅 Dernière mise à jour : </span>
-              <strong style="color: ${ageColor};">${formattedDate}</strong>
-              <span style="color: ${ageColor}; margin-left: 8px;">(${ageText})</span>
+            html += `
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <span style="width: 24px;">${ft.icon}</span>
+                <span style="min-width: 100px; color: #856404; font-weight: 500;">${ft.label}:</span>
+                <span style="color: ${age.color}; font-weight: ${age.isOld ? 'bold' : 'normal'};">
+                  ${age.text}
+                  ${info?.recordCount ? `<span style="color: #666; font-weight: normal;"> (${info.recordCount} enregistrements)</span>` : ''}
+                </span>
+              </div>
             `;
-          } else {
-            infoElement.innerHTML = `
-              <span style="color: #dc3545;">⚠️ Aucune inscription importée - Veuillez importer le fichier des inscriptions</span>
-            `;
-          }
+          });
+
+          html += '</div>';
+          infoElement.innerHTML = html;
         } else {
-          infoElement.innerHTML = `<span style="color: #666;">Impossible de charger la date de mise à jour</span>`;
+          infoElement.innerHTML = `<span style="color: #666;">Impossible de charger les informations</span>`;
         }
       } catch (error) {
         console.error('Error loading last import date:', error);

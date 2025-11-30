@@ -129,6 +129,15 @@ router.post('/tournoi/import', authenticateToken, upload.single('file'), async (
     // Clean up uploaded file
     fs.unlinkSync(req.file.path);
 
+    // Record import in history
+    const historyQuery = `
+      INSERT INTO import_history (file_type, record_count, filename, imported_by)
+      VALUES ($1, $2, $3, $4)
+    `;
+    db.run(historyQuery, ['tournois', records.length, req.file.originalname, req.user?.username || 'unknown'], (err) => {
+      if (err) console.error('Error recording import history:', err);
+    });
+
     res.json({
       message: 'Import completed',
       imported,
@@ -229,6 +238,15 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
     // Clean up uploaded file
     fs.unlinkSync(req.file.path);
 
+    // Record import in history
+    const historyQuery = `
+      INSERT INTO import_history (file_type, record_count, filename, imported_by)
+      VALUES ($1, $2, $3, $4)
+    `;
+    db.run(historyQuery, ['inscriptions', records.length, req.file.originalname, req.user?.username || 'unknown'], (err) => {
+      if (err) console.error('Error recording import history:', err);
+    });
+
     res.json({
       message: 'Import completed',
       imported,
@@ -301,24 +319,75 @@ router.get('/tournoi', authenticateToken, async (req, res) => {
   });
 });
 
-// Get last inscription import date
+// Get last import dates for all file types
 router.get('/last-import', authenticateToken, (req, res) => {
-  // Get the most recent created_at from inscriptions table
+  // Get the most recent import for each file type from import_history
   const query = `
-    SELECT MAX(created_at) as last_import_date,
-           COUNT(*) as total_inscriptions
-    FROM inscriptions
+    SELECT DISTINCT ON (file_type)
+      file_type,
+      import_date,
+      record_count,
+      filename,
+      imported_by
+    FROM import_history
+    ORDER BY file_type, import_date DESC
   `;
 
-  db.get(query, [], (err, row) => {
+  db.all(query, [], (err, rows) => {
     if (err) {
-      console.error('Error fetching last import date:', err);
-      return res.status(500).json({ error: err.message });
+      // Fallback to old method if import_history table doesn't exist yet
+      console.error('Error fetching import history, falling back to old method:', err);
+
+      // Fallback: get max created_at from each table
+      const fallbackQuery = `
+        SELECT
+          'inscriptions' as file_type,
+          MAX(created_at) as import_date,
+          COUNT(*) as record_count
+        FROM inscriptions
+        UNION ALL
+        SELECT
+          'tournois' as file_type,
+          MAX(created_at) as import_date,
+          COUNT(*) as record_count
+        FROM tournoi_ext
+        UNION ALL
+        SELECT
+          'joueurs' as file_type,
+          NULL as import_date,
+          COUNT(*) as record_count
+        FROM players
+      `;
+
+      db.all(fallbackQuery, [], (fallbackErr, fallbackRows) => {
+        if (fallbackErr) {
+          return res.status(500).json({ error: fallbackErr.message });
+        }
+
+        const result = {};
+        (fallbackRows || []).forEach(row => {
+          result[row.file_type] = {
+            importDate: row.import_date,
+            recordCount: row.record_count
+          };
+        });
+        res.json(result);
+      });
+      return;
     }
-    res.json({
-      lastImportDate: row?.last_import_date || null,
-      totalInscriptions: row?.total_inscriptions || 0
+
+    // Transform rows to object keyed by file_type
+    const result = {};
+    (rows || []).forEach(row => {
+      result[row.file_type] = {
+        importDate: row.import_date,
+        recordCount: row.record_count,
+        filename: row.filename,
+        importedBy: row.imported_by
+      };
     });
+
+    res.json(result);
   });
 });
 
