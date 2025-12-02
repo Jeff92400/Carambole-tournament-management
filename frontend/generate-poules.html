@@ -2144,6 +2144,21 @@
         progressBar.style.width = '30%';
         progressText.textContent = 'Envoi des convocations...';
 
+        // Check if we have test players (TEST*) and inject mock ranking data for testing
+        const hasTestPlayers = playersWithEmails.some(p => p.licence?.startsWith('TEST'));
+        let mockRankingData = null;
+        if (hasTestPlayers) {
+          mockRankingData = {
+            'TEST001': { rank: 1, moyenne: '2.098' },
+            'TEST002': { rank: 2, moyenne: '2.057' },
+            'TEST003': { rank: 3, moyenne: '2.697' },
+            'TEST004': { rank: 4, moyenne: '1.856' },
+            'TEST005': { rank: 5, moyenne: '1.542' },
+            'TEST006': { rank: 6, moyenne: '1.234' }
+          };
+          console.log('Test players detected, using mock ranking data');
+        }
+
         const response = await fetch(`${API_URL}/email/send-convocations`, {
           method: 'POST',
           headers: {
@@ -2160,7 +2175,8 @@
             locations: lastGeneratedData.locations,
             specialNote: document.getElementById('specialNoteField').value.trim(),
             gameParams: lastGeneratedData.gameParams,
-            selectedDistance: lastGeneratedData.selectedDistance
+            selectedDistance: lastGeneratedData.selectedDistance,
+            mockRankingData: mockRankingData
           })
         });
 
