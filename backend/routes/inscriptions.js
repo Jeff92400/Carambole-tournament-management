@@ -1213,4 +1213,73 @@ function generateMatchSchedule(pouleSize) {
   return matches;
 }
 
+// Update a tournament (admin only)
+router.put('/tournoi/:id', authenticateToken, (req, res) => {
+  // Check admin role
+  if (req.user?.role !== 'admin') {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  const { id } = req.params;
+  const { nom, mode, categorie, taille, debut, fin, grand_coin, taille_cadre, lieu } = req.body;
+
+  const query = `
+    UPDATE tournoi_ext SET
+      nom = $1,
+      mode = $2,
+      categorie = $3,
+      taille = $4,
+      debut = $5,
+      fin = $6,
+      grand_coin = $7,
+      taille_cadre = $8,
+      lieu = $9
+    WHERE tournoi_id = $10
+  `;
+
+  db.run(query, [nom, mode, categorie, taille || null, debut || null, fin || null, grand_coin || 0, taille_cadre, lieu, id], function(err) {
+    if (err) {
+      console.error('Error updating tournament:', err);
+      return res.status(500).json({ error: err.message });
+    }
+    if (this.changes === 0) {
+      return res.status(404).json({ error: 'Tournament not found' });
+    }
+    res.json({ success: true, message: 'Tournament updated' });
+  });
+});
+
+// Update an inscription (admin only)
+router.put('/:id', authenticateToken, (req, res) => {
+  // Check admin role
+  if (req.user?.role !== 'admin') {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  const { id } = req.params;
+  const { licence, email, telephone, convoque, forfait, commentaire } = req.body;
+
+  const query = `
+    UPDATE inscriptions SET
+      licence = $1,
+      email = $2,
+      telephone = $3,
+      convoque = $4,
+      forfait = $5,
+      commentaire = $6
+    WHERE inscription_id = $7
+  `;
+
+  db.run(query, [licence, email, telephone, convoque || 0, forfait || 0, commentaire, id], function(err) {
+    if (err) {
+      console.error('Error updating inscription:', err);
+      return res.status(500).json({ error: err.message });
+    }
+    if (this.changes === 0) {
+      return res.status(404).json({ error: 'Inscription not found' });
+    }
+    res.json({ success: true, message: 'Inscription updated' });
+  });
+});
+
 module.exports = router;
