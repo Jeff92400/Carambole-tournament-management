@@ -290,7 +290,7 @@
               <option value="">Toutes categories</option>
             </select>
             <select id="tournoiFilter">
-              <option value="">Tous les joueurs</option>
+              <option value="">-- Tournois saison en cours --</option>
             </select>
           </div>
           <div class="filter-bar">
@@ -678,7 +678,7 @@
         if (response.ok) {
           allTournois = await response.json();
           const select = document.getElementById('tournoiFilter');
-          select.innerHTML = '<option value="">Tous les joueurs</option>';
+          select.innerHTML = '<option value="">-- Tournois saison en cours --</option>';
 
           // Group by mode
           const byMode = {};
