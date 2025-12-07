@@ -1682,8 +1682,8 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
           bySeason[season].forEach(t => {
             const option = document.createElement('option');
             option.value = t.id;
-            const date = t.date ? new Date(t.date).toLocaleDateString('fr-FR') : '';
-            option.textContent = `${t.category} - ${date} (${t.player_count} joueurs)`;
+            const date = t.tournament_date ? new Date(t.tournament_date).toLocaleDateString('fr-FR') : '';
+            option.textContent = `${t.display_name} - ${date} (${t.player_count} joueurs)`;
             option.dataset.tournament = JSON.stringify(t);
             optgroup.appendChild(option);
           });
@@ -1728,11 +1728,11 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
         tournamentResults = resultsData.results || [];
 
         // Update info section
-        document.getElementById('tournamentInfoTitle').textContent = tournament.category;
-        document.getElementById('tournamentInfoDate').textContent = tournament.date ? new Date(tournament.date).toLocaleDateString('fr-FR') : '-';
+        document.getElementById('tournamentInfoTitle').textContent = tournament.display_name || '-';
+        document.getElementById('tournamentInfoDate').textContent = tournament.tournament_date ? new Date(tournament.tournament_date).toLocaleDateString('fr-FR') : '-';
         document.getElementById('tournamentInfoLieu').textContent = tournament.location || '-';
-        document.getElementById('tournamentInfoMode').textContent = tournament.mode || '-';
-        document.getElementById('tournamentInfoCategory').textContent = tournament.category_level || '-';
+        document.getElementById('tournamentInfoMode').textContent = tournament.game_type || '-';
+        document.getElementById('tournamentInfoCategory').textContent = tournament.level || '-';
         document.getElementById('tournamentInfoParticipants').textContent = tournamentResults.length;
         document.getElementById('tournamentInfoEmails').textContent = resultsData.emailCount || 0;
 

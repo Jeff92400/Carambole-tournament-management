@@ -744,9 +744,14 @@ router.get('/tournament-results/:id', authenticateToken, async (req, res) => {
   const { id } = req.params;
 
   try {
-    // Get tournament details
+    // Get tournament details with category info
     const tournament = await new Promise((resolve, reject) => {
-      db.get('SELECT * FROM tournaments WHERE id = $1', [id], (err, row) => {
+      db.get(`
+        SELECT t.*, c.display_name, c.game_type, c.level
+        FROM tournaments t
+        JOIN categories c ON t.category_id = c.id
+        WHERE t.id = $1
+      `, [id], (err, row) => {
         if (err) reject(err);
         else resolve(row);
       });
@@ -782,7 +787,7 @@ router.get('/tournament-results/:id', authenticateToken, async (req, res) => {
         LEFT JOIN player_contacts pc ON REPLACE(r.licence, ' ', '') = REPLACE(pc.licence, ' ', '')
         WHERE r.season = $1 AND r.category = $2
         ORDER BY r.total_points DESC
-      `, [tournament.season, tournament.category], (err, rows) => {
+      `, [tournament.season, tournament.display_name], (err, rows) => {
         if (err) reject(err);
         else resolve(rows || []);
       });
@@ -828,9 +833,14 @@ router.post('/send-results', authenticateToken, async (req, res) => {
   }
 
   try {
-    // Get tournament details
+    // Get tournament details with category info
     const tournament = await new Promise((resolve, reject) => {
-      db.get('SELECT * FROM tournaments WHERE id = $1', [tournamentId], (err, row) => {
+      db.get(`
+        SELECT t.*, c.display_name, c.game_type, c.level
+        FROM tournaments t
+        JOIN categories c ON t.category_id = c.id
+        WHERE t.id = $1
+      `, [tournamentId], (err, row) => {
         if (err) reject(err);
         else resolve(row);
       });
@@ -862,7 +872,7 @@ router.post('/send-results', authenticateToken, async (req, res) => {
         LEFT JOIN player_contacts pc ON REPLACE(r.licence, ' ', '') = REPLACE(pc.licence, ' ', '')
         WHERE r.season = $1 AND r.category = $2
         ORDER BY r.total_points DESC
-      `, [tournament.season, tournament.category], (err, rows) => {
+      `, [tournament.season, tournament.display_name], (err, rows) => {
         if (err) reject(err);
         else resolve(rows || []);
       });
@@ -901,14 +911,14 @@ router.post('/send-results', authenticateToken, async (req, res) => {
     `;
 
     const sentResults = { sent: [], failed: [], skipped: [] };
-    const tournamentDate = tournament.date ? new Date(tournament.date).toLocaleDateString('fr-FR') : '';
+    const tournamentDate = tournament.tournament_date ? new Date(tournament.tournament_date).toLocaleDateString('fr-FR') : '';
 
     // Create campaign record
     const campaignId = await new Promise((resolve, reject) => {
       db.run(
         `INSERT INTO email_campaigns (subject, body, template_key, recipients_count, status)
          VALUES ($1, $2, 'tournament_results', $3, 'sending')`,
-        [`Résultats - ${tournament.category}`, introText, results.filter(r => r.email).length],
+        [`Résultats - ${tournament.display_name}`, introText, results.filter(r => r.email).length],
         function(err) {
           if (err) reject(err);
           else resolve(this.lastID);
@@ -964,7 +974,7 @@ router.post('/send-results', authenticateToken, async (req, res) => {
         const personalizedIntro = introText
           .replace(/\{first_name\}/g, participant.first_name || participant.player_name.split(' ')[0] || '')
           .replace(/\{last_name\}/g, participant.last_name || '')
-          .replace(/\{tournament_name\}/g, tournament.category)
+          .replace(/\{tournament_name\}/g, tournament.display_name)
           .replace(/\{tournament_date\}/g, tournamentDate)
           .replace(/\{tournament_lieu\}/g, tournament.location || '')
           .replace(/\{player_position\}/g, participant.position)
@@ -983,7 +993,7 @@ router.post('/send-results', authenticateToken, async (req, res) => {
           <div style="font-family: Arial, sans-serif; max-width: 700px; margin: 0 auto;">
             <div style="background: #1F4788; color: white; padding: 20px; text-align: center;">
               <img src="https://cdbhs-tournament-management-production.up.railway.app/images/billiard-icon.png" alt="CDBHS" style="height: 50px; margin-bottom: 10px;" onerror="this.style.display='none'">
-              <h1 style="margin: 0; font-size: 24px;">Résultats - ${tournament.category}</h1>
+              <h1 style="margin: 0; font-size: 24px;">Résultats - ${tournament.display_name}</h1>
               <p style="margin: 10px 0 0 0; opacity: 0.9;">${tournamentDate}${tournament.location ? ' - ' + tournament.location : ''}</p>
             </div>
             <div style="padding: 20px; background: #f8f9fa; line-height: 1.6;">
@@ -993,7 +1003,7 @@ router.post('/send-results', authenticateToken, async (req, res) => {
               <h3 style="color: #1F4788; margin-top: 30px;">Résultats du Tournoi</h3>
               ${resultsTableHtml.replace('{{RESULTS_ROWS}}', resultsRows)}
 
-              <h3 style="color: #28a745; margin-top: 30px;">Classement Général ${tournament.category}</h3>
+              <h3 style="color: #28a745; margin-top: 30px;">Classement Général ${tournament.display_name}</h3>
               ${rankingsTableHtml.replace('{{RANKINGS_ROWS}}', rankingsRows)}
 
               <p style="margin-top: 30px;">${personalizedOutro.replace(/\n/g, '<br>')}</p>
@@ -1007,7 +1017,7 @@ router.post('/send-results', authenticateToken, async (req, res) => {
         await resend.emails.send({
           from: 'CDBHS <communication@cdbhs.net>',
           to: [participant.email],
-          subject: `Résultats - ${tournament.category} - ${tournamentDate}`,
+          subject: `Résultats - ${tournament.display_name} - ${tournamentDate}`,
           html: emailHtml
         });
 
