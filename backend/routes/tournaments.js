@@ -505,18 +505,25 @@ function recalculateRankings(categoryId, season, callback) {
     }
 
     // Sort results in JavaScript to ensure correct order
-    // (backup in case PostgreSQL ORDER BY doesn't work as expected)
+    // Force numeric conversion in case PostgreSQL returns strings
     results.sort((a, b) => {
+      const aPoints = Number(a.total_match_points) || 0;
+      const bPoints = Number(b.total_match_points) || 0;
+      const aMoyenne = Number(a.avg_moyenne) || 0;
+      const bMoyenne = Number(b.avg_moyenne) || 0;
+      const aSerie = Number(a.best_serie) || 0;
+      const bSerie = Number(b.best_serie) || 0;
+
       // 1. Sort by total_match_points DESC
-      if (b.total_match_points !== a.total_match_points) {
-        return b.total_match_points - a.total_match_points;
+      if (bPoints !== aPoints) {
+        return bPoints - aPoints;
       }
       // 2. Sort by avg_moyenne DESC
-      if (b.avg_moyenne !== a.avg_moyenne) {
-        return b.avg_moyenne - a.avg_moyenne;
+      if (bMoyenne !== aMoyenne) {
+        return bMoyenne - aMoyenne;
       }
       // 3. Sort by best_serie DESC
-      return (b.best_serie || 0) - (a.best_serie || 0);
+      return bSerie - aSerie;
     });
 
     console.log('Rankings calculated, first 5:', results.slice(0, 5).map(r => ({
