@@ -100,6 +100,7 @@ async function initializeDatabase() {
         tournament_id INTEGER NOT NULL REFERENCES tournaments(id),
         licence TEXT NOT NULL REFERENCES players(licence),
         player_name TEXT,
+        position INTEGER DEFAULT 0,
         match_points INTEGER DEFAULT 0,
         moyenne REAL DEFAULT 0,
         serie INTEGER DEFAULT 0,
@@ -107,6 +108,11 @@ async function initializeDatabase() {
         reprises INTEGER DEFAULT 0,
         UNIQUE(tournament_id, licence)
       )
+    `);
+
+    // Add position column if it doesn't exist (migration)
+    await client.query(`
+      ALTER TABLE tournament_results ADD COLUMN IF NOT EXISTS position INTEGER DEFAULT 0
     `);
 
     // Rankings table

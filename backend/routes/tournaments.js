@@ -389,8 +389,8 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
 
                   // Now insert tournament results
                   const stmt = db.prepare(`
-                    INSERT INTO tournament_results (tournament_id, licence, player_name, match_points, moyenne, serie, points, reprises)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO tournament_results (tournament_id, licence, player_name, position, match_points, moyenne, serie, points, reprises)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                   `);
 
                   for (const record of records) {
@@ -399,6 +399,7 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
                       if (record[0]?.includes('Classt') || record[0]?.includes('Licence')) continue;
 
                       // Parse CSV format from the tournament results
+                      // Column A (index 0): Position/Classement
                       // Column B (index 1): Licence
                       // Column C (index 2): Joueur
                       // Column E (index 4): Pts match (match points)
@@ -406,6 +407,7 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
                       // Column I (index 8): Reprises
                       // Column J (index 9): Série
                       // Column M (index 12): Points (R) - game points
+                      const position = parseInt(record[0]?.replace(/"/g, '').trim()) || 0;
                       const licence = record[1]?.replace(/"/g, '').replace(/ /g, '').trim(); // Remove spaces
                       const playerName = record[2]?.replace(/"/g, '').trim();
                       const matchPoints = parseInt(record[4]?.replace(/"/g, '').trim()) || 0;
@@ -417,7 +419,7 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
 
                       if (!licence || !playerName) continue;
 
-                      stmt.run(finalTournamentId, licence, playerName, matchPoints, moyenne, serie, points, reprises, (err) => {
+                      stmt.run(finalTournamentId, licence, playerName, position, matchPoints, moyenne, serie, points, reprises, (err) => {
                         if (err) {
                           errors.push({ licence, error: err.message });
                         } else {
@@ -619,14 +621,14 @@ router.get('/:id/results', authenticateToken, (req, res) => {
 
       console.log('Tournament found:', tournament);
 
-      // Get tournament results with club name
+      // Get tournament results with club name (use stored position)
       db.all(
         `SELECT tr.*, p.club as club_name, c.logo_filename as club_logo
          FROM tournament_results tr
          LEFT JOIN players p ON tr.licence = p.licence
          LEFT JOIN clubs c ON REPLACE(REPLACE(REPLACE(UPPER(p.club), ' ', ''), '.', ''), '-', '') = REPLACE(REPLACE(REPLACE(UPPER(c.name), ' ', ''), '.', ''), '-', '')
          WHERE tr.tournament_id = ?
-         ORDER BY tr.match_points DESC, tr.moyenne DESC`,
+         ORDER BY tr.position ASC`,
         [tournamentId],
         (err, results) => {
           if (err) {
@@ -664,14 +666,14 @@ router.get('/:id/export', authenticateToken, async (req, res) => {
         return res.status(404).json({ error: 'Tournament not found' });
       }
 
-      // Get tournament results with club name and logo
+      // Get tournament results with club name and logo (use stored position)
       db.all(
         `SELECT tr.*, p.club as club_name, c.logo_filename as club_logo
          FROM tournament_results tr
          LEFT JOIN players p ON tr.licence = p.licence
          LEFT JOIN clubs c ON REPLACE(REPLACE(REPLACE(UPPER(p.club), ' ', ''), '.', ''), '-', '') = REPLACE(REPLACE(REPLACE(UPPER(c.name), ' ', ''), '.', ''), '-', '')
          WHERE tr.tournament_id = ?
-         ORDER BY tr.match_points DESC, tr.moyenne DESC`,
+         ORDER BY tr.position ASC`,
         [tournamentId],
         async (err, results) => {
           if (err) {

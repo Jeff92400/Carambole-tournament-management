@@ -762,8 +762,7 @@ router.get('/tournament-results/:id', authenticateToken, async (req, res) => {
     }
 
     // Get tournament results with emails from player_contacts
-    // Join tournament_results with player_contacts to get emails
-    // Order by match_points DESC, then moyenne DESC for tiebreaker
+    // Use stored position from import
     const results = await new Promise((resolve, reject) => {
       db.all(`
         SELECT tr.*,
@@ -773,7 +772,7 @@ router.get('/tournament-results/:id', authenticateToken, async (req, res) => {
         FROM tournament_results tr
         LEFT JOIN player_contacts pc ON REPLACE(tr.licence, ' ', '') = REPLACE(pc.licence, ' ', '')
         WHERE tr.tournament_id = $1
-        ORDER BY tr.match_points DESC, tr.moyenne DESC
+        ORDER BY tr.position ASC
       `, [id], (err, rows) => {
         if (err) reject(err);
         else resolve(rows || []);
@@ -859,18 +858,17 @@ router.post('/send-results', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Tournoi non trouvé' });
     }
 
-    // Get tournament results with emails (order by match_points, then moyenne for tiebreaker)
+    // Get tournament results with emails (use stored position from import)
     const results = await new Promise((resolve, reject) => {
       db.all(`
         SELECT tr.*, pc.email, pc.first_name, pc.last_name
         FROM tournament_results tr
         LEFT JOIN player_contacts pc ON REPLACE(tr.licence, ' ', '') = REPLACE(pc.licence, ' ', '')
         WHERE tr.tournament_id = $1
-        ORDER BY tr.match_points DESC, tr.moyenne DESC
+        ORDER BY tr.position ASC
       `, [tournamentId], (err, rows) => {
         if (err) reject(err);
-        // Add position based on array index
-        else resolve((rows || []).map((r, idx) => ({ ...r, position: idx + 1 })));
+        else resolve(rows || []);
       });
     });
 
