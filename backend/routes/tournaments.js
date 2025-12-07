@@ -389,8 +389,8 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
 
                   // Now insert tournament results
                   const stmt = db.prepare(`
-                    INSERT INTO tournament_results (tournament_id, licence, player_name, position, match_points, moyenne, serie, points, reprises)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO tournament_results (tournament_id, licence, player_name, match_points, moyenne, serie, points, reprises)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                   `);
 
                   for (const record of records) {
@@ -399,7 +399,6 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
                       if (record[0]?.includes('Classt') || record[0]?.includes('Licence')) continue;
 
                       // Parse CSV format from the tournament results
-                      // Column A (index 0): Position/Classement
                       // Column B (index 1): Licence
                       // Column C (index 2): Joueur
                       // Column E (index 4): Pts match (match points)
@@ -407,7 +406,6 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
                       // Column I (index 8): Reprises
                       // Column J (index 9): Série
                       // Column M (index 12): Points (R) - game points
-                      const position = parseInt(record[0]?.replace(/"/g, '').trim()) || 0;
                       const licence = record[1]?.replace(/"/g, '').replace(/ /g, '').trim(); // Remove spaces
                       const playerName = record[2]?.replace(/"/g, '').trim();
                       const matchPoints = parseInt(record[4]?.replace(/"/g, '').trim()) || 0;
@@ -419,7 +417,7 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
 
                       if (!licence || !playerName) continue;
 
-                      stmt.run(finalTournamentId, licence, playerName, position, matchPoints, moyenne, serie, points, reprises, (err) => {
+                      stmt.run(finalTournamentId, licence, playerName, matchPoints, moyenne, serie, points, reprises, (err) => {
                         if (err) {
                           errors.push({ licence, error: err.message });
                         } else {
@@ -472,11 +470,10 @@ function recalculateRankings(categoryId, season, callback) {
   // Get all tournament results for this category and season
   // Exclude finale (tournament_number = 4) from ranking calculation
   // Ranking order: 1) match points DESC, 2) cumulative moyenne DESC, 3) best serie DESC
-  // NOTE: Group by licence only (not player_name) because name format may vary between tournaments
   const query = `
     SELECT
       REPLACE(tr.licence, ' ', '') as licence,
-      MAX(tr.player_name) as player_name,
+      tr.player_name,
       SUM(tr.match_points) as total_match_points,
       SUM(tr.points) as total_points,
       SUM(tr.reprises) as total_reprises,
@@ -491,11 +488,8 @@ function recalculateRankings(categoryId, season, callback) {
     FROM tournament_results tr
     JOIN tournaments t ON tr.tournament_id = t.id
     WHERE t.category_id = ? AND t.season = ? AND t.tournament_number <= 3
-    GROUP BY REPLACE(tr.licence, ' ', '')
-    ORDER BY
-      SUM(tr.match_points) DESC,
-      CASE WHEN SUM(tr.reprises) > 0 THEN CAST(SUM(tr.points) AS FLOAT) / CAST(SUM(tr.reprises) AS FLOAT) ELSE 0 END DESC,
-      MAX(tr.serie) DESC
+    GROUP BY REPLACE(tr.licence, ' ', ''), tr.player_name
+    ORDER BY total_match_points DESC, avg_moyenne DESC, best_serie DESC
   `;
 
   db.all(query, [categoryId, season], (err, results) => {
@@ -503,35 +497,6 @@ function recalculateRankings(categoryId, season, callback) {
       console.error('Error calculating rankings:', err);
       return callback(err);
     }
-
-    // Sort results in JavaScript to ensure correct order
-    // Force numeric conversion in case PostgreSQL returns strings
-    results.sort((a, b) => {
-      const aPoints = Number(a.total_match_points) || 0;
-      const bPoints = Number(b.total_match_points) || 0;
-      const aMoyenne = Number(a.avg_moyenne) || 0;
-      const bMoyenne = Number(b.avg_moyenne) || 0;
-      const aSerie = Number(a.best_serie) || 0;
-      const bSerie = Number(b.best_serie) || 0;
-
-      // 1. Sort by total_match_points DESC
-      if (bPoints !== aPoints) {
-        return bPoints - aPoints;
-      }
-      // 2. Sort by avg_moyenne DESC
-      if (bMoyenne !== aMoyenne) {
-        return bMoyenne - aMoyenne;
-      }
-      // 3. Sort by best_serie DESC
-      return bSerie - aSerie;
-    });
-
-    console.log('Rankings calculated, first 5:', results.slice(0, 5).map(r => ({
-      licence: r.licence,
-      points: r.total_match_points,
-      moyenne: r.avg_moyenne,
-      serie: r.best_serie
-    })));
 
     // Delete existing rankings
     db.run('DELETE FROM rankings WHERE category_id = ? AND season = ?', [categoryId, season], (err) => {
@@ -654,14 +619,14 @@ router.get('/:id/results', authenticateToken, (req, res) => {
 
       console.log('Tournament found:', tournament);
 
-      // Get tournament results with club name (use stored position)
+      // Get tournament results with club name
       db.all(
         `SELECT tr.*, p.club as club_name, c.logo_filename as club_logo
          FROM tournament_results tr
          LEFT JOIN players p ON tr.licence = p.licence
          LEFT JOIN clubs c ON REPLACE(REPLACE(REPLACE(UPPER(p.club), ' ', ''), '.', ''), '-', '') = REPLACE(REPLACE(REPLACE(UPPER(c.name), ' ', ''), '.', ''), '-', '')
          WHERE tr.tournament_id = ?
-         ORDER BY tr.position ASC`,
+         ORDER BY tr.match_points DESC, tr.moyenne DESC`,
         [tournamentId],
         (err, results) => {
           if (err) {
@@ -699,14 +664,14 @@ router.get('/:id/export', authenticateToken, async (req, res) => {
         return res.status(404).json({ error: 'Tournament not found' });
       }
 
-      // Get tournament results with club name and logo (use stored position)
+      // Get tournament results with club name and logo
       db.all(
         `SELECT tr.*, p.club as club_name, c.logo_filename as club_logo
          FROM tournament_results tr
          LEFT JOIN players p ON tr.licence = p.licence
          LEFT JOIN clubs c ON REPLACE(REPLACE(REPLACE(UPPER(p.club), ' ', ''), '.', ''), '-', '') = REPLACE(REPLACE(REPLACE(UPPER(c.name), ' ', ''), '.', ''), '-', '')
          WHERE tr.tournament_id = ?
-         ORDER BY tr.position ASC`,
+         ORDER BY tr.match_points DESC, tr.moyenne DESC`,
         [tournamentId],
         async (err, results) => {
           if (err) {
