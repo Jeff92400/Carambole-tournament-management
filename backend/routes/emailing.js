@@ -259,17 +259,34 @@ router.post('/contacts/sync', authenticateToken, async (req, res) => {
   }
 });
 
-// Get available tournaments for filtering (upcoming and recent)
+// Get available tournaments for filtering (current season: Sept - June)
 router.get('/tournois', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
+
+  // Calculate current season dates
+  // Season runs from September 1st to June 30th
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth(); // 0-11
+
+  let seasonStart, seasonEnd;
+  if (currentMonth >= 8) {
+    // September or later: current season is currentYear-Sept to nextYear-June
+    seasonStart = `${currentYear}-09-01`;
+    seasonEnd = `${currentYear + 1}-06-30`;
+  } else {
+    // Before September: current season is previousYear-Sept to currentYear-June
+    seasonStart = `${currentYear - 1}-09-01`;
+    seasonEnd = `${currentYear}-06-30`;
+  }
 
   db.all(
     `SELECT t.tournoi_id, t.nom, t.mode, t.categorie, t.debut, t.lieu,
             (SELECT COUNT(*) FROM inscriptions i WHERE i.tournoi_id = t.tournoi_id AND i.forfait != 1) as nb_inscrits
      FROM tournoi_ext t
-     WHERE t.debut >= date('now', '-30 days')
-     ORDER BY t.debut DESC, t.mode, t.categorie`,
-    [],
+     WHERE t.debut >= $1 AND t.debut <= $2
+     ORDER BY t.debut ASC, t.mode, t.categorie`,
+    [seasonStart, seasonEnd],
     (err, rows) => {
       if (err) {
         console.error('Error fetching tournois:', err);
