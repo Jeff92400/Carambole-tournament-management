@@ -780,7 +780,7 @@ router.get('/tournament-results/:id', authenticateToken, async (req, res) => {
       });
     });
 
-    // Get ranking data for this mode/category
+    // Get ranking data for this mode/category (sorted by total_match_points, then by avg_moyenne for tiebreaker)
     const rankings = await new Promise((resolve, reject) => {
       db.all(`
         SELECT r.*, p.first_name, p.last_name,
@@ -790,7 +790,7 @@ router.get('/tournament-results/:id', authenticateToken, async (req, res) => {
         LEFT JOIN players p ON REPLACE(r.licence, ' ', '') = REPLACE(p.licence, ' ', '')
         LEFT JOIN player_contacts pc ON REPLACE(r.licence, ' ', '') = REPLACE(pc.licence, ' ', '')
         WHERE r.season = $1 AND r.category_id = $2
-        ORDER BY r.total_match_points DESC
+        ORDER BY r.total_match_points DESC, r.avg_moyenne DESC
       `, [tournament.season, tournament.category_id], (err, rows) => {
         if (err) reject(err);
         else resolve(rows || []);
@@ -874,7 +874,7 @@ router.post('/send-results', authenticateToken, async (req, res) => {
       });
     });
 
-    // Get general rankings for this category
+    // Get general rankings for this category (sorted by total_match_points, then by avg_moyenne for tiebreaker)
     const rankings = await new Promise((resolve, reject) => {
       db.all(`
         SELECT r.*, p.first_name as rank_first_name, p.last_name as rank_last_name,
@@ -884,7 +884,7 @@ router.post('/send-results', authenticateToken, async (req, res) => {
         LEFT JOIN players p ON REPLACE(r.licence, ' ', '') = REPLACE(p.licence, ' ', '')
         LEFT JOIN player_contacts pc ON REPLACE(r.licence, ' ', '') = REPLACE(pc.licence, ' ', '')
         WHERE r.season = $1 AND r.category_id = $2
-        ORDER BY r.total_match_points DESC
+        ORDER BY r.total_match_points DESC, r.avg_moyenne DESC
       `, [tournament.season, tournament.category_id], (err, rows) => {
         if (err) reject(err);
         else resolve(rows || []);
