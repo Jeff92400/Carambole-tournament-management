@@ -446,6 +446,17 @@ Le Comité Départemental de Billard des Hauts-de-Seine</textarea>
               <code>{player_points}</code>
             </div>
 
+            <!-- Test Mode -->
+            <div style="background: #fff3cd; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+              <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                <input type="checkbox" id="testModeCheck" style="width: 18px; height: 18px;">
+                <strong>Mode Test</strong> - Envoyer uniquement à mon adresse
+              </label>
+              <div id="testEmailInput" style="display: none; margin-top: 10px;">
+                <input type="email" id="testEmail" placeholder="votre.email@exemple.com" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+              </div>
+            </div>
+
             <button class="btn" id="sendResultsBtn" style="width: 100%; padding: 15px; font-size: 16px; background: #1F4788;" disabled>
               Envoyer les Résultats
             </button>
@@ -1762,18 +1773,47 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
       }
     });
 
+    // Test mode toggle
+    document.getElementById('testModeCheck').addEventListener('change', (e) => {
+      const testEmailInput = document.getElementById('testEmailInput');
+      const sendBtn = document.getElementById('sendResultsBtn');
+
+      if (e.target.checked) {
+        testEmailInput.style.display = 'block';
+        sendBtn.textContent = 'Envoyer le Test';
+        sendBtn.style.background = '#FF9800';
+      } else {
+        testEmailInput.style.display = 'none';
+        sendBtn.textContent = 'Envoyer les Résultats';
+        sendBtn.style.background = '#1F4788';
+      }
+    });
+
     document.getElementById('sendResultsBtn').addEventListener('click', async () => {
       if (!selectedTournamentData || tournamentResults.length === 0) {
         showError('Veuillez sélectionner un tournoi');
         return;
       }
 
-      const emailCount = tournamentResults.filter(r => r.email).length;
-      if (!confirm(`Envoyer les résultats à ${emailCount} participant(s) ?`)) {
-        return;
+      const isTestMode = document.getElementById('testModeCheck').checked;
+      const testEmail = document.getElementById('testEmail').value.trim();
+
+      if (isTestMode) {
+        if (!testEmail || !testEmail.includes('@')) {
+          showError('Veuillez entrer une adresse email valide pour le test.');
+          return;
+        }
+        if (!confirm(`Envoyer un email de test à ${testEmail} ?`)) {
+          return;
+        }
+      } else {
+        const emailCount = tournamentResults.filter(r => r.email).length;
+        if (!confirm(`Envoyer les résultats à ${emailCount} participant(s) ?`)) {
+          return;
+        }
       }
 
-      showProgress('Envoi des résultats en cours...');
+      showProgress(isTestMode ? 'Envoi du test...' : 'Envoi des résultats en cours...');
 
       try {
         const response = await fetch(`${API_URL}/emailing/send-results`, {
@@ -1786,7 +1826,9 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
             tournamentId: selectedTournamentData.id,
             introText: document.getElementById('resultsIntroText').value,
             outroText: document.getElementById('resultsOutroText').value,
-            imageUrl: document.getElementById('resultsImageUrl').value || null
+            imageUrl: document.getElementById('resultsImageUrl').value || null,
+            testMode: isTestMode,
+            testEmail: isTestMode ? testEmail : null
           })
         });
 

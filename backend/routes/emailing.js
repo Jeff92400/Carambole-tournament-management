@@ -823,13 +823,18 @@ router.get('/tournament-results/:id', authenticateToken, async (req, res) => {
 // Send tournament results email to all participants
 router.post('/send-results', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
-  const { tournamentId, introText, outroText, imageUrl } = req.body;
+  const { tournamentId, introText, outroText, imageUrl, testMode, testEmail } = req.body;
 
   const resend = getResend();
   if (!resend) {
     return res.status(500).json({
       error: 'Email non configuré. Veuillez définir RESEND_API_KEY.'
     });
+  }
+
+  // Validate test mode
+  if (testMode && (!testEmail || !testEmail.includes('@'))) {
+    return res.status(400).json({ error: 'Email de test invalide.' });
   }
 
   try {
@@ -926,8 +931,11 @@ router.post('/send-results', authenticateToken, async (req, res) => {
       );
     });
 
+    // In test mode, only send to the test email using first participant data
+    const participantsToEmail = testMode ? [{ ...results[0], email: testEmail }] : results;
+
     // Send email to each participant with email
-    for (const participant of results) {
+    for (const participant of participantsToEmail) {
       if (!participant.email || !participant.email.includes('@')) {
         sentResults.skipped.push({
           name: participant.player_name,
@@ -1058,10 +1066,15 @@ router.post('/send-results', authenticateToken, async (req, res) => {
       );
     });
 
+    const message = testMode
+      ? `Email de test envoyé à ${testEmail}`
+      : `Résultats envoyés: ${sentResults.sent.length}, Échecs: ${sentResults.failed.length}, Ignorés: ${sentResults.skipped.length}`;
+
     res.json({
       success: true,
-      message: `Résultats envoyés: ${sentResults.sent.length}, Échecs: ${sentResults.failed.length}, Ignorés: ${sentResults.skipped.length}`,
-      results: sentResults
+      message,
+      results: sentResults,
+      testMode
     });
 
   } catch (error) {
