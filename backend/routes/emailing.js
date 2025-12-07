@@ -898,7 +898,8 @@ router.post('/send-results', authenticateToken, async (req, res) => {
           <tr style="background: #1F4788; color: white;">
             <th style="padding: 12px; text-align: center; border: 1px solid #ddd;">Pos</th>
             <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Joueur</th>
-            <th style="padding: 12px; text-align: center; border: 1px solid #ddd;">Points</th>
+            <th style="padding: 12px; text-align: center; border: 1px solid #ddd;">Total Pts Match</th>
+            <th style="padding: 12px; text-align: center; border: 1px solid #ddd;">Moyenne</th>
           </tr>
         </thead>
         <tbody>
@@ -914,7 +915,8 @@ router.post('/send-results', authenticateToken, async (req, res) => {
           <tr style="background: #28a745; color: white;">
             <th style="padding: 12px; text-align: center; border: 1px solid #ddd;">Pos</th>
             <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Joueur</th>
-            <th style="padding: 12px; text-align: center; border: 1px solid #ddd;">Total Points</th>
+            <th style="padding: 12px; text-align: center; border: 1px solid #ddd;">Total Pts Match</th>
+            <th style="padding: 12px; text-align: center; border: 1px solid #ddd;">Moyenne</th>
           </tr>
         </thead>
         <tbody>
@@ -964,11 +966,13 @@ router.post('/send-results', authenticateToken, async (req, res) => {
           const bgColor = isCurrentPlayer ? '#FFF3CD' : (r.position % 2 === 0 ? '#f8f9fa' : 'white');
           const fontWeight = isCurrentPlayer ? 'bold' : 'normal';
           const arrow = isCurrentPlayer ? '▶ ' : '';
+          const moyenne = r.moyenne ? r.moyenne.toFixed(3) : '-';
           return `
             <tr style="background: ${bgColor};">
               <td style="padding: 10px; text-align: center; border: 1px solid #ddd; font-weight: ${fontWeight};">${r.position}</td>
               <td style="padding: 10px; text-align: left; border: 1px solid #ddd; font-weight: ${fontWeight};">${arrow}${r.player_name}</td>
-              <td style="padding: 10px; text-align: center; border: 1px solid #ddd; font-weight: ${fontWeight};">${r.points || '-'}</td>
+              <td style="padding: 10px; text-align: center; border: 1px solid #ddd; font-weight: ${fontWeight};">${r.match_points || '-'}</td>
+              <td style="padding: 10px; text-align: center; border: 1px solid #ddd; font-weight: ${fontWeight};">${moyenne}</td>
             </tr>
           `;
         }).join('');
@@ -979,11 +983,13 @@ router.post('/send-results', authenticateToken, async (req, res) => {
           const bgColor = isCurrentPlayer ? '#FFF3CD' : ((idx + 1) % 2 === 0 ? '#f8f9fa' : 'white');
           const fontWeight = isCurrentPlayer ? 'bold' : 'normal';
           const arrow = isCurrentPlayer ? '▶ ' : '';
+          const avgMoyenne = r.avg_moyenne ? r.avg_moyenne.toFixed(3) : '-';
           return `
             <tr style="background: ${bgColor};">
               <td style="padding: 10px; text-align: center; border: 1px solid #ddd; font-weight: ${fontWeight};">${idx + 1}</td>
               <td style="padding: 10px; text-align: left; border: 1px solid #ddd; font-weight: ${fontWeight};">${arrow}${r.player_name}</td>
               <td style="padding: 10px; text-align: center; border: 1px solid #ddd; font-weight: ${fontWeight};">${r.total_match_points || '-'}</td>
+              <td style="padding: 10px; text-align: center; border: 1px solid #ddd; font-weight: ${fontWeight};">${avgMoyenne}</td>
             </tr>
           `;
         }).join('');
@@ -1024,7 +1030,9 @@ router.post('/send-results', authenticateToken, async (req, res) => {
               <h3 style="color: #1F4788; margin-top: 30px;">Résultats du Tournoi</h3>
               ${resultsTableHtml.replace('{{RESULTS_ROWS}}', resultsRows)}
 
-              <h3 style="color: #28a745; margin-top: 30px;">Classement Général ${tournament.display_name}</h3>
+              <p style="margin-top: 30px; font-style: italic; color: #555;">Après les rencontres ci-dessus, le classement général pour la finale départementale est le suivant :</p>
+
+              <h3 style="color: #28a745; margin-top: 15px;">Classement Général ${tournament.display_name}</h3>
               ${rankingsTableHtml.replace('{{RANKINGS_ROWS}}', rankingsRows)}
 
               <p style="margin-top: 30px;">${personalizedOutro.replace(/\n/g, '<br>')}</p>
