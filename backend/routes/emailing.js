@@ -931,6 +931,11 @@ router.post('/send-results', authenticateToken, async (req, res) => {
       );
     });
 
+    // Check if there are results
+    if (results.length === 0) {
+      return res.status(400).json({ error: 'Aucun résultat trouvé pour ce tournoi.' });
+    }
+
     // In test mode, only send to the test email using first participant data
     const participantsToEmail = testMode ? [{ ...results[0], email: testEmail }] : results;
 
