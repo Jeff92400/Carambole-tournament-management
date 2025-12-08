@@ -300,8 +300,10 @@
           throw new Error(errorData.error || 'Failed to load rankings');
         }
 
-        const rankings = await response.json();
-        console.log('Rankings loaded:', rankings.length);
+        const data = await response.json();
+        const rankings = data.rankings;
+        const tournamentsPlayed = data.tournamentsPlayed;
+        console.log('Rankings loaded:', rankings.length, 'Tournaments played:', tournamentsPlayed);
 
         if (rankings.length === 0) {
           document.getElementById('loadingRankings').style.display = 'none';
@@ -316,8 +318,14 @@
         const tbody = document.getElementById('rankingsBody');
         tbody.innerHTML = '';
 
-        // Helper to format tournament points: null = "*" (absent), number = display as is
-        const formatTournamentPoints = (points) => {
+        // Helper to format tournament points:
+        // - Tournament not played → "-"
+        // - Tournament played but player absent (null) → "*"
+        // - Tournament played and player participated → show points
+        const formatTournamentPoints = (points, tournamentPlayed) => {
+          if (!tournamentPlayed) {
+            return '<span style="color: #ccc;">-</span>';
+          }
           if (points === null || points === undefined) {
             return '<span style="color: #999;">*</span>';
           }
@@ -345,9 +353,9 @@
                 </a>
               </td>
               <td></td>
-              <td style="text-align: center;">${formatTournamentPoints(rank.tournament_1_points)}</td>
-              <td style="text-align: center;">${formatTournamentPoints(rank.tournament_2_points)}</td>
-              <td style="text-align: center;">${formatTournamentPoints(rank.tournament_3_points)}</td>
+              <td style="text-align: center;">${formatTournamentPoints(rank.tournament_1_points, tournamentsPlayed.t1)}</td>
+              <td style="text-align: center;">${formatTournamentPoints(rank.tournament_2_points, tournamentsPlayed.t2)}</td>
+              <td style="text-align: center;">${formatTournamentPoints(rank.tournament_3_points, tournamentsPlayed.t3)}</td>
               <td style="text-align: center; font-weight: bold;">${rank.total_match_points}</td>
               <td style="text-align: center;">${rank.cumulated_points}</td>
               <td style="text-align: center;">${rank.cumulated_reprises}</td>
@@ -362,11 +370,11 @@
             tbody.appendChild(row);
           });
 
-        // Show legend only if there are absent players (null tournament points)
+        // Show legend only if there are absent players from PLAYED tournaments
         const hasAbsentPlayers = rankings.some(r =>
-          r.tournament_1_points === null ||
-          r.tournament_2_points === null ||
-          r.tournament_3_points === null
+          (tournamentsPlayed.t1 && r.tournament_1_points === null) ||
+          (tournamentsPlayed.t2 && r.tournament_2_points === null) ||
+          (tournamentsPlayed.t3 && r.tournament_3_points === null)
         );
         document.getElementById('rankingsLegend').style.display = hasAbsentPlayers ? 'block' : 'none';
 

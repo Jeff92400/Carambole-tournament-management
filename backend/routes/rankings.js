@@ -33,51 +33,73 @@ router.get('/', authenticateToken, (req, res) => {
     return res.status(400).json({ error: 'Category ID and season required' });
   }
 
-  // Use LEFT JOIN for players to include ranked players even if not in players table
-  // Get player name from tournament_results as fallback
-  const query = `
-    SELECT
-      r.rank_position,
-      r.licence,
-      COALESCE(p.first_name, (SELECT MAX(tr.player_name) FROM tournament_results tr WHERE REPLACE(tr.licence, ' ', '') = r.licence)) as first_name,
-      COALESCE(p.last_name, '') as last_name,
-      COALESCE(p.club, 'Non renseigné') as club,
-      r.total_match_points,
-      r.avg_moyenne,
-      r.best_serie,
-      r.tournament_1_points,
-      r.tournament_2_points,
-      r.tournament_3_points,
-      c.game_type,
-      c.level,
-      c.display_name,
-      clubs.logo_filename as club_logo,
-      COALESCE((SELECT SUM(tr.points) FROM tournament_results tr
-                JOIN tournaments t ON tr.tournament_id = t.id
-                WHERE REPLACE(tr.licence, ' ', '') = REPLACE(r.licence, ' ', '')
-                AND t.category_id = r.category_id
-                AND t.season = r.season
-                AND t.tournament_number <= 3), 0) as cumulated_points,
-      COALESCE((SELECT SUM(tr.reprises) FROM tournament_results tr
-                JOIN tournaments t ON tr.tournament_id = t.id
-                WHERE REPLACE(tr.licence, ' ', '') = REPLACE(r.licence, ' ', '')
-                AND t.category_id = r.category_id
-                AND t.season = r.season
-                AND t.tournament_number <= 3), 0) as cumulated_reprises,
-      CASE WHEN p.licence IS NULL THEN 1 ELSE 0 END as missing_from_players
-    FROM rankings r
-    LEFT JOIN players p ON REPLACE(r.licence, ' ', '') = REPLACE(p.licence, ' ', '')
-    JOIN categories c ON r.category_id = c.id
-    LEFT JOIN clubs ON REPLACE(REPLACE(REPLACE(UPPER(COALESCE(p.club, '')), ' ', ''), '.', ''), '-', '') = REPLACE(REPLACE(REPLACE(UPPER(clubs.name), ' ', ''), '.', ''), '-', '')
-    WHERE r.category_id = ? AND r.season = ?
-    ORDER BY r.rank_position
+  // First, check which tournaments have been played for this category/season
+  const tournamentsPlayedQuery = `
+    SELECT tournament_number FROM tournaments
+    WHERE category_id = ? AND season = ? AND tournament_number <= 3
   `;
 
-  db.all(query, [categoryId, season], (err, rows) => {
+  db.all(tournamentsPlayedQuery, [categoryId, season], (err, tournamentRows) => {
     if (err) {
       return res.status(500).json({ error: err.message });
     }
-    res.json(rows);
+
+    const tournamentsPlayed = {
+      t1: tournamentRows.some(t => t.tournament_number === 1),
+      t2: tournamentRows.some(t => t.tournament_number === 2),
+      t3: tournamentRows.some(t => t.tournament_number === 3)
+    };
+
+    // Use LEFT JOIN for players to include ranked players even if not in players table
+    // Get player name from tournament_results as fallback
+    const query = `
+      SELECT
+        r.rank_position,
+        r.licence,
+        COALESCE(p.first_name, (SELECT MAX(tr.player_name) FROM tournament_results tr WHERE REPLACE(tr.licence, ' ', '') = r.licence)) as first_name,
+        COALESCE(p.last_name, '') as last_name,
+        COALESCE(p.club, 'Non renseigné') as club,
+        r.total_match_points,
+        r.avg_moyenne,
+        r.best_serie,
+        r.tournament_1_points,
+        r.tournament_2_points,
+        r.tournament_3_points,
+        c.game_type,
+        c.level,
+        c.display_name,
+        clubs.logo_filename as club_logo,
+        COALESCE((SELECT SUM(tr.points) FROM tournament_results tr
+                  JOIN tournaments t ON tr.tournament_id = t.id
+                  WHERE REPLACE(tr.licence, ' ', '') = REPLACE(r.licence, ' ', '')
+                  AND t.category_id = r.category_id
+                  AND t.season = r.season
+                  AND t.tournament_number <= 3), 0) as cumulated_points,
+        COALESCE((SELECT SUM(tr.reprises) FROM tournament_results tr
+                  JOIN tournaments t ON tr.tournament_id = t.id
+                  WHERE REPLACE(tr.licence, ' ', '') = REPLACE(r.licence, ' ', '')
+                  AND t.category_id = r.category_id
+                  AND t.season = r.season
+                  AND t.tournament_number <= 3), 0) as cumulated_reprises,
+        CASE WHEN p.licence IS NULL THEN 1 ELSE 0 END as missing_from_players
+      FROM rankings r
+      LEFT JOIN players p ON REPLACE(r.licence, ' ', '') = REPLACE(p.licence, ' ', '')
+      JOIN categories c ON r.category_id = c.id
+      LEFT JOIN clubs ON REPLACE(REPLACE(REPLACE(UPPER(COALESCE(p.club, '')), ' ', ''), '.', ''), '-', '') = REPLACE(REPLACE(REPLACE(UPPER(clubs.name), ' ', ''), '.', ''), '-', '')
+      WHERE r.category_id = ? AND r.season = ?
+      ORDER BY r.rank_position
+    `;
+
+    db.all(query, [categoryId, season], (err, rows) => {
+      if (err) {
+        return res.status(500).json({ error: err.message });
+      }
+      // Return rankings with tournaments played info
+      res.json({
+        rankings: rows,
+        tournamentsPlayed
+      });
+    });
   });
 });
 
@@ -98,6 +120,25 @@ router.get('/export', authenticateToken, async (req, res) => {
   if (!categoryId || !season) {
     return res.status(400).json({ error: 'Category ID and season required' });
   }
+
+  // First, check which tournaments have been played
+  const tournamentsPlayedQuery = `
+    SELECT tournament_number FROM tournaments
+    WHERE category_id = ? AND season = ? AND tournament_number <= 3
+  `;
+
+  const tournamentRows = await new Promise((resolve, reject) => {
+    db.all(tournamentsPlayedQuery, [categoryId, season], (err, rows) => {
+      if (err) reject(err);
+      else resolve(rows || []);
+    });
+  });
+
+  const tournamentsPlayed = {
+    t1: tournamentRows.some(t => t.tournament_number === 1),
+    t2: tournamentRows.some(t => t.tournament_number === 2),
+    t3: tournamentRows.some(t => t.tournament_number === 3)
+  };
 
   // Use LEFT JOIN for players to include ranked players even if not in players table
   const query = `
@@ -225,14 +266,21 @@ router.get('/export', authenticateToken, async (req, res) => {
         bottom: { style: 'medium', color: { argb: 'FF1F4788' } }
       };
 
-      // Helper to format tournament points: null = "*" (absent)
-      const formatTournamentPoints = (points) => points === null ? '*' : points;
+      // Helper to format tournament points:
+      // - Tournament not played → "-"
+      // - Tournament played but player absent (null) → "*"
+      // - Tournament played and player participated → show points
+      const formatTournamentPoints = (points, tournamentPlayed) => {
+        if (!tournamentPlayed) return '-';
+        if (points === null) return '*';
+        return points;
+      };
 
-      // Check if legend is needed (any absent players)
+      // Check if legend is needed (any absent players from PLAYED tournaments)
       const hasAbsentPlayers = rows.some(r =>
-        r.tournament_1_points === null ||
-        r.tournament_2_points === null ||
-        r.tournament_3_points === null
+        (tournamentsPlayed.t1 && r.tournament_1_points === null) ||
+        (tournamentsPlayed.t2 && r.tournament_2_points === null) ||
+        (tournamentsPlayed.t3 && r.tournament_3_points === null)
       );
 
       // Add legend if needed
@@ -256,9 +304,9 @@ router.get('/export', authenticateToken, async (req, res) => {
           row.last_name,
           row.club,
           '', // Empty cell for logo
-          formatTournamentPoints(row.tournament_1_points),
-          formatTournamentPoints(row.tournament_2_points),
-          formatTournamentPoints(row.tournament_3_points),
+          formatTournamentPoints(row.tournament_1_points, tournamentsPlayed.t1),
+          formatTournamentPoints(row.tournament_2_points, tournamentsPlayed.t2),
+          formatTournamentPoints(row.tournament_3_points, tournamentsPlayed.t3),
           row.total_match_points,
           row.cumulated_points,
           row.cumulated_reprises,
