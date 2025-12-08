@@ -16,6 +16,15 @@ router.get('/debug-player/:licence', authenticateToken, (req, res) => {
   });
 });
 
+// Debug: check rankings table directly
+router.get('/debug-rankings-table/:categoryId/:season', authenticateToken, (req, res) => {
+  const { categoryId, season } = req.params;
+  db.all(`SELECT licence, total_match_points, rank_position FROM rankings WHERE category_id = ? AND season = ? ORDER BY rank_position`, [categoryId, season], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ count: rows.length, rows });
+  });
+});
+
 // Get rankings by category and season
 router.get('/', authenticateToken, (req, res) => {
   const { categoryId, season } = req.query;
