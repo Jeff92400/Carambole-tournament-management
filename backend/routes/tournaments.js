@@ -475,7 +475,7 @@ function recalculateRankings(categoryId, season, callback) {
   const query = `
     SELECT
       REPLACE(tr.licence, ' ', '') as licence,
-      tr.player_name,
+      MAX(tr.player_name) as player_name,
       SUM(tr.match_points) as total_match_points,
       SUM(tr.points) as total_points,
       SUM(tr.reprises) as total_reprises,
@@ -490,7 +490,7 @@ function recalculateRankings(categoryId, season, callback) {
     FROM tournament_results tr
     JOIN tournaments t ON tr.tournament_id = t.id
     WHERE t.category_id = ? AND t.season = ? AND t.tournament_number <= 3
-    GROUP BY REPLACE(tr.licence, ' ', ''), tr.player_name
+    GROUP BY REPLACE(tr.licence, ' ', '')
     ORDER BY total_match_points DESC, avg_moyenne DESC, best_serie DESC
   `;
 
