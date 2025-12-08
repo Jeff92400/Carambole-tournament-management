@@ -1301,19 +1301,28 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
           headers: { 'Authorization': `Bearer ${token}` }
         });
 
+        let intro = DEFAULT_RESULTS_TEMPLATE.intro;
+        let outro = DEFAULT_RESULTS_TEMPLATE.outro;
+
         if (response.ok) {
           const template = await response.json();
           // Parse the body which contains intro and outro separated by a delimiter
           const parts = (template.body_template || '').split('---OUTRO---');
-          document.getElementById('resultsIntroTemplate').value = parts[0] || DEFAULT_RESULTS_TEMPLATE.intro;
-          document.getElementById('resultsOutroTemplate').value = parts[1] || DEFAULT_RESULTS_TEMPLATE.outro;
-        } else {
-          document.getElementById('resultsIntroTemplate').value = DEFAULT_RESULTS_TEMPLATE.intro;
-          document.getElementById('resultsOutroTemplate').value = DEFAULT_RESULTS_TEMPLATE.outro;
+          intro = parts[0] || DEFAULT_RESULTS_TEMPLATE.intro;
+          outro = parts[1] || DEFAULT_RESULTS_TEMPLATE.outro;
         }
+
+        // Update both the Templates tab fields AND the Results tab fields
+        document.getElementById('resultsIntroTemplate').value = intro;
+        document.getElementById('resultsOutroTemplate').value = outro;
+        document.getElementById('resultsIntroText').value = intro;
+        document.getElementById('resultsOutroText').value = outro;
+
       } catch (error) {
         document.getElementById('resultsIntroTemplate').value = DEFAULT_RESULTS_TEMPLATE.intro;
         document.getElementById('resultsOutroTemplate').value = DEFAULT_RESULTS_TEMPLATE.outro;
+        document.getElementById('resultsIntroText').value = DEFAULT_RESULTS_TEMPLATE.intro;
+        document.getElementById('resultsOutroText').value = DEFAULT_RESULTS_TEMPLATE.outro;
       }
     }
 
@@ -1921,6 +1930,7 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
       await loadTemplates();
       await loadImportedTournaments();
       await loadCcEmail();
+      await loadResultsTemplate(); // Load saved template into Results tab
     }
 
     initialize();
