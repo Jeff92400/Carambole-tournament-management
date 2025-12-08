@@ -602,7 +602,16 @@ router.post('/recalculate-rankings', authenticateToken, (req, res) => {
     if (err) {
       return res.status(500).json({ error: err.message });
     }
-    res.json({ message: 'Rankings recalculated successfully' });
+
+    // Get count of ranked players to return to frontend
+    db.get('SELECT COUNT(*) as count FROM rankings WHERE category_id = ? AND season = ?',
+      [categoryId, season], (countErr, row) => {
+        const playersRanked = row ? row.count : 0;
+        res.json({
+          message: 'Rankings recalculated successfully',
+          playersRanked: playersRanked
+        });
+      });
   });
 });
 
@@ -1083,22 +1092,6 @@ router.delete('/:id', authenticateToken, (req, res) => {
         });
       });
     });
-  });
-});
-
-// Recalculate all rankings for a specific category and season (admin utility)
-router.post('/recalculate-rankings', authenticateToken, (req, res) => {
-  const { categoryId, season } = req.body;
-
-  if (!categoryId || !season) {
-    return res.status(400).json({ error: 'Category ID and season required' });
-  }
-
-  recalculateRankings(categoryId, season, (err) => {
-    if (err) {
-      return res.status(500).json({ error: 'Rankings recalculation failed: ' + err.message });
-    }
-    res.json({ message: 'Rankings recalculated successfully' });
   });
 });
 

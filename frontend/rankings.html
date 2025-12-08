@@ -39,9 +39,12 @@
           </select>
         </div>
 
-        <div class="form-group" style="display: flex; align-items: flex-end;">
+        <div class="form-group" style="display: flex; align-items: flex-end; gap: 10px;">
           <button class="btn btn-success" id="exportBtn" style="margin-top: 0;">
             📊 Exporter en Excel
+          </button>
+          <button class="btn admin-only" id="recalculateBtn" style="margin-top: 0; background: #ff9800; color: white;">
+            🔄 Recalculer
           </button>
         </div>
       </div>
@@ -411,6 +414,54 @@
       } catch (error) {
         console.error('Export error:', error);
         alert('Erreur lors de l\'export');
+      }
+    });
+
+    // Recalculate rankings
+    document.getElementById('recalculateBtn').addEventListener('click', async () => {
+      if (!currentCategoryId || !currentSeason) {
+        alert('Veuillez sélectionner une saison et une catégorie');
+        return;
+      }
+
+      if (!confirm('Recalculer le classement pour cette catégorie et saison ?')) {
+        return;
+      }
+
+      const btn = document.getElementById('recalculateBtn');
+      const originalText = btn.innerHTML;
+      btn.innerHTML = '⏳ Recalcul...';
+      btn.disabled = true;
+
+      try {
+        const response = await fetch(`${API_URL}/tournaments/recalculate-rankings`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            categoryId: parseInt(currentCategoryId),
+            season: currentSeason
+          })
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Erreur lors du recalcul');
+        }
+
+        const result = await response.json();
+        alert(`Classement recalculé avec succès !\n${result.playersRanked} joueurs classés.`);
+
+        // Reload rankings to show updated data
+        await loadRankings();
+      } catch (error) {
+        console.error('Recalculate error:', error);
+        alert(`Erreur: ${error.message}`);
+      } finally {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
       }
     });
 
