@@ -1140,6 +1140,428 @@ router.post('/send-results', authenticateToken, async (req, res) => {
   }
 });
 
+// ==================== FINALES & FINALISTS ====================
+
+// Get finales for current season (tournament_number = 4 or contains "FINALE" in name)
+router.get('/finales', authenticateToken, async (req, res) => {
+  const db = require('../db-loader');
+
+  // Calculate current season dates
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth();
+
+  let seasonStart, seasonEnd;
+  if (currentMonth >= 8) {
+    seasonStart = `${currentYear}-09-01`;
+    seasonEnd = `${currentYear + 1}-06-30`;
+  } else {
+    seasonStart = `${currentYear - 1}-09-01`;
+    seasonEnd = `${currentYear}-06-30`;
+  }
+
+  db.all(
+    `SELECT t.tournoi_id, t.nom, t.mode, t.categorie, t.debut, t.fin, t.lieu,
+            (SELECT COUNT(*) FROM inscriptions i WHERE i.tournoi_id = t.tournoi_id AND i.forfait != 1) as nb_inscrits
+     FROM tournoi_ext t
+     WHERE (t.debut >= $1 AND t.debut <= $2)
+       AND (UPPER(t.nom) LIKE '%FINALE%' OR UPPER(t.nom) LIKE '%FINAL%')
+     ORDER BY t.debut ASC, t.mode, t.categorie`,
+    [seasonStart, seasonEnd],
+    (err, rows) => {
+      if (err) {
+        console.error('Error fetching finales:', err);
+        return res.status(500).json({ error: err.message });
+      }
+      res.json(rows || []);
+    }
+  );
+});
+
+// Get finalists for a specific finale (qualified players from ranking after T3)
+router.get('/finalists/:finaleId', authenticateToken, async (req, res) => {
+  const db = require('../db-loader');
+  const { finaleId } = req.params;
+
+  try {
+    // Get the finale details to determine mode/category
+    const finale = await new Promise((resolve, reject) => {
+      db.get(
+        `SELECT * FROM tournoi_ext WHERE tournoi_id = $1`,
+        [finaleId],
+        (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        }
+      );
+    });
+
+    if (!finale) {
+      return res.status(404).json({ error: 'Finale non trouvée' });
+    }
+
+    // Determine the season from finale date
+    const finaleDate = new Date(finale.debut);
+    const finaleYear = finaleDate.getFullYear();
+    const finaleMonth = finaleDate.getMonth();
+
+    let season;
+    if (finaleMonth >= 8) {
+      season = `${finaleYear}-${finaleYear + 1}`;
+    } else {
+      season = `${finaleYear - 1}-${finaleYear}`;
+    }
+
+    // Find the category in our system
+    // Map mode: LIBRE, CADRE, BANDE, 3BANDES
+    // Map category: N3, R1, R2, R3, etc.
+    const mode = finale.mode.toUpperCase();
+    const categoryLevel = finale.categorie.toUpperCase();
+
+    // Find matching category
+    const category = await new Promise((resolve, reject) => {
+      db.get(
+        `SELECT * FROM categories
+         WHERE UPPER(game_type) = $1
+           AND (UPPER(level) = $2 OR UPPER(level) LIKE $3)`,
+        [mode, categoryLevel, categoryLevel + '%'],
+        (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        }
+      );
+    });
+
+    if (!category) {
+      return res.status(404).json({ error: `Catégorie non trouvée: ${mode} - ${categoryLevel}` });
+    }
+
+    // Get rankings for this category/season (final ranking after T3)
+    const rankings = await new Promise((resolve, reject) => {
+      db.all(
+        `SELECT r.*,
+                p.first_name, p.last_name,
+                COALESCE(p.first_name || ' ' || p.last_name, r.licence) as player_name,
+                pc.email, pc.telephone
+         FROM rankings r
+         LEFT JOIN players p ON REPLACE(r.licence, ' ', '') = REPLACE(p.licence, ' ', '')
+         LEFT JOIN player_contacts pc ON REPLACE(r.licence, ' ', '') = REPLACE(pc.licence, ' ', '')
+         WHERE r.season = $1 AND r.category_id = $2
+         ORDER BY r.rank_position ASC`,
+        [season, category.id],
+        (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows || []);
+        }
+      );
+    });
+
+    // Determine qualified count: <9 players → 4 qualified, >=9 players → 6 qualified
+    const totalPlayers = rankings.length;
+    const qualifiedCount = totalPlayers < 9 ? 4 : 6;
+
+    // Get only qualified players (top N)
+    const finalists = rankings
+      .filter(r => r.rank_position <= qualifiedCount)
+      .map(r => ({
+        licence: r.licence,
+        player_name: r.player_name,
+        first_name: r.first_name,
+        last_name: r.last_name,
+        rank_position: r.rank_position,
+        total_match_points: r.total_match_points,
+        avg_moyenne: r.avg_moyenne,
+        email: r.email,
+        telephone: r.telephone
+      }));
+
+    const emailCount = finalists.filter(f => f.email && f.email.includes('@')).length;
+
+    res.json({
+      finale: {
+        tournoi_id: finale.tournoi_id,
+        nom: finale.nom,
+        mode: finale.mode,
+        categorie: finale.categorie,
+        date: finale.debut,
+        lieu: finale.lieu
+      },
+      category: {
+        id: category.id,
+        display_name: category.display_name,
+        game_type: category.game_type,
+        level: category.level
+      },
+      season,
+      totalPlayers,
+      qualifiedCount,
+      finalists,
+      emailCount
+    });
+
+  } catch (error) {
+    console.error('Error fetching finalists:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Send finale convocation emails to finalists
+router.post('/send-finale-convocation', authenticateToken, async (req, res) => {
+  const db = require('../db-loader');
+  const { finaleId, introText, outroText, imageUrl, testMode, testEmail, ccEmail } = req.body;
+
+  const resend = getResend();
+  if (!resend) {
+    return res.status(500).json({
+      error: 'Email non configuré. Veuillez définir RESEND_API_KEY.'
+    });
+  }
+
+  if (testMode && (!testEmail || !testEmail.includes('@'))) {
+    return res.status(400).json({ error: 'Email de test invalide.' });
+  }
+
+  try {
+    // Get finale details
+    const finale = await new Promise((resolve, reject) => {
+      db.get(`SELECT * FROM tournoi_ext WHERE tournoi_id = $1`, [finaleId], (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
+
+    if (!finale) {
+      return res.status(404).json({ error: 'Finale non trouvée' });
+    }
+
+    // Determine season
+    const finaleDate = new Date(finale.debut);
+    const finaleYear = finaleDate.getFullYear();
+    const finaleMonth = finaleDate.getMonth();
+    const season = finaleMonth >= 8 ? `${finaleYear}-${finaleYear + 1}` : `${finaleYear - 1}-${finaleYear}`;
+
+    // Find category
+    const mode = finale.mode.toUpperCase();
+    const categoryLevel = finale.categorie.toUpperCase();
+
+    const category = await new Promise((resolve, reject) => {
+      db.get(
+        `SELECT * FROM categories WHERE UPPER(game_type) = $1 AND (UPPER(level) = $2 OR UPPER(level) LIKE $3)`,
+        [mode, categoryLevel, categoryLevel + '%'],
+        (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        }
+      );
+    });
+
+    if (!category) {
+      return res.status(404).json({ error: `Catégorie non trouvée: ${mode} - ${categoryLevel}` });
+    }
+
+    // Get finalists
+    const rankings = await new Promise((resolve, reject) => {
+      db.all(
+        `SELECT r.*, p.first_name, p.last_name,
+                COALESCE(p.first_name || ' ' || p.last_name, r.licence) as player_name,
+                pc.email, pc.telephone
+         FROM rankings r
+         LEFT JOIN players p ON REPLACE(r.licence, ' ', '') = REPLACE(p.licence, ' ', '')
+         LEFT JOIN player_contacts pc ON REPLACE(r.licence, ' ', '') = REPLACE(pc.licence, ' ', '')
+         WHERE r.season = $1 AND r.category_id = $2
+         ORDER BY r.rank_position ASC`,
+        [season, category.id],
+        (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows || []);
+        }
+      );
+    });
+
+    const qualifiedCount = rankings.length < 9 ? 4 : 6;
+    const finalists = rankings.filter(r => r.rank_position <= qualifiedCount);
+
+    if (finalists.length === 0) {
+      return res.status(400).json({ error: 'Aucun finaliste trouvé' });
+    }
+
+    const sentResults = { sent: [], failed: [], skipped: [] };
+    const finaleFormattedDate = finale.debut ? new Date(finale.debut).toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : '';
+
+    // Create campaign record
+    const campaignId = await new Promise((resolve, reject) => {
+      db.run(
+        `INSERT INTO email_campaigns (subject, body, template_key, recipients_count, status)
+         VALUES ($1, $2, 'finale_convocation', $3, 'sending')`,
+        [`Convocation Finale - ${category.display_name}`, introText, finalists.filter(f => f.email).length],
+        function(err) {
+          if (err) reject(err);
+          else resolve(this.lastID);
+        }
+      );
+    });
+
+    // In test mode, send to test email only
+    const participantsToEmail = testMode ? [{ ...finalists[0], email: testEmail }] : finalists;
+
+    for (const finalist of participantsToEmail) {
+      if (!finalist.email || !finalist.email.includes('@')) {
+        sentResults.skipped.push({
+          name: finalist.player_name,
+          reason: 'Email invalide ou manquant'
+        });
+        continue;
+      }
+
+      try {
+        // Build finalists table for email
+        const finalistsTableRows = finalists.map(f => {
+          const isCurrentPlayer = f.licence === finalist.licence;
+          const bgColor = isCurrentPlayer ? '#FFF3CD' : (f.rank_position % 2 === 0 ? '#f8f9fa' : 'white');
+          const fontWeight = isCurrentPlayer ? 'bold' : 'normal';
+          const arrow = isCurrentPlayer ? '▶ ' : '';
+          return `
+            <tr style="background: ${bgColor};">
+              <td style="padding: 10px; text-align: center; border: 1px solid #ddd; font-weight: ${fontWeight};">${f.rank_position}</td>
+              <td style="padding: 10px; text-align: left; border: 1px solid #ddd; font-weight: ${fontWeight};">${arrow}${f.player_name}</td>
+              <td style="padding: 10px; text-align: center; border: 1px solid #ddd; font-weight: ${fontWeight};">${f.total_match_points || '-'}</td>
+              <td style="padding: 10px; text-align: center; border: 1px solid #ddd; font-weight: ${fontWeight};">${f.avg_moyenne ? f.avg_moyenne.toFixed(3) : '-'}</td>
+            </tr>
+          `;
+        }).join('');
+
+        const finalistsTableHtml = `
+          <table style="width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 14px;">
+            <thead>
+              <tr style="background: #28a745; color: white;">
+                <th style="padding: 12px; text-align: center; border: 1px solid #ddd;">Pos</th>
+                <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Joueur</th>
+                <th style="padding: 12px; text-align: center; border: 1px solid #ddd;">Total Pts Match</th>
+                <th style="padding: 12px; text-align: center; border: 1px solid #ddd;">Moyenne</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${finalistsTableRows}
+            </tbody>
+          </table>
+        `;
+
+        // Replace template variables
+        const personalizedIntro = introText
+          .replace(/\{first_name\}/g, finalist.first_name || finalist.player_name.split(' ')[0] || '')
+          .replace(/\{last_name\}/g, finalist.last_name || '')
+          .replace(/\{player_name\}/g, finalist.player_name || '')
+          .replace(/\{finale_name\}/g, finale.nom || '')
+          .replace(/\{finale_date\}/g, finaleFormattedDate)
+          .replace(/\{finale_lieu\}/g, finale.lieu || '')
+          .replace(/\{category\}/g, category.display_name || '')
+          .replace(/\{rank_position\}/g, finalist.rank_position || '');
+
+        const personalizedOutro = outroText
+          .replace(/\{first_name\}/g, finalist.first_name || '')
+          .replace(/\{last_name\}/g, finalist.last_name || '');
+
+        const imageHtml = imageUrl ? `<div style="text-align: center; margin: 20px 0;"><img src="${imageUrl}" alt="Image" style="max-width: 100%; height: auto; border-radius: 8px;"></div>` : '';
+
+        const emailHtml = `
+          <div style="font-family: Arial, sans-serif; max-width: 700px; margin: 0 auto;">
+            <div style="background: #1F4788; color: white; padding: 20px; text-align: center;">
+              <img src="https://cdbhs-tournament-management-production.up.railway.app/images/billiard-icon.png" alt="CDBHS" style="height: 50px; margin-bottom: 10px;" onerror="this.style.display='none'">
+              <h1 style="margin: 0; font-size: 24px;">🏆 Convocation Finale Départementale</h1>
+              <p style="margin: 10px 0 0 0; opacity: 0.9;">${category.display_name}</p>
+            </div>
+            <div style="padding: 20px; background: #f8f9fa; line-height: 1.6;">
+              ${imageHtml}
+
+              <div style="background: #d4edda; border-left: 4px solid #28a745; padding: 15px; margin-bottom: 20px;">
+                <strong>🎉 Félicitations ${finalist.first_name || ''} !</strong><br>
+                Vous êtes qualifié(e) pour la finale départementale !
+              </div>
+
+              <p>${personalizedIntro.replace(/\n/g, '<br>')}</p>
+
+              <div style="background: white; padding: 15px; border-radius: 8px; margin: 20px 0; border: 1px solid #ddd;">
+                <h3 style="margin-top: 0; color: #1F4788;">📍 Informations de la Finale</h3>
+                <p><strong>Date :</strong> ${finaleFormattedDate}</p>
+                <p><strong>Lieu :</strong> ${finale.lieu || 'À confirmer'}</p>
+                <p><strong>Catégorie :</strong> ${category.display_name}</p>
+              </div>
+
+              <h3 style="color: #28a745;">Liste des Finalistes</h3>
+              ${finalistsTableHtml}
+
+              <p style="margin-top: 30px;">${personalizedOutro.replace(/\n/g, '<br>')}</p>
+            </div>
+            <div style="background: #1F4788; color: white; padding: 10px; text-align: center; font-size: 12px;">
+              <p style="margin: 0;">CDBHS - cdbhs92@gmail.com</p>
+            </div>
+          </div>
+        `;
+
+        const emailOptions = {
+          from: 'CDBHS <communication@cdbhs.net>',
+          to: [finalist.email],
+          subject: `🏆 Convocation Finale - ${category.display_name} - ${finaleFormattedDate}`,
+          html: emailHtml
+        };
+
+        if (ccEmail && ccEmail.includes('@') && !testMode) {
+          emailOptions.cc = [ccEmail];
+        }
+
+        await resend.emails.send(emailOptions);
+
+        sentResults.sent.push({
+          name: finalist.player_name,
+          email: finalist.email
+        });
+
+        await new Promise((resolve) => {
+          db.run(
+            'UPDATE player_contacts SET last_contacted = CURRENT_TIMESTAMP WHERE REPLACE(licence, \' \', \'\') = $1',
+            [finalist.licence.replace(/ /g, '')],
+            () => resolve()
+          );
+        });
+
+        await delay(1500);
+
+      } catch (error) {
+        console.error(`Error sending finale convocation to ${finalist.email}:`, error);
+        sentResults.failed.push({
+          name: finalist.player_name,
+          email: finalist.email,
+          error: error.message
+        });
+      }
+    }
+
+    // Update campaign
+    await new Promise((resolve) => {
+      db.run(
+        `UPDATE email_campaigns SET sent_count = $1, failed_count = $2, status = 'completed', sent_at = CURRENT_TIMESTAMP WHERE id = $3`,
+        [sentResults.sent.length, sentResults.failed.length, campaignId],
+        () => resolve()
+      );
+    });
+
+    const message = testMode
+      ? `Email de test envoyé à ${testEmail}`
+      : `Convocations envoyées: ${sentResults.sent.length}, Échecs: ${sentResults.failed.length}, Ignorés: ${sentResults.skipped.length}`;
+
+    res.json({
+      success: true,
+      message,
+      results: sentResults,
+      testMode
+    });
+
+  } catch (error) {
+    console.error('Error sending finale convocations:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ==================== CAMPAIGN HISTORY ====================
 
 // Get email campaign history

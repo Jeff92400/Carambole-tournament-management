@@ -246,6 +246,7 @@
     <div class="tabs">
       <div class="tab active" data-tab="compose">Composer</div>
       <div class="tab" data-tab="results">Résultats Tournoi</div>
+      <div class="tab" data-tab="finale">Convocation Finale</div>
       <div class="tab" data-tab="contacts">Gestion Contacts</div>
       <div class="tab" data-tab="templates">Templates</div>
       <div class="tab" data-tab="history">Historique</div>
@@ -471,6 +472,122 @@ Le Comité Départemental de Billard des Hauts-de-Seine</textarea>
 
             <button class="btn" id="sendResultsBtn" style="width: 100%; padding: 15px; font-size: 16px; background: #1F4788;" disabled>
               Envoyer les Résultats
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB: Finale Convocation -->
+    <div id="tab-finale" class="tab-content">
+      <div class="card">
+        <h3>🏆 Convocation des Finalistes</h3>
+        <p style="color: #666; margin-bottom: 20px;">
+          Sélectionnez une finale pour envoyer les convocations aux joueurs qualifiés (basé sur le classement après les 3 tournois).
+        </p>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+          <!-- Left: Finale Selection -->
+          <div>
+            <label style="display: block; font-weight: bold; margin-bottom: 10px;">Sélectionner une finale</label>
+            <select id="finaleSelect" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
+              <option value="">-- Finales saison en cours --</option>
+            </select>
+
+            <div id="finaleInfo" style="display: none; margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+              <h4 style="margin: 0 0 10px 0;" id="finaleInfoTitle">-</h4>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 14px;">
+                <div><strong>Date:</strong> <span id="finaleInfoDate">-</span></div>
+                <div><strong>Lieu:</strong> <span id="finaleInfoLieu">-</span></div>
+                <div><strong>Mode:</strong> <span id="finaleInfoMode">-</span></div>
+                <div><strong>Catégorie:</strong> <span id="finaleInfoCategory">-</span></div>
+                <div><strong>Qualifiés:</strong> <span id="finaleInfoQualified">-</span></div>
+                <div><strong>Emails disponibles:</strong> <span id="finaleInfoEmails">-</span></div>
+              </div>
+            </div>
+
+            <div id="finalistsPreview" style="display: none; margin-top: 20px;">
+              <h4 style="color: #28a745;">Finalistes Qualifiés</h4>
+              <p style="color: #666; font-size: 13px; margin-bottom: 10px;">
+                Règle : moins de 9 joueurs = 4 qualifiés, 9 joueurs ou plus = 6 qualifiés
+              </p>
+              <div style="max-height: 350px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px;">
+                <table style="width: 100%; font-size: 13px;">
+                  <thead style="background: #28a745; color: white; position: sticky; top: 0;">
+                    <tr>
+                      <th style="padding: 10px; text-align: center;">Pos</th>
+                      <th style="padding: 10px; text-align: left;">Joueur</th>
+                      <th style="padding: 10px; text-align: center;">Pts Match</th>
+                      <th style="padding: 10px; text-align: center;">Moyenne</th>
+                      <th style="padding: 10px; text-align: center;">Email</th>
+                    </tr>
+                  </thead>
+                  <tbody id="finalistsPreviewBody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right: Email Customization -->
+          <div>
+            <div style="margin-bottom: 15px;">
+              <label style="display: block; font-weight: bold; margin-bottom: 5px;">Texte d'introduction</label>
+              <textarea id="finaleIntroText" rows="5" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-family: inherit;">Bonjour {first_name},
+
+Suite aux trois tournois de la saison, nous avons le plaisir de vous informer que vous êtes qualifié(e) pour la finale départementale !
+
+Vous trouverez ci-dessous les informations concernant cette finale ainsi que la liste des finalistes.</textarea>
+            </div>
+
+            <div style="margin-bottom: 15px;">
+              <label style="display: block; font-weight: bold; margin-bottom: 5px;">Texte de conclusion</label>
+              <textarea id="finaleOutroText" rows="3" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-family: inherit;">En cas d'empêchement, merci de nous prévenir dès que possible.
+
+Sportivement,
+Le Comité Départemental de Billard des Hauts-de-Seine</textarea>
+            </div>
+
+            <div style="margin-bottom: 15px;">
+              <label style="display: block; font-weight: bold; margin-bottom: 5px;">Image (optionnel) - URL</label>
+              <input type="url" id="finaleImageUrl" placeholder="https://exemple.com/image.jpg" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+            </div>
+
+            <div class="template-vars" style="margin-bottom: 20px;">
+              <strong>Variables disponibles:</strong>
+              <code>{first_name}</code>
+              <code>{last_name}</code>
+              <code>{player_name}</code>
+              <code>{finale_name}</code>
+              <code>{finale_date}</code>
+              <code>{finale_lieu}</code>
+              <code>{category}</code>
+              <code>{rank_position}</code>
+            </div>
+
+            <!-- CC Option -->
+            <div style="background: #e7f3ff; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+              <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                <input type="checkbox" id="finaleCcCheck" checked style="width: 18px; height: 18px;">
+                <strong>Copie (CC)</strong> - Envoyer une copie à :
+              </label>
+              <div id="finaleCcEmailInput" style="margin-top: 10px;">
+                <input type="email" id="finaleCcEmail" value="cdbhs92@gmail.com" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+              </div>
+            </div>
+
+            <!-- Test Mode -->
+            <div style="background: #fff3cd; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+              <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                <input type="checkbox" id="finaleTestModeCheck" style="width: 18px; height: 18px;">
+                <strong>Mode Test</strong> - Envoyer uniquement à mon adresse
+              </label>
+              <div id="finaleTestEmailInput" style="display: none; margin-top: 10px;">
+                <input type="email" id="finaleTestEmail" placeholder="votre.email@exemple.com" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+              </div>
+            </div>
+
+            <button class="btn" id="sendFinaleConvocationBtn" style="width: 100%; padding: 15px; font-size: 16px; background: #28a745;" disabled>
+              🏆 Envoyer les Convocations Finale
             </button>
           </div>
         </div>
@@ -756,6 +873,7 @@ Le Comité Départemental de Billard des Hauts-de-Seine</textarea>
 
         // Load data for specific tabs
         if (tab.dataset.tab === 'results') loadImportedTournaments();
+        if (tab.dataset.tab === 'finale') loadFinales();
         if (tab.dataset.tab === 'contacts') loadAllContacts();
         if (tab.dataset.tab === 'templates') {
           loadConvocationTemplate();
@@ -1929,6 +2047,210 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
             testMode: isTestMode,
             testEmail: isTestMode ? testEmail : null,
             ccEmail: document.getElementById('ccCheck').checked ? document.getElementById('ccEmail').value.trim() : null
+          })
+        });
+
+        const result = await response.json();
+        hideProgress();
+
+        if (response.ok) {
+          showSuccess(result.message);
+        } else {
+          showError(result.error || 'Erreur lors de l\'envoi');
+        }
+
+      } catch (error) {
+        hideProgress();
+        showError('Erreur: ' + error.message);
+      }
+    });
+
+    // ==================== FINALE CONVOCATIONS ====================
+
+    let selectedFinaleData = null;
+    let finalistsList = [];
+
+    async function loadFinales() {
+      try {
+        const response = await fetch(`${API_URL}/emailing/finales`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (!response.ok) throw new Error('Failed to load finales');
+
+        const finales = await response.json();
+        const select = document.getElementById('finaleSelect');
+        select.innerHTML = '<option value="">-- Finales saison en cours --</option>';
+
+        if (finales.length === 0) {
+          const option = document.createElement('option');
+          option.value = '';
+          option.textContent = 'Aucune finale trouvée pour cette saison';
+          option.disabled = true;
+          select.appendChild(option);
+          return;
+        }
+
+        // Group by mode
+        const byMode = {};
+        finales.forEach(f => {
+          if (!byMode[f.mode]) byMode[f.mode] = [];
+          byMode[f.mode].push(f);
+        });
+
+        Object.keys(byMode).sort().forEach(mode => {
+          const optgroup = document.createElement('optgroup');
+          optgroup.label = mode;
+          byMode[mode].forEach(f => {
+            const option = document.createElement('option');
+            option.value = f.tournoi_id;
+            const date = f.debut ? new Date(f.debut).toLocaleDateString('fr-FR') : '';
+            option.textContent = `${f.nom} - ${f.categorie} - ${date}`;
+            option.dataset.finale = JSON.stringify(f);
+            optgroup.appendChild(option);
+          });
+          select.appendChild(optgroup);
+        });
+
+      } catch (error) {
+        console.error('Error loading finales:', error);
+        showError('Erreur lors du chargement des finales');
+      }
+    }
+
+    document.getElementById('finaleSelect').addEventListener('change', async (e) => {
+      const finaleId = e.target.value;
+      const infoDiv = document.getElementById('finaleInfo');
+      const previewDiv = document.getElementById('finalistsPreview');
+      const sendBtn = document.getElementById('sendFinaleConvocationBtn');
+
+      if (!finaleId) {
+        infoDiv.style.display = 'none';
+        previewDiv.style.display = 'none';
+        sendBtn.disabled = true;
+        selectedFinaleData = null;
+        finalistsList = [];
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API_URL}/emailing/finalists/${finaleId}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to load finalists');
+        }
+
+        const data = await response.json();
+        selectedFinaleData = data;
+        finalistsList = data.finalists || [];
+
+        // Update info section
+        document.getElementById('finaleInfoTitle').textContent = data.finale.nom || '-';
+        document.getElementById('finaleInfoDate').textContent = data.finale.date ? new Date(data.finale.date).toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : '-';
+        document.getElementById('finaleInfoLieu').textContent = data.finale.lieu || 'À confirmer';
+        document.getElementById('finaleInfoMode').textContent = data.finale.mode || '-';
+        document.getElementById('finaleInfoCategory').textContent = data.category.display_name || '-';
+        document.getElementById('finaleInfoQualified').textContent = `${data.qualifiedCount} / ${data.totalPlayers} joueurs`;
+        document.getElementById('finaleInfoEmails').textContent = data.emailCount || 0;
+
+        infoDiv.style.display = 'block';
+
+        // Update finalists preview
+        const tbody = document.getElementById('finalistsPreviewBody');
+        tbody.innerHTML = '';
+
+        finalistsList.forEach(f => {
+          const row = document.createElement('tr');
+          row.style.background = f.rank_position % 2 === 0 ? '#f8f9fa' : 'white';
+          row.innerHTML = `
+            <td style="padding: 10px; text-align: center; font-weight: bold; color: #28a745;">${f.rank_position}</td>
+            <td style="padding: 10px; text-align: left;">${f.player_name}</td>
+            <td style="padding: 10px; text-align: center;">${f.total_match_points || '-'}</td>
+            <td style="padding: 10px; text-align: center;">${f.avg_moyenne ? f.avg_moyenne.toFixed(3) : '-'}</td>
+            <td style="padding: 10px; text-align: center;">${f.email ? '✅' : '❌'}</td>
+          `;
+          tbody.appendChild(row);
+        });
+
+        previewDiv.style.display = 'block';
+        sendBtn.disabled = data.emailCount === 0;
+
+      } catch (error) {
+        console.error('Error loading finalists:', error);
+        showError('Erreur: ' + error.message);
+        infoDiv.style.display = 'none';
+        previewDiv.style.display = 'none';
+        sendBtn.disabled = true;
+      }
+    });
+
+    // CC checkbox toggle for finale
+    document.getElementById('finaleCcCheck').addEventListener('change', (e) => {
+      document.getElementById('finaleCcEmailInput').style.opacity = e.target.checked ? '1' : '0.5';
+      document.getElementById('finaleCcEmail').disabled = !e.target.checked;
+    });
+
+    // Test mode toggle for finale
+    document.getElementById('finaleTestModeCheck').addEventListener('change', (e) => {
+      const testEmailInput = document.getElementById('finaleTestEmailInput');
+      const sendBtn = document.getElementById('sendFinaleConvocationBtn');
+
+      if (e.target.checked) {
+        testEmailInput.style.display = 'block';
+        sendBtn.textContent = '🧪 Envoyer le Test';
+        sendBtn.style.background = '#FF9800';
+      } else {
+        testEmailInput.style.display = 'none';
+        sendBtn.textContent = '🏆 Envoyer les Convocations Finale';
+        sendBtn.style.background = '#28a745';
+      }
+    });
+
+    // Send finale convocations
+    document.getElementById('sendFinaleConvocationBtn').addEventListener('click', async () => {
+      if (!selectedFinaleData || finalistsList.length === 0) {
+        showError('Veuillez sélectionner une finale');
+        return;
+      }
+
+      const isTestMode = document.getElementById('finaleTestModeCheck').checked;
+      const testEmail = document.getElementById('finaleTestEmail').value.trim();
+
+      if (isTestMode) {
+        if (!testEmail || !testEmail.includes('@')) {
+          showError('Veuillez entrer une adresse email valide pour le test.');
+          return;
+        }
+        if (!confirm(`Envoyer un email de test à ${testEmail} ?`)) {
+          return;
+        }
+      } else {
+        const emailCount = finalistsList.filter(f => f.email).length;
+        if (!confirm(`Envoyer les convocations finale à ${emailCount} finaliste(s) ?`)) {
+          return;
+        }
+      }
+
+      showProgress(isTestMode ? 'Envoi du test...' : 'Envoi des convocations en cours...');
+
+      try {
+        const response = await fetch(`${API_URL}/emailing/send-finale-convocation`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            finaleId: selectedFinaleData.finale.tournoi_id,
+            introText: document.getElementById('finaleIntroText').value,
+            outroText: document.getElementById('finaleOutroText').value,
+            imageUrl: document.getElementById('finaleImageUrl').value || null,
+            testMode: isTestMode,
+            testEmail: isTestMode ? testEmail : null,
+            ccEmail: document.getElementById('finaleCcCheck').checked ? document.getElementById('finaleCcEmail').value.trim() : null
           })
         });
 
