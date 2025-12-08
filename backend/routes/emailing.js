@@ -997,6 +997,18 @@ router.post('/send-results', authenticateToken, async (req, res) => {
         const playerRanking = rankings.find(r => r.licence === participant.licence);
         const playerRankingPosition = playerRanking ? playerRanking.rank_position : '-';
 
+        // Determine qualification status for the final
+        // Rule: < 9 players → 4 qualified, >= 9 players → 9 qualified
+        const qualifiedCount = rankings.length < 9 ? 4 : 9;
+        const isQualified = playerRanking && playerRanking.rank_position <= qualifiedCount;
+        const qualificationMessage = isQualified
+          ? `<p style="margin-top: 20px; padding: 15px; background: #d4edda; border-left: 4px solid #28a745; color: #155724;">
+              ✅ <strong>Vous êtes à ce stade de la compétition éligible pour la finale départementale.</strong>
+            </p>`
+          : `<p style="margin-top: 20px; padding: 15px; background: #fff3cd; border-left: 4px solid #ffc107; color: #856404;">
+              Malheureusement, vous n'êtes pas, à ce stade de la compétition, éligible pour la finale départementale.
+            </p>`;
+
         // Replace template variables
         const personalizedIntro = introText
           .replace(/\{first_name\}/g, participant.first_name || participant.player_name.split(' ')[0] || '')
@@ -1034,6 +1046,8 @@ router.post('/send-results', authenticateToken, async (req, res) => {
 
               <h3 style="color: #28a745; margin-top: 15px;">Classement Général ${tournament.display_name}</h3>
               ${rankingsTableHtml.replace('{{RANKINGS_ROWS}}', rankingsRows)}
+
+              ${qualificationMessage}
 
               <p style="margin-top: 30px;">${personalizedOutro.replace(/\n/g, '<br>')}</p>
             </div>
