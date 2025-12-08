@@ -605,6 +605,7 @@
             </div>
             <div id="selectedCount" style="margin-top: 10px; font-size: 14px; color: #666;">
               <strong><span id="checkedCount">0</span></strong> joueur(s) sélectionné(s) pour l'envoi
+              <br><span style="color: #17a2b8;">📋 Récapitulatif envoyé à : <strong id="summaryEmailDisplay">cdbhs92@gmail.com</strong></span>
             </div>
           </div>
 
@@ -657,6 +658,22 @@
     } else {
       document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');
     }
+
+    // Load summary email setting for display
+    (async function loadSummaryEmailDisplay() {
+      try {
+        const response = await fetch(`${API_URL}/settings/app/summary_email`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          const email = data.value || 'cdbhs92@gmail.com';
+          document.getElementById('summaryEmailDisplay').textContent = email;
+        }
+      } catch (error) {
+        console.error('Error loading summary email:', error);
+      }
+    })();
 
     // Logout
     document.getElementById('logoutBtn').addEventListener('click', (e) => {
