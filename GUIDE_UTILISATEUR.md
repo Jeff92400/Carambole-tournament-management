@@ -69,7 +69,7 @@ L'application nécessite 3 fichiers CSV exportés depuis la base IONOS :
 
 ### Indicateurs de fraîcheur des données
 
-Sur la page "Tournois à jouer", un panneau affiche l'état des 3 fichiers avec un code couleur :
+Sur la page "Compétitions à jouer", un panneau affiche l'état des 3 fichiers avec un code couleur :
 
 | Couleur | Signification |
 |---------|---------------|
@@ -83,7 +83,7 @@ Sur la page "Tournois à jouer", un panneau affiche l'état des 3 fichiers avec 
 ## 4. Génération des poules
 
 ### Accès
-Menu principal > **Tournois à jouer**
+Menu principal > **Compétitions à jouer**
 
 ### Étape 1 : Vérification des données
 

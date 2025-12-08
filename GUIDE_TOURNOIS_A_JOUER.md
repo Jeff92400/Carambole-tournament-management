@@ -1,12 +1,12 @@
-# Guide Utilisateur - Tournois à Jouer
+# Guide Utilisateur - Compétitions à Jouer
 
-Ce guide vous accompagne pas à pas dans la préparation des poules pour vos tournois de billard.
+Ce guide vous accompagne pas à pas dans la préparation des poules pour vos compétitions de billard.
 
 ---
 
 ## Vue d'ensemble
 
-Le module "Tournois à jouer" vous permet de :
+Le module "Compétitions à jouer" vous permet de :
 - Vérifier la fraîcheur des données IONOS
 - Sélectionner un tournoi à préparer
 - Choisir les joueurs participants
