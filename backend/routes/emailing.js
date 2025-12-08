@@ -998,8 +998,8 @@ router.post('/send-results', authenticateToken, async (req, res) => {
         const playerRankingPosition = playerRanking ? playerRanking.rank_position : '-';
 
         // Determine qualification status for the final
-        // Rule: < 9 players → 4 qualified, >= 9 players → 9 qualified
-        const qualifiedCount = rankings.length < 9 ? 4 : 9;
+        // Rule: < 9 players → 4 qualified, >= 9 players → 6 qualified
+        const qualifiedCount = rankings.length < 9 ? 4 : 6;
         const isQualified = playerRanking && playerRanking.rank_position <= qualifiedCount;
         const isFinalTournament = tournament.tournament_number === 3;
 

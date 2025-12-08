@@ -347,9 +347,9 @@
         };
 
         // Calculate number of qualified players for the final
-        // Rule: < 9 players → 4 qualified, >= 9 players → 9 qualified
+        // Rule: < 9 players → 4 qualified, >= 9 players → 6 qualified
         const totalPlayers = rankings.length;
-        const qualifiedCount = totalPlayers < 9 ? 4 : 9;
+        const qualifiedCount = totalPlayers < 9 ? 4 : 6;
 
         rankings.forEach(rank => {
           const row = document.createElement('tr');
