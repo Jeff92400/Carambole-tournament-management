@@ -57,6 +57,7 @@
 
     <div class="card" id="rankingsCard" style="display: none;">
       <h3 id="rankingsTitle">Classement</h3>
+      <p id="rankingsLegend" style="display: none; font-size: 12px; color: #666; font-style: italic; margin-top: -10px; margin-bottom: 15px;">(*) Non-participation au tournoi concerné</p>
       <div class="table-container">
         <table>
           <thead>
@@ -315,6 +316,14 @@
         const tbody = document.getElementById('rankingsBody');
         tbody.innerHTML = '';
 
+        // Helper to format tournament points: null = "*" (absent), number = display as is
+        const formatTournamentPoints = (points) => {
+          if (points === null || points === undefined) {
+            return '<span style="color: #999;">*</span>';
+          }
+          return points;
+        };
+
         rankings.forEach(rank => {
           const row = document.createElement('tr');
 
@@ -336,9 +345,9 @@
                 </a>
               </td>
               <td></td>
-              <td style="text-align: center;">${rank.tournament_1_points}</td>
-              <td style="text-align: center;">${rank.tournament_2_points}</td>
-              <td style="text-align: center;">${rank.tournament_3_points}</td>
+              <td style="text-align: center;">${formatTournamentPoints(rank.tournament_1_points)}</td>
+              <td style="text-align: center;">${formatTournamentPoints(rank.tournament_2_points)}</td>
+              <td style="text-align: center;">${formatTournamentPoints(rank.tournament_3_points)}</td>
               <td style="text-align: center; font-weight: bold;">${rank.total_match_points}</td>
               <td style="text-align: center;">${rank.cumulated_points}</td>
               <td style="text-align: center;">${rank.cumulated_reprises}</td>
@@ -352,6 +361,14 @@
 
             tbody.appendChild(row);
           });
+
+        // Show legend only if there are absent players (null tournament points)
+        const hasAbsentPlayers = rankings.some(r =>
+          r.tournament_1_points === null ||
+          r.tournament_2_points === null ||
+          r.tournament_3_points === null
+        );
+        document.getElementById('rankingsLegend').style.display = hasAbsentPlayers ? 'block' : 'none';
 
         document.getElementById('loadingRankings').style.display = 'none';
         document.getElementById('rankingsCard').style.display = 'block';

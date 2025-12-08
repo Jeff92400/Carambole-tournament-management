@@ -225,6 +225,24 @@ router.get('/export', authenticateToken, async (req, res) => {
         bottom: { style: 'medium', color: { argb: 'FF1F4788' } }
       };
 
+      // Helper to format tournament points: null = "*" (absent)
+      const formatTournamentPoints = (points) => points === null ? '*' : points;
+
+      // Check if legend is needed (any absent players)
+      const hasAbsentPlayers = rows.some(r =>
+        r.tournament_1_points === null ||
+        r.tournament_2_points === null ||
+        r.tournament_3_points === null
+      );
+
+      // Add legend if needed
+      if (hasAbsentPlayers) {
+        worksheet.mergeCells('A3:M3');
+        worksheet.getCell('A3').value = '(*) Non-participation au tournoi concerné';
+        worksheet.getCell('A3').font = { size: 10, italic: true, color: { argb: 'FF666666' } };
+        worksheet.getCell('A3').alignment = { horizontal: 'left', vertical: 'middle' };
+      }
+
       // Data
       rows.forEach((row, index) => {
         const moyenne = row.cumulated_reprises > 0
@@ -238,9 +256,9 @@ router.get('/export', authenticateToken, async (req, res) => {
           row.last_name,
           row.club,
           '', // Empty cell for logo
-          row.tournament_1_points,
-          row.tournament_2_points,
-          row.tournament_3_points,
+          formatTournamentPoints(row.tournament_1_points),
+          formatTournamentPoints(row.tournament_2_points),
+          formatTournamentPoints(row.tournament_3_points),
           row.total_match_points,
           row.cumulated_points,
           row.cumulated_reprises,

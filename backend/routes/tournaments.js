@@ -486,9 +486,9 @@ function recalculateRankings(categoryId, season, callback) {
         ELSE 0
       END as avg_moyenne,
       MAX(tr.serie) as best_serie,
-      MAX(CASE WHEN t.tournament_number = 1 THEN tr.match_points ELSE 0 END) as t1_points,
-      MAX(CASE WHEN t.tournament_number = 2 THEN tr.match_points ELSE 0 END) as t2_points,
-      MAX(CASE WHEN t.tournament_number = 3 THEN tr.match_points ELSE 0 END) as t3_points
+      MAX(CASE WHEN t.tournament_number = 1 THEN tr.match_points ELSE NULL END) as t1_points,
+      MAX(CASE WHEN t.tournament_number = 2 THEN tr.match_points ELSE NULL END) as t2_points,
+      MAX(CASE WHEN t.tournament_number = 3 THEN tr.match_points ELSE NULL END) as t3_points
     FROM tournament_results tr
     JOIN tournaments t ON tr.tournament_id = t.id
     WHERE t.category_id = ? AND t.season = ? AND t.tournament_number <= 3
@@ -631,9 +631,9 @@ router.get('/debug-rankings/:categoryId/:season', authenticateToken, (req, res) 
         ELSE 0
       END as avg_moyenne,
       MAX(tr.serie) as best_serie,
-      MAX(CASE WHEN t.tournament_number = 1 THEN tr.match_points ELSE 0 END) as t1_points,
-      MAX(CASE WHEN t.tournament_number = 2 THEN tr.match_points ELSE 0 END) as t2_points,
-      MAX(CASE WHEN t.tournament_number = 3 THEN tr.match_points ELSE 0 END) as t3_points,
+      MAX(CASE WHEN t.tournament_number = 1 THEN tr.match_points ELSE NULL END) as t1_points,
+      MAX(CASE WHEN t.tournament_number = 2 THEN tr.match_points ELSE NULL END) as t2_points,
+      MAX(CASE WHEN t.tournament_number = 3 THEN tr.match_points ELSE NULL END) as t3_points,
       t.category_id,
       t.season
     FROM tournament_results tr
