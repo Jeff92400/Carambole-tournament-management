@@ -598,6 +598,23 @@ Le Comité Départemental de Billard des Hauts-de-Seine</textarea>
 
     <!-- TAB: Contacts Management -->
     <div id="tab-contacts" class="tab-content">
+      <!-- Settings Section -->
+      <div class="card" style="margin-bottom: 20px; background: #f0f7ff;">
+        <h3 style="margin-top: 0;">⚙️ Paramètres Email</h3>
+        <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
+          <div style="flex: 1; min-width: 300px;">
+            <label style="display: block; font-weight: 500; margin-bottom: 5px;">Email récapitulatif (synthèse des envois)</label>
+            <div style="display: flex; gap: 10px;">
+              <input type="email" id="summaryEmailSetting" placeholder="email@exemple.com" style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+              <button class="btn" id="saveSummaryEmailBtn" style="background: #28a745; white-space: nowrap;">Sauvegarder</button>
+            </div>
+            <p style="color: #666; font-size: 12px; margin-top: 5px;">
+              Cet email recevra un récapitulatif unique après chaque envoi de convocations (au lieu d'un CC sur chaque email).
+            </p>
+          </div>
+        </div>
+      </div>
+
       <div class="card">
         <h3>Gestion des Contacts</h3>
 
@@ -2271,6 +2288,57 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
       }
     });
 
+    // ==================== SUMMARY EMAIL SETTING ====================
+
+    async function loadSummaryEmailSetting() {
+      try {
+        const response = await fetch(`${API_URL}/settings/app/summary_email`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          const email = data.value || 'cdbhs92@gmail.com';
+          document.getElementById('summaryEmailSetting').value = email;
+          // Also update the default values in the CC fields
+          document.getElementById('ccEmail').value = email;
+          document.getElementById('finaleCcEmail').value = email;
+        }
+      } catch (error) {
+        console.error('Error loading summary email setting:', error);
+      }
+    }
+
+    document.getElementById('saveSummaryEmailBtn').addEventListener('click', async () => {
+      const email = document.getElementById('summaryEmailSetting').value.trim();
+      if (!email || !email.includes('@')) {
+        showError('Veuillez entrer une adresse email valide');
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API_URL}/settings/app/summary_email`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ value: email })
+        });
+
+        if (response.ok) {
+          showSuccess('Email récapitulatif sauvegardé');
+          // Update the CC fields with the new value
+          document.getElementById('ccEmail').value = email;
+          document.getElementById('finaleCcEmail').value = email;
+        } else {
+          const data = await response.json();
+          showError(data.error || 'Erreur lors de la sauvegarde');
+        }
+      } catch (error) {
+        showError('Erreur: ' + error.message);
+      }
+    });
+
     // ==================== INIT ====================
 
     async function initialize() {
@@ -2280,7 +2348,8 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
       await loadTemplates();
       await loadImportedTournaments();
       await loadCcEmail();
-      await loadResultsTemplate(); // Load saved template into Results tab
+      await loadResultsTemplate();
+      await loadSummaryEmailSetting();
     }
 
     initialize();

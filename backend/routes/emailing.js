@@ -7,6 +7,20 @@ const router = express.Router();
 // Helper function to add delay between emails (avoid rate limiting)
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
+// Get summary email from app_settings (with fallback)
+async function getSummaryEmail() {
+  const db = require('../db-loader');
+  return new Promise((resolve) => {
+    db.get(
+      "SELECT value FROM app_settings WHERE key = 'summary_email'",
+      [],
+      (err, row) => {
+        resolve(row?.value || 'cdbhs92@gmail.com');
+      }
+    );
+  });
+}
+
 // Initialize Resend
 const getResend = () => {
   if (!process.env.RESEND_API_KEY) {

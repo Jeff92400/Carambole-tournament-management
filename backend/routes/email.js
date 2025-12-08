@@ -8,6 +8,20 @@ const router = express.Router();
 // Helper function to add delay between emails (avoid rate limiting)
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
+// Get summary email from app_settings (with fallback)
+async function getSummaryEmail() {
+  const db = require('../db-loader');
+  return new Promise((resolve) => {
+    db.get(
+      "SELECT value FROM app_settings WHERE key = 'summary_email'",
+      [],
+      (err, row) => {
+        resolve(row?.value || 'cdbhs92@gmail.com');
+      }
+    );
+  });
+}
+
 // Initialize Resend
 const getResend = () => {
   if (!process.env.RESEND_API_KEY) {
@@ -670,8 +684,9 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
     }
   }
 
-  // Send summary email to cdbhs92@gmail.com after all individual emails
-  if (results.sent.length > 0) {
+  // Send summary email after all individual emails
+  const summaryEmailAddress = await getSummaryEmail();
+  if (results.sent.length > 0 && summaryEmailAddress) {
     try {
       // Build recipient list HTML
       const recipientListHtml = results.sent.map((r, idx) =>
@@ -742,12 +757,12 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
 
       await resend.emails.send({
         from: 'CDBHS Convocations <convocations@cdbhs.net>',
-        to: ['cdbhs92@gmail.com'],
+        to: [summaryEmailAddress],
         subject: `📋 Récapitulatif - Convocations ${category.display_name} - ${tournamentLabel} - ${dateStr}`,
         html: summaryHtml
       });
 
-      console.log('Summary email sent to cdbhs92@gmail.com');
+      console.log(`Summary email sent to ${summaryEmailAddress}`);
     } catch (summaryError) {
       console.error('Error sending summary email:', summaryError);
       // Don't fail the whole operation if summary email fails
