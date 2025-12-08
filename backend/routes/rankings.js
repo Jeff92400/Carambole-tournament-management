@@ -299,6 +299,11 @@ router.get('/export', authenticateToken, async (req, res) => {
         worksheet.getCell('A3').alignment = { horizontal: 'left', vertical: 'middle' };
       }
 
+      // Calculate number of qualified players for the final
+      // Rule: < 9 players → 4 qualified, >= 9 players → 6 qualified
+      const totalPlayers = rows.length;
+      const qualifiedCount = totalPlayers < 9 ? 4 : 6;
+
       // Data
       rows.forEach((row, index) => {
         const moyenne = row.cumulated_reprises > 0
@@ -322,36 +327,20 @@ router.get('/export', authenticateToken, async (req, res) => {
           row.best_serie || 0
         ]);
 
-        // Podium colors for top 3
-        if (row.rank_position === 1) {
-          // Gold
+        // Green highlighting for qualified players
+        if (row.rank_position <= qualifiedCount) {
+          // Light green background for qualified players
           excelRow.fill = {
             type: 'pattern',
             pattern: 'solid',
-            fgColor: { argb: 'FFFFD700' }
+            fgColor: { argb: 'FFE8F5E9' }  // Light green
           };
           excelRow.font = { bold: true, size: 11 };
-          excelRow.getCell(1).value = '🥇 1';
-        } else if (row.rank_position === 2) {
-          // Silver
-          excelRow.fill = {
-            type: 'pattern',
-            pattern: 'solid',
-            fgColor: { argb: 'FFC0C0C0' }
-          };
-          excelRow.font = { bold: true, size: 11 };
-          excelRow.getCell(1).value = '🥈 2';
-        } else if (row.rank_position === 3) {
-          // Bronze
-          excelRow.fill = {
-            type: 'pattern',
-            pattern: 'solid',
-            fgColor: { argb: 'FFCD7F32' }
-          };
-          excelRow.font = { bold: true, size: 11, color: { argb: 'FFFFFFFF' } };
-          excelRow.getCell(1).value = '🥉 3';
+          // Green position number
+          excelRow.getCell(1).font = { bold: true, size: 11, color: { argb: 'FF2E7D32' } };
+          excelRow.getCell(1).value = `✓ ${row.rank_position}`;
         } else {
-          // Alternate row colors for others
+          // Alternate row colors for non-qualified
           if (index % 2 === 0) {
             excelRow.fill = {
               type: 'pattern',
