@@ -491,6 +491,14 @@ Le Comité Départemental de Billard des Hauts-de-Seine</textarea>
           </p>
         </div>
 
+        <div style="margin-bottom: 15px; display: flex; align-items: center; gap: 10px;">
+          <label style="display: flex; align-items: center; cursor: pointer; user-select: none;">
+            <input type="checkbox" id="filterActifOnly" style="width: 18px; height: 18px; margin-right: 8px; cursor: pointer;">
+            <span style="font-weight: 500;">Afficher uniquement les contacts Actifs</span>
+          </label>
+          <span id="contactsCountDisplay" style="color: #666; font-size: 13px; margin-left: 15px;"></span>
+        </div>
+
         <div id="loadingAllContacts" class="loading" style="display: none;">
           <div class="spinner"></div>
           Chargement...
@@ -1407,6 +1415,8 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
 
     // ==================== ALL CONTACTS (Management) ====================
 
+    let allContactsData = []; // Store contacts globally for filtering
+
     async function loadAllContacts() {
       document.getElementById('loadingAllContacts').style.display = 'block';
 
@@ -1417,8 +1427,8 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
 
         if (!response.ok) throw new Error('Failed to load contacts');
 
-        const contacts = await response.json();
-        displayAllContacts(contacts);
+        allContactsData = await response.json();
+        displayAllContacts();
 
       } catch (error) {
         showError('Erreur: ' + error.message);
@@ -1427,9 +1437,25 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
       }
     }
 
-    function displayAllContacts(contacts) {
+    // Toggle filter event listener
+    document.getElementById('filterActifOnly').addEventListener('change', displayAllContacts);
+
+    function displayAllContacts() {
       const tbody = document.getElementById('allContactsBody');
       tbody.innerHTML = '';
+
+      const filterActif = document.getElementById('filterActifOnly').checked;
+      const contacts = filterActif
+        ? allContactsData.filter(c => (c.statut || 'Actif') === 'Actif')
+        : allContactsData;
+
+      // Update count display
+      const countDisplay = document.getElementById('contactsCountDisplay');
+      if (filterActif) {
+        countDisplay.textContent = `${contacts.length} actif(s) sur ${allContactsData.length} total`;
+      } else {
+        countDisplay.textContent = `${allContactsData.length} contact(s)`;
+      }
 
       if (contacts.length === 0) {
         tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 20px;">Aucun contact. Utilisez le bouton "Synchroniser" pour importer les joueurs.</td></tr>';
@@ -1457,7 +1483,7 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
       // Add edit button handlers
       document.querySelectorAll('.edit-contact-btn').forEach(btn => {
         btn.addEventListener('click', () => {
-          const contact = contacts.find(c => c.id === parseInt(btn.dataset.id));
+          const contact = allContactsData.find(c => c.id === parseInt(btn.dataset.id));
           openEditContactModal(contact);
         });
       });
