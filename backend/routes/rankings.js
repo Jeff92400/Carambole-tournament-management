@@ -202,7 +202,7 @@ router.get('/export', authenticateToken, async (req, res) => {
       const categoryName = rows[0].display_name;
 
       // Add billiard ball image
-      const imagePath = path.join(__dirname, '../frontend/images/billiard-icon.png');
+      const imagePath = path.join(__dirname, '../../frontend/images/billiard-icon.png');
 
       try {
         const imageId = workbook.addImage({
