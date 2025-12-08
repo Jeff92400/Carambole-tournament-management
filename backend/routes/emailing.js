@@ -964,7 +964,8 @@ router.post('/send-results', authenticateToken, async (req, res) => {
           const bgColor = isCurrentPlayer ? '#FFF3CD' : (r.position % 2 === 0 ? '#f8f9fa' : 'white');
           const fontWeight = isCurrentPlayer ? 'bold' : 'normal';
           const arrow = isCurrentPlayer ? '▶ ' : '';
-          const moyenne = r.moyenne ? r.moyenne.toFixed(3) : '-';
+          // Calculate moyenne from points/reprises (Moyenne R), not the stored CSV value
+          const moyenne = r.reprises > 0 ? (r.points / r.reprises).toFixed(3) : '-';
           return `
             <tr style="background: ${bgColor};">
               <td style="padding: 10px; text-align: center; border: 1px solid #ddd; font-weight: ${fontWeight};">${r.position}</td>
