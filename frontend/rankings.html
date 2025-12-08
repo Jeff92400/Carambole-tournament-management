@@ -315,8 +315,18 @@
           return;
         }
 
+        // Determine which tournament we're after
+        let tournamentSuffix = '';
+        if (tournamentsPlayed.t3) {
+          tournamentSuffix = ' - après 3ème tournoi';
+        } else if (tournamentsPlayed.t2) {
+          tournamentSuffix = ' - après 2ème tournoi';
+        } else if (tournamentsPlayed.t1) {
+          tournamentSuffix = ' - après 1er tournoi';
+        }
+
         // Update title
-        document.getElementById('rankingsTitle').textContent = `Classement ${rankings[0].display_name} - ${currentSeason}`;
+        document.getElementById('rankingsTitle').textContent = `Classement ${rankings[0].display_name} - ${currentSeason}${tournamentSuffix}`;
 
         // Populate table
         const tbody = document.getElementById('rankingsBody');
