@@ -301,11 +301,11 @@
         }
 
         const data = await response.json();
-        const rankings = data.rankings;
-        const tournamentsPlayed = data.tournamentsPlayed;
+        const rankings = data.rankings || [];
+        const tournamentsPlayed = data.tournamentsPlayed || { t1: false, t2: false, t3: false };
         console.log('Rankings loaded:', rankings.length, 'Tournaments played:', tournamentsPlayed);
 
-        if (rankings.length === 0) {
+        if (!rankings || rankings.length === 0) {
           document.getElementById('loadingRankings').style.display = 'none';
           document.getElementById('noDataMessage').style.display = 'block';
           return;
