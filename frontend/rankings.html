@@ -57,7 +57,11 @@
 
     <div class="card" id="rankingsCard" style="display: none;">
       <h3 id="rankingsTitle">Classement</h3>
-      <p id="rankingsLegend" style="display: none; font-size: 12px; color: #666; font-style: italic; margin-top: -10px; margin-bottom: 15px;">(*) Non-participation au tournoi concerné</p>
+      <p id="qualifiedLegend" style="display: none; font-size: 13px; color: #2e7d32; margin-top: -10px; margin-bottom: 10px;">
+        <span style="display: inline-block; width: 12px; height: 12px; background: #e8f5e9; border-left: 3px solid #4caf50; margin-right: 6px; vertical-align: middle;"></span>
+        <span id="qualifiedText">Qualifiés pour la finale</span>
+      </p>
+      <p id="rankingsLegend" style="display: none; font-size: 12px; color: #666; font-style: italic; margin-top: 0; margin-bottom: 15px;">(*) Non-participation au tournoi concerné</p>
       <div class="table-container">
         <table>
           <thead>
@@ -332,13 +336,18 @@
           return points;
         };
 
+        // Calculate number of qualified players for the final
+        // Rule: < 9 players → 4 qualified, >= 9 players → 9 qualified
+        const totalPlayers = rankings.length;
+        const qualifiedCount = totalPlayers < 9 ? 4 : 9;
+
         rankings.forEach(rank => {
           const row = document.createElement('tr');
 
-          // Add special class for top 3
-          if (rank.rank_position === 1) row.classList.add('rank-1');
-          if (rank.rank_position === 2) row.classList.add('rank-2');
-          if (rank.rank_position === 3) row.classList.add('rank-3');
+          // Add qualified class for players on track to be selected for the final
+          if (rank.rank_position <= qualifiedCount) {
+            row.classList.add('qualified-for-final');
+          }
 
           const moyenne = rank.cumulated_reprises > 0
             ? (rank.cumulated_points / rank.cumulated_reprises).toFixed(3)
@@ -370,7 +379,12 @@
             tbody.appendChild(row);
           });
 
-        // Show legend only if there are absent players from PLAYED tournaments
+        // Show qualified legend with count
+        document.getElementById('qualifiedText').textContent =
+          `${qualifiedCount} premiers qualifiés pour la finale (${totalPlayers} joueur${totalPlayers > 1 ? 's' : ''} classé${totalPlayers > 1 ? 's' : ''})`;
+        document.getElementById('qualifiedLegend').style.display = 'block';
+
+        // Show absent legend only if there are absent players from PLAYED tournaments
         const hasAbsentPlayers = rankings.some(r =>
           (tournamentsPlayed.t1 && r.tournament_1_points === null) ||
           (tournamentsPlayed.t2 && r.tournament_2_points === null) ||
