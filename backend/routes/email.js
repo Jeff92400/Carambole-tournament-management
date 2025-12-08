@@ -610,11 +610,10 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
       // Convert newlines to <br> for HTML
       const emailBodyHtml = emailBodyText.replace(/\n/g, '<br>');
 
-      // Send email using Resend
+      // Send email using Resend (no CC - summary email sent at the end)
       const emailResult = await resend.emails.send({
         from: 'CDBHS Convocations <convocations@cdbhs.net>',
         to: [player.email],
-        cc: ['cdbhs92@gmail.com'],
         subject: emailSubject,
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -671,9 +670,93 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
     }
   }
 
+  // Send summary email to cdbhs92@gmail.com after all individual emails
+  if (results.sent.length > 0) {
+    try {
+      // Build recipient list HTML
+      const recipientListHtml = results.sent.map((r, idx) =>
+        `<tr style="background: ${idx % 2 === 0 ? 'white' : '#f8f9fa'};">
+          <td style="padding: 8px; border: 1px solid #ddd;">${idx + 1}</td>
+          <td style="padding: 8px; border: 1px solid #ddd;">${r.name}</td>
+          <td style="padding: 8px; border: 1px solid #ddd;">${r.email}</td>
+        </tr>`
+      ).join('');
+
+      // Build poules summary
+      const poulesSummaryHtml = poules.map(poule => {
+        const locNum = poule.locationNum || '1';
+        const loc = locations.find(l => l.locationNum === locNum) || locations[0];
+        return `<div style="margin-bottom: 15px; padding: 10px; background: #f8f9fa; border-radius: 4px;">
+          <strong>Poule ${poule.number}</strong> - ${loc?.name || 'Lieu non défini'} (${loc?.startTime || '13:30'})
+          <div style="font-size: 12px; color: #666; margin-top: 5px;">
+            ${poule.players.map(p => `${p.first_name} ${p.last_name}`).join(', ')}
+          </div>
+        </div>`;
+      }).join('');
+
+      const summaryHtml = `
+        <div style="font-family: Arial, sans-serif; max-width: 700px; margin: 0 auto;">
+          <div style="background: #1F4788; color: white; padding: 20px; text-align: center;">
+            <img src="https://cdbhs-tournament-management-production.up.railway.app/images/billiard-icon.png" alt="CDBHS" style="height: 50px; margin-bottom: 10px;" onerror="this.style.display='none'">
+            <h1 style="margin: 0; font-size: 24px;">📋 Récapitulatif Convocations</h1>
+            <p style="margin: 10px 0 0 0; opacity: 0.9;">${category.display_name}</p>
+          </div>
+          <div style="padding: 20px; background: #f8f9fa; line-height: 1.6;">
+            <div style="background: #d4edda; border-left: 4px solid #28a745; padding: 15px; margin-bottom: 20px;">
+              <strong>✅ Envoi terminé avec succès</strong><br>
+              ${results.sent.length} convocation(s) envoyée(s) sur ${players.length} joueur(s)
+              ${results.failed.length > 0 ? `<br><span style="color: #dc3545;">${results.failed.length} échec(s)</span>` : ''}
+              ${results.skipped.length > 0 ? `<br><span style="color: #856404;">${results.skipped.length} ignoré(s) (pas d'email)</span>` : ''}
+            </div>
+
+            <div style="background: white; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #ddd;">
+              <h3 style="margin-top: 0; color: #1F4788;">📍 Informations du Tournoi</h3>
+              <p><strong>Catégorie :</strong> ${category.display_name}</p>
+              <p><strong>Compétition :</strong> ${tournamentLabel}</p>
+              <p><strong>Date :</strong> ${dateStr}</p>
+              ${specialNote ? `<p style="color: #856404;"><strong>Note spéciale :</strong> ${specialNote}</p>` : ''}
+            </div>
+
+            <h3 style="color: #1F4788;">📧 Convocations Envoyées (${results.sent.length})</h3>
+            <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 13px;">
+              <thead>
+                <tr style="background: #1F4788; color: white;">
+                  <th style="padding: 10px; border: 1px solid #ddd;">#</th>
+                  <th style="padding: 10px; border: 1px solid #ddd; text-align: left;">Joueur</th>
+                  <th style="padding: 10px; border: 1px solid #ddd; text-align: left;">Email</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${recipientListHtml}
+              </tbody>
+            </table>
+
+            <h3 style="color: #28a745;">🎱 Composition des Poules (${poules.length})</h3>
+            ${poulesSummaryHtml}
+          </div>
+          <div style="background: #1F4788; color: white; padding: 10px; text-align: center; font-size: 12px;">
+            <p style="margin: 0;">CDBHS - cdbhs92@gmail.com</p>
+          </div>
+        </div>
+      `;
+
+      await resend.emails.send({
+        from: 'CDBHS Convocations <convocations@cdbhs.net>',
+        to: ['cdbhs92@gmail.com'],
+        subject: `📋 Récapitulatif - Convocations ${category.display_name} - ${tournamentLabel} - ${dateStr}`,
+        html: summaryHtml
+      });
+
+      console.log('Summary email sent to cdbhs92@gmail.com');
+    } catch (summaryError) {
+      console.error('Error sending summary email:', summaryError);
+      // Don't fail the whole operation if summary email fails
+    }
+  }
+
   res.json({
     success: true,
-    message: `Emails envoyes: ${results.sent.length}, Echecs: ${results.failed.length}, Ignores: ${results.skipped.length}`,
+    message: `Emails envoyes: ${results.sent.length}, Echecs: ${results.failed.length}, Ignores: ${results.skipped.length}${results.sent.length > 0 ? ' + récapitulatif envoyé' : ''}`,
     results
   });
 });
