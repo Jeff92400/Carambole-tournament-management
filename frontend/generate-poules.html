@@ -1648,9 +1648,15 @@
       document.getElementById('selectedCount').textContent = totalSelected;
 
       if (totalSelected >= 3) {
-        const config = getPouleConfig(totalSelected);
-        document.getElementById('pouleConfig').textContent = config.description;
-        document.getElementById('tablesNeeded').textContent = config.tables;
+        // For finals: always show "1 poule unique" since all finalists play together
+        if (isFinale) {
+          document.getElementById('pouleConfig').textContent = '1 poule unique (tous contre tous)';
+          document.getElementById('tablesNeeded').textContent = '1';
+        } else {
+          const config = getPouleConfig(totalSelected);
+          document.getElementById('pouleConfig').textContent = config.description;
+          document.getElementById('tablesNeeded').textContent = config.tables;
+        }
         document.getElementById('validatePlayersBtn').disabled = false;
       } else {
         document.getElementById('pouleConfig').textContent = '-';
