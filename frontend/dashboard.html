@@ -49,7 +49,8 @@
     <div id="errorMessage" class="error" style="display: none;"></div>
     <div id="successMessage" class="success" style="display: none;"></div>
 
-    <div class="stats-grid">
+    <!-- Joueurs stats -->
+    <div class="stats-grid" style="margin-bottom: 20px;">
       <div class="stat-card">
         <h4>Joueurs Actifs</h4>
         <div class="stat-value" id="activePlayerCount">-</div>
@@ -61,6 +62,72 @@
       <div class="stat-card">
         <h4>Participants cumulés</h4>
         <div class="stat-value" id="cumulativeParticipants">-</div>
+      </div>
+    </div>
+
+    <!-- Inscriptions stats - All time (smaller) -->
+    <h4 style="margin: 20px 0 10px 0; color: #666;">Inscriptions IONOS</h4>
+    <div class="stats-grid" style="margin-bottom: 10px;">
+      <div class="stat-card" style="padding: 12px 15px;">
+        <h4 style="font-size: 12px; margin-bottom: 5px;">Total (toutes saisons)</h4>
+        <div class="stat-value" id="inscTotalAll" style="font-size: 28px;">-</div>
+      </div>
+      <div class="stat-card" style="padding: 12px 15px;">
+        <h4 style="font-size: 12px; margin-bottom: 5px;">Convoqués (toutes saisons)</h4>
+        <div class="stat-value" id="inscConvoquesAll" style="font-size: 28px;">-</div>
+      </div>
+      <div class="stat-card" style="padding: 12px 15px;">
+        <h4 style="font-size: 12px; margin-bottom: 5px;">Forfaits (toutes saisons)</h4>
+        <div class="stat-value" id="inscForfaitsAll" style="font-size: 28px;">-</div>
+      </div>
+    </div>
+
+    <!-- Inscriptions stats - Current season (green) -->
+    <div class="stats-grid" style="margin-bottom: 20px;">
+      <div class="stat-card" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
+        <h4 id="inscTotalSeasonLabel">Total Saison en cours</h4>
+        <div class="stat-value" id="inscTotalSeason">-</div>
+      </div>
+      <div class="stat-card" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
+        <h4 id="inscConvoquesSeasonLabel">Convoqués Saison en cours</h4>
+        <div class="stat-value" id="inscConvoquesSeason">-</div>
+      </div>
+      <div class="stat-card" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
+        <h4 id="inscForfaitsSeasonLabel">Forfaits Saison en cours</h4>
+        <div class="stat-value" id="inscForfaitsSeason">-</div>
+      </div>
+    </div>
+
+    <!-- Tournois IONOS stats - All time (smaller) -->
+    <h4 style="margin: 20px 0 10px 0; color: #666;">Tournois IONOS</h4>
+    <div class="stats-grid" style="margin-bottom: 10px;">
+      <div class="stat-card" style="padding: 12px 15px;">
+        <h4 style="font-size: 12px; margin-bottom: 5px;">Total (toutes saisons)</h4>
+        <div class="stat-value" id="tournoiTotalAll" style="font-size: 28px;">-</div>
+      </div>
+      <div class="stat-card" style="padding: 12px 15px;">
+        <h4 style="font-size: 12px; margin-bottom: 5px;">A venir (toutes saisons)</h4>
+        <div class="stat-value" id="tournoiUpcomingAll" style="font-size: 28px;">-</div>
+      </div>
+      <div class="stat-card" style="padding: 12px 15px;">
+        <h4 style="font-size: 12px; margin-bottom: 5px;">Passés (toutes saisons)</h4>
+        <div class="stat-value" id="tournoiPastAll" style="font-size: 28px;">-</div>
+      </div>
+    </div>
+
+    <!-- Tournois IONOS stats - Current season (green) -->
+    <div class="stats-grid" style="margin-bottom: 20px;">
+      <div class="stat-card" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
+        <h4 id="tournoiTotalSeasonLabel">Total Saison en cours</h4>
+        <div class="stat-value" id="tournoiTotalSeason">-</div>
+      </div>
+      <div class="stat-card" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
+        <h4 id="tournoiUpcomingSeasonLabel">A venir Saison en cours</h4>
+        <div class="stat-value" id="tournoiUpcomingSeason">-</div>
+      </div>
+      <div class="stat-card" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
+        <h4 id="tournoiPastSeasonLabel">Passés Saison en cours</h4>
+        <div class="stat-value" id="tournoiPastSeason">-</div>
       </div>
     </div>
 
@@ -113,6 +180,17 @@
       window.location.href = 'login.html';
     });
 
+    // Get season for a given date (Sept-Aug cycle)
+    function getSeasonForDate(date) {
+      const year = date.getFullYear();
+      const month = date.getMonth(); // 0-11
+      if (month >= 8) {
+        return `${year}-${year + 1}`;
+      } else {
+        return `${year - 1}-${year}`;
+      }
+    }
+
     // Load dashboard data
     async function loadDashboard() {
       try {
@@ -133,7 +211,7 @@
           document.getElementById('activePlayerCount').textContent = activePlayers.length;
         }
 
-        // Load tournaments
+        // Load tournaments (played)
         const tournamentsResponse = await fetch(`${API_URL}/tournaments`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -152,8 +230,131 @@
           const cumulativeParticipants = tournaments.reduce((sum, t) => sum + (parseInt(t.player_count, 10) || 0), 0);
           document.getElementById('cumulativeParticipants').textContent = cumulativeParticipants;
         }
+
+        // Load inscriptions and tournois IONOS stats
+        await loadInscriptionsStats();
+        await loadTournoisStats();
+
       } catch (error) {
         console.error('Error loading dashboard:', error);
+      }
+    }
+
+    // Load inscriptions stats
+    async function loadInscriptionsStats() {
+      try {
+        // Load inscriptions
+        const inscResponse = await fetch(`${API_URL}/inscriptions`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        // Load tournois for date reference
+        const tournoisResponse = await fetch(`${API_URL}/inscriptions/tournoi`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (inscResponse.ok && tournoisResponse.ok) {
+          const inscriptions = await inscResponse.json();
+          const tournois = await tournoisResponse.json();
+
+          // Create tournoi lookup by ID
+          const tournoiMap = {};
+          tournois.forEach(t => { tournoiMap[t.tournoi_id] = t; });
+
+          // All-time stats
+          const totalAll = inscriptions.length;
+          const convoquesAll = inscriptions.filter(i => i.convoque === 1).length;
+          const forfaitsAll = inscriptions.filter(i => i.forfait === 1).length;
+
+          document.getElementById('inscTotalAll').textContent = totalAll;
+          document.getElementById('inscConvoquesAll').textContent = convoquesAll;
+          document.getElementById('inscForfaitsAll').textContent = forfaitsAll;
+
+          // Current season stats
+          const currentSeason = getSeasonForDate(new Date());
+          const seasonInscriptions = inscriptions.filter(i => {
+            const tournoi = tournoiMap[i.tournoi_id];
+            if (!tournoi || !tournoi.debut) return false;
+            const date = new Date(tournoi.debut);
+            return getSeasonForDate(date) === currentSeason;
+          });
+
+          const totalSeason = seasonInscriptions.length;
+          const convoquesSeason = seasonInscriptions.filter(i => i.convoque === 1).length;
+          const forfaitsSeason = seasonInscriptions.filter(i => i.forfait === 1).length;
+
+          // Update labels
+          document.getElementById('inscTotalSeasonLabel').textContent = `Total Saison ${currentSeason}`;
+          document.getElementById('inscConvoquesSeasonLabel').textContent = `Convoqués Saison ${currentSeason}`;
+          document.getElementById('inscForfaitsSeasonLabel').textContent = `Forfaits Saison ${currentSeason}`;
+
+          // Update values
+          document.getElementById('inscTotalSeason').textContent = totalSeason;
+          document.getElementById('inscConvoquesSeason').textContent = convoquesSeason;
+          document.getElementById('inscForfaitsSeason').textContent = forfaitsSeason;
+        }
+      } catch (error) {
+        console.error('Error loading inscriptions stats:', error);
+      }
+    }
+
+    // Load tournois IONOS stats
+    async function loadTournoisStats() {
+      try {
+        const response = await fetch(`${API_URL}/inscriptions/tournoi`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (response.ok) {
+          const tournois = await response.json();
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+
+          // All-time stats
+          const totalAll = tournois.length;
+          const upcomingAll = tournois.filter(t => {
+            const debut = t.debut ? new Date(t.debut) : null;
+            return debut && debut >= today;
+          }).length;
+          const pastAll = tournois.filter(t => {
+            const debut = t.debut ? new Date(t.debut) : null;
+            return debut && debut < today;
+          }).length;
+
+          document.getElementById('tournoiTotalAll').textContent = totalAll;
+          document.getElementById('tournoiUpcomingAll').textContent = upcomingAll;
+          document.getElementById('tournoiPastAll').textContent = pastAll;
+
+          // Current season stats
+          const currentSeason = getSeasonForDate(new Date());
+          const seasonTournois = tournois.filter(t => {
+            if (!t.debut) return false;
+            const date = new Date(t.debut);
+            return getSeasonForDate(date) === currentSeason;
+          });
+
+          const totalSeason = seasonTournois.length;
+          const upcomingSeason = seasonTournois.filter(t => {
+            const debut = t.debut ? new Date(t.debut) : null;
+            return debut && debut >= today;
+          }).length;
+          const pastSeason = seasonTournois.filter(t => {
+            const debut = t.debut ? new Date(t.debut) : null;
+            return debut && debut < today;
+          }).length;
+
+          // Update labels
+          document.getElementById('tournoiTotalSeasonLabel').textContent = `Total Saison ${currentSeason}`;
+          document.getElementById('tournoiUpcomingSeasonLabel').textContent = `A venir Saison ${currentSeason}`;
+          document.getElementById('tournoiPastSeasonLabel').textContent = `Passés Saison ${currentSeason}`;
+
+          // Update values
+          document.getElementById('tournoiTotalSeason').textContent = totalSeason;
+          document.getElementById('tournoiUpcomingSeason').textContent = upcomingSeason;
+          document.getElementById('tournoiPastSeason').textContent = pastSeason;
+        }
+      } catch (error) {
+        console.error('Error loading tournois stats:', error);
       }
     }
 
