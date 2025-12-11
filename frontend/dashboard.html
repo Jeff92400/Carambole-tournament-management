@@ -65,68 +65,36 @@
       </div>
     </div>
 
-    <!-- Inscriptions stats - All time (smaller) -->
-    <h4 style="margin: 20px 0 10px 0; color: #666;">Inscriptions IONOS</h4>
-    <div class="stats-grid" style="margin-bottom: 10px;">
-      <div class="stat-card" style="padding: 12px 15px;">
-        <h4 style="font-size: 12px; margin-bottom: 5px;">Total (toutes saisons)</h4>
-        <div class="stat-value" id="inscTotalAll" style="font-size: 28px;">-</div>
-      </div>
-      <div class="stat-card" style="padding: 12px 15px;">
-        <h4 style="font-size: 12px; margin-bottom: 5px;">Convoqués (toutes saisons)</h4>
-        <div class="stat-value" id="inscConvoquesAll" style="font-size: 28px;">-</div>
-      </div>
-      <div class="stat-card" style="padding: 12px 15px;">
-        <h4 style="font-size: 12px; margin-bottom: 5px;">Forfaits (toutes saisons)</h4>
-        <div class="stat-value" id="inscForfaitsAll" style="font-size: 28px;">-</div>
-      </div>
-    </div>
-
-    <!-- Inscriptions stats - Current season (green) -->
+    <!-- Inscriptions saison en cours (green) -->
+    <h4 id="inscSectionTitle" style="margin: 20px 0 10px 0; color: #666;">Inscriptions saison en cours</h4>
     <div class="stats-grid" style="margin-bottom: 20px;">
       <div class="stat-card" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
-        <h4 id="inscTotalSeasonLabel">Total Saison en cours</h4>
+        <h4>Total</h4>
         <div class="stat-value" id="inscTotalSeason">-</div>
       </div>
       <div class="stat-card" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
-        <h4 id="inscConvoquesSeasonLabel">Convoqués Saison en cours</h4>
+        <h4>Convoqués</h4>
         <div class="stat-value" id="inscConvoquesSeason">-</div>
       </div>
       <div class="stat-card" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
-        <h4 id="inscForfaitsSeasonLabel">Forfaits Saison en cours</h4>
+        <h4>Forfaits</h4>
         <div class="stat-value" id="inscForfaitsSeason">-</div>
       </div>
     </div>
 
-    <!-- Tournois IONOS stats - All time (smaller) -->
-    <h4 style="margin: 20px 0 10px 0; color: #666;">Tournois IONOS</h4>
-    <div class="stats-grid" style="margin-bottom: 10px;">
-      <div class="stat-card" style="padding: 12px 15px;">
-        <h4 style="font-size: 12px; margin-bottom: 5px;">Total (toutes saisons)</h4>
-        <div class="stat-value" id="tournoiTotalAll" style="font-size: 28px;">-</div>
-      </div>
-      <div class="stat-card" style="padding: 12px 15px;">
-        <h4 style="font-size: 12px; margin-bottom: 5px;">A venir (toutes saisons)</h4>
-        <div class="stat-value" id="tournoiUpcomingAll" style="font-size: 28px;">-</div>
-      </div>
-      <div class="stat-card" style="padding: 12px 15px;">
-        <h4 style="font-size: 12px; margin-bottom: 5px;">Passés (toutes saisons)</h4>
-        <div class="stat-value" id="tournoiPastAll" style="font-size: 28px;">-</div>
-      </div>
-    </div>
-
-    <!-- Tournois IONOS stats - Current season (green) -->
+    <!-- Compétitions saison en cours (green) -->
+    <h4 id="tournoiSectionTitle" style="margin: 20px 0 10px 0; color: #666;">Compétitions saison en cours</h4>
     <div class="stats-grid" style="margin-bottom: 20px;">
       <div class="stat-card" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
-        <h4 id="tournoiTotalSeasonLabel">Total Saison en cours</h4>
+        <h4>Total</h4>
         <div class="stat-value" id="tournoiTotalSeason">-</div>
       </div>
       <div class="stat-card" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
-        <h4 id="tournoiUpcomingSeasonLabel">A venir Saison en cours</h4>
+        <h4>A venir</h4>
         <div class="stat-value" id="tournoiUpcomingSeason">-</div>
       </div>
       <div class="stat-card" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
-        <h4 id="tournoiPastSeasonLabel">Passés Saison en cours</h4>
+        <h4>Passés</h4>
         <div class="stat-value" id="tournoiPastSeason">-</div>
       </div>
     </div>
@@ -240,7 +208,7 @@
       }
     }
 
-    // Load inscriptions stats
+    // Load inscriptions stats (current season only)
     async function loadInscriptionsStats() {
       try {
         // Load inscriptions
@@ -261,15 +229,6 @@
           const tournoiMap = {};
           tournois.forEach(t => { tournoiMap[t.tournoi_id] = t; });
 
-          // All-time stats
-          const totalAll = inscriptions.length;
-          const convoquesAll = inscriptions.filter(i => i.convoque === 1).length;
-          const forfaitsAll = inscriptions.filter(i => i.forfait === 1).length;
-
-          document.getElementById('inscTotalAll').textContent = totalAll;
-          document.getElementById('inscConvoquesAll').textContent = convoquesAll;
-          document.getElementById('inscForfaitsAll').textContent = forfaitsAll;
-
           // Current season stats
           const currentSeason = getSeasonForDate(new Date());
           const seasonInscriptions = inscriptions.filter(i => {
@@ -283,10 +242,8 @@
           const convoquesSeason = seasonInscriptions.filter(i => i.convoque === 1).length;
           const forfaitsSeason = seasonInscriptions.filter(i => i.forfait === 1).length;
 
-          // Update labels
-          document.getElementById('inscTotalSeasonLabel').textContent = `Total Saison ${currentSeason}`;
-          document.getElementById('inscConvoquesSeasonLabel').textContent = `Convoqués Saison ${currentSeason}`;
-          document.getElementById('inscForfaitsSeasonLabel').textContent = `Forfaits Saison ${currentSeason}`;
+          // Update section title with season
+          document.getElementById('inscSectionTitle').textContent = `Inscriptions saison ${currentSeason}`;
 
           // Update values
           document.getElementById('inscTotalSeason').textContent = totalSeason;
@@ -298,7 +255,7 @@
       }
     }
 
-    // Load tournois IONOS stats
+    // Load tournois stats (current season only)
     async function loadTournoisStats() {
       try {
         const response = await fetch(`${API_URL}/inscriptions/tournoi`, {
@@ -309,21 +266,6 @@
           const tournois = await response.json();
           const today = new Date();
           today.setHours(0, 0, 0, 0);
-
-          // All-time stats
-          const totalAll = tournois.length;
-          const upcomingAll = tournois.filter(t => {
-            const debut = t.debut ? new Date(t.debut) : null;
-            return debut && debut >= today;
-          }).length;
-          const pastAll = tournois.filter(t => {
-            const debut = t.debut ? new Date(t.debut) : null;
-            return debut && debut < today;
-          }).length;
-
-          document.getElementById('tournoiTotalAll').textContent = totalAll;
-          document.getElementById('tournoiUpcomingAll').textContent = upcomingAll;
-          document.getElementById('tournoiPastAll').textContent = pastAll;
 
           // Current season stats
           const currentSeason = getSeasonForDate(new Date());
@@ -343,10 +285,8 @@
             return debut && debut < today;
           }).length;
 
-          // Update labels
-          document.getElementById('tournoiTotalSeasonLabel').textContent = `Total Saison ${currentSeason}`;
-          document.getElementById('tournoiUpcomingSeasonLabel').textContent = `A venir Saison ${currentSeason}`;
-          document.getElementById('tournoiPastSeasonLabel').textContent = `Passés Saison ${currentSeason}`;
+          // Update section title with season
+          document.getElementById('tournoiSectionTitle').textContent = `Compétitions saison ${currentSeason}`;
 
           // Update values
           document.getElementById('tournoiTotalSeason').textContent = totalSeason;
