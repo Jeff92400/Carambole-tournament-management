@@ -4,12 +4,13 @@
 1. [Connexion](#1-connexion)
 2. [Tableau de bord](#2-tableau-de-bord)
 3. [Gestion des fichiers IONOS](#3-gestion-des-fichiers-ionos)
-4. [Génération des poules](#4-génération-des-poules)
-5. [Classements](#5-classements)
-6. [Tournois joués](#6-tournois-joués)
-7. [Gestion des joueurs](#7-gestion-des-joueurs)
-8. [Gestion des clubs](#8-gestion-des-clubs)
-9. [Paramètres](#9-paramètres)
+4. [Génération des poules et convocations](#4-génération-des-poules-et-convocations)
+5. [Envoi des convocations par email](#5-envoi-des-convocations-par-email)
+6. [Classements](#6-classements)
+7. [Tournois joués et envoi des résultats](#7-tournois-joués-et-envoi-des-résultats)
+8. [Gestion des joueurs](#8-gestion-des-joueurs)
+9. [Gestion des clubs](#9-gestion-des-clubs)
+10. [Paramètres](#10-paramètres)
 
 ---
 
@@ -47,7 +48,7 @@ L'application nécessite 3 fichiers CSV exportés depuis la base IONOS :
 | Fichier | Description | Fréquence |
 |---------|-------------|-----------|
 | **Joueurs** | Liste des joueurs FFB avec licences et classements | Début de saison |
-| **Tournois** | Liste des compétitions CDBHS | Début de saison |
+| **Compétitions IONOS** | Liste des compétitions CDBHS | Début de saison |
 | **Inscriptions** | Inscriptions des joueurs aux tournois | Avant chaque tournoi |
 
 ### Procédure d'import
@@ -58,18 +59,18 @@ L'application nécessite 3 fichiers CSV exportés depuis la base IONOS :
 
 2. **Importer dans l'application** :
    - Allez dans **Fichiers** > **Compétitions & Inscriptions**
-   - Sélectionnez l'onglet correspondant (Joueurs, Tournois, Inscriptions)
-   - Cliquez sur **Choisir un fichier**
-   - Sélectionnez le fichier CSV
+   - Section "1. Importer les Compétitions IONOS" pour les tournois
+   - Section "2. Importer les Inscriptions" pour les inscriptions joueurs
+   - Cliquez sur la zone de dépôt ou glissez-déposez le fichier CSV
    - Cliquez sur **Importer**
 
 3. **Vérification** :
    - Un message confirme le nombre d'enregistrements importés
-   - Les dates de dernière mise à jour sont affichées
+   - La section "Données actuelles" affiche le nombre de compétitions et inscriptions
 
 ### Indicateurs de fraîcheur des données
 
-Sur la page "Compétitions à jouer", un panneau affiche l'état des 3 fichiers avec un code couleur :
+Sur la page "Compétitions à jouer", un panneau affiche l'état des fichiers avec un code couleur :
 
 | Couleur | Signification |
 |---------|---------------|
@@ -80,7 +81,7 @@ Sur la page "Compétitions à jouer", un panneau affiche l'état des 3 fichiers 
 
 ---
 
-## 4. Génération des poules
+## 4. Génération des poules et convocations
 
 ### Accès
 Menu principal > **Compétitions à jouer**
@@ -96,6 +97,7 @@ Menu principal > **Compétitions à jouer**
 **Tournois à venir** :
 - L'application affiche automatiquement les tournois prévus dans les 2 prochaines semaines
 - Cliquez sur un tournoi pour pré-remplir automatiquement les sélections
+- Les **finales** sont affichées séparément avec un badge doré "Finale"
 
 **Sélection manuelle** :
 1. Choisissez la **Catégorie** (ex: LIBRE - REGIONALE 3)
@@ -104,6 +106,13 @@ Menu principal > **Compétitions à jouer**
 4. Cliquez sur **Charger les joueurs**
 
 ### Étape 3 : Sélection des joueurs
+
+L'écran affiche un résumé en temps réel :
+- **Joueurs sélectionnés** : Nombre de joueurs cochés
+- **Configuration des poules** : Distribution automatique (ex: "5 poules de 3 et 1 poule de 4")
+- **Tables nécessaires** : Nombre de tables pour le tournoi
+
+**Pour un tournoi classique (T1, T2, T3)** :
 
 L'écran affiche 3 sections :
 
@@ -121,48 +130,119 @@ L'écran affiche 3 sections :
 - Recherchez un joueur par nom ou licence
 - Ajoutez-le manuellement si absent des inscriptions
 
+**Pour une Finale** :
+
+- L'application charge automatiquement les **4 ou 6 meilleurs joueurs** du classement général
+- La règle est : 6 finalistes si 10+ participants dans la catégorie, sinon 4 finalistes
+- Les joueurs sont marqués "Finaliste" (badge doré)
+- La configuration affiche "1 poule unique (tous contre tous)"
+
 **Actions rapides** :
 - **Tout sélectionner** : Sélectionne tous les joueurs
 - **Tout désélectionner** : Désélectionne tous les joueurs
 - **Sélectionner les inscrits** : Sélectionne uniquement les joueurs inscrits
 
-**Résumé en temps réel** :
-- Nombre de joueurs sélectionnés
-- Configuration des poules (ex: "5 poules de 3 et 1 poule de 4")
-- Nombre de tables nécessaires
+### Étape 4 : Validation et aperçu des poules
 
-### Étape 4 : Validation et aperçu
+Cliquez sur **Valider la liste** pour passer à l'aperçu.
 
 **Résumé du tournoi** :
 - Catégorie, numéro de tournoi, date, lieu
 - Nombre de joueurs et configuration
 
 **Aperçu des poules** :
-- Distribution serpentine automatique
-- Possibilité de **déplacer un joueur** entre poules
-- Chaque joueur affiche son classement final
+- Distribution serpentine automatique (les joueurs sont répartis selon leur classement)
+- Possibilité de **déplacer un joueur** entre poules (cliquer sur le joueur, puis sur la poule cible)
+- Chaque joueur affiche son classement (rang dans la catégorie)
+
+**Pour une Finale** : Une seule poule "POULE UNIQUE" est générée avec tous les finalistes.
 
 **Configuration du lieu** :
-1. Sélectionnez le **Lieu principal** (club)
+1. Sélectionnez le **Lieu principal** (club) dans la liste déroulante
 2. Choisissez l'**Heure de début**
-3. Optionnel : Ajoutez un **second lieu** (split) pour les poules
+3. Optionnel : Cliquez sur **+ Ajouter un second lieu** pour un tournoi split
 
-**Attribution des lieux par poule** :
+**Attribution des lieux par poule** (si 2 lieux) :
 - Chaque poule peut être assignée à Lieu 1 ou Lieu 2
 - Utile pour les tournois split sur 2 clubs
 
-### Étape 5 : Génération du fichier Excel
+### Étape 5 : Génération des documents
 
-Cliquez sur **Générer le fichier Excel**
-
-Le fichier contient 3 feuilles :
+**Fichier Excel** :
+Cliquez sur **Générer le fichier Excel** pour télécharger un fichier contenant 3 feuilles :
 1. **Poules** : Composition des poules avec planning des matchs
 2. **Convocation** : Format classique
 3. **Convocation v2** : Format moderne avec mise en page professionnelle
 
+**Convocations PDF individuelles** :
+Cliquez sur **Générer les PDFs** pour créer un fichier ZIP contenant une convocation PDF par joueur.
+
+Chaque PDF contient :
+- En-tête avec logo CDBHS
+- Informations du tournoi (catégorie, date, lieu)
+- Composition de la poule du joueur (avec tous les adversaires)
+- Adresse complète du lieu avec code QR Google Maps
+- Horaire de convocation
+
+**Pour une Finale** : Les PDFs ont un en-tête doré et le titre "CONVOCATION FINALE DÉPARTEMENTALE".
+
 ---
 
-## 5. Classements
+## 5. Envoi des convocations par email
+
+### Accès
+Depuis l'étape 4 de génération des poules, cliquez sur **Envoyer les convocations par email**
+
+### Pré-requis
+- Les joueurs doivent avoir une adresse email valide dans leurs coordonnées
+- Synchronisez d'abord les contacts via **Emailing** > **Synchroniser les contacts IONOS**
+
+### Processus d'envoi
+
+**Étape 1 : Préparation**
+1. Vérifiez la liste des destinataires affichée
+2. Les joueurs sans email sont marqués et seront ignorés
+3. Le nombre d'emails à envoyer est indiqué
+
+**Étape 2 : Personnalisation du message**
+1. Saisissez un **message d'introduction** personnalisé (optionnel)
+2. Vous pouvez utiliser des variables :
+   - `{first_name}` : Prénom du joueur
+   - `{last_name}` : Nom du joueur
+   - `{tournament_name}` : Nom du tournoi
+   - `{tournament_date}` : Date du tournoi
+
+**Étape 3 : Email en copie (CC)**
+1. Cochez **Envoyer une copie récapitulative**
+2. Saisissez l'adresse email (ex: votre email pour suivi)
+3. Vous recevrez un récapitulatif avec la liste de tous les envois
+
+**Étape 4 : Test avant envoi**
+1. Cochez **Mode test**
+2. Saisissez votre adresse email
+3. Cliquez sur **Envoyer (test)** pour recevoir un exemple
+4. Vérifiez le rendu de l'email
+
+**Étape 5 : Envoi définitif**
+1. Décochez le mode test
+2. Cliquez sur **Envoyer les convocations**
+3. Une barre de progression s'affiche
+4. Un message confirme le nombre d'emails envoyés
+
+### Contenu de l'email de convocation
+
+Chaque joueur reçoit un email contenant :
+- Objet : "Convocation - [Catégorie] - Tournoi N°[X] - [Date]"
+- En-tête avec logo CDBHS
+- Message d'introduction personnalisé
+- **Tableau de la poule** avec tous les joueurs et leur classement
+- **Informations pratiques** : Date, heure, lieu
+- **Adresse complète** du club
+- Pièce jointe : **PDF de convocation individuelle**
+
+---
+
+## 6. Classements
 
 ### Accès
 Menu principal > **Classements**
@@ -183,12 +263,12 @@ Menu principal > **Classements**
 
 ---
 
-## 6. Tournois joués
+## 7. Tournois joués et envoi des résultats
 
 ### Accès
 Menu principal > **Tournois joués**
 
-### Fonctionnalités
+### Consultation des résultats
 - Liste de tous les tournois importés
 - Filtrage par catégorie et saison
 - Visualisation des résultats avec podium
@@ -197,16 +277,37 @@ Menu principal > **Tournois joués**
 ### Import des résultats
 Menu **Fichiers** > **Tournois joués** > **Importer**
 
-1. Préparez le fichier CSV des résultats
+1. Préparez le fichier CSV des résultats (export depuis le logiciel de gestion de tournoi)
 2. Sélectionnez la **Catégorie**
 3. Indiquez le **Numéro de tournoi**
 4. Saisissez la **Date du tournoi**
 5. Uploadez le fichier
 6. Validez après vérification
 
+### Envoi des résultats par email
+
+**Accès** : Sur la page d'un tournoi, cliquez sur **Envoyer les résultats**
+
+**Contenu de l'email** :
+
+Chaque participant reçoit :
+- **Tableau des résultats du tournoi** avec sa ligne en surbrillance
+- **Classement général** mis à jour avec sa position en surbrillance
+- **Message de qualification** indiquant s'il est éligible pour la finale :
+  - Après T1/T2 : "Vous êtes à ce stade éligible pour la finale" (provisoire)
+  - Après T3 : "Félicitations ! Vous êtes sélectionné pour la finale" (définitif)
+
+**Format des noms** : Les noms sont affichés au format "Prénom Nom" dans les deux tableaux.
+
+**Procédure d'envoi** :
+1. Saisissez un message d'introduction personnalisé
+2. Ajoutez une adresse CC pour recevoir le récapitulatif
+3. Testez d'abord en mode test
+4. Envoyez à tous les participants
+
 ---
 
-## 7. Gestion des joueurs
+## 8. Gestion des joueurs
 
 ### Accès
 Menu **Fichiers** > **Joueurs**
@@ -221,9 +322,16 @@ Menu **Fichiers** > **Joueurs**
 - Historique des performances par joueur
 - Import CSV de la liste FFB
 
+### Contacts joueurs
+Menu **Emailing** > **Contacts**
+
+- Liste des coordonnées (email, téléphone)
+- Synchronisation avec les données IONOS
+- Modification manuelle des contacts
+
 ---
 
-## 8. Gestion des clubs
+## 9. Gestion des clubs
 
 ### Accès
 Menu **Fichiers** > **Clubs**
@@ -235,11 +343,11 @@ Menu **Fichiers** > **Clubs**
 - Email
 - Logo
 
-Ces informations sont utilisées dans les convocations générées.
+Ces informations sont utilisées dans les convocations générées (adresse affichée avec QR code).
 
 ---
 
-## 9. Paramètres
+## 10. Paramètres
 
 ### Accès
 Menu **Paramètres** > **Configuration**
@@ -250,6 +358,11 @@ Menu **Paramètres** > **Configuration**
 - Désactivation de comptes
 - Changement de mot de passe
 
+### Gestion des catégories
+Menu **Paramètres** > **Catégories**
+- Création/modification des catégories (Mode, Niveau)
+- Activation/désactivation par saison
+
 ### Calendrier
 Menu **Paramètres** > **Calendrier**
 - Upload du calendrier de saison (PDF ou Excel)
@@ -257,7 +370,7 @@ Menu **Paramètres** > **Calendrier**
 
 ---
 
-## Annexe : Format des fichiers CSV
+## Annexe A : Format des fichiers CSV
 
 ### Joueurs (export FFB)
 ```csv
@@ -274,6 +387,30 @@ Classement;Licence;Joueur;Points;Reprises;Moyenne;Série
 
 ---
 
+## Annexe B : Workflow complet d'un tournoi
+
+### Avant le tournoi (J-7 à J-2)
+1. **Importer les inscriptions** depuis IONOS (Fichiers > Compétitions & Inscriptions)
+2. **Générer les poules** (Compétitions à jouer)
+3. **Vérifier la composition** et ajuster si nécessaire
+4. **Envoyer les convocations** par email
+
+### Le jour du tournoi
+1. Imprimer les feuilles de poules (fichier Excel)
+2. Gérer les absences/remplacements de dernière minute
+
+### Après le tournoi
+1. **Importer les résultats** CSV (Fichiers > Tournois joués)
+2. **Vérifier le classement** mis à jour (Classements)
+3. **Envoyer les résultats** par email aux participants
+
+### Fin de saison (après T3)
+1. **Préparer la finale** : Sélectionner la finale depuis "Compétitions à jouer"
+2. Les 4 ou 6 finalistes sont automatiquement chargés
+3. **Envoyer les convocations finale** (en-tête doré, poule unique)
+
+---
+
 ## Support
 
 - **Repository** : https://github.com/Jeff92400/cdbhs-tournament-management
@@ -281,5 +418,5 @@ Classement;Licence;Joueur;Points;Reprises;Moyenne;Série
 
 ---
 
-*Guide utilisateur - CDBHS Tournois v1.1*
-*Mis à jour le 30 novembre 2025*
+*Guide utilisateur - CDBHS Tournois v2.0*
+*Mis à jour le 10 décembre 2025*
