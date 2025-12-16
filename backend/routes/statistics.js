@@ -75,52 +75,75 @@ router.get('/debug/bande-check', async (req, res) => {
   const db = require('../db-loader');
 
   try {
-    // Get ALL tournaments to check seasons
-    const allTournaments = await new Promise((resolve, reject) => {
+    // Get ALL tournaments for 2025-2026 season with counts
+    const tournamentsByMode = await new Promise((resolve, reject) => {
       db.all(`
-        SELECT t.id, c.game_type, c.level, t.tournament_number, t.tournament_date, t.season
+        SELECT c.game_type, COUNT(*) as tournament_count,
+               GROUP_CONCAT(t.id || ':' || c.level || ':T' || t.tournament_number) as tournaments
         FROM tournaments t
         JOIN categories c ON t.category_id = c.id
-        ORDER BY t.tournament_date DESC
+        WHERE t.season = '2025-2026'
+        GROUP BY c.game_type
+        ORDER BY c.game_type
       `, [], (err, rows) => {
         if (err) reject(err);
         else resolve(rows);
       });
     });
 
-    // Check the podiums aggregation with club alias
-    const podiumsAggregated = await new Promise((resolve, reject) => {
+    // Get podium count by game_type (not by club)
+    const podiumsByMode = await new Promise((resolve, reject) => {
       db.all(`
-        SELECT
-          COALESCE(ca.canonical_name, p.club, 'Non renseigné') as club,
-          c.game_type,
-          SUM(CASE WHEN tr.position = 1 THEN 1 ELSE 0 END) as gold,
-          SUM(CASE WHEN tr.position = 2 THEN 1 ELSE 0 END) as silver,
-          SUM(CASE WHEN tr.position = 3 THEN 1 ELSE 0 END) as bronze,
-          SUM(CASE WHEN tr.position IN (1, 2, 3) THEN 1 ELSE 0 END) as podiums
+        SELECT c.game_type,
+               COUNT(*) as total_podiums,
+               SUM(CASE WHEN tr.position = 1 THEN 1 ELSE 0 END) as gold_count,
+               SUM(CASE WHEN tr.position = 2 THEN 1 ELSE 0 END) as silver_count,
+               SUM(CASE WHEN tr.position = 3 THEN 1 ELSE 0 END) as bronze_count
         FROM tournament_results tr
         JOIN tournaments t ON tr.tournament_id = t.id
         JOIN categories c ON t.category_id = c.id
-        LEFT JOIN players p ON REPLACE(tr.licence, ' ', '') = REPLACE(p.licence, ' ', '')
-        LEFT JOIN club_aliases ca ON UPPER(REPLACE(REPLACE(REPLACE(COALESCE(p.club, ''), ' ', ''), '.', ''), '-', ''))
-                                    = UPPER(REPLACE(REPLACE(REPLACE(ca.alias, ' ', ''), '.', ''), '-', ''))
         WHERE t.season = '2025-2026'
           AND tr.position IN (1, 2, 3)
-        GROUP BY COALESCE(ca.canonical_name, p.club, 'Non renseigné'), c.game_type
-        ORDER BY c.game_type, podiums DESC
+        GROUP BY c.game_type
+        ORDER BY c.game_type
       `, [], (err, rows) => {
         if (err) reject(err);
         else resolve(rows);
       });
     });
 
-    // Total podiums count
-    const totalPodiums = podiumsAggregated.reduce((sum, r) => sum + r.podiums, 0);
+    // Get raw podium details
+    const rawPodiums = await new Promise((resolve, reject) => {
+      db.all(`
+        SELECT t.id as tournament_id, c.game_type, c.level, t.tournament_number,
+               tr.position, tr.player_name
+        FROM tournament_results tr
+        JOIN tournaments t ON tr.tournament_id = t.id
+        JOIN categories c ON t.category_id = c.id
+        WHERE t.season = '2025-2026'
+          AND tr.position IN (1, 2, 3)
+        ORDER BY c.game_type, t.id, tr.position
+      `, [], (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows);
+      });
+    });
+
+    // Total podiums
+    const totalPodiums = podiumsByMode.reduce((sum, r) => sum + r.total_podiums, 0);
+
+    // Expected podiums (tournaments × 3)
+    const totalTournaments = tournamentsByMode.reduce((sum, r) => sum + r.tournament_count, 0);
+    const expectedPodiums = totalTournaments * 3;
 
     res.json({
-      all_tournaments: allTournaments,
-      podiums_by_club_and_mode: podiumsAggregated,
-      total_podiums: totalPodiums
+      tournaments_by_mode: tournamentsByMode,
+      total_tournaments: totalTournaments,
+      podiums_by_mode: podiumsByMode,
+      total_podiums: totalPodiums,
+      expected_podiums: expectedPodiums,
+      discrepancy: totalPodiums - expectedPodiums,
+      raw_podiums: rawPodiums
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
