@@ -112,38 +112,65 @@ router.get('/debug/bande-check', async (req, res) => {
       });
     });
 
-    // Get raw podium details
-    const rawPodiums = await new Promise((resolve, reject) => {
+    // Get the EXACT same data that /clubs/podiums returns
+    const clubPodiumsData = await new Promise((resolve, reject) => {
       db.all(`
-        SELECT t.id as tournament_id, c.game_type, c.level, t.tournament_number,
-               tr.position, tr.player_name
+        SELECT
+          COALESCE(ca.canonical_name, p.club, 'Non renseigné') as club,
+          c.game_type,
+          SUM(CASE WHEN tr.position = 1 THEN 1 ELSE 0 END) as gold,
+          SUM(CASE WHEN tr.position = 2 THEN 1 ELSE 0 END) as silver,
+          SUM(CASE WHEN tr.position = 3 THEN 1 ELSE 0 END) as bronze,
+          SUM(CASE WHEN tr.position IN (1, 2, 3) THEN 1 ELSE 0 END) as podiums
         FROM tournament_results tr
         JOIN tournaments t ON tr.tournament_id = t.id
         JOIN categories c ON t.category_id = c.id
+        LEFT JOIN players p ON REPLACE(tr.licence, ' ', '') = REPLACE(p.licence, ' ', '')
+        LEFT JOIN club_aliases ca ON UPPER(REPLACE(REPLACE(REPLACE(COALESCE(p.club, ''), ' ', ''), '.', ''), '-', ''))
+                                    = UPPER(REPLACE(REPLACE(REPLACE(ca.alias, ' ', ''), '.', ''), '-', ''))
         WHERE t.season = '2025-2026'
           AND tr.position IN (1, 2, 3)
-        ORDER BY c.game_type, t.id, tr.position
+        GROUP BY COALESCE(ca.canonical_name, p.club, 'Non renseigné'), c.game_type
+        ORDER BY c.game_type, podiums DESC
       `, [], (err, rows) => {
         if (err) reject(err);
         else resolve(rows);
       });
     });
 
-    // Total podiums
-    const totalPodiums = podiumsByMode.reduce((sum, r) => sum + r.total_podiums, 0);
+    // Calculate totals the same way frontend would
+    const resultByMode = {};
+    let grandTotalFromClubData = 0;
+    clubPodiumsData.forEach(row => {
+      if (!resultByMode[row.game_type]) {
+        resultByMode[row.game_type] = { clubs: [], total: 0 };
+      }
+      const podiums = parseInt(row.podiums) || 0;
+      resultByMode[row.game_type].clubs.push({
+        club: row.club,
+        gold: parseInt(row.gold) || 0,
+        silver: parseInt(row.silver) || 0,
+        bronze: parseInt(row.bronze) || 0,
+        podiums: podiums
+      });
+      resultByMode[row.game_type].total += podiums;
+      grandTotalFromClubData += podiums;
+    });
 
-    // Expected podiums (tournaments × 3)
-    const totalTournaments = tournamentsByMode.reduce((sum, r) => sum + r.tournament_count, 0);
+    // Sum from raw podiums by mode
+    const totalPodiums = podiumsByMode.reduce((sum, r) => sum + parseInt(r.total_podiums), 0);
+    const totalTournaments = tournamentsByMode.reduce((sum, r) => sum + parseInt(r.tournament_count), 0);
     const expectedPodiums = totalTournaments * 3;
 
     res.json({
       tournaments_by_mode: tournamentsByMode,
       total_tournaments: totalTournaments,
       podiums_by_mode: podiumsByMode,
-      total_podiums: totalPodiums,
+      total_from_raw_count: totalPodiums,
       expected_podiums: expectedPodiums,
-      discrepancy: totalPodiums - expectedPodiums,
-      raw_podiums: rawPodiums
+      club_podiums_grouped: resultByMode,
+      grand_total_from_club_data: grandTotalFromClubData,
+      discrepancy: grandTotalFromClubData - expectedPodiums
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -278,22 +305,19 @@ router.get('/clubs/podiums', authenticateToken, async (req, res) => {
       return res.status(500).json({ error: err.message });
     }
 
-    // Group by game_type and limit to top 3 per game_type
+    // Group by game_type - show all clubs (frontend will limit display)
     const result = {};
     (rows || []).forEach(row => {
       if (!result[row.game_type]) {
         result[row.game_type] = [];
       }
-      // Only keep top 3 clubs per game_type
-      if (result[row.game_type].length < 3) {
-        result[row.game_type].push({
-          club: row.club,
-          podiums: row.podiums,
-          gold: row.gold,
-          silver: row.silver,
-          bronze: row.bronze
-        });
-      }
+      result[row.game_type].push({
+        club: row.club,
+        podiums: parseInt(row.podiums) || 0,
+        gold: parseInt(row.gold) || 0,
+        silver: parseInt(row.silver) || 0,
+        bronze: parseInt(row.bronze) || 0
+      });
     });
 
     res.json(result);
