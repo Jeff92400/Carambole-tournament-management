@@ -696,16 +696,41 @@
                     </tr>
                   </thead>
                   <tbody>
-                    ${data[mode].map((club, i) => `
-                      <tr>
-                        <td>${createRankBadge(i + 1)}</td>
-                        <td class="player-name">${club.club}</td>
-                        <td class="stat-value">${club.gold}</td>
-                        <td>${club.silver}</td>
-                        <td>${club.bronze}</td>
-                        <td class="stat-value">${club.podiums}</td>
-                      </tr>
-                    `).join('')}
+                    ${(() => {
+                      const top3 = data[mode].slice(0, 3);
+                      const others = data[mode].slice(3);
+                      const othersTotal = others.reduce((acc, c) => ({
+                        gold: acc.gold + c.gold,
+                        silver: acc.silver + c.silver,
+                        bronze: acc.bronze + c.bronze,
+                        podiums: acc.podiums + c.podiums
+                      }), { gold: 0, silver: 0, bronze: 0, podiums: 0 });
+
+                      let html = top3.map((club, i) => `
+                        <tr>
+                          <td>${createRankBadge(i + 1)}</td>
+                          <td class="player-name">${club.club}</td>
+                          <td class="stat-value">${club.gold}</td>
+                          <td>${club.silver}</td>
+                          <td>${club.bronze}</td>
+                          <td class="stat-value">${club.podiums}</td>
+                        </tr>
+                      `).join('');
+
+                      if (others.length > 0) {
+                        html += `
+                          <tr style="background: #f8f9fa; font-style: italic;">
+                            <td></td>
+                            <td class="player-name">Autres clubs (${others.length})</td>
+                            <td class="stat-value">${othersTotal.gold}</td>
+                            <td>${othersTotal.silver}</td>
+                            <td>${othersTotal.bronze}</td>
+                            <td class="stat-value">${othersTotal.podiums}</td>
+                          </tr>
+                        `;
+                      }
+                      return html;
+                    })()}
                   </tbody>
                 </table>
               </div>
