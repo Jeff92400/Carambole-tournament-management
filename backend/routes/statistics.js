@@ -75,53 +75,37 @@ router.get('/debug/bande-check', async (req, res) => {
   const db = require('../db-loader');
 
   try {
-    // Get ALL tournaments for 2025-2026 season with counts
-    const tournamentsByMode = await new Promise((resolve, reject) => {
+    // Check for duplicate licences in players table
+    const duplicateLicences = await new Promise((resolve, reject) => {
       db.all(`
-        SELECT c.game_type, COUNT(*) as tournament_count,
-               STRING_AGG(t.id || ':' || c.level || ':T' || t.tournament_number, ', ') as tournaments
-        FROM tournaments t
-        JOIN categories c ON t.category_id = c.id
-        WHERE t.season = '2025-2026'
-        GROUP BY c.game_type
-        ORDER BY c.game_type
+        SELECT REPLACE(licence, ' ', '') as clean_licence, COUNT(*) as cnt
+        FROM players
+        GROUP BY REPLACE(licence, ' ', '')
+        HAVING COUNT(*) > 1
       `, [], (err, rows) => {
         if (err) reject(err);
         else resolve(rows);
       });
     });
 
-    // Get podium count by game_type (not by club)
-    const podiumsByMode = await new Promise((resolve, reject) => {
+    // Check for duplicate club aliases
+    const duplicateAliases = await new Promise((resolve, reject) => {
       db.all(`
-        SELECT c.game_type,
-               COUNT(*) as total_podiums,
-               SUM(CASE WHEN tr.position = 1 THEN 1 ELSE 0 END) as gold_count,
-               SUM(CASE WHEN tr.position = 2 THEN 1 ELSE 0 END) as silver_count,
-               SUM(CASE WHEN tr.position = 3 THEN 1 ELSE 0 END) as bronze_count
-        FROM tournament_results tr
-        JOIN tournaments t ON tr.tournament_id = t.id
-        JOIN categories c ON t.category_id = c.id
-        WHERE t.season = '2025-2026'
-          AND tr.position IN (1, 2, 3)
-        GROUP BY c.game_type
-        ORDER BY c.game_type
+        SELECT UPPER(REPLACE(REPLACE(REPLACE(alias, ' ', ''), '.', ''), '-', '')) as clean_alias,
+               COUNT(*) as cnt
+        FROM club_aliases
+        GROUP BY UPPER(REPLACE(REPLACE(REPLACE(alias, ' ', ''), '.', ''), '-', ''))
+        HAVING COUNT(*) > 1
       `, [], (err, rows) => {
         if (err) reject(err);
         else resolve(rows);
       });
     });
 
-    // Get the EXACT same data that /clubs/podiums returns
-    const clubPodiumsData = await new Promise((resolve, reject) => {
+    // Check actual row count from the join (before aggregation)
+    const joinRowCount = await new Promise((resolve, reject) => {
       db.all(`
-        SELECT
-          COALESCE(ca.canonical_name, p.club, 'Non renseigné') as club,
-          c.game_type,
-          SUM(CASE WHEN tr.position = 1 THEN 1 ELSE 0 END) as gold,
-          SUM(CASE WHEN tr.position = 2 THEN 1 ELSE 0 END) as silver,
-          SUM(CASE WHEN tr.position = 3 THEN 1 ELSE 0 END) as bronze,
-          SUM(CASE WHEN tr.position IN (1, 2, 3) THEN 1 ELSE 0 END) as podiums
+        SELECT COUNT(*) as row_count
         FROM tournament_results tr
         JOIN tournaments t ON tr.tournament_id = t.id
         JOIN categories c ON t.category_id = c.id
@@ -130,47 +114,34 @@ router.get('/debug/bande-check', async (req, res) => {
                                     = UPPER(REPLACE(REPLACE(REPLACE(ca.alias, ' ', ''), '.', ''), '-', ''))
         WHERE t.season = '2025-2026'
           AND tr.position IN (1, 2, 3)
-        GROUP BY COALESCE(ca.canonical_name, p.club, 'Non renseigné'), c.game_type
-        ORDER BY c.game_type, podiums DESC
       `, [], (err, rows) => {
         if (err) reject(err);
-        else resolve(rows);
+        else resolve(rows[0]);
       });
     });
 
-    // Calculate totals the same way frontend would
-    const resultByMode = {};
-    let grandTotalFromClubData = 0;
-    clubPodiumsData.forEach(row => {
-      if (!resultByMode[row.game_type]) {
-        resultByMode[row.game_type] = { clubs: [], total: 0 };
-      }
-      const podiums = parseInt(row.podiums) || 0;
-      resultByMode[row.game_type].clubs.push({
-        club: row.club,
-        gold: parseInt(row.gold) || 0,
-        silver: parseInt(row.silver) || 0,
-        bronze: parseInt(row.bronze) || 0,
-        podiums: podiums
+    // Get raw podium count (without joins that might cause duplication)
+    const rawPodiumCount = await new Promise((resolve, reject) => {
+      db.all(`
+        SELECT COUNT(*) as count
+        FROM tournament_results tr
+        JOIN tournaments t ON tr.tournament_id = t.id
+        WHERE t.season = '2025-2026'
+          AND tr.position IN (1, 2, 3)
+      `, [], (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows[0]);
       });
-      resultByMode[row.game_type].total += podiums;
-      grandTotalFromClubData += podiums;
     });
-
-    // Sum from raw podiums by mode
-    const totalPodiums = podiumsByMode.reduce((sum, r) => sum + parseInt(r.total_podiums), 0);
-    const totalTournaments = tournamentsByMode.reduce((sum, r) => sum + parseInt(r.tournament_count), 0);
-    const expectedPodiums = totalTournaments * 3;
 
     res.json({
-      tournaments_by_mode: tournamentsByMode,
-      total_tournaments: totalTournaments,
-      podiums_by_mode: podiumsByMode,
-      total_from_raw_count: totalPodiums,
-      expected_podiums: expectedPodiums,
-      club_podiums_grouped: resultByMode,
-      grand_total_from_club_data: grandTotalFromClubData,
-      discrepancy: grandTotalFromClubData - expectedPodiums
+      raw_podium_count: rawPodiumCount.count,
+      join_row_count: joinRowCount.row_count,
+      duplicate_licences: duplicateLicences,
+      duplicate_aliases: duplicateAliases,
+      issue: joinRowCount.row_count > rawPodiumCount.count ?
+        `JOIN creates ${joinRowCount.row_count - rawPodiumCount.count} extra rows due to duplicates` :
+        'No duplication from JOINs'
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
