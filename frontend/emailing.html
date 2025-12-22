@@ -295,6 +295,9 @@
             <select id="tournoiFilter">
               <option value="">-- Tournois saison en cours --</option>
             </select>
+            <select id="rankingFilter" style="min-width: 200px;">
+              <option value="">-- Classements --</option>
+            </select>
           </div>
           <div class="filter-bar">
             <input type="text" id="contactSearch" placeholder="Rechercher par nom, email, club..." style="flex: 1;">
@@ -1064,6 +1067,68 @@ Le Comité Départemental de Billard des Hauts-de-Seine</textarea>
       }
     }
 
+    async function loadRankingCategories() {
+      try {
+        const response = await fetch(`${API_URL}/emailing/ranking-categories`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          const categories = await response.json();
+          const select = document.getElementById('rankingFilter');
+          select.innerHTML = '<option value="">-- Classements --</option>';
+
+          // Group by game_type
+          const byMode = {};
+          categories.forEach(c => {
+            if (!byMode[c.game_type]) byMode[c.game_type] = [];
+            byMode[c.game_type].push(c);
+          });
+
+          Object.keys(byMode).sort().forEach(mode => {
+            const optgroup = document.createElement('optgroup');
+            optgroup.label = mode;
+            byMode[mode].forEach(c => {
+              const option = document.createElement('option');
+              option.value = c.id;
+              option.textContent = `${c.display_name} (${c.player_count} joueurs)`;
+              optgroup.appendChild(option);
+            });
+            select.appendChild(optgroup);
+          });
+        }
+      } catch (error) {
+        console.error('Error loading ranking categories:', error);
+      }
+    }
+
+    async function loadRankingContacts(categoryId) {
+      try {
+        document.getElementById('loadingContacts').style.display = 'block';
+        document.getElementById('contactsList').style.display = 'none';
+
+        const response = await fetch(`${API_URL}/emailing/ranking-contacts?categoryId=${categoryId}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (!response.ok) throw new Error('Failed to load ranking contacts');
+
+        allContacts = await response.json();
+
+        // Update stats
+        document.getElementById('totalContacts').textContent = allContacts.length;
+        document.getElementById('optinCount').textContent = allContacts.filter(c => c.email_optin === 1).length;
+
+        displayContacts(allContacts);
+
+        document.getElementById('loadingContacts').style.display = 'none';
+        document.getElementById('contactsList').style.display = 'block';
+
+      } catch (error) {
+        console.error('Error loading ranking contacts:', error);
+        showError('Erreur lors du chargement des contacts du classement');
+      }
+    }
+
     // Update category dropdown based on selected mode
     function updateCategoryFilter() {
       const mode = document.getElementById('modeFilter').value;
@@ -1162,7 +1227,23 @@ Le Comité Départemental de Billard des Hauts-de-Seine</textarea>
       onFilterChange();
     });
     document.getElementById('categoryFilter').addEventListener('change', onFilterChange);
-    document.getElementById('tournoiFilter').addEventListener('change', onFilterChange);
+    document.getElementById('tournoiFilter').addEventListener('change', () => {
+      // Clear ranking filter when selecting tournament
+      if (document.getElementById('tournoiFilter').value) {
+        document.getElementById('rankingFilter').value = '';
+      }
+      onFilterChange();
+    });
+    document.getElementById('rankingFilter').addEventListener('change', () => {
+      const rankingId = document.getElementById('rankingFilter').value;
+      if (rankingId) {
+        // Clear tournament filter when selecting ranking
+        document.getElementById('tournoiFilter').value = '';
+        loadRankingContacts(rankingId);
+      } else {
+        loadContacts();
+      }
+    });
 
     // Select all / Deselect all
     document.getElementById('selectAllBtn').addEventListener('click', () => {
@@ -2544,6 +2625,7 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
     async function initialize() {
       await loadClubs();
       await loadTournois();
+      await loadRankingCategories();
       await loadContacts();
       await loadTemplates();
       await loadImportedTournaments();

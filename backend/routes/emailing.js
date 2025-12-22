@@ -338,6 +338,82 @@ router.get('/clubs', authenticateToken, async (req, res) => {
   );
 });
 
+// Get ranking categories for filter dropdown (categories that have rankings)
+router.get('/ranking-categories', authenticateToken, async (req, res) => {
+  const db = require('../db-loader');
+
+  // Get categories that have rankings in the current season
+  const query = `
+    SELECT DISTINCT c.id, c.game_type, c.level, c.display_name,
+           (SELECT COUNT(*) FROM rankings r WHERE r.category_id = c.id AND r.season = (SELECT MAX(season) FROM rankings)) as player_count
+    FROM categories c
+    WHERE c.id IN (SELECT DISTINCT category_id FROM rankings WHERE season = (SELECT MAX(season) FROM rankings))
+    ORDER BY c.game_type, c.level
+  `;
+
+  db.all(query, [], (err, rows) => {
+    if (err) {
+      console.error('Error fetching ranking categories:', err);
+      return res.status(500).json({ error: err.message });
+    }
+    res.json(rows || []);
+  });
+});
+
+// Get contacts from rankings by category
+router.get('/ranking-contacts', authenticateToken, async (req, res) => {
+  const db = require('../db-loader');
+  const { categoryId } = req.query;
+
+  if (!categoryId) {
+    return res.status(400).json({ error: 'Category ID required' });
+  }
+
+  // Get current season
+  const seasonQuery = `SELECT MAX(season) as season FROM rankings`;
+
+  db.get(seasonQuery, [], (err, seasonRow) => {
+    if (err) {
+      console.error('Error fetching season:', err);
+      return res.status(500).json({ error: err.message });
+    }
+
+    const season = seasonRow?.season;
+    if (!season) {
+      return res.json([]);
+    }
+
+    // Get players from rankings joined with player_contacts for email info
+    const query = `
+      SELECT DISTINCT
+        pc.id,
+        pc.licence,
+        pc.first_name,
+        pc.last_name,
+        pc.email,
+        pc.club,
+        pc.statut,
+        pc.email_optin,
+        r.rank_position,
+        c.display_name as category_name
+      FROM rankings r
+      LEFT JOIN player_contacts pc ON REPLACE(r.licence, ' ', '') = REPLACE(pc.licence, ' ', '')
+      JOIN categories c ON r.category_id = c.id
+      WHERE r.category_id = $1 AND r.season = $2
+        AND pc.email IS NOT NULL AND pc.email != '' AND pc.email LIKE '%@%'
+      ORDER BY r.rank_position
+    `;
+
+    db.all(query, [categoryId, season], (err, rows) => {
+      if (err) {
+        console.error('Error fetching ranking contacts:', err);
+        return res.status(500).json({ error: err.message });
+      }
+      res.json(rows || []);
+    });
+  });
+});
+
 // ==================== EMAIL TEMPLATES ====================
 
 // Get all email templates
