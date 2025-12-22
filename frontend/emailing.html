@@ -1392,6 +1392,8 @@ Le Comité Départemental de Billard des Hauts-de-Seine</textarea>
 
         if (response.ok) {
           const templates = await response.json();
+
+          // Update the template selector (for using templates)
           const select = document.getElementById('templateSelect');
           select.innerHTML = '<option value="">-- Aucun template --</option>';
           templates.forEach(t => {
@@ -1399,6 +1401,16 @@ Le Comité Départemental de Billard des Hauts-de-Seine</textarea>
             option.value = t.template_key;
             option.textContent = t.template_key;
             select.appendChild(option);
+          });
+
+          // Update the template editor selector (for editing templates)
+          const editSelect = document.getElementById('templateEditSelect');
+          editSelect.innerHTML = '<option value="">-- Choisir --</option>';
+          templates.forEach(t => {
+            const option = document.createElement('option');
+            option.value = t.template_key;
+            option.textContent = t.template_key;
+            editSelect.appendChild(option);
           });
         }
       } catch (error) {
@@ -1488,10 +1500,17 @@ Le Comité Départemental de Billard des Hauts-de-Seine</textarea>
         });
 
         if (response.ok) {
-          showSuccess('Template sauvegarde!');
+          showSuccess('Template sauvegardé !');
           loadTemplates();
+          // Clear form and hide editor
+          document.getElementById('templateKey').value = '';
+          document.getElementById('templateSubject').value = '';
+          document.getElementById('templateBody').value = '';
+          document.getElementById('templateEditor').style.display = 'none';
+          document.getElementById('templateEditSelect').value = '';
         } else {
-          showError('Erreur lors de la sauvegarde.');
+          const errorData = await response.json().catch(() => ({}));
+          showError(errorData.error || 'Erreur lors de la sauvegarde.');
         }
       } catch (error) {
         showError('Erreur: ' + error.message);
