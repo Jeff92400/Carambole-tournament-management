@@ -1123,7 +1123,12 @@ Le Comité Départemental de Billard des Hauts-de-Seine</textarea>
     <!-- TAB: Scheduled -->
     <div id="tab-scheduled" class="tab-content">
       <div class="card">
-        <h3>Emails programmes</h3>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+          <h3 style="margin: 0;">Emails programmés</h3>
+          <button id="triggerSchedulerBtn" class="btn" style="background: #17a2b8; padding: 8px 15px; font-size: 13px;">
+            🔄 Traiter maintenant
+          </button>
+        </div>
 
         <div id="loadingScheduled" class="loading" style="display: none;">
           <div class="spinner"></div>
@@ -1132,7 +1137,7 @@ Le Comité Départemental de Billard des Hauts-de-Seine</textarea>
 
         <div id="scheduledList" class="scheduled-list"></div>
         <div id="noScheduled" style="text-align: center; color: #666; padding: 40px; display: none;">
-          Aucun email programme.
+          Aucun email programmé.
         </div>
       </div>
     </div>
@@ -3312,6 +3317,35 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
         });
       });
     }
+
+    // Trigger scheduler manually
+    document.getElementById('triggerSchedulerBtn').addEventListener('click', async () => {
+      const btn = document.getElementById('triggerSchedulerBtn');
+      btn.disabled = true;
+      btn.textContent = '⏳ Traitement...';
+
+      try {
+        const response = await fetch(`${API_URL}/emailing/trigger-scheduler`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        const result = await response.json();
+        if (response.ok) {
+          showSuccess('Scheduler exécuté avec succès');
+          loadScheduled(); // Refresh the list
+        } else {
+          showError(result.error || 'Erreur lors du déclenchement');
+          console.error('Scheduler error:', result);
+        }
+      } catch (error) {
+        showError('Erreur: ' + error.message);
+        console.error('Scheduler error:', error);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '🔄 Traiter maintenant';
+      }
+    });
 
     // ==================== HELPERS ====================
 

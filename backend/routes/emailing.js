@@ -821,6 +821,18 @@ router.get('/scheduled', authenticateToken, async (req, res) => {
   );
 });
 
+// Manually trigger the scheduler (for testing)
+router.post('/trigger-scheduler', authenticateToken, async (req, res) => {
+  try {
+    // Import processScheduledEmails from server
+    const result = await global.processScheduledEmails();
+    res.json({ success: true, message: 'Scheduler triggered', result });
+  } catch (error) {
+    console.error('Error triggering scheduler:', error);
+    res.status(500).json({ error: error.message, stack: error.stack });
+  }
+});
+
 // Update a scheduled email (change date/time)
 router.put('/scheduled/:id', authenticateToken, async (req, res) => {
   const db = require('../db-loader');

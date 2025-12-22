@@ -282,7 +282,8 @@ async function processTemplatedScheduledEmail(db, resend, scheduled, delay) {
   console.log(`[Email Scheduler] Completed ${scheduled.id}: ${sentCount} sent, ${failedCount} failed`);
 }
 
-// Email scheduler - check and send scheduled emails every minute
+// Email scheduler - check and send scheduled emails
+// Exposed globally for manual triggering via API
 async function processScheduledEmails() {
   const { Resend } = require('resend');
   const db = require('./db-loader');
@@ -441,6 +442,9 @@ async function processScheduledEmails() {
     console.error('[Email Scheduler] Error:', error.message);
   }
 }
+
+// Expose for manual triggering via API
+global.processScheduledEmails = processScheduledEmails;
 
 // Start server
 app.listen(PORT, '0.0.0.0', () => {
