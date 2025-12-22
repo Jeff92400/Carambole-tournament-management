@@ -325,15 +325,16 @@ router.get('/tournois', authenticateToken, async (req, res) => {
 router.get('/clubs', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
 
+  // Return canonical club names from club_aliases (no duplicates)
   db.all(
-    `SELECT DISTINCT club FROM player_contacts WHERE club IS NOT NULL AND club != '' ORDER BY club`,
+    `SELECT DISTINCT canonical_name FROM club_aliases WHERE canonical_name IS NOT NULL ORDER BY canonical_name`,
     [],
     (err, rows) => {
       if (err) {
         console.error('Error fetching clubs:', err);
         return res.status(500).json({ error: err.message });
       }
-      res.json((rows || []).map(r => r.club));
+      res.json((rows || []).map(r => r.canonical_name));
     }
   );
 });
@@ -2109,6 +2110,83 @@ router.put('/relance-templates/:key', authenticateToken, async (req, res) => {
     res.json({ success: true });
   } catch (error) {
     console.error('Error saving relance template:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get next tournament info for relance (T2, T3, or Finale)
+router.get('/next-tournament', authenticateToken, async (req, res) => {
+  const db = require('../db-loader');
+  const { mode, category, relanceType } = req.query;
+
+  if (!mode || !category || !relanceType) {
+    return res.status(400).json({ error: 'Mode, category, and relanceType required' });
+  }
+
+  try {
+    // Get current season
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth();
+    const season = currentMonth >= 8 ? `${currentYear}-${currentYear + 1}` : `${currentYear - 1}-${currentYear}`;
+
+    // Find the category
+    const categoryRow = await new Promise((resolve, reject) => {
+      db.get(
+        `SELECT * FROM categories WHERE UPPER(game_type) = $1 AND UPPER(level) = $2`,
+        [mode.toUpperCase(), category.toUpperCase()],
+        (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        }
+      );
+    });
+
+    if (!categoryRow) {
+      return res.status(404).json({ error: 'Category not found' });
+    }
+
+    // Determine which tournament number to look for based on relance type
+    let tournamentNumber;
+    if (relanceType === 't2') {
+      tournamentNumber = 2;
+    } else if (relanceType === 't3') {
+      tournamentNumber = 3;
+    } else if (relanceType === 'finale') {
+      tournamentNumber = 4; // Finale is tournament 4
+    } else {
+      return res.status(400).json({ error: 'Invalid relance type' });
+    }
+
+    // Get the tournament info
+    const tournament = await new Promise((resolve, reject) => {
+      db.get(
+        `SELECT * FROM tournaments WHERE category_id = $1 AND season = $2 AND tournament_number = $3`,
+        [categoryRow.id, season, tournamentNumber],
+        (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        }
+      );
+    });
+
+    if (!tournament) {
+      return res.json({
+        found: false,
+        message: `Tournoi ${relanceType === 'finale' ? 'Finale' : 'T' + tournamentNumber} non trouvé pour cette catégorie`
+      });
+    }
+
+    res.json({
+      found: true,
+      tournament_date: tournament.tournament_date,
+      location: tournament.location,
+      tournament_number: tournament.tournament_number,
+      category: categoryRow.display_name
+    });
+
+  } catch (error) {
+    console.error('Error fetching next tournament:', error);
     res.status(500).json({ error: error.message });
   }
 });

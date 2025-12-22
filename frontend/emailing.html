@@ -2404,7 +2404,7 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
       loadBtn.disabled = !(mode && category && typeSelect.value);
     }
 
-    function updateRelanceTemplate() {
+    async function updateRelanceTemplate() {
       const relanceType = document.getElementById('relanceTypeSelect').value;
       const extraVarsSpan = document.getElementById('relanceExtraVars');
       const customFieldsDiv = document.getElementById('relanceCustomFields');
@@ -2485,6 +2485,83 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
           </div>
         `;
         customFieldsDiv.style.display = 'block';
+      }
+
+      // After updating the template, fetch the tournament info from DB
+      await fetchNextTournamentInfo();
+    }
+
+    // Fetch tournament date/lieu from DB and populate the fields
+    async function fetchNextTournamentInfo() {
+      const mode = document.getElementById('relanceModeFilter').value;
+      const category = document.getElementById('relanceCategoryFilter').value;
+      const relanceType = document.getElementById('relanceTypeSelect').value;
+
+      if (!mode || !category || !relanceType) return;
+
+      try {
+        const response = await fetch(`${API_URL}/emailing/next-tournament?mode=${mode}&category=${category}&relanceType=${relanceType}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (!response.ok) return;
+
+        const data = await response.json();
+        if (!data.found) return;
+
+        // Populate the fields based on relance type
+        if (relanceType === 't2') {
+          if (data.tournament_date) {
+            const dateInput = document.getElementById('relanceT2Date');
+            if (dateInput) dateInput.value = data.tournament_date.split('T')[0];
+          }
+          if (data.location) {
+            const lieuSelect = document.getElementById('relanceT2Lieu');
+            if (lieuSelect) {
+              // Find matching option
+              for (let opt of lieuSelect.options) {
+                if (opt.value === data.location || opt.text === data.location) {
+                  lieuSelect.value = opt.value;
+                  break;
+                }
+              }
+            }
+          }
+        } else if (relanceType === 't3') {
+          if (data.tournament_date) {
+            const dateInput = document.getElementById('relanceT3Date');
+            if (dateInput) dateInput.value = data.tournament_date.split('T')[0];
+          }
+          if (data.location) {
+            const lieuSelect = document.getElementById('relanceT3Lieu');
+            if (lieuSelect) {
+              for (let opt of lieuSelect.options) {
+                if (opt.value === data.location || opt.text === data.location) {
+                  lieuSelect.value = opt.value;
+                  break;
+                }
+              }
+            }
+          }
+        } else if (relanceType === 'finale') {
+          if (data.tournament_date) {
+            const dateInput = document.getElementById('relanceFinaleDate');
+            if (dateInput) dateInput.value = data.tournament_date.split('T')[0];
+          }
+          if (data.location) {
+            const lieuSelect = document.getElementById('relanceFinaleLieu');
+            if (lieuSelect) {
+              for (let opt of lieuSelect.options) {
+                if (opt.value === data.location || opt.text === data.location) {
+                  lieuSelect.value = opt.value;
+                  break;
+                }
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.log('Could not fetch tournament info:', error);
       }
     }
 
