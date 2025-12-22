@@ -41,9 +41,10 @@ router.get('/check-campaign', authenticateToken, async (req, res) => {
   }
 
   try {
+    // Only check for real sends (not test mode)
     let query = `SELECT id, subject, sent_count, sent_at, sent_by
                  FROM email_campaigns
-                 WHERE campaign_type = $1 AND status = 'completed'`;
+                 WHERE campaign_type = $1 AND status = 'completed' AND (test_mode = FALSE OR test_mode IS NULL)`;
     const params = [campaign_type];
     let paramIndex = 2;
 
@@ -1207,10 +1208,10 @@ router.post('/send-results', authenticateToken, async (req, res) => {
     // Create campaign record with tracking info
     const campaignId = await new Promise((resolve, reject) => {
       db.run(
-        `INSERT INTO email_campaigns (subject, body, template_key, recipients_count, status, campaign_type, mode, category, tournament_id, sent_by)
-         VALUES ($1, $2, 'tournament_results', $3, 'sending', 'tournament_results', $4, $5, $6, $7)`,
+        `INSERT INTO email_campaigns (subject, body, template_key, recipients_count, status, campaign_type, mode, category, tournament_id, sent_by, test_mode)
+         VALUES ($1, $2, 'tournament_results', $3, 'sending', 'tournament_results', $4, $5, $6, $7, $8)`,
         [`Résultats - ${tournament.display_name}`, introText, results.filter(r => r.email).length,
-         tournament.game_type, tournament.level, tournamentId, req.user?.username || 'unknown'],
+         tournament.game_type, tournament.level, tournamentId, req.user?.username || 'unknown', testMode ? true : false],
         function(err) {
           if (err) reject(err);
           else resolve(this.lastID);
@@ -1765,10 +1766,10 @@ router.post('/send-finale-convocation', authenticateToken, async (req, res) => {
     // Create campaign record with tracking info
     const campaignId = await new Promise((resolve, reject) => {
       db.run(
-        `INSERT INTO email_campaigns (subject, body, template_key, recipients_count, status, campaign_type, mode, category, tournament_id, sent_by)
-         VALUES ($1, $2, 'finale_convocation', $3, 'sending', 'finale_convocation', $4, $5, $6, $7)`,
+        `INSERT INTO email_campaigns (subject, body, template_key, recipients_count, status, campaign_type, mode, category, tournament_id, sent_by, test_mode)
+         VALUES ($1, $2, 'finale_convocation', $3, 'sending', 'finale_convocation', $4, $5, $6, $7, $8)`,
         [`Convocation Finale - ${category.display_name}`, introText, finalists.filter(f => f.email).length,
-         finale.mode, finale.categorie, finaleId, req.user?.username || 'unknown'],
+         finale.mode, finale.categorie, finaleId, req.user?.username || 'unknown', testMode ? true : false],
         function(err) {
           if (err) reject(err);
           else resolve(this.lastID);
@@ -2847,10 +2848,10 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
     // Create campaign record with tracking info
     const campaignId = await new Promise((resolve, reject) => {
       db.run(
-        `INSERT INTO email_campaigns (subject, body, template_key, recipients_count, status, campaign_type, mode, category, sent_by)
-         VALUES ($1, $2, $3, $4, 'sending', $5, $6, $7, $8)`,
+        `INSERT INTO email_campaigns (subject, body, template_key, recipients_count, status, campaign_type, mode, category, sent_by, test_mode)
+         VALUES ($1, $2, $3, $4, 'sending', $5, $6, $7, $8, $9)`,
         [subject, intro, `relance_${relanceType}`, testMode ? 1 : participants.filter(p => p.email).length,
-         `relance_${relanceType}`, mode, category, req.user?.username || 'unknown'],
+         `relance_${relanceType}`, mode, category, req.user?.username || 'unknown', testMode ? true : false],
         function(err) {
           if (err) reject(err);
           else resolve(this.lastID);

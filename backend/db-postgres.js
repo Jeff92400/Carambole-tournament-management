@@ -312,7 +312,8 @@ async function initializeDatabase() {
         mode TEXT,
         category TEXT,
         tournament_id INTEGER,
-        sent_by TEXT
+        sent_by TEXT,
+        test_mode BOOLEAN DEFAULT FALSE
       )
     `);
 
@@ -322,6 +323,7 @@ async function initializeDatabase() {
     await client.query(`ALTER TABLE email_campaigns ADD COLUMN IF NOT EXISTS category TEXT`);
     await client.query(`ALTER TABLE email_campaigns ADD COLUMN IF NOT EXISTS tournament_id INTEGER`);
     await client.query(`ALTER TABLE email_campaigns ADD COLUMN IF NOT EXISTS sent_by TEXT`);
+    await client.query(`ALTER TABLE email_campaigns ADD COLUMN IF NOT EXISTS test_mode BOOLEAN DEFAULT FALSE`);
 
     // Scheduled emails table - for future email sending
     await client.query(`
