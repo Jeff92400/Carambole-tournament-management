@@ -3331,8 +3331,10 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
         });
 
         const result = await response.json();
+        console.log('Scheduler result:', result);
         if (response.ok) {
-          showSuccess('Scheduler exécuté avec succès');
+          const msg = result.result ? `${result.result.message} (pending: ${result.result.pending}, due: ${result.result.due})` : 'Scheduler exécuté';
+          showSuccess(msg);
           loadScheduled(); // Refresh the list
         } else {
           showError(result.error || 'Erreur lors du déclenchement');

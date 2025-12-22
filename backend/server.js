@@ -288,7 +288,12 @@ async function processScheduledEmails() {
   const { Resend } = require('resend');
   const db = require('./db-loader');
 
-  if (!process.env.RESEND_API_KEY) return;
+  console.log('[Email Scheduler] Starting processScheduledEmails...');
+
+  if (!process.env.RESEND_API_KEY) {
+    console.log('[Email Scheduler] No RESEND_API_KEY configured');
+    return { status: 'error', message: 'No RESEND_API_KEY configured' };
+  }
 
   const resend = new Resend(process.env.RESEND_API_KEY);
   const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
@@ -306,12 +311,16 @@ async function processScheduledEmails() {
       );
     });
 
-    if (allPending.length === 0) return;
+    console.log(`[Email Scheduler] Found ${allPending.length} pending email(s)`);
+
+    if (allPending.length === 0) {
+      return { status: 'ok', message: 'No pending emails', pending: 0, due: 0, processed: 0 };
+    }
 
     // Get current Paris time
     const now = new Date();
     const parisNow = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
-    console.log(`[Email Scheduler] Checking ${allPending.length} pending email(s). Paris time: ${parisNow.toISOString()}`);
+    console.log(`[Email Scheduler] Paris time: ${parisNow.toLocaleString('fr-FR')}`);
 
     // Filter emails that are due (scheduled_at <= now Paris time)
     const scheduledEmails = allPending.filter(email => {
@@ -319,13 +328,13 @@ async function processScheduledEmails() {
       const scheduledStr = email.scheduled_at ? email.scheduled_at.replace('Z', '').replace('.000', '') : '';
       const scheduledDate = new Date(scheduledStr);
       const isDue = scheduledDate <= parisNow;
-      console.log(`[Email Scheduler] Email ${email.id}: scheduled=${scheduledStr}, isDue=${isDue}`);
+      console.log(`[Email Scheduler] Email ${email.id}: scheduled=${scheduledStr} (${scheduledDate.toLocaleString('fr-FR')}), now=${parisNow.toLocaleString('fr-FR')}, isDue=${isDue}`);
       return isDue;
     });
 
     if (scheduledEmails.length === 0) {
       console.log('[Email Scheduler] No emails due yet');
-      return;
+      return { status: 'ok', message: 'No emails due yet', pending: allPending.length, due: 0, processed: 0 };
     }
 
     console.log(`[Email Scheduler] Processing ${scheduledEmails.length} scheduled email(s)`);
@@ -438,8 +447,11 @@ async function processScheduledEmails() {
       console.log(`[Email Scheduler] Sent ${sentCount}/${recipientIds.length} emails for scheduled ID ${scheduled.id}`);
     }
 
+    return { status: 'ok', message: `Processed ${scheduledEmails.length} email(s)`, pending: allPending.length, due: scheduledEmails.length, processed: scheduledEmails.length };
+
   } catch (error) {
-    console.error('[Email Scheduler] Error:', error.message);
+    console.error('[Email Scheduler] Error:', error.message, error.stack);
+    return { status: 'error', message: error.message, stack: error.stack };
   }
 }
 
