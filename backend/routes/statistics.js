@@ -613,17 +613,30 @@ router.get('/general/participation', authenticateToken, async (req, res) => {
   const seasonStart = `${startYear}-09-01`;
   const seasonEnd = `${parseInt(startYear) + 1}-06-30`;
 
+  // Normalize mode names using CASE to handle variations
   const query = `
     SELECT
-      te.mode as game_type,
+      CASE
+        WHEN UPPER(te.mode) LIKE '%3%BANDE%' THEN '3 Bandes'
+        WHEN UPPER(te.mode) LIKE '%BANDE%' AND UPPER(te.mode) NOT LIKE '%3%' THEN 'Bande'
+        WHEN UPPER(te.mode) LIKE '%CADRE%' THEN 'Cadre'
+        WHEN UPPER(te.mode) LIKE '%LIBRE%' THEN 'Libre'
+        ELSE te.mode
+      END as game_type,
       COUNT(DISTINCT i.inscription_id) as total_inscriptions,
       SUM(CASE WHEN i.forfait = 1 THEN 1 ELSE 0 END) as forfaits,
       SUM(CASE WHEN i.forfait = 0 OR i.forfait IS NULL THEN 1 ELSE 0 END) as participated
     FROM inscriptions i
     JOIN tournoi_ext te ON i.tournoi_id = te.tournoi_id
     WHERE te.debut >= $1 AND te.debut <= $2
-    GROUP BY te.mode
-    ORDER BY te.mode
+    GROUP BY CASE
+        WHEN UPPER(te.mode) LIKE '%3%BANDE%' THEN '3 Bandes'
+        WHEN UPPER(te.mode) LIKE '%BANDE%' AND UPPER(te.mode) NOT LIKE '%3%' THEN 'Bande'
+        WHEN UPPER(te.mode) LIKE '%CADRE%' THEN 'Cadre'
+        WHEN UPPER(te.mode) LIKE '%LIBRE%' THEN 'Libre'
+        ELSE te.mode
+      END
+    ORDER BY game_type
   `;
 
   db.all(query, [seasonStart, seasonEnd], (err, rows) => {
