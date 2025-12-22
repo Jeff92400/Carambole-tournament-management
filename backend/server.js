@@ -293,10 +293,10 @@ async function processScheduledEmails() {
   const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
   try {
-    // Get emails that are due (compare with Paris time)
-    const scheduledEmails = await new Promise((resolve, reject) => {
+    // Get all pending emails
+    const allPending = await new Promise((resolve, reject) => {
       db.all(
-        `SELECT * FROM scheduled_emails WHERE status = 'pending' AND scheduled_at <= (CURRENT_TIMESTAMP AT TIME ZONE 'Europe/Paris')`,
+        `SELECT * FROM scheduled_emails WHERE status = 'pending'`,
         [],
         (err, rows) => {
           if (err) reject(err);
@@ -305,7 +305,27 @@ async function processScheduledEmails() {
       );
     });
 
-    if (scheduledEmails.length === 0) return;
+    if (allPending.length === 0) return;
+
+    // Get current Paris time
+    const now = new Date();
+    const parisNow = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
+    console.log(`[Email Scheduler] Checking ${allPending.length} pending email(s). Paris time: ${parisNow.toISOString()}`);
+
+    // Filter emails that are due (scheduled_at <= now Paris time)
+    const scheduledEmails = allPending.filter(email => {
+      // Parse scheduled_at as Paris time (remove Z if present)
+      const scheduledStr = email.scheduled_at ? email.scheduled_at.replace('Z', '').replace('.000', '') : '';
+      const scheduledDate = new Date(scheduledStr);
+      const isDue = scheduledDate <= parisNow;
+      console.log(`[Email Scheduler] Email ${email.id}: scheduled=${scheduledStr}, isDue=${isDue}`);
+      return isDue;
+    });
+
+    if (scheduledEmails.length === 0) {
+      console.log('[Email Scheduler] No emails due yet');
+      return;
+    }
 
     console.log(`[Email Scheduler] Processing ${scheduledEmails.length} scheduled email(s)`);
 
