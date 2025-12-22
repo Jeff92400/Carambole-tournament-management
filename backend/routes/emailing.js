@@ -2162,13 +2162,26 @@ router.get('/next-tournament', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Invalid relance type' });
     }
 
-    console.log('Looking for tournament:', { categoryId: categoryRow.id, season, tournamentNumber });
+    // Search in tournoi_ext for planned tournaments
+    // Match by mode, category, and name pattern (T2, T3, or Finale)
+    let namePattern;
+    if (relanceType === 't2') {
+      namePattern = '%T2%';
+    } else if (relanceType === 't3') {
+      namePattern = '%T3%';
+    } else {
+      namePattern = '%FINALE%';
+    }
 
-    // Get the tournament info
+    console.log('Looking for tournament in tournoi_ext:', { mode, category, namePattern });
+
     const tournament = await new Promise((resolve, reject) => {
       db.get(
-        `SELECT * FROM tournaments WHERE category_id = $1 AND season = $2 AND tournament_number = $3`,
-        [categoryRow.id, season, tournamentNumber],
+        `SELECT * FROM tournoi_ext
+         WHERE UPPER(mode) = $1 AND UPPER(categorie) = $2
+         AND (UPPER(nom) LIKE $3 OR (${relanceType === 'finale' ? "UPPER(nom) LIKE '%FINAL%'" : "1=0"}))
+         ORDER BY debut DESC LIMIT 1`,
+        [mode.toUpperCase(), category.toUpperCase(), namePattern],
         (err, row) => {
           if (err) reject(err);
           else resolve(row);
@@ -2176,20 +2189,20 @@ router.get('/next-tournament', authenticateToken, async (req, res) => {
       );
     });
 
-    console.log('Tournament found:', tournament);
+    console.log('Tournament found in tournoi_ext:', tournament);
 
     if (!tournament) {
       return res.json({
         found: false,
-        message: `Tournoi ${relanceType === 'finale' ? 'Finale' : 'T' + tournamentNumber} non trouvé pour cette catégorie (saison ${season})`
+        message: `Tournoi ${relanceType === 'finale' ? 'Finale' : 'T' + tournamentNumber} non trouvé dans la base de données`
       });
     }
 
     res.json({
       found: true,
-      tournament_date: tournament.tournament_date,
-      location: tournament.location,
-      tournament_number: tournament.tournament_number,
+      tournament_date: tournament.debut,
+      location: tournament.lieu,
+      tournament_name: tournament.nom,
       category: categoryRow.display_name
     });
 
