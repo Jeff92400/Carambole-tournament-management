@@ -448,7 +448,7 @@
               <div style="display: flex; align-items: center; gap: 10px;">
                 <span style="font-size: 24px;">⚠️</span>
                 <div>
-                  <strong style="color: #856404;">Cette relance a deja ete envoyee!</strong>
+                  <strong style="color: #856404;">Cette relance a déjà été envoyée!</strong>
                   <div id="relanceAlreadySentDetails" style="font-size: 13px; color: #856404; margin-top: 5px;"></div>
                 </div>
               </div>
@@ -2299,11 +2299,11 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
 
         if (response.ok) {
           document.getElementById('editContactModal').style.display = 'none';
-          showSuccess('Contact mis a jour!');
+          showSuccess('Contact mis à jour!');
           loadAllContacts();
           loadContacts(); // Refresh the contacts list in compose tab
         } else {
-          showError('Erreur lors de la mise a jour.');
+          showError('Erreur lors de la mise à jour.');
         }
       } catch (error) {
         showError('Erreur: ' + error.message);
@@ -2967,7 +2967,7 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
         });
 
         if (!response.ok) throw new Error('Failed to update');
-        showSuccess('Type mis a jour');
+        showSuccess('Type mis à jour');
       } catch (error) {
         showError('Erreur: ' + error.message);
         loadHistory(); // Reload to revert
