@@ -307,9 +307,21 @@ async function initializeDatabase() {
         failed_count INTEGER DEFAULT 0,
         status TEXT DEFAULT 'draft',
         sent_at TIMESTAMP,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        campaign_type TEXT,
+        mode TEXT,
+        category TEXT,
+        tournament_id INTEGER,
+        sent_by TEXT
       )
     `);
+
+    // Add new columns if they don't exist (for existing deployments)
+    await client.query(`ALTER TABLE email_campaigns ADD COLUMN IF NOT EXISTS campaign_type TEXT`);
+    await client.query(`ALTER TABLE email_campaigns ADD COLUMN IF NOT EXISTS mode TEXT`);
+    await client.query(`ALTER TABLE email_campaigns ADD COLUMN IF NOT EXISTS category TEXT`);
+    await client.query(`ALTER TABLE email_campaigns ADD COLUMN IF NOT EXISTS tournament_id INTEGER`);
+    await client.query(`ALTER TABLE email_campaigns ADD COLUMN IF NOT EXISTS sent_by TEXT`);
 
     // Scheduled emails table - for future email sending
     await client.query(`

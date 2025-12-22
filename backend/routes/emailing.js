@@ -31,6 +31,61 @@ router.get('/summary-email', authenticateToken, async (req, res) => {
   }
 });
 
+// Check if a campaign was already sent
+router.get('/check-campaign', authenticateToken, async (req, res) => {
+  const db = require('../db-loader');
+  const { campaign_type, mode, category, tournament_id } = req.query;
+
+  if (!campaign_type) {
+    return res.status(400).json({ error: 'campaign_type required' });
+  }
+
+  try {
+    let query = `SELECT id, subject, sent_count, sent_at, sent_by
+                 FROM email_campaigns
+                 WHERE campaign_type = $1 AND status = 'completed'`;
+    const params = [campaign_type];
+    let paramIndex = 2;
+
+    if (mode) {
+      query += ` AND mode = $${paramIndex++}`;
+      params.push(mode);
+    }
+    if (category) {
+      query += ` AND category = $${paramIndex++}`;
+      params.push(category);
+    }
+    if (tournament_id) {
+      query += ` AND tournament_id = $${paramIndex++}`;
+      params.push(tournament_id);
+    }
+
+    query += ' ORDER BY sent_at DESC LIMIT 1';
+
+    const campaign = await new Promise((resolve, reject) => {
+      db.get(query, params, (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
+
+    if (campaign) {
+      res.json({
+        alreadySent: true,
+        lastSent: campaign.sent_at,
+        sentBy: campaign.sent_by,
+        recipientCount: campaign.sent_count,
+        subject: campaign.subject
+      });
+    } else {
+      res.json({ alreadySent: false });
+    }
+  } catch (error) {
+    console.error('Error checking campaign:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Initialize Resend
 const getResend = () => {
   if (!process.env.RESEND_API_KEY) {
@@ -1149,12 +1204,13 @@ router.post('/send-results', authenticateToken, async (req, res) => {
     const sentResults = { sent: [], failed: [], skipped: [] };
     const tournamentDate = tournament.tournament_date ? new Date(tournament.tournament_date).toLocaleDateString('fr-FR') : '';
 
-    // Create campaign record
+    // Create campaign record with tracking info
     const campaignId = await new Promise((resolve, reject) => {
       db.run(
-        `INSERT INTO email_campaigns (subject, body, template_key, recipients_count, status)
-         VALUES ($1, $2, 'tournament_results', $3, 'sending')`,
-        [`Résultats - ${tournament.display_name}`, introText, results.filter(r => r.email).length],
+        `INSERT INTO email_campaigns (subject, body, template_key, recipients_count, status, campaign_type, mode, category, tournament_id, sent_by)
+         VALUES ($1, $2, 'tournament_results', $3, 'sending', 'tournament_results', $4, $5, $6, $7)`,
+        [`Résultats - ${tournament.display_name}`, introText, results.filter(r => r.email).length,
+         tournament.game_type, tournament.level, tournamentId, req.user?.username || 'unknown'],
         function(err) {
           if (err) reject(err);
           else resolve(this.lastID);
@@ -1706,12 +1762,13 @@ router.post('/send-finale-convocation', authenticateToken, async (req, res) => {
     const sentResults = { sent: [], failed: [], skipped: [] };
     const finaleFormattedDate = finale.debut ? new Date(finale.debut).toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : '';
 
-    // Create campaign record
+    // Create campaign record with tracking info
     const campaignId = await new Promise((resolve, reject) => {
       db.run(
-        `INSERT INTO email_campaigns (subject, body, template_key, recipients_count, status)
-         VALUES ($1, $2, 'finale_convocation', $3, 'sending')`,
-        [`Convocation Finale - ${category.display_name}`, introText, finalists.filter(f => f.email).length],
+        `INSERT INTO email_campaigns (subject, body, template_key, recipients_count, status, campaign_type, mode, category, tournament_id, sent_by)
+         VALUES ($1, $2, 'finale_convocation', $3, 'sending', 'finale_convocation', $4, $5, $6, $7)`,
+        [`Convocation Finale - ${category.display_name}`, introText, finalists.filter(f => f.email).length,
+         finale.mode, finale.categorie, finaleId, req.user?.username || 'unknown'],
         function(err) {
           if (err) reject(err);
           else resolve(this.lastID);
@@ -2787,12 +2844,13 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
 
     const results = { sent: [], failed: [], skipped: [] };
 
-    // Create campaign record
+    // Create campaign record with tracking info
     const campaignId = await new Promise((resolve, reject) => {
       db.run(
-        `INSERT INTO email_campaigns (subject, body, template_key, recipients_count, status)
-         VALUES ($1, $2, $3, $4, 'sending')`,
-        [subject, intro, `relance_${relanceType}`, testMode ? 1 : participants.filter(p => p.email).length],
+        `INSERT INTO email_campaigns (subject, body, template_key, recipients_count, status, campaign_type, mode, category, sent_by)
+         VALUES ($1, $2, $3, $4, 'sending', $5, $6, $7, $8)`,
+        [subject, intro, `relance_${relanceType}`, testMode ? 1 : participants.filter(p => p.email).length,
+         `relance_${relanceType}`, mode, category, req.user?.username || 'unknown'],
         function(err) {
           if (err) reject(err);
           else resolve(this.lastID);

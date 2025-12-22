@@ -2750,11 +2750,25 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
       }
 
       const selectedCount = selectedRelanceIds.size;
-      const confirmMsg = testMode
-        ? `MODE TEST: Envoyer l'email uniquement à ${testEmail} ?`
-        : `Envoyer la relance à ${selectedCount} destinataire(s) sélectionné(s) ?`;
 
-      if (!confirm(confirmMsg)) return;
+      // Check if this campaign was already sent (only for non-test mode)
+      if (!testMode) {
+        const campaignCheck = await checkCampaignAlreadySent(`relance_${relanceType}`, mode, category);
+        if (campaignCheck && campaignCheck.alreadySent) {
+          const warningMsg = `⚠️ ATTENTION: Une relance ${relanceType.toUpperCase()} pour ${mode} ${category} a déjà été envoyée!\n\n` +
+            `📅 Date: ${formatCampaignDate(campaignCheck.lastSent)}\n` +
+            `👤 Par: ${campaignCheck.sentBy || 'Inconnu'}\n` +
+            `📧 Destinataires: ${campaignCheck.recipientCount || 0}\n\n` +
+            `Voulez-vous quand même envoyer à nouveau à ${selectedCount} destinataire(s) ?`;
+
+          if (!confirm(warningMsg)) return;
+        } else {
+          // Normal confirmation
+          if (!confirm(`Envoyer la relance à ${selectedCount} destinataire(s) sélectionné(s) ?`)) return;
+        }
+      } else {
+        if (!confirm(`MODE TEST: Envoyer l'email uniquement à ${testEmail} ?`)) return;
+      }
 
       showProgress('Envoi des relances...');
 
@@ -2999,6 +3013,39 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
       document.getElementById('progressOverlay').style.display = 'none';
     }
 
+    // Check if a campaign was already sent
+    async function checkCampaignAlreadySent(campaignType, mode, category, tournamentId = null) {
+      try {
+        let url = `${API_URL}/emailing/check-campaign?campaign_type=${encodeURIComponent(campaignType)}`;
+        if (mode) url += `&mode=${encodeURIComponent(mode)}`;
+        if (category) url += `&category=${encodeURIComponent(category)}`;
+        if (tournamentId) url += `&tournament_id=${encodeURIComponent(tournamentId)}`;
+
+        const response = await fetch(url, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (!response.ok) return null;
+        return await response.json();
+      } catch (error) {
+        console.error('Error checking campaign:', error);
+        return null;
+      }
+    }
+
+    // Format date for display
+    function formatCampaignDate(dateStr) {
+      if (!dateStr) return '';
+      const date = new Date(dateStr);
+      return date.toLocaleDateString('fr-FR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    }
+
     // ==================== TOURNAMENT RESULTS ====================
 
     let selectedTournamentData = null;
@@ -3198,8 +3245,27 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
         }
       } else {
         const emailCount = tournamentResults.filter(r => r.email).length;
-        if (!confirm(`Envoyer les résultats à ${emailCount} participant(s) ?`)) {
-          return;
+
+        // Check if results were already sent for this tournament
+        const campaignCheck = await checkCampaignAlreadySent(
+          'tournament_results',
+          selectedTournamentData.game_type,
+          selectedTournamentData.level,
+          selectedTournamentData.id
+        );
+
+        if (campaignCheck && campaignCheck.alreadySent) {
+          const warningMsg = `⚠️ ATTENTION: Les résultats de ce tournoi ont déjà été envoyés!\n\n` +
+            `📅 Date: ${formatCampaignDate(campaignCheck.lastSent)}\n` +
+            `👤 Par: ${campaignCheck.sentBy || 'Inconnu'}\n` +
+            `📧 Destinataires: ${campaignCheck.recipientCount || 0}\n\n` +
+            `Voulez-vous quand même envoyer à nouveau à ${emailCount} participant(s) ?`;
+
+          if (!confirm(warningMsg)) return;
+        } else {
+          if (!confirm(`Envoyer les résultats à ${emailCount} participant(s) ?`)) {
+            return;
+          }
         }
       }
 
@@ -3402,8 +3468,27 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
         }
       } else {
         const emailCount = finalistsList.filter(f => f.email).length;
-        if (!confirm(`Envoyer les convocations finale à ${emailCount} finaliste(s) ?`)) {
-          return;
+
+        // Check if convocations were already sent for this finale
+        const campaignCheck = await checkCampaignAlreadySent(
+          'finale_convocation',
+          selectedFinaleData.finale.mode,
+          selectedFinaleData.finale.categorie,
+          selectedFinaleData.finale.tournoi_id
+        );
+
+        if (campaignCheck && campaignCheck.alreadySent) {
+          const warningMsg = `⚠️ ATTENTION: Les convocations pour cette finale ont déjà été envoyées!\n\n` +
+            `📅 Date: ${formatCampaignDate(campaignCheck.lastSent)}\n` +
+            `👤 Par: ${campaignCheck.sentBy || 'Inconnu'}\n` +
+            `📧 Destinataires: ${campaignCheck.recipientCount || 0}\n\n` +
+            `Voulez-vous quand même envoyer à nouveau à ${emailCount} finaliste(s) ?`;
+
+          if (!confirm(warningMsg)) return;
+        } else {
+          if (!confirm(`Envoyer les convocations finale à ${emailCount} finaliste(s) ?`)) {
+            return;
+          }
         }
       }
 
