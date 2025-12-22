@@ -2052,6 +2052,31 @@ router.get('/history', authenticateToken, async (req, res) => {
   );
 });
 
+// Update campaign (for editing type)
+router.put('/campaigns/:id', authenticateToken, async (req, res) => {
+  const db = require('../db-loader');
+  const { id } = req.params;
+  const { campaign_type } = req.body;
+
+  try {
+    await new Promise((resolve, reject) => {
+      db.run(
+        `UPDATE email_campaigns SET campaign_type = $1 WHERE id = $2`,
+        [campaign_type, id],
+        function(err) {
+          if (err) reject(err);
+          else resolve(this.changes);
+        }
+      );
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error updating campaign:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ==================== RELANCES INSCRIPTIONS ====================
 
 // Default templates for relances

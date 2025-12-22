@@ -2893,17 +2893,55 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
       }
     }
 
+    const CAMPAIGN_TYPES = {
+      'tournament_results': 'Resultats',
+      'finale_convocation': 'Convoc. Finale',
+      'relance_t2': 'Relance T2',
+      'relance_t3': 'Relance T3',
+      'relance_finale': 'Relance Finale',
+      'convocation': 'Convocation',
+      'custom': 'Autre'
+    };
+
     function formatCampaignType(h) {
       if (h.test_mode) return '<span style="color: #FF9800; font-weight: bold;">TEST</span>';
       if (!h.campaign_type) return '-';
-      const types = {
-        'tournament_results': 'Resultats',
-        'finale_convocation': 'Convoc. Finale',
-        'relance_t2': 'Relance T2',
-        'relance_t3': 'Relance T3',
-        'relance_finale': 'Relance Finale'
-      };
-      return types[h.campaign_type] || h.campaign_type;
+      return CAMPAIGN_TYPES[h.campaign_type] || h.campaign_type;
+    }
+
+    function createTypeDropdown(campaignId, currentType, isTestMode) {
+      if (isTestMode) {
+        return '<span style="color: #FF9800; font-weight: bold;">TEST</span>';
+      }
+
+      let options = '<option value="">-</option>';
+      for (const [value, label] of Object.entries(CAMPAIGN_TYPES)) {
+        const selected = value === currentType ? 'selected' : '';
+        options += `<option value="${value}" ${selected}>${label}</option>`;
+      }
+
+      return `<select class="campaign-type-select" data-id="${campaignId}" style="padding: 2px 5px; font-size: 12px; border-radius: 3px;">
+        ${options}
+      </select>`;
+    }
+
+    async function updateCampaignType(campaignId, newType) {
+      try {
+        const response = await fetch(`${API_URL}/emailing/campaigns/${campaignId}`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ campaign_type: newType || null })
+        });
+
+        if (!response.ok) throw new Error('Failed to update');
+        showSuccess('Type mis a jour');
+      } catch (error) {
+        showError('Erreur: ' + error.message);
+        loadHistory(); // Reload to revert
+      }
     }
 
     function displayHistory(history) {
@@ -2918,11 +2956,11 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
       history.forEach(h => {
         const row = document.createElement('tr');
         const date = h.sent_at ? new Date(h.sent_at).toLocaleString('fr-FR') : new Date(h.created_at).toLocaleString('fr-FR');
-        const typeDisplay = formatCampaignType(h);
+        const typeDropdown = createTypeDropdown(h.id, h.campaign_type, h.test_mode);
         const sentBy = h.sent_by || '-';
         row.innerHTML = `
           <td>${date}</td>
-          <td>${typeDisplay}</td>
+          <td>${typeDropdown}</td>
           <td>${h.subject}</td>
           <td>${sentBy}</td>
           <td>${h.recipients_count}</td>
@@ -2931,6 +2969,15 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
           <td><span class="badge badge-${h.status === 'completed' ? 'actif' : 'inactif'}">${h.status}</span></td>
         `;
         tbody.appendChild(row);
+      });
+
+      // Add event listeners for type dropdowns
+      document.querySelectorAll('.campaign-type-select').forEach(select => {
+        select.addEventListener('change', (e) => {
+          const campaignId = e.target.dataset.id;
+          const newType = e.target.value;
+          updateCampaignType(campaignId, newType);
+        });
       });
     }
 
