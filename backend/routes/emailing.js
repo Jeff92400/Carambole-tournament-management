@@ -2130,6 +2130,8 @@ router.get('/next-tournament', authenticateToken, async (req, res) => {
     const currentMonth = now.getMonth();
     const season = currentMonth >= 8 ? `${currentYear}-${currentYear + 1}` : `${currentYear - 1}-${currentYear}`;
 
+    console.log('next-tournament request:', { mode, category, relanceType, season });
+
     // Find the category
     const categoryRow = await new Promise((resolve, reject) => {
       db.get(
@@ -2141,6 +2143,8 @@ router.get('/next-tournament', authenticateToken, async (req, res) => {
         }
       );
     });
+
+    console.log('Category found:', categoryRow);
 
     if (!categoryRow) {
       return res.status(404).json({ error: 'Category not found' });
@@ -2158,6 +2162,8 @@ router.get('/next-tournament', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Invalid relance type' });
     }
 
+    console.log('Looking for tournament:', { categoryId: categoryRow.id, season, tournamentNumber });
+
     // Get the tournament info
     const tournament = await new Promise((resolve, reject) => {
       db.get(
@@ -2170,10 +2176,12 @@ router.get('/next-tournament', authenticateToken, async (req, res) => {
       );
     });
 
+    console.log('Tournament found:', tournament);
+
     if (!tournament) {
       return res.json({
         found: false,
-        message: `Tournoi ${relanceType === 'finale' ? 'Finale' : 'T' + tournamentNumber} non trouvé pour cette catégorie`
+        message: `Tournoi ${relanceType === 'finale' ? 'Finale' : 'T' + tournamentNumber} non trouvé pour cette catégorie (saison ${season})`
       });
     }
 

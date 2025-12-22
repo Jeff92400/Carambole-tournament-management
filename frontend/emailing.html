@@ -2499,15 +2499,41 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
 
       if (!mode || !category || !relanceType) return;
 
+      // Show info message area
+      const infoDiv = document.getElementById('relanceInfo');
+
       try {
+        console.log('Fetching tournament info for:', mode, category, relanceType);
         const response = await fetch(`${API_URL}/emailing/next-tournament?mode=${mode}&category=${category}&relanceType=${relanceType}`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
 
-        if (!response.ok) return;
+        if (!response.ok) {
+          console.log('Response not OK:', response.status);
+          return;
+        }
 
         const data = await response.json();
-        if (!data.found) return;
+        console.log('Tournament data:', data);
+
+        if (!data.found) {
+          // Tournament not found - show message
+          if (infoDiv) {
+            infoDiv.innerHTML = `<p style="color: #856404;"><strong>Info:</strong> ${data.message || 'Tournoi non trouvé dans la base de données. Veuillez saisir les informations manuellement.'}</p>`;
+            infoDiv.style.display = 'block';
+            infoDiv.style.background = '#fff3cd';
+          }
+          return;
+        }
+
+        // Tournament found - hide warning
+        if (infoDiv && !data.tournament_date && !data.location) {
+          infoDiv.innerHTML = `<p style="color: #856404;"><strong>Info:</strong> Date et lieu non renseignés dans la base. Veuillez les saisir manuellement.</p>`;
+          infoDiv.style.display = 'block';
+          infoDiv.style.background = '#fff3cd';
+        } else if (infoDiv) {
+          infoDiv.style.display = 'none';
+        }
 
         // Populate the fields based on relance type
         if (relanceType === 't2') {
