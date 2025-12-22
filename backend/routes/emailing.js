@@ -42,18 +42,22 @@ router.get('/check-campaign', authenticateToken, async (req, res) => {
 
   try {
     // Only check for real sends (not test mode)
-    let query = `SELECT id, subject, sent_count, sent_at, sent_by
+    // Check both 'completed' and 'sending' status (sending means it was started)
+    let query = `SELECT id, subject, sent_count, recipients_count, sent_at, created_at, sent_by, mode, category
                  FROM email_campaigns
-                 WHERE campaign_type = $1 AND status = 'completed' AND (test_mode = FALSE OR test_mode IS NULL)`;
+                 WHERE campaign_type = $1
+                   AND status IN ('completed', 'sending')
+                   AND (test_mode = FALSE OR test_mode IS NULL)`;
     const params = [campaign_type];
     let paramIndex = 2;
 
+    // Mode/category matching: if provided, match OR allow NULL (for manually tagged records)
     if (mode) {
-      query += ` AND mode = $${paramIndex++}`;
+      query += ` AND (mode = $${paramIndex++} OR mode IS NULL)`;
       params.push(mode);
     }
     if (category) {
-      query += ` AND category = $${paramIndex++}`;
+      query += ` AND (category = $${paramIndex++} OR category IS NULL)`;
       params.push(category);
     }
     if (tournament_id) {
@@ -61,7 +65,7 @@ router.get('/check-campaign', authenticateToken, async (req, res) => {
       params.push(tournament_id);
     }
 
-    query += ' ORDER BY sent_at DESC LIMIT 1';
+    query += ' ORDER BY COALESCE(sent_at, created_at) DESC LIMIT 1';
 
     const campaign = await new Promise((resolve, reject) => {
       db.get(query, params, (err, row) => {
@@ -73,9 +77,9 @@ router.get('/check-campaign', authenticateToken, async (req, res) => {
     if (campaign) {
       res.json({
         alreadySent: true,
-        lastSent: campaign.sent_at,
+        lastSent: campaign.sent_at || campaign.created_at,
         sentBy: campaign.sent_by,
-        recipientCount: campaign.sent_count,
+        recipientCount: campaign.sent_count || campaign.recipients_count,
         subject: campaign.subject
       });
     } else {
