@@ -852,12 +852,16 @@ router.post('/schedule-relance', authenticateToken, async (req, res) => {
     return res.status(400).json({ error: 'Email de test requis en mode test' });
   }
 
+  // Replace {category} placeholder in subject
+  const categoryLabel = `${mode} ${category}`;
+  const finalSubject = subject.replace(/\{category\}/g, categoryLabel);
+
   try {
     await new Promise((resolve, reject) => {
       db.run(
         `INSERT INTO scheduled_emails (subject, body, template_key, image_url, recipient_ids, scheduled_at, status, email_type, mode, category, outro_text, cc_email, custom_data, created_by, test_mode, test_email)
          VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
-        [subject, intro, `relance_${relanceType}`, imageUrl || null, '[]', scheduledAt, `relance_${relanceType}`, mode, category, outro || null, ccEmail || null, JSON.stringify(customData || {}), req.user?.username || 'unknown', testMode || false, testEmail || null],
+        [finalSubject, intro, `relance_${relanceType}`, imageUrl || null, '[]', scheduledAt, `relance_${relanceType}`, mode, category, outro || null, ccEmail || null, JSON.stringify(customData || {}), req.user?.username || 'unknown', testMode || false, testEmail || null],
         function(err) {
           if (err) reject(err);
           else resolve(this.lastID);

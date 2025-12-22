@@ -3201,19 +3201,23 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
         const status = SCHEDULED_STATUS_LABELS[s.status] || { label: s.status, color: '#6c757d', bg: '#e2e3e5' };
         const emailType = SCHEDULED_TYPE_LABELS[s.email_type] || s.email_type || 'Custom';
         const categoryInfo = s.mode && s.category ? ` (${s.mode} ${s.category})` : '';
+        const isTestMode = s.test_mode === true || s.test_mode === 1;
+        const testBadge = isTestMode ? `<span style="background: #ffc107; color: #000; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: bold;">TEST</span>` : '';
+        const testEmailInfo = isTestMode && s.test_email ? ` → ${s.test_email}` : '';
 
         const div = document.createElement('div');
         div.className = 'scheduled-item';
         div.style.cssText = 'display: flex; justify-content: space-between; align-items: center; padding: 15px; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 10px; background: white;';
         div.innerHTML = `
           <div style="flex: 1;">
-            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px; flex-wrap: wrap;">
               <span style="background: ${status.bg}; color: ${status.color}; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: bold;">${status.label}</span>
+              ${testBadge}
               <span style="background: #e7f3ff; color: #1F4788; padding: 3px 10px; border-radius: 12px; font-size: 11px;">${emailType}${categoryInfo}</span>
             </div>
             <strong>${s.subject}</strong>
             <div style="font-size: 12px; color: #666; margin-top: 5px;">
-              📅 ${date}${s.created_by ? ` • Par: ${s.created_by}` : ''}${recipientIds.length > 0 ? ` • ${recipientIds.length} dest.` : ''}
+              📅 ${date}${s.created_by ? ` • Par: ${s.created_by}` : ''}${recipientIds.length > 0 ? ` • ${recipientIds.length} dest.` : ''}${testEmailInfo}
             </div>
           </div>
           ${s.status === 'pending' ? `<button class="btn cancel-scheduled-btn" data-id="${s.id}" style="background: #dc3545; padding: 8px 15px;">Annuler</button>` : ''}
