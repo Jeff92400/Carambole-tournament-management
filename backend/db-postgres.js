@@ -530,8 +530,43 @@ Comite Departemental Billard Hauts-de-Seine`;
         ['rappel', 'Rappel - CDBHS', rappelBodyTemplate]
       );
 
+      // Results template (for tournament results email)
+      const resultsBodyTemplate = `Bonjour {player_name},
+
+Veuillez trouver ci-joint les résultats du tournoi {tournament}.
+
+{message}
+
+Cordialement,
+Comité Départemental Billard Hauts-de-Seine`;
+
+      await client.query(
+        `INSERT INTO email_templates (template_key, subject_template, body_template)
+         VALUES ($1, $2, $3) ON CONFLICT (template_key) DO NOTHING`,
+        ['results', 'Résultats {category} - {tournament}', resultsBodyTemplate]
+      );
+
+      // CC Email setting template (stores the default CC email address)
+      await client.query(
+        `INSERT INTO email_templates (template_key, subject_template, body_template)
+         VALUES ($1, $2, $3) ON CONFLICT (template_key) DO NOTHING`,
+        ['results_cc_email', 'cdbhs92@gmail.com', '']
+      );
+
       console.log('Default email templates initialized');
     }
+
+    // Ensure results and cc_email templates exist (added later, need to be inserted separately)
+    await client.query(
+      `INSERT INTO email_templates (template_key, subject_template, body_template)
+       VALUES ('results', 'Résultats {category} - {tournament}', 'Bonjour {player_name},\n\nVeuillez trouver ci-joint les résultats du tournoi {tournament}.\n\n{message}\n\nCordialement,\nComité Départemental Billard Hauts-de-Seine')
+       ON CONFLICT (template_key) DO NOTHING`
+    );
+    await client.query(
+      `INSERT INTO email_templates (template_key, subject_template, body_template)
+       VALUES ('results_cc_email', 'cdbhs92@gmail.com', '')
+       ON CONFLICT (template_key) DO NOTHING`
+    );
 
     // Initialize default clubs
     const clubResult = await client.query('SELECT COUNT(*) as count FROM clubs');
