@@ -959,6 +959,7 @@ Le Comité Départemental de Billard des Hauts-de-Seine</textarea>
     let allContacts = [];
     let selectedContactIds = new Set();
     let allTournois = [];
+    let allRankingCategories = [];
 
     // Categories by mode
     const categoriesByMode = {
@@ -1039,32 +1040,48 @@ Le Comité Départemental de Billard des Hauts-de-Seine</textarea>
         });
         if (response.ok) {
           allTournois = await response.json();
-          const select = document.getElementById('tournoiFilter');
-          select.innerHTML = '<option value="">-- Tournois saison en cours --</option>';
-
-          // Group by mode
-          const byMode = {};
-          allTournois.forEach(t => {
-            if (!byMode[t.mode]) byMode[t.mode] = [];
-            byMode[t.mode].push(t);
-          });
-
-          Object.keys(byMode).sort().forEach(mode => {
-            const optgroup = document.createElement('optgroup');
-            optgroup.label = mode;
-            byMode[mode].forEach(t => {
-              const option = document.createElement('option');
-              option.value = t.tournoi_id;
-              const date = t.debut ? new Date(t.debut).toLocaleDateString('fr-FR') : '';
-              option.textContent = `${t.nom} ${t.categorie} ${date} (${t.nb_inscrits} inscrits)`;
-              optgroup.appendChild(option);
-            });
-            select.appendChild(optgroup);
-          });
+          filterTournoisDropdown();
         }
       } catch (error) {
         console.error('Error loading tournois:', error);
       }
+    }
+
+    // Filter tournament dropdown based on selected mode/category
+    function filterTournoisDropdown() {
+      const selectedMode = document.getElementById('modeFilter').value;
+      const selectedCategory = document.getElementById('categoryFilter').value;
+      const select = document.getElementById('tournoiFilter');
+      select.innerHTML = '<option value="">-- Tournois saison en cours --</option>';
+
+      // Filter tournaments based on mode and category
+      let filtered = allTournois;
+      if (selectedMode) {
+        filtered = filtered.filter(t => t.mode.toUpperCase() === selectedMode.toUpperCase());
+      }
+      if (selectedCategory) {
+        filtered = filtered.filter(t => t.categorie.toUpperCase() === selectedCategory.toUpperCase());
+      }
+
+      // Group by mode
+      const byMode = {};
+      filtered.forEach(t => {
+        if (!byMode[t.mode]) byMode[t.mode] = [];
+        byMode[t.mode].push(t);
+      });
+
+      Object.keys(byMode).sort().forEach(mode => {
+        const optgroup = document.createElement('optgroup');
+        optgroup.label = mode;
+        byMode[mode].forEach(t => {
+          const option = document.createElement('option');
+          option.value = t.tournoi_id;
+          const date = t.debut ? new Date(t.debut).toLocaleDateString('fr-FR') : '';
+          option.textContent = `${t.nom} ${t.categorie} ${date} (${t.nb_inscrits} inscrits)`;
+          optgroup.appendChild(option);
+        });
+        select.appendChild(optgroup);
+      });
     }
 
     async function loadRankingCategories() {
@@ -1073,32 +1090,48 @@ Le Comité Départemental de Billard des Hauts-de-Seine</textarea>
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (response.ok) {
-          const categories = await response.json();
-          const select = document.getElementById('rankingFilter');
-          select.innerHTML = '<option value="">-- Classements --</option>';
-
-          // Group by game_type
-          const byMode = {};
-          categories.forEach(c => {
-            if (!byMode[c.game_type]) byMode[c.game_type] = [];
-            byMode[c.game_type].push(c);
-          });
-
-          Object.keys(byMode).sort().forEach(mode => {
-            const optgroup = document.createElement('optgroup');
-            optgroup.label = mode;
-            byMode[mode].forEach(c => {
-              const option = document.createElement('option');
-              option.value = c.id;
-              option.textContent = `${c.display_name} (${c.player_count} joueurs)`;
-              optgroup.appendChild(option);
-            });
-            select.appendChild(optgroup);
-          });
+          allRankingCategories = await response.json();
+          filterRankingsDropdown();
         }
       } catch (error) {
         console.error('Error loading ranking categories:', error);
       }
+    }
+
+    // Filter rankings dropdown based on selected mode/category
+    function filterRankingsDropdown() {
+      const selectedMode = document.getElementById('modeFilter').value;
+      const selectedCategory = document.getElementById('categoryFilter').value;
+      const select = document.getElementById('rankingFilter');
+      select.innerHTML = '<option value="">-- Classements --</option>';
+
+      // Filter rankings based on mode and category
+      let filtered = allRankingCategories;
+      if (selectedMode) {
+        filtered = filtered.filter(c => c.game_type.toUpperCase() === selectedMode.toUpperCase());
+      }
+      if (selectedCategory) {
+        filtered = filtered.filter(c => c.level.toUpperCase() === selectedCategory.toUpperCase());
+      }
+
+      // Group by game_type
+      const byMode = {};
+      filtered.forEach(c => {
+        if (!byMode[c.game_type]) byMode[c.game_type] = [];
+        byMode[c.game_type].push(c);
+      });
+
+      Object.keys(byMode).sort().forEach(mode => {
+        const optgroup = document.createElement('optgroup');
+        optgroup.label = mode;
+        byMode[mode].forEach(c => {
+          const option = document.createElement('option');
+          option.value = c.id;
+          option.textContent = `${c.display_name} (${c.player_count} joueurs)`;
+          optgroup.appendChild(option);
+        });
+        select.appendChild(optgroup);
+      });
     }
 
     async function loadRankingContacts(categoryId) {
@@ -1224,9 +1257,15 @@ Le Comité Départemental de Billard des Hauts-de-Seine</textarea>
     document.getElementById('clubFilter').addEventListener('change', onFilterChange);
     document.getElementById('modeFilter').addEventListener('change', () => {
       updateCategoryFilter();
+      filterTournoisDropdown();
+      filterRankingsDropdown();
       onFilterChange();
     });
-    document.getElementById('categoryFilter').addEventListener('change', onFilterChange);
+    document.getElementById('categoryFilter').addEventListener('change', () => {
+      filterTournoisDropdown();
+      filterRankingsDropdown();
+      onFilterChange();
+    });
     document.getElementById('tournoiFilter').addEventListener('change', () => {
       // Clear ranking filter when selecting tournament
       if (document.getElementById('tournoiFilter').value) {
