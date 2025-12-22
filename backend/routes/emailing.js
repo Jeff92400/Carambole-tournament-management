@@ -2163,6 +2163,30 @@ router.get('/next-tournament', authenticateToken, async (req, res) => {
     }
 
     // Search in tournoi_ext for planned tournaments
+    // First get all IONOS mode variations for this game_type from mode_mapping
+    const modeMappings = await new Promise((resolve, reject) => {
+      db.all(
+        'SELECT ionos_mode FROM mode_mapping WHERE game_type = $1',
+        [mode],
+        (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows || []);
+        }
+      );
+    });
+
+    // Build mode matching condition
+    let modeCondition;
+    let modeParams = [];
+    if (modeMappings.length > 0) {
+      const placeholders = modeMappings.map((_, i) => `$${i + 1}`).join(', ');
+      modeCondition = `UPPER(mode) IN (${placeholders})`;
+      modeParams = modeMappings.map(m => m.ionos_mode.toUpperCase());
+    } else {
+      modeCondition = 'UPPER(mode) = $1';
+      modeParams = [mode.toUpperCase()];
+    }
+
     // Match by mode, category, and name pattern (T2, T3, or Finale)
     let namePattern;
     if (relanceType === 't2') {
@@ -2173,15 +2197,20 @@ router.get('/next-tournament', authenticateToken, async (req, res) => {
       namePattern = '%FINALE%';
     }
 
-    console.log('Looking for tournament in tournoi_ext:', { mode, category, namePattern });
+    console.log('Looking for tournament in tournoi_ext:', { mode, category, namePattern, modeMappings: modeParams });
+
+    // Build the full query
+    const catParamIdx = modeParams.length + 1;
+    const nameParamIdx = modeParams.length + 2;
+    const finaleCondition = relanceType === 'finale' ? "OR UPPER(nom) LIKE '%FINAL%'" : "";
 
     const tournament = await new Promise((resolve, reject) => {
       db.get(
         `SELECT * FROM tournoi_ext
-         WHERE UPPER(mode) = $1 AND UPPER(categorie) = $2
-         AND (UPPER(nom) LIKE $3 OR (${relanceType === 'finale' ? "UPPER(nom) LIKE '%FINAL%'" : "1=0"}))
+         WHERE ${modeCondition} AND UPPER(categorie) = $${catParamIdx}
+         AND (UPPER(nom) LIKE $${nameParamIdx} ${finaleCondition})
          ORDER BY debut DESC LIMIT 1`,
-        [mode.toUpperCase(), category.toUpperCase(), namePattern],
+        [...modeParams, category.toUpperCase(), namePattern],
         (err, row) => {
           if (err) reject(err);
           else resolve(row);
