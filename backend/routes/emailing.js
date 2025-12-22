@@ -804,12 +804,12 @@ router.post('/schedule', authenticateToken, async (req, res) => {
   }
 });
 
-// Get scheduled emails
+// Get scheduled emails (all statuses, sorted by most recent)
 router.get('/scheduled', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
 
   db.all(
-    `SELECT * FROM scheduled_emails WHERE status = 'pending' ORDER BY scheduled_at`,
+    `SELECT * FROM scheduled_emails ORDER BY scheduled_at DESC LIMIT 50`,
     [],
     (err, rows) => {
       if (err) {
@@ -839,6 +839,153 @@ router.delete('/scheduled/:id', authenticateToken, async (req, res) => {
   );
 });
 
+// Schedule a relance email
+router.post('/schedule-relance', authenticateToken, async (req, res) => {
+  const db = require('../db-loader');
+  const { relanceType, mode, category, subject, intro, outro, imageUrl, scheduledAt, ccEmail, customData } = req.body;
+
+  if (!relanceType || !mode || !category || !subject || !intro || !scheduledAt) {
+    return res.status(400).json({ error: 'Champs obligatoires manquants' });
+  }
+
+  try {
+    await new Promise((resolve, reject) => {
+      db.run(
+        `INSERT INTO scheduled_emails (subject, body, template_key, image_url, recipient_ids, scheduled_at, status, email_type, mode, category, outro_text, cc_email, custom_data, created_by)
+         VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7, $8, $9, $10, $11, $12, $13)`,
+        [subject, intro, `relance_${relanceType}`, imageUrl || null, '[]', scheduledAt, `relance_${relanceType}`, mode, category, outro || null, ccEmail || null, JSON.stringify(customData || {}), req.user?.username || 'unknown'],
+        function(err) {
+          if (err) reject(err);
+          else resolve(this.lastID);
+        }
+      );
+    });
+
+    res.json({ success: true, message: `Relance programmée pour le ${new Date(scheduledAt).toLocaleString('fr-FR')}` });
+  } catch (error) {
+    console.error('Error scheduling relance:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Schedule results email
+router.post('/schedule-results', authenticateToken, async (req, res) => {
+  const db = require('../db-loader');
+  const { tournamentId, introText, outroText, imageUrl, scheduledAt, ccEmail } = req.body;
+
+  if (!tournamentId || !scheduledAt) {
+    return res.status(400).json({ error: 'Champs obligatoires manquants' });
+  }
+
+  try {
+    // Get tournament info for subject
+    const tournament = await new Promise((resolve, reject) => {
+      db.get(`SELECT * FROM tournaments WHERE id = $1`, [tournamentId], (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
+
+    if (!tournament) {
+      return res.status(404).json({ error: 'Tournoi non trouvé' });
+    }
+
+    const subject = `Résultats - ${tournament.display_name}`;
+
+    await new Promise((resolve, reject) => {
+      db.run(
+        `INSERT INTO scheduled_emails (subject, body, template_key, image_url, recipient_ids, scheduled_at, status, email_type, mode, category, tournament_id, outro_text, cc_email, created_by)
+         VALUES ($1, $2, 'tournament_results', $3, $4, $5, 'pending', 'tournament_results', $6, $7, $8, $9, $10, $11)`,
+        [subject, introText || '', imageUrl || null, '[]', scheduledAt, tournament.game_type, tournament.level, tournamentId, outroText || null, ccEmail || null, req.user?.username || 'unknown'],
+        function(err) {
+          if (err) reject(err);
+          else resolve(this.lastID);
+        }
+      );
+    });
+
+    res.json({ success: true, message: `Résultats programmés pour le ${new Date(scheduledAt).toLocaleString('fr-FR')}` });
+  } catch (error) {
+    console.error('Error scheduling results:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Schedule finale convocation email
+router.post('/schedule-finale-convocation', authenticateToken, async (req, res) => {
+  const db = require('../db-loader');
+  const { finaleId, introText, outroText, imageUrl, scheduledAt, ccEmail } = req.body;
+
+  if (!finaleId || !scheduledAt) {
+    return res.status(400).json({ error: 'Champs obligatoires manquants' });
+  }
+
+  try {
+    // Get finale info
+    const finale = await new Promise((resolve, reject) => {
+      db.get(`SELECT * FROM tournoi_ext WHERE tournoi_id = $1`, [finaleId], (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
+
+    if (!finale) {
+      return res.status(404).json({ error: 'Finale non trouvée' });
+    }
+
+    const subject = `Convocation Finale - ${finale.mode} ${finale.categorie}`;
+
+    await new Promise((resolve, reject) => {
+      db.run(
+        `INSERT INTO scheduled_emails (subject, body, template_key, image_url, recipient_ids, scheduled_at, status, email_type, mode, category, tournament_id, outro_text, cc_email, created_by)
+         VALUES ($1, $2, 'finale_convocation', $3, $4, $5, 'pending', 'finale_convocation', $6, $7, $8, $9, $10, $11)`,
+        [subject, introText || '', imageUrl || null, '[]', scheduledAt, finale.mode, finale.categorie, finaleId, outroText || null, ccEmail || null, req.user?.username || 'unknown'],
+        function(err) {
+          if (err) reject(err);
+          else resolve(this.lastID);
+        }
+      );
+    });
+
+    res.json({ success: true, message: `Convocation finale programmée pour le ${new Date(scheduledAt).toLocaleString('fr-FR')}` });
+  } catch (error) {
+    console.error('Error scheduling finale convocation:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Helper function to check if a campaign was already manually sent
+async function checkIfAlreadySent(db, emailType, mode, category, tournamentId) {
+  return new Promise((resolve, reject) => {
+    let query = `SELECT id FROM email_campaigns
+                 WHERE campaign_type = $1
+                   AND status IN ('completed', 'sending')
+                   AND (test_mode = FALSE OR test_mode IS NULL)`;
+    const params = [emailType];
+    let paramIndex = 2;
+
+    if (mode) {
+      query += ` AND (mode = $${paramIndex++} OR mode IS NULL)`;
+      params.push(mode);
+    }
+    if (category) {
+      query += ` AND (category = $${paramIndex++} OR category IS NULL)`;
+      params.push(category);
+    }
+    if (tournamentId) {
+      query += ` AND tournament_id = $${paramIndex++}`;
+      params.push(tournamentId);
+    }
+
+    query += ' LIMIT 1';
+
+    db.get(query, params, (err, row) => {
+      if (err) reject(err);
+      else resolve(!!row);
+    });
+  });
+}
+
 // Process scheduled emails (to be called by a scheduler/cron job)
 router.post('/process-scheduled', async (req, res) => {
   const db = require('../db-loader');
@@ -865,8 +1012,34 @@ router.post('/process-scheduled', async (req, res) => {
     });
 
     const processedCount = scheduledEmails.length;
+    let blockedCount = 0;
 
     for (const scheduled of scheduledEmails) {
+      // Check if this type of email was already manually sent
+      if (scheduled.email_type) {
+        const alreadySent = await checkIfAlreadySent(
+          db,
+          scheduled.email_type,
+          scheduled.mode,
+          scheduled.category,
+          scheduled.tournament_id
+        );
+
+        if (alreadySent) {
+          // Block this scheduled email
+          await new Promise((resolve) => {
+            db.run(
+              `UPDATE scheduled_emails SET status = 'blocked' WHERE id = $1`,
+              [scheduled.id],
+              () => resolve()
+            );
+          });
+          blockedCount++;
+          console.log(`Blocked scheduled email ${scheduled.id} - already manually sent`);
+          continue;
+        }
+      }
+
       const recipientIds = JSON.parse(scheduled.recipient_ids);
 
       // Get recipients
@@ -965,7 +1138,7 @@ router.post('/process-scheduled', async (req, res) => {
 
     res.json({
       success: true,
-      message: `${processedCount} email(s) programme(s) traite(s).`
+      message: `${processedCount} email(s) programmé(s) traité(s)${blockedCount > 0 ? `, ${blockedCount} bloqué(s)` : ''}.`
     });
 
   } catch (error) {

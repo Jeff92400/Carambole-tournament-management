@@ -535,6 +535,17 @@
             <button class="btn" id="sendRelanceBtn" style="width: 100%; padding: 15px; font-size: 16px; background: #28a745;" disabled>
               Envoyer les Relances
             </button>
+
+            <!-- Schedule Option -->
+            <div style="margin-top: 15px; padding: 15px; background: #e7f3ff; border-radius: 8px;">
+              <label style="display: block; font-weight: bold; margin-bottom: 10px;">Programmer l'envoi</label>
+              <div style="display: flex; gap: 10px; align-items: center;">
+                <input type="datetime-local" id="relanceScheduleDate" style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                <button class="btn" id="scheduleRelanceBtn" style="background: #17a2b8; padding: 10px 20px;" disabled>
+                  Programmer
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -646,6 +657,17 @@ Le Comité Départemental de Billard des Hauts-de-Seine</textarea>
             <button class="btn" id="sendResultsBtn" style="width: 100%; padding: 15px; font-size: 16px; background: #1F4788;" disabled>
               Envoyer les Résultats
             </button>
+
+            <!-- Schedule Option -->
+            <div style="margin-top: 15px; padding: 15px; background: #e7f3ff; border-radius: 8px;">
+              <label style="display: block; font-weight: bold; margin-bottom: 10px;">Programmer l'envoi</label>
+              <div style="display: flex; gap: 10px; align-items: center;">
+                <input type="datetime-local" id="resultsScheduleDate" style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                <button class="btn" id="scheduleResultsBtn" style="background: #17a2b8; padding: 10px 20px;" disabled>
+                  Programmer
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -763,6 +785,17 @@ Le Comité Départemental de Billard des Hauts-de-Seine</textarea>
             <button class="btn" id="sendFinaleConvocationBtn" style="width: 100%; padding: 15px; font-size: 16px; background: #28a745;" disabled>
               🏆 Envoyer les Convocations Finale
             </button>
+
+            <!-- Schedule Option -->
+            <div style="margin-top: 15px; padding: 15px; background: #e7f3ff; border-radius: 8px;">
+              <label style="display: block; font-weight: bold; margin-bottom: 10px;">Programmer l'envoi</label>
+              <div style="display: flex; gap: 10px; align-items: center;">
+                <input type="datetime-local" id="finaleScheduleDate" style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                <button class="btn" id="scheduleFinaleBtn" style="background: #17a2b8; padding: 10px 20px;" disabled>
+                  Programmer
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -2901,6 +2934,74 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
       document.getElementById('relanceTestEmailInput').style.display = e.target.checked ? 'block' : 'none';
     });
 
+    // Schedule relance button
+    document.getElementById('scheduleRelanceBtn').addEventListener('click', async () => {
+      const scheduledAt = document.getElementById('relanceScheduleDate').value;
+      if (!scheduledAt) {
+        showError('Veuillez sélectionner une date et heure');
+        return;
+      }
+
+      const mode = document.getElementById('relanceModeFilter').value;
+      const category = document.getElementById('relanceCategoryFilter').value;
+      const relanceType = document.getElementById('relanceTypeSelect').value;
+      const subject = document.getElementById('relanceSubject').value.trim();
+      const intro = document.getElementById('relanceIntro').value.trim();
+      const outro = document.getElementById('relanceOutro').value.trim();
+      const imageUrl = document.getElementById('relanceImageUrl').value.trim();
+      const ccEmail = document.getElementById('relanceCcCheck').checked ? document.getElementById('relanceCcEmail').value.trim() : null;
+
+      if (!subject || !intro) {
+        showError('Le sujet et le message sont obligatoires.');
+        return;
+      }
+
+      let customData = {};
+      if (relanceType === 't2') {
+        customData.tournament_date = document.getElementById('relanceT2Date')?.value || '';
+        customData.tournament_lieu = document.getElementById('relanceT2Lieu')?.value || '';
+      } else if (relanceType === 't3') {
+        customData.tournament_date = document.getElementById('relanceT3Date')?.value || '';
+        customData.tournament_lieu = document.getElementById('relanceT3Lieu')?.value || '';
+      } else if (relanceType === 'finale') {
+        customData.finale_date = document.getElementById('relanceFinaleDate')?.value || '';
+        customData.finale_lieu = document.getElementById('relanceFinaleLieu')?.value || '';
+        customData.deadline_date = document.getElementById('relanceDeadlineDate')?.value || '';
+      }
+
+      if (!confirm(`Programmer la relance pour le ${new Date(scheduledAt).toLocaleString('fr-FR')} ?`)) return;
+
+      try {
+        const response = await fetch(`${API_URL}/emailing/schedule-relance`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            relanceType, mode, category, subject, intro, outro, imageUrl, scheduledAt, ccEmail, customData
+          })
+        });
+
+        const result = await response.json();
+        if (response.ok) {
+          showSuccess(result.message);
+          document.getElementById('relanceScheduleDate').value = '';
+        } else {
+          showError(result.error || 'Erreur');
+        }
+      } catch (error) {
+        showError('Erreur: ' + error.message);
+      }
+    });
+
+    // Enable schedule button when participants loaded
+    document.getElementById('relanceScheduleDate').addEventListener('input', () => {
+      const hasDate = document.getElementById('relanceScheduleDate').value;
+      const hasParticipants = relanceParticipants.length > 0;
+      document.getElementById('scheduleRelanceBtn').disabled = !hasDate || !hasParticipants;
+    });
+
     // ==================== HISTORY ====================
 
     async function loadHistory() {
@@ -3033,6 +3134,22 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
       }
     }
 
+    const SCHEDULED_STATUS_LABELS = {
+      'pending': { label: 'Programmé', color: '#17a2b8', bg: '#d1ecf1' },
+      'completed': { label: 'Envoyé', color: '#28a745', bg: '#d4edda' },
+      'failed': { label: 'Échec', color: '#dc3545', bg: '#f8d7da' },
+      'blocked': { label: 'Bloqué', color: '#6c757d', bg: '#e2e3e5' },
+      'cancelled': { label: 'Annulé', color: '#6c757d', bg: '#e2e3e5' }
+    };
+
+    const SCHEDULED_TYPE_LABELS = {
+      'relance_t2': 'Relance T2',
+      'relance_t3': 'Relance T3',
+      'relance_finale': 'Relance Finale',
+      'tournament_results': 'Résultats',
+      'finale_convocation': 'Convoc. Finale'
+    };
+
     function displayScheduled(scheduled) {
       const list = document.getElementById('scheduledList');
       const noScheduled = document.getElementById('noScheduled');
@@ -3047,25 +3164,33 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
 
       scheduled.forEach(s => {
         const date = new Date(s.scheduled_at).toLocaleString('fr-FR');
-        const recipientIds = JSON.parse(s.recipient_ids);
+        const recipientIds = s.recipient_ids ? JSON.parse(s.recipient_ids) : [];
+        const status = SCHEDULED_STATUS_LABELS[s.status] || { label: s.status, color: '#6c757d', bg: '#e2e3e5' };
+        const emailType = SCHEDULED_TYPE_LABELS[s.email_type] || s.email_type || 'Custom';
+        const categoryInfo = s.mode && s.category ? ` (${s.mode} ${s.category})` : '';
 
         const div = document.createElement('div');
         div.className = 'scheduled-item';
+        div.style.cssText = 'display: flex; justify-content: space-between; align-items: center; padding: 15px; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 10px; background: white;';
         div.innerHTML = `
-          <div>
+          <div style="flex: 1;">
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">
+              <span style="background: ${status.bg}; color: ${status.color}; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: bold;">${status.label}</span>
+              <span style="background: #e7f3ff; color: #1F4788; padding: 3px 10px; border-radius: 12px; font-size: 11px;">${emailType}${categoryInfo}</span>
+            </div>
             <strong>${s.subject}</strong>
-            <div style="font-size: 12px; color: #666;">
-              ${date} - ${recipientIds.length} destinataire(s)
+            <div style="font-size: 12px; color: #666; margin-top: 5px;">
+              📅 ${date}${s.created_by ? ` • Par: ${s.created_by}` : ''}${recipientIds.length > 0 ? ` • ${recipientIds.length} dest.` : ''}
             </div>
           </div>
-          <button class="btn cancel-scheduled-btn" data-id="${s.id}" style="background: #dc3545; padding: 8px 15px;">Annuler</button>
+          ${s.status === 'pending' ? `<button class="btn cancel-scheduled-btn" data-id="${s.id}" style="background: #dc3545; padding: 8px 15px;">Annuler</button>` : ''}
         `;
         list.appendChild(div);
       });
 
       document.querySelectorAll('.cancel-scheduled-btn').forEach(btn => {
         btn.addEventListener('click', async () => {
-          if (!confirm('Annuler cet email programme ?')) return;
+          if (!confirm('Annuler cet email programmé ?')) return;
 
           try {
             const response = await fetch(`${API_URL}/emailing/scheduled/${btn.dataset.id}`, {
@@ -3074,7 +3199,7 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
             });
 
             if (response.ok) {
-              showSuccess('Email annule.');
+              showSuccess('Email annulé.');
               loadScheduled();
             }
           } catch (error) {
@@ -3400,6 +3525,56 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
       }
     });
 
+    // Schedule results button
+    document.getElementById('scheduleResultsBtn').addEventListener('click', async () => {
+      const scheduledAt = document.getElementById('resultsScheduleDate').value;
+      if (!scheduledAt) {
+        showError('Veuillez sélectionner une date et heure');
+        return;
+      }
+
+      if (!selectedTournamentData) {
+        showError('Veuillez sélectionner un tournoi');
+        return;
+      }
+
+      if (!confirm(`Programmer l'envoi des résultats pour le ${new Date(scheduledAt).toLocaleString('fr-FR')} ?`)) return;
+
+      try {
+        const response = await fetch(`${API_URL}/emailing/schedule-results`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            tournamentId: selectedTournamentData.id,
+            introText: document.getElementById('resultsIntroText').value,
+            outroText: document.getElementById('resultsOutroText').value,
+            imageUrl: document.getElementById('resultsImageUrl').value || null,
+            scheduledAt,
+            ccEmail: document.getElementById('ccCheck').checked ? document.getElementById('ccEmail').value.trim() : null
+          })
+        });
+
+        const result = await response.json();
+        if (response.ok) {
+          showSuccess(result.message);
+          document.getElementById('resultsScheduleDate').value = '';
+        } else {
+          showError(result.error || 'Erreur');
+        }
+      } catch (error) {
+        showError('Erreur: ' + error.message);
+      }
+    });
+
+    // Enable schedule results button when tournament selected
+    document.getElementById('resultsScheduleDate').addEventListener('input', () => {
+      const hasDate = document.getElementById('resultsScheduleDate').value;
+      document.getElementById('scheduleResultsBtn').disabled = !hasDate || !selectedTournamentData;
+    });
+
     // ==================== FINALE CONVOCATIONS ====================
 
     let selectedFinaleData = null;
@@ -3621,6 +3796,56 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
         hideProgress();
         showError('Erreur: ' + error.message);
       }
+    });
+
+    // Schedule finale convocation button
+    document.getElementById('scheduleFinaleBtn').addEventListener('click', async () => {
+      const scheduledAt = document.getElementById('finaleScheduleDate').value;
+      if (!scheduledAt) {
+        showError('Veuillez sélectionner une date et heure');
+        return;
+      }
+
+      if (!selectedFinaleData) {
+        showError('Veuillez sélectionner une finale');
+        return;
+      }
+
+      if (!confirm(`Programmer l'envoi des convocations pour le ${new Date(scheduledAt).toLocaleString('fr-FR')} ?`)) return;
+
+      try {
+        const response = await fetch(`${API_URL}/emailing/schedule-finale-convocation`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            finaleId: selectedFinaleData.finale.tournoi_id,
+            introText: document.getElementById('finaleIntroText').value,
+            outroText: document.getElementById('finaleOutroText').value,
+            imageUrl: document.getElementById('finaleImageUrl').value || null,
+            scheduledAt,
+            ccEmail: document.getElementById('finaleCcCheck').checked ? document.getElementById('finaleCcEmail').value.trim() : null
+          })
+        });
+
+        const result = await response.json();
+        if (response.ok) {
+          showSuccess(result.message);
+          document.getElementById('finaleScheduleDate').value = '';
+        } else {
+          showError(result.error || 'Erreur');
+        }
+      } catch (error) {
+        showError('Erreur: ' + error.message);
+      }
+    });
+
+    // Enable schedule finale button when finale selected
+    document.getElementById('finaleScheduleDate').addEventListener('input', () => {
+      const hasDate = document.getElementById('finaleScheduleDate').value;
+      document.getElementById('scheduleFinaleBtn').disabled = !hasDate || !selectedFinaleData;
     });
 
     // ==================== SUMMARY EMAIL SETTING ====================

@@ -337,16 +337,28 @@ async function initializeDatabase() {
         scheduled_at TIMESTAMP NOT NULL,
         status TEXT DEFAULT 'pending',
         sent_at TIMESTAMP,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        email_type TEXT,
+        mode TEXT,
+        category TEXT,
+        tournament_id INTEGER,
+        outro_text TEXT,
+        cc_email TEXT,
+        custom_data TEXT,
+        created_by TEXT
       )
     `);
 
-    // Add image_url column if it doesn't exist (migration)
-    try {
-      await client.query(`ALTER TABLE scheduled_emails ADD COLUMN IF NOT EXISTS image_url TEXT`);
-    } catch (e) {
-      // Column might already exist
-    }
+    // Add columns if they don't exist (migration)
+    await client.query(`ALTER TABLE scheduled_emails ADD COLUMN IF NOT EXISTS image_url TEXT`);
+    await client.query(`ALTER TABLE scheduled_emails ADD COLUMN IF NOT EXISTS email_type TEXT`);
+    await client.query(`ALTER TABLE scheduled_emails ADD COLUMN IF NOT EXISTS mode TEXT`);
+    await client.query(`ALTER TABLE scheduled_emails ADD COLUMN IF NOT EXISTS category TEXT`);
+    await client.query(`ALTER TABLE scheduled_emails ADD COLUMN IF NOT EXISTS tournament_id INTEGER`);
+    await client.query(`ALTER TABLE scheduled_emails ADD COLUMN IF NOT EXISTS outro_text TEXT`);
+    await client.query(`ALTER TABLE scheduled_emails ADD COLUMN IF NOT EXISTS cc_email TEXT`);
+    await client.query(`ALTER TABLE scheduled_emails ADD COLUMN IF NOT EXISTS custom_data TEXT`);
+    await client.query(`ALTER TABLE scheduled_emails ADD COLUMN IF NOT EXISTS created_by TEXT`)
 
     await client.query('COMMIT');
 
