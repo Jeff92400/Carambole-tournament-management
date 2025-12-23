@@ -47,6 +47,28 @@
     <div id="errorMessage" class="error" style="display: none;"></div>
     <div id="successMessage" class="success" style="display: none;"></div>
 
+    <!-- Actions Rapides - moved to top -->
+    <div class="card" style="margin-bottom: 20px;">
+      <h3>Actions Rapides</h3>
+      <div class="action-buttons">
+        <button class="btn" style="background: #dc3545;" onclick="window.location.href='generate-poules.html'">
+          Compétitions à jouer
+        </button>
+        <button class="btn btn-success admin-only" onclick="window.location.href='import-tournament.html'">
+          Importer une compétition
+        </button>
+        <button class="btn" onclick="window.location.href='tournaments-list.html'">
+          Compétitions jouées
+        </button>
+        <button class="btn" onclick="window.location.href='rankings.html'">
+          Voir les Classements
+        </button>
+        <button class="btn" onclick="window.location.href='calendar.html'">
+          Calendrier
+        </button>
+      </div>
+    </div>
+
     <!-- Season selector -->
     <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 20px;">
       <label style="font-weight: bold; color: #333;">Saison :</label>
@@ -102,27 +124,6 @@
       <div class="stat-card" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
         <h4>Passés</h4>
         <div class="stat-value" id="tournoiPastSeason">-</div>
-      </div>
-    </div>
-
-    <div class="card">
-      <h3>Actions Rapides</h3>
-      <div class="action-buttons">
-        <button class="btn btn-success admin-only" onclick="window.location.href='import-tournament.html'">
-          Importer un Tournoi
-        </button>
-        <button class="btn" onclick="window.location.href='generate-poules.html'">
-          Compétitions à jouer
-        </button>
-        <button class="btn" onclick="window.location.href='rankings.html'">
-          Voir les Classements
-        </button>
-        <button class="btn" onclick="window.location.href='calendar.html'">
-          Calendrier
-        </button>
-        <button class="btn" onclick="window.location.href='players-list.html'">
-          Joueurs
-        </button>
       </div>
     </div>
 
