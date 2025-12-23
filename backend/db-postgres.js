@@ -51,6 +51,7 @@ async function initializeDatabase() {
     await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT`);
     await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token TEXT`);
     await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token_expiry TIMESTAMP`);
+    await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS receive_tournament_alerts BOOLEAN DEFAULT FALSE`);
 
     // Players table
     await client.query(`
@@ -365,7 +366,19 @@ async function initializeDatabase() {
     await client.query(`ALTER TABLE scheduled_emails ADD COLUMN IF NOT EXISTS custom_data TEXT`);
     await client.query(`ALTER TABLE scheduled_emails ADD COLUMN IF NOT EXISTS created_by TEXT`);
     await client.query(`ALTER TABLE scheduled_emails ADD COLUMN IF NOT EXISTS test_mode BOOLEAN DEFAULT FALSE`);
-    await client.query(`ALTER TABLE scheduled_emails ADD COLUMN IF NOT EXISTS test_email TEXT`)
+    await client.query(`ALTER TABLE scheduled_emails ADD COLUMN IF NOT EXISTS test_email TEXT`);
+
+    // Tournament relance tracking table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS tournament_relances (
+        id SERIAL PRIMARY KEY,
+        tournoi_id INTEGER NOT NULL,
+        relance_sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        sent_by TEXT,
+        recipients_count INTEGER DEFAULT 0,
+        UNIQUE(tournoi_id)
+      )
+    `);
 
     await client.query('COMMIT');
 

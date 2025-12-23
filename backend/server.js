@@ -290,6 +290,137 @@ async function processTemplatedScheduledEmail(db, resend, scheduled, delay) {
   console.log(`[Email Scheduler] Completed ${scheduled.id}: ${sentCount} sent, ${failedCount} failed`);
 }
 
+// Tournament alerts - check for upcoming tournaments and notify opted-in users
+async function checkTournamentAlerts() {
+  const { Resend } = require('resend');
+  const db = require('./db-loader');
+
+  if (!process.env.RESEND_API_KEY) {
+    console.log('[Tournament Alerts] Skipped - no RESEND_API_KEY');
+    return;
+  }
+
+  const resend = new Resend(process.env.RESEND_API_KEY);
+
+  try {
+    console.log('[Tournament Alerts] Checking for upcoming tournaments...');
+
+    // Get Paris time
+    const now = new Date();
+    const parisNow = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
+    const currentHour = parisNow.getHours();
+
+    // Only send alerts once per day, at 9 AM Paris time
+    if (currentHour !== 9) {
+      console.log(`[Tournament Alerts] Skipping - current hour is ${currentHour}, alerts sent at 9 AM`);
+      return;
+    }
+
+    const today = new Date();
+    const twoWeeksFromNow = new Date(today.getTime() + 14 * 24 * 60 * 60 * 1000);
+
+    // Get upcoming tournaments that need relances
+    const tournamentsNeeding = await new Promise((resolve, reject) => {
+      db.all(`
+        SELECT t.*
+        FROM tournoi_ext t
+        LEFT JOIN tournament_relances r ON t.tournoi_id = r.tournoi_id
+        WHERE t.debut >= $1 AND t.debut <= $2 AND r.tournoi_id IS NULL
+        ORDER BY t.debut ASC
+      `, [today.toISOString().split('T')[0], twoWeeksFromNow.toISOString().split('T')[0]], (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows || []);
+      });
+    });
+
+    if (tournamentsNeeding.length === 0) {
+      console.log('[Tournament Alerts] No tournaments needing relances in the next 2 weeks');
+      return;
+    }
+
+    console.log(`[Tournament Alerts] Found ${tournamentsNeeding.length} tournament(s) needing relances`);
+
+    // Get users opted-in for alerts with valid email
+    const usersToNotify = await new Promise((resolve, reject) => {
+      db.all(`
+        SELECT id, username, email FROM users
+        WHERE receive_tournament_alerts = true AND email IS NOT NULL AND email != '' AND is_active = 1
+      `, [], (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows || []);
+      });
+    });
+
+    if (usersToNotify.length === 0) {
+      console.log('[Tournament Alerts] No users opted-in for tournament alerts');
+      return;
+    }
+
+    console.log(`[Tournament Alerts] Notifying ${usersToNotify.length} user(s)`);
+
+    // Build tournament list HTML
+    const tournamentListHtml = tournamentsNeeding.map(t => {
+      const dateObj = new Date(t.debut);
+      const dateStr = dateObj.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+      const daysLeft = Math.ceil((dateObj - new Date()) / (1000 * 60 * 60 * 24));
+
+      return `
+        <div style="background: #fff3cd; padding: 15px; border-radius: 8px; margin-bottom: 10px; border-left: 4px solid #ffc107;">
+          <strong style="color: #333;">${t.nom}</strong><br>
+          <span style="color: #666;">${t.mode} ${t.categorie} - ${dateStr}</span><br>
+          <span style="color: ${daysLeft <= 7 ? '#dc3545' : '#856404'}; font-weight: bold;">
+            Dans ${daysLeft} jour${daysLeft > 1 ? 's' : ''}
+          </span>
+        </div>
+      `;
+    }).join('');
+
+    const baseUrl = process.env.BASE_URL || 'https://cdbhs-tournament-management-production.up.railway.app';
+
+    // Send email to each opted-in user
+    for (const user of usersToNotify) {
+      try {
+        await resend.emails.send({
+          from: 'CDBHS <convocations@cdbhs.net>',
+          to: user.email,
+          subject: `⚠️ ${tournamentsNeeding.length} tournoi(s) à relancer - CDBHS`,
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+              <div style="background: #1F4788; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0;">
+                <h1 style="margin: 0; font-size: 24px;">Rappel Tournois CDBHS</h1>
+              </div>
+              <div style="background: #f8f9fa; padding: 20px; border-radius: 0 0 8px 8px;">
+                <p>Bonjour ${user.username},</p>
+                <p>Les tournois suivants approchent et les <strong>relances n'ont pas encore été envoyées</strong> :</p>
+                ${tournamentListHtml}
+                <p style="margin-top: 20px;">
+                  <a href="${baseUrl}/dashboard.html" style="background: #28a745; color: white; padding: 12px 25px; text-decoration: none; border-radius: 6px; display: inline-block;">
+                    Accéder au tableau de bord
+                  </a>
+                </p>
+                <hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;">
+                <p style="color: #666; font-size: 12px;">
+                  Vous recevez cet email car vous avez activé les alertes de tournois dans vos paramètres.
+                  <br>Pour vous désabonner, modifiez vos paramètres sur ${baseUrl}/settings.html
+                </p>
+              </div>
+            </div>
+          `
+        });
+
+        console.log(`[Tournament Alerts] Email sent to ${user.email}`);
+      } catch (error) {
+        console.error(`[Tournament Alerts] Error sending to ${user.email}:`, error.message);
+      }
+    }
+
+    console.log('[Tournament Alerts] Completed');
+
+  } catch (error) {
+    console.error('[Tournament Alerts] Error:', error.message);
+  }
+}
+
 // Email scheduler - check and send scheduled emails
 // Exposed globally for manual triggering via API
 async function processScheduledEmails() {
@@ -515,6 +646,15 @@ app.listen(PORT, '0.0.0.0', () => {
 
   // Also run once immediately on startup (after 30 seconds to let DB settle)
   setTimeout(() => processScheduledEmails(), 30000);
+
+  // Tournament alerts scheduler - check every hour for upcoming tournaments
+  setInterval(async () => {
+    await checkTournamentAlerts();
+  }, 3600000); // Check every hour (3600000ms)
+  console.log('[Tournament Alerts] Started - checking for upcoming tournaments every hour');
+
+  // Also run tournament alerts check on startup (after 60 seconds)
+  setTimeout(() => checkTournamentAlerts(), 60000);
 
   // Auto-sync contacts on startup (after a short delay to ensure DB is ready)
   setTimeout(async () => {

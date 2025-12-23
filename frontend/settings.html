@@ -72,6 +72,29 @@
       </form>
     </div>
 
+    <!-- My Settings Section -->
+    <div class="card">
+      <h3>Mes paramètres</h3>
+      <form id="mySettingsForm">
+        <div class="form-group">
+          <label for="myEmail">Mon email :</label>
+          <input type="email" id="myEmail" placeholder="ex: mon.email@exemple.com" style="width: 100%; max-width: 400px;">
+          <small style="color: #666; display: block; margin-top: 5px;">Utilisé pour la réinitialisation du mot de passe et les notifications</small>
+        </div>
+        <div class="form-group" style="margin-top: 20px;">
+          <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+            <input type="checkbox" id="myTournamentAlerts" style="width: 20px; height: 20px; cursor: pointer;">
+            <span>Recevoir les alertes de tournois à venir</span>
+          </label>
+          <small style="color: #666; display: block; margin-top: 5px; margin-left: 30px;">
+            Vous serez notifié par email lorsqu'un tournoi approche (2 semaines avant) et que les relances n'ont pas encore été envoyées
+          </small>
+        </div>
+        <button type="submit" class="btn btn-primary" style="margin-top: 15px;">Enregistrer mes paramètres</button>
+      </form>
+      <div id="mySettingsMessage" style="display: none; margin-top: 15px; padding: 10px; border-radius: 4px;"></div>
+    </div>
+
     <!-- User Management Section - Admin Only -->
     <div class="card admin-only" id="userManagementSection">
       <h3>Gestion des Utilisateurs</h3>
@@ -284,6 +307,79 @@
       }
     }
     checkUserRole();
+
+    // ============= MY SETTINGS =============
+
+    // Load current user settings
+    async function loadMySettings() {
+      try {
+        const response = await fetch(`${API_URL}/auth/me`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          document.getElementById('myEmail').value = data.email || '';
+          document.getElementById('myTournamentAlerts').checked = data.receive_tournament_alerts || false;
+        }
+      } catch (error) {
+        console.error('Error loading my settings:', error);
+      }
+    }
+
+    // Save my settings
+    document.getElementById('mySettingsForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const email = document.getElementById('myEmail').value.trim();
+      const receive_tournament_alerts = document.getElementById('myTournamentAlerts').checked;
+      const msgDiv = document.getElementById('mySettingsMessage');
+
+      // Basic email validation if not empty
+      if (email && !email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) {
+        msgDiv.textContent = 'Format d\'email invalide';
+        msgDiv.style.background = '#f8d7da';
+        msgDiv.style.color = '#721c24';
+        msgDiv.style.display = 'block';
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API_URL}/auth/me/settings`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            email: email || null,
+            receive_tournament_alerts
+          })
+        });
+
+        if (response.ok) {
+          msgDiv.textContent = 'Paramètres enregistrés avec succès !';
+          msgDiv.style.background = '#d4edda';
+          msgDiv.style.color = '#155724';
+        } else {
+          const data = await response.json();
+          throw new Error(data.error || 'Erreur lors de la sauvegarde');
+        }
+      } catch (error) {
+        console.error('Error saving settings:', error);
+        msgDiv.textContent = error.message;
+        msgDiv.style.background = '#f8d7da';
+        msgDiv.style.color = '#721c24';
+      }
+
+      msgDiv.style.display = 'block';
+      setTimeout(() => { msgDiv.style.display = 'none'; }, 3000);
+    });
+
+    // Load my settings on page load
+    loadMySettings();
+
+    // ============= END MY SETTINGS =============
 
     // ============= USER MANAGEMENT =============
 

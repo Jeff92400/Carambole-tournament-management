@@ -47,6 +47,20 @@
     <div id="errorMessage" class="error" style="display: none;"></div>
     <div id="successMessage" class="success" style="display: none;"></div>
 
+    <!-- Tournament Alerts - Admin Only -->
+    <div id="tournamentAlertsCard" class="card admin-only" style="display: none; background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%); border-left: 5px solid #ffc107; margin-bottom: 20px;">
+      <h3 style="color: #856404; margin-bottom: 15px;">
+        <span style="font-size: 24px; margin-right: 10px;">⚠️</span>
+        Tournois à relancer
+      </h3>
+      <p style="color: #856404; margin-bottom: 15px;">
+        Les tournois suivants approchent et les relances n'ont pas encore été envoyées :
+      </p>
+      <div id="tournamentAlertsList" style="display: flex; flex-direction: column; gap: 10px;">
+        <!-- Alerts will be loaded here -->
+      </div>
+    </div>
+
     <!-- Actions Rapides - moved to top -->
     <div class="card" style="margin-bottom: 20px;">
       <h3>Actions Rapides</h3>
@@ -142,8 +156,67 @@
     const userRole = localStorage.getItem('userRole');
     if (userRole === 'admin') {
       document.querySelectorAll('.admin-only').forEach(el => el.style.display = '');
+      // Load tournament alerts for admins
+      loadTournamentAlerts();
     } else {
       document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');
+    }
+
+    // Load tournament alerts (tournaments needing relances)
+    async function loadTournamentAlerts() {
+      try {
+        const response = await fetch(`${API_URL}/inscriptions/upcoming-relances`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (!response.ok) return;
+
+        const data = await response.json();
+        const alertsCard = document.getElementById('tournamentAlertsCard');
+        const alertsList = document.getElementById('tournamentAlertsList');
+
+        if (data.needs_relance && data.needs_relance.length > 0) {
+          alertsCard.style.display = 'block';
+
+          alertsList.innerHTML = data.needs_relance.map(tournoi => {
+            const dateObj = new Date(tournoi.debut);
+            const dateStr = dateObj.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+            const daysLeft = Math.ceil((dateObj - new Date()) / (1000 * 60 * 60 * 24));
+
+            return `
+              <div style="display: flex; justify-content: space-between; align-items: center; padding: 15px; background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                <div>
+                  <strong style="color: #333; font-size: 16px;">${tournoi.nom}</strong>
+                  <div style="color: #666; font-size: 14px; margin-top: 5px;">
+                    ${tournoi.mode} ${tournoi.categorie} - ${dateStr}
+                    <span style="color: ${daysLeft <= 7 ? '#dc3545' : '#ffc107'}; font-weight: bold; margin-left: 10px;">
+                      (${daysLeft} jour${daysLeft > 1 ? 's' : ''})
+                    </span>
+                  </div>
+                  <div style="color: #888; font-size: 13px; margin-top: 3px;">
+                    ${tournoi.inscription_count || 0} inscription(s)
+                  </div>
+                </div>
+                <button onclick="goToRelance(${tournoi.tournoi_id}, '${tournoi.mode}', '${tournoi.categorie}')"
+                        class="btn" style="background: #28a745; padding: 10px 20px; white-space: nowrap;">
+                  Envoyer les relances
+                </button>
+              </div>
+            `;
+          }).join('');
+        } else {
+          alertsCard.style.display = 'none';
+        }
+      } catch (error) {
+        console.error('Error loading tournament alerts:', error);
+      }
+    }
+
+    // Navigate to emailing page with tournament pre-selected
+    function goToRelance(tournoiId, mode, categorie) {
+      // Store the tournament info for the emailing page
+      localStorage.setItem('relanceTournoi', JSON.stringify({ tournoiId, mode, categorie }));
+      window.location.href = 'emailing.html?action=relance&tournoi=' + tournoiId;
     }
 
     // Logout

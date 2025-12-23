@@ -58,10 +58,53 @@ router.post('/login', (req, res) => {
 
 // Get current user info
 router.get('/me', authenticateToken, (req, res) => {
-  res.json({
-    userId: req.user.userId,
-    username: req.user.username,
-    role: req.user.role
+  db.get('SELECT id, username, email, role, receive_tournament_alerts FROM users WHERE id = $1', [req.user.userId], (err, user) => {
+    if (err || !user) {
+      return res.json({
+        userId: req.user.userId,
+        username: req.user.username,
+        role: req.user.role
+      });
+    }
+    res.json({
+      userId: user.id,
+      username: user.username,
+      email: user.email,
+      role: user.role,
+      receive_tournament_alerts: user.receive_tournament_alerts || false
+    });
+  });
+});
+
+// Update current user settings (email, alerts)
+router.put('/me/settings', authenticateToken, (req, res) => {
+  const { email, receive_tournament_alerts } = req.body;
+
+  const updates = [];
+  const params = [];
+  let paramIndex = 1;
+
+  if (email !== undefined) {
+    updates.push(`email = $${paramIndex++}`);
+    params.push(email ? email.toLowerCase().trim() : null);
+  }
+
+  if (typeof receive_tournament_alerts === 'boolean') {
+    updates.push(`receive_tournament_alerts = $${paramIndex++}`);
+    params.push(receive_tournament_alerts);
+  }
+
+  if (updates.length === 0) {
+    return res.json({ message: 'No changes made' });
+  }
+
+  params.push(req.user.userId);
+
+  db.run(`UPDATE users SET ${updates.join(', ')} WHERE id = $${paramIndex}`, params, (err) => {
+    if (err) {
+      return res.status(500).json({ error: 'Error updating settings' });
+    }
+    res.json({ message: 'Settings updated successfully' });
   });
 });
 
@@ -228,7 +271,7 @@ router.post('/reset-password-token', (req, res) => {
 
 // Get all users (admin only)
 router.get('/users', authenticateToken, requireAdmin, (req, res) => {
-  db.all('SELECT id, username, email, role, is_active, created_at, last_login FROM users ORDER BY username', [], (err, users) => {
+  db.all('SELECT id, username, email, role, is_active, receive_tournament_alerts, created_at, last_login FROM users ORDER BY username', [], (err, users) => {
     if (err) {
       return res.status(500).json({ error: 'Database error' });
     }
@@ -288,7 +331,7 @@ router.post('/users', authenticateToken, requireAdmin, (req, res) => {
 // Update user (admin only)
 router.put('/users/:id', authenticateToken, requireAdmin, (req, res) => {
   const userId = req.params.id;
-  const { username, password, role, is_active, email } = req.body;
+  const { username, password, role, is_active, email, receive_tournament_alerts } = req.body;
 
   // Prevent admin from deactivating themselves
   if (req.user.userId == userId && is_active === 0) {
@@ -327,6 +370,12 @@ router.put('/users/:id', authenticateToken, requireAdmin, (req, res) => {
     if (email !== undefined) {
       updates.push(`email = $${paramIndex++}`);
       params.push(email ? email.toLowerCase().trim() : null);
+    }
+
+    // Handle tournament alerts opt-in
+    if (typeof receive_tournament_alerts === 'boolean') {
+      updates.push(`receive_tournament_alerts = $${paramIndex++}`);
+      params.push(receive_tournament_alerts);
     }
 
     if (password && password.length >= 6) {

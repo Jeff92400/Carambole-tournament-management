@@ -1250,4 +1250,96 @@ router.delete('/delete-test-finale', authenticateToken, async (req, res) => {
   }
 });
 
+// ==================== TOURNAMENT RELANCES ====================
+
+// Get upcoming tournaments (within 2 weeks) that need relances
+router.get('/upcoming-relances', authenticateToken, async (req, res) => {
+  try {
+    const today = new Date();
+    const twoWeeksFromNow = new Date(today.getTime() + 14 * 24 * 60 * 60 * 1000);
+
+    // Get all upcoming tournaments within 2 weeks
+    const tournois = await new Promise((resolve, reject) => {
+      db.all(`
+        SELECT t.*,
+               (SELECT COUNT(*) FROM inscriptions i WHERE i.tournoi_id = t.tournoi_id) as inscription_count,
+               r.relance_sent_at, r.sent_by, r.recipients_count as relance_recipients
+        FROM tournoi_ext t
+        LEFT JOIN tournament_relances r ON t.tournoi_id = r.tournoi_id
+        WHERE t.debut >= $1 AND t.debut <= $2
+        ORDER BY t.debut ASC
+      `, [today.toISOString().split('T')[0], twoWeeksFromNow.toISOString().split('T')[0]], (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows || []);
+      });
+    });
+
+    // Filter to only those without sent relances
+    const needsRelance = tournois.filter(t => !t.relance_sent_at);
+
+    res.json({
+      all_upcoming: tournois,
+      needs_relance: needsRelance,
+      today: today.toISOString().split('T')[0],
+      deadline: twoWeeksFromNow.toISOString().split('T')[0]
+    });
+
+  } catch (error) {
+    console.error('Error fetching upcoming relances:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Mark a tournament relance as sent
+router.post('/relances/:tournoi_id', authenticateToken, async (req, res) => {
+  const { tournoi_id } = req.params;
+  const { recipients_count } = req.body;
+  const sent_by = req.user.username;
+
+  try {
+    await new Promise((resolve, reject) => {
+      db.run(`
+        INSERT INTO tournament_relances (tournoi_id, sent_by, recipients_count)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (tournoi_id) DO UPDATE SET
+          relance_sent_at = CURRENT_TIMESTAMP,
+          sent_by = $2,
+          recipients_count = $3
+      `, [tournoi_id, sent_by, recipients_count || 0], (err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+
+    res.json({ success: true, message: 'Relance marked as sent' });
+
+  } catch (error) {
+    console.error('Error marking relance as sent:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get all sent relances
+router.get('/relances', authenticateToken, async (req, res) => {
+  try {
+    const relances = await new Promise((resolve, reject) => {
+      db.all(`
+        SELECT r.*, t.nom, t.mode, t.categorie, t.debut
+        FROM tournament_relances r
+        JOIN tournoi_ext t ON r.tournoi_id = t.tournoi_id
+        ORDER BY r.relance_sent_at DESC
+      `, [], (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows || []);
+      });
+    });
+
+    res.json(relances);
+
+  } catch (error) {
+    console.error('Error fetching relances:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;
