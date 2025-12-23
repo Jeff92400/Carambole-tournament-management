@@ -64,15 +64,35 @@
       </div>
     </div>
 
+    <!-- Upload section - Admin only -->
+    <div class="card admin-only" id="uploadSection" style="display: none;">
+      <h3>Téléverser le calendrier</h3>
+      <p style="margin-bottom: 15px; color: #666;">Téléversez le calendrier de la saison (PDF ou Excel) pour le rendre accessible à tous les utilisateurs.</p>
+
+      <div id="currentCalendarInfo" style="display: none; margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-left: 4px solid #28a745; border-radius: 4px;">
+        <strong>Calendrier actuel :</strong>
+        <div id="calendarDetails" style="margin-top: 8px; color: #666;"></div>
+      </div>
+
+      <form id="calendarUploadForm" style="display: flex; gap: 15px; align-items: flex-end; flex-wrap: wrap;">
+        <div class="form-group" style="flex: 1; min-width: 200px; margin-bottom: 0;">
+          <label for="calendarFile">Fichier calendrier (PDF ou Excel) :</label>
+          <input type="file" id="calendarFile" accept=".pdf,.xlsx,.xls" required style="padding: 10px; border: 1px solid #ddd; border-radius: 4px; width: 100%;">
+        </div>
+        <button type="submit" class="btn-download" id="uploadCalendarBtn" style="padding: 12px 25px;">
+          Téléverser
+        </button>
+      </form>
+
+      <div id="calendarUploadStatus" style="display: none; margin-top: 15px; padding: 10px; border-radius: 4px;"></div>
+    </div>
+
     <!-- No calendar message -->
     <div class="card" id="noCalendarContainer" style="display: none;">
       <h3>Calendrier CDBHS 2025-2026</h3>
       <div class="download-section">
         <p style="color: #666; font-size: 18px;">Aucun calendrier n'a encore été téléversé.</p>
-        <p style="font-size: 14px; color: #888;">L'administrateur doit téléverser un fichier PDF ou Excel depuis la page Paramètres.</p>
-        <a href="settings.html" class="btn-download" style="text-decoration: none;">
-          Aller aux Paramètres
-        </a>
+        <p style="font-size: 14px; color: #888;" class="viewer-message">Contactez l'administrateur pour téléverser le calendrier.</p>
       </div>
     </div>
 
@@ -109,15 +129,120 @@
       window.location.href = 'login.html';
     }
 
+    // Check user role and show upload section for admins
+    const userRole = localStorage.getItem('userRole');
+    if (userRole === 'admin') {
+      document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'block');
+    }
+
     // Logout
     document.getElementById('logoutBtn').addEventListener('click', (e) => {
       e.preventDefault();
       localStorage.removeItem('token');
+      localStorage.removeItem('userRole');
+      localStorage.removeItem('username');
       window.location.href = 'login.html';
     });
 
     const viewUrl = `${API_URL}/calendar/view`;
     const downloadUrl = `${API_URL}/calendar/download`;
+
+    // Load current calendar info
+    async function loadCalendarInfo() {
+      try {
+        const response = await fetch(`${API_URL}/calendar/info`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data.exists) {
+            const uploadDate = new Date(data.uploadedAt);
+            const formattedDate = uploadDate.toLocaleDateString('fr-FR', {
+              year: 'numeric', month: 'long', day: 'numeric'
+            });
+            const formattedTime = uploadDate.toLocaleTimeString('fr-FR', {
+              hour: '2-digit', minute: '2-digit'
+            });
+
+            document.getElementById('calendarDetails').innerHTML = `
+              <strong>${data.filename}</strong><br>
+              Téléversé le ${formattedDate} à ${formattedTime}<br>
+              Par: ${data.uploadedBy || 'admin'}
+            `;
+            document.getElementById('currentCalendarInfo').style.display = 'block';
+          }
+        }
+      } catch (error) {
+        console.error('Error loading calendar info:', error);
+      }
+    }
+
+    // Calendar upload form
+    document.getElementById('calendarUploadForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const fileInput = document.getElementById('calendarFile');
+      const file = fileInput.files[0];
+      const statusDiv = document.getElementById('calendarUploadStatus');
+      const uploadBtn = document.getElementById('uploadCalendarBtn');
+
+      if (!file) {
+        statusDiv.textContent = 'Veuillez sélectionner un fichier';
+        statusDiv.style.background = '#f8d7da';
+        statusDiv.style.color = '#721c24';
+        statusDiv.style.display = 'block';
+        return;
+      }
+
+      uploadBtn.disabled = true;
+      uploadBtn.textContent = 'Téléversement...';
+      statusDiv.textContent = 'Téléversement en cours...';
+      statusDiv.style.background = '#cce5ff';
+      statusDiv.style.color = '#004085';
+      statusDiv.style.display = 'block';
+
+      try {
+        const formData = new FormData();
+        formData.append('calendar', file);
+
+        const response = await fetch(`${API_URL}/calendar/upload`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` },
+          body: formData
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || 'Erreur lors du téléversement');
+        }
+
+        statusDiv.textContent = `Calendrier "${data.filename}" téléversé avec succès !`;
+        statusDiv.style.background = '#d4edda';
+        statusDiv.style.color = '#155724';
+
+        fileInput.value = '';
+        loadCalendarInfo();
+
+        // Reload the page to show the new calendar
+        setTimeout(() => location.reload(), 1500);
+
+      } catch (error) {
+        console.error('Error uploading calendar:', error);
+        statusDiv.textContent = error.message;
+        statusDiv.style.background = '#f8d7da';
+        statusDiv.style.color = '#721c24';
+      } finally {
+        uploadBtn.disabled = false;
+        uploadBtn.textContent = 'Téléverser';
+      }
+    });
+
+    // Load calendar info on page load (for admins)
+    if (userRole === 'admin') {
+      loadCalendarInfo();
+    }
 
     // Check what type of calendar file is available
     async function initializeCalendar() {
