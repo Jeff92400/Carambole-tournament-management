@@ -443,11 +443,11 @@
               </div>
             </div>
           </div>
-          <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+          <div style="display: flex; gap: 6px; flex-wrap: wrap; align-items: center;">
+            <button onclick="editUserEmail(${user.id}, '${user.username}', '${user.email || ''}')" class="btn" style="background: #6f42c1; padding: 5px 10px; font-size: 12px;">
+              Email
+            </button>
             ${user.id !== 1 ? `
-              <button onclick="editUserEmail(${user.id}, '${user.username}', '${user.email || ''}')" class="btn" style="background: #6f42c1; padding: 5px 10px; font-size: 12px;">
-                Email
-              </button>
               <button onclick="toggleUserRole(${user.id}, '${user.role}')" class="btn" style="background: #17a2b8; padding: 5px 10px; font-size: 12px;">
                 ${user.role === 'admin' ? 'Rétro.' : 'Promo.'}
               </button>
