@@ -98,9 +98,14 @@
     </div>
 
     <div style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
-      <button id="exportPlayersBtn" class="btn" style="background-color: #28a745; color: white;">
-        📥 Exporter Excel
-      </button>
+      <div style="display: flex; gap: 10px;">
+        <button id="exportPlayersBtn" class="btn" style="background-color: #28a745; color: white;">
+          📥 Exporter Excel
+        </button>
+        <button class="btn admin-only" onclick="window.location.href='import-players.html'" style="background-color: #28a745; color: white;">
+          📤 Importer Joueurs
+        </button>
+      </div>
       <button id="clearPlayersBtn" class="btn admin-only" style="background-color: #dc3545; color: white;">
         🗑️ Effacer tous les joueurs
       </button>
@@ -458,6 +463,33 @@
       }
     }
 
+    // Delete player
+    async function deletePlayer(player) {
+      const confirmDelete = confirm(`Voulez-vous vraiment supprimer le joueur ${player.first_name} ${player.last_name} (${player.licence}) ?`);
+      if (!confirmDelete) return;
+
+      try {
+        const response = await fetch(`${API_URL}/players/${player.licence}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || 'Failed to delete player');
+        }
+
+        // Reload players
+        await loadPlayers();
+        alert('Joueur supprimé avec succès!');
+      } catch (error) {
+        console.error('Error deleting player:', error);
+        alert('Erreur lors de la suppression: ' + error.message);
+      }
+    }
+
     // Display players in table
     function displayPlayers(players) {
       const tbody = document.getElementById('playersBody');
@@ -491,7 +523,8 @@
           </td>
           ${isAdmin ? `
           <td style="text-align: center;">
-            <button class="btn btn-small edit-player-btn" style="background: #4CAF50; padding: 5px 10px; font-size: 12px;">✏️ Modifier</button>
+            <button class="btn btn-small edit-player-btn" style="background: #4CAF50; padding: 5px 10px; font-size: 12px;">✏️</button>
+            <button class="btn btn-small delete-player-btn" style="background: #dc3545; padding: 5px 10px; font-size: 12px;">🗑️</button>
           </td>
           ` : ''}
         `;
@@ -505,6 +538,14 @@
             editBtn.onclick = (e) => {
               e.stopPropagation();
               openEditModal(player);
+            };
+          }
+
+          const deleteBtn = row.querySelector('.delete-player-btn');
+          if (deleteBtn) {
+            deleteBtn.onclick = (e) => {
+              e.stopPropagation();
+              deletePlayer(player);
             };
           }
         }
