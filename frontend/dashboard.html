@@ -187,7 +187,7 @@
             const urgentColor = daysLeft <= 7 ? '#dc3545' : '#28a745';
 
             return `
-              <button onclick="goToRelance(${tournoi.tournoi_id}, '${tournoi.mode}', '${tournoi.categorie}')"
+              <button onclick="goToRelance(${tournoi.tournoi_id}, '${tournoi.mode}', '${tournoi.categorie}', '${tournoi.nom.replace(/'/g, "\\'")}')"
                       style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; background: white; border: 1px solid #ddd; border-radius: 4px; font-size: 12px; cursor: pointer; white-space: nowrap;">
                 <span style="color: #333; font-weight: 500;">${tournoi.nom}</span>
                 <span style="color: #666;">${tournoi.mode} ${tournoi.categorie}</span>
@@ -205,9 +205,9 @@
     }
 
     // Navigate to emailing page with tournament pre-selected
-    function goToRelance(tournoiId, mode, categorie) {
+    function goToRelance(tournoiId, mode, categorie, nom) {
       // Store the tournament info for the emailing page
-      localStorage.setItem('relanceTournoi', JSON.stringify({ tournoiId, mode, categorie }));
+      localStorage.setItem('relanceTournoi', JSON.stringify({ tournoiId, mode, categorie, nom }));
       window.location.href = 'emailing.html?action=relance&tournoi=' + tournoiId;
     }
 

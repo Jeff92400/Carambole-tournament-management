@@ -4093,12 +4093,14 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
         const relanceInfo = localStorage.getItem('relanceTournoi');
         let mode = '';
         let category = '';
+        let nom = '';
 
         if (relanceInfo) {
           try {
             const info = JSON.parse(relanceInfo);
             mode = info.mode || '';
             category = info.categorie || '';
+            nom = info.nom || '';
             // Clear after use
             localStorage.removeItem('relanceTournoi');
           } catch (e) {
@@ -4112,6 +4114,7 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
           if (tournoi) {
             mode = tournoi.mode;
             category = tournoi.categorie;
+            nom = tournoi.nom;
           }
         }
 
@@ -4140,6 +4143,24 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
 
           // Enable type select
           updateRelanceTypeEnabled();
+
+          // Determine relance type from tournament name
+          let relanceType = '';
+          const nomLower = nom.toLowerCase();
+          if (nomLower.includes('finale')) {
+            relanceType = 'finale';
+          } else if (nomLower.includes('tournoi 3') || nomLower.includes('t3')) {
+            relanceType = 't3';
+          } else if (nomLower.includes('tournoi 2') || nomLower.includes('t2')) {
+            relanceType = 't2';
+          }
+
+          // Pre-select relance type if determined
+          if (relanceType) {
+            const typeSelect = document.getElementById('relanceTypeSelect');
+            typeSelect.value = relanceType;
+            updateRelanceTemplate();
+          }
 
           // Load relance templates
           await loadRelanceTemplates();
