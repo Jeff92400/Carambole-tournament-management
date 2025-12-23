@@ -421,38 +421,46 @@
       }
 
       container.innerHTML = users.map(user => `
-        <div style="display: flex; align-items: center; justify-content: space-between; padding: 15px; background: white; border: 1px solid #ddd; border-radius: 8px;">
-          <div style="display: flex; align-items: center; gap: 15px;">
-            <div style="width: 40px; height: 40px; border-radius: 50%; background: ${user.role === 'admin' ? '#1F4788' : '#6c757d'}; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold;">
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 15px; background: white; border: 1px solid #ddd; border-radius: 8px; flex-wrap: wrap; gap: 10px;">
+          <div style="display: flex; align-items: center; gap: 12px; flex: 1; min-width: 250px;">
+            <div style="width: 36px; height: 36px; border-radius: 50%; background: ${user.role === 'admin' ? '#1F4788' : '#6c757d'}; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px;">
               ${user.username.charAt(0).toUpperCase()}
             </div>
             <div>
-              <strong>${user.username}</strong>
-              ${user.email ? `<span style="margin-left: 8px; color: #666; font-size: 13px;">(${user.email})</span>` : ''}
-              <span style="display: inline-block; margin-left: 10px; padding: 2px 8px; border-radius: 12px; font-size: 12px; background: ${user.role === 'admin' ? '#d4edda' : '#e2e3e5'}; color: ${user.role === 'admin' ? '#155724' : '#383d41'};">
-                ${user.role === 'admin' ? 'Administrateur' : 'Viewer'}
-              </span>
-              ${user.is_active === false ? '<span style="display: inline-block; margin-left: 5px; padding: 2px 8px; border-radius: 12px; font-size: 12px; background: #f8d7da; color: #721c24;">Désactivé</span>' : ''}
+              <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                <strong>${user.username}</strong>
+                <span style="padding: 2px 6px; border-radius: 10px; font-size: 11px; background: ${user.role === 'admin' ? '#d4edda' : '#e2e3e5'}; color: ${user.role === 'admin' ? '#155724' : '#383d41'};">
+                  ${user.role === 'admin' ? 'Admin' : 'Viewer'}
+                </span>
+                ${user.is_active === false ? '<span style="padding: 2px 6px; border-radius: 10px; font-size: 11px; background: #f8d7da; color: #721c24;">Inactif</span>' : ''}
+              </div>
+              <div style="display: flex; align-items: center; gap: 10px; margin-top: 4px; font-size: 12px;">
+                <label style="display: flex; align-items: center; gap: 4px; cursor: pointer; color: #666;" title="Recevoir les alertes tournois">
+                  <input type="checkbox" ${user.receive_tournament_alerts ? 'checked' : ''} onchange="toggleUserAlerts(${user.id}, this.checked)" style="cursor: pointer;">
+                  <span>Alertes</span>
+                </label>
+                ${user.email ? `<span style="color: #666;">${user.email}</span>` : '<span style="color: #999; font-style: italic;">Pas d\'email</span>'}
+              </div>
             </div>
           </div>
-          <div style="display: flex; gap: 10px;">
+          <div style="display: flex; gap: 6px; flex-wrap: wrap;">
             ${user.id !== 1 ? `
-              <button onclick="editUserEmail(${user.id}, '${user.username}', '${user.email || ''}')" class="btn" style="background: #6f42c1; padding: 6px 12px; font-size: 13px;">
+              <button onclick="editUserEmail(${user.id}, '${user.username}', '${user.email || ''}')" class="btn" style="background: #6f42c1; padding: 5px 10px; font-size: 12px;">
                 Email
               </button>
-              <button onclick="toggleUserRole(${user.id}, '${user.role}')" class="btn" style="background: #17a2b8; padding: 6px 12px; font-size: 13px;">
-                ${user.role === 'admin' ? 'Rétrograder' : 'Promouvoir'}
+              <button onclick="toggleUserRole(${user.id}, '${user.role}')" class="btn" style="background: #17a2b8; padding: 5px 10px; font-size: 12px;">
+                ${user.role === 'admin' ? 'Rétro.' : 'Promo.'}
               </button>
-              <button onclick="resetUserPassword(${user.id}, '${user.username}')" class="btn" style="background: #ffc107; color: #000; padding: 6px 12px; font-size: 13px;">
-                Reset MDP
+              <button onclick="resetUserPassword(${user.id}, '${user.username}')" class="btn" style="background: #ffc107; color: #000; padding: 5px 10px; font-size: 12px;">
+                MDP
               </button>
-              <button onclick="toggleUserActive(${user.id}, ${user.is_active !== false})" class="btn" style="background: ${user.is_active !== false ? '#6c757d' : '#28a745'}; padding: 6px 12px; font-size: 13px;">
-                ${user.is_active !== false ? 'Désactiver' : 'Activer'}
+              <button onclick="toggleUserActive(${user.id}, ${user.is_active !== false})" class="btn" style="background: ${user.is_active !== false ? '#6c757d' : '#28a745'}; padding: 5px 10px; font-size: 12px;">
+                ${user.is_active !== false ? 'Désact.' : 'Activer'}
               </button>
-              <button onclick="deleteUser(${user.id}, '${user.username}')" class="btn" style="background: #dc3545; padding: 6px 12px; font-size: 13px;">
-                Supprimer
+              <button onclick="deleteUser(${user.id}, '${user.username}')" class="btn" style="background: #dc3545; padding: 5px 10px; font-size: 12px;">
+                Suppr.
               </button>
-            ` : '<span style="color: #666; font-style: italic; font-size: 13px;">Compte principal</span>'}
+            ` : '<span style="color: #666; font-style: italic; font-size: 12px;">Principal</span>'}
           </div>
         </div>
       `).join('');
@@ -499,6 +507,36 @@
         document.getElementById('successMessage').style.display = 'none';
       }
     });
+
+    // Toggle user alerts
+    async function toggleUserAlerts(userId, enabled) {
+      try {
+        const response = await fetch(`${API_URL}/auth/users/${userId}`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ receive_tournament_alerts: enabled })
+        });
+
+        if (!response.ok) {
+          const data = await response.json();
+          throw new Error(data.error || 'Erreur lors de la modification');
+        }
+
+        // Show brief success message
+        document.getElementById('successMessage').textContent = `Alertes ${enabled ? 'activées' : 'désactivées'}`;
+        document.getElementById('successMessage').style.display = 'block';
+        setTimeout(() => { document.getElementById('successMessage').style.display = 'none'; }, 2000);
+
+      } catch (error) {
+        console.error('Error toggling alerts:', error);
+        document.getElementById('errorMessage').textContent = error.message;
+        document.getElementById('errorMessage').style.display = 'block';
+        loadUsers(); // Reload to reset checkbox state
+      }
+    }
 
     // Toggle user role
     async function toggleUserRole(userId, currentRole) {
