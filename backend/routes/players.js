@@ -56,7 +56,7 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
     let updated = 0;
     let errors = [];
 
-    // Process records sequentially for PostgreSQL
+    // Process records using PostgreSQL ON CONFLICT
     for (const record of records) {
       try {
         // Parse CSV format: "licence","club","first_name","last_name","libre","cadre","bande","3bandes","?","?","active"
@@ -74,41 +74,30 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
 
         if (!licence || !firstName || !lastName) continue;
 
-        // Check if player exists
-        const existing = await new Promise((resolve, reject) => {
-          db.get('SELECT licence FROM players WHERE licence = $1', [licence], (err, row) => {
-            if (err) reject(err);
-            else resolve(row);
+        // Use PostgreSQL UPSERT with ON CONFLICT
+        await new Promise((resolve, reject) => {
+          db.run(`
+            INSERT INTO players (licence, club, first_name, last_name, rank_libre, rank_cadre, rank_bande, rank_3bandes, is_active)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            ON CONFLICT (licence) DO UPDATE SET
+              club = EXCLUDED.club,
+              first_name = EXCLUDED.first_name,
+              last_name = EXCLUDED.last_name,
+              rank_libre = EXCLUDED.rank_libre,
+              rank_cadre = EXCLUDED.rank_cadre,
+              rank_bande = EXCLUDED.rank_bande,
+              rank_3bandes = EXCLUDED.rank_3bandes,
+              is_active = EXCLUDED.is_active
+          `, [licence, club, firstName, lastName, rankLibre, rankCadre, rankBande, rank3Bandes, isActive], function(err) {
+            if (err) {
+              reject(err);
+            } else {
+              // this.changes tells us if it was insert (1) or update (rowCount from PostgreSQL)
+              resolve(this.changes);
+            }
           });
         });
-
-        if (existing) {
-          // Update existing player
-          await new Promise((resolve, reject) => {
-            db.run(`
-              UPDATE players SET
-                club = $1, first_name = $2, last_name = $3,
-                rank_libre = $4, rank_cadre = $5, rank_bande = $6, rank_3bandes = $7, is_active = $8
-              WHERE licence = $9
-            `, [club, firstName, lastName, rankLibre, rankCadre, rankBande, rank3Bandes, isActive, licence], (err) => {
-              if (err) reject(err);
-              else resolve();
-            });
-          });
-          updated++;
-        } else {
-          // Insert new player
-          await new Promise((resolve, reject) => {
-            db.run(`
-              INSERT INTO players (licence, club, first_name, last_name, rank_libre, rank_cadre, rank_bande, rank_3bandes, is_active)
-              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-            `, [licence, club, firstName, lastName, rankLibre, rankCadre, rankBande, rank3Bandes, isActive], (err) => {
-              if (err) reject(err);
-              else resolve();
-            });
-          });
-          imported++;
-        }
+        imported++;
       } catch (err) {
         errors.push({ record: record[0], error: err.message });
       }
@@ -118,18 +107,17 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
     fs.unlinkSync(req.file.path);
 
     // Record import in history
-    const historyQuery = `
+    db.run(`
       INSERT INTO import_history (file_type, record_count, filename, imported_by)
       VALUES ($1, $2, $3, $4)
-    `;
-    db.run(historyQuery, ['joueurs', records.length, req.file.originalname, req.user?.username || 'unknown'], (histErr) => {
+    `, ['joueurs', records.length, req.file.originalname, req.user?.username || 'unknown'], (histErr) => {
       if (histErr) console.error('Error recording import history:', histErr);
     });
 
     res.json({
       message: 'Import completed',
       imported,
-      updated,
+      updated: 0,
       errors: errors.length > 0 ? errors : undefined
     });
 

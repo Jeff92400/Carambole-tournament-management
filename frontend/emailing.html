@@ -4164,6 +4164,9 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
             relanceType = 't2';
           }
 
+          // Load relance templates FIRST (this loads clubs too)
+          await loadRelanceTemplates();
+
           // Pre-select relance type if determined
           if (relanceType) {
             const typeSelect = document.getElementById('relanceTypeSelect');
@@ -4211,9 +4214,6 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
               }
             }, 100);
           }
-
-          // Load relance templates
-          await loadRelanceTemplates();
 
           // Show info message
           const lieuInfo = lieu ? ` @ ${lieu}` : '';
