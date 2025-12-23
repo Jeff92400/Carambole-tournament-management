@@ -2561,6 +2561,91 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
       // Show info message area
       const infoDiv = document.getElementById('relanceInfo');
 
+      // Helper function to match location with dropdown options
+      function setLocationDropdown(selectId, locationValue) {
+        const lieuSelect = document.getElementById(selectId);
+        if (!lieuSelect || !locationValue) return false;
+
+        const locationUpper = locationValue.toUpperCase().trim();
+
+        // First try exact match
+        for (let opt of lieuSelect.options) {
+          if (opt.value === locationValue || opt.text === locationValue) {
+            lieuSelect.value = opt.value;
+            return true;
+          }
+        }
+
+        // Then try case-insensitive partial match (location name contained in option)
+        for (let opt of lieuSelect.options) {
+          const optUpper = opt.text.toUpperCase().trim();
+          if (optUpper.includes(locationUpper) || locationUpper.includes(optUpper.split(' ')[0])) {
+            lieuSelect.value = opt.value;
+            return true;
+          }
+        }
+
+        // Try matching just the city name (e.g., "Clichy" matches "BC Clichy" or "Billard Club Clichy")
+        for (let opt of lieuSelect.options) {
+          const optUpper = opt.text.toUpperCase().trim();
+          // Check if any word in the option matches the location
+          const optWords = optUpper.split(/[\s-]+/);
+          if (optWords.some(word => word === locationUpper || locationUpper === word)) {
+            lieuSelect.value = opt.value;
+            return true;
+          }
+        }
+
+        // If still not found, add as a new option
+        const newOption = document.createElement('option');
+        newOption.value = locationValue;
+        newOption.text = locationValue;
+        lieuSelect.add(newOption);
+        lieuSelect.value = locationValue;
+        return true;
+      }
+
+      // Check if we have pending values from dashboard (these take priority)
+      const pendingLieu = window.pendingRelanceLieu;
+      const pendingDebut = window.pendingRelanceDebut;
+
+      // Clear pending values after reading
+      if (pendingLieu) window.pendingRelanceLieu = null;
+      if (pendingDebut) window.pendingRelanceDebut = null;
+
+      // If we have pending values from dashboard, use them directly
+      if (pendingLieu || pendingDebut) {
+        if (infoDiv) infoDiv.style.display = 'none';
+
+        if (relanceType === 't2') {
+          if (pendingDebut) {
+            const dateInput = document.getElementById('relanceT2Date');
+            if (dateInput) dateInput.value = pendingDebut.split('T')[0];
+          }
+          if (pendingLieu) {
+            setLocationDropdown('relanceT2Lieu', pendingLieu);
+          }
+        } else if (relanceType === 't3') {
+          if (pendingDebut) {
+            const dateInput = document.getElementById('relanceT3Date');
+            if (dateInput) dateInput.value = pendingDebut.split('T')[0];
+          }
+          if (pendingLieu) {
+            setLocationDropdown('relanceT3Lieu', pendingLieu);
+          }
+        } else if (relanceType === 'finale') {
+          if (pendingDebut) {
+            const dateInput = document.getElementById('relanceFinaleDate');
+            if (dateInput) dateInput.value = pendingDebut.split('T')[0];
+          }
+          if (pendingLieu) {
+            setLocationDropdown('relanceFinaleLieu', pendingLieu);
+          }
+        }
+        return; // Don't fetch from DB, we already have the data
+      }
+
+      // Fetch from DB (normal flow when not coming from dashboard)
       try {
         const response = await fetch(`${API_URL}/emailing/next-tournament?mode=${mode}&category=${category}&relanceType=${relanceType}`, {
           headers: { 'Authorization': `Bearer ${token}` }
@@ -2587,32 +2672,6 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
           infoDiv.style.background = '#fff3cd';
         } else if (infoDiv) {
           infoDiv.style.display = 'none';
-        }
-
-        // Populate the fields based on relance type
-        // Helper function to match location with dropdown options
-        function setLocationDropdown(selectId, locationValue) {
-          const lieuSelect = document.getElementById(selectId);
-          if (!lieuSelect || !locationValue) return;
-
-          const locationUpper = locationValue.toUpperCase();
-
-          // First try exact match
-          for (let opt of lieuSelect.options) {
-            if (opt.value === locationValue || opt.text === locationValue) {
-              lieuSelect.value = opt.value;
-              return;
-            }
-          }
-
-          // Then try case-insensitive partial match (location name contained in option)
-          for (let opt of lieuSelect.options) {
-            const optUpper = opt.text.toUpperCase();
-            if (optUpper.includes(locationUpper) || locationUpper.includes(optUpper.split(' ')[0])) {
-              lieuSelect.value = opt.value;
-              return;
-            }
-          }
         }
 
         if (relanceType === 't2') {
@@ -4171,63 +4230,10 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
           if (relanceType) {
             const typeSelect = document.getElementById('relanceTypeSelect');
             typeSelect.value = relanceType;
-            updateRelanceTemplate();
+            // Await updateRelanceTemplate so fetchNextTournamentInfo uses pending values
+            await updateRelanceTemplate();
             // IMPORTANT: Enable the "Charger" button after setting the type
             updateRelanceTypeEnabled();
-
-            // Pre-fill date and location after a short delay (to let the DOM update)
-            setTimeout(() => {
-              // Set the date field
-              if (debut) {
-                const dateStr = debut.split('T')[0]; // Get YYYY-MM-DD format
-                if (relanceType === 't2') {
-                  const dateInput = document.getElementById('relanceT2Date');
-                  if (dateInput) dateInput.value = dateStr;
-                } else if (relanceType === 't3') {
-                  const dateInput = document.getElementById('relanceT3Date');
-                  if (dateInput) dateInput.value = dateStr;
-                } else if (relanceType === 'finale') {
-                  const dateInput = document.getElementById('relanceFinaleDate');
-                  if (dateInput) dateInput.value = dateStr;
-                }
-              }
-
-              // Set the location dropdown
-              if (lieu) {
-                let lieuSelectId = '';
-                if (relanceType === 't2') lieuSelectId = 'relanceT2Lieu';
-                else if (relanceType === 't3') lieuSelectId = 'relanceT3Lieu';
-                else if (relanceType === 'finale') lieuSelectId = 'relanceFinaleLieu';
-
-                if (lieuSelectId) {
-                  const lieuSelect = document.getElementById(lieuSelectId);
-                  if (lieuSelect) {
-                    // Try to match the lieu value in the dropdown (case-insensitive)
-                    const lieuLower = lieu.toLowerCase().trim();
-                    let found = false;
-                    for (let i = 0; i < lieuSelect.options.length; i++) {
-                      const optValue = lieuSelect.options[i].value.toLowerCase().trim();
-                      const optText = lieuSelect.options[i].text.toLowerCase().trim();
-                      if (optValue === lieuLower || optText === lieuLower ||
-                          optValue.includes(lieuLower) || optText.includes(lieuLower) ||
-                          lieuLower.includes(optValue) || lieuLower.includes(optText)) {
-                        lieuSelect.selectedIndex = i;
-                        found = true;
-                        break;
-                      }
-                    }
-                    // If not found, try to add it as an option
-                    if (!found && lieu) {
-                      const newOption = document.createElement('option');
-                      newOption.value = lieu;
-                      newOption.text = lieu;
-                      lieuSelect.add(newOption);
-                      lieuSelect.value = lieu;
-                    }
-                  }
-                }
-              }
-            }, 200);
           }
 
           // Show info message
