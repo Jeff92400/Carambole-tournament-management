@@ -80,8 +80,11 @@
       </div>
     </div>
 
-    <div style="margin-bottom: 20px; text-align: right;">
-      <button id="clearPlayersBtn" class="btn" style="background-color: #dc3545; color: white;">
+    <div style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
+      <button id="exportPlayersBtn" class="btn" style="background-color: #28a745; color: white;">
+        📥 Exporter Excel
+      </button>
+      <button id="clearPlayersBtn" class="btn admin-only" style="background-color: #dc3545; color: white;">
         🗑️ Effacer tous les joueurs
       </button>
     </div>
@@ -528,6 +531,37 @@
                (player.club && player.club.toLowerCase().includes(searchTerm));
       });
       displayPlayers(filteredPlayers);
+    });
+
+    // Export players button
+    document.getElementById('exportPlayersBtn').addEventListener('click', async () => {
+      const btn = document.getElementById('exportPlayersBtn');
+      btn.disabled = true;
+      btn.textContent = '⏳ Export en cours...';
+
+      try {
+        const response = await fetch(`${API_URL}/backup/export-players`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (!response.ok) throw new Error('Erreur lors de l\'export');
+
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Joueurs_${new Date().toISOString().split('T')[0]}.xlsx`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+      } catch (error) {
+        console.error('Export error:', error);
+        alert('Erreur lors de l\'export');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '📥 Exporter Excel';
+      }
     });
 
     // Clear all players button

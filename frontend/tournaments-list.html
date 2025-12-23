@@ -28,9 +28,14 @@
     <div class="card">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
         <h3>Tous les Tournois</h3>
-        <button class="btn btn-success admin-only" onclick="window.location.href='import-tournament.html'">
-          Importer un Tournoi
-        </button>
+        <div style="display: flex; gap: 10px;">
+          <button id="exportTournamentsBtn" class="btn" style="background-color: #28a745;">
+            📥 Exporter Excel
+          </button>
+          <button class="btn btn-success admin-only" onclick="window.location.href='import-tournament.html'">
+            Importer un Tournoi
+          </button>
+        </div>
       </div>
 
       <div style="margin-bottom: 20px; display: flex; gap: 10px; flex-wrap: wrap;">
@@ -365,6 +370,37 @@
         alert(`Erreur: ${error.message}`);
       }
     }
+
+    // Export tournaments button
+    document.getElementById('exportTournamentsBtn').addEventListener('click', async () => {
+      const btn = document.getElementById('exportTournamentsBtn');
+      btn.disabled = true;
+      btn.textContent = '⏳ Export en cours...';
+
+      try {
+        const response = await fetch(`${API_URL}/backup/export-tournaments`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (!response.ok) throw new Error('Erreur lors de l\'export');
+
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Competitions_${new Date().toISOString().split('T')[0]}.xlsx`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+      } catch (error) {
+        console.error('Export error:', error);
+        alert('Erreur lors de l\'export');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '📥 Exporter Excel';
+      }
+    });
 
     // Initialize
     loadTournaments();
