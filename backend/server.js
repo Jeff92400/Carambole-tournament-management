@@ -400,11 +400,12 @@ async function checkTournamentAlerts() {
       const dateObj = new Date(t.debut);
       const dateStr = dateObj.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
       const daysLeft = Math.ceil((dateObj - new Date()) / (1000 * 60 * 60 * 24));
+      const lieuStr = t.lieu ? ` - <span style="color: #17a2b8;">${t.lieu}</span>` : '';
 
       return `
         <div style="background: #fff3cd; padding: 15px; border-radius: 8px; margin-bottom: 10px; border-left: 4px solid #ffc107;">
           <strong style="color: #333;">${t.nom}</strong><br>
-          <span style="color: #666;">${t.mode} ${t.categorie} - ${dateStr}</span><br>
+          <span style="color: #666;">${t.mode} ${t.categorie} - ${dateStr}${lieuStr}</span><br>
           <span style="color: ${daysLeft <= 7 ? '#dc3545' : '#856404'}; font-weight: bold;">
             Dans ${daysLeft} jour${daysLeft > 1 ? 's' : ''}
           </span>
