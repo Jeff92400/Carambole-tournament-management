@@ -1319,6 +1319,76 @@ router.post('/relances/:tournoi_id', authenticateToken, async (req, res) => {
   }
 });
 
+// Mark relance by mode/category/type (auto-find the tournament)
+router.post('/relances/mark-by-type', authenticateToken, async (req, res) => {
+  const { mode, category, relanceType, recipients_count } = req.body;
+  const sent_by = req.user.username;
+
+  if (!mode || !category || !relanceType) {
+    return res.status(400).json({ error: 'Mode, category, and relanceType are required' });
+  }
+
+  try {
+    const today = new Date();
+    const twoWeeksFromNow = new Date(today.getTime() + 14 * 24 * 60 * 60 * 1000);
+
+    // Determine tournament number based on relanceType
+    let tournamentNamePattern;
+    if (relanceType === 't2') {
+      tournamentNamePattern = '%Tournoi 2%';
+    } else if (relanceType === 't3') {
+      tournamentNamePattern = '%Tournoi 3%';
+    } else if (relanceType === 'finale') {
+      tournamentNamePattern = '%Finale%';
+    } else {
+      return res.status(400).json({ error: 'Invalid relanceType' });
+    }
+
+    // Find the matching upcoming tournament
+    const tournament = await new Promise((resolve, reject) => {
+      db.get(`
+        SELECT tournoi_id FROM tournoi_ext
+        WHERE UPPER(mode) = UPPER($1)
+          AND UPPER(categorie) = UPPER($2)
+          AND UPPER(nom) LIKE UPPER($3)
+          AND debut >= $4 AND debut <= $5
+        ORDER BY debut ASC
+        LIMIT 1
+      `, [mode, category, tournamentNamePattern, today.toISOString().split('T')[0], twoWeeksFromNow.toISOString().split('T')[0]], (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
+
+    if (!tournament) {
+      console.log(`No matching tournament found for ${mode} ${category} ${relanceType}`);
+      return res.json({ success: true, message: 'No matching tournament found to mark', marked: false });
+    }
+
+    // Mark the relance
+    await new Promise((resolve, reject) => {
+      db.run(`
+        INSERT INTO tournament_relances (tournoi_id, sent_by, recipients_count)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (tournoi_id) DO UPDATE SET
+          relance_sent_at = CURRENT_TIMESTAMP,
+          sent_by = $2,
+          recipients_count = $3
+      `, [tournament.tournoi_id, sent_by, recipients_count || 0], (err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+
+    console.log(`Relance marked for tournament ${tournament.tournoi_id} (${mode} ${category} ${relanceType})`);
+    res.json({ success: true, message: 'Relance marked as sent', marked: true, tournoi_id: tournament.tournoi_id });
+
+  } catch (error) {
+    console.error('Error marking relance by type:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Get all sent relances
 router.get('/relances', authenticateToken, async (req, res) => {
   try {

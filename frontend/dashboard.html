@@ -165,7 +165,7 @@
       document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');
     }
 
-    // Load tournament alerts (tournaments needing relances)
+    // Load tournament alerts (tournaments needing relances + already sent)
     async function loadTournamentAlerts() {
       try {
         const response = await fetch(`${API_URL}/inscriptions/upcoming-relances`, {
@@ -178,27 +178,60 @@
         const alertsCard = document.getElementById('tournamentAlertsCard');
         const alertsList = document.getElementById('tournamentAlertsList');
 
-        if (data.needs_relance && data.needs_relance.length > 0) {
+        // Separate tournaments into pending and already sent
+        const needsRelance = data.needs_relance || [];
+        const alreadySent = (data.all_upcoming || []).filter(t => t.relance_sent_at);
+
+        if (needsRelance.length > 0 || alreadySent.length > 0) {
           alertsCard.style.display = 'block';
 
-          alertsList.innerHTML = data.needs_relance.map(tournoi => {
-            const dateObj = new Date(tournoi.debut);
-            const daysLeft = Math.ceil((dateObj - new Date()) / (1000 * 60 * 60 * 24));
-            const urgentColor = daysLeft <= 7 ? '#dc3545' : '#28a745';
-            const lieu = (tournoi.lieu || '').replace(/'/g, "\\'");
-            const debut = tournoi.debut || '';
+          let html = '';
 
-            return `
-              <button onclick="goToRelance(${tournoi.tournoi_id}, '${tournoi.mode}', '${tournoi.categorie}', '${tournoi.nom.replace(/'/g, "\\'")}', '${lieu}', '${debut}')"
-                      style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; background: white; border: 1px solid #ddd; border-radius: 4px; font-size: 12px; cursor: pointer; white-space: nowrap;">
-                <span style="color: #333; font-weight: 500;">${tournoi.nom}</span>
-                <span style="color: #666;">${tournoi.mode} ${tournoi.categorie}</span>
-                ${lieu ? `<span style="color: #17a2b8;">${lieu}</span>` : ''}
-                <span style="color: ${urgentColor}; font-weight: bold;">(${daysLeft}j)</span>
-                <span style="background: ${urgentColor}; color: white; padding: 2px 6px; border-radius: 3px; font-size: 10px;">Relancer</span>
-              </button>
-            `;
-          }).join('');
+          // Show pending relances first (orange/red badges)
+          if (needsRelance.length > 0) {
+            html += needsRelance.map(tournoi => {
+              const dateObj = new Date(tournoi.debut);
+              const daysLeft = Math.ceil((dateObj - new Date()) / (1000 * 60 * 60 * 24));
+              const urgentColor = daysLeft <= 7 ? '#dc3545' : '#ffc107';
+              const lieu = (tournoi.lieu || '').replace(/'/g, "\\'");
+              const debut = tournoi.debut || '';
+
+              return `
+                <button onclick="goToRelance(${tournoi.tournoi_id}, '${tournoi.mode}', '${tournoi.categorie}', '${tournoi.nom.replace(/'/g, "\\'")}', '${lieu}', '${debut}')"
+                        style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; background: white; border: 1px solid ${urgentColor}; border-radius: 4px; font-size: 12px; cursor: pointer; white-space: nowrap;">
+                  <span style="color: #333; font-weight: 500;">${tournoi.nom}</span>
+                  <span style="color: #666;">${tournoi.mode} ${tournoi.categorie}</span>
+                  ${lieu ? `<span style="color: #17a2b8;">${lieu}</span>` : ''}
+                  <span style="color: ${urgentColor}; font-weight: bold;">(${daysLeft}j)</span>
+                  <span style="background: ${urgentColor}; color: ${urgentColor === '#ffc107' ? '#333' : 'white'}; padding: 2px 6px; border-radius: 3px; font-size: 10px;">Relancer</span>
+                </button>
+              `;
+            }).join('');
+          }
+
+          // Show already sent relances (green badges)
+          if (alreadySent.length > 0) {
+            html += alreadySent.map(tournoi => {
+              const dateObj = new Date(tournoi.debut);
+              const daysLeft = Math.ceil((dateObj - new Date()) / (1000 * 60 * 60 * 24));
+              const lieu = (tournoi.lieu || '').replace(/'/g, "\\'");
+              const debut = tournoi.debut || '';
+              const sentDate = new Date(tournoi.relance_sent_at).toLocaleDateString('fr-FR');
+
+              return `
+                <button onclick="goToRelance(${tournoi.tournoi_id}, '${tournoi.mode}', '${tournoi.categorie}', '${tournoi.nom.replace(/'/g, "\\'")}', '${lieu}', '${debut}')"
+                        style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; background: #f8f9fa; border: 1px solid #28a745; border-radius: 4px; font-size: 12px; cursor: pointer; white-space: nowrap; opacity: 0.8;">
+                  <span style="color: #333; font-weight: 500;">${tournoi.nom}</span>
+                  <span style="color: #666;">${tournoi.mode} ${tournoi.categorie}</span>
+                  ${lieu ? `<span style="color: #17a2b8;">${lieu}</span>` : ''}
+                  <span style="color: #666;">(${daysLeft}j)</span>
+                  <span style="background: #28a745; color: white; padding: 2px 6px; border-radius: 3px; font-size: 10px;" title="Envoyé le ${sentDate}">✓ Envoyé</span>
+                </button>
+              `;
+            }).join('');
+          }
+
+          alertsList.innerHTML = html;
         } else {
           alertsCard.style.display = 'none';
         }

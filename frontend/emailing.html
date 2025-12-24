@@ -2935,22 +2935,45 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
         if (response.ok) {
           showSuccess(result.message);
 
-          // Mark tournament relance as sent if coming from dashboard alert (not in test mode)
-          if (!testMode && window.currentRelanceTournoiId) {
+          // Mark tournament relance as sent (not in test mode)
+          if (!testMode) {
             try {
-              await fetch(`${API_URL}/inscriptions/relances/${window.currentRelanceTournoiId}`, {
-                method: 'POST',
-                headers: {
-                  'Authorization': `Bearer ${token}`,
-                  'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                  recipients_count: selectedCount
-                })
-              });
-              console.log('Tournament relance marked as sent');
-              // Clear the tournoiId
-              window.currentRelanceTournoiId = null;
+              // First try by tournoiId if coming from dashboard
+              if (window.currentRelanceTournoiId) {
+                await fetch(`${API_URL}/inscriptions/relances/${window.currentRelanceTournoiId}`, {
+                  method: 'POST',
+                  headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                  },
+                  body: JSON.stringify({
+                    recipients_count: selectedCount
+                  })
+                });
+                console.log('Tournament relance marked as sent (by tournoiId)');
+                window.currentRelanceTournoiId = null;
+              } else {
+                // Otherwise try to find and mark by mode/category/type
+                const markResponse = await fetch(`${API_URL}/inscriptions/relances/mark-by-type`, {
+                  method: 'POST',
+                  headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                  },
+                  body: JSON.stringify({
+                    mode,
+                    category,
+                    relanceType,
+                    recipients_count: selectedCount
+                  })
+                });
+                const markResult = await markResponse.json();
+                if (markResult.marked) {
+                  console.log(`Tournament relance marked as sent (by type: ${mode} ${category} ${relanceType})`);
+                } else {
+                  console.log('No matching tournament found to mark');
+                }
+              }
             } catch (e) {
               console.error('Error marking relance as sent:', e);
             }
