@@ -1274,58 +1274,7 @@ router.get('/upcoming-relances', authenticateToken, async (req, res) => {
       });
     });
 
-    // Auto-sync: Check email_campaigns for relances that were sent but not recorded in tournament_relances
-    for (const tournoi of tournois) {
-      if (!tournoi.relance_sent_at) {
-        // Determine relance type from tournament name
-        let relanceType = null;
-        const nomLower = tournoi.nom.toLowerCase();
-        if (nomLower.includes('finale')) relanceType = 'relance_finale';
-        else if (nomLower.includes('tournoi 3') || nomLower.includes('t3')) relanceType = 'relance_t3';
-        else if (nomLower.includes('tournoi 2') || nomLower.includes('t2')) relanceType = 'relance_t2';
-
-        if (relanceType) {
-          // Check if a campaign was sent for this mode/category/type
-          const campaign = await new Promise((resolve, reject) => {
-            db.get(`
-              SELECT sent_at, created_by, recipients_count
-              FROM email_campaigns
-              WHERE campaign_type = $1
-                AND UPPER(mode) = UPPER($2)
-                AND UPPER(category) = UPPER($3)
-                AND status = 'completed'
-              ORDER BY sent_at DESC
-              LIMIT 1
-            `, [relanceType, tournoi.mode, tournoi.categorie], (err, row) => {
-              if (err) reject(err);
-              else resolve(row);
-            });
-          });
-
-          if (campaign) {
-            // Auto-sync: Record this in tournament_relances
-            await new Promise((resolve) => {
-              db.run(`
-                INSERT INTO tournament_relances (tournoi_id, sent_by, recipients_count, relance_sent_at)
-                VALUES ($1, $2, $3, $4)
-                ON CONFLICT (tournoi_id) DO UPDATE SET
-                  relance_sent_at = $4,
-                  sent_by = $2,
-                  recipients_count = $3
-              `, [tournoi.tournoi_id, campaign.created_by || 'auto-sync', campaign.recipients_count || 0, campaign.sent_at], () => resolve());
-            });
-
-            // Update local record
-            tournoi.relance_sent_at = campaign.sent_at;
-            tournoi.sent_by = campaign.created_by || 'auto-sync';
-            tournoi.relance_recipients = campaign.recipients_count || 0;
-            console.log(`[Auto-sync] Marked relance for ${tournoi.nom} (${tournoi.mode} ${tournoi.categorie})`);
-          }
-        }
-      }
-    }
-
-    // Filter to only those without sent relances
+    // Filter to only those without sent relances (based on tournament_relances table)
     const needsRelance = tournois.filter(t => !t.relance_sent_at);
 
     res.json({
