@@ -1264,6 +1264,8 @@
         if (clubNameLower.includes(locationLower) || locationLower.includes(clubNameLower)) {
           console.log('[preselectLocation] Found match by name:', club.name, '-> id:', club.id);
           select1.value = club.id;
+          // Update poule labels to reflect the new selection
+          updatePouleLocationLabels();
           return;
         }
 
@@ -1271,6 +1273,8 @@
         if (clubCityLower === locationLower || clubCityLower.includes(locationLower) || locationLower.includes(clubCityLower)) {
           console.log('[preselectLocation] Found match by city:', club.name, 'city:', club.city, '-> id:', club.id);
           select1.value = club.id;
+          // Update poule labels to reflect the new selection
+          updatePouleLocationLabels();
           return;
         }
       }
