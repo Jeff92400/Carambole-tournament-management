@@ -121,16 +121,6 @@ async function generatePlayerConvocationPDF(player, tournamentInfo, allPoules, l
       const pageWidth = doc.page.width - 80;
       let y = 40;
 
-      // Add CDBHS logo
-      const logoPath = path.join(__dirname, '../../frontend/images/billiard-icon.png');
-      try {
-        if (fs.existsSync(logoPath)) {
-          doc.image(logoPath, 45, y, { width: 40 });
-        }
-      } catch (err) {
-        console.log('Logo not found for PDF:', err.message);
-      }
-
       // Header - CONVOCATION
       const isFinale = tournamentInfo.tournamentNum === '4' || tournamentInfo.tournamentNum === 'Finale' || tournamentInfo.isFinale;
       const tournamentLabel = isFinale ? 'FINALE DEPARTEMENTALE' : `TOURNOI N°${tournamentInfo.tournamentNum}`;
@@ -139,6 +129,16 @@ async function generatePlayerConvocationPDF(player, tournamentInfo, allPoules, l
       doc.rect(40, y, pageWidth, 45).fill(headerColor);
       doc.fillColor(headerTextColor).fontSize(22).font('Helvetica-Bold')
          .text(`CONVOCATION ${tournamentLabel}`, 40, y + 12, { width: pageWidth, align: 'center' });
+
+      // Add CDBHS logo on top of header (left side)
+      const logoPath = path.join(__dirname, '../../frontend/images/billiard-icon.png');
+      try {
+        if (fs.existsSync(logoPath)) {
+          doc.image(logoPath, 48, y + 5, { width: 35 });
+        }
+      } catch (err) {
+        console.log('Logo not found for PDF:', err.message);
+      }
       y += 50;
 
       // Season
@@ -327,16 +327,6 @@ async function generateSummaryConvocationPDF(tournamentInfo, allPoules, location
       const pageWidth = doc.page.width - 80;
       let y = 40;
 
-      // Add CDBHS logo
-      const logoPath = path.join(__dirname, '../../frontend/images/billiard-icon.png');
-      try {
-        if (fs.existsSync(logoPath)) {
-          doc.image(logoPath, 45, y, { width: 40 });
-        }
-      } catch (err) {
-        console.log('Logo not found for PDF:', err.message);
-      }
-
       // Header - CONVOCATION
       const isFinale = tournamentInfo.tournamentNum === '4' || tournamentInfo.tournamentNum === 'Finale' || tournamentInfo.isFinale;
       const tournamentLabel = isFinale ? 'FINALE DEPARTEMENTALE' : `TOURNOI N°${tournamentInfo.tournamentNum}`;
@@ -345,6 +335,16 @@ async function generateSummaryConvocationPDF(tournamentInfo, allPoules, location
       doc.rect(40, y, pageWidth, 45).fill(headerColor);
       doc.fillColor(headerTextColor).fontSize(22).font('Helvetica-Bold')
          .text(`CONVOCATION ${tournamentLabel}`, 40, y + 12, { width: pageWidth, align: 'center' });
+
+      // Add CDBHS logo on top of header (left side)
+      const logoPath = path.join(__dirname, '../../frontend/images/billiard-icon.png');
+      try {
+        if (fs.existsSync(logoPath)) {
+          doc.image(logoPath, 48, y + 5, { width: 35 });
+        }
+      } catch (err) {
+        console.log('Logo not found for PDF:', err.message);
+      }
       y += 50;
 
       // Season
