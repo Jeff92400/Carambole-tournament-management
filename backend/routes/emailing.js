@@ -16,10 +16,37 @@ function convertEmailsToMailtoLinks(text) {
   );
 }
 
-// Contact phrase to be added before signature in all emails
-const CONTACT_PHRASE_HTML = `<p style="margin-top: 20px; padding: 10px; background: #e8f4f8; border-left: 3px solid #1F4788; font-size: 14px;">
-  Pour toute question ou information, écrivez à <a href="mailto:cdbhs92@gmail.com" style="color: #1F4788;">cdbhs92@gmail.com</a>
+// Get contact email from app_settings (with fallback to summary_email)
+async function getContactEmail() {
+  const db = require('../db-loader');
+  return new Promise((resolve) => {
+    db.get(
+      "SELECT value FROM app_settings WHERE key = 'contact_email'",
+      [],
+      (err, row) => {
+        if (row?.value) {
+          resolve(row.value);
+        } else {
+          // Fallback to summary_email
+          db.get(
+            "SELECT value FROM app_settings WHERE key = 'summary_email'",
+            [],
+            (err2, row2) => {
+              resolve(row2?.value || 'cdbhs92@gmail.com');
+            }
+          );
+        }
+      }
+    );
+  });
+}
+
+// Build contact phrase HTML with configurable email
+function buildContactPhraseHtml(email) {
+  return `<p style="margin-top: 20px; padding: 10px; background: #e8f4f8; border-left: 3px solid #1F4788; font-size: 14px;">
+  Pour toute question ou information, écrivez à <a href="mailto:${email}" style="color: #1F4788;">${email}</a>
 </p>`;
+}
 
 // Helper function to parse dates that might be in French format (DD/MM/YYYY)
 function parseDateSafe(dateStr) {
@@ -656,6 +683,10 @@ router.post('/send', authenticateToken, async (req, res) => {
       ? [{ ...recipients[0], email: testEmail, first_name: 'TEST', last_name: 'MODE' }]
       : recipients;
 
+    // Get contact email for the contact phrase
+    const contactEmail = await getContactEmail();
+    const contactPhraseHtml = buildContactPhraseHtml(contactEmail);
+
     // Send emails
     for (const recipient of recipientsToEmail) {
       if (!recipient.email || !recipient.email.includes('@')) {
@@ -685,7 +716,7 @@ router.post('/send', authenticateToken, async (req, res) => {
 
         await resend.emails.send({
           from: 'CDBHS <communication@cdbhs.net>',
-          replyTo: 'cdbhs92@gmail.com',
+          replyTo: contactEmail,
           to: [recipient.email],
           subject: emailSubject,
           html: `
@@ -697,10 +728,10 @@ router.post('/send', authenticateToken, async (req, res) => {
               <div style="padding: 20px; background: #f8f9fa; line-height: 1.6;">
                 ${imageHtml}
                 ${emailBodyHtml}
-                ${CONTACT_PHRASE_HTML}
+                ${contactPhraseHtml}
               </div>
               <div style="background: #1F4788; color: white; padding: 10px; text-align: center; font-size: 12px;">
-                <p style="margin: 0;">CDBHS - <a href="mailto:cdbhs92@gmail.com" style="color: white;">cdbhs92@gmail.com</a></p>
+                <p style="margin: 0;">CDBHS - <a href="mailto:${contactEmail}" style="color: white;">${contactEmail}</a></p>
               </div>
             </div>
           `
@@ -1116,6 +1147,10 @@ router.post('/process-scheduled', async (req, res) => {
     const processedCount = scheduledEmails.length;
     let blockedCount = 0;
 
+    // Get configurable contact email
+    const contactEmail = await getContactEmail();
+    const contactPhraseHtml = buildContactPhraseHtml(contactEmail);
+
     for (const scheduled of scheduledEmails) {
       // Check if this type of email was already manually sent
       if (scheduled.email_type) {
@@ -1181,7 +1216,7 @@ router.post('/process-scheduled', async (req, res) => {
 
           await resend.emails.send({
             from: 'CDBHS <communication@cdbhs.net>',
-            replyTo: 'cdbhs92@gmail.com',
+            replyTo: contactEmail,
             to: [recipient.email],
             subject: emailSubject,
             html: `
@@ -1191,10 +1226,10 @@ router.post('/process-scheduled', async (req, res) => {
                 </div>
                 <div style="padding: 20px; background: #f8f9fa; line-height: 1.6;">
                   ${emailBodyHtml}
-                  ${CONTACT_PHRASE_HTML}
+                  ${contactPhraseHtml}
                 </div>
                 <div style="background: #1F4788; color: white; padding: 10px; text-align: center; font-size: 12px;">
-                  <p style="margin: 0;">Comite Departemental Billard Hauts-de-Seine - <a href="mailto:cdbhs92@gmail.com" style="color: white;">cdbhs92@gmail.com</a></p>
+                  <p style="margin: 0;">Comite Departemental Billard Hauts-de-Seine - <a href="mailto:${contactEmail}" style="color: white;">${contactEmail}</a></p>
                 </div>
               </div>
             `
@@ -1508,6 +1543,10 @@ router.post('/send-results', authenticateToken, async (req, res) => {
     // In test mode, only send to the test email using first participant data
     const participantsToEmail = testMode ? [{ ...results[0], email: testEmail }] : results;
 
+    // Get configurable contact email
+    const contactEmail = await getContactEmail();
+    const contactPhraseHtml = buildContactPhraseHtml(contactEmail);
+
     // Send email to each participant with email
     for (const participant of participantsToEmail) {
       if (!participant.email || !participant.email.includes('@')) {
@@ -1625,18 +1664,18 @@ router.post('/send-results', authenticateToken, async (req, res) => {
 
               ${qualificationMessage}
 
-              ${CONTACT_PHRASE_HTML}
+              ${contactPhraseHtml}
               <p style="margin-top: 30px;">${convertEmailsToMailtoLinks(personalizedOutro.replace(/\n/g, '<br>'))}</p>
             </div>
             <div style="background: #1F4788; color: white; padding: 10px; text-align: center; font-size: 12px;">
-              <p style="margin: 0;">CDBHS - <a href="mailto:cdbhs92@gmail.com" style="color: white;">cdbhs92@gmail.com</a></p>
+              <p style="margin: 0;">CDBHS - <a href="mailto:${contactEmail}" style="color: white;">${contactEmail}</a></p>
             </div>
           </div>
         `;
 
         const emailOptions = {
           from: 'CDBHS <communication@cdbhs.net>',
-          replyTo: 'cdbhs92@gmail.com',
+          replyTo: contactEmail,
           to: [participant.email],
           subject: `Résultats - ${tournament.display_name} - ${tournamentDate}`,
           html: emailHtml
@@ -1760,14 +1799,14 @@ router.post('/send-results', authenticateToken, async (req, res) => {
               </table>
             </div>
             <div style="background: #1F4788; color: white; padding: 10px; text-align: center; font-size: 12px;">
-              <p style="margin: 0;">CDBHS - <a href="mailto:cdbhs92@gmail.com" style="color: white;">cdbhs92@gmail.com</a></p>
+              <p style="margin: 0;">CDBHS - <a href="mailto:${contactEmail}" style="color: white;">${contactEmail}</a></p>
             </div>
           </div>
         `;
 
         await resend.emails.send({
           from: 'CDBHS <communication@cdbhs.net>',
-          replyTo: 'cdbhs92@gmail.com',
+          replyTo: contactEmail,
           to: [ccEmail],
           subject: `📋 Récapitulatif - Résultats ${tournament.display_name} - ${tournamentDate}`,
           html: summaryHtml
@@ -2063,6 +2102,10 @@ router.post('/send-finale-convocation', authenticateToken, async (req, res) => {
     // In test mode, send to test email only
     const participantsToEmail = testMode ? [{ ...finalists[0], email: testEmail }] : finalists;
 
+    // Get configurable contact email
+    const contactEmail = await getContactEmail();
+    const contactPhraseHtml = buildContactPhraseHtml(contactEmail);
+
     for (const finalist of participantsToEmail) {
       if (!finalist.email || !finalist.email.includes('@')) {
         sentResults.skipped.push({
@@ -2149,18 +2192,18 @@ router.post('/send-finale-convocation', authenticateToken, async (req, res) => {
               <h3 style="color: #28a745;">Liste des Finalistes</h3>
               ${finalistsTableHtml}
 
-              ${CONTACT_PHRASE_HTML}
+              ${contactPhraseHtml}
               <p style="margin-top: 30px;">${convertEmailsToMailtoLinks(personalizedOutro.replace(/\n/g, '<br>'))}</p>
             </div>
             <div style="background: #1F4788; color: white; padding: 10px; text-align: center; font-size: 12px;">
-              <p style="margin: 0;">CDBHS - <a href="mailto:cdbhs92@gmail.com" style="color: white;">cdbhs92@gmail.com</a></p>
+              <p style="margin: 0;">CDBHS - <a href="mailto:${contactEmail}" style="color: white;">${contactEmail}</a></p>
             </div>
           </div>
         `;
 
         const emailOptions = {
           from: 'CDBHS <communication@cdbhs.net>',
-          replyTo: 'cdbhs92@gmail.com',
+          replyTo: contactEmail,
           to: [finalist.email],
           subject: `🏆 Convocation Finale - ${category.display_name} - ${finaleFormattedDate}`,
           html: emailHtml
@@ -2281,14 +2324,14 @@ router.post('/send-finale-convocation', authenticateToken, async (req, res) => {
               </table>
             </div>
             <div style="background: #1F4788; color: white; padding: 10px; text-align: center; font-size: 12px;">
-              <p style="margin: 0;">CDBHS - <a href="mailto:cdbhs92@gmail.com" style="color: white;">cdbhs92@gmail.com</a></p>
+              <p style="margin: 0;">CDBHS - <a href="mailto:${contactEmail}" style="color: white;">${contactEmail}</a></p>
             </div>
           </div>
         `;
 
         await resend.emails.send({
           from: 'CDBHS <communication@cdbhs.net>',
-          replyTo: 'cdbhs92@gmail.com',
+          replyTo: contactEmail,
           to: [ccEmail],
           subject: `📋 Récapitulatif - Convocations Finale ${category.display_name} - ${finaleFormattedDate}`,
           html: summaryHtml
@@ -3204,6 +3247,10 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
       ? [{ ...participants[0], email: testEmail }]
       : participants.filter(p => p.email && p.email.includes('@'));
 
+    // Get configurable contact email
+    const contactEmail = await getContactEmail();
+    const contactPhraseHtml = buildContactPhraseHtml(contactEmail);
+
     for (const participant of recipientsToEmail) {
       if (!participant.email || !participant.email.includes('@')) {
         results.skipped.push({
@@ -3257,19 +3304,19 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
             <div style="padding: 20px; background: #f8f9fa; line-height: 1.6;">
               ${imageHtml}
               <p>${convertEmailsToMailtoLinks(emailIntro.replace(/\n/g, '<br>'))}</p>
-              ${CONTACT_PHRASE_HTML}
+              ${contactPhraseHtml}
               <hr style="margin: 20px 0; border: none; border-top: 1px solid #ddd;">
               <p>${convertEmailsToMailtoLinks(emailOutro.replace(/\n/g, '<br>'))}</p>
             </div>
             <div style="background: #1F4788; color: white; padding: 10px; text-align: center; font-size: 12px;">
-              <p style="margin: 0;">CDBHS - <a href="mailto:cdbhs92@gmail.com" style="color: white;">cdbhs92@gmail.com</a></p>
+              <p style="margin: 0;">CDBHS - <a href="mailto:${contactEmail}" style="color: white;">${contactEmail}</a></p>
             </div>
           </div>
         `;
 
         await resend.emails.send({
           from: 'CDBHS <communication@cdbhs.net>',
-          replyTo: 'cdbhs92@gmail.com',
+          replyTo: contactEmail,
           to: [participant.email],
           subject: emailSubject,
           html: emailHtml
