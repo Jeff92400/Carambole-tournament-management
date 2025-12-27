@@ -715,7 +715,7 @@ router.post('/send', authenticateToken, async (req, res) => {
         const imageHtml = imageUrl ? `<div style="text-align: center; margin: 20px 0;"><img src="${imageUrl}" alt="Image" style="max-width: 100%; height: auto; border-radius: 8px;"></div>` : '';
 
         await resend.emails.send({
-          from: 'CDBHS <communication@cdbhs.net>',
+          from: 'CDBHS <noreply@cdbhs.net>',
           replyTo: contactEmail,
           to: [recipient.email],
           subject: emailSubject,
@@ -807,7 +807,7 @@ router.post('/send', authenticateToken, async (req, res) => {
         `;
 
         await resend.emails.send({
-          from: 'CDBHS <communication@cdbhs.net>',
+          from: 'CDBHS <noreply@cdbhs.net>',
           to: [ccEmail],
           subject: `[Récap] ${subject}`,
           html: summaryHtml
@@ -1215,7 +1215,7 @@ router.post('/process-scheduled', async (req, res) => {
           const emailBodyHtml = convertEmailsToMailtoLinks(emailBody.replace(/\n/g, '<br>'));
 
           await resend.emails.send({
-            from: 'CDBHS <communication@cdbhs.net>',
+            from: 'CDBHS <noreply@cdbhs.net>',
             replyTo: contactEmail,
             to: [recipient.email],
             subject: emailSubject,
@@ -1674,7 +1674,7 @@ router.post('/send-results', authenticateToken, async (req, res) => {
         `;
 
         const emailOptions = {
-          from: 'CDBHS <communication@cdbhs.net>',
+          from: 'CDBHS <noreply@cdbhs.net>',
           replyTo: contactEmail,
           to: [participant.email],
           subject: `Résultats - ${tournament.display_name} - ${tournamentDate}`,
@@ -1805,7 +1805,7 @@ router.post('/send-results', authenticateToken, async (req, res) => {
         `;
 
         await resend.emails.send({
-          from: 'CDBHS <communication@cdbhs.net>',
+          from: 'CDBHS <noreply@cdbhs.net>',
           replyTo: contactEmail,
           to: [ccEmail],
           subject: `📋 Récapitulatif - Résultats ${tournament.display_name} - ${tournamentDate}`,
@@ -2202,7 +2202,7 @@ router.post('/send-finale-convocation', authenticateToken, async (req, res) => {
         `;
 
         const emailOptions = {
-          from: 'CDBHS <communication@cdbhs.net>',
+          from: 'CDBHS <noreply@cdbhs.net>',
           replyTo: contactEmail,
           to: [finalist.email],
           subject: `🏆 Convocation Finale - ${category.display_name} - ${finaleFormattedDate}`,
@@ -2330,7 +2330,7 @@ router.post('/send-finale-convocation', authenticateToken, async (req, res) => {
         `;
 
         await resend.emails.send({
-          from: 'CDBHS <communication@cdbhs.net>',
+          from: 'CDBHS <noreply@cdbhs.net>',
           replyTo: contactEmail,
           to: [ccEmail],
           subject: `📋 Récapitulatif - Convocations Finale ${category.display_name} - ${finaleFormattedDate}`,
@@ -3315,7 +3315,7 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
         `;
 
         await resend.emails.send({
-          from: 'CDBHS <communication@cdbhs.net>',
+          from: 'CDBHS <noreply@cdbhs.net>',
           replyTo: contactEmail,
           to: [participant.email],
           subject: emailSubject,
@@ -3404,7 +3404,7 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
         `;
 
         await resend.emails.send({
-          from: 'CDBHS <communication@cdbhs.net>',
+          from: 'CDBHS <noreply@cdbhs.net>',
           to: [ccEmail],
           subject: `Récap Relance ${relanceTypeLabels[relanceType]} - ${mode} ${category}`,
           html: summaryHtml
