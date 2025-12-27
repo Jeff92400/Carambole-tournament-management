@@ -7,6 +7,29 @@ const router = express.Router();
 // Helper function to add delay between emails (avoid rate limiting)
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
+// Helper function to parse dates that might be in French format (DD/MM/YYYY)
+function parseDateSafe(dateStr) {
+  if (!dateStr) return null;
+
+  // If it's already a Date object, return it
+  if (dateStr instanceof Date) return dateStr;
+
+  // Check if it's in DD/MM/YYYY format
+  const frenchMatch = dateStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (frenchMatch) {
+    const [, day, month, year] = frenchMatch;
+    return new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+  }
+
+  // Try ISO format (YYYY-MM-DD) or other standard formats
+  const parsed = new Date(dateStr);
+  if (!isNaN(parsed.getTime())) {
+    return parsed;
+  }
+
+  return null;
+}
+
 // Get summary email from app_settings (with fallback)
 async function getSummaryEmail() {
   const db = require('../db-loader');
@@ -2990,10 +3013,12 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
       // Calculate deadline (tournament date - 7 days)
       let deadlineDate = '';
       if (customData?.tournament_date) {
-        const tournamentDate = new Date(customData.tournament_date);
-        const deadline = new Date(tournamentDate);
-        deadline.setDate(deadline.getDate() - 7);
-        deadlineDate = deadline.toLocaleDateString('fr-FR');
+        const tournamentDate = parseDateSafe(customData.tournament_date);
+        if (tournamentDate) {
+          const deadline = new Date(tournamentDate);
+          deadline.setDate(deadline.getDate() - 7);
+          deadlineDate = deadline.toLocaleDateString('fr-FR');
+        }
       }
 
       tournamentInfo = {
@@ -3046,10 +3071,12 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
       // Calculate deadline (tournament date - 7 days)
       let deadlineDate = '';
       if (customData?.tournament_date) {
-        const tournamentDate = new Date(customData.tournament_date);
-        const deadline = new Date(tournamentDate);
-        deadline.setDate(deadline.getDate() - 7);
-        deadlineDate = deadline.toLocaleDateString('fr-FR');
+        const tournamentDate = parseDateSafe(customData.tournament_date);
+        if (tournamentDate) {
+          const deadline = new Date(tournamentDate);
+          deadline.setDate(deadline.getDate() - 7);
+          deadlineDate = deadline.toLocaleDateString('fr-FR');
+        }
       }
 
       tournamentInfo = {
