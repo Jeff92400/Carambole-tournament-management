@@ -163,12 +163,12 @@ async function generatePlayerConvocationPDF(player, tournamentInfo, allPoules, l
 
         // Line 2: Moyenne qualificative
         doc.fillColor('#666666').fontSize(9).font('Helvetica-Oblique')
-           .text(`La moyenne qualificative pour cette categorie est entre ${parseFloat(gameParams.moyenne_mini).toFixed(3)} et ${parseFloat(gameParams.moyenne_maxi).toFixed(3)}`, 40, y, { width: pageWidth, align: 'center' });
+           .text(`La moyenne qualificative pour cette catégorie est entre ${parseFloat(gameParams.moyenne_mini).toFixed(3)} et ${parseFloat(gameParams.moyenne_maxi).toFixed(3)}`, 40, y, { width: pageWidth, align: 'center' });
         y += 12;
 
         // Line 3: Explanation of Moyenne and Classement columns
         doc.fillColor('#666666').fontSize(8).font('Helvetica-Oblique')
-           .text(`Les colonnes Moyenne et Classement en face du nom de chaque joueur correspondent aux positions cumulees a la suite du dernier tournoi joue`, 40, y, { width: pageWidth, align: 'center' });
+           .text(`Les colonnes Moyenne et Classement en face du nom de chaque joueur correspondent aux positions cumulées à la suite du dernier tournoi joué`, 40, y, { width: pageWidth, align: 'center' });
         y += 15;
       } else {
         y += 5;
@@ -359,12 +359,12 @@ async function generateSummaryConvocationPDF(tournamentInfo, allPoules, location
 
         // Line 2: Moyenne qualificative
         doc.fillColor('#666666').fontSize(9).font('Helvetica-Oblique')
-           .text(`La moyenne qualificative pour cette categorie est entre ${parseFloat(gameParams.moyenne_mini).toFixed(3)} et ${parseFloat(gameParams.moyenne_maxi).toFixed(3)}`, 40, y, { width: pageWidth, align: 'center' });
+           .text(`La moyenne qualificative pour cette catégorie est entre ${parseFloat(gameParams.moyenne_mini).toFixed(3)} et ${parseFloat(gameParams.moyenne_maxi).toFixed(3)}`, 40, y, { width: pageWidth, align: 'center' });
         y += 12;
 
         // Line 3: Explanation of Moyenne and Classement columns
         doc.fillColor('#666666').fontSize(8).font('Helvetica-Oblique')
-           .text(`Les colonnes Moyenne et Classement en face du nom de chaque joueur correspondent aux positions cumulees a la suite du dernier tournoi joue`, 40, y, { width: pageWidth, align: 'center' });
+           .text(`Les colonnes Moyenne et Classement en face du nom de chaque joueur correspondent aux positions cumulées à la suite du dernier tournoi joué`, 40, y, { width: pageWidth, align: 'center' });
         y += 20;
       } else {
         y += 10;

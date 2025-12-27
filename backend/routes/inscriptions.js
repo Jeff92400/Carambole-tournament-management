@@ -911,13 +911,13 @@ router.post('/generate-poules', authenticateToken, async (req, res) => {
       convRow++;
 
       convocationSheet.mergeCells(`A${convRow}:H${convRow}`);
-      convocationSheet.getCell(`A${convRow}`).value = `La moyenne qualificative pour cette categorie est entre ${parseFloat(gameParams.moyenne_mini).toFixed(3)} et ${parseFloat(gameParams.moyenne_maxi).toFixed(3)}`;
+      convocationSheet.getCell(`A${convRow}`).value = `La moyenne qualificative pour cette catégorie est entre ${parseFloat(gameParams.moyenne_mini).toFixed(3)} et ${parseFloat(gameParams.moyenne_maxi).toFixed(3)}`;
       convocationSheet.getCell(`A${convRow}`).font = { size: 10, italic: true, color: { argb: 'FF666666' } };
       convocationSheet.getCell(`A${convRow}`).alignment = { horizontal: 'center' };
       convRow++;
 
       convocationSheet.mergeCells(`A${convRow}:H${convRow}`);
-      convocationSheet.getCell(`A${convRow}`).value = `Les colonnes Moyenne et Classement en face du nom de chaque joueur correspondent aux positions cumulees a la suite du dernier tournoi joue`;
+      convocationSheet.getCell(`A${convRow}`).value = `Les colonnes Moyenne et Classement en face du nom de chaque joueur correspondent aux positions cumulées à la suite du dernier tournoi joué`;
       convocationSheet.getCell(`A${convRow}`).font = { size: 9, italic: true, color: { argb: 'FF666666' } };
       convocationSheet.getCell(`A${convRow}`).alignment = { horizontal: 'center' };
       convRow++;
