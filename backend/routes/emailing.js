@@ -3274,10 +3274,15 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
 
     // Update campaign
     await new Promise((resolve) => {
+      console.log(`[Relance] Updating campaign ${campaignId}: sent=${results.sent.length}, failed=${results.failed.length}`);
       db.run(
         `UPDATE email_campaigns SET sent_count = $1, failed_count = $2, status = 'completed', sent_at = CURRENT_TIMESTAMP WHERE id = $3`,
         [results.sent.length, results.failed.length, campaignId],
-        () => resolve()
+        (err) => {
+          if (err) console.error('[Relance] Error updating campaign status:', err);
+          else console.log(`[Relance] Campaign ${campaignId} marked as completed`);
+          resolve();
+        }
       );
     });
 
