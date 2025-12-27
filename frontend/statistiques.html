@@ -1314,23 +1314,21 @@
       }
     }
 
-    // Close modal when clicking overlay or close button
-    document.getElementById('playerListModal').addEventListener('click', (e) => {
-      if (e.target.classList.contains('modal-overlay') || e.target.classList.contains('modal-close')) {
-        document.getElementById('playerListModal').classList.remove('active');
-      }
-    });
+    // Close modal function
+    function closePlayerListModal() {
+      document.getElementById('playerListModal').classList.remove('active');
+    }
 
     // Initialize
     loadSeasons();
   </script>
 
   <!-- Player List Modal -->
-  <div id="playerListModal" class="modal-overlay">
+  <div id="playerListModal" class="modal-overlay" onclick="if(event.target === this) closePlayerListModal()">
     <div class="modal-content">
       <div class="modal-header">
         <h3 id="playerListModalTitle">Joueurs</h3>
-        <button class="modal-close">&times;</button>
+        <button class="modal-close" onclick="closePlayerListModal()">&times;</button>
       </div>
       <div class="modal-body" id="playerListModalBody">
       </div>
