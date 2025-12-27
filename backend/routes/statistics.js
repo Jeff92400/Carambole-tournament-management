@@ -862,4 +862,42 @@ router.get('/players/multi-category', authenticateToken, async (req, res) => {
   });
 });
 
+// Get list of players by number of categories played
+router.get('/players/multi-category/list', authenticateToken, async (req, res) => {
+  const db = require('../db-loader');
+  const { season, categories } = req.query;
+  const targetSeason = season || getCurrentSeason();
+  const numCategories = parseInt(categories) || 4;
+
+  const query = `
+    WITH player_categories AS (
+      SELECT
+        tr.licence,
+        COUNT(DISTINCT c.game_type) as num_categories
+      FROM tournament_results tr
+      JOIN tournaments t ON tr.tournament_id = t.id
+      JOIN categories c ON t.category_id = c.id
+      WHERE t.season = $1
+      GROUP BY tr.licence
+    )
+    SELECT
+      pc.licence,
+      COALESCE(p.first_name || ' ' || p.last_name, pc.licence) as player_name,
+      p.club,
+      pc.num_categories
+    FROM player_categories pc
+    LEFT JOIN players p ON REPLACE(pc.licence, ' ', '') = REPLACE(p.licence, ' ', '')
+    WHERE pc.num_categories = $2
+    ORDER BY player_name
+  `;
+
+  db.all(query, [targetSeason, numCategories], (err, rows) => {
+    if (err) {
+      console.error('Error fetching multi-category players list:', err);
+      return res.status(500).json({ error: err.message });
+    }
+    res.json(rows || []);
+  });
+});
+
 module.exports = router;
