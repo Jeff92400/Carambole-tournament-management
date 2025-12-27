@@ -832,12 +832,20 @@ router.get('/players/multi-category', authenticateToken, async (req, res) => {
   const targetSeason = season || getCurrentSeason();
 
   // Count distinct game types each player has actually played in for the season
-  // Based on tournament_results for consistency with "Joueurs uniques" stat
+  // Normalize game_type to handle variations (3 Bandes vs 3Bandes, etc.)
   const query = `
     WITH player_categories AS (
       SELECT
         tr.licence,
-        COUNT(DISTINCT c.game_type) as num_categories
+        COUNT(DISTINCT
+          CASE
+            WHEN UPPER(REPLACE(c.game_type, ' ', '')) LIKE '%3%BANDE%' THEN '3 Bandes'
+            WHEN UPPER(c.game_type) = 'BANDE' THEN 'Bande'
+            WHEN UPPER(c.game_type) = 'LIBRE' THEN 'Libre'
+            WHEN UPPER(c.game_type) = 'CADRE' THEN 'Cadre'
+            ELSE c.game_type
+          END
+        ) as num_categories
       FROM tournament_results tr
       JOIN tournaments t ON tr.tournament_id = t.id
       JOIN categories c ON t.category_id = c.id
@@ -869,17 +877,30 @@ router.get('/players/multi-category/list', authenticateToken, async (req, res) =
   const targetSeason = season || getCurrentSeason();
   const numCategories = parseInt(categories) || 4;
 
+  // Normalize game_type to handle variations (3 Bandes vs 3Bandes, etc.)
   const query = `
-    WITH player_categories AS (
+    WITH normalized_results AS (
       SELECT
         tr.licence,
-        COUNT(DISTINCT c.game_type) as num_categories,
-        STRING_AGG(DISTINCT c.game_type, ', ' ORDER BY c.game_type) as game_types
+        CASE
+          WHEN UPPER(REPLACE(c.game_type, ' ', '')) LIKE '%3%BANDE%' THEN '3 Bandes'
+          WHEN UPPER(c.game_type) = 'BANDE' THEN 'Bande'
+          WHEN UPPER(c.game_type) = 'LIBRE' THEN 'Libre'
+          WHEN UPPER(c.game_type) = 'CADRE' THEN 'Cadre'
+          ELSE c.game_type
+        END as normalized_game_type
       FROM tournament_results tr
       JOIN tournaments t ON tr.tournament_id = t.id
       JOIN categories c ON t.category_id = c.id
       WHERE t.season = $1
-      GROUP BY tr.licence
+    ),
+    player_categories AS (
+      SELECT
+        licence,
+        COUNT(DISTINCT normalized_game_type) as num_categories,
+        STRING_AGG(DISTINCT normalized_game_type, ', ' ORDER BY normalized_game_type) as game_types
+      FROM normalized_results
+      GROUP BY licence
     )
     SELECT
       pc.licence,
