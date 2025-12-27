@@ -1136,7 +1136,8 @@
             { count: 4, label: '4 catégories', color: '#1F4788' },
             { count: 3, label: '3 catégories', color: '#28a745' },
             { count: 2, label: '2 catégories', color: '#ffc107' },
-            { count: 1, label: '1 catégorie', color: '#6c757d' }
+            { count: 1, label: '1 catégorie', color: '#6c757d' },
+            { count: 0, label: '0 catégorie (NC)', color: '#dc3545' }
           ];
 
           container.innerHTML = `
@@ -1266,7 +1267,8 @@
         4: '4 catégories',
         3: '3 catégories',
         2: '2 catégories',
-        1: '1 catégorie'
+        1: '1 catégorie',
+        0: '0 catégorie (NC partout)'
       };
 
       modalTitle.textContent = `Joueurs en ${labels[numCategories]}`;
