@@ -552,12 +552,10 @@
         <div class="stats-section">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
             <h2 class="stats-section-title" style="margin-bottom: 0;">🎯 Joueurs Multi-Catégories</h2>
-            <select id="multiCatSeasonSelect" style="padding: 8px 15px; border: 1px solid #ddd; border-radius: 8px; background: white; font-size: 14px; min-width: 150px;">
-              <option value="">Chargement...</option>
-            </select>
+            <span style="font-size: 12px; color: #888;">(basé sur le fichier joueurs)</span>
           </div>
           <div class="stats-card">
-            <div class="stats-card-header">Répartition des joueurs actifs par nombre de catégories</div>
+            <div class="stats-card-header">Répartition des joueurs actifs par nombre de catégories (non-NC)</div>
             <div class="stats-card-body" id="multiCatTable">
               <div class="loading">
                 <div class="loading-spinner"></div>
@@ -683,12 +681,6 @@
             `<option value="${s}" ${i === 0 ? 'selected' : ''}>${s}</option>`
           ).join('');
 
-          // Also populate multi-category season dropdown
-          const multiCatSeasonSelect = document.getElementById('multiCatSeasonSelect');
-          multiCatSeasonSelect.innerHTML = seasons.map((s, i) =>
-            `<option value="${s}" ${i === 0 ? 'selected' : ''}>${s}</option>`
-          ).join('');
-
           currentSeason = seasons[0] || '';
           loadAllStats();
         }
@@ -717,10 +709,6 @@
       loadNewPlayers(e.target.value);
     });
 
-    // Multi-category season selector
-    document.getElementById('multiCatSeasonSelect').addEventListener('change', (e) => {
-      loadMultiCatStats(e.target.value);
-    });
 
     // Load all statistics
     async function loadAllStats() {
@@ -1124,15 +1112,14 @@
       }
     }
 
-    // Load multi-category players stats
-    async function loadMultiCatStats(season = null) {
+    // Load multi-category players stats (from players file, not season-specific)
+    async function loadMultiCatStats() {
       const container = document.getElementById('multiCatTable');
-      const targetSeason = season || currentSeason;
 
       container.innerHTML = '<div class="loading"><div class="loading-spinner"></div></div>';
 
       try {
-        const response = await fetch(`${API_URL}/statistics/players/multi-category?season=${targetSeason}`, {
+        const response = await fetch(`${API_URL}/statistics/players/multi-category`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
 
@@ -1141,7 +1128,7 @@
           const total = data.total || 0;
 
           if (total === 0) {
-            container.innerHTML = '<div class="empty-state">Aucun joueur actif pour cette saison</div>';
+            container.innerHTML = '<div class="empty-state">Aucun joueur actif</div>';
             return;
           }
 
@@ -1158,7 +1145,7 @@
                 const count = data[`cat_${cat.count}`] || 0;
                 const percent = total > 0 ? ((count / total) * 100).toFixed(1) : 0;
                 return `
-                  <div class="stat-card-clickable" onclick="showPlayerListModal(${cat.count}, '${targetSeason}')" style="background: ${cat.color}15; border-left: 4px solid ${cat.color}; padding: 15px; border-radius: 8px;">
+                  <div class="stat-card-clickable" onclick="showPlayerListModal(${cat.count})" style="background: ${cat.color}15; border-left: 4px solid ${cat.color}; padding: 15px; border-radius: 8px;">
                     <div style="font-size: 28px; font-weight: bold; color: ${cat.color};">${count}</div>
                     <div style="color: #666; margin-top: 5px;">${cat.label}</div>
                     <div style="color: ${cat.color}; font-weight: bold; font-size: 14px; margin-top: 5px;">${percent}%</div>
@@ -1167,7 +1154,7 @@
               }).join('')}
             </div>
             <div style="text-align: center; color: #666; font-size: 14px; padding: 10px; background: #f8f9fa; border-radius: 8px;">
-              Total joueurs: <strong>${total}</strong>
+              Total joueurs actifs: <strong>${total}</strong>
             </div>
           `;
         }
@@ -1270,7 +1257,7 @@
     }
 
     // Show player list modal
-    async function showPlayerListModal(numCategories, season) {
+    async function showPlayerListModal(numCategories) {
       const modal = document.getElementById('playerListModal');
       const modalTitle = document.getElementById('playerListModalTitle');
       const modalBody = document.getElementById('playerListModalBody');
@@ -1282,12 +1269,12 @@
         1: '1 catégorie'
       };
 
-      modalTitle.textContent = `Joueurs en ${labels[numCategories]} (${season})`;
+      modalTitle.textContent = `Joueurs en ${labels[numCategories]}`;
       modalBody.innerHTML = '<div class="loading"><div class="loading-spinner"></div></div>';
       modal.classList.add('active');
 
       try {
-        const response = await fetch(`${API_URL}/statistics/players/multi-category/list?season=${season}&categories=${numCategories}`, {
+        const response = await fetch(`${API_URL}/statistics/players/multi-category/list?categories=${numCategories}`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
 

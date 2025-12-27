@@ -826,95 +826,82 @@ router.get('/players/veterans', authenticateToken, async (req, res) => {
 });
 
 // Get multi-category players stats (how many players play in 1, 2, 3 or 4 categories)
+// Based on players table ranks (not tournament results) - counts non-NC ranks
 router.get('/players/multi-category', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
-  const { season } = req.query;
-  const targetSeason = season || getCurrentSeason();
 
-  // Count distinct game types each player has actually played in for the season
-  // Normalize game_type to handle variations (3 Bandes vs 3Bandes, etc.)
+  // Count non-NC ranks for each active player from players table
   const query = `
     WITH player_categories AS (
       SELECT
-        tr.licence,
-        COUNT(DISTINCT
-          CASE
-            WHEN UPPER(REPLACE(c.game_type, ' ', '')) LIKE '%3%BANDE%' THEN '3 Bandes'
-            WHEN UPPER(c.game_type) = 'BANDE' THEN 'Bande'
-            WHEN UPPER(c.game_type) = 'LIBRE' THEN 'Libre'
-            WHEN UPPER(c.game_type) = 'CADRE' THEN 'Cadre'
-            ELSE c.game_type
-          END
-        ) as num_categories
-      FROM tournament_results tr
-      JOIN tournaments t ON tr.tournament_id = t.id
-      JOIN categories c ON t.category_id = c.id
-      WHERE t.season = $1
-      GROUP BY tr.licence
+        licence,
+        (CASE WHEN rank_libre IS NOT NULL AND UPPER(rank_libre) != 'NC' THEN 1 ELSE 0 END +
+         CASE WHEN rank_bande IS NOT NULL AND UPPER(rank_bande) != 'NC' THEN 1 ELSE 0 END +
+         CASE WHEN rank_3bandes IS NOT NULL AND UPPER(rank_3bandes) != 'NC' THEN 1 ELSE 0 END +
+         CASE WHEN rank_cadre IS NOT NULL AND UPPER(rank_cadre) != 'NC' THEN 1 ELSE 0 END) as num_categories
+      FROM players
+      WHERE is_active = 1
     )
     SELECT
       COUNT(*) FILTER (WHERE num_categories = 4) as cat_4,
       COUNT(*) FILTER (WHERE num_categories = 3) as cat_3,
       COUNT(*) FILTER (WHERE num_categories = 2) as cat_2,
       COUNT(*) FILTER (WHERE num_categories = 1) as cat_1,
+      COUNT(*) FILTER (WHERE num_categories = 0) as cat_0,
       COUNT(*) as total
     FROM player_categories
   `;
 
-  db.get(query, [targetSeason], (err, row) => {
+  db.get(query, [], (err, row) => {
     if (err) {
       console.error('Error fetching multi-category stats:', err);
       return res.status(500).json({ error: err.message });
     }
-    res.json(row || { cat_4: 0, cat_3: 0, cat_2: 0, cat_1: 0, total: 0 });
+    res.json(row || { cat_4: 0, cat_3: 0, cat_2: 0, cat_1: 0, cat_0: 0, total: 0 });
   });
 });
 
-// Get list of players by number of categories played (with game types detail)
+// Get list of players by number of categories played (based on player ranks)
 router.get('/players/multi-category/list', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
-  const { season, categories } = req.query;
-  const targetSeason = season || getCurrentSeason();
+  const { categories } = req.query;
   const numCategories = parseInt(categories) || 4;
 
-  // Normalize game_type to handle variations (3 Bandes vs 3Bandes, etc.)
+  // List players with specific number of non-NC ranks
   const query = `
-    WITH normalized_results AS (
-      SELECT
-        tr.licence,
-        CASE
-          WHEN UPPER(REPLACE(c.game_type, ' ', '')) LIKE '%3%BANDE%' THEN '3 Bandes'
-          WHEN UPPER(c.game_type) = 'BANDE' THEN 'Bande'
-          WHEN UPPER(c.game_type) = 'LIBRE' THEN 'Libre'
-          WHEN UPPER(c.game_type) = 'CADRE' THEN 'Cadre'
-          ELSE c.game_type
-        END as normalized_game_type
-      FROM tournament_results tr
-      JOIN tournaments t ON tr.tournament_id = t.id
-      JOIN categories c ON t.category_id = c.id
-      WHERE t.season = $1
-    ),
-    player_categories AS (
+    WITH player_categories AS (
       SELECT
         licence,
-        COUNT(DISTINCT normalized_game_type) as num_categories,
-        STRING_AGG(DISTINCT normalized_game_type, ', ' ORDER BY normalized_game_type) as game_types
-      FROM normalized_results
-      GROUP BY licence
+        first_name || ' ' || last_name as player_name,
+        club,
+        rank_libre,
+        rank_bande,
+        rank_3bandes,
+        rank_cadre,
+        (CASE WHEN rank_libre IS NOT NULL AND UPPER(rank_libre) != 'NC' THEN 1 ELSE 0 END +
+         CASE WHEN rank_bande IS NOT NULL AND UPPER(rank_bande) != 'NC' THEN 1 ELSE 0 END +
+         CASE WHEN rank_3bandes IS NOT NULL AND UPPER(rank_3bandes) != 'NC' THEN 1 ELSE 0 END +
+         CASE WHEN rank_cadre IS NOT NULL AND UPPER(rank_cadre) != 'NC' THEN 1 ELSE 0 END) as num_categories
+      FROM players
+      WHERE is_active = 1
     )
     SELECT
-      pc.licence,
-      COALESCE(p.first_name || ' ' || p.last_name, pc.licence) as player_name,
-      p.club,
-      pc.num_categories,
-      pc.game_types
-    FROM player_categories pc
-    LEFT JOIN players p ON REPLACE(pc.licence, ' ', '') = REPLACE(p.licence, ' ', '')
-    WHERE pc.num_categories = $2
+      licence,
+      player_name,
+      club,
+      num_categories,
+      CONCAT_WS(', ',
+        CASE WHEN rank_libre IS NOT NULL AND UPPER(rank_libre) != 'NC' THEN 'Libre (' || rank_libre || ')' END,
+        CASE WHEN rank_bande IS NOT NULL AND UPPER(rank_bande) != 'NC' THEN 'Bande (' || rank_bande || ')' END,
+        CASE WHEN rank_3bandes IS NOT NULL AND UPPER(rank_3bandes) != 'NC' THEN '3 Bandes (' || rank_3bandes || ')' END,
+        CASE WHEN rank_cadre IS NOT NULL AND UPPER(rank_cadre) != 'NC' THEN 'Cadre (' || rank_cadre || ')' END
+      ) as game_types
+    FROM player_categories
+    WHERE num_categories = $1
     ORDER BY player_name
   `;
 
-  db.all(query, [targetSeason, numCategories], (err, rows) => {
+  db.all(query, [numCategories], (err, rows) => {
     if (err) {
       console.error('Error fetching multi-category players list:', err);
       return res.status(500).json({ error: err.message });
