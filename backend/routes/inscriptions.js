@@ -1256,9 +1256,11 @@ router.delete('/delete-test-finale', authenticateToken, async (req, res) => {
 router.get('/upcoming-relances', authenticateToken, async (req, res) => {
   try {
     const today = new Date();
+    const oneWeekFromNow = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
     const twoWeeksFromNow = new Date(today.getTime() + 14 * 24 * 60 * 60 * 1000);
 
-    // Get all upcoming tournaments within 2 weeks
+    // Get upcoming tournaments between 7-14 days away (relance window)
+    // Tournaments disappear once they're less than 7 days away
     const tournois = await new Promise((resolve, reject) => {
       db.all(`
         SELECT t.*,
@@ -1268,7 +1270,7 @@ router.get('/upcoming-relances', authenticateToken, async (req, res) => {
         LEFT JOIN tournament_relances r ON t.tournoi_id = r.tournoi_id
         WHERE t.debut >= $1 AND t.debut <= $2
         ORDER BY t.debut ASC
-      `, [today.toISOString().split('T')[0], twoWeeksFromNow.toISOString().split('T')[0]], (err, rows) => {
+      `, [oneWeekFromNow.toISOString().split('T')[0], twoWeeksFromNow.toISOString().split('T')[0]], (err, rows) => {
         if (err) reject(err);
         else resolve(rows || []);
       });
@@ -1281,7 +1283,8 @@ router.get('/upcoming-relances', authenticateToken, async (req, res) => {
       all_upcoming: tournois,
       needs_relance: needsRelance,
       today: today.toISOString().split('T')[0],
-      deadline: twoWeeksFromNow.toISOString().split('T')[0]
+      window_start: oneWeekFromNow.toISOString().split('T')[0],
+      window_end: twoWeeksFromNow.toISOString().split('T')[0]
     });
 
   } catch (error) {
