@@ -2460,6 +2460,7 @@
       playersWithEmailInfo.forEach(p => {
         const div = document.createElement('div');
         div.style.cssText = 'display: flex; align-items: center; padding: 8px; border-bottom: 1px solid #eee;';
+        div.id = `row_${p.licence?.replace(/\s/g, '')}`;
 
         const checkbox = document.createElement('input');
         checkbox.type = 'checkbox';
@@ -2472,11 +2473,21 @@
 
         const label = document.createElement('label');
         label.htmlFor = checkbox.id;
+        label.id = `label_${p.licence?.replace(/\s/g, '')}`;
         label.style.cssText = `flex: 1; cursor: pointer; ${!p.hasEmail ? 'color: #999;' : ''}`;
         label.innerHTML = `<strong>${p.last_name || ''} ${p.first_name || ''}</strong> - ${p.hasEmail ? p.email : '<em>Pas d\'email</em>'}`;
 
+        // Edit button
+        const editBtn = document.createElement('button');
+        editBtn.type = 'button';
+        editBtn.innerHTML = '✏️';
+        editBtn.title = 'Modifier l\'email';
+        editBtn.style.cssText = 'background: none; border: none; cursor: pointer; font-size: 16px; padding: 4px 8px;';
+        editBtn.onclick = () => showEmailEditor(p.licence?.replace(/\s/g, ''), p.last_name, p.first_name, p.email || '');
+
         div.appendChild(checkbox);
         div.appendChild(label);
+        div.appendChild(editBtn);
         checkboxList.appendChild(div);
       });
 
@@ -2493,6 +2504,118 @@
       const checkboxes = document.querySelectorAll('#playerCheckboxList input[type="checkbox"]:checked');
       document.getElementById('checkedCount').textContent = checkboxes.length;
       document.getElementById('sendConvocationsBtn').disabled = checkboxes.length === 0;
+    }
+
+    // Show email editor inline
+    function showEmailEditor(licence, lastName, firstName, currentEmail) {
+      const row = document.getElementById(`row_${licence}`);
+      if (!row) return;
+
+      // Replace row content with editor
+      const originalContent = row.innerHTML;
+      row.innerHTML = `
+        <div style="flex: 1; display: flex; align-items: center; gap: 8px;">
+          <strong>${lastName || ''} ${firstName || ''}</strong>
+          <input type="email" id="emailInput_${licence}" value="${currentEmail}"
+                 placeholder="email@exemple.com"
+                 style="flex: 1; padding: 6px 10px; border: 1px solid #1F4788; border-radius: 4px; font-size: 14px;">
+          <button type="button" onclick="saveEmail('${licence}', '${lastName}', '${firstName}')"
+                  style="background: #28a745; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer;">
+            ✓
+          </button>
+          <button type="button" onclick="cancelEmailEdit('${licence}')"
+                  style="background: #dc3545; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer;">
+            ✗
+          </button>
+        </div>
+      `;
+      row.dataset.originalContent = originalContent;
+
+      // Focus the input
+      setTimeout(() => {
+        const input = document.getElementById(`emailInput_${licence}`);
+        if (input) {
+          input.focus();
+          input.select();
+        }
+      }, 50);
+    }
+
+    // Save edited email
+    function saveEmail(licence, lastName, firstName) {
+      const input = document.getElementById(`emailInput_${licence}`);
+      const newEmail = input?.value?.trim() || '';
+
+      if (newEmail && !newEmail.includes('@')) {
+        alert('Veuillez entrer un email valide');
+        return;
+      }
+
+      // Store in playerEmails object (temporary for this session)
+      if (newEmail) {
+        playerEmails[licence] = newEmail;
+      } else {
+        delete playerEmails[licence];
+      }
+
+      // Update the row display
+      const row = document.getElementById(`row_${licence}`);
+      const hasEmail = newEmail && newEmail.includes('@');
+
+      row.innerHTML = '';
+
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.id = `player_${licence}`;
+      checkbox.dataset.licence = licence;
+      checkbox.checked = hasEmail;
+      checkbox.disabled = !hasEmail;
+      checkbox.style.cssText = 'width: 18px; height: 18px; margin-right: 10px; cursor: pointer;';
+      checkbox.addEventListener('change', updateCheckedCount);
+
+      const label = document.createElement('label');
+      label.htmlFor = checkbox.id;
+      label.id = `label_${licence}`;
+      label.style.cssText = `flex: 1; cursor: pointer; ${!hasEmail ? 'color: #999;' : ''}`;
+      label.innerHTML = `<strong>${lastName || ''} ${firstName || ''}</strong> - ${hasEmail ? newEmail : '<em>Pas d\'email</em>'}`;
+
+      const editBtn = document.createElement('button');
+      editBtn.type = 'button';
+      editBtn.innerHTML = '✏️';
+      editBtn.title = 'Modifier l\'email';
+      editBtn.style.cssText = 'background: none; border: none; cursor: pointer; font-size: 16px; padding: 4px 8px;';
+      editBtn.onclick = () => showEmailEditor(licence, lastName, firstName, newEmail);
+
+      row.appendChild(checkbox);
+      row.appendChild(label);
+      row.appendChild(editBtn);
+
+      // Update counts
+      updateEmailCounts();
+      updateCheckedCount();
+    }
+
+    // Cancel email edit
+    function cancelEmailEdit(licence) {
+      const row = document.getElementById(`row_${licence}`);
+      if (row && row.dataset.originalContent) {
+        row.innerHTML = row.dataset.originalContent;
+      } else {
+        // Refresh the whole list
+        updateEmailStats();
+      }
+    }
+
+    // Update emailable count after edit
+    function updateEmailCounts() {
+      let emailableCount = 0;
+      selectedPlayers.forEach(p => {
+        const email = p.email || playerEmails[p.licence?.replace(/\s/g, '')];
+        if (email && email.includes('@')) emailableCount++;
+      });
+      document.getElementById('emailableCount').textContent = emailableCount;
+      document.getElementById('totalPlayersCount').textContent = selectedPlayers.length;
+      document.getElementById('sendConvocationsBtn').disabled = emailableCount === 0;
     }
 
     // Select all / Deselect all buttons for email section
