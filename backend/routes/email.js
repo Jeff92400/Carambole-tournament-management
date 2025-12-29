@@ -24,6 +24,20 @@ async function getSummaryEmail() {
   });
 }
 
+// Get contact email from app_settings (with fallback)
+async function getContactEmail() {
+  const db = require('../db-loader');
+  return new Promise((resolve) => {
+    db.get(
+      "SELECT value FROM app_settings WHERE key = 'contact_email'",
+      [],
+      (err, row) => {
+        resolve(row?.value || 'cdbhs92@gmail.com');
+      }
+    );
+  });
+}
+
 // Initialize Resend
 const getResend = () => {
   if (!process.env.RESEND_API_KEY) {
@@ -624,6 +638,9 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
     // Continue anyway - don't block email sending if campaign recording fails
   }
 
+  // Get contact email once for all emails
+  const contactEmail = await getContactEmail();
+
   // Process each player
   for (const player of players) {
     // Skip if no email
@@ -713,8 +730,8 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
 
       // Send email using Resend (no CC - summary email sent at the end)
       const emailResult = await resend.emails.send({
-        from: 'CDBHS Convocations <convocations@cdbhs.net>',
-        replyTo: 'cdbhs92@gmail.com',
+        from: 'CDBHS <noreply@cdbhs.net>',
+        replyTo: contactEmail,
         to: [player.email],
         subject: emailSubject,
         html: `
@@ -739,10 +756,15 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
               <div style="line-height: 1.6;">
                 ${emailBodyHtml}
               </div>
+
+              <p style="margin-top: 20px; padding: 10px; background: #fff3cd; border-left: 4px solid #ffc107; font-size: 13px;">
+                📧 <strong>Contact :</strong> Pour toute question ou en cas d'empêchement, contactez-nous à
+                <a href="mailto:${contactEmail}" style="color: #1F4788;">${contactEmail}</a>
+              </p>
             </div>
 
             <div style="background: #1F4788; color: white; padding: 10px; text-align: center; font-size: 12px;">
-              <p style="margin: 0;">CDBHS - cdbhs92@gmail.com</p>
+              <p style="margin: 0;">CDBHS - <a href="mailto:${contactEmail}" style="color: white;">${contactEmail}</a></p>
             </div>
           </div>
         `,
@@ -844,8 +866,8 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
       `;
 
       await resend.emails.send({
-        from: 'CDBHS Convocations <convocations@cdbhs.net>',
-        replyTo: 'cdbhs92@gmail.com',
+        from: 'CDBHS <noreply@cdbhs.net>',
+        replyTo: contactEmail,
         to: [summaryEmailAddress],
         subject: `📋 Récapitulatif - Convocations ${category.display_name} - ${tournamentLabel} - ${dateStr}`,
         html: summaryHtml
