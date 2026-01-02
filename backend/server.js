@@ -26,6 +26,7 @@ const emailRoutes = require('./routes/email');
 const settingsRoutes = require('./routes/settings');
 const emailingRoutes = require('./routes/emailing');
 const statisticsRoutes = require('./routes/statistics');
+const playerAccountsRoutes = require('./routes/player-accounts');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -57,6 +58,7 @@ app.use('/api/email', emailRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/emailing', emailingRoutes);
 app.use('/api/statistics', statisticsRoutes);
+app.use('/api/player-accounts', playerAccountsRoutes);
 
 // Serve frontend pages
 app.get('/', (req, res) => {
