@@ -454,6 +454,47 @@
       }
     }
 
+    // Load inscriptions while preserving filter state
+    async function loadInscriptionsKeepFilters(savedSeason, savedTournoi, savedStatus, savedSearch) {
+      try {
+        const response = await fetch(`${API_URL}/inscriptions`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to load inscriptions');
+        }
+
+        allInscriptions = await response.json();
+
+        // Update stats
+        const convoques = allInscriptions.filter(i => i.convoque === 1);
+        const forfaits = allInscriptions.filter(i => i.forfait === 1);
+        document.getElementById('totalCount').textContent = allInscriptions.length;
+        document.getElementById('convoqueCount').textContent = convoques.length;
+        document.getElementById('forfaitCount').textContent = forfaits.length;
+        updateSeasonStats();
+
+        // Restore filter values
+        document.getElementById('seasonFilter').value = savedSeason;
+        document.getElementById('tournoiFilter').value = savedTournoi;
+        document.getElementById('statusFilter').value = savedStatus;
+        document.getElementById('searchInput').value = savedSearch;
+
+        // Re-populate tournament filter for the saved season and restore selection
+        populateTournoiFilter();
+        document.getElementById('tournoiFilter').value = savedTournoi;
+
+        // Apply filters to show the same view
+        applyFilters();
+
+      } catch (error) {
+        console.error('Error loading inscriptions:', error);
+      }
+    }
+
     // Get season for a given date (Sept-June: season starts Sept, ends June)
     function getSeasonForDate(date) {
       const year = date.getFullYear();
@@ -730,7 +771,13 @@
       const success = await updateInscription(data);
       if (success) {
         closeEditModal();
-        await loadInscriptions();
+        // Preserve current filter values
+        const savedSeason = document.getElementById('seasonFilter').value;
+        const savedTournoi = document.getElementById('tournoiFilter').value;
+        const savedStatus = document.getElementById('statusFilter').value;
+        const savedSearch = document.getElementById('searchInput').value;
+
+        await loadInscriptionsKeepFilters(savedSeason, savedTournoi, savedStatus, savedSearch);
         alert('Inscription mise a jour avec succes!');
       }
     });
