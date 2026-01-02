@@ -1299,6 +1299,73 @@ router.delete('/delete-test-finale', authenticateToken, async (req, res) => {
   }
 });
 
+// ==================== TEST: SET CONVOCATION DETAILS ====================
+
+// Test endpoint to manually set convocation details for testing
+router.post('/test-set-convocation/:id', authenticateToken, async (req, res) => {
+  if (req.user?.role !== 'admin') {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  const { id } = req.params;
+  const { poule, lieu, adresse, heure, notes } = req.body;
+
+  try {
+    await new Promise((resolve, reject) => {
+      db.run(`
+        UPDATE inscriptions SET
+          convoque = 1,
+          convocation_poule = $1,
+          convocation_lieu = $2,
+          convocation_adresse = $3,
+          convocation_heure = $4,
+          convocation_notes = $5
+        WHERE inscription_id = $6
+      `, [
+        poule || 'A',
+        lieu || 'Billard Club de Châtillon',
+        adresse || '15 rue de la Mairie 92320 Châtillon',
+        heure || '14:00',
+        notes || null,
+        id
+      ], function(err) {
+        if (err) reject(err);
+        else resolve(this);
+      });
+    });
+
+    res.json({ success: true, message: `Convocation details set for inscription ${id}` });
+  } catch (error) {
+    console.error('Error setting convocation details:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get recent inscriptions with convocation details (for testing)
+router.get('/test-recent-inscriptions', authenticateToken, async (req, res) => {
+  try {
+    const inscriptions = await new Promise((resolve, reject) => {
+      db.all(`
+        SELECT i.inscription_id, i.licence, i.tournoi_id, i.convoque,
+               i.convocation_poule, i.convocation_lieu, i.convocation_heure,
+               t.nom as tournoi_nom, t.debut
+        FROM inscriptions i
+        LEFT JOIN tournoi_ext t ON i.tournoi_id = t.tournoi_id
+        ORDER BY t.debut DESC
+        LIMIT 20
+      `, [], (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows);
+      });
+    });
+
+    res.json(inscriptions || []);
+  } catch (error) {
+    console.error('Error fetching inscriptions:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ==================== TOURNAMENT RELANCES ====================
 
 // Get upcoming tournaments (within 2 weeks) that need relances
