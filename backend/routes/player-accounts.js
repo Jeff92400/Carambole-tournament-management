@@ -116,32 +116,66 @@ router.post('/', async (req, res) => {
 
 /**
  * PUT /api/player-accounts/:id
- * Update a player account (admin status)
+ * Update a player account (admin status or password)
  */
-router.put('/:id', (req, res) => {
+router.put('/:id', async (req, res) => {
   const { id } = req.params;
-  const { isAdmin } = req.body;
+  const { isAdmin, password } = req.body;
 
-  if (isAdmin === undefined) {
-    return res.status(400).json({ error: 'Paramètre isAdmin requis' });
+  // Must have at least one field to update
+  if (isAdmin === undefined && !password) {
+    return res.status(400).json({ error: 'Paramètre isAdmin ou password requis' });
   }
 
-  db.run(
-    `UPDATE player_accounts SET is_admin = $1 WHERE id = $2`,
-    [isAdmin, id],
-    function(err) {
-      if (err) {
-        console.error('Error updating player account:', err);
-        return res.status(500).json({ error: 'Erreur lors de la mise à jour' });
+  try {
+    // Handle password update
+    if (password) {
+      if (password.length < 6) {
+        return res.status(400).json({ error: 'Le mot de passe doit contenir au moins 6 caractères' });
       }
 
-      if (this.changes === 0) {
-        return res.status(404).json({ error: 'Compte non trouvé' });
-      }
+      const passwordHash = await bcrypt.hash(password, 10);
 
-      res.json({ success: true, message: 'Compte mis à jour' });
+      db.run(
+        `UPDATE player_accounts SET password_hash = $1 WHERE id = $2`,
+        [passwordHash, id],
+        function(err) {
+          if (err) {
+            console.error('Error updating player password:', err);
+            return res.status(500).json({ error: 'Erreur lors de la mise à jour du mot de passe' });
+          }
+
+          if (this.changes === 0) {
+            return res.status(404).json({ error: 'Compte non trouvé' });
+          }
+
+          res.json({ success: true, message: 'Mot de passe mis à jour' });
+        }
+      );
+      return;
     }
-  );
+
+    // Handle admin status update
+    db.run(
+      `UPDATE player_accounts SET is_admin = $1 WHERE id = $2`,
+      [isAdmin, id],
+      function(err) {
+        if (err) {
+          console.error('Error updating player account:', err);
+          return res.status(500).json({ error: 'Erreur lors de la mise à jour' });
+        }
+
+        if (this.changes === 0) {
+          return res.status(404).json({ error: 'Compte non trouvé' });
+        }
+
+        res.json({ success: true, message: 'Compte mis à jour' });
+      }
+    );
+  } catch (error) {
+    console.error('Error in player account update:', error);
+    res.status(500).json({ error: 'Erreur lors de la mise à jour' });
+  }
 });
 
 /**
