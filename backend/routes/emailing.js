@@ -3237,13 +3237,16 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
 
     const results = { sent: [], failed: [], skipped: [] };
 
+    // Replace {category} in subject for logging (use display_name from tournamentInfo)
+    const logSubject = subject.replace(/\{category\}/g, tournamentInfo.category || category);
+
     // Create campaign record with tracking info
     const campaignId = await new Promise((resolve, reject) => {
       db.run(
         `INSERT INTO email_campaigns (subject, body, template_key, recipients_count, status, campaign_type, mode, category, sent_by, test_mode)
          VALUES ($1, $2, $3, $4, 'sending', $5, $6, $7, $8, $9)
          RETURNING id`,
-        [subject, intro, `relance_${relanceType}`, testMode ? 1 : participants.filter(p => p.email).length,
+        [logSubject, intro, `relance_${relanceType}`, testMode ? 1 : participants.filter(p => p.email).length,
          `relance_${relanceType}`, mode, category, req.user?.username || 'unknown', testMode ? true : false],
         function(err) {
           if (err) reject(err);

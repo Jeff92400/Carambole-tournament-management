@@ -1456,17 +1456,18 @@ router.post('/relances/mark-by-type', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Invalid relanceType' });
     }
 
-    // Find the matching upcoming tournament
+    // Find the matching upcoming tournament (flexible category match: N3 matches N3 or N3 GC)
+    const categoryUpper = category.toUpperCase();
     const tournament = await new Promise((resolve, reject) => {
       db.get(`
         SELECT tournoi_id FROM tournoi_ext
         WHERE UPPER(mode) = UPPER($1)
-          AND UPPER(categorie) = UPPER($2)
-          AND UPPER(nom) LIKE UPPER($3)
-          AND debut >= $4 AND debut <= $5
+          AND (UPPER(categorie) = $2 OR UPPER(categorie) LIKE $3)
+          AND UPPER(nom) LIKE UPPER($4)
+          AND debut >= $5 AND debut <= $6
         ORDER BY debut ASC
         LIMIT 1
-      `, [mode, category, tournamentNamePattern, today.toISOString().split('T')[0], twoWeeksFromNow.toISOString().split('T')[0]], (err, row) => {
+      `, [mode, categoryUpper, categoryUpper + ' %', tournamentNamePattern, today.toISOString().split('T')[0], twoWeeksFromNow.toISOString().split('T')[0]], (err, row) => {
         if (err) reject(err);
         else resolve(row);
       });
