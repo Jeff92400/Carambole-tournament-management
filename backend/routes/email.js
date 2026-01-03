@@ -909,8 +909,11 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
         let playerPouleNumber = null;
         let playerLocation = null;
 
+        // Normalize licence for comparison (remove spaces)
+        const playerLicenceNorm = (player.licence || '').replace(/\s+/g, '');
+
         for (const poule of poules) {
-          const found = poule.players.find(p => p.licence === player.licence);
+          const found = poule.players.find(p => (p.licence || '').replace(/\s+/g, '') === playerLicenceNorm);
           if (found) {
             playerPouleNumber = poule.number;
             const locNum = poule.locationNum || '1';
