@@ -69,6 +69,10 @@ async function initializeDatabase() {
       )
     `);
 
+    // Add email and telephone columns to players (migration for inscription validation)
+    await client.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS email TEXT`);
+    await client.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS telephone TEXT`);
+
     // Categories table
     await client.query(`
       CREATE TABLE IF NOT EXISTS categories (
