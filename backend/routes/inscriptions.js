@@ -1610,4 +1610,56 @@ router.get('/relances', authenticateToken, async (req, res) => {
   }
 });
 
+// Update all past inscriptions to convoqué (admin only, one-time utility)
+router.post('/bulk-convoque-past', authenticateToken, async (req, res) => {
+  if (req.user?.role !== 'admin') {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  const { beforeDate } = req.body;
+  const cutoffDate = beforeDate || '2026-01-03';
+
+  try {
+    // Count affected rows first
+    const countResult = await new Promise((resolve, reject) => {
+      db.get(`
+        SELECT COUNT(*) as cnt FROM inscriptions i
+        JOIN tournoi_ext t ON i.tournoi_id = t.tournoi_id
+        WHERE t.debut < $1
+        AND (i.convoque = 0 OR i.convoque IS NULL)
+        AND (i.forfait = 0 OR i.forfait IS NULL)
+      `, [cutoffDate], (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
+
+    console.log(`Will update ${countResult.cnt} inscriptions to convoqué`);
+
+    // Update all inscriptions for past tournaments
+    const updateResult = await new Promise((resolve, reject) => {
+      db.run(`
+        UPDATE inscriptions SET convoque = 1
+        WHERE tournoi_id IN (SELECT tournoi_id FROM tournoi_ext WHERE debut < $1)
+        AND (convoque = 0 OR convoque IS NULL)
+        AND (forfait = 0 OR forfait IS NULL)
+      `, [cutoffDate], function(err) {
+        if (err) reject(err);
+        else resolve({ changes: this.changes });
+      });
+    });
+
+    res.json({
+      success: true,
+      message: `Updated ${updateResult.changes} inscriptions to convoqué`,
+      beforeDate: cutoffDate,
+      affected: updateResult.changes
+    });
+
+  } catch (error) {
+    console.error('Error bulk updating inscriptions:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;
