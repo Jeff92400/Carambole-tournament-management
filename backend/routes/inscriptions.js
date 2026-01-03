@@ -1364,6 +1364,60 @@ router.post('/test-set-convocation/:id', authenticateToken, async (req, res) => 
   }
 });
 
+// Restore convoque=1 for inscriptions that have convocation details stored
+router.post('/restore-convoque/:mode/:categorie', authenticateToken, async (req, res) => {
+  if (req.user?.role !== 'admin') {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  const { mode, categorie } = req.params;
+
+  try {
+    // Find tournament matching mode/categorie that's upcoming
+    const tournament = await new Promise((resolve, reject) => {
+      db.get(`
+        SELECT tournoi_id, nom FROM tournoi_ext
+        WHERE UPPER(mode) LIKE UPPER($1)
+          AND UPPER(categorie) LIKE UPPER($2)
+          AND debut >= date('now')
+        ORDER BY debut ASC
+        LIMIT 1
+      `, [`%${mode}%`, `%${categorie}%`], (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
+
+    if (!tournament) {
+      return res.status(404).json({ error: `No upcoming tournament found for ${mode} ${categorie}` });
+    }
+
+    // Update all inscriptions that have convocation_poule set (meaning convocation was sent)
+    const result = await new Promise((resolve, reject) => {
+      db.run(`
+        UPDATE inscriptions
+        SET convoque = 1
+        WHERE tournoi_id = $1
+          AND convocation_poule IS NOT NULL
+      `, [tournament.tournoi_id], function(err) {
+        if (err) reject(err);
+        else resolve({ changes: this.changes });
+      });
+    });
+
+    res.json({
+      success: true,
+      tournament: tournament.nom,
+      tournoi_id: tournament.tournoi_id,
+      restored: result.changes,
+      message: `Restored convoque=1 for ${result.changes} inscriptions`
+    });
+  } catch (error) {
+    console.error('Error restoring convoque:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Get recent inscriptions with convocation details (for testing)
 router.get('/test-recent-inscriptions', authenticateToken, async (req, res) => {
   try {
