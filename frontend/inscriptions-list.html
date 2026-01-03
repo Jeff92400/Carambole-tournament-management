@@ -125,6 +125,12 @@
         <select id="seasonFilter">
           <option value="">Toutes les saisons</option>
         </select>
+        <select id="modeFilter">
+          <option value="">Tous les modes</option>
+        </select>
+        <select id="categorieFilter">
+          <option value="">Toutes les catégories</option>
+        </select>
         <select id="tournoiFilter">
           <option value="">Tous les tournois</option>
         </select>
@@ -370,6 +376,9 @@
 
         if (response.ok) {
           allTournois = await response.json();
+          // Populate all filter dropdowns (season filter will override on load)
+          populateModeFilter();
+          populateCategorieFilter();
           populateTournoiFilter();
         }
       } catch (error) {
@@ -377,15 +386,13 @@
       }
     }
 
-    // Populate tournoi filter (filtered by selected season)
-    function populateTournoiFilter() {
-      const select = document.getElementById('tournoiFilter');
+    // Populate mode filter
+    function populateModeFilter() {
+      const select = document.getElementById('modeFilter');
       const selectedSeason = document.getElementById('seasonFilter').value;
 
-      // Clear all optgroups and options except the first "Tous les tournois" option
-      const firstOption = select.options[0];
-      select.innerHTML = '';
-      select.appendChild(firstOption);
+      // Clear and add default option
+      select.innerHTML = '<option value="">Tous les modes</option>';
 
       // Filter tournaments by selected season
       let filteredTournois = allTournois;
@@ -399,31 +406,94 @@
         });
       }
 
-      // Group by mode/categorie
-      const grouped = {};
-      filteredTournois.forEach(t => {
-        const key = `${t.mode} - ${t.categorie}`;
-        if (!grouped[key]) grouped[key] = [];
-        grouped[key].push(t);
+      // Get unique modes
+      const modes = [...new Set(filteredTournois.map(t => t.mode).filter(Boolean))].sort();
+
+      modes.forEach(mode => {
+        const option = document.createElement('option');
+        option.value = mode;
+        option.textContent = mode;
+        select.appendChild(option);
+      });
+    }
+
+    // Populate categorie filter (filtered by selected mode)
+    function populateCategorieFilter() {
+      const select = document.getElementById('categorieFilter');
+      const selectedSeason = document.getElementById('seasonFilter').value;
+      const selectedMode = document.getElementById('modeFilter').value;
+
+      // Clear and add default option
+      select.innerHTML = '<option value="">Toutes les catégories</option>';
+
+      // Filter tournaments by selected season and mode
+      let filteredTournois = allTournois;
+      if (selectedSeason) {
+        filteredTournois = filteredTournois.filter(t => {
+          if (!t.debut) return false;
+          const date = parseDate(t.debut);
+          if (!date || isNaN(date.getTime())) return false;
+          const season = getSeasonForDate(date);
+          return season === selectedSeason;
+        });
+      }
+      if (selectedMode) {
+        filteredTournois = filteredTournois.filter(t => t.mode === selectedMode);
+      }
+
+      // Get unique categories
+      const categories = [...new Set(filteredTournois.map(t => t.categorie).filter(Boolean))].sort();
+
+      categories.forEach(cat => {
+        const option = document.createElement('option');
+        option.value = cat;
+        option.textContent = cat;
+        select.appendChild(option);
+      });
+    }
+
+    // Populate tournoi filter (filtered by selected season, mode, and categorie)
+    function populateTournoiFilter() {
+      const select = document.getElementById('tournoiFilter');
+      const selectedSeason = document.getElementById('seasonFilter').value;
+      const selectedMode = document.getElementById('modeFilter').value;
+      const selectedCategorie = document.getElementById('categorieFilter').value;
+
+      // Clear and add default option
+      select.innerHTML = '<option value="">Tous les tournois</option>';
+
+      // Filter tournaments by selected season, mode, and categorie
+      let filteredTournois = allTournois;
+      if (selectedSeason) {
+        filteredTournois = filteredTournois.filter(t => {
+          if (!t.debut) return false;
+          const date = parseDate(t.debut);
+          if (!date || isNaN(date.getTime())) return false;
+          const season = getSeasonForDate(date);
+          return season === selectedSeason;
+        });
+      }
+      if (selectedMode) {
+        filteredTournois = filteredTournois.filter(t => t.mode === selectedMode);
+      }
+      if (selectedCategorie) {
+        filteredTournois = filteredTournois.filter(t => t.categorie === selectedCategorie);
+      }
+
+      // Sort by date (most recent first)
+      filteredTournois.sort((a, b) => {
+        const dateA = a.debut ? new Date(a.debut) : new Date(0);
+        const dateB = b.debut ? new Date(b.debut) : new Date(0);
+        return dateB - dateA;
       });
 
-      Object.keys(grouped).sort().forEach(key => {
-        const optgroup = document.createElement('optgroup');
-        optgroup.label = key;
-
-        grouped[key].sort((a, b) => {
-          const dateA = a.debut ? new Date(a.debut) : new Date(0);
-          const dateB = b.debut ? new Date(b.debut) : new Date(0);
-          return dateB - dateA;
-        }).forEach(t => {
-          const option = document.createElement('option');
-          option.value = t.tournoi_id;
-          const date = t.debut ? new Date(t.debut).toLocaleDateString('fr-FR') : '';
-          option.textContent = `${t.nom} ${date ? `(${date})` : ''}`;
-          optgroup.appendChild(option);
-        });
-
-        select.appendChild(optgroup);
+      // Add tournaments as options
+      filteredTournois.forEach(t => {
+        const option = document.createElement('option');
+        option.value = t.tournoi_id;
+        const date = t.debut ? new Date(t.debut).toLocaleDateString('fr-FR') : '';
+        option.textContent = `${t.nom} ${date ? `(${date})` : ''}`;
+        select.appendChild(option);
       });
     }
 
@@ -475,7 +545,7 @@
     }
 
     // Load inscriptions while preserving filter state
-    async function loadInscriptionsKeepFilters(savedSeason, savedTournoi, savedStatus, savedSearch) {
+    async function loadInscriptionsKeepFilters(savedSeason, savedMode, savedCategorie, savedTournoi, savedStatus, savedSearch) {
       try {
         const response = await fetch(`${API_URL}/inscriptions`, {
           headers: {
@@ -499,11 +569,17 @@
 
         // Restore filter values
         document.getElementById('seasonFilter').value = savedSeason;
+        document.getElementById('modeFilter').value = savedMode;
+        document.getElementById('categorieFilter').value = savedCategorie;
         document.getElementById('tournoiFilter').value = savedTournoi;
         document.getElementById('statusFilter').value = savedStatus;
         document.getElementById('searchInput').value = savedSearch;
 
-        // Re-populate tournament filter for the saved season and restore selection
+        // Re-populate all filters and restore selections
+        populateModeFilter();
+        document.getElementById('modeFilter').value = savedMode;
+        populateCategorieFilter();
+        document.getElementById('categorieFilter').value = savedCategorie;
         populateTournoiFilter();
         document.getElementById('tournoiFilter').value = savedTournoi;
 
@@ -582,7 +658,9 @@
 
       if (sortedSeasons.includes(currentSeason)) {
         select.value = currentSeason;
-        // Re-populate tournament filter with tournaments for current season
+        // Populate all cascading filters
+        populateModeFilter();
+        populateCategorieFilter();
         populateTournoiFilter();
         applyFilters();
       }
@@ -693,6 +771,8 @@
     // Apply filters
     function applyFilters() {
       const seasonFilter = document.getElementById('seasonFilter').value;
+      const modeFilter = document.getElementById('modeFilter').value;
+      const categorieFilter = document.getElementById('categorieFilter').value;
       const tournoiFilter = document.getElementById('tournoiFilter').value;
       const statusFilter = document.getElementById('statusFilter').value;
       const searchTerm = document.getElementById('searchInput').value.toLowerCase();
@@ -707,6 +787,22 @@
           const date = parseDate(tournoi.debut);
           if (!date || isNaN(date.getTime())) return false;
           return getSeasonForDate(date) === seasonFilter;
+        });
+      }
+
+      // Mode filter
+      if (modeFilter) {
+        filtered = filtered.filter(i => {
+          const tournoi = getTournoiById(i.tournoi_id);
+          return tournoi.mode === modeFilter;
+        });
+      }
+
+      // Categorie filter
+      if (categorieFilter) {
+        filtered = filtered.filter(i => {
+          const tournoi = getTournoiById(i.tournoi_id);
+          return tournoi.categorie === categorieFilter;
         });
       }
 
@@ -794,11 +890,13 @@
 
         // Preserve current filter values
         const savedSeason = document.getElementById('seasonFilter').value;
+        const savedMode = document.getElementById('modeFilter').value;
+        const savedCategorie = document.getElementById('categorieFilter').value;
         const savedTournoi = document.getElementById('tournoiFilter').value;
         const savedStatus = document.getElementById('statusFilter').value;
         const savedSearch = document.getElementById('searchInput').value;
 
-        await loadInscriptionsKeepFilters(savedSeason, savedTournoi, savedStatus, savedSearch);
+        await loadInscriptionsKeepFilters(savedSeason, savedMode, savedCategorie, savedTournoi, savedStatus, savedSearch);
         alert('Inscription supprimee avec succes!');
 
       } catch (error) {
@@ -851,11 +949,13 @@
         closeEditModal();
         // Preserve current filter values
         const savedSeason = document.getElementById('seasonFilter').value;
+        const savedMode = document.getElementById('modeFilter').value;
+        const savedCategorie = document.getElementById('categorieFilter').value;
         const savedTournoi = document.getElementById('tournoiFilter').value;
         const savedStatus = document.getElementById('statusFilter').value;
         const savedSearch = document.getElementById('searchInput').value;
 
-        await loadInscriptionsKeepFilters(savedSeason, savedTournoi, savedStatus, savedSearch);
+        await loadInscriptionsKeepFilters(savedSeason, savedMode, savedCategorie, savedTournoi, savedStatus, savedSearch);
         alert('Inscription mise a jour avec succes!');
       }
     });
@@ -865,7 +965,25 @@
 
     // Filter event listeners
     document.getElementById('seasonFilter').addEventListener('change', () => {
-      // Reset tournament filter and re-populate with tournaments for selected season
+      // Reset all cascading filters
+      document.getElementById('modeFilter').value = '';
+      document.getElementById('categorieFilter').value = '';
+      document.getElementById('tournoiFilter').value = '';
+      populateModeFilter();
+      populateCategorieFilter();
+      populateTournoiFilter();
+      applyFilters();
+    });
+    document.getElementById('modeFilter').addEventListener('change', () => {
+      // Reset downstream filters
+      document.getElementById('categorieFilter').value = '';
+      document.getElementById('tournoiFilter').value = '';
+      populateCategorieFilter();
+      populateTournoiFilter();
+      applyFilters();
+    });
+    document.getElementById('categorieFilter').addEventListener('change', () => {
+      // Reset tournament filter
       document.getElementById('tournoiFilter').value = '';
       populateTournoiFilter();
       applyFilters();
