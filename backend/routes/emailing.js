@@ -2547,11 +2547,12 @@ router.get('/next-tournament', authenticateToken, async (req, res) => {
     const season = currentMonth >= 8 ? `${currentYear}-${currentYear + 1}` : `${currentYear - 1}-${currentYear}`;
 
 
-    // Find the category
+    // Find the category (flexible match: N3 matches N3 or N3GC)
+    const categoryUpper = category.toUpperCase();
     const categoryRow = await new Promise((resolve, reject) => {
       db.get(
-        `SELECT * FROM categories WHERE UPPER(game_type) = $1 AND UPPER(level) = $2`,
-        [mode.toUpperCase(), category.toUpperCase()],
+        `SELECT * FROM categories WHERE UPPER(game_type) = $1 AND (UPPER(level) = $2 OR UPPER(level) LIKE $3)`,
+        [mode.toUpperCase(), categoryUpper, categoryUpper + '%'],
         (err, row) => {
           if (err) reject(err);
           else resolve(row);
@@ -2671,11 +2672,12 @@ router.get('/t1-participants', authenticateToken, async (req, res) => {
       season = `${currentYear - 1}-${currentYear}`;
     }
 
-    // Find the category
+    // Find the category (flexible match: N3 matches N3 or N3GC)
+    const categoryUpper = category.toUpperCase();
     const categoryRow = await new Promise((resolve, reject) => {
       db.get(
-        `SELECT * FROM categories WHERE UPPER(game_type) = $1 AND UPPER(level) = $2`,
-        [mode.toUpperCase(), category.toUpperCase()],
+        `SELECT * FROM categories WHERE UPPER(game_type) = $1 AND (UPPER(level) = $2 OR UPPER(level) LIKE $3)`,
+        [mode.toUpperCase(), categoryUpper, categoryUpper + '%'],
         (err, row) => {
           if (err) reject(err);
           else resolve(row);
@@ -2801,11 +2803,12 @@ router.get('/ranking-for-relance', authenticateToken, async (req, res) => {
       season = `${currentYear - 1}-${currentYear}`;
     }
 
-    // Find the category
+    // Find the category (flexible match: N3 matches N3 or N3GC)
+    const categoryUpper = category.toUpperCase();
     const categoryRow = await new Promise((resolve, reject) => {
       db.get(
-        `SELECT * FROM categories WHERE UPPER(game_type) = $1 AND UPPER(level) = $2`,
-        [mode.toUpperCase(), category.toUpperCase()],
+        `SELECT * FROM categories WHERE UPPER(game_type) = $1 AND (UPPER(level) = $2 OR UPPER(level) LIKE $3)`,
+        [mode.toUpperCase(), categoryUpper, categoryUpper + '%'],
         (err, row) => {
           if (err) reject(err);
           else resolve(row);
@@ -2912,11 +2915,12 @@ router.get('/finale-qualified', authenticateToken, async (req, res) => {
       season = `${currentYear - 1}-${currentYear}`;
     }
 
-    // Find the category
+    // Find the category (flexible match: N3 matches N3 or N3GC)
+    const categoryUpper = category.toUpperCase();
     const categoryRow = await new Promise((resolve, reject) => {
       db.get(
-        `SELECT * FROM categories WHERE UPPER(game_type) = $1 AND UPPER(level) = $2`,
-        [mode.toUpperCase(), category.toUpperCase()],
+        `SELECT * FROM categories WHERE UPPER(game_type) = $1 AND (UPPER(level) = $2 OR UPPER(level) LIKE $3)`,
+        [mode.toUpperCase(), categoryUpper, categoryUpper + '%'],
         (err, row) => {
           if (err) reject(err);
           else resolve(row);
@@ -3036,10 +3040,12 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
       const currentMonth = now.getMonth();
       const season = currentMonth >= 8 ? `${currentYear}-${currentYear + 1}` : `${currentYear - 1}-${currentYear}`;
 
+      // Flexible category match: N3 matches N3 or N3GC
+      const categoryUpper = category.toUpperCase();
       const categoryRow = await new Promise((resolve, reject) => {
         db.get(
-          `SELECT * FROM categories WHERE UPPER(game_type) = $1 AND UPPER(level) = $2`,
-          [mode.toUpperCase(), category.toUpperCase()],
+          `SELECT * FROM categories WHERE UPPER(game_type) = $1 AND (UPPER(level) = $2 OR UPPER(level) LIKE $3)`,
+          [mode.toUpperCase(), categoryUpper, categoryUpper + '%'],
           (err, row) => {
             if (err) reject(err);
             else resolve(row);
@@ -3108,10 +3114,12 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
       const currentMonth = now.getMonth();
       const season = currentMonth >= 8 ? `${currentYear}-${currentYear + 1}` : `${currentYear - 1}-${currentYear}`;
 
+      // Flexible category match: N3 matches N3 or N3GC
+      const categoryUpper = category.toUpperCase();
       const categoryRow = await new Promise((resolve, reject) => {
         db.get(
-          `SELECT * FROM categories WHERE UPPER(game_type) = $1 AND UPPER(level) = $2`,
-          [mode.toUpperCase(), category.toUpperCase()],
+          `SELECT * FROM categories WHERE UPPER(game_type) = $1 AND (UPPER(level) = $2 OR UPPER(level) LIKE $3)`,
+          [mode.toUpperCase(), categoryUpper, categoryUpper + '%'],
           (err, row) => {
             if (err) reject(err);
             else resolve(row);
@@ -3165,10 +3173,12 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
       const currentMonth = now.getMonth();
       const season = currentMonth >= 8 ? `${currentYear}-${currentYear + 1}` : `${currentYear - 1}-${currentYear}`;
 
+      // Flexible category match: N3 matches N3 or N3GC
+      const categoryUpper = category.toUpperCase();
       const categoryRow = await new Promise((resolve, reject) => {
         db.get(
-          `SELECT * FROM categories WHERE UPPER(game_type) = $1 AND UPPER(level) = $2`,
-          [mode.toUpperCase(), category.toUpperCase()],
+          `SELECT * FROM categories WHERE UPPER(game_type) = $1 AND (UPPER(level) = $2 OR UPPER(level) LIKE $3)`,
+          [mode.toUpperCase(), categoryUpper, categoryUpper + '%'],
           (err, row) => {
             if (err) reject(err);
             else resolve(row);
