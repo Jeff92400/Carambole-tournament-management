@@ -48,7 +48,12 @@
       </div>
 
       <div class="card">
-        <h3>Historique des Tournois</h3>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+          <h3 style="margin: 0;">Historique des Tournois</h3>
+          <select id="seasonFilter" style="padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
+            <option value="">Toutes les saisons</option>
+          </select>
+        </div>
         <div id="noHistory" style="display: none; text-align: center; padding: 20px; color: #666;">
           Aucun historique de tournoi disponible pour ce joueur.
         </div>
@@ -105,12 +110,84 @@
     const urlParams = new URLSearchParams(window.location.search);
     const licence = urlParams.get('licence');
 
+    let allHistory = []; // Store all history for filtering
+
     if (!licence) {
       document.getElementById('loadingPlayer').style.display = 'none';
       document.getElementById('errorMessage').textContent = 'Aucune licence spécifiée';
       document.getElementById('errorMessage').style.display = 'block';
     } else {
       loadPlayerData();
+    }
+
+    // Season filter change handler
+    document.getElementById('seasonFilter').addEventListener('change', () => {
+      displayHistory(allHistory);
+    });
+
+    // Display history with optional season filter
+    function displayHistory(history) {
+      const seasonFilter = document.getElementById('seasonFilter').value;
+      const filtered = seasonFilter
+        ? history.filter(r => r.season === seasonFilter)
+        : history;
+
+      const tbody = document.getElementById('historyBody');
+      tbody.innerHTML = '';
+
+      if (filtered.length === 0) {
+        document.getElementById('noHistory').style.display = 'block';
+        document.getElementById('historyTable').style.display = 'none';
+        return;
+      }
+
+      document.getElementById('noHistory').style.display = 'none';
+
+      filtered.forEach(record => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td>${record.season}</td>
+          <td>${record.display_name}</td>
+          <td style="text-align: center;">T${record.tournament_number}</td>
+          <td style="text-align: center; font-weight: bold;">${record.match_points}</td>
+          <td style="text-align: center;">${record.moyenne.toFixed(3)}</td>
+          <td style="text-align: center;">${record.serie}</td>
+          <td style="text-align: center; font-weight: bold;">${record.total_match_points || '-'}</td>
+          <td style="text-align: center;">
+            ${record.rank_position ? `#${record.rank_position}` : '-'}
+          </td>
+        `;
+        tbody.appendChild(row);
+      });
+
+      document.getElementById('historyTable').style.display = 'block';
+    }
+
+    // Populate season filter dropdown
+    function populateSeasonFilter(history) {
+      const seasons = [...new Set(history.map(r => r.season))].sort().reverse();
+      const select = document.getElementById('seasonFilter');
+
+      // Keep the "Toutes les saisons" option
+      select.innerHTML = '<option value="">Toutes les saisons</option>';
+
+      seasons.forEach(season => {
+        const option = document.createElement('option');
+        option.value = season;
+        option.textContent = season;
+        select.appendChild(option);
+      });
+
+      // Default to current season if available
+      const currentYear = new Date().getFullYear();
+      const currentMonth = new Date().getMonth();
+      const currentSeason = currentMonth >= 8
+        ? `${currentYear}-${currentYear + 1}`
+        : `${currentYear - 1}-${currentYear}`;
+
+      if (seasons.includes(currentSeason)) {
+        select.value = currentSeason;
+      }
     }
 
     async function loadPlayerData() {
@@ -152,32 +229,14 @@
         console.log('History response status:', historyResponse.status);
 
         if (historyResponse.ok) {
-          const history = await historyResponse.json();
+          allHistory = await historyResponse.json();
 
-          if (history.length === 0) {
+          if (allHistory.length === 0) {
             document.getElementById('noHistory').style.display = 'block';
           } else {
-            const tbody = document.getElementById('historyBody');
-            tbody.innerHTML = '';
-
-            history.forEach(record => {
-              const row = document.createElement('tr');
-              row.innerHTML = `
-                <td>${record.season}</td>
-                <td>${record.display_name}</td>
-                <td style="text-align: center;">T${record.tournament_number}</td>
-                <td style="text-align: center; font-weight: bold;">${record.match_points}</td>
-                <td style="text-align: center;">${record.moyenne.toFixed(3)}</td>
-                <td style="text-align: center;">${record.serie}</td>
-                <td style="text-align: center; font-weight: bold;">${record.total_match_points || '-'}</td>
-                <td style="text-align: center;">
-                  ${record.rank_position ? `#${record.rank_position}` : '-'}
-                </td>
-              `;
-              tbody.appendChild(row);
-            });
-
-            document.getElementById('historyTable').style.display = 'block';
+            // Populate season filter and display history
+            populateSeasonFilter(allHistory);
+            displayHistory(allHistory);
           }
         }
 
