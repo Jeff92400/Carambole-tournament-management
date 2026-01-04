@@ -694,16 +694,21 @@
     document.getElementById('editPlayerForm').addEventListener('submit', async (e) => {
       e.preventDefault();
 
+      const clubValue = document.getElementById('edit_club').value;
       const playerData = {
         licence: document.getElementById('edit_licence').value,
         first_name: document.getElementById('edit_first_name').value,
         last_name: document.getElementById('edit_last_name').value,
-        club: document.getElementById('edit_club').value,
         rank_libre: document.getElementById('edit_rank_libre').value || null,
         rank_cadre: document.getElementById('edit_rank_cadre').value || null,
         rank_bande: document.getElementById('edit_rank_bande').value || null,
         rank_3bandes: document.getElementById('edit_rank_3bandes').value || null
       };
+
+      // Only include club if a value is selected (don't clear existing club)
+      if (clubValue) {
+        playerData.club = clubValue;
+      }
 
       const success = await updatePlayer(playerData);
       if (success) {
