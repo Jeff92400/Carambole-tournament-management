@@ -591,8 +591,18 @@ async function initializeDatabase() {
       // Get the base level (strip any suffix like "GC", "HC", etc.)
       const baseLevel = category.level.toUpperCase().replace(/\s+/g, ' ').trim();
 
-      // Find matching variations for this level
-      const variations = categoryVariations[baseLevel] || categoryVariations[baseLevel.replace(/\s*(GC|HC|JC|SC)$/i, '')] || [baseLevel];
+      // For categories with suffixes (like N3 GC), only add their specific variations
+      // Don't add base variations (N3) to suffix categories (N3 GC)
+      const hasSuffix = /\s*(GC|HC|JC|SC)$/i.test(category.level);
+
+      let variations;
+      if (hasSuffix) {
+        // Only use variations specific to this suffix level
+        variations = categoryVariations[baseLevel] || [baseLevel];
+      } else {
+        // For base levels (N3, R1, etc.), use the base variations
+        variations = categoryVariations[baseLevel] || [baseLevel];
+      }
 
       for (const variation of variations) {
         await client.query(
@@ -601,6 +611,28 @@ async function initializeDatabase() {
            ON CONFLICT (ionos_categorie, game_type) DO NOTHING`,
           [variation, category.game_type, category.id]
         );
+      }
+    }
+
+    // Fix: Ensure base N3 variations map to N3 category, not N3 GC
+    // Find the N3 category (without GC suffix) for each game type
+    for (const gameType of ['LIBRE', 'CADRE', 'BANDE', '3BANDES']) {
+      const n3Category = categories.find(c =>
+        c.game_type === gameType &&
+        c.level.toUpperCase() === 'N3'
+      );
+
+      if (n3Category) {
+        const baseVariations = ['N3', 'N 3', 'n3', 'NATIONALE 3', 'Nationale 3'];
+        for (const variation of baseVariations) {
+          // Update existing mappings to point to N3 (not N3 GC)
+          await client.query(
+            `UPDATE category_mapping
+             SET category_id = $1
+             WHERE ionos_categorie = $2 AND game_type = $3`,
+            [n3Category.id, variation, gameType]
+          );
+        }
       }
     }
     console.log('Category mappings initialized');
