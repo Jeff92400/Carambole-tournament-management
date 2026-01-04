@@ -82,10 +82,13 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
         const club = record[1]?.replace(/"/g, '').trim();
         const firstName = record[2]?.replace(/"/g, '').trim();
         const lastName = record[3]?.replace(/"/g, '').trim();
+        // CSV column order: LICENCE, CLUB, PRENOM, NOM, LIBRE, BANDE, 3 BANDES, BLACKBALL, CADRE, JOUEUR_ID, ACTIF
+        //                      0       1      2      3     4      5        6         7        8        9       10
         const rankLibre = record[4]?.replace(/"/g, '').trim() || 'NC';
-        const rankCadre = record[5]?.replace(/"/g, '').trim() || 'NC';
-        const rankBande = record[6]?.replace(/"/g, '').trim() || 'NC';
-        const rank3Bandes = record[7]?.replace(/"/g, '').trim() || 'NC';
+        const rankBande = record[5]?.replace(/"/g, '').trim() || 'NC';
+        const rank3Bandes = record[6]?.replace(/"/g, '').trim() || 'NC';
+        // record[7] = BLACKBALL (not used)
+        const rankCadre = record[8]?.replace(/"/g, '').trim() || 'NC';
         const isActive = record[10]?.replace(/"/g, '').trim() === '1' ? 1 : 0;
 
         if (!licence || !firstName || !lastName) continue;
