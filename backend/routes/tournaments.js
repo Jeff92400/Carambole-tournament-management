@@ -681,9 +681,9 @@ router.get('/:id/results', authenticateToken, (req, res) => {
 
       console.log('Tournament found:', tournament);
 
-      // Get tournament results with club name
+      // Get tournament results with club name and player first/last name
       db.all(
-        `SELECT tr.*, p.club as club_name, c.logo_filename as club_logo
+        `SELECT tr.*, p.club as club_name, p.first_name, p.last_name, c.logo_filename as club_logo
          FROM tournament_results tr
          LEFT JOIN players p ON tr.licence = p.licence
          LEFT JOIN clubs c ON REPLACE(REPLACE(REPLACE(UPPER(p.club), ' ', ''), '.', ''), '-', '') = REPLACE(REPLACE(REPLACE(UPPER(c.name), ' ', ''), '.', ''), '-', '')
