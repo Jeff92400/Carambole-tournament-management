@@ -59,6 +59,7 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
     let updated = 0;
     let skipped = 0;
     let errors = [];
+    let notFound = []; // Track players not found in database (for rankings-only mode)
 
     // Process records using PostgreSQL ON CONFLICT
     for (const record of records) {
@@ -80,7 +81,7 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
 
         if (rankingsOnly) {
           // Only update rankings for existing players
-          await new Promise((resolve, reject) => {
+          const changes = await new Promise((resolve, reject) => {
             db.run(`
               UPDATE players SET
                 rank_libre = $1,
@@ -92,15 +93,25 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
               if (err) {
                 reject(err);
               } else {
-                if (this.changes > 0) {
-                  updated++;
-                } else {
-                  skipped++; // Player not found in database
-                }
                 resolve(this.changes);
               }
             });
           });
+
+          if (changes > 0) {
+            updated++;
+          } else {
+            skipped++; // Player not found in database
+            notFound.push({
+              licence: licence,
+              name: `${firstName} ${lastName}`,
+              club: club || '',
+              rank_libre: rankLibre,
+              rank_cadre: rankCadre,
+              rank_bande: rankBande,
+              rank_3bandes: rank3Bandes
+            });
+          }
         } else {
           // Full import: check if player exists (with space-normalized licence matching)
           const existingPlayer = await new Promise((resolve, reject) => {
@@ -168,6 +179,7 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
         message: 'Rankings update completed',
         updated,
         skipped,
+        notFound: notFound.length > 0 ? notFound : undefined,
         errors: errors.length > 0 ? errors : undefined
       });
     } else {

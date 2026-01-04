@@ -270,18 +270,73 @@
           const resultsCard = document.getElementById('resultsCard');
           const resultsDiv = document.getElementById('importResults');
 
-          resultsDiv.innerHTML = `
-            <div class="stats-grid">
-              <div class="stat-card">
-                <h4>Nouveaux joueurs</h4>
-                <div class="stat-value">${data.imported}</div>
+          if (rankingsOnly) {
+            resultsDiv.innerHTML = `
+              <div class="stats-grid">
+                <div class="stat-card">
+                  <h4>Classements mis à jour</h4>
+                  <div class="stat-value">${data.updated}</div>
+                </div>
+                <div class="stat-card">
+                  <h4>Non trouvés</h4>
+                  <div class="stat-value" style="color: ${data.skipped > 0 ? '#e74c3c' : '#27ae60'};">${data.skipped || 0}</div>
+                </div>
               </div>
-              <div class="stat-card">
-                <h4>Joueurs mis à jour</h4>
-                <div class="stat-value">${data.updated}</div>
+            `;
+
+            // Show not found players report
+            if (data.notFound && data.notFound.length > 0) {
+              resultsDiv.innerHTML += `
+                <div style="margin-top: 20px; padding: 15px; background: #fff3cd; border-radius: 8px; border: 1px solid #ffc107;">
+                  <h4 style="margin: 0 0 15px 0; color: #856404;">⚠️ Joueurs non trouvés dans la base (${data.notFound.length})</h4>
+                  <p style="font-size: 12px; color: #666; margin-bottom: 15px;">
+                    Ces joueurs sont dans le fichier IONOS mais n'existent pas dans l'application Master.
+                  </p>
+                  <div style="overflow-x: auto;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                      <thead>
+                        <tr style="background: #f8f9fa;">
+                          <th style="padding: 8px; text-align: left; border-bottom: 2px solid #dee2e6;">Licence</th>
+                          <th style="padding: 8px; text-align: left; border-bottom: 2px solid #dee2e6;">Nom</th>
+                          <th style="padding: 8px; text-align: left; border-bottom: 2px solid #dee2e6;">Club</th>
+                          <th style="padding: 8px; text-align: center; border-bottom: 2px solid #dee2e6;">Libre</th>
+                          <th style="padding: 8px; text-align: center; border-bottom: 2px solid #dee2e6;">Cadre</th>
+                          <th style="padding: 8px; text-align: center; border-bottom: 2px solid #dee2e6;">Bande</th>
+                          <th style="padding: 8px; text-align: center; border-bottom: 2px solid #dee2e6;">3 Bandes</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        ${data.notFound.map(p => `
+                          <tr style="border-bottom: 1px solid #dee2e6;">
+                            <td style="padding: 8px; font-family: monospace;">${p.licence}</td>
+                            <td style="padding: 8px;">${p.name}</td>
+                            <td style="padding: 8px;">${p.club || '-'}</td>
+                            <td style="padding: 8px; text-align: center;">${p.rank_libre}</td>
+                            <td style="padding: 8px; text-align: center;">${p.rank_cadre}</td>
+                            <td style="padding: 8px; text-align: center;">${p.rank_bande}</td>
+                            <td style="padding: 8px; text-align: center;">${p.rank_3bandes}</td>
+                          </tr>
+                        `).join('')}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              `;
+            }
+          } else {
+            resultsDiv.innerHTML = `
+              <div class="stats-grid">
+                <div class="stat-card">
+                  <h4>Nouveaux joueurs</h4>
+                  <div class="stat-value">${data.imported}</div>
+                </div>
+                <div class="stat-card">
+                  <h4>Joueurs mis à jour</h4>
+                  <div class="stat-value">${data.updated}</div>
+                </div>
               </div>
-            </div>
-          `;
+            `;
+          }
 
           if (data.errors && data.errors.length > 0) {
             resultsDiv.innerHTML += `
