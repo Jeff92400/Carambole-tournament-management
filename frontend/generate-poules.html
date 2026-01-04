@@ -1347,12 +1347,38 @@
         if (response.ok) {
           externalTournois = await response.json();
 
-          // Find matching tournament by name
+          // If we have a selected tournament from clicking a card, use its ID directly
+          const selectedTournoiId = window.selectedUpcomingTournament?.tournoiId;
+
+          // Find matching tournament - prefer using stored tournoiId if available
           const targetName = tournamentNum === '4' ? 'FINALE' : `TOURNOI ${tournamentNum}`;
-          matchingTournoi = externalTournois.find(t =>
-            t.nom.toUpperCase().includes(targetName) ||
-            (tournamentNum === '4' && t.nom.toUpperCase().includes('FINALE'))
-          );
+
+          if (selectedTournoiId) {
+            // First try to find by exact tournoi_id in the API response
+            matchingTournoi = externalTournois.find(t => t.tournoi_id == selectedTournoiId);
+
+            // If not found in filtered results, fetch it directly by ID
+            if (!matchingTournoi) {
+              try {
+                const directResponse = await fetch(`${API_URL}/inscriptions/tournoi/${selectedTournoiId}`, {
+                  headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (directResponse.ok) {
+                  matchingTournoi = await directResponse.json();
+                }
+              } catch (e) {
+                console.log('Could not fetch tournament directly:', e);
+              }
+            }
+          }
+
+          // Fallback to name matching if not found by ID
+          if (!matchingTournoi) {
+            matchingTournoi = externalTournois.find(t =>
+              t.nom.toUpperCase().includes(targetName) ||
+              (tournamentNum === '4' && t.nom.toUpperCase().includes('FINALE'))
+            );
+          }
 
           if (matchingTournoi) {
             // Load inscription count
