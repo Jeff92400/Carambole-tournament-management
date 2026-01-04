@@ -337,6 +337,34 @@
       </div>
     </div>
 
+    <!-- Player App Settings Section - Admin Only -->
+    <div class="card admin-only" id="playerAppSettingsSection">
+      <h3>Paramètres Espace Joueur</h3>
+      <p style="margin-bottom: 20px; color: #666;">
+        Configurez les paramètres de l'application Espace Joueur.
+      </p>
+
+      <div style="display: flex; gap: 20px; align-items: flex-end; flex-wrap: wrap;">
+        <div style="flex: 1; min-width: 300px;">
+          <label style="display: block; margin-bottom: 8px; font-weight: 500;">URL du Règlement Sportif :</label>
+          <input type="url" id="reglementUrl" placeholder="ex: https://docs.google.com/document/..." style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+        </div>
+        <button onclick="saveReglementUrl()" class="btn" style="background: #28a745; padding: 12px 25px;">
+          Enregistrer
+        </button>
+      </div>
+
+      <div id="reglementUrlMessage" style="display: none; margin-top: 15px; padding: 10px; border-radius: 4px;"></div>
+
+      <div style="margin-top: 20px; padding: 15px; background: #e7f3ff; border-left: 4px solid #1F4788; border-radius: 4px;">
+        <strong>Information :</strong>
+        <p style="margin: 10px 0 0 0; color: #666;">
+          Ce lien sera affiché dans l'application Espace Joueur lors des inscriptions aux tournois.
+          Les joueurs devront confirmer avoir pris connaissance du règlement avant de s'inscrire.
+        </p>
+      </div>
+    </div>
+
     <!-- Club Aliases Section - Admin Only -->
     <div class="card admin-only" id="clubAliasesSection">
       <h3>Alias des Clubs</h3>
@@ -1261,6 +1289,73 @@
     loadSchedulerHour();
 
     // ============= END EMAIL SCHEDULER SETTINGS =============
+
+    // ============= PLAYER APP SETTINGS =============
+
+    // Load règlement URL setting
+    async function loadReglementUrl() {
+      try {
+        const response = await fetch(`${API_URL}/settings/app/reglement_url`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          if (data.value) {
+            document.getElementById('reglementUrl').value = data.value;
+          }
+        }
+      } catch (error) {
+        console.error('Error loading règlement URL:', error);
+      }
+    }
+
+    // Save règlement URL setting
+    async function saveReglementUrl() {
+      const url = document.getElementById('reglementUrl').value.trim();
+      const msgDiv = document.getElementById('reglementUrlMessage');
+
+      // Basic URL validation
+      if (url && !url.match(/^https?:\/\/.+/)) {
+        msgDiv.textContent = 'Format d\'URL invalide (doit commencer par http:// ou https://)';
+        msgDiv.style.background = '#f8d7da';
+        msgDiv.style.color = '#721c24';
+        msgDiv.style.display = 'block';
+        setTimeout(() => { msgDiv.style.display = 'none'; }, 3000);
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API_URL}/settings/app/reglement_url`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ value: url })
+        });
+
+        if (response.ok) {
+          msgDiv.textContent = 'URL du règlement enregistrée';
+          msgDiv.style.background = '#d4edda';
+          msgDiv.style.color = '#155724';
+        } else {
+          throw new Error('Erreur lors de la sauvegarde');
+        }
+      } catch (error) {
+        console.error('Error saving règlement URL:', error);
+        msgDiv.textContent = error.message;
+        msgDiv.style.background = '#f8d7da';
+        msgDiv.style.color = '#721c24';
+      }
+
+      msgDiv.style.display = 'block';
+      setTimeout(() => { msgDiv.style.display = 'none'; }, 3000);
+    }
+
+    // Load on page load
+    loadReglementUrl();
+
+    // ============= END PLAYER APP SETTINGS =============
 
     // ============= CLUB ALIASES MANAGEMENT =============
 
