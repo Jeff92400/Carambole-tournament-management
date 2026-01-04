@@ -16,6 +16,9 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
     return res.status(400).json({ error: 'No file uploaded' });
   }
 
+  // Check if only rankings should be updated
+  const rankingsOnly = req.body.rankingsOnly === 'true' || req.body.rankingsOnly === true;
+
   try {
     let fileContent = fs.readFileSync(req.file.path, 'utf-8');
 
@@ -54,6 +57,7 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
 
     let imported = 0;
     let updated = 0;
+    let skipped = 0;
     let errors = [];
 
     // Process records using PostgreSQL ON CONFLICT
@@ -74,30 +78,54 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
 
         if (!licence || !firstName || !lastName) continue;
 
-        // Use PostgreSQL UPSERT with ON CONFLICT
-        await new Promise((resolve, reject) => {
-          db.run(`
-            INSERT INTO players (licence, club, first_name, last_name, rank_libre, rank_cadre, rank_bande, rank_3bandes, is_active)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-            ON CONFLICT (licence) DO UPDATE SET
-              club = EXCLUDED.club,
-              first_name = EXCLUDED.first_name,
-              last_name = EXCLUDED.last_name,
-              rank_libre = EXCLUDED.rank_libre,
-              rank_cadre = EXCLUDED.rank_cadre,
-              rank_bande = EXCLUDED.rank_bande,
-              rank_3bandes = EXCLUDED.rank_3bandes,
-              is_active = EXCLUDED.is_active
-          `, [licence, club, firstName, lastName, rankLibre, rankCadre, rankBande, rank3Bandes, isActive], function(err) {
-            if (err) {
-              reject(err);
-            } else {
-              // this.changes tells us if it was insert (1) or update (rowCount from PostgreSQL)
-              resolve(this.changes);
-            }
+        if (rankingsOnly) {
+          // Only update rankings for existing players
+          await new Promise((resolve, reject) => {
+            db.run(`
+              UPDATE players SET
+                rank_libre = $1,
+                rank_cadre = $2,
+                rank_bande = $3,
+                rank_3bandes = $4
+              WHERE REPLACE(licence, ' ', '') = REPLACE($5, ' ', '')
+            `, [rankLibre, rankCadre, rankBande, rank3Bandes, licence], function(err) {
+              if (err) {
+                reject(err);
+              } else {
+                if (this.changes > 0) {
+                  updated++;
+                } else {
+                  skipped++; // Player not found in database
+                }
+                resolve(this.changes);
+              }
+            });
           });
-        });
-        imported++;
+        } else {
+          // Full import: insert or update all fields
+          await new Promise((resolve, reject) => {
+            db.run(`
+              INSERT INTO players (licence, club, first_name, last_name, rank_libre, rank_cadre, rank_bande, rank_3bandes, is_active)
+              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+              ON CONFLICT (licence) DO UPDATE SET
+                club = EXCLUDED.club,
+                first_name = EXCLUDED.first_name,
+                last_name = EXCLUDED.last_name,
+                rank_libre = EXCLUDED.rank_libre,
+                rank_cadre = EXCLUDED.rank_cadre,
+                rank_bande = EXCLUDED.rank_bande,
+                rank_3bandes = EXCLUDED.rank_3bandes,
+                is_active = EXCLUDED.is_active
+            `, [licence, club, firstName, lastName, rankLibre, rankCadre, rankBande, rank3Bandes, isActive], function(err) {
+              if (err) {
+                reject(err);
+              } else {
+                resolve(this.changes);
+              }
+            });
+          });
+          imported++;
+        }
       } catch (err) {
         errors.push({ record: record[0], error: err.message });
       }
@@ -110,16 +138,25 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
     db.run(`
       INSERT INTO import_history (file_type, record_count, filename, imported_by)
       VALUES ($1, $2, $3, $4)
-    `, ['joueurs', records.length, req.file.originalname, req.user?.username || 'unknown'], (histErr) => {
+    `, [rankingsOnly ? 'joueurs_rankings' : 'joueurs', records.length, req.file.originalname, req.user?.username || 'unknown'], (histErr) => {
       if (histErr) console.error('Error recording import history:', histErr);
     });
 
-    res.json({
-      message: 'Import completed',
-      imported,
-      updated: 0,
-      errors: errors.length > 0 ? errors : undefined
-    });
+    if (rankingsOnly) {
+      res.json({
+        message: 'Rankings update completed',
+        updated,
+        skipped,
+        errors: errors.length > 0 ? errors : undefined
+      });
+    } else {
+      res.json({
+        message: 'Import completed',
+        imported,
+        updated: 0,
+        errors: errors.length > 0 ? errors : undefined
+      });
+    }
 
   } catch (error) {
     // Clean up uploaded file

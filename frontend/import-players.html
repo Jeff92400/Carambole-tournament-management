@@ -85,6 +85,20 @@
           <div id="fileName" class="file-name" style="display: none;"></div>
         </div>
 
+        <div style="margin: 20px 0; padding: 15px; background: #fff3cd; border-radius: 8px; border: 1px solid #ffc107;">
+          <label style="display: flex; align-items: flex-start; cursor: pointer; gap: 10px;">
+            <input type="checkbox" id="rankingsOnly" style="width: 20px; height: 20px; margin-top: 2px; cursor: pointer;">
+            <div>
+              <span style="font-weight: 600;">Mettre à jour uniquement les classements FFB</span>
+              <p style="font-size: 12px; color: #666; margin: 5px 0 0 0;">
+                Si coché, seuls les classements (Libre, Cadre, Bande, 3 Bandes) seront mis à jour pour les joueurs existants.
+                Les autres informations (club, email, téléphone, rôle) ne seront pas modifiées.
+                Les nouveaux joueurs ne seront pas ajoutés.
+              </p>
+            </div>
+          </label>
+        </div>
+
         <button type="submit" class="btn" id="importBtn">Importer les joueurs</button>
       </form>
     </div>
@@ -226,8 +240,12 @@
       const formData = new FormData();
       formData.append('file', fileInput.files[0]);
 
+      // Check if rankings only mode
+      const rankingsOnly = document.getElementById('rankingsOnly').checked;
+      formData.append('rankingsOnly', rankingsOnly);
+
       importBtn.disabled = true;
-      importBtn.textContent = 'Import en cours...';
+      importBtn.textContent = rankingsOnly ? 'Mise à jour des classements...' : 'Import en cours...';
 
       try {
         const response = await fetch(`${API_URL}/players/import`, {
@@ -241,7 +259,11 @@
         const data = await response.json();
 
         if (response.ok) {
-          successDiv.textContent = `Import réussi ! ${data.imported} joueurs importés, ${data.updated} mis à jour.`;
+          if (rankingsOnly) {
+            successDiv.textContent = `Mise à jour terminée ! ${data.updated} classements mis à jour, ${data.skipped || 0} joueurs non trouvés.`;
+          } else {
+            successDiv.textContent = `Import réussi ! ${data.imported} joueurs importés.`;
+          }
           successDiv.style.display = 'block';
 
           // Show results
