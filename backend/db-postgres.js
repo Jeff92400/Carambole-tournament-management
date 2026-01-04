@@ -72,6 +72,18 @@ async function initializeDatabase() {
     // Add email and telephone columns to players (migration for inscription validation)
     await client.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS email TEXT`);
     await client.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS telephone TEXT`);
+    // Add player_app_role column for Player App admin management (joueur/admin)
+    await client.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS player_app_role VARCHAR(20) DEFAULT NULL`);
+
+    // Migrate existing admins from player_accounts.is_admin to players.player_app_role
+    await client.query(`
+      UPDATE players p
+      SET player_app_role = 'admin'
+      FROM player_accounts pa
+      WHERE REPLACE(p.licence, ' ', '') = REPLACE(pa.licence, ' ', '')
+        AND pa.is_admin = true
+        AND (p.player_app_role IS NULL OR p.player_app_role != 'admin')
+    `);
 
     // Categories table
     await client.query(`

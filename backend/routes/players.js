@@ -256,6 +256,12 @@ router.put('/:licence', authenticateToken, (req, res) => {
     updates.push('is_active = ?');
     values.push(is_active ? 1 : 0);
   }
+  if (req.body.player_app_role !== undefined) {
+    updates.push('player_app_role = ?');
+    // Allow null, 'joueur', or 'admin'
+    const role = req.body.player_app_role;
+    values.push(role === '' || role === null ? null : role);
+  }
 
   if (updates.length === 0) {
     return res.status(400).json({ error: 'No fields to update' });
@@ -312,6 +318,82 @@ router.delete('/all', authenticateToken, (req, res) => {
       deleted: this.changes
     });
   });
+});
+
+// Get player account info (for Player App)
+router.get('/:licence/account', authenticateToken, (req, res) => {
+  const licence = req.params.licence.replace(/\s+/g, '');
+
+  db.get(
+    `SELECT id, email, is_admin, last_login, created_at
+     FROM player_accounts
+     WHERE REPLACE(licence, ' ', '') = $1`,
+    [licence],
+    (err, row) => {
+      if (err) {
+        return res.status(500).json({ error: err.message });
+      }
+      res.json({
+        hasAccount: !!row,
+        account: row ? {
+          email: row.email,
+          isAdmin: row.is_admin,
+          lastLogin: row.last_login,
+          createdAt: row.created_at
+        } : null
+      });
+    }
+  );
+});
+
+// Reset player account password (admin only)
+router.post('/:licence/reset-password', authenticateToken, async (req, res) => {
+  const licence = req.params.licence.replace(/\s+/g, '');
+  const { newPassword } = req.body;
+
+  if (!newPassword || newPassword.length < 8) {
+    return res.status(400).json({ error: 'Le mot de passe doit contenir au moins 8 caractères' });
+  }
+
+  try {
+    // Check if account exists
+    const account = await new Promise((resolve, reject) => {
+      db.get(
+        `SELECT id FROM player_accounts WHERE REPLACE(licence, ' ', '') = $1`,
+        [licence],
+        (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        }
+      );
+    });
+
+    if (!account) {
+      return res.status(404).json({ error: 'Ce joueur n\'a pas de compte Player App' });
+    }
+
+    // Hash the new password
+    const bcrypt = require('bcryptjs');
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+
+    // Update password
+    await new Promise((resolve, reject) => {
+      db.run(
+        `UPDATE player_accounts SET password_hash = $1 WHERE id = $2`,
+        [passwordHash, account.id],
+        function(err) {
+          if (err) reject(err);
+          else resolve(this.changes);
+        }
+      );
+    });
+
+    res.json({ success: true, message: 'Mot de passe réinitialisé' });
+
+  } catch (error) {
+    console.error('Reset password error:', error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // Get player tournament history

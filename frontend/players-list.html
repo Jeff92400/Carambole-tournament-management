@@ -95,6 +95,10 @@
         <h4>Total</h4>
         <div class="stat-value" id="totalCount">-</div>
       </div>
+      <div class="stat-card admin-only">
+        <h4>Admins App</h4>
+        <div class="stat-value" id="adminCount" style="color: #d32f2f;">-</div>
+      </div>
     </div>
 
     <div style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
@@ -139,6 +143,7 @@
                 <th>Bande</th>
                 <th>3 Bandes</th>
                 <th>Statut</th>
+                <th class="admin-only">Rôle App</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -261,13 +266,15 @@
 
         allPlayers = await response.json();
 
-        // Count active/inactive
+        // Count active/inactive/admins
         const activePlayers = allPlayers.filter(p => p.is_active === 1);
         const inactivePlayers = allPlayers.filter(p => p.is_active === 0);
+        const adminPlayers = allPlayers.filter(p => p.player_app_role === 'admin');
 
         document.getElementById('activeCount').textContent = activePlayers.length;
         document.getElementById('inactiveCount').textContent = inactivePlayers.length;
         document.getElementById('totalCount').textContent = allPlayers.length;
+        document.getElementById('adminCount').textContent = adminPlayers.length;
 
         displayPlayers(allPlayers);
 
@@ -524,8 +531,18 @@
             </span>
           </td>
           ${isAdmin ? `
+          <td style="text-align: center;" class="role-cell" data-licence="${player.licence}">
+            <select class="role-select" data-licence="${player.licence}" style="padding: 4px 8px; border-radius: 4px; border: 1px solid #ddd; font-size: 12px; ${player.player_app_role === 'admin' ? 'background: #ffebee; color: #d32f2f; font-weight: bold;' : ''}">
+              <option value="" ${!player.player_app_role ? 'selected' : ''}>--</option>
+              <option value="joueur" ${player.player_app_role === 'joueur' ? 'selected' : ''}>Joueur</option>
+              <option value="admin" ${player.player_app_role === 'admin' ? 'selected' : ''}>Admin</option>
+            </select>
+          </td>
+          ` : ''}
+          ${isAdmin ? `
           <td style="text-align: center;">
             <button class="btn btn-small edit-player-btn" style="background: #4CAF50; padding: 5px 10px; font-size: 12px;">✏️</button>
+            <button class="btn btn-small reset-pwd-btn" style="background: #ff9800; padding: 5px 10px; font-size: 12px; display: none;" title="Réinitialiser le mot de passe">🔑</button>
             <button class="btn btn-small delete-player-btn" style="background: #dc3545; padding: 5px 10px; font-size: 12px;">🗑️</button>
           </td>
           ` : ''}
@@ -550,8 +567,127 @@
               deletePlayer(player);
             };
           }
+
+          // Role dropdown change
+          const roleSelect = row.querySelector('.role-select');
+          if (roleSelect) {
+            roleSelect.onchange = async (e) => {
+              const newRole = e.target.value || null;
+              await updatePlayerRole(player.licence, newRole);
+            };
+          }
+
+          // Check if player has account and show reset button
+          const resetBtn = row.querySelector('.reset-pwd-btn');
+          if (resetBtn) {
+            checkPlayerAccount(player.licence).then(hasAccount => {
+              if (hasAccount) {
+                resetBtn.style.display = 'inline-block';
+                resetBtn.onclick = (e) => {
+                  e.stopPropagation();
+                  resetPlayerPassword(player);
+                };
+              }
+            });
+          }
         }
       });
+    }
+
+    // Update player role
+    async function updatePlayerRole(licence, role) {
+      try {
+        const response = await fetch(`${API_URL}/players/${licence}`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ player_app_role: role })
+        });
+
+        if (!response.ok) {
+          throw new Error('Erreur lors de la mise à jour');
+        }
+
+        // Update local data
+        const player = allPlayers.find(p => p.licence === licence);
+        if (player) {
+          player.player_app_role = role;
+        }
+
+        // Update admin count
+        const adminCount = allPlayers.filter(p => p.player_app_role === 'admin').length;
+        document.getElementById('adminCount').textContent = adminCount;
+
+        // Update select styling
+        const select = document.querySelector(`.role-select[data-licence="${licence}"]`);
+        if (select) {
+          if (role === 'admin') {
+            select.style.background = '#ffebee';
+            select.style.color = '#d32f2f';
+            select.style.fontWeight = 'bold';
+          } else {
+            select.style.background = '';
+            select.style.color = '';
+            select.style.fontWeight = '';
+          }
+        }
+
+      } catch (error) {
+        console.error('Error updating role:', error);
+        alert('Erreur lors de la mise à jour du rôle');
+        // Reload to reset select
+        loadPlayers();
+      }
+    }
+
+    // Check if player has an account
+    async function checkPlayerAccount(licence) {
+      try {
+        const response = await fetch(`${API_URL}/players/${licence}/account`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!response.ok) return false;
+        const data = await response.json();
+        return data.hasAccount;
+      } catch (error) {
+        return false;
+      }
+    }
+
+    // Reset player password
+    async function resetPlayerPassword(player) {
+      const newPassword = prompt(`Nouveau mot de passe pour ${player.first_name} ${player.last_name}:\n\n(minimum 8 caractères)`);
+
+      if (!newPassword) return;
+
+      if (newPassword.length < 8) {
+        alert('Le mot de passe doit contenir au moins 8 caractères');
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API_URL}/players/${player.licence}/reset-password`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ newPassword })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || 'Erreur');
+        }
+
+        alert('✅ Mot de passe réinitialisé avec succès');
+
+      } catch (error) {
+        alert('❌ Erreur: ' + error.message);
+      }
     }
 
     // Edit form submission
