@@ -504,7 +504,7 @@ async function initializeDatabase() {
     const catResult = await client.query('SELECT COUNT(*) as count FROM categories');
     if (catResult.rows[0].count == 0) {
       const categories = [
-        { game_type: 'LIBRE', level: 'N3GC', display_name: 'LIBRE - NATIONALE 3 GC' },
+        { game_type: 'LIBRE', level: 'N3', display_name: 'LIBRE - NATIONALE 3' },
         { game_type: 'LIBRE', level: 'R1', display_name: 'LIBRE - REGIONALE 1' },
         { game_type: 'LIBRE', level: 'R2', display_name: 'LIBRE - REGIONALE 2' },
         { game_type: 'LIBRE', level: 'R3', display_name: 'LIBRE - REGIONALE 3' },
@@ -527,6 +527,19 @@ async function initializeDatabase() {
       }
       console.log('Categories initialized');
     }
+
+    // Migration: Rename LIBRE N3GC to LIBRE N3 (one-time fix)
+    await client.query(`
+      UPDATE categories
+      SET level = 'N3', display_name = 'LIBRE - NATIONALE 3'
+      WHERE game_type = 'LIBRE' AND level = 'N3GC'
+    `);
+    // Ensure LIBRE N3 exists
+    await client.query(`
+      INSERT INTO categories (game_type, level, display_name)
+      VALUES ('LIBRE', 'N3', 'LIBRE - NATIONALE 3')
+      ON CONFLICT (game_type, level) DO NOTHING
+    `);
 
     // Initialize mode mappings (IONOS mode names -> internal game_type)
     const modeMappings = [
@@ -570,12 +583,12 @@ async function initializeDatabase() {
     const categories = categoriesResult.rows;
 
     // Define IONOS category variations for each internal level
+    // Note: N3GC, N3 GC etc. are variations that should map to N3 (not separate categories)
     const categoryVariations = {
-      // National levels
+      // National levels - N3 includes all GC variations for LIBRE
       'N1': ['N1', 'N 1', 'n1', 'NATIONALE 1', 'Nationale 1'],
       'N2': ['N2', 'N 2', 'n2', 'NATIONALE 2', 'Nationale 2'],
-      'N3': ['N3', 'N 3', 'n3', 'NATIONALE 3', 'Nationale 3'],
-      'N3 GC': ['N3 GC', 'N3GC', 'N 3 GC', 'N3-GC', 'NATIONALE 3 GC'],
+      'N3': ['N3', 'N 3', 'n3', 'NATIONALE 3', 'Nationale 3', 'N3GC', 'N3 GC', 'N 3 GC', 'N3-GC', 'NATIONALE 3 GC', 'n3gc', 'N3 gc'],
       // Regional levels
       'R1': ['R1', 'R 1', 'r1', 'REGIONALE 1', 'Regionale 1', 'Régionale 1'],
       'R2': ['R2', 'R 2', 'r2', 'REGIONALE 2', 'Regionale 2', 'Régionale 2'],
@@ -588,52 +601,32 @@ async function initializeDatabase() {
     };
 
     for (const category of categories) {
-      // Get the base level (strip any suffix like "GC", "HC", etc.)
       const baseLevel = category.level.toUpperCase().replace(/\s+/g, ' ').trim();
-
-      // For categories with suffixes (like N3 GC), only add their specific variations
-      // Don't add base variations (N3) to suffix categories (N3 GC)
-      const hasSuffix = /\s*(GC|HC|JC|SC)$/i.test(category.level);
-
-      let variations;
-      if (hasSuffix) {
-        // Only use variations specific to this suffix level
-        variations = categoryVariations[baseLevel] || [baseLevel];
-      } else {
-        // For base levels (N3, R1, etc.), use the base variations
-        variations = categoryVariations[baseLevel] || [baseLevel];
-      }
+      const variations = categoryVariations[baseLevel] || [baseLevel];
 
       for (const variation of variations) {
         await client.query(
           `INSERT INTO category_mapping (ionos_categorie, game_type, category_id)
            VALUES ($1, $2, $3)
-           ON CONFLICT (ionos_categorie, game_type) DO NOTHING`,
+           ON CONFLICT (ionos_categorie, game_type) DO UPDATE SET category_id = $3`,
           [variation, category.game_type, category.id]
         );
       }
     }
 
-    // Fix: Ensure base N3 variations map to N3 category, not N3 GC
-    // Find the N3 category (without GC suffix) for each game type
-    for (const gameType of ['LIBRE', 'CADRE', 'BANDE', '3BANDES']) {
-      const n3Category = categories.find(c =>
-        c.game_type === gameType &&
-        c.level.toUpperCase() === 'N3'
-      );
-
-      if (n3Category) {
-        const baseVariations = ['N3', 'N 3', 'n3', 'NATIONALE 3', 'Nationale 3'];
-        for (const variation of baseVariations) {
-          // Update existing mappings to point to N3 (not N3 GC)
-          await client.query(
-            `UPDATE category_mapping
-             SET category_id = $1
-             WHERE ionos_categorie = $2 AND game_type = $3`,
-            [n3Category.id, variation, gameType]
-          );
-        }
+    // Fix: Ensure ALL N3 variations (including N3GC) map to LIBRE N3
+    const libreN3 = categories.find(c => c.game_type === 'LIBRE' && c.level === 'N3');
+    if (libreN3) {
+      const allN3Variations = ['N3', 'N 3', 'n3', 'NATIONALE 3', 'Nationale 3', 'N3GC', 'N3 GC', 'N 3 GC', 'N3-GC', 'NATIONALE 3 GC', 'n3gc', 'N3 gc'];
+      for (const variation of allN3Variations) {
+        await client.query(
+          `INSERT INTO category_mapping (ionos_categorie, game_type, category_id)
+           VALUES ($1, 'LIBRE', $2)
+           ON CONFLICT (ionos_categorie, game_type) DO UPDATE SET category_id = $2`,
+          [variation, libreN3.id]
+        );
       }
+      console.log('LIBRE N3 mappings updated - all N3/N3GC variations now map to LIBRE N3');
     }
     console.log('Category mappings initialized');
 
