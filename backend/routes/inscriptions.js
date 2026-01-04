@@ -509,7 +509,7 @@ router.get('/tournoi/upcoming', authenticateToken, (req, res) => {
 
   const query = `
     SELECT t.*,
-           COALESCE(COUNT(CASE WHEN i.forfait != 1 OR i.forfait IS NULL THEN 1 END), 0) as inscrit_count
+           COUNT(CASE WHEN i.inscription_id IS NOT NULL AND (i.forfait IS NULL OR i.forfait != 1) THEN 1 END) as inscrit_count
     FROM tournoi_ext t
     LEFT JOIN inscriptions i ON t.tournoi_id = i.tournoi_id
     WHERE t.debut >= $1 AND t.debut <= $2
@@ -548,7 +548,7 @@ router.get('/finales/upcoming', authenticateToken, (req, res) => {
   // Finals are identified by name containing "Finale" (case insensitive)
   const query = `
     SELECT t.*,
-           COALESCE(COUNT(CASE WHEN i.forfait != 1 OR i.forfait IS NULL THEN 1 END), 0) as inscrit_count
+           COUNT(CASE WHEN i.inscription_id IS NOT NULL AND (i.forfait IS NULL OR i.forfait != 1) THEN 1 END) as inscrit_count
     FROM tournoi_ext t
     LEFT JOIN inscriptions i ON t.tournoi_id = i.tournoi_id
     WHERE t.debut >= $1 AND t.debut <= $2
