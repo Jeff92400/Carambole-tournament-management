@@ -22,6 +22,13 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
   try {
     let fileContent = fs.readFileSync(req.file.path, 'utf-8');
 
+    // Detect delimiter: check if file uses semicolons (IONOS format) or commas
+    const firstLine = fileContent.split('\n')[0] || '';
+    const semicolonCount = (firstLine.match(/;/g) || []).length;
+    const commaCount = (firstLine.match(/,/g) || []).length;
+    const delimiter = semicolonCount > commaCount ? ';' : ',';
+    console.log(`CSV delimiter detected: "${delimiter}" (semicolons: ${semicolonCount}, commas: ${commaCount})`);
+
     // Fix CSV format: remove outer quotes and fix double quotes
     // Format: "field1,""field2"",""field3""" becomes field1,"field2","field3"
     const lines = fileContent.split('\n');
@@ -29,8 +36,8 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
       line = line.trim();
       if (!line) return line;
 
-      // Remove outer quotes if present
-      if (line.startsWith('"') && line.endsWith('"')) {
+      // Remove outer quotes if present (only if the entire line is wrapped)
+      if (line.startsWith('"') && line.endsWith('"') && line.indexOf(delimiter) === -1) {
         line = line.slice(1, -1);
       }
 
@@ -44,11 +51,12 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
     const records = [];
 
     const parser = parse(fileContent, {
-      delimiter: ',',
+      delimiter: delimiter,
       skip_empty_lines: true,
       quote: '"',
       escape: '"',
-      relax_column_count: true
+      relax_column_count: true,
+      relax_quotes: true  // Allow quotes in unquoted fields
     });
 
     for await (const record of parser) {
