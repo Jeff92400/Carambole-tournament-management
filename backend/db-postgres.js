@@ -99,6 +99,38 @@ async function initializeDatabase() {
       WHERE UPPER(last_name) LIKE '%RALLET%' OR UPPER(last_name) LIKE '%HUI BON HOA%'
     `);
 
+    // Populate players email/telephone from inscriptions (batch migration)
+    // Uses most recent inscription for each player
+    await client.query(`
+      UPDATE players p
+      SET email = i.email
+      FROM (
+        SELECT DISTINCT ON (REPLACE(licence, ' ', ''))
+          REPLACE(licence, ' ', '') as clean_licence,
+          email
+        FROM inscriptions
+        WHERE email IS NOT NULL AND email != ''
+        ORDER BY REPLACE(licence, ' ', ''), timestamp DESC
+      ) i
+      WHERE REPLACE(p.licence, ' ', '') = i.clean_licence
+        AND (p.email IS NULL OR p.email = '')
+    `);
+
+    await client.query(`
+      UPDATE players p
+      SET telephone = i.telephone
+      FROM (
+        SELECT DISTINCT ON (REPLACE(licence, ' ', ''))
+          REPLACE(licence, ' ', '') as clean_licence,
+          telephone
+        FROM inscriptions
+        WHERE telephone IS NOT NULL AND telephone != ''
+        ORDER BY REPLACE(licence, ' ', ''), timestamp DESC
+      ) i
+      WHERE REPLACE(p.licence, ' ', '') = i.clean_licence
+        AND (p.telephone IS NULL OR p.telephone = '')
+    `);
+
     // Categories table
     await client.query(`
       CREATE TABLE IF NOT EXISTS categories (

@@ -396,6 +396,64 @@ router.post('/:licence/reset-password', authenticateToken, async (req, res) => {
   }
 });
 
+// Batch: Populate players email/telephone from inscriptions
+router.post('/batch/populate-from-inscriptions', authenticateToken, async (req, res) => {
+  try {
+    // Update emails from most recent inscriptions
+    const emailResult = await new Promise((resolve, reject) => {
+      db.run(`
+        UPDATE players p
+        SET email = i.email
+        FROM (
+          SELECT DISTINCT ON (REPLACE(licence, ' ', ''))
+            REPLACE(licence, ' ', '') as clean_licence,
+            email
+          FROM inscriptions
+          WHERE email IS NOT NULL AND email != ''
+          ORDER BY REPLACE(licence, ' ', ''), timestamp DESC
+        ) i
+        WHERE REPLACE(p.licence, ' ', '') = i.clean_licence
+          AND (p.email IS NULL OR p.email = '')
+      `, [], function(err) {
+        if (err) reject(err);
+        else resolve(this.changes || 0);
+      });
+    });
+
+    // Update telephones from most recent inscriptions
+    const phoneResult = await new Promise((resolve, reject) => {
+      db.run(`
+        UPDATE players p
+        SET telephone = i.telephone
+        FROM (
+          SELECT DISTINCT ON (REPLACE(licence, ' ', ''))
+            REPLACE(licence, ' ', '') as clean_licence,
+            telephone
+          FROM inscriptions
+          WHERE telephone IS NOT NULL AND telephone != ''
+          ORDER BY REPLACE(licence, ' ', ''), timestamp DESC
+        ) i
+        WHERE REPLACE(p.licence, ' ', '') = i.clean_licence
+          AND (p.telephone IS NULL OR p.telephone = '')
+      `, [], function(err) {
+        if (err) reject(err);
+        else resolve(this.changes || 0);
+      });
+    });
+
+    res.json({
+      success: true,
+      emailsUpdated: emailResult,
+      phonesUpdated: phoneResult,
+      message: `${emailResult} emails et ${phoneResult} telephones mis a jour`
+    });
+
+  } catch (error) {
+    console.error('Batch populate error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Get player tournament history
 router.get('/:licence/history', authenticateToken, (req, res) => {
   const query = `
