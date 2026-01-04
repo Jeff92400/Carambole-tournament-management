@@ -265,6 +265,52 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
   }
 });
 
+// DIAGNOSTIC: Find orphaned inscriptions (inscriptions whose tournoi_id doesn't match expected)
+router.get('/diagnostic/n3-inscriptions', authenticateToken, async (req, res) => {
+  try {
+    // Get all LIBRE N3 tournaments
+    const tournaments = await new Promise((resolve, reject) => {
+      db.all(`
+        SELECT tournoi_id, nom, mode, categorie, debut
+        FROM tournoi_ext
+        WHERE UPPER(mode) = 'LIBRE' AND UPPER(categorie) LIKE '%N3%'
+        ORDER BY debut DESC
+      `, [], (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows || []);
+      });
+    });
+
+    // Get all inscriptions that might be related to N3 tournaments
+    const inscriptions = await new Promise((resolve, reject) => {
+      db.all(`
+        SELECT i.inscription_id, i.tournoi_id, i.licence, i.forfait,
+               t.nom as tournoi_nom, t.mode, t.categorie
+        FROM inscriptions i
+        LEFT JOIN tournoi_ext t ON i.tournoi_id = t.tournoi_id
+        WHERE t.mode IS NULL
+           OR (UPPER(t.mode) = 'LIBRE' AND UPPER(t.categorie) LIKE '%N3%')
+        ORDER BY i.tournoi_id
+      `, [], (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows || []);
+      });
+    });
+
+    res.json({
+      tournaments,
+      inscriptions,
+      summary: {
+        tournament_count: tournaments.length,
+        inscription_count: inscriptions.length,
+        orphaned: inscriptions.filter(i => !i.tournoi_nom).length
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Get all external tournaments
 router.get('/tournoi', authenticateToken, async (req, res) => {
   const { mode, categorie } = req.query;
