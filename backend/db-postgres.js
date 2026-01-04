@@ -301,6 +301,18 @@ async function initializeDatabase() {
       )
     `);
 
+    // Category mapping table - maps IONOS category names to internal category IDs
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS category_mapping (
+        id SERIAL PRIMARY KEY,
+        ionos_categorie TEXT NOT NULL,
+        game_type TEXT NOT NULL,
+        category_id INTEGER REFERENCES categories(id),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(ionos_categorie, game_type)
+      )
+    `);
+
     // Import history table - tracks all file imports from IONOS
     await client.query(`
       CREATE TABLE IF NOT EXISTS import_history (
@@ -551,6 +563,47 @@ async function initializeDatabase() {
       );
     }
     console.log('Mode mappings initialized');
+
+    // Initialize category mappings
+    // First, get all existing categories
+    const categoriesResult = await client.query('SELECT id, game_type, level FROM categories');
+    const categories = categoriesResult.rows;
+
+    // Define IONOS category variations for each internal level
+    const categoryVariations = {
+      // National levels
+      'N1': ['N1', 'N 1', 'n1', 'NATIONALE 1', 'Nationale 1'],
+      'N2': ['N2', 'N 2', 'n2', 'NATIONALE 2', 'Nationale 2'],
+      'N3': ['N3', 'N 3', 'n3', 'NATIONALE 3', 'Nationale 3'],
+      'N3 GC': ['N3 GC', 'N3GC', 'N 3 GC', 'N3-GC', 'NATIONALE 3 GC'],
+      // Regional levels
+      'R1': ['R1', 'R 1', 'r1', 'REGIONALE 1', 'Regionale 1', 'Régionale 1'],
+      'R2': ['R2', 'R 2', 'r2', 'REGIONALE 2', 'Regionale 2', 'Régionale 2'],
+      'R3': ['R3', 'R 3', 'r3', 'REGIONALE 3', 'Regionale 3', 'Régionale 3'],
+      'R4': ['R4', 'R 4', 'r4', 'REGIONALE 4', 'Regionale 4', 'Régionale 4'],
+      // Departmental levels
+      'D1': ['D1', 'D 1', 'd1', 'DEPARTEMENTALE 1', 'Departementale 1', 'Départementale 1'],
+      'D2': ['D2', 'D 2', 'd2', 'DEPARTEMENTALE 2', 'Departementale 2', 'Départementale 2'],
+      'D3': ['D3', 'D 3', 'd3', 'DEPARTEMENTALE 3', 'Departementale 3', 'Départementale 3']
+    };
+
+    for (const category of categories) {
+      // Get the base level (strip any suffix like "GC", "HC", etc.)
+      const baseLevel = category.level.toUpperCase().replace(/\s+/g, ' ').trim();
+
+      // Find matching variations for this level
+      const variations = categoryVariations[baseLevel] || categoryVariations[baseLevel.replace(/\s*(GC|HC|JC|SC)$/i, '')] || [baseLevel];
+
+      for (const variation of variations) {
+        await client.query(
+          `INSERT INTO category_mapping (ionos_categorie, game_type, category_id)
+           VALUES ($1, $2, $3)
+           ON CONFLICT (ionos_categorie, game_type) DO NOTHING`,
+          [variation, category.game_type, category.id]
+        );
+      }
+    }
+    console.log('Category mappings initialized');
 
     // Initialize game parameters (if empty)
     const gameParamsResult = await client.query('SELECT COUNT(*) as count FROM game_parameters');

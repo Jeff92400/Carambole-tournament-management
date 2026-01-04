@@ -348,9 +348,35 @@ router.get('/tournoi', authenticateToken, async (req, res) => {
     }
   }
   if (categorie) {
-    // Case-insensitive matching for categorie
-    conditions.push(`UPPER(categorie) = UPPER($${params.length + 1})`);
-    params.push(categorie);
+    // Use category_mapping table to find all IONOS category variations
+    try {
+      const catMappingQuery = mode
+        ? 'SELECT DISTINCT ionos_categorie FROM category_mapping WHERE UPPER(ionos_categorie) = UPPER($1) OR category_id IN (SELECT category_id FROM category_mapping WHERE UPPER(ionos_categorie) = UPPER($1) AND UPPER(game_type) = UPPER($2))'
+        : 'SELECT DISTINCT ionos_categorie FROM category_mapping WHERE UPPER(ionos_categorie) = UPPER($1) OR category_id IN (SELECT category_id FROM category_mapping WHERE UPPER(ionos_categorie) = UPPER($1))';
+
+      const catMappingParams = mode ? [categorie, mode] : [categorie];
+      const catMappingResult = await new Promise((resolve, reject) => {
+        db.all(catMappingQuery, catMappingParams, (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows || []);
+        });
+      });
+
+      if (catMappingResult.length > 0) {
+        // Match any of the mapped category variations
+        const placeholders = catMappingResult.map((_, i) => `$${params.length + i + 1}`).join(', ');
+        conditions.push(`UPPER(categorie) IN (${placeholders})`);
+        catMappingResult.forEach(m => params.push(m.ionos_categorie.toUpperCase()));
+      } else {
+        // Fallback: direct case-insensitive matching
+        conditions.push(`UPPER(categorie) = UPPER($${params.length + 1})`);
+        params.push(categorie);
+      }
+    } catch (err) {
+      // Fallback on error
+      conditions.push(`UPPER(categorie) = UPPER($${params.length + 1})`);
+      params.push(categorie);
+    }
   }
 
   if (conditions.length > 0) {

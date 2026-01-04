@@ -191,6 +191,72 @@
       <div id="gameParamsMessage" style="display: none; margin-top: 15px; padding: 10px; border-radius: 4px;"></div>
     </div>
 
+    <!-- Category Mappings Section - Admin Only -->
+    <div class="card admin-only" id="categoryMappingsSection">
+      <h3>Correspondances de catégories IONOS</h3>
+      <p style="margin-bottom: 20px; color: #666;">
+        Gérez les correspondances entre les noms de catégories dans les fichiers IONOS et les catégories internes du système.
+        Cela permet de reconnaître automatiquement les variations d'écriture (ex: "N3", "N 3", "NATIONALE 3").
+      </p>
+
+      <!-- Add New Mapping Form -->
+      <div style="margin-bottom: 25px; padding: 20px; background: #f8f9fa; border-radius: 8px;">
+        <h4 style="margin-top: 0; margin-bottom: 15px; color: #1F4788;">Ajouter une correspondance</h4>
+        <form id="addMappingForm" style="display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 15px; align-items: end;">
+          <div class="form-group" style="margin-bottom: 0;">
+            <label for="newIonosCategorie">Valeur IONOS :</label>
+            <input type="text" id="newIonosCategorie" required placeholder="ex: N 3, NATIONALE 3">
+          </div>
+          <div class="form-group" style="margin-bottom: 0;">
+            <label for="newMappingGameType">Mode :</label>
+            <select id="newMappingGameType" required style="padding: 10px; border: 1px solid #ddd; border-radius: 4px; width: 100%;">
+              <option value="">Sélectionner...</option>
+              <option value="LIBRE">LIBRE</option>
+              <option value="CADRE">CADRE</option>
+              <option value="BANDE">BANDE</option>
+              <option value="3BANDES">3 BANDES</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin-bottom: 0;">
+            <label for="newMappingCategory">Catégorie interne :</label>
+            <select id="newMappingCategory" required style="padding: 10px; border: 1px solid #ddd; border-radius: 4px; width: 100%;">
+              <option value="">Sélectionner...</option>
+            </select>
+          </div>
+          <button type="submit" class="btn" style="background: #28a745; padding: 10px 20px;">
+            Ajouter
+          </button>
+        </form>
+      </div>
+
+      <!-- Mappings Table -->
+      <div id="categoryMappingsTable" style="overflow-x: auto;">
+        <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+          <thead>
+            <tr style="background: #1F4788; color: white;">
+              <th style="padding: 12px; text-align: left;">Mode</th>
+              <th style="padding: 12px; text-align: left;">Catégorie interne</th>
+              <th style="padding: 12px; text-align: left;">Variations IONOS acceptées</th>
+              <th style="padding: 12px; text-align: center; width: 100px;">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="categoryMappingsBody">
+            <tr><td colspan="4" style="text-align: center; padding: 20px; color: #666;">Chargement...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div id="categoryMappingsMessage" style="display: none; margin-top: 15px; padding: 10px; border-radius: 4px;"></div>
+
+      <div style="margin-top: 20px; padding: 15px; background: #fff3cd; border-left: 4px solid #ffc107; border-radius: 4px;">
+        <strong>Note :</strong>
+        <p style="margin: 10px 0 0 0; color: #666;">
+          Les correspondances permettent au système de reconnaître automatiquement les catégories lors de l'import des fichiers IONOS,
+          même si l'orthographe varie. Par exemple, "N3", "N 3" et "NATIONALE 3" peuvent tous correspondre à la même catégorie interne.
+        </p>
+      </div>
+    </div>
+
     <!-- Contact Email Settings - Admin Only -->
     <div class="card admin-only" id="contactEmailSection">
       <h3>Email de contact</h3>
@@ -1513,6 +1579,162 @@
     loadGameParameters();
 
     // ============= END GAME PARAMETERS MANAGEMENT =============
+
+    // ============= CATEGORY MAPPINGS MANAGEMENT =============
+
+    let allCategories = [];
+
+    // Load categories for dropdown
+    async function loadCategories() {
+      try {
+        const response = await fetch(`${API_URL}/settings/categories`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          allCategories = await response.json();
+          updateCategoryDropdown();
+        }
+      } catch (error) {
+        console.error('Error loading categories:', error);
+      }
+    }
+
+    // Update category dropdown based on selected game type
+    function updateCategoryDropdown() {
+      const gameType = document.getElementById('newMappingGameType').value;
+      const categorySelect = document.getElementById('newMappingCategory');
+
+      categorySelect.innerHTML = '<option value="">Sélectionner...</option>';
+
+      const filtered = allCategories.filter(c => !gameType || c.game_type === gameType);
+      filtered.forEach(c => {
+        const option = document.createElement('option');
+        option.value = c.id;
+        option.textContent = `${c.game_type} - ${c.level}`;
+        categorySelect.appendChild(option);
+      });
+    }
+
+    // Load category mappings
+    async function loadCategoryMappings() {
+      try {
+        const response = await fetch(`${API_URL}/settings/category-mappings/grouped`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (!response.ok) throw new Error('Failed to load category mappings');
+
+        const mappings = await response.json();
+        const tbody = document.getElementById('categoryMappingsBody');
+
+        if (mappings.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 20px; color: #666;">Aucune correspondance configurée</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = mappings.map(group => `
+          <tr style="border-bottom: 1px solid #eee;">
+            <td style="padding: 12px; font-weight: 500;">${group.game_type}</td>
+            <td style="padding: 12px;">${group.level || 'N/A'}</td>
+            <td style="padding: 12px;">
+              <div style="display: flex; flex-wrap: wrap; gap: 5px;">
+                ${group.variations.map(v => `
+                  <span style="background: #e7f3ff; padding: 4px 10px; border-radius: 15px; font-size: 13px; display: inline-flex; align-items: center; gap: 5px;">
+                    ${v.ionos_categorie}
+                    <button onclick="deleteMapping(${v.id})" style="background: none; border: none; color: #dc3545; cursor: pointer; font-size: 14px; padding: 0; line-height: 1;" title="Supprimer">×</button>
+                  </span>
+                `).join('')}
+              </div>
+            </td>
+            <td style="padding: 12px; text-align: center;">
+              <span style="color: #666; font-size: 12px;">${group.variations.length} variation(s)</span>
+            </td>
+          </tr>
+        `).join('');
+
+      } catch (error) {
+        console.error('Error loading category mappings:', error);
+        document.getElementById('categoryMappingsBody').innerHTML =
+          '<tr><td colspan="4" style="text-align: center; padding: 20px; color: #dc3545;">Erreur de chargement</td></tr>';
+      }
+    }
+
+    // Add new mapping
+    document.getElementById('addMappingForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const ionos_categorie = document.getElementById('newIonosCategorie').value.trim();
+      const game_type = document.getElementById('newMappingGameType').value;
+      const category_id = document.getElementById('newMappingCategory').value;
+
+      if (!ionos_categorie || !game_type || !category_id) {
+        showCategoryMappingsMessage('Tous les champs sont requis', 'error');
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API_URL}/settings/category-mappings`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ ionos_categorie, game_type, category_id: parseInt(category_id) })
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || 'Erreur lors de l\'ajout');
+        }
+
+        showCategoryMappingsMessage('Correspondance ajoutée avec succès', 'success');
+        document.getElementById('addMappingForm').reset();
+        loadCategoryMappings();
+      } catch (error) {
+        showCategoryMappingsMessage(error.message, 'error');
+      }
+    });
+
+    // Delete mapping
+    async function deleteMapping(id) {
+      if (!confirm('Supprimer cette correspondance ?')) return;
+
+      try {
+        const response = await fetch(`${API_URL}/settings/category-mappings/${id}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || 'Erreur lors de la suppression');
+        }
+
+        showCategoryMappingsMessage('Correspondance supprimée', 'success');
+        loadCategoryMappings();
+      } catch (error) {
+        showCategoryMappingsMessage(error.message, 'error');
+      }
+    }
+
+    // Show message
+    function showCategoryMappingsMessage(message, type) {
+      const msgDiv = document.getElementById('categoryMappingsMessage');
+      msgDiv.textContent = message;
+      msgDiv.style.background = type === 'success' ? '#d4edda' : '#f8d7da';
+      msgDiv.style.color = type === 'success' ? '#155724' : '#721c24';
+      msgDiv.style.display = 'block';
+      setTimeout(() => { msgDiv.style.display = 'none'; }, 5000);
+    }
+
+    // Update category dropdown when game type changes
+    document.getElementById('newMappingGameType').addEventListener('change', updateCategoryDropdown);
+
+    // Load category mappings on page load
+    loadCategories();
+    loadCategoryMappings();
+
+    // ============= END CATEGORY MAPPINGS MANAGEMENT =============
   </script>
 
   <!-- Edit Game Parameter Modal -->

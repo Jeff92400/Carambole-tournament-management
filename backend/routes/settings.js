@@ -276,4 +276,155 @@ router.put('/email-template/:key', authenticateToken, requireAdmin, (req, res) =
   );
 });
 
+// ============= CATEGORY MAPPINGS =============
+
+// Get all category mappings
+router.get('/category-mappings', authenticateToken, (req, res) => {
+  const db = getDb();
+
+  db.all(
+    `SELECT cm.*, c.level, c.display_name
+     FROM category_mapping cm
+     LEFT JOIN categories c ON cm.category_id = c.id
+     ORDER BY cm.game_type, cm.ionos_categorie`,
+    [],
+    (err, rows) => {
+      if (err) {
+        console.error('Error fetching category mappings:', err);
+        return res.status(500).json({ error: err.message });
+      }
+      res.json(rows || []);
+    }
+  );
+});
+
+// Get category mappings grouped by game_type and category
+router.get('/category-mappings/grouped', authenticateToken, (req, res) => {
+  const db = getDb();
+
+  db.all(
+    `SELECT cm.*, c.level, c.display_name
+     FROM category_mapping cm
+     LEFT JOIN categories c ON cm.category_id = c.id
+     ORDER BY cm.game_type, c.level, cm.ionos_categorie`,
+    [],
+    (err, rows) => {
+      if (err) {
+        console.error('Error fetching category mappings:', err);
+        return res.status(500).json({ error: err.message });
+      }
+
+      // Group by game_type and category
+      const grouped = {};
+      (rows || []).forEach(row => {
+        const key = `${row.game_type}-${row.category_id}`;
+        if (!grouped[key]) {
+          grouped[key] = {
+            game_type: row.game_type,
+            category_id: row.category_id,
+            level: row.level,
+            display_name: row.display_name,
+            variations: []
+          };
+        }
+        grouped[key].variations.push({
+          id: row.id,
+          ionos_categorie: row.ionos_categorie
+        });
+      });
+
+      res.json(Object.values(grouped));
+    }
+  );
+});
+
+// Add a new category mapping (admin only)
+router.post('/category-mappings', authenticateToken, requireAdmin, (req, res) => {
+  const db = getDb();
+  const { ionos_categorie, game_type, category_id } = req.body;
+
+  if (!ionos_categorie || !game_type || !category_id) {
+    return res.status(400).json({ error: 'ionos_categorie, game_type, and category_id are required' });
+  }
+
+  db.run(
+    `INSERT INTO category_mapping (ionos_categorie, game_type, category_id)
+     VALUES ($1, $2, $3)`,
+    [ionos_categorie.trim(), game_type.toUpperCase(), category_id],
+    function(err) {
+      if (err) {
+        if (err.message.includes('UNIQUE constraint') || err.message.includes('unique constraint')) {
+          return res.status(409).json({ error: 'This mapping already exists' });
+        }
+        console.error('Error adding category mapping:', err);
+        return res.status(500).json({ error: err.message });
+      }
+      res.json({ success: true, id: this.lastID, message: 'Category mapping added' });
+    }
+  );
+});
+
+// Delete a category mapping (admin only)
+router.delete('/category-mappings/:id', authenticateToken, requireAdmin, (req, res) => {
+  const db = getDb();
+  const { id } = req.params;
+
+  db.run(
+    'DELETE FROM category_mapping WHERE id = $1',
+    [id],
+    function(err) {
+      if (err) {
+        console.error('Error deleting category mapping:', err);
+        return res.status(500).json({ error: err.message });
+      }
+      if (this.changes === 0) {
+        return res.status(404).json({ error: 'Mapping not found' });
+      }
+      res.json({ success: true, message: 'Category mapping deleted' });
+    }
+  );
+});
+
+// Get all categories (for dropdown)
+router.get('/categories', authenticateToken, (req, res) => {
+  const db = getDb();
+
+  db.all(
+    `SELECT * FROM categories ORDER BY game_type, level`,
+    [],
+    (err, rows) => {
+      if (err) {
+        console.error('Error fetching categories:', err);
+        return res.status(500).json({ error: err.message });
+      }
+      res.json(rows || []);
+    }
+  );
+});
+
+// Lookup category by IONOS values (used during matching)
+router.get('/category-mappings/lookup', authenticateToken, (req, res) => {
+  const db = getDb();
+  const { ionos_categorie, game_type } = req.query;
+
+  if (!ionos_categorie || !game_type) {
+    return res.status(400).json({ error: 'ionos_categorie and game_type are required' });
+  }
+
+  db.get(
+    `SELECT cm.*, c.level, c.display_name
+     FROM category_mapping cm
+     JOIN categories c ON cm.category_id = c.id
+     WHERE UPPER(cm.ionos_categorie) = UPPER($1) AND UPPER(cm.game_type) = UPPER($2)`,
+    [ionos_categorie.trim(), game_type.trim()],
+    (err, row) => {
+      if (err) {
+        console.error('Error looking up category mapping:', err);
+        return res.status(500).json({ error: err.message });
+      }
+      res.json(row || null);
+    }
+  );
+});
+
 module.exports = router;
