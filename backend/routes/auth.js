@@ -7,6 +7,37 @@ const db = require('../db-loader');
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'billard-ranking-jwt-secret-key-2024-change-in-production';
 
+// In-memory store for reset codes (email -> { code, timestamp })
+const resetCodes = new Map();
+const RESET_CODE_EXPIRY = 10 * 60 * 1000; // 10 minutes
+
+// Generate 6-digit reset code
+function generateResetCode() {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
+// Store reset code
+function storeResetCode(email, code) {
+  resetCodes.set(email.toLowerCase(), { code, timestamp: Date.now() });
+}
+
+// Verify reset code
+function verifyResetCode(email, code) {
+  const stored = resetCodes.get(email.toLowerCase());
+  if (!stored) {
+    return { valid: false, error: 'Code invalide ou expire' };
+  }
+  if (Date.now() - stored.timestamp > RESET_CODE_EXPIRY) {
+    resetCodes.delete(email.toLowerCase());
+    return { valid: false, error: 'Code expire' };
+  }
+  if (stored.code !== code) {
+    return { valid: false, error: 'Code incorrect' };
+  }
+  resetCodes.delete(email.toLowerCase());
+  return { valid: true };
+}
+
 // Login with username and password
 router.post('/login', (req, res) => {
   const { username, password } = req.body;
@@ -265,6 +296,122 @@ router.post('/reset-password-token', (req, res) => {
       });
     }
   );
+});
+
+// ==================== 6-DIGIT CODE PASSWORD RESET ====================
+
+// Forgot password - send 6-digit code via email
+router.post('/forgot', async (req, res) => {
+  const { email } = req.body;
+
+  if (!email) {
+    return res.status(400).json({ error: 'Email requis' });
+  }
+
+  const normalizedEmail = email.toLowerCase().trim();
+
+  // Always return same response to prevent email enumeration
+  const standardResponse = {
+    success: true,
+    message: 'Si un compte existe avec cette adresse, un code de reinitialisation a ete envoye'
+  };
+
+  // Find user by email
+  db.get('SELECT * FROM users WHERE email = $1 AND is_active = 1', [normalizedEmail], async (err, user) => {
+    if (err || !user) {
+      return res.json(standardResponse);
+    }
+
+    // Generate 6-digit reset code
+    const code = generateResetCode();
+    storeResetCode(normalizedEmail, code);
+
+    console.log(`Password reset code generated for ${normalizedEmail}: ${code}`);
+
+    // Send email with code
+    try {
+      const { Resend } = require('resend');
+      const resend = new Resend(process.env.RESEND_API_KEY);
+
+      if (resend) {
+        await resend.emails.send({
+          from: 'CDBHS <noreply@cdbhs.net>',
+          replyTo: 'cdbhs92@gmail.com',
+          to: [normalizedEmail],
+          subject: 'CDBHS - Code de reinitialisation',
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto;">
+              <div style="background: #1F4788; color: white; padding: 20px; text-align: center;">
+                <h1 style="margin: 0; font-size: 24px;">CDBHS Tournois</h1>
+              </div>
+              <div style="padding: 30px; background: #f8f9fa;">
+                <p>Bonjour ${user.username},</p>
+                <p>Vous avez demande la reinitialisation de votre mot de passe.</p>
+                <p>Voici votre code de verification :</p>
+                <div style="background: #1F4788; color: white; font-size: 32px; font-weight: bold; letter-spacing: 8px; text-align: center; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                  ${code}
+                </div>
+                <p style="color: #666; font-size: 14px;">Ce code expire dans 10 minutes.</p>
+                <p style="color: #666; font-size: 14px;">Si vous n'avez pas demande cette reinitialisation, ignorez cet email.</p>
+              </div>
+              <div style="padding: 15px; background: #e9ecef; text-align: center; font-size: 12px; color: #666;">
+                CDBHS - Comite Departemental de Billard des Hauts-de-Seine
+              </div>
+            </div>
+          `
+        });
+        console.log(`Reset code email sent to ${normalizedEmail}`);
+      }
+    } catch (emailErr) {
+      console.error('Error sending reset code email:', emailErr);
+    }
+
+    res.json(standardResponse);
+  });
+});
+
+// Reset password with 6-digit code
+router.post('/reset-with-code', (req, res) => {
+  const { email, code, password } = req.body;
+
+  if (!email || !code || !password) {
+    return res.status(400).json({ error: 'Email, code et nouveau mot de passe requis' });
+  }
+
+  const normalizedEmail = email.toLowerCase().trim();
+
+  // Verify code
+  const codeVerification = verifyResetCode(normalizedEmail, code);
+  if (!codeVerification.valid) {
+    return res.status(400).json({ error: codeVerification.error });
+  }
+
+  // Don't enforce strict password rules for now (as requested)
+  if (password.length < 6) {
+    return res.status(400).json({ error: 'Le mot de passe doit contenir au moins 6 caracteres' });
+  }
+
+  // Find user
+  db.get('SELECT * FROM users WHERE email = $1', [normalizedEmail], (err, user) => {
+    if (err || !user) {
+      return res.status(404).json({ error: 'Compte introuvable' });
+    }
+
+    bcrypt.hash(password, 10, (err, hash) => {
+      if (err) {
+        return res.status(500).json({ error: 'Erreur lors du changement de mot de passe' });
+      }
+
+      db.run('UPDATE users SET password_hash = $1 WHERE id = $2', [hash, user.id], (err) => {
+        if (err) {
+          return res.status(500).json({ error: 'Erreur lors de la mise a jour' });
+        }
+
+        console.log(`Password reset successful for ${normalizedEmail}`);
+        res.json({ success: true, message: 'Mot de passe reinitialise avec succes' });
+      });
+    });
+  });
 });
 
 // ==================== USER MANAGEMENT (Admin only) ====================
