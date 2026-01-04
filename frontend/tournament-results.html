@@ -138,18 +138,25 @@
 
     <div id="tournamentContent" style="display: none;">
       <div class="card">
-        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 15px;">
-          <div style="flex: 1;">
-            <h3 id="tournamentTitle" style="margin: 0 0 10px 0;">-</h3>
-            <p style="color: #666; margin: 0;">
-              <strong>Saison :</strong> <span id="tournamentSeason">-</span> &nbsp;|&nbsp;
-              <strong>Date :</strong> <span id="tournamentDate">-</span> &nbsp;|&nbsp;
-              <strong>Participants :</strong> <span id="participantCount">-</span>
-            </p>
+        <h3 id="tournamentTitle" style="margin-bottom: 15px;">-</h3>
+        <div class="filter-section">
+          <div class="form-group">
+            <label>Saison</label>
+            <div style="padding: 8px 0; font-weight: 500;" id="tournamentSeason">-</div>
           </div>
-          <button class="btn" id="exportExcelBtn" style="background: #28a745; color: white; white-space: nowrap; flex-shrink: 0; padding: 10px 20px; border-radius: 6px;">
-            📊 Exporter en Excel
-          </button>
+          <div class="form-group">
+            <label>Date</label>
+            <div style="padding: 8px 0; font-weight: 500;" id="tournamentDate">-</div>
+          </div>
+          <div class="form-group">
+            <label>Participants</label>
+            <div style="padding: 8px 0; font-weight: 500;" id="participantCount">-</div>
+          </div>
+          <div class="form-group" style="display: flex; align-items: flex-end;">
+            <button class="btn btn-success" id="exportExcelBtn" style="margin-top: 0;">
+              📊 Exporter en Excel
+            </button>
+          </div>
         </div>
       </div>
 
