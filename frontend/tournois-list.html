@@ -137,6 +137,17 @@
         </select>
         <input type="text" id="searchInput" placeholder="Rechercher par nom ou lieu...">
       </div>
+      <div class="filter-bar" style="margin-top: -10px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <label style="font-size: 13px; color: #666;">Du:</label>
+          <input type="date" id="dateFromFilter" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <label style="font-size: 13px; color: #666;">Au:</label>
+          <input type="date" id="dateToFilter" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+        </div>
+        <button class="btn" onclick="clearDateFilters()" style="background: #6c757d; padding: 8px 12px; font-size: 13px;">Effacer dates</button>
+      </div>
 
       <div id="loadingTournois" class="loading">
         <div class="spinner"></div>
@@ -521,15 +532,39 @@
       const modeFilter = document.getElementById('modeFilter').value;
       const categorieFilter = document.getElementById('categorieFilter').value;
       const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+      const dateFrom = document.getElementById('dateFromFilter').value;
+      const dateTo = document.getElementById('dateToFilter').value;
 
       let filtered = allTournois;
 
-      // Season filter
-      if (seasonFilter) {
+      // Season filter (only apply if no date filters are set)
+      if (seasonFilter && !dateFrom && !dateTo) {
         filtered = filtered.filter(t => {
           if (!t.debut) return false;
           const date = new Date(t.debut);
           return getSeasonForDate(date) === seasonFilter;
+        });
+      }
+
+      // Date from filter
+      if (dateFrom) {
+        const fromDate = new Date(dateFrom);
+        fromDate.setHours(0, 0, 0, 0);
+        filtered = filtered.filter(t => {
+          if (!t.debut) return false;
+          const tournoiDate = new Date(t.debut);
+          return tournoiDate >= fromDate;
+        });
+      }
+
+      // Date to filter
+      if (dateTo) {
+        const toDate = new Date(dateTo);
+        toDate.setHours(23, 59, 59, 999);
+        filtered = filtered.filter(t => {
+          if (!t.debut) return false;
+          const tournoiDate = new Date(t.debut);
+          return tournoiDate <= toDate;
         });
       }
 
@@ -554,6 +589,13 @@
       }
 
       displayTournois(filtered);
+    }
+
+    // Clear date filters
+    function clearDateFilters() {
+      document.getElementById('dateFromFilter').value = '';
+      document.getElementById('dateToFilter').value = '';
+      applyFilters();
     }
 
     // Open edit modal
@@ -698,6 +740,8 @@
     document.getElementById('modeFilter').addEventListener('change', applyFilters);
     document.getElementById('categorieFilter').addEventListener('change', applyFilters);
     document.getElementById('searchInput').addEventListener('input', applyFilters);
+    document.getElementById('dateFromFilter').addEventListener('change', applyFilters);
+    document.getElementById('dateToFilter').addEventListener('change', applyFilters);
 
     // Update season-specific stats (consistent with dashboard)
     async function updateSeasonStats() {
