@@ -355,12 +355,19 @@
           fileInput.value = '';
           fileName.style.display = 'none';
         } else {
-          errorDiv.textContent = data.error || 'Erreur lors de l\'import';
+          // Show detailed error from server
+          let errorMsg = data.error || 'Erreur lors de l\'import';
+          if (data.stack) {
+            errorMsg += '\n\nStack: ' + data.stack;
+          }
+          errorDiv.innerHTML = `<pre style="white-space: pre-wrap; word-break: break-word;">${errorMsg}</pre>`;
           errorDiv.style.display = 'block';
+          console.error('Import error:', data);
         }
       } catch (error) {
-        errorDiv.textContent = 'Erreur de connexion au serveur';
+        errorDiv.textContent = 'Erreur de connexion au serveur: ' + error.message;
         errorDiv.style.display = 'block';
+        console.error('Connection error:', error);
       } finally {
         importBtn.disabled = false;
         importBtn.textContent = 'Importer les joueurs';
