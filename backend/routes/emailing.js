@@ -3210,12 +3210,56 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
       const qualifiedCount = allRankings.length < 9 ? 4 : 6;
       participants = allRankings.filter(r => r.rank_position <= qualifiedCount);
 
+      // Try to get finale info from tournoi_ext if not provided in customData
+      let finaleDate = customData?.finale_date || '';
+      let finaleLieu = customData?.finale_lieu || '';
+      let deadlineDate = customData?.deadline_date || '';
+
+      // Auto-fetch from tournoi_ext if not provided
+      if (!finaleDate || !finaleLieu) {
+        const finale = await new Promise((resolve, reject) => {
+          db.get(
+            `SELECT * FROM tournoi_ext
+             WHERE UPPER(mode) = $1
+             AND (UPPER(categorie) = $2 OR UPPER(categorie) LIKE $3)
+             AND debut >= $4
+             ORDER BY debut ASC LIMIT 1`,
+            [mode.toUpperCase(), categoryUpper, categoryUpper + '%', new Date().toISOString().split('T')[0]],
+            (err, row) => {
+              if (err) reject(err);
+              else resolve(row);
+            }
+          );
+        });
+
+        if (finale) {
+          if (!finaleDate && finale.debut) {
+            finaleDate = new Date(finale.debut).toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+          }
+          if (!finaleLieu && finale.lieu) {
+            finaleLieu = finale.lieu;
+          }
+        }
+      }
+
+      // Auto-calculate deadline (7 days before finale) if not provided
+      if (!deadlineDate && finaleDate) {
+        // Try to parse the finale date to calculate deadline
+        const finaleMatch = finaleDate.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+        if (finaleMatch) {
+          const [_, day, month, year] = finaleMatch;
+          const finaleDateTime = new Date(year, month - 1, day);
+          finaleDateTime.setDate(finaleDateTime.getDate() - 7);
+          deadlineDate = finaleDateTime.toLocaleDateString('fr-FR');
+        }
+      }
+
       tournamentInfo = {
         category: categoryRow.display_name,
         qualified_count: qualifiedCount,
-        finale_date: customData?.finale_date || '',
-        finale_lieu: customData?.finale_lieu || '',
-        deadline_date: customData?.deadline_date || ''
+        finale_date: finaleDate,
+        finale_lieu: finaleLieu,
+        deadline_date: deadlineDate
       };
     }
 

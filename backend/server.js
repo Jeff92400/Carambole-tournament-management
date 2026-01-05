@@ -180,28 +180,126 @@ async function processTemplatedScheduledEmail(db, resend, scheduled, delay) {
 
   // Fetch recipients based on email type
   if (emailType.startsWith('relance_')) {
-    // Get all contacts for this mode/category
-    recipients = await new Promise((resolve, reject) => {
-      db.all(
-        `SELECT * FROM player_contacts WHERE email IS NOT NULL AND email LIKE '%@%'`,
-        [],
-        (err, rows) => {
+    // Parse custom data for template
+    const customData = scheduled.custom_data ? JSON.parse(scheduled.custom_data) : {};
+
+    // Look up category from database for proper display_name
+    const mode = (scheduled.mode || '').toUpperCase();
+    const categoryLevel = (scheduled.category || '').toUpperCase();
+
+    const categoryRow = await new Promise((resolve, reject) => {
+      db.get(
+        `SELECT * FROM categories WHERE UPPER(game_type) = $1 AND (UPPER(level) = $2 OR UPPER(level) LIKE $3)`,
+        [mode, categoryLevel, categoryLevel + '%'],
+        (err, row) => {
           if (err) reject(err);
-          else resolve(rows || []);
+          else resolve(row);
         }
       );
     });
 
-    // Parse custom data for template
-    const customData = scheduled.custom_data ? JSON.parse(scheduled.custom_data) : {};
-    templateVariables = {
-      category: `${scheduled.mode} ${scheduled.category}`,
-      tournament_date: customData.tournament_date || '',
-      tournament_lieu: customData.tournament_lieu || '',
-      finale_date: customData.finale_date || '',
-      finale_lieu: customData.finale_lieu || '',
-      deadline_date: customData.deadline_date || ''
-    };
+    const categoryDisplayName = categoryRow?.display_name || `${scheduled.mode} ${scheduled.category}`;
+
+    // For relance_finale, get qualified players with their rankings
+    if (emailType === 'relance_finale') {
+      // Get current season
+      const now = new Date();
+      const currentYear = now.getFullYear();
+      const currentMonth = now.getMonth();
+      const season = currentMonth >= 8 ? `${currentYear}-${currentYear + 1}` : `${currentYear - 1}-${currentYear}`;
+
+      // Fetch ranked players
+      const allRankings = await new Promise((resolve, reject) => {
+        db.all(
+          `SELECT r.*,
+                  pc.id as contact_id, pc.first_name, pc.last_name, pc.email, pc.club,
+                  COALESCE(pc.first_name || ' ' || pc.last_name, r.licence) as player_name
+           FROM rankings r
+           LEFT JOIN player_contacts pc ON REPLACE(r.licence, ' ', '') = REPLACE(pc.licence, ' ', '')
+           WHERE r.season = $1 AND r.category_id = $2
+           ORDER BY r.rank_position ASC`,
+          [season, categoryRow?.id],
+          (err, rows) => {
+            if (err) reject(err);
+            else resolve(rows || []);
+          }
+        );
+      });
+
+      const qualifiedCount = allRankings.length < 9 ? 4 : 6;
+      recipients = allRankings.filter(r => r.rank_position <= qualifiedCount && r.email);
+
+      // Fetch finale info from tournoi_ext if not in customData
+      let finaleDate = customData.finale_date || '';
+      let finaleLieu = customData.finale_lieu || '';
+
+      if (!finaleDate || !finaleLieu) {
+        const finale = await new Promise((resolve, reject) => {
+          db.get(
+            `SELECT * FROM tournoi_ext
+             WHERE UPPER(mode) = $1
+             AND (UPPER(categorie) = $2 OR UPPER(categorie) LIKE $3)
+             AND debut >= $4
+             ORDER BY debut ASC LIMIT 1`,
+            [mode, categoryLevel, categoryLevel + '%', new Date().toISOString().split('T')[0]],
+            (err, row) => {
+              if (err) reject(err);
+              else resolve(row);
+            }
+          );
+        });
+
+        if (finale) {
+          if (!finaleDate && finale.debut) {
+            finaleDate = new Date(finale.debut).toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+          }
+          if (!finaleLieu && finale.lieu) {
+            finaleLieu = finale.lieu;
+          }
+        }
+      }
+
+      // Auto-calculate deadline (7 days before finale) if not provided
+      let deadlineDate = customData.deadline_date || '';
+      if (!deadlineDate && finaleDate) {
+        const finaleMatch = finaleDate.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+        if (finaleMatch) {
+          const [_, day, month, year] = finaleMatch;
+          const finaleDateTime = new Date(year, month - 1, day);
+          finaleDateTime.setDate(finaleDateTime.getDate() - 7);
+          deadlineDate = finaleDateTime.toLocaleDateString('fr-FR');
+        }
+      }
+
+      templateVariables = {
+        category: categoryDisplayName,
+        qualified_count: qualifiedCount.toString(),
+        finale_date: finaleDate,
+        finale_lieu: finaleLieu,
+        deadline_date: deadlineDate
+      };
+    } else {
+      // For T2/T3 relances, get all contacts
+      recipients = await new Promise((resolve, reject) => {
+        db.all(
+          `SELECT * FROM player_contacts WHERE email IS NOT NULL AND email LIKE '%@%'`,
+          [],
+          (err, rows) => {
+            if (err) reject(err);
+            else resolve(rows || []);
+          }
+        );
+      });
+
+      templateVariables = {
+        category: categoryDisplayName,
+        tournament_date: customData.tournament_date || '',
+        tournament_lieu: customData.tournament_lieu || '',
+        finale_date: customData.finale_date || '',
+        finale_lieu: customData.finale_lieu || '',
+        deadline_date: customData.deadline_date || ''
+      };
+    }
 
   } else if (emailType === 'tournament_results' && scheduled.tournament_id) {
     // Get tournament participants
@@ -298,6 +396,9 @@ async function processTemplatedScheduledEmail(db, resend, scheduled, delay) {
         .replace(/\{last_name\}/g, recipient.last_name || '')
         .replace(/\{club\}/g, recipient.club || '')
         .replace(/\{category\}/g, templateVariables.category || '')
+        .replace(/\{rank_position\}/g, recipient.rank_position?.toString() || '')
+        .replace(/\{total_points\}/g, recipient.total_match_points?.toString() || '')
+        .replace(/\{qualified_count\}/g, templateVariables.qualified_count || '')
         .replace(/\{tournament_date\}/g, templateVariables.tournament_date || '')
         .replace(/\{tournament_lieu\}/g, templateVariables.tournament_lieu || '')
         .replace(/\{finale_date\}/g, templateVariables.finale_date || '')
