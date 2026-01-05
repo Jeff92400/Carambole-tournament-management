@@ -1081,7 +1081,9 @@
                    data-tournoi-id="${t.tournoi_id}"
                    data-lieu="${t.lieu || ''}"
                    data-date="${t.debut || ''}"
-                   data-is-finale="${t.isFinale}">
+                   data-is-finale="${t.isFinale}"
+                   data-finalist-count="${t.finalist_count || 0}"
+                   data-inscribed-finalist-count="${t.inscribed_finalist_count || 0}">
                 <div class="tournament-mode">${t.mode} - ${t.categorie}${badgeHtml}</div>
                 <div class="tournament-name">${t.isFinale ? 'Finale Départementale' : t.nom}</div>
                 <div class="tournament-details">
@@ -1089,7 +1091,7 @@
                   <span>📍 ${t.lieu || 'Lieu non défini'}</span>
                 </div>
                 <div class="tournament-inscrits">
-                  👥 ${t.isFinale ? 'Finalistes qualifiés' : `${t.inscrit_count || 0} inscrit(s)`}
+                  👥 ${t.isFinale ? `${t.inscribed_finalist_count || 0}/${t.finalist_count || 0} inscrits` : `${t.inscrit_count || 0} inscrit(s)`}
                 </div>
               </div>
             `;
@@ -1163,7 +1165,7 @@
         // For finals, set tournament to "Finale", otherwise use tournament number
         document.getElementById('tournamentSelect').value = isFinale ? 'Finale' : tournamentNum;
 
-        // Store the selected tournament info for later use
+        // Store the selected tournament info for later use (including finalist counts from card data)
         window.selectedUpcomingTournament = {
           tournoiId,
           lieu,
@@ -1171,7 +1173,9 @@
           mode,
           categorie,
           tournamentNum: isFinale ? 'Finale' : tournamentNum,
-          isFinale
+          isFinale,
+          finalist_count: parseInt(card.dataset.finalistCount) || 0,
+          inscribed_finalist_count: parseInt(card.dataset.inscribedFinalistCount) || 0
         };
 
         // Trigger change event to load tournament info
@@ -1400,9 +1404,15 @@
               `${category.display_name} - ${matchingTournoi.nom}`;
             document.getElementById('tournamentInfoDate').textContent = dateStr;
             document.getElementById('tournamentInfoLieu').textContent = matchingTournoi.lieu || 'Non défini';
-            // For finals, show "Finalistes qualifiés" instead of raw inscription count
+            // For finals, show "X/Y inscrits" (inscribed finalists / total finalists)
             const isFinaleTournoi = matchingTournoi.nom?.toUpperCase().includes('FINALE') || tournamentNum === 'Finale' || isFinale;
-            document.getElementById('tournamentInfoInscrits').textContent = isFinaleTournoi ? 'Finalistes qualifiés' : `${inscCount} joueurs`;
+            if (isFinaleTournoi && window.selectedUpcomingTournament) {
+              const fc = window.selectedUpcomingTournament.finalist_count || 0;
+              const ifc = window.selectedUpcomingTournament.inscribed_finalist_count || 0;
+              document.getElementById('tournamentInfoInscrits').textContent = `${ifc}/${fc} inscrits`;
+            } else {
+              document.getElementById('tournamentInfoInscrits').textContent = `${inscCount} joueurs`;
+            }
             document.getElementById('tournamentInfo').style.display = 'block';
           } else if (window.selectedUpcomingTournament && (tournamentNum === 'Finale' || isFinale)) {
             // For finals selected from upcoming tournaments card, use stored data
@@ -1438,8 +1448,10 @@
               `${category.display_name} - Finale Départementale`;
             document.getElementById('tournamentInfoDate').textContent = dateStr;
             document.getElementById('tournamentInfoLieu').textContent = upcomingData.lieu || 'Non défini';
-            // For finals, don't show raw inscription count - finalists are determined from rankings
-            document.getElementById('tournamentInfoInscrits').textContent = 'Finalistes qualifiés';
+            // For finals, show "X/Y inscrits" (inscribed finalists / total finalists)
+            const fc = upcomingData.finalist_count || 0;
+            const ifc = upcomingData.inscribed_finalist_count || 0;
+            document.getElementById('tournamentInfoInscrits').textContent = `${ifc}/${fc} inscrits`;
             document.getElementById('tournamentInfo').style.display = 'block';
           } else {
             document.getElementById('tournamentInfo').style.display = 'none';

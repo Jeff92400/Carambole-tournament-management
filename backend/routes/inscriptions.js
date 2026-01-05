@@ -556,42 +556,124 @@ router.get('/tournoi/upcoming', authenticateToken, (req, res) => {
 });
 
 // Get upcoming finals (within next 4 weeks)
-router.get('/finales/upcoming', authenticateToken, (req, res) => {
-  // Get today's date
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+router.get('/finales/upcoming', authenticateToken, async (req, res) => {
+  try {
+    // Get today's date
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
-  // Look 4 weeks ahead for finals
-  const fourWeeksLater = new Date(today);
-  fourWeeksLater.setDate(today.getDate() + 28);
+    // Look 4 weeks ahead for finals
+    const fourWeeksLater = new Date(today);
+    fourWeeksLater.setDate(today.getDate() + 28);
 
-  // Format dates for SQL
-  const startDate = today.toISOString().split('T')[0];
-  const endDate = fourWeeksLater.toISOString().split('T')[0];
+    // Format dates for SQL
+    const startDate = today.toISOString().split('T')[0];
+    const endDate = fourWeeksLater.toISOString().split('T')[0];
 
-  console.log(`Fetching upcoming finals from ${startDate} to ${endDate}`);
+    console.log(`Fetching upcoming finals from ${startDate} to ${endDate}`);
 
-  // Finals are identified by name containing "Finale" (case insensitive)
-  const query = `
-    SELECT t.*,
-           COUNT(CASE WHEN i.inscription_id IS NOT NULL AND (i.forfait IS NULL OR i.forfait != 1) THEN 1 END) as inscrit_count
-    FROM tournoi_ext t
-    LEFT JOIN inscriptions i ON t.tournoi_id = i.tournoi_id
-    WHERE t.debut >= $1 AND t.debut <= $2
-    AND LOWER(t.nom) LIKE '%finale%'
-    GROUP BY t.tournoi_id
-    ORDER BY t.debut ASC, t.mode, t.categorie
-  `;
+    // Level mapping from IONOS format to internal format
+    const levelMapping = {
+      'N1': 'NATIONALE 1', 'N2': 'NATIONALE 2', 'N3': 'NATIONALE 3',
+      'R1': 'REGIONALE 1', 'R2': 'REGIONALE 2', 'R3': 'REGIONALE 3',
+      'D1': 'DEPARTEMENTALE 1', 'D2': 'DEPARTEMENTALE 2', 'D3': 'DEPARTEMENTALE 3'
+    };
 
-  db.all(query, [startDate, endDate], (err, rows) => {
-    if (err) {
-      console.error('Error fetching upcoming finals:', err);
-      return res.status(500).json({ error: err.message });
-    }
+    // Get current season
+    const currentYear = new Date().getFullYear();
+    const currentMonth = new Date().getMonth();
+    const season = currentMonth >= 8 ? `${currentYear}-${currentYear + 1}` : `${currentYear - 1}-${currentYear}`;
 
-    console.log(`Found ${(rows || []).length} upcoming finals`);
-    res.json(rows || []);
-  });
+    // Get basic finals data
+    const finalsQuery = `
+      SELECT t.*
+      FROM tournoi_ext t
+      WHERE t.debut >= $1 AND t.debut <= $2
+      AND LOWER(t.nom) LIKE '%finale%'
+      ORDER BY t.debut ASC, t.mode, t.categorie
+    `;
+
+    const finals = await new Promise((resolve, reject) => {
+      db.all(finalsQuery, [startDate, endDate], (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows || []);
+      });
+    });
+
+    console.log(`Found ${finals.length} upcoming finals`);
+
+    // For each final, calculate finalist counts
+    const enrichedFinals = await Promise.all(finals.map(async (final) => {
+      try {
+        // Map mode and categorie to find category
+        const gameType = final.mode?.toUpperCase();
+        const normalizedLevel = levelMapping[final.categorie?.toUpperCase()] || final.categorie?.toUpperCase();
+
+        // Find matching category
+        const category = await new Promise((resolve, reject) => {
+          db.get(
+            `SELECT * FROM categories WHERE UPPER(game_type) = $1 AND (UPPER(level) = $2 OR UPPER(level) LIKE $3)`,
+            [gameType, normalizedLevel, `${normalizedLevel}%`],
+            (err, row) => {
+              if (err) reject(err);
+              else resolve(row);
+            }
+          );
+        });
+
+        if (!category) {
+          console.log(`No category found for ${gameType} - ${normalizedLevel}`);
+          return { ...final, finalist_count: 0, inscribed_finalist_count: 0 };
+        }
+
+        // Get rankings for this category to determine finalists
+        const rankings = await new Promise((resolve, reject) => {
+          db.all(
+            `SELECT r.licence FROM rankings r WHERE r.category_id = $1 AND r.season = $2 ORDER BY r.rank_position ASC`,
+            [category.id, season],
+            (err, rows) => {
+              if (err) reject(err);
+              else resolve(rows || []);
+            }
+          );
+        });
+
+        // Determine number of finalists: 6 if >= 10 participants, otherwise 4
+        const numFinalists = rankings.length >= 10 ? 6 : 4;
+        const finalistLicences = rankings.slice(0, numFinalists).map(r => r.licence?.replace(/\s/g, ''));
+
+        // Get inscriptions for this tournament
+        const inscriptions = await new Promise((resolve, reject) => {
+          db.all(
+            `SELECT licence FROM inscriptions WHERE tournoi_id = $1 AND (forfait IS NULL OR forfait != 1)`,
+            [final.tournoi_id],
+            (err, rows) => {
+              if (err) reject(err);
+              else resolve(rows || []);
+            }
+          );
+        });
+
+        // Count how many finalists are inscribed
+        const inscribedLicences = inscriptions.map(i => i.licence?.replace(/\s/g, ''));
+        const inscribedFinalistCount = finalistLicences.filter(l => inscribedLicences.includes(l)).length;
+
+        return {
+          ...final,
+          finalist_count: finalistLicences.length,
+          inscribed_finalist_count: inscribedFinalistCount
+        };
+      } catch (err) {
+        console.error(`Error processing final ${final.tournoi_id}:`, err);
+        return { ...final, finalist_count: 0, inscribed_finalist_count: 0 };
+      }
+    }));
+
+    res.json(enrichedFinals);
+  } catch (err) {
+    console.error('Error fetching upcoming finals:', err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Get a specific external tournament
