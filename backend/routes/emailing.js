@@ -2940,7 +2940,7 @@ router.get('/finale-qualified', authenticateToken, async (req, res) => {
          AND UPPER(mode) = $1
          AND (UPPER(category) = $2 OR UPPER(category) LIKE $3)
          AND status = 'completed'
-         AND (test_mode = 0 OR test_mode IS NULL)
+         AND (test_mode = false OR test_mode IS NULL)
          ORDER BY sent_at DESC LIMIT 1`,
         [mode.toUpperCase(), categoryUpper, categoryUpper + '%'],
         (err, row) => {
@@ -3237,7 +3237,7 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
              AND UPPER(mode) = $1
              AND (UPPER(category) = $2 OR UPPER(category) LIKE $3)
              AND status = 'completed'
-             AND (test_mode = 0 OR test_mode IS NULL)
+             AND (test_mode = false OR test_mode IS NULL)
              ORDER BY sent_at DESC LIMIT 1`,
             [mode.toUpperCase(), categoryUpper, categoryUpper + '%'],
             (err, row) => {

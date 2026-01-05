@@ -210,7 +210,7 @@ async function processTemplatedScheduledEmail(db, resend, scheduled, delay) {
            AND UPPER(mode) = $1
            AND (UPPER(category) = $2 OR UPPER(category) LIKE $3)
            AND status = 'completed'
-           AND (test_mode = 0 OR test_mode IS NULL)
+           AND (test_mode = false OR test_mode IS NULL)
            ORDER BY sent_at DESC LIMIT 1`,
           [mode, categoryLevel, categoryLevel + '%'],
           (err, row) => {
