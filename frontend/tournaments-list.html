@@ -209,6 +209,12 @@
             ? `<button class="btn-delete" onclick="deleteTournament(${tournament.id}, '${tournament.display_name} - T${tournament.tournament_number} - ${tournament.season}')" title="Supprimer" style="background: #dc3545; color: white; border: none; padding: 6px 10px; cursor: pointer; border-radius: 4px; font-size: 16px;">🗑️</button>`
             : '';
 
+          // Email status indicator
+          const emailSent = tournament.results_email_sent;
+          const emailStatusBtn = emailSent
+            ? `<button class="btn-email-sent" onclick="toggleEmailStatus(${tournament.id}, false)" title="Résultats envoyés le ${tournament.results_email_sent_at ? new Date(tournament.results_email_sent_at).toLocaleDateString('fr-FR') : ''}" style="background: #28a745; color: white; border: none; padding: 6px 10px; cursor: pointer; border-radius: 4px; font-size: 14px; margin-right: 3px;">✅</button>`
+            : `<button class="btn-email-pending" onclick="sendResultsEmail(${tournament.id})" title="Résultats non envoyés - Cliquez pour envoyer" style="background: #dc3545; color: white; border: none; padding: 6px 10px; cursor: pointer; border-radius: 4px; font-size: 14px; margin-right: 3px;">❌</button>`;
+
           row.innerHTML = `
             <td>${tournament.display_name}</td>
             <td>${tournamentLabel}</td>
@@ -219,6 +225,7 @@
             <td style="text-align: center; padding: 8px;">
               <button class="btn-view" onclick="viewTournament(${tournament.id})" title="Voir les résultats" style="background: #28a745; color: white; border: none; padding: 6px 10px; cursor: pointer; border-radius: 4px; font-size: 14px; margin-right: 3px;">👁️</button>
               <button class="btn-export" onclick="exportTournament(${tournament.id})" title="Exporter en Excel" style="background: #007bff; color: white; border: none; padding: 6px 10px; cursor: pointer; border-radius: 4px; font-size: 14px; margin-right: 3px;">📊</button>
+              ${emailStatusBtn}
               ${editBtn}
               ${deleteBtn}
             </td>
@@ -271,6 +278,41 @@
       } catch (error) {
         console.error('Error exporting tournament:', error);
         alert('Erreur lors de l\'export Excel');
+      }
+    }
+
+    // Send results email - redirect to emailing page
+    function sendResultsEmail(tournamentId) {
+      window.location.href = `emailing.html?tab=results&tournamentId=${tournamentId}`;
+    }
+
+    // Toggle email status (mark as sent/unsent)
+    async function toggleEmailStatus(tournamentId, markAsSent) {
+      const action = markAsSent ? 'mark-results-sent' : 'mark-results-unsent';
+      const confirmMsg = markAsSent
+        ? 'Marquer les résultats comme envoyés ?'
+        : 'Annuler le statut "envoyé" des résultats ?';
+
+      if (!confirm(confirmMsg)) return;
+
+      try {
+        const response = await fetch(`${API_URL}/tournaments/${tournamentId}/${action}`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (response.ok) {
+          await loadTournaments();
+        } else {
+          const data = await response.json();
+          alert(data.error || 'Erreur lors de la mise à jour');
+        }
+      } catch (error) {
+        console.error('Error toggling email status:', error);
+        alert('Erreur lors de la mise à jour du statut');
       }
     }
 

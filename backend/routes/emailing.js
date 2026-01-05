@@ -1823,6 +1823,17 @@ router.post('/send-results', authenticateToken, async (req, res) => {
       ? `Email de test envoyé à ${testEmail}`
       : `Résultats envoyés: ${sentResults.sent.length}, Échecs: ${sentResults.failed.length}, Ignorés: ${sentResults.skipped.length}${ccEmail ? ' + récapitulatif envoyé' : ''}`;
 
+    // Mark tournament results as sent (only if not test mode and at least one email was sent)
+    if (!testMode && sentResults.sent.length > 0) {
+      await new Promise((resolve) => {
+        db.run(
+          `UPDATE tournaments SET results_email_sent = $1, results_email_sent_at = CURRENT_TIMESTAMP WHERE id = $2`,
+          [true, tournamentId],
+          () => resolve()
+        );
+      });
+    }
+
     res.json({
       success: true,
       message,

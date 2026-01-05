@@ -628,6 +628,8 @@ router.get('/', authenticateToken, (req, res) => {
       t.tournament_date,
       t.import_date,
       t.location,
+      t.results_email_sent,
+      t.results_email_sent_at,
       c.id as category_id,
       c.game_type,
       c.level,
@@ -644,7 +646,7 @@ router.get('/', authenticateToken, (req, res) => {
     params.push(season);
   }
 
-  query += ' GROUP BY t.id, t.tournament_number, t.season, t.tournament_date, t.import_date, t.location, c.id, c.game_type, c.level, c.display_name ORDER BY t.import_date DESC';
+  query += ' GROUP BY t.id, t.tournament_number, t.season, t.tournament_date, t.import_date, t.location, t.results_email_sent, t.results_email_sent_at, c.id, c.game_type, c.level, c.display_name ORDER BY t.import_date DESC';
 
   db.all(query, params, (err, rows) => {
     if (err) {
@@ -1137,6 +1139,69 @@ router.put('/:id', authenticateToken, (req, res) => {
         return res.status(404).json({ error: 'Tournament not found' });
       }
       res.json({ success: true, message: 'Tournament updated successfully' });
+    }
+  );
+});
+
+// Get tournaments with unsent results (for dashboard reminder)
+router.get('/unsent-results', authenticateToken, (req, res) => {
+  // Get current season
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth();
+  const season = currentMonth >= 8 ? `${currentYear}-${currentYear + 1}` : `${currentYear - 1}-${currentYear}`;
+
+  db.all(`
+    SELECT t.*, c.display_name, c.game_type, c.level,
+           (SELECT COUNT(*) FROM tournament_results WHERE tournament_id = t.id) as participant_count
+    FROM tournaments t
+    JOIN categories c ON t.category_id = c.id
+    WHERE t.season = $1
+      AND (t.results_email_sent = 0 OR t.results_email_sent IS NULL OR t.results_email_sent = false)
+      AND (SELECT COUNT(*) FROM tournament_results WHERE tournament_id = t.id) > 0
+    ORDER BY t.tournament_date DESC
+  `, [season], (err, rows) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+    res.json(rows || []);
+  });
+});
+
+// Mark tournament results as sent (manual action from UI)
+router.post('/:id/mark-results-sent', authenticateToken, (req, res) => {
+  const { id } = req.params;
+
+  db.run(
+    `UPDATE tournaments SET results_email_sent = $1, results_email_sent_at = CURRENT_TIMESTAMP WHERE id = $2`,
+    [true, id],
+    function(err) {
+      if (err) {
+        return res.status(500).json({ error: err.message });
+      }
+      if (this.changes === 0) {
+        return res.status(404).json({ error: 'Tournament not found' });
+      }
+      res.json({ success: true, message: 'Tournament marked as results sent' });
+    }
+  );
+});
+
+// Mark tournament results as NOT sent (undo action)
+router.post('/:id/mark-results-unsent', authenticateToken, (req, res) => {
+  const { id } = req.params;
+
+  db.run(
+    `UPDATE tournaments SET results_email_sent = $1, results_email_sent_at = NULL WHERE id = $2`,
+    [false, id],
+    function(err) {
+      if (err) {
+        return res.status(500).json({ error: err.message });
+      }
+      if (this.changes === 0) {
+        return res.status(404).json({ error: 'Tournament not found' });
+      }
+      res.json({ success: true, message: 'Tournament marked as results not sent' });
     }
   );
 });

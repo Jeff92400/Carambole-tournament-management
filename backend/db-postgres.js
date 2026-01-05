@@ -161,6 +161,14 @@ async function initializeDatabase() {
       ALTER TABLE tournaments ADD COLUMN IF NOT EXISTS location TEXT
     `);
 
+    // Add results_email_sent columns (migration for tracking email status)
+    await client.query(`
+      ALTER TABLE tournaments ADD COLUMN IF NOT EXISTS results_email_sent BOOLEAN DEFAULT FALSE
+    `);
+    await client.query(`
+      ALTER TABLE tournaments ADD COLUMN IF NOT EXISTS results_email_sent_at TIMESTAMP
+    `);
+
     // Tournament results table
     await client.query(`
       CREATE TABLE IF NOT EXISTS tournament_results (

@@ -68,6 +68,14 @@ function initializeDatabase() {
       )
     `);
 
+    // Add results_email_sent columns to tournaments (migration for existing databases)
+    db.run(`ALTER TABLE tournaments ADD COLUMN results_email_sent INTEGER DEFAULT 0`, [], (err) => {
+      // Ignore error if column already exists
+    });
+    db.run(`ALTER TABLE tournaments ADD COLUMN results_email_sent_at DATETIME`, [], (err) => {
+      // Ignore error if column already exists
+    });
+
     // Tournament results table
     db.run(`
       CREATE TABLE IF NOT EXISTS tournament_results (

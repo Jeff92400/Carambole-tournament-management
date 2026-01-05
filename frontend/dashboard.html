@@ -57,6 +57,22 @@
       </div>
     </div>
 
+    <!-- Unsent Results Reminder (admin only) -->
+    <div id="unsentResultsCard" class="card admin-only" style="display: none; margin-bottom: 15px; padding: 15px; background: #fff3cd; border-left: 4px solid #ffc107;">
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <span style="font-size: 28px;">⚠️</span>
+        <div style="flex: 1;">
+          <h4 style="margin: 0 0 5px 0; color: #856404;">Résultats non envoyés</h4>
+          <p style="margin: 0; color: #856404; font-size: 14px;">
+            <span id="unsentCount">0</span> compétition(s) ont des résultats qui n'ont pas été envoyés aux participants.
+          </p>
+        </div>
+        <button class="btn" onclick="window.location.href='tournaments-list.html'" style="background: #ffc107; color: #856404; border: none; white-space: nowrap;">
+          Voir les compétitions
+        </button>
+      </div>
+    </div>
+
     <!-- Season selector -->
     <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
       <label style="font-weight: bold; color: #333; font-size: 13px;">Saison :</label>
@@ -323,6 +339,33 @@
     async function loadDashboard() {
       await loadSeasons();
       await loadDashboardStats();
+      await loadUnsentResults();
+    }
+
+    // Load tournaments with unsent results (admin only)
+    async function loadUnsentResults() {
+      const userRole = localStorage.getItem('userRole');
+      if (userRole !== 'admin') return;
+
+      try {
+        const response = await fetch(`${API_URL}/tournaments/unsent-results`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (response.ok) {
+          const unsent = await response.json();
+          const card = document.getElementById('unsentResultsCard');
+
+          if (unsent.length > 0) {
+            document.getElementById('unsentCount').textContent = unsent.length;
+            card.style.display = 'block';
+          } else {
+            card.style.display = 'none';
+          }
+        }
+      } catch (error) {
+        console.error('Error loading unsent results:', error);
+      }
     }
 
     // Load all stats for selected season

@@ -104,6 +104,24 @@
         </div>
       </div>
     </div>
+
+    <!-- Modal for sending results email -->
+    <div id="sendResultsModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
+      <div style="background: white; padding: 30px; border-radius: 12px; max-width: 450px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); text-align: center;">
+        <div style="font-size: 48px; margin-bottom: 15px;">📧</div>
+        <h3 style="margin-top: 0; color: #1F4788;">Envoyer les résultats ?</h3>
+        <p style="color: #666; margin-bottom: 25px;">
+          Voulez-vous envoyer les résultats du tournoi par email aux participants ?
+        </p>
+        <div style="display: flex; gap: 10px;">
+          <button id="sendResultsYesBtn" class="btn" style="flex: 1; background: #28a745;">Oui, envoyer</button>
+          <button id="sendResultsNoBtn" class="btn" style="flex: 1; background: #6c757d;">Plus tard</button>
+        </div>
+        <p style="font-size: 12px; color: #999; margin-top: 15px;">
+          Vous pourrez envoyer les résultats plus tard depuis la page Compétitions Jouées
+        </p>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -412,6 +430,13 @@
           fileInput.value = '';
           fileName.style.display = 'none';
           document.getElementById('importForm').reset();
+
+          // Ask if user wants to send results email
+          if (data.tournamentId && data.imported > 0) {
+            setTimeout(() => {
+              showSendResultsPopup(data.tournamentId, categoryId);
+            }, 500);
+          }
         } else {
           errorDiv.textContent = data.error || 'Erreur lors de l\'import';
           errorDiv.style.display = 'block';
@@ -539,6 +564,24 @@
       localStorage.removeItem('userRole');
       window.location.href = 'login.html';
     });
+
+    // Show send results popup
+    function showSendResultsPopup(tournamentId, categoryId) {
+      const modal = document.getElementById('sendResultsModal');
+      modal.style.display = 'flex';
+
+      // Handle Yes button - redirect to emailing page
+      document.getElementById('sendResultsYesBtn').onclick = () => {
+        modal.style.display = 'none';
+        // Redirect to emailing page with tournament pre-selected
+        window.location.href = `emailing.html?tab=results&tournamentId=${tournamentId}`;
+      };
+
+      // Handle No button - just close
+      document.getElementById('sendResultsNoBtn').onclick = () => {
+        modal.style.display = 'none';
+      };
+    }
   </script>
 </body>
 </html>
