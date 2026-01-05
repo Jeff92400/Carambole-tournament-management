@@ -3190,6 +3190,32 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
         return res.status(404).json({ error: 'Category not found' });
       }
 
+      // Check that convocation has been sent before allowing relance finale (skip in test mode)
+      if (!testMode) {
+        const convocationSent = await new Promise((resolve, reject) => {
+          db.get(
+            `SELECT id, sent_at FROM email_campaigns
+             WHERE campaign_type = 'finale_convocation'
+             AND UPPER(mode) = $1
+             AND (UPPER(category) = $2 OR UPPER(category) LIKE $3)
+             AND status = 'completed'
+             AND (test_mode = 0 OR test_mode IS NULL)
+             ORDER BY sent_at DESC LIMIT 1`,
+            [mode.toUpperCase(), categoryUpper, categoryUpper + '%'],
+            (err, row) => {
+              if (err) reject(err);
+              else resolve(row);
+            }
+          );
+        });
+
+        if (!convocationSent) {
+          return res.status(400).json({
+            error: 'La convocation finale doit être envoyée avant de pouvoir envoyer une relance. Veuillez d\'abord envoyer la convocation aux finalistes.'
+          });
+        }
+      }
+
       const allRankings = await new Promise((resolve, reject) => {
         db.all(
           `SELECT r.*,

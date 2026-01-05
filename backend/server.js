@@ -202,6 +202,32 @@ async function processTemplatedScheduledEmail(db, resend, scheduled, delay) {
 
     // For relance_finale, get qualified players with their rankings
     if (emailType === 'relance_finale') {
+      // Check that convocation has been sent before allowing relance finale
+      const convocationSent = await new Promise((resolve, reject) => {
+        db.get(
+          `SELECT id, sent_at FROM email_campaigns
+           WHERE campaign_type = 'finale_convocation'
+           AND UPPER(mode) = $1
+           AND (UPPER(category) = $2 OR UPPER(category) LIKE $3)
+           AND status = 'completed'
+           AND (test_mode = 0 OR test_mode IS NULL)
+           ORDER BY sent_at DESC LIMIT 1`,
+          [mode, categoryLevel, categoryLevel + '%'],
+          (err, row) => {
+            if (err) reject(err);
+            else resolve(row);
+          }
+        );
+      });
+
+      if (!convocationSent) {
+        console.log(`[Email Scheduler] Skipping relance_finale for ${mode} ${categoryLevel}: convocation not sent yet`);
+        await new Promise((resolve) => {
+          db.run(`UPDATE scheduled_emails SET status = 'failed', error_message = 'Convocation non envoyée' WHERE id = $1`, [scheduled.id], () => resolve());
+        });
+        return;
+      }
+
       // Get current season
       const now = new Date();
       const currentYear = now.getFullYear();
