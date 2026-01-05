@@ -301,19 +301,13 @@
     // Player App button
     document.getElementById('openPlayerAppBtn').addEventListener('click', (e) => {
       e.preventDefault();
-      // Determine player app URL based on current environment
       const currentHost = window.location.hostname;
       let playerAppUrl;
 
       if (currentHost === 'localhost' || currentHost === '127.0.0.1') {
-        // Local development - player app on port 3001
         playerAppUrl = 'http://localhost:3001';
-      } else if (currentHost.includes('cdbhs-tournament')) {
-        // Production - replace tournament with player in subdomain
-        playerAppUrl = window.location.origin.replace('cdbhs-tournament', 'cdbhs-player');
       } else {
-        // Fallback - try player subdomain
-        playerAppUrl = window.location.protocol + '//player.' + currentHost;
+        playerAppUrl = 'https://cdbhs-player-app-production.up.railway.app/?admin';
       }
 
       window.open(playerAppUrl, '_blank');
