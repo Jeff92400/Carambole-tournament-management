@@ -2776,18 +2776,29 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
             ${relanceData.finale ? `<br><strong>Finale:</strong> ${relanceData.finale.nom}` : ''}
           `;
 
-          // Auto-populate deadline date from backend calculation
-          if (relanceData.deadlineDate) {
-            const deadlineInput = document.getElementById('relanceDeadlineDate');
-            if (deadlineInput) {
+          // Auto-populate deadline date from backend calculation or calculate from finale date
+          const deadlineInput = document.getElementById('relanceDeadlineDate');
+          if (deadlineInput) {
+            if (relanceData.deadlineDate) {
               deadlineInput.value = relanceData.deadlineDate;
+            } else {
+              // Calculate from finale date field if backend didn't return deadline
+              const finaleDateInput = document.getElementById('relanceFinaleDate');
+              if (finaleDateInput && finaleDateInput.value) {
+                const finaleDate = new Date(finaleDateInput.value);
+                finaleDate.setDate(finaleDate.getDate() - 7);
+                deadlineInput.value = finaleDate.toISOString().split('T')[0];
+              }
             }
           }
 
-          // Show warning if convocation not sent
+          // Show warning if convocation not sent - block everything
           if (relanceData.convocationRequired) {
             showError('La convocation finale doit être envoyée avant de pouvoir envoyer une relance. Veuillez d\'abord envoyer la convocation aux finalistes.');
             document.getElementById('sendRelanceBtn').disabled = true;
+            document.getElementById('scheduleRelanceBtn').disabled = true;
+            document.getElementById('relanceParticipantsSection').style.display = 'none';
+            return; // Don't show participants
           }
         }
 
@@ -2841,6 +2852,7 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
         updateRelanceSelectedCount();
         document.getElementById('relanceParticipantsSection').style.display = 'block';
         document.getElementById('sendRelanceBtn').disabled = selectedRelanceIds.size === 0;
+        document.getElementById('scheduleRelanceBtn').disabled = false;
 
       } catch (error) {
         console.error('Error loading relance participants:', error);
