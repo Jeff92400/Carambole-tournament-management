@@ -662,7 +662,7 @@ router.get('/', authenticateToken, (req, res) => {
 // IMPORTANT: This must be defined BEFORE routes with :id parameter
 router.post('/mark-all-results-sent', authenticateToken, (req, res) => {
   db.run(
-    `UPDATE tournaments SET results_email_sent = $1, results_email_sent_at = CURRENT_TIMESTAMP WHERE results_email_sent IS NULL OR results_email_sent = 0 OR results_email_sent = false`,
+    `UPDATE tournaments SET results_email_sent = $1, results_email_sent_at = CURRENT_TIMESTAMP WHERE results_email_sent IS NULL OR NOT results_email_sent`,
     [true],
     function(err) {
       if (err) {
