@@ -856,7 +856,7 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
               </tbody>
             </table>
 
-            <h3 style="color: #28a745;">🎱 Composition des Poules (${poules.length})</h3>
+            <h3 style="color: #28a745;">🎯 Composition des Poules (${poules.length})</h3>
             ${poulesSummaryHtml}
           </div>
           <div style="background: #1F4788; color: white; padding: 10px; text-align: center; font-size: 12px;">
@@ -1097,7 +1097,7 @@ const DEFAULT_INSCRIPTION_CONFIRMATION_TEMPLATE = {
 Votre inscription a bien été enregistrée pour la compétition suivante :
 
 📅 Compétition : {tournament_name}
-🎱 Mode : {mode} - {category}
+🎯 Mode : {mode} - {category}
 📆 Date : {tournament_date}
 📍 Lieu : {location}
 
@@ -1278,7 +1278,7 @@ router.post('/inscription-cancellation', async (req, res) => {
           <div style="padding: 20px; background: #f8f9fa;">
             <div style="margin-bottom: 20px; padding: 15px; background: white; border-radius: 4px; border-left: 4px solid #dc3545;">
               <p style="margin: 5px 0;">📅 <strong>Tournoi :</strong> ${tournament_name}</p>
-              <p style="margin: 5px 0;">🎱 <strong>Mode :</strong> ${mode || '-'}</p>
+              <p style="margin: 5px 0;">🎯 <strong>Mode :</strong> ${mode || '-'}</p>
               <p style="margin: 5px 0;">🏆 <strong>Catégorie :</strong> ${category || '-'}</p>
               <p style="margin: 5px 0;">📆 <strong>Date :</strong> ${dateStr}</p>
               <p style="margin: 5px 0;">📍 <strong>Lieu :</strong> ${location || 'Non défini'}</p>
