@@ -1666,6 +1666,11 @@ router.get('/upcoming-relances', authenticateToken, async (req, res) => {
     const oneWeekFromNow = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
     const twoWeeksFromNow = new Date(today.getTime() + 14 * 24 * 60 * 60 * 1000);
 
+    // Calculate current season
+    const currentYear = today.getFullYear();
+    const currentMonth = today.getMonth();
+    const season = currentMonth >= 8 ? `${currentYear}-${currentYear + 1}` : `${currentYear - 1}-${currentYear}`;
+
     // Get upcoming tournaments between 7-14 days away (relance window)
     // Tournaments disappear once they're less than 7 days away
     const tournois = await new Promise((resolve, reject) => {
@@ -1683,11 +1688,94 @@ router.get('/upcoming-relances', authenticateToken, async (req, res) => {
       });
     });
 
-    // Filter to only those without sent relances (based on tournament_relances table)
-    const needsRelance = tournois.filter(t => !t.relance_sent_at);
+    // For finales, check if all qualified players are inscribed
+    const enrichedTournois = await Promise.all(tournois.map(async (t) => {
+      const isFinale = t.nom && t.nom.toUpperCase().includes('FINALE');
+
+      if (!isFinale) {
+        return { ...t, isFinale: false };
+      }
+
+      // For finales, get finalist count and inscribed count
+      try {
+        const gameType = t.mode?.toUpperCase();
+        const categoryLevel = t.categorie?.toUpperCase();
+
+        // Find matching category
+        const category = await new Promise((resolve, reject) => {
+          db.get(
+            `SELECT * FROM categories WHERE UPPER(game_type) = $1 AND (UPPER(level) = $2 OR UPPER(level) LIKE $3)`,
+            [gameType, categoryLevel, `${categoryLevel}%`],
+            (err, row) => {
+              if (err) reject(err);
+              else resolve(row);
+            }
+          );
+        });
+
+        if (!category) {
+          return { ...t, isFinale: true, finalist_count: 0, inscribed_finalist_count: 0 };
+        }
+
+        // Get rankings for this category
+        const rankings = await new Promise((resolve, reject) => {
+          db.all(
+            `SELECT r.licence FROM rankings r WHERE r.category_id = $1 AND r.season = $2 ORDER BY r.rank_position ASC`,
+            [category.id, season],
+            (err, rows) => {
+              if (err) reject(err);
+              else resolve(rows || []);
+            }
+          );
+        });
+
+        // Determine number of finalists: 6 if >= 10 participants, otherwise 4
+        const numFinalists = rankings.length >= 10 ? 6 : 4;
+        const finalistLicences = rankings.slice(0, numFinalists).map(r => r.licence?.replace(/\s/g, ''));
+
+        // Get inscriptions for this tournament (non-forfait)
+        const inscriptions = await new Promise((resolve, reject) => {
+          db.all(
+            `SELECT licence FROM inscriptions WHERE tournoi_id = $1 AND (forfait IS NULL OR forfait != 1)`,
+            [t.tournoi_id],
+            (err, rows) => {
+              if (err) reject(err);
+              else resolve(rows || []);
+            }
+          );
+        });
+
+        // Count how many finalists are inscribed
+        const inscribedLicences = inscriptions.map(i => i.licence?.replace(/\s/g, ''));
+        const inscribedFinalistCount = finalistLicences.filter(l => inscribedLicences.includes(l)).length;
+
+        return {
+          ...t,
+          isFinale: true,
+          finalist_count: finalistLicences.length,
+          inscribed_finalist_count: inscribedFinalistCount
+        };
+      } catch (err) {
+        console.error(`Error enriching finale ${t.tournoi_id}:`, err);
+        return { ...t, isFinale: true, finalist_count: 0, inscribed_finalist_count: 0 };
+      }
+    }));
+
+    // Filter to only those without sent relances AND not fully inscribed finales
+    const needsRelance = enrichedTournois.filter(t => {
+      // Already sent - don't need relance
+      if (t.relance_sent_at) return false;
+
+      // For finales: exclude if all finalists are inscribed (100%)
+      if (t.isFinale && t.finalist_count > 0 && t.inscribed_finalist_count >= t.finalist_count) {
+        return false;
+      }
+
+      return true;
+    });
 
     res.json({
-      all_upcoming: tournois,
+      all_upcoming: enrichedTournois,
       needs_relance: needsRelance,
       today: today.toISOString().split('T')[0],
       window_start: oneWeekFromNow.toISOString().split('T')[0],
