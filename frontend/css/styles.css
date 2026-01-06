@@ -289,6 +289,57 @@ body {
   color: white !important;
 }
 
+/* Tooltip styles for nav links */
+.nav-tooltip {
+  position: relative;
+}
+
+.nav-tooltip::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: #333;
+  color: white;
+  font-size: 12px;
+  font-weight: normal;
+  border-radius: 6px;
+  white-space: nowrap;
+  max-width: 250px;
+  white-space: normal;
+  text-align: center;
+  z-index: 1000;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s, visibility 0.2s;
+  pointer-events: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.nav-tooltip::before {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-top: 2px;
+  border: 6px solid transparent;
+  border-bottom-color: #333;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s, visibility 0.2s;
+  pointer-events: none;
+}
+
+.nav-tooltip:hover::after,
+.nav-tooltip:hover::before {
+  opacity: 1;
+  visibility: visible;
+}
+
 .card {
   background: #f8f9fa;
   border-radius: 8px;
