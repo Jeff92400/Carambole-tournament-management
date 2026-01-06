@@ -753,7 +753,8 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
                 <p style="margin: 5px 0;"><strong>Date :</strong> ${dateStr}</p>
                 <p style="margin: 5px 0;"><strong>Heure :</strong> ${playerLocation?.startTime?.replace(':', 'H') || '14H00'}</p>
                 <p style="margin: 5px 0;"><strong>Lieu :</strong> ${playerLocation?.name || 'A definir'}</p>
-                ${fullAddress ? `<p style="margin: 5px 0; color: #666;">${fullAddress}</p>` : ''}
+                ${fullAddress ? `<p style="margin: 5px 0; color: #666;">📍 ${fullAddress}</p>` : ''}
+                ${playerLocation?.phone ? `<p style="margin: 5px 0; color: #666;">📞 ${playerLocation.phone}</p>` : ''}
                 <p style="margin: 5px 0;"><strong>Votre poule :</strong> ${playerPoule.pouleNumber}</p>
               </div>
 
@@ -1093,6 +1094,45 @@ router.delete('/inscription-logs/:id', authenticateToken, async (req, res) => {
 
 // ============ INSCRIPTION CONFIRMATION EMAILS (for Player App) ============
 
+// Helper function to look up club phone by location name (accent-insensitive)
+async function getClubPhoneByLocation(locationName) {
+  if (!locationName) return null;
+
+  const db = require('../db-loader');
+
+  return new Promise((resolve) => {
+    // Normalize: lowercase, remove accents
+    const normalizedLocation = locationName.toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+    db.all('SELECT name, city, phone FROM clubs WHERE phone IS NOT NULL AND phone != \'\'', [], (err, clubs) => {
+      if (err || !clubs) {
+        resolve(null);
+        return;
+      }
+
+      for (const club of clubs) {
+        const normalizedName = (club.name || '').toLowerCase()
+          .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        const normalizedCity = (club.city || '').toLowerCase()
+          .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+        // Check if location matches club name or city
+        if (normalizedName.includes(normalizedLocation) ||
+            normalizedLocation.includes(normalizedName) ||
+            normalizedCity === normalizedLocation ||
+            normalizedCity.includes(normalizedLocation) ||
+            normalizedLocation.includes(normalizedCity)) {
+          resolve(club.phone);
+          return;
+        }
+      }
+
+      resolve(null);
+    });
+  });
+}
+
 // Default templates for inscription confirmations
 const DEFAULT_INSCRIPTION_CONFIRMATION_TEMPLATE = {
   subject: 'Confirmation d\'inscription - {tournament_name}',
@@ -1153,6 +1193,9 @@ router.post('/inscription-confirmation', async (req, res) => {
     const contactEmail = await getContactEmail();
     const template = DEFAULT_INSCRIPTION_CONFIRMATION_TEMPLATE;
 
+    // Look up club phone from location name
+    const locationPhone = await getClubPhoneByLocation(location);
+
     // Replace template variables
     const dateStr = tournament_date
       ? new Date(tournament_date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
@@ -1188,6 +1231,7 @@ router.post('/inscription-confirmation', async (req, res) => {
               <p style="margin: 5px 0;"><strong>Catégorie :</strong> ${category || '-'}</p>
               <p style="margin: 5px 0;"><strong>Date :</strong> ${dateStr}</p>
               <p style="margin: 5px 0;"><strong>Lieu :</strong> ${location || 'À définir'}</p>
+              ${locationPhone ? `<p style="margin: 5px 0; color: #666;">📞 ${locationPhone}</p>` : ''}
             </div>
             <div style="line-height: 1.6;">
               ${bodyHtml}
@@ -1251,6 +1295,9 @@ router.post('/inscription-cancellation', async (req, res) => {
     const contactEmail = await getContactEmail();
     const template = DEFAULT_INSCRIPTION_CANCELLATION_TEMPLATE;
 
+    // Look up club phone from location name
+    const locationPhone = await getClubPhoneByLocation(location);
+
     // Replace template variables
     const dateStr = tournament_date
       ? new Date(tournament_date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
@@ -1286,6 +1333,7 @@ router.post('/inscription-cancellation', async (req, res) => {
               <p style="margin: 5px 0;">🏆 <strong>Catégorie :</strong> ${category || '-'}</p>
               <p style="margin: 5px 0;">📆 <strong>Date :</strong> ${dateStr}</p>
               <p style="margin: 5px 0;">📍 <strong>Lieu :</strong> ${location || 'Non défini'}</p>
+              ${locationPhone ? `<p style="margin: 5px 0; color: #666;">📞 ${locationPhone}</p>` : ''}
             </div>
             <div style="line-height: 1.6;">
               ${bodyHtml}
