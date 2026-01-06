@@ -1019,4 +1019,201 @@ router.post('/generate-summary-pdf', authenticateToken, async (req, res) => {
   }
 });
 
+// ============ INSCRIPTION CONFIRMATION EMAILS (for Player App) ============
+
+// Default templates for inscription confirmations
+const DEFAULT_INSCRIPTION_CONFIRMATION_TEMPLATE = {
+  subject: 'Confirmation d\'inscription - {tournament_name}',
+  body: `Bonjour {player_name},
+
+Votre inscription a bien été enregistrée pour la compétition suivante :
+
+📅 Compétition : {tournament_name}
+🎱 Mode : {mode} - {category}
+📆 Date : {tournament_date}
+📍 Lieu : {location}
+
+Vous recevrez une convocation avec les détails (horaires, poules) quelques jours avant la compétition.
+
+En cas d'empêchement, merci de vous désinscrire via l'application ou de nous prévenir par email.
+
+Sportivement,
+Le Comité Départemental de Billard des Hauts-de-Seine`
+};
+
+const DEFAULT_INSCRIPTION_CANCELLATION_TEMPLATE = {
+  subject: 'Confirmation de désinscription - {tournament_name}',
+  body: `Bonjour {player_name},
+
+Nous confirmons l'annulation de votre inscription à la compétition suivante :
+
+📅 Compétition : {tournament_name}
+🎱 Mode : {mode} - {category}
+📆 Date : {tournament_date}
+
+Si cette désinscription n'est pas de votre fait, merci de nous contacter rapidement.
+
+Sportivement,
+Le Comité Départemental de Billard des Hauts-de-Seine`
+};
+
+// Send inscription confirmation email (called by Player App)
+router.post('/inscription-confirmation', async (req, res) => {
+  const { player_email, player_name, tournament_name, mode, category, tournament_date, location, api_key } = req.body;
+
+  // Verify API key (shared secret between apps)
+  if (api_key !== process.env.PLAYER_APP_API_KEY) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const resend = getResend();
+  if (!resend) {
+    return res.status(500).json({ error: 'Email not configured' });
+  }
+
+  if (!player_email || !player_name || !tournament_name) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  try {
+    const contactEmail = await getContactEmail();
+    const template = DEFAULT_INSCRIPTION_CONFIRMATION_TEMPLATE;
+
+    // Replace template variables
+    const dateStr = tournament_date
+      ? new Date(tournament_date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+      : 'Date à définir';
+
+    const variables = {
+      player_name,
+      tournament_name,
+      mode: mode || '',
+      category: category || '',
+      tournament_date: dateStr,
+      location: location || 'Lieu à définir'
+    };
+
+    const subject = replaceTemplateVariables(template.subject, variables);
+    const bodyText = replaceTemplateVariables(template.body, variables);
+    const bodyHtml = bodyText.replace(/\n/g, '<br>');
+
+    await resend.emails.send({
+      from: 'CDBHS <noreply@cdbhs.net>',
+      replyTo: contactEmail,
+      to: [player_email],
+      subject: subject,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <div style="background: #28a745; color: white; padding: 20px; text-align: center;">
+            <h1 style="margin: 0; font-size: 24px;">✅ Inscription Confirmée</h1>
+          </div>
+          <div style="padding: 20px; background: #f8f9fa;">
+            <div style="margin-bottom: 20px; padding: 15px; background: white; border-radius: 4px; border-left: 4px solid #28a745;">
+              <p style="margin: 5px 0;"><strong>Compétition :</strong> ${tournament_name}</p>
+              <p style="margin: 5px 0;"><strong>Mode :</strong> ${mode || '-'} - ${category || '-'}</p>
+              <p style="margin: 5px 0;"><strong>Date :</strong> ${dateStr}</p>
+              <p style="margin: 5px 0;"><strong>Lieu :</strong> ${location || 'À définir'}</p>
+            </div>
+            <div style="line-height: 1.6;">
+              ${bodyHtml}
+            </div>
+            <p style="margin-top: 20px; padding: 10px; background: #e7f3ff; border-left: 4px solid #007bff; font-size: 13px;">
+              📧 <strong>Contact :</strong> <a href="mailto:${contactEmail}" style="color: #1F4788;">${contactEmail}</a>
+            </p>
+          </div>
+          <div style="background: #1F4788; color: white; padding: 10px; text-align: center; font-size: 12px;">
+            <p style="margin: 0;">CDBHS - Comité Départemental de Billard des Hauts-de-Seine</p>
+          </div>
+        </div>
+      `
+    });
+
+    console.log(`Inscription confirmation email sent to ${player_email} for ${tournament_name}`);
+    res.json({ success: true, message: 'Confirmation email sent' });
+
+  } catch (error) {
+    console.error('Error sending inscription confirmation:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Send inscription cancellation email (called by Player App)
+router.post('/inscription-cancellation', async (req, res) => {
+  const { player_email, player_name, tournament_name, mode, category, tournament_date, api_key } = req.body;
+
+  // Verify API key (shared secret between apps)
+  if (api_key !== process.env.PLAYER_APP_API_KEY) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const resend = getResend();
+  if (!resend) {
+    return res.status(500).json({ error: 'Email not configured' });
+  }
+
+  if (!player_email || !player_name || !tournament_name) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  try {
+    const contactEmail = await getContactEmail();
+    const template = DEFAULT_INSCRIPTION_CANCELLATION_TEMPLATE;
+
+    // Replace template variables
+    const dateStr = tournament_date
+      ? new Date(tournament_date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+      : 'Date à définir';
+
+    const variables = {
+      player_name,
+      tournament_name,
+      mode: mode || '',
+      category: category || '',
+      tournament_date: dateStr
+    };
+
+    const subject = replaceTemplateVariables(template.subject, variables);
+    const bodyText = replaceTemplateVariables(template.body, variables);
+    const bodyHtml = bodyText.replace(/\n/g, '<br>');
+
+    await resend.emails.send({
+      from: 'CDBHS <noreply@cdbhs.net>',
+      replyTo: contactEmail,
+      to: [player_email],
+      subject: subject,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <div style="background: #dc3545; color: white; padding: 20px; text-align: center;">
+            <h1 style="margin: 0; font-size: 24px;">❌ Désinscription Confirmée</h1>
+          </div>
+          <div style="padding: 20px; background: #f8f9fa;">
+            <div style="margin-bottom: 20px; padding: 15px; background: white; border-radius: 4px; border-left: 4px solid #dc3545;">
+              <p style="margin: 5px 0;"><strong>Compétition :</strong> ${tournament_name}</p>
+              <p style="margin: 5px 0;"><strong>Mode :</strong> ${mode || '-'} - ${category || '-'}</p>
+              <p style="margin: 5px 0;"><strong>Date :</strong> ${dateStr}</p>
+            </div>
+            <div style="line-height: 1.6;">
+              ${bodyHtml}
+            </div>
+            <p style="margin-top: 20px; padding: 10px; background: #fff3cd; border-left: 4px solid #ffc107; font-size: 13px;">
+              ⚠️ Si cette désinscription n'est pas de votre fait, contactez-nous à
+              <a href="mailto:${contactEmail}" style="color: #1F4788;">${contactEmail}</a>
+            </p>
+          </div>
+          <div style="background: #1F4788; color: white; padding: 10px; text-align: center; font-size: 12px;">
+            <p style="margin: 0;">CDBHS - Comité Départemental de Billard des Hauts-de-Seine</p>
+          </div>
+        </div>
+      `
+    });
+
+    console.log(`Inscription cancellation email sent to ${player_email} for ${tournament_name}`);
+    res.json({ success: true, message: 'Cancellation email sent' });
+
+  } catch (error) {
+    console.error('Error sending inscription cancellation:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;
