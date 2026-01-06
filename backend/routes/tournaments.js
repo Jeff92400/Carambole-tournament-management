@@ -1172,7 +1172,7 @@ router.get('/unsent-results', authenticateToken, (req, res) => {
     FROM tournaments t
     JOIN categories c ON t.category_id = c.id
     WHERE t.season = $1
-      AND (t.results_email_sent = 0 OR t.results_email_sent IS NULL OR t.results_email_sent = false)
+      AND (t.results_email_sent IS NULL OR NOT t.results_email_sent)
       AND (SELECT COUNT(*) FROM tournament_results WHERE tournament_id = t.id) > 0
     ORDER BY t.tournament_date DESC
   `, [season], (err, rows) => {
