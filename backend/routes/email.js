@@ -1165,7 +1165,8 @@ router.post('/inscription-confirmation', async (req, res) => {
 
     const subject = replaceTemplateVariables(template.subject, variables);
     const bodyText = replaceTemplateVariables(template.body, variables);
-    const bodyHtml = bodyText.replace(/\n/g, '<br>');
+    const frenchBillardIcon = '<img src="https://cdbhs-tournament-management-production.up.railway.app/images/FrenchBillard%20Icon.png" alt="🎯" style="height: 18px; width: 18px; vertical-align: middle;">';
+    const bodyHtml = bodyText.replace(/\n/g, '<br>').replace(/🎯/g, frenchBillardIcon);
 
     await resend.emails.send({
       from: 'CDBHS <noreply@cdbhs.net>',
@@ -1263,7 +1264,8 @@ router.post('/inscription-cancellation', async (req, res) => {
 
     const subject = replaceTemplateVariables(template.subject, variables);
     const bodyText = replaceTemplateVariables(template.body, variables);
-    const bodyHtml = bodyText.replace(/\n/g, '<br>');
+    const frenchBillardIcon = '<img src="https://cdbhs-tournament-management-production.up.railway.app/images/FrenchBillard%20Icon.png" alt="🎯" style="height: 18px; width: 18px; vertical-align: middle;">';
+    const bodyHtml = bodyText.replace(/\n/g, '<br>').replace(/🎯/g, frenchBillardIcon);
 
     await resend.emails.send({
       from: 'CDBHS <noreply@cdbhs.net>',
