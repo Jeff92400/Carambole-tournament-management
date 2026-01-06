@@ -298,6 +298,7 @@ async function initializeDatabase() {
     await client.query(`ALTER TABLE inscriptions ADD COLUMN IF NOT EXISTS convocation_adresse TEXT`);
     await client.query(`ALTER TABLE inscriptions ADD COLUMN IF NOT EXISTS convocation_heure VARCHAR(10)`);
     await client.query(`ALTER TABLE inscriptions ADD COLUMN IF NOT EXISTS convocation_notes TEXT`);
+    await client.query(`ALTER TABLE inscriptions ADD COLUMN IF NOT EXISTS convocation_phone VARCHAR(50)`);
 
     // Calendar storage table
     await client.query(`

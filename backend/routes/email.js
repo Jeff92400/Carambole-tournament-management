@@ -941,15 +941,17 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
                  convocation_lieu = $2,
                  convocation_adresse = $3,
                  convocation_heure = $4,
-                 convocation_notes = $5
-             WHERE tournoi_id = $6
-             AND REPLACE(licence, ' ', '') = REPLACE($7, ' ', '')`,
+                 convocation_notes = $5,
+                 convocation_phone = $6
+             WHERE tournoi_id = $7
+             AND REPLACE(licence, ' ', '') = REPLACE($8, ' ', '')`,
             [
               playerPouleNumber ? String(playerPouleNumber) : null,
               playerLocation?.name || null,
               fullAddress || null,
               playerLocation?.startTime || null,
               specialNote || null,
+              playerLocation?.phone || null,
               tournoiId,
               player.licence
             ],

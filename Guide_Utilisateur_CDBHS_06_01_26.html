@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Guide Utilisateur - Application de Gestion des Tournois CDBHS</title>
+  <style>
+    body {
+      font-family: Calibri, Arial, sans-serif;
+      font-size: 11pt;
+      line-height: 1.6;
+      max-width: 800px;
+      margin: 40px auto;
+      padding: 20px;
+      color: #333;
+    }
+    h1 {
+      color: #1F4788;
+      font-size: 24pt;
+      text-align: center;
+      border-bottom: 3px solid #1F4788;
+      padding-bottom: 10px;
+      margin-bottom: 5px;
+    }
+    .subtitle {
+      text-align: center;
+      color: #666;
+      font-size: 14pt;
+      margin-bottom: 30px;
+    }
+    h2 {
+      color: #1F4788;
+      font-size: 16pt;
+      margin-top: 30px;
+      border-bottom: 1px solid #ddd;
+      padding-bottom: 5px;
+    }
+    h3 {
+      color: #333;
+      font-size: 13pt;
+      margin-top: 20px;
+    }
+    .toc {
+      background: #f5f5f5;
+      padding: 20px;
+      border-radius: 8px;
+      margin: 20px 0;
+    }
+    .toc-title {
+      font-weight: bold;
+      font-size: 14pt;
+      margin-bottom: 10px;
+      color: #1F4788;
+    }
+    .toc ul {
+      list-style: none;
+      padding-left: 0;
+    }
+    .toc li {
+      margin: 8px 0;
+    }
+    .toc a {
+      color: #1F4788;
+      text-decoration: none;
+    }
+    .toc ul ul {
+      padding-left: 20px;
+    }
+    .note {
+      background: #e7f3ff;
+      border-left: 4px solid #1F4788;
+      padding: 10px 15px;
+      margin: 15px 0;
+    }
+    .warning {
+      background: #fff3cd;
+      border-left: 4px solid #ffc107;
+      padding: 10px 15px;
+      margin: 15px 0;
+    }
+    .tip {
+      background: #d4edda;
+      border-left: 4px solid #28a745;
+      padding: 10px 15px;
+      margin: 15px 0;
+    }
+    .new {
+      background: #e8f5e9;
+      border-left: 4px solid #4caf50;
+      padding: 10px 15px;
+      margin: 15px 0;
+    }
+    .new-badge {
+      display: inline-block;
+      background: #4caf50;
+      color: white;
+      font-size: 9pt;
+      padding: 2px 8px;
+      border-radius: 4px;
+      margin-left: 8px;
+      vertical-align: middle;
+    }
+    ul, ol {
+      margin: 10px 0;
+      padding-left: 25px;
+    }
+    li {
+      margin: 5px 0;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 15px 0;
+    }
+    th, td {
+      border: 1px solid #ddd;
+      padding: 10px;
+      text-align: left;
+    }
+    th {
+      background: #1F4788;
+      color: white;
+    }
+    .footer {
+      text-align: center;
+      margin-top: 40px;
+      padding-top: 20px;
+      border-top: 1px solid #ddd;
+      color: #666;
+      font-size: 10pt;
+    }
+  </style>
+</head>
+<body>
+
+<h1>Guide Utilisateur</h1>
+<p class="subtitle">Application de Gestion des Tournois CDBHS<br>Version 3.1 - Janvier 2026</p>
+
+<div class="toc">
+  <div class="toc-title">Table des Matieres</div>
+  <ul>
+    <li>1. <a href="#accueil">Accueil (Dashboard)</a>
+      <ul>
+        <li>1.1 Alertes de Relances</li>
+        <li>1.2 Actions Rapides</li>
+        <li>1.3 Selecteur de Saison</li>
+        <li>1.4 Statistiques</li>
+      </ul>
+    </li>
+    <li>2. <a href="#competitions-jouer">Competitions a Jouer (Focus Principal)</a>
+      <ul>
+        <li>2.1 Mise a jour des inscriptions CDBHS</li>
+        <li>2.2 Generation des poules</li>
+        <li>2.3 Feuilles de matches</li>
+        <li>2.4 Gestion des convocations</li>
+      </ul>
+    </li>
+    <li>3. <a href="#competitions-jouees">Competitions Jouees</a></li>
+    <li>4. <a href="#classements">Classements</a></li>
+    <li>5. <a href="#calendrier">Calendrier</a></li>
+    <li>6. <a href="#statistiques">Statistiques</a></li>
+    <li>7. <a href="#emailing">Emailing</a>
+      <ul>
+        <li>7.1 Composer</li>
+        <li>7.2 Relances</li>
+        <li>7.3 Resultats Tournoi</li>
+        <li>7.4 Convocation Finale</li>
+        <li>7.5 Gestion Contacts</li>
+        <li>7.6 Templates et Historique</li>
+        <li>7.7 Messages des Joueurs <span class="new-badge">NOUVEAU</span></li>
+      </ul>
+    </li>
+    <li>8. <a href="#fichiers">Fichiers (Administration)</a></li>
+    <li>9. <a href="#parametres">Parametres</a>
+      <ul>
+        <li>9.1 Mon mot de passe</li>
+        <li>9.2 Mes parametres</li>
+        <li>9.3 Gestion des Utilisateurs</li>
+        <li>9.4 Parametres des epreuves</li>
+        <li>9.5 Planification des emails</li>
+        <li>9.6 Alias des Clubs</li>
+      </ul>
+    </li>
+    <li>10. <a href="#connexion">Connexion et Reinitialisation</a></li>
+    <li>11. <a href="#espace-joueur">Espace Joueur (Application Mobile)</a> <span class="new-badge">NOUVEAU</span></li>
+    <li><a href="#annexe">Annexe: Workflow Type</a></li>
+  </ul>
+</div>
+
+<h2 id="accueil">1. Accueil (Dashboard)</h2>
+
+<p>Le tableau de bord offre une vue d'ensemble de l'activite du comite avec des alertes proactives et des statistiques detaillees.</p>
+
+<h3>1.1 Alertes de Relances</h3>
+
+<p>Le dashboard affiche un bandeau d'alertes pour les administrateurs indiquant les tournois necessitant une relance.</p>
+
+<p><strong>Fonctionnalites :</strong></p>
+<ul>
+  <li>Affichage des tournois a venir necessitant une relance</li>
+  <li>Indication du nombre de jours restants avant chaque tournoi</li>
+  <li>Code couleur : orange si > 7 jours, rouge si <= 7 jours</li>
+  <li>Bouton "Relancer" pour acceder directement a l'emailing pre-rempli</li>
+  <li>Bouton vert pour marquer une relance comme deja envoyee</li>
+  <li>Affichage des relances deja envoyees avec la date d'envoi</li>
+</ul>
+
+<h3>1.2 Actions Rapides</h3>
+
+<p>Boutons d'acces rapide aux fonctions principales :</p>
+<ul>
+  <li><strong>Competitions a jouer</strong> (bouton rouge - priorite principale)</li>
+  <li>Importer une competition (admin seulement)</li>
+  <li>Competitions jouees</li>
+  <li>Voir les Classements</li>
+  <li>Calendrier</li>
+</ul>
+
+<h3>1.3 Selecteur de Saison</h3>
+
+<p>Un selecteur permet de filtrer toutes les statistiques par saison (cycle Septembre-Aout).</p>
+
+<h3>1.4 Statistiques affichees</h3>
+
+<p><strong>Statistiques globales :</strong></p>
+<ul>
+  <li>Joueurs Actifs : Nombre de joueurs actifs dans la base</li>
+  <li>Competitions jouees : Nombre de competitions importees pour la saison</li>
+  <li>Participants cumules : Total des participations aux competitions de la saison</li>
+</ul>
+
+<p><strong>Inscriptions saison en cours :</strong></p>
+<ul>
+  <li>Total des inscriptions</li>
+  <li>Nombre de convoques</li>
+  <li>Nombre de forfaits</li>
+</ul>
+
+<p><strong>Competitions saison en cours :</strong></p>
+<ul>
+  <li>Total : Passes + A venir</li>
+  <li>A venir : Competitions programmees non encore jouees</li>
+  <li>Passes : Competitions deja jouees et importees</li>
+</ul>
+
+<h2 id="competitions-jouer">2. Competitions a Jouer</h2>
+
+<div class="note">
+  <strong>SECTION PRINCIPALE DE L'APPLICATION</strong><br>
+  Cette section permet de preparer et gerer les competitions a venir. C'est le coeur de l'application pour l'organisation des tournois.
+</div>
+
+<h3>2.1 Mise a jour des inscriptions CDBHS</h3>
+
+<p>Avant de generer les poules, il est essentiel de mettre a jour les donnees depuis le systeme CDBHS.</p>
+
+<div class="warning">
+  <strong>Important :</strong> Un bandeau d'avertissement s'affiche en haut de page indiquant la date du dernier import.
+</div>
+
+<p><strong>Procedure de mise a jour :</strong></p>
+<ol>
+  <li>Cliquez sur "Mettre a jour les inscriptions" dans le bandeau jaune</li>
+  <li>Telechargez les fichiers CSV depuis le systeme CDBHS (Tournois et Inscriptions)</li>
+  <li>Importez chaque fichier via le formulaire dedie (pages separees)</li>
+  <li>Verifiez que les dates d'import sont actualisees</li>
+</ol>
+
+<h3>2.2 Generation des poules</h3>
+
+<p>Une fois les inscriptions a jour, vous pouvez generer les poules pour chaque competition.</p>
+
+<p><strong>Selection de la competition :</strong></p>
+<ul>
+  <li>Choisissez le Mode de jeu (Libre, Bande, 3 Bandes, Cadre)</li>
+  <li>Selectionnez la Categorie (R1, R2, R3, etc.)</li>
+  <li>Cliquez sur "Charger les Inscrits"</li>
+</ul>
+
+<p><strong>Liste des inscrits - Le tableau affiche :</strong></p>
+<ul>
+  <li>Nom/Prenom : Identite du joueur</li>
+  <li>Licence : Numero de licence FFB</li>
+  <li>Club : Club d'appartenance</li>
+  <li>Classement : Classement officiel du joueur</li>
+  <li>Convoque : Statut de convocation (case a cocher)</li>
+  <li>Forfait : Si le joueur a declare forfait</li>
+</ul>
+
+<p><strong>Gestion des convocations :</strong></p>
+<ul>
+  <li>Cochez les joueurs a convoquer dans la colonne "Convoque"</li>
+  <li>Les modifications sont sauvegardees automatiquement</li>
+  <li>Le compteur de joueurs convoques s'actualise en temps reel</li>
+</ul>
+
+<p><strong>Generation des poules :</strong></p>
+<ol>
+  <li>Verifiez le nombre de joueurs convoques</li>
+  <li>Selectionnez le nombre de poules souhaite</li>
+  <li>L'algorithme repartit equitablement les joueurs par classement</li>
+  <li>Les poules sont affichees avec la composition detaillee</li>
+</ol>
+
+<div class="tip">
+  <strong>Astuce :</strong> L'algorithme de repartition utilise un systeme de "serpent" pour equilibrer les niveaux entre les poules.
+</div>
+
+<h3>2.3 Feuilles de matches</h3>
+
+<p>Apres generation des poules, vous pouvez creer les feuilles de matches.</p>
+<ul>
+  <li><strong>Feuilles individuelles :</strong> Une feuille par match avec les details des joueurs</li>
+  <li><strong>Recapitulatif par poule :</strong> Vue d'ensemble de tous les matches d'une poule</li>
+  <li><strong>Export PDF :</strong> Generation d'un document PDF pret a imprimer</li>
+</ul>
+
+<h3>2.4 Gestion des convocations</h3>
+
+<p>Les convocations peuvent etre envoyees par email depuis la section Emailing :</p>
+<ol>
+  <li>Generez les poules et validez la composition</li>
+  <li>Allez dans la section "Emailing"</li>
+  <li>Selectionnez le type "Convocation"</li>
+  <li>Les joueurs convoques sont automatiquement selectionnes</li>
+  <li>Personnalisez le message si necessaire</li>
+  <li>Envoyez les convocations</li>
+</ol>
+
+<h2 id="competitions-jouees">3. Competitions Jouees</h2>
+
+<p>Cette section liste toutes les competitions dont les resultats ont ete importes.</p>
+
+<p><strong>Informations affichees :</strong></p>
+<ul>
+  <li>Date de la competition</li>
+  <li>Mode de jeu et categorie</li>
+  <li>Nombre de participants</li>
+  <li>Lieu</li>
+  <li>Actions (voir resultats, supprimer)</li>
+</ul>
+
+<p><strong>Import des resultats :</strong></p>
+<ol>
+  <li>Cliquez sur "Importer un Tournoi"</li>
+  <li>Selectionnez le fichier Excel des resultats (format FFB)</li>
+  <li>Verifiez les donnees importees</li>
+  <li>Validez l'import</li>
+</ol>
+
+<div class="note">
+  Bouton d'export disponible pour telecharger la liste des competitions.
+</div>
+
+<h2 id="classements">4. Classements</h2>
+
+<p>Consultation des classements par mode de jeu et categorie.</p>
+
+<p><strong>Filtres disponibles :</strong></p>
+<ul>
+  <li>Saison</li>
+  <li>Mode de jeu (Libre, Bande, 3 Bandes, Cadre)</li>
+  <li>Categorie (R1, R2, R3, etc.)</li>
+  <li>Club</li>
+</ul>
+
+<p><strong>Donnees du classement :</strong></p>
+<ul>
+  <li>Position</li>
+  <li>Nom du joueur</li>
+  <li>Club</li>
+  <li>Points de match</li>
+  <li>Moyenne generale</li>
+  <li>Meilleure serie</li>
+  <li>Nombre de tournois joues</li>
+</ul>
+
+<h2 id="calendrier">5. Calendrier</h2>
+
+<p>Le calendrier est accessible directement depuis la barre de navigation principale (visible pour tous les utilisateurs).</p>
+
+<p>Le calendrier affiche toutes les competitions programmees pour la saison avec :</p>
+<ul>
+  <li>Vue mensuelle des competitions</li>
+  <li>Details : mode, categorie, lieu</li>
+  <li>Indication des competitions passees vs a venir</li>
+</ul>
+
+<h2 id="statistiques">6. Statistiques</h2>
+
+<p>Analyse detaillee des donnees de la saison avec selecteur de saison.</p>
+
+<h3>Onglet Clubs</h3>
+<ul>
+  <li><strong>Podiums par Mode de Jeu :</strong> Classement des clubs par nombre de podiums (or, argent, bronze)</li>
+  <li><strong>Clubs les Plus Actifs :</strong> Classement par nombre de participations</li>
+</ul>
+
+<h3>Onglet Joueurs</h3>
+<ul>
+  <li><strong>Joueurs les Plus Actifs :</strong> Top 10 par nombre de competitions</li>
+  <li><strong>Meilleures Moyennes :</strong> Par categorie selectionnee</li>
+  <li><strong>Meilleures Series :</strong> Par categorie selectionnee</li>
+  <li><strong>Nouveaux Joueurs :</strong> Premiere participation dans la saison</li>
+</ul>
+
+<h3>Onglet General</h3>
+<ul>
+  <li>Taux de participation par mode (inscriptions vs forfaits)</li>
+  <li>Repartition par categorie</li>
+</ul>
+
+<h2 id="emailing">7. Emailing</h2>
+
+<p>Systeme complet d'envoi d'emails aux joueurs avec plusieurs modes.</p>
+
+<h3>7.1 Composer</h3>
+
+<p>Email libre a un ou plusieurs destinataires.</p>
+<ul>
+  <li>Selection des contacts avec filtres (club, mode, categorie, activite)</li>
+  <li>Support des templates avec variables dynamiques</li>
+  <li>Option d'ajout d'images</li>
+  <li>Programmation d'envoi differe</li>
+  <li>Mode test pour validation</li>
+</ul>
+
+<h3>7.2 Relances</h3>
+
+<p>Systeme de relances automatisees pour les inscriptions aux tournois.</p>
+
+<p><strong>Types de relances :</strong></p>
+<ul>
+  <li><strong>T2 :</strong> Relance pour le 2eme tournoi qualificatif</li>
+  <li><strong>T3 :</strong> Relance pour le 3eme tournoi qualificatif</li>
+  <li><strong>Finale :</strong> Confirmation pour les finales departementales</li>
+</ul>
+
+<p><strong>Fonctionnalites :</strong></p>
+<ul>
+  <li>Pre-selection automatique du tournoi depuis le dashboard</li>
+  <li>Templates personnalisables avec variables (nom, date, lieu, date limite)</li>
+  <li>Date limite d'inscription calculee automatiquement (tournoi - 7 jours)</li>
+  <li>Lieu du tournoi inclus dans le template</li>
+  <li>Suivi des relances envoyees</li>
+</ul>
+
+<h3>7.3 Resultats Tournoi</h3>
+
+<p>Envoi automatique des resultats aux participants apres un tournoi.</p>
+<ul>
+  <li>Selection du tournoi</li>
+  <li>Texte d'introduction et conclusion personnalisables</li>
+  <li>Substitution automatique des variables</li>
+</ul>
+
+<h3>7.4 Convocation Finale</h3>
+
+<p>Notification des finalistes qualifies avec details de l'evenement.</p>
+<ul>
+  <li>Position dans le classement</li>
+  <li>Details de la finale</li>
+  <li>Exigences de participation</li>
+</ul>
+
+<h3>7.5 Gestion Contacts</h3>
+<ul>
+  <li>Synchronisation avec la base joueurs et inscriptions</li>
+  <li>Filtrage par statut d'activite, club, mode, categorie</li>
+  <li>Edition manuelle avec suivi opt-in</li>
+  <li>Indicateurs de validite email</li>
+</ul>
+
+<h3>7.6 Templates et Historique</h3>
+<ul>
+  <li><strong>Templates :</strong> Modeles d'emails reutilisables avec reinitialisation par defaut</li>
+  <li><strong>Historique :</strong> Consultation des emails envoyes avec classification par type</li>
+  <li><strong>Programmes :</strong> Gestion des emails planifies avec modification/annulation</li>
+</ul>
+
+<h3 id="messages-joueurs">7.7 Messages des Joueurs <span class="new-badge">NOUVEAU</span></h3>
+
+<div class="new">
+  <strong>NOUVEAU dans la version 3.1</strong><br>
+  Les joueurs peuvent desormais envoyer des messages au CDBHS directement depuis l'Espace Joueur (application mobile).
+</div>
+
+<p><strong>Reception des messages :</strong></p>
+<p>Les messages envoyes par les joueurs arrivent dans la boite mail du CDBHS (cdbhs92@gmail.com) avec :</p>
+<ul>
+  <li>Sujet prefixe par "[Espace Joueur]"</li>
+  <li>Nom, prenom et licence du joueur</li>
+  <li>Club du joueur</li>
+  <li>Email du joueur (pour repondre directement)</li>
+  <li>Contenu du message</li>
+</ul>
+
+<p><strong>Sujets possibles :</strong></p>
+<ul>
+  <li>Question generale</li>
+  <li>Probleme d'inscription</li>
+  <li>Probleme technique</li>
+  <li>Suggestion</li>
+  <li>Autre</li>
+</ul>
+
+<p><strong>Confirmation automatique :</strong></p>
+<p>Le joueur recoit automatiquement une copie de son message pour confirmer l'envoi.</p>
+
+<div class="tip">
+  <strong>Conseil :</strong> Utilisez la fonction "Repondre" de votre messagerie pour repondre directement au joueur - l'adresse de reponse est pre-configuree.
+</div>
+
+<h2 id="fichiers">8. Fichiers (Administration)</h2>
+
+<p>Menu reserve aux administrateurs pour la gestion des donnees.</p>
+
+<p><strong>Sous-menus :</strong></p>
+<ul>
+  <li><strong>Joueurs :</strong> Liste et gestion des joueurs (avec bouton export)</li>
+  <li><strong>Competitions jouees :</strong> Acces a la liste des tournois (avec bouton export)</li>
+  <li><strong>Tournois CDBHS :</strong> Donnees des tournois importees</li>
+  <li><strong>Inscriptions CDBHS :</strong> Donnees des inscriptions importees</li>
+  <li><strong>Clubs :</strong> Gestion des clubs et alias</li>
+</ul>
+
+<div class="note">
+  Les imports de Tournois et Inscriptions CDBHS sont sur des pages separees pour plus de clarte.
+</div>
+
+<h2 id="parametres">9. Parametres</h2>
+
+<p>Configuration de l'application.</p>
+
+<h3>9.1 Mon mot de passe</h3>
+<p>Changement du mot de passe personnel (disponible pour tous les utilisateurs).</p>
+
+<h3>9.2 Mes parametres</h3>
+<p>Configuration personnelle :</p>
+<ul>
+  <li><strong>Email personnel :</strong> Utilise pour la reinitialisation du mot de passe</li>
+  <li><strong>Alertes tournois :</strong> Recevoir des notifications email pour les tournois a venir</li>
+</ul>
+
+<h3>9.3 Gestion des Utilisateurs (Admin)</h3>
+<p>Gestion complete des comptes utilisateurs :</p>
+<ul>
+  <li>Ajouter un utilisateur (nom, email, mot de passe, role)</li>
+  <li>Roles : Administrateur (acces complet) ou Viewer (lecture seule)</li>
+  <li>Modifier l'email d'un utilisateur</li>
+  <li>Reinitialiser le mot de passe</li>
+  <li>Activer/desactiver un compte</li>
+  <li>Supprimer un utilisateur</li>
+  <li>Activer/desactiver les alertes tournois par utilisateur</li>
+</ul>
+
+<h3>9.4 Parametres des epreuves (Admin)</h3>
+<p>Configuration des regles pour chaque mode de jeu et categorie :</p>
+<ul>
+  <li>Coin (Grand Coin / Petit Coin)</li>
+  <li>Distance normale et reduite</li>
+  <li>Nombre de reprises</li>
+  <li>Moyennes qualificatives (mini/maxi)</li>
+</ul>
+
+<h3>9.5 Planification des emails (Admin)</h3>
+<p>Configuration de l'heure d'envoi automatique des emails programmes (heure de Paris).</p>
+
+<h3>9.6 Alias des Clubs (Admin)</h3>
+<p>Gestion des correspondances entre variantes de noms de clubs pour l'affichage correct des logos.</p>
+
+<h2 id="connexion">10. Connexion et Reinitialisation</h2>
+
+<h3>Connexion</h3>
+<p>Acces a l'application via la page de connexion avec nom d'utilisateur et mot de passe.</p>
+
+<h3>Reinitialisation du mot de passe</h3>
+<p>En cas d'oubli du mot de passe, les utilisateurs peuvent le reinitialiser eux-memes :</p>
+<ol>
+  <li>Cliquez sur "Mot de passe oublie ?" sur la page de connexion</li>
+  <li>Entrez l'adresse email associee a votre compte</li>
+  <li>Recevez un lien de reinitialisation par email</li>
+  <li>Cliquez sur le lien et definissez un nouveau mot de passe</li>
+</ol>
+
+<div class="warning">
+  <strong>Prerequis :</strong> L'utilisateur doit avoir configure son email dans ses parametres (section 9.2).
+</div>
+
+<h2 id="espace-joueur">11. Espace Joueur (Application Mobile) <span class="new-badge">NOUVEAU</span></h2>
+
+<div class="new">
+  <strong>NOUVEAU dans la version 3.1</strong><br>
+  Une application mobile "Espace Joueur" est maintenant disponible pour les joueurs du CDBHS.
+</div>
+
+<p>L'Espace Joueur permet aux joueurs de :</p>
+<ul>
+  <li>Consulter les competitions a venir</li>
+  <li>S'inscrire aux competitions de leur categorie</li>
+  <li>Suivre leurs inscriptions et convocations</li>
+  <li>Consulter leurs classements</li>
+  <li>Contacter le CDBHS</li>
+</ul>
+
+<p><strong>Inscription des joueurs :</strong></p>
+<p>Les joueurs doivent creer un compte avec :</p>
+<ul>
+  <li>Leur numero de licence FFB (qui doit etre dans la base de donnees)</li>
+  <li>Une adresse email</li>
+  <li>Un mot de passe securise</li>
+</ul>
+
+<p><strong>Inscriptions via l'application :</strong></p>
+<p>Lorsqu'un joueur s'inscrit a une competition via l'Espace Joueur :</p>
+<ul>
+  <li>L'inscription est automatiquement ajoutee a la base de donnees</li>
+  <li>Le joueur apparait dans la liste des inscrits de la competition</li>
+  <li>Un email de confirmation est envoye au joueur</li>
+</ul>
+
+<div class="note">
+  Un guide utilisateur separe est disponible pour l'Espace Joueur : <strong>Guide_Utilisateur_Espace_Joueur_CDBHS.html</strong>
+</div>
+
+<h2 id="annexe">Annexe: Workflow Type - Preparation d'un Tournoi</h2>
+
+<p>Ce workflow decrit les etapes pour preparer une competition de A a Z.</p>
+
+<table>
+  <tr>
+    <th>Delai</th>
+    <th>Action</th>
+    <th>Description</th>
+  </tr>
+  <tr>
+    <td><strong>J-14</strong></td>
+    <td>Alerte dashboard</td>
+    <td>Les administrateurs recoivent une alerte sur le dashboard pour les tournois a venir</td>
+  </tr>
+  <tr>
+    <td><strong>J-7</strong></td>
+    <td>Mise a jour CDBHS</td>
+    <td>Importer les dernieres inscriptions depuis le systeme CDBHS</td>
+  </tr>
+  <tr>
+    <td><strong>J-7</strong></td>
+    <td>Relance</td>
+    <td>Envoyer les relances aux inscrits via le systeme de relances</td>
+  </tr>
+  <tr>
+    <td><strong>J-5</strong></td>
+    <td>Verification</td>
+    <td>Verifier la liste des inscrits, identifier les forfaits</td>
+  </tr>
+  <tr>
+    <td><strong>J-3</strong></td>
+    <td>Generation poules</td>
+    <td>Selectionner les convoques et generer les poules</td>
+  </tr>
+  <tr>
+    <td><strong>J-3</strong></td>
+    <td>Convocations</td>
+    <td>Envoyer les emails de convocation via la section Emailing</td>
+  </tr>
+  <tr>
+    <td><strong>J-1</strong></td>
+    <td>Impression</td>
+    <td>Imprimer les feuilles de matches</td>
+  </tr>
+  <tr>
+    <td><strong>Jour J</strong></td>
+    <td>Competition</td>
+    <td>Deroulement de la competition</td>
+  </tr>
+  <tr>
+    <td><strong>J+1</strong></td>
+    <td>Import resultats</td>
+    <td>Importer le fichier Excel des resultats</td>
+  </tr>
+  <tr>
+    <td><strong>J+1</strong></td>
+    <td>Communication</td>
+    <td>Envoyer les resultats par email aux participants</td>
+  </tr>
+</table>
+
+<div class="footer">
+  <p><strong>CDBHS - Comite Departemental de Billard des Hauts-de-Seine</strong></p>
+  <p>Document mis a jour le 6 janvier 2026</p>
+</div>
+
+</body>
+</html>
