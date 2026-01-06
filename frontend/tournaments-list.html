@@ -74,7 +74,7 @@
                 <th style="cursor: pointer;" onclick="sortTable('player_count')">Participants ⬍</th>
                 <th style="cursor: pointer;" onclick="sortTable('tournament_date')">Date ⬍</th>
                 <th style="cursor: pointer;" onclick="sortTable('location')">Lieu ⬍</th>
-                <th style="width: 180px; text-align: center;">Actions</th>
+                <th style="width: 140px; text-align: center;">Actions</th>
               </tr>
             </thead>
             <tbody id="tournamentsBody"></tbody>
@@ -205,18 +205,18 @@
           const tournamentLabel = tournament.tournament_number === 4 ? 'Finale Départementale' : `Tournoi ${tournament.tournament_number}`;
 
           const editBtn = userRole === 'admin'
-            ? `<button class="btn-edit" onclick="editTournament(${tournament.id}, '${(tournament.location || '').replace(/'/g, "\\'")}', '${tournament.tournament_date || ''}')" title="Modifier" style="background: #ffc107; color: black; border: none; padding: 6px 10px; cursor: pointer; border-radius: 4px; font-size: 14px; margin-right: 3px;">✏️</button>`
+            ? `<button onclick="editTournament(${tournament.id}, '${(tournament.location || '').replace(/'/g, "\\'")}', '${tournament.tournament_date || ''}')" title="Modifier" style="background: #ffc107; color: black; border: none; padding: 4px 6px; cursor: pointer; border-radius: 3px; font-size: 12px;">✏️</button>`
             : '';
 
           const deleteBtn = userRole === 'admin'
-            ? `<button class="btn-delete" onclick="deleteTournament(${tournament.id}, '${tournament.display_name} - T${tournament.tournament_number} - ${tournament.season}')" title="Supprimer" style="background: #dc3545; color: white; border: none; padding: 6px 10px; cursor: pointer; border-radius: 4px; font-size: 16px;">🗑️</button>`
+            ? `<button onclick="deleteTournament(${tournament.id}, '${tournament.display_name} - T${tournament.tournament_number} - ${tournament.season}')" title="Supprimer" style="background: #dc3545; color: white; border: none; padding: 4px 6px; cursor: pointer; border-radius: 3px; font-size: 12px;">🗑️</button>`
             : '';
 
-          // Email status indicator - cleaner envelope icon
+          // Email status indicator - clear checkbox style
           const emailSent = tournament.results_email_sent;
           const emailStatusBtn = emailSent
-            ? `<button onclick="toggleEmailStatus(${tournament.id}, false)" title="Résultats envoyés${tournament.results_email_sent_at ? ' le ' + new Date(tournament.results_email_sent_at).toLocaleDateString('fr-FR') : ''} - Cliquez pour annuler" style="background: #28a745; color: white; border: none; padding: 5px 8px; cursor: pointer; border-radius: 4px; font-size: 13px;">📧✓</button>`
-            : `<button onclick="sendResultsEmail(${tournament.id})" title="Résultats non envoyés - Cliquez pour envoyer" style="background: #6c757d; color: white; border: none; padding: 5px 8px; cursor: pointer; border-radius: 4px; font-size: 13px;">📧</button>`;
+            ? `<button onclick="toggleEmailStatus(${tournament.id}, false)" title="Résultats envoyés${tournament.results_email_sent_at ? ' le ' + new Date(tournament.results_email_sent_at).toLocaleDateString('fr-FR') : ''}" style="background: #28a745; color: white; border: none; padding: 4px 8px; cursor: pointer; border-radius: 3px; font-size: 14px; font-weight: bold;">☑</button>`
+            : `<button onclick="sendResultsEmail(${tournament.id})" title="Résultats non envoyés - Cliquez pour envoyer" style="background: #dc3545; color: white; border: none; padding: 4px 8px; cursor: pointer; border-radius: 3px; font-size: 14px; font-weight: bold;">☐</button>`;
 
           row.innerHTML = `
             <td>${tournament.display_name}</td>
@@ -225,8 +225,8 @@
             <td style="text-align: center;">${tournament.player_count}</td>
             <td>${tournament.tournament_date ? new Date(tournament.tournament_date).toLocaleDateString('fr-FR') : 'N/A'}</td>
             <td title="${tournament.location || 'Non défini'}" style="max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${tournament.location || '-'}</td>
-            <td style="text-align: center; padding: 8px;">
-              <button class="btn-view" onclick="viewTournament(${tournament.id})" title="Voir les résultats" style="background: #28a745; color: white; border: none; padding: 6px 10px; cursor: pointer; border-radius: 4px; font-size: 14px; margin-right: 3px;">👁️</button>
+            <td style="text-align: center; padding: 4px; white-space: nowrap;">
+              <button onclick="viewTournament(${tournament.id})" title="Voir les résultats" style="background: #28a745; color: white; border: none; padding: 4px 6px; cursor: pointer; border-radius: 3px; font-size: 12px;">👁️</button>
               ${editBtn}
               ${emailStatusBtn}
               ${deleteBtn}
