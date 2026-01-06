@@ -1115,6 +1115,7 @@ Le Comité Départemental de Billard des Hauts-de-Seine</textarea>
                 <th>Mode</th>
                 <th>Catégorie</th>
                 <th>Statut</th>
+                <th class="admin-only-column" style="display: none;">Actions</th>
               </tr>
             </thead>
             <tbody id="inscriptionLogsBody"></tbody>
@@ -3365,6 +3366,12 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
       const noLogsEl = document.getElementById('noInscriptionLogs');
       tbody.innerHTML = '';
 
+      // Check if user is admin to show delete buttons
+      const isAdmin = userRole === 'admin';
+      if (isAdmin) {
+        document.querySelectorAll('.admin-only-column').forEach(el => el.style.display = '');
+      }
+
       if (!logs || logs.length === 0) {
         noLogsEl.style.display = 'block';
         return;
@@ -3381,6 +3388,10 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
           ? '<span class="badge badge-actif">Envoyé</span>'
           : `<span class="badge badge-inactif" title="${log.error_message || ''}">Échec</span>`;
 
+        const deleteBtn = isAdmin
+          ? `<td><button class="btn" style="background: #dc3545; color: white; padding: 4px 8px; font-size: 0.75rem;" onclick="deleteInscriptionLog(${log.id})">🗑️</button></td>`
+          : '';
+
         row.innerHTML = `
           <td>${date}</td>
           <td><span style="color: ${typeColor}; font-weight: 500;">${typeLabel}</span></td>
@@ -3390,9 +3401,28 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
           <td>${log.mode || '-'}</td>
           <td>${log.category || '-'}</td>
           <td>${statusBadge}</td>
+          ${deleteBtn}
         `;
         tbody.appendChild(row);
       });
+    }
+
+    async function deleteInscriptionLog(logId) {
+      if (!confirm('Supprimer cet enregistrement de l\'historique ?')) return;
+
+      try {
+        const response = await fetch(`${API_URL}/email/inscription-logs/${logId}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (!response.ok) throw new Error('Failed to delete log');
+
+        showSuccess('Enregistrement supprimé');
+        loadInscriptionEmailLogs();
+      } catch (error) {
+        showError('Erreur: ' + error.message);
+      }
     }
 
     // ==================== SCHEDULED ====================

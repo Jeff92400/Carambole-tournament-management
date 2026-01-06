@@ -1063,6 +1063,30 @@ router.get('/inscription-logs', authenticateToken, async (req, res) => {
   }
 });
 
+// Delete inscription email log (admin only)
+router.delete('/inscription-logs/:id', authenticateToken, async (req, res) => {
+  // Check if user is admin
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  const db = require('../db-loader');
+  const { id } = req.params;
+
+  try {
+    await new Promise((resolve, reject) => {
+      db.run('DELETE FROM inscription_email_logs WHERE id = $1', [id], function(err) {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting inscription email log:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ============ INSCRIPTION CONFIRMATION EMAILS (for Player App) ============
 
 // Default templates for inscription confirmations
