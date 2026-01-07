@@ -2103,23 +2103,52 @@ router.get('/tournoi/:id/simulation', authenticateToken, async (req, res) => {
       if (licNorm) cdbhsRankMap[licNorm] = r.rank_position;
     });
 
-    // Build players list with CDBHS rankings
-    const playersWithRanks = activeInscriptions.map(insc => {
+    // Separate ranked and new players
+    const rankedPlayers = [];
+    const newPlayers = [];
+
+    activeInscriptions.forEach(insc => {
       const licNorm = insc.licence?.replace(/\s/g, '');
-      const cdbhsPosition = cdbhsRankMap[licNorm] || 9999; // New players get high number
-      return {
+      const cdbhsPosition = cdbhsRankMap[licNorm];
+
+      const playerData = {
         licence: insc.licence,
         first_name: insc.first_name || '',
         last_name: insc.last_name || '',
         club: insc.club || '',
-        rank: cdbhsPosition,
-        rank_display: cdbhsPosition < 9999 ? `#${cdbhsPosition}` : 'Nouveau',
-        isNew: cdbhsPosition >= 9999
+        timestamp: insc.timestamp // Keep timestamp for sorting new players
       };
+
+      if (cdbhsPosition) {
+        rankedPlayers.push({
+          ...playerData,
+          rank: cdbhsPosition,
+          rank_display: `#${cdbhsPosition}`,
+          isNew: false
+        });
+      } else {
+        newPlayers.push({
+          ...playerData,
+          rank: null,
+          rank_display: 'Nouveau',
+          isNew: true
+        });
+      }
     });
 
-    // Sort players by CDBHS rank position (ascending - #1 first)
-    playersWithRanks.sort((a, b) => a.rank - b.rank);
+    // Sort ranked players by CDBHS position (ascending - #1 first)
+    rankedPlayers.sort((a, b) => a.rank - b.rank);
+
+    // Sort new players by inscription timestamp (earliest first)
+    newPlayers.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+
+    // Combine: ranked players first, then new players by timestamp
+    const playersWithRanks = [...rankedPlayers, ...newPlayers];
+
+    // Assign final rank (1, 2, 3... for display)
+    playersWithRanks.forEach((p, idx) => {
+      p.finalRank = idx + 1;
+    });
 
     // Get poule configuration
     const config = getSimulationPouleConfig(playersWithRanks.length);
@@ -2148,7 +2177,8 @@ router.get('/tournoi/:id/simulation', authenticateToken, async (req, res) => {
             last_name: player.last_name,
             club: player.club,
             rank_display: player.rank_display,
-            seed: player.originalRank
+            isNew: player.isNew,
+            seed: player.finalRank || player.originalRank
           }))
         }))
       },
