@@ -244,6 +244,27 @@
       font-weight: 500;
       color: #17a2b8;
     }
+    .upcoming-tournament-card .simulation-btn {
+      margin-top: 10px;
+      padding: 6px 12px;
+      background: #17a2b8;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 12px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      transition: background 0.2s;
+    }
+    .upcoming-tournament-card .simulation-btn:hover {
+      background: #138496;
+    }
+    .upcoming-tournament-card .simulation-btn img {
+      height: 14px;
+      width: 14px;
+    }
   </style>
 </head>
 <body>
@@ -1075,6 +1096,10 @@
               ? '<span style="background: #ffc107; color: #333; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: bold; margin-left: 8px;">🏆 FINALE</span>'
               : '';
 
+            // Check if simulation should be available (> 7 days away and >= 3 inscriptions)
+            const inscritCount = t.isFinale ? (t.inscribed_finalist_count || 0) : (t.inscrit_count || 0);
+            const showSimulation = daysUntil >= 7 && inscritCount >= 3;
+
             return `
               <div class="upcoming-tournament-card"
                    style="${cardStyle}"
@@ -1096,6 +1121,11 @@
                 <div class="tournament-inscrits">
                   👥 ${t.isFinale ? `${t.inscribed_finalist_count || 0}/${t.finalist_count || 0} inscrits` : `${t.inscrit_count || 0} inscrit(s)`}
                 </div>
+                ${showSimulation ? `
+                  <button class="simulation-btn" data-tournoi-id="${t.tournoi_id}" onclick="event.stopPropagation(); openSimulationModal(${t.tournoi_id});">
+                    <img src="images/billiard-icon.png" alt=""> Simulation des poules
+                  </button>
+                ` : ''}
               </div>
             `;
           }).join('');
@@ -2855,6 +2885,128 @@
         console.error('Error fetching player emails:', error);
       }
     }
+
+    // ==================== POULE SIMULATION ====================
+
+    async function openSimulationModal(tournoiId) {
+      const modal = document.getElementById('simulationModal');
+      const content = document.getElementById('simulationContent');
+      const title = document.getElementById('simulationTitle');
+
+      modal.style.display = 'flex';
+      content.innerHTML = '<div class="spinner" style="margin: 40px auto;"></div>';
+      title.textContent = 'Chargement...';
+
+      try {
+        const response = await fetch(`${API_URL}/inscriptions/tournoi/${tournoiId}/simulation`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        const data = await response.json();
+
+        if (!data.available) {
+          content.innerHTML = `
+            <div style="text-align: center; padding: 40px;">
+              <div style="font-size: 3rem; margin-bottom: 16px;">${data.reason === 'simulation_disabled' ? '🔒' : '👥'}</div>
+              <p style="color: #666;">${data.message}</p>
+            </div>
+          `;
+          title.textContent = 'Simulation non disponible';
+          return;
+        }
+
+        title.textContent = `${data.tournament.nom} - ${data.tournament.mode} ${data.tournament.categorie}`;
+
+        let html = `
+          <div style="text-align: center; margin-bottom: 20px;">
+            <span style="background: #e3f2fd; color: #1565c0; padding: 8px 16px; border-radius: 20px; font-size: 14px; font-weight: 600;">
+              ${data.simulation.player_count} joueurs • ${data.simulation.config_description}
+            </span>
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px;">
+        `;
+
+        data.simulation.poules.forEach(poule => {
+          html += `
+            <div style="background: #f8f9fa; border-radius: 8px; overflow: hidden; border: 1px solid #e9ecef;">
+              <div style="background: #1F4788; color: white; padding: 10px 16px; font-weight: 600;">
+                Poule ${poule.number}
+              </div>
+              <table style="width: 100%; border-collapse: collapse;">
+                <thead>
+                  <tr style="background: #e9ecef;">
+                    <th style="padding: 8px; text-align: center; width: 40px;">#</th>
+                    <th style="padding: 8px; text-align: left;">Joueur</th>
+                    <th style="padding: 8px; text-align: center;">Class.</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${poule.players.map((player, idx) => `
+                    <tr style="border-bottom: 1px solid #e9ecef;">
+                      <td style="padding: 8px; text-align: center;">
+                        <span style="display: inline-block; width: 24px; height: 24px; background: ${idx === 0 ? '#ffc107' : '#e9ecef'}; color: ${idx === 0 ? '#000' : '#666'}; border-radius: 50%; line-height: 24px; font-size: 12px; font-weight: 600;">
+                          ${player.seed}
+                        </span>
+                      </td>
+                      <td style="padding: 8px;">
+                        <div style="font-weight: 500;">${player.first_name} ${player.last_name}</div>
+                        <div style="font-size: 11px; color: #666;">${player.club || '-'}</div>
+                      </td>
+                      <td style="padding: 8px; text-align: center;">
+                        <span style="background: #e8f5e9; color: #2e7d32; padding: 3px 8px; border-radius: 10px; font-size: 11px; font-weight: 600;">
+                          ${player.rank_display}
+                        </span>
+                      </td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+          `;
+        });
+
+        html += `</div>
+          <div style="text-align: center; margin-top: 20px; padding-top: 16px; border-top: 1px solid #eee;">
+            <p style="font-size: 12px; color: #666;">
+              Simulation générée le ${new Date(data.simulation.generated_at).toLocaleString('fr-FR')}
+            </p>
+          </div>
+        `;
+
+        content.innerHTML = html;
+
+      } catch (error) {
+        console.error('Simulation error:', error);
+        content.innerHTML = `
+          <div style="text-align: center; padding: 40px;">
+            <div style="font-size: 3rem; margin-bottom: 16px;">❌</div>
+            <p style="color: #dc3545;">Erreur lors du chargement de la simulation</p>
+          </div>
+        `;
+      }
+    }
+
+    function closeSimulationModal() {
+      document.getElementById('simulationModal').style.display = 'none';
+    }
   </script>
+
+  <!-- Simulation Modal -->
+  <div id="simulationModal" class="modal" style="display: none;">
+    <div class="modal-content" style="max-width: 900px; max-height: 90vh; overflow-y: auto;">
+      <div class="modal-header" style="background: linear-gradient(135deg, #1F4788 0%, #163560 100%); color: white; padding: 20px; border-radius: 8px 8px 0 0;">
+        <h3 id="simulationTitle" style="margin: 0; font-size: 18px;">Simulation des poules</h3>
+        <span class="close-modal" onclick="closeSimulationModal()">&times;</span>
+      </div>
+      <div style="background: #fff3cd; padding: 12px 20px; border-bottom: 1px solid #ffc107;">
+        <p style="margin: 0; font-size: 13px; color: #856404;">
+          ⚠️ <strong>SIMULATION</strong> - Cette répartition est indicative et peut différer de la convocation officielle.
+        </p>
+      </div>
+      <div id="simulationContent" style="padding: 20px;">
+        <!-- Content will be loaded here -->
+      </div>
+    </div>
+  </div>
 </body>
 </html>
