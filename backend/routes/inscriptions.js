@@ -2036,23 +2036,13 @@ router.get('/tournoi/:id/simulation', authenticateToken, async (req, res) => {
       'CADRE': 'CADRE'
     };
 
-    // Map tournament categorie to categories.level (same mapping as generate-poules.html)
-    const levelMapping = {
-      'N1': 'NATIONALE 1',
-      'N2': 'NATIONALE 2',
-      'N3': 'NATIONALE 3',
-      'R1': 'REGIONALE 1',
-      'R2': 'REGIONALE 2',
-      'R3': 'REGIONALE 3',
-      'D1': 'DEPARTEMENTALE 1',
-      'D2': 'DEPARTEMENTALE 2',
-      'D3': 'DEPARTEMENTALE 3'
-    };
+    // Categories table stores level as 'R2', 'N3', etc. (short form)
+    // No mapping needed - use rawLevel directly
 
     const rawMode = tournament.mode?.toUpperCase();
     const rawLevel = tournament.categorie?.toUpperCase();
     const gameType = modeToGameType[rawMode] || rawMode;
-    const categoryLevel = levelMapping[rawLevel] || rawLevel;
+    const categoryLevel = rawLevel; // DB stores 'R2', 'N3', etc.
 
     // Get season from tournament date
     const tDate = new Date(tournament.debut);
