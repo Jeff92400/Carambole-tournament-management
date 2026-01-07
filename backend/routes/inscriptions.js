@@ -2023,36 +2023,74 @@ router.get('/tournoi/:id/simulation', authenticateToken, async (req, res) => {
       });
     }
 
-    // Get ranking field based on tournament mode
+    // Get CDBHS rankings for this category (same as official poule generation)
     const mode = (tournament.mode || '').toUpperCase();
-    let rankField;
-    if (mode.includes('LIBRE')) {
-      rankField = 'rank_libre';
-    } else if (mode.includes('CADRE')) {
-      rankField = 'rank_cadre';
-    } else if (mode.includes('3') || mode.includes('TROIS')) {
-      rankField = 'rank_3bandes';
-    } else if (mode.includes('BANDE')) {
-      rankField = 'rank_bande';
-    } else {
-      rankField = 'rank_libre';
+    const gameType = mode.includes('LIBRE') ? 'LIBRE' :
+                     mode.includes('CADRE') ? 'CADRE' :
+                     (mode.includes('3') || mode.includes('TROIS')) ? '3 BANDES' :
+                     mode.includes('BANDE') ? 'BANDE' : 'LIBRE';
+
+    // Get season from tournament date
+    const tDate = new Date(tournament.debut);
+    const tYear = tDate.getFullYear();
+    const tMonth = tDate.getMonth();
+    const currentSeason = tMonth >= 8 ? `${tYear}-${tYear + 1}` : `${tYear - 1}-${tYear}`;
+
+    // Get category
+    const simCategory = await new Promise((resolve, reject) => {
+      db.get(
+        `SELECT * FROM categories WHERE UPPER(game_type) = $1 AND UPPER(level) = $2`,
+        [gameType, tournament.categorie?.toUpperCase()],
+        (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        }
+      );
+    });
+
+    // Get CDBHS rankings for sorting
+    let cdbhsRankings = [];
+    if (simCategory) {
+      cdbhsRankings = await new Promise((resolve, reject) => {
+        db.all(
+          `SELECT r.licence, r.rank_position, p.first_name, p.last_name, p.club
+           FROM rankings r
+           LEFT JOIN players p ON REPLACE(r.licence, ' ', '') = REPLACE(p.licence, ' ', '')
+           WHERE r.category_id = $1 AND r.season = $2
+           ORDER BY r.rank_position ASC`,
+          [simCategory.id, currentSeason],
+          (err, rows) => {
+            if (err) reject(err);
+            else resolve(rows || []);
+          }
+        );
+      });
     }
 
-    // Build players list with rankings
+    // Create a map of licence -> CDBHS rank position
+    const cdbhsRankMap = {};
+    cdbhsRankings.forEach(r => {
+      const licNorm = r.licence?.replace(/\s/g, '');
+      if (licNorm) cdbhsRankMap[licNorm] = r.rank_position;
+    });
+
+    // Build players list with CDBHS rankings
     const playersWithRanks = activeInscriptions.map(insc => {
-      const rankValue = parseFloat(insc[rankField]) || 0;
+      const licNorm = insc.licence?.replace(/\s/g, '');
+      const cdbhsPosition = cdbhsRankMap[licNorm] || 9999; // New players get high number
       return {
         licence: insc.licence,
         first_name: insc.first_name || '',
         last_name: insc.last_name || '',
         club: insc.club || '',
-        rank: rankValue,
-        rank_display: insc[rankField] || 'NC'
+        rank: cdbhsPosition,
+        rank_display: cdbhsPosition < 9999 ? `#${cdbhsPosition}` : 'Nouveau',
+        isNew: cdbhsPosition >= 9999
       };
     });
 
-    // Sort players by rank (descending)
-    playersWithRanks.sort((a, b) => b.rank - a.rank);
+    // Sort players by CDBHS rank position (ascending - #1 first)
+    playersWithRanks.sort((a, b) => a.rank - b.rank);
 
     // Get poule configuration
     const config = getSimulationPouleConfig(playersWithRanks.length);
