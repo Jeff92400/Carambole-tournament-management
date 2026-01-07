@@ -1914,6 +1914,215 @@ router.get('/relances', authenticateToken, async (req, res) => {
   }
 });
 
+// ==================== POULE SIMULATION ====================
+
+/**
+ * GET /api/inscriptions/tournoi/:id/simulation
+ * Get poule simulation for a tournament (auto-generated based on inscriptions)
+ * Available to all authenticated users
+ */
+router.get('/tournoi/:id/simulation', authenticateToken, async (req, res) => {
+  try {
+    // Get tournament details
+    const tournament = await new Promise((resolve, reject) => {
+      db.get('SELECT * FROM tournoi_ext WHERE tournoi_id = $1', [req.params.id], (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
+
+    if (!tournament) {
+      return res.status(404).json({ error: 'Tournament not found' });
+    }
+
+    // Check if simulation should be available (> 7 days before tournament)
+    const tournamentDate = new Date(tournament.debut);
+    const now = new Date();
+    const daysUntil = (tournamentDate - now) / (1000 * 60 * 60 * 24);
+
+    if (daysUntil < 7) {
+      return res.json({
+        available: false,
+        reason: 'simulation_disabled',
+        message: 'La simulation n\'est plus disponible à moins de 7 jours de la compétition.'
+      });
+    }
+
+    // Get inscriptions with player details
+    const inscriptions = await new Promise((resolve, reject) => {
+      db.all(`
+        SELECT i.*, p.first_name, p.last_name, p.club,
+               p.rank_libre, p.rank_bande, p.rank_3bandes, p.rank_cadre
+        FROM inscriptions i
+        LEFT JOIN players p ON REPLACE(i.licence, ' ', '') = REPLACE(p.licence, ' ', '')
+        WHERE i.tournoi_id = $1
+      `, [req.params.id], (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows || []);
+      });
+    });
+
+    // Filter out forfaits
+    const activeInscriptions = inscriptions.filter(i => i.forfait !== 1);
+
+    if (activeInscriptions.length < 3) {
+      return res.json({
+        available: false,
+        reason: 'not_enough_players',
+        message: `Pas assez de joueurs inscrits (${activeInscriptions.length}/3 minimum)`,
+        inscriptionCount: activeInscriptions.length
+      });
+    }
+
+    // Get ranking field based on tournament mode
+    const mode = (tournament.mode || '').toUpperCase();
+    let rankField;
+    if (mode.includes('LIBRE')) {
+      rankField = 'rank_libre';
+    } else if (mode.includes('CADRE')) {
+      rankField = 'rank_cadre';
+    } else if (mode.includes('3') || mode.includes('TROIS')) {
+      rankField = 'rank_3bandes';
+    } else if (mode.includes('BANDE')) {
+      rankField = 'rank_bande';
+    } else {
+      rankField = 'rank_libre';
+    }
+
+    // Build players list with rankings
+    const playersWithRanks = activeInscriptions.map(insc => {
+      const rankValue = parseFloat(insc[rankField]) || 0;
+      return {
+        licence: insc.licence,
+        first_name: insc.first_name || '',
+        last_name: insc.last_name || '',
+        club: insc.club || '',
+        rank: rankValue,
+        rank_display: insc[rankField] || 'NC'
+      };
+    });
+
+    // Sort players by rank (descending)
+    playersWithRanks.sort((a, b) => b.rank - a.rank);
+
+    // Get poule configuration
+    const config = getSimulationPouleConfig(playersWithRanks.length);
+
+    // Distribute players using serpentine algorithm
+    const poules = distributeSimulationSerpentine(playersWithRanks, config.poules);
+
+    res.json({
+      available: true,
+      tournament: {
+        id: tournament.tournoi_id,
+        nom: tournament.nom,
+        mode: tournament.mode,
+        categorie: tournament.categorie,
+        date: tournament.debut,
+        lieu: tournament.lieu
+      },
+      simulation: {
+        generated_at: new Date().toISOString(),
+        player_count: playersWithRanks.length,
+        config_description: config.description,
+        poules: poules.map(p => ({
+          number: p.number,
+          players: p.players.map(player => ({
+            first_name: player.first_name,
+            last_name: player.last_name,
+            club: player.club,
+            rank_display: player.rank_display,
+            seed: player.originalRank
+          }))
+        }))
+      },
+      disclaimer: 'SIMULATION - Cette répartition est indicative et peut différer de la convocation officielle.'
+    });
+
+  } catch (error) {
+    console.error('Get poule simulation error:', error);
+    res.status(500).json({ error: 'Failed to generate simulation' });
+  }
+});
+
+// Poule configuration for simulation
+const SIMULATION_POULE_CONFIG = {
+  3: { poules: [3], tables: 1 },
+  4: { poules: [4], tables: 2 },
+  5: { poules: [5], tables: 2 },
+  6: { poules: [3, 3], tables: 2 },
+  7: { poules: [3, 4], tables: 3 },
+  8: { poules: [3, 5], tables: 3 },
+  9: { poules: [3, 3, 3], tables: 3 },
+  10: { poules: [3, 3, 4], tables: 4 },
+  11: { poules: [3, 3, 5], tables: 4 },
+  12: { poules: [3, 3, 3, 3], tables: 4 },
+  13: { poules: [3, 3, 3, 4], tables: 5 },
+  14: { poules: [3, 3, 3, 5], tables: 5 },
+  15: { poules: [3, 3, 3, 3, 3], tables: 5 },
+  16: { poules: [3, 3, 3, 3, 4], tables: 6 },
+  17: { poules: [3, 3, 3, 3, 5], tables: 6 },
+  18: { poules: [3, 3, 3, 3, 3, 3], tables: 6 },
+  19: { poules: [3, 3, 3, 3, 3, 4], tables: 7 },
+  20: { poules: [3, 3, 3, 3, 3, 5], tables: 7 }
+};
+
+function getSimulationPouleConfig(numPlayers) {
+  if (numPlayers < 3) {
+    return { poules: [], tables: 0, description: 'Pas assez de joueurs' };
+  }
+  if (numPlayers > 20) {
+    const base = Math.floor(numPlayers / 3);
+    const remainder = numPlayers % 3;
+    const poules = Array(base).fill(3);
+    if (remainder === 1) {
+      poules[poules.length - 1] = 4;
+    } else if (remainder === 2) {
+      poules[poules.length - 1] = 5;
+    }
+    return {
+      poules,
+      tables: poules.length + 1,
+      description: formatSimulationPouleDescription(poules)
+    };
+  }
+  const config = SIMULATION_POULE_CONFIG[numPlayers];
+  return { ...config, description: formatSimulationPouleDescription(config.poules) };
+}
+
+function formatSimulationPouleDescription(poules) {
+  if (poules.length === 0) return '-';
+  if (poules.length === 1) return `1 poule de ${poules[0]}`;
+  const counts = {};
+  poules.forEach(size => { counts[size] = (counts[size] || 0) + 1; });
+  const parts = [];
+  Object.keys(counts).sort((a, b) => a - b).forEach(size => {
+    const count = counts[size];
+    parts.push(`${count} poule${count > 1 ? 's' : ''} de ${size}`);
+  });
+  return `${parts.join(' et ')} (${poules.length} poules)`;
+}
+
+function distributeSimulationSerpentine(players, pouleSizes) {
+  const numPoules = pouleSizes.length;
+  const poules = pouleSizes.map((size, i) => ({ number: i + 1, size, players: [] }));
+  let playerIndex = 0;
+  let round = 0;
+  while (playerIndex < players.length) {
+    const isLeftToRight = round % 2 === 0;
+    for (let i = 0; i < numPoules && playerIndex < players.length; i++) {
+      const pouleIndex = isLeftToRight ? i : (numPoules - 1 - i);
+      const poule = poules[pouleIndex];
+      if (poule.players.length < poule.size) {
+        poules[pouleIndex].players.push({ ...players[playerIndex], originalRank: playerIndex + 1 });
+        playerIndex++;
+      }
+    }
+    round++;
+  }
+  return poules;
+}
+
 // Update all past inscriptions to convoqué (admin only, one-time utility)
 router.post('/bulk-convoque-past', authenticateToken, async (req, res) => {
   if (req.user?.role !== 'admin') {
