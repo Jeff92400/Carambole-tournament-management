@@ -118,7 +118,34 @@ router.get('/download', authenticateToken, (req, res) => {
 });
 
 // Public calendar access (no authentication required - for Player App)
+// Enable CORS for this public endpoint
+router.options('/public', (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Expose-Headers', 'Content-Type, Content-Disposition');
+  res.status(204).end();
+});
+
+router.head('/public', (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Expose-Headers', 'Content-Type, Content-Disposition');
+
+  db.get('SELECT content_type, filename FROM calendar ORDER BY created_at DESC LIMIT 1', [], (err, row) => {
+    if (err || !row) {
+      return res.status(404).end();
+    }
+    res.setHeader('Content-Type', row.content_type);
+    res.setHeader('Content-Disposition', `inline; filename="${row.filename}"`);
+    res.status(200).end();
+  });
+});
+
 router.get('/public', (req, res) => {
+  // CORS headers for cross-origin access from Player App
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Expose-Headers', 'Content-Type, Content-Disposition');
+
   db.get('SELECT * FROM calendar ORDER BY created_at DESC LIMIT 1', [], (err, row) => {
     if (err) {
       console.error('Error fetching calendar:', err);
