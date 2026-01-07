@@ -2024,11 +2024,9 @@ router.get('/tournoi/:id/simulation', authenticateToken, async (req, res) => {
     }
 
     // Get CDBHS rankings for this category (same as official poule generation)
-    const mode = (tournament.mode || '').toUpperCase();
-    const gameType = mode.includes('LIBRE') ? 'LIBRE' :
-                     mode.includes('CADRE') ? 'CADRE' :
-                     (mode.includes('3') || mode.includes('TROIS')) ? '3 BANDES' :
-                     mode.includes('BANDE') ? 'BANDE' : 'LIBRE';
+    // Use same approach as finales enrichment code
+    const gameType = tournament.mode?.toUpperCase();
+    const categoryLevel = tournament.categorie?.toUpperCase();
 
     // Get season from tournament date
     const tDate = new Date(tournament.debut);
@@ -2037,7 +2035,6 @@ router.get('/tournoi/:id/simulation', authenticateToken, async (req, res) => {
     const currentSeason = tMonth >= 8 ? `${tYear}-${tYear + 1}` : `${tYear - 1}-${tYear}`;
 
     // Get category (use LIKE for partial match like R2 matching R2-something)
-    const categoryLevel = tournament.categorie?.toUpperCase();
     const simCategory = await new Promise((resolve, reject) => {
       db.get(
         `SELECT * FROM categories WHERE UPPER(game_type) = $1 AND (UPPER(level) = $2 OR UPPER(level) LIKE $3)`,
