@@ -623,20 +623,28 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
   const campaignSubject = `Convocation ${category.display_name} - ${tournamentLabel}`;
   const campaignBody = `Convocations pour ${category.display_name} - ${tournamentLabel} - ${dateStr}`;
 
+  // Determine campaign type - finale_convocation enables relance functionality
+  const campaignType = isFinale ? 'finale_convocation' : 'convocation';
+  // Extract mode (game type) from category display name (e.g., "CADRE NATIONALE 3" -> "CADRE")
+  const categoryMode = category.display_name?.split(' ')[0] || '';
+  // Extract level from category (e.g., "CADRE NATIONALE 3" -> "NATIONALE 3" or use short form)
+  const categoryLevel = category.short_name || category.display_name?.replace(categoryMode, '').trim() || '';
+  const sentBy = req.user?.username || 'unknown';
+
   let campaignId = null;
   try {
     campaignId = await new Promise((resolve, reject) => {
       db.run(
-        `INSERT INTO email_campaigns (subject, body, template_key, recipients_count, status)
-         VALUES ($1, $2, $3, $4, 'sending')`,
-        [campaignSubject, campaignBody, 'convocation', players.length],
+        `INSERT INTO email_campaigns (subject, body, template_key, recipients_count, status, campaign_type, mode, category, tournament_id, sent_by, test_mode)
+         VALUES ($1, $2, $3, $4, 'sending', $5, $6, $7, $8, $9, false)`,
+        [campaignSubject, campaignBody, campaignType, players.length, campaignType, categoryMode, categoryLevel, tournoiId || null, sentBy],
         function(err) {
           if (err) reject(err);
           else resolve(this.lastID);
         }
       );
     });
-    console.log('Campaign record created with ID:', campaignId);
+    console.log('Campaign record created with ID:', campaignId, 'type:', campaignType);
   } catch (campaignError) {
     console.error('Error creating campaign record:', campaignError);
     // Continue anyway - don't block email sending if campaign recording fails
@@ -888,16 +896,23 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
   // Update campaign record with results
   if (campaignId) {
     try {
-      await new Promise((resolve) => {
+      await new Promise((resolve, reject) => {
         db.run(
           `UPDATE email_campaigns
            SET sent_count = $1, failed_count = $2, status = 'completed', sent_at = CURRENT_TIMESTAMP
            WHERE id = $3`,
           [results.sent.length, results.failed.length, campaignId],
-          () => resolve()
+          function(err) {
+            if (err) {
+              console.error('Database error updating campaign:', err);
+              reject(err);
+            } else {
+              console.log(`Campaign ${campaignId} updated: sent=${results.sent.length}, failed=${results.failed.length}, status=completed`);
+              resolve();
+            }
+          }
         );
       });
-      console.log('Campaign record updated:', campaignId);
     } catch (updateError) {
       console.error('Error updating campaign record:', updateError);
     }

@@ -3236,13 +3236,14 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
 
       // Check that convocation has been sent before allowing relance finale (skip in test mode)
       if (!testMode) {
-        const convocationSent = await new Promise((resolve, reject) => {
+        // First try to find a campaign with proper campaign_type field (new format)
+        let convocationSent = await new Promise((resolve, reject) => {
           db.get(
             `SELECT id, sent_at FROM email_campaigns
              WHERE campaign_type = 'finale_convocation'
              AND UPPER(mode) = $1
              AND (UPPER(category) = $2 OR UPPER(category) LIKE $3)
-             AND status = 'completed'
+             AND status IN ('completed', 'sending')
              AND (test_mode = false OR test_mode IS NULL)
              ORDER BY sent_at DESC LIMIT 1`,
             [mode.toUpperCase(), categoryUpper, categoryUpper + '%'],
@@ -3252,6 +3253,25 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
             }
           );
         });
+
+        // Fallback: check for older campaigns without campaign_type but with matching subject (legacy format)
+        if (!convocationSent) {
+          convocationSent = await new Promise((resolve, reject) => {
+            db.get(
+              `SELECT id, sent_at FROM email_campaigns
+               WHERE (subject LIKE '%' || $1 || '%Finale Departementale%'
+                      OR subject LIKE '%Convocation Finale - %' || $1 || '%')
+               AND status IN ('completed', 'sending')
+               AND (test_mode = false OR test_mode IS NULL)
+               ORDER BY sent_at DESC LIMIT 1`,
+              [mode.toUpperCase()],
+              (err, row) => {
+                if (err) reject(err);
+                else resolve(row);
+              }
+            );
+          });
+        }
 
         if (!convocationSent) {
           return res.status(400).json({

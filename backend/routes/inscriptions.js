@@ -2024,8 +2024,34 @@ router.get('/tournoi/:id/simulation', authenticateToken, async (req, res) => {
     }
 
     // Get CDBHS rankings for this category (same as official poule generation)
-    const gameType = tournament.mode?.toUpperCase();
-    const categoryLevel = tournament.categorie?.toUpperCase();
+    // Map tournament mode to categories.game_type (same mapping as generate-poules.html)
+    const modeToGameType = {
+      'LIBRE': 'LIBRE',
+      '3BANDES': '3BANDES',
+      '3 BANDES': '3BANDES',
+      'BANDE': 'BANDE',
+      '1BANDE': 'BANDE',
+      '1 BANDE': 'BANDE',
+      'CADRE': 'CADRE'
+    };
+
+    // Map tournament categorie to categories.level (same mapping as generate-poules.html)
+    const levelMapping = {
+      'N1': 'NATIONALE 1',
+      'N2': 'NATIONALE 2',
+      'N3': 'NATIONALE 3',
+      'R1': 'REGIONALE 1',
+      'R2': 'REGIONALE 2',
+      'R3': 'REGIONALE 3',
+      'D1': 'DEPARTEMENTALE 1',
+      'D2': 'DEPARTEMENTALE 2',
+      'D3': 'DEPARTEMENTALE 3'
+    };
+
+    const rawMode = tournament.mode?.toUpperCase();
+    const rawLevel = tournament.categorie?.toUpperCase();
+    const gameType = modeToGameType[rawMode] || rawMode;
+    const categoryLevel = levelMapping[rawLevel] || rawLevel;
 
     // Get season from tournament date
     const tDate = new Date(tournament.debut);
@@ -2033,13 +2059,12 @@ router.get('/tournoi/:id/simulation', authenticateToken, async (req, res) => {
     const tMonth = tDate.getMonth();
     const currentSeason = tMonth >= 8 ? `${tYear}-${tYear + 1}` : `${tYear - 1}-${tYear}`;
 
-    // Get category - use flexible matching for game_type (handle "3 BANDES", "3BANDES", etc.)
+    // Get category - now using mapped values that match the categories table
     const simCategory = await new Promise((resolve, reject) => {
       db.get(
         `SELECT * FROM categories
-         WHERE (UPPER(game_type) = $1 OR UPPER(REPLACE(game_type, ' ', '')) = UPPER(REPLACE($1, ' ', '')))
-         AND (UPPER(level) = $2 OR UPPER(level) LIKE $3)`,
-        [gameType, categoryLevel, `${categoryLevel}%`],
+         WHERE UPPER(game_type) = $1 AND UPPER(level) = $2`,
+        [gameType, categoryLevel],
         (err, row) => {
           if (err) reject(err);
           else resolve(row);
@@ -2047,7 +2072,7 @@ router.get('/tournoi/:id/simulation', authenticateToken, async (req, res) => {
       );
     });
 
-    console.log(`Simulation: gameType=${gameType}, level=${categoryLevel}, season=${currentSeason}, category found=${!!simCategory}`);
+    console.log(`Simulation: mode=${rawMode}->${gameType}, categorie=${rawLevel}->${categoryLevel}, season=${currentSeason}, category found=${!!simCategory}`);
 
     // Get CDBHS rankings for sorting
     let cdbhsRankings = [];
