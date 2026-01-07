@@ -2024,7 +2024,6 @@ router.get('/tournoi/:id/simulation', authenticateToken, async (req, res) => {
     }
 
     // Get CDBHS rankings for this category (same as official poule generation)
-    // Use same approach as finales enrichment code
     const gameType = tournament.mode?.toUpperCase();
     const categoryLevel = tournament.categorie?.toUpperCase();
 
@@ -2034,10 +2033,12 @@ router.get('/tournoi/:id/simulation', authenticateToken, async (req, res) => {
     const tMonth = tDate.getMonth();
     const currentSeason = tMonth >= 8 ? `${tYear}-${tYear + 1}` : `${tYear - 1}-${tYear}`;
 
-    // Get category (use LIKE for partial match like R2 matching R2-something)
+    // Get category - use flexible matching for game_type (handle "3 BANDES", "3BANDES", etc.)
     const simCategory = await new Promise((resolve, reject) => {
       db.get(
-        `SELECT * FROM categories WHERE UPPER(game_type) = $1 AND (UPPER(level) = $2 OR UPPER(level) LIKE $3)`,
+        `SELECT * FROM categories
+         WHERE (UPPER(game_type) = $1 OR UPPER(REPLACE(game_type, ' ', '')) = UPPER(REPLACE($1, ' ', '')))
+         AND (UPPER(level) = $2 OR UPPER(level) LIKE $3)`,
         [gameType, categoryLevel, `${categoryLevel}%`],
         (err, row) => {
           if (err) reject(err);
@@ -2045,6 +2046,8 @@ router.get('/tournoi/:id/simulation', authenticateToken, async (req, res) => {
         }
       );
     });
+
+    console.log(`Simulation: gameType=${gameType}, level=${categoryLevel}, season=${currentSeason}, category found=${!!simCategory}`);
 
     // Get CDBHS rankings for sorting
     let cdbhsRankings = [];
@@ -2063,6 +2066,9 @@ router.get('/tournoi/:id/simulation', authenticateToken, async (req, res) => {
           }
         );
       });
+      console.log(`Simulation: category_id=${simCategory.id}, found ${cdbhsRankings.length} rankings`);
+    } else {
+      console.log(`Simulation: No category found for ${gameType} ${categoryLevel}`);
     }
 
     // Create a map of licence -> CDBHS rank position
