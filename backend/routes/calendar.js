@@ -117,6 +117,26 @@ router.get('/download', authenticateToken, (req, res) => {
   });
 });
 
+// Public calendar access (no authentication required - for Player App)
+router.get('/public', (req, res) => {
+  db.get('SELECT * FROM calendar ORDER BY created_at DESC LIMIT 1', [], (err, row) => {
+    if (err) {
+      console.error('Error fetching calendar:', err);
+      return res.status(500).json({ error: 'Database error' });
+    }
+
+    if (!row) {
+      return res.status(404).send('<html><body style="font-family: Arial; text-align: center; padding: 50px;"><h2>Calendrier non disponible</h2><p>Le calendrier n\'a pas encore été publié.</p></body></html>');
+    }
+
+    res.setHeader('Content-Type', row.content_type);
+    res.setHeader('Content-Disposition', `inline; filename="${row.filename}"`);
+
+    const fileData = Buffer.isBuffer(row.file_data) ? row.file_data : Buffer.from(row.file_data);
+    res.send(fileData);
+  });
+});
+
 // Check if calendar exists
 router.get('/info', authenticateToken, (req, res) => {
   db.get('SELECT id, filename, content_type, uploaded_by, created_at FROM calendar ORDER BY created_at DESC LIMIT 1', [], (err, row) => {
