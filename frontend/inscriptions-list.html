@@ -40,6 +40,9 @@
     .badge-cadre { background: #fff3e0; color: #e65100; }
     .badge-bande { background: #f3e5f5; color: #7b1fa2; }
     .badge-3bandes { background: #e8f5e9; color: #2e7d32; }
+    .badge-ionos { background: #e3f2fd; color: #0d47a1; }
+    .badge-player-app { background: #e8f5e9; color: #2e7d32; }
+    .badge-manual { background: #f5f5f5; color: #616161; }
   </style>
 </head>
 <body>
@@ -123,6 +126,12 @@
           <option value="non-convoque">Non convoques</option>
           <option value="forfait">Forfaits</option>
         </select>
+        <select id="sourceFilter">
+          <option value="">Toutes les sources</option>
+          <option value="ionos">IONOS</option>
+          <option value="player_app">Player App</option>
+          <option value="manual">Manuel</option>
+        </select>
         <input type="text" id="searchInput" placeholder="Rechercher par licence ou email...">
       </div>
 
@@ -144,6 +153,7 @@
                 <th>Email</th>
                 <th>Telephone</th>
                 <th>Statut</th>
+                <th>Source</th>
                 <th>Date inscription</th>
                 <th class="admin-only">Actions</th>
               </tr>
@@ -528,7 +538,7 @@
     }
 
     // Load inscriptions while preserving filter state
-    async function loadInscriptionsKeepFilters(savedSeason, savedMode, savedCategorie, savedTournoi, savedStatus, savedSearch) {
+    async function loadInscriptionsKeepFilters(savedSeason, savedMode, savedCategorie, savedTournoi, savedStatus, savedSource, savedSearch) {
       try {
         const response = await fetch(`${API_URL}/inscriptions`, {
           headers: {
@@ -556,6 +566,7 @@
         document.getElementById('categorieFilter').value = savedCategorie;
         document.getElementById('tournoiFilter').value = savedTournoi;
         document.getElementById('statusFilter').value = savedStatus;
+        document.getElementById('sourceFilter').value = savedSource;
         document.getElementById('searchInput').value = savedSearch;
 
         // Re-populate all filters and restore selections
@@ -684,13 +695,24 @@
       return '<span class="badge badge-non-convoque">Inscrit</span>';
     }
 
+    // Get source badge
+    function getSourceBadge(source) {
+      if (source === 'player_app') {
+        return '<span class="badge badge-player-app">📱 Player App</span>';
+      }
+      if (source === 'ionos') {
+        return '<span class="badge badge-ionos">📤 IONOS</span>';
+      }
+      return '<span class="badge badge-manual">✏️ Manuel</span>';
+    }
+
     // Display inscriptions in table
     function displayInscriptions(inscriptions) {
       const tbody = document.getElementById('inscriptionsBody');
       tbody.innerHTML = '';
 
       if (inscriptions.length === 0) {
-        const colspan = isAdmin ? 10 : 9;
+        const colspan = isAdmin ? 11 : 10;
         tbody.innerHTML = `<tr><td colspan="${colspan}" style="text-align: center; padding: 20px;">Aucune inscription trouvee</td></tr>`;
         return;
       }
@@ -720,6 +742,7 @@
           <td>${inscription.email || '-'}</td>
           <td>${inscription.telephone || '-'}</td>
           <td>${getStatusBadge(inscription)}</td>
+          <td>${getSourceBadge(inscription.source)}</td>
           <td>${formatDateTime(inscription.timestamp)}</td>
           ${isAdmin ? `
           <td style="text-align: center;">
@@ -758,6 +781,7 @@
       const categorieFilter = document.getElementById('categorieFilter').value;
       const tournoiFilter = document.getElementById('tournoiFilter').value;
       const statusFilter = document.getElementById('statusFilter').value;
+      const sourceFilter = document.getElementById('sourceFilter').value;
       const searchTerm = document.getElementById('searchInput').value.toLowerCase();
 
       let filtered = allInscriptions;
@@ -802,6 +826,15 @@
           filtered = filtered.filter(i => i.convoque !== 1 && i.forfait !== 1);
         } else if (statusFilter === 'forfait') {
           filtered = filtered.filter(i => i.forfait === 1);
+        }
+      }
+
+      // Source filter
+      if (sourceFilter) {
+        if (sourceFilter === 'manual') {
+          filtered = filtered.filter(i => !i.source || (i.source !== 'ionos' && i.source !== 'player_app'));
+        } else {
+          filtered = filtered.filter(i => i.source === sourceFilter);
         }
       }
 
@@ -877,9 +910,10 @@
         const savedCategorie = document.getElementById('categorieFilter').value;
         const savedTournoi = document.getElementById('tournoiFilter').value;
         const savedStatus = document.getElementById('statusFilter').value;
+        const savedSource = document.getElementById('sourceFilter').value;
         const savedSearch = document.getElementById('searchInput').value;
 
-        await loadInscriptionsKeepFilters(savedSeason, savedMode, savedCategorie, savedTournoi, savedStatus, savedSearch);
+        await loadInscriptionsKeepFilters(savedSeason, savedMode, savedCategorie, savedTournoi, savedStatus, savedSource, savedSearch);
         alert('Inscription supprimee avec succes!');
 
       } catch (error) {
@@ -936,9 +970,10 @@
         const savedCategorie = document.getElementById('categorieFilter').value;
         const savedTournoi = document.getElementById('tournoiFilter').value;
         const savedStatus = document.getElementById('statusFilter').value;
+        const savedSource = document.getElementById('sourceFilter').value;
         const savedSearch = document.getElementById('searchInput').value;
 
-        await loadInscriptionsKeepFilters(savedSeason, savedMode, savedCategorie, savedTournoi, savedStatus, savedSearch);
+        await loadInscriptionsKeepFilters(savedSeason, savedMode, savedCategorie, savedTournoi, savedStatus, savedSource, savedSearch);
         alert('Inscription mise a jour avec succes!');
       }
     });
@@ -973,6 +1008,7 @@
     });
     document.getElementById('tournoiFilter').addEventListener('change', applyFilters);
     document.getElementById('statusFilter').addEventListener('change', applyFilters);
+    document.getElementById('sourceFilter').addEventListener('change', applyFilters);
     document.getElementById('searchInput').addEventListener('input', applyFilters);
 
     // ========== CREATE INSCRIPTION FUNCTIONS ==========
