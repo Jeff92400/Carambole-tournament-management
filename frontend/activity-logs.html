@@ -6,6 +6,7 @@
   <title>Logs d'activite - CDBHS</title>
   <link rel="icon" type="image/png" href="images/billiard-icon.png">
   <link rel="stylesheet" href="css/styles.css">
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
   <style>
     .filters-card {
       background: white;
@@ -232,7 +233,7 @@
           <button class="btn" onclick="loadLogs()" style="margin-top: auto;">Filtrer</button>
         </div>
         <div class="filter-group">
-          <button class="export-btn" onclick="exportCSV()" style="margin-top: auto;">Exporter CSV</button>
+          <button class="export-btn" onclick="exportExcel()" style="margin-top: auto;">Exporter Excel</button>
         </div>
         <div class="filter-group admin-only" style="display: none;">
           <button onclick="openResetModal()" style="margin-top: auto; background: #dc3545; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">Reinitialiser</button>
@@ -481,8 +482,8 @@
       }
     }
 
-    // Export to CSV
-    function exportCSV() {
+    // Export to Excel
+    function exportExcel() {
       if (currentLogs.length === 0) {
         alert('Aucune donnee a exporter');
         return;
@@ -501,16 +502,15 @@
         log.ip_address || ''
       ]);
 
-      let csv = headers.join(';') + '\n';
-      rows.forEach(row => {
-        csv += row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(';') + '\n';
-      });
-
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(blob);
-      link.download = `activity-logs-${new Date().toISOString().slice(0, 10)}.csv`;
-      link.click();
+      // Create Excel workbook
+      const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+      ws['!cols'] = [
+        { wch: 18 }, { wch: 25 }, { wch: 8 }, { wch: 10 },
+        { wch: 25 }, { wch: 30 }, { wch: 20 }, { wch: 40 }, { wch: 15 }
+      ];
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Logs');
+      XLSX.writeFile(wb, `activity-logs-${new Date().toISOString().slice(0, 10)}.xlsx`);
     }
 
     // Modal functions
@@ -580,7 +580,7 @@
           return;
         }
 
-        // Step 2: Generate and download CSV backup
+        // Step 2: Generate and download Excel backup
         const headers = ['Date/Heure', 'Action', 'Statut', 'Licence', 'Joueur', 'Email', 'Cible', 'Details', 'IP'];
         const rows = logsToDelete.map(log => [
           formatDateTime(log.created_at),
@@ -594,17 +594,24 @@
           log.ip_address || ''
         ]);
 
-        let csv = headers.join(';') + '\n';
-        rows.forEach(row => {
-          csv += row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(';') + '\n';
-        });
-
-        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
+        // Create Excel workbook
+        const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+        // Set column widths
+        ws['!cols'] = [
+          { wch: 18 }, // Date/Heure
+          { wch: 25 }, // Action
+          { wch: 8 },  // Statut
+          { wch: 10 }, // Licence
+          { wch: 25 }, // Joueur
+          { wch: 30 }, // Email
+          { wch: 20 }, // Cible
+          { wch: 40 }, // Details
+          { wch: 15 }  // IP
+        ];
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Logs');
         const dateStr = new Date().toISOString().slice(0, 10);
-        link.download = `backup-logs-${dateStr}.csv`;
-        link.click();
+        XLSX.writeFile(wb, `backup-logs-${dateStr}.xlsx`);
 
         // Step 3: Delete logs
         let deleteUrl = `${API_URL}/activity-logs`;
