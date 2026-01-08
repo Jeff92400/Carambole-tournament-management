@@ -197,16 +197,43 @@ router.get('/stats', authenticateToken, requireViewer, async (req, res) => {
 
 /**
  * DELETE /api/activity-logs
- * Clear all activity logs (admin only)
- * Used at the beginning of a new season
+ * Clear activity logs (admin only)
+ * Supports optional date range filtering
+ *
+ * Body params (optional):
+ * - startDate: Delete from this date
+ * - endDate: Delete to this date
  */
 router.delete('/', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const result = await db.query('DELETE FROM activity_logs');
-    console.log(`Activity logs cleared by admin: ${req.user.email}`);
+    const { startDate, endDate } = req.body || {};
+
+    let query = 'DELETE FROM activity_logs WHERE 1=1';
+    const params = [];
+    let paramIndex = 1;
+
+    if (startDate) {
+      query += ` AND created_at >= $${paramIndex}`;
+      params.push(startDate);
+      paramIndex++;
+    }
+
+    if (endDate) {
+      query += ` AND created_at <= $${paramIndex}`;
+      params.push(endDate);
+      paramIndex++;
+    }
+
+    const result = await db.query(query, params);
+
+    const rangeInfo = startDate || endDate
+      ? ` (${startDate || 'debut'} - ${endDate || 'fin'})`
+      : ' (tous)';
+    console.log(`Activity logs cleared by admin: ${req.user.email}${rangeInfo} - ${result.rowCount} deleted`);
+
     res.json({
       success: true,
-      message: 'Tous les logs ont été supprimés',
+      message: 'Les logs ont été supprimés',
       deleted: result.rowCount
     });
   } catch (error) {
