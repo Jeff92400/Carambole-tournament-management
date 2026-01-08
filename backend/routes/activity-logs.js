@@ -7,7 +7,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db-postgres');
-const { authenticateToken, requireRole } = require('./auth');
+const { authenticateToken, requireViewer } = require('./auth');
 
 /**
  * GET /api/activity-logs
@@ -22,7 +22,7 @@ const { authenticateToken, requireRole } = require('./auth');
  * - limit: Max records to return (default 100)
  * - offset: Pagination offset (default 0)
  */
-router.get('/', authenticateToken, requireRole(['admin', 'editor', 'viewer']), async (req, res) => {
+router.get('/', authenticateToken, requireViewer, async (req, res) => {
   try {
     const {
       startDate,
@@ -121,7 +121,7 @@ router.get('/', authenticateToken, requireRole(['admin', 'editor', 'viewer']), a
  * GET /api/activity-logs/action-types
  * Get list of all action types for filtering
  */
-router.get('/action-types', authenticateToken, requireRole(['admin', 'editor', 'viewer']), async (req, res) => {
+router.get('/action-types', authenticateToken, requireViewer, async (req, res) => {
   try {
     const result = await db.query(`
       SELECT DISTINCT action_type
@@ -140,7 +140,7 @@ router.get('/action-types', authenticateToken, requireRole(['admin', 'editor', '
  * GET /api/activity-logs/stats
  * Get activity statistics
  */
-router.get('/stats', authenticateToken, requireRole(['admin', 'editor', 'viewer']), async (req, res) => {
+router.get('/stats', authenticateToken, requireViewer, async (req, res) => {
   try {
     const { days = 7 } = req.query;
 
