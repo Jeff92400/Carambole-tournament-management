@@ -863,6 +863,9 @@ Comité Départemental Billard Hauts-de-Seine`;
 
 // Wrapper to make PostgreSQL API compatible with SQLite
 const db = {
+  // Direct query method (Promise-based, returns { rows })
+  query: (query, params) => pool.query(query, params),
+
   // For SELECT queries that return multiple rows
   all: (query, params, callback) => {
     // Convert SQLite ? placeholders to PostgreSQL $1, $2, etc.
