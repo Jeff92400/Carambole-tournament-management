@@ -43,6 +43,10 @@ const activityLogsRoutes = require('./routes/activity-logs');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Trust proxy for Railway - required for rate limiting to work correctly
+// Without this, all requests appear to come from Railway's internal proxy IP
+app.set('trust proxy', true);
+
 console.log('Railway deployment - using PORT:', PORT);
 
 // Security Middleware
