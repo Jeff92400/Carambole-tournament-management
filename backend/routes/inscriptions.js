@@ -185,6 +185,37 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
     let skipped = 0;
     let skippedDetails = [];
     let errors = [];
+    let seasonImported = 0;
+
+    // Get current season (Sept-Aug cycle)
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth(); // 0-11
+    const currentSeason = currentMonth >= 8
+      ? `${currentYear}-${currentYear + 1}`
+      : `${currentYear - 1}-${currentYear}`;
+
+    // Pre-fetch all tournaments to determine season
+    const tournoiMap = await new Promise((resolve, reject) => {
+      db.all('SELECT tournoi_id, debut FROM tournoi_ext', [], (err, rows) => {
+        if (err) reject(err);
+        else {
+          const map = {};
+          rows.forEach(t => { map[t.tournoi_id] = t; });
+          resolve(map);
+        }
+      });
+    });
+
+    // Helper to get season for a tournament
+    const getSeasonForTournoi = (tournoiId) => {
+      const tournoi = tournoiMap[tournoiId];
+      if (!tournoi || !tournoi.debut) return null;
+      const date = new Date(tournoi.debut);
+      const year = date.getFullYear();
+      const month = date.getMonth();
+      return month >= 8 ? `${year}-${year + 1}` : `${year - 1}-${year}`;
+    };
 
     for (const record of records) {
       try {
@@ -258,18 +289,25 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
           WHERE inscriptions.source IS NULL OR inscriptions.source != 'player_app'
         `;
 
-        await new Promise((resolve, reject) => {
+        const wasInserted = await new Promise((resolve, reject) => {
           db.run(query, [inscriptionId, joueurId, tournoiId, timestamp, email, telephone, licence, convoque, forfait, commentaire], function(err) {
             if (err) {
               reject(err);
             } else {
-              if (this.changes > 0) updated++;
-              else imported++;
-              resolve();
+              resolve(this.changes > 0);
             }
           });
         });
-        imported++;
+
+        if (wasInserted) {
+          imported++;
+          // Track season imports
+          if (getSeasonForTournoi(tournoiId) === currentSeason) {
+            seasonImported++;
+          }
+        } else {
+          updated++;
+        }
       } catch (err) {
         errors.push({ record: record.INSCRIPTION_ID || record.inscription_id, error: err.message });
       }
@@ -294,6 +332,8 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
       skipped,
       skippedDetails: skippedDetails.length > 0 ? skippedDetails : undefined,
       total: records.length,
+      seasonImported,
+      currentSeason,
       errors: errors.length > 0 ? errors : undefined
     });
 

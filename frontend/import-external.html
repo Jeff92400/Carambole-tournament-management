@@ -216,7 +216,10 @@
 
         if (response.ok) {
           let message = `<strong>Import réussi !</strong><br>`;
-          message += `• ${data.imported} inscriptions importées<br>`;
+          message += `• <strong>${data.seasonImported || 0}</strong> inscriptions saison ${data.currentSeason || ''}<br>`;
+          if (data.imported !== data.seasonImported) {
+            message += `• ${data.imported} total importées (toutes saisons)<br>`;
+          }
           message += `• ${data.updated || 0} mises à jour<br>`;
           if (data.skipped > 0) {
             message += `• <span style="color: #e67e22;">${data.skipped} ignorées</span> (déjà inscrit via Player App)`;
@@ -233,7 +236,7 @@
           successDiv.innerHTML = message;
           successDiv.style.display = 'block';
           document.getElementById('inscriptionStats').style.display = 'block';
-          document.getElementById('inscriptionCount').textContent = data.imported;
+          document.getElementById('inscriptionCount').textContent = data.seasonImported || data.imported;
           loadStats();
 
           // Reset form
