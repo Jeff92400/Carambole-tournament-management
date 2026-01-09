@@ -106,7 +106,7 @@ const authLimiter = rateLimit({
 // General API rate limiter
 const apiLimiter = rateLimit({
   windowMs: 1 * 60 * 1000, // 1 minute
-  max: 100, // Limit each IP to 100 requests per minute
+  max: 300, // Limit each IP to 300 requests per minute
   message: { error: 'Trop de requêtes. Veuillez réessayer dans quelques instants.' },
   standardHeaders: true,
   legacyHeaders: false
