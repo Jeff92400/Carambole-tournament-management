@@ -215,7 +215,11 @@
         const data = await response.json();
 
         if (response.ok) {
-          successDiv.textContent = `Import réussi ! ${data.imported} inscriptions importées.`;
+          let message = `Import réussi ! ${data.imported} inscriptions importées.`;
+          if (data.skipped > 0) {
+            message += ` ${data.skipped} ignorées (déjà inscrit via Player App).`;
+          }
+          successDiv.textContent = message;
           successDiv.style.display = 'block';
           document.getElementById('inscriptionStats').style.display = 'block';
           document.getElementById('inscriptionCount').textContent = data.imported;

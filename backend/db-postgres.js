@@ -303,6 +303,13 @@ async function initializeDatabase() {
     // Add source column to track inscription origin (ionos import vs player_app)
     await client.query(`ALTER TABLE inscriptions ADD COLUMN IF NOT EXISTS source VARCHAR(20) DEFAULT 'ionos'`);
 
+    // Add unique constraint on (normalized licence, tournoi_id) to prevent duplicates
+    // This ensures a player can only be inscribed once per tournament regardless of source
+    await client.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_licence_tournoi
+      ON inscriptions (REPLACE(UPPER(licence), ' ', ''), tournoi_id)
+    `);
+
     // Calendar storage table
     await client.query(`
       CREATE TABLE IF NOT EXISTS calendar (

@@ -182,6 +182,7 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
 
     let imported = 0;
     let updated = 0;
+    let skipped = 0;
     let errors = [];
 
     for (const record of records) {
@@ -200,6 +201,28 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
 
         if (!inscriptionId || !tournoiId) {
           errors.push({ inscriptionId, error: 'Missing required fields' });
+          continue;
+        }
+
+        // Check if a Player App inscription already exists for this licence + tournament
+        // If so, skip this record to avoid duplicates (Player App takes priority)
+        const existingPlayerApp = await new Promise((resolve, reject) => {
+          db.get(
+            `SELECT inscription_id FROM inscriptions
+             WHERE REPLACE(UPPER(licence), ' ', '') = REPLACE(UPPER($1), ' ', '')
+             AND tournoi_id = $2
+             AND source = 'player_app'`,
+            [licence, tournoiId],
+            (err, row) => {
+              if (err) reject(err);
+              else resolve(row);
+            }
+          );
+        });
+
+        if (existingPlayerApp) {
+          // Player already registered via Player App - skip IONOS import for this inscription
+          skipped++;
           continue;
         }
 
@@ -255,6 +278,8 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
       message: 'Import completed',
       imported,
       updated,
+      skipped,
+      skippedReason: skipped > 0 ? 'Inscriptions via Player App (non écrasées)' : undefined,
       total: records.length,
       errors: errors.length > 0 ? errors : undefined
     });
