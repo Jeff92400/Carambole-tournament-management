@@ -289,24 +289,21 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
           WHERE inscriptions.source IS NULL OR inscriptions.source != 'player_app'
         `;
 
-        const wasInserted = await new Promise((resolve, reject) => {
+        await new Promise((resolve, reject) => {
           db.run(query, [inscriptionId, joueurId, tournoiId, timestamp, email, telephone, licence, convoque, forfait, commentaire], function(err) {
             if (err) {
               reject(err);
             } else {
-              resolve(this.changes > 0);
+              if (this.changes > 0) updated++;
+              else imported++;
+              resolve();
             }
           });
         });
-
-        if (wasInserted) {
-          imported++;
-          // Track season imports
-          if (getSeasonForTournoi(tournoiId) === currentSeason) {
-            seasonImported++;
-          }
-        } else {
-          updated++;
+        imported++;
+        // Track season imports
+        if (getSeasonForTournoi(tournoiId) === currentSeason) {
+          seasonImported++;
         }
       } catch (err) {
         errors.push({ record: record.INSCRIPTION_ID || record.inscription_id, error: err.message });
