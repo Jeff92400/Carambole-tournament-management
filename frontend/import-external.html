@@ -224,7 +224,8 @@
               message += `<div style="margin-top: 10px; padding: 10px; background: #fff3e0; border-radius: 4px; font-size: 0.9em;">`;
               message += `<strong>Détails des inscriptions ignorées :</strong><ul style="margin: 5px 0 0 20px; padding: 0;">`;
               data.skippedDetails.forEach(s => {
-                message += `<li>Licence <strong>${s.licence}</strong> - ${s.tournoiNom}</li>`;
+                const playerInfo = s.playerName ? `<strong>${s.playerName}</strong> (${s.licence})` : `Licence <strong>${s.licence}</strong>`;
+                message += `<li>${playerInfo} - ${s.tournoiNom}</li>`;
               });
               message += `</ul></div>`;
             }

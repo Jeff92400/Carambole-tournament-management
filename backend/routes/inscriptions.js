@@ -209,9 +209,10 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
         // If so, skip this record to avoid duplicates (Player App takes priority)
         const existingPlayerApp = await new Promise((resolve, reject) => {
           db.get(
-            `SELECT i.inscription_id, t.nom as tournoi_nom
+            `SELECT i.inscription_id, t.nom as tournoi_nom, p.nom as player_nom, p.prenom as player_prenom
              FROM inscriptions i
              LEFT JOIN tournoi_ext t ON i.tournoi_id = t.tournoi_id
+             LEFT JOIN players p ON REPLACE(UPPER(p.licence), ' ', '') = REPLACE(UPPER(i.licence), ' ', '')
              WHERE REPLACE(UPPER(i.licence), ' ', '') = REPLACE(UPPER($1), ' ', '')
              AND i.tournoi_id = $2
              AND i.source = 'player_app'`,
@@ -226,8 +227,12 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
         if (existingPlayerApp) {
           // Player already registered via Player App - skip IONOS import for this inscription
           skipped++;
+          const playerName = existingPlayerApp.player_nom
+            ? `${existingPlayerApp.player_prenom || ''} ${existingPlayerApp.player_nom}`.trim()
+            : null;
           skippedDetails.push({
             licence,
+            playerName,
             tournoiId,
             tournoiNom: existingPlayerApp.tournoi_nom || `Tournoi ${tournoiId}`
           });
