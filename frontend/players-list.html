@@ -250,6 +250,12 @@
 
         allPlayers = await response.json();
 
+        // Defensive check: ensure allPlayers is an array
+        if (!Array.isArray(allPlayers)) {
+          console.error('Invalid players data:', allPlayers);
+          throw new Error('Invalid data received');
+        }
+
         // Count active/inactive/admins
         const activePlayers = allPlayers.filter(p => p.is_active === 1);
         const inactivePlayers = allPlayers.filter(p => p.is_active === 0);

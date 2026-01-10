@@ -983,6 +983,10 @@
         });
         if (response.ok) {
           const tournaments = await response.json();
+          if (!Array.isArray(tournaments)) {
+            console.error('Invalid tournaments data');
+            return;
+          }
 
           // Extract unique categories
           const categoryMap = new Map();

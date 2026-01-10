@@ -428,7 +428,9 @@
 
         // Calculate stats from totals
         const totals = {};
-        stats.totals.forEach(t => totals[t.action_type] = parseInt(t.count));
+        if (stats && Array.isArray(stats.totals)) {
+          stats.totals.forEach(t => totals[t.action_type] = parseInt(t.count));
+        }
 
         document.getElementById('statLogins').textContent = totals['login_success'] || 0;
         document.getElementById('statInscriptions').textContent = totals['inscription_created'] || 0;
@@ -468,8 +470,8 @@
         if (!response.ok) throw new Error('Failed to load logs');
         const data = await response.json();
 
-        currentLogs = data.logs;
-        totalLogs = data.total;
+        currentLogs = Array.isArray(data?.logs) ? data.logs : [];
+        totalLogs = data?.total || 0;
 
         renderLogs();
         updatePagination();
