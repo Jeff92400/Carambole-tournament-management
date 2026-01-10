@@ -380,6 +380,14 @@
       }
     }
 
+    // Helper to normalize mode/category to Title Case
+    function toTitleCase(str) {
+      if (!str) return '';
+      return str.toLowerCase().split(' ').map(word =>
+        word.charAt(0).toUpperCase() + word.slice(1)
+      ).join(' ');
+    }
+
     // Populate mode filter
     function populateModeFilter() {
       const select = document.getElementById('modeFilter');
@@ -400,8 +408,15 @@
         });
       }
 
-      // Get unique modes
-      const modes = [...new Set(filteredTournois.map(t => t.mode).filter(Boolean))].sort();
+      // Get unique modes (normalized to Title Case for deduplication)
+      const modesMap = {};
+      filteredTournois.forEach(t => {
+        if (t.mode) {
+          const normalized = toTitleCase(t.mode);
+          modesMap[normalized] = true;
+        }
+      });
+      const modes = Object.keys(modesMap).sort();
 
       modes.forEach(mode => {
         const option = document.createElement('option');
@@ -432,11 +447,19 @@
         });
       }
       if (selectedMode) {
-        filteredTournois = filteredTournois.filter(t => t.mode === selectedMode);
+        // Case-insensitive mode comparison
+        filteredTournois = filteredTournois.filter(t => toTitleCase(t.mode) === selectedMode);
       }
 
-      // Get unique categories
-      const categories = [...new Set(filteredTournois.map(t => t.categorie).filter(Boolean))].sort();
+      // Get unique categories (normalized to uppercase for deduplication)
+      const categoriesMap = {};
+      filteredTournois.forEach(t => {
+        if (t.categorie) {
+          const normalized = t.categorie.toUpperCase().trim();
+          categoriesMap[normalized] = true;
+        }
+      });
+      const categories = Object.keys(categoriesMap).sort();
 
       categories.forEach(cat => {
         const option = document.createElement('option');
@@ -468,10 +491,12 @@
         });
       }
       if (selectedMode) {
-        filteredTournois = filteredTournois.filter(t => t.mode === selectedMode);
+        // Case-insensitive mode comparison
+        filteredTournois = filteredTournois.filter(t => toTitleCase(t.mode) === selectedMode);
       }
       if (selectedCategorie) {
-        filteredTournois = filteredTournois.filter(t => t.categorie === selectedCategorie);
+        // Case-insensitive categorie comparison
+        filteredTournois = filteredTournois.filter(t => (t.categorie || '').toUpperCase().trim() === selectedCategorie);
       }
 
       // Sort by date (most recent first)
@@ -798,19 +823,19 @@
         });
       }
 
-      // Mode filter
+      // Mode filter (case-insensitive)
       if (modeFilter) {
         filtered = filtered.filter(i => {
           const tournoi = getTournoiById(i.tournoi_id);
-          return tournoi.mode === modeFilter;
+          return toTitleCase(tournoi.mode) === modeFilter;
         });
       }
 
-      // Categorie filter
+      // Categorie filter (case-insensitive)
       if (categorieFilter) {
         filtered = filtered.filter(i => {
           const tournoi = getTournoiById(i.tournoi_id);
-          return tournoi.categorie === categorieFilter;
+          return (tournoi.categorie || '').toUpperCase().trim() === categorieFilter;
         });
       }
 
