@@ -1897,15 +1897,20 @@ Le Comité Départemental de Billard des Hauts-de-Seine</textarea>
         if (response.ok) {
           const templates = await response.json();
 
-          // Update the template selector (for using templates)
+          // Templates that have dedicated editors or are automatic (exclude from Composer)
+          const excludedFromComposer = ['convocation', 'finale_convocation', 'results', 'results_cc_email', 'club_reminder'];
+
+          // Update the template selector (for using templates in Composer)
           const select = document.getElementById('templateSelect');
           select.innerHTML = '<option value="">-- Aucun template --</option>';
-          templates.forEach(t => {
-            const option = document.createElement('option');
-            option.value = t.template_key;
-            option.textContent = t.template_key;
-            select.appendChild(option);
-          });
+          templates
+            .filter(t => !excludedFromComposer.includes(t.template_key) && !t.template_key.startsWith('relance_'))
+            .forEach(t => {
+              const option = document.createElement('option');
+              option.value = t.template_key;
+              option.textContent = t.template_key;
+              select.appendChild(option);
+            });
 
           // Update the template editor selector (for editing templates)
           const editSelect = document.getElementById('templateEditSelect');
