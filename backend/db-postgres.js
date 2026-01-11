@@ -842,6 +842,35 @@ Comité Départemental Billard Hauts-de-Seine`;
        ON CONFLICT (template_key) DO NOTHING`
     );
 
+    // Club reminder template
+    const clubReminderBody = `Bonjour,
+
+Votre club {club_name} accueille prochainement une compétition du CDBHS.
+
+DÉTAILS DE LA COMPÉTITION:
+- Compétition: {category} - {tournament}
+- Date: {date}
+- Horaire: {time}
+- Participants: {num_players} joueur(s)
+- Tables nécessaires: {num_tables} table(s)
+
+RAPPELS IMPORTANTS:
+- Maître de jeu: Merci de prévoir la présence d'un maître de jeu pour encadrer la compétition
+- Arbitrage: Si vous avez des arbitres disponibles, merci de nous le signaler. Sinon, l'autoarbitrage sera mis en place
+- Résultats FFB: Les résultats devront être saisis sur le site de la FFB à l'issue de la compétition
+- Rafraîchissements: Merci de prévoir des rafraîchissements pour les joueurs
+
+Pour toute question, contactez-nous à l'adresse: cdbhs92@gmail.com
+
+Sportivement,
+Le CDBHS`;
+    await client.query(
+      `INSERT INTO email_templates (template_key, subject_template, body_template)
+       VALUES ('club_reminder', 'Rappel Organisation - {category} {tournament}', $1)
+       ON CONFLICT (template_key) DO NOTHING`,
+      [clubReminderBody]
+    );
+
     // Initialize default clubs
     const clubResult = await client.query('SELECT COUNT(*) as count FROM clubs');
     if (clubResult.rows[0].count == 0) {

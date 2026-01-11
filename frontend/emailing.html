@@ -1087,6 +1087,31 @@ Le Comité Départemental de Billard des Hauts-de-Seine</textarea>
         </div>
       </div>
 
+      <!-- Club Reminder Template -->
+      <div class="card" style="margin-top: 20px;">
+        <h3>📧 Template Rappel Club</h3>
+        <p style="color: #666; margin-bottom: 15px;">Template utilisé pour les emails de rappel envoyés aux clubs hébergeant les compétitions.</p>
+
+        <div style="margin-bottom: 15px; padding: 10px; background: #e7f3ff; border-radius: 4px; font-size: 13px;">
+          <strong>Variables disponibles :</strong>
+          <code>{club_name}</code> <code>{category}</code> <code>{tournament}</code>
+          <code>{date}</code> <code>{time}</code> <code>{num_players}</code> <code>{num_tables}</code>
+        </div>
+
+        <div style="margin-bottom: 15px;">
+          <label style="display: block; font-weight: bold; margin-bottom: 5px;">Sujet</label>
+          <input type="text" id="clubReminderSubject" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+        </div>
+
+        <div style="margin-bottom: 15px;">
+          <label style="display: block; font-weight: bold; margin-bottom: 5px;">Corps du message</label>
+          <textarea id="clubReminderBody" rows="15" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-family: inherit;"></textarea>
+        </div>
+
+        <button class="btn" id="saveClubReminderTemplateBtn" style="background: #28a745;">Enregistrer</button>
+        <button class="btn" id="resetClubReminderTemplateBtn" style="background: #6c757d; margin-left: 10px;">Réinitialiser par défaut</button>
+      </div>
+
       <!-- Custom Templates -->
       <div class="card" style="margin-top: 20px;">
         <h3>Templates Personnalisés</h3>
@@ -1302,6 +1327,7 @@ Le Comité Départemental de Billard des Hauts-de-Seine</textarea>
           loadFinaleConvocationTemplate();
           loadResultsTemplate();
           loadRelanceTemplates();
+          loadClubReminderTemplate();
         }
         if (tab.dataset.tab === 'history') {
           loadHistory();
@@ -2039,6 +2065,31 @@ Félicitations à tous les participants !`,
 Le Comité Départemental de Billard des Hauts-de-Seine`
     };
 
+    const DEFAULT_CLUB_REMINDER_TEMPLATE = {
+      subject: 'Rappel Organisation - {category} {tournament}',
+      body: `Bonjour,
+
+Votre club {club_name} accueille prochainement une compétition du CDBHS.
+
+DÉTAILS DE LA COMPÉTITION:
+- Compétition: {category} - {tournament}
+- Date: {date}
+- Horaire: {time}
+- Participants: {num_players} joueur(s)
+- Tables nécessaires: {num_tables} table(s)
+
+RAPPELS IMPORTANTS:
+- Maître de jeu: Merci de prévoir la présence d'un maître de jeu pour encadrer la compétition
+- Arbitrage: Si vous avez des arbitres disponibles, merci de nous le signaler. Sinon, l'autoarbitrage sera mis en place
+- Résultats FFB: Les résultats devront être saisis sur le site de la FFB à l'issue de la compétition
+- Rafraîchissements: Merci de prévoir des rafraîchissements pour les joueurs
+
+Pour toute question, contactez-nous à l'adresse: cdbhs92@gmail.com
+
+Sportivement,
+Le CDBHS`
+    };
+
     async function loadConvocationTemplate() {
       try {
         const response = await fetch(`${API_URL}/settings/email-template/convocation`, {
@@ -2225,6 +2276,66 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
     document.getElementById('resetResultsTemplateBtn').addEventListener('click', () => {
       document.getElementById('resultsIntroTemplate').value = DEFAULT_RESULTS_TEMPLATE.intro;
       document.getElementById('resultsOutroTemplate').value = DEFAULT_RESULTS_TEMPLATE.outro;
+      showSuccess('Template réinitialisé. Cliquez sur Enregistrer pour sauvegarder.');
+    });
+
+    // ==================== CLUB REMINDER TEMPLATE ====================
+
+    async function loadClubReminderTemplate() {
+      try {
+        const response = await fetch(`${API_URL}/emailing/templates/club_reminder`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (response.ok) {
+          const template = await response.json();
+          document.getElementById('clubReminderSubject').value = template.subject_template || DEFAULT_CLUB_REMINDER_TEMPLATE.subject;
+          document.getElementById('clubReminderBody').value = template.body_template || DEFAULT_CLUB_REMINDER_TEMPLATE.body;
+        } else {
+          document.getElementById('clubReminderSubject').value = DEFAULT_CLUB_REMINDER_TEMPLATE.subject;
+          document.getElementById('clubReminderBody').value = DEFAULT_CLUB_REMINDER_TEMPLATE.body;
+        }
+      } catch (error) {
+        document.getElementById('clubReminderSubject').value = DEFAULT_CLUB_REMINDER_TEMPLATE.subject;
+        document.getElementById('clubReminderBody').value = DEFAULT_CLUB_REMINDER_TEMPLATE.body;
+      }
+    }
+
+    document.getElementById('saveClubReminderTemplateBtn').addEventListener('click', async () => {
+      const subject = document.getElementById('clubReminderSubject').value.trim();
+      const body = document.getElementById('clubReminderBody').value.trim();
+
+      if (!subject || !body) {
+        showError('Tous les champs sont obligatoires.');
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API_URL}/emailing/templates/club_reminder`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            subject_template: subject,
+            body_template: body
+          })
+        });
+
+        if (response.ok) {
+          showSuccess('Template rappel club enregistré!');
+        } else {
+          showError('Erreur lors de la sauvegarde.');
+        }
+      } catch (error) {
+        showError('Erreur: ' + error.message);
+      }
+    });
+
+    document.getElementById('resetClubReminderTemplateBtn').addEventListener('click', () => {
+      document.getElementById('clubReminderSubject').value = DEFAULT_CLUB_REMINDER_TEMPLATE.subject;
+      document.getElementById('clubReminderBody').value = DEFAULT_CLUB_REMINDER_TEMPLATE.body;
       showSuccess('Template réinitialisé. Cliquez sur Enregistrer pour sauvegarder.');
     });
 

@@ -1052,8 +1052,69 @@ router.post('/send-club-reminder', authenticateToken, async (req, res) => {
       ? 'Finale Départementale'
       : `Tournoi ${tournament}`;
 
-    // Build email content
-    const subject = `Rappel Organisation - ${category} ${tournamentLabel}`;
+    // Fetch template from database
+    const template = await new Promise((resolve, reject) => {
+      db.get(
+        `SELECT subject_template, body_template FROM email_templates WHERE template_key = 'club_reminder'`,
+        [],
+        (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        }
+      );
+    });
+
+    // Default template if not found in DB
+    const defaultSubject = 'Rappel Organisation - {category} {tournament}';
+    const defaultBody = `Bonjour,
+
+Votre club {club_name} accueille prochainement une compétition du CDBHS.
+
+DÉTAILS DE LA COMPÉTITION:
+- Compétition: {category} - {tournament}
+- Date: {date}
+- Horaire: {time}
+- Participants: {num_players} joueur(s)
+- Tables nécessaires: {num_tables} table(s)
+
+RAPPELS IMPORTANTS:
+- Maître de jeu: Merci de prévoir la présence d'un maître de jeu pour encadrer la compétition
+- Arbitrage: Si vous avez des arbitres disponibles, merci de nous le signaler. Sinon, l'autoarbitrage sera mis en place
+- Résultats FFB: Les résultats devront être saisis sur le site de la FFB à l'issue de la compétition
+- Rafraîchissements: Merci de prévoir des rafraîchissements pour les joueurs
+
+Pour toute question, contactez-nous à l'adresse : cdbhs92@gmail.com
+
+Sportivement,
+Le CDBHS`;
+
+    // Get subject and body from template or defaults
+    let subjectTemplate = template?.subject_template || defaultSubject;
+    let bodyTemplate = template?.body_template || defaultBody;
+
+    // Apply variable substitution
+    const variables = {
+      '{club_name}': clubName,
+      '{category}': category,
+      '{tournament}': tournamentLabel,
+      '{date}': dateStr,
+      '{time}': startTime || '14H00',
+      '{num_players}': numPlayers,
+      '{num_tables}': numTables
+    };
+
+    let subject = subjectTemplate;
+    let bodyText = bodyTemplate;
+    for (const [key, value] of Object.entries(variables)) {
+      subject = subject.replace(new RegExp(key.replace(/[{}]/g, '\\$&'), 'g'), value);
+      bodyText = bodyText.replace(new RegExp(key.replace(/[{}]/g, '\\$&'), 'g'), value);
+    }
+
+    // Convert plain text template to HTML email
+    const bodyHtml = bodyText
+      .split('\n\n')
+      .map(para => `<p>${para.replace(/\n/g, '<br>')}</p>`)
+      .join('');
 
     const emailBody = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -1061,34 +1122,7 @@ router.post('/send-club-reminder', authenticateToken, async (req, res) => {
           <h1 style="margin: 0; font-size: 24px;">CDBHS - Rappel Organisation</h1>
         </div>
         <div style="padding: 20px; background: #f8f9fa; line-height: 1.6;">
-          <p>Bonjour,</p>
-
-          <p>Votre club <strong>${clubName}</strong> accueille prochainement une compétition du CDBHS.</p>
-
-          <div style="background: white; border: 1px solid #ddd; border-radius: 8px; padding: 20px; margin: 20px 0;">
-            <h3 style="margin-top: 0; color: #1F4788;">Détails de la compétition</h3>
-            <table style="width: 100%; border-collapse: collapse;">
-              <tr><td style="padding: 8px 0; border-bottom: 1px solid #eee;"><strong>Compétition:</strong></td><td style="padding: 8px 0; border-bottom: 1px solid #eee;">${category} - ${tournamentLabel}</td></tr>
-              <tr><td style="padding: 8px 0; border-bottom: 1px solid #eee;"><strong>Date:</strong></td><td style="padding: 8px 0; border-bottom: 1px solid #eee;">${dateStr}</td></tr>
-              <tr><td style="padding: 8px 0; border-bottom: 1px solid #eee;"><strong>Horaire:</strong></td><td style="padding: 8px 0; border-bottom: 1px solid #eee;">${startTime || '14H00'}</td></tr>
-              <tr><td style="padding: 8px 0; border-bottom: 1px solid #eee;"><strong>Participants:</strong></td><td style="padding: 8px 0; border-bottom: 1px solid #eee;">${numPlayers} joueur(s)</td></tr>
-              <tr><td style="padding: 8px 0;"><strong>Tables nécessaires:</strong></td><td style="padding: 8px 0;"><span style="background: #ffc107; padding: 3px 10px; border-radius: 4px; font-weight: bold;">${numTables} table(s)</span></td></tr>
-            </table>
-          </div>
-
-          <div style="background: #fff3cd; border: 1px solid #ffc107; border-radius: 8px; padding: 15px; margin: 20px 0;">
-            <h4 style="margin-top: 0; color: #856404;">Rappels importants</h4>
-            <ul style="margin: 0; padding-left: 20px; color: #856404;">
-              <li><strong>Maître de jeu:</strong> Merci de prévoir la présence d'un maître de jeu pour encadrer la compétition</li>
-              <li><strong>Arbitrage:</strong> Si vous avez des arbitres disponibles, merci de nous le signaler. Sinon, l'autoarbitrage sera mis en place</li>
-              <li><strong>Résultats FFB:</strong> Les résultats devront être saisis sur le site de la FFB à l'issue de la compétition</li>
-              <li><strong>Rafraîchissements:</strong> Merci de prévoir des rafraîchissements pour les joueurs</li>
-            </ul>
-          </div>
-
-          <p>Pour toute question, contactez-nous à l'adresse : <a href="mailto:cdbhs92@gmail.com">cdbhs92@gmail.com</a></p>
-
-          <p>Sportivement,<br>Le CDBHS</p>
+          ${bodyHtml}
         </div>
         <div style="background: #1F4788; color: white; padding: 15px; text-align: center; font-size: 12px;">
           Comité Départemental de Billard des Hauts-de-Seine
