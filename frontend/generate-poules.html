@@ -2979,16 +2979,19 @@
     }
 
     // Calculate number of tables needed based on player count
+    // Poule of 3 = 1 table, poule of 4-5 = 2 tables
     function calculateTablesNeeded(numPlayers) {
       if (numPlayers < 3) return 0;
-      if (numPlayers <= 5) return numPlayers <= 4 ? 2 : 2;
-      if (numPlayers <= 8) return 3;
-      if (numPlayers <= 11) return 4;
-      if (numPlayers <= 14) return 5;
-      if (numPlayers <= 17) return 6;
-      if (numPlayers <= 20) return 7;
+      if (numPlayers === 3) return 1;  // 1 poule of 3 = 1 table
+      if (numPlayers <= 5) return 2;   // 1 poule of 4-5 = 2 tables
+      if (numPlayers <= 6) return 2;   // 2 poules of 3 = 2 tables
+      if (numPlayers <= 8) return 4;   // 2 poules of 4 = 4 tables
+      if (numPlayers <= 9) return 3;   // 3 poules of 3 = 3 tables
+      if (numPlayers <= 12) return 4;  // mixed poules
+      if (numPlayers <= 15) return 5;
+      if (numPlayers <= 18) return 6;
       // For more players, estimate based on poules
-      return Math.ceil(numPlayers / 3) + 1;
+      return Math.ceil(numPlayers / 3);
     }
 
     // Fetch player emails from inscriptions when loading
