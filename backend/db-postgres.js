@@ -258,6 +258,9 @@ async function initializeDatabase() {
       )
     `);
 
+    // Add email column to club_aliases for club reminder emails
+    await client.query(`ALTER TABLE club_aliases ADD COLUMN IF NOT EXISTS email TEXT`);
+
     // External tournament definitions table (from CDBHS external DB)
     await client.query(`
       CREATE TABLE IF NOT EXISTS tournoi_ext (

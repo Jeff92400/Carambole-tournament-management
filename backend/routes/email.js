@@ -992,6 +992,150 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
   });
 });
 
+// Send club reminder email when hosting a tournament
+router.post('/send-club-reminder', authenticateToken, async (req, res) => {
+  const db = require('../db-loader');
+  const {
+    clubName,        // Name of the club hosting
+    clubEmail,       // Email of the club (if already known)
+    category,        // Category display name
+    tournament,      // Tournament number (1, 2, 3, Finale)
+    tournamentDate,  // Date of tournament
+    startTime,       // Start time
+    numPlayers,      // Number of participants
+    numTables,       // Number of tables needed
+    ccEmail          // CC to CDBHS
+  } = req.body;
+
+  const resend = getResend();
+  if (!resend) {
+    return res.status(500).json({ error: 'Email non configuré' });
+  }
+
+  try {
+    // Find club email if not provided
+    let emailToSend = clubEmail;
+    if (!emailToSend && clubName) {
+      const clubResult = await new Promise((resolve, reject) => {
+        db.get(
+          `SELECT email FROM club_aliases
+           WHERE (UPPER(canonical_name) = UPPER($1) OR UPPER(alias) = UPPER($1))
+           AND email IS NOT NULL AND email != ''
+           LIMIT 1`,
+          [clubName],
+          (err, row) => {
+            if (err) reject(err);
+            else resolve(row);
+          }
+        );
+      });
+      if (clubResult) {
+        emailToSend = clubResult.email;
+      }
+    }
+
+    if (!emailToSend) {
+      return res.json({
+        success: false,
+        skipped: true,
+        message: `Pas d'email configuré pour le club ${clubName}`
+      });
+    }
+
+    // Format date
+    const dateStr = tournamentDate
+      ? new Date(tournamentDate).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+      : 'Date à confirmer';
+
+    // Build tournament label
+    const tournamentLabel = tournament === 'Finale' || tournament === '4'
+      ? 'Finale Départementale'
+      : `Tournoi ${tournament}`;
+
+    // Build email content
+    const subject = `Rappel Organisation - ${category} ${tournamentLabel}`;
+
+    const emailBody = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="background: #1F4788; color: white; padding: 20px; text-align: center;">
+          <h1 style="margin: 0; font-size: 24px;">CDBHS - Rappel Organisation</h1>
+        </div>
+        <div style="padding: 20px; background: #f8f9fa; line-height: 1.6;">
+          <p>Bonjour,</p>
+
+          <p>Votre club <strong>${clubName}</strong> accueille prochainement une compétition du CDBHS.</p>
+
+          <div style="background: white; border: 1px solid #ddd; border-radius: 8px; padding: 20px; margin: 20px 0;">
+            <h3 style="margin-top: 0; color: #1F4788;">Détails de la compétition</h3>
+            <table style="width: 100%; border-collapse: collapse;">
+              <tr><td style="padding: 8px 0; border-bottom: 1px solid #eee;"><strong>Compétition:</strong></td><td style="padding: 8px 0; border-bottom: 1px solid #eee;">${category} - ${tournamentLabel}</td></tr>
+              <tr><td style="padding: 8px 0; border-bottom: 1px solid #eee;"><strong>Date:</strong></td><td style="padding: 8px 0; border-bottom: 1px solid #eee;">${dateStr}</td></tr>
+              <tr><td style="padding: 8px 0; border-bottom: 1px solid #eee;"><strong>Horaire:</strong></td><td style="padding: 8px 0; border-bottom: 1px solid #eee;">${startTime || '14H00'}</td></tr>
+              <tr><td style="padding: 8px 0; border-bottom: 1px solid #eee;"><strong>Participants:</strong></td><td style="padding: 8px 0; border-bottom: 1px solid #eee;">${numPlayers} joueur(s)</td></tr>
+              <tr><td style="padding: 8px 0;"><strong>Tables nécessaires:</strong></td><td style="padding: 8px 0;"><span style="background: #ffc107; padding: 3px 10px; border-radius: 4px; font-weight: bold;">${numTables} table(s)</span></td></tr>
+            </table>
+          </div>
+
+          <div style="background: #fff3cd; border: 1px solid #ffc107; border-radius: 8px; padding: 15px; margin: 20px 0;">
+            <h4 style="margin-top: 0; color: #856404;">Rappels importants</h4>
+            <ul style="margin: 0; padding-left: 20px; color: #856404;">
+              <li><strong>Maître de jeu:</strong> Merci de prévoir la présence d'un maître de jeu pour encadrer la compétition</li>
+              <li><strong>Arbitrage:</strong> Si vous avez des arbitres disponibles, merci de nous le signaler. Sinon, l'autoarbitrage sera mis en place</li>
+              <li><strong>Résultats FFB:</strong> Les résultats devront être saisis sur le site de la FFB à l'issue de la compétition</li>
+              <li><strong>Rafraîchissements:</strong> Merci de prévoir des rafraîchissements pour les joueurs</li>
+            </ul>
+          </div>
+
+          <p>Pour toute question, contactez-nous à l'adresse : <a href="mailto:cdbhs92@gmail.com">cdbhs92@gmail.com</a></p>
+
+          <p>Sportivement,<br>Le CDBHS</p>
+        </div>
+        <div style="background: #1F4788; color: white; padding: 15px; text-align: center; font-size: 12px;">
+          Comité Départemental de Billard des Hauts-de-Seine
+        </div>
+      </div>
+    `;
+
+    // Send the email
+    const recipients = [emailToSend];
+    if (ccEmail) {
+      recipients.push(ccEmail);
+    }
+
+    await resend.emails.send({
+      from: 'CDBHS <convocations@cdbhs.net>',
+      to: recipients,
+      subject: subject,
+      html: emailBody
+    });
+
+    // Log to email_campaigns
+    await new Promise((resolve, reject) => {
+      db.run(
+        `INSERT INTO email_campaigns (subject, body, template_key, recipients_count, sent_count, failed_count, status, sent_at, campaign_type, mode, category, sent_by)
+         VALUES ($1, $2, 'club_reminder', 1, 1, 0, 'completed', CURRENT_TIMESTAMP, 'club_reminder', $3, $4, $5)`,
+        [subject, `Rappel envoyé à ${clubName} (${emailToSend})`, category.split(' ')[0], category, req.user?.username || 'system'],
+        function(err) {
+          if (err) reject(err);
+          else resolve();
+        }
+      );
+    });
+
+    console.log(`[Club Reminder] Sent to ${clubName} (${emailToSend}) for ${category} ${tournamentLabel}`);
+
+    res.json({
+      success: true,
+      message: `Rappel envoyé au club ${clubName}`,
+      email: emailToSend
+    });
+
+  } catch (error) {
+    console.error('Error sending club reminder:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Generate summary/neutral PDF (for printing - no personalization)
 router.post('/generate-summary-pdf', authenticateToken, async (req, res) => {
   const { poules, category, season, tournament, tournamentDate, locations, gameParams, selectedDistance, mockRankingData, isFinale } = req.body;

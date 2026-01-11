@@ -559,6 +559,97 @@ router.get('/clubs', authenticateToken, async (req, res) => {
   );
 });
 
+// Get clubs with their emails (for management)
+router.get('/clubs-with-emails', authenticateToken, async (req, res) => {
+  const db = require('../db-loader');
+
+  db.all(
+    `SELECT DISTINCT canonical_name, email FROM club_aliases WHERE canonical_name IS NOT NULL ORDER BY canonical_name`,
+    [],
+    (err, rows) => {
+      if (err) {
+        console.error('Error fetching clubs with emails:', err);
+        return res.status(500).json({ error: err.message });
+      }
+      // Group by canonical_name to get unique clubs with their email
+      const clubsMap = {};
+      (rows || []).forEach(r => {
+        if (!clubsMap[r.canonical_name]) {
+          clubsMap[r.canonical_name] = { name: r.canonical_name, email: r.email || '' };
+        } else if (r.email && !clubsMap[r.canonical_name].email) {
+          // If this alias has an email but the existing entry doesn't, use this one
+          clubsMap[r.canonical_name].email = r.email;
+        }
+      });
+      res.json(Object.values(clubsMap));
+    }
+  );
+});
+
+// Update club email
+router.put('/clubs/:clubName/email', authenticateToken, async (req, res) => {
+  const db = require('../db-loader');
+  const { clubName } = req.params;
+  const { email } = req.body;
+
+  // Validate email format if provided
+  if (email && !email.includes('@')) {
+    return res.status(400).json({ error: 'Format email invalide' });
+  }
+
+  try {
+    // Update email for all aliases of this club
+    await new Promise((resolve, reject) => {
+      db.run(
+        `UPDATE club_aliases SET email = $1 WHERE canonical_name = $2`,
+        [email || null, clubName],
+        function(err) {
+          if (err) reject(err);
+          else resolve({ changes: this.changes });
+        }
+      );
+    });
+
+    console.log(`[Club Email] Updated email for ${clubName}: ${email || '(removed)'}`);
+    res.json({ success: true, message: 'Email mis à jour' });
+  } catch (error) {
+    console.error('Error updating club email:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get club email by location name (for club reminders)
+router.get('/club-email/:locationName', authenticateToken, async (req, res) => {
+  const db = require('../db-loader');
+  const { locationName } = req.params;
+
+  try {
+    // Try to find a matching club by canonical name or alias
+    const result = await new Promise((resolve, reject) => {
+      db.get(
+        `SELECT canonical_name, email FROM club_aliases
+         WHERE (UPPER(canonical_name) = UPPER($1) OR UPPER(alias) = UPPER($1))
+         AND email IS NOT NULL AND email != ''
+         LIMIT 1`,
+        [locationName],
+        (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        }
+      );
+    });
+
+    if (result) {
+      res.json({ found: true, clubName: result.canonical_name, email: result.email });
+    } else {
+      res.json({ found: false });
+    }
+  } catch (error) {
+    console.error('Error fetching club email:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Get ranking categories for filter dropdown (categories that have rankings)
 router.get('/ranking-categories', authenticateToken, async (req, res) => {
   const db = require('../db-loader');

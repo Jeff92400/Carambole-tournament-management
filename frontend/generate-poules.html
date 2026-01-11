@@ -2858,6 +2858,11 @@
               <ul style="margin: 5px 0 0 20px;">${result.results.skipped.map(s => `<li>${s.name} - ${s.reason}</li>`).join('')}</ul>
             </div>`;
           }
+
+          // Send club reminders if convocations were sent successfully
+          if (result.results.sent.length > 0 && lastGeneratedData.locations) {
+            await sendClubReminders(lastGeneratedData, playersWithEmails.length);
+          }
         } else {
           progressText.textContent = `Erreur: ${result.error}`;
           progressText.style.color = '#dc3545';
@@ -2873,6 +2878,118 @@
       btn.disabled = false;
       btn.textContent = '✉️ Envoyer les convocations';
     });
+
+    // Send club reminders to hosting clubs
+    async function sendClubReminders(generatedData, totalPlayers) {
+      const locations = generatedData.locations || [];
+      const poules = generatedData.poules || [];
+      const clubReminderResults = [];
+
+      // Group poules by location to calculate players/tables per location
+      const locationData = {};
+      locations.forEach(loc => {
+        locationData[loc.locationNum || '1'] = {
+          name: loc.name,
+          startTime: loc.startTime,
+          players: 0,
+          tables: 0
+        };
+      });
+
+      // Count players per location from poules
+      poules.forEach(poule => {
+        const locNum = poule.locationNum || '1';
+        if (locationData[locNum]) {
+          locationData[locNum].players += poule.players.length;
+        }
+      });
+
+      // Calculate tables per location based on player count
+      for (const locNum in locationData) {
+        const loc = locationData[locNum];
+        loc.tables = calculateTablesNeeded(loc.players);
+      }
+
+      // Send reminder to each location
+      for (const locNum in locationData) {
+        const loc = locationData[locNum];
+        if (!loc.name) continue;
+
+        try {
+          const response = await fetch(`${API_URL}/email/send-club-reminder`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              clubName: loc.name,
+              category: currentCategory.display_name,
+              tournament: currentTournament,
+              tournamentDate: generatedData.tournamentDate,
+              startTime: loc.startTime || '14H00',
+              numPlayers: loc.players,
+              numTables: loc.tables,
+              ccEmail: 'cdbhs92@gmail.com'
+            })
+          });
+
+          const result = await response.json();
+          clubReminderResults.push({
+            club: loc.name,
+            success: result.success,
+            skipped: result.skipped,
+            message: result.message
+          });
+
+          if (result.success) {
+            console.log(`[Club Reminder] Sent to ${loc.name}`);
+          } else if (result.skipped) {
+            console.log(`[Club Reminder] Skipped ${loc.name}: ${result.message}`);
+          }
+        } catch (error) {
+          console.error(`[Club Reminder] Error for ${loc.name}:`, error);
+          clubReminderResults.push({
+            club: loc.name,
+            success: false,
+            message: error.message
+          });
+        }
+      }
+
+      // Show club reminder results
+      const resultsDiv = document.getElementById('emailResults');
+      if (clubReminderResults.length > 0) {
+        const sent = clubReminderResults.filter(r => r.success);
+        const skipped = clubReminderResults.filter(r => r.skipped);
+
+        let clubHtml = '<div style="background: #e7f3ff; padding: 10px; border-radius: 4px; margin-top: 10px;">';
+        clubHtml += '<strong>📧 Rappels aux clubs:</strong><ul style="margin: 5px 0 0 20px;">';
+
+        if (sent.length > 0) {
+          clubHtml += sent.map(r => `<li style="color: #28a745;">✓ ${r.club}</li>`).join('');
+        }
+        if (skipped.length > 0) {
+          clubHtml += skipped.map(r => `<li style="color: #856404;">⚠ ${r.club} - ${r.message}</li>`).join('');
+        }
+
+        clubHtml += '</ul></div>';
+        resultsDiv.innerHTML += clubHtml;
+      }
+    }
+
+    // Calculate number of tables needed based on player count
+    function calculateTablesNeeded(numPlayers) {
+      if (numPlayers < 3) return 0;
+      if (numPlayers <= 5) return numPlayers <= 4 ? 2 : 2;
+      if (numPlayers <= 8) return 3;
+      if (numPlayers <= 11) return 4;
+      if (numPlayers <= 14) return 5;
+      if (numPlayers <= 17) return 6;
+      if (numPlayers <= 20) return 7;
+      // For more players, estimate based on poules
+      return Math.ceil(numPlayers / 3) + 1;
+    }
 
     // Fetch player emails from inscriptions when loading
     async function fetchPlayerEmails(tournoiId) {

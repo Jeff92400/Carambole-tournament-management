@@ -854,6 +854,28 @@ Le Comité Départemental de Billard des Hauts-de-Seine</textarea>
         </div>
       </div>
 
+      <!-- Club Emails Section -->
+      <div class="card" style="margin-bottom: 20px;">
+        <h3 style="margin-top: 0;">📧 Emails des Clubs</h3>
+        <p style="color: #666; font-size: 13px; margin-bottom: 15px;">
+          Configurez les emails des clubs pour recevoir automatiquement un rappel lors des convocations de tournois hébergés.
+        </p>
+        <div style="max-height: 300px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px;">
+          <table style="width: 100%; font-size: 13px; border-collapse: collapse;">
+            <thead style="background: #f8f9fa; position: sticky; top: 0;">
+              <tr>
+                <th style="padding: 10px; text-align: left; border-bottom: 2px solid #ddd;">Club</th>
+                <th style="padding: 10px; text-align: left; border-bottom: 2px solid #ddd;">Email</th>
+                <th style="padding: 10px; text-align: center; border-bottom: 2px solid #ddd; width: 100px;">Action</th>
+              </tr>
+            </thead>
+            <tbody id="clubEmailsBody">
+              <tr><td colspan="3" style="padding: 20px; text-align: center; color: #666;">Chargement...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       <div class="card">
         <h3>Gestion des Contacts</h3>
 
@@ -1274,7 +1296,7 @@ Le Comité Départemental de Billard des Hauts-de-Seine</textarea>
         if (tab.dataset.tab === 'relances') loadRelanceTemplates();
         if (tab.dataset.tab === 'results') loadImportedTournaments();
         if (tab.dataset.tab === 'finale') loadFinales();
-        if (tab.dataset.tab === 'contacts') loadAllContacts();
+        if (tab.dataset.tab === 'contacts') { loadAllContacts(); loadClubEmails(); }
         if (tab.dataset.tab === 'templates') {
           loadConvocationTemplate();
           loadFinaleConvocationTemplate();
@@ -2326,6 +2348,82 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
       document.getElementById('relanceTemplateOutro').value = defaultTemplate.outro;
       showSuccess('Template réinitialisé. Cliquez sur Enregistrer pour sauvegarder.');
     });
+
+    // ==================== CLUB EMAILS ====================
+
+    async function loadClubEmails() {
+      const tbody = document.getElementById('clubEmailsBody');
+      tbody.innerHTML = '<tr><td colspan="3" style="padding: 20px; text-align: center; color: #666;">Chargement...</td></tr>';
+
+      try {
+        const response = await fetch(`${API_URL}/emailing/clubs-with-emails`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (!response.ok) throw new Error('Erreur chargement clubs');
+
+        const clubs = await response.json();
+
+        if (clubs.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="3" style="padding: 20px; text-align: center; color: #666;">Aucun club trouvé</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = clubs.map(club => `
+          <tr style="border-bottom: 1px solid #eee;" data-club="${club.name.replace(/"/g, '&quot;')}">
+            <td style="padding: 10px; font-weight: 500;">${club.name}</td>
+            <td style="padding: 10px;">
+              <input type="email" class="club-email-input" value="${club.email || ''}"
+                     placeholder="email@club.com"
+                     style="width: 100%; padding: 6px 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+            </td>
+            <td style="padding: 10px; text-align: center;">
+              <button class="btn save-club-email-btn" style="background: #28a745; padding: 5px 12px; font-size: 12px;">
+                Sauver
+              </button>
+            </td>
+          </tr>
+        `).join('');
+
+        // Add event listeners
+        document.querySelectorAll('.save-club-email-btn').forEach(btn => {
+          btn.addEventListener('click', async (e) => {
+            const row = e.target.closest('tr');
+            const clubName = row.dataset.club;
+            const emailInput = row.querySelector('.club-email-input');
+            const email = emailInput.value.trim();
+
+            if (email && !email.includes('@')) {
+              showError('Format email invalide');
+              return;
+            }
+
+            try {
+              const response = await fetch(`${API_URL}/emailing/clubs/${encodeURIComponent(clubName)}/email`, {
+                method: 'PUT',
+                headers: {
+                  'Authorization': `Bearer ${token}`,
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ email: email || null })
+              });
+
+              if (!response.ok) throw new Error('Erreur sauvegarde');
+
+              showSuccess(`Email ${email ? 'mis à jour' : 'supprimé'} pour ${clubName}`);
+              e.target.style.background = '#28a745';
+              setTimeout(() => e.target.style.background = '#28a745', 2000);
+            } catch (error) {
+              showError('Erreur: ' + error.message);
+            }
+          });
+        });
+
+      } catch (error) {
+        console.error('Error loading club emails:', error);
+        tbody.innerHTML = '<tr><td colspan="3" style="padding: 20px; text-align: center; color: #dc3545;">Erreur chargement</td></tr>';
+      }
+    }
 
     // ==================== ALL CONTACTS (Management) ====================
 
@@ -3419,6 +3517,7 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
       'relance_t3': 'Relance T3',
       'relance_finale': 'Relance Finale',
       'convocation': 'Convocation',
+      'club_reminder': 'Rappel Club',
       'custom': 'Autre'
     };
 
