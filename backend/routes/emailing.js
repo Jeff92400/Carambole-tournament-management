@@ -665,12 +665,13 @@ router.post('/send', authenticateToken, async (req, res) => {
     };
 
     // Create campaign record
+    const sentBy = req.user?.username || 'unknown';
     const campaignId = await new Promise((resolve, reject) => {
       db.run(
-        `INSERT INTO email_campaigns (subject, body, template_key, recipients_count, status)
-         VALUES ($1, $2, $3, $4, 'sending')
+        `INSERT INTO email_campaigns (subject, body, template_key, recipients_count, status, sent_by)
+         VALUES ($1, $2, $3, $4, 'sending', $5)
          RETURNING id`,
-        [subject, body, templateKey || null, testMode ? 1 : (recipientIds ? recipientIds.length : 0)],
+        [subject, body, templateKey || null, testMode ? 1 : (recipientIds ? recipientIds.length : 0), sentBy],
         function(err) {
           if (err) reject(err);
           else resolve(this.lastID);
@@ -1266,9 +1267,9 @@ router.post('/process-scheduled', async (req, res) => {
       // Create campaign record
       await new Promise((resolve) => {
         db.run(
-          `INSERT INTO email_campaigns (subject, body, template_key, recipients_count, sent_count, failed_count, status, sent_at)
-           VALUES ($1, $2, $3, $4, $5, $6, 'completed', CURRENT_TIMESTAMP)`,
-          [scheduled.subject, scheduled.body, scheduled.template_key, recipientIds.length, sentCount, failedCount],
+          `INSERT INTO email_campaigns (subject, body, template_key, recipients_count, sent_count, failed_count, status, sent_at, sent_by)
+           VALUES ($1, $2, $3, $4, $5, $6, 'completed', CURRENT_TIMESTAMP, $7)`,
+          [scheduled.subject, scheduled.body, scheduled.template_key, recipientIds.length, sentCount, failedCount, scheduled.created_by || 'scheduled'],
           () => resolve()
         );
       });

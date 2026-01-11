@@ -488,9 +488,9 @@ async function processTemplatedScheduledEmail(db, resend, scheduled, delay) {
   // Create campaign record
   await new Promise((resolve) => {
     db.run(
-      `INSERT INTO email_campaigns (subject, body, template_key, recipients_count, sent_count, failed_count, status, sent_at, campaign_type, mode, category, tournament_id)
-       VALUES ($1, $2, $3, $4, $5, $6, 'completed', CURRENT_TIMESTAMP, $7, $8, $9, $10)`,
-      [scheduled.subject, scheduled.body, scheduled.template_key, recipients.length, sentCount, failedCount, scheduled.email_type, scheduled.mode, scheduled.category, scheduled.tournament_id],
+      `INSERT INTO email_campaigns (subject, body, template_key, recipients_count, sent_count, failed_count, status, sent_at, campaign_type, mode, category, tournament_id, sent_by)
+       VALUES ($1, $2, $3, $4, $5, $6, 'completed', CURRENT_TIMESTAMP, $7, $8, $9, $10, $11)`,
+      [scheduled.subject, scheduled.body, scheduled.template_key, recipients.length, sentCount, failedCount, scheduled.email_type, scheduled.mode, scheduled.category, scheduled.tournament_id, scheduled.created_by || 'scheduled'],
       () => resolve()
     );
   });
