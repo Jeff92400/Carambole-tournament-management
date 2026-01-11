@@ -1110,6 +1110,15 @@ Le Comité Départemental de Billard des Hauts-de-Seine</textarea>
 
         <button class="btn" id="saveClubReminderTemplateBtn" style="background: #28a745;">Enregistrer</button>
         <button class="btn" id="resetClubReminderTemplateBtn" style="background: #6c757d; margin-left: 10px;">Réinitialiser par défaut</button>
+
+        <div style="margin-top: 20px; padding: 15px; background: #fff3cd; border-radius: 4px; border: 1px solid #ffc107;">
+          <label style="display: block; font-weight: bold; margin-bottom: 10px;">Tester le template</label>
+          <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+            <input type="email" id="clubReminderTestEmail" placeholder="Email de test" style="padding: 10px; border: 1px solid #ddd; border-radius: 4px; min-width: 250px;">
+            <button class="btn" id="testClubReminderBtn" style="background: #17a2b8;">Envoyer un test</button>
+          </div>
+          <p style="margin-top: 10px; font-size: 12px; color: #856404;">Envoie un email de test avec des données fictives pour vérifier le rendu.</p>
+        </div>
       </div>
 
       <!-- Custom Templates -->
@@ -2342,6 +2351,43 @@ Le CDBHS`
       document.getElementById('clubReminderSubject').value = DEFAULT_CLUB_REMINDER_TEMPLATE.subject;
       document.getElementById('clubReminderBody').value = DEFAULT_CLUB_REMINDER_TEMPLATE.body;
       showSuccess('Template réinitialisé. Cliquez sur Enregistrer pour sauvegarder.');
+    });
+
+    document.getElementById('testClubReminderBtn').addEventListener('click', async () => {
+      const testEmail = document.getElementById('clubReminderTestEmail').value.trim();
+      if (!testEmail) {
+        showError('Veuillez entrer une adresse email de test.');
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API_URL}/email/send-club-reminder`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            clubName: 'Club Test (Exemple)',
+            clubEmail: testEmail,
+            category: 'LIBRE R3',
+            tournament: '2',
+            tournamentDate: new Date().toISOString(),
+            startTime: '14H00',
+            numPlayers: 6,
+            numTables: 2
+          })
+        });
+
+        const result = await response.json();
+        if (result.success) {
+          showSuccess(`Email de test envoyé à ${testEmail}`);
+        } else {
+          showError(result.error || result.message || 'Erreur lors de l\'envoi');
+        }
+      } catch (error) {
+        showError('Erreur: ' + error.message);
+      }
     });
 
     // ==================== RELANCE TEMPLATES EDITOR ====================
