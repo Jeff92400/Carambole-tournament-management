@@ -1162,7 +1162,12 @@ Le Comité Départemental de Billard des Hauts-de-Seine</textarea>
 
       <!-- Historique des campagnes -->
       <div class="card" style="margin-top: 20px;">
-        <h3>Historique des campagnes</h3>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+          <h3 style="margin: 0;">Historique des campagnes</h3>
+          <button id="purgeCampaignsBtn" class="btn" style="background: #dc3545; padding: 8px 15px; font-size: 13px; display: none;">
+            🗑️ Purger saison précédente
+          </button>
+        </div>
 
         <div id="loadingHistory" class="loading" style="display: none;">
           <div class="spinner"></div>
@@ -3315,12 +3320,97 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
         const history = await response.json();
         displayHistory(history);
 
+        // Check if purge is available (admin only, after June 30)
+        checkPurgeAvailability();
+
       } catch (error) {
         showError('Erreur: ' + error.message);
       } finally {
         document.getElementById('loadingHistory').style.display = 'none';
       }
     }
+
+    async function checkPurgeAvailability() {
+      try {
+        const response = await fetch(`${API_URL}/emailing/campaigns/purge-count`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (!response.ok) {
+          document.getElementById('purgeCampaignsBtn').style.display = 'none';
+          return;
+        }
+
+        const data = await response.json();
+        const btn = document.getElementById('purgeCampaignsBtn');
+
+        if (data.allowed && data.count > 0) {
+          btn.style.display = 'inline-block';
+          btn.title = `${data.count} enregistrement(s) avant le ${new Date(data.beforeDate).toLocaleDateString('fr-FR')}`;
+        } else if (!data.allowed) {
+          btn.style.display = 'none';
+        } else {
+          btn.style.display = 'none';
+        }
+      } catch (error) {
+        console.error('Error checking purge availability:', error);
+        document.getElementById('purgeCampaignsBtn').style.display = 'none';
+      }
+    }
+
+    async function purgeCampaigns() {
+      try {
+        // First get the count
+        const countResponse = await fetch(`${API_URL}/emailing/campaigns/purge-count`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (!countResponse.ok) {
+          showError('Erreur lors de la vérification');
+          return;
+        }
+
+        const countData = await countResponse.json();
+
+        if (!countData.allowed) {
+          showError(countData.message || 'Purge non autorisée');
+          return;
+        }
+
+        if (countData.count === 0) {
+          showSuccess('Aucun enregistrement à purger');
+          return;
+        }
+
+        // Confirm with user
+        const beforeDate = new Date(countData.beforeDate).toLocaleDateString('fr-FR');
+        if (!confirm(`Êtes-vous sûr de vouloir supprimer ${countData.count} enregistrement(s) antérieurs au ${beforeDate} ?\n\nCette action est irréversible.`)) {
+          return;
+        }
+
+        // Execute purge
+        const purgeResponse = await fetch(`${API_URL}/emailing/campaigns/purge`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (!purgeResponse.ok) {
+          const error = await purgeResponse.json();
+          throw new Error(error.error || 'Erreur lors de la purge');
+        }
+
+        const result = await purgeResponse.json();
+        showSuccess(result.message);
+
+        // Reload history
+        loadHistory();
+
+      } catch (error) {
+        showError('Erreur: ' + error.message);
+      }
+    }
+
+    document.getElementById('purgeCampaignsBtn').addEventListener('click', purgeCampaigns);
 
     const CAMPAIGN_TYPES = {
       'tournament_results': 'Resultats',

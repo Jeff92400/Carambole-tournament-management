@@ -155,6 +155,100 @@ router.get('/check-campaign', authenticateToken, async (req, res) => {
   }
 });
 
+// Get count of campaigns to purge (before current season) - Admin only
+router.get('/campaigns/purge-count', authenticateToken, async (req, res) => {
+  const db = require('../db-loader');
+
+  // Check if user is admin
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  // Check if we're past June 30th
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth(); // 0-11
+
+  // Season ends June 30th, so purge is only allowed after that
+  // Before July (month < 6), we're still in the season
+  if (currentMonth < 6) { // Before July
+    return res.json({
+      allowed: false,
+      message: 'La purge n\'est possible qu\'après le 30 juin',
+      count: 0
+    });
+  }
+
+  // Calculate previous season start (September 1st of previous year)
+  const previousSeasonStart = `${currentYear - 1}-09-01`;
+
+  try {
+    const result = await new Promise((resolve, reject) => {
+      db.get(
+        `SELECT COUNT(*) as count FROM email_campaigns WHERE sent_at < $1 OR (sent_at IS NULL AND created_at < $1)`,
+        [previousSeasonStart],
+        (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        }
+      );
+    });
+
+    res.json({
+      allowed: true,
+      count: result.count,
+      beforeDate: previousSeasonStart
+    });
+  } catch (error) {
+    console.error('Error counting campaigns to purge:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Purge old campaigns (before current season) - Admin only
+router.delete('/campaigns/purge', authenticateToken, async (req, res) => {
+  const db = require('../db-loader');
+
+  // Check if user is admin
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  // Check if we're past June 30th
+  const now = new Date();
+  const currentMonth = now.getMonth();
+
+  if (currentMonth < 6) {
+    return res.status(400).json({ error: 'La purge n\'est possible qu\'après le 30 juin' });
+  }
+
+  const currentYear = now.getFullYear();
+  const previousSeasonStart = `${currentYear - 1}-09-01`;
+
+  try {
+    const result = await new Promise((resolve, reject) => {
+      db.run(
+        `DELETE FROM email_campaigns WHERE sent_at < $1 OR (sent_at IS NULL AND created_at < $1)`,
+        [previousSeasonStart],
+        function(err) {
+          if (err) reject(err);
+          else resolve({ deleted: this.changes });
+        }
+      );
+    });
+
+    console.log(`[Purge] Deleted ${result.deleted} old email campaigns before ${previousSeasonStart}`);
+    res.json({
+      success: true,
+      deleted: result.deleted,
+      message: `${result.deleted} enregistrement(s) supprimé(s)`
+    });
+  } catch (error) {
+    console.error('Error purging campaigns:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Initialize Resend
 const getResend = () => {
   if (!process.env.RESEND_API_KEY) {
