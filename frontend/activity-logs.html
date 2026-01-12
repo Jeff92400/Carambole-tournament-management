@@ -418,6 +418,35 @@
       return labels[type] || type;
     }
 
+    // Format details for display (make them human-readable)
+    function formatDetails(details, actionType) {
+      if (!details) return '-';
+
+      // For login failures, show the reason in French
+      if (actionType === 'login_failed' && details.reason) {
+        const reasons = {
+          'account_locked': 'Compte bloqué' + (details.remainingMinutes ? ` (${details.remainingMinutes} min)` : ''),
+          'account_not_found': 'Compte inexistant',
+          'email_not_verified': 'Email non vérifié',
+          'wrong_password': 'Mot de passe incorrect'
+        };
+        return reasons[details.reason] || details.reason;
+      }
+
+      // For login success, show club if available
+      if (actionType === 'login_success' && details.club) {
+        return `Club: ${details.club}`;
+      }
+
+      // For inscriptions, show tournament info
+      if ((actionType === 'inscription_created' || actionType === 'inscription_cancelled') && details.tournament) {
+        return `${details.mode || ''} ${details.category || ''} - ${details.tournament}`.trim();
+      }
+
+      // Default: show as JSON but more compact
+      return JSON.stringify(details);
+    }
+
     // Load stats
     async function loadStats() {
       try {
@@ -509,7 +538,8 @@
       `;
 
       currentLogs.forEach(log => {
-        const details = log.details ? JSON.stringify(log.details) : '-';
+        const details = formatDetails(log.details, log.action_type);
+        const rawDetails = log.details ? JSON.stringify(log.details) : '-';
         const statusClass = log.action_status === 'success' ? 'status-success' : 'status-failed';
 
         html += `
@@ -520,7 +550,7 @@
             <td>${log.user_name || log.licence || '-'}</td>
             <td>${log.user_email || '-'}</td>
             <td>${log.target_name || '-'}</td>
-            <td class="details-cell" title="${details}">${details}</td>
+            <td class="details-cell" title="${rawDetails}">${details}</td>
             <td>${log.ip_address || '-'}</td>
           </tr>
         `;
