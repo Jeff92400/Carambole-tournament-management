@@ -1,0 +1,148 @@
+const express = require('express');
+const { authenticateToken, requireAdmin } = require('./auth');
+
+const router = express.Router();
+
+// Get database connection
+const getDb = () => require('../db-loader');
+
+// Get all announcements (admin view - includes inactive)
+router.get('/', authenticateToken, requireAdmin, (req, res) => {
+  const db = getDb();
+
+  db.all(
+    `SELECT * FROM announcements ORDER BY created_at DESC`,
+    [],
+    (err, rows) => {
+      if (err) {
+        console.error('Error fetching announcements:', err);
+        return res.status(500).json({ error: err.message });
+      }
+      res.json(rows || []);
+    }
+  );
+});
+
+// Get active announcements (public - for Player App)
+router.get('/active', (req, res) => {
+  const db = getDb();
+
+  db.all(
+    `SELECT id, title, message, type, created_at
+     FROM announcements
+     WHERE is_active = TRUE
+       AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
+     ORDER BY created_at DESC`,
+    [],
+    (err, rows) => {
+      if (err) {
+        console.error('Error fetching active announcements:', err);
+        return res.status(500).json({ error: err.message });
+      }
+      res.json(rows || []);
+    }
+  );
+});
+
+// Create announcement (admin only)
+router.post('/', authenticateToken, requireAdmin, (req, res) => {
+  const db = getDb();
+  const { title, message, type, expires_at } = req.body;
+  const created_by = req.user?.username || 'admin';
+
+  if (!title || !message) {
+    return res.status(400).json({ error: 'Title and message are required' });
+  }
+
+  const announcementType = type || 'info';
+
+  db.run(
+    `INSERT INTO announcements (title, message, type, expires_at, created_by)
+     VALUES ($1, $2, $3, $4, $5)
+     RETURNING id`,
+    [title, message, announcementType, expires_at || null, created_by],
+    function(err) {
+      if (err) {
+        console.error('Error creating announcement:', err);
+        return res.status(500).json({ error: err.message });
+      }
+      res.json({
+        success: true,
+        message: 'Announcement created',
+        id: this.lastID
+      });
+    }
+  );
+});
+
+// Update announcement (admin only)
+router.put('/:id', authenticateToken, requireAdmin, (req, res) => {
+  const db = getDb();
+  const { id } = req.params;
+  const { title, message, type, is_active, expires_at } = req.body;
+
+  if (!title || !message) {
+    return res.status(400).json({ error: 'Title and message are required' });
+  }
+
+  db.run(
+    `UPDATE announcements
+     SET title = $1, message = $2, type = $3, is_active = $4, expires_at = $5
+     WHERE id = $6`,
+    [title, message, type || 'info', is_active !== false, expires_at || null, id],
+    function(err) {
+      if (err) {
+        console.error('Error updating announcement:', err);
+        return res.status(500).json({ error: err.message });
+      }
+      if (this.changes === 0) {
+        return res.status(404).json({ error: 'Announcement not found' });
+      }
+      res.json({ success: true, message: 'Announcement updated' });
+    }
+  );
+});
+
+// Toggle announcement active status (admin only)
+router.patch('/:id/toggle', authenticateToken, requireAdmin, (req, res) => {
+  const db = getDb();
+  const { id } = req.params;
+
+  db.run(
+    `UPDATE announcements SET is_active = NOT is_active WHERE id = $1`,
+    [id],
+    function(err) {
+      if (err) {
+        console.error('Error toggling announcement:', err);
+        return res.status(500).json({ error: err.message });
+      }
+      if (this.changes === 0) {
+        return res.status(404).json({ error: 'Announcement not found' });
+      }
+      res.json({ success: true, message: 'Announcement status toggled' });
+    }
+  );
+});
+
+// Delete announcement (admin only)
+router.delete('/:id', authenticateToken, requireAdmin, (req, res) => {
+  const db = getDb();
+  const { id } = req.params;
+
+  db.run(
+    'DELETE FROM announcements WHERE id = $1',
+    [id],
+    function(err) {
+      if (err) {
+        console.error('Error deleting announcement:', err);
+        return res.status(500).json({ error: err.message });
+      }
+      if (this.changes === 0) {
+        return res.status(404).json({ error: 'Announcement not found' });
+      }
+      res.json({ success: true, message: 'Announcement deleted' });
+    }
+  );
+});
+
+module.exports = router;
