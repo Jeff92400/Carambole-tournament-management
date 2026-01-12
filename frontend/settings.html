@@ -207,6 +207,7 @@
           <p>Gérer le calendrier de la saison.</p>
           <div class="card-links">
             <a href="calendar.html" class="card-link"><span class="link-icon">📄</span> Voir / Téléverser</a>
+            <a href="#" onclick="openSeasonImportModal(); return false;" class="card-link" style="background: #28a745; color: white;"><span class="link-icon">🗓️</span> Générer tournois saison</a>
           </div>
         </div>
 
@@ -225,6 +226,93 @@
             <a href="settings-admin.html#maintenanceSection" class="card-link"><span class="link-icon">📊</span> Recalculer les moyennes</a>
             <a href="settings-admin.html#maintenanceSection" class="card-link"><span class="link-icon">🏆</span> Recalculer les classements</a>
           </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Season Import Modal -->
+  <div id="seasonImportModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; overflow-y: auto;">
+    <div style="background: white; max-width: 900px; margin: 30px auto; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
+      <div style="padding: 20px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center;">
+        <h3 style="margin: 0;">🗓️ Générer les tournois de la saison</h3>
+        <button onclick="closeSeasonImportModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #666;">&times;</button>
+      </div>
+      <div style="padding: 20px;">
+        <!-- Step 1: Upload -->
+        <div id="importStep1">
+          <div style="background: #e3f2fd; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+            <h4 style="margin: 0 0 10px 0; color: #1565c0;">📋 Format attendu du fichier Excel</h4>
+            <p style="margin: 0; font-size: 13px; color: #1565c0;">
+              Utilisez le même format que le calendrier actuel. Dans chaque cellule, indiquez :<br>
+              • <strong>T1/A</strong>, <strong>T2/B</strong>, <strong>T3/C</strong> = Tournoi + Club<br>
+              • <strong>F/?</strong> = Finale (lieu inconnu)<br>
+              • <strong>L</strong> = LBIF (ignoré, juste pour le calendrier)<br><br>
+              <strong>Codes clubs :</strong> A=Courbevoie, B=Bois-Colombes, C=Châtillon, D=Clamart, E=Clichy
+            </p>
+          </div>
+
+          <form id="seasonImportForm" style="display: flex; gap: 15px; align-items: flex-end; flex-wrap: wrap;">
+            <div class="form-group" style="margin-bottom: 0;">
+              <label for="importSeason">Saison :</label>
+              <select id="importSeason" style="padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                <option value="2026-2027">2026-2027</option>
+                <option value="2027-2028">2027-2028</option>
+                <option value="2025-2026">2025-2026</option>
+              </select>
+            </div>
+            <div class="form-group" style="flex: 1; min-width: 200px; margin-bottom: 0;">
+              <label for="seasonCalendarFile">Fichier calendrier Excel :</label>
+              <input type="file" id="seasonCalendarFile" accept=".xlsx,.xls" required style="padding: 10px; border: 1px solid #ddd; border-radius: 4px; width: 100%;">
+            </div>
+            <button type="submit" class="btn" style="padding: 12px 25px;">
+              📥 Prévisualiser
+            </button>
+          </form>
+        </div>
+
+        <!-- Step 2: Preview -->
+        <div id="importStep2" style="display: none;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <div>
+              <h4 style="margin: 0;" id="previewTitle">Prévisualisation</h4>
+              <p style="margin: 5px 0 0 0; color: #666; font-size: 13px;" id="previewSubtitle"></p>
+            </div>
+            <div style="display: flex; gap: 10px;">
+              <button onclick="backToUpload()" class="btn" style="background: #6c757d;">← Retour</button>
+              <button onclick="executeImport()" class="btn btn-success" id="executeImportBtn">✓ Importer les tournois</button>
+            </div>
+          </div>
+
+          <div style="max-height: 400px; overflow-y: auto; border: 1px solid #ddd; border-radius: 8px;">
+            <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+              <thead style="position: sticky; top: 0; background: #f8f9fa;">
+                <tr>
+                  <th style="padding: 10px; text-align: left; border-bottom: 2px solid #ddd;">ID</th>
+                  <th style="padding: 10px; text-align: left; border-bottom: 2px solid #ddd;">Date</th>
+                  <th style="padding: 10px; text-align: left; border-bottom: 2px solid #ddd;">Nom</th>
+                  <th style="padding: 10px; text-align: left; border-bottom: 2px solid #ddd;">Mode</th>
+                  <th style="padding: 10px; text-align: left; border-bottom: 2px solid #ddd;">Catégorie</th>
+                  <th style="padding: 10px; text-align: left; border-bottom: 2px solid #ddd;">Lieu</th>
+                  <th style="padding: 10px; text-align: left; border-bottom: 2px solid #ddd;">Taille</th>
+                </tr>
+              </thead>
+              <tbody id="previewTableBody">
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Step 3: Result -->
+        <div id="importStep3" style="display: none;">
+          <div id="importResult" style="text-align: center; padding: 40px;">
+          </div>
+          <div style="text-align: center; margin-top: 20px;">
+            <button onclick="closeSeasonImportModal()" class="btn btn-success">Fermer</button>
+          </div>
+        </div>
+
+        <div id="importError" style="display: none; background: #f8d7da; color: #721c24; padding: 15px; border-radius: 8px; margin-top: 15px;">
         </div>
       </div>
     </div>
@@ -324,6 +412,189 @@
       }
 
       window.open(playerAppUrl, '_blank');
+    });
+
+    // ============================================================
+    // SEASON IMPORT FUNCTIONALITY
+    // ============================================================
+
+    let previewData = null;
+    let selectedFile = null;
+
+    function openSeasonImportModal() {
+      document.getElementById('seasonImportModal').style.display = 'block';
+      document.getElementById('importStep1').style.display = 'block';
+      document.getElementById('importStep2').style.display = 'none';
+      document.getElementById('importStep3').style.display = 'none';
+      document.getElementById('importError').style.display = 'none';
+      document.getElementById('seasonCalendarFile').value = '';
+      previewData = null;
+      selectedFile = null;
+    }
+
+    function closeSeasonImportModal() {
+      document.getElementById('seasonImportModal').style.display = 'none';
+    }
+
+    function backToUpload() {
+      document.getElementById('importStep1').style.display = 'block';
+      document.getElementById('importStep2').style.display = 'none';
+      document.getElementById('importError').style.display = 'none';
+    }
+
+    // Handle preview form submission
+    document.getElementById('seasonImportForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const fileInput = document.getElementById('seasonCalendarFile');
+      const season = document.getElementById('importSeason').value;
+      const errorDiv = document.getElementById('importError');
+
+      if (!fileInput.files.length) {
+        errorDiv.textContent = 'Veuillez sélectionner un fichier Excel';
+        errorDiv.style.display = 'block';
+        return;
+      }
+
+      selectedFile = fileInput.files[0];
+      const formData = new FormData();
+      formData.append('calendar', selectedFile);
+      formData.append('season', season);
+
+      // Show loading
+      const submitBtn = e.target.querySelector('button[type="submit"]');
+      const originalText = submitBtn.innerHTML;
+      submitBtn.innerHTML = '⏳ Analyse en cours...';
+      submitBtn.disabled = true;
+      errorDiv.style.display = 'none';
+
+      try {
+        const response = await fetch(`${API_URL}/calendar/import-season/preview`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` },
+          body: formData
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || 'Erreur lors de l\'analyse');
+        }
+
+        previewData = data;
+        showPreview(data);
+
+      } catch (error) {
+        errorDiv.textContent = error.message;
+        errorDiv.style.display = 'block';
+      } finally {
+        submitBtn.innerHTML = originalText;
+        submitBtn.disabled = false;
+      }
+    });
+
+    function showPreview(data) {
+      document.getElementById('importStep1').style.display = 'none';
+      document.getElementById('importStep2').style.display = 'block';
+
+      document.getElementById('previewTitle').textContent = `Saison ${data.season} - ${data.count} tournois trouvés`;
+      document.getElementById('previewSubtitle').textContent = `IDs: ${data.tournaments[0]?.tournoi_id} à ${data.tournaments[data.tournaments.length - 1]?.tournoi_id}`;
+
+      const tbody = document.getElementById('previewTableBody');
+      tbody.innerHTML = data.tournaments.map(t => {
+        const isFinale = t._is_finale;
+        const rowStyle = isFinale ? 'background: #fff3cd;' : '';
+        return `
+          <tr style="${rowStyle}">
+            <td style="padding: 8px; border-bottom: 1px solid #eee;">${t.tournoi_id}</td>
+            <td style="padding: 8px; border-bottom: 1px solid #eee;">${formatDate(t.debut)}</td>
+            <td style="padding: 8px; border-bottom: 1px solid #eee;">${isFinale ? '🏆 ' : ''}${t.nom}</td>
+            <td style="padding: 8px; border-bottom: 1px solid #eee;">${t.mode}</td>
+            <td style="padding: 8px; border-bottom: 1px solid #eee;">${t.categorie}</td>
+            <td style="padding: 8px; border-bottom: 1px solid #eee;">${t.lieu || '<span style="color: #999;">Non défini</span>'}</td>
+            <td style="padding: 8px; border-bottom: 1px solid #eee;">${t.taille || '-'}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    async function executeImport() {
+      if (!selectedFile || !previewData) return;
+
+      const season = document.getElementById('importSeason').value;
+      const formData = new FormData();
+      formData.append('calendar', selectedFile);
+      formData.append('season', season);
+
+      const btn = document.getElementById('executeImportBtn');
+      btn.innerHTML = '⏳ Import en cours...';
+      btn.disabled = true;
+
+      try {
+        const response = await fetch(`${API_URL}/calendar/import-season/execute`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` },
+          body: formData
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || 'Erreur lors de l\'import');
+        }
+
+        // Show result
+        document.getElementById('importStep2').style.display = 'none';
+        document.getElementById('importStep3').style.display = 'block';
+
+        let resultHtml = `
+          <div style="font-size: 48px; margin-bottom: 20px;">✅</div>
+          <h3 style="color: #28a745; margin-bottom: 20px;">Import réussi !</h3>
+          <p style="font-size: 16px; color: #333;">${data.message}</p>
+          <div style="display: flex; justify-content: center; gap: 30px; margin-top: 20px;">
+            <div style="text-align: center;">
+              <div style="font-size: 24px; font-weight: bold; color: #28a745;">${data.imported}</div>
+              <div style="font-size: 12px; color: #666;">Nouveaux</div>
+            </div>
+            <div style="text-align: center;">
+              <div style="font-size: 24px; font-weight: bold; color: #ffc107;">${data.updated}</div>
+              <div style="font-size: 12px; color: #666;">Mis à jour</div>
+            </div>
+          </div>
+        `;
+
+        if (data.errors && data.errors.length > 0) {
+          resultHtml += `
+            <div style="margin-top: 20px; padding: 15px; background: #fff3cd; border-radius: 8px; text-align: left;">
+              <strong>⚠️ ${data.errors.length} erreur(s) :</strong>
+              <ul style="margin: 10px 0 0 20px; font-size: 13px;">
+                ${data.errors.map(e => `<li>ID ${e.tournoi_id}: ${e.error}</li>`).join('')}
+              </ul>
+            </div>
+          `;
+        }
+
+        document.getElementById('importResult').innerHTML = resultHtml;
+
+      } catch (error) {
+        document.getElementById('importError').textContent = error.message;
+        document.getElementById('importError').style.display = 'block';
+        btn.innerHTML = '✓ Importer les tournois';
+        btn.disabled = false;
+      }
+    }
+
+    function formatDate(dateStr) {
+      if (!dateStr) return '-';
+      const date = new Date(dateStr);
+      return date.toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' });
+    }
+
+    // Close modal on outside click
+    document.getElementById('seasonImportModal').addEventListener('click', (e) => {
+      if (e.target.id === 'seasonImportModal') {
+        closeSeasonImportModal();
+      }
     });
   </script>
 </body>
