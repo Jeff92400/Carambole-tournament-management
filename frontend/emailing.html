@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Emailing - CDBHS</title>
+  <title>Com joueurs - CDBHS</title>
   <link rel="icon" type="image/png" href="images/billiard-icon.png">
   <link rel="stylesheet" href="css/styles.css">
   <style>
@@ -225,18 +225,96 @@
       border-radius: 4px;
       margin-bottom: 10px;
     }
+    /* Announcements styles */
+    .announcement-card {
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 15px;
+      background: white;
+      margin-bottom: 15px;
+    }
+    .announcement-card.inactive {
+      opacity: 0.6;
+      background: #f5f5f5;
+    }
+    .announcement-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .announcement-title {
+      font-weight: bold;
+      font-size: 15px;
+      margin: 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .announcement-type {
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 11px;
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+    .announcement-type.type-info { background: #e3f2fd; color: #1565c0; }
+    .announcement-type.type-warning { background: #fff3e0; color: #e65100; }
+    .announcement-type.type-urgent { background: #ffebee; color: #c62828; }
+    .announcement-message {
+      color: #555;
+      font-size: 13px;
+      white-space: pre-wrap;
+      margin: 10px 0;
+      padding: 10px;
+      background: #f9f9f9;
+      border-radius: 4px;
+    }
+    .announcement-meta {
+      font-size: 12px;
+      color: #888;
+      display: flex;
+      gap: 15px;
+      flex-wrap: wrap;
+    }
+    .announcement-actions {
+      display: flex;
+      gap: 8px;
+    }
+    .announcement-actions button {
+      padding: 6px 12px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    .btn-toggle { background: #ff9800; color: white; }
+    .btn-toggle.active { background: #4CAF50; }
+    .btn-edit { background: #2196F3; color: white; }
+    .btn-delete { background: #dc3545; color: white; }
+    .status-badge {
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .status-active { background: #d4edda; color: #155724; }
+    .status-inactive { background: #f8d7da; color: #721c24; }
+    .status-expired { background: #fff3cd; color: #856404; }
   </style>
 </head>
 <body>
   <div class="container">
     <div class="navbar">
-      <h2><img src="images/billiard-icon.png" alt="🎱" style="height: 28px; width: 28px; vertical-align: middle; margin-right: 8px;" onerror="this.style.display='none'; this.nextSibling.style.display='inline';"><span style="display:none;">🎱</span> Emailing</h2>
+      <h2><img src="images/billiard-icon.png" alt="🎱" style="height: 28px; width: 28px; vertical-align: middle; margin-right: 8px;" onerror="this.style.display='none'; this.nextSibling.style.display='inline';"><span style="display:none;">🎱</span> Com joueurs</h2>
       <div class="nav-links">
         <a href="dashboard.html">Accueil</a>
         <a href="rankings.html" class="nav-tooltip" data-tooltip="Classement par catégorie de jeu au fur et à mesure des tournois">Classements</a>
         <a href="generate-poules.html" class="nav-tooltip" data-tooltip="Compétitions à jouer / Convocations">Compétitions</a>
         <a href="calendar.html" class="nav-tooltip" data-tooltip="Calendrier de la saison">Calendrier</a>
-        <a href="emailing.html" class="admin-only active nav-tooltip" data-tooltip="Relances, résultats, convocation finale via emails">Emailing</a>
+        <a href="emailing.html" class="active nav-tooltip" data-tooltip="Annonces, relances, résultats, convocation">Com joueurs</a>
         <a href="activity-logs.html" class="admin-only nav-tooltip" data-tooltip="Logs d'activité Player App">Logs</a>
         <a href="settings.html" class="admin-only nav-tooltip" data-tooltip="Réservé aux administrateurs">Paramètres</a>
         <a href="#" id="logoutBtn" class="nav-logout">Déconnexion</a>
@@ -247,7 +325,8 @@
     <div id="successMessage" class="success" style="display: none;"></div>
 
     <div class="tabs">
-      <div class="tab active tooltip" data-tab="compose" data-tooltip="Email avec texte libre et destinataires à sélectionner depuis la base joueurs">Composer</div>
+      <div class="tab active tooltip" data-tab="announcements" data-tooltip="Annonces affichées dans l'Espace Joueur">Annonces</div>
+      <div class="tab tooltip" data-tab="compose" data-tooltip="Email avec texte libre et destinataires à sélectionner depuis la base joueurs">Composer</div>
       <div class="tab tooltip" data-tab="relances" data-tooltip="Rappels d'inscription par tournois et finales">Relances</div>
       <div class="tab tooltip" data-tab="results" data-tooltip="Classement à l'issue de chaque rencontre">Résultats Tournoi</div>
       <div class="tab tooltip" data-tab="finale" data-tooltip="Convocation à envoyer avant toute relance">Convocation Finale</div>
@@ -257,8 +336,57 @@
       <div class="tab tooltip" data-tab="scheduled" data-tooltip="Envoi d'emails décalé">Programmés</div>
     </div>
 
+    <!-- TAB: Announcements -->
+    <div id="tab-announcements" class="tab-content active">
+      <div class="card">
+        <h3>Nouvelle annonce</h3>
+        <p style="color: #666; margin-top: -10px; margin-bottom: 15px;">
+          Les annonces s'affichent dans l'Espace Joueur pour informer les joueurs de nouvelles importantes (nouveau calendrier, changement de date, etc.).
+        </p>
+        <form id="addAnnouncementForm">
+          <div class="form-group">
+            <label for="announcementTitle">Titre :</label>
+            <input type="text" id="announcementTitle" required placeholder="Ex: Nouveau calendrier disponible" style="width: 100%; max-width: 500px;">
+          </div>
+          <div class="form-group">
+            <label for="announcementMessage">Message :</label>
+            <textarea id="announcementMessage" required placeholder="Ecrivez votre message ici..." style="width: 100%; max-width: 500px; min-height: 100px;"></textarea>
+          </div>
+          <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+            <div class="form-group">
+              <label for="announcementType">Type :</label>
+              <select id="announcementType" style="padding: 8px;">
+                <option value="info">Information</option>
+                <option value="warning">Avertissement</option>
+                <option value="urgent">Urgent</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="announcementExpiry">Expiration (optionnel) :</label>
+              <input type="datetime-local" id="announcementExpiry" style="padding: 8px;">
+            </div>
+          </div>
+          <div style="background: #1F4788; padding: 15px; border-radius: 8px; margin: 15px 0; max-width: 500px;">
+            <h4 style="color: white; margin: 0 0 8px 0; font-size: 13px; opacity: 0.8;">Apercu dans l'Espace Joueur :</h4>
+            <div id="announcementPreview" style="background: white; border-radius: 6px; padding: 12px 15px; border-left: 4px solid #1565c0;">
+              <strong id="previewTitle" style="font-size: 14px;">Titre de l'annonce</strong>
+              <p id="previewMessage" style="margin: 5px 0 0 0; font-size: 13px; color: #333;">Message de l'annonce...</p>
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary">Publier l'annonce</button>
+        </form>
+      </div>
+
+      <div class="card" style="margin-top: 20px;">
+        <h3>Annonces existantes</h3>
+        <div id="announcementsList" style="margin-top: 15px;">
+          <div style="text-align: center; padding: 20px; color: #666;">Chargement...</div>
+        </div>
+      </div>
+    </div>
+
     <!-- TAB: Compose Email -->
-    <div id="tab-compose" class="tab-content active">
+    <div id="tab-compose" class="tab-content">
       <div class="stats-mini">
         <div class="stat-mini">
           <div class="value" id="totalContacts">-</div>
@@ -4902,6 +5030,191 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
         }
       }
     }
+
+    // ==================== ANNOUNCEMENTS ====================
+
+    // Live preview for announcements
+    document.getElementById('announcementTitle')?.addEventListener('input', updateAnnouncementPreview);
+    document.getElementById('announcementMessage')?.addEventListener('input', updateAnnouncementPreview);
+    document.getElementById('announcementType')?.addEventListener('change', updateAnnouncementPreview);
+
+    function updateAnnouncementPreview() {
+      const title = document.getElementById('announcementTitle').value || 'Titre de l\'annonce';
+      const message = document.getElementById('announcementMessage').value || 'Message de l\'annonce...';
+      const type = document.getElementById('announcementType').value;
+
+      document.getElementById('previewTitle').textContent = title;
+      document.getElementById('previewMessage').textContent = message;
+
+      const preview = document.getElementById('announcementPreview');
+      const colors = { info: '#1565c0', warning: '#e65100', urgent: '#c62828' };
+      preview.style.borderLeftColor = colors[type] || colors.info;
+      if (type === 'urgent') {
+        preview.style.background = '#fff5f5';
+      } else {
+        preview.style.background = 'white';
+      }
+    }
+
+    // Load announcements
+    async function loadAnnouncements() {
+      try {
+        const response = await fetch(`${API_URL}/announcements`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (!response.ok) throw new Error('Failed to load announcements');
+
+        const announcements = await response.json();
+        const container = document.getElementById('announcementsList');
+
+        if (!announcements || announcements.length === 0) {
+          container.innerHTML = '<div style="text-align: center; padding: 40px; color: #666;">Aucune annonce pour le moment.</div>';
+          return;
+        }
+
+        container.innerHTML = announcements.map(a => {
+          const isExpired = a.expires_at && new Date(a.expires_at) < new Date();
+          const statusClass = !a.is_active ? 'inactive' : '';
+          const statusBadge = !a.is_active
+            ? '<span class="status-badge status-inactive">Inactive</span>'
+            : isExpired
+              ? '<span class="status-badge status-expired">Expiree</span>'
+              : '<span class="status-badge status-active">Active</span>';
+
+          return `
+            <div class="announcement-card ${statusClass}">
+              <div class="announcement-header">
+                <h4 class="announcement-title">
+                  <span class="announcement-type type-${a.type}">${a.type}</span>
+                  ${escapeHtmlAnn(a.title)}
+                  ${statusBadge}
+                </h4>
+                <div class="announcement-actions">
+                  <button class="btn-toggle ${a.is_active ? 'active' : ''}" onclick="toggleAnnouncement(${a.id})">
+                    ${a.is_active ? 'Desactiver' : 'Activer'}
+                  </button>
+                  <button class="btn-delete" onclick="deleteAnnouncement(${a.id})">Supprimer</button>
+                </div>
+              </div>
+              <div class="announcement-message">${escapeHtmlAnn(a.message)}</div>
+              <div class="announcement-meta">
+                <span>Creee le ${formatDateAnn(a.created_at)}</span>
+                ${a.created_by ? `<span>Par ${a.created_by}</span>` : ''}
+                ${a.expires_at ? `<span>Expire le ${formatDateAnn(a.expires_at)}</span>` : '<span>Pas d\'expiration</span>'}
+              </div>
+            </div>
+          `;
+        }).join('');
+
+      } catch (error) {
+        console.error('Error loading announcements:', error);
+        document.getElementById('announcementsList').innerHTML =
+          '<div style="text-align: center; padding: 40px; color: #c62828;">Erreur lors du chargement des annonces.</div>';
+      }
+    }
+
+    // Add announcement
+    document.getElementById('addAnnouncementForm')?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const data = {
+        title: document.getElementById('announcementTitle').value,
+        message: document.getElementById('announcementMessage').value,
+        type: document.getElementById('announcementType').value,
+        expires_at: document.getElementById('announcementExpiry').value || null
+      };
+
+      try {
+        const response = await fetch(`${API_URL}/announcements`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(data)
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || 'Failed to create announcement');
+        }
+
+        showSuccess('Annonce publiee avec succes !');
+        e.target.reset();
+        updateAnnouncementPreview();
+        loadAnnouncements();
+
+      } catch (error) {
+        showError(error.message);
+      }
+    });
+
+    // Toggle announcement
+    async function toggleAnnouncement(id) {
+      try {
+        const response = await fetch(`${API_URL}/announcements/${id}/toggle`, {
+          method: 'PATCH',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (!response.ok) throw new Error('Failed to toggle announcement');
+
+        loadAnnouncements();
+      } catch (error) {
+        showError(error.message);
+      }
+    }
+
+    // Delete announcement
+    async function deleteAnnouncement(id) {
+      if (!confirm('Etes-vous sur de vouloir supprimer cette annonce ?')) return;
+
+      try {
+        const response = await fetch(`${API_URL}/announcements/${id}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (!response.ok) throw new Error('Failed to delete announcement');
+
+        showSuccess('Annonce supprimee');
+        loadAnnouncements();
+      } catch (error) {
+        showError(error.message);
+      }
+    }
+
+    function escapeHtmlAnn(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    function formatDateAnn(dateStr) {
+      const date = new Date(dateStr);
+      return date.toLocaleDateString('fr-FR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    }
+
+    // Load announcements on tab switch
+    const originalTabHandler = document.querySelectorAll('.tab')[0]?.onclick;
+    document.querySelectorAll('.tab').forEach(tab => {
+      const originalClick = tab.onclick;
+      tab.addEventListener('click', () => {
+        if (tab.dataset.tab === 'announcements') {
+          loadAnnouncements();
+        }
+      });
+    });
+
+    // Initial load of announcements (since it's the default tab now)
+    loadAnnouncements();
 
     initialize();
   </script>
