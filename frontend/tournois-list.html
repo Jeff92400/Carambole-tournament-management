@@ -386,6 +386,7 @@
     // Populate season filter based on tournament dates
     function populateSeasonFilter() {
       const seasons = new Set();
+      const currentSeason = getSeasonForDate(new Date());
 
       allTournois.forEach(t => {
         if (t.debut) {
@@ -395,7 +396,10 @@
       });
 
       const select = document.getElementById('seasonFilter');
-      const sortedSeasons = Array.from(seasons).sort().reverse();
+      // Only show current season and future seasons (not past)
+      const sortedSeasons = Array.from(seasons)
+        .filter(season => season >= currentSeason)
+        .sort().reverse();
 
       sortedSeasons.forEach(season => {
         const option = document.createElement('option');
@@ -405,7 +409,6 @@
       });
 
       // Select current season by default
-      const currentSeason = getSeasonForDate(new Date());
 
       if (sortedSeasons.includes(currentSeason)) {
         select.value = currentSeason;

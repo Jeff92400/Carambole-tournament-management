@@ -131,8 +131,11 @@
         if (response.ok) {
           allTournaments = await response.json();
 
-          // Populate season filter
-          const seasons = [...new Set(allTournaments.map(t => t.season))].sort().reverse();
+          // Populate season filter (only current season 2025-2026 and future, no past data)
+          const currentSeason = '2025-2026';
+          const seasons = [...new Set(allTournaments.map(t => t.season))]
+            .filter(season => season >= currentSeason)
+            .sort().reverse();
           const seasonFilter = document.getElementById('seasonFilter');
           seasons.forEach(season => {
             const option = document.createElement('option');

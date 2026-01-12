@@ -646,7 +646,11 @@
         });
 
         if (response.ok) {
-          const seasons = await response.json();
+          const allSeasons = await response.json();
+          // Filter to only show 2025-2026 and future (no past data before current season)
+          const minSeason = '2025-2026';
+          const seasons = allSeasons.filter(s => s >= minSeason);
+
           const select = document.getElementById('seasonSelect');
           select.innerHTML = seasons.map((s, i) =>
             `<option value="${s}" ${i === 0 ? 'selected' : ''}>${s}</option>`
