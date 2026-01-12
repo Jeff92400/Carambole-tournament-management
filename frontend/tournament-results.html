@@ -415,12 +415,12 @@
         document.getElementById('loadingTournament').style.display = 'none';
         document.getElementById('tournamentContent').style.display = 'block';
 
-        // Update rankings link with category ID
+        // Update rankings link with category ID (if button exists)
         const rankingsBtn = document.getElementById('viewRankingsBtn');
-        if (data.tournament.category_id) {
-          rankingsBtn.href = `rankings.html?categoryId=${data.tournament.category_id}`;
-        } else {
-          rankingsBtn.href = 'rankings.html';
+        if (rankingsBtn) {
+          rankingsBtn.href = data.tournament.category_id
+            ? `rankings.html?categoryId=${data.tournament.category_id}`
+            : 'rankings.html';
         }
 
       } catch (error) {
