@@ -227,6 +227,11 @@
             <label for="editClubEmail">Email :</label>
             <input type="email" id="editClubEmail">
           </div>
+          <div class="form-group">
+            <label for="editClubCalendarCode">Code calendrier :</label>
+            <input type="text" id="editClubCalendarCode" maxlength="2" style="width: 60px; text-transform: uppercase;" placeholder="Ex: A">
+            <small style="color: #666; display: block; margin-top: 4px;">Lettre utilisée dans l'import Excel (A, B, C...)</small>
+          </div>
         </div>
         <div class="form-group">
           <label for="editClubLogo">Nouveau logo (optionnel) :</label>
@@ -442,6 +447,7 @@
       document.getElementById('editClubZipCode').value = club.zip_code || '';
       document.getElementById('editClubPhone').value = club.phone || '';
       document.getElementById('editClubEmail').value = club.email || '';
+      document.getElementById('editClubCalendarCode').value = club.calendar_code || '';
       document.getElementById('editLogoPreview').style.display = 'none';
       document.getElementById('editClubLogo').value = '';
 
@@ -477,6 +483,7 @@
       formData.append('zip_code', document.getElementById('editClubZipCode').value);
       formData.append('phone', document.getElementById('editClubPhone').value);
       formData.append('email', document.getElementById('editClubEmail').value);
+      formData.append('calendar_code', document.getElementById('editClubCalendarCode').value.toUpperCase());
 
       const logoFile = document.getElementById('editClubLogo').files[0];
       if (logoFile) {

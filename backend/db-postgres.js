@@ -239,13 +239,29 @@ async function initializeDatabase() {
     `);
 
     // Add new columns to clubs if they don't exist (migration)
-    const clubColumns = ['street', 'city', 'zip_code', 'phone', 'email'];
+    const clubColumns = ['street', 'city', 'zip_code', 'phone', 'email', 'calendar_code'];
     for (const col of clubColumns) {
       try {
         await client.query(`ALTER TABLE clubs ADD COLUMN IF NOT EXISTS ${col} TEXT`);
       } catch (e) {
         // Column might already exist
       }
+    }
+
+    // Initialize default calendar codes for existing clubs
+    const defaultCalendarCodes = [
+      { name_pattern: '%COURBEVOIE%', code: 'A' },
+      { name_pattern: '%BOIS%COLOMBES%', code: 'B' },
+      { name_pattern: '%CHATILLON%', code: 'C' },
+      { name_pattern: '%Châtillon%', code: 'C' },
+      { name_pattern: '%CLAMART%', code: 'D' },
+      { name_pattern: '%CLICH%', code: 'E' }
+    ];
+    for (const mapping of defaultCalendarCodes) {
+      await client.query(`
+        UPDATE clubs SET calendar_code = $1
+        WHERE (name ILIKE $2 OR display_name ILIKE $2) AND calendar_code IS NULL
+      `, [mapping.code, mapping.name_pattern]);
     }
 
     // Club aliases table - maps variant names to canonical club names

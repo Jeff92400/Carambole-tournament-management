@@ -5,8 +5,9 @@ const ExcelJS = require('exceljs');
 const db = require('../db-loader');
 const { authenticateToken, requireAdmin, JWT_SECRET } = require('./auth');
 
-// Club code mapping
-const CLUB_MAPPING = {
+// Club code mapping - loaded dynamically from database
+// Fallback hardcoded values (used if DB not available)
+const FALLBACK_CLUB_MAPPING = {
   'A': 'Courbevoie',
   'B': 'Bois-Colombes',
   'C': 'Châtillon',
@@ -14,6 +15,26 @@ const CLUB_MAPPING = {
   'E': 'Clichy',
   '?': null  // Unknown location for finals
 };
+
+// Load club codes from database
+async function loadClubMapping() {
+  return new Promise((resolve) => {
+    db.all(`SELECT calendar_code, display_name FROM clubs WHERE calendar_code IS NOT NULL AND calendar_code != ''`, [], (err, rows) => {
+      if (err || !rows || rows.length === 0) {
+        console.log('[Calendar] Using fallback club mapping');
+        resolve(FALLBACK_CLUB_MAPPING);
+        return;
+      }
+
+      const mapping = { '?': null };
+      for (const row of rows) {
+        mapping[row.calendar_code.toUpperCase()] = row.display_name;
+      }
+      console.log('[Calendar] Loaded club mapping from DB:', Object.keys(mapping).filter(k => k !== '?').join(', '));
+      resolve(mapping);
+    });
+  });
+}
 
 // Category mapping from display names to codes
 const CATEGORY_MAPPING = {
@@ -227,6 +248,21 @@ router.get('/info', authenticateToken, (req, res) => {
 // SEASON TOURNAMENT GENERATION FROM EXCEL CALENDAR
 // ============================================================
 
+// Get current club codes mapping (for display in UI)
+router.get('/club-codes', authenticateToken, async (req, res) => {
+  try {
+    const mapping = await loadClubMapping();
+    // Convert to array format for easier display
+    const codes = Object.entries(mapping)
+      .filter(([code]) => code !== '?')
+      .map(([code, name]) => ({ code, name }))
+      .sort((a, b) => a.code.localeCompare(b.code));
+    res.json(codes);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Configure multer for Excel import
 const importUpload = multer({
   storage: multer.memoryStorage(),
@@ -251,7 +287,10 @@ router.post('/import-season/preview', authenticateToken, requireAdmin, importUpl
     const season = req.body.season || '2026-2027';
     const seasonPrefix = season.replace('-', '').substring(2, 6); // "2627" from "2026-2027"
 
-    const tournaments = await parseExcelCalendar(req.file.buffer, season, seasonPrefix);
+    // Load club mapping from database
+    const clubMapping = await loadClubMapping();
+
+    const tournaments = await parseExcelCalendar(req.file.buffer, season, seasonPrefix, clubMapping);
 
     res.json({
       success: true,
@@ -276,7 +315,10 @@ router.post('/import-season/execute', authenticateToken, requireAdmin, importUpl
     const season = req.body.season || '2026-2027';
     const seasonPrefix = season.replace('-', '').substring(2, 6); // "2627" from "2026-2027"
 
-    const tournaments = await parseExcelCalendar(req.file.buffer, season, seasonPrefix);
+    // Load club mapping from database
+    const clubMapping = await loadClubMapping();
+
+    const tournaments = await parseExcelCalendar(req.file.buffer, season, seasonPrefix, clubMapping);
 
     let imported = 0;
     let updated = 0;
@@ -375,7 +417,7 @@ router.delete('/season-tournaments/:season', authenticateToken, requireAdmin, (r
 });
 
 // Parse Excel calendar file
-async function parseExcelCalendar(buffer, season, seasonPrefix) {
+async function parseExcelCalendar(buffer, season, seasonPrefix, clubMapping) {
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(buffer);
 
@@ -557,8 +599,8 @@ async function parseExcelCalendar(buffer, season, seasonPrefix) {
       // Get tournament name
       const nom = TOURNAMENT_NAME_MAPPING[tournamentType] || tournamentType;
 
-      // Get location
-      const lieu = clubCode ? CLUB_MAPPING[clubCode] : null;
+      // Get location from club mapping
+      const lieu = clubCode ? (clubMapping[clubCode] || null) : null;
 
       // Format date as YYYY-MM-DD
       const debut = formatDate(tournamentDate);

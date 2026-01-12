@@ -248,7 +248,7 @@
               • <strong>T1/A</strong>, <strong>T2/B</strong>, <strong>T3/C</strong> = Tournoi + Club<br>
               • <strong>F/?</strong> = Finale (lieu inconnu)<br>
               • <strong>L</strong> = LBIF (ignoré, juste pour le calendrier)<br><br>
-              <strong>Codes clubs :</strong> A=Courbevoie, B=Bois-Colombes, C=Châtillon, D=Clamart, E=Clichy
+              <strong>Codes clubs :</strong> <span id="clubCodesDisplay">Chargement...</span>
             </p>
           </div>
 
@@ -421,6 +421,31 @@
     let previewData = null;
     let selectedFile = null;
 
+    async function loadClubCodes() {
+      try {
+        const response = await fetch(`${API_URL}/calendar/club-codes`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          const codes = await response.json();
+          const display = document.getElementById('clubCodesDisplay');
+          if (codes && Object.keys(codes).length > 0) {
+            // Filter out '?' and format as "A=ClubName, B=ClubName"
+            const formatted = Object.entries(codes)
+              .filter(([code]) => code !== '?')
+              .map(([code, name]) => `${code}=${name}`)
+              .join(', ');
+            display.textContent = formatted || 'Aucun code configuré';
+          } else {
+            display.textContent = 'Aucun code configuré (voir section Clubs)';
+          }
+        }
+      } catch (error) {
+        console.error('Error loading club codes:', error);
+        document.getElementById('clubCodesDisplay').textContent = 'Erreur de chargement';
+      }
+    }
+
     function openSeasonImportModal() {
       document.getElementById('seasonImportModal').style.display = 'block';
       document.getElementById('importStep1').style.display = 'block';
@@ -430,6 +455,7 @@
       document.getElementById('seasonCalendarFile').value = '';
       previewData = null;
       selectedFile = null;
+      loadClubCodes(); // Load club codes dynamically
     }
 
     function closeSeasonImportModal() {
