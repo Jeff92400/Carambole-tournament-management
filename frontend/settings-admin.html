@@ -416,6 +416,41 @@
 
       <div id="aliasesMessage" style="display: none; margin-top: 15px; padding: 10px; border-radius: 4px;"></div>
     </div>
+
+    <!-- Maintenance Section - Admin Only -->
+    <div class="card admin-only" id="maintenanceSection">
+      <h3>🔧 Maintenance</h3>
+      <p style="margin-bottom: 20px; color: #666;">
+        Outils de maintenance pour corriger les données existantes.
+      </p>
+
+      <div style="display: flex; flex-wrap: wrap; gap: 20px;">
+        <!-- Recalculate Moyennes -->
+        <div style="flex: 1; min-width: 300px; padding: 20px; background: #f8f9fa; border-radius: 8px; border: 1px solid #e9ecef;">
+          <h4 style="margin: 0 0 10px 0; color: #1F4788;">📊 Recalculer les moyennes</h4>
+          <p style="margin: 0 0 15px 0; color: #666; font-size: 14px;">
+            Recalcule la moyenne (points ÷ reprises) pour tous les résultats de tournois.
+            Utile si des données ont été importées avec des moyennes incorrectes.
+          </p>
+          <button onclick="recalculateMoyennes()" class="btn" style="background: #17a2b8;">
+            🔄 Recalculer toutes les moyennes
+          </button>
+        </div>
+
+        <!-- Recalculate Rankings -->
+        <div style="flex: 1; min-width: 300px; padding: 20px; background: #f8f9fa; border-radius: 8px; border: 1px solid #e9ecef;">
+          <h4 style="margin: 0 0 10px 0; color: #1F4788;">🏆 Recalculer les classements</h4>
+          <p style="margin: 0 0 15px 0; color: #666; font-size: 14px;">
+            Recalcule tous les classements de la saison en cours à partir des résultats de tournois.
+          </p>
+          <button onclick="recalculateAllRankings()" class="btn" style="background: #28a745;">
+            🔄 Recalculer tous les classements
+          </button>
+        </div>
+      </div>
+
+      <div id="maintenanceMessage" style="display: none; margin-top: 20px; padding: 15px; border-radius: 4px;"></div>
+    </div>
   </div>
 
   <script>
@@ -1835,6 +1870,93 @@
     loadCategoryMappings();
 
     // ============= END CATEGORY MAPPINGS MANAGEMENT =============
+
+    // ============= MAINTENANCE FUNCTIONS =============
+
+    // Recalculate all moyennes
+    async function recalculateMoyennes() {
+      const msgDiv = document.getElementById('maintenanceMessage');
+
+      if (!confirm('Voulez-vous recalculer les moyennes de tous les résultats de tournois ?\n\nCette opération va recalculer moyenne = points ÷ reprises pour tous les résultats.')) {
+        return;
+      }
+
+      try {
+        msgDiv.textContent = '⏳ Recalcul en cours...';
+        msgDiv.style.background = '#fff3cd';
+        msgDiv.style.color = '#856404';
+        msgDiv.style.display = 'block';
+
+        const response = await fetch(`${API_URL}/tournaments/recalculate-moyennes`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          msgDiv.innerHTML = `✅ <strong>Terminé !</strong><br>
+            ${data.total_checked} résultats vérifiés<br>
+            ${data.updated} moyennes corrigées`;
+          msgDiv.style.background = '#d4edda';
+          msgDiv.style.color = '#155724';
+        } else {
+          throw new Error(data.error || 'Erreur lors du recalcul');
+        }
+      } catch (error) {
+        msgDiv.textContent = '❌ Erreur: ' + error.message;
+        msgDiv.style.background = '#f8d7da';
+        msgDiv.style.color = '#721c24';
+      }
+
+      setTimeout(() => { msgDiv.style.display = 'none'; }, 10000);
+    }
+
+    // Recalculate all rankings
+    async function recalculateAllRankings() {
+      const msgDiv = document.getElementById('maintenanceMessage');
+
+      if (!confirm('Voulez-vous recalculer tous les classements de la saison en cours ?\n\nCette opération peut prendre quelques secondes.')) {
+        return;
+      }
+
+      try {
+        msgDiv.textContent = '⏳ Recalcul des classements en cours...';
+        msgDiv.style.background = '#fff3cd';
+        msgDiv.style.color = '#856404';
+        msgDiv.style.display = 'block';
+
+        const response = await fetch(`${API_URL}/tournaments/recalculate-all-rankings`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          msgDiv.innerHTML = `✅ <strong>Terminé !</strong><br>
+            ${data.categories_updated || 'Tous les'} classements recalculés`;
+          msgDiv.style.background = '#d4edda';
+          msgDiv.style.color = '#155724';
+        } else {
+          throw new Error(data.error || 'Erreur lors du recalcul');
+        }
+      } catch (error) {
+        msgDiv.textContent = '❌ Erreur: ' + error.message;
+        msgDiv.style.background = '#f8d7da';
+        msgDiv.style.color = '#721c24';
+      }
+
+      setTimeout(() => { msgDiv.style.display = 'none'; }, 10000);
+    }
+
+    // ============= END MAINTENANCE FUNCTIONS =============
   </script>
 
   <!-- Edit Game Parameter Modal -->
