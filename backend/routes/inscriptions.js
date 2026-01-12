@@ -276,7 +276,7 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
               timestamp = $2,
               email = $3,
               telephone = $4,
-              convoque = GREATEST(convoque, $5),
+              convoque = $5,
               forfait = GREATEST(forfait, $6),
               commentaire = $7
             WHERE inscription_id = $8
@@ -300,7 +300,7 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
               email = EXCLUDED.email,
               telephone = EXCLUDED.telephone,
               licence = EXCLUDED.licence,
-              convoque = GREATEST(inscriptions.convoque, EXCLUDED.convoque),
+              convoque = EXCLUDED.convoque,
               forfait = GREATEST(inscriptions.forfait, EXCLUDED.forfait),
               commentaire = EXCLUDED.commentaire,
               source = 'ionos'
