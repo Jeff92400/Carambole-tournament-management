@@ -291,6 +291,7 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
           updated++;
         } else {
           // New inscription - insert (or update if inscription_id already exists with different licence/tournoi)
+          // Only update on conflict if existing record is from IONOS (protect manual and player_app)
           const insertQuery = `
             INSERT INTO inscriptions (inscription_id, joueur_id, tournoi_id, timestamp, email, telephone, licence, convoque, forfait, commentaire, source)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'ionos')
@@ -305,6 +306,7 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
               forfait = GREATEST(inscriptions.forfait, EXCLUDED.forfait),
               commentaire = EXCLUDED.commentaire,
               source = 'ionos'
+            WHERE inscriptions.source = 'ionos'
           `;
           await new Promise((resolve, reject) => {
             db.run(insertQuery, [inscriptionId, joueurId, tournoiId, timestamp, email, telephone, licence, convoque, forfait, commentaire], function(err) {
