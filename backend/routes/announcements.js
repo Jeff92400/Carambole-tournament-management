@@ -6,8 +6,25 @@ const router = express.Router();
 // Get database connection
 const getDb = () => require('../db-loader');
 
-// Get all announcements (admin view - includes inactive)
-router.get('/', authenticateToken, requireAdmin, (req, res) => {
+// Get audience count (number of Player App users)
+router.get('/audience-count', authenticateToken, (req, res) => {
+  const db = getDb();
+
+  db.get(
+    `SELECT COUNT(*) as count FROM player_accounts`,
+    [],
+    (err, row) => {
+      if (err) {
+        console.error('Error fetching audience count:', err);
+        return res.status(500).json({ error: err.message });
+      }
+      res.json({ count: row?.count || 0 });
+    }
+  );
+});
+
+// Get all announcements (includes inactive)
+router.get('/', authenticateToken, (req, res) => {
   const db = getDb();
 
   db.all(
@@ -44,8 +61,8 @@ router.get('/active', (req, res) => {
   );
 });
 
-// Create announcement (admin only)
-router.post('/', authenticateToken, requireAdmin, (req, res) => {
+// Create announcement
+router.post('/', authenticateToken, (req, res) => {
   const db = getDb();
   const { title, message, type, expires_at } = req.body;
   const created_by = req.user?.username || 'admin';
@@ -75,8 +92,8 @@ router.post('/', authenticateToken, requireAdmin, (req, res) => {
   );
 });
 
-// Update announcement (admin only)
-router.put('/:id', authenticateToken, requireAdmin, (req, res) => {
+// Update announcement
+router.put('/:id', authenticateToken, (req, res) => {
   const db = getDb();
   const { id } = req.params;
   const { title, message, type, is_active, expires_at } = req.body;
@@ -103,8 +120,8 @@ router.put('/:id', authenticateToken, requireAdmin, (req, res) => {
   );
 });
 
-// Toggle announcement active status (admin only)
-router.patch('/:id/toggle', authenticateToken, requireAdmin, (req, res) => {
+// Toggle announcement active status
+router.patch('/:id/toggle', authenticateToken, (req, res) => {
   const db = getDb();
   const { id } = req.params;
 
@@ -124,8 +141,8 @@ router.patch('/:id/toggle', authenticateToken, requireAdmin, (req, res) => {
   );
 });
 
-// Delete announcement (admin only)
-router.delete('/:id', authenticateToken, requireAdmin, (req, res) => {
+// Delete announcement
+router.delete('/:id', authenticateToken, (req, res) => {
   const db = getDb();
   const { id } = req.params;
 
