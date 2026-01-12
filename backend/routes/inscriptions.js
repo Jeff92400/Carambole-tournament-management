@@ -1445,7 +1445,7 @@ router.put('/:id', authenticateToken, (req, res) => {
   }
 
   const { id } = req.params;
-  const { licence, email, telephone, convoque, forfait, commentaire } = req.body;
+  const { licence, email, telephone, convoque, forfait, commentaire, source } = req.body;
 
   const query = `
     UPDATE inscriptions SET
@@ -1454,11 +1454,12 @@ router.put('/:id', authenticateToken, (req, res) => {
       telephone = $3,
       convoque = $4,
       forfait = $5,
-      commentaire = $6
-    WHERE inscription_id = $7
+      commentaire = $6,
+      source = $7
+    WHERE inscription_id = $8
   `;
 
-  db.run(query, [licence, email, telephone, convoque || 0, forfait || 0, commentaire, id], function(err) {
+  db.run(query, [licence, email, telephone, convoque || 0, forfait || 0, commentaire, source || 'ionos', id], function(err) {
     if (err) {
       console.error('Error updating inscription:', err);
       return res.status(500).json({ error: err.message });

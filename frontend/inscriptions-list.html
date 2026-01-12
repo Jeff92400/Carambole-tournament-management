@@ -272,6 +272,15 @@
             <textarea id="edit_commentaire" rows="3" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;"></textarea>
           </div>
 
+          <div style="margin-bottom: 15px;">
+            <label style="display: block; margin-bottom: 5px; font-weight: bold;">Source</label>
+            <select id="edit_source" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+              <option value="ionos">IONOS</option>
+              <option value="player_app">Player App</option>
+              <option value="manual">Manuel</option>
+            </select>
+          </div>
+
           <div style="display: flex; gap: 10px; margin-top: 20px;">
             <button type="submit" class="btn" style="flex: 1; background: #4CAF50;">Enregistrer</button>
             <button type="button" id="cancelEditBtn" class="btn" style="flex: 1; background: #999;">Annuler</button>
@@ -887,6 +896,7 @@
       document.getElementById('edit_convoque').value = inscription.convoque || 0;
       document.getElementById('edit_forfait').value = inscription.forfait || 0;
       document.getElementById('edit_commentaire').value = inscription.commentaire || '';
+      document.getElementById('edit_source').value = inscription.source || 'ionos';
 
       document.getElementById('editInscriptionModal').style.display = 'flex';
     }
@@ -985,7 +995,8 @@
         telephone: document.getElementById('edit_telephone').value || null,
         convoque: parseInt(document.getElementById('edit_convoque').value),
         forfait: parseInt(document.getElementById('edit_forfait').value),
-        commentaire: document.getElementById('edit_commentaire').value || null
+        commentaire: document.getElementById('edit_commentaire').value || null,
+        source: document.getElementById('edit_source').value
       };
 
       const success = await updateInscription(data);
