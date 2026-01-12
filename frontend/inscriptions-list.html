@@ -674,7 +674,11 @@
       });
 
       const select = document.getElementById('seasonFilter');
-      const sortedSeasons = Array.from(seasons).sort().reverse();
+      const currentSeason = getSeasonForDate(new Date());
+      // Only show current season and future seasons (not past)
+      const sortedSeasons = Array.from(seasons)
+        .filter(season => season >= currentSeason)
+        .sort().reverse();
 
       sortedSeasons.forEach(season => {
         const option = document.createElement('option');
@@ -684,7 +688,6 @@
       });
 
       // Select current season by default
-      const currentSeason = getSeasonForDate(new Date());
 
       if (sortedSeasons.includes(currentSeason)) {
         select.value = currentSeason;
@@ -1054,16 +1057,26 @@
 
     // Open create modal
     function openCreateModal() {
-      // Populate tournoi select with all tournaments
+      // Populate tournoi select with current season tournaments only
       const select = document.getElementById('create_tournoi_id');
       select.innerHTML = '<option value="">-- Sélectionner un tournoi --</option>';
 
-      // Group by mode/categorie and sort by date (most recent first)
-      const sortedTournois = [...allTournois].sort((a, b) => {
-        const dateA = a.debut ? new Date(a.debut) : new Date(0);
-        const dateB = b.debut ? new Date(b.debut) : new Date(0);
-        return dateB - dateA;
-      });
+      const currentSeason = getSeasonForDate(new Date());
+
+      // Filter to current/future season and sort by date (most recent first)
+      const sortedTournois = [...allTournois]
+        .filter(t => {
+          if (!t.debut) return false;
+          const date = parseDate(t.debut);
+          if (!date || isNaN(date.getTime())) return false;
+          const season = getSeasonForDate(date);
+          return season >= currentSeason;
+        })
+        .sort((a, b) => {
+          const dateA = a.debut ? new Date(a.debut) : new Date(0);
+          const dateB = b.debut ? new Date(b.debut) : new Date(0);
+          return dateB - dateA;
+        });
 
       // Group by mode/categorie
       const grouped = {};
