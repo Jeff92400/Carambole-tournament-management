@@ -201,18 +201,18 @@ router.get('/stats', authenticateToken, requireViewer, async (req, res) => {
     `);
 
     // Recent active users (join with players to get real names)
+    // Group by normalized licence to avoid duplicates
     const activeUsers = await db.query(`
       SELECT
-        a.licence,
-        a.user_email,
-        COALESCE(p.last_name || ' ' || p.first_name, a.user_name, a.licence) as user_name,
+        REPLACE(a.licence, ' ', '') as licence,
+        COALESCE(p.last_name || ' ' || p.first_name, MAX(a.user_name), REPLACE(a.licence, ' ', '')) as user_name,
         COUNT(*) as action_count,
         MAX(a.created_at) as last_activity
       FROM activity_logs a
       LEFT JOIN players p ON REPLACE(p.licence, ' ', '') = REPLACE(a.licence, ' ', '')
       WHERE ${dateFilter.replace('created_at', 'a.created_at')}
         AND a.licence IS NOT NULL
-      GROUP BY a.licence, a.user_email, p.last_name, p.first_name, a.user_name
+      GROUP BY REPLACE(a.licence, ' ', ''), p.last_name, p.first_name
       ORDER BY action_count DESC
       LIMIT 10
     `);
