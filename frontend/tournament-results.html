@@ -153,9 +153,18 @@
             <div style="padding: 8px 0; font-weight: 500;" id="tournamentDate">-</div>
           </div>
           <div class="form-group">
+            <label>Lieu</label>
+            <div style="padding: 8px 0; font-weight: 500;" id="tournamentLocation">-</div>
+          </div>
+          <div class="form-group">
             <label>Participants</label>
             <div style="padding: 8px 0; font-weight: 500;" id="participantCount">-</div>
           </div>
+        </div>
+        <div style="margin-top: 15px;">
+          <a id="viewRankingsBtn" href="rankings.html" class="btn" style="background: #17a2b8; text-decoration: none;">
+            📊 Voir le classement de la catégorie
+          </a>
         </div>
       </div>
 
@@ -348,7 +357,14 @@
           data.tournament.tournament_date
             ? new Date(data.tournament.tournament_date).toLocaleDateString('fr-FR')
             : 'Non spécifiée';
+        document.getElementById('tournamentLocation').textContent = data.tournament.location || 'Non spécifié';
         document.getElementById('participantCount').textContent = data.results.length;
+
+        // Update rankings link with category ID
+        const rankingsBtn = document.getElementById('viewRankingsBtn');
+        if (rankingsBtn && data.tournament.category_id) {
+          rankingsBtn.href = `rankings.html?categoryId=${data.tournament.category_id}&season=${data.tournament.season}`;
+        }
 
         // Sort results by match points desc, then moyenne desc
         data.results.sort((a, b) => {
@@ -415,14 +431,6 @@
 
         document.getElementById('loadingTournament').style.display = 'none';
         document.getElementById('tournamentContent').style.display = 'block';
-
-        // Update rankings link with category ID (if button exists)
-        const rankingsBtn = document.getElementById('viewRankingsBtn');
-        if (rankingsBtn) {
-          rankingsBtn.href = data.tournament.category_id
-            ? `rankings.html?categoryId=${data.tournament.category_id}`
-            : 'rankings.html';
-        }
 
       } catch (error) {
         console.error('Error loading tournament results:', error);
