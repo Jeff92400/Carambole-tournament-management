@@ -107,3 +107,69 @@ function logout() {
   localStorage.removeItem('role');
   window.location.href = '/login.html';
 }
+
+// ============================================
+// Automatic version check system
+// ============================================
+
+/**
+ * Show update notification toast
+ */
+function showUpdateToast() {
+  // Check if toast already exists
+  if (document.getElementById('update-toast')) return;
+
+  const toast = document.createElement('div');
+  toast.id = 'update-toast';
+  toast.innerHTML = `
+    <div style="position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+                background: #1F4788; color: white; padding: 15px 25px; border-radius: 8px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 10000;
+                display: flex; align-items: center; gap: 15px; font-family: Arial, sans-serif;">
+      <span>Nouvelle version disponible</span>
+      <button onclick="window.location.reload()"
+              style="background: white; color: #1F4788; border: none; padding: 8px 16px;
+                     border-radius: 4px; cursor: pointer; font-weight: bold;">
+        Actualiser
+      </button>
+      <button onclick="document.getElementById('update-toast').remove()"
+              style="background: transparent; color: white; border: none; cursor: pointer;
+                     font-size: 18px; padding: 0 5px;">&times;</button>
+    </div>
+  `;
+  document.body.appendChild(toast);
+}
+
+/**
+ * Check app version against server
+ */
+async function checkAppVersion() {
+  try {
+    const response = await fetch('/api/version');
+    if (!response.ok) return;
+
+    const data = await response.json();
+    const serverVersion = data.version;
+    const storedVersion = localStorage.getItem('tournamentAppVersion');
+
+    console.log(`[App] Version check - Server: ${serverVersion}, Stored: ${storedVersion}`);
+
+    if (!storedVersion) {
+      // First visit, store the version
+      localStorage.setItem('tournamentAppVersion', serverVersion);
+    } else if (storedVersion !== serverVersion) {
+      // Version changed, show update toast
+      console.log('[App] New version available!');
+      localStorage.setItem('tournamentAppVersion', serverVersion);
+      showUpdateToast();
+    }
+  } catch (error) {
+    console.error('[App] Version check failed:', error);
+  }
+}
+
+// Check version on load and every hour (only if authenticated)
+if (localStorage.getItem('token')) {
+  checkAppVersion();
+  setInterval(checkAppVersion, 60 * 60 * 1000); // 1 hour
+}

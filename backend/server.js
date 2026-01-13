@@ -141,6 +141,22 @@ app.use('/api/player-accounts', apiLimiter, playerAccountsRoutes);
 app.use('/api/activity-logs', apiLimiter, activityLogsRoutes);
 app.use('/api/announcements', apiLimiter, announcementsRoutes);
 
+// App version endpoint (for automatic update detection)
+// INCREMENT THIS VERSION when deploying updates you want users to see
+const APP_VERSION = '2026.01.13.1';
+app.get('/api/version', (req, res) => {
+  res.json({ version: APP_VERSION });
+});
+
+// Health check
+app.get('/api/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    app: 'cdbhs-tournament-management',
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Serve frontend pages
 app.get('/', (req, res) => {
   res.sendFile(path.join(frontendPath, 'login.html'));
