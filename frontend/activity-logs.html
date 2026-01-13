@@ -234,22 +234,29 @@
 
     <h1 style="margin-bottom: 15px;">Logs d'activité - Player App</h1>
 
+    <!-- Stats Date Filter -->
+    <div style="margin-bottom: 10px; display: flex; align-items: center; gap: 10px;">
+      <label style="font-size: 14px; color: #666;">📅 Depuis le :</label>
+      <input type="date" id="statsSinceDate" style="padding: 6px 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
+      <button onclick="resetStatsDate()" class="btn" style="padding: 6px 12px; font-size: 12px; background: #6c757d;">7 derniers jours</button>
+    </div>
+
     <!-- Stats -->
     <div id="statsContainer" class="stats-grid">
       <div class="stat-card">
-        <div class="label">Connexions (7j)</div>
+        <div class="label" id="labelLogins">Connexions (7j)</div>
         <div class="value" id="statLogins">-</div>
       </div>
       <div class="stat-card">
-        <div class="label">Inscriptions Tournois (7j)</div>
+        <div class="label" id="labelInscriptions">Inscriptions Tournois (7j)</div>
         <div class="value" id="statInscriptions">-</div>
       </div>
       <div class="stat-card">
-        <div class="label">Désinscriptions Tournois (7j)</div>
+        <div class="label" id="labelCancellations">Désinscriptions Tournois (7j)</div>
         <div class="value" id="statCancellations">-</div>
       </div>
       <div class="stat-card">
-        <div class="label">Nouveaux comptes (7j)</div>
+        <div class="label" id="labelAccounts">Nouveaux comptes (7j)</div>
         <div class="value" id="statAccounts">-</div>
       </div>
       <div class="stat-card" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
@@ -498,8 +505,18 @@
     // Load stats
     async function loadStats() {
       try {
-        // Load 7-day stats from activity logs
-        const response = await fetch(`${API_URL}/activity-logs/stats?days=7`, {
+        const sinceDate = document.getElementById('statsSinceDate').value;
+        let url = `${API_URL}/activity-logs/stats`;
+
+        if (sinceDate) {
+          url += `?since=${sinceDate}`;
+          updateStatsLabels(sinceDate);
+        } else {
+          url += '?days=7';
+          updateStatsLabels(null);
+        }
+
+        const response = await fetch(url, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (!response.ok) throw new Error('Failed to load stats');
@@ -522,6 +539,30 @@
         console.error('Error loading stats:', error);
       }
     }
+
+    // Update stat card labels based on date filter
+    function updateStatsLabels(sinceDate) {
+      const suffix = sinceDate ? `depuis ${formatDateFR(sinceDate)}` : '(7j)';
+      document.getElementById('labelLogins').textContent = `Connexions ${suffix}`;
+      document.getElementById('labelInscriptions').textContent = `Inscriptions Tournois ${suffix}`;
+      document.getElementById('labelCancellations').textContent = `Désinscriptions Tournois ${suffix}`;
+      document.getElementById('labelAccounts').textContent = `Nouveaux comptes ${suffix}`;
+    }
+
+    // Format date as French (DD/MM/YYYY)
+    function formatDateFR(dateStr) {
+      const [year, month, day] = dateStr.split('-');
+      return `${day}/${month}/${year}`;
+    }
+
+    // Reset stats date to default (7 days)
+    function resetStatsDate() {
+      document.getElementById('statsSinceDate').value = '';
+      loadStats();
+    }
+
+    // Listen for date picker change
+    document.getElementById('statsSinceDate').addEventListener('change', loadStats);
 
     // Load logs
     async function loadLogs() {

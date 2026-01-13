@@ -161,19 +161,30 @@ router.get('/action-types', authenticateToken, requireViewer, async (req, res) =
 /**
  * GET /api/activity-logs/stats
  * Get activity statistics
+ * Query params:
+ * - days: Number of days to look back (default 7)
+ * - since: Alternative to days - filter from this date (ISO string, e.g. 2025-09-01)
  */
 router.get('/stats', authenticateToken, requireViewer, async (req, res) => {
   try {
-    const { days = 7 } = req.query;
+    const { days = 7, since } = req.query;
 
-    // Actions per day for the last N days
+    // Build date filter: use 'since' date if provided, otherwise use 'days'
+    let dateFilter;
+    if (since) {
+      dateFilter = `created_at >= '${since}'`;
+    } else {
+      dateFilter = `created_at >= NOW() - INTERVAL '${parseInt(days)} days'`;
+    }
+
+    // Actions per day
     const dailyStats = await db.query(`
       SELECT
         DATE(created_at) as date,
         action_type,
         COUNT(*) as count
       FROM activity_logs
-      WHERE created_at >= NOW() - INTERVAL '${parseInt(days)} days'
+      WHERE ${dateFilter}
       GROUP BY DATE(created_at), action_type
       ORDER BY date DESC, action_type
     `);
@@ -184,7 +195,7 @@ router.get('/stats', authenticateToken, requireViewer, async (req, res) => {
         action_type,
         COUNT(*) as count
       FROM activity_logs
-      WHERE created_at >= NOW() - INTERVAL '${parseInt(days)} days'
+      WHERE ${dateFilter}
       GROUP BY action_type
       ORDER BY count DESC
     `);
@@ -199,7 +210,7 @@ router.get('/stats', authenticateToken, requireViewer, async (req, res) => {
         MAX(a.created_at) as last_activity
       FROM activity_logs a
       LEFT JOIN players p ON REPLACE(p.licence, ' ', '') = REPLACE(a.licence, ' ', '')
-      WHERE a.created_at >= NOW() - INTERVAL '${parseInt(days)} days'
+      WHERE ${dateFilter.replace('created_at', 'a.created_at')}
         AND a.licence IS NOT NULL
       GROUP BY a.licence, a.user_email, p.last_name, p.first_name, a.user_name
       ORDER BY action_count DESC
