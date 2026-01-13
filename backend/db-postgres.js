@@ -587,6 +587,28 @@ async function initializeDatabase() {
     await client.query(`ALTER TABLE announcements ADD COLUMN IF NOT EXISTS test_licence VARCHAR(20)`);
     await client.query(`ALTER TABLE announcements ADD COLUMN IF NOT EXISTS target_licence VARCHAR(20)`);
 
+    // Convocation poules table - stores full poule composition when convocations are sent
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS convocation_poules (
+        id SERIAL PRIMARY KEY,
+        tournoi_id INTEGER NOT NULL REFERENCES tournoi_ext(tournoi_id),
+        poule_number INTEGER NOT NULL,
+        licence VARCHAR(50) NOT NULL,
+        player_name VARCHAR(255),
+        club VARCHAR(255),
+        location_name VARCHAR(255),
+        location_address TEXT,
+        start_time VARCHAR(10),
+        player_order INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(tournoi_id, poule_number, licence)
+      )
+    `);
+    // Index for faster lookups by tournament
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_convocation_poules_tournoi ON convocation_poules(tournoi_id)
+    `);
+
     await client.query('COMMIT');
 
     // Initialize default admin (legacy)
