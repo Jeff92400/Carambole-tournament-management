@@ -253,6 +253,81 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
           );
         });
 
+        // Check if inscription_id already exists for a DIFFERENT licence/tournament (ID collision)
+        const idCollision = await new Promise((resolve, reject) => {
+          db.get(
+            `SELECT inscription_id, licence, tournoi_id, source FROM inscriptions WHERE inscription_id = $1`,
+            [inscriptionId],
+            (err, row) => {
+              if (err) reject(err);
+              else resolve(row);
+            }
+          );
+        });
+
+        if (idCollision && (!existingInscription || idCollision.inscription_id !== existingInscription.inscription_id)) {
+          // inscription_id exists but for a different licence/tournament - this is an ID collision from IONOS
+          console.warn(`[IONOS Import] ID collision detected: inscription_id=${inscriptionId} already used for licence=${idCollision.licence}, tournoi=${idCollision.tournoi_id}. New record: licence=${licence}, tournoi=${tournoiId}`);
+
+          // Update the existing record if it's from IONOS, otherwise skip
+          if (idCollision.source === 'ionos') {
+            // IONOS reassigned this ID - update the existing record with new data
+            console.log(`[IONOS Import] Updating ID collision record (source=ionos): ${inscriptionId}`);
+            const updateCollisionQuery = `
+              UPDATE inscriptions SET
+                joueur_id = $1,
+                tournoi_id = $2,
+                timestamp = $3,
+                email = $4,
+                telephone = $5,
+                licence = $6,
+                convoque = $7,
+                forfait = $8,
+                commentaire = $9
+              WHERE inscription_id = $10
+            `;
+            await new Promise((resolve, reject) => {
+              db.run(updateCollisionQuery, [joueurId, tournoiId, timestamp, email, telephone, licence, convoque, forfait, commentaire, inscriptionId], function(err) {
+                if (err) reject(err);
+                else resolve();
+              });
+            });
+            updated++;
+          } else {
+            // ID collision with protected source - insert with a new generated ID
+            // Generate a unique ID by using timestamp + random to avoid conflicts
+            const newId = Date.now() + Math.floor(Math.random() * 1000);
+            console.log(`[IONOS Import] ID collision with protected source ${idCollision.source}, inserting with new ID: ${newId}`);
+            const insertWithNewIdQuery = `
+              INSERT INTO inscriptions (inscription_id, joueur_id, tournoi_id, timestamp, email, telephone, licence, convoque, forfait, commentaire, source)
+              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'ionos')
+            `;
+            try {
+              await new Promise((resolve, reject) => {
+                db.run(insertWithNewIdQuery, [newId, joueurId, tournoiId, timestamp, email, telephone, licence, convoque, forfait, commentaire], function(err) {
+                  if (err) {
+                    console.error(`[IONOS Import] Insert with new ID failed: ${err.message}`);
+                    reject(err);
+                  } else {
+                    console.log(`[IONOS Import] Insert with new ID successful`);
+                    resolve();
+                  }
+                });
+              });
+              imported++;
+            } catch (insertErr) {
+              // Unique constraint on licence+tournoi means player already registered
+              if (insertErr.message && (insertErr.message.includes('unique') || insertErr.message.includes('UNIQUE') || insertErr.message.includes('duplicate'))) {
+                console.warn(`[IONOS Import] Player ${licence} already registered for tournament ${tournoiId}`);
+                skipped++;
+              } else {
+                throw insertErr;
+              }
+            }
+          }
+          continue;
+        }
+
         if (existingInscription) {
           if (existingInscription.source === 'player_app' || existingInscription.source === 'manual') {
             // Player already registered via Player App or manually - skip IONOS import
