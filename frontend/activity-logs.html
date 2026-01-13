@@ -281,40 +281,39 @@
         </div>
         <div class="filter-group">
           <label>Nom joueur</label>
-          <div style="display: flex; gap: 5px;">
-            <select id="filterNameType" style="width: 120px; font-size: 12px;">
+          <div style="display: flex; gap: 4px;">
+            <select id="filterNameType" style="width: 110px; padding: 8px 4px; font-size: 12px;">
               <option value="contains">Contient</option>
               <option value="not_contains">Ne contient pas</option>
               <option value="equals">Égal à</option>
               <option value="not_equals">Différent de</option>
               <option value="starts_with">Commence par</option>
             </select>
-            <input type="text" id="filterName" placeholder="Ex: DUPONT" style="flex: 1;">
+            <input type="text" id="filterName" placeholder="Ex: DUPONT" style="flex: 1; min-width: 100px;">
           </div>
-        </div>
-        <div class="filter-group">
-          <button class="btn" onclick="loadLogs()" style="margin-top: auto;">Filtrer</button>
-        </div>
-        <div class="filter-group">
-          <button class="export-btn" onclick="exportExcel()" style="margin-top: auto;">Exporter Excel</button>
-        </div>
-        <div class="filter-group admin-only" style="display: none;">
-          <button onclick="openResetModal()" style="margin-top: auto; background: #dc3545; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">Réinitialiser</button>
         </div>
         <div class="filter-group">
           <label>Licence</label>
           <input type="text" id="filterLicence" placeholder="Ex: 123456">
         </div>
         <div class="filter-group">
-          <div class="auto-refresh-toggle">
-            <label class="toggle-switch">
-              <input type="checkbox" id="autoRefreshToggle" onchange="toggleAutoRefresh()">
-              <span class="toggle-slider"></span>
-            </label>
-            <span class="auto-refresh-label">Auto-refresh (30s)</span>
-            <span id="refreshIndicator" class="refresh-indicator">●</span>
+          <label>&nbsp;</label>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <button class="btn" onclick="loadLogs()" style="padding: 8px 16px; font-size: 13px;">Filtrer</button>
+            <div class="auto-refresh-toggle" style="margin: 0;">
+              <label class="toggle-switch">
+                <input type="checkbox" id="autoRefreshToggle" onchange="toggleAutoRefresh()">
+                <span class="toggle-slider"></span>
+              </label>
+              <span class="auto-refresh-label">Auto (30s)</span>
+              <span id="refreshIndicator" class="refresh-indicator">●</span>
+            </div>
           </div>
         </div>
+      </div>
+      <div style="display: flex; gap: 10px; margin-top: 12px;">
+        <button class="export-btn" onclick="exportExcel()">Exporter Excel</button>
+        <button class="admin-only" onclick="openResetModal()" style="display: none; background: #dc3545; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 13px;">Réinitialiser</button>
       </div>
     </div>
 
