@@ -1898,6 +1898,18 @@
       newPlayers = [];
       lastMinutePlayers = [];
       selectedPlayers = [];
+      // Clear save poules result message
+      const savePoulesResult = document.getElementById('savePoulesResult');
+      if (savePoulesResult) {
+        savePoulesResult.style.display = 'none';
+        savePoulesResult.innerHTML = '';
+      }
+      // Clear email results too
+      const emailResults = document.getElementById('emailResults');
+      if (emailResults) {
+        emailResults.style.display = 'none';
+        emailResults.innerHTML = '';
+      }
       goToStep(1);
     });
 
