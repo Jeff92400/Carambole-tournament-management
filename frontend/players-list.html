@@ -80,6 +80,10 @@
         <div class="stat-value" id="totalCount">-</div>
       </div>
       <div class="stat-card admin-only">
+        <h4>Utilisateurs App</h4>
+        <div class="stat-value" id="appUserCount" style="color: #2e7d32;">-</div>
+      </div>
+      <div class="stat-card admin-only">
         <h4>Admins App</h4>
         <div class="stat-value" id="adminCount" style="color: #d32f2f;">-</div>
       </div>
@@ -127,6 +131,7 @@
                 <th>Bande</th>
                 <th>3 Bandes</th>
                 <th>Statut</th>
+                <th class="admin-only" title="Utilisateur de l'app mobile">📱 App</th>
                 <th class="admin-only">Player App role</th>
                 <th>Actions</th>
               </tr>
@@ -183,6 +188,14 @@
               <label style="display: block; margin-bottom: 5px; font-weight: bold;">3 Bandes</label>
               <input type="text" id="edit_rank_3bandes" placeholder="NC" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
             </div>
+          </div>
+
+          <div style="margin-bottom: 15px; padding: 12px; background: #e8f5e9; border-radius: 6px;">
+            <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+              <input type="checkbox" id="edit_player_app_user" style="width: 18px; height: 18px; cursor: pointer;">
+              <span style="font-weight: bold; color: #2e7d32;">Utilisateur Player App</span>
+            </label>
+            <p style="margin: 8px 0 0 28px; font-size: 12px; color: #666;">Cochez si ce joueur utilise l'application mobile Player App</p>
           </div>
 
           <div style="display: flex; gap: 10px; margin-top: 20px;">
@@ -257,14 +270,16 @@
           throw new Error('Invalid data received');
         }
 
-        // Count active/inactive/admins
+        // Count active/inactive/admins/app users
         const activePlayers = allPlayers.filter(p => p.is_active === 1);
         const inactivePlayers = allPlayers.filter(p => p.is_active === 0);
         const adminPlayers = allPlayers.filter(p => p.player_app_role === 'admin');
+        const appUsers = allPlayers.filter(p => p.player_app_user === true);
 
         document.getElementById('activeCount').textContent = activePlayers.length;
         document.getElementById('inactiveCount').textContent = inactivePlayers.length;
         document.getElementById('totalCount').textContent = allPlayers.length;
+        document.getElementById('appUserCount').textContent = appUsers.length;
         document.getElementById('adminCount').textContent = adminPlayers.length;
 
         displayPlayers(allPlayers);
@@ -424,6 +439,7 @@
       document.getElementById('edit_rank_cadre').value = player.rank_cadre || '';
       document.getElementById('edit_rank_bande').value = player.rank_bande || '';
       document.getElementById('edit_rank_3bandes').value = player.rank_3bandes || '';
+      document.getElementById('edit_player_app_user').checked = player.player_app_user === true;
 
       // Populate club dropdown
       const clubSelect = document.getElementById('edit_club');
@@ -496,7 +512,7 @@
       tbody.innerHTML = '';
 
       if (players.length === 0) {
-        const colspan = isAdmin ? 12 : 11;
+        const colspan = isAdmin ? 14 : 11;
         tbody.innerHTML = `<tr><td colspan="${colspan}" style="text-align: center; padding: 20px;">Aucun joueur trouvé</td></tr>`;
         return;
       }
@@ -521,6 +537,11 @@
               ${player.is_active ? '✓ Actif' : '✗ Inactif'}
             </span>
           </td>
+          ${isAdmin ? `
+          <td style="text-align: center;" title="${player.player_app_user ? 'Utilisateur Player App' : 'Non utilisateur'}">
+            ${player.player_app_user ? '<span style="color: #2e7d32; font-size: 16px;">✓</span>' : '<span style="color: #ccc;">-</span>'}
+          </td>
+          ` : ''}
           ${isAdmin ? `
           <td style="text-align: center;" class="role-cell" data-licence="${player.licence}">
             <select class="role-select" data-licence="${player.licence}" style="padding: 4px 8px; border-radius: 4px; border: 1px solid #ddd; font-size: 12px; ${player.player_app_role === 'admin' ? 'background: #ffebee; color: #d32f2f; font-weight: bold;' : ''}">
@@ -693,7 +714,8 @@
         rank_libre: document.getElementById('edit_rank_libre').value || null,
         rank_cadre: document.getElementById('edit_rank_cadre').value || null,
         rank_bande: document.getElementById('edit_rank_bande').value || null,
-        rank_3bandes: document.getElementById('edit_rank_3bandes').value || null
+        rank_3bandes: document.getElementById('edit_rank_3bandes').value || null,
+        player_app_user: document.getElementById('edit_player_app_user').checked
       };
 
       // Only include club if a value is selected (don't clear existing club)

@@ -348,6 +348,10 @@ router.put('/:licence', authenticateToken, (req, res) => {
     const role = req.body.player_app_role;
     values.push(role === '' || role === null ? null : role);
   }
+  if (req.body.player_app_user !== undefined) {
+    updates.push('player_app_user = ?');
+    values.push(req.body.player_app_user ? true : false);
+  }
 
   if (updates.length === 0) {
     return res.status(400).json({ error: 'No fields to update' });
