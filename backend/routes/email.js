@@ -1952,12 +1952,16 @@ router.post('/poules/:tournoiId/regenerate', authenticateToken, async (req, res)
     }
 
     // Get the category_id from mode and categorie
-    console.log('Looking for category:', { mode: tournament.mode, categorie: tournament.categorie });
+    // Normalize mode: '3 BANDES' -> '3BANDES', 'LIBRE' -> 'LIBRE', etc.
+    const normalizedMode = (tournament.mode || '').replace(/\s+/g, '').toUpperCase();
+    const normalizedCategorie = (tournament.categorie || '').toUpperCase();
+    console.log('Looking for category:', { mode: tournament.mode, normalizedMode, categorie: normalizedCategorie });
+
     const category = await new Promise((resolve, reject) => {
       db.get(`
         SELECT id, game_type, level FROM categories
-        WHERE game_type = $1 AND level = $2
-      `, [tournament.mode, tournament.categorie], (err, row) => {
+        WHERE UPPER(REPLACE(game_type, ' ', '')) = $1 AND UPPER(level) = $2
+      `, [normalizedMode, normalizedCategorie], (err, row) => {
         if (err) reject(err);
         else resolve(row);
       });
