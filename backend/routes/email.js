@@ -1952,21 +1952,24 @@ router.post('/poules/:tournoiId/regenerate', authenticateToken, async (req, res)
     }
 
     // Get the category_id from mode and categorie
+    console.log('Looking for category:', { mode: tournament.mode, categorie: tournament.categorie });
     const category = await new Promise((resolve, reject) => {
       db.get(`
-        SELECT id FROM categories
+        SELECT id, game_type, level FROM categories
         WHERE game_type = $1 AND level = $2
       `, [tournament.mode, tournament.categorie], (err, row) => {
         if (err) reject(err);
         else resolve(row);
       });
     });
+    console.log('Found category:', category);
 
     // Determine current season (September cutoff)
     const now = new Date();
     const year = now.getFullYear();
     const month = now.getMonth() + 1;
     const season = month >= 9 ? `${year}-${year + 1}` : `${year - 1}-${year}`;
+    console.log('Season:', season);
 
     // Fetch current rankings for this category
     let rankings = [];
@@ -1985,6 +1988,9 @@ router.post('/poules/:tournoiId/regenerate', authenticateToken, async (req, res)
           else resolve(rows || []);
         });
       });
+      console.log('Found rankings:', rankings.length);
+    } else {
+      console.log('No category found - cannot lookup rankings');
     }
 
     // Create a map of licence -> rank_position for quick lookup
@@ -2081,29 +2087,55 @@ router.post('/poules/:tournoiId/regenerate', authenticateToken, async (req, res)
       }
     }
 
-    // Calculate number of poules (same logic as in original poule generation)
-    const playerCount = activePlayers.length;
-    let numPoules;
-    if (playerCount <= 4) numPoules = 1;
-    else if (playerCount <= 6) numPoules = 2;
-    else if (playerCount <= 9) numPoules = 3;
-    else if (playerCount <= 12) numPoules = 4;
-    else if (playerCount <= 15) numPoules = 5;
-    else numPoules = Math.ceil(playerCount / 3);
+    // Poule configuration - same as frontend
+    const POULE_CONFIG = {
+      3: [3], 4: [4], 5: [5],
+      6: [3, 3], 7: [3, 4], 8: [3, 5],
+      9: [3, 3, 3], 10: [3, 3, 4], 11: [3, 3, 5],
+      12: [3, 3, 3, 3], 13: [3, 3, 3, 4], 14: [3, 3, 3, 5],
+      15: [3, 3, 3, 3, 3], 16: [3, 3, 3, 3, 4], 17: [3, 3, 3, 3, 5],
+      18: [3, 3, 3, 3, 3, 3], 19: [3, 3, 3, 3, 3, 4], 20: [3, 3, 3, 3, 3, 5]
+    };
 
-    // Distribute players using serpentine
-    const newPoules = Array.from({ length: numPoules }, (_, i) => ({
+    // Get poule sizes for player count
+    const playerCount = activePlayers.length;
+    let pouleSizes;
+    if (playerCount < 3) {
+      pouleSizes = [];
+    } else if (playerCount > 20) {
+      const base = Math.floor(playerCount / 3);
+      const remainder = playerCount % 3;
+      pouleSizes = Array(base).fill(3);
+      if (remainder === 1) pouleSizes[pouleSizes.length - 1] = 4;
+      else if (remainder === 2) pouleSizes[pouleSizes.length - 1] = 5;
+    } else {
+      pouleSizes = POULE_CONFIG[playerCount] || [];
+    }
+
+    // Create poules with sizes
+    const numPoules = pouleSizes.length;
+    const newPoules = pouleSizes.map((size, i) => ({
       number: i + 1,
+      size: size,
       players: [],
       locationNum: '1'
     }));
 
-    activePlayers.forEach((player, index) => {
-      const row = Math.floor(index / numPoules);
-      const isEvenRow = row % 2 === 0;
-      const pouleIndex = isEvenRow ? (index % numPoules) : (numPoules - 1 - (index % numPoules));
-      newPoules[pouleIndex].players.push(player);
-    });
+    // Distribute players using serpentine (same as frontend)
+    let playerIndex = 0;
+    let row = 0;
+    while (playerIndex < activePlayers.length && numPoules > 0) {
+      const isLeftToRight = row % 2 === 0;
+      for (let i = 0; i < numPoules && playerIndex < activePlayers.length; i++) {
+        const pouleIndex = isLeftToRight ? i : (numPoules - 1 - i);
+        const poule = newPoules[pouleIndex];
+        if (poule.players.length < poule.size) {
+          poule.players.push(activePlayers[playerIndex]);
+          playerIndex++;
+        }
+      }
+      row++;
+    }
 
     // Save new poules to database only if not preview
     if (!previewOnly) {
