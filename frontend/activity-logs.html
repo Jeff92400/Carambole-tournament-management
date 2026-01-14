@@ -558,11 +558,26 @@
     // Reset stats date to default (7 days)
     function resetStatsDate() {
       document.getElementById('statsSinceDate').value = '';
+      localStorage.removeItem('activityLogsSinceDate');
       loadStats();
     }
 
-    // Listen for date picker change
-    document.getElementById('statsSinceDate').addEventListener('change', loadStats);
+    // Listen for date picker change and persist to localStorage
+    document.getElementById('statsSinceDate').addEventListener('change', () => {
+      const value = document.getElementById('statsSinceDate').value;
+      if (value) {
+        localStorage.setItem('activityLogsSinceDate', value);
+      } else {
+        localStorage.removeItem('activityLogsSinceDate');
+      }
+      loadStats();
+    });
+
+    // Restore saved date from localStorage on page load
+    const savedSinceDate = localStorage.getItem('activityLogsSinceDate');
+    if (savedSinceDate) {
+      document.getElementById('statsSinceDate').value = savedSinceDate;
+    }
 
     // Load logs
     async function loadLogs() {
