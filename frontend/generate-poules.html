@@ -3495,26 +3495,34 @@
             }
           });
         });
-        list.textContent = names.join(', ');
-        summary.style.display = 'block';
-        previewBtn.disabled = false;
+        if (list) list.textContent = names.join(', ');
+        if (summary) summary.style.display = 'block';
+        if (previewBtn) previewBtn.disabled = false;
       } else {
-        summary.style.display = 'none';
-        previewBtn.disabled = true;
+        if (summary) summary.style.display = 'none';
+        if (previewBtn) previewBtn.disabled = true;
       }
       // Close any open preview when selection changes
       closePreview();
     }
 
     async function previewPoules() {
+      console.log('previewPoules called', {
+        forfaitSelectedTournoi,
+        forfaitSelectedPlayers: Array.from(forfaitSelectedPlayers),
+        forfaitReplacementPlayer
+      });
+
       if (forfaitSelectedPlayers.size === 0 && !forfaitReplacementPlayer) {
         alert('Veuillez sélectionner au moins un joueur forfait');
         return;
       }
 
       const btn = document.getElementById('previewPoulesBtn');
-      btn.disabled = true;
-      btn.textContent = 'Chargement...';
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Chargement...';
+      }
 
       try {
         const response = await fetch(`${API_URL}/email/poules/${forfaitSelectedTournoi}/regenerate`, {
@@ -3544,8 +3552,10 @@
         console.error('Error previewing poules:', error);
         alert('Erreur: ' + error.message);
       } finally {
-        btn.disabled = forfaitSelectedPlayers.size === 0;
-        btn.textContent = '👁️ Prévisualiser';
+        if (btn) {
+          btn.disabled = forfaitSelectedPlayers.size === 0;
+          btn.textContent = '👁️ Prévisualiser';
+        }
       }
     }
 
