@@ -3446,10 +3446,12 @@
       updateForfaitSummary();
     }
 
+    let forfaitPreviewData = null;
+
     function updateForfaitSummary() {
       const summary = document.getElementById('forfaitSummary');
       const list = document.getElementById('forfaitList');
-      const regenerateBtn = document.getElementById('regeneratePoulesBtn');
+      const previewBtn = document.getElementById('previewPoulesBtn');
 
       if (forfaitSelectedPlayers.size > 0) {
         const names = [];
@@ -3462,22 +3464,24 @@
         });
         list.textContent = names.join(', ');
         summary.style.display = 'block';
-        regenerateBtn.disabled = false;
+        previewBtn.disabled = false;
       } else {
         summary.style.display = 'none';
-        regenerateBtn.disabled = true;
+        previewBtn.disabled = true;
       }
+      // Close any open preview when selection changes
+      closePreview();
     }
 
-    async function regeneratePoules(withReplacement = false) {
-      if (forfaitSelectedPlayers.size === 0 && !withReplacement) {
+    async function previewPoules() {
+      if (forfaitSelectedPlayers.size === 0 && !forfaitReplacementPlayer) {
         alert('Veuillez sélectionner au moins un joueur forfait');
         return;
       }
 
-      const btn = document.getElementById('regeneratePoulesBtn');
+      const btn = document.getElementById('previewPoulesBtn');
       btn.disabled = true;
-      btn.textContent = 'Régénération en cours...';
+      btn.textContent = 'Chargement...';
 
       try {
         const response = await fetch(`${API_URL}/email/poules/${forfaitSelectedTournoi}/regenerate`, {
@@ -3488,7 +3492,80 @@
           },
           body: JSON.stringify({
             forfaitLicences: Array.from(forfaitSelectedPlayers),
-            replacementPlayer: forfaitReplacementPlayer
+            replacementPlayer: forfaitReplacementPlayer,
+            previewOnly: true
+          })
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || 'Failed to preview poules');
+        }
+
+        forfaitPreviewData = await response.json();
+        renderPreview(forfaitPreviewData);
+        document.getElementById('forfaitPreview').style.display = 'block';
+        document.getElementById('regeneratePoulesBtn').disabled = false;
+
+      } catch (error) {
+        console.error('Error previewing poules:', error);
+        alert('Erreur: ' + error.message);
+      } finally {
+        btn.disabled = forfaitSelectedPlayers.size === 0;
+        btn.textContent = '👁️ Prévisualiser';
+      }
+    }
+
+    function renderPreview(data) {
+      const container = document.getElementById('forfaitPreviewPoules');
+      container.innerHTML = data.poules.map(poule => `
+        <div style="background: white; border: 1px solid #ddd; border-radius: 6px; overflow: hidden;">
+          <div style="background: #17a2b8; color: white; padding: 8px 12px; font-weight: bold; font-size: 13px;">
+            Poule ${poule.number}
+          </div>
+          <div style="padding: 8px;">
+            ${poule.players.map(player => `
+              <div style="padding: 6px 8px; border-bottom: 1px solid #eee; font-size: 12px;
+                          ${player.isNouveau ? 'background: #fff3e0;' : ''}">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <span style="font-weight: 500;">${player.name}</span>
+                  ${player.rank ? `<span style="background: #1F4788; color: white; padding: 1px 6px; border-radius: 10px; font-size: 10px;">#${player.rank}</span>` : '<span style="background: #ff9800; color: white; padding: 1px 6px; border-radius: 10px; font-size: 10px;">Nouv.</span>'}
+                </div>
+                <div style="color: #666; font-size: 11px;">${player.club || ''}</div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function closePreview() {
+      document.getElementById('forfaitPreview').style.display = 'none';
+      document.getElementById('regeneratePoulesBtn').disabled = true;
+      forfaitPreviewData = null;
+    }
+
+    async function confirmRegeneration() {
+      if (!forfaitPreviewData) {
+        alert('Veuillez d\'abord prévisualiser les poules');
+        return;
+      }
+
+      const btn = document.querySelector('#forfaitPreview button[onclick="confirmRegeneration()"]');
+      btn.disabled = true;
+      btn.textContent = 'Enregistrement...';
+
+      try {
+        const response = await fetch(`${API_URL}/email/poules/${forfaitSelectedTournoi}/regenerate`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            forfaitLicences: Array.from(forfaitSelectedPlayers),
+            replacementPlayer: forfaitReplacementPlayer,
+            previewOnly: false
           })
         });
 
@@ -3499,11 +3576,12 @@
 
         const result = await response.json();
 
-        alert(`Poules régénérées avec succès!\n${result.playerCount} joueur(s) répartis en ${result.pouleCount} poule(s)`);
+        alert(`Poules enregistrées avec succès!\n${result.playerCount} joueur(s) répartis en ${result.pouleCount} poule(s)`);
 
         // Reload poules
         forfaitSelectedPlayers.clear();
         forfaitReplacementPlayer = null;
+        forfaitPreviewData = null;
         await loadForfaitPoules(forfaitSelectedTournoi);
 
       } catch (error) {
@@ -3511,8 +3589,25 @@
         alert('Erreur: ' + error.message);
       } finally {
         btn.disabled = false;
-        btn.textContent = '🔄 Régénérer les poules';
+        btn.textContent = '✓ Confirmer et enregistrer';
       }
+    }
+
+    async function regeneratePoules(withReplacement = false) {
+      // This is now a fallback - main flow uses preview + confirm
+      if (forfaitSelectedPlayers.size === 0 && !withReplacement) {
+        alert('Veuillez sélectionner au moins un joueur forfait');
+        return;
+      }
+
+      // If we have preview data, just confirm it
+      if (forfaitPreviewData) {
+        await confirmRegeneration();
+        return;
+      }
+
+      // Otherwise show preview first
+      await previewPoules();
     }
 
     // Replacement player modal
@@ -3666,7 +3761,10 @@
         <!-- Action Buttons -->
         <div id="forfaitActions" style="display: none; margin-top: 20px; padding-top: 20px; border-top: 1px solid #eee;">
           <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-            <button id="regeneratePoulesBtn" class="btn" style="background: #28a745; color: white;" onclick="regeneratePoules(false)">
+            <button id="previewPoulesBtn" class="btn" style="background: #17a2b8; color: white;" onclick="previewPoules()">
+              👁️ Prévisualiser
+            </button>
+            <button id="regeneratePoulesBtn" class="btn" style="background: #28a745; color: white;" onclick="regeneratePoules(false)" disabled>
               🔄 Régénérer les poules
             </button>
             <button id="regenerateWithReplacementBtn" class="btn" style="background: #1F4788; color: white;" onclick="openReplacementModal()">
@@ -3675,6 +3773,18 @@
           </div>
           <div id="forfaitSummary" style="margin-top: 15px; padding: 10px; background: #fff3cd; border-radius: 6px; display: none;">
             <strong>Forfaits sélectionnés :</strong> <span id="forfaitList"></span>
+          </div>
+          <!-- Preview Result -->
+          <div id="forfaitPreview" style="display: none; margin-top: 20px; padding: 15px; background: #e7f3ff; border: 2px solid #17a2b8; border-radius: 8px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+              <h4 style="margin: 0; color: #0c5460;">👁️ Prévisualisation (non enregistrée)</h4>
+              <button class="btn" style="background: #6c757d; padding: 5px 10px; font-size: 12px;" onclick="closePreview()">✕ Fermer</button>
+            </div>
+            <div id="forfaitPreviewPoules" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px;"></div>
+            <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #17a2b8; display: flex; gap: 10px;">
+              <button class="btn" style="background: #28a745; color: white;" onclick="confirmRegeneration()">✓ Confirmer et enregistrer</button>
+              <button class="btn" style="background: #6c757d;" onclick="closePreview()">Annuler</button>
+            </div>
           </div>
         </div>
 

@@ -1932,7 +1932,7 @@ router.get('/poules/:tournoiId', authenticateToken, async (req, res) => {
 router.post('/poules/:tournoiId/regenerate', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
   const { tournoiId } = req.params;
-  const { forfaitLicences, replacementPlayer, locations } = req.body;
+  const { forfaitLicences, replacementPlayer, locations, previewOnly } = req.body;
 
   try {
     // Get tournament info
@@ -1950,6 +1950,49 @@ router.post('/poules/:tournoiId/regenerate', authenticateToken, async (req, res)
     if (!tournament) {
       return res.status(404).json({ error: 'Tournament not found' });
     }
+
+    // Get the category_id from mode and categorie
+    const category = await new Promise((resolve, reject) => {
+      db.get(`
+        SELECT id FROM categories
+        WHERE game_type = $1 AND level = $2
+      `, [tournament.mode, tournament.categorie], (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
+
+    // Determine current season (September cutoff)
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth() + 1;
+    const season = month >= 9 ? `${year}-${year + 1}` : `${year - 1}-${year}`;
+
+    // Fetch current rankings for this category
+    let rankings = [];
+    if (category) {
+      rankings = await new Promise((resolve, reject) => {
+        db.all(`
+          SELECT r.licence, r.rank_position,
+                 COALESCE(p.first_name, '') as first_name,
+                 COALESCE(p.last_name, '') as last_name
+          FROM rankings r
+          LEFT JOIN players p ON REPLACE(r.licence, ' ', '') = REPLACE(p.licence, ' ', '')
+          WHERE r.category_id = $1 AND r.season = $2
+          ORDER BY r.rank_position
+        `, [category.id, season], (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows || []);
+        });
+      });
+    }
+
+    // Create a map of licence -> rank_position for quick lookup
+    const rankingMap = new Map();
+    rankings.forEach(r => {
+      const normLicence = r.licence?.replace(/\s/g, '');
+      rankingMap.set(normLicence, r.rank_position);
+    });
 
     // Get current poules
     const currentPoules = await new Promise((resolve, reject) => {
@@ -2001,18 +2044,41 @@ router.post('/poules/:tournoiId/regenerate', authenticateToken, async (req, res)
       });
     }
 
-    // Mark forfait players in inscriptions table
-    for (const licence of (forfaitLicences || [])) {
-      await new Promise((resolve, reject) => {
-        db.run(`
-          UPDATE inscriptions
-          SET forfait = 1
-          WHERE tournoi_id = $1 AND REPLACE(licence, ' ', '') = REPLACE($2, ' ', '')
-        `, [tournoiId, licence], (err) => {
-          if (err) reject(err);
-          else resolve();
+    // Sort players by their ranking position
+    // Ranked players first (sorted by rank), then nouveaux at the end
+    activePlayers = activePlayers.map(p => {
+      const normLicence = p.licence?.replace(/\s/g, '');
+      const rank = rankingMap.get(normLicence);
+      return {
+        ...p,
+        rank: rank || null,
+        isNouveau: rank === undefined || rank === null
+      };
+    });
+
+    // Sort: ranked players by rank_position, then nouveaux at end
+    activePlayers.sort((a, b) => {
+      if (a.isNouveau && b.isNouveau) return 0;
+      if (a.isNouveau) return 1; // nouveaux go to end
+      if (b.isNouveau) return -1;
+      return a.rank - b.rank;
+    });
+
+    // If preview only, don't save to database
+    if (!previewOnly) {
+      // Mark forfait players in inscriptions table
+      for (const licence of (forfaitLicences || [])) {
+        await new Promise((resolve, reject) => {
+          db.run(`
+            UPDATE inscriptions
+            SET forfait = 1
+            WHERE tournoi_id = $1 AND REPLACE(licence, ' ', '') = REPLACE($2, ' ', '')
+          `, [tournoiId, licence], (err) => {
+            if (err) reject(err);
+            else resolve();
+          });
         });
-      });
+      }
     }
 
     // Calculate number of poules (same logic as in original poule generation)
@@ -2039,33 +2105,36 @@ router.post('/poules/:tournoiId/regenerate', authenticateToken, async (req, res)
       newPoules[pouleIndex].players.push(player);
     });
 
-    // Save new poules to database
-    await new Promise((resolve, reject) => {
-      db.run(`DELETE FROM convocation_poules WHERE tournoi_id = $1`, [tournoiId], (err) => {
-        if (err) reject(err);
-        else resolve();
-      });
-    });
-
-    for (const poule of newPoules) {
-      const loc = pouleLocations.find(l => l.locationNum === poule.locationNum) || pouleLocations[0];
-      for (let i = 0; i < poule.players.length; i++) {
-        const player = poule.players[i];
-        await new Promise((resolve, reject) => {
-          db.run(`
-            INSERT INTO convocation_poules (tournoi_id, poule_number, licence, player_name, club, location_name, location_address, start_time, player_order)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-          `, [tournoiId, poule.number, player.licence, player.player_name, player.club, loc?.name || '', loc?.address || '', loc?.startTime || '', i], (err) => {
-            if (err) reject(err);
-            else resolve();
-          });
+    // Save new poules to database only if not preview
+    if (!previewOnly) {
+      await new Promise((resolve, reject) => {
+        db.run(`DELETE FROM convocation_poules WHERE tournoi_id = $1`, [tournoiId], (err) => {
+          if (err) reject(err);
+          else resolve();
         });
+      });
+
+      for (const poule of newPoules) {
+        const loc = pouleLocations.find(l => l.locationNum === poule.locationNum) || pouleLocations[0];
+        for (let i = 0; i < poule.players.length; i++) {
+          const player = poule.players[i];
+          await new Promise((resolve, reject) => {
+            db.run(`
+              INSERT INTO convocation_poules (tournoi_id, poule_number, licence, player_name, club, location_name, location_address, start_time, player_order)
+              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            `, [tournoiId, poule.number, player.licence, player.player_name, player.club, loc?.name || '', loc?.address || '', loc?.startTime || '', i], (err) => {
+              if (err) reject(err);
+              else resolve();
+            });
+          });
+        }
       }
     }
 
     res.json({
       success: true,
-      message: 'Poules regenerated',
+      preview: previewOnly || false,
+      message: previewOnly ? 'Preview generated (not saved)' : 'Poules regenerated',
       playerCount: activePlayers.length,
       pouleCount: newPoules.length,
       poules: newPoules.map(p => ({
@@ -2073,7 +2142,9 @@ router.post('/poules/:tournoiId/regenerate', authenticateToken, async (req, res)
         players: p.players.map(pl => ({
           licence: pl.licence,
           name: pl.player_name,
-          club: pl.club
+          club: pl.club,
+          rank: pl.rank,
+          isNouveau: pl.isNouveau
         }))
       }))
     });
