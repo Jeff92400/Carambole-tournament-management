@@ -3525,6 +3525,7 @@
       }
 
       try {
+        console.log('Making API call to:', `${API_URL}/email/poules/${forfaitSelectedTournoi}/regenerate`);
         const response = await fetch(`${API_URL}/email/poules/${forfaitSelectedTournoi}/regenerate`, {
           method: 'POST',
           headers: {
@@ -3538,15 +3539,22 @@
           })
         });
 
+        console.log('Response status:', response.status);
+
         if (!response.ok) {
           const error = await response.json();
+          console.error('API error:', error);
           throw new Error(error.error || 'Failed to preview poules');
         }
 
         forfaitPreviewData = await response.json();
+        console.log('Preview data received:', forfaitPreviewData);
         renderPreview(forfaitPreviewData);
-        document.getElementById('forfaitPreview').style.display = 'block';
-        document.getElementById('regeneratePoulesBtn').disabled = false;
+        const previewEl = document.getElementById('forfaitPreview');
+        console.log('Preview element:', previewEl);
+        if (previewEl) previewEl.style.display = 'block';
+        const regenBtn = document.getElementById('regeneratePoulesBtn');
+        if (regenBtn) regenBtn.disabled = false;
 
       } catch (error) {
         console.error('Error previewing poules:', error);
