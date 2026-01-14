@@ -1072,8 +1072,23 @@
 
         if (finalesRes.ok) {
           const finales = await finalesRes.json();
+          const now = new Date();
           finales.forEach(f => {
             f.isFinale = true;
+            // Check if T3 of the same category has occurred
+            const t3 = allCompetitions.find(t =>
+              t.mode?.toUpperCase() === f.mode?.toUpperCase() &&
+              t.categorie?.toUpperCase() === f.categorie?.toUpperCase() &&
+              (t.nom?.toUpperCase().includes('T3') || t.nom?.toUpperCase().includes('TOURNOI 3'))
+            );
+            if (t3 && t3.debut) {
+              const t3Date = new Date(t3.debut);
+              f.t3Pending = t3Date > now;
+              f.t3Date = t3.debut;
+              f.daysUntilT3 = Math.ceil((t3Date - now) / (1000 * 60 * 60 * 24));
+            } else {
+              f.t3Pending = false;
+            }
           });
           allCompetitions = allCompetitions.concat(finales);
         }
@@ -1107,6 +1122,9 @@
             const badgeHtml = t.isFinale
               ? '<span style="background: #ffc107; color: #333; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: bold; margin-left: 8px;">🏆 FINALE</span>'
               : '';
+            const t3PendingBadge = t.t3Pending
+              ? `<div style="background: #fff3cd; border: 1px solid #ffc107; color: #856404; padding: 4px 8px; border-radius: 6px; font-size: 11px; margin-top: 6px;">⏳ T3 en attente (${t.daysUntilT3}j)</div>`
+              : '';
 
             // Check if simulation should be available (> 7 days away and >= 3 inscriptions)
             const tournamentDate = t.debut ? new Date(t.debut) : null;
@@ -1135,6 +1153,7 @@
                 <div class="tournament-inscrits">
                   👥 ${t.isFinale ? `${t.inscribed_finalist_count || 0}/${t.finalist_count || 0} inscrits` : `${t.inscrit_count || 0} inscrit(s)`}
                 </div>
+                ${t3PendingBadge}
                 ${showSimulation ? `
                   <button class="simulation-btn" data-tournoi-id="${t.tournoi_id}" onclick="event.stopPropagation(); openSimulationModal(${t.tournoi_id});">
                     <img src="images/french-billiard.png" alt=""> Simulation des poules
