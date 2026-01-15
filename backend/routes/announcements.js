@@ -6,12 +6,15 @@ const router = express.Router();
 // Get database connection
 const getDb = () => require('../db-loader');
 
-// Get audience count (number of Player App users)
+// Get audience count (number of Player App users, excluding test accounts)
 router.get('/audience-count', authenticateToken, (req, res) => {
   const db = getDb();
 
   db.get(
-    `SELECT COUNT(*) as count FROM player_accounts`,
+    `SELECT COUNT(*) as count
+     FROM player_accounts pa
+     LEFT JOIN players p ON REPLACE(pa.licence, ' ', '') = REPLACE(p.licence, ' ', '')
+     WHERE p.player_app_role IS NULL OR p.player_app_role != 'test'`,
     [],
     (err, row) => {
       if (err) {
