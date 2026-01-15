@@ -289,16 +289,24 @@ router.post('/', authenticateToken, async (req, res) => {
 router.get('/', authenticateToken, (req, res) => {
   const { active } = req.query;
 
-  let query = 'SELECT * FROM players';
+  // GDPR consent can come from either players table (admin set) or player_accounts (registration)
+  // Use COALESCE to show consent from either source
+  let query = `
+    SELECT p.*,
+      COALESCE(p.gdpr_consent_date, pa.gdpr_consent_date) as gdpr_consent_date,
+      COALESCE(p.gdpr_consent_version, pa.gdpr_consent_version) as gdpr_consent_version
+    FROM players p
+    LEFT JOIN player_accounts pa ON REPLACE(p.licence, ' ', '') = REPLACE(pa.licence, ' ', '')
+  `;
   const params = [];
 
   if (active === 'true') {
-    query += ' WHERE is_active = 1';
+    query += ' WHERE p.is_active = 1';
   } else if (active === 'false') {
-    query += ' WHERE is_active = 0';
+    query += ' WHERE p.is_active = 0';
   }
 
-  query += ' ORDER BY last_name, first_name';
+  query += ' ORDER BY p.last_name, p.first_name';
 
   db.all(query, params, (err, rows) => {
     if (err) {
