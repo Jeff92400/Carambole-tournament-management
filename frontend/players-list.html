@@ -172,6 +172,7 @@
                 <th>Statut</th>
                 <th class="admin-only" title="Utilisateur de l'app mobile">📱 App</th>
                 <th class="admin-only">Player App role</th>
+                <th class="admin-only" title="Consentement RGPD">📋 RGPD</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -697,7 +698,7 @@
       tbody.innerHTML = '';
 
       if (players.length === 0) {
-        const colspan = isAdmin ? 14 : 11;
+        const colspan = isAdmin ? 15 : 11;
         tbody.innerHTML = `<tr><td colspan="${colspan}" style="text-align: center; padding: 20px;">Aucun joueur trouvé</td></tr>`;
         return;
       }
@@ -735,6 +736,13 @@
               <option value="admin" ${player.player_app_role === 'admin' ? 'selected' : ''}>Admin</option>
               <option value="test" ${player.player_app_role === 'test' ? 'selected' : ''}>Test</option>
             </select>
+          </td>
+          ` : ''}
+          ${isAdmin ? `
+          <td style="text-align: center;" title="${player.gdpr_consent_date ? new Date(player.gdpr_consent_date).toLocaleDateString('fr-FR') : 'Pas de consentement'}">
+            ${player.gdpr_consent_date
+              ? '<span style="color: #2e7d32; font-size: 16px;">✓</span>'
+              : (player.player_app_user ? '<span style="color: #ff9800; font-size: 14px;">⚠</span>' : '<span style="color: #ccc;">-</span>')}
           </td>
           ` : ''}
           ${isAdmin ? `
