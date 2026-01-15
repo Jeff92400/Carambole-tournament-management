@@ -256,7 +256,7 @@ router.post('/', authenticateToken, async (req, res) => {
     // Insert new player
     await new Promise((resolve, reject) => {
       db.run(`
-        INSERT INTO players (licence, first_name, last_name, club, email, phone, rank_libre, rank_cadre, rank_bande, rank_3bandes, player_app_role, player_app_user, is_active)
+        INSERT INTO players (licence, first_name, last_name, club, email, telephone, rank_libre, rank_cadre, rank_bande, rank_3bandes, player_app_role, player_app_user, is_active)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
       `, [
         normalizedLicence,
