@@ -400,15 +400,16 @@
           throw new Error('Invalid data received');
         }
 
-        // Count active/inactive/admins/app users
-        const activePlayers = allPlayers.filter(p => p.is_active === 1);
-        const inactivePlayers = allPlayers.filter(p => p.is_active === 0);
-        const adminPlayers = allPlayers.filter(p => p.player_app_role === 'admin');
-        const appUsers = allPlayers.filter(p => p.player_app_user === true);
+        // Count active/inactive/admins/app users (excluding "test" role)
+        const realPlayers = allPlayers.filter(p => p.player_app_role !== 'test');
+        const activePlayers = realPlayers.filter(p => p.is_active === 1);
+        const inactivePlayers = realPlayers.filter(p => p.is_active === 0);
+        const adminPlayers = realPlayers.filter(p => p.player_app_role === 'admin');
+        const appUsers = realPlayers.filter(p => p.player_app_user === true);
 
         document.getElementById('activeCount').textContent = activePlayers.length;
         document.getElementById('inactiveCount').textContent = inactivePlayers.length;
-        document.getElementById('totalCount').textContent = allPlayers.length;
+        document.getElementById('totalCount').textContent = realPlayers.length;
         document.getElementById('appUserCount').textContent = appUsers.length;
         document.getElementById('adminCount').textContent = adminPlayers.length;
 
@@ -581,6 +582,11 @@
       const gdprCheckbox = document.getElementById('edit_gdpr_consent');
       const gdprInfo = document.getElementById('gdprConsentInfo');
 
+      // Reset GDPR checkbox state
+      gdprCheckbox.checked = false;
+      gdprCheckbox.disabled = false;
+      gdprInfo.style.display = 'none';
+
       if (player.player_app_user) {
         gdprSection.style.display = 'block';
         // Load GDPR consent status from player account
@@ -622,11 +628,10 @@
             gdprInfo.style.display = 'none';
           }
         } else {
-          // No account yet
+          // No account yet - still allow setting consent (will be stored when account is created)
           gdprCheckbox.checked = false;
-          gdprInfo.textContent = 'Pas de compte Player App';
+          gdprInfo.textContent = 'Pas encore de compte Player App';
           gdprInfo.style.display = 'block';
-          gdprCheckbox.disabled = true;
         }
       } catch (error) {
         console.error('Error loading GDPR consent:', error);
