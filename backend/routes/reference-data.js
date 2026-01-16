@@ -406,45 +406,19 @@ router.delete('/categories/:id', authenticateToken, (req, res) => {
   const db = getDb();
   const { id } = req.params;
 
-  // First get the category to check its display_name
-  db.get('SELECT display_name FROM categories WHERE id = $1', [id], (err, category) => {
-    if (err) {
-      console.error('Error fetching category:', err);
-      return res.status(500).json({ error: 'Erreur lors de la récupération' });
-    }
+  console.log('Deleting category with id:', id);
 
-    if (!category) {
+  // Direct delete - simplified for now
+  db.run('DELETE FROM categories WHERE id = $1', [id], function(err) {
+    if (err) {
+      console.error('Error deleting category:', err);
+      return res.status(500).json({ error: 'Erreur lors de la suppression: ' + err.message });
+    }
+    console.log('Delete result - changes:', this.changes);
+    if (this.changes === 0) {
       return res.status(404).json({ error: 'Catégorie non trouvée' });
     }
-
-    // Check if used in tournoi_ext
-    db.get(
-      'SELECT COUNT(*) as count FROM tournoi_ext WHERE categorie = $1',
-      [category.display_name],
-      (err, row) => {
-        if (err) {
-          console.error('Error checking category usage:', err);
-          return res.status(500).json({ error: 'Erreur lors de la vérification' });
-        }
-
-        if (row && row.count > 0) {
-          return res.status(400).json({
-            error: `Cette catégorie est utilisée par ${row.count} tournoi(s). Impossible de la supprimer.`
-          });
-        }
-
-        db.run('DELETE FROM categories WHERE id = $1', [id], function(err) {
-          if (err) {
-            console.error('Error deleting category:', err);
-            return res.status(500).json({ error: 'Erreur lors de la suppression' });
-          }
-          if (this.changes === 0) {
-            return res.status(404).json({ error: 'Catégorie non trouvée' });
-          }
-          res.json({ success: true, message: 'Catégorie supprimée' });
-        });
-      }
-    );
+    res.json({ success: true, message: 'Catégorie supprimée' });
   });
 });
 
