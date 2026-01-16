@@ -374,6 +374,109 @@
       transform: translateY(-2px);
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     }
+
+    /* Pie Chart Styles */
+    .chart-container {
+      display: flex;
+      gap: 30px;
+      align-items: flex-start;
+      flex-wrap: wrap;
+    }
+
+    .pie-chart-wrapper {
+      flex: 0 0 250px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .pie-chart {
+      width: 200px;
+      height: 200px;
+      border-radius: 50%;
+      position: relative;
+    }
+
+    .pie-chart-center {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: white;
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .pie-chart-total {
+      font-size: 24px;
+      font-weight: 700;
+      color: #1F4788;
+    }
+
+    .pie-chart-label {
+      font-size: 10px;
+      color: #666;
+    }
+
+    .chart-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 15px;
+      justify-content: center;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 11px;
+      color: #444;
+    }
+
+    .legend-color {
+      width: 12px;
+      height: 12px;
+      border-radius: 2px;
+    }
+
+    .table-wrapper {
+      flex: 1;
+      min-width: 300px;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+
+    .club-breakdown-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
+      gap: 20px;
+    }
+
+    @media (max-width: 768px) {
+      .chart-container {
+        flex-direction: column;
+        align-items: center;
+      }
+
+      .pie-chart-wrapper {
+        flex: 0 0 auto;
+      }
+
+      .table-wrapper {
+        width: 100%;
+      }
+
+      .club-breakdown-grid {
+        grid-template-columns: 1fr;
+      }
+    }
   </style>
 </head>
 <body>
@@ -453,6 +556,32 @@
             <div class="stats-card-body" id="activeClubsTable">
               <div class="loading">
                 <div class="loading-spinner"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Club Breakdown Section -->
+        <div class="stats-section">
+          <h2 class="stats-section-title">📊 Répartition des Joueurs par Club</h2>
+          <div class="club-breakdown-grid">
+            <!-- Active Players by Club -->
+            <div class="stats-card">
+              <div class="stats-card-header">Joueurs Actifs (Licenciés)</div>
+              <div class="stats-card-body" id="activePlayersByClub">
+                <div class="loading">
+                  <div class="loading-spinner"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Competing Players by Club -->
+            <div class="stats-card">
+              <div class="stats-card-header" id="competingPlayersHeader">Joueurs ayant Compété (Saison)</div>
+              <div class="stats-card-body" id="competingPlayersByClub">
+                <div class="loading">
+                  <div class="loading-spinner"></div>
+                </div>
               </div>
             </div>
           </div>
@@ -696,6 +825,8 @@
       loadSummary();
       loadClubPodiums();
       loadActiveClubs();
+      loadActivePlayersByClub();
+      loadCompetingPlayersByClub();
       loadActivePlayers();
       loadStatCategories(); // Load categories for dropdowns (wins, moyenne, serie)
       loadNewPlayers();
@@ -873,6 +1004,137 @@
         }
       } catch (error) {
         console.error('Error loading active clubs:', error);
+      }
+    }
+
+    // Chart colors for clubs
+    const chartColors = [
+      '#1F4788', '#28a745', '#dc3545', '#ffc107', '#17a2b8',
+      '#6f42c1', '#e83e8c', '#fd7e14', '#20c997', '#6610f2',
+      '#007bff', '#343a40'
+    ];
+
+    // Generate pie chart CSS gradient
+    function generatePieGradient(data, total) {
+      if (data.length === 0 || total === 0) return 'conic-gradient(#e0e0e0 0deg 360deg)';
+
+      const segments = [];
+      let currentAngle = 0;
+
+      data.forEach((item, index) => {
+        const percentage = (item.player_count / total) * 100;
+        const angle = (percentage / 100) * 360;
+        const color = chartColors[index % chartColors.length];
+        segments.push(`${color} ${currentAngle}deg ${currentAngle + angle}deg`);
+        currentAngle += angle;
+      });
+
+      return `conic-gradient(${segments.join(', ')})`;
+    }
+
+    // Render club breakdown with pie chart and table
+    function renderClubBreakdown(containerId, data, title) {
+      const container = document.getElementById(containerId);
+
+      if (!data || data.length === 0) {
+        container.innerHTML = '<div class="empty-state">Aucune donnée disponible</div>';
+        return;
+      }
+
+      const total = data.reduce((sum, item) => sum + item.player_count, 0);
+
+      // Top clubs for pie chart (max 10, rest grouped as "Autres")
+      const topClubs = data.slice(0, 10);
+      const otherClubs = data.slice(10);
+      const otherTotal = otherClubs.reduce((sum, item) => sum + item.player_count, 0);
+
+      let pieData = [...topClubs];
+      if (otherTotal > 0) {
+        pieData.push({ club: `Autres (${otherClubs.length})`, player_count: otherTotal });
+      }
+
+      const pieGradient = generatePieGradient(pieData, total);
+
+      container.innerHTML = `
+        <div class="chart-container">
+          <div class="pie-chart-wrapper">
+            <div class="pie-chart" style="background: ${pieGradient};">
+              <div class="pie-chart-center">
+                <div class="pie-chart-total">${total}</div>
+                <div class="pie-chart-label">joueurs</div>
+              </div>
+            </div>
+            <div class="chart-legend">
+              ${pieData.slice(0, 6).map((item, i) => `
+                <div class="legend-item">
+                  <div class="legend-color" style="background: ${chartColors[i % chartColors.length]};"></div>
+                  <span>${item.club.length > 15 ? item.club.substring(0, 15) + '...' : item.club}</span>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+          <div class="table-wrapper">
+            <table class="ranking-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Club</th>
+                  <th>Joueurs</th>
+                  <th>%</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${data.map((club, i) => `
+                  <tr>
+                    <td>${createRankBadge(i + 1)}</td>
+                    <td class="player-name" style="font-size: 12px;">${club.club}</td>
+                    <td class="stat-value">${club.player_count}</td>
+                    <td>${((club.player_count / total) * 100).toFixed(1)}%</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `;
+    }
+
+    // Load active players by club
+    async function loadActivePlayersByClub() {
+      const container = document.getElementById('activePlayersByClub');
+      try {
+        const response = await fetch(`${API_URL}/statistics/clubs/active-players`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          renderClubBreakdown('activePlayersByClub', data, 'Joueurs Actifs');
+        }
+      } catch (error) {
+        console.error('Error loading active players by club:', error);
+        container.innerHTML = '<div class="empty-state">Erreur de chargement</div>';
+      }
+    }
+
+    // Load competing players by club
+    async function loadCompetingPlayersByClub() {
+      const container = document.getElementById('competingPlayersByClub');
+      const header = document.getElementById('competingPlayersHeader');
+      header.textContent = `Joueurs ayant Compété (${currentSeason})`;
+
+      try {
+        const response = await fetch(`${API_URL}/statistics/clubs/competing-players?season=${currentSeason}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          renderClubBreakdown('competingPlayersByClub', data, 'Joueurs Compétition');
+        }
+      } catch (error) {
+        console.error('Error loading competing players by club:', error);
+        container.innerHTML = '<div class="empty-state">Erreur de chargement</div>';
       }
     }
 

@@ -8,14 +8,28 @@ const { authenticateToken } = require('./auth');
 
 const router = express.Router();
 
-// Configure multer for file uploads
+// Configure multer for file uploads with security restrictions
 let upload;
 try {
   const uploadsDir = path.join(__dirname, '../uploads');
   if (!fs.existsSync(uploadsDir)) {
     fs.mkdirSync(uploadsDir, { recursive: true });
   }
-  upload = multer({ dest: uploadsDir });
+  upload = multer({
+    dest: uploadsDir,
+    limits: {
+      fileSize: 5 * 1024 * 1024 // 5MB max
+    },
+    fileFilter: (req, file, cb) => {
+      // Only allow CSV files
+      const ext = file.originalname.toLowerCase().slice(file.originalname.lastIndexOf('.'));
+      if (ext === '.csv') {
+        cb(null, true);
+      } else {
+        cb(new Error('Seuls les fichiers CSV sont acceptés'), false);
+      }
+    }
+  });
   console.log('Multer configured successfully, uploads dir:', uploadsDir);
 } catch (error) {
   console.error('Error configuring multer:', error);

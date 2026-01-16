@@ -288,6 +288,62 @@ router.get('/clubs/participations', authenticateToken, async (req, res) => {
   });
 });
 
+// Get active players breakdown by club (from players table)
+router.get('/clubs/active-players', authenticateToken, async (req, res) => {
+  const db = require('../db-loader');
+
+  const query = `
+    SELECT
+      COALESCE(ca.canonical_name, p.club, 'Non renseigné') as club,
+      COUNT(*) as player_count
+    FROM players p
+    LEFT JOIN club_aliases ca ON UPPER(REPLACE(REPLACE(REPLACE(p.club, ' ', ''), '.', ''), '-', ''))
+                                = UPPER(REPLACE(REPLACE(REPLACE(ca.alias, ' ', ''), '.', ''), '-', ''))
+    WHERE p.is_active = 1
+      AND p.club IS NOT NULL AND p.club != ''
+    GROUP BY COALESCE(ca.canonical_name, p.club, 'Non renseigné')
+    ORDER BY player_count DESC
+  `;
+
+  db.all(query, [], (err, rows) => {
+    if (err) {
+      console.error('Error fetching active players by club:', err);
+      return res.status(500).json({ error: err.message });
+    }
+    res.json(rows || []);
+  });
+});
+
+// Get players who competed at least once during the season, by club
+router.get('/clubs/competing-players', authenticateToken, async (req, res) => {
+  const db = require('../db-loader');
+  const { season } = req.query;
+  const targetSeason = season || getCurrentSeason();
+
+  const query = `
+    SELECT
+      COALESCE(ca.canonical_name, p.club, 'Non renseigné') as club,
+      COUNT(DISTINCT tr.licence) as player_count
+    FROM tournament_results tr
+    JOIN tournaments t ON tr.tournament_id = t.id
+    LEFT JOIN players p ON REPLACE(tr.licence, ' ', '') = REPLACE(p.licence, ' ', '')
+    LEFT JOIN club_aliases ca ON UPPER(REPLACE(REPLACE(REPLACE(p.club, ' ', ''), '.', ''), '-', ''))
+                                = UPPER(REPLACE(REPLACE(REPLACE(ca.alias, ' ', ''), '.', ''), '-', ''))
+    WHERE t.season = $1
+      AND p.club IS NOT NULL AND p.club != ''
+    GROUP BY COALESCE(ca.canonical_name, p.club, 'Non renseigné')
+    ORDER BY player_count DESC
+  `;
+
+  db.all(query, [targetSeason], (err, rows) => {
+    if (err) {
+      console.error('Error fetching competing players by club:', err);
+      return res.status(500).json({ error: err.message });
+    }
+    res.json(rows || []);
+  });
+});
+
 // Get best average moyenne by club per game mode
 router.get('/clubs/moyenne', authenticateToken, async (req, res) => {
   const db = require('../db-loader');

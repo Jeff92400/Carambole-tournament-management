@@ -8,8 +8,23 @@ const { authenticateToken } = require('./auth');
 
 const router = express.Router();
 
-// Configure multer for file uploads
-const upload = multer({ dest: 'uploads/' });
+// Configure multer for file uploads with security restrictions
+const upload = multer({
+  dest: 'uploads/',
+  limits: {
+    fileSize: 5 * 1024 * 1024 // 5MB max
+  },
+  fileFilter: (req, file, cb) => {
+    // Only allow CSV files
+    const allowedExtensions = ['.csv'];
+    const ext = file.originalname.toLowerCase().slice(file.originalname.lastIndexOf('.'));
+    if (allowedExtensions.includes(ext)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Seuls les fichiers CSV sont acceptés'), false);
+    }
+  }
+});
 
 // Helper function to parse date in DD/MM/YYYY format
 function parseDate(dateStr) {

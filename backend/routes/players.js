@@ -7,8 +7,22 @@ const { authenticateToken } = require('./auth');
 
 const router = express.Router();
 
-// Configure multer for file uploads
-const upload = multer({ dest: '/tmp' });
+// Configure multer for file uploads with security restrictions
+const upload = multer({
+  dest: '/tmp',
+  limits: {
+    fileSize: 5 * 1024 * 1024 // 5MB max
+  },
+  fileFilter: (req, file, cb) => {
+    // Only allow CSV files
+    const ext = file.originalname.toLowerCase().slice(file.originalname.lastIndexOf('.'));
+    if (ext === '.csv') {
+      cb(null, true);
+    } else {
+      cb(new Error('Seuls les fichiers CSV sont acceptés'), false);
+    }
+  }
+});
 
 // Import players from CSV
 router.post('/import', authenticateToken, upload.single('file'), async (req, res) => {
@@ -212,7 +226,7 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
     }
     console.error('Import error:', error);
     console.error('Stack:', error.stack);
-    res.status(500).json({ error: error.message, stack: error.stack });
+    res.status(500).json({ error: 'Erreur lors de l\'import du fichier' });
   }
 });
 
