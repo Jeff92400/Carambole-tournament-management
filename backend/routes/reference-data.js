@@ -307,4 +307,96 @@ router.get('/categories', authenticateToken, (req, res) => {
   });
 });
 
+// Create category from game mode + FFB ranking
+router.post('/categories', authenticateToken, (req, res) => {
+  const db = getDb();
+  const { game_mode_code, ranking_code, display_name } = req.body;
+
+  if (!game_mode_code || !ranking_code) {
+    return res.status(400).json({ error: 'Mode de jeu et classement sont requis' });
+  }
+
+  // Get game mode display name for the category
+  db.get('SELECT display_name FROM game_modes WHERE code = $1', [game_mode_code.toUpperCase()], (err, gameMode) => {
+    if (err) {
+      console.error('Error fetching game mode:', err);
+      return res.status(500).json({ error: 'Erreur lors de la récupération du mode de jeu' });
+    }
+
+    if (!gameMode) {
+      return res.status(400).json({ error: 'Mode de jeu non trouvé' });
+    }
+
+    // Verify ranking exists
+    db.get('SELECT code FROM ffb_rankings WHERE code = $1', [ranking_code.toUpperCase()], (err, ranking) => {
+      if (err) {
+        console.error('Error fetching ranking:', err);
+        return res.status(500).json({ error: 'Erreur lors de la récupération du classement' });
+      }
+
+      if (!ranking) {
+        return res.status(400).json({ error: 'Classement non trouvé' });
+      }
+
+      // Create category with game_type = game mode display_name, level = ranking code
+      const categoryDisplayName = display_name || `${gameMode.display_name} ${ranking_code.toUpperCase()}`;
+
+      db.run(
+        `INSERT INTO categories (game_type, level, display_name)
+         VALUES ($1, $2, $3)`,
+        [gameMode.display_name, ranking_code.toUpperCase(), categoryDisplayName],
+        function(err) {
+          if (err) {
+            console.error('Error creating category:', err);
+            if (err.message.includes('UNIQUE') || err.message.includes('unique')) {
+              return res.status(400).json({ error: 'Cette catégorie existe déjà' });
+            }
+            return res.status(500).json({ error: 'Erreur lors de la création de la catégorie' });
+          }
+          res.json({ success: true, id: this.lastID, message: 'Catégorie créée' });
+        }
+      );
+    });
+  });
+});
+
+// Delete category
+router.delete('/categories/:id', authenticateToken, (req, res) => {
+  const db = getDb();
+  const { id } = req.params;
+
+  // Check if used in tournaments or inscriptions
+  db.get(
+    `SELECT
+      (SELECT COUNT(*) FROM tournament_results WHERE category_id = $1) as results_count,
+      (SELECT COUNT(*) FROM tournoi_ext WHERE categorie IN (SELECT display_name FROM categories WHERE id = $1)) as tournois_count
+    `,
+    [id],
+    (err, row) => {
+      if (err) {
+        console.error('Error checking category usage:', err);
+        return res.status(500).json({ error: 'Erreur lors de la vérification' });
+      }
+
+      const totalUsage = (row?.results_count || 0) + (row?.tournois_count || 0);
+      if (totalUsage > 0) {
+        return res.status(400).json({
+          error: `Cette catégorie est utilisée (${row.results_count} résultats, ${row.tournois_count} tournois). Impossible de la supprimer.`
+        });
+      }
+
+      db.run('DELETE FROM categories WHERE id = $1', [id], function(err) {
+        if (err) {
+          console.error('Error deleting category:', err);
+          return res.status(500).json({ error: 'Erreur lors de la suppression' });
+        }
+        if (this.changes === 0) {
+          return res.status(404).json({ error: 'Catégorie non trouvée' });
+        }
+        res.json({ success: true, message: 'Catégorie supprimée' });
+      });
+    }
+  );
+});
+
 module.exports = router;

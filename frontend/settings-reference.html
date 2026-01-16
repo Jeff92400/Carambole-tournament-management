@@ -369,9 +369,29 @@
 
       <!-- Tab: Categories -->
       <div class="tab-content" id="tab-categories">
-        <div class="section-description" style="background: #fff8e1; border-left-color: #ff9800;">
-          <strong>Note :</strong> Les categories sont actuellement gerees via l'ancien systeme.
-          Une fois la migration terminee, vous pourrez creer des categories en combinant un mode de jeu et un classement FFB.
+        <div class="add-form">
+          <h4>Créer une Catégorie</h4>
+          <form id="addCategoryForm" class="form-row">
+            <div class="form-group">
+              <label for="catGameMode">Mode de Jeu *</label>
+              <select id="catGameMode" required>
+                <option value="">-- Sélectionner --</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="catRanking">Classement FFB *</label>
+              <select id="catRanking" required>
+                <option value="">-- Sélectionner --</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="catDisplayName">Nom (auto)</label>
+              <input type="text" id="catDisplayName" placeholder="Ex: Quilles R3" readonly style="background: #f0f0f0;">
+            </div>
+            <div class="form-group" style="flex: 0 0 auto;">
+              <button type="submit" class="btn btn-primary">Créer</button>
+            </div>
+          </form>
         </div>
 
         <table class="data-table" id="categoriesTable">
@@ -380,10 +400,11 @@
               <th>Mode de Jeu</th>
               <th>Classement</th>
               <th>Nom d'affichage</th>
+              <th style="width: 80px;">Actions</th>
             </tr>
           </thead>
           <tbody id="categoriesBody">
-            <tr><td colspan="3" class="empty-state">Chargement...</td></tr>
+            <tr><td colspan="4" class="empty-state">Chargement...</td></tr>
           </tbody>
         </table>
       </div>
@@ -861,6 +882,9 @@
 
     // ==================== CATEGORIES ====================
 
+    let gameModesList = [];
+    let rankingsList = [];
+
     async function loadCategories() {
       try {
         const response = await fetch(`${API_URL}/reference-data/categories`, {
@@ -874,15 +898,99 @@
       } catch (error) {
         console.error('Error loading categories:', error);
         document.getElementById('categoriesBody').innerHTML =
-          '<tr><td colspan="3" class="empty-state">Erreur de chargement</td></tr>';
+          '<tr><td colspan="4" class="empty-state">Erreur de chargement</td></tr>';
       }
     }
+
+    async function loadCategoryDropdowns() {
+      try {
+        // Load game modes
+        const gmResponse = await fetch(`${API_URL}/reference-data/game-modes?active_only=true`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (gmResponse.ok) {
+          gameModesList = await gmResponse.json();
+          const gmSelect = document.getElementById('catGameMode');
+          gmSelect.innerHTML = '<option value="">-- Sélectionner --</option>' +
+            gameModesList.map(gm => `<option value="${gm.code}" data-name="${gm.display_name}">${gm.display_name}</option>`).join('');
+        }
+
+        // Load rankings
+        const frResponse = await fetch(`${API_URL}/reference-data/ffb-rankings?active_only=true`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (frResponse.ok) {
+          rankingsList = await frResponse.json();
+          const frSelect = document.getElementById('catRanking');
+          frSelect.innerHTML = '<option value="">-- Sélectionner --</option>' +
+            rankingsList.map(fr => `<option value="${fr.code}">${fr.display_name} (${fr.code})</option>`).join('');
+        }
+      } catch (error) {
+        console.error('Error loading dropdowns:', error);
+      }
+    }
+
+    // Auto-generate display name
+    function updateCategoryDisplayName() {
+      const gmSelect = document.getElementById('catGameMode');
+      const frSelect = document.getElementById('catRanking');
+      const displayInput = document.getElementById('catDisplayName');
+
+      const gmOption = gmSelect.options[gmSelect.selectedIndex];
+      const gmName = gmOption ? gmOption.dataset.name : '';
+      const frCode = frSelect.value;
+
+      if (gmName && frCode) {
+        displayInput.value = `${gmName} ${frCode}`;
+      } else {
+        displayInput.value = '';
+      }
+    }
+
+    document.getElementById('catGameMode').addEventListener('change', updateCategoryDisplayName);
+    document.getElementById('catRanking').addEventListener('change', updateCategoryDisplayName);
+
+    // Add category
+    document.getElementById('addCategoryForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const data = {
+        game_mode_code: document.getElementById('catGameMode').value,
+        ranking_code: document.getElementById('catRanking').value,
+        display_name: document.getElementById('catDisplayName').value
+      };
+
+      try {
+        const response = await fetch(`${API_URL}/reference-data/categories`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(data)
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+          showMessage('success', 'Catégorie créée');
+          document.getElementById('addCategoryForm').reset();
+          document.getElementById('catDisplayName').value = '';
+          loadCategories();
+        } else {
+          showMessage('error', result.error || 'Erreur lors de la création');
+        }
+      } catch (error) {
+        console.error('Error creating category:', error);
+        showMessage('error', 'Erreur de connexion');
+      }
+    });
 
     function renderCategories(categories) {
       const tbody = document.getElementById('categoriesBody');
 
       if (categories.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="3" class="empty-state">Aucune categorie</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="4" class="empty-state">Aucune catégorie</td></tr>';
         return;
       }
 
@@ -896,8 +1004,34 @@
             ${cat.ranking_tier ? `<span class="tier-badge tier-${cat.ranking_tier}">${cat.ranking_name || cat.level}</span>` : cat.level}
           </td>
           <td>${cat.display_name}</td>
+          <td class="action-btns">
+            <button class="btn-icon btn-delete" onclick="deleteCategory(${cat.id}, '${cat.display_name.replace(/'/g, "\\'")}')" title="Supprimer">Suppr</button>
+          </td>
         </tr>
       `).join('');
+    }
+
+    async function deleteCategory(id, name) {
+      if (!confirm(`Supprimer la catégorie "${name}" ?`)) return;
+
+      try {
+        const response = await fetch(`${API_URL}/reference-data/categories/${id}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+          showMessage('success', 'Catégorie supprimée');
+          loadCategories();
+        } else {
+          showMessage('error', result.error || 'Erreur lors de la suppression');
+        }
+      } catch (error) {
+        console.error('Error deleting category:', error);
+        showMessage('error', 'Erreur de connexion');
+      }
     }
 
     // Handle URL hash navigation
@@ -921,6 +1055,7 @@
     loadGameModes();
     loadRankings();
     loadCategories();
+    loadCategoryDropdowns();
     handleHashNavigation(); // Handle initial hash on page load
   </script>
 </body>
