@@ -407,23 +407,30 @@ router.delete('/categories/:id', authenticateToken, (req, res) => {
     const db = getDb();
     const id = parseInt(req.params.id, 10);
 
-    console.log('Deleting category with id:', id, 'type:', typeof id);
+    console.log('Deleting category with id:', id);
 
     if (isNaN(id)) {
       return res.status(400).json({ error: 'ID invalide' });
     }
 
-    // Direct delete - simplified for now
-    db.run('DELETE FROM categories WHERE id = $1', [id], function(err) {
+    // First delete from category_mapping (foreign key reference)
+    db.run('DELETE FROM category_mapping WHERE category_id = $1', [id], function(err) {
       if (err) {
-        console.error('Error deleting category:', err);
-        return res.status(500).json({ error: 'Erreur lors de la suppression: ' + err.message });
+        console.error('Error deleting category_mapping:', err);
+        // Continue anyway - mapping might not exist
       }
-      console.log('Delete result - changes:', this.changes);
-      if (this.changes === 0) {
-        return res.status(404).json({ error: 'Catégorie non trouvée' });
-      }
-      res.json({ success: true, message: 'Catégorie supprimée' });
+
+      // Then delete the category
+      db.run('DELETE FROM categories WHERE id = $1', [id], function(err) {
+        if (err) {
+          console.error('Error deleting category:', err);
+          return res.status(500).json({ error: 'Erreur lors de la suppression: ' + err.message });
+        }
+        if (this.changes === 0) {
+          return res.status(404).json({ error: 'Catégorie non trouvée' });
+        }
+        res.json({ success: true, message: 'Catégorie supprimée' });
+      });
     });
   } catch (error) {
     console.error('Unexpected error in delete category:', error);
