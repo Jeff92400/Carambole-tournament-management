@@ -1072,6 +1072,13 @@ router.post('/save-poules', authenticateToken, async (req, res) => {
 
       for (let i = 0; i < poule.players.length; i++) {
         const p = poule.players[i];
+        // Handle different name formats: first_name/last_name, name, or player_name
+        let playerName = p.name || p.player_name || '';
+        if (p.first_name && p.last_name) {
+          playerName = `${p.first_name} ${p.last_name}`;
+        } else if (p.last_name && !p.first_name) {
+          playerName = p.last_name;
+        }
         await new Promise((resolve, reject) => {
           db.run(
             `INSERT INTO convocation_poules (tournoi_id, poule_number, licence, player_name, club, location_name, location_address, start_time, player_order)
@@ -1082,7 +1089,7 @@ router.post('/save-poules', authenticateToken, async (req, res) => {
               tournoiId,
               poule.number,
               p.licence,
-              `${p.first_name} ${p.last_name}`,
+              playerName,
               p.club || '',
               loc?.name || '',
               fullAddress,
