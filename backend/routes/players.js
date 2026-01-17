@@ -700,6 +700,18 @@ router.post('/fix-duplicate-licence', authenticateToken, async (req, res) => {
       );
     });
 
+    // Delete rankings for the wrong licence first (foreign key constraint)
+    const deleteRankings = await new Promise((resolve, reject) => {
+      db.run(
+        `DELETE FROM rankings WHERE REPLACE(licence, ' ', '') = REPLACE($1, ' ', '')`,
+        [wrongLicence],
+        function(err) {
+          if (err) reject(err);
+          else resolve(this.changes);
+        }
+      );
+    });
+
     // Delete the duplicate player
     const deleteResult = await new Promise((resolve, reject) => {
       db.run(
@@ -714,8 +726,9 @@ router.post('/fix-duplicate-licence', authenticateToken, async (req, res) => {
 
     res.json({
       success: true,
-      message: `Fixed: updated ${updateResult} tournament results, deleted ${deleteResult} duplicate player`,
+      message: `Fixed: updated ${updateResult} tournament results, deleted ${deleteRankings} rankings, deleted ${deleteResult} duplicate player`,
       updatedResults: updateResult,
+      deletedRankings: deleteRankings,
       deletedPlayers: deleteResult
     });
   } catch (error) {
