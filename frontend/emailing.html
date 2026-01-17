@@ -474,10 +474,7 @@
             </select>
             <select id="modeFilter">
               <option value="">Tous les modes</option>
-              <option value="LIBRE">LIBRE</option>
-              <option value="CADRE">CADRE</option>
-              <option value="BANDE">BANDE</option>
-              <option value="3BANDES">3 BANDES</option>
+              <!-- Options loaded dynamically from API -->
             </select>
             <select id="categoryFilter" disabled>
               <option value="">Toutes categories</option>
@@ -600,10 +597,7 @@
                 <label style="display: block; font-weight: bold; margin-bottom: 5px;">Mode</label>
                 <select id="relanceModeFilter" style="padding: 10px; border: 1px solid #ddd; border-radius: 4px; min-width: 150px;">
                   <option value="">-- Sélectionner --</option>
-                  <option value="LIBRE">LIBRE</option>
-                  <option value="CADRE">CADRE</option>
-                  <option value="BANDE">BANDE</option>
-                  <option value="3BANDES">3 BANDES</option>
+                  <!-- Options loaded dynamically from API -->
                 </select>
               </div>
               <div>
@@ -1537,14 +1531,67 @@ Le Comité Départemental de Billard des Hauts-de-Seine</textarea>
     let selectedContactIds = new Set();
     let allTournois = [];
     let allRankingCategories = [];
+    let gameModesList = [];
 
-    // Categories by mode
-    const categoriesByMode = {
-      'LIBRE': ['N3', 'R1', 'R2', 'R3', 'R4'],
-      'CADRE': ['N3', 'R1'],
-      'BANDE': ['N3', 'R1', 'R2'],
-      '3BANDES': ['N3', 'R1', 'R2']
-    };
+    // Categories by mode - will be populated from API
+    let categoriesByMode = {};
+
+    // Load game modes from reference data API
+    async function loadGameModes() {
+      try {
+        const response = await fetch(`${API_URL}/reference-data/game-modes?active_only=true`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (response.ok) {
+          gameModesList = await response.json();
+
+          // Populate modeFilter dropdown (Composer tab)
+          const modeFilter = document.getElementById('modeFilter');
+          modeFilter.innerHTML = '<option value="">Tous les modes</option>' +
+            gameModesList.map(gm => `<option value="${gm.code}">${gm.display_name}</option>`).join('');
+
+          // Populate relanceModeFilter dropdown (Relances tab)
+          const relanceModeFilter = document.getElementById('relanceModeFilter');
+          relanceModeFilter.innerHTML = '<option value="">-- Sélectionner --</option>' +
+            gameModesList.map(gm => `<option value="${gm.code}">${gm.display_name}</option>`).join('');
+        }
+
+        // Load categories to build categoriesByMode mapping
+        const catResponse = await fetch(`${API_URL}/reference-data/categories`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (catResponse.ok) {
+          const categories = await catResponse.json();
+          // Build categoriesByMode from categories data
+          categoriesByMode = {};
+          categories.forEach(cat => {
+            const modeCode = cat.game_type.toUpperCase().replace(/ /g, '').replace('3BANDES', '3BANDES');
+            // Normalize mode code
+            let normalizedMode = modeCode;
+            if (modeCode === '3 BANDES' || modeCode === '3BANDES') normalizedMode = '3BANDES';
+            if (modeCode === 'BANDE' || modeCode === '1BANDE' || modeCode === '1 BANDE') normalizedMode = 'BANDE';
+
+            if (!categoriesByMode[normalizedMode]) {
+              categoriesByMode[normalizedMode] = [];
+            }
+            if (!categoriesByMode[normalizedMode].includes(cat.level)) {
+              categoriesByMode[normalizedMode].push(cat.level);
+            }
+          });
+        }
+      } catch (error) {
+        console.error('Error loading game modes:', error);
+        // Fallback to default values if API fails
+        categoriesByMode = {
+          'LIBRE': ['N3', 'R1', 'R2', 'R3', 'R4'],
+          'CADRE': ['N3', 'R1'],
+          'BANDE': ['N3', 'R1', 'R2'],
+          '3BANDES': ['N3', 'R1', 'R2']
+        };
+      }
+    }
 
     // ==================== CONTACTS ====================
 
@@ -4966,6 +5013,7 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
     // ==================== INIT ====================
 
     async function initialize() {
+      await loadGameModes(); // Load game modes for dropdowns
       await loadClubs();
       await loadTournois();
       await loadRankingCategories();
