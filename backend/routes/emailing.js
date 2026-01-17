@@ -1513,18 +1513,22 @@ router.get('/tournament-results/:id', authenticateToken, async (req, res) => {
     });
 
     // Get tournament results with emails
-    // Priority: 1) Email from inscription for THIS tournament, 2) Email from player_contacts
+    // Priority: 1) Email from inscription for THIS tournament, 2) Email from players table, 3) Email from player_contacts
     const results = await new Promise((resolve, reject) => {
       db.all(`
         SELECT tr.*,
-               COALESCE(insc.email, pc.email) as email,
+               COALESCE(
+                 CASE WHEN insc.email IS NOT NULL AND insc.email != '' AND insc.email LIKE '%@%' THEN insc.email END,
+                 CASE WHEN p.email IS NOT NULL AND p.email != '' AND p.email LIKE '%@%' THEN p.email END,
+                 CASE WHEN pc.email IS NOT NULL AND pc.email != '' AND pc.email LIKE '%@%' THEN pc.email END
+               ) as email,
                pc.first_name as contact_first_name,
                pc.last_name as contact_last_name
         FROM tournament_results tr
+        LEFT JOIN players p ON REPLACE(tr.licence, ' ', '') = REPLACE(p.licence, ' ', '')
         LEFT JOIN player_contacts pc ON REPLACE(tr.licence, ' ', '') = REPLACE(pc.licence, ' ', '')
         LEFT JOIN inscriptions insc ON REPLACE(tr.licence, ' ', '') = REPLACE(insc.licence, ' ', '')
           AND insc.tournoi_id = $2
-          AND insc.email IS NOT NULL AND insc.email != '' AND insc.email LIKE '%@%'
         WHERE tr.tournament_id = $1
         ORDER BY tr.position ASC
       `, [id, matchingTournoi?.tournoi_id || -1], (err, rows) => {
@@ -1538,7 +1542,10 @@ router.get('/tournament-results/:id', authenticateToken, async (req, res) => {
       db.all(`
         SELECT r.*, p.first_name, p.last_name,
                COALESCE(p.first_name || ' ' || p.last_name, r.licence) as player_name,
-               pc.email
+               COALESCE(
+                 CASE WHEN p.email IS NOT NULL AND p.email != '' AND p.email LIKE '%@%' THEN p.email END,
+                 CASE WHEN pc.email IS NOT NULL AND pc.email != '' AND pc.email LIKE '%@%' THEN pc.email END
+               ) as email
         FROM rankings r
         LEFT JOIN players p ON REPLACE(r.licence, ' ', '') = REPLACE(p.licence, ' ', '')
         LEFT JOIN player_contacts pc ON REPLACE(r.licence, ' ', '') = REPLACE(pc.licence, ' ', '')
