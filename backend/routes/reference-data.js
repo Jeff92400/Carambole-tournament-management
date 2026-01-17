@@ -327,6 +327,7 @@ router.get('/categories', authenticateToken, (req, res) => {
       c.game_type,
       c.level,
       c.display_name,
+      c.is_active,
       gm.id as game_mode_id,
       gm.display_name as game_mode_name,
       gm.color as game_mode_color,
@@ -334,7 +335,7 @@ router.get('/categories', authenticateToken, (req, res) => {
       fr.display_name as ranking_name,
       fr.tier as ranking_tier
     FROM categories c
-    LEFT JOIN game_modes gm ON UPPER(c.game_type) = UPPER(gm.code)
+    LEFT JOIN game_modes gm ON UPPER(c.game_type) = UPPER(gm.display_name)
     LEFT JOIN ffb_rankings fr ON UPPER(c.level) = UPPER(fr.code)
     ORDER BY gm.display_order, fr.level_order
   `;
@@ -399,6 +400,30 @@ router.post('/categories', authenticateToken, (req, res) => {
       );
     });
   });
+});
+
+// Update category (status)
+router.put('/categories/:id', authenticateToken, (req, res) => {
+  const db = getDb();
+  const { id } = req.params;
+  const { is_active, display_name } = req.body;
+
+  db.run(
+    `UPDATE categories
+     SET is_active = $1, display_name = COALESCE($2, display_name), updated_at = CURRENT_TIMESTAMP
+     WHERE id = $3`,
+    [is_active, display_name, id],
+    function(err) {
+      if (err) {
+        console.error('Error updating category:', err);
+        return res.status(500).json({ error: 'Erreur lors de la mise à jour de la catégorie' });
+      }
+      if (this.changes === 0) {
+        return res.status(404).json({ error: 'Catégorie non trouvée' });
+      }
+      res.json({ success: true, message: 'Catégorie mise à jour' });
+    }
+  );
 });
 
 // Delete category

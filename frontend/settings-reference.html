@@ -239,6 +239,26 @@
       border-radius: 8px;
       border-left: 4px solid #1F4788;
     }
+
+    .status-select {
+      padding: 6px 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 13px;
+      cursor: pointer;
+      background: white;
+      min-width: 100px;
+    }
+
+    .status-select:focus {
+      outline: none;
+      border-color: #1F4788;
+      box-shadow: 0 0 0 2px rgba(31, 71, 136, 0.1);
+    }
+
+    .status-select option[value="active"] { color: #28a745; }
+    .status-select option[value="inactive"] { color: #dc3545; }
+    .status-select option[value="na"] { color: #6c757d; }
   </style>
 </head>
 <body>
@@ -400,11 +420,12 @@
               <th>Mode de Jeu</th>
               <th>Classement</th>
               <th>Nom d'affichage</th>
+              <th style="width: 120px;">Statut</th>
               <th style="width: 80px;">Actions</th>
             </tr>
           </thead>
           <tbody id="categoriesBody">
-            <tr><td colspan="4" class="empty-state">Chargement...</td></tr>
+            <tr><td colspan="5" class="empty-state">Chargement...</td></tr>
           </tbody>
         </table>
       </div>
@@ -990,11 +1011,17 @@
       const tbody = document.getElementById('categoriesBody');
 
       if (categories.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" class="empty-state">Aucune catégorie</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" class="empty-state">Aucune catégorie</td></tr>';
         return;
       }
 
-      tbody.innerHTML = categories.map(cat => `
+      tbody.innerHTML = categories.map(cat => {
+        // Determine status value: true = 'active', false = 'inactive', null = 'na'
+        let statusValue = 'na';
+        if (cat.is_active === true || cat.is_active === 1) statusValue = 'active';
+        else if (cat.is_active === false || cat.is_active === 0) statusValue = 'inactive';
+
+        return `
         <tr>
           <td>
             ${cat.game_mode_color ? `<span class="color-badge" style="background: ${cat.game_mode_color}; margin-right: 8px;"></span>` : ''}
@@ -1004,11 +1031,49 @@
             ${cat.ranking_tier ? `<span class="tier-badge tier-${cat.ranking_tier}">${cat.ranking_name || cat.level}</span>` : cat.level}
           </td>
           <td>${cat.display_name}</td>
+          <td>
+            <select class="status-select" data-category-id="${cat.id}" onchange="updateCategoryStatus(${cat.id}, this.value)">
+              <option value="active" ${statusValue === 'active' ? 'selected' : ''}>Actif</option>
+              <option value="inactive" ${statusValue === 'inactive' ? 'selected' : ''}>Non actif</option>
+              <option value="na" ${statusValue === 'na' ? 'selected' : ''}>N/A</option>
+            </select>
+          </td>
           <td class="action-btns">
             <button class="btn-icon btn-delete" onclick="deleteCategory(${cat.id}, '${cat.display_name.replace(/'/g, "\\'")}')" title="Supprimer">Suppr</button>
           </td>
         </tr>
-      `).join('');
+      `}).join('');
+    }
+
+    async function updateCategoryStatus(id, status) {
+      // Convert status string to boolean or null
+      let is_active = null;
+      if (status === 'active') is_active = true;
+      else if (status === 'inactive') is_active = false;
+
+      try {
+        const response = await fetch(`${API_URL}/reference-data/categories/${id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ is_active })
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+          showMessage('success', 'Statut mis à jour');
+        } else {
+          showMessage('error', result.error || 'Erreur lors de la mise à jour');
+          loadCategories(); // Reload to reset the dropdown
+        }
+      } catch (error) {
+        console.error('Error updating category status:', error);
+        showMessage('error', 'Erreur de connexion');
+        loadCategories(); // Reload to reset the dropdown
+      }
     }
 
     async function deleteCategory(id, name) {
