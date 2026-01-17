@@ -1584,6 +1584,54 @@ router.get('/tournament-results/:id', authenticateToken, async (req, res) => {
 
     const emailCount = results.filter(r => r.email && r.email.includes('@')).length;
 
+    // Debug: Log players without email
+    const noEmailPlayers = results.filter(r => !r.email || !r.email.includes('@'));
+    if (noEmailPlayers.length > 0) {
+      console.log('[Tournament-Results] Players WITHOUT email:', noEmailPlayers.map(p => ({
+        name: p.player_name,
+        licence: p.licence
+      })));
+
+      // For each player without email, check all sources
+      for (const player of noEmailPlayers) {
+        const normLicence = (player.licence || '').replace(/\s+/g, '');
+
+        // Check players table
+        const playerEmail = await new Promise((resolve, reject) => {
+          db.get(`SELECT licence, email FROM players WHERE REPLACE(licence, ' ', '') = $1`, [normLicence], (err, row) => {
+            if (err) reject(err);
+            else resolve(row);
+          });
+        });
+
+        // Check inscriptions for this tournament
+        const inscEmail = await new Promise((resolve, reject) => {
+          db.get(`SELECT licence, email, tournoi_id FROM inscriptions WHERE REPLACE(licence, ' ', '') = $1 AND tournoi_id = $2`,
+            [normLicence, matchingTournoi?.tournoi_id || -1], (err, row) => {
+            if (err) reject(err);
+            else resolve(row);
+          });
+        });
+
+        // Check all inscriptions for this player
+        const allInsc = await new Promise((resolve, reject) => {
+          db.all(`SELECT licence, email, tournoi_id FROM inscriptions WHERE REPLACE(licence, ' ', '') = $1 LIMIT 5`,
+            [normLicence], (err, rows) => {
+            if (err) reject(err);
+            else resolve(rows || []);
+          });
+        });
+
+        console.log(`[Tournament-Results] Debug for ${player.player_name} (licence: ${player.licence}):`, {
+          normLicence,
+          matchingTournoiId: matchingTournoi?.tournoi_id || -1,
+          playerTableEmail: playerEmail,
+          inscriptionForTournament: inscEmail,
+          allInscriptions: allInsc
+        });
+      }
+    }
+
     res.json({
       tournament,
       results: results.map((r, idx) => ({
