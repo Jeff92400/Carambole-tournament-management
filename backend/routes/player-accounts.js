@@ -223,4 +223,202 @@ router.delete('/:id', (req, res) => {
   );
 });
 
+/**
+ * GET /api/player-accounts/:licence/calendar.ics
+ * Generate iCalendar file with tournaments for player's eligible categories
+ */
+router.get('/:licence/calendar.ics', async (req, res) => {
+  const { licence } = req.params;
+  const normalizedLicence = (licence || '').replace(/\s+/g, '');
+
+  try {
+    // Get player info and their moyennes
+    const player = await new Promise((resolve, reject) => {
+      db.get(`
+        SELECT licence, first_name, last_name,
+               rank_libre, rank_cadre, rank_bande, rank_3bandes
+        FROM players
+        WHERE REPLACE(licence, ' ', '') = $1
+      `, [normalizedLicence], (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
+
+    if (!player) {
+      return res.status(404).json({ error: 'Joueur non trouvé' });
+    }
+
+    // Get game parameters to determine eligibility
+    const gameParams = await new Promise((resolve, reject) => {
+      db.all(`SELECT * FROM game_parameters`, [], (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows || []);
+      });
+    });
+
+    // Map player rankings to mode names
+    const playerRankings = {
+      'LIBRE': parseFloat(player.rank_libre) || 0,
+      'CADRE': parseFloat(player.rank_cadre) || 0,
+      'BANDE': parseFloat(player.rank_bande) || 0,
+      '3BANDES': parseFloat(player.rank_3bandes) || 0,
+      '3 BANDES': parseFloat(player.rank_3bandes) || 0
+    };
+
+    // Find eligible categories for each mode
+    const eligibleCategories = [];
+    for (const param of gameParams) {
+      const modeKey = param.mode.toUpperCase().replace(/\s+/g, '');
+      const playerMoyenne = playerRankings[param.mode.toUpperCase()] || playerRankings[modeKey] || 0;
+
+      // Check if NC (not classified) - skip if NC
+      const rankValue = param.mode.toUpperCase().includes('3')
+        ? player.rank_3bandes
+        : param.mode.toUpperCase() === 'LIBRE' ? player.rank_libre
+        : param.mode.toUpperCase() === 'CADRE' ? player.rank_cadre
+        : player.rank_bande;
+
+      if (rankValue === 'NC' || rankValue === null) continue;
+
+      // Check if player's moyenne falls within category range
+      if (playerMoyenne >= parseFloat(param.moyenne_mini) && playerMoyenne <= parseFloat(param.moyenne_maxi)) {
+        eligibleCategories.push({
+          mode: param.mode,
+          categorie: param.categorie
+        });
+      }
+    }
+
+    if (eligibleCategories.length === 0) {
+      return res.status(404).json({ error: 'Aucune catégorie éligible trouvée' });
+    }
+
+    // Get current season
+    const now = new Date();
+    const currentYear = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
+    const seasonStart = `${currentYear}-09-01`;
+    const seasonEnd = `${currentYear + 1}-08-31`;
+
+    // Build query for eligible tournaments
+    const categoryConditions = eligibleCategories.map((_, i) =>
+      `(UPPER(REPLACE(mode, ' ', '')) = UPPER(REPLACE($${i * 2 + 3}, ' ', '')) AND UPPER(categorie) = UPPER($${i * 2 + 4}))`
+    ).join(' OR ');
+
+    const queryParams = [seasonStart, seasonEnd];
+    eligibleCategories.forEach(cat => {
+      queryParams.push(cat.mode, cat.categorie);
+    });
+
+    const tournaments = await new Promise((resolve, reject) => {
+      db.all(`
+        SELECT tournoi_id, nom, mode, categorie, debut, lieu
+        FROM tournoi_ext
+        WHERE debut >= $1 AND debut <= $2
+          AND (${categoryConditions})
+        ORDER BY debut ASC
+      `, queryParams, (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows || []);
+      });
+    });
+
+    // Generate iCalendar content
+    const playerName = `${player.first_name} ${player.last_name}`;
+    const icsContent = generateICalendar(tournaments, playerName, eligibleCategories);
+
+    // Set headers for file download
+    res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="CDBHS_${normalizedLicence}.ics"`);
+    res.send(icsContent);
+
+  } catch (error) {
+    console.error('Error generating calendar:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * Generate iCalendar format content
+ */
+function generateICalendar(tournaments, playerName, eligibleCategories) {
+  const now = new Date();
+  const timestamp = now.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+
+  let ics = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//CDBHS//Calendrier Tournois//FR',
+    'CALSCALE:GREGORIAN',
+    'METHOD:PUBLISH',
+    `X-WR-CALNAME:CDBHS - Tournois ${playerName}`,
+    'X-WR-TIMEZONE:Europe/Paris'
+  ];
+
+  // Add timezone definition
+  ics.push(
+    'BEGIN:VTIMEZONE',
+    'TZID:Europe/Paris',
+    'BEGIN:DAYLIGHT',
+    'TZOFFSETFROM:+0100',
+    'TZOFFSETTO:+0200',
+    'TZNAME:CEST',
+    'DTSTART:19700329T020000',
+    'RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=-1SU',
+    'END:DAYLIGHT',
+    'BEGIN:STANDARD',
+    'TZOFFSETFROM:+0200',
+    'TZOFFSETTO:+0100',
+    'TZNAME:CET',
+    'DTSTART:19701025T030000',
+    'RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU',
+    'END:STANDARD',
+    'END:VTIMEZONE'
+  );
+
+  // Add events for each tournament
+  for (const tournament of tournaments) {
+    const eventDate = new Date(tournament.debut);
+    const dateStr = eventDate.toISOString().split('T')[0].replace(/-/g, '');
+    const uid = `tournament-${tournament.tournoi_id}@cdbhs.net`;
+
+    // Determine if it's a finale
+    const isFinale = (tournament.nom || '').toLowerCase().includes('finale');
+    const title = isFinale
+      ? `🏆 FINALE ${tournament.mode} ${tournament.categorie}`
+      : `${tournament.nom} - ${tournament.mode} ${tournament.categorie}`;
+
+    const location = tournament.lieu || 'Lieu à confirmer';
+    const description = `Tournoi CDBHS\\n${tournament.mode} - ${tournament.categorie}\\nLieu: ${location}`;
+
+    ics.push(
+      'BEGIN:VEVENT',
+      `UID:${uid}`,
+      `DTSTAMP:${timestamp}`,
+      `DTSTART;VALUE=DATE:${dateStr}`,
+      `DTEND;VALUE=DATE:${dateStr}`,
+      `SUMMARY:${escapeIcsText(title)}`,
+      `DESCRIPTION:${escapeIcsText(description)}`,
+      `LOCATION:${escapeIcsText(location)}`,
+      'TRANSP:OPAQUE',
+      'END:VEVENT'
+    );
+  }
+
+  ics.push('END:VCALENDAR');
+  return ics.join('\r\n');
+}
+
+/**
+ * Escape special characters for iCalendar format
+ */
+function escapeIcsText(text) {
+  if (!text) return '';
+  return text
+    .replace(/\\/g, '\\\\')
+    .replace(/;/g, '\\;')
+    .replace(/,/g, '\\,')
+    .replace(/\n/g, '\\n');
+}
+
 module.exports = router;
