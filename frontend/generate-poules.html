@@ -3755,7 +3755,23 @@
 
         // Set global variables used by the email section
         selectedPlayers = allPlayers;
-        currentCategory = `${t.mode} ${t.categorie}`;
+
+        // Find matching category from categories array (required by email API)
+        const tournoiCategoryName = `${t.mode} ${t.categorie}`.toUpperCase();
+        const matchingCategory = categories.find(c => {
+          const catDisplay = (c.display_name || '').toUpperCase();
+          return catDisplay === tournoiCategoryName ||
+                 catDisplay.includes(t.categorie?.toUpperCase()) && catDisplay.includes(t.mode?.toUpperCase());
+        });
+
+        // Use matching category or create a fallback object with required fields
+        currentCategory = matchingCategory || {
+          id: null,
+          display_name: `${t.mode} ${t.categorie}`,
+          short_name: t.categorie
+        };
+        console.log('Category for email:', currentCategory);
+
         currentTournament = t.nom;
 
         // Store generation data for the email section
