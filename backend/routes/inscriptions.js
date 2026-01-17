@@ -1561,6 +1561,11 @@ router.put('/tournoi/:id', authenticateToken, async (req, res) => {
     const newDate = debut ? new Date(debut).toISOString().split('T')[0] : null;
     const dateChanged = oldDate !== newDate && oldDate && newDate;
 
+    // Check if location changed
+    const oldLieu = (currentTournament.lieu || '').trim();
+    const newLieu = (lieu || '').trim();
+    const locationChanged = oldLieu !== newLieu && newLieu;
+
     // Update the tournament
     const query = `
       UPDATE tournoi_ext SET
@@ -1583,18 +1588,35 @@ router.put('/tournoi/:id', authenticateToken, async (req, res) => {
       });
     });
 
-    // If date changed, send email notifications to inscribed players
+    // If date or location changed, send email notifications to inscribed players
     let emailsSent = 0;
-    if (dateChanged) {
-      emailsSent = await sendDateChangeNotifications(id, currentTournament, {
+    if (dateChanged || locationChanged) {
+      emailsSent = await sendTournamentChangeNotifications(id, currentTournament, {
         nom, mode, categorie, debut, lieu
-      }, oldDate, newDate);
+      }, {
+        dateChanged,
+        locationChanged,
+        oldDate,
+        newDate,
+        oldLieu,
+        newLieu
+      });
+    }
+
+    // Build response message
+    let changeMessage = '';
+    if (dateChanged && locationChanged) {
+      changeMessage = `${emailsSent} notification(s) sent for date and location change.`;
+    } else if (dateChanged) {
+      changeMessage = `${emailsSent} notification(s) sent for date change.`;
+    } else if (locationChanged) {
+      changeMessage = `${emailsSent} notification(s) sent for location change.`;
     }
 
     res.json({
       success: true,
-      message: dateChanged
-        ? `Tournament updated. ${emailsSent} notification(s) sent for date change.`
+      message: changeMessage
+        ? `Tournament updated. ${changeMessage}`
         : 'Tournament updated'
     });
 
@@ -1605,14 +1627,16 @@ router.put('/tournoi/:id', authenticateToken, async (req, res) => {
 });
 
 /**
- * Send email notifications to inscribed players when tournament date changes
+ * Send email notifications to inscribed players when tournament date or location changes
  */
-async function sendDateChangeNotifications(tournoiId, oldTournament, newData, oldDate, newDate) {
+async function sendTournamentChangeNotifications(tournoiId, oldTournament, newData, changes) {
   const resend = getResend();
   if (!resend) {
-    console.log('[Date Change] Resend not configured, skipping notifications');
+    console.log('[Tournament Change] Resend not configured, skipping notifications');
     return 0;
   }
+
+  const { dateChanged, locationChanged, oldDate, newDate, oldLieu, newLieu } = changes;
 
   try {
     // Get all inscribed players with emails for this tournament
@@ -1632,12 +1656,13 @@ async function sendDateChangeNotifications(tournoiId, oldTournament, newData, ol
     });
 
     if (inscriptions.length === 0) {
-      console.log('[Date Change] No players with email to notify');
+      console.log('[Tournament Change] No players with email to notify');
       return 0;
     }
 
     // Format dates for display
     const formatDate = (dateStr) => {
+      if (!dateStr) return '';
       const date = new Date(dateStr);
       return date.toLocaleDateString('fr-FR', {
         weekday: 'long',
@@ -1647,10 +1672,39 @@ async function sendDateChangeNotifications(tournoiId, oldTournament, newData, ol
       });
     };
 
-    const oldDateFormatted = formatDate(oldDate);
-    const newDateFormatted = formatDate(newDate);
     const tournamentName = `${newData.nom || oldTournament.nom} - ${newData.mode} ${newData.categorie}`;
-    const location = newData.lieu || oldTournament.lieu || 'Lieu à confirmer';
+
+    // Build email subject based on what changed
+    let emailSubject = '⚠️ ';
+    if (dateChanged && locationChanged) {
+      emailSubject += 'Changement de date et lieu';
+    } else if (dateChanged) {
+      emailSubject += 'Changement de date';
+    } else {
+      emailSubject += 'Changement de lieu';
+    }
+    emailSubject += ` - ${tournamentName}`;
+
+    // Build header text
+    let headerText = '⚠️ ';
+    if (dateChanged && locationChanged) {
+      headerText += 'Changement de Date et Lieu';
+    } else if (dateChanged) {
+      headerText += 'Changement de Date';
+    } else {
+      headerText += 'Changement de Lieu';
+    }
+
+    // Build intro text
+    let introText = 'Nous vous informons que ';
+    if (dateChanged && locationChanged) {
+      introText += 'la date et le lieu du tournoi auquel vous êtes inscrit(e) ont été modifiés';
+    } else if (dateChanged) {
+      introText += 'la date du tournoi auquel vous êtes inscrit(e) a été modifiée';
+    } else {
+      introText += 'le lieu du tournoi auquel vous êtes inscrit(e) a été modifié';
+    }
+    introText += ' :';
 
     let sentCount = 0;
 
@@ -1659,22 +1713,51 @@ async function sendDateChangeNotifications(tournoiId, oldTournament, newData, ol
         ? `${inscription.first_name} ${inscription.last_name}`
         : inscription.nom || 'Joueur';
 
+      // Build the changes section
+      let changesHtml = '';
+
+      if (dateChanged) {
+        const oldDateFormatted = formatDate(oldDate);
+        const newDateFormatted = formatDate(newDate);
+        changesHtml += `
+          <p style="margin: 5px 0; color: #dc3545;"><strong>❌ Ancienne date :</strong> ${oldDateFormatted}</p>
+          <p style="margin: 5px 0; color: #28a745;"><strong>✅ Nouvelle date :</strong> ${newDateFormatted}</p>
+        `;
+      }
+
+      if (locationChanged) {
+        changesHtml += `
+          <p style="margin: 5px 0; color: #dc3545;"><strong>❌ Ancien lieu :</strong> ${oldLieu || 'Non défini'}</p>
+          <p style="margin: 5px 0; color: #28a745;"><strong>✅ Nouveau lieu :</strong> ${newLieu}</p>
+        `;
+      }
+
+      // If only date changed, show current location
+      if (dateChanged && !locationChanged) {
+        const currentLocation = newData.lieu || oldTournament.lieu || 'Lieu à confirmer';
+        changesHtml = `<p style="margin: 5px 0;"><strong>📍 Lieu :</strong> ${currentLocation}</p>` + changesHtml;
+      }
+
+      // If only location changed, show current date
+      if (locationChanged && !dateChanged) {
+        const currentDate = formatDate(newData.debut || oldTournament.debut);
+        changesHtml = `<p style="margin: 5px 0;"><strong>📅 Date :</strong> ${currentDate}</p>` + changesHtml;
+      }
+
       const emailHtml = `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <div style="background: linear-gradient(135deg, #1F4788 0%, #667eea 100%); padding: 20px; text-align: center;">
-            <h1 style="color: white; margin: 0;">⚠️ Changement de Date</h1>
+            <h1 style="color: white; margin: 0;">${headerText}</h1>
           </div>
 
           <div style="padding: 30px; background: #f8f9fa;">
             <p>Bonjour ${playerName},</p>
 
-            <p>Nous vous informons que la date du tournoi auquel vous êtes inscrit(e) a été modifiée :</p>
+            <p>${introText}</p>
 
             <div style="background: white; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0;">
               <h3 style="margin: 0 0 10px 0; color: #1F4788;">${tournamentName}</h3>
-              <p style="margin: 5px 0;"><strong>📍 Lieu :</strong> ${location}</p>
-              <p style="margin: 5px 0; color: #dc3545;"><strong>❌ Ancienne date :</strong> ${oldDateFormatted}</p>
-              <p style="margin: 5px 0; color: #28a745;"><strong>✅ Nouvelle date :</strong> ${newDateFormatted}</p>
+              ${changesHtml}
             </div>
 
             <p>Si ce changement vous empêche de participer, merci de nous en informer dès que possible en répondant à cet email.</p>
@@ -1695,24 +1778,24 @@ async function sendDateChangeNotifications(tournoiId, oldTournament, newData, ol
         await resend.emails.send({
           from: 'CDBHS <convocations@cdbhs.net>',
           to: inscription.player_email,
-          subject: `⚠️ Changement de date - ${tournamentName}`,
+          subject: emailSubject,
           html: emailHtml
         });
         sentCount++;
-        console.log(`[Date Change] Email sent to ${inscription.player_email}`);
+        console.log(`[Tournament Change] Email sent to ${inscription.player_email}`);
 
         // Small delay to avoid rate limiting
         await new Promise(resolve => setTimeout(resolve, 100));
       } catch (emailError) {
-        console.error(`[Date Change] Failed to send to ${inscription.player_email}:`, emailError.message);
+        console.error(`[Tournament Change] Failed to send to ${inscription.player_email}:`, emailError.message);
       }
     }
 
-    console.log(`[Date Change] Sent ${sentCount}/${inscriptions.length} notifications for tournament ${tournoiId}`);
+    console.log(`[Tournament Change] Sent ${sentCount}/${inscriptions.length} notifications for tournament ${tournoiId}`);
     return sentCount;
 
   } catch (error) {
-    console.error('[Date Change] Error sending notifications:', error);
+    console.error('[Tournament Change] Error sending notifications:', error);
     return 0;
   }
 }
