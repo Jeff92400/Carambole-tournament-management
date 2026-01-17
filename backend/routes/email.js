@@ -1123,6 +1123,7 @@ router.post('/send-club-reminder', authenticateToken, async (req, res) => {
     category,        // Category display name
     tournament,      // Tournament number (1, 2, 3, Finale)
     tournamentDate,  // Date of tournament
+    tournoiId,       // Tournament ID for duplicate tracking
     startTime,       // Start time
     numPlayers,      // Number of participants
     numTables,       // Number of tables needed
@@ -1135,6 +1136,34 @@ router.post('/send-club-reminder', authenticateToken, async (req, res) => {
   }
 
   try {
+    // Check if we already sent a reminder for this tournament + club combination
+    if (tournoiId && clubName) {
+      const existingReminder = await new Promise((resolve, reject) => {
+        db.get(
+          `SELECT id FROM email_campaigns
+           WHERE campaign_type = 'club_reminder'
+           AND tournament_id = $1
+           AND body LIKE $2
+           AND status = 'completed'`,
+          [tournoiId, `%${clubName}%`],
+          (err, row) => {
+            if (err) reject(err);
+            else resolve(row);
+          }
+        );
+      });
+
+      if (existingReminder) {
+        console.log(`[Club Reminder] Already sent to ${clubName} for tournament ${tournoiId}, skipping`);
+        return res.json({
+          success: false,
+          skipped: true,
+          alreadySent: true,
+          message: `Rappel déjà envoyé au club ${clubName} pour ce tournoi`
+        });
+      }
+    }
+
     // Find club email if not provided
     let emailToSend = clubEmail;
     if (!emailToSend && clubName) {
@@ -1266,12 +1295,12 @@ Le CDBHS`;
       html: emailBody
     });
 
-    // Log to email_campaigns
+    // Log to email_campaigns (include tournament_id for duplicate tracking)
     await new Promise((resolve, reject) => {
       db.run(
-        `INSERT INTO email_campaigns (subject, body, template_key, recipients_count, sent_count, failed_count, status, sent_at, campaign_type, mode, category, sent_by)
-         VALUES ($1, $2, 'club_reminder', 1, 1, 0, 'completed', CURRENT_TIMESTAMP, 'club_reminder', $3, $4, $5)`,
-        [subject, `Rappel envoyé à ${clubName} (${emailToSend})`, category.split(' ')[0], category, req.user?.username || 'system'],
+        `INSERT INTO email_campaigns (subject, body, template_key, recipients_count, sent_count, failed_count, status, sent_at, campaign_type, mode, category, tournament_id, sent_by)
+         VALUES ($1, $2, 'club_reminder', 1, 1, 0, 'completed', CURRENT_TIMESTAMP, 'club_reminder', $3, $4, $5, $6)`,
+        [subject, `Rappel envoyé à ${clubName} (${emailToSend})`, category.split(' ')[0], category, tournoiId || null, req.user?.username || 'system'],
         function(err) {
           if (err) reject(err);
           else resolve();
