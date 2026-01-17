@@ -294,18 +294,18 @@ router.get('/:licence/calendar.ics', async (req, res) => {
       return res.status(404).json({ error: 'Aucune catégorie éligible trouvée' });
     }
 
-    // Get current season
+    // Get current season (but only future tournaments from today)
     const now = new Date();
+    const today = now.toISOString().split('T')[0]; // YYYY-MM-DD
     const currentYear = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
-    const seasonStart = `${currentYear}-09-01`;
     const seasonEnd = `${currentYear + 1}-08-31`;
 
-    // Build query for eligible tournaments
+    // Build query for eligible tournaments (only future ones)
     const categoryConditions = eligibleCategories.map((_, i) =>
       `(UPPER(REPLACE(mode, ' ', '')) = UPPER(REPLACE($${i * 2 + 3}, ' ', '')) AND UPPER(categorie) = UPPER($${i * 2 + 4}))`
     ).join(' OR ');
 
-    const queryParams = [seasonStart, seasonEnd];
+    const queryParams = [today, seasonEnd];
     eligibleCategories.forEach(cat => {
       queryParams.push(cat.mode, cat.categorie);
     });
