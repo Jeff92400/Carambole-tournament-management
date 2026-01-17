@@ -3790,24 +3790,38 @@
         selectedPlayers = allPlayers;
 
         // Find matching category from categories array (required by email API for ranking data)
-        // Normalize for comparison: remove extra spaces, handle variations like "3 BANDES" vs "3BANDES"
+        // Normalize for comparison and expand abbreviations
         const normalizeForMatch = (str) => (str || '').toUpperCase().replace(/\s+/g, ' ').trim();
+
+        // Expand category abbreviations (R1 → REGIONALE 1, N3 → NATIONALE 3, etc.)
+        const expandAbbreviation = (abbrev) => {
+          const upper = (abbrev || '').toUpperCase().trim();
+          const expansions = {
+            'R1': 'REGIONALE 1', 'R2': 'REGIONALE 2', 'R3': 'REGIONALE 3', 'R4': 'REGIONALE 4',
+            'N1': 'NATIONALE 1', 'N2': 'NATIONALE 2', 'N3': 'NATIONALE 3', 'N4': 'NATIONALE 4',
+            'D1': 'DEPARTEMENTALE 1', 'D2': 'DEPARTEMENTALE 2', 'D3': 'DEPARTEMENTALE 3'
+          };
+          return expansions[upper] || upper;
+        };
+
         const tournoiMode = normalizeForMatch(t.mode);
         const tournoiCategorie = normalizeForMatch(t.categorie);
-        const tournoiCategoryName = `${tournoiMode} ${tournoiCategorie}`;
+        const tournoiCategorieExpanded = expandAbbreviation(tournoiCategorie);
 
-        console.log('Looking for category:', tournoiCategoryName);
+        console.log('Looking for category:', tournoiMode, tournoiCategorie, '→ expanded:', tournoiCategorieExpanded);
         console.log('Available categories:', categories.map(c => ({ id: c.id, name: c.display_name })));
 
         const matchingCategory = categories.find(c => {
           const catDisplay = normalizeForMatch(c.display_name);
-          // Try exact match first
-          if (catDisplay === tournoiCategoryName) return true;
-          // Try matching mode and categorie separately
-          if (catDisplay.includes(tournoiCategorie) && catDisplay.includes(tournoiMode)) return true;
+          // Try with expanded abbreviation (e.g., "3 BANDES R2" → matches "3 BANDES - REGIONALE 2")
+          if (catDisplay.includes(tournoiMode) && catDisplay.includes(tournoiCategorieExpanded)) return true;
+          // Try exact match
+          if (catDisplay === `${tournoiMode} ${tournoiCategorie}`) return true;
+          if (catDisplay === `${tournoiMode} - ${tournoiCategorie}`) return true;
+          if (catDisplay === `${tournoiMode} - ${tournoiCategorieExpanded}`) return true;
           // Try with mode variations (e.g., "3 BANDES" matches "3BANDES")
           const modeNoSpace = tournoiMode.replace(/\s/g, '');
-          if (catDisplay.includes(tournoiCategorie) && catDisplay.replace(/\s/g, '').includes(modeNoSpace)) return true;
+          if (catDisplay.replace(/\s/g, '').includes(modeNoSpace) && catDisplay.includes(tournoiCategorieExpanded)) return true;
           return false;
         });
 
