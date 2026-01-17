@@ -469,6 +469,9 @@
             <label style="display: flex; align-items: center; gap: 5px; white-space: nowrap;">
               <input type="checkbox" id="activeOnlyFilter" checked> Actifs seulement
             </label>
+            <label style="display: flex; align-items: center; gap: 5px; white-space: nowrap; background: #e8f5e9; padding: 5px 10px; border-radius: 4px;">
+              <input type="checkbox" id="playerAppUsersFilter"> Utilisateurs Espace Joueur
+            </label>
             <select id="clubFilter">
               <option value="">Tous les clubs</option>
             </select>
@@ -534,9 +537,26 @@
             </div>
 
             <div style="margin-top: 15px;">
-              <label>Image (optionnel) - URL</label>
-              <input type="url" id="imageUrl" placeholder="https://exemple.com/image.jpg" style="width: 100%;">
-              <p style="font-size: 11px; color: #666; margin-top: 5px;">L'image sera affichee en haut du message. Utilisez une URL publique (ex: lien vers image hebergee).</p>
+              <label>Image (optionnel)</label>
+              <div id="imagePasteZone" style="border: 2px dashed #ccc; border-radius: 8px; padding: 20px; text-align: center; cursor: pointer; margin-bottom: 10px; min-height: 60px; background: #fafafa; transition: all 0.2s;">
+                <div id="imagePasteContent">
+                  <span style="color: #666;">📋 Collez une capture d'écran (Ctrl+V) ou cliquez pour saisir une URL</span>
+                </div>
+                <div id="imagePreview" style="display: none; margin-top: 10px;">
+                  <img id="imagePreviewImg" style="max-width: 100%; max-height: 150px; border-radius: 4px;">
+                  <button type="button" id="removeImageBtn" style="display: block; margin: 10px auto 0; background: #dc3545; color: white; border: none; padding: 5px 15px; border-radius: 4px; cursor: pointer;">Supprimer l'image</button>
+                </div>
+              </div>
+              <div id="imageUrlSection" style="display: none;">
+                <input type="url" id="imageUrl" placeholder="https://exemple.com/image.jpg" style="width: 100%;">
+                <p style="font-size: 11px; color: #666; margin-top: 5px;">L'image sera affichée en haut du message.</p>
+              </div>
+              <div id="imageUploadProgress" style="display: none; margin-top: 10px;">
+                <div style="background: #e0e0e0; border-radius: 4px; overflow: hidden;">
+                  <div style="background: #1F4788; height: 4px; width: 0%; transition: width 0.3s;" id="uploadProgressBar"></div>
+                </div>
+                <p style="font-size: 11px; color: #666; margin-top: 5px;">Téléchargement en cours...</p>
+              </div>
             </div>
 
             <div class="schedule-section">
@@ -1602,6 +1622,9 @@ Le Comité Départemental de Billard des Hauts-de-Seine</textarea>
         if (document.getElementById('activeOnlyFilter').checked) {
           params.append('activeOnly', 'true');
         }
+        if (document.getElementById('playerAppUsersFilter').checked) {
+          params.append('playerAppUsers', 'true');
+        }
         const club = document.getElementById('clubFilter').value;
         if (club) params.append('club', club);
         const mode = document.getElementById('modeFilter').value;
@@ -1878,6 +1901,7 @@ Le Comité Départemental de Billard des Hauts-de-Seine</textarea>
     // Filter event listeners
     document.getElementById('contactSearch').addEventListener('input', applyContactFilters);
     document.getElementById('activeOnlyFilter').addEventListener('change', onFilterChange);
+    document.getElementById('playerAppUsersFilter').addEventListener('change', onFilterChange);
     document.getElementById('clubFilter').addEventListener('change', onFilterChange);
     document.getElementById('modeFilter').addEventListener('change', () => {
       updateCategoryFilter();
@@ -2052,7 +2076,7 @@ Le Comité Départemental de Billard des Hauts-de-Seine</textarea>
           if (!isTestMode) {
             document.getElementById('emailSubject').value = '';
             document.getElementById('emailBody').value = '';
-            document.getElementById('imageUrl').value = '';
+            resetImageUI();
             selectedContactIds.clear();
             updateSelectedCount();
             applyContactFilters();
@@ -2111,7 +2135,7 @@ Le Comité Départemental de Billard des Hauts-de-Seine</textarea>
           // Clear form
           document.getElementById('emailSubject').value = '';
           document.getElementById('emailBody').value = '';
-          document.getElementById('imageUrl').value = '';
+          resetImageUI();
           document.getElementById('scheduledAt').value = '';
           document.getElementById('scheduleCheck').checked = false;
           document.getElementById('scheduleOptions').style.display = 'none';
@@ -5010,6 +5034,147 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
       }
     });
 
+    // ==================== IMAGE PASTE HANDLER ====================
+
+    // Reset image UI to initial state
+    function resetImageUI() {
+      const imageUrlInput = document.getElementById('imageUrl');
+      const imagePreview = document.getElementById('imagePreview');
+      const pasteContent = document.getElementById('imagePasteContent');
+      const pasteZone = document.getElementById('imagePasteZone');
+      const imageUrlSection = document.getElementById('imageUrlSection');
+
+      if (imageUrlInput) imageUrlInput.value = '';
+      if (imagePreview) imagePreview.style.display = 'none';
+      if (pasteContent) {
+        pasteContent.style.display = 'block';
+        pasteContent.innerHTML = '<span style="color: #666;">📋 Collez une capture d\'écran (Ctrl+V) ou cliquez pour saisir une URL</span>';
+      }
+      if (pasteZone) {
+        pasteZone.style.borderColor = '#ccc';
+        pasteZone.style.background = '#fafafa';
+      }
+      if (imageUrlSection) imageUrlSection.style.display = 'none';
+    }
+
+    // Handle image paste in the paste zone
+    function setupImagePasteHandler() {
+      const pasteZone = document.getElementById('imagePasteZone');
+      const imageUrlInput = document.getElementById('imageUrl');
+      const imageUrlSection = document.getElementById('imageUrlSection');
+      const imagePreview = document.getElementById('imagePreview');
+      const imagePreviewImg = document.getElementById('imagePreviewImg');
+      const removeImageBtn = document.getElementById('removeImageBtn');
+      const pasteContent = document.getElementById('imagePasteContent');
+
+      // Click on paste zone to show URL input
+      pasteZone.addEventListener('click', (e) => {
+        if (e.target !== removeImageBtn && !imagePreview.style.display.includes('block')) {
+          imageUrlSection.style.display = imageUrlSection.style.display === 'none' ? 'block' : 'none';
+        }
+      });
+
+      // Handle paste event on the whole document (for convenience)
+      document.addEventListener('paste', async (e) => {
+        // Only handle if we're in the compose tab
+        const composeTab = document.getElementById('tab-compose');
+        if (!composeTab.classList.contains('active')) return;
+
+        const items = e.clipboardData?.items;
+        if (!items) return;
+
+        for (const item of items) {
+          if (item.type.startsWith('image/')) {
+            e.preventDefault();
+            const file = item.getAsFile();
+            if (file) {
+              await uploadImage(file);
+            }
+            break;
+          }
+        }
+      });
+
+      // Remove image button
+      removeImageBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        imageUrlInput.value = '';
+        imagePreview.style.display = 'none';
+        pasteContent.style.display = 'block';
+        pasteZone.style.borderColor = '#ccc';
+        pasteZone.style.background = '#fafafa';
+      });
+
+      // Upload image function
+      async function uploadImage(file) {
+        const progressDiv = document.getElementById('imageUploadProgress');
+        const progressBar = document.getElementById('uploadProgressBar');
+
+        try {
+          // Show progress
+          progressDiv.style.display = 'block';
+          pasteContent.innerHTML = '<span style="color: #1F4788;">Téléchargement en cours...</span>';
+          progressBar.style.width = '30%';
+
+          const formData = new FormData();
+          formData.append('image', file);
+
+          progressBar.style.width = '60%';
+
+          const response = await fetch(`${API_URL}/emailing/upload-image`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`
+            },
+            body: formData
+          });
+
+          progressBar.style.width = '90%';
+
+          if (!response.ok) {
+            throw new Error('Upload failed');
+          }
+
+          const result = await response.json();
+          progressBar.style.width = '100%';
+
+          // Set the URL and show preview
+          imageUrlInput.value = result.url;
+          imagePreviewImg.src = result.url;
+          imagePreview.style.display = 'block';
+          pasteContent.style.display = 'none';
+          pasteZone.style.borderColor = '#28a745';
+          pasteZone.style.background = '#e8f5e9';
+
+          setTimeout(() => {
+            progressDiv.style.display = 'none';
+            progressBar.style.width = '0%';
+          }, 500);
+
+          showSuccess('Image téléchargée avec succès');
+
+        } catch (error) {
+          console.error('Error uploading image:', error);
+          progressDiv.style.display = 'none';
+          progressBar.style.width = '0%';
+          pasteContent.innerHTML = '<span style="color: #666;">📋 Collez une capture d\'écran (Ctrl+V) ou cliquez pour saisir une URL</span>';
+          showError('Erreur lors du téléchargement de l\'image');
+        }
+      }
+
+      // Also handle URL input changes to show preview
+      imageUrlInput.addEventListener('change', () => {
+        const url = imageUrlInput.value.trim();
+        if (url) {
+          imagePreviewImg.src = url;
+          imagePreview.style.display = 'block';
+          pasteContent.style.display = 'none';
+          pasteZone.style.borderColor = '#28a745';
+          pasteZone.style.background = '#e8f5e9';
+        }
+      });
+    }
+
     // ==================== INIT ====================
 
     async function initialize() {
@@ -5024,6 +5189,7 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
       await loadResultsTemplate();
       await loadSummaryEmailSetting();
       await loadRelanceHistory();
+      setupImagePasteHandler(); // Setup image paste functionality
 
       // Check for relance action from URL params (from dashboard alert)
       await handleRelanceFromDashboard();

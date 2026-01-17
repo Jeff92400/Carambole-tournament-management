@@ -1,8 +1,42 @@
 const express = require('express');
 const { Resend } = require('resend');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 const { authenticateToken } = require('./auth');
 
 const router = express.Router();
+
+// Configure multer for email image uploads
+const imageStorage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    const uploadDir = path.join(__dirname, '../../frontend/images/uploads');
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    cb(null, uploadDir);
+  },
+  filename: function (req, file, cb) {
+    // Generate unique filename with timestamp
+    const timestamp = Date.now();
+    const ext = path.extname(file.originalname).toLowerCase() || '.png';
+    cb(null, `email-image-${timestamp}${ext}`);
+  }
+});
+
+const imageUpload = multer({
+  storage: imageStorage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB max
+  fileFilter: function (req, file, cb) {
+    const filetypes = /jpeg|jpg|png|gif|webp/;
+    const mimetype = filetypes.test(file.mimetype);
+    const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
+    if (mimetype || file.mimetype.startsWith('image/')) {
+      return cb(null, true);
+    }
+    cb(new Error('Only image files are allowed'));
+  }
+});
 
 // Helper function to add delay between emails (avoid rate limiting)
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
@@ -84,6 +118,28 @@ async function getSummaryEmail() {
     );
   });
 }
+
+// Upload image for email (supports pasted screenshots)
+router.post('/upload-image', authenticateToken, imageUpload.single('image'), (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'Aucune image fournie' });
+    }
+
+    // Build the public URL for the uploaded image
+    const baseUrl = process.env.BASE_URL || 'https://cdbhs-tournament-management-production.up.railway.app';
+    const imageUrl = `${baseUrl}/images/uploads/${req.file.filename}`;
+
+    res.json({
+      success: true,
+      url: imageUrl,
+      filename: req.file.filename
+    });
+  } catch (error) {
+    console.error('Error uploading image:', error);
+    res.status(500).json({ error: 'Erreur lors du téléchargement de l\'image' });
+  }
+});
 
 // API endpoint to get summary email
 router.get('/summary-email', authenticateToken, async (req, res) => {
@@ -365,7 +421,7 @@ async function syncContacts() {
 // Get all player contacts with filters
 router.get('/contacts', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
-  const { activeOnly, club, mode, category, tournoiId } = req.query;
+  const { activeOnly, club, mode, category, tournoiId, playerAppUsers } = req.query;
 
   let query = `
     SELECT pc.* FROM player_contacts pc
@@ -377,6 +433,11 @@ router.get('/contacts', authenticateToken, async (req, res) => {
   // Filter by active status
   if (activeOnly === 'true' || activeOnly === '1') {
     query += ` AND pc.statut = 'Actif'`;
+  }
+
+  // Filter by Player App users (those with accounts in player_accounts)
+  if (playerAppUsers === 'true' || playerAppUsers === '1') {
+    query += ` AND REPLACE(pc.licence, ' ', '') IN (SELECT REPLACE(pa.licence, ' ', '') FROM player_accounts pa)`;
   }
 
   // Filter by club
