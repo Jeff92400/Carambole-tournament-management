@@ -1836,7 +1836,7 @@ router.put('/:id', authenticateToken, (req, res) => {
 
 // Desinscription - mark a player as désinscrit (all users can do this, pre-convocation)
 // This is different from forfait which is only used after official convocation
-router.put('/:id/desinscription', authenticateToken, (req, res) => {
+router.put('/:id/desinscription', authenticateToken, async (req, res) => {
   const { id } = req.params;
   const { statut } = req.body; // 'désinscrit' or 'inscrit' (to undo)
 
@@ -1846,24 +1846,101 @@ router.put('/:id/desinscription', authenticateToken, (req, res) => {
     return res.status(400).json({ error: 'Statut invalide. Utilisez "inscrit" ou "désinscrit".' });
   }
 
-  db.run(
-    `UPDATE inscriptions SET statut = $1 WHERE inscription_id = $2`,
-    [newStatut, id],
-    function(err) {
-      if (err) {
-        console.error('Error updating inscription statut:', err);
-        return res.status(500).json({ error: err.message });
-      }
-      if (this.changes === 0) {
-        return res.status(404).json({ error: 'Inscription not found' });
-      }
-      res.json({
-        success: true,
-        message: newStatut === 'désinscrit' ? 'Joueur désinscrit' : 'Inscription rétablie',
-        statut: newStatut
+  try {
+    // Get inscription details with player and tournament info for the email
+    const inscriptionDetails = await new Promise((resolve, reject) => {
+      db.get(`
+        SELECT i.*, t.nom as tournoi_nom, t.mode, t.categorie, t.debut, t.lieu,
+               p.first_name, p.last_name
+        FROM inscriptions i
+        LEFT JOIN tournoi_ext t ON i.tournoi_id = t.tournoi_id
+        LEFT JOIN players p ON REPLACE(i.licence, ' ', '') = REPLACE(p.licence, ' ', '')
+        WHERE i.inscription_id = $1
+      `, [id], (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
       });
+    });
+
+    if (!inscriptionDetails) {
+      return res.status(404).json({ error: 'Inscription not found' });
     }
-  );
+
+    // Update the statut
+    await new Promise((resolve, reject) => {
+      db.run(
+        `UPDATE inscriptions SET statut = $1 WHERE inscription_id = $2`,
+        [newStatut, id],
+        function(err) {
+          if (err) reject(err);
+          else resolve(this.changes);
+        }
+      );
+    });
+
+    // Send cancellation email if marking as désinscrit and player has email
+    if (newStatut === 'désinscrit' && inscriptionDetails.email) {
+      const resend = getResend();
+      if (resend) {
+        try {
+          const dateStr = inscriptionDetails.debut
+            ? new Date(inscriptionDetails.debut).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+            : 'Date à définir';
+
+          const playerName = inscriptionDetails.first_name && inscriptionDetails.last_name
+            ? `${inscriptionDetails.first_name} ${inscriptionDetails.last_name}`
+            : 'Joueur';
+
+          const tournamentName = inscriptionDetails.tournoi_nom || `${inscriptionDetails.mode || ''} ${inscriptionDetails.categorie || ''}`.trim();
+
+          const emailBody = `Bonjour ${playerName},
+
+Nous avons bien pris en compte votre désinscription du tournoi suivant :
+
+Tournoi : ${tournamentName}
+Mode : ${inscriptionDetails.mode || ''}
+Catégorie : ${inscriptionDetails.categorie || ''}
+Date : ${dateStr}
+Lieu : ${inscriptionDetails.lieu || 'Non défini'}
+
+Si cette désinscription est une erreur, veuillez contacter le comité via "Contact" ou par email cdbhs92@gmail.com.
+
+Sportivement,
+Le Comité Départemental de Billard des Hauts-de-Seine`;
+
+          await resend.emails.send({
+            from: 'CDBHS <noreply@cdbhs.net>',
+            replyTo: 'cdbhs92@gmail.com',
+            to: [inscriptionDetails.email],
+            subject: `Confirmation de désinscription - ${inscriptionDetails.mode || ''} ${inscriptionDetails.categorie || ''}`,
+            html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <div style="background: #dc3545; color: white; padding: 20px; text-align: center;">
+                <h2 style="margin: 0;">Désinscription confirmée</h2>
+              </div>
+              <div style="padding: 20px; background: #f8f9fa;">
+                ${emailBody.replace(/\n/g, '<br>')}
+              </div>
+            </div>`
+          });
+          console.log(`Desinscription email sent to ${inscriptionDetails.email}`);
+        } catch (emailError) {
+          console.error('Error sending desinscription email:', emailError);
+          // Don't fail the desinscription if email fails
+        }
+      }
+    }
+
+    res.json({
+      success: true,
+      message: newStatut === 'désinscrit' ? 'Joueur désinscrit' : 'Inscription rétablie',
+      statut: newStatut,
+      emailSent: newStatut === 'désinscrit' && !!inscriptionDetails.email
+    });
+
+  } catch (err) {
+    console.error('Error updating inscription statut:', err);
+    return res.status(500).json({ error: err.message });
+  }
 });
 
 // Delete a single inscription (admin only)
