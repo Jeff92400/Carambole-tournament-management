@@ -1652,11 +1652,11 @@
               });
             } else {
               // Regular tournament logic
-              // Find new players (inscribed but not in ranking)
+              // Find new players (inscribed but not in ranking) - include désinscrit to show them grayed out
               const rankedLicences = new Set(rankedPlayers.map(p => p.licence.replace(/\s/g, '')));
 
               newPlayers = inscriptions
-                .filter(i => !rankedLicences.has(i.licence?.replace(/\s/g, '')) && i.forfait !== 1 && i.statut !== 'désinscrit')
+                .filter(i => !rankedLicences.has(i.licence?.replace(/\s/g, '')) && i.forfait !== 1)
                 .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
                 .map((i, index) => ({
                   licence: i.licence,
@@ -1687,9 +1687,11 @@
                 }
               });
 
-              // Auto-select all new players (they are all inscribed by definition, and not désinscrit since we filtered above)
+              // Auto-select new players (except désinscrit ones)
               newPlayers.forEach(p => {
-                p.selected = true;
+                if (!p.desinscrit) {
+                  p.selected = true;
+                }
               });
             }
           }
@@ -1773,14 +1775,17 @@
         newList.innerHTML = '<p style="padding: 20px; color: #666; text-align: center;">Aucun nouveau joueur inscrit</p>';
       } else {
         newList.innerHTML = newPlayers.map((p, index) => `
-          <div class="player-item new-player ${p.selected ? 'selected' : ''}"
-               data-licence="${p.licence}" data-type="new" data-index="${index}">
-            <input type="checkbox" ${p.selected ? 'checked' : ''}>
+          <div class="player-item new-player ${p.selected ? 'selected' : ''} ${p.desinscrit ? 'desinscrit' : ''}"
+               data-licence="${p.licence}" data-type="new" data-index="${index}" data-inscription-id="${p.inscription_id || ''}"
+               style="${p.desinscrit ? 'opacity: 0.5; text-decoration: line-through;' : ''}">
+            <input type="checkbox" ${p.selected ? 'checked' : ''} ${p.desinscrit ? 'disabled' : ''}>
             <span class="player-rank">-</span>
             <span class="player-name">${p.last_name} ${p.first_name}</span>
             <span class="player-club">${p.club || ''}</span>
             <span class="player-licence">${p.licence}</span>
-            <span class="badge badge-new">Nouveau</span>
+            ${p.desinscrit
+              ? '<span class="badge" style="background: #6c757d; color: white;">Désinscrit</span><button class="btn-reinscription" data-inscription-id="' + p.inscription_id + '" title="Rétablir inscription" style="margin-left: 5px; padding: 2px 8px; font-size: 11px; background: #28a745; color: white; border: none; border-radius: 3px; cursor: pointer;">Réinscrire</button>'
+              : '<span class="badge badge-new">Nouveau</span><button class="btn-desinscription" data-inscription-id="' + p.inscription_id + '" title="Désinscrire ce joueur" style="margin-left: 5px; padding: 2px 6px; font-size: 11px; background: #dc3545; color: white; border: none; border-radius: 3px; cursor: pointer;">✕</button>'}
           </div>
         `).join('');
       }
@@ -1862,6 +1867,9 @@
               if (type === 'ranked') {
                 rankedPlayers[index].desinscrit = true;
                 rankedPlayers[index].selected = false;
+              } else if (type === 'new') {
+                newPlayers[index].desinscrit = true;
+                newPlayers[index].selected = false;
               }
               renderPlayerLists();
               // Show success message
@@ -1907,6 +1915,9 @@
               if (type === 'ranked') {
                 rankedPlayers[index].desinscrit = false;
                 rankedPlayers[index].selected = true;
+              } else if (type === 'new') {
+                newPlayers[index].desinscrit = false;
+                newPlayers[index].selected = true;
               }
               renderPlayerLists();
               // Show success message
