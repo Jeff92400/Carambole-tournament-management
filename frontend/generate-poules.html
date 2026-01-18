@@ -354,10 +354,20 @@
     <div class="card" id="step1" style="display: none;">
       <h3>Étape 1: Sélectionner le Tournoi</h3>
 
-      <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 20px;">
+      <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 15px; margin-bottom: 20px;">
         <div>
-          <label for="categorySelect" style="display: block; margin-bottom: 5px; font-weight: 500;">Catégorie</label>
-          <select id="categorySelect" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+          <label for="modeSelect" style="display: block; margin-bottom: 5px; font-weight: 500;">Mode de jeu</label>
+          <select id="modeSelect" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+            <option value="">-- Sélectionner --</option>
+          </select>
+        </div>
+        <div>
+          <label for="levelSelect" style="display: block; margin-bottom: 5px; font-weight: 500;">Classement FFB</label>
+          <select id="levelSelect" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+            <option value="">-- Sélectionner --</option>
+          </select>
+          <!-- Hidden select to store the resolved category ID -->
+          <select id="categorySelect" style="display: none;">
             <option value="">-- Sélectionner --</option>
           </select>
         </div>
@@ -1014,6 +1024,15 @@
 
           categories = Array.from(categoryMap.values());
 
+          // Populate mode selector with unique game types
+          const modes = [...new Set(categories.map(c => c.game_type))].sort();
+          const modeSelect = document.getElementById('modeSelect');
+          modeSelect.innerHTML = '<option value="">-- Sélectionner --</option>';
+          modes.forEach(mode => {
+            modeSelect.innerHTML += `<option value="${mode}">${mode}</option>`;
+          });
+
+          // Keep hidden categorySelect for compatibility
           const select = document.getElementById('categorySelect');
           select.innerHTML = '<option value="">-- Sélectionner --</option>';
           categories.forEach(cat => {
@@ -1229,8 +1248,11 @@
       );
 
       if (matchingCategory) {
-        // Set dropdowns
-        document.getElementById('categorySelect').value = matchingCategory.id;
+        // Set mode and level dropdowns
+        document.getElementById('modeSelect').value = matchingCategory.game_type;
+        document.getElementById('modeSelect').dispatchEvent(new Event('change'));
+        document.getElementById('levelSelect').value = matchingCategory.level;
+        document.getElementById('levelSelect').dispatchEvent(new Event('change'));
         // For finals, set tournament to "Finale", otherwise use tournament number
         document.getElementById('tournamentSelect').value = isFinale ? 'Finale' : tournamentNum;
 
@@ -1544,6 +1566,52 @@
         document.getElementById('tournamentInfo').style.display = 'none';
       }
     }
+
+    // Mode selector change - populate levels
+    document.getElementById('modeSelect').addEventListener('change', (e) => {
+      const selectedMode = e.target.value;
+      const levelSelect = document.getElementById('levelSelect');
+      const categorySelect = document.getElementById('categorySelect');
+
+      levelSelect.innerHTML = '<option value="">-- Sélectionner --</option>';
+      categorySelect.value = '';
+
+      if (selectedMode) {
+        // Filter categories by selected mode and get unique levels
+        const levels = categories
+          .filter(c => c.game_type === selectedMode)
+          .map(c => c.level)
+          .filter((v, i, a) => a.indexOf(v) === i)
+          .sort();
+
+        levels.forEach(level => {
+          levelSelect.innerHTML += `<option value="${level}">${level}</option>`;
+        });
+      }
+
+      updateLoadButtonState();
+    });
+
+    // Level selector change - set category
+    document.getElementById('levelSelect').addEventListener('change', (e) => {
+      const selectedMode = document.getElementById('modeSelect').value;
+      const selectedLevel = e.target.value;
+      const categorySelect = document.getElementById('categorySelect');
+
+      if (selectedMode && selectedLevel) {
+        // Find the matching category
+        const matchingCategory = categories.find(c =>
+          c.game_type === selectedMode && c.level === selectedLevel
+        );
+        if (matchingCategory) {
+          categorySelect.value = matchingCategory.id;
+        }
+      } else {
+        categorySelect.value = '';
+      }
+
+      updateLoadButtonState();
+    });
 
     document.getElementById('categorySelect').addEventListener('change', updateLoadButtonState);
     document.getElementById('seasonSelect').addEventListener('change', updateLoadButtonState);
