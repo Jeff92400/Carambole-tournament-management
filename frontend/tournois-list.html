@@ -651,10 +651,10 @@
         });
       }
 
-      // Mode filter
+      // Mode filter (exact match)
       if (modeFilter) {
         filtered = filtered.filter(t =>
-          (t.mode || '').toUpperCase().includes(modeFilter.toUpperCase())
+          (t.mode || '').toUpperCase() === modeFilter.toUpperCase()
         );
       }
 
