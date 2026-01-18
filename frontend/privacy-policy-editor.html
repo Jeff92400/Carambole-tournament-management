@@ -178,8 +178,8 @@ Vous pouvez utiliser le format Markdown :
     </div>
   </div>
 
-  <!-- Mammoth.js for reading Word files -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+  <!-- Mammoth.js for reading Word files (using jsdelivr which is CSP-allowed) -->
+  <script src="https://cdn.jsdelivr.net/npm/mammoth@1.6.0/mammoth.browser.min.js"></script>
   <script src="js/auth-utils.js"></script>
   <script>
     const API_URL = '/api';
