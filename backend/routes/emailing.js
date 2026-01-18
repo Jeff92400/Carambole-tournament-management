@@ -447,33 +447,40 @@ router.get('/contacts', authenticateToken, async (req, res) => {
   }
 
   // Filter by game mode (based on rankings)
-  if (mode) {
-    const modeUpper = mode.toUpperCase();
-    if (modeUpper === 'LIBRE') {
+  // Normalize mode: remove spaces and convert to uppercase for comparison
+  const modeNormalized = mode ? mode.toUpperCase().replace(/ /g, '') : '';
+
+  if (modeNormalized) {
+    if (modeNormalized === 'LIBRE' || modeNormalized.includes('LIBRE')) {
       query += ` AND pc.rank_libre IS NOT NULL AND pc.rank_libre != '' AND pc.rank_libre != 'NC'`;
-    } else if (modeUpper === 'CADRE') {
+    } else if (modeNormalized === 'CADRE' || modeNormalized.includes('CADRE')) {
       query += ` AND pc.rank_cadre IS NOT NULL AND pc.rank_cadre != '' AND pc.rank_cadre != 'NC'`;
-    } else if (modeUpper === 'BANDE') {
+    } else if (modeNormalized === 'BANDE' || modeNormalized === '1BANDE') {
       query += ` AND pc.rank_bande IS NOT NULL AND pc.rank_bande != '' AND pc.rank_bande != 'NC'`;
-    } else if (modeUpper === '3BANDES') {
+    } else if (modeNormalized === '3BANDES') {
       query += ` AND pc.rank_3bandes IS NOT NULL AND pc.rank_3bandes != '' AND pc.rank_3bandes != 'NC'`;
     }
   }
 
   // Filter by category (N3, R1, R2, etc.)
-  if (category && mode) {
-    const modeUpper = mode.toUpperCase();
+  if (category && modeNormalized) {
     const catUpper = category.toUpperCase();
-    if (modeUpper === 'LIBRE') {
-      query += ` AND UPPER(pc.rank_libre) = $${paramIndex++}`;
-    } else if (modeUpper === 'CADRE') {
-      query += ` AND UPPER(pc.rank_cadre) = $${paramIndex++}`;
-    } else if (modeUpper === 'BANDE') {
-      query += ` AND UPPER(pc.rank_bande) = $${paramIndex++}`;
-    } else if (modeUpper === '3BANDES') {
-      query += ` AND UPPER(pc.rank_3bandes) = $${paramIndex++}`;
+    let rankColumn = null;
+
+    if (modeNormalized === 'LIBRE' || modeNormalized.includes('LIBRE')) {
+      rankColumn = 'rank_libre';
+    } else if (modeNormalized === 'CADRE' || modeNormalized.includes('CADRE')) {
+      rankColumn = 'rank_cadre';
+    } else if (modeNormalized === 'BANDE' || modeNormalized === '1BANDE') {
+      rankColumn = 'rank_bande';
+    } else if (modeNormalized === '3BANDES') {
+      rankColumn = 'rank_3bandes';
     }
-    params.push(catUpper);
+
+    if (rankColumn) {
+      query += ` AND UPPER(pc.${rankColumn}) = $${paramIndex++}`;
+      params.push(catUpper);
+    }
   }
 
   // Filter by tournament (players registered) - normalize licence comparison
