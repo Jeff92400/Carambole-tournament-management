@@ -7,6 +7,44 @@ const { authenticateToken } = require('./auth');
 
 const router = express.Router();
 
+/**
+ * Load game modes with rank_column mapping from database
+ * Returns object: { 'LIBRE': 'rank_libre', 'BANDE': 'rank_bande', ... }
+ */
+async function loadGameModeRankColumns() {
+  return new Promise((resolve, reject) => {
+    db.all(
+      `SELECT code, display_name, rank_column FROM game_modes WHERE rank_column IS NOT NULL`,
+      [],
+      (err, rows) => {
+        if (err) {
+          reject(err);
+        } else {
+          const mapping = {};
+          (rows || []).forEach(row => {
+            // Map by code (normalized) and display_name for flexibility
+            const normalizedCode = row.code.toUpperCase().replace(/\s+/g, '');
+            mapping[normalizedCode] = row.rank_column;
+            mapping[row.display_name.toUpperCase()] = row.rank_column;
+          });
+          resolve(mapping);
+        }
+      }
+    );
+  });
+}
+
+/**
+ * CSV column mapping for FFB export format
+ * Maps CSV column index to game mode code
+ */
+const CSV_COLUMN_TO_MODE = {
+  4: 'LIBRE',
+  5: 'BANDE',
+  6: '3BANDES',
+  8: 'CADRE'
+};
+
 // Configure multer for file uploads with security restrictions
 const upload = multer({
   dest: '/tmp',
@@ -83,6 +121,9 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
     let errors = [];
     let notFound = []; // Track players not found in database (for rankings-only mode)
 
+    // Load game mode rank column mappings dynamically
+    const rankColumnMap = await loadGameModeRankColumns();
+
     // Process records using PostgreSQL ON CONFLICT
     for (const record of records) {
       try {
@@ -96,28 +137,33 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
         const club = record[1]?.replace(/"/g, '').trim();
         const firstName = record[2]?.replace(/"/g, '').trim();
         const lastName = record[3]?.replace(/"/g, '').trim();
+        const isActive = record[10]?.replace(/"/g, '').trim() === '1' ? 1 : 0;
+
+        // Extract rankings from CSV using dynamic column mapping
         // CSV column order: LICENCE, CLUB, PRENOM, NOM, LIBRE, BANDE, 3 BANDES, BLACKBALL, CADRE, JOUEUR_ID, ACTIF
         //                      0       1      2      3     4      5        6         7        8        9       10
-        const rankLibre = record[4]?.replace(/"/g, '').trim() || 'NC';
-        const rankBande = record[5]?.replace(/"/g, '').trim() || 'NC';
-        const rank3Bandes = record[6]?.replace(/"/g, '').trim() || 'NC';
-        // record[7] = BLACKBALL (not used)
-        const rankCadre = record[8]?.replace(/"/g, '').trim() || 'NC';
-        const isActive = record[10]?.replace(/"/g, '').trim() === '1' ? 1 : 0;
+        const csvRankings = {};
+        for (const [colIndex, modeCode] of Object.entries(CSV_COLUMN_TO_MODE)) {
+          const value = record[parseInt(colIndex)]?.replace(/"/g, '').trim() || 'NC';
+          const rankColumn = rankColumnMap[modeCode];
+          if (rankColumn) {
+            csvRankings[rankColumn] = value;
+          }
+        }
 
         if (!licence || !firstName || !lastName) continue;
 
         if (rankingsOnly) {
-          // Only update rankings for existing players
+          // Only update rankings for existing players - build dynamic UPDATE
+          const setClauses = Object.keys(csvRankings).map((col, i) => `${col} = $${i + 1}`);
+          const values = Object.values(csvRankings);
+          values.push(licence);
+
           const changes = await new Promise((resolve, reject) => {
             db.run(`
-              UPDATE players SET
-                rank_libre = $1,
-                rank_cadre = $2,
-                rank_bande = $3,
-                rank_3bandes = $4
-              WHERE REPLACE(licence, ' ', '') = REPLACE($5, ' ', '')
-            `, [rankLibre, rankCadre, rankBande, rank3Bandes, licence], function(err) {
+              UPDATE players SET ${setClauses.join(', ')}
+              WHERE REPLACE(licence, ' ', '') = REPLACE($${values.length}, ' ', '')
+            `, values, function(err) {
               if (err) {
                 reject(err);
               } else {
@@ -130,15 +176,16 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
             updated++;
           } else {
             skipped++; // Player not found in database
-            notFound.push({
+            const notFoundEntry = {
               licence: licence,
               name: `${firstName} ${lastName}`,
-              club: club || '',
-              rank_libre: rankLibre,
-              rank_cadre: rankCadre,
-              rank_bande: rankBande,
-              rank_3bandes: rank3Bandes
+              club: club || ''
+            };
+            // Add rankings dynamically
+            Object.entries(csvRankings).forEach(([col, val]) => {
+              notFoundEntry[col] = val;
             });
+            notFound.push(notFoundEntry);
           }
         } else {
           // Full import: check if player exists (with space-normalized licence matching)
@@ -153,32 +200,42 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
           });
 
           if (existingPlayer) {
-            // Update existing player (using normalized licence match)
+            // Update existing player - build dynamic UPDATE
+            const rankCols = Object.keys(csvRankings);
+            const baseValues = [club, firstName, lastName];
+            const rankValues = Object.values(csvRankings);
+            const allValues = [...baseValues, ...rankValues, isActive, licence];
+
+            const rankSetClauses = rankCols.map((col, i) => `${col} = $${4 + i}`);
+
             await new Promise((resolve, reject) => {
               db.run(`
                 UPDATE players SET
                   club = $1,
                   first_name = $2,
                   last_name = $3,
-                  rank_libre = $4,
-                  rank_cadre = $5,
-                  rank_bande = $6,
-                  rank_3bandes = $7,
-                  is_active = $8
-                WHERE REPLACE(licence, ' ', '') = REPLACE($9, ' ', '')
-              `, [club, firstName, lastName, rankLibre, rankCadre, rankBande, rank3Bandes, isActive, licence], function(err) {
+                  ${rankSetClauses.join(', ')},
+                  is_active = $${4 + rankCols.length}
+                WHERE REPLACE(licence, ' ', '') = REPLACE($${5 + rankCols.length}, ' ', '')
+              `, allValues, function(err) {
                 if (err) reject(err);
                 else resolve(this.changes);
               });
             });
             updated++;
           } else {
-            // Insert new player
+            // Insert new player - build dynamic INSERT
+            const rankCols = Object.keys(csvRankings);
+            const rankValues = Object.values(csvRankings);
+            const allCols = ['licence', 'club', 'first_name', 'last_name', ...rankCols, 'is_active'];
+            const allValues = [licence, club, firstName, lastName, ...rankValues, isActive];
+            const placeholders = allValues.map((_, i) => `$${i + 1}`);
+
             await new Promise((resolve, reject) => {
               db.run(`
-                INSERT INTO players (licence, club, first_name, last_name, rank_libre, rank_cadre, rank_bande, rank_3bandes, is_active)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-              `, [licence, club, firstName, lastName, rankLibre, rankCadre, rankBande, rank3Bandes, isActive], function(err) {
+                INSERT INTO players (${allCols.join(', ')})
+                VALUES (${placeholders.join(', ')})
+              `, allValues, function(err) {
                 if (err) reject(err);
                 else resolve(this.changes);
               });
@@ -239,7 +296,8 @@ router.post('/', authenticateToken, async (req, res) => {
     club,
     email,
     phone,
-    rank_libre,
+    rankings, // New: dynamic rankings object { rank_libre: 'value', rank_cadre: 'value', ... }
+    rank_libre, // Legacy support
     rank_cadre,
     rank_bande,
     rank_3bandes,
@@ -267,26 +325,64 @@ router.post('/', authenticateToken, async (req, res) => {
       return res.status(409).json({ error: 'Un joueur avec cette licence existe déjà' });
     }
 
-    // Insert new player
+    // Load game mode rank columns dynamically
+    const rankColumnMap = await loadGameModeRankColumns();
+    const validRankColumns = Object.values(rankColumnMap);
+
+    // Build rankings from either new dynamic format or legacy fields
+    const playerRankings = {};
+    if (rankings && typeof rankings === 'object') {
+      // New dynamic format
+      for (const [col, val] of Object.entries(rankings)) {
+        if (validRankColumns.includes(col)) {
+          playerRankings[col] = val || 'NC';
+        }
+      }
+    } else {
+      // Legacy format - map to rank columns
+      if (rank_libre !== undefined) playerRankings.rank_libre = rank_libre || 'NC';
+      if (rank_cadre !== undefined) playerRankings.rank_cadre = rank_cadre || 'NC';
+      if (rank_bande !== undefined) playerRankings.rank_bande = rank_bande || 'NC';
+      if (rank_3bandes !== undefined) playerRankings.rank_3bandes = rank_3bandes || 'NC';
+    }
+
+    // Set default NC for any missing rank columns
+    for (const col of validRankColumns) {
+      if (!playerRankings[col]) {
+        playerRankings[col] = 'NC';
+      }
+    }
+
+    // Build dynamic INSERT
+    const baseCols = ['licence', 'first_name', 'last_name', 'club', 'email', 'telephone'];
+    const baseValues = [
+      normalizedLicence,
+      first_name,
+      last_name.toUpperCase(),
+      club || null,
+      email || null,
+      phone || null
+    ];
+
+    const rankCols = Object.keys(playerRankings);
+    const rankValues = Object.values(playerRankings);
+
+    const endCols = ['player_app_role', 'player_app_user', 'is_active'];
+    const endValues = [
+      player_app_role || null,
+      player_app_user ? true : false,
+      is_active !== false ? 1 : 0
+    ];
+
+    const allCols = [...baseCols, ...rankCols, ...endCols];
+    const allValues = [...baseValues, ...rankValues, ...endValues];
+    const placeholders = allValues.map((_, i) => `$${i + 1}`);
+
     await new Promise((resolve, reject) => {
       db.run(`
-        INSERT INTO players (licence, first_name, last_name, club, email, telephone, rank_libre, rank_cadre, rank_bande, rank_3bandes, player_app_role, player_app_user, is_active)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-      `, [
-        normalizedLicence,
-        first_name,
-        last_name.toUpperCase(),
-        club || null,
-        email || null,
-        phone || null,
-        rank_libre || 'NC',
-        rank_cadre || 'NC',
-        rank_bande || 'NC',
-        rank_3bandes || 'NC',
-        player_app_role || null,
-        player_app_user ? true : false,
-        is_active !== false ? 1 : 0
-      ], function(err) {
+        INSERT INTO players (${allCols.join(', ')})
+        VALUES (${placeholders.join(', ')})
+      `, allValues, function(err) {
         if (err) reject(err);
         else resolve(this);
       });
@@ -330,53 +426,7 @@ router.get('/', authenticateToken, (req, res) => {
   });
 });
 
-// Create a single player
-router.post('/', authenticateToken, (req, res) => {
-  const { licence, club, first_name, last_name, rank_libre, rank_cadre, rank_bande, rank_3bandes, is_active } = req.body;
-
-  // Validate required fields
-  if (!licence || !first_name || !last_name) {
-    return res.status(400).json({ error: 'Licence, first name, and last name are required' });
-  }
-
-  const stmt = db.prepare(`
-    INSERT INTO players (licence, club, first_name, last_name, rank_libre, rank_cadre, rank_bande, rank_3bandes, is_active)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(licence) DO UPDATE SET
-      club = excluded.club,
-      first_name = excluded.first_name,
-      last_name = excluded.last_name,
-      rank_libre = excluded.rank_libre,
-      rank_cadre = excluded.rank_cadre,
-      rank_bande = excluded.rank_bande,
-      rank_3bandes = excluded.rank_3bandes,
-      is_active = excluded.is_active
-  `);
-
-  stmt.run(
-    licence.replace(/\s+/g, '').trim(),
-    club || '',
-    first_name.trim(),
-    last_name.trim(),
-    rank_libre || 'NC',
-    rank_cadre || 'NC',
-    rank_bande || 'NC',
-    rank_3bandes || 'NC',
-    is_active !== undefined ? is_active : 1,
-    function(err) {
-      if (err) {
-        return res.status(500).json({ error: err.message });
-      }
-      res.json({
-        success: true,
-        message: this.changes > 0 ? 'Player updated' : 'Player created',
-        licence: licence.replace(/\s+/g, '').trim()
-      });
-    }
-  );
-
-  stmt.finalize();
-});
+// Note: Duplicate POST route removed - use the main POST / endpoint above
 
 // Find duplicate players (same first_name + last_name)
 // MUST be before /:licence route to avoid being caught by it
@@ -424,84 +474,107 @@ router.get('/:licence', authenticateToken, (req, res) => {
 // Update player (all fields)
 router.put('/:licence', authenticateToken, async (req, res) => {
   const { licence } = req.params;
-  const { club, first_name, last_name, rank_libre, rank_cadre, rank_bande, rank_3bandes, is_active } = req.body;
+  const { club, first_name, last_name, rankings, rank_libre, rank_cadre, rank_bande, rank_3bandes, is_active } = req.body;
 
-  // Build dynamic UPDATE query based on provided fields
-  const updates = [];
-  const values = [];
+  try {
+    // Load game mode rank columns dynamically for validation
+    const rankColumnMap = await loadGameModeRankColumns();
+    const validRankColumns = Object.values(rankColumnMap);
 
-  if (club !== undefined) {
-    updates.push('club = ?');
-    values.push(club);
-  }
-  if (first_name !== undefined) {
-    updates.push('first_name = ?');
-    values.push(first_name);
-  }
-  if (last_name !== undefined) {
-    updates.push('last_name = ?');
-    values.push(last_name);
-  }
-  if (rank_libre !== undefined) {
-    updates.push('rank_libre = ?');
-    values.push(rank_libre || null);
-  }
-  if (rank_cadre !== undefined) {
-    updates.push('rank_cadre = ?');
-    values.push(rank_cadre || null);
-  }
-  if (rank_bande !== undefined) {
-    updates.push('rank_bande = ?');
-    values.push(rank_bande || null);
-  }
-  if (rank_3bandes !== undefined) {
-    updates.push('rank_3bandes = ?');
-    values.push(rank_3bandes || null);
-  }
-  if (is_active !== undefined) {
-    updates.push('is_active = ?');
-    values.push(is_active ? 1 : 0);
-  }
-  if (req.body.player_app_role !== undefined) {
-    updates.push('player_app_role = ?');
-    // Allow null, 'joueur', or 'admin'
-    const role = req.body.player_app_role;
-    values.push(role === '' || role === null ? null : role);
-  }
-  if (req.body.player_app_user !== undefined) {
-    updates.push('player_app_user = ?');
-    values.push(req.body.player_app_user ? true : false);
-  }
-  // Handle GDPR consent - store directly in players table
-  if (req.body.gdpr_consent !== undefined) {
-    if (req.body.gdpr_consent) {
-      updates.push('gdpr_consent_date = NOW()');
-      updates.push("gdpr_consent_version = '1.0'");
+    // Build dynamic UPDATE query based on provided fields
+    const updates = [];
+    const values = [];
+
+    if (club !== undefined) {
+      updates.push('club = ?');
+      values.push(club);
+    }
+    if (first_name !== undefined) {
+      updates.push('first_name = ?');
+      values.push(first_name);
+    }
+    if (last_name !== undefined) {
+      updates.push('last_name = ?');
+      values.push(last_name);
+    }
+
+    // Handle rankings - new dynamic format or legacy fields
+    if (rankings && typeof rankings === 'object') {
+      // New dynamic format
+      for (const [col, val] of Object.entries(rankings)) {
+        if (validRankColumns.includes(col)) {
+          updates.push(`${col} = ?`);
+          values.push(val || null);
+        }
+      }
     } else {
-      updates.push('gdpr_consent_date = NULL');
-      updates.push('gdpr_consent_version = NULL');
+      // Legacy format support
+      if (rank_libre !== undefined) {
+        updates.push('rank_libre = ?');
+        values.push(rank_libre || null);
+      }
+      if (rank_cadre !== undefined) {
+        updates.push('rank_cadre = ?');
+        values.push(rank_cadre || null);
+      }
+      if (rank_bande !== undefined) {
+        updates.push('rank_bande = ?');
+        values.push(rank_bande || null);
+      }
+      if (rank_3bandes !== undefined) {
+        updates.push('rank_3bandes = ?');
+        values.push(rank_3bandes || null);
+      }
     }
+
+    if (is_active !== undefined) {
+      updates.push('is_active = ?');
+      values.push(is_active ? 1 : 0);
+    }
+    if (req.body.player_app_role !== undefined) {
+      updates.push('player_app_role = ?');
+      // Allow null, 'joueur', or 'admin'
+      const role = req.body.player_app_role;
+      values.push(role === '' || role === null ? null : role);
+    }
+    if (req.body.player_app_user !== undefined) {
+      updates.push('player_app_user = ?');
+      values.push(req.body.player_app_user ? true : false);
+    }
+    // Handle GDPR consent - store directly in players table
+    if (req.body.gdpr_consent !== undefined) {
+      if (req.body.gdpr_consent) {
+        updates.push('gdpr_consent_date = NOW()');
+        updates.push("gdpr_consent_version = '1.0'");
+      } else {
+        updates.push('gdpr_consent_date = NULL');
+        updates.push('gdpr_consent_version = NULL');
+      }
+    }
+
+    if (updates.length === 0) {
+      return res.status(400).json({ error: 'No fields to update' });
+    }
+
+    values.push(licence);
+
+    const query = `UPDATE players SET ${updates.join(', ')} WHERE REPLACE(licence, ' ', '') = REPLACE(?, ' ', '')`;
+
+    db.run(query, values, function(err) {
+      if (err) {
+        console.error('Update player error:', err);
+        return res.status(500).json({ error: err.message });
+      }
+      if (this.changes === 0) {
+        return res.status(404).json({ error: 'Player not found' });
+      }
+
+      res.json({ success: true, message: 'Player updated successfully' });
+    });
+  } catch (error) {
+    console.error('Update player error:', error);
+    res.status(500).json({ error: error.message });
   }
-
-  if (updates.length === 0) {
-    return res.status(400).json({ error: 'No fields to update' });
-  }
-
-  values.push(licence);
-
-  const query = `UPDATE players SET ${updates.join(', ')} WHERE REPLACE(licence, ' ', '') = REPLACE(?, ' ', '')`;
-
-  db.run(query, values, function(err) {
-    if (err) {
-      console.error('Update player error:', err);
-      return res.status(500).json({ error: err.message });
-    }
-    if (this.changes === 0) {
-      return res.status(404).json({ error: 'Player not found' });
-    }
-
-    res.json({ success: true, message: 'Player updated successfully' });
-  });
 });
 
 // Legacy endpoint - update club only (for backwards compatibility)

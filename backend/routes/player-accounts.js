@@ -15,6 +15,23 @@ const router = express.Router();
 const db = require('../db-loader');
 
 /**
+ * Load game modes with rank_column mapping from database
+ * Returns array of { code, display_name, rank_column }
+ */
+async function loadGameModes() {
+  return new Promise((resolve, reject) => {
+    db.all(
+      `SELECT code, display_name, rank_column FROM game_modes WHERE rank_column IS NOT NULL AND is_active = true ORDER BY display_order`,
+      [],
+      (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows || []);
+      }
+    );
+  });
+}
+
+/**
  * GET /api/player-accounts
  * List all player accounts with player info
  */
@@ -232,11 +249,17 @@ router.get('/:licence/calendar.ics', async (req, res) => {
   const normalizedLicence = (licence || '').replace(/\s+/g, '');
 
   try {
-    // Get player info and their moyennes
+    // Load game modes with rank_column mapping
+    const gameModes = await loadGameModes();
+
+    // Build dynamic SELECT for rank columns
+    const rankColumns = gameModes.map(gm => gm.rank_column).filter(Boolean);
+    const rankColumnsSQL = rankColumns.length > 0 ? ', ' + rankColumns.join(', ') : '';
+
+    // Get player info and their moyennes dynamically
     const player = await new Promise((resolve, reject) => {
       db.get(`
-        SELECT licence, first_name, last_name,
-               rank_libre, rank_cadre, rank_bande, rank_3bandes
+        SELECT licence, first_name, last_name${rankColumnsSQL}
         FROM players
         WHERE REPLACE(licence, ' ', '') = $1
       `, [normalizedLicence], (err, row) => {
@@ -257,14 +280,30 @@ router.get('/:licence/calendar.ics', async (req, res) => {
       });
     });
 
-    // Map player rankings to mode names
-    const playerRankings = {
-      'LIBRE': parseFloat(player.rank_libre) || 0,
-      'CADRE': parseFloat(player.rank_cadre) || 0,
-      'BANDE': parseFloat(player.rank_bande) || 0,
-      '3BANDES': parseFloat(player.rank_3bandes) || 0,
-      '3 BANDES': parseFloat(player.rank_3bandes) || 0
-    };
+    // Build dynamic player rankings mapping from game_modes
+    const playerRankings = {};
+    for (const gm of gameModes) {
+      if (gm.rank_column && player[gm.rank_column]) {
+        const normalizedCode = gm.code.toUpperCase().replace(/\s+/g, '');
+        const displayNameUpper = gm.display_name.toUpperCase();
+        const rankValue = parseFloat(player[gm.rank_column]) || 0;
+        // Map by multiple keys for flexible matching
+        playerRankings[normalizedCode] = rankValue;
+        playerRankings[displayNameUpper] = rankValue;
+        playerRankings[gm.code.toUpperCase()] = rankValue;
+      }
+    }
+
+    // Build rank_column lookup by mode for NC check
+    const modeToRankColumn = {};
+    for (const gm of gameModes) {
+      if (gm.rank_column) {
+        const normalizedCode = gm.code.toUpperCase().replace(/\s+/g, '');
+        modeToRankColumn[normalizedCode] = gm.rank_column;
+        modeToRankColumn[gm.display_name.toUpperCase()] = gm.rank_column;
+        modeToRankColumn[gm.code.toUpperCase()] = gm.rank_column;
+      }
+    }
 
     // Find eligible categories for each mode
     const eligibleCategories = [];
@@ -272,12 +311,9 @@ router.get('/:licence/calendar.ics', async (req, res) => {
       const modeKey = param.mode.toUpperCase().replace(/\s+/g, '');
       const playerMoyenne = playerRankings[param.mode.toUpperCase()] || playerRankings[modeKey] || 0;
 
-      // Check if NC (not classified) - skip if NC
-      const rankValue = param.mode.toUpperCase().includes('3')
-        ? player.rank_3bandes
-        : param.mode.toUpperCase() === 'LIBRE' ? player.rank_libre
-        : param.mode.toUpperCase() === 'CADRE' ? player.rank_cadre
-        : player.rank_bande;
+      // Check if NC (not classified) - use dynamic rank_column lookup
+      const rankColumn = modeToRankColumn[param.mode.toUpperCase()] || modeToRankColumn[modeKey];
+      const rankValue = rankColumn ? player[rankColumn] : null;
 
       if (rankValue === 'NC' || rankValue === null) continue;
 
