@@ -752,7 +752,7 @@ router.get('/tournoi/upcoming', authenticateToken, (req, res) => {
 
   const query = `
     SELECT t.*,
-           COUNT(CASE WHEN i.inscription_id IS NOT NULL AND (i.forfait IS NULL OR i.forfait != 1) THEN 1 END) as inscrit_count
+           COUNT(CASE WHEN i.inscription_id IS NOT NULL AND (i.forfait IS NULL OR i.forfait != 1) AND (i.statut IS NULL OR i.statut != 'désinscrit') THEN 1 END) as inscrit_count
     FROM tournoi_ext t
     LEFT JOIN inscriptions i ON t.tournoi_id = i.tournoi_id
     WHERE t.debut >= $1 AND t.debut <= $2
@@ -2161,7 +2161,7 @@ router.get('/upcoming-relances', authenticateToken, async (req, res) => {
     const tournois = await new Promise((resolve, reject) => {
       db.all(`
         SELECT t.*,
-               (SELECT COUNT(*) FROM inscriptions i WHERE i.tournoi_id = t.tournoi_id) as inscription_count,
+               (SELECT COUNT(*) FROM inscriptions i WHERE i.tournoi_id = t.tournoi_id AND (i.forfait IS NULL OR i.forfait != 1) AND (i.statut IS NULL OR i.statut != 'désinscrit')) as inscription_count,
                r.relance_sent_at, r.sent_by, r.recipients_count as relance_recipients
         FROM tournoi_ext t
         LEFT JOIN tournament_relances r ON t.tournoi_id = r.tournoi_id
@@ -2762,6 +2762,7 @@ router.post('/bulk-convoque-past', authenticateToken, async (req, res) => {
         WHERE t.debut < $1
         AND (i.convoque = 0 OR i.convoque IS NULL)
         AND (i.forfait = 0 OR i.forfait IS NULL)
+        AND (i.statut IS NULL OR i.statut != 'désinscrit')
       `, [cutoffDate], (err, row) => {
         if (err) reject(err);
         else resolve(row);
@@ -2777,6 +2778,7 @@ router.post('/bulk-convoque-past', authenticateToken, async (req, res) => {
         WHERE tournoi_id IN (SELECT tournoi_id FROM tournoi_ext WHERE debut < $1)
         AND (convoque = 0 OR convoque IS NULL)
         AND (forfait = 0 OR forfait IS NULL)
+        AND (statut IS NULL OR statut != 'désinscrit')
       `, [cutoffDate], function(err) {
         if (err) reject(err);
         else resolve({ changes: this.changes });
