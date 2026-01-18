@@ -448,7 +448,7 @@
     // Load categories and build mapping of game_mode -> valid rankings
     async function loadCategories() {
       try {
-        const response = await fetch(`${API_URL}/categories`, {
+        const response = await fetch(`${API_URL}/reference-data/categories`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
