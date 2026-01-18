@@ -730,22 +730,13 @@ async function initializeDatabase() {
     await client.query(`UPDATE game_modes SET rank_column = 'rank_bande' WHERE UPPER(code) = 'BANDE' OR UPPER(code) = '1BANDE' AND rank_column IS NULL`);
     await client.query(`UPDATE game_modes SET rank_column = 'rank_3bandes' WHERE UPPER(code) LIKE '%3BANDES%' OR UPPER(code) LIKE '%3 BANDES%' AND rank_column IS NULL`);
 
-    // FIX: Restore BANDE tournaments that were incorrectly migrated to 3 BANDES
-    // Identify by categorie field: if categorie starts with "BANDE" (not "3 BANDES"), restore mode to BANDE
+    // FIX: Restore BANDE tournaments by specific IDs (from IONOS export)
+    // These tournament IDs were incorrectly migrated to 3 BANDES
     await client.query(`
       UPDATE tournoi_ext
       SET mode = 'BANDE'
-      WHERE UPPER(categorie) LIKE 'BANDE%'
-        AND UPPER(categorie) NOT LIKE '3 BANDES%'
-        AND UPPER(categorie) NOT LIKE '3BANDES%'
+      WHERE tournoi_id IN (272, 301, 308, 316, 317, 318, 330, 332, 333, 336, 340, 345)
     `);
-
-    // Migration: Sync tournoi_ext.mode with game_modes.display_name (EXACT matching only)
-    // Only update when mode EXACTLY matches a game_mode code
-    await client.query(`UPDATE tournoi_ext SET mode = UPPER((SELECT display_name FROM game_modes WHERE UPPER(code) = 'LIBRE')) WHERE UPPER(mode) = 'LIBRE'`);
-    await client.query(`UPDATE tournoi_ext SET mode = UPPER((SELECT display_name FROM game_modes WHERE UPPER(code) = 'CADRE')) WHERE UPPER(mode) = 'CADRE'`);
-    await client.query(`UPDATE tournoi_ext SET mode = UPPER((SELECT display_name FROM game_modes WHERE UPPER(code) = 'BANDE')) WHERE UPPER(mode) = 'BANDE' OR UPPER(mode) = '1BANDE' OR UPPER(mode) = '1 BANDE'`);
-    await client.query(`UPDATE tournoi_ext SET mode = UPPER((SELECT display_name FROM game_modes WHERE UPPER(code) = '3BANDES')) WHERE UPPER(mode) = '3BANDES' OR UPPER(mode) = '3 BANDES'`);
 
     // Initialize game_modes reference data
     const gameModeResult = await client.query('SELECT COUNT(*) as count FROM game_modes');

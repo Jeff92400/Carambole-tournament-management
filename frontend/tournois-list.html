@@ -96,6 +96,9 @@
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
         <h3 style="margin: 0;">Tournois CDBHS</h3>
         <div style="display: flex; gap: 10px;">
+          <button class="btn" onclick="exportToExcel()" style="background: #17a2b8;">
+            📥 Exporter Excel
+          </button>
           <button class="btn admin-only" onclick="openCreateModal()" style="background: #007bff;">
             + Créer un tournoi
           </button>
@@ -676,6 +679,50 @@
       document.getElementById('dateFromFilter').value = '';
       document.getElementById('dateToFilter').value = '';
       applyFilters();
+    }
+
+    // Export to Excel (CSV)
+    function exportToExcel() {
+      // Get currently filtered tournois from the displayed table
+      const rows = document.querySelectorAll('#tournoisTableBody tr');
+      if (rows.length === 0) {
+        alert('Aucun tournoi à exporter');
+        return;
+      }
+
+      // CSV headers
+      const headers = ['ID', 'Nom', 'Mode', 'Categorie', 'Date debut', 'Date fin', 'Lieu', 'Taille'];
+
+      // Build CSV content
+      let csvContent = headers.join(';') + '\n';
+
+      rows.forEach(row => {
+        const cells = row.querySelectorAll('td');
+        if (cells.length >= 8) {
+          const rowData = [
+            cells[0].textContent.trim(), // ID
+            cells[1].textContent.trim(), // Nom
+            cells[2].textContent.trim(), // Mode
+            cells[3].textContent.trim(), // Categorie
+            cells[4].textContent.trim(), // Date debut
+            cells[5].textContent.trim(), // Date fin
+            cells[6].textContent.trim(), // Lieu
+            cells[7].textContent.trim()  // Taille
+          ];
+          csvContent += rowData.join(';') + '\n';
+        }
+      });
+
+      // Create and download file
+      const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `tournois_export_${new Date().toISOString().split('T')[0]}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
     }
 
     // Open edit modal
