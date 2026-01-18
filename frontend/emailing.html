@@ -1584,14 +1584,11 @@ Le Comité Départemental de Billard des Hauts-de-Seine</textarea>
 
         if (catResponse.ok) {
           const categories = await catResponse.json();
-          // Build categoriesByMode from categories data
+          // Build categoriesByMode from categories data (categories table is the single source of truth)
           categoriesByMode = {};
           categories.forEach(cat => {
-            const modeCode = cat.game_type.toUpperCase().replace(/ /g, '').replace('3BANDES', '3BANDES');
-            // Normalize mode code
-            let normalizedMode = modeCode;
-            if (modeCode === '3 BANDES' || modeCode === '3BANDES') normalizedMode = '3BANDES';
-            if (modeCode === 'BANDE' || modeCode === '1BANDE' || modeCode === '1 BANDE') normalizedMode = 'BANDE';
+            // Normalize mode: remove spaces and uppercase to match selector values
+            const normalizedMode = cat.game_type.toUpperCase().replace(/ /g, '');
 
             if (!categoriesByMode[normalizedMode]) {
               categoriesByMode[normalizedMode] = [];

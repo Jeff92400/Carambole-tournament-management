@@ -450,37 +450,31 @@ router.get('/contacts', authenticateToken, async (req, res) => {
   // Normalize mode: remove spaces and convert to uppercase for comparison
   const modeNormalized = mode ? mode.toUpperCase().replace(/ /g, '') : '';
 
+  // Dynamic rank_column lookup from game_modes table
+  let rankColumn = null;
   if (modeNormalized) {
-    if (modeNormalized === 'LIBRE' || modeNormalized.includes('LIBRE')) {
-      query += ` AND pc.rank_libre IS NOT NULL AND pc.rank_libre != '' AND pc.rank_libre != 'NC'`;
-    } else if (modeNormalized === 'CADRE' || modeNormalized.includes('CADRE')) {
-      query += ` AND pc.rank_cadre IS NOT NULL AND pc.rank_cadre != '' AND pc.rank_cadre != 'NC'`;
-    } else if (modeNormalized === 'BANDE' || modeNormalized === '1BANDE') {
-      query += ` AND pc.rank_bande IS NOT NULL AND pc.rank_bande != '' AND pc.rank_bande != 'NC'`;
-    } else if (modeNormalized === '3BANDES') {
-      query += ` AND pc.rank_3bandes IS NOT NULL AND pc.rank_3bandes != '' AND pc.rank_3bandes != 'NC'`;
+    const gameModeResult = await new Promise((resolve, reject) => {
+      db.get(
+        `SELECT rank_column FROM game_modes WHERE UPPER(REPLACE(code, ' ', '')) = $1`,
+        [modeNormalized],
+        (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        }
+      );
+    });
+
+    if (gameModeResult && gameModeResult.rank_column) {
+      rankColumn = gameModeResult.rank_column;
+      query += ` AND pc.${rankColumn} IS NOT NULL AND pc.${rankColumn} != '' AND pc.${rankColumn} != 'NC'`;
     }
   }
 
   // Filter by category (N3, R1, R2, etc.)
-  if (category && modeNormalized) {
+  if (category && rankColumn) {
     const catUpper = category.toUpperCase();
-    let rankColumn = null;
-
-    if (modeNormalized === 'LIBRE' || modeNormalized.includes('LIBRE')) {
-      rankColumn = 'rank_libre';
-    } else if (modeNormalized === 'CADRE' || modeNormalized.includes('CADRE')) {
-      rankColumn = 'rank_cadre';
-    } else if (modeNormalized === 'BANDE' || modeNormalized === '1BANDE') {
-      rankColumn = 'rank_bande';
-    } else if (modeNormalized === '3BANDES') {
-      rankColumn = 'rank_3bandes';
-    }
-
-    if (rankColumn) {
-      query += ` AND UPPER(pc.${rankColumn}) = $${paramIndex++}`;
-      params.push(catUpper);
-    }
+    query += ` AND UPPER(pc.${rankColumn}) = $${paramIndex++}`;
+    params.push(catUpper);
   }
 
   // Filter by tournament (players registered) - normalize licence comparison
