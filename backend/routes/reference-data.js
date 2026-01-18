@@ -48,17 +48,17 @@ router.get('/game-modes/:id', authenticateToken, (req, res) => {
 // Create game mode
 router.post('/game-modes', authenticateToken, (req, res) => {
   const db = getDb();
-  const { code, display_name, color, display_order } = req.body;
+  const { code, display_name, color, display_order, rank_column } = req.body;
 
   if (!code || !display_name) {
     return res.status(400).json({ error: 'Code et nom sont requis' });
   }
 
   db.run(
-    `INSERT INTO game_modes (code, display_name, color, display_order)
-     VALUES ($1, $2, $3, $4)
+    `INSERT INTO game_modes (code, display_name, color, display_order, rank_column)
+     VALUES ($1, $2, $3, $4, $5)
      RETURNING id`,
-    [code.toUpperCase(), display_name, color || '#1F4788', display_order || 0],
+    [code.toUpperCase(), display_name, color || '#1F4788', display_order || 0, rank_column || null],
     function(err) {
       if (err) {
         console.error('Error creating game mode:', err);
@@ -76,7 +76,7 @@ router.post('/game-modes', authenticateToken, (req, res) => {
 router.put('/game-modes/:id', authenticateToken, (req, res) => {
   const db = getDb();
   const { id } = req.params;
-  const { code, display_name, color, display_order, is_active } = req.body;
+  const { code, display_name, color, display_order, is_active, rank_column } = req.body;
 
   if (!code || !display_name) {
     return res.status(400).json({ error: 'Code et nom sont requis' });
@@ -98,9 +98,9 @@ router.put('/game-modes/:id', authenticateToken, (req, res) => {
 
     db.run(
       `UPDATE game_modes
-       SET code = $1, display_name = $2, color = $3, display_order = $4, is_active = $5, updated_at = CURRENT_TIMESTAMP
-       WHERE id = $6`,
-      [code.toUpperCase(), display_name, color || '#1F4788', display_order || 0, is_active !== false, id],
+       SET code = $1, display_name = $2, color = $3, display_order = $4, is_active = $5, rank_column = $6, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $7`,
+      [code.toUpperCase(), display_name, color || '#1F4788', display_order || 0, is_active !== false, rank_column || null, id],
       function(err) {
         if (err) {
           console.error('Error updating game mode:', err);

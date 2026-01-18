@@ -722,19 +722,27 @@ async function initializeDatabase() {
     await client.query(`ALTER TABLE categories ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE`);
     await client.query(`ALTER TABLE categories ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP`);
 
+    // Add rank_column to game_modes to map mode to player rank column
+    await client.query(`ALTER TABLE game_modes ADD COLUMN IF NOT EXISTS rank_column VARCHAR(30)`);
+    // Update existing game_modes with their rank_column values
+    await client.query(`UPDATE game_modes SET rank_column = 'rank_libre' WHERE UPPER(code) LIKE '%LIBRE%' AND rank_column IS NULL`);
+    await client.query(`UPDATE game_modes SET rank_column = 'rank_cadre' WHERE UPPER(code) LIKE '%CADRE%' AND rank_column IS NULL`);
+    await client.query(`UPDATE game_modes SET rank_column = 'rank_bande' WHERE UPPER(code) = 'BANDE' OR UPPER(code) = '1BANDE' AND rank_column IS NULL`);
+    await client.query(`UPDATE game_modes SET rank_column = 'rank_3bandes' WHERE UPPER(code) LIKE '%3BANDES%' OR UPPER(code) LIKE '%3 BANDES%' AND rank_column IS NULL`);
+
     // Initialize game_modes reference data
     const gameModeResult = await client.query('SELECT COUNT(*) as count FROM game_modes');
     if (gameModeResult.rows[0].count == 0) {
       const gameModes = [
-        { code: 'LIBRE', display_name: 'Libre', color: '#1F4788', display_order: 1 },
-        { code: 'BANDE', display_name: 'Bande', color: '#28a745', display_order: 2 },
-        { code: '3BANDES', display_name: '3 Bandes', color: '#dc3545', display_order: 3 },
-        { code: 'CADRE', display_name: 'Cadre', color: '#6f42c1', display_order: 4 }
+        { code: 'LIBRE', display_name: 'Libre', color: '#1F4788', display_order: 1, rank_column: 'rank_libre' },
+        { code: 'BANDE', display_name: 'Bande', color: '#28a745', display_order: 2, rank_column: 'rank_bande' },
+        { code: '3BANDES', display_name: '3 Bandes', color: '#dc3545', display_order: 3, rank_column: 'rank_3bandes' },
+        { code: 'CADRE', display_name: 'Cadre', color: '#6f42c1', display_order: 4, rank_column: 'rank_cadre' }
       ];
       for (const mode of gameModes) {
         await client.query(
-          'INSERT INTO game_modes (code, display_name, color, display_order) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING',
-          [mode.code, mode.display_name, mode.color, mode.display_order]
+          'INSERT INTO game_modes (code, display_name, color, display_order, rank_column) VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING',
+          [mode.code, mode.display_name, mode.color, mode.display_order, mode.rank_column]
         );
       }
       console.log('Game modes initialized');
