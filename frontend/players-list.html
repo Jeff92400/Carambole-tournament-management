@@ -423,6 +423,8 @@
 
     // Get game modes from database for dynamic ranking fields
     let gameModesList = [];
+    // Categories grouped by game mode code: { 'LIBRE': ['N3', 'R1', 'R2', ...], '5QUILLES': ['R2', 'R3'], ... }
+    let categoriesByMode = {};
 
     async function loadGameModes() {
       try {
@@ -441,6 +443,54 @@
         console.error('Error loading game modes:', error);
       }
       return gameModesList;
+    }
+
+    // Load categories and build mapping of game_mode -> valid rankings
+    async function loadCategories() {
+      try {
+        const response = await fetch(`${API_URL}/categories`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        if (response.ok) {
+          const categories = await response.json();
+          // Group by game_type (mode code)
+          categoriesByMode = {};
+          categories.forEach(cat => {
+            const modeCode = (cat.game_type || '').toUpperCase();
+            if (!categoriesByMode[modeCode]) {
+              categoriesByMode[modeCode] = [];
+            }
+            if (cat.level && !categoriesByMode[modeCode].includes(cat.level)) {
+              categoriesByMode[modeCode].push(cat.level);
+            }
+          });
+        }
+      } catch (error) {
+        console.error('Error loading categories:', error);
+      }
+      return categoriesByMode;
+    }
+
+    // Get valid rankings for a game mode from categories
+    function getValidRankingsForMode(modeCode) {
+      const normalized = (modeCode || '').toUpperCase().replace(/\s+/g, '');
+      // Try exact match first, then partial match
+      let rankings = categoriesByMode[normalized] || categoriesByMode[modeCode.toUpperCase()] || [];
+
+      // Also check with display name variations
+      if (rankings.length === 0) {
+        for (const key of Object.keys(categoriesByMode)) {
+          if (key.replace(/\s+/g, '') === normalized) {
+            rankings = categoriesByMode[key];
+            break;
+          }
+        }
+      }
+
+      return rankings;
     }
 
     // Generate dynamic ranking fields HTML
@@ -472,7 +522,17 @@
         .map(mode => {
           // Get ranking value from player_rankings (keyed by game_mode_id)
           const rankingData = playerRankings[mode.id] || {};
-          const rankingValue = rankingData.ranking || '';
+          const rankingValue = (rankingData.ranking || '').toUpperCase();
+
+          // Get valid rankings for this mode from categories
+          const validRankings = getValidRankingsForMode(mode.code);
+
+          // Build options: NC + valid rankings from categories
+          let options = '<option value="NC"' + (rankingValue === 'NC' || rankingValue === '' ? ' selected' : '') + '>NC</option>';
+          validRankings.forEach(rank => {
+            const isSelected = rankingValue === rank.toUpperCase() ? ' selected' : '';
+            options += `<option value="${rank}"${isSelected}>${rank}</option>`;
+          });
 
           return `
             <div>
@@ -480,12 +540,11 @@
                 <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: ${mode.color || '#1F4788'};"></span>
                 ${mode.display_name}
               </label>
-              <input type="text"
-                     id="${prefix}_rank_${mode.id}"
-                     data-game-mode-id="${mode.id}"
-                     placeholder="NC"
-                     value="${rankingValue}"
-                     style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+              <select id="${prefix}_rank_${mode.id}"
+                      data-game-mode-id="${mode.id}"
+                      style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; background: white;">
+                ${options}
+              </select>
             </div>
           `;
         })
@@ -1281,7 +1340,8 @@
     async function initialize() {
       await Promise.all([
         loadClubsList(),
-        loadGameModes()
+        loadGameModes(),
+        loadCategories()
       ]);
       // Populate dynamic ranking headers after game modes are loaded
       populateRankingHeaders();
