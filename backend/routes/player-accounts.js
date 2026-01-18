@@ -272,57 +272,19 @@ router.get('/:licence/calendar.ics', async (req, res) => {
       return res.status(404).json({ error: 'Joueur non trouvé' });
     }
 
-    // Get game parameters to determine eligibility
-    const gameParams = await new Promise((resolve, reject) => {
-      db.all(`SELECT * FROM game_parameters`, [], (err, rows) => {
-        if (err) reject(err);
-        else resolve(rows || []);
-      });
-    });
-
-    // Build dynamic player rankings mapping from game_modes
-    const playerRankings = {};
+    // Build eligible categories directly from player's rank values
+    // The player's category for a game mode IS their rank value (R3, R4, N3, etc.)
+    const eligibleCategories = [];
     for (const gm of gameModes) {
       if (gm.rank_column && player[gm.rank_column]) {
-        const normalizedCode = gm.code.toUpperCase().replace(/\s+/g, '');
-        const displayNameUpper = gm.display_name.toUpperCase();
-        const rankValue = parseFloat(player[gm.rank_column]) || 0;
-        // Map by multiple keys for flexible matching
-        playerRankings[normalizedCode] = rankValue;
-        playerRankings[displayNameUpper] = rankValue;
-        playerRankings[gm.code.toUpperCase()] = rankValue;
-      }
-    }
-
-    // Build rank_column lookup by mode for NC check
-    const modeToRankColumn = {};
-    for (const gm of gameModes) {
-      if (gm.rank_column) {
-        const normalizedCode = gm.code.toUpperCase().replace(/\s+/g, '');
-        modeToRankColumn[normalizedCode] = gm.rank_column;
-        modeToRankColumn[gm.display_name.toUpperCase()] = gm.rank_column;
-        modeToRankColumn[gm.code.toUpperCase()] = gm.rank_column;
-      }
-    }
-
-    // Find eligible categories for each mode
-    const eligibleCategories = [];
-    for (const param of gameParams) {
-      const modeKey = param.mode.toUpperCase().replace(/\s+/g, '');
-      const playerMoyenne = playerRankings[param.mode.toUpperCase()] || playerRankings[modeKey] || 0;
-
-      // Check if NC (not classified) - use dynamic rank_column lookup
-      const rankColumn = modeToRankColumn[param.mode.toUpperCase()] || modeToRankColumn[modeKey];
-      const rankValue = rankColumn ? player[rankColumn] : null;
-
-      if (rankValue === 'NC' || rankValue === null) continue;
-
-      // Check if player's moyenne falls within category range
-      if (playerMoyenne >= parseFloat(param.moyenne_mini) && playerMoyenne <= parseFloat(param.moyenne_maxi)) {
-        eligibleCategories.push({
-          mode: param.mode,
-          categorie: param.categorie
-        });
+        const rankValue = player[gm.rank_column];
+        // Skip NC (not classified) or empty values
+        if (rankValue && rankValue.toUpperCase() !== 'NC') {
+          eligibleCategories.push({
+            mode: gm.display_name, // Use display_name to match tournament.mode
+            categorie: rankValue.toUpperCase()
+          });
+        }
       }
     }
 
