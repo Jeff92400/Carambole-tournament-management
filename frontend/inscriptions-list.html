@@ -355,6 +355,8 @@
 
     let allInscriptions = [];
     let allTournois = [];
+    let gameModesList = [];
+    let categoriesByMode = {};
 
     // Parse date that might be in various formats (ISO, DD/MM/YYYY, etc.)
     function parseDate(dateStr) {
@@ -400,6 +402,40 @@
       }
     }
 
+    // Load game modes from reference data API
+    async function loadGameModes() {
+      try {
+        const response = await fetch(`${API_URL}/reference-data/game-modes?active_only=true`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (response.ok) {
+          gameModesList = await response.json();
+        }
+
+        // Load categories to build categoriesByMode mapping
+        const catResponse = await fetch(`${API_URL}/reference-data/categories`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (catResponse.ok) {
+          const categories = await catResponse.json();
+          categoriesByMode = {};
+          categories.forEach(cat => {
+            const normalizedMode = cat.game_type.toUpperCase().replace(/ /g, '');
+            if (!categoriesByMode[normalizedMode]) {
+              categoriesByMode[normalizedMode] = [];
+            }
+            if (!categoriesByMode[normalizedMode].includes(cat.level)) {
+              categoriesByMode[normalizedMode].push(cat.level);
+            }
+          });
+        }
+      } catch (error) {
+        console.error('Error loading game modes:', error);
+      }
+    }
+
     // Helper to normalize mode/category to Title Case
     function toTitleCase(str) {
       if (!str) return '';
@@ -408,85 +444,48 @@
       ).join(' ');
     }
 
-    // Populate mode filter
+    // Populate mode filter from game_modes API
     function populateModeFilter() {
       const select = document.getElementById('modeFilter');
-      const selectedSeason = document.getElementById('seasonFilter').value;
 
       // Clear and add default option
       select.innerHTML = '<option value="">Mode de jeu : tous</option>';
 
-      // Filter tournaments by selected season
-      let filteredTournois = allTournois;
-      if (selectedSeason) {
-        filteredTournois = allTournois.filter(t => {
-          if (!t.debut) return false;
-          const date = parseDate(t.debut);
-          if (!date || isNaN(date.getTime())) return false;
-          const season = getSeasonForDate(date);
-          return season === selectedSeason;
-        });
-      }
-
-      // Get unique modes (normalized to Title Case for deduplication)
-      const modesMap = {};
-      filteredTournois.forEach(t => {
-        if (t.mode) {
-          const normalized = toTitleCase(t.mode);
-          modesMap[normalized] = true;
-        }
-      });
-      const modes = Object.keys(modesMap).sort();
-
-      modes.forEach(mode => {
+      // Use game modes from API
+      gameModesList.forEach(gm => {
         const option = document.createElement('option');
-        option.value = mode;
-        option.textContent = mode;
+        option.value = gm.display_name;
+        option.textContent = gm.display_name;
         select.appendChild(option);
       });
     }
 
-    // Populate categorie filter (filtered by selected mode)
+    // Populate categorie filter (filtered by selected mode using categories API)
     function populateCategorieFilter() {
       const select = document.getElementById('categorieFilter');
-      const selectedSeason = document.getElementById('seasonFilter').value;
       const selectedMode = document.getElementById('modeFilter').value;
 
       // Clear and add default option
       select.innerHTML = '<option value="">Classement FFB : tous</option>';
 
-      // Filter tournaments by selected season and mode
-      let filteredTournois = allTournois;
-      if (selectedSeason) {
-        filteredTournois = filteredTournois.filter(t => {
-          if (!t.debut) return false;
-          const date = parseDate(t.debut);
-          if (!date || isNaN(date.getTime())) return false;
-          const season = getSeasonForDate(date);
-          return season === selectedSeason;
-        });
-      }
       if (selectedMode) {
-        // Case-insensitive mode comparison
-        filteredTournois = filteredTournois.filter(t => toTitleCase(t.mode) === selectedMode);
-      }
+        // Normalize mode to match categoriesByMode keys
+        const modeNormalized = selectedMode.toUpperCase().replace(/ /g, '');
 
-      // Get unique categories (normalized to uppercase for deduplication)
-      const categoriesMap = {};
-      filteredTournois.forEach(t => {
-        if (t.categorie) {
-          const normalized = t.categorie.toUpperCase().trim();
-          categoriesMap[normalized] = true;
+        if (categoriesByMode[modeNormalized]) {
+          select.disabled = false;
+          categoriesByMode[modeNormalized].sort().forEach(cat => {
+            const option = document.createElement('option');
+            option.value = cat;
+            option.textContent = cat;
+            select.appendChild(option);
+          });
+        } else {
+          select.disabled = true;
         }
-      });
-      const categories = Object.keys(categoriesMap).sort();
-
-      categories.forEach(cat => {
-        const option = document.createElement('option');
-        option.value = cat;
-        option.textContent = cat;
-        select.appendChild(option);
-      });
+      } else {
+        select.disabled = true;
+      }
     }
 
     // Populate tournoi filter (filtered by selected season, mode, and categorie)
@@ -1225,6 +1224,7 @@
 
     // Initialize
     async function initialize() {
+      await loadGameModes();
       await loadTournois();
       await loadInscriptions();
     }
