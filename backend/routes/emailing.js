@@ -440,11 +440,25 @@ router.get('/contacts', authenticateToken, async (req, res) => {
     query += ` AND REPLACE(pc.licence, ' ', '') IN (SELECT REPLACE(pa.licence, ' ', '') FROM player_accounts pa)`;
   }
 
-  // Filter by club (use normalized matching to handle variations like "A. DE" vs "A DE", hyphens, etc.)
+  // Filter by club using club_aliases for proper canonical name resolution
   if (club) {
-    // Normalize: remove periods, replace hyphens with spaces, collapse multiple spaces
-    query += ` AND UPPER(REPLACE(REPLACE(REPLACE(pc.club, '.', ''), '-', ' '), '  ', ' ')) = UPPER(REPLACE(REPLACE(REPLACE($${paramIndex++}, '.', ''), '-', ' '), '  ', ' '))`;
-    params.push(club);
+    // Match either:
+    // 1. Player's club resolves to same canonical name as selected club
+    // 2. Direct normalized match if no alias exists
+    query += ` AND (
+      COALESCE(
+        (SELECT ca.canonical_name FROM club_aliases ca
+         WHERE UPPER(REPLACE(REPLACE(REPLACE(ca.alias, ' ', ''), '.', ''), '-', ''))
+             = UPPER(REPLACE(REPLACE(REPLACE(pc.club, ' ', ''), '.', ''), '-', ''))),
+        pc.club
+      ) = COALESCE(
+        (SELECT ca2.canonical_name FROM club_aliases ca2
+         WHERE UPPER(REPLACE(REPLACE(REPLACE(ca2.alias, ' ', ''), '.', ''), '-', ''))
+             = UPPER(REPLACE(REPLACE(REPLACE($${paramIndex++}, ' ', ''), '.', ''), '-', ''))),
+        $${paramIndex++}
+      )
+    )`;
+    params.push(club, club);
   }
 
   // Filter by game mode (based on rankings)

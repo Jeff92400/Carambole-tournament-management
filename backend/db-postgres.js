@@ -1070,6 +1070,34 @@ Le CDBHS`;
       console.log('Default clubs initialized');
     }
 
+    // Migration: Normalize club names in players and player_contacts to use canonical names from club_aliases
+    // This ensures consistent club names across the system
+    const normalizeClubsResult = await client.query(`
+      UPDATE players p
+      SET club = ca.canonical_name
+      FROM club_aliases ca
+      WHERE UPPER(REPLACE(REPLACE(REPLACE(p.club, ' ', ''), '.', ''), '-', ''))
+          = UPPER(REPLACE(REPLACE(REPLACE(ca.alias, ' ', ''), '.', ''), '-', ''))
+        AND p.club != ca.canonical_name
+        AND p.club IS NOT NULL
+    `);
+    if (normalizeClubsResult.rowCount > 0) {
+      console.log(`Normalized ${normalizeClubsResult.rowCount} club names in players table`);
+    }
+
+    const normalizeContactsResult = await client.query(`
+      UPDATE player_contacts pc
+      SET club = ca.canonical_name
+      FROM club_aliases ca
+      WHERE UPPER(REPLACE(REPLACE(REPLACE(pc.club, ' ', ''), '.', ''), '-', ''))
+          = UPPER(REPLACE(REPLACE(REPLACE(ca.alias, ' ', ''), '.', ''), '-', ''))
+        AND pc.club != ca.canonical_name
+        AND pc.club IS NOT NULL
+    `);
+    if (normalizeContactsResult.rowCount > 0) {
+      console.log(`Normalized ${normalizeContactsResult.rowCount} club names in player_contacts table`);
+    }
+
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('Error initializing database:', err);
