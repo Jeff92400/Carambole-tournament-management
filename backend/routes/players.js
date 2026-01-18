@@ -558,34 +558,79 @@ router.post('/', authenticateToken, async (req, res) => {
   }
 });
 // Get all players (or filter by active status)
-router.get('/', authenticateToken, (req, res) => {
+router.get('/', authenticateToken, async (req, res) => {
   const { active } = req.query;
 
-  // GDPR consent can come from either players table (admin set) or player_accounts (registration)
-  // Use COALESCE to show consent from either source
-  let query = `
-    SELECT p.*,
-      COALESCE(p.gdpr_consent_date, pa.gdpr_consent_date) as gdpr_consent_date,
-      COALESCE(p.gdpr_consent_version, pa.gdpr_consent_version) as gdpr_consent_version
-    FROM players p
-    LEFT JOIN player_accounts pa ON REPLACE(p.licence, ' ', '') = REPLACE(pa.licence, ' ', '')
-  `;
-  const params = [];
+  try {
+    // GDPR consent can come from either players table (admin set) or player_accounts (registration)
+    // Use COALESCE to show consent from either source
+    let query = `
+      SELECT p.*,
+        COALESCE(p.gdpr_consent_date, pa.gdpr_consent_date) as gdpr_consent_date,
+        COALESCE(p.gdpr_consent_version, pa.gdpr_consent_version) as gdpr_consent_version
+      FROM players p
+      LEFT JOIN player_accounts pa ON REPLACE(p.licence, ' ', '') = REPLACE(pa.licence, ' ', '')
+    `;
+    const params = [];
 
-  if (active === 'true') {
-    query += ' WHERE p.is_active = 1';
-  } else if (active === 'false') {
-    query += ' WHERE p.is_active = 0';
-  }
-
-  query += ' ORDER BY p.last_name, p.first_name';
-
-  db.all(query, params, (err, rows) => {
-    if (err) {
-      return res.status(500).json({ error: err.message });
+    if (active === 'true') {
+      query += ' WHERE p.is_active = 1';
+    } else if (active === 'false') {
+      query += ' WHERE p.is_active = 0';
     }
-    res.json(rows);
-  });
+
+    query += ' ORDER BY p.last_name, p.first_name';
+
+    const players = await new Promise((resolve, reject) => {
+      db.all(query, params, (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows || []);
+      });
+    });
+
+    // Fetch all player_rankings in one efficient query
+    const allRankings = await new Promise((resolve, reject) => {
+      db.all(
+        `SELECT pr.licence, pr.game_mode_id, pr.ranking, gm.code, gm.display_name, gm.color
+         FROM player_rankings pr
+         JOIN game_modes gm ON pr.game_mode_id = gm.id`,
+        [],
+        (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows || []);
+        }
+      );
+    });
+
+    // Group rankings by normalized licence
+    const rankingsByLicence = {};
+    allRankings.forEach(row => {
+      const normLicence = (row.licence || '').replace(/\s+/g, '');
+      if (!rankingsByLicence[normLicence]) {
+        rankingsByLicence[normLicence] = {};
+      }
+      rankingsByLicence[normLicence][row.game_mode_id] = {
+        ranking: row.ranking,
+        code: row.code,
+        display_name: row.display_name,
+        color: row.color
+      };
+    });
+
+    // Attach player_rankings to each player
+    const playersWithRankings = players.map(player => {
+      const normLicence = (player.licence || '').replace(/\s+/g, '');
+      return {
+        ...player,
+        player_rankings: rankingsByLicence[normLicence] || {}
+      };
+    });
+
+    res.json(playersWithRankings);
+  } catch (err) {
+    console.error('Get players error:', err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Note: Duplicate POST route removed - use the main POST / endpoint above
