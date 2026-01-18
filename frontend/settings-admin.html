@@ -463,6 +463,242 @@
 
       <div id="maintenanceMessage" style="display: none; margin-top: 20px; padding: 15px; border-radius: 4px;"></div>
     </div>
+
+    <!-- Organisation Section - Admin Only -->
+    <div class="card admin-only" id="organisationSection">
+      <h3>🏢 Organisation</h3>
+      <p style="margin-bottom: 20px; color: #666;">
+        Configurez les informations de votre organisation. Ces informations seront utilisées dans les emails et l'application.
+      </p>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
+        <div>
+          <label style="display: block; margin-bottom: 8px; font-weight: 500;">Nom complet de l'organisation :</label>
+          <input type="text" id="organizationName" placeholder="ex: Comité Départemental de Billard des Hauts-de-Seine" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+        </div>
+        <div>
+          <label style="display: block; margin-bottom: 8px; font-weight: 500;">Nom court / Sigle :</label>
+          <input type="text" id="organizationShortName" placeholder="ex: CDBHS" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+        </div>
+      </div>
+
+      <button onclick="saveOrganisationSettings()" class="btn" style="background: #28a745; padding: 12px 25px; margin-top: 20px;">
+        Enregistrer
+      </button>
+      <div id="organisationMessage" style="display: none; margin-top: 15px; padding: 10px; border-radius: 4px;"></div>
+    </div>
+
+    <!-- Identité Visuelle Section - Admin Only -->
+    <div class="card admin-only" id="brandingSection">
+      <h3>🎨 Identité Visuelle</h3>
+      <p style="margin-bottom: 20px; color: #666;">
+        Personnalisez les couleurs de l'application et des emails.
+      </p>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px;">
+        <div>
+          <label style="display: block; margin-bottom: 8px; font-weight: 500;">Couleur principale :</label>
+          <div style="display: flex; gap: 10px; align-items: center;">
+            <input type="color" id="primaryColor" value="#1F4788" style="width: 50px; height: 40px; border: 1px solid #ddd; border-radius: 4px; cursor: pointer;">
+            <input type="text" id="primaryColorText" value="#1F4788" style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-family: monospace;" onchange="document.getElementById('primaryColor').value = this.value">
+          </div>
+        </div>
+        <div>
+          <label style="display: block; margin-bottom: 8px; font-weight: 500;">Couleur secondaire :</label>
+          <div style="display: flex; gap: 10px; align-items: center;">
+            <input type="color" id="secondaryColor" value="#667EEA" style="width: 50px; height: 40px; border: 1px solid #ddd; border-radius: 4px; cursor: pointer;">
+            <input type="text" id="secondaryColorText" value="#667EEA" style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-family: monospace;" onchange="document.getElementById('secondaryColor').value = this.value">
+          </div>
+        </div>
+        <div>
+          <label style="display: block; margin-bottom: 8px; font-weight: 500;">Couleur d'accent :</label>
+          <div style="display: flex; gap: 10px; align-items: center;">
+            <input type="color" id="accentColor" value="#FFC107" style="width: 50px; height: 40px; border: 1px solid #ddd; border-radius: 4px; cursor: pointer;">
+            <input type="text" id="accentColorText" value="#FFC107" style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-family: monospace;" onchange="document.getElementById('accentColor').value = this.value">
+          </div>
+        </div>
+        <div>
+          <label style="display: block; margin-bottom: 8px; font-weight: 500;">Fond principal :</label>
+          <div style="display: flex; gap: 10px; align-items: center;">
+            <input type="color" id="backgroundColor" value="#FFFFFF" style="width: 50px; height: 40px; border: 1px solid #ddd; border-radius: 4px; cursor: pointer;">
+            <input type="text" id="backgroundColorText" value="#FFFFFF" style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-family: monospace;" onchange="document.getElementById('backgroundColor').value = this.value">
+          </div>
+        </div>
+        <div>
+          <label style="display: block; margin-bottom: 8px; font-weight: 500;">Fond secondaire :</label>
+          <div style="display: flex; gap: 10px; align-items: center;">
+            <input type="color" id="backgroundSecondaryColor" value="#F5F5F5" style="width: 50px; height: 40px; border: 1px solid #ddd; border-radius: 4px; cursor: pointer;">
+            <input type="text" id="backgroundSecondaryColorText" value="#F5F5F5" style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-family: monospace;" onchange="document.getElementById('backgroundSecondaryColor').value = this.value">
+          </div>
+        </div>
+      </div>
+
+      <button onclick="saveBrandingSettings()" class="btn" style="background: #28a745; padding: 12px 25px; margin-top: 20px;">
+        Enregistrer
+      </button>
+      <div id="brandingMessage" style="display: none; margin-top: 15px; padding: 10px; border-radius: 4px;"></div>
+    </div>
+
+    <!-- Emails Configuration Section - Admin Only -->
+    <div class="card admin-only" id="emailsConfigSection">
+      <h3>📧 Configuration des Emails</h3>
+      <p style="margin-bottom: 20px; color: #666;">
+        Configurez les adresses email utilisées pour les différents types de communications.
+      </p>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px;">
+        <div>
+          <label style="display: block; margin-bottom: 8px; font-weight: 500;">Email de communication :</label>
+          <input type="email" id="emailCommunication" placeholder="ex: communication@cdbhs.net" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+          <small style="color: #666;">Utilisé pour les annonces générales</small>
+        </div>
+        <div>
+          <label style="display: block; margin-bottom: 8px; font-weight: 500;">Email des convocations :</label>
+          <input type="email" id="emailConvocations" placeholder="ex: convocations@cdbhs.net" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+          <small style="color: #666;">Utilisé pour les convocations aux tournois</small>
+        </div>
+        <div>
+          <label style="display: block; margin-bottom: 8px; font-weight: 500;">Email no-reply :</label>
+          <input type="email" id="emailNoreply" placeholder="ex: noreply@cdbhs.net" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+          <small style="color: #666;">Utilisé pour les emails automatiques</small>
+        </div>
+        <div>
+          <label style="display: block; margin-bottom: 8px; font-weight: 500;">Nom de l'expéditeur :</label>
+          <input type="text" id="emailSenderName" placeholder="ex: CDBHS" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+          <small style="color: #666;">Nom affiché dans les emails envoyés</small>
+        </div>
+      </div>
+
+      <button onclick="saveEmailsConfig()" class="btn" style="background: #28a745; padding: 12px 25px; margin-top: 20px;">
+        Enregistrer
+      </button>
+      <div id="emailsConfigMessage" style="display: none; margin-top: 15px; padding: 10px; border-radius: 4px;"></div>
+    </div>
+
+    <!-- Saison Section - Admin Only -->
+    <div class="card admin-only" id="seasonSection">
+      <h3>📅 Configuration de la Saison</h3>
+      <p style="margin-bottom: 20px; color: #666;">
+        Configurez le mois de début de saison pour le calcul automatique de la saison en cours.
+      </p>
+
+      <div style="display: flex; gap: 20px; align-items: flex-end; flex-wrap: wrap;">
+        <div style="flex: 1; min-width: 200px; max-width: 300px;">
+          <label style="display: block; margin-bottom: 8px; font-weight: 500;">Mois de début de saison :</label>
+          <select id="seasonCutoffMonth" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+            <option value="0">Janvier</option>
+            <option value="1">Février</option>
+            <option value="2">Mars</option>
+            <option value="3">Avril</option>
+            <option value="4">Mai</option>
+            <option value="5">Juin</option>
+            <option value="6">Juillet</option>
+            <option value="7">Août</option>
+            <option value="8">Septembre</option>
+            <option value="9">Octobre</option>
+            <option value="10">Novembre</option>
+            <option value="11">Décembre</option>
+          </select>
+        </div>
+        <button onclick="saveSeasonSettings()" class="btn" style="background: #28a745; padding: 12px 25px;">
+          Enregistrer
+        </button>
+      </div>
+
+      <div id="seasonMessage" style="display: none; margin-top: 15px; padding: 10px; border-radius: 4px;"></div>
+
+      <div style="margin-top: 20px; padding: 15px; background: #e7f3ff; border-left: 4px solid #1F4788; border-radius: 4px;">
+        <strong>Information :</strong>
+        <p style="margin: 10px 0 0 0; color: #666;">
+          La saison est calculée automatiquement en fonction du mois actuel.
+          Par exemple, avec Septembre comme mois de début, de Septembre 2024 à Août 2025, la saison sera "2024-2025".
+        </p>
+      </div>
+    </div>
+
+    <!-- Classements Section - Admin Only -->
+    <div class="card admin-only" id="rankingsConfigSection">
+      <h3>🏆 Configuration des Classements</h3>
+      <p style="margin-bottom: 20px; color: #666;">
+        Configurez les règles de qualification pour la finale départementale.
+      </p>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px;">
+        <div>
+          <label style="display: block; margin-bottom: 8px; font-weight: 500;">Seuil petite catégorie :</label>
+          <input type="number" id="qualificationThreshold" min="1" max="20" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+          <small style="color: #666;">Si moins de X joueurs, c'est une petite catégorie</small>
+        </div>
+        <div>
+          <label style="display: block; margin-bottom: 8px; font-weight: 500;">Qualifiés (petite catégorie) :</label>
+          <input type="number" id="qualificationSmall" min="1" max="10" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+          <small style="color: #666;">Nombre de qualifiés pour la finale</small>
+        </div>
+        <div>
+          <label style="display: block; margin-bottom: 8px; font-weight: 500;">Qualifiés (grande catégorie) :</label>
+          <input type="number" id="qualificationLarge" min="1" max="20" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+          <small style="color: #666;">Nombre de qualifiés pour la finale</small>
+        </div>
+      </div>
+
+      <button onclick="saveRankingsConfig()" class="btn" style="background: #28a745; padding: 12px 25px; margin-top: 20px;">
+        Enregistrer
+      </button>
+      <div id="rankingsConfigMessage" style="display: none; margin-top: 15px; padding: 10px; border-radius: 4px;"></div>
+
+      <div style="margin-top: 20px; padding: 15px; background: #e7f3ff; border-left: 4px solid #1F4788; border-radius: 4px;">
+        <strong>Règle actuelle :</strong>
+        <p style="margin: 10px 0 0 0; color: #666;" id="rankingsRuleDisplay">
+          Chargement...
+        </p>
+      </div>
+    </div>
+
+    <!-- Types de Tournoi Section - Admin Only -->
+    <div class="card admin-only" id="tournamentTypesSection">
+      <h3>🎯 Types de Tournoi</h3>
+      <p style="margin-bottom: 20px; color: #666;">
+        Configurez les types de tournois disponibles et leurs libellés.
+      </p>
+
+      <div id="tournamentTypesTable" style="overflow-x: auto;">
+        <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+          <thead>
+            <tr style="background: #1F4788; color: white;">
+              <th style="padding: 12px; text-align: center;">N°</th>
+              <th style="padding: 12px; text-align: left;">Code</th>
+              <th style="padding: 12px; text-align: left;">Nom d'affichage</th>
+              <th style="padding: 12px; text-align: center;">Compte dans classement</th>
+              <th style="padding: 12px; text-align: center;">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="tournamentTypesBody">
+            <tr><td colspan="5" style="text-align: center; padding: 20px; color: #666;">Chargement...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div id="tournamentTypesMessage" style="display: none; margin-top: 15px; padding: 10px; border-radius: 4px;"></div>
+    </div>
+
+    <!-- Politique de Confidentialité Section - Admin Only -->
+    <div class="card admin-only" id="privacyPolicySection">
+      <h3>📋 Politique de Confidentialité</h3>
+      <p style="margin-bottom: 20px; color: #666;">
+        Gérez le texte complet de la politique de confidentialité affiché dans l'Espace Joueur.
+      </p>
+
+      <div style="display: flex; align-items: center; gap: 20px; flex-wrap: wrap;">
+        <div style="flex: 1;">
+          <p style="margin: 0; color: #666;">
+            <strong>Dernière modification :</strong> <span id="privacyPolicyLastUpdate">Non configurée</span>
+          </p>
+        </div>
+        <a href="privacy-policy-editor.html" class="btn" style="background: #1F4788; padding: 12px 25px; text-decoration: none;">
+          Modifier la politique →
+        </a>
+      </div>
+    </div>
   </div>
 
   <script src="js/auth-utils.js"></script>
@@ -2058,6 +2294,458 @@
     }
 
     // ============= END MAINTENANCE FUNCTIONS =============
+
+    // ============= ORGANISATION SETTINGS =============
+
+    async function loadOrganisationSettings() {
+      try {
+        const response = await fetch(`${API_URL}/settings/app-all`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          const settings = await response.json();
+          document.getElementById('organizationName').value = settings.organization_name || '';
+          document.getElementById('organizationShortName').value = settings.organization_short_name || '';
+        }
+      } catch (error) {
+        console.error('Error loading organisation settings:', error);
+      }
+    }
+
+    async function saveOrganisationSettings() {
+      const msgDiv = document.getElementById('organisationMessage');
+
+      try {
+        const response = await fetch(`${API_URL}/settings/app-bulk`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            organization_name: document.getElementById('organizationName').value.trim(),
+            organization_short_name: document.getElementById('organizationShortName').value.trim()
+          })
+        });
+
+        if (response.ok) {
+          msgDiv.textContent = 'Paramètres de l\'organisation enregistrés';
+          msgDiv.style.background = '#d4edda';
+          msgDiv.style.color = '#155724';
+        } else {
+          throw new Error('Erreur lors de la sauvegarde');
+        }
+      } catch (error) {
+        console.error('Error saving organisation settings:', error);
+        msgDiv.textContent = error.message;
+        msgDiv.style.background = '#f8d7da';
+        msgDiv.style.color = '#721c24';
+      }
+
+      msgDiv.style.display = 'block';
+      setTimeout(() => { msgDiv.style.display = 'none'; }, 3000);
+    }
+
+    loadOrganisationSettings();
+
+    // ============= END ORGANISATION SETTINGS =============
+
+    // ============= BRANDING SETTINGS =============
+
+    // Sync color picker with text input
+    function setupColorSync(colorId) {
+      const colorInput = document.getElementById(colorId);
+      const textInput = document.getElementById(colorId + 'Text');
+
+      colorInput.addEventListener('input', () => {
+        textInput.value = colorInput.value.toUpperCase();
+      });
+
+      textInput.addEventListener('change', () => {
+        const value = textInput.value.trim();
+        if (/^#[0-9A-Fa-f]{6}$/.test(value)) {
+          colorInput.value = value;
+        }
+      });
+    }
+
+    // Setup all color pickers
+    ['primaryColor', 'secondaryColor', 'accentColor', 'backgroundColor', 'backgroundSecondaryColor'].forEach(setupColorSync);
+
+    async function loadBrandingSettings() {
+      try {
+        const response = await fetch(`${API_URL}/settings/app-all`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          const settings = await response.json();
+
+          const colors = {
+            primaryColor: settings.primary_color || '#1F4788',
+            secondaryColor: settings.secondary_color || '#667EEA',
+            accentColor: settings.accent_color || '#FFC107',
+            backgroundColor: settings.background_color || '#FFFFFF',
+            backgroundSecondaryColor: settings.background_secondary_color || '#F5F5F5'
+          };
+
+          for (const [id, value] of Object.entries(colors)) {
+            document.getElementById(id).value = value;
+            document.getElementById(id + 'Text').value = value;
+          }
+        }
+      } catch (error) {
+        console.error('Error loading branding settings:', error);
+      }
+    }
+
+    async function saveBrandingSettings() {
+      const msgDiv = document.getElementById('brandingMessage');
+
+      try {
+        const response = await fetch(`${API_URL}/settings/app-bulk`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            primary_color: document.getElementById('primaryColor').value,
+            secondary_color: document.getElementById('secondaryColor').value,
+            accent_color: document.getElementById('accentColor').value,
+            background_color: document.getElementById('backgroundColor').value,
+            background_secondary_color: document.getElementById('backgroundSecondaryColor').value
+          })
+        });
+
+        if (response.ok) {
+          msgDiv.textContent = 'Identité visuelle enregistrée';
+          msgDiv.style.background = '#d4edda';
+          msgDiv.style.color = '#155724';
+        } else {
+          throw new Error('Erreur lors de la sauvegarde');
+        }
+      } catch (error) {
+        console.error('Error saving branding settings:', error);
+        msgDiv.textContent = error.message;
+        msgDiv.style.background = '#f8d7da';
+        msgDiv.style.color = '#721c24';
+      }
+
+      msgDiv.style.display = 'block';
+      setTimeout(() => { msgDiv.style.display = 'none'; }, 3000);
+    }
+
+    loadBrandingSettings();
+
+    // ============= END BRANDING SETTINGS =============
+
+    // ============= EMAILS CONFIG SETTINGS =============
+
+    async function loadEmailsConfig() {
+      try {
+        const response = await fetch(`${API_URL}/settings/app-all`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          const settings = await response.json();
+          document.getElementById('emailCommunication').value = settings.email_communication || '';
+          document.getElementById('emailConvocations').value = settings.email_convocations || '';
+          document.getElementById('emailNoreply').value = settings.email_noreply || '';
+          document.getElementById('emailSenderName').value = settings.email_sender_name || '';
+        }
+      } catch (error) {
+        console.error('Error loading emails config:', error);
+      }
+    }
+
+    async function saveEmailsConfig() {
+      const msgDiv = document.getElementById('emailsConfigMessage');
+
+      try {
+        const response = await fetch(`${API_URL}/settings/app-bulk`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            email_communication: document.getElementById('emailCommunication').value.trim(),
+            email_convocations: document.getElementById('emailConvocations').value.trim(),
+            email_noreply: document.getElementById('emailNoreply').value.trim(),
+            email_sender_name: document.getElementById('emailSenderName').value.trim()
+          })
+        });
+
+        if (response.ok) {
+          msgDiv.textContent = 'Configuration des emails enregistrée';
+          msgDiv.style.background = '#d4edda';
+          msgDiv.style.color = '#155724';
+        } else {
+          throw new Error('Erreur lors de la sauvegarde');
+        }
+      } catch (error) {
+        console.error('Error saving emails config:', error);
+        msgDiv.textContent = error.message;
+        msgDiv.style.background = '#f8d7da';
+        msgDiv.style.color = '#721c24';
+      }
+
+      msgDiv.style.display = 'block';
+      setTimeout(() => { msgDiv.style.display = 'none'; }, 3000);
+    }
+
+    loadEmailsConfig();
+
+    // ============= END EMAILS CONFIG SETTINGS =============
+
+    // ============= SEASON SETTINGS =============
+
+    async function loadSeasonSettings() {
+      try {
+        const response = await fetch(`${API_URL}/settings/app/season_cutoff_month`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          if (data.value) {
+            document.getElementById('seasonCutoffMonth').value = data.value;
+          }
+        }
+      } catch (error) {
+        console.error('Error loading season settings:', error);
+      }
+    }
+
+    async function saveSeasonSettings() {
+      const msgDiv = document.getElementById('seasonMessage');
+      const month = document.getElementById('seasonCutoffMonth').value;
+      const monthNames = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
+
+      try {
+        const response = await fetch(`${API_URL}/settings/app/season_cutoff_month`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ value: month })
+        });
+
+        if (response.ok) {
+          msgDiv.textContent = `Mois de début de saison configuré : ${monthNames[parseInt(month)]}`;
+          msgDiv.style.background = '#d4edda';
+          msgDiv.style.color = '#155724';
+        } else {
+          throw new Error('Erreur lors de la sauvegarde');
+        }
+      } catch (error) {
+        console.error('Error saving season settings:', error);
+        msgDiv.textContent = error.message;
+        msgDiv.style.background = '#f8d7da';
+        msgDiv.style.color = '#721c24';
+      }
+
+      msgDiv.style.display = 'block';
+      setTimeout(() => { msgDiv.style.display = 'none'; }, 3000);
+    }
+
+    loadSeasonSettings();
+
+    // ============= END SEASON SETTINGS =============
+
+    // ============= RANKINGS CONFIG SETTINGS =============
+
+    async function loadRankingsConfig() {
+      try {
+        const response = await fetch(`${API_URL}/settings/app-all`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          const settings = await response.json();
+          document.getElementById('qualificationThreshold').value = settings.qualification_threshold || '9';
+          document.getElementById('qualificationSmall').value = settings.qualification_small || '4';
+          document.getElementById('qualificationLarge').value = settings.qualification_large || '6';
+
+          // Update display
+          updateRankingsRuleDisplay(
+            settings.qualification_threshold || '9',
+            settings.qualification_small || '4',
+            settings.qualification_large || '6'
+          );
+        }
+      } catch (error) {
+        console.error('Error loading rankings config:', error);
+      }
+    }
+
+    function updateRankingsRuleDisplay(threshold, small, large) {
+      document.getElementById('rankingsRuleDisplay').innerHTML = `
+        Si une catégorie a <strong>moins de ${threshold} joueurs</strong>, les <strong>${small} premiers</strong> sont qualifiés pour la finale.<br>
+        Si une catégorie a <strong>${threshold} joueurs ou plus</strong>, les <strong>${large} premiers</strong> sont qualifiés.
+      `;
+    }
+
+    async function saveRankingsConfig() {
+      const msgDiv = document.getElementById('rankingsConfigMessage');
+      const threshold = document.getElementById('qualificationThreshold').value;
+      const small = document.getElementById('qualificationSmall').value;
+      const large = document.getElementById('qualificationLarge').value;
+
+      try {
+        const response = await fetch(`${API_URL}/settings/app-bulk`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            qualification_threshold: threshold,
+            qualification_small: small,
+            qualification_large: large
+          })
+        });
+
+        if (response.ok) {
+          msgDiv.textContent = 'Configuration des classements enregistrée';
+          msgDiv.style.background = '#d4edda';
+          msgDiv.style.color = '#155724';
+          updateRankingsRuleDisplay(threshold, small, large);
+        } else {
+          throw new Error('Erreur lors de la sauvegarde');
+        }
+      } catch (error) {
+        console.error('Error saving rankings config:', error);
+        msgDiv.textContent = error.message;
+        msgDiv.style.background = '#f8d7da';
+        msgDiv.style.color = '#721c24';
+      }
+
+      msgDiv.style.display = 'block';
+      setTimeout(() => { msgDiv.style.display = 'none'; }, 3000);
+    }
+
+    loadRankingsConfig();
+
+    // ============= END RANKINGS CONFIG SETTINGS =============
+
+    // ============= TOURNAMENT TYPES SETTINGS =============
+
+    async function loadTournamentTypes() {
+      try {
+        const response = await fetch(`${API_URL}/settings/tournament-types`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          const types = await response.json();
+          renderTournamentTypes(types);
+        }
+      } catch (error) {
+        console.error('Error loading tournament types:', error);
+        document.getElementById('tournamentTypesBody').innerHTML =
+          '<tr><td colspan="5" style="text-align: center; padding: 20px; color: #dc3545;">Erreur de chargement</td></tr>';
+      }
+    }
+
+    function renderTournamentTypes(types) {
+      const tbody = document.getElementById('tournamentTypesBody');
+
+      if (!types || types.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 20px; color: #666;">Aucun type de tournoi configuré</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = types.map(t => `
+        <tr style="border-bottom: 1px solid #ddd;" data-id="${t.id}">
+          <td style="padding: 12px; text-align: center; font-weight: bold;">${t.tournament_number}</td>
+          <td style="padding: 12px;">
+            <input type="text" value="${t.code}" class="tt-code" style="width: 80px; padding: 6px; border: 1px solid #ddd; border-radius: 4px;">
+          </td>
+          <td style="padding: 12px;">
+            <input type="text" value="${t.display_name}" class="tt-display-name" style="width: 200px; padding: 6px; border: 1px solid #ddd; border-radius: 4px;">
+          </td>
+          <td style="padding: 12px; text-align: center;">
+            <input type="checkbox" ${t.include_in_ranking ? 'checked' : ''} class="tt-include" style="width: 20px; height: 20px; cursor: pointer;">
+          </td>
+          <td style="padding: 12px; text-align: center;">
+            <button onclick="saveTournamentType(${t.id})" class="btn" style="background: #28a745; padding: 5px 12px; font-size: 12px;">
+              Sauver
+            </button>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    async function saveTournamentType(id) {
+      const row = document.querySelector(`tr[data-id="${id}"]`);
+      const code = row.querySelector('.tt-code').value.trim();
+      const displayName = row.querySelector('.tt-display-name').value.trim();
+      const includeInRanking = row.querySelector('.tt-include').checked;
+      const msgDiv = document.getElementById('tournamentTypesMessage');
+
+      try {
+        const response = await fetch(`${API_URL}/settings/tournament-types/${id}`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            code: code,
+            display_name: displayName,
+            include_in_ranking: includeInRanking
+          })
+        });
+
+        if (response.ok) {
+          msgDiv.textContent = 'Type de tournoi mis à jour';
+          msgDiv.style.background = '#d4edda';
+          msgDiv.style.color = '#155724';
+        } else {
+          throw new Error('Erreur lors de la sauvegarde');
+        }
+      } catch (error) {
+        console.error('Error saving tournament type:', error);
+        msgDiv.textContent = error.message;
+        msgDiv.style.background = '#f8d7da';
+        msgDiv.style.color = '#721c24';
+      }
+
+      msgDiv.style.display = 'block';
+      setTimeout(() => { msgDiv.style.display = 'none'; }, 3000);
+    }
+
+    loadTournamentTypes();
+
+    // ============= END TOURNAMENT TYPES SETTINGS =============
+
+    // ============= PRIVACY POLICY SETTINGS =============
+
+    async function loadPrivacyPolicyInfo() {
+      try {
+        const response = await fetch(`${API_URL}/settings/app/privacy_policy`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          const updateEl = document.getElementById('privacyPolicyLastUpdate');
+          if (data.value && data.value.length > 0) {
+            if (data.updated_at) {
+              updateEl.textContent = new Date(data.updated_at).toLocaleDateString('fr-FR');
+            } else {
+              updateEl.textContent = 'Configurée';
+            }
+          } else {
+            updateEl.textContent = 'Non configurée';
+          }
+        }
+      } catch (error) {
+        console.error('Error loading privacy policy info:', error);
+      }
+    }
+
+    loadPrivacyPolicyInfo();
+
+    // ============= END PRIVACY POLICY SETTINGS =============
   </script>
 
   <!-- Edit Game Parameter Modal -->

@@ -155,12 +155,95 @@ const initAppSettings = async () => {
         value TEXT,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
-    `, [], (err) => {
+    `, [], async (err) => {
       if (err) console.error('Error creating app_settings table:', err);
-      // Insert default values if not exists
-      db.run(`INSERT OR IGNORE INTO app_settings (key, value) VALUES ('summary_email', 'cdbhs92@gmail.com')`, [], () => {
-        db.run(`INSERT OR IGNORE INTO app_settings (key, value) VALUES ('email_scheduler_hour', '6')`, [], () => resolve());
-      });
+
+      // Default settings to initialize
+      const defaultSettings = [
+        // Legacy settings
+        ['summary_email', 'cdbhs92@gmail.com'],
+        ['email_scheduler_hour', '6'],
+
+        // Organization settings
+        ['organization_name', 'Comité Départemental de Billard des Hauts-de-Seine'],
+        ['organization_short_name', 'CDBHS'],
+
+        // Branding settings
+        ['primary_color', '#1F4788'],
+        ['secondary_color', '#667EEA'],
+        ['accent_color', '#FFC107'],
+        ['background_color', '#FFFFFF'],
+        ['background_secondary_color', '#F5F5F5'],
+
+        // Email settings
+        ['email_communication', 'communication@cdbhs.net'],
+        ['email_convocations', 'convocations@cdbhs.net'],
+        ['email_noreply', 'noreply@cdbhs.net'],
+        ['email_sender_name', 'CDBHS'],
+
+        // Season settings
+        ['season_cutoff_month', '8'], // September (0-indexed: 8 = September)
+
+        // Ranking settings
+        ['qualification_threshold', '9'],
+        ['qualification_small', '4'],
+        ['qualification_large', '6'],
+
+        // Privacy policy (default placeholder)
+        ['privacy_policy', '']
+      ];
+
+      // Insert default values using INSERT OR IGNORE / ON CONFLICT
+      for (const [key, value] of defaultSettings) {
+        await new Promise((res) => {
+          db.run(
+            `INSERT INTO app_settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO NOTHING`,
+            [key, value],
+            () => res()
+          );
+        });
+      }
+
+      resolve();
+    });
+  });
+};
+
+// Initialize tournament_types table
+const initTournamentTypes = async () => {
+  const db = getDb();
+  return new Promise((resolve) => {
+    db.run(`
+      CREATE TABLE IF NOT EXISTS tournament_types (
+        id SERIAL PRIMARY KEY,
+        tournament_number INTEGER NOT NULL UNIQUE,
+        code TEXT NOT NULL,
+        display_name TEXT NOT NULL,
+        include_in_ranking BOOLEAN DEFAULT TRUE
+      )
+    `, [], async (err) => {
+      if (err) console.error('Error creating tournament_types table:', err);
+
+      // Default tournament types
+      const defaultTypes = [
+        [1, 'T1', 'Tournoi 1', true],
+        [2, 'T2', 'Tournoi 2', true],
+        [3, 'T3', 'Tournoi 3', true],
+        [4, 'FINALE', 'Finale Départementale', false]
+      ];
+
+      for (const [num, code, displayName, includeInRanking] of defaultTypes) {
+        await new Promise((res) => {
+          db.run(
+            `INSERT INTO tournament_types (tournament_number, code, display_name, include_in_ranking)
+             VALUES ($1, $2, $3, $4) ON CONFLICT (tournament_number) DO NOTHING`,
+            [num, code, displayName, includeInRanking],
+            () => res()
+          );
+        });
+      }
+
+      resolve();
     });
   });
 };
@@ -203,6 +286,103 @@ router.put('/app/:key', authenticateToken, requireAdmin, async (req, res) => {
         return res.status(500).json({ error: err.message });
       }
       res.json({ success: true, message: 'Setting updated' });
+    }
+  );
+});
+
+// Get all app settings at once
+router.get('/app-all', authenticateToken, async (req, res) => {
+  const db = getDb();
+
+  await initAppSettings();
+
+  db.all(
+    'SELECT key, value FROM app_settings',
+    [],
+    (err, rows) => {
+      if (err) {
+        console.error('Error fetching all settings:', err);
+        return res.status(500).json({ error: err.message });
+      }
+      // Convert to object for easier use
+      const settings = {};
+      (rows || []).forEach(row => {
+        settings[row.key] = row.value;
+      });
+      res.json(settings);
+    }
+  );
+});
+
+// Update multiple settings at once (admin only)
+router.put('/app-bulk', authenticateToken, requireAdmin, async (req, res) => {
+  const db = getDb();
+  const settings = req.body; // Object with key-value pairs
+
+  await initAppSettings();
+
+  try {
+    for (const [key, value] of Object.entries(settings)) {
+      await new Promise((resolve, reject) => {
+        db.run(
+          `INSERT INTO app_settings (key, value, updated_at) VALUES ($1, $2, CURRENT_TIMESTAMP)
+           ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = CURRENT_TIMESTAMP`,
+          [key, value],
+          (err) => {
+            if (err) reject(err);
+            else resolve();
+          }
+        );
+      });
+    }
+    res.json({ success: true, message: 'Settings updated' });
+  } catch (err) {
+    console.error('Error updating settings:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ============= TOURNAMENT TYPES =============
+
+// Get all tournament types
+router.get('/tournament-types', authenticateToken, async (req, res) => {
+  const db = getDb();
+
+  await initTournamentTypes();
+
+  db.all(
+    'SELECT * FROM tournament_types ORDER BY tournament_number',
+    [],
+    (err, rows) => {
+      if (err) {
+        console.error('Error fetching tournament types:', err);
+        return res.status(500).json({ error: err.message });
+      }
+      res.json(rows || []);
+    }
+  );
+});
+
+// Update a tournament type (admin only)
+router.put('/tournament-types/:id', authenticateToken, requireAdmin, async (req, res) => {
+  const db = getDb();
+  const { id } = req.params;
+  const { code, display_name, include_in_ranking } = req.body;
+
+  await initTournamentTypes();
+
+  db.run(
+    `UPDATE tournament_types SET code = $1, display_name = $2, include_in_ranking = $3 WHERE id = $4`,
+    [code, display_name, include_in_ranking, id],
+    function(err) {
+      if (err) {
+        console.error('Error updating tournament type:', err);
+        return res.status(500).json({ error: err.message });
+      }
+      if (this.changes === 0) {
+        return res.status(404).json({ error: 'Tournament type not found' });
+      }
+      res.json({ success: true, message: 'Tournament type updated' });
     }
   );
 });

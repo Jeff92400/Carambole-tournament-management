@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Politique de Confidentialité - Éditeur</title>
+  <link rel="icon" type="image/png" href="images/billiard-icon.png">
+  <link rel="stylesheet" href="css/styles.css">
+  <style>
+    .editor-container {
+      display: flex;
+      flex-direction: column;
+      height: calc(100vh - 200px);
+      min-height: 500px;
+    }
+    .editor-toolbar {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 15px;
+      padding: 10px;
+      background: #f8f9fa;
+      border-radius: 6px;
+      flex-wrap: wrap;
+    }
+    .editor-toolbar button {
+      padding: 8px 12px;
+      border: 1px solid #ddd;
+      background: white;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    .editor-toolbar button:hover {
+      background: #e9ecef;
+    }
+    .editor-textarea {
+      flex: 1;
+      width: 100%;
+      padding: 20px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 14px;
+      line-height: 1.6;
+      resize: none;
+    }
+    .editor-textarea:focus {
+      outline: none;
+      border-color: #1F4788;
+      box-shadow: 0 0 0 3px rgba(31, 71, 136, 0.1);
+    }
+    .preview-container {
+      flex: 1;
+      width: 100%;
+      padding: 20px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      background: white;
+      overflow-y: auto;
+    }
+    .preview-container h1 { font-size: 24px; margin-top: 0; }
+    .preview-container h2 { font-size: 20px; margin-top: 20px; }
+    .preview-container h3 { font-size: 16px; margin-top: 15px; }
+    .preview-container p { margin: 10px 0; }
+    .preview-container ul, .preview-container ol { margin: 10px 0; padding-left: 25px; }
+    .preview-container li { margin: 5px 0; }
+    .tab-buttons {
+      display: flex;
+      gap: 5px;
+      margin-bottom: 15px;
+    }
+    .tab-btn {
+      padding: 10px 20px;
+      border: none;
+      background: #e9ecef;
+      border-radius: 6px 6px 0 0;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+    }
+    .tab-btn.active {
+      background: #1F4788;
+      color: white;
+    }
+    .char-count {
+      text-align: right;
+      color: #666;
+      font-size: 12px;
+      margin-top: 5px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="navbar">
+      <h2><img src="images/billiard-icon.png" alt="" style="height: 28px; width: 28px; vertical-align: middle; margin-right: 8px;" onerror="this.style.display='none'; this.nextSibling.style.display='inline';"><span style="display:none;"></span> Politique de Confidentialité</h2>
+      <div class="nav-links">
+        <a href="settings.html">← Retour aux paramètres</a>
+        <a href="#" id="logoutBtn" class="nav-logout">Déconnexion</a>
+      </div>
+    </div>
+
+    <div id="errorMessage" class="error" style="display: none;"></div>
+    <div id="successMessage" class="success" style="display: none;"></div>
+
+    <div class="card">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
+        <div>
+          <h3 style="margin: 0;">Éditeur de la Politique de Confidentialité</h3>
+          <p style="color: #666; margin: 5px 0 0 0;">Ce texte sera affiché dans l'Espace Joueur lorsque les utilisateurs consultent la politique de confidentialité.</p>
+        </div>
+        <div style="display: flex; gap: 10px;">
+          <button onclick="savePolicy()" class="btn" style="background: #28a745; padding: 10px 25px;">
+            Enregistrer
+          </button>
+        </div>
+      </div>
+
+      <div class="tab-buttons">
+        <button class="tab-btn active" onclick="showTab('editor')">Éditeur</button>
+        <button class="tab-btn" onclick="showTab('preview')">Aperçu</button>
+      </div>
+
+      <div class="editor-container">
+        <div id="editorTab" style="flex: 1; display: flex; flex-direction: column;">
+          <div class="editor-toolbar">
+            <button onclick="insertMarkdown('# ', '')" title="Titre 1">H1</button>
+            <button onclick="insertMarkdown('## ', '')" title="Titre 2">H2</button>
+            <button onclick="insertMarkdown('### ', '')" title="Titre 3">H3</button>
+            <button onclick="insertMarkdown('**', '**')" title="Gras"><strong>B</strong></button>
+            <button onclick="insertMarkdown('*', '*')" title="Italique"><em>I</em></button>
+            <button onclick="insertMarkdown('\n- ', '')" title="Liste à puces">• Liste</button>
+            <button onclick="insertMarkdown('\n1. ', '')" title="Liste numérotée">1. Liste</button>
+            <button onclick="insertMarkdown('\n\n', '')" title="Nouveau paragraphe">¶</button>
+          </div>
+          <textarea id="policyContent" class="editor-textarea" placeholder="Entrez ici le texte de votre politique de confidentialité...
+
+Vous pouvez utiliser le format Markdown :
+# Titre principal
+## Sous-titre
+### Section
+
+**Texte en gras**
+*Texte en italique*
+
+- Liste à puces
+- Autre élément
+
+1. Liste numérotée
+2. Autre élément"></textarea>
+          <div class="char-count"><span id="charCount">0</span> caractères</div>
+        </div>
+
+        <div id="previewTab" class="preview-container" style="display: none;">
+          <!-- Preview content will be rendered here -->
+        </div>
+      </div>
+
+      <div id="policyMessage" style="display: none; margin-top: 15px; padding: 10px; border-radius: 4px;"></div>
+
+      <div style="margin-top: 20px; padding: 15px; background: #e7f3ff; border-left: 4px solid #1F4788; border-radius: 4px;">
+        <strong>Format Markdown supporté :</strong>
+        <ul style="margin: 10px 0; padding-left: 20px; color: #666;">
+          <li><code># Titre</code>, <code>## Sous-titre</code>, <code>### Section</code> pour les titres</li>
+          <li><code>**gras**</code> et <code>*italique*</code> pour le formatage</li>
+          <li><code>- élément</code> pour les listes à puces</li>
+          <li><code>1. élément</code> pour les listes numérotées</li>
+          <li>Lignes vides pour séparer les paragraphes</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/auth-utils.js"></script>
+  <script>
+    const API_URL = '/api';
+
+    // Check authentication
+    if (!requireAuth()) {
+      throw new Error('Not authenticated');
+    }
+    const token = localStorage.getItem('token');
+
+    // Check user role - admin only
+    function checkAdminRole() {
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        if (payload.role !== 'admin') {
+          alert('Accès réservé aux administrateurs');
+          window.location.href = 'settings.html';
+        }
+      } catch (e) {
+        console.error('Error parsing token:', e);
+        window.location.href = 'login.html';
+      }
+    }
+    checkAdminRole();
+
+    // Logout
+    document.getElementById('logoutBtn').addEventListener('click', (e) => {
+      e.preventDefault();
+      localStorage.removeItem('token');
+      localStorage.removeItem('username');
+      localStorage.removeItem('userRole');
+      window.location.href = 'login.html';
+    });
+
+    // Tab switching
+    function showTab(tab) {
+      const editorTab = document.getElementById('editorTab');
+      const previewTab = document.getElementById('previewTab');
+      const buttons = document.querySelectorAll('.tab-btn');
+
+      buttons.forEach(btn => btn.classList.remove('active'));
+
+      if (tab === 'editor') {
+        editorTab.style.display = 'flex';
+        previewTab.style.display = 'none';
+        buttons[0].classList.add('active');
+      } else {
+        editorTab.style.display = 'none';
+        previewTab.style.display = 'block';
+        buttons[1].classList.add('active');
+        renderPreview();
+      }
+    }
+
+    // Simple Markdown to HTML converter
+    function markdownToHtml(text) {
+      if (!text) return '<p style="color: #999; font-style: italic;">Aucun contenu</p>';
+
+      let html = text
+        // Escape HTML
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        // Headers
+        .replace(/^### (.*)$/gm, '<h3>$1</h3>')
+        .replace(/^## (.*)$/gm, '<h2>$1</h2>')
+        .replace(/^# (.*)$/gm, '<h1>$1</h1>')
+        // Bold and italic
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.+?)\*/g, '<em>$1</em>')
+        // Lists
+        .replace(/^- (.*)$/gm, '<li>$1</li>')
+        .replace(/^(\d+)\. (.*)$/gm, '<li>$2</li>')
+        // Paragraphs
+        .replace(/\n\n/g, '</p><p>')
+        .replace(/\n/g, '<br>');
+
+      // Wrap in paragraph if not starting with header
+      if (!html.startsWith('<h')) {
+        html = '<p>' + html + '</p>';
+      }
+
+      // Fix list items
+      html = html.replace(/(<li>.*<\/li>)/g, '<ul>$1</ul>');
+      html = html.replace(/<\/ul><ul>/g, '');
+
+      return html;
+    }
+
+    // Render preview
+    function renderPreview() {
+      const content = document.getElementById('policyContent').value;
+      document.getElementById('previewTab').innerHTML = markdownToHtml(content);
+    }
+
+    // Insert markdown formatting
+    function insertMarkdown(before, after) {
+      const textarea = document.getElementById('policyContent');
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const text = textarea.value;
+      const selectedText = text.substring(start, end);
+
+      textarea.value = text.substring(0, start) + before + selectedText + after + text.substring(end);
+      textarea.focus();
+      textarea.setSelectionRange(start + before.length, start + before.length + selectedText.length);
+      updateCharCount();
+    }
+
+    // Update character count
+    function updateCharCount() {
+      const count = document.getElementById('policyContent').value.length;
+      document.getElementById('charCount').textContent = count.toLocaleString('fr-FR');
+    }
+
+    document.getElementById('policyContent').addEventListener('input', updateCharCount);
+
+    // Load policy
+    async function loadPolicy() {
+      try {
+        const response = await fetch(`${API_URL}/settings/app/privacy_policy`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          if (data.value) {
+            document.getElementById('policyContent').value = data.value;
+            updateCharCount();
+          }
+        }
+      } catch (error) {
+        console.error('Error loading policy:', error);
+      }
+    }
+
+    // Save policy
+    async function savePolicy() {
+      const content = document.getElementById('policyContent').value;
+      const msgDiv = document.getElementById('policyMessage');
+
+      try {
+        const response = await fetch(`${API_URL}/settings/app/privacy_policy`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ value: content })
+        });
+
+        if (response.ok) {
+          msgDiv.textContent = 'Politique de confidentialité enregistrée avec succès !';
+          msgDiv.style.background = '#d4edda';
+          msgDiv.style.color = '#155724';
+
+          document.getElementById('successMessage').textContent = 'Politique de confidentialité enregistrée';
+          document.getElementById('successMessage').style.display = 'block';
+          setTimeout(() => { document.getElementById('successMessage').style.display = 'none'; }, 3000);
+        } else {
+          throw new Error('Erreur lors de la sauvegarde');
+        }
+      } catch (error) {
+        console.error('Error saving policy:', error);
+        msgDiv.textContent = error.message;
+        msgDiv.style.background = '#f8d7da';
+        msgDiv.style.color = '#721c24';
+
+        document.getElementById('errorMessage').textContent = error.message;
+        document.getElementById('errorMessage').style.display = 'block';
+      }
+
+      msgDiv.style.display = 'block';
+      setTimeout(() => { msgDiv.style.display = 'none'; }, 5000);
+    }
+
+    // Load on page load
+    loadPolicy();
+  </script>
+</body>
+</html>
