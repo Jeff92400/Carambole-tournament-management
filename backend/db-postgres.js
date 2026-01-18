@@ -1070,32 +1070,87 @@ Le CDBHS`;
       console.log('Default clubs initialized');
     }
 
-    // Migration: Normalize club names in players and player_contacts to use canonical names from club_aliases
-    // This ensures consistent club names across the system
+    // Migration: Ensure club_aliases.canonical_name references valid clubs.name
+    // First, update any canonical_name that doesn't match clubs.name to the closest match
+    const alignAliasesResult = await client.query(`
+      UPDATE club_aliases ca
+      SET canonical_name = c.name
+      FROM clubs c
+      WHERE UPPER(REPLACE(REPLACE(REPLACE(ca.canonical_name, ' ', ''), '.', ''), '-', ''))
+          = UPPER(REPLACE(REPLACE(REPLACE(c.name, ' ', ''), '.', ''), '-', ''))
+        AND ca.canonical_name != c.name
+    `);
+    if (alignAliasesResult.rowCount > 0) {
+      console.log(`Aligned ${alignAliasesResult.rowCount} club_aliases canonical names to clubs table`);
+    }
+
+    // Migration: Normalize club names in players to use clubs.name (via club_aliases)
+    // Uses club_aliases to find the canonical name, which must exist in clubs table
     const normalizeClubsResult = await client.query(`
       UPDATE players p
-      SET club = ca.canonical_name
+      SET club = c.name
       FROM club_aliases ca
+      INNER JOIN clubs c ON ca.canonical_name = c.name
       WHERE UPPER(REPLACE(REPLACE(REPLACE(p.club, ' ', ''), '.', ''), '-', ''))
           = UPPER(REPLACE(REPLACE(REPLACE(ca.alias, ' ', ''), '.', ''), '-', ''))
-        AND p.club != ca.canonical_name
+        AND p.club != c.name
         AND p.club IS NOT NULL
     `);
     if (normalizeClubsResult.rowCount > 0) {
       console.log(`Normalized ${normalizeClubsResult.rowCount} club names in players table`);
     }
 
+    // Also try direct match against clubs table for any clubs without aliases
+    const directNormalizeResult = await client.query(`
+      UPDATE players p
+      SET club = c.name
+      FROM clubs c
+      WHERE UPPER(REPLACE(REPLACE(REPLACE(p.club, ' ', ''), '.', ''), '-', ''))
+          = UPPER(REPLACE(REPLACE(REPLACE(c.name, ' ', ''), '.', ''), '-', ''))
+        AND p.club != c.name
+        AND p.club IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM club_aliases ca2
+          WHERE UPPER(REPLACE(REPLACE(REPLACE(p.club, ' ', ''), '.', ''), '-', ''))
+              = UPPER(REPLACE(REPLACE(REPLACE(ca2.alias, ' ', ''), '.', ''), '-', ''))
+        )
+    `);
+    if (directNormalizeResult.rowCount > 0) {
+      console.log(`Direct-normalized ${directNormalizeResult.rowCount} club names in players table`);
+    }
+
+    // Normalize player_contacts to use clubs.name (via club_aliases)
     const normalizeContactsResult = await client.query(`
       UPDATE player_contacts pc
-      SET club = ca.canonical_name
+      SET club = c.name
       FROM club_aliases ca
+      INNER JOIN clubs c ON ca.canonical_name = c.name
       WHERE UPPER(REPLACE(REPLACE(REPLACE(pc.club, ' ', ''), '.', ''), '-', ''))
           = UPPER(REPLACE(REPLACE(REPLACE(ca.alias, ' ', ''), '.', ''), '-', ''))
-        AND pc.club != ca.canonical_name
+        AND pc.club != c.name
         AND pc.club IS NOT NULL
     `);
     if (normalizeContactsResult.rowCount > 0) {
       console.log(`Normalized ${normalizeContactsResult.rowCount} club names in player_contacts table`);
+    }
+
+    // Direct match for player_contacts without aliases
+    const directContactsResult = await client.query(`
+      UPDATE player_contacts pc
+      SET club = c.name
+      FROM clubs c
+      WHERE UPPER(REPLACE(REPLACE(REPLACE(pc.club, ' ', ''), '.', ''), '-', ''))
+          = UPPER(REPLACE(REPLACE(REPLACE(c.name, ' ', ''), '.', ''), '-', ''))
+        AND pc.club != c.name
+        AND pc.club IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM club_aliases ca2
+          WHERE UPPER(REPLACE(REPLACE(REPLACE(pc.club, ' ', ''), '.', ''), '-', ''))
+              = UPPER(REPLACE(REPLACE(REPLACE(ca2.alias, ' ', ''), '.', ''), '-', ''))
+        )
+    `);
+    if (directContactsResult.rowCount > 0) {
+      console.log(`Direct-normalized ${directContactsResult.rowCount} club names in player_contacts table`);
     }
 
   } catch (err) {

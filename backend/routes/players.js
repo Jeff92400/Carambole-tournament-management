@@ -8,6 +8,54 @@ const { authenticateToken } = require('./auth');
 const router = express.Router();
 
 /**
+ * Normalize a club name to its canonical form from the clubs table
+ * Uses club_aliases for lookup, falls back to exact match in clubs table
+ * @param {string} rawClubName - Raw club name from import
+ * @returns {Promise<string>} - Canonical club name or original if not found
+ */
+async function normalizeClubName(rawClubName) {
+  if (!rawClubName) return rawClubName;
+
+  // Normalize for comparison: remove spaces, dots, hyphens, uppercase
+  const normalized = rawClubName.toUpperCase().replace(/[\s.\-]/g, '');
+
+  return new Promise((resolve, reject) => {
+    // First try to find via club_aliases
+    db.get(
+      `SELECT ca.canonical_name
+       FROM club_aliases ca
+       INNER JOIN clubs c ON ca.canonical_name = c.name
+       WHERE UPPER(REPLACE(REPLACE(REPLACE(ca.alias, ' ', ''), '.', ''), '-', '')) = $1
+       LIMIT 1`,
+      [normalized],
+      (err, row) => {
+        if (err) {
+          console.error('Error looking up club alias:', err);
+          resolve(rawClubName); // Fallback to original
+        } else if (row) {
+          resolve(row.canonical_name);
+        } else {
+          // No alias found, try direct match in clubs table
+          db.get(
+            `SELECT name FROM clubs
+             WHERE UPPER(REPLACE(REPLACE(REPLACE(name, ' ', ''), '.', ''), '-', '')) = $1
+             LIMIT 1`,
+            [normalized],
+            (err2, row2) => {
+              if (err2 || !row2) {
+                resolve(rawClubName); // No match, keep original
+              } else {
+                resolve(row2.name);
+              }
+            }
+          );
+        }
+      }
+    );
+  });
+}
+
+/**
  * Load game modes with rank_column mapping from database
  * Returns object: { 'LIBRE': 'rank_libre', 'BANDE': 'rank_bande', ... }
  */
@@ -134,7 +182,8 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
 
         // Skip header row (detect by checking if first column looks like a header)
         if (licence.toUpperCase() === 'LICENCE' || licence.toUpperCase() === 'LICENSE') continue;
-        const club = record[1]?.replace(/"/g, '').trim();
+        const rawClub = record[1]?.replace(/"/g, '').trim();
+        const club = await normalizeClubName(rawClub); // Normalize to canonical name from clubs table
         const firstName = record[2]?.replace(/"/g, '').trim();
         const lastName = record[3]?.replace(/"/g, '').trim();
         const isActive = record[10]?.replace(/"/g, '').trim() === '1' ? 1 : 0;
@@ -353,13 +402,16 @@ router.post('/', authenticateToken, async (req, res) => {
       }
     }
 
+    // Normalize club name to canonical form from clubs table
+    const normalizedClub = club ? await normalizeClubName(club) : null;
+
     // Build dynamic INSERT
     const baseCols = ['licence', 'first_name', 'last_name', 'club', 'email', 'telephone'];
     const baseValues = [
       normalizedLicence,
       first_name,
       last_name.toUpperCase(),
-      club || null,
+      normalizedClub,
       email || null,
       phone || null
     ];
@@ -486,8 +538,10 @@ router.put('/:licence', authenticateToken, async (req, res) => {
     const values = [];
 
     if (club !== undefined) {
+      // Normalize club name to canonical form from clubs table
+      const normalizedClub = club ? await normalizeClubName(club) : null;
       updates.push('club = ?');
-      values.push(club);
+      values.push(normalizedClub);
     }
     if (first_name !== undefined) {
       updates.push('first_name = ?');
