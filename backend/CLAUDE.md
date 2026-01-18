@@ -99,7 +99,7 @@ Optional:
 - Licence numbers are normalized by removing spaces for comparisons
 - CSV files use semicolon delimiter, imported via multer
 
-## Future Cleanup (Post-IONOS Decommissioning)
+## Future Cleanup (2025-2026 Season)
 
 When IONOS is fully deprecated, the following can be removed for maintainability:
 - `routes/inscriptions.js`: Remove `/import` endpoint and CSV parsing logic (~300 lines)
@@ -108,3 +108,9 @@ When IONOS is fully deprecated, the following can be removed for maintainability
 - Import history tracking (`import_history` table)
 - Frontend IONOS import UI components
 - Related documentation and error handling
+
+### Hidden Settings Sections (to be deleted)
+The following sections in `frontend/settings-admin.html` are hidden and should be fully removed:
+- **"Correspondances de catégories IONOS"** (`#categoryMappingsSection`) - IONOS category mappings, no longer needed
+- **"Alias des Clubs"** (`#clubAliasesSection`) - Club name aliases, player data now standardized
+- Also remove related backend routes in `routes/clubs.js` (alias endpoints) and `category_mappings` table
