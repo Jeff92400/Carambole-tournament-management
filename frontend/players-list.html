@@ -165,8 +165,7 @@
                 <!-- Dynamic ranking columns will be inserted here -->
                 <th id="rankingColumnsPlaceholder" style="display:none;"></th>
                 <th>Statut</th>
-                <th class="admin-only" title="Utilisateur de l'app mobile">📱 App</th>
-                <th class="admin-only">Player App role</th>
+                <th class="admin-only">Statut App</th>
                 <th class="admin-only" title="Consentement RGPD">📋 RGPD</th>
                 <th>Actions</th>
               </tr>
@@ -221,12 +220,15 @@
             <p style="margin: 8px 0 0 28px; font-size: 12px; color: #666;">Décochez pour marquer le joueur comme inactif (ne joue plus cette saison)</p>
           </div>
 
-          <div style="margin-bottom: 15px; padding: 12px; background: #e8f5e9; border-radius: 6px;">
-            <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
-              <input type="checkbox" id="edit_player_app_user" style="width: 18px; height: 18px; cursor: pointer;">
-              <span style="font-weight: bold; color: #2e7d32;">Utilisateur Player App</span>
-            </label>
-            <p style="margin: 8px 0 0 28px; font-size: 12px; color: #666;">Cochez si ce joueur utilise l'application mobile Player App</p>
+          <div style="margin-bottom: 15px;">
+            <label style="display: block; margin-bottom: 5px; font-weight: bold;">Statut Player App</label>
+            <select id="edit_player_app_role" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+              <option value="">Non inscrit</option>
+              <option value="joueur">Joueur</option>
+              <option value="admin">Admin</option>
+              <option value="test">Test (exclu des stats)</option>
+            </select>
+            <p style="margin: 5px 0 0 0; font-size: 12px; color: #666;">Non inscrit = pas encore dans Player App. Passe à "Joueur" lors de l'inscription.</p>
           </div>
 
           <div id="gdprConsentSection" style="margin-bottom: 15px; padding: 12px; background: #e3f2fd; border-radius: 6px; display: none;">
@@ -291,20 +293,14 @@
           </div>
 
           <div style="margin-bottom: 15px;">
-            <label style="display: block; margin-bottom: 5px; font-weight: bold;">Player App Role</label>
+            <label style="display: block; margin-bottom: 5px; font-weight: bold;">Statut Player App</label>
             <select id="create_player_app_role" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-              <option value="">-- Aucun --</option>
+              <option value="">Non inscrit</option>
               <option value="joueur">Joueur</option>
               <option value="admin">Admin</option>
-              <option value="test" selected>Test</option>
+              <option value="test" selected>Test (exclu des stats)</option>
             </select>
-          </div>
-
-          <div style="margin-bottom: 15px; padding: 12px; background: #e8f5e9; border-radius: 6px;">
-            <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
-              <input type="checkbox" id="create_player_app_user" checked style="width: 18px; height: 18px; cursor: pointer;">
-              <span style="font-weight: bold; color: #2e7d32;">Utilisateur Player App</span>
-            </label>
+            <p style="margin: 5px 0 0 0; font-size: 12px; color: #666;">Test = compte de test exclu des statistiques officielles</p>
           </div>
 
           <div style="display: flex; gap: 10px; margin-top: 20px;">
@@ -768,7 +764,7 @@
       document.getElementById('edit_first_name').value = player.first_name || '';
       document.getElementById('edit_last_name').value = player.last_name || '';
       document.getElementById('edit_is_active').checked = player.is_active === 1 || player.is_active === true;
-      document.getElementById('edit_player_app_user').checked = player.player_app_user === true;
+      document.getElementById('edit_player_app_role').value = player.player_app_role || '';
 
       // Populate dynamic ranking fields with data from player_rankings table
       // Also pass legacy data as fallback
@@ -869,9 +865,9 @@
       tbody.innerHTML = '';
 
       if (players.length === 0) {
-        // Calculate colspan: 6 fixed + N ranking + 5 admin or 1 non-admin
+        // Calculate colspan: 6 fixed + N ranking + 4 admin (Statut, Role, RGPD, Actions) or 2 non-admin
         const rankingCols = getTableGameModes().length;
-        const colspan = isAdmin ? (6 + rankingCols + 5) : (6 + rankingCols + 2);
+        const colspan = isAdmin ? (6 + rankingCols + 4) : (6 + rankingCols + 2);
         tbody.innerHTML = `<tr><td colspan="${colspan}" style="text-align: center; padding: 20px;">Aucun joueur trouvé</td></tr>`;
         return;
       }
@@ -894,14 +890,9 @@
             </span>
           </td>
           ${isAdmin ? `
-          <td style="text-align: center;" title="${player.player_app_user ? 'Utilisateur Player App' : 'Non utilisateur'}">
-            ${player.player_app_user ? '<span style="color: #2e7d32; font-size: 16px;">✓</span>' : '<span style="color: #ccc;">-</span>'}
-          </td>
-          ` : ''}
-          ${isAdmin ? `
           <td style="text-align: center;" class="role-cell" data-licence="${player.licence}">
-            <select class="role-select" data-licence="${player.licence}" style="padding: 4px 8px; border-radius: 4px; border: 1px solid #ddd; font-size: 12px; ${player.player_app_role === 'admin' ? 'background: #ffebee; color: #d32f2f; font-weight: bold;' : ''}">
-              <option value="" ${!player.player_app_role ? 'selected' : ''}>--</option>
+            <select class="role-select" data-licence="${player.licence}" style="padding: 4px 8px; border-radius: 4px; border: 1px solid #ddd; font-size: 12px; ${player.player_app_role === 'admin' ? 'background: #ffebee; color: #d32f2f; font-weight: bold;' : player.player_app_role === 'test' ? 'background: #fff3e0; color: #e65100;' : ''}">
+              <option value="" ${!player.player_app_role ? 'selected' : ''}>Non inscrit</option>
               <option value="joueur" ${player.player_app_role === 'joueur' ? 'selected' : ''}>Joueur</option>
               <option value="admin" ${player.player_app_role === 'admin' ? 'selected' : ''}>Admin</option>
               <option value="test" ${player.player_app_role === 'test' ? 'selected' : ''}>Test</option>
@@ -912,7 +903,7 @@
           <td style="text-align: center;" title="${player.gdpr_consent_date ? new Date(player.gdpr_consent_date).toLocaleDateString('fr-FR') : 'Pas de consentement'}">
             ${player.gdpr_consent_date
               ? '<span style="color: #2e7d32; font-size: 16px;">✓</span>'
-              : (player.player_app_user ? '<span style="color: #ff9800; font-size: 14px;">⚠</span>' : '<span style="color: #ccc;">-</span>')}
+              : (['joueur', 'admin'].includes(player.player_app_role) ? '<span style="color: #ff9800; font-size: 14px;">⚠</span>' : '<span style="color: #ccc;">-</span>')}
           </td>
           ` : ''}
           ${isAdmin ? `
@@ -1082,7 +1073,7 @@
         last_name: document.getElementById('edit_last_name').value,
         player_rankings: playerRankings,  // New format: { game_mode_id: 'ranking_value', ... }
         is_active: document.getElementById('edit_is_active').checked,
-        player_app_user: document.getElementById('edit_player_app_user').checked
+        player_app_role: document.getElementById('edit_player_app_role').value || null
       };
 
       // Only include club if a value is selected (don't clear existing club)
@@ -1204,7 +1195,6 @@
       document.getElementById('createPlayerForm').reset();
       // Pre-select "Test" role
       document.getElementById('create_player_app_role').value = 'test';
-      document.getElementById('create_player_app_user').checked = true;
 
       // Populate clubs dropdown
       const clubSelect = document.getElementById('create_club');
@@ -1229,8 +1219,7 @@
       const club = document.getElementById('create_club').value;
       const email = document.getElementById('create_email').value.trim();
       const phone = document.getElementById('create_phone').value.trim();
-      const playerAppRole = document.getElementById('create_player_app_role').value;
-      const playerAppUser = document.getElementById('create_player_app_user').checked;
+      const playerAppRole = document.getElementById('create_player_app_role').value || null;
 
       // Collect rankings from dynamic form fields
       const playerRankings = collectRankingsFromForm('create');
@@ -1256,7 +1245,6 @@
             phone,
             player_rankings: playerRankings,  // New format: { game_mode_id: 'ranking_value', ... }
             player_app_role: playerAppRole,
-            player_app_user: playerAppUser,
             is_active: true
           })
         });

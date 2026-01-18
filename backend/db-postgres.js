@@ -100,11 +100,13 @@ async function initializeDatabase() {
         AND p.player_app_user = FALSE
     `);
 
-    // Set all players without a role to 'joueur', except admins
+    // Set player_app_role = 'joueur' for players who are Player App users but have no role
+    // This consolidates player_app_user boolean into player_app_role
     await client.query(`
       UPDATE players
       SET player_app_role = 'joueur'
-      WHERE player_app_role IS NULL
+      WHERE player_app_user = TRUE
+        AND (player_app_role IS NULL OR player_app_role = '')
     `);
 
     // Ensure Rallet and Hui Bon Hoa are admins
