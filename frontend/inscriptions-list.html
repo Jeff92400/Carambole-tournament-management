@@ -829,7 +829,7 @@
     // Export to Excel (CSV)
     function exportToExcel() {
       // Get currently filtered inscriptions from the displayed table
-      const rows = document.querySelectorAll('#inscriptionsTableBody tr');
+      const rows = document.querySelectorAll('#inscriptionsBody tr');
       if (rows.length === 0) {
         alert('Aucune inscription à exporter');
         return;
