@@ -356,10 +356,8 @@ async function generatePlayerConvocationPDF(player, tournamentInfo, allPoules, l
       const headerColor = isFinale ? '#D4AF37' : primaryColor; // Gold for finals
       const headerTextColor = isFinale ? '#1F4788' : 'white';
       doc.rect(40, y, pageWidth, 45).fill(headerColor);
-      doc.fillColor(headerTextColor).fontSize(22).font('Helvetica-Bold')
-         .text(`CONVOCATION ${tournamentLabel}`, 40, y + 12, { width: pageWidth, align: 'center' });
 
-      // Add CDBHS logo on top of header (left side)
+      // Add CDBHS logo on left side of header
       const logoPath = path.join(__dirname, '../../frontend/images/billiard-icon.png');
       try {
         if (fs.existsSync(logoPath)) {
@@ -368,6 +366,10 @@ async function generatePlayerConvocationPDF(player, tournamentInfo, allPoules, l
       } catch (err) {
         console.log('Logo not found for PDF:', err.message);
       }
+
+      // Title text - offset to avoid logo overlap, slightly smaller font
+      doc.fillColor(headerTextColor).fontSize(20).font('Helvetica-Bold')
+         .text(`CONVOCATION ${tournamentLabel}`, 90, y + 14, { width: pageWidth - 60, align: 'center' });
       y += 50;
 
       // Season
@@ -688,10 +690,8 @@ async function generateSummaryConvocationPDF(tournamentInfo, allPoules, location
       const headerColor = isFinale ? '#D4AF37' : primaryColor; // Gold for finals
       const headerTextColor = isFinale ? '#1F4788' : 'white';
       doc.rect(40, y, pageWidth, 45).fill(headerColor);
-      doc.fillColor(headerTextColor).fontSize(22).font('Helvetica-Bold')
-         .text(`CONVOCATION ${tournamentLabel}`, 40, y + 12, { width: pageWidth, align: 'center' });
 
-      // Add CDBHS logo on top of header (left side)
+      // Add CDBHS logo on left side of header
       const logoPath = path.join(__dirname, '../../frontend/images/billiard-icon.png');
       try {
         if (fs.existsSync(logoPath)) {
@@ -700,6 +700,10 @@ async function generateSummaryConvocationPDF(tournamentInfo, allPoules, location
       } catch (err) {
         console.log('Logo not found for PDF:', err.message);
       }
+
+      // Title text - offset to avoid logo overlap, slightly smaller font
+      doc.fillColor(headerTextColor).fontSize(20).font('Helvetica-Bold')
+         .text(`CONVOCATION ${tournamentLabel}`, 90, y + 14, { width: pageWidth - 60, align: 'center' });
       y += 50;
 
       // Season
