@@ -1059,6 +1059,10 @@
           }
         }
 
+        // Assign to global categories array
+        categories = Array.from(categoryMap.values());
+        console.log('[loadCategories] Loaded', categories.length, 'categories:', categories.map(c => `${c.game_type}|${c.level}`));
+
         // Populate mode selector with unique game types
         const modes = [...new Set(categories.map(c => c.game_type))].sort();
         const modeSelect = document.getElementById('modeSelect');
