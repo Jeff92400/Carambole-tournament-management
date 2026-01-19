@@ -629,16 +629,14 @@ function generateConvocationICS(inscription) {
   const address = inscription.convocation_adresse || '';
   const fullLocation = address ? `${location}, ${address}` : location;
 
-  // Build description with convocation details
+  // Build description with convocation details (keep only useful info, avoid redundancy)
   let descriptionParts = [
-    `Tournoi CDBHS`,
-    `${inscription.mode} - ${inscription.categorie}`
+    isFinale ? `Finale départementale CDBHS` : `Compétition départementale CDBHS`
   ];
 
   if (inscription.convocation_poule) {
-    descriptionParts.push(`Poule: ${inscription.convocation_poule}`);
+    descriptionParts.push(`Poule ${inscription.convocation_poule}`);
   }
-  descriptionParts.push(`Lieu: ${fullLocation}`);
   if (inscription.convocation_notes) {
     descriptionParts.push(`Note: ${inscription.convocation_notes}`);
   }
