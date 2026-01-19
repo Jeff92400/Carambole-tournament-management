@@ -1261,23 +1261,34 @@
       // Normalize for comparison: remove spaces and convert to uppercase
       const normalizeForCompare = (str) => str.toUpperCase().replace(/\s+/g, '');
 
+      // Debug logging
+      console.log('[selectUpcomingTournament] mode:', mode, 'categorie:', categorie);
+      console.log('[selectUpcomingTournament] gameType:', gameType, 'normalizedLevel:', normalizedLevel);
+      console.log('[selectUpcomingTournament] categories array length:', categories.length);
+      console.log('[selectUpcomingTournament] categories:', categories.map(c => `${c.game_type}|${c.level}`));
+
       // Find matching category (flexible matching: ignore spaces, handle level variations)
       const matchingCategory = categories.find(c => {
         const cGameType = normalizeForCompare(c.game_type);
         const cLevel = c.level.toUpperCase();
         const targetGameType = normalizeForCompare(gameType);
 
-        // Game type must match (ignoring spaces)
-        if (cGameType !== targetGameType) return false;
-
-        // Level can match in several ways
-        return cLevel === normalizedLevel ||
+        const gameTypeMatch = cGameType === targetGameType;
+        const levelMatch = cLevel === normalizedLevel ||
                cLevel === categorie.toUpperCase() ||
                cLevel.startsWith(normalizedLevel) ||
                cLevel.startsWith(categorie.toUpperCase()) ||
                normalizedLevel.startsWith(cLevel) ||
                categorie.toUpperCase() === cLevel.replace(/\s+/g, '').substring(0, categorie.length);
+
+        if (c.game_type.toUpperCase().includes('BANDE')) {
+          console.log(`[matching] ${c.game_type}|${c.level}: cGameType=${cGameType} targetGameType=${targetGameType} match=${gameTypeMatch}, levelMatch=${levelMatch}`);
+        }
+
+        return gameTypeMatch && levelMatch;
       });
+
+      console.log('[selectUpcomingTournament] matchingCategory:', matchingCategory);
 
       if (matchingCategory) {
         // Set mode and level dropdowns
