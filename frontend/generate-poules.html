@@ -1650,6 +1650,7 @@
             const numFinalists = totalParticipants >= 10 ? 6 : 4;
 
             // Take only top N finalists
+            // Include email from player_contacts for finale convocations
             rankedPlayers = rankings.slice(0, numFinalists).map((r, index) => ({
               licence: r.licence,
               first_name: r.first_name,
@@ -1657,6 +1658,8 @@
               club: r.club,
               rank: r.rank_position,
               total_match_points: r.total_match_points,
+              email: r.contact_email || null,
+              telephone: r.contact_telephone || null,
               isRanked: true,
               isFinalist: true
             }));

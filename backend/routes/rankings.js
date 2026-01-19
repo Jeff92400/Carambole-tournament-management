@@ -35,6 +35,7 @@ router.get('/', authenticateToken, (req, res) => {
     // Use LEFT JOIN for players to include ranked players even if not in players table
     // Get player name from tournament_results as fallback
     // Use subqueries for club_aliases and clubs to avoid duplicate rows from JOINs
+    // Include email/telephone from player_contacts for finale convocations
     const query = `
       SELECT * FROM (
         SELECT DISTINCT ON (r.licence)
@@ -73,9 +74,12 @@ router.get('/', authenticateToken, (req, res) => {
                     AND t.category_id = r.category_id
                     AND t.season = r.season
                     AND t.tournament_number <= 3), 0) as cumulated_reprises,
-          CASE WHEN p.licence IS NULL THEN 1 ELSE 0 END as missing_from_players
+          CASE WHEN p.licence IS NULL THEN 1 ELSE 0 END as missing_from_players,
+          pc.email as contact_email,
+          pc.telephone as contact_telephone
         FROM rankings r
         LEFT JOIN players p ON REPLACE(r.licence, ' ', '') = REPLACE(p.licence, ' ', '')
+        LEFT JOIN player_contacts pc ON REPLACE(r.licence, ' ', '') = REPLACE(pc.licence, ' ', '')
         JOIN categories c ON r.category_id = c.id
         WHERE r.category_id = ? AND r.season = ?
         ORDER BY r.licence, r.rank_position
