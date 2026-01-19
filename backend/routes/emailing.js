@@ -2304,7 +2304,7 @@ router.get('/finalists/:finaleId', authenticateToken, async (req, res) => {
 // Send finale convocation emails to finalists
 router.post('/send-finale-convocation', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
-  const { finaleId, introText, outroText, imageUrl, testMode, testEmail, ccEmail } = req.body;
+  const { finaleId, finaleHeure, introText, outroText, imageUrl, testMode, testEmail, ccEmail } = req.body;
 
   const resend = getResend();
   if (!resend) {
@@ -2455,6 +2455,7 @@ router.post('/send-finale-convocation', authenticateToken, async (req, res) => {
           .replace(/\{player_name\}/g, finalist.player_name || '')
           .replace(/\{finale_name\}/g, finale.nom || '')
           .replace(/\{finale_date\}/g, finaleFormattedDate)
+          .replace(/\{finale_heure\}/g, finaleHeure || '')
           .replace(/\{finale_lieu\}/g, finale.lieu || '')
           .replace(/\{category\}/g, category.display_name || '')
           .replace(/\{rank_position\}/g, finalist.rank_position || '');
@@ -2464,6 +2465,9 @@ router.post('/send-finale-convocation', authenticateToken, async (req, res) => {
           .replace(/\{last_name\}/g, finalist.last_name || '');
 
         const imageHtml = imageUrl ? `<div style="text-align: center; margin: 20px 0;"><img src="${imageUrl}" alt="Image" style="max-width: 100%; height: auto; border-radius: 8px;"></div>` : '';
+
+        // Base URL for ICS calendar link
+        const baseUrl = process.env.BASE_URL || 'https://cdbhs-tournament-management-production.up.railway.app';
 
         const emailHtml = `
           <div style="font-family: Arial, sans-serif; max-width: 700px; margin: 0 auto;">
@@ -2485,8 +2489,12 @@ router.post('/send-finale-convocation', authenticateToken, async (req, res) => {
               <div style="background: white; padding: 15px; border-radius: 8px; margin: 20px 0; border: 1px solid #ddd;">
                 <h3 style="margin-top: 0; color: #1F4788;">📍 Informations de la Finale</h3>
                 <p><strong>Date :</strong> ${finaleFormattedDate}</p>
+                <p><strong>Heure :</strong> ${finaleHeure || 'À confirmer'}</p>
                 <p><strong>Lieu :</strong> ${finale.lieu || 'À confirmer'}</p>
                 <p><strong>Catégorie :</strong> ${category.display_name}</p>
+                <p style="margin-top: 15px; text-align: center;">
+                  <a href="${baseUrl}/api/player-accounts/tournament/${finale.tournoi_id}/calendar.ics" style="display: inline-block; background: #1F4788; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-size: 14px;">📅 Ajouter à mon calendrier</a>
+                </p>
               </div>
 
               <h3 style="color: #28a745;">Liste des Finalistes</h3>

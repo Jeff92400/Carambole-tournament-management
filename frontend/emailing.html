@@ -988,6 +988,7 @@ Le Comité Départemental de Billard des Hauts-de-Seine</textarea>
               <code>{player_name}</code>
               <code>{finale_name}</code>
               <code>{finale_date}</code>
+              <code>{finale_heure}</code>
               <code>{finale_lieu}</code>
               <code>{category}</code>
               <code>{rank_position}</code>
@@ -4853,6 +4854,26 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
         return;
       }
 
+      // Prompt for finale time before sending
+      const finaleHeure = prompt(
+        "À quelle heure a lieu la finale ?\n\nFormat: HH:MM (ex: 14:00)",
+        "14:00"
+      );
+
+      if (finaleHeure === null) {
+        // User cancelled
+        return;
+      }
+
+      // Validate time format
+      const timeRegex = /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/;
+      if (!timeRegex.test(finaleHeure.trim())) {
+        showError('Format d\'heure invalide. Utilisez le format HH:MM (ex: 14:00)');
+        return;
+      }
+
+      const finalTime = finaleHeure.trim();
+
       const isTestMode = document.getElementById('finaleTestModeCheck').checked;
       const testEmail = document.getElementById('finaleTestEmail').value.trim();
 
@@ -4861,7 +4882,7 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
           showError('Veuillez entrer une adresse email valide pour le test.');
           return;
         }
-        if (!confirm(`Envoyer un email de test à ${testEmail} ?`)) {
+        if (!confirm(`Envoyer un email de test à ${testEmail} ?\n\nHeure de la finale: ${finalTime}`)) {
           return;
         }
       } else {
@@ -4884,7 +4905,7 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
 
           if (!confirm(warningMsg)) return;
         } else {
-          if (!confirm(`Envoyer les convocations finale à ${emailCount} finaliste(s) ?`)) {
+          if (!confirm(`Envoyer les convocations finale à ${emailCount} finaliste(s) ?\n\nHeure de la finale: ${finalTime}`)) {
             return;
           }
         }
@@ -4901,6 +4922,7 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
           },
           body: JSON.stringify({
             finaleId: selectedFinaleData.finale.tournoi_id,
+            finaleHeure: finalTime,
             introText: document.getElementById('finaleIntroText').value,
             outroText: document.getElementById('finaleOutroText').value,
             imageUrl: document.getElementById('finaleImageUrl').value || null,
