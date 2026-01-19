@@ -205,6 +205,17 @@
             </select>
           </div>
 
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+            <div>
+              <label style="display: block; margin-bottom: 5px; font-weight: bold;">📧 Email</label>
+              <input type="email" id="edit_email" placeholder="email@exemple.com" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+            </div>
+            <div>
+              <label style="display: block; margin-bottom: 5px; font-weight: bold;">📞 Téléphone</label>
+              <input type="tel" id="edit_telephone" placeholder="06 12 34 56 78" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+            </div>
+          </div>
+
           <div style="margin-bottom: 15px;">
             <label style="display: block; margin-bottom: 8px; font-weight: bold; color: #1F4788;">Classements FFB</label>
             <div id="edit_rankings_container" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
@@ -763,6 +774,8 @@
       document.getElementById('edit_licence_display').value = player.licence;
       document.getElementById('edit_first_name').value = player.first_name || '';
       document.getElementById('edit_last_name').value = player.last_name || '';
+      document.getElementById('edit_email').value = player.email || player.contact_email || '';
+      document.getElementById('edit_telephone').value = player.telephone || player.contact_telephone || '';
       document.getElementById('edit_is_active').checked = player.is_active === 1 || player.is_active === true;
       document.getElementById('edit_player_app_role').value = player.player_app_role || '';
 
@@ -1071,6 +1084,8 @@
         licence: document.getElementById('edit_licence').value,
         first_name: document.getElementById('edit_first_name').value,
         last_name: document.getElementById('edit_last_name').value,
+        email: document.getElementById('edit_email').value || null,
+        telephone: document.getElementById('edit_telephone').value || null,
         player_rankings: playerRankings,  // New format: { game_mode_id: 'ranking_value', ... }
         is_active: document.getElementById('edit_is_active').checked,
         player_app_role: document.getElementById('edit_player_app_role').value || null

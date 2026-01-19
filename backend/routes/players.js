@@ -678,12 +678,22 @@ router.get('/:licence', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Player not found' });
     }
 
+    // Get contact info from player_contacts table
+    const contact = await new Promise((resolve, reject) => {
+      db.get("SELECT email, telephone FROM player_contacts WHERE REPLACE(licence, ' ', '') = REPLACE($1, ' ', '')", [req.params.licence], (err, row) => {
+        if (err) reject(err);
+        else resolve(row || {});
+      });
+    });
+
     // Get rankings from player_rankings table
     const rankings = await getPlayerRankings(req.params.licence);
 
-    // Return player with rankings from new table
+    // Return player with rankings from new table and contact info
     res.json({
       ...player,
+      email: contact.email || null,
+      telephone: contact.telephone || null,
       player_rankings: rankings  // New format: { game_mode_id: { ranking, code, display_name, color } }
     });
   } catch (err) {
@@ -792,6 +802,29 @@ router.put('/:licence', authenticateToken, async (req, res) => {
         updates.push('gdpr_consent_date = NULL');
         updates.push('gdpr_consent_version = NULL');
       }
+    }
+
+    // Handle email and telephone - update both players table and player_contacts
+    if (req.body.email !== undefined || req.body.telephone !== undefined) {
+      const email = req.body.email || null;
+      const telephone = req.body.telephone || null;
+
+      // Update player_contacts table (upsert)
+      await new Promise((resolve, reject) => {
+        db.run(`
+          INSERT INTO player_contacts (licence, email, telephone)
+          VALUES (REPLACE(?, ' ', ''), ?, ?)
+          ON CONFLICT(licence) DO UPDATE SET
+            email = COALESCE(excluded.email, player_contacts.email),
+            telephone = COALESCE(excluded.telephone, player_contacts.telephone)
+        `, [licence, email, telephone], (err) => {
+          if (err) {
+            console.error('Error updating player_contacts:', err);
+            // Don't fail the whole update, just log
+          }
+          resolve();
+        });
+      });
     }
 
     // If only player_rankings was provided and no other updates, still return success
