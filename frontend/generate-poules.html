@@ -2270,7 +2270,10 @@
       }
 
       try {
-        const response = await fetch(`${API_URL}/settings/game-parameters/${currentCategory.game_type}/${currentCategory.level}`, {
+        // URL encode parameters and uppercase for consistent lookup
+        const mode = encodeURIComponent(currentCategory.game_type.toUpperCase());
+        const level = encodeURIComponent(currentCategory.level.toUpperCase());
+        const response = await fetch(`${API_URL}/settings/game-parameters/${mode}/${level}`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
 

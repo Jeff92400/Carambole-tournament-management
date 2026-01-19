@@ -42,9 +42,13 @@ router.get('/game-parameters/:mode/:categorie', authenticateToken, (req, res) =>
   const db = getDb();
   const { mode, categorie } = req.params;
 
+  // Normalize: uppercase and preserve spaces as stored in DB
+  const normalizedMode = decodeURIComponent(mode).toUpperCase();
+  const normalizedCategorie = decodeURIComponent(categorie).toUpperCase();
+
   db.get(
-    'SELECT * FROM game_parameters WHERE mode = $1 AND categorie = $2',
-    [mode.toUpperCase(), categorie.toUpperCase()],
+    'SELECT * FROM game_parameters WHERE UPPER(mode) = $1 AND UPPER(categorie) = $2',
+    [normalizedMode, normalizedCategorie],
     (err, row) => {
       if (err) {
         console.error('Error fetching game parameter:', err);
