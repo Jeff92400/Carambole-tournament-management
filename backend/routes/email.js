@@ -627,15 +627,17 @@ async function generatePlayerConvocationPDF(player, tournamentInfo, allPoules, l
         y += 15;
       }
 
-      // Note at the bottom
+      // Note at the bottom (only for regular tournaments, not finales)
       if (y + 60 > doc.page.height - 40) {
         doc.addPage();
         y = 40;
       }
 
-      doc.fillColor('#666666').fontSize(9).font('Helvetica-Oblique')
-         .text("Les joueurs d'un meme club jouent ensemble au 1er tour", 40, y, { width: pageWidth, align: 'center' });
-      y += 25;
+      if (!isFinale) {
+        doc.fillColor('#666666').fontSize(9).font('Helvetica-Oblique')
+           .text("Les joueurs d'un meme club jouent ensemble au 1er tour", 40, y, { width: pageWidth, align: 'center' });
+        y += 25;
+      }
 
       // Footer
       doc.fillColor('#999999').fontSize(9).font('Helvetica-Oblique')
@@ -942,15 +944,17 @@ async function generateSummaryConvocationPDF(tournamentInfo, allPoules, location
         y += 15;
       }
 
-      // Note at the bottom
+      // Note at the bottom (only for regular tournaments, not finales)
       if (y + 60 > doc.page.height - 40) {
         doc.addPage();
         y = 40;
       }
 
-      doc.fillColor('#666666').fontSize(9).font('Helvetica-Oblique')
-         .text("Les joueurs d'un meme club jouent ensemble au 1er tour", 40, y, { width: pageWidth, align: 'center' });
-      y += 25;
+      if (!isFinale) {
+        doc.fillColor('#666666').fontSize(9).font('Helvetica-Oblique')
+           .text("Les joueurs d'un meme club jouent ensemble au 1er tour", 40, y, { width: pageWidth, align: 'center' });
+        y += 25;
+      }
 
       // Footer
       doc.fillColor('#999999').fontSize(9).font('Helvetica-Oblique')
