@@ -548,14 +548,18 @@ router.post('/send', authenticateToken, async (req, res) => {
           .replace(/\{organisation_name\}/g, orgName)
           .replace(/\{organization_name\}/g, orgName)
           .replace(/\{organisation_short_name\}/g, orgShortName)
-          .replace(/\{organization_short_name\}/g, orgShortName);
+          .replace(/\{organization_short_name\}/g, orgShortName)
+          .replace(/\{organisation_email\}/g, replyToEmail)
+          .replace(/\{organization_email\}/g, replyToEmail);
 
         const emailSubject = templateSubject
           .replace(/\{first_name\}/g, firstName)
           .replace(/\{organisation_name\}/g, orgName)
           .replace(/\{organization_name\}/g, orgName)
           .replace(/\{organisation_short_name\}/g, orgShortName)
-          .replace(/\{organization_short_name\}/g, orgShortName);
+          .replace(/\{organization_short_name\}/g, orgShortName)
+          .replace(/\{organisation_email\}/g, replyToEmail)
+          .replace(/\{organization_email\}/g, replyToEmail);
 
         // Build HTML email
         const logoHtml = `<img src="${logoUrl}" alt="${orgShortName}" style="height: 60px; margin-bottom: 10px;" onerror="this.style.display='none'">`;
@@ -830,14 +834,18 @@ router.post('/resend/:id', authenticateToken, async (req, res) => {
       .replace(/\{organisation_name\}/g, orgName)
       .replace(/\{organization_name\}/g, orgName)
       .replace(/\{organisation_short_name\}/g, orgShortName)
-      .replace(/\{organization_short_name\}/g, orgShortName);
+      .replace(/\{organization_short_name\}/g, orgShortName)
+      .replace(/\{organisation_email\}/g, replyToEmail)
+      .replace(/\{organization_email\}/g, replyToEmail);
 
     const emailSubject = templateSubject
       .replace(/\{first_name\}/g, firstName)
       .replace(/\{organisation_name\}/g, orgName)
       .replace(/\{organization_name\}/g, orgName)
       .replace(/\{organisation_short_name\}/g, orgShortName)
-      .replace(/\{organization_short_name\}/g, orgShortName);
+      .replace(/\{organization_short_name\}/g, orgShortName)
+      .replace(/\{organisation_email\}/g, replyToEmail)
+      .replace(/\{organization_email\}/g, replyToEmail);
 
     const htmlBody = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
