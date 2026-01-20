@@ -41,6 +41,7 @@ const playerAccountsRoutes = require('./routes/player-accounts');
 const activityLogsRoutes = require('./routes/activity-logs');
 const announcementsRoutes = require('./routes/announcements');
 const referenceDataRoutes = require('./routes/reference-data');
+const playerInvitationsRoutes = require('./routes/player-invitations');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -144,6 +145,7 @@ app.use('/api/player-accounts', apiLimiter, playerAccountsRoutes);
 app.use('/api/activity-logs', apiLimiter, activityLogsRoutes);
 app.use('/api/announcements', apiLimiter, announcementsRoutes);
 app.use('/api/reference-data', apiLimiter, referenceDataRoutes);
+app.use('/api/player-invitations', apiLimiter, playerInvitationsRoutes);
 
 // App version endpoint (for automatic update detection)
 // INCREMENT THIS VERSION when deploying updates you want users to see
