@@ -730,12 +730,12 @@ router.post('/sync-signups', authenticateToken, async (req, res) => {
   }
 });
 
-// Get list of clubs for filtering
+// Get list of clubs for filtering (from official clubs table only)
 router.get('/clubs', authenticateToken, async (req, res) => {
   try {
     const clubs = await new Promise((resolve, reject) => {
       db.all(
-        `SELECT DISTINCT club FROM player_contacts WHERE club IS NOT NULL AND club != '' ORDER BY club`,
+        `SELECT name FROM clubs ORDER BY name`,
         [],
         (err, rows) => {
           if (err) reject(err);
@@ -744,7 +744,7 @@ router.get('/clubs', authenticateToken, async (req, res) => {
       );
     });
 
-    res.json(clubs.map(c => c.club));
+    res.json(clubs.map(c => c.name));
   } catch (error) {
     console.error('Error fetching clubs:', error);
     res.status(500).json({ error: 'Erreur lors de la récupération des clubs' });
