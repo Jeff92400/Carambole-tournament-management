@@ -437,6 +437,18 @@ router.post('/send', authenticateToken, async (req, res) => {
     return res.status(500).json({ error: 'Configuration email manquante (RESEND_API_KEY)' });
   }
 
+  // Check if PDF guide is uploaded
+  const pdfExists = await new Promise((resolve, reject) => {
+    db.get('SELECT id FROM invitation_pdf LIMIT 1', [], (err, row) => {
+      if (err) reject(err);
+      else resolve(!!row);
+    });
+  });
+
+  if (!pdfExists) {
+    return res.status(400).json({ error: 'Veuillez d\'abord télécharger un guide PDF dans les paramètres avant d\'envoyer des invitations.' });
+  }
+
   const resend = new Resend(process.env.RESEND_API_KEY);
   const isTestMode = !!test_email;
 

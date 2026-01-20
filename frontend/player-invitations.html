@@ -809,7 +809,25 @@
     }
 
     // Send modal
-    function openSendModal() {
+    async function openSendModal() {
+      // Check if PDF is uploaded
+      try {
+        const response = await fetch(`${API_URL}/player-invitations/pdf`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          const pdfInfo = await response.json();
+          if (!pdfInfo.exists) {
+            showError('Veuillez d\'abord telecharger un guide PDF dans l\'onglet "Parametres" avant d\'envoyer des invitations.');
+            return;
+          }
+        }
+      } catch (error) {
+        console.error('Error checking PDF:', error);
+        showError('Erreur lors de la verification du PDF');
+        return;
+      }
+
       document.getElementById('sendCount').textContent = selectedIds.size;
       document.getElementById('testModeCheckbox').checked = false;
       document.getElementById('testEmailInput').style.display = 'none';
