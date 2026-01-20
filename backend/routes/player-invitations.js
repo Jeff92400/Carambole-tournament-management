@@ -7,31 +7,15 @@
 const express = require('express');
 const { Resend } = require('resend');
 const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
 const { authenticateToken, requireAdmin } = require('./auth');
 const db = require('../db-loader');
 const appSettings = require('../utils/app-settings');
 
 const router = express.Router();
 
-// Configure multer for PDF uploads
-const pdfStorage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    const uploadDir = path.join(__dirname, '../../frontend/documents');
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-    cb(null, uploadDir);
-  },
-  filename: function (req, file, cb) {
-    // Use a fixed name for the invitation guide PDF
-    cb(null, 'player-invitation-guide.pdf');
-  }
-});
-
+// Configure multer for PDF uploads (memory storage for database)
 const pdfUpload = multer({
-  storage: pdfStorage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB max
   fileFilter: function (req, file, cb) {
     if (file.mimetype === 'application/pdf') {
@@ -348,19 +332,23 @@ router.put('/template', authenticateToken, requireAdmin, async (req, res) => {
   }
 });
 
-// Get PDF info
+// Get PDF info (from database)
 router.get('/pdf', authenticateToken, async (req, res) => {
   try {
-    const pdfPath = path.join(__dirname, '../../frontend/documents/player-invitation-guide.pdf');
+    const pdf = await new Promise((resolve, reject) => {
+      db.get('SELECT id, filename, content_type, LENGTH(file_data) as size, created_at FROM invitation_pdf ORDER BY created_at DESC LIMIT 1', [], (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
 
-    if (fs.existsSync(pdfPath)) {
-      const stats = fs.statSync(pdfPath);
+    if (pdf) {
       res.json({
         exists: true,
-        filename: 'player-invitation-guide.pdf',
-        size: stats.size,
-        lastModified: stats.mtime,
-        url: '/documents/player-invitation-guide.pdf'
+        filename: pdf.filename,
+        size: pdf.size,
+        lastModified: pdf.created_at,
+        url: '/api/player-invitations/pdf/download'
       });
     } else {
       res.json({ exists: false });
@@ -371,19 +359,65 @@ router.get('/pdf', authenticateToken, async (req, res) => {
   }
 });
 
-// Upload PDF guide (admin only)
+// Download PDF (for viewing)
+router.get('/pdf/download', authenticateToken, async (req, res) => {
+  try {
+    const pdf = await new Promise((resolve, reject) => {
+      db.get('SELECT * FROM invitation_pdf ORDER BY created_at DESC LIMIT 1', [], (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
+
+    if (!pdf) {
+      return res.status(404).json({ error: 'PDF non trouvé' });
+    }
+
+    res.setHeader('Content-Type', pdf.content_type);
+    res.setHeader('Content-Disposition', `inline; filename="${pdf.filename}"`);
+
+    const fileData = Buffer.isBuffer(pdf.file_data) ? pdf.file_data : Buffer.from(pdf.file_data);
+    res.send(fileData);
+  } catch (error) {
+    console.error('Error downloading PDF:', error);
+    res.status(500).json({ error: 'Erreur lors du téléchargement du PDF' });
+  }
+});
+
+// Upload PDF guide (admin only) - stores in database
 router.post('/pdf', authenticateToken, requireAdmin, pdfUpload.single('pdf'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'Aucun fichier PDF fourni' });
     }
 
+    const { originalname, mimetype, buffer } = req.file;
+    const uploadedBy = req.user?.username || 'admin';
+
+    // Delete existing PDF and insert new one
+    await new Promise((resolve, reject) => {
+      db.run('DELETE FROM invitation_pdf', [], (err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+
+    await new Promise((resolve, reject) => {
+      db.run(
+        'INSERT INTO invitation_pdf (filename, content_type, file_data, uploaded_by) VALUES ($1, $2, $3, $4)',
+        [originalname, mimetype, buffer, uploadedBy],
+        (err) => {
+          if (err) reject(err);
+          else resolve();
+        }
+      );
+    });
+
     res.json({
       success: true,
       message: 'PDF téléversé avec succès',
-      filename: 'player-invitation-guide.pdf',
-      size: req.file.size,
-      url: '/documents/player-invitation-guide.pdf'
+      filename: originalname,
+      size: req.file.size
     });
   } catch (error) {
     console.error('Error uploading PDF:', error);
@@ -453,20 +487,24 @@ router.post('/send', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Aucun joueur trouvé' });
     }
 
-    // Check for PDF attachment
-    const pdfPath = path.join(__dirname, '../../frontend/documents/player-invitation-guide.pdf');
+    // Check for PDF attachment (from database)
     let pdfAttachment = null;
+    const pdfRow = await new Promise((resolve, reject) => {
+      db.get('SELECT filename, file_data FROM invitation_pdf ORDER BY created_at DESC LIMIT 1', [], (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
 
-    console.log('[Player Invitations] Checking for PDF at:', pdfPath);
-    if (fs.existsSync(pdfPath)) {
-      const pdfContent = fs.readFileSync(pdfPath);
+    if (pdfRow) {
+      const pdfContent = Buffer.isBuffer(pdfRow.file_data) ? pdfRow.file_data : Buffer.from(pdfRow.file_data);
       pdfAttachment = {
-        filename: 'Guide-Application-Joueur.pdf',
-        content: pdfContent // Pass Buffer directly, Resend handles it
+        filename: pdfRow.filename || 'Guide-Application-Joueur.pdf',
+        content: pdfContent
       };
-      console.log('[Player Invitations] PDF found, size:', pdfContent.length, 'bytes');
+      console.log('[Player Invitations] PDF found in DB, size:', pdfContent.length, 'bytes');
     } else {
-      console.log('[Player Invitations] PDF not found at path');
+      console.log('[Player Invitations] No PDF in database');
     }
 
     const senderName = emailSettings.email_sender_name || 'CDBHS';
@@ -701,8 +739,7 @@ router.post('/resend/:id', authenticateToken, async (req, res) => {
       </div>
     `;
 
-    // Check for PDF attachment
-    const pdfPath = path.join(__dirname, '../../frontend/documents/player-invitation-guide.pdf');
+    // Check for PDF attachment (from database)
     const emailOptions = {
       from: `${senderName} <${senderEmail}>`,
       replyTo: replyToEmail,
@@ -711,11 +748,18 @@ router.post('/resend/:id', authenticateToken, async (req, res) => {
       html: htmlBody
     };
 
-    if (fs.existsSync(pdfPath)) {
-      const pdfContent = fs.readFileSync(pdfPath);
+    const pdfRow = await new Promise((resolve, reject) => {
+      db.get('SELECT filename, file_data FROM invitation_pdf ORDER BY created_at DESC LIMIT 1', [], (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
+
+    if (pdfRow) {
+      const pdfContent = Buffer.isBuffer(pdfRow.file_data) ? pdfRow.file_data : Buffer.from(pdfRow.file_data);
       emailOptions.attachments = [{
-        filename: 'Guide-Application-Joueur.pdf',
-        content: pdfContent // Pass Buffer directly
+        filename: pdfRow.filename || 'Guide-Application-Joueur.pdf',
+        content: pdfContent
       }];
     }
 

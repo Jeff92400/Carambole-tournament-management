@@ -247,6 +247,18 @@ function initializeDatabase() {
     db.run(`CREATE INDEX IF NOT EXISTS idx_player_invitations_licence ON player_invitations(REPLACE(licence, ' ', ''))`);
     db.run(`CREATE INDEX IF NOT EXISTS idx_player_invitations_email ON player_invitations(email)`);
 
+    // Invitation PDF storage table (persists across deployments)
+    db.run(`
+      CREATE TABLE IF NOT EXISTS invitation_pdf (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        filename TEXT NOT NULL,
+        content_type TEXT NOT NULL,
+        file_data BLOB NOT NULL,
+        uploaded_by TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
     // Initialize default admin password (admin123 - should be changed)
     db.get('SELECT COUNT(*) as count FROM admin', [], (err, row) => {
       if (!err && row.count === 0) {
