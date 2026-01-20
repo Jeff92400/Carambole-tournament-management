@@ -74,9 +74,9 @@ router.get('/stats', authenticateToken, async (req, res) => {
       });
     });
 
-    // Count actual Player App users (signed up)
+    // Count actual Player App users (signed up) - exclude test accounts
     const playerAccountStats = await new Promise((resolve, reject) => {
-      db.get(`SELECT COUNT(*) as signed_up FROM player_accounts`, [], (err, row) => {
+      db.get(`SELECT COUNT(*) as signed_up FROM player_accounts WHERE UPPER(licence) NOT LIKE 'TEST%'`, [], (err, row) => {
         if (err) reject(err);
         else resolve(row || { signed_up: 0 });
       });

@@ -103,6 +103,7 @@ Optional:
 - Season format: `YYYY-YYYY+1` (e.g., "2024-2025"), determined by September cutoff
 - Licence numbers are normalized by removing spaces for comparisons
 - CSV files use semicolon delimiter, imported via multer
+- **Test data exclusion:** ALWAYS exclude test accounts from counts, lists, and statistics. Test accounts have licences starting with "TEST" (case-insensitive). Use `WHERE UPPER(licence) NOT LIKE 'TEST%'` in queries.
 
 ## Future Cleanup (2025-2026 Season)
 
