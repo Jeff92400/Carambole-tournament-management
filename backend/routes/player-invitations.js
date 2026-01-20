@@ -10,6 +10,7 @@ const multer = require('multer');
 const { authenticateToken, requireAdmin } = require('./auth');
 const db = require('../db-loader');
 const appSettings = require('../utils/app-settings');
+const { logAdminAction, ACTION_TYPES } = require('../utils/admin-logger');
 
 const router = express.Router();
 
@@ -639,6 +640,18 @@ router.post('/send', authenticateToken, async (req, res) => {
         failedCount++;
         errors.push({ player: `${player.first_name} ${player.last_name}`, error: error.message });
       }
+    }
+
+    // Log the action
+    if (!isTestMode && sentCount > 0) {
+      logAdminAction({
+        req,
+        action: ACTION_TYPES.SEND_INVITATION,
+        details: `Invitations Player App: ${sentCount} envoyées, ${failedCount} échecs`,
+        targetType: 'invitation',
+        targetId: null,
+        targetName: `${sentCount} invitations`
+      });
     }
 
     res.json({

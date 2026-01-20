@@ -5,6 +5,7 @@ const { Resend } = require('resend');
 const PDFDocument = require('pdfkit');
 const { authenticateToken } = require('./auth');
 const appSettings = require('../utils/app-settings');
+const { logAdminAction, ACTION_TYPES } = require('../utils/admin-logger');
 
 const router = express.Router();
 
@@ -1524,6 +1525,16 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
       // Don't fail the whole operation if convoque update fails
     }
   }
+
+  // Log the convocation action
+  logAdminAction({
+    req,
+    action: ACTION_TYPES.SEND_CONVOCATION,
+    details: `Convocations ${category.display_name} - ${tournamentLabel}: ${results.sent.length} envoyés, ${results.failed.length} échecs, ${results.skipped.length} ignorés`,
+    targetType: 'tournament',
+    targetId: tournoiId,
+    targetName: `${category.display_name} - ${tournamentLabel}`
+  });
 
   res.json({
     success: true,

@@ -7,6 +7,7 @@ const { Resend } = require('resend');
 const db = require('../db-loader');
 const { authenticateToken } = require('./auth');
 const appSettings = require('../utils/app-settings');
+const { logAdminAction, ACTION_TYPES } = require('../utils/admin-logger');
 
 // Initialize Resend for email notifications
 const getResend = () => {
@@ -1032,6 +1033,16 @@ router.post('/create', authenticateToken, async (req, res) => {
       });
     });
 
+    // Log the action
+    logAdminAction({
+      req,
+      action: ACTION_TYPES.ADD_INSCRIPTION,
+      details: `Inscription manuelle ajoutée: licence ${cleanLicence} au tournoi ${tournoi_id}`,
+      targetType: 'inscription',
+      targetId: nextId,
+      targetName: cleanLicence
+    });
+
     res.json({
       success: true,
       message: 'Inscription created successfully',
@@ -1971,7 +1982,7 @@ Le Comité Départemental de Billard des Hauts-de-Seine`;
 });
 
 // Delete a single inscription (admin only)
-router.delete('/:id', authenticateToken, (req, res) => {
+router.delete('/:id', authenticateToken, async (req, res) => {
   // Check admin role
   if (req.user?.role !== 'admin') {
     return res.status(403).json({ error: 'Admin access required' });
@@ -1979,16 +1990,42 @@ router.delete('/:id', authenticateToken, (req, res) => {
 
   const { id } = req.params;
 
-  db.run('DELETE FROM inscriptions WHERE inscription_id = $1', [id], function(err) {
-    if (err) {
-      console.error('Error deleting inscription:', err);
-      return res.status(500).json({ error: err.message });
-    }
-    if (this.changes === 0) {
+  try {
+    // First get the inscription details for logging
+    const inscription = await new Promise((resolve, reject) => {
+      db.get('SELECT licence, tournoi_id FROM inscriptions WHERE inscription_id = $1', [id], (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
+
+    if (!inscription) {
       return res.status(404).json({ error: 'Inscription not found' });
     }
-    res.json({ success: true, message: 'Inscription deleted', deleted: this.changes });
-  });
+
+    // Delete the inscription
+    await new Promise((resolve, reject) => {
+      db.run('DELETE FROM inscriptions WHERE inscription_id = $1', [id], function(err) {
+        if (err) reject(err);
+        else resolve(this.changes);
+      });
+    });
+
+    // Log the action
+    logAdminAction({
+      req,
+      action: ACTION_TYPES.DELETE_INSCRIPTION,
+      details: `Inscription supprimée: licence ${inscription.licence} du tournoi ${inscription.tournoi_id}`,
+      targetType: 'inscription',
+      targetId: id,
+      targetName: inscription.licence
+    });
+
+    res.json({ success: true, message: 'Inscription deleted', deleted: 1 });
+  } catch (err) {
+    console.error('Error deleting inscription:', err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // TEMPORARY: Create test finale data for testing the finale convocation workflow
