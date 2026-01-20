@@ -2825,6 +2825,18 @@ router.post('/poules/:tournoiId/regenerate', authenticateToken, async (req, res)
       }
     }
 
+    // Log the action (only if not preview)
+    if (!previewOnly) {
+      logAdminAction({
+        req,
+        action: ACTION_TYPES.REGENERATE_POULES,
+        details: `Poules régénérées: ${newPoules.length} poules, ${activePlayers.length} joueurs (${(forfaitLicences || []).length} forfaits)`,
+        targetType: 'tournament',
+        targetId: tournoiId,
+        targetName: `Tournoi ${tournoiId}`
+      });
+    }
+
     res.json({
       success: true,
       preview: previewOnly || false,

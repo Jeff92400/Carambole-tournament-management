@@ -1634,6 +1634,18 @@ router.put('/tournoi/:id', authenticateToken, async (req, res) => {
       });
     }
 
+    // Log if tournament was cancelled
+    if (statusChangedToCancelled) {
+      logAdminAction({
+        req,
+        action: ACTION_TYPES.CANCEL_TOURNAMENT,
+        details: `Tournoi annulé: ${nom} (${mode} ${categorie})`,
+        targetType: 'tournament',
+        targetId: id,
+        targetName: `${nom} - ${mode} ${categorie}`
+      });
+    }
+
     // Build response message
     let changeMessage = '';
     if (statusChangedToCancelled) {
