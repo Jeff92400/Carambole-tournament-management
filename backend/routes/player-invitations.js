@@ -184,6 +184,7 @@ router.get('/candidates', authenticateToken, async (req, res) => {
         AND pc.email != ''
         AND pc.email LIKE '%@%'
         AND COALESCE(pc.email_optin, 1) = 1
+        AND COALESCE(pc.statut, 'Actif') = 'Actif'
     `;
     const params = [];
     let paramIndex = 1;
