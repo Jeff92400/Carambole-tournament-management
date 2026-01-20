@@ -2843,6 +2843,53 @@
     }
 
     // ============= END ACTIVITY LOGS QUICK STATS =============
+
+    // ============= HASH-BASED CARD NAVIGATION =============
+
+    // Show only the targeted card when navigating via URL hash
+    function handleHashNavigation() {
+      const hash = window.location.hash;
+      const allCards = document.querySelectorAll('.card');
+
+      if (hash && hash.length > 1) {
+        const targetId = hash.substring(1);
+        const targetCard = document.getElementById(targetId);
+
+        if (targetCard) {
+          // Hide all cards
+          allCards.forEach(card => {
+            card.style.display = 'none';
+          });
+
+          // Show only the targeted card
+          targetCard.style.display = 'block';
+
+          // Add back button if not already present
+          if (!document.getElementById('backToSettingsBtn')) {
+            const backBtn = document.createElement('div');
+            backBtn.id = 'backToSettingsBtn';
+            backBtn.innerHTML = `
+              <a href="settings.html" style="display: inline-flex; align-items: center; gap: 8px; margin-bottom: 20px; padding: 10px 20px; background: #f8f9fa; border: 1px solid #ddd; border-radius: 6px; text-decoration: none; color: #333; font-weight: 500;">
+                ← Retour aux paramètres
+              </a>
+              <a href="settings-admin.html" style="display: inline-flex; align-items: center; gap: 8px; margin-left: 10px; padding: 10px 20px; background: #e7f3ff; border: 1px solid #1F4788; border-radius: 6px; text-decoration: none; color: #1F4788; font-weight: 500;">
+                Voir tous les paramètres
+              </a>
+            `;
+            targetCard.parentNode.insertBefore(backBtn, targetCard);
+          }
+
+          // Scroll to top
+          window.scrollTo(0, 0);
+        }
+      }
+    }
+
+    // Handle hash changes and initial load
+    handleHashNavigation();
+    window.addEventListener('hashchange', handleHashNavigation);
+
+    // ============= END HASH-BASED CARD NAVIGATION =============
   </script>
 
   <!-- Edit Game Parameter Modal -->
