@@ -706,6 +706,20 @@
         </a>
       </div>
     </div>
+
+    <!-- Activity Logs Section - Admin Only -->
+    <div class="card admin-only">
+      <h3>📋 Logs d'activité</h3>
+      <p style="margin-bottom: 20px; color: #666;">Consultez l'historique des actions des utilisateurs : connexions, inscriptions, créations de compte, etc.</p>
+      <div style="display: flex; gap: 15px; flex-wrap: wrap; align-items: center;">
+        <a href="activity-logs.html" class="btn" style="background: #1F4788; padding: 12px 25px; text-decoration: none;">
+          Voir les logs complets →
+        </a>
+        <div id="logsQuickStats" style="display: flex; gap: 20px; color: #666; font-size: 0.9rem;">
+          <span>Chargement des stats...</span>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script src="js/auth-utils.js"></script>
@@ -2773,6 +2787,41 @@
     loadPrivacyPolicyInfo();
 
     // ============= END PRIVACY POLICY SETTINGS =============
+
+    // ============= ACTIVITY LOGS QUICK STATS =============
+    async function loadLogsQuickStats() {
+      try {
+        const response = await fetch(`${API_URL}/activity-logs/stats`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (response.ok) {
+          const stats = await response.json();
+          const container = document.getElementById('logsQuickStats');
+          if (container) {
+            container.innerHTML = `
+              <span title="7 derniers jours">🔑 <strong>${stats.logins || 0}</strong> connexions</span>
+              <span title="7 derniers jours">📝 <strong>${stats.inscriptions || 0}</strong> inscriptions</span>
+              <span title="7 derniers jours">👤 <strong>${stats.newAccounts || 0}</strong> nouveaux comptes</span>
+            `;
+          }
+        }
+      } catch (error) {
+        console.error('Error loading logs quick stats:', error);
+        const container = document.getElementById('logsQuickStats');
+        if (container) {
+          container.innerHTML = '<span style="color: #999;">Stats indisponibles</span>';
+        }
+      }
+    }
+
+    // Load logs stats on page load (admin only)
+    const userRole = localStorage.getItem('userRole');
+    if (userRole === 'admin') {
+      loadLogsQuickStats();
+    }
+
+    // ============= END ACTIVITY LOGS QUICK STATS =============
   </script>
 
   <!-- Edit Game Parameter Modal -->
