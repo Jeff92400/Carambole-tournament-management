@@ -527,14 +527,9 @@ router.post('/send', authenticateToken, async (req, res) => {
     const replyToEmail = emailSettings.summary_email || 'cdbhs92@gmail.com';
     const baseUrl = process.env.BASE_URL || 'https://cdbhs-tournament-management-production.up.railway.app';
 
-    // Check if logo exists in database
-    const logoExists = await new Promise((resolve, reject) => {
-      db.get('SELECT id FROM organization_logo LIMIT 1', [], (err, row) => {
-        if (err) reject(err);
-        else resolve(!!row);
-      });
-    });
-    const logoUrl = logoExists ? `${baseUrl}/logo.png` : null;
+    // Logo URL - always include, onerror will hide if not found
+    const logoUrl = `${baseUrl}/logo.png`;
+    console.log('[Player Invitations] Using logo URL:', logoUrl);
 
     let sentCount = 0;
     let failedCount = 0;
@@ -557,9 +552,7 @@ router.post('/send', authenticateToken, async (req, res) => {
           .replace(/\{organization_name\}/g, orgName);
 
         // Build HTML email
-        const logoHtml = logoUrl
-          ? `<img src="${logoUrl}" alt="${orgShortName}" style="height: 60px; margin-bottom: 10px;" onerror="this.style.display='none'">`
-          : '';
+        const logoHtml = `<img src="${logoUrl}" alt="${orgShortName}" style="height: 60px; margin-bottom: 10px;" onerror="this.style.display='none'">`;
 
         const htmlBody = `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -741,17 +734,9 @@ router.post('/resend/:id', authenticateToken, async (req, res) => {
     const replyToEmail = emailSettings.summary_email || 'cdbhs92@gmail.com';
     const baseUrl = process.env.BASE_URL || 'https://cdbhs-tournament-management-production.up.railway.app';
 
-    // Check if logo exists
-    const logoExists = await new Promise((resolve, reject) => {
-      db.get('SELECT id FROM organization_logo LIMIT 1', [], (err, row) => {
-        if (err) reject(err);
-        else resolve(!!row);
-      });
-    });
-    const logoUrl = logoExists ? `${baseUrl}/logo.png` : null;
-    const logoHtml = logoUrl
-      ? `<img src="${logoUrl}" alt="${orgShortName}" style="height: 60px; margin-bottom: 10px;" onerror="this.style.display='none'">`
-      : '';
+    // Logo URL - always include, onerror will hide if not found
+    const logoUrl = `${baseUrl}/logo.png`;
+    const logoHtml = `<img src="${logoUrl}" alt="${orgShortName}" style="height: 60px; margin-bottom: 10px;" onerror="this.style.display='none'">`;
 
     const emailBody = templateBody
       .replace(/\{first_name\}/g, firstName)
