@@ -195,10 +195,11 @@ router.get('/', authenticateToken, async (req, res) => {
 // Get candidates for invitation (players with email who haven't been invited or need resend)
 router.get('/candidates', authenticateToken, async (req, res) => {
   try {
-    const { club, search, exclude_invited } = req.query;
+    const { club, mode, rank, search, exclude_invited } = req.query;
 
     let query = `
       SELECT pc.id, pc.licence, pc.first_name, pc.last_name, pc.club, pc.email,
+             pc.rank_libre, pc.rank_cadre, pc.rank_bande, pc.rank_3bandes,
              pi.id as invitation_id, pi.sent_at, pi.has_signed_up, pi.resend_count
       FROM player_contacts pc
       LEFT JOIN player_invitations pi ON pc.id = pi.player_contact_id
@@ -220,6 +221,26 @@ router.get('/candidates', authenticateToken, async (req, res) => {
     if (club) {
       query += ` AND pc.club = $${paramIndex++}`;
       params.push(club);
+    }
+
+    // Filter by game mode (has ranking in that mode)
+    if (mode) {
+      const modeColumn = {
+        'LIBRE': 'rank_libre',
+        'CADRE': 'rank_cadre',
+        'BANDE': 'rank_bande',
+        '3BANDES': 'rank_3bandes'
+      }[mode.toUpperCase()];
+      if (modeColumn) {
+        query += ` AND pc.${modeColumn} IS NOT NULL AND pc.${modeColumn} != ''`;
+      }
+    }
+
+    // Filter by FFB ranking
+    if (rank) {
+      query += ` AND (pc.rank_libre = $${paramIndex} OR pc.rank_cadre = $${paramIndex} OR pc.rank_bande = $${paramIndex} OR pc.rank_3bandes = $${paramIndex})`;
+      params.push(rank);
+      paramIndex++;
     }
 
     if (search) {

@@ -358,6 +358,26 @@
           <select id="candidateClubFilter">
             <option value="">Tous les clubs</option>
           </select>
+          <select id="candidateModeFilter">
+            <option value="">Tous les modes</option>
+            <option value="LIBRE">Libre</option>
+            <option value="CADRE">Cadre</option>
+            <option value="BANDE">Bande</option>
+            <option value="3BANDES">3 Bandes</option>
+          </select>
+          <select id="candidateRankFilter">
+            <option value="">Tous les classements</option>
+            <option value="N1">Nationale 1</option>
+            <option value="N2">Nationale 2</option>
+            <option value="N3">Nationale 3</option>
+            <option value="R1">Regionale 1</option>
+            <option value="R2">Regionale 2</option>
+            <option value="R3">Regionale 3</option>
+            <option value="R4">Regionale 4</option>
+            <option value="D1">Departementale 1</option>
+            <option value="D2">Departementale 2</option>
+            <option value="D3">Departementale 3</option>
+          </select>
           <input type="text" id="candidateSearch" placeholder="Rechercher un joueur...">
           <label style="display: flex; align-items: center; gap: 5px;">
             <input type="checkbox" id="excludeInvited" checked>
@@ -383,12 +403,13 @@
                 <th class="checkbox-col"><input type="checkbox" id="selectAll" onchange="toggleSelectAll()"></th>
                 <th>Nom</th>
                 <th>Club</th>
+                <th>Classements</th>
                 <th>Email</th>
                 <th>Statut</th>
               </tr>
             </thead>
             <tbody id="candidatesTable">
-              <tr><td colspan="5" class="empty-state">Chargement...</td></tr>
+              <tr><td colspan="6" class="empty-state">Chargement...</td></tr>
             </tbody>
           </table>
         </div>
@@ -591,11 +612,15 @@
     async function loadCandidates() {
       try {
         const club = document.getElementById('candidateClubFilter').value;
+        const mode = document.getElementById('candidateModeFilter').value;
+        const rank = document.getElementById('candidateRankFilter').value;
         const search = document.getElementById('candidateSearch').value;
         const excludeInvited = document.getElementById('excludeInvited').checked;
 
         const params = new URLSearchParams();
         if (club) params.append('club', club);
+        if (mode) params.append('mode', mode);
+        if (rank) params.append('rank', rank);
         if (search) params.append('search', search);
         if (excludeInvited) params.append('exclude_invited', 'true');
 
@@ -616,7 +641,7 @@
       const tbody = document.getElementById('candidatesTable');
 
       if (candidates.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" class="empty-state">
+        tbody.innerHTML = `<tr><td colspan="6" class="empty-state">
           <h4>Aucun joueur disponible</h4>
           <p>Tous les joueurs eligibles ont deja ete invites ou n'ont pas d'email.</p>
         </td></tr>`;
@@ -631,6 +656,14 @@
               : '<span class="status-badge invited">Deja invite</span>')
           : '<span class="status-badge pending">Non invite</span>';
 
+        // Build rankings display
+        const rankings = [];
+        if (c.rank_libre) rankings.push(`L:${c.rank_libre}`);
+        if (c.rank_cadre) rankings.push(`C:${c.rank_cadre}`);
+        if (c.rank_bande) rankings.push(`B:${c.rank_bande}`);
+        if (c.rank_3bandes) rankings.push(`3B:${c.rank_3bandes}`);
+        const rankingsHtml = rankings.length > 0 ? rankings.join(' ') : '-';
+
         return `
           <tr>
             <td class="checkbox-col">
@@ -638,6 +671,7 @@
             </td>
             <td><strong>${c.first_name || ''} ${c.last_name || ''}</strong><br><small style="color:#666">${c.licence || ''}</small></td>
             <td>${c.club || '-'}</td>
+            <td><small>${rankingsHtml}</small></td>
             <td>${c.email}</td>
             <td>${statusHtml}</td>
           </tr>
@@ -1007,6 +1041,8 @@ https://cdbhs-player-app-production.up.railway.app/`;
 
     // Filter event listeners
     document.getElementById('candidateClubFilter').addEventListener('change', loadCandidates);
+    document.getElementById('candidateModeFilter').addEventListener('change', loadCandidates);
+    document.getElementById('candidateRankFilter').addEventListener('change', loadCandidates);
     document.getElementById('candidateSearch').addEventListener('input', debounce(loadCandidates, 300));
     document.getElementById('excludeInvited').addEventListener('change', loadCandidates);
     document.getElementById('trackingClubFilter').addEventListener('change', loadTracking);
