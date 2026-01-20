@@ -534,7 +534,7 @@ router.post('/send', authenticateToken, async (req, res) => {
         else resolve(!!row);
       });
     });
-    const logoUrl = logoExists ? `${baseUrl}/api/settings/organization-logo/download` : null;
+    const logoUrl = logoExists ? `${baseUrl}/logo.png` : null;
 
     let sentCount = 0;
     let failedCount = 0;
@@ -748,7 +748,7 @@ router.post('/resend/:id', authenticateToken, async (req, res) => {
         else resolve(!!row);
       });
     });
-    const logoUrl = logoExists ? `${baseUrl}/api/settings/organization-logo/download` : null;
+    const logoUrl = logoExists ? `${baseUrl}/logo.png` : null;
     const logoHtml = logoUrl
       ? `<img src="${logoUrl}" alt="${orgShortName}" style="height: 60px; margin-bottom: 10px;" onerror="this.style.display='none'">`
       : '';

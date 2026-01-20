@@ -132,6 +132,20 @@ const frontendPath = fs.existsSync(path.join(__dirname, 'frontend'))
   : path.join(__dirname, '../frontend');
 app.use(express.static(frontendPath));
 
+// Public endpoint for organization logo (needed for emails)
+app.get('/logo.png', (req, res) => {
+  const db = require('./db-loader');
+  db.get('SELECT file_data, content_type FROM organization_logo ORDER BY created_at DESC LIMIT 1', [], (err, row) => {
+    if (err || !row) {
+      return res.status(404).send('Logo not found');
+    }
+    res.setHeader('Content-Type', row.content_type || 'image/png');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    const fileData = Buffer.isBuffer(row.file_data) ? row.file_data : Buffer.from(row.file_data);
+    res.send(fileData);
+  });
+});
+
 // API Routes with rate limiting
 // Apply strict rate limit only to login/password endpoints, general limit for other auth routes
 app.use('/api/auth/login', authLimiter);
