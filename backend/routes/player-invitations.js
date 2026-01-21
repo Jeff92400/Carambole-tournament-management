@@ -529,7 +529,8 @@ router.post('/send', authenticateToken, async (req, res) => {
     const baseUrl = process.env.BASE_URL || 'https://cdbhs-tournament-management-production.up.railway.app';
 
     // Logo URL - always include, onerror will hide if not found
-    const logoUrl = `${baseUrl}/logo.png`;
+    // Add cache-busting timestamp to ensure email clients get latest logo
+    const logoUrl = `${baseUrl}/logo.png?v=${Date.now()}`;
     console.log('[Player Invitations] Using logo URL:', logoUrl);
 
     let sentCount = 0;
@@ -826,7 +827,8 @@ router.post('/resend/:id', authenticateToken, async (req, res) => {
     const baseUrl = process.env.BASE_URL || 'https://cdbhs-tournament-management-production.up.railway.app';
 
     // Logo URL - always include, onerror will hide if not found
-    const logoUrl = `${baseUrl}/logo.png`;
+    // Add cache-busting timestamp to ensure email clients get latest logo
+    const logoUrl = `${baseUrl}/logo.png?v=${Date.now()}`;
     const logoHtml = `<img src="${logoUrl}" alt="${orgShortName}" style="height: 60px; margin-bottom: 10px;" onerror="this.style.display='none'">`;
 
     const emailBody = templateBody
