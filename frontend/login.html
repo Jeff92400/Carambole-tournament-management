@@ -3,15 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Connexion - CDBHS Tournois</title>
-  <link rel="icon" type="image/png" href="images/billiard-icon.png">
+  <title>Connexion - CDB Tournois</title>
+  <link rel="icon" type="image/png" href="images/FrenchBillard-Icon-small.png">
   <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
   <div class="container login-container">
     <div class="header">
-      <h1><img src="images/billiard-icon.png" alt="" style="height: 40px; width: 40px; vertical-align: middle; margin-right: 10px;" onerror="this.style.display='none'; this.nextSibling.style.display='inline';">
-<span style="display:none;"></span> CDBHS Tournois</h1>
+      <h1><img id="app-header-icon" src="images/FrenchBillard-Icon-small.png" alt="" style="height: 40px; width: 40px; vertical-align: middle; margin-right: 10px;" onerror="this.src='images/FrenchBillard-Icon-small.png';"><span id="app-org-name">CDB Tournois</span></h1>
       <p>Gestion des Compétitions de Billard</p>
     </div>
 
@@ -36,8 +35,12 @@
     </div>
   </div>
 
+  <script src="js/app-branding.js"></script>
   <script>
     const API_URL = '/api';
+
+    // Initialize public branding
+    initPublicBranding();
 
     // Show session expired message if present
     const sessionExpiredMessage = sessionStorage.getItem('sessionExpiredMessage');

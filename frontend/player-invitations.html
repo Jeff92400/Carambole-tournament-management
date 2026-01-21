@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Gestion de l'inscription à l'App Joueurs - CDBHS</title>
-  <link rel="icon" type="image/png" href="images/billiard-icon.png">
+  <title>Gestion de l'inscription à l'App Joueurs - CDB</title>
+  <link rel="icon" type="image/png" href="images/FrenchBillard-Icon-small.png">
   <link rel="stylesheet" href="css/styles.css">
   <style>
     .stats-cards {
@@ -311,7 +311,7 @@
 <body>
   <div class="container">
     <div class="navbar">
-      <h2><img src="images/billiard-icon.png" alt="" style="height: 28px; width: 28px; vertical-align: middle; margin-right: 8px;" onerror="this.style.display='none'"> Gestion de l'inscription à l'App Joueurs</h2>
+      <h2><img id="app-header-icon" src="images/FrenchBillard-Icon-small.png" alt="" style="height: 28px; width: 28px; vertical-align: middle; margin-right: 8px;" onerror="this.src='images/FrenchBillard-Icon-small.png';"> Gestion de l'inscription à l'App Joueurs</h2>
       <div class="nav-links">
         <a href="dashboard.html">Accueil</a>
         <a href="settings.html">Parametres</a>
@@ -505,6 +505,7 @@
   </div>
 
   <script src="js/auth-utils.js"></script>
+  <script src="js/app-branding.js"></script>
   <script>
     const API_URL = '/api';
 

@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Logs d'activité - CDBHS</title>
-  <link rel="icon" type="image/png" href="images/billiard-icon.png">
+  <link rel="icon" type="image/png" href="images/FrenchBillard-Icon-small.png">
   <link rel="stylesheet" href="css/styles.css">
   <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -217,7 +217,7 @@
   <div class="container">
     <div class="navbar">
       <div>
-        <h2 style="margin-bottom: 0;"><img src="images/billiard-icon.png" alt="" style="height: 28px; width: 28px; vertical-align: middle; margin-right: 8px;" onerror="this.style.display='none'; this.nextSibling.style.display='inline';"><span style="display:none;"></span> CDBHS Tournois</h2>
+        <h2 style="margin-bottom: 0;"><img id="app-header-icon" src="images/FrenchBillard-Icon-small.png" alt="" style="height: 28px; width: 28px; vertical-align: middle; margin-right: 8px;" onerror="this.src='images/FrenchBillard-Icon-small.png';"><span id="app-org-name">CDB Tournois</span></h2>
         <span style="font-size: 18px; color: #1F4788; font-weight: bold; margin-left: 36px;">V2.0</span>
       </div>
       <div class="nav-links">
@@ -416,6 +416,7 @@
   </div>
 
   <script src="js/auth-utils.js"></script>
+  <script src="js/app-branding.js"></script>
   <script>
     const API_URL = '/api';
     let currentPage = 0;

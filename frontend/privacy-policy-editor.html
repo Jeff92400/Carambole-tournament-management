@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Politique de Confidentialité - Éditeur</title>
-  <link rel="icon" type="image/png" href="images/billiard-icon.png">
+  <link rel="icon" type="image/png" href="images/FrenchBillard-Icon-small.png">
   <link rel="stylesheet" href="css/styles.css">
   <style>
     .editor-container {
@@ -93,7 +93,7 @@
 <body>
   <div class="container">
     <div class="navbar">
-      <h2><img src="images/billiard-icon.png" alt="" style="height: 28px; width: 28px; vertical-align: middle; margin-right: 8px;" onerror="this.style.display='none'; this.nextSibling.style.display='inline';"><span style="display:none;"></span> Politique de Confidentialité</h2>
+      <h2><img id="app-header-icon" src="images/FrenchBillard-Icon-small.png" alt="" style="height: 28px; width: 28px; vertical-align: middle; margin-right: 8px;" onerror="this.src='images/FrenchBillard-Icon-small.png';">Politique de Confidentialité</h2>
       <div class="nav-links">
         <a href="settings.html">← Retour aux paramètres</a>
         <a href="#" id="logoutBtn" class="nav-logout">Déconnexion</a>
@@ -181,6 +181,7 @@ Vous pouvez utiliser le format Markdown :
   <!-- Mammoth.js for reading Word files (using jsdelivr which is CSP-allowed) -->
   <script src="https://cdn.jsdelivr.net/npm/mammoth@1.6.0/mammoth.browser.min.js"></script>
   <script src="js/auth-utils.js"></script>
+  <script src="js/app-branding.js"></script>
   <script>
     const API_URL = '/api';
 

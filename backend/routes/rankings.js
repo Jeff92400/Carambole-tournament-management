@@ -7,6 +7,26 @@ const { authenticateToken } = require('./auth');
 
 const router = express.Router();
 
+// Get organization logo as buffer from database (for Excel exports)
+async function getOrganizationLogoBuffer() {
+  return new Promise((resolve) => {
+    db.get('SELECT file_data, content_type FROM organization_logo ORDER BY created_at DESC LIMIT 1', [], (err, row) => {
+      if (err || !row) {
+        // Fallback to static French billiard icon
+        const fallbackPath = path.join(__dirname, '../../frontend/images/FrenchBillard-Icon-small.png');
+        if (fs.existsSync(fallbackPath)) {
+          resolve(fs.readFileSync(fallbackPath));
+        } else {
+          resolve(null);
+        }
+        return;
+      }
+      const buffer = Buffer.isBuffer(row.file_data) ? row.file_data : Buffer.from(row.file_data);
+      resolve(buffer);
+    });
+  });
+}
+
 // Get rankings by category and season
 router.get('/', authenticateToken, (req, res) => {
   const { categoryId, season } = req.query;
@@ -201,21 +221,21 @@ router.get('/export', authenticateToken, async (req, res) => {
 
       const categoryName = rows[0].display_name;
 
-      // Add billiard ball image
-      const imagePath = path.join(__dirname, '../../frontend/images/billiard-icon.png');
-
+      // Add organization logo
       try {
-        const imageId = workbook.addImage({
-          filename: imagePath,
-          extension: 'png',
-        });
-
-        worksheet.addImage(imageId, {
-          tl: { col: 0, row: 0 },
-          ext: { width: 80, height: 45 }
-        });
+        const logoBuffer = await getOrganizationLogoBuffer();
+        if (logoBuffer) {
+          const imageId = workbook.addImage({
+            buffer: logoBuffer,
+            extension: 'png',
+          });
+          worksheet.addImage(imageId, {
+            tl: { col: 0, row: 0 },
+            ext: { width: 80, height: 45 }
+          });
+        }
       } catch (err) {
-        console.log('Image not found, using text icon instead');
+        console.log('Logo not found for Excel:', err.message);
       }
 
       // Title - Row 1
