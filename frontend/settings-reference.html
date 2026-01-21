@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Gestion des Fichiers - CDBHS</title>
-  <link rel="icon" type="image/png" href="images/billiard-icon.png">
+  <link rel="icon" type="image/png" href="images/FrenchBillard-Icon-small.png">
   <link rel="stylesheet" href="css/styles.css">
   <style>
     .tabs {
@@ -264,7 +264,7 @@
 <body>
   <div class="container">
     <div class="navbar">
-      <h2><img src="images/billiard-icon.png" alt="ball" style="height: 28px; width: 28px; vertical-align: middle; margin-right: 8px;" onerror="this.style.display='none'; this.nextSibling.style.display='inline';"><span style="display:none;"></span> Gestion des Fichiers</h2>
+      <h2><img id="app-header-icon" src="images/FrenchBillard-Icon-small.png" alt="" style="height: 28px; width: 28px; vertical-align: middle; margin-right: 8px;" onerror="this.src='images/FrenchBillard-Icon-small.png';">Gestion des Fichiers</h2>
       <div class="nav-links">
         <a href="dashboard.html">Accueil</a>
         <a href="rankings.html">Classements</a>
@@ -529,6 +529,7 @@
   </div>
 
   <script src="js/auth-utils.js"></script>
+  <script src="js/app-branding.js"></script>
   <script>
     const API_URL = '/api';
 

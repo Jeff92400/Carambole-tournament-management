@@ -15,6 +15,27 @@ const FRENCH_BILLARD_ICON_IMG = `<img src="${FRENCH_BILLARD_ICON_BASE64}" alt="�
 // Helper function to add delay between emails (avoid rate limiting)
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
+// Get organization logo as buffer from database (for PDFs)
+async function getOrganizationLogoBuffer() {
+  const db = require('../db-loader');
+  return new Promise((resolve) => {
+    db.get('SELECT file_data, content_type FROM organization_logo ORDER BY created_at DESC LIMIT 1', [], (err, row) => {
+      if (err || !row) {
+        // Fallback to static French billiard icon
+        const fallbackPath = path.join(__dirname, '../../frontend/images/FrenchBillard-Icon-small.png');
+        if (fs.existsSync(fallbackPath)) {
+          resolve(fs.readFileSync(fallbackPath));
+        } else {
+          resolve(null);
+        }
+        return;
+      }
+      const buffer = Buffer.isBuffer(row.file_data) ? row.file_data : Buffer.from(row.file_data);
+      resolve(buffer);
+    });
+  });
+}
+
 // Get summary email from app_settings (with fallback)
 async function getSummaryEmail() {
   return appSettings.getSetting('summary_email');
@@ -357,11 +378,11 @@ async function generatePlayerConvocationPDF(player, tournamentInfo, allPoules, l
       const headerTextColor = isFinale ? '#1F4788' : 'white';
       doc.rect(40, y, pageWidth, 45).fill(headerColor);
 
-      // Add CDBHS logo on left side of header
-      const logoPath = path.join(__dirname, '../../frontend/images/billiard-icon.png');
+      // Add organization logo on left side of header
       try {
-        if (fs.existsSync(logoPath)) {
-          doc.image(logoPath, 48, y + 5, { width: 35 });
+        const logoBuffer = await getOrganizationLogoBuffer();
+        if (logoBuffer) {
+          doc.image(logoBuffer, 48, y + 5, { width: 35 });
         }
       } catch (err) {
         console.log('Logo not found for PDF:', err.message);
@@ -691,11 +712,11 @@ async function generateSummaryConvocationPDF(tournamentInfo, allPoules, location
       const headerTextColor = isFinale ? '#1F4788' : 'white';
       doc.rect(40, y, pageWidth, 45).fill(headerColor);
 
-      // Add CDBHS logo on left side of header
-      const logoPath = path.join(__dirname, '../../frontend/images/billiard-icon.png');
+      // Add organization logo on left side of header
       try {
-        if (fs.existsSync(logoPath)) {
-          doc.image(logoPath, 48, y + 5, { width: 35 });
+        const logoBuffer = await getOrganizationLogoBuffer();
+        if (logoBuffer) {
+          doc.image(logoBuffer, 48, y + 5, { width: 35 });
         }
       } catch (err) {
         console.log('Logo not found for PDF:', err.message);
@@ -1313,7 +1334,7 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
       const summaryHtml = `
         <div style="font-family: Arial, sans-serif; max-width: 700px; margin: 0 auto;">
           <div style="background: ${primaryColor}; color: white; padding: 20px; text-align: center;">
-            <img src="https://cdbhs-tournament-management-production.up.railway.app/images/billiard-icon.png" alt="${orgShortName}" style="height: 50px; margin-bottom: 10px;" onerror="this.style.display='none'">
+            <img src="${baseUrl}/logo.png" alt="${orgShortName}" style="height: 50px; margin-bottom: 10px;" onerror="this.style.display='none'">
             <h1 style="margin: 0; font-size: 24px;">📋 Récapitulatif Convocations</h1>
             <p style="margin: 10px 0 0 0; opacity: 0.9;">${category.display_name}</p>
           </div>
@@ -1634,6 +1655,12 @@ router.post('/send-club-reminder', authenticateToken, async (req, res) => {
   }
 
   try {
+    // Get email settings for organization branding
+    const emailSettings = await getEmailTemplateSettings();
+    const orgShortName = emailSettings.organization_short_name || 'CDB';
+    const orgName = emailSettings.organization_name || orgShortName;
+    const baseUrl = process.env.BASE_URL || 'https://cdbhs-tournament-management-production.up.railway.app';
+
     // Check if we already sent a reminder for this tournament + club combination
     if (tournoiId && clubName) {
       const existingReminder = await new Promise((resolve, reject) => {
@@ -1768,14 +1795,14 @@ Le CDBHS`;
     const emailBody = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <div style="background: #1F4788; color: white; padding: 20px; text-align: center;">
-          <img src="https://cdbhs-tournament-management-production.up.railway.app/images/billiard-icon.png" alt="CDBHS" style="height: 50px; margin-bottom: 10px;" onerror="this.style.display='none'">
-          <h1 style="margin: 0; font-size: 24px;">Comite Departemental Billard Hauts-de-Seine</h1>
+          <img src="${baseUrl}/logo.png" alt="" style="height: 50px; margin-bottom: 10px;" onerror="this.style.display='none'">
+          <h1 style="margin: 0; font-size: 24px;">${orgShortName}</h1>
         </div>
         <div style="padding: 20px; background: #f8f9fa; line-height: 1.6;">
           ${bodyHtml}
         </div>
         <div style="background: #1F4788; color: white; padding: 15px; text-align: center; font-size: 12px;">
-          Comité Départemental de Billard des Hauts-de-Seine
+          ${orgName}
         </div>
       </div>
     `;
