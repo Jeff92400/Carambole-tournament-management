@@ -7,7 +7,25 @@
   <link rel="icon" type="image/png" href="images/FrenchBillard-Icon-small.png">
   <link rel="stylesheet" href="css/styles.css">
   <script src="js/branding.js"></script>
+  <!-- Quill Rich Text Editor -->
+  <link href="https://cdn.quilljs.com/1.3.7/quill.snow.css" rel="stylesheet">
+  <script src="https://cdn.quilljs.com/1.3.7/quill.min.js"></script>
   <style>
+    /* Quill editor styling */
+    .ql-container {
+      font-family: inherit;
+      font-size: 14px;
+    }
+    .ql-editor {
+      min-height: 200px;
+    }
+    .ql-toolbar {
+      background: #f8f9fa;
+      border-radius: 4px 4px 0 0;
+    }
+    .ql-container.ql-snow {
+      border-radius: 0 0 4px 4px;
+    }
     .emailing-container {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -524,7 +542,7 @@
 
             <div>
               <label>Message *</label>
-              <textarea id="emailBody" placeholder="Contenu de l'email..."></textarea>
+              <div id="emailBodyEditor"></div>
             </div>
 
             <div class="template-vars">
@@ -1364,6 +1382,22 @@ Le Comité Départemental de Billard des Hauts-de-Seine</textarea>
     }
     const token = localStorage.getItem('token');
 
+    // Initialize Quill rich text editor
+    const quill = new Quill('#emailBodyEditor', {
+      theme: 'snow',
+      placeholder: 'Contenu de l\'email...',
+      modules: {
+        toolbar: [
+          ['bold', 'italic', 'underline', 'strike'],
+          [{ 'color': [] }, { 'background': [] }],
+          [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+          [{ 'align': [] }],
+          ['link'],
+          ['clean']
+        ]
+      }
+    });
+
     // Get user role
     let userRole = 'viewer';
     try {
@@ -1896,9 +1930,10 @@ Le Comité Départemental de Billard des Hauts-de-Seine</textarea>
       }
 
       const subject = document.getElementById('emailSubject').value.trim();
-      const body = document.getElementById('emailBody').value.trim();
+      const body = quill.root.innerHTML;
+      const bodyText = quill.getText().trim();
 
-      if (!subject || !body) {
+      if (!subject || !bodyText) {
         showError('Le sujet et le message sont obligatoires.');
         return;
       }
@@ -1946,7 +1981,7 @@ Le Comité Départemental de Billard des Hauts-de-Seine</textarea>
           // Only clear form if NOT in test mode (keep content for final send)
           if (!isTestMode) {
             document.getElementById('emailSubject').value = '';
-            document.getElementById('emailBody').value = '';
+            quill.setContents([]);
             resetImageUI();
             selectedContactIds.clear();
             updateSelectedCount();
@@ -1969,10 +2004,11 @@ Le Comité Départemental de Billard des Hauts-de-Seine</textarea>
       }
 
       const subject = document.getElementById('emailSubject').value.trim();
-      const body = document.getElementById('emailBody').value.trim();
+      const body = quill.root.innerHTML;
+      const bodyText = quill.getText().trim();
       const scheduledAt = document.getElementById('scheduledAt').value;
 
-      if (!subject || !body) {
+      if (!subject || !bodyText) {
         showError('Le sujet et le message sont obligatoires.');
         return;
       }
@@ -2005,7 +2041,7 @@ Le Comité Départemental de Billard des Hauts-de-Seine</textarea>
           showSuccess(result.message);
           // Clear form
           document.getElementById('emailSubject').value = '';
-          document.getElementById('emailBody').value = '';
+          quill.setContents([]);
           resetImageUI();
           document.getElementById('scheduledAt').value = '';
           document.getElementById('scheduleCheck').checked = false;
@@ -2076,7 +2112,9 @@ Le Comité Départemental de Billard des Hauts-de-Seine</textarea>
         if (response.ok) {
           const template = await response.json();
           document.getElementById('emailSubject').value = template.subject_template;
-          document.getElementById('emailBody').value = template.body_template;
+          // Convert plain text line breaks to HTML for Quill
+          const htmlContent = template.body_template.replace(/\n/g, '<br>');
+          quill.clipboard.dangerouslyPasteHTML(htmlContent);
         }
       } catch (error) {
         console.error('Error loading template:', error);

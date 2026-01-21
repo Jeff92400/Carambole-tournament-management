@@ -373,6 +373,20 @@ function replaceTemplateVariables(template, variables) {
   return result;
 }
 
+// Convert plain text to HTML (only if content is not already HTML)
+// Detects HTML by checking for common HTML tags
+function textToHtml(content) {
+  if (!content) return '';
+  // Check if content already contains HTML tags
+  const htmlTagPattern = /<\/?(?:p|br|div|span|strong|em|b|i|u|a|ul|ol|li|h[1-6])[^>]*>/i;
+  if (htmlTagPattern.test(content)) {
+    // Already HTML, return as-is
+    return content;
+  }
+  // Plain text - convert line breaks to <br>
+  return content);
+}
+
 // ==================== SYNC HELPER ====================
 
 // Sync contacts from players and inscriptions - can be called from anywhere
@@ -998,7 +1012,7 @@ router.post('/send', authenticateToken, async (req, res) => {
 
         const emailSubject = replaceTemplateVariables(subject, templateVariables);
         const emailBody = replaceTemplateVariables(body, templateVariables);
-        const emailBodyHtml = convertEmailsToMailtoLinks(emailBody.replace(/\n/g, '<br>'), primaryColor);
+        const emailBodyHtml = convertEmailsToMailtoLinks(textToHtml(emailBody), primaryColor);
 
         // Build optional image HTML
         const imageHtml = imageUrl ? `<div style="text-align: center; margin: 20px 0;"><img src="${imageUrl}" alt="Image" style="max-width: 100%; height: auto; border-radius: 8px;"></div>` : '';
@@ -1089,7 +1103,7 @@ router.post('/send', authenticateToken, async (req, res) => {
               <hr style="margin: 20px 0; border: none; border-top: 1px solid #ddd;">
               <p><strong>Contenu envoyé:</strong></p>
               <div style="background: white; padding: 15px; border-radius: 4px; border-left: 4px solid ${primaryColor};">
-                ${body.replace(/\n/g, '<br>')}
+                ${textToHtml(body)}
               </div>
             </div>
           </div>
@@ -1519,7 +1533,7 @@ router.post('/process-scheduled', async (req, res) => {
 
           const emailSubject = replaceTemplateVariables(scheduled.subject, templateVariables);
           const emailBody = replaceTemplateVariables(scheduled.body, templateVariables);
-          const emailBodyHtml = convertEmailsToMailtoLinks(emailBody.replace(/\n/g, '<br>'), primaryColor);
+          const emailBodyHtml = convertEmailsToMailtoLinks(textToHtml(emailBody), primaryColor);
 
           await resend.emails.send({
             from: emailFrom,
@@ -1975,7 +1989,7 @@ router.post('/send-results', authenticateToken, async (req, res) => {
             </div>
             <div style="padding: 20px; background: #f8f9fa; line-height: 1.6;">
               ${imageHtml}
-              <p>${convertEmailsToMailtoLinks(personalizedIntro.replace(/\n/g, '<br>'), primaryColor)}</p>
+              <p>${convertEmailsToMailtoLinks(textToHtml(personalizedIntro), primaryColor)}</p>
 
               <h3 style="color: ${primaryColor}; margin-top: 30px;">Résultats du Tournoi</h3>
               ${resultsTableHtml.replace('{{RESULTS_ROWS}}', resultsRows)}
@@ -1988,7 +2002,7 @@ router.post('/send-results', authenticateToken, async (req, res) => {
               ${qualificationMessage}
 
               ${contactPhraseHtml}
-              <p style="margin-top: 30px;">${convertEmailsToMailtoLinks(personalizedOutro.replace(/\n/g, '<br>'), primaryColor)}</p>
+              <p style="margin-top: 30px;">${convertEmailsToMailtoLinks(textToHtml(personalizedOutro), primaryColor)}</p>
             </div>
             <div style="background: ${primaryColor}; color: white; padding: 10px; text-align: center; font-size: 12px;">
               <p style="margin: 0;">${senderName} - <a href="mailto:${contactEmail}" style="color: white;">${contactEmail}</a></p>
@@ -2537,7 +2551,7 @@ router.post('/send-finale-convocation', authenticateToken, async (req, res) => {
                 Vous êtes qualifié(e) pour la finale départementale !
               </div>
 
-              <p>${convertEmailsToMailtoLinks(personalizedIntro.replace(/\n/g, '<br>'), primaryColor)}</p>
+              <p>${convertEmailsToMailtoLinks(textToHtml(personalizedIntro), primaryColor)}</p>
 
               <div style="background: white; padding: 15px; border-radius: 8px; margin: 20px 0; border: 1px solid #ddd;">
                 <h3 style="margin-top: 0; color: ${primaryColor};">📍 Informations de la Finale</h3>
@@ -2554,7 +2568,7 @@ router.post('/send-finale-convocation', authenticateToken, async (req, res) => {
               ${finalistsTableHtml}
 
               ${contactPhraseHtml}
-              <p style="margin-top: 30px;">${convertEmailsToMailtoLinks(personalizedOutro.replace(/\n/g, '<br>'), primaryColor)}</p>
+              <p style="margin-top: 30px;">${convertEmailsToMailtoLinks(textToHtml(personalizedOutro), primaryColor)}</p>
             </div>
             <div style="background: ${primaryColor}; color: white; padding: 10px; text-align: center; font-size: 12px;">
               <p style="margin: 0;">${senderName} - <a href="mailto:${contactEmail}" style="color: white;">${contactEmail}</a></p>
@@ -3825,10 +3839,10 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
             </div>
             <div style="padding: 20px; background: #f8f9fa; line-height: 1.6;">
               ${imageHtml}
-              <p>${convertEmailsToMailtoLinks(emailIntro.replace(/\n/g, '<br>'), primaryColor)}</p>
+              <p>${convertEmailsToMailtoLinks(textToHtml(emailIntro), primaryColor)}</p>
               ${contactPhraseHtml}
               <hr style="margin: 20px 0; border: none; border-top: 1px solid #ddd;">
-              <p>${convertEmailsToMailtoLinks(emailOutro.replace(/\n/g, '<br>'), primaryColor)}</p>
+              <p>${convertEmailsToMailtoLinks(textToHtml(emailOutro), primaryColor)}</p>
             </div>
             <div style="background: ${primaryColor}; color: white; padding: 10px; text-align: center; font-size: 12px;">
               <p style="margin: 0;">${senderName} - <a href="mailto:${contactEmail}" style="color: white;">${contactEmail}</a></p>
