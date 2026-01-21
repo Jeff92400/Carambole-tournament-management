@@ -20,6 +20,51 @@ const logoUpload = multer({
 // Get database connection
 const getDb = () => require('../db-loader');
 
+// ==================== PUBLIC ENDPOINTS (NO AUTH) ====================
+
+// Get branding colors (public - needed for login page)
+router.get('/branding/colors', async (req, res) => {
+  const db = getDb();
+
+  const colorKeys = [
+    'primary_color',
+    'secondary_color',
+    'accent_color',
+    'background_color',
+    'background_secondary_color'
+  ];
+
+  const placeholders = colorKeys.map((_, i) => `$${i + 1}`).join(',');
+
+  db.all(
+    `SELECT key, value FROM app_settings WHERE key IN (${placeholders})`,
+    colorKeys,
+    (err, rows) => {
+      if (err) {
+        console.error('Error fetching branding colors:', err);
+        return res.status(500).json({ error: err.message });
+      }
+
+      // Convert to object with defaults
+      const colors = {
+        primary_color: '#1F4788',
+        secondary_color: '#667eea',
+        accent_color: '#ffc107',
+        background_color: '#f8f9fa',
+        background_secondary_color: '#f5f5f5'
+      };
+
+      for (const row of rows || []) {
+        if (row.value) colors[row.key] = row.value;
+      }
+
+      res.json(colors);
+    }
+  );
+});
+
+// ==================== AUTHENTICATED ENDPOINTS ====================
+
 // Get all game parameters
 router.get('/game-parameters', authenticateToken, (req, res) => {
   const db = getDb();
