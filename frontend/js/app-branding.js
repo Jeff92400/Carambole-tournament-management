@@ -100,14 +100,20 @@ function updateFavicon(url) {
 
 /**
  * Initialize branding for public pages (no auth required)
- * Uses default logo only
+ * Uses /logo.png public endpoint for dynamic logo
  */
 function initPublicBranding() {
-  updateFavicon(DEFAULT_LOGO_PATH);
+  // Use the public /logo.png endpoint with cache-busting
+  const logoUrl = '/logo.png?v=' + Date.now();
+
+  updateFavicon(logoUrl);
 
   const headerIcon = document.getElementById('app-header-icon');
   if (headerIcon) {
-    headerIcon.src = DEFAULT_LOGO_PATH;
+    headerIcon.src = logoUrl;
+    headerIcon.onerror = function() {
+      this.src = DEFAULT_LOGO_PATH;
+    };
   }
 }
 
