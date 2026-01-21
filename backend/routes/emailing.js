@@ -970,6 +970,11 @@ router.post('/send', authenticateToken, async (req, res) => {
     const contactPhraseHtml = buildContactPhraseHtml(contactEmail);
     const baseUrl = process.env.BASE_URL || 'https://cdbhs-tournament-management-production.up.railway.app';
 
+    // Get dynamic sender info
+    const senderName = await appSettings.getSetting('email_sender_name') || 'CDBHS';
+    const senderEmail = await appSettings.getSetting('email_noreply') || 'noreply@cdbhs.net';
+    const emailFrom = `${senderName} <${senderEmail}>`;
+
     // Send emails
     for (const recipient of recipientsToEmail) {
       if (!recipient.email || !recipient.email.includes('@')) {
@@ -998,7 +1003,7 @@ router.post('/send', authenticateToken, async (req, res) => {
         const imageHtml = imageUrl ? `<div style="text-align: center; margin: 20px 0;"><img src="${imageUrl}" alt="Image" style="max-width: 100%; height: auto; border-radius: 8px;"></div>` : '';
 
         await resend.emails.send({
-          from: 'CDBHS <noreply@cdbhs.net>',
+          from: emailFrom,
           replyTo: contactEmail,
           to: [recipient.email],
           subject: emailSubject,
@@ -1014,7 +1019,7 @@ router.post('/send', authenticateToken, async (req, res) => {
                 ${contactPhraseHtml}
               </div>
               <div style="background: #1F4788; color: white; padding: 10px; text-align: center; font-size: 12px;">
-                <p style="margin: 0;">CDBHS - <a href="mailto:${contactEmail}" style="color: white;">${contactEmail}</a></p>
+                <p style="margin: 0;">${senderName} - <a href="mailto:${contactEmail}" style="color: white;">${contactEmail}</a></p>
               </div>
             </div>
           `
@@ -1090,7 +1095,7 @@ router.post('/send', authenticateToken, async (req, res) => {
         `;
 
         await resend.emails.send({
-          from: 'CDBHS <noreply@cdbhs.net>',
+          from: emailFrom,
           to: [ccEmail],
           subject: `[Récap] ${subject}`,
           html: summaryHtml
@@ -1446,6 +1451,11 @@ router.post('/process-scheduled', async (req, res) => {
     const contactEmail = await getContactEmail();
     const contactPhraseHtml = buildContactPhraseHtml(contactEmail);
 
+    // Get dynamic sender info
+    const senderName = await appSettings.getSetting('email_sender_name') || 'CDBHS';
+    const senderEmail = await appSettings.getSetting('email_noreply') || 'noreply@cdbhs.net';
+    const emailFrom = `${senderName} <${senderEmail}>`;
+
     for (const scheduled of scheduledEmails) {
       // Check if this type of email was already manually sent
       if (scheduled.email_type) {
@@ -1510,14 +1520,14 @@ router.post('/process-scheduled', async (req, res) => {
           const emailBodyHtml = convertEmailsToMailtoLinks(emailBody.replace(/\n/g, '<br>'));
 
           await resend.emails.send({
-            from: 'CDBHS <noreply@cdbhs.net>',
+            from: emailFrom,
             replyTo: contactEmail,
             to: [recipient.email],
             subject: emailSubject,
             html: `
               <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
                 <div style="background: #1F4788; color: white; padding: 20px; text-align: center;">
-                  <h1 style="margin: 0; font-size: 24px;">CDBHS</h1>
+                  <h1 style="margin: 0; font-size: 24px;">${senderName}</h1>
                 </div>
                 <div style="padding: 20px; background: #f8f9fa; line-height: 1.6;">
                   ${emailBodyHtml}
@@ -1712,6 +1722,11 @@ router.post('/send-results', authenticateToken, async (req, res) => {
 
   try {
     const baseUrl = process.env.BASE_URL || 'https://cdbhs-tournament-management-production.up.railway.app';
+
+    // Get dynamic sender info
+    const senderName = await appSettings.getSetting('email_sender_name') || 'CDBHS';
+    const senderEmail = await appSettings.getSetting('email_noreply') || 'noreply@cdbhs.net';
+    const emailFrom = `${senderName} <${senderEmail}>`;
 
     // Get tournament details with category info
     const tournament = await new Promise((resolve, reject) => {
@@ -1973,13 +1988,13 @@ router.post('/send-results', authenticateToken, async (req, res) => {
               <p style="margin-top: 30px;">${convertEmailsToMailtoLinks(personalizedOutro.replace(/\n/g, '<br>'))}</p>
             </div>
             <div style="background: #1F4788; color: white; padding: 10px; text-align: center; font-size: 12px;">
-              <p style="margin: 0;">CDBHS - <a href="mailto:${contactEmail}" style="color: white;">${contactEmail}</a></p>
+              <p style="margin: 0;">${senderName} - <a href="mailto:${contactEmail}" style="color: white;">${contactEmail}</a></p>
             </div>
           </div>
         `;
 
         const emailOptions = {
-          from: 'CDBHS <noreply@cdbhs.net>',
+          from: emailFrom,
           replyTo: contactEmail,
           to: [participant.email],
           subject: `Résultats - ${tournament.display_name} - ${tournamentDate}`,
@@ -2104,13 +2119,13 @@ router.post('/send-results', authenticateToken, async (req, res) => {
               </table>
             </div>
             <div style="background: #1F4788; color: white; padding: 10px; text-align: center; font-size: 12px;">
-              <p style="margin: 0;">CDBHS - <a href="mailto:${contactEmail}" style="color: white;">${contactEmail}</a></p>
+              <p style="margin: 0;">${senderName} - <a href="mailto:${contactEmail}" style="color: white;">${contactEmail}</a></p>
             </div>
           </div>
         `;
 
         await resend.emails.send({
-          from: 'CDBHS <noreply@cdbhs.net>',
+          from: emailFrom,
           replyTo: contactEmail,
           to: [ccEmail],
           subject: `📋 Récapitulatif - Résultats ${tournament.display_name} - ${tournamentDate}`,
@@ -2347,6 +2362,11 @@ router.post('/send-finale-convocation', authenticateToken, async (req, res) => {
   }
 
   try {
+    // Get dynamic sender info
+    const senderName = await appSettings.getSetting('email_sender_name') || 'CDBHS';
+    const senderEmail = await appSettings.getSetting('email_noreply') || 'noreply@cdbhs.net';
+    const emailFrom = `${senderName} <${senderEmail}>`;
+
     // Get finale details
     const finale = await new Promise((resolve, reject) => {
       db.get(`SELECT * FROM tournoi_ext WHERE tournoi_id = $1`, [finaleId], (err, row) => {
@@ -2501,7 +2521,7 @@ router.post('/send-finale-convocation', authenticateToken, async (req, res) => {
         const emailHtml = `
           <div style="font-family: Arial, sans-serif; max-width: 700px; margin: 0 auto;">
             <div style="background: #1F4788; color: white; padding: 20px; text-align: center;">
-              <img src="${baseUrl}/logo.png?v=${Date.now()}" alt="CDBHS" style="height: 50px; margin-bottom: 10px;" onerror="this.style.display='none'">
+              <img src="${baseUrl}/logo.png?v=${Date.now()}" alt="Logo" style="height: 50px; margin-bottom: 10px;" onerror="this.style.display='none'">
               <h1 style="margin: 0; font-size: 24px;">🏆 Convocation Finale Départementale</h1>
               <p style="margin: 10px 0 0 0; opacity: 0.9;">${category.display_name}</p>
             </div>
@@ -2533,13 +2553,13 @@ router.post('/send-finale-convocation', authenticateToken, async (req, res) => {
               <p style="margin-top: 30px;">${convertEmailsToMailtoLinks(personalizedOutro.replace(/\n/g, '<br>'))}</p>
             </div>
             <div style="background: #1F4788; color: white; padding: 10px; text-align: center; font-size: 12px;">
-              <p style="margin: 0;">CDBHS - <a href="mailto:${contactEmail}" style="color: white;">${contactEmail}</a></p>
+              <p style="margin: 0;">${senderName} - <a href="mailto:${contactEmail}" style="color: white;">${contactEmail}</a></p>
             </div>
           </div>
         `;
 
         const emailOptions = {
-          from: 'CDBHS <noreply@cdbhs.net>',
+          from: emailFrom,
           replyTo: contactEmail,
           to: [finalist.email],
           subject: `🏆 Convocation Finale - ${category.display_name} - ${finaleFormattedDate}`,
@@ -2661,13 +2681,13 @@ router.post('/send-finale-convocation', authenticateToken, async (req, res) => {
               </table>
             </div>
             <div style="background: #1F4788; color: white; padding: 10px; text-align: center; font-size: 12px;">
-              <p style="margin: 0;">CDBHS - <a href="mailto:${contactEmail}" style="color: white;">${contactEmail}</a></p>
+              <p style="margin: 0;">${senderName} - <a href="mailto:${contactEmail}" style="color: white;">${contactEmail}</a></p>
             </div>
           </div>
         `;
 
         await resend.emails.send({
-          from: 'CDBHS <noreply@cdbhs.net>',
+          from: emailFrom,
           replyTo: contactEmail,
           to: [ccEmail],
           subject: `📋 Récapitulatif - Convocations Finale ${category.display_name} - ${finaleFormattedDate}`,
@@ -3411,6 +3431,11 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
   try {
     const baseUrl = process.env.BASE_URL || 'https://cdbhs-tournament-management-production.up.railway.app';
 
+    // Get dynamic sender info
+    const senderName = await appSettings.getSetting('email_sender_name') || 'CDBHS';
+    const senderEmail = await appSettings.getSetting('email_noreply') || 'noreply@cdbhs.net';
+    const emailFrom = `${senderName} <${senderEmail}>`;
+
     // Get participants based on relance type
     let participants = [];
     let tournamentInfo = {};
@@ -3801,13 +3826,13 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
               <p>${convertEmailsToMailtoLinks(emailOutro.replace(/\n/g, '<br>'))}</p>
             </div>
             <div style="background: #1F4788; color: white; padding: 10px; text-align: center; font-size: 12px;">
-              <p style="margin: 0;">CDBHS - <a href="mailto:${contactEmail}" style="color: white;">${contactEmail}</a></p>
+              <p style="margin: 0;">${senderName} - <a href="mailto:${contactEmail}" style="color: white;">${contactEmail}</a></p>
             </div>
           </div>
         `;
 
         await resend.emails.send({
-          from: 'CDBHS <noreply@cdbhs.net>',
+          from: emailFrom,
           replyTo: contactEmail,
           to: [participant.email],
           subject: emailSubject,
@@ -3896,7 +3921,7 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
         `;
 
         await resend.emails.send({
-          from: 'CDBHS <noreply@cdbhs.net>',
+          from: emailFrom,
           to: [ccEmail],
           subject: `Récap Relance ${relanceTypeLabels[relanceType]} - ${mode} ${category}`,
           html: summaryHtml
