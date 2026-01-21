@@ -366,6 +366,7 @@ async function getEmailTemplate(templateKey = 'general') {
 
 // Replace a single template variable
 // Handles: plain {var}, HTML-encoded &#123;var&#125;, and vars with HTML tags inside {<strong>var</strong>}
+// PRESERVES formatting tags so {<strong>var</strong>} becomes <strong>value</strong>
 function replaceVar(text, varName, value) {
   if (!text || typeof text !== 'string') return text || '';
   const val = (value !== null && value !== undefined) ? String(value) : '';
@@ -378,14 +379,13 @@ function replaceVar(text, varName, value) {
   // 2. Replace HTML-encoded &#123;varName&#125;
   result = result.replace(new RegExp(`&#123;${varName}&#125;`, 'g'), val);
 
-  // 3. Handle HTML tags INSIDE braces: {<strong>varName</strong>} or {<em>varName</em>} etc.
-  // This happens when user applies formatting to the variable name in Quill
-  const htmlInsidePattern = new RegExp(`\\{(?:<[^>]+>)*${varName}(?:<\\/[^>]+>)*\\}`, 'gi');
-  result = result.replace(htmlInsidePattern, val);
-
-  // 4. Handle braces with mixed tags: {<strong>varName</strong>} where tags wrap just the name
-  const mixedPattern = new RegExp(`\\{\\s*(?:<[^>]+>)?\\s*${varName}\\s*(?:<\\/[^>]+>)?\\s*\\}`, 'gi');
-  result = result.replace(mixedPattern, val);
+  // 3. Handle HTML tags INSIDE braces and PRESERVE the formatting
+  // Pattern: {<tag>varName</tag>} -> <tag>value</tag>
+  // Captures the opening tag(s) and closing tag(s) to wrap around the value
+  const htmlInsidePattern = new RegExp(`\\{((?:<[^>]+>)*)${varName}((?:<\\/[^>]+>)*)\\}`, 'gi');
+  result = result.replace(htmlInsidePattern, (match, openTags, closeTags) => {
+    return (openTags || '') + val + (closeTags || '');
+  });
 
   return result;
 }
