@@ -364,11 +364,28 @@ async function getEmailTemplate(templateKey = 'general') {
   });
 }
 
-// Replace a single template variable (handles both plain and HTML-encoded)
-function replaceVar(text, varName, value) {
+// Decode HTML entities for curly braces
+function decodeHtmlBraces(text) {
+  if (!text || typeof text !== 'string') return text || '';
   return text
-    .replace(new RegExp(`\\{${varName}\\}`, 'g'), value || '')
-    .replace(new RegExp(`&#123;${varName}&#125;`, 'g'), value || '');
+    .replace(/&#123;/g, '{')
+    .replace(/&#125;/g, '}')
+    .replace(/&lcub;/g, '{')
+    .replace(/&rcub;/g, '}')
+    .replace(/&#x7b;/gi, '{')
+    .replace(/&#x7d;/gi, '}');
+}
+
+// Replace a single template variable
+// Handles both plain {var} and HTML-encoded versions from Quill
+function replaceVar(text, varName, value) {
+  if (!text || typeof text !== 'string') return text || '';
+  const val = (value !== null && value !== undefined) ? String(value) : '';
+  // First decode HTML entities for braces, then replace
+  const decoded = decodeHtmlBraces(text);
+  // Use global regex for reliable replacement of all occurrences
+  const pattern = new RegExp(`\\{${varName}\\}`, 'g');
+  return decoded.replace(pattern, val);
 }
 
 // Replace template variables with actual values
@@ -3633,12 +3650,17 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
         }
       }
 
+      // Debug: Log customData for t3
+      console.log('[Relance T3] customData received:', JSON.stringify(customData));
+
       tournamentInfo = {
         category: categoryRow.display_name,
         tournament_date: customData?.tournament_date || '',
         tournament_lieu: customData?.tournament_lieu || '',
         deadline_date: deadlineDate
       };
+
+      console.log('[Relance T3] tournamentInfo:', JSON.stringify(tournamentInfo));
 
     } else if (relanceType === 'finale') {
       // Fetch finale qualified
@@ -3862,15 +3884,36 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
         };
 
         // Replace variables in subject, intro, outro
-        let emailSubject = subject;
-        let emailIntro = intro;
-        let emailOutro = outro;
+        let emailSubject = subject || '';
+        let emailIntro = intro || '';
+        let emailOutro = outro || '';
+
+        // Debug: Log the original intro and variables for first participant
+        if (participant === recipientsToEmail[0]) {
+          console.log('[Relance] Variables for replacement:', JSON.stringify({
+            tournament_date: variables.tournament_date,
+            tournament_lieu: variables.tournament_lieu,
+            deadline_date: variables.deadline_date,
+            first_name: variables.first_name
+          }));
+          console.log('[Relance] Intro before replacement (first 200 chars):', emailIntro.substring(0, 200));
+        }
 
         // Replace variables (handles both plain and HTML-encoded from Quill)
         for (const [key, value] of Object.entries(variables)) {
           emailSubject = replaceVar(emailSubject, key, value);
           emailIntro = replaceVar(emailIntro, key, value);
           emailOutro = replaceVar(emailOutro, key, value);
+        }
+
+        // Debug: Log the intro after replacement for first participant
+        if (participant === recipientsToEmail[0]) {
+          console.log('[Relance] Intro after replacement (first 200 chars):', emailIntro.substring(0, 200));
+          // Check for any remaining unmatched template variables
+          const remainingVars = emailIntro.match(/\{[a-z_]+\}/g);
+          if (remainingVars && remainingVars.length > 0) {
+            console.log('[Relance] WARNING: Unmatched template variables found:', remainingVars);
+          }
         }
 
         const imageHtml = imageUrl ? `<div style="text-align: center; margin: 20px 0;"><img src="${imageUrl}" alt="Image" style="max-width: 100%; height: auto; border-radius: 8px;"></div>` : '';
