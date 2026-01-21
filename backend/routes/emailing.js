@@ -968,6 +968,7 @@ router.post('/send', authenticateToken, async (req, res) => {
     // Get contact email for the contact phrase
     const contactEmail = await getContactEmail();
     const contactPhraseHtml = buildContactPhraseHtml(contactEmail);
+    const baseUrl = process.env.BASE_URL || 'https://cdbhs-tournament-management-production.up.railway.app';
 
     // Send emails
     for (const recipient of recipientsToEmail) {
@@ -1710,6 +1711,8 @@ router.post('/send-results', authenticateToken, async (req, res) => {
   }
 
   try {
+    const baseUrl = process.env.BASE_URL || 'https://cdbhs-tournament-management-production.up.railway.app';
+
     // Get tournament details with category info
     const tournament = await new Promise((resolve, reject) => {
       db.get(`
@@ -3406,6 +3409,8 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
   }
 
   try {
+    const baseUrl = process.env.BASE_URL || 'https://cdbhs-tournament-management-production.up.railway.app';
+
     // Get participants based on relance type
     let participants = [];
     let tournamentInfo = {};
