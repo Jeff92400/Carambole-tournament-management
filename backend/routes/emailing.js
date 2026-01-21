@@ -44,11 +44,11 @@ const imageUpload = multer({
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 // Helper function to convert email addresses to mailto links in HTML
-function convertEmailsToMailtoLinks(text) {
+function convertEmailsToMailtoLinks(text, primaryColor = '#1F4788') {
   // Match email addresses and convert to mailto links
   return text.replace(
     /([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/g,
-    '<a href="mailto:$1" style="color: #1F4788;">$1</a>'
+    `<a href="mailto:$1" style="color: ${primaryColor};">$1</a>`
   );
 }
 
@@ -967,13 +967,14 @@ router.post('/send', authenticateToken, async (req, res) => {
 
     // Get contact email for the contact phrase
     const contactEmail = await getContactEmail();
-    const contactPhraseHtml = buildContactPhraseHtml(contactEmail);
+    const contactPhraseHtml = buildContactPhraseHtml(contactEmail, primaryColor);
     const baseUrl = process.env.BASE_URL || 'https://cdbhs-tournament-management-production.up.railway.app';
 
     // Get dynamic sender info
     const senderName = await appSettings.getSetting('email_sender_name') || 'CDBHS';
     const senderEmail = await appSettings.getSetting('email_noreply') || 'noreply@cdbhs.net';
     const emailFrom = `${senderName} <${senderEmail}>`;
+    const primaryColor = await appSettings.getSetting('primary_color') || '#1F4788';
 
     // Send emails
     for (const recipient of recipientsToEmail) {
@@ -997,7 +998,7 @@ router.post('/send', authenticateToken, async (req, res) => {
 
         const emailSubject = replaceTemplateVariables(subject, templateVariables);
         const emailBody = replaceTemplateVariables(body, templateVariables);
-        const emailBodyHtml = convertEmailsToMailtoLinks(emailBody.replace(/\n/g, '<br>'));
+        const emailBodyHtml = convertEmailsToMailtoLinks(emailBody.replace(/\n/g, '<br>'), primaryColor);
 
         // Build optional image HTML
         const imageHtml = imageUrl ? `<div style="text-align: center; margin: 20px 0;"><img src="${imageUrl}" alt="Image" style="max-width: 100%; height: auto; border-radius: 8px;"></div>` : '';
@@ -1009,7 +1010,7 @@ router.post('/send', authenticateToken, async (req, res) => {
           subject: emailSubject,
           html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-              <div style="background: #1F4788; color: white; padding: 20px; text-align: center;">
+              <div style="background: ${primaryColor}; color: white; padding: 20px; text-align: center;">
                 <img src="${baseUrl}/logo.png?v=${Date.now()}" alt="Logo" style="height: 50px; margin-bottom: 10px;" onerror="this.style.display='none'">
                 <h1 style="margin: 0; font-size: 24px;">${await appSettings.getSetting('organization_name') || 'Comité Départemental de Billard'}</h1>
               </div>
@@ -1018,7 +1019,7 @@ router.post('/send', authenticateToken, async (req, res) => {
                 ${emailBodyHtml}
                 ${contactPhraseHtml}
               </div>
-              <div style="background: #1F4788; color: white; padding: 10px; text-align: center; font-size: 12px;">
+              <div style="background: ${primaryColor}; color: white; padding: 10px; text-align: center; font-size: 12px;">
                 <p style="margin: 0;">${senderName} - <a href="mailto:${contactEmail}" style="color: white;">${contactEmail}</a></p>
               </div>
             </div>
@@ -1070,11 +1071,11 @@ router.post('/send', authenticateToken, async (req, res) => {
         const recipientsList = results.sent.map(r => `- ${r.name} (${r.email})`).join('\n');
         const summaryHtml = `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <div style="background: #1F4788; color: white; padding: 20px; text-align: center;">
+            <div style="background: ${primaryColor}; color: white; padding: 20px; text-align: center;">
               <h1 style="margin: 0; font-size: 20px;">Récapitulatif d'envoi</h1>
             </div>
             <div style="padding: 20px; background: #f8f9fa;">
-              <h2 style="color: #1F4788; margin-top: 0;">Sujet: ${subject}</h2>
+              <h2 style="color: ${primaryColor}; margin-top: 0;">Sujet: ${subject}</h2>
               <p><strong>Destinataires (${results.sent.length}):</strong></p>
               <ul style="background: white; padding: 15px 15px 15px 35px; border-radius: 4px; margin: 10px 0;">
                 ${results.sent.map(r => `<li>${r.name} - ${r.email}</li>`).join('')}
@@ -1087,7 +1088,7 @@ router.post('/send', authenticateToken, async (req, res) => {
               ` : ''}
               <hr style="margin: 20px 0; border: none; border-top: 1px solid #ddd;">
               <p><strong>Contenu envoyé:</strong></p>
-              <div style="background: white; padding: 15px; border-radius: 4px; border-left: 4px solid #1F4788;">
+              <div style="background: white; padding: 15px; border-radius: 4px; border-left: 4px solid ${primaryColor};">
                 ${body.replace(/\n/g, '<br>')}
               </div>
             </div>
@@ -1449,12 +1450,13 @@ router.post('/process-scheduled', async (req, res) => {
 
     // Get configurable contact email
     const contactEmail = await getContactEmail();
-    const contactPhraseHtml = buildContactPhraseHtml(contactEmail);
+    const contactPhraseHtml = buildContactPhraseHtml(contactEmail, primaryColor);
 
     // Get dynamic sender info
     const senderName = await appSettings.getSetting('email_sender_name') || 'CDBHS';
     const senderEmail = await appSettings.getSetting('email_noreply') || 'noreply@cdbhs.net';
     const emailFrom = `${senderName} <${senderEmail}>`;
+    const primaryColor = await appSettings.getSetting('primary_color') || '#1F4788';
 
     for (const scheduled of scheduledEmails) {
       // Check if this type of email was already manually sent
@@ -1517,7 +1519,7 @@ router.post('/process-scheduled', async (req, res) => {
 
           const emailSubject = replaceTemplateVariables(scheduled.subject, templateVariables);
           const emailBody = replaceTemplateVariables(scheduled.body, templateVariables);
-          const emailBodyHtml = convertEmailsToMailtoLinks(emailBody.replace(/\n/g, '<br>'));
+          const emailBodyHtml = convertEmailsToMailtoLinks(emailBody.replace(/\n/g, '<br>'), primaryColor);
 
           await resend.emails.send({
             from: emailFrom,
@@ -1526,14 +1528,14 @@ router.post('/process-scheduled', async (req, res) => {
             subject: emailSubject,
             html: `
               <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                <div style="background: #1F4788; color: white; padding: 20px; text-align: center;">
+                <div style="background: ${primaryColor}; color: white; padding: 20px; text-align: center;">
                   <h1 style="margin: 0; font-size: 24px;">${senderName}</h1>
                 </div>
                 <div style="padding: 20px; background: #f8f9fa; line-height: 1.6;">
                   ${emailBodyHtml}
                   ${contactPhraseHtml}
                 </div>
-                <div style="background: #1F4788; color: white; padding: 10px; text-align: center; font-size: 12px;">
+                <div style="background: ${primaryColor}; color: white; padding: 10px; text-align: center; font-size: 12px;">
                   <p style="margin: 0;">Comite Departemental Billard Hauts-de-Seine - <a href="mailto:${contactEmail}" style="color: white;">${contactEmail}</a></p>
                 </div>
               </div>
@@ -1727,6 +1729,7 @@ router.post('/send-results', authenticateToken, async (req, res) => {
     const senderName = await appSettings.getSetting('email_sender_name') || 'CDBHS';
     const senderEmail = await appSettings.getSetting('email_noreply') || 'noreply@cdbhs.net';
     const emailFrom = `${senderName} <${senderEmail}>`;
+    const primaryColor = await appSettings.getSetting('primary_color') || '#1F4788';
 
     // Get tournament details with category info
     const tournament = await new Promise((resolve, reject) => {
@@ -1806,7 +1809,7 @@ router.post('/send-results', authenticateToken, async (req, res) => {
     const resultsTableHtml = `
       <table style="width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 14px;">
         <thead>
-          <tr style="background: #1F4788; color: white;">
+          <tr style="background: ${primaryColor}; color: white;">
             <th style="padding: 12px; text-align: center; border: 1px solid #ddd;">Pos</th>
             <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Joueur</th>
             <th style="padding: 12px; text-align: center; border: 1px solid #ddd;">Total Pts Match</th>
@@ -1864,7 +1867,7 @@ router.post('/send-results', authenticateToken, async (req, res) => {
 
     // Get configurable contact email
     const contactEmail = await getContactEmail();
-    const contactPhraseHtml = buildContactPhraseHtml(contactEmail);
+    const contactPhraseHtml = buildContactPhraseHtml(contactEmail, primaryColor);
 
     // Send email to each participant with email
     for (const participant of participantsToEmail) {
@@ -1964,7 +1967,7 @@ router.post('/send-results', authenticateToken, async (req, res) => {
         // Build final email HTML
         const emailHtml = `
           <div style="font-family: Arial, sans-serif; max-width: 700px; margin: 0 auto;">
-            <div style="background: #1F4788; color: white; padding: 20px; text-align: center;">
+            <div style="background: ${primaryColor}; color: white; padding: 20px; text-align: center;">
               <img src="${baseUrl}/logo.png?v=${Date.now()}" alt="Logo" style="height: 50px; margin-bottom: 10px;" onerror="this.style.display='none'">
               <h1 style="margin: 0; font-size: 24px;">${await appSettings.getSetting('organization_name') || 'Comité Départemental de Billard'}</h1>
               <p style="margin: 10px 0 0 0; opacity: 0.9;">Résultats - ${tournament.display_name}</p>
@@ -1972,9 +1975,9 @@ router.post('/send-results', authenticateToken, async (req, res) => {
             </div>
             <div style="padding: 20px; background: #f8f9fa; line-height: 1.6;">
               ${imageHtml}
-              <p>${convertEmailsToMailtoLinks(personalizedIntro.replace(/\n/g, '<br>'))}</p>
+              <p>${convertEmailsToMailtoLinks(personalizedIntro.replace(/\n/g, '<br>'), primaryColor)}</p>
 
-              <h3 style="color: #1F4788; margin-top: 30px;">Résultats du Tournoi</h3>
+              <h3 style="color: ${primaryColor}; margin-top: 30px;">Résultats du Tournoi</h3>
               ${resultsTableHtml.replace('{{RESULTS_ROWS}}', resultsRows)}
 
               <p style="margin-top: 30px; font-style: italic; color: #555;">Après les rencontres ci-dessus, le classement général pour la finale départementale est le suivant :</p>
@@ -1985,9 +1988,9 @@ router.post('/send-results', authenticateToken, async (req, res) => {
               ${qualificationMessage}
 
               ${contactPhraseHtml}
-              <p style="margin-top: 30px;">${convertEmailsToMailtoLinks(personalizedOutro.replace(/\n/g, '<br>'))}</p>
+              <p style="margin-top: 30px;">${convertEmailsToMailtoLinks(personalizedOutro.replace(/\n/g, '<br>'), primaryColor)}</p>
             </div>
-            <div style="background: #1F4788; color: white; padding: 10px; text-align: center; font-size: 12px;">
+            <div style="background: ${primaryColor}; color: white; padding: 10px; text-align: center; font-size: 12px;">
               <p style="margin: 0;">${senderName} - <a href="mailto:${contactEmail}" style="color: white;">${contactEmail}</a></p>
             </div>
           </div>
@@ -2069,7 +2072,7 @@ router.post('/send-results', authenticateToken, async (req, res) => {
 
         const summaryHtml = `
           <div style="font-family: Arial, sans-serif; max-width: 700px; margin: 0 auto;">
-            <div style="background: #1F4788; color: white; padding: 20px; text-align: center;">
+            <div style="background: ${primaryColor}; color: white; padding: 20px; text-align: center;">
               <img src="${baseUrl}/logo.png?v=${Date.now()}" alt="Logo" style="height: 50px; margin-bottom: 10px;" onerror="this.style.display='none'">
               <h1 style="margin: 0; font-size: 24px;">${await appSettings.getSetting('organization_name') || 'Comité Départemental de Billard'}</h1>
               <p style="margin: 10px 0 0 0; opacity: 0.9;">📋 Récapitulatif Envoi Résultats - ${tournament.display_name}</p>
@@ -2083,16 +2086,16 @@ router.post('/send-results', authenticateToken, async (req, res) => {
               </div>
 
               <div style="background: white; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #ddd;">
-                <h3 style="margin-top: 0; color: #1F4788;">📍 Informations du Tournoi</h3>
+                <h3 style="margin-top: 0; color: ${primaryColor};">📍 Informations du Tournoi</h3>
                 <p><strong>Tournoi :</strong> ${tournament.display_name}</p>
                 <p><strong>Date :</strong> ${tournamentDate}</p>
                 <p><strong>Lieu :</strong> ${tournament.location || '-'}</p>
               </div>
 
-              <h3 style="color: #1F4788;">📧 Liste des Destinataires (${sentResults.sent.length})</h3>
+              <h3 style="color: ${primaryColor};">📧 Liste des Destinataires (${sentResults.sent.length})</h3>
               <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 13px;">
                 <thead>
-                  <tr style="background: #1F4788; color: white;">
+                  <tr style="background: ${primaryColor}; color: white;">
                     <th style="padding: 10px; border: 1px solid #ddd;">#</th>
                     <th style="padding: 10px; border: 1px solid #ddd; text-align: left;">Joueur</th>
                     <th style="padding: 10px; border: 1px solid #ddd; text-align: left;">Email</th>
@@ -2118,7 +2121,7 @@ router.post('/send-results', authenticateToken, async (req, res) => {
                 </tbody>
               </table>
             </div>
-            <div style="background: #1F4788; color: white; padding: 10px; text-align: center; font-size: 12px;">
+            <div style="background: ${primaryColor}; color: white; padding: 10px; text-align: center; font-size: 12px;">
               <p style="margin: 0;">${senderName} - <a href="mailto:${contactEmail}" style="color: white;">${contactEmail}</a></p>
             </div>
           </div>
@@ -2366,6 +2369,7 @@ router.post('/send-finale-convocation', authenticateToken, async (req, res) => {
     const senderName = await appSettings.getSetting('email_sender_name') || 'CDBHS';
     const senderEmail = await appSettings.getSetting('email_noreply') || 'noreply@cdbhs.net';
     const emailFrom = `${senderName} <${senderEmail}>`;
+    const primaryColor = await appSettings.getSetting('primary_color') || '#1F4788';
 
     // Get finale details
     const finale = await new Promise((resolve, reject) => {
@@ -2453,7 +2457,7 @@ router.post('/send-finale-convocation', authenticateToken, async (req, res) => {
 
     // Get configurable contact email
     const contactEmail = await getContactEmail();
-    const contactPhraseHtml = buildContactPhraseHtml(contactEmail);
+    const contactPhraseHtml = buildContactPhraseHtml(contactEmail, primaryColor);
 
     for (const finalist of participantsToEmail) {
       if (!finalist.email || !finalist.email.includes('@')) {
@@ -2520,7 +2524,7 @@ router.post('/send-finale-convocation', authenticateToken, async (req, res) => {
 
         const emailHtml = `
           <div style="font-family: Arial, sans-serif; max-width: 700px; margin: 0 auto;">
-            <div style="background: #1F4788; color: white; padding: 20px; text-align: center;">
+            <div style="background: ${primaryColor}; color: white; padding: 20px; text-align: center;">
               <img src="${baseUrl}/logo.png?v=${Date.now()}" alt="Logo" style="height: 50px; margin-bottom: 10px;" onerror="this.style.display='none'">
               <h1 style="margin: 0; font-size: 24px;">🏆 Convocation Finale Départementale</h1>
               <p style="margin: 10px 0 0 0; opacity: 0.9;">${category.display_name}</p>
@@ -2533,16 +2537,16 @@ router.post('/send-finale-convocation', authenticateToken, async (req, res) => {
                 Vous êtes qualifié(e) pour la finale départementale !
               </div>
 
-              <p>${convertEmailsToMailtoLinks(personalizedIntro.replace(/\n/g, '<br>'))}</p>
+              <p>${convertEmailsToMailtoLinks(personalizedIntro.replace(/\n/g, '<br>'), primaryColor)}</p>
 
               <div style="background: white; padding: 15px; border-radius: 8px; margin: 20px 0; border: 1px solid #ddd;">
-                <h3 style="margin-top: 0; color: #1F4788;">📍 Informations de la Finale</h3>
+                <h3 style="margin-top: 0; color: ${primaryColor};">📍 Informations de la Finale</h3>
                 <p><strong>Date :</strong> ${finaleFormattedDate}</p>
                 <p><strong>Heure :</strong> ${finaleHeure || 'À confirmer'}</p>
                 <p><strong>Lieu :</strong> ${finale.lieu || 'À confirmer'}</p>
                 <p><strong>Catégorie :</strong> ${category.display_name}</p>
                 <p style="margin-top: 15px; text-align: center;">
-                  <a href="${baseUrl}/api/player-accounts/tournament/${finale.tournoi_id}/calendar.ics" style="display: inline-block; background: #1F4788; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-size: 14px;">📅 Ajouter à mon calendrier</a>
+                  <a href="${baseUrl}/api/player-accounts/tournament/${finale.tournoi_id}/calendar.ics" style="display: inline-block; background: ${primaryColor}; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-size: 14px;">📅 Ajouter à mon calendrier</a>
                 </p>
               </div>
 
@@ -2550,9 +2554,9 @@ router.post('/send-finale-convocation', authenticateToken, async (req, res) => {
               ${finalistsTableHtml}
 
               ${contactPhraseHtml}
-              <p style="margin-top: 30px;">${convertEmailsToMailtoLinks(personalizedOutro.replace(/\n/g, '<br>'))}</p>
+              <p style="margin-top: 30px;">${convertEmailsToMailtoLinks(personalizedOutro.replace(/\n/g, '<br>'), primaryColor)}</p>
             </div>
-            <div style="background: #1F4788; color: white; padding: 10px; text-align: center; font-size: 12px;">
+            <div style="background: ${primaryColor}; color: white; padding: 10px; text-align: center; font-size: 12px;">
               <p style="margin: 0;">${senderName} - <a href="mailto:${contactEmail}" style="color: white;">${contactEmail}</a></p>
             </div>
           </div>
@@ -2629,7 +2633,7 @@ router.post('/send-finale-convocation', authenticateToken, async (req, res) => {
 
         const summaryHtml = `
           <div style="font-family: Arial, sans-serif; max-width: 700px; margin: 0 auto;">
-            <div style="background: #1F4788; color: white; padding: 20px; text-align: center;">
+            <div style="background: ${primaryColor}; color: white; padding: 20px; text-align: center;">
               <img src="${baseUrl}/logo.png?v=${Date.now()}" alt="Logo" style="height: 50px; margin-bottom: 10px;" onerror="this.style.display='none'">
               <h1 style="margin: 0; font-size: 24px;">${await appSettings.getSetting('organization_name') || 'Comité Départemental de Billard'}</h1>
               <p style="margin: 10px 0 0 0; opacity: 0.9;">📋 Récapitulatif Convocations Finale - ${category.display_name}</p>
@@ -2643,17 +2647,17 @@ router.post('/send-finale-convocation', authenticateToken, async (req, res) => {
               </div>
 
               <div style="background: white; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #ddd;">
-                <h3 style="margin-top: 0; color: #1F4788;">📍 Informations de la Finale</h3>
+                <h3 style="margin-top: 0; color: ${primaryColor};">📍 Informations de la Finale</h3>
                 <p><strong>Finale :</strong> ${finale.nom}</p>
                 <p><strong>Catégorie :</strong> ${category.display_name}</p>
                 <p><strong>Date :</strong> ${finaleFormattedDate}</p>
                 <p><strong>Lieu :</strong> ${finale.lieu || 'À confirmer'}</p>
               </div>
 
-              <h3 style="color: #1F4788;">📧 Convocations Envoyées (${sentResults.sent.length})</h3>
+              <h3 style="color: ${primaryColor};">📧 Convocations Envoyées (${sentResults.sent.length})</h3>
               <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 13px;">
                 <thead>
-                  <tr style="background: #1F4788; color: white;">
+                  <tr style="background: ${primaryColor}; color: white;">
                     <th style="padding: 10px; border: 1px solid #ddd;">#</th>
                     <th style="padding: 10px; border: 1px solid #ddd; text-align: left;">Joueur</th>
                     <th style="padding: 10px; border: 1px solid #ddd; text-align: left;">Email</th>
@@ -2680,7 +2684,7 @@ router.post('/send-finale-convocation', authenticateToken, async (req, res) => {
                 </tbody>
               </table>
             </div>
-            <div style="background: #1F4788; color: white; padding: 10px; text-align: center; font-size: 12px;">
+            <div style="background: ${primaryColor}; color: white; padding: 10px; text-align: center; font-size: 12px;">
               <p style="margin: 0;">${senderName} - <a href="mailto:${contactEmail}" style="color: white;">${contactEmail}</a></p>
             </div>
           </div>
@@ -3435,6 +3439,7 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
     const senderName = await appSettings.getSetting('email_sender_name') || 'CDBHS';
     const senderEmail = await appSettings.getSetting('email_noreply') || 'noreply@cdbhs.net';
     const emailFrom = `${senderName} <${senderEmail}>`;
+    const primaryColor = await appSettings.getSetting('primary_color') || '#1F4788';
 
     // Get participants based on relance type
     let participants = [];
@@ -3766,7 +3771,7 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
 
     // Get configurable contact email
     const contactEmail = await getContactEmail();
-    const contactPhraseHtml = buildContactPhraseHtml(contactEmail);
+    const contactPhraseHtml = buildContactPhraseHtml(contactEmail, primaryColor);
 
     for (const participant of recipientsToEmail) {
       if (!participant.email || !participant.email.includes('@')) {
@@ -3814,18 +3819,18 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
 
         const emailHtml = `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <div style="background: #1F4788; color: white; padding: 20px; text-align: center;">
+            <div style="background: ${primaryColor}; color: white; padding: 20px; text-align: center;">
               <img src="${baseUrl}/logo.png?v=${Date.now()}" alt="Logo" style="height: 50px; margin-bottom: 10px;" onerror="this.style.display='none'">
               <h1 style="margin: 0; font-size: 24px;">${await appSettings.getSetting('organization_name') || 'Comité Départemental de Billard'}</h1>
             </div>
             <div style="padding: 20px; background: #f8f9fa; line-height: 1.6;">
               ${imageHtml}
-              <p>${convertEmailsToMailtoLinks(emailIntro.replace(/\n/g, '<br>'))}</p>
+              <p>${convertEmailsToMailtoLinks(emailIntro.replace(/\n/g, '<br>'), primaryColor)}</p>
               ${contactPhraseHtml}
               <hr style="margin: 20px 0; border: none; border-top: 1px solid #ddd;">
-              <p>${convertEmailsToMailtoLinks(emailOutro.replace(/\n/g, '<br>'))}</p>
+              <p>${convertEmailsToMailtoLinks(emailOutro.replace(/\n/g, '<br>'), primaryColor)}</p>
             </div>
-            <div style="background: #1F4788; color: white; padding: 10px; text-align: center; font-size: 12px;">
+            <div style="background: ${primaryColor}; color: white; padding: 10px; text-align: center; font-size: 12px;">
               <p style="margin: 0;">${senderName} - <a href="mailto:${contactEmail}" style="color: white;">${contactEmail}</a></p>
             </div>
           </div>
@@ -3896,7 +3901,7 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
 
         const summaryHtml = `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <div style="background: #1F4788; color: white; padding: 20px; text-align: center;">
+            <div style="background: ${primaryColor}; color: white; padding: 20px; text-align: center;">
               <h1 style="margin: 0; font-size: 20px;">Récapitulatif Relance ${relanceTypeLabels[relanceType]}</h1>
               <p style="margin: 10px 0 0 0;">${mode} ${category}</p>
             </div>
@@ -3908,7 +3913,7 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
               <h3>Destinataires</h3>
               <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
                 <thead>
-                  <tr style="background: #1F4788; color: white;">
+                  <tr style="background: ${primaryColor}; color: white;">
                     <th style="padding: 8px; border: 1px solid #ddd;">#</th>
                     <th style="padding: 8px; border: 1px solid #ddd;">Joueur</th>
                     <th style="padding: 8px; border: 1px solid #ddd;">Email</th>

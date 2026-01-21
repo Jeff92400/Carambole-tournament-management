@@ -384,7 +384,7 @@ async function generatePlayerConvocationPDF(player, tournamentInfo, allPoules, l
       const isFinale = tournamentInfo.tournamentNum === '4' || tournamentInfo.tournamentNum === 'Finale' || tournamentInfo.isFinale;
       const tournamentLabel = isFinale ? 'FINALE DEPARTEMENTALE' : `TOURNOI N°${tournamentInfo.tournamentNum}`;
       const headerColor = isFinale ? '#D4AF37' : primaryColor; // Gold for finals
-      const headerTextColor = isFinale ? '#1F4788' : 'white';
+      const headerTextColor = isFinale ? primaryColor : 'white';
       doc.rect(40, y, pageWidth, 45).fill(headerColor);
 
       // Add organization logo on left side of header (logoBuffer fetched before Promise)
@@ -585,7 +585,7 @@ async function generatePlayerConvocationPDF(player, tournamentInfo, allPoules, l
 
           // Header - gold for finale
           doc.rect(40, y, pageWidth, 20).fill('#D4AF37');
-          doc.fillColor('#1F4788').fontSize(10).font('Helvetica-Bold')
+          doc.fillColor(primaryColor).fontSize(10).font('Helvetica-Bold')
              .text(`PROGRAMME DES MATCHS ${tableInfo} - Tous contre tous`, 50, y + 5, { width: pageWidth - 20 });
           y += 22;
 
@@ -683,7 +683,7 @@ async function generatePlayerConvocationPDF(player, tournamentInfo, allPoules, l
 }
 
 // Generate NEUTRAL/SUMMARY PDF (no personalization) - for printing/sharing
-async function generateSummaryConvocationPDF(tournamentInfo, allPoules, locations, gameParams, selectedDistance, rankingData = {}) {
+async function generateSummaryConvocationPDF(tournamentInfo, allPoules, locations, gameParams, selectedDistance, rankingData = {}, brandingSettings = {}) {
   // Fetch logo before entering Promise to avoid async issues
   let logoBuffer = null;
   try {
@@ -705,10 +705,10 @@ async function generateSummaryConvocationPDF(tournamentInfo, allPoules, location
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
 
-      // Colors
-      const primaryColor = '#1F4788';
-      const secondaryColor = '#667EEA';
-      const accentColor = '#FFC107';
+      // Colors (from settings or defaults)
+      const primaryColor = brandingSettings.primary_color || '#1F4788';
+      const secondaryColor = brandingSettings.secondary_color || '#667EEA';
+      const accentColor = brandingSettings.accent_color || '#FFC107';
       const redColor = '#DC3545';
       const lightGray = '#F8F9FA';
 
@@ -725,7 +725,7 @@ async function generateSummaryConvocationPDF(tournamentInfo, allPoules, location
       const isFinale = tournamentInfo.tournamentNum === '4' || tournamentInfo.tournamentNum === 'Finale' || tournamentInfo.isFinale;
       const tournamentLabel = isFinale ? 'FINALE DEPARTEMENTALE' : `TOURNOI N°${tournamentInfo.tournamentNum}`;
       const headerColor = isFinale ? '#D4AF37' : primaryColor; // Gold for finals
-      const headerTextColor = isFinale ? '#1F4788' : 'white';
+      const headerTextColor = isFinale ? primaryColor : 'white';
       doc.rect(40, y, pageWidth, 45).fill(headerColor);
 
       // Add organization logo on left side of header (logoBuffer fetched before Promise)
@@ -911,7 +911,7 @@ async function generateSummaryConvocationPDF(tournamentInfo, allPoules, location
 
           // Header - gold for finale
           doc.rect(40, y, pageWidth, 20).fill('#D4AF37');
-          doc.fillColor('#1F4788').fontSize(10).font('Helvetica-Bold')
+          doc.fillColor(primaryColor).fontSize(10).font('Helvetica-Bold')
              .text(`PROGRAMME DES MATCHS ${tableInfo} - Tous contre tous`, 50, y + 5, { width: pageWidth - 20 });
           y += 22;
 
@@ -1684,6 +1684,7 @@ router.post('/send-club-reminder', authenticateToken, async (req, res) => {
     const emailSettings = await getEmailTemplateSettings();
     const orgShortName = emailSettings.organization_short_name || 'CDB';
     const orgName = emailSettings.organization_name || orgShortName;
+    const primaryColor = emailSettings.primary_color || '#1F4788';
     const baseUrl = process.env.BASE_URL || 'https://cdbhs-tournament-management-production.up.railway.app';
 
     // Check if we already sent a reminder for this tournament + club combination
@@ -1819,14 +1820,14 @@ Le CDBHS`;
 
     const emailBody = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <div style="background: #1F4788; color: white; padding: 20px; text-align: center;">
+        <div style="background: ${primaryColor}; color: white; padding: 20px; text-align: center;">
           <img src="${baseUrl}/logo.png?v=${Date.now()}" alt="" style="height: 50px; margin-bottom: 10px;" onerror="this.style.display='none'">
           <h1 style="margin: 0; font-size: 24px;">${orgShortName}</h1>
         </div>
         <div style="padding: 20px; background: #f8f9fa; line-height: 1.6;">
           ${bodyHtml}
         </div>
-        <div style="background: #1F4788; color: white; padding: 15px; text-align: center; font-size: 12px;">
+        <div style="background: ${primaryColor}; color: white; padding: 15px; text-align: center; font-size: 12px;">
           ${orgName}
         </div>
       </div>
@@ -1899,6 +1900,11 @@ router.post('/generate-summary-pdf', authenticateToken, async (req, res) => {
       rankingData = await getRankingDataForCategory(category.id, season);
     }
 
+    // Get branding settings
+    const brandingSettings = await appSettings.getSettingsBatch([
+      'primary_color', 'secondary_color', 'accent_color'
+    ]);
+
     // Generate PDF
     const pdfBuffer = await generateSummaryConvocationPDF(
       tournamentInfo,
@@ -1906,7 +1912,8 @@ router.post('/generate-summary-pdf', authenticateToken, async (req, res) => {
       locations || [],
       gameParams,
       selectedDistance,
-      rankingData
+      rankingData,
+      brandingSettings
     );
 
     // Send PDF
@@ -2134,7 +2141,7 @@ router.post('/inscription-confirmation', async (req, res) => {
               ${bodyHtml}
             </div>
           </div>
-          <div style="background: #1F4788; color: white; padding: 10px; text-align: center; font-size: 12px;">
+          <div style="background: ${primaryColor}; color: white; padding: 10px; text-align: center; font-size: 12px;">
             <p style="margin: 0;">CDBHS - Comité Départemental de Billard des Hauts-de-Seine</p>
           </div>
         </div>
@@ -2236,7 +2243,7 @@ router.post('/inscription-cancellation', async (req, res) => {
               ${bodyHtml}
             </div>
           </div>
-          <div style="background: #1F4788; color: white; padding: 10px; text-align: center; font-size: 12px;">
+          <div style="background: ${primaryColor}; color: white; padding: 10px; text-align: center; font-size: 12px;">
             <p style="margin: 0;">CDBHS - Comité Départemental de Billard des Hauts-de-Seine</p>
           </div>
         </div>
@@ -2314,11 +2321,11 @@ router.post('/contact', async (req, res) => {
       attachments: emailAttachments,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <div style="background: #1F4788; color: white; padding: 20px; text-align: center;">
+          <div style="background: ${primaryColor}; color: white; padding: 20px; text-align: center;">
             <h1 style="margin: 0; font-size: 24px;">Message depuis l'Espace Joueur</h1>
           </div>
           <div style="padding: 20px; background: #f8f9fa;">
-            <div style="margin-bottom: 20px; padding: 15px; background: white; border-radius: 4px; border-left: 4px solid #1F4788;">
+            <div style="margin-bottom: 20px; padding: 15px; background: white; border-radius: 4px; border-left: 4px solid ${primaryColor};">
               <p style="margin: 5px 0;"><strong>De :</strong> ${player_name}</p>
               <p style="margin: 5px 0;"><strong>Email :</strong> <a href="mailto:${player_email}">${player_email}</a></p>
               <p style="margin: 5px 0;"><strong>Licence :</strong> ${player_licence}</p>
@@ -2331,7 +2338,7 @@ router.post('/contact', async (req, res) => {
               ${attachmentInfo}
             </div>
           </div>
-          <div style="background: #1F4788; color: white; padding: 10px; text-align: center; font-size: 12px;">
+          <div style="background: ${primaryColor}; color: white; padding: 10px; text-align: center; font-size: 12px;">
             <p style="margin: 0;">CDBHS - Comité Départemental de Billard des Hauts-de-Seine</p>
           </div>
         </div>
@@ -2359,7 +2366,7 @@ router.post('/contact', async (req, res) => {
             </div>
             <p style="color: #666; font-size: 0.9rem;">Si vous avez besoin d'une réponse urgente, vous pouvez nous contacter directement à <a href="mailto:${contactEmail}">${contactEmail}</a></p>
           </div>
-          <div style="background: #1F4788; color: white; padding: 10px; text-align: center; font-size: 12px;">
+          <div style="background: ${primaryColor}; color: white; padding: 10px; text-align: center; font-size: 12px;">
             <p style="margin: 0;">CDBHS - Comité Départemental de Billard des Hauts-de-Seine</p>
           </div>
         </div>
