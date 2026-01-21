@@ -364,11 +364,19 @@ async function getEmailTemplate(templateKey = 'general') {
   });
 }
 
+// Replace a single template variable (handles both plain and HTML-encoded)
+function replaceVar(text, varName, value) {
+  return text
+    .replace(new RegExp(`\\{${varName}\\}`, 'g'), value || '')
+    .replace(new RegExp(`&#123;${varName}&#125;`, 'g'), value || '');
+}
+
 // Replace template variables with actual values
+// Handles both plain {var} and HTML-encoded &#123;var&#125; from Quill
 function replaceTemplateVariables(template, variables) {
   let result = template;
   for (const [key, value] of Object.entries(variables)) {
-    result = result.replace(new RegExp(`\\{${key}\\}`, 'g'), value || '');
+    result = replaceVar(result, key, value);
   }
   return result;
 }
@@ -1975,26 +1983,26 @@ router.post('/send-results', authenticateToken, async (req, res) => {
               </p>`;
         }
 
-        // Replace template variables
-        const personalizedIntro = introText
-          .replace(/\{first_name\}/g, participant.first_name || participant.player_name.split(' ')[0] || '')
-          .replace(/\{last_name\}/g, participant.last_name || '')
-          .replace(/\{tournament_name\}/g, tournament.display_name)
-          .replace(/\{tournament_date\}/g, tournamentDate)
-          .replace(/\{tournament_lieu\}/g, tournament.location || '')
-          .replace(/\{player_position\}/g, participant.position)
-          .replace(/\{player_points\}/g, participant.points || '-')
-          .replace(/\{ranking_position\}/g, playerRankingPosition || '-')
-          .replace(/\{organization_name\}/g, organizationName)
-          .replace(/\{organization_short_name\}/g, organizationShortName)
-          .replace(/\{organization_email\}/g, organizationEmail);
+        // Replace template variables (handles both plain and HTML-encoded from Quill)
+        let personalizedIntro = introText;
+        personalizedIntro = replaceVar(personalizedIntro, 'first_name', participant.first_name || participant.player_name.split(' ')[0] || '');
+        personalizedIntro = replaceVar(personalizedIntro, 'last_name', participant.last_name || '');
+        personalizedIntro = replaceVar(personalizedIntro, 'tournament_name', tournament.display_name);
+        personalizedIntro = replaceVar(personalizedIntro, 'tournament_date', tournamentDate);
+        personalizedIntro = replaceVar(personalizedIntro, 'tournament_lieu', tournament.location || '');
+        personalizedIntro = replaceVar(personalizedIntro, 'player_position', participant.position);
+        personalizedIntro = replaceVar(personalizedIntro, 'player_points', participant.points || '-');
+        personalizedIntro = replaceVar(personalizedIntro, 'ranking_position', playerRankingPosition || '-');
+        personalizedIntro = replaceVar(personalizedIntro, 'organization_name', organizationName);
+        personalizedIntro = replaceVar(personalizedIntro, 'organization_short_name', organizationShortName);
+        personalizedIntro = replaceVar(personalizedIntro, 'organization_email', organizationEmail);
 
-        const personalizedOutro = outroText
-          .replace(/\{first_name\}/g, participant.first_name || '')
-          .replace(/\{last_name\}/g, participant.last_name || '')
-          .replace(/\{organization_name\}/g, organizationName)
-          .replace(/\{organization_short_name\}/g, organizationShortName)
-          .replace(/\{organization_email\}/g, organizationEmail);
+        let personalizedOutro = outroText;
+        personalizedOutro = replaceVar(personalizedOutro, 'first_name', participant.first_name || '');
+        personalizedOutro = replaceVar(personalizedOutro, 'last_name', participant.last_name || '');
+        personalizedOutro = replaceVar(personalizedOutro, 'organization_name', organizationName);
+        personalizedOutro = replaceVar(personalizedOutro, 'organization_short_name', organizationShortName);
+        personalizedOutro = replaceVar(personalizedOutro, 'organization_email', organizationEmail);
 
         // Build optional image HTML
         const imageHtml = imageUrl ? `<div style="text-align: center; margin: 20px 0;"><img src="${imageUrl}" alt="Image" style="max-width: 100%; height: auto; border-radius: 8px;"></div>` : '';
@@ -2539,27 +2547,27 @@ router.post('/send-finale-convocation', authenticateToken, async (req, res) => {
           </table>
         `;
 
-        // Replace template variables
-        const personalizedIntro = introText
-          .replace(/\{first_name\}/g, finalist.first_name || finalist.player_name.split(' ')[0] || '')
-          .replace(/\{last_name\}/g, finalist.last_name || '')
-          .replace(/\{player_name\}/g, finalist.player_name || '')
-          .replace(/\{finale_name\}/g, finale.nom || '')
-          .replace(/\{finale_date\}/g, finaleFormattedDate)
-          .replace(/\{finale_heure\}/g, finaleHeure || '')
-          .replace(/\{finale_lieu\}/g, finale.lieu || '')
-          .replace(/\{category\}/g, category.display_name || '')
-          .replace(/\{rank_position\}/g, finalist.rank_position || '')
-          .replace(/\{organization_name\}/g, organizationName)
-          .replace(/\{organization_short_name\}/g, organizationShortName)
-          .replace(/\{organization_email\}/g, organizationEmail);
+        // Replace template variables (handles both plain and HTML-encoded from Quill)
+        let personalizedIntro = introText;
+        personalizedIntro = replaceVar(personalizedIntro, 'first_name', finalist.first_name || finalist.player_name.split(' ')[0] || '');
+        personalizedIntro = replaceVar(personalizedIntro, 'last_name', finalist.last_name || '');
+        personalizedIntro = replaceVar(personalizedIntro, 'player_name', finalist.player_name || '');
+        personalizedIntro = replaceVar(personalizedIntro, 'finale_name', finale.nom || '');
+        personalizedIntro = replaceVar(personalizedIntro, 'finale_date', finaleFormattedDate);
+        personalizedIntro = replaceVar(personalizedIntro, 'finale_heure', finaleHeure || '');
+        personalizedIntro = replaceVar(personalizedIntro, 'finale_lieu', finale.lieu || '');
+        personalizedIntro = replaceVar(personalizedIntro, 'category', category.display_name || '');
+        personalizedIntro = replaceVar(personalizedIntro, 'rank_position', finalist.rank_position || '');
+        personalizedIntro = replaceVar(personalizedIntro, 'organization_name', organizationName);
+        personalizedIntro = replaceVar(personalizedIntro, 'organization_short_name', organizationShortName);
+        personalizedIntro = replaceVar(personalizedIntro, 'organization_email', organizationEmail);
 
-        const personalizedOutro = outroText
-          .replace(/\{first_name\}/g, finalist.first_name || '')
-          .replace(/\{last_name\}/g, finalist.last_name || '')
-          .replace(/\{organization_name\}/g, organizationName)
-          .replace(/\{organization_short_name\}/g, organizationShortName)
-          .replace(/\{organization_email\}/g, organizationEmail);
+        let personalizedOutro = outroText;
+        personalizedOutro = replaceVar(personalizedOutro, 'first_name', finalist.first_name || '');
+        personalizedOutro = replaceVar(personalizedOutro, 'last_name', finalist.last_name || '');
+        personalizedOutro = replaceVar(personalizedOutro, 'organization_name', organizationName);
+        personalizedOutro = replaceVar(personalizedOutro, 'organization_short_name', organizationShortName);
+        personalizedOutro = replaceVar(personalizedOutro, 'organization_email', organizationEmail);
 
         const imageHtml = imageUrl ? `<div style="text-align: center; margin: 20px 0;"><img src="${imageUrl}" alt="Image" style="max-width: 100%; height: auto; border-radius: 8px;"></div>` : '';
 
@@ -3858,11 +3866,11 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
         let emailIntro = intro;
         let emailOutro = outro;
 
+        // Replace variables (handles both plain and HTML-encoded from Quill)
         for (const [key, value] of Object.entries(variables)) {
-          const regex = new RegExp(`\\{${key}\\}`, 'g');
-          emailSubject = emailSubject.replace(regex, value);
-          emailIntro = emailIntro.replace(regex, value);
-          emailOutro = emailOutro.replace(regex, value);
+          emailSubject = replaceVar(emailSubject, key, value);
+          emailIntro = replaceVar(emailIntro, key, value);
+          emailOutro = replaceVar(emailOutro, key, value);
         }
 
         const imageHtml = imageUrl ? `<div style="text-align: center; margin: 20px 0;"><img src="${imageUrl}" alt="Image" style="max-width: 100%; height: auto; border-radius: 8px;"></div>` : '';
