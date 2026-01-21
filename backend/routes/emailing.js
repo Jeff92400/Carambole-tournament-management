@@ -364,28 +364,30 @@ async function getEmailTemplate(templateKey = 'general') {
   });
 }
 
-// Decode HTML entities for curly braces
-function decodeHtmlBraces(text) {
-  if (!text || typeof text !== 'string') return text || '';
-  return text
-    .replace(/&#123;/g, '{')
-    .replace(/&#125;/g, '}')
-    .replace(/&lcub;/g, '{')
-    .replace(/&rcub;/g, '}')
-    .replace(/&#x7b;/gi, '{')
-    .replace(/&#x7d;/gi, '}');
-}
-
 // Replace a single template variable
-// Handles both plain {var} and HTML-encoded versions from Quill
+// Handles: plain {var}, HTML-encoded &#123;var&#125;, and vars with HTML tags inside {<strong>var</strong>}
 function replaceVar(text, varName, value) {
   if (!text || typeof text !== 'string') return text || '';
   const val = (value !== null && value !== undefined) ? String(value) : '';
-  // First decode HTML entities for braces, then replace
-  const decoded = decodeHtmlBraces(text);
-  // Use global regex for reliable replacement of all occurrences
-  const pattern = new RegExp(`\\{${varName}\\}`, 'g');
-  return decoded.replace(pattern, val);
+
+  let result = text;
+
+  // 1. Replace plain {varName}
+  result = result.replace(new RegExp(`\\{${varName}\\}`, 'g'), val);
+
+  // 2. Replace HTML-encoded &#123;varName&#125;
+  result = result.replace(new RegExp(`&#123;${varName}&#125;`, 'g'), val);
+
+  // 3. Handle HTML tags INSIDE braces: {<strong>varName</strong>} or {<em>varName</em>} etc.
+  // This happens when user applies formatting to the variable name in Quill
+  const htmlInsidePattern = new RegExp(`\\{(?:<[^>]+>)*${varName}(?:<\\/[^>]+>)*\\}`, 'gi');
+  result = result.replace(htmlInsidePattern, val);
+
+  // 4. Handle braces with mixed tags: {<strong>varName</strong>} where tags wrap just the name
+  const mixedPattern = new RegExp(`\\{\\s*(?:<[^>]+>)?\\s*${varName}\\s*(?:<\\/[^>]+>)?\\s*\\}`, 'gi');
+  result = result.replace(mixedPattern, val);
+
+  return result;
 }
 
 // Replace template variables with actual values
@@ -3860,60 +3862,63 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
       }
 
       try {
-        // Build template variables
-        const variables = {
-          first_name: participant.first_name || '',
-          last_name: participant.last_name || '',
-          player_name: participant.player_name || `${participant.first_name} ${participant.last_name}`,
-          club: participant.club || '',
-          category: tournamentInfo.category || '',
-          t1_position: participant.position || participant.t1_position || '',
-          t1_points: participant.match_points || participant.t1_points || '',
-          t1_date: tournamentInfo.t1_date || '',
-          rank_position: participant.rank_position || '',
-          total_points: participant.total_match_points || participant.total_points || '',
-          tournament_date: tournamentInfo.tournament_date || '',
-          tournament_lieu: tournamentInfo.tournament_lieu || '',
-          finale_date: tournamentInfo.finale_date || '',
-          finale_lieu: tournamentInfo.finale_lieu || '',
-          deadline_date: tournamentInfo.deadline_date || '',
-          qualified_count: tournamentInfo.qualified_count || '',
-          organization_name: organizationName,
-          organization_short_name: organizationShortName,
-          organization_email: organizationEmail
-        };
-
-        // Replace variables in subject, intro, outro
+        // Replace variables in subject, intro, outro - using explicit calls like Results template
         let emailSubject = subject || '';
         let emailIntro = intro || '';
         let emailOutro = outro || '';
 
-        // Debug: Log the original intro and variables for first participant
+        // Debug log for first participant
         if (participant === recipientsToEmail[0]) {
-          console.log('[Relance] Variables for replacement:', JSON.stringify({
-            tournament_date: variables.tournament_date,
-            tournament_lieu: variables.tournament_lieu,
-            deadline_date: variables.deadline_date,
-            first_name: variables.first_name
-          }));
-          console.log('[Relance] Intro before replacement (first 200 chars):', emailIntro.substring(0, 200));
+          console.log('[Relance] tournamentInfo:', JSON.stringify(tournamentInfo));
+          console.log('[Relance] Intro before replacement (first 300 chars):', emailIntro.substring(0, 300));
         }
 
-        // Replace variables (handles both plain and HTML-encoded from Quill)
-        for (const [key, value] of Object.entries(variables)) {
-          emailSubject = replaceVar(emailSubject, key, value);
-          emailIntro = replaceVar(emailIntro, key, value);
-          emailOutro = replaceVar(emailOutro, key, value);
-        }
+        // Replace all variables explicitly (same pattern as Results template)
+        // Player info
+        emailSubject = replaceVar(emailSubject, 'first_name', participant.first_name || '');
+        emailSubject = replaceVar(emailSubject, 'last_name', participant.last_name || '');
+        emailSubject = replaceVar(emailSubject, 'category', tournamentInfo.category || '');
 
-        // Debug: Log the intro after replacement for first participant
+        emailIntro = replaceVar(emailIntro, 'first_name', participant.first_name || '');
+        emailIntro = replaceVar(emailIntro, 'last_name', participant.last_name || '');
+        emailIntro = replaceVar(emailIntro, 'player_name', participant.player_name || `${participant.first_name} ${participant.last_name}`);
+        emailIntro = replaceVar(emailIntro, 'club', participant.club || '');
+        emailIntro = replaceVar(emailIntro, 'category', tournamentInfo.category || '');
+
+        // T1 info
+        emailIntro = replaceVar(emailIntro, 't1_position', participant.position || participant.t1_position || '');
+        emailIntro = replaceVar(emailIntro, 't1_points', participant.match_points || participant.t1_points || '');
+        emailIntro = replaceVar(emailIntro, 't1_date', tournamentInfo.t1_date || '');
+
+        // Ranking info
+        emailIntro = replaceVar(emailIntro, 'rank_position', participant.rank_position || '');
+        emailIntro = replaceVar(emailIntro, 'total_points', participant.total_match_points || participant.total_points || '');
+
+        // Tournament info - THE KEY ONES
+        emailIntro = replaceVar(emailIntro, 'tournament_date', tournamentInfo.tournament_date || '');
+        emailIntro = replaceVar(emailIntro, 'tournament_lieu', tournamentInfo.tournament_lieu || '');
+        emailIntro = replaceVar(emailIntro, 'deadline_date', tournamentInfo.deadline_date || '');
+
+        // Finale info
+        emailIntro = replaceVar(emailIntro, 'finale_date', tournamentInfo.finale_date || '');
+        emailIntro = replaceVar(emailIntro, 'finale_lieu', tournamentInfo.finale_lieu || '');
+        emailIntro = replaceVar(emailIntro, 'qualified_count', tournamentInfo.qualified_count || '');
+
+        // Organization info
+        emailIntro = replaceVar(emailIntro, 'organization_name', organizationName);
+        emailIntro = replaceVar(emailIntro, 'organization_short_name', organizationShortName);
+        emailIntro = replaceVar(emailIntro, 'organization_email', organizationEmail);
+
+        // Outro replacements
+        emailOutro = replaceVar(emailOutro, 'first_name', participant.first_name || '');
+        emailOutro = replaceVar(emailOutro, 'last_name', participant.last_name || '');
+        emailOutro = replaceVar(emailOutro, 'organization_name', organizationName);
+        emailOutro = replaceVar(emailOutro, 'organization_short_name', organizationShortName);
+        emailOutro = replaceVar(emailOutro, 'organization_email', organizationEmail);
+
+        // Debug log after replacement
         if (participant === recipientsToEmail[0]) {
-          console.log('[Relance] Intro after replacement (first 200 chars):', emailIntro.substring(0, 200));
-          // Check for any remaining unmatched template variables
-          const remainingVars = emailIntro.match(/\{[a-z_]+\}/g);
-          if (remainingVars && remainingVars.length > 0) {
-            console.log('[Relance] WARNING: Unmatched template variables found:', remainingVars);
-          }
+          console.log('[Relance] Intro after replacement (first 300 chars):', emailIntro.substring(0, 300));
         }
 
         const imageHtml = imageUrl ? `<div style="text-align: center; margin: 20px 0;"><img src="${imageUrl}" alt="Image" style="max-width: 100%; height: auto; border-radius: 8px;"></div>` : '';
