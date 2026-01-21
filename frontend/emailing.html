@@ -1235,7 +1235,7 @@ Le Comité Départemental de Billard des Hauts-de-Seine</textarea>
 
           <div style="margin-bottom: 15px;">
             <label style="display: block; margin-bottom: 5px; font-weight: bold;">Corps du message</label>
-            <textarea id="templateBody" rows="10" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;"></textarea>
+            <div id="templateBodyEditor"></div>
           </div>
 
           <div class="template-vars">
@@ -1386,6 +1386,22 @@ Le Comité Départemental de Billard des Hauts-de-Seine</textarea>
     const quill = new Quill('#emailBodyEditor', {
       theme: 'snow',
       placeholder: 'Contenu de l\'email...',
+      modules: {
+        toolbar: [
+          ['bold', 'italic', 'underline', 'strike'],
+          [{ 'color': [] }, { 'background': [] }],
+          [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+          [{ 'align': [] }],
+          ['link'],
+          ['clean']
+        ]
+      }
+    });
+
+    // Initialize Quill for template editor
+    const quillTemplate = new Quill('#templateBodyEditor', {
+      theme: 'snow',
+      placeholder: 'Corps du template...',
       modules: {
         toolbar: [
           ['bold', 'italic', 'underline', 'strike'],
@@ -2140,15 +2156,17 @@ Le Comité Départemental de Billard des Hauts-de-Seine</textarea>
         if (response.ok) {
           const template = await response.json();
           document.getElementById('templateSubject').value = template.subject_template;
-          document.getElementById('templateBody').value = template.body_template;
+          // Convert plain text line breaks to HTML for Quill
+          const htmlContent = (template.body_template || '').replace(/\n/g, '<br>');
+          quillTemplate.clipboard.dangerouslyPasteHTML(htmlContent);
         } else {
           // New template
           document.getElementById('templateSubject').value = '';
-          document.getElementById('templateBody').value = '';
+          quillTemplate.setContents([]);
         }
       } catch (error) {
         document.getElementById('templateSubject').value = '';
-        document.getElementById('templateBody').value = '';
+        quillTemplate.setContents([]);
       }
     });
 
@@ -2158,15 +2176,16 @@ Le Comité Départemental de Billard des Hauts-de-Seine</textarea>
       document.getElementById('templateKey').value = '';
       document.getElementById('templateKey').readOnly = false;
       document.getElementById('templateSubject').value = '';
-      document.getElementById('templateBody').value = '';
+      quillTemplate.setContents([]);
     });
 
     document.getElementById('saveTemplateBtn').addEventListener('click', async () => {
       const key = document.getElementById('templateKey').value.trim();
       const subject = document.getElementById('templateSubject').value.trim();
-      const body = document.getElementById('templateBody').value.trim();
+      const body = quillTemplate.root.innerHTML;
+      const bodyText = quillTemplate.getText().trim();
 
-      if (!key || !subject || !body) {
+      if (!key || !subject || !bodyText) {
         showError('Tous les champs sont obligatoires.');
         return;
       }
@@ -2190,7 +2209,7 @@ Le Comité Départemental de Billard des Hauts-de-Seine</textarea>
           // Clear form and hide editor
           document.getElementById('templateKey').value = '';
           document.getElementById('templateSubject').value = '';
-          document.getElementById('templateBody').value = '';
+          quillTemplate.setContents([]);
           document.getElementById('templateEditor').style.display = 'none';
           document.getElementById('templateEditSelect').value = '';
         } else {
