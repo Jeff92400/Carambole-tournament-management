@@ -986,6 +986,7 @@ router.post('/send', authenticateToken, async (req, res) => {
     const primaryColor = await appSettings.getSetting('primary_color') || '#1F4788';
     const organizationName = await appSettings.getSetting('organization_name') || 'Comité Départemental de Billard';
     const organizationShortName = await appSettings.getSetting('organization_short_name') || 'CDBHS';
+    const organizationEmail = await appSettings.getSetting('email_communication') || 'communication@cdbhs.net';
 
     // Get contact email for the contact phrase
     const contactEmail = await getContactEmail();
@@ -1011,7 +1012,8 @@ router.post('/send', authenticateToken, async (req, res) => {
           club: recipient.club || '',
           message: body,
           organization_name: organizationName,
-          organization_short_name: organizationShortName
+          organization_short_name: organizationShortName,
+          organization_email: organizationEmail
         };
 
         const emailSubject = replaceTemplateVariables(subject, templateVariables);
@@ -1473,6 +1475,7 @@ router.post('/process-scheduled', async (req, res) => {
     const primaryColor = await appSettings.getSetting('primary_color') || '#1F4788';
     const organizationName = await appSettings.getSetting('organization_name') || 'Comité Départemental de Billard';
     const organizationShortName = await appSettings.getSetting('organization_short_name') || 'CDBHS';
+    const organizationEmail = await appSettings.getSetting('email_communication') || 'communication@cdbhs.net';
 
     // Get configurable contact email
     const contactEmail = await getContactEmail();
@@ -1536,7 +1539,8 @@ router.post('/process-scheduled', async (req, res) => {
             club: recipient.club || '',
             message: scheduled.body,
             organization_name: organizationName,
-            organization_short_name: organizationShortName
+            organization_short_name: organizationShortName,
+            organization_email: organizationEmail
           };
 
           const emailSubject = replaceTemplateVariables(scheduled.subject, templateVariables);
@@ -1754,6 +1758,7 @@ router.post('/send-results', authenticateToken, async (req, res) => {
     const primaryColor = await appSettings.getSetting('primary_color') || '#1F4788';
     const organizationName = await appSettings.getSetting('organization_name') || 'Comité Départemental de Billard';
     const organizationShortName = await appSettings.getSetting('organization_short_name') || 'CDBHS';
+    const organizationEmail = await appSettings.getSetting('email_communication') || 'communication@cdbhs.net';
 
     // Get tournament details with category info
     const tournament = await new Promise((resolve, reject) => {
@@ -1981,13 +1986,15 @@ router.post('/send-results', authenticateToken, async (req, res) => {
           .replace(/\{player_points\}/g, participant.points || '-')
           .replace(/\{ranking_position\}/g, playerRankingPosition || '-')
           .replace(/\{organization_name\}/g, organizationName)
-          .replace(/\{organization_short_name\}/g, organizationShortName);
+          .replace(/\{organization_short_name\}/g, organizationShortName)
+          .replace(/\{organization_email\}/g, organizationEmail);
 
         const personalizedOutro = outroText
           .replace(/\{first_name\}/g, participant.first_name || '')
           .replace(/\{last_name\}/g, participant.last_name || '')
           .replace(/\{organization_name\}/g, organizationName)
-          .replace(/\{organization_short_name\}/g, organizationShortName);
+          .replace(/\{organization_short_name\}/g, organizationShortName)
+          .replace(/\{organization_email\}/g, organizationEmail);
 
         // Build optional image HTML
         const imageHtml = imageUrl ? `<div style="text-align: center; margin: 20px 0;"><img src="${imageUrl}" alt="Image" style="max-width: 100%; height: auto; border-radius: 8px;"></div>` : '';
@@ -2400,6 +2407,7 @@ router.post('/send-finale-convocation', authenticateToken, async (req, res) => {
     const primaryColor = await appSettings.getSetting('primary_color') || '#1F4788';
     const organizationName = await appSettings.getSetting('organization_name') || 'Comité Départemental de Billard';
     const organizationShortName = await appSettings.getSetting('organization_short_name') || 'CDBHS';
+    const organizationEmail = await appSettings.getSetting('email_communication') || 'communication@cdbhs.net';
 
     // Get finale details
     const finale = await new Promise((resolve, reject) => {
@@ -2543,13 +2551,15 @@ router.post('/send-finale-convocation', authenticateToken, async (req, res) => {
           .replace(/\{category\}/g, category.display_name || '')
           .replace(/\{rank_position\}/g, finalist.rank_position || '')
           .replace(/\{organization_name\}/g, organizationName)
-          .replace(/\{organization_short_name\}/g, organizationShortName);
+          .replace(/\{organization_short_name\}/g, organizationShortName)
+          .replace(/\{organization_email\}/g, organizationEmail);
 
         const personalizedOutro = outroText
           .replace(/\{first_name\}/g, finalist.first_name || '')
           .replace(/\{last_name\}/g, finalist.last_name || '')
           .replace(/\{organization_name\}/g, organizationName)
-          .replace(/\{organization_short_name\}/g, organizationShortName);
+          .replace(/\{organization_short_name\}/g, organizationShortName)
+          .replace(/\{organization_email\}/g, organizationEmail);
 
         const imageHtml = imageUrl ? `<div style="text-align: center; margin: 20px 0;"><img src="${imageUrl}" alt="Image" style="max-width: 100%; height: auto; border-radius: 8px;"></div>` : '';
 
@@ -3476,6 +3486,7 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
     const primaryColor = await appSettings.getSetting('primary_color') || '#1F4788';
     const organizationName = await appSettings.getSetting('organization_name') || 'Comité Départemental de Billard';
     const organizationShortName = await appSettings.getSetting('organization_short_name') || 'CDBHS';
+    const organizationEmail = await appSettings.getSetting('email_communication') || 'communication@cdbhs.net';
 
     // Get participants based on relance type
     let participants = [];
@@ -3838,7 +3849,8 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
           deadline_date: tournamentInfo.deadline_date || '',
           qualified_count: tournamentInfo.qualified_count || '',
           organization_name: organizationName,
-          organization_short_name: organizationShortName
+          organization_short_name: organizationShortName,
+          organization_email: organizationEmail
         };
 
         // Replace variables in subject, intro, outro
