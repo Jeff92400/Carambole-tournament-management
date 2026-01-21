@@ -333,6 +333,14 @@ function generateMatchSchedule(pouleSize) {
 
 // Generate PDF convocation for a specific player - includes ALL poules
 async function generatePlayerConvocationPDF(player, tournamentInfo, allPoules, locations, gameParams, selectedDistance, rankingData = {}, brandingSettings = {}) {
+  // Fetch logo before entering Promise to avoid async issues
+  let logoBuffer = null;
+  try {
+    logoBuffer = await getOrganizationLogoBuffer();
+  } catch (err) {
+    console.log('Logo not found for PDF:', err.message);
+  }
+
   return new Promise((resolve, reject) => {
     try {
       const doc = new PDFDocument({
@@ -379,14 +387,13 @@ async function generatePlayerConvocationPDF(player, tournamentInfo, allPoules, l
       const headerTextColor = isFinale ? '#1F4788' : 'white';
       doc.rect(40, y, pageWidth, 45).fill(headerColor);
 
-      // Add organization logo on left side of header
-      try {
-        const logoBuffer = await getOrganizationLogoBuffer();
-        if (logoBuffer) {
+      // Add organization logo on left side of header (logoBuffer fetched before Promise)
+      if (logoBuffer) {
+        try {
           doc.image(logoBuffer, 48, y + 5, { width: 35 });
+        } catch (err) {
+          console.log('Error adding logo to PDF:', err.message);
         }
-      } catch (err) {
-        console.log('Logo not found for PDF:', err.message);
       }
 
       // Title text - offset to avoid logo overlap, slightly smaller font
@@ -677,6 +684,14 @@ async function generatePlayerConvocationPDF(player, tournamentInfo, allPoules, l
 
 // Generate NEUTRAL/SUMMARY PDF (no personalization) - for printing/sharing
 async function generateSummaryConvocationPDF(tournamentInfo, allPoules, locations, gameParams, selectedDistance, rankingData = {}) {
+  // Fetch logo before entering Promise to avoid async issues
+  let logoBuffer = null;
+  try {
+    logoBuffer = await getOrganizationLogoBuffer();
+  } catch (err) {
+    console.log('Logo not found for PDF:', err.message);
+  }
+
   return new Promise((resolve, reject) => {
     try {
       const doc = new PDFDocument({
@@ -713,14 +728,13 @@ async function generateSummaryConvocationPDF(tournamentInfo, allPoules, location
       const headerTextColor = isFinale ? '#1F4788' : 'white';
       doc.rect(40, y, pageWidth, 45).fill(headerColor);
 
-      // Add organization logo on left side of header
-      try {
-        const logoBuffer = await getOrganizationLogoBuffer();
-        if (logoBuffer) {
+      // Add organization logo on left side of header (logoBuffer fetched before Promise)
+      if (logoBuffer) {
+        try {
           doc.image(logoBuffer, 48, y + 5, { width: 35 });
+        } catch (err) {
+          console.log('Error adding logo to PDF:', err.message);
         }
-      } catch (err) {
-        console.log('Logo not found for PDF:', err.message);
       }
 
       // Title text - offset to avoid logo overlap, slightly smaller font
