@@ -78,14 +78,30 @@ router.get('/game-parameters', authenticateToken, async (req, res) => {
       });
     });
 
-    // Create a lookup map (normalize codes for matching)
-    const modeMap = {};
-    gameModes.forEach(gm => {
-      const normalizedCode = gm.code.toUpperCase().replace(/\s+/g, '');
-      modeMap[normalizedCode] = { display_name: gm.display_name, display_order: gm.display_order };
-      // Also map by display_name for flexibility
-      modeMap[gm.display_name.toUpperCase().replace(/\s+/g, '')] = { display_name: gm.display_name, display_order: gm.display_order };
-    });
+    // Function to find matching game mode
+    // Handles cases like: mode="CADRE" matching code="CADRE 42/2"
+    function findGameMode(paramMode, gameModes) {
+      const normalizedParamMode = paramMode.toUpperCase().replace(/\s+/g, '').replace(/[^A-Z0-9]/g, '');
+
+      for (const gm of gameModes) {
+        const normalizedCode = gm.code.toUpperCase().replace(/\s+/g, '').replace(/[^A-Z0-9]/g, '');
+        const normalizedDisplayName = gm.display_name.toUpperCase().replace(/\s+/g, '').replace(/[^A-Z0-9]/g, '');
+
+        // Exact match
+        if (normalizedCode === normalizedParamMode || normalizedDisplayName === normalizedParamMode) {
+          return gm;
+        }
+        // Code starts with param mode (e.g., "CADRE422" starts with "CADRE")
+        if (normalizedCode.startsWith(normalizedParamMode)) {
+          return gm;
+        }
+        // Display name starts with param mode
+        if (normalizedDisplayName.startsWith(normalizedParamMode)) {
+          return gm;
+        }
+      }
+      return null;
+    }
 
     // Get game parameters
     const params = await new Promise((resolve, reject) => {
@@ -114,12 +130,11 @@ router.get('/game-parameters', authenticateToken, async (req, res) => {
 
     // Enrich params with mode display names
     const enrichedParams = params.map(param => {
-      const normalizedMode = param.mode.toUpperCase().replace(/\s+/g, '');
-      const modeInfo = modeMap[normalizedMode] || {};
+      const matchedMode = findGameMode(param.mode, gameModes);
       return {
         ...param,
-        mode_display_name: modeInfo.display_name || param.mode,
-        display_order: modeInfo.display_order
+        mode_display_name: matchedMode ? matchedMode.display_name : param.mode,
+        display_order: matchedMode ? matchedMode.display_order : 999
       };
     });
 
