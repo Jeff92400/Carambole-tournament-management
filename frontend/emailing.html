@@ -1340,12 +1340,15 @@
                   Supprimer
                 </button>
               </div>
+              <label style="display: flex; align-items: center; gap: 6px; margin-top: 10px; font-size: 13px; color: #FF9800; cursor: pointer;">
+                <input type="checkbox" id="purgeByDateTestOnly"> Emails TEST uniquement
+              </label>
             </div>
 
             <!-- Option 2: Purge all -->
             <div style="flex: 1; min-width: 280px; border-left: 2px solid #ffc107; padding-left: 30px;">
               <h4 style="margin: 0 0 10px 0; color: #856404;">⚠️ Purger TOUT l'historique</h4>
-              <p style="margin: 0 0 15px 0; font-size: 13px; color: #dc3545; font-weight: bold;">
+              <p id="purgeAllWarning" style="margin: 0 0 15px 0; font-size: 13px; color: #dc3545; font-weight: bold;">
                 Cette action supprimera TOUTES les campagnes - IRRÉVERSIBLE
               </p>
               <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
@@ -1354,6 +1357,9 @@
                   Supprimer tout
                 </button>
               </div>
+              <label style="display: flex; align-items: center; gap: 6px; margin-top: 10px; font-size: 13px; color: #FF9800; cursor: pointer;">
+                <input type="checkbox" id="purgeAllTestOnly" onchange="updatePurgeAllWarning()"> Emails TEST uniquement
+              </label>
             </div>
           </div>
 
@@ -3915,6 +3921,7 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
     async function purgeByDateRange() {
       const startDate = document.getElementById('purgeStartDate').value;
       const endDate = document.getElementById('purgeEndDate').value;
+      const testOnly = document.getElementById('purgeByDateTestOnly').checked;
 
       if (!startDate || !endDate) {
         showError('Veuillez sélectionner une date de début et de fin');
@@ -3928,8 +3935,9 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
 
       const startFormatted = new Date(startDate).toLocaleDateString('fr-FR');
       const endFormatted = new Date(endDate).toLocaleDateString('fr-FR');
+      const testLabel = testOnly ? ' TEST' : '';
 
-      if (!confirm(`Êtes-vous sûr de vouloir supprimer les campagnes entre le ${startFormatted} et le ${endFormatted} ?\n\nCette action est irréversible.`)) {
+      if (!confirm(`Êtes-vous sûr de vouloir supprimer les campagnes${testLabel} entre le ${startFormatted} et le ${endFormatted} ?\n\nCette action est irréversible.`)) {
         return;
       }
 
@@ -3940,7 +3948,7 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({ startDate, endDate })
+          body: JSON.stringify({ startDate, endDate, testOnly })
         });
 
         if (!response.ok) {
@@ -3960,11 +3968,31 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
       }
     }
 
+    // Update warning text based on testOnly checkbox
+    function updatePurgeAllWarning() {
+      const testOnly = document.getElementById('purgeAllTestOnly').checked;
+      const warning = document.getElementById('purgeAllWarning');
+      if (testOnly) {
+        warning.textContent = 'Cette action supprimera TOUS les emails TEST - IRRÉVERSIBLE';
+        warning.style.color = '#FF9800';
+      } else {
+        warning.textContent = 'Cette action supprimera TOUTES les campagnes - IRRÉVERSIBLE';
+        warning.style.color = '#dc3545';
+      }
+    }
+
     // Purge ALL campaigns (double confirmation)
     async function purgeAllCampaigns() {
+      const testOnly = document.getElementById('purgeAllTestOnly').checked;
+      const testLabel = testOnly ? ' TEST' : '';
+
       // First confirmation already done via typing "SUPPRIMER"
       // Second confirmation via confirm dialog
-      if (!confirm('Êtes-vous ABSOLUMENT sûr ?\n\nCette action est IRRÉVERSIBLE et supprimera TOUTES les campagnes email de l\'historique.\n\nCliquez OK pour confirmer la suppression définitive.')) {
+      const confirmMsg = testOnly
+        ? 'Êtes-vous sûr ?\n\nCette action supprimera TOUS les emails TEST de l\'historique.\n\nCliquez OK pour confirmer.'
+        : 'Êtes-vous ABSOLUMENT sûr ?\n\nCette action est IRRÉVERSIBLE et supprimera TOUTES les campagnes email de l\'historique.\n\nCliquez OK pour confirmer la suppression définitive.';
+
+      if (!confirm(confirmMsg)) {
         return;
       }
 
@@ -3975,7 +4003,7 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({ purgeAll: true })
+          body: JSON.stringify({ purgeAll: true, testOnly })
         });
 
         if (!response.ok) {

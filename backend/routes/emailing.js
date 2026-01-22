@@ -280,6 +280,7 @@ router.get('/campaigns/purge-count', authenticateToken, async (req, res) => {
 
 // Purge campaigns - Admin only
 // Supports: purgeAll=true OR date range (startDate/endDate)
+// Optional: testOnly=true to only purge TEST campaigns
 router.delete('/campaigns/purge', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
 
@@ -288,7 +289,7 @@ router.delete('/campaigns/purge', authenticateToken, async (req, res) => {
     return res.status(403).json({ error: 'Admin access required' });
   }
 
-  const { startDate, endDate, purgeAll } = req.body;
+  const { startDate, endDate, purgeAll, testOnly } = req.body;
 
   // Validate parameters - require either purgeAll OR valid date range
   if (!purgeAll && (!startDate || !endDate)) {
@@ -297,15 +298,19 @@ router.delete('/campaigns/purge', authenticateToken, async (req, res) => {
     });
   }
 
+  // Build test_mode filter clause
+  const testFilter = testOnly ? ' AND test_mode = TRUE' : '';
+  const testLabel = testOnly ? ' TEST' : '';
+
   try {
     let result;
     let logMessage;
 
     if (purgeAll) {
-      // Purge ALL campaigns
+      // Purge ALL campaigns (optionally only TEST)
       result = await new Promise((resolve, reject) => {
         db.run(
-          `DELETE FROM email_campaigns`,
+          `DELETE FROM email_campaigns WHERE 1=1${testFilter}`,
           [],
           function(err) {
             if (err) reject(err);
@@ -313,15 +318,15 @@ router.delete('/campaigns/purge', authenticateToken, async (req, res) => {
           }
         );
       });
-      logMessage = `[Purge] Deleted ALL ${result.deleted} email campaigns (purgeAll)`;
+      logMessage = `[Purge] Deleted ALL ${result.deleted}${testLabel} email campaigns (purgeAll)`;
     } else {
       // Purge by date range (inclusive)
       // Delete campaigns where sent_at is within the range, or if sent_at is null, where created_at is within the range
       result = await new Promise((resolve, reject) => {
         db.run(
           `DELETE FROM email_campaigns
-           WHERE (sent_at >= $1 AND sent_at <= $2)
-              OR (sent_at IS NULL AND created_at >= $1 AND created_at <= $2)`,
+           WHERE ((sent_at >= $1 AND sent_at <= $2)
+              OR (sent_at IS NULL AND created_at >= $1 AND created_at <= $2))${testFilter}`,
           [startDate, endDate],
           function(err) {
             if (err) reject(err);
@@ -329,14 +334,14 @@ router.delete('/campaigns/purge', authenticateToken, async (req, res) => {
           }
         );
       });
-      logMessage = `[Purge] Deleted ${result.deleted} email campaigns between ${startDate} and ${endDate}`;
+      logMessage = `[Purge] Deleted ${result.deleted}${testLabel} email campaigns between ${startDate} and ${endDate}`;
     }
 
     console.log(logMessage);
     res.json({
       success: true,
       deleted: result.deleted,
-      message: `${result.deleted} enregistrement(s) supprimé(s)`
+      message: `${result.deleted} enregistrement(s)${testLabel} supprimé(s)`
     });
   } catch (error) {
     console.error('Error purging campaigns:', error);
