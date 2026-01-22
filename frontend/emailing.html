@@ -1319,9 +1319,49 @@
       <div class="card" style="margin-top: 20px;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
           <h3 style="margin: 0;">Historique des campagnes</h3>
-          <button id="purgeCampaignsBtn" class="btn" style="background: #dc3545; padding: 8px 15px; font-size: 13px; display: none;">
-            🗑️ Purger saison précédente
+          <button id="showPurgeOptionsBtn" class="btn" style="background: #dc3545; padding: 8px 15px; font-size: 13px; display: none;">
+            🗑️ Purger l'historique
           </button>
+        </div>
+
+        <!-- Purge Options Panel -->
+        <div id="purgeOptionsPanel" style="display: none; background: #fff3cd; border: 1px solid #ffc107; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+          <div style="display: flex; gap: 30px; flex-wrap: wrap;">
+            <!-- Option 1: Purge by date range -->
+            <div style="flex: 1; min-width: 280px;">
+              <h4 style="margin: 0 0 10px 0; color: #856404;">📅 Purger par plage de dates</h4>
+              <p style="margin: 0 0 15px 0; font-size: 13px; color: #666;">Supprimer les campagnes entre deux dates</p>
+              <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                <label style="font-size: 13px;">Du:</label>
+                <input type="date" id="purgeStartDate" style="padding: 6px 10px; border: 1px solid #ccc; border-radius: 4px;">
+                <label style="font-size: 13px;">Au:</label>
+                <input type="date" id="purgeEndDate" style="padding: 6px 10px; border: 1px solid #ccc; border-radius: 4px;">
+                <button id="purgeByDateBtn" class="btn" style="background: #dc3545; padding: 6px 15px; font-size: 13px;">
+                  Supprimer
+                </button>
+              </div>
+            </div>
+
+            <!-- Option 2: Purge all -->
+            <div style="flex: 1; min-width: 280px; border-left: 2px solid #ffc107; padding-left: 30px;">
+              <h4 style="margin: 0 0 10px 0; color: #856404;">⚠️ Purger TOUT l'historique</h4>
+              <p style="margin: 0 0 15px 0; font-size: 13px; color: #dc3545; font-weight: bold;">
+                Cette action supprimera TOUTES les campagnes - IRRÉVERSIBLE
+              </p>
+              <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                <input type="text" id="confirmPurgeAllInput" placeholder="Tapez SUPPRIMER pour confirmer" style="padding: 6px 10px; border: 1px solid #ccc; border-radius: 4px; width: 220px;">
+                <button id="purgeAllBtn" class="btn" style="background: #dc3545; padding: 6px 15px; font-size: 13px;" disabled>
+                  Supprimer tout
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div style="margin-top: 15px; text-align: right;">
+            <button id="closePurgeOptionsBtn" class="btn" style="background: #6c757d; padding: 6px 15px; font-size: 13px;">
+              Fermer
+            </button>
+          </div>
         </div>
 
         <div id="loadingHistory" class="loading" style="display: none;">
@@ -3847,79 +3887,72 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
       }
     }
 
+    // Show purge button for admin users only
     async function checkPurgeAvailability() {
       try {
-        const response = await fetch(`${API_URL}/emailing/campaigns/purge-count`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
+        // Check if user is admin by checking userRole from localStorage
+        const userRole = localStorage.getItem('userRole');
+        const btn = document.getElementById('showPurgeOptionsBtn');
 
-        if (!response.ok) {
-          document.getElementById('purgeCampaignsBtn').style.display = 'none';
-          return;
-        }
-
-        const data = await response.json();
-        const btn = document.getElementById('purgeCampaignsBtn');
-
-        if (data.allowed && data.count > 0) {
+        if (userRole === 'admin') {
           btn.style.display = 'inline-block';
-          btn.title = `${data.count} enregistrement(s) avant le ${new Date(data.beforeDate).toLocaleDateString('fr-FR')}`;
-        } else if (!data.allowed) {
-          btn.style.display = 'none';
         } else {
           btn.style.display = 'none';
         }
       } catch (error) {
         console.error('Error checking purge availability:', error);
-        document.getElementById('purgeCampaignsBtn').style.display = 'none';
+        document.getElementById('showPurgeOptionsBtn').style.display = 'none';
       }
     }
 
-    async function purgeCampaigns() {
+    // Toggle purge options panel
+    function togglePurgeOptions() {
+      const panel = document.getElementById('purgeOptionsPanel');
+      panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+    }
+
+    // Purge by date range
+    async function purgeByDateRange() {
+      const startDate = document.getElementById('purgeStartDate').value;
+      const endDate = document.getElementById('purgeEndDate').value;
+
+      if (!startDate || !endDate) {
+        showError('Veuillez sélectionner une date de début et de fin');
+        return;
+      }
+
+      if (new Date(startDate) > new Date(endDate)) {
+        showError('La date de début doit être antérieure à la date de fin');
+        return;
+      }
+
+      const startFormatted = new Date(startDate).toLocaleDateString('fr-FR');
+      const endFormatted = new Date(endDate).toLocaleDateString('fr-FR');
+
+      if (!confirm(`Êtes-vous sûr de vouloir supprimer les campagnes entre le ${startFormatted} et le ${endFormatted} ?\n\nCette action est irréversible.`)) {
+        return;
+      }
+
       try {
-        // First get the count
-        const countResponse = await fetch(`${API_URL}/emailing/campaigns/purge-count`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-
-        if (!countResponse.ok) {
-          showError('Erreur lors de la vérification');
-          return;
-        }
-
-        const countData = await countResponse.json();
-
-        if (!countData.allowed) {
-          showError(countData.message || 'Purge non autorisée');
-          return;
-        }
-
-        if (countData.count === 0) {
-          showSuccess('Aucun enregistrement à purger');
-          return;
-        }
-
-        // Confirm with user
-        const beforeDate = new Date(countData.beforeDate).toLocaleDateString('fr-FR');
-        if (!confirm(`Êtes-vous sûr de vouloir supprimer ${countData.count} enregistrement(s) antérieurs au ${beforeDate} ?\n\nCette action est irréversible.`)) {
-          return;
-        }
-
-        // Execute purge
-        const purgeResponse = await fetch(`${API_URL}/emailing/campaigns/purge`, {
+        const response = await fetch(`${API_URL}/emailing/campaigns/purge`, {
           method: 'DELETE',
-          headers: { 'Authorization': `Bearer ${token}` }
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ startDate, endDate })
         });
 
-        if (!purgeResponse.ok) {
-          const error = await purgeResponse.json();
+        if (!response.ok) {
+          const error = await response.json();
           throw new Error(error.error || 'Erreur lors de la purge');
         }
 
-        const result = await purgeResponse.json();
+        const result = await response.json();
         showSuccess(result.message);
 
-        // Reload history
+        // Hide panel and reload history
+        document.getElementById('purgeOptionsPanel').style.display = 'none';
         loadHistory();
 
       } catch (error) {
@@ -3927,7 +3960,58 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
       }
     }
 
-    document.getElementById('purgeCampaignsBtn').addEventListener('click', purgeCampaigns);
+    // Purge ALL campaigns (double confirmation)
+    async function purgeAllCampaigns() {
+      // First confirmation already done via typing "SUPPRIMER"
+      // Second confirmation via confirm dialog
+      if (!confirm('Êtes-vous ABSOLUMENT sûr ?\n\nCette action est IRRÉVERSIBLE et supprimera TOUTES les campagnes email de l\'historique.\n\nCliquez OK pour confirmer la suppression définitive.')) {
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API_URL}/emailing/campaigns/purge`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ purgeAll: true })
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || 'Erreur lors de la purge');
+        }
+
+        const result = await response.json();
+        showSuccess(result.message);
+
+        // Hide panel, clear input, and reload history
+        document.getElementById('purgeOptionsPanel').style.display = 'none';
+        document.getElementById('confirmPurgeAllInput').value = '';
+        document.getElementById('purgeAllBtn').disabled = true;
+        loadHistory();
+
+      } catch (error) {
+        showError('Erreur: ' + error.message);
+      }
+    }
+
+    // Enable/disable purge all button based on confirmation input
+    function handlePurgeAllConfirmInput() {
+      const input = document.getElementById('confirmPurgeAllInput');
+      const btn = document.getElementById('purgeAllBtn');
+      btn.disabled = input.value.toUpperCase() !== 'SUPPRIMER';
+    }
+
+    // Event listeners for purge functionality
+    document.getElementById('showPurgeOptionsBtn').addEventListener('click', togglePurgeOptions);
+    document.getElementById('closePurgeOptionsBtn').addEventListener('click', () => {
+      document.getElementById('purgeOptionsPanel').style.display = 'none';
+    });
+    document.getElementById('purgeByDateBtn').addEventListener('click', purgeByDateRange);
+    document.getElementById('purgeAllBtn').addEventListener('click', purgeAllCampaigns);
+    document.getElementById('confirmPurgeAllInput').addEventListener('input', handlePurgeAllConfirmInput);
 
     const CAMPAIGN_TYPES = {
       'tournament_results': 'Résultats',

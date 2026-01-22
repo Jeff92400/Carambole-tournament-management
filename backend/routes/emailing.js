@@ -278,7 +278,8 @@ router.get('/campaigns/purge-count', authenticateToken, async (req, res) => {
   }
 });
 
-// Purge old campaigns (before current season) - Admin only
+// Purge campaigns - Admin only
+// Supports: purgeAll=true OR date range (startDate/endDate)
 router.delete('/campaigns/purge', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
 
@@ -287,30 +288,51 @@ router.delete('/campaigns/purge', authenticateToken, async (req, res) => {
     return res.status(403).json({ error: 'Admin access required' });
   }
 
-  // Check if we're past June 30th
-  const now = new Date();
-  const currentMonth = now.getMonth();
+  const { startDate, endDate, purgeAll } = req.body;
 
-  if (currentMonth < 6) {
-    return res.status(400).json({ error: 'La purge n\'est possible qu\'après le 30 juin' });
+  // Validate parameters - require either purgeAll OR valid date range
+  if (!purgeAll && (!startDate || !endDate)) {
+    return res.status(400).json({
+      error: 'Paramètres invalides: spécifier purgeAll=true ou une plage de dates (startDate/endDate)'
+    });
   }
 
-  const currentYear = now.getFullYear();
-  const previousSeasonStart = `${currentYear - 1}-09-01`;
-
   try {
-    const result = await new Promise((resolve, reject) => {
-      db.run(
-        `DELETE FROM email_campaigns WHERE sent_at < $1 OR (sent_at IS NULL AND created_at < $1)`,
-        [previousSeasonStart],
-        function(err) {
-          if (err) reject(err);
-          else resolve({ deleted: this.changes });
-        }
-      );
-    });
+    let result;
+    let logMessage;
 
-    console.log(`[Purge] Deleted ${result.deleted} old email campaigns before ${previousSeasonStart}`);
+    if (purgeAll) {
+      // Purge ALL campaigns
+      result = await new Promise((resolve, reject) => {
+        db.run(
+          `DELETE FROM email_campaigns`,
+          [],
+          function(err) {
+            if (err) reject(err);
+            else resolve({ deleted: this.changes });
+          }
+        );
+      });
+      logMessage = `[Purge] Deleted ALL ${result.deleted} email campaigns (purgeAll)`;
+    } else {
+      // Purge by date range (inclusive)
+      // Delete campaigns where sent_at is within the range, or if sent_at is null, where created_at is within the range
+      result = await new Promise((resolve, reject) => {
+        db.run(
+          `DELETE FROM email_campaigns
+           WHERE (sent_at >= $1 AND sent_at <= $2)
+              OR (sent_at IS NULL AND created_at >= $1 AND created_at <= $2)`,
+          [startDate, endDate],
+          function(err) {
+            if (err) reject(err);
+            else resolve({ deleted: this.changes });
+          }
+        );
+      });
+      logMessage = `[Purge] Deleted ${result.deleted} email campaigns between ${startDate} and ${endDate}`;
+    }
+
+    console.log(logMessage);
     res.json({
       success: true,
       deleted: result.deleted,
