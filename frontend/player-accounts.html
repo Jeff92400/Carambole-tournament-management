@@ -86,7 +86,7 @@
 
     <div class="card">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-        <h3 style="margin: 0;">Comptes Espace Joueur</h3>
+        <h3 id="pageTitle" style="margin: 0;">Comptes Espace Joueur</h3>
         <input type="text" id="searchInput" placeholder="Rechercher par nom, licence ou email..."
                style="padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px; width: 300px;">
       </div>
@@ -150,6 +150,14 @@
 
     // Show admin-only elements
     document.querySelectorAll('.admin-only').forEach(el => el.style.display = '');
+
+    // Load organization short name for title
+    (async function() {
+      const orgName = await getOrganizationShortName();
+      if (orgName) {
+        document.getElementById('pageTitle').textContent = `Comptes Espace Joueur ${orgName}`;
+      }
+    })();
 
     // Logout
     document.getElementById('logoutBtn').addEventListener('click', (e) => {
