@@ -151,11 +151,11 @@
     // Show admin-only elements
     document.querySelectorAll('.admin-only').forEach(el => el.style.display = '');
 
-    // Load organization short name for title
+    // Override navbar title for this page: "{orgName} Application Joueur"
     (async function() {
       const orgName = await getOrganizationShortName();
       if (orgName) {
-        document.getElementById('pageTitle').textContent = `Comptes Espace Joueur ${orgName}`;
+        document.getElementById('app-org-name').textContent = `${orgName} Application Joueur`;
       }
     })();
 
