@@ -245,11 +245,20 @@ async function sendRejectionEmail(request, reason) {
 
 /**
  * GET /api/enrollment-requests
- * List all enrollment requests with optional status filter
+ * List all enrollment requests with optional status and season filter
  */
 router.get('/', async (req, res) => {
   try {
-    const { status, limit = 100, offset = 0 } = req.query;
+    const { status, season, limit = 100, offset = 0 } = req.query;
+
+    // Calculate season date range (season format: "2024-2025")
+    let seasonStart = null;
+    let seasonEnd = null;
+    if (season) {
+      const [startYear] = season.split('-').map(Number);
+      seasonStart = `${startYear}-09-01`;
+      seasonEnd = `${startYear + 1}-08-31`;
+    }
 
     let sql = `
       SELECT er.*, gm.display_name as game_mode_display
@@ -259,6 +268,11 @@ router.get('/', async (req, res) => {
     `;
     const params = [];
     let paramIndex = 1;
+
+    if (seasonStart && seasonEnd) {
+      sql += ` AND er.created_at >= $${paramIndex++} AND er.created_at <= $${paramIndex++}`;
+      params.push(seasonStart, seasonEnd);
+    }
 
     if (status) {
       sql += ` AND er.status = $${paramIndex++}`;
@@ -279,12 +293,23 @@ router.get('/', async (req, res) => {
 
     const result = await db.query(sql, params);
 
-    // Get counts by status
-    const countResult = await db.query(`
+    // Get counts by status for the selected season
+    let countSql = `
       SELECT status, COUNT(*) as count
       FROM enrollment_requests
-      GROUP BY status
-    `);
+      WHERE 1=1
+    `;
+    const countParams = [];
+    let countParamIndex = 1;
+
+    if (seasonStart && seasonEnd) {
+      countSql += ` AND created_at >= $${countParamIndex++} AND created_at <= $${countParamIndex++}`;
+      countParams.push(seasonStart, seasonEnd);
+    }
+
+    countSql += ` GROUP BY status`;
+
+    const countResult = await db.query(countSql, countParams);
     const counts = {};
     (countResult.rows || []).forEach(row => {
       counts[row.status] = parseInt(row.count);
@@ -295,12 +320,78 @@ router.get('/', async (req, res) => {
       counts: counts,
       total: (result.rows || []).length,
       limit: parseInt(limit),
-      offset: parseInt(offset)
+      offset: parseInt(offset),
+      season: season
     });
 
   } catch (error) {
     console.error('Error fetching enrollment requests:', error);
     res.status(500).json({ error: 'Failed to fetch enrollment requests' });
+  }
+});
+
+/**
+ * DELETE /api/enrollment-requests/purge
+ * Permanently delete all 'deleted' enrollment requests for a season
+ */
+router.delete('/purge', async (req, res) => {
+  try {
+    const { season } = req.query;
+
+    if (!season) {
+      return res.status(400).json({ error: 'Season is required' });
+    }
+
+    // Calculate season date range
+    const [startYear] = season.split('-').map(Number);
+    const seasonStart = `${startYear}-09-01`;
+    const seasonEnd = `${startYear + 1}-08-31`;
+
+    // Count before purging
+    const countResult = await db.query(`
+      SELECT COUNT(*) as count
+      FROM enrollment_requests
+      WHERE status = 'deleted'
+        AND created_at >= $1 AND created_at <= $2
+    `, [seasonStart, seasonEnd]);
+
+    const countToPurge = parseInt(countResult.rows[0]?.count || 0);
+
+    if (countToPurge === 0) {
+      return res.json({ success: true, purged: 0, message: 'Aucune demande à purger' });
+    }
+
+    // Permanently delete
+    await db.query(`
+      DELETE FROM enrollment_requests
+      WHERE status = 'deleted'
+        AND created_at >= $1 AND created_at <= $2
+    `, [seasonStart, seasonEnd]);
+
+    // Log admin action
+    logAdminAction(
+      req.user.id,
+      req.user.username,
+      req.user.role,
+      'enrollment_requests_purged',
+      `Purged ${countToPurge} deleted enrollment requests for season ${season}`,
+      'enrollment_request',
+      'bulk',
+      `Season ${season}`,
+      req
+    );
+
+    console.log(`[PURGE] Purged ${countToPurge} deleted enrollment requests for season ${season}`);
+
+    res.json({
+      success: true,
+      purged: countToPurge,
+      message: `${countToPurge} demande(s) purgée(s)`
+    });
+
+  } catch (error) {
+    console.error('Error purging enrollment requests:', error);
+    res.status(500).json({ error: 'Failed to purge enrollment requests' });
   }
 });
 

@@ -230,6 +230,9 @@
 
     <!-- Filter Bar -->
     <div class="filter-bar">
+      <select id="seasonFilter" onchange="loadRequests()">
+        <!-- Populated by JS -->
+      </select>
       <select id="statusFilter" onchange="loadRequests()">
         <option value="">Tous les statuts</option>
         <option value="pending" selected>En attente</option>
@@ -240,6 +243,9 @@
       </select>
       <button onclick="loadRequests()" class="btn btn-primary" style="padding: 10px 20px;">
         Actualiser
+      </button>
+      <button id="purgeBtn" onclick="purgeDeleted()" class="btn" style="padding: 10px 20px; background: #6c757d; color: white; display: none;">
+        🗑️ Purger supprimées
       </button>
     </div>
 
@@ -293,23 +299,48 @@
       window.location.href = 'login.html';
     });
 
+    // Populate season selector
+    function populateSeasonSelector() {
+      const select = document.getElementById('seasonFilter');
+      const now = new Date();
+      const currentYear = now.getFullYear();
+      const currentMonth = now.getMonth();
+
+      // Determine current season (September start)
+      const currentSeasonStart = currentMonth >= 8 ? currentYear : currentYear - 1;
+
+      // Generate seasons (current + 2 previous)
+      const seasons = [];
+      for (let i = 0; i < 3; i++) {
+        const startYear = currentSeasonStart - i;
+        seasons.push(`${startYear}-${startYear + 1}`);
+      }
+
+      select.innerHTML = seasons.map((s, idx) =>
+        `<option value="${s}" ${idx === 0 ? 'selected' : ''}>${s}</option>`
+      ).join('');
+    }
+
     // Load requests on page load
     document.addEventListener('DOMContentLoaded', () => {
+      populateSeasonSelector();
       loadRequests();
     });
 
     async function loadRequests(bustCache = false) {
       const container = document.getElementById('requestsContainer');
       const statusFilter = document.getElementById('statusFilter').value;
+      const seasonFilter = document.getElementById('seasonFilter').value;
 
       try {
-        let url = statusFilter
-          ? `${API_URL}/enrollment-requests?status=${statusFilter}`
-          : `${API_URL}/enrollment-requests`;
+        let url = `${API_URL}/enrollment-requests?season=${seasonFilter}`;
+        if (statusFilter) {
+          url += `&status=${statusFilter}`;
+        }
 
         // Add cache-busting parameter
         if (bustCache) {
-          url += (url.includes('?') ? '&' : '?') + '_t=' + Date.now();
+          url += '&_t=' + Date.now();
         }
 
         const response = await authFetch(url);
@@ -322,6 +353,10 @@
         document.getElementById('approvedCount').textContent = data.counts?.approved || 0;
         document.getElementById('rejectedCount').textContent = data.counts?.rejected || 0;
         document.getElementById('deletedCount').textContent = data.counts?.deleted || 0;
+
+        // Show/hide purge button
+        const deletedCount = data.counts?.deleted || 0;
+        document.getElementById('purgeBtn').style.display = deletedCount > 0 ? 'inline-block' : 'none';
 
         if (!data.requests || data.requests.length === 0) {
           container.innerHTML = `
@@ -518,6 +553,44 @@
         showSuccess('Demande supprimée');
 
         // Small delay then reload with cache-busting
+        await new Promise(resolve => setTimeout(resolve, 300));
+        await loadRequests(true);
+
+      } catch (error) {
+        showError(error.message);
+        await loadRequests();
+      }
+    }
+
+    async function purgeDeleted() {
+      const seasonFilter = document.getElementById('seasonFilter').value;
+      const deletedCount = parseInt(document.getElementById('deletedCount').textContent) || 0;
+
+      if (deletedCount === 0) {
+        showError('Aucune demande supprimée à purger');
+        return;
+      }
+
+      if (!confirm(`Purger définitivement ${deletedCount} demande(s) supprimée(s) de la saison ${seasonFilter} ?\n\nCette action est irréversible.`)) return;
+
+      // Show loading state
+      const container = document.getElementById('requestsContainer');
+      container.innerHTML = '<div class="empty-state"><div class="icon">⏳</div><p>Purge en cours...</p></div>';
+
+      try {
+        const response = await authFetch(`${API_URL}/enrollment-requests/purge?season=${seasonFilter}`, {
+          method: 'DELETE'
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.error || 'Failed to purge');
+        }
+
+        showSuccess(`${result.purged || 0} demande(s) purgée(s) définitivement`);
+
+        // Reload
         await new Promise(resolve => setTimeout(resolve, 300));
         await loadRequests(true);
 
