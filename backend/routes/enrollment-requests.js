@@ -18,6 +18,63 @@ const { logAdminAction, ACTION_TYPES } = require('../utils/admin-logger');
 router.use(authenticateToken);
 router.use(requireAdmin);
 
+// Helper function to send approval email
+async function sendApprovalEmail(req, request) {
+  try {
+    const token = req.headers['authorization'];
+    const response = await fetch(`http://localhost:${process.env.PORT || 3000}/api/email/enrollment-approved`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': token
+      },
+      body: JSON.stringify({
+        player_email: request.player_email,
+        player_name: request.player_name,
+        game_mode: request.game_mode_name,
+        requested_ranking: request.requested_ranking,
+        tournament_number: request.tournament_number
+      })
+    });
+    if (!response.ok) {
+      console.error('Failed to send approval email:', await response.text());
+    } else {
+      console.log(`Approval email sent to ${request.player_email}`);
+    }
+  } catch (error) {
+    console.error('Error sending approval email:', error);
+  }
+}
+
+// Helper function to send rejection email
+async function sendRejectionEmail(req, request, reason) {
+  try {
+    const token = req.headers['authorization'];
+    const response = await fetch(`http://localhost:${process.env.PORT || 3000}/api/email/enrollment-rejected`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': token
+      },
+      body: JSON.stringify({
+        player_email: request.player_email,
+        player_name: request.player_name,
+        game_mode: request.game_mode_name,
+        requested_ranking: request.requested_ranking,
+        tournament_number: request.tournament_number,
+        rejection_reason: reason
+      })
+    });
+    if (!response.ok) {
+      console.error('Failed to send rejection email:', await response.text());
+    } else {
+      console.log(`Rejection email sent to ${request.player_email}`);
+    }
+  } catch (error) {
+    console.error('Error sending rejection email:', error);
+  }
+}
+
 /**
  * GET /api/enrollment-requests
  * List all enrollment requests with optional status filter
@@ -183,6 +240,11 @@ router.put('/:id/approve', async (req, res) => {
       req
     );
 
+    // Send approval email to player (non-blocking)
+    sendApprovalEmail(req, request).catch(err => {
+      console.error('Failed to send approval email:', err);
+    });
+
     res.json({
       success: true,
       message: 'Demande approuvée',
@@ -244,9 +306,14 @@ router.put('/:id/reject', async (req, res) => {
       req
     );
 
+    // Send rejection email to player (non-blocking)
+    sendRejectionEmail(req, request, reason).catch(err => {
+      console.error('Failed to send rejection email:', err);
+    });
+
     res.json({
       success: true,
-      message: 'Demande refusee'
+      message: 'Demande refusée'
     });
 
   } catch (error) {

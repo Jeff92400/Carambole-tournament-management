@@ -3155,4 +3155,231 @@ router.post('/enrollment-notification', async (req, res) => {
   }
 });
 
+/**
+ * POST /api/email/enrollment-approved
+ * Send email to player when their enrollment request is approved
+ */
+router.post('/enrollment-approved', async (req, res) => {
+  const { player_email, player_name, game_mode, requested_ranking, tournament_number, tournament_name, tournament_date } = req.body;
+
+  // This endpoint is called internally, verify auth token
+  const authHeader = req.headers['authorization'];
+  if (!authHeader) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const resend = getResend();
+  if (!resend) {
+    return res.status(500).json({ error: 'Email not configured' });
+  }
+
+  if (!player_email || !player_name) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  try {
+    const emailSettings = await getEmailTemplateSettings();
+    const contactEmail = await getContactEmail();
+    const primaryColor = emailSettings.primary_color || '#1F4788';
+    const senderName = emailSettings.email_sender_name || 'CDBHS';
+    const emailFrom = emailSettings.email_noreply || 'noreply@cdbhs.net';
+    const orgShortName = emailSettings.organization_short_name || 'CDBHS';
+
+    const emailHtml = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      </head>
+      <body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f5f5f5;">
+        <table role="presentation" cellpadding="0" cellspacing="0" style="width: 100%; background-color: #f5f5f5;">
+          <tr>
+            <td align="center" style="padding: 20px;">
+              <table role="presentation" cellpadding="0" cellspacing="0" style="max-width: 600px; width: 100%; background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                <tr>
+                  <td style="background: linear-gradient(135deg, #28a745, #20c997); padding: 30px; text-align: center; border-radius: 8px 8px 0 0;">
+                    <h1 style="color: #ffffff; margin: 0; font-size: 24px;">Demande acceptée !</h1>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding: 30px;">
+                    <p style="font-size: 16px; color: #333333; margin: 0 0 20px 0;">
+                      Bonjour <strong>${player_name}</strong>,
+                    </p>
+                    <p style="font-size: 16px; color: #333333; margin: 0 0 20px 0;">
+                      Bonne nouvelle ! Votre demande d'inscription a été <strong style="color: #28a745;">acceptée</strong>.
+                    </p>
+                    <table style="width: 100%; background-color: #d4edda; border-radius: 8px; padding: 20px; margin: 20px 0;">
+                      <tr>
+                        <td style="padding: 8px 20px;">
+                          <strong>Mode de jeu :</strong> ${game_mode || '-'}
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 8px 20px;">
+                          <strong>Catégorie :</strong> ${requested_ranking || '-'}
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 8px 20px;">
+                          <strong>Tournoi :</strong> ${tournament_number || '-'}
+                        </td>
+                      </tr>
+                    </table>
+                    <p style="font-size: 16px; color: #333333; margin: 20px 0;">
+                      Vous recevrez une convocation avec les détails (lieu, heure, poule) quelques jours avant la compétition.
+                    </p>
+                    <p style="font-size: 16px; color: #333333; margin: 20px 0 0 0;">
+                      Cordialement,<br>
+                      <strong>${orgShortName}</strong>
+                    </p>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="background-color: #f8f9fa; padding: 20px; text-align: center; border-radius: 0 0 8px 8px; font-size: 12px; color: #666666;">
+                    ${contactEmail ? `Contact : <a href="mailto:${contactEmail}" style="color: ${primaryColor};">${contactEmail}</a>` : ''}
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </body>
+      </html>
+    `;
+
+    await resend.emails.send({
+      from: `${senderName} <${emailFrom}>`,
+      to: player_email,
+      subject: `Demande acceptée - ${game_mode} ${requested_ranking} T${tournament_number}`,
+      html: emailHtml
+    });
+
+    console.log(`Enrollment approved email sent to ${player_email}`);
+    res.json({ success: true });
+
+  } catch (error) {
+    console.error('Error sending enrollment approved email:', error);
+    res.status(500).json({ error: 'Failed to send email' });
+  }
+});
+
+/**
+ * POST /api/email/enrollment-rejected
+ * Send email to player when their enrollment request is rejected
+ */
+router.post('/enrollment-rejected', async (req, res) => {
+  const { player_email, player_name, game_mode, requested_ranking, tournament_number, rejection_reason } = req.body;
+
+  // This endpoint is called internally, verify auth token
+  const authHeader = req.headers['authorization'];
+  if (!authHeader) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const resend = getResend();
+  if (!resend) {
+    return res.status(500).json({ error: 'Email not configured' });
+  }
+
+  if (!player_email || !player_name) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  try {
+    const emailSettings = await getEmailTemplateSettings();
+    const contactEmail = await getContactEmail();
+    const primaryColor = emailSettings.primary_color || '#1F4788';
+    const senderName = emailSettings.email_sender_name || 'CDBHS';
+    const emailFrom = emailSettings.email_noreply || 'noreply@cdbhs.net';
+    const orgShortName = emailSettings.organization_short_name || 'CDBHS';
+
+    const emailHtml = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      </head>
+      <body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f5f5f5;">
+        <table role="presentation" cellpadding="0" cellspacing="0" style="width: 100%; background-color: #f5f5f5;">
+          <tr>
+            <td align="center" style="padding: 20px;">
+              <table role="presentation" cellpadding="0" cellspacing="0" style="max-width: 600px; width: 100%; background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                <tr>
+                  <td style="background: linear-gradient(135deg, #dc3545, #c82333); padding: 30px; text-align: center; border-radius: 8px 8px 0 0;">
+                    <h1 style="color: #ffffff; margin: 0; font-size: 24px;">Demande refusée</h1>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding: 30px;">
+                    <p style="font-size: 16px; color: #333333; margin: 0 0 20px 0;">
+                      Bonjour <strong>${player_name}</strong>,
+                    </p>
+                    <p style="font-size: 16px; color: #333333; margin: 0 0 20px 0;">
+                      Nous sommes au regret de vous informer que votre demande d'inscription a été <strong style="color: #dc3545;">refusée</strong>.
+                    </p>
+                    <table style="width: 100%; background-color: #f8d7da; border-radius: 8px; padding: 20px; margin: 20px 0;">
+                      <tr>
+                        <td style="padding: 8px 20px;">
+                          <strong>Mode de jeu :</strong> ${game_mode || '-'}
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 8px 20px;">
+                          <strong>Catégorie :</strong> ${requested_ranking || '-'}
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 8px 20px;">
+                          <strong>Tournoi :</strong> ${tournament_number || '-'}
+                        </td>
+                      </tr>
+                      ${rejection_reason ? `
+                      <tr>
+                        <td style="padding: 8px 20px;">
+                          <strong>Motif :</strong> ${rejection_reason}
+                        </td>
+                      </tr>
+                      ` : ''}
+                    </table>
+                    <p style="font-size: 16px; color: #333333; margin: 20px 0;">
+                      Si vous avez des questions, n'hésitez pas à nous contacter.
+                    </p>
+                    <p style="font-size: 16px; color: #333333; margin: 20px 0 0 0;">
+                      Cordialement,<br>
+                      <strong>${orgShortName}</strong>
+                    </p>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="background-color: #f8f9fa; padding: 20px; text-align: center; border-radius: 0 0 8px 8px; font-size: 12px; color: #666666;">
+                    ${contactEmail ? `Contact : <a href="mailto:${contactEmail}" style="color: ${primaryColor};">${contactEmail}</a>` : ''}
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </body>
+      </html>
+    `;
+
+    await resend.emails.send({
+      from: `${senderName} <${emailFrom}>`,
+      to: player_email,
+      subject: `Demande refusée - ${game_mode} ${requested_ranking} T${tournament_number}`,
+      html: emailHtml
+    });
+
+    console.log(`Enrollment rejected email sent to ${player_email}`);
+    res.json({ success: true });
+
+  } catch (error) {
+    console.error('Error sending enrollment rejected email:', error);
+    res.status(500).json({ error: 'Failed to send email' });
+  }
+});
+
 module.exports = router;
