@@ -840,7 +840,7 @@ router.post('/resend/:id', authenticateToken, async (req, res) => {
       .replace(/\{organisation_email\}/g, replyToEmail)
       .replace(/\{organization_email\}/g, replyToEmail);
 
-    const emailSubject = templateSubject
+    let emailSubject = templateSubject
       .replace(/\{first_name\}/g, firstName)
       .replace(/\{organisation_name\}/g, orgName)
       .replace(/\{organization_name\}/g, orgName)
@@ -848,6 +848,14 @@ router.post('/resend/:id', authenticateToken, async (req, res) => {
       .replace(/\{organization_short_name\}/g, orgShortName)
       .replace(/\{organisation_email\}/g, replyToEmail)
       .replace(/\{organization_email\}/g, replyToEmail);
+
+    // Add "Rappel amical" prefix for resends
+    const reminderCount = (invitation.resend_count || 0) + 1;
+    if (reminderCount === 1) {
+      emailSubject = `Rappel amical - ${emailSubject}`;
+    } else {
+      emailSubject = `Rappel amical (${reminderCount}) - ${emailSubject}`;
+    }
 
     const htmlBody = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
