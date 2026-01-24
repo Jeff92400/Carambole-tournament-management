@@ -2981,7 +2981,7 @@ router.post('/enrollment-acknowledgment', async (req, res) => {
                       Bonjour <strong>${player_name}</strong>,
                     </p>
                     <p style="font-size: 16px; color: #333333; margin: 0 0 20px 0;">
-                      Votre demande d'inscription a bien ete enregistree :
+                      Votre demande d'inscription a bien été enregistrée :
                     </p>
                     <table style="width: 100%; background-color: #f8f9fa; border-radius: 8px; padding: 20px; margin: 20px 0;">
                       <tr>
@@ -2991,7 +2991,7 @@ router.post('/enrollment-acknowledgment', async (req, res) => {
                       </tr>
                       <tr>
                         <td style="padding: 8px 20px;">
-                          <strong>Categorie :</strong> ${requested_ranking}
+                          <strong>Catégorie :</strong> ${requested_ranking}
                         </td>
                       </tr>
                       <tr>
@@ -3087,7 +3087,7 @@ router.post('/enrollment-notification', async (req, res) => {
                 <tr>
                   <td style="padding: 30px;">
                     <p style="font-size: 16px; color: #333333; margin: 0 0 20px 0;">
-                      Le joueur suivant souhaite s'inscrire a une competition :
+                      Le joueur suivant souhaite s'inscrire à une compétition :
                     </p>
 
                     <h3 style="color: ${primaryColor}; margin: 20px 0 10px 0; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">
@@ -3098,10 +3098,10 @@ router.post('/enrollment-notification', async (req, res) => {
                         <td style="padding: 8px 20px;"><strong>Nom :</strong> ${player_name}</td>
                       </tr>
                       <tr>
-                        <td style="padding: 8px 20px;"><strong>Licence :</strong> ${player_licence || 'Non renseignee'}</td>
+                        <td style="padding: 8px 20px;"><strong>Licence :</strong> ${player_licence || 'Non renseignée'}</td>
                       </tr>
                       <tr>
-                        <td style="padding: 8px 20px;"><strong>Club :</strong> ${player_club || 'Non renseigne'}</td>
+                        <td style="padding: 8px 20px;"><strong>Club :</strong> ${player_club || 'Non renseigné'}</td>
                       </tr>
                       <tr>
                         <td style="padding: 8px 20px;"><strong>Email :</strong> <a href="mailto:${player_email}" style="color: ${primaryColor};">${player_email}</a></td>
@@ -3116,10 +3116,10 @@ router.post('/enrollment-notification', async (req, res) => {
                         <td style="padding: 8px 20px;"><strong>Mode de jeu :</strong> ${game_mode}</td>
                       </tr>
                       <tr>
-                        <td style="padding: 8px 20px;"><strong>Classement actuel :</strong> ${current_ranking || 'Non classe'}</td>
+                        <td style="padding: 8px 20px;"><strong>Classement actuel :</strong> ${current_ranking || 'Non classé'}</td>
                       </tr>
                       <tr>
-                        <td style="padding: 8px 20px;"><strong>Categorie demandee :</strong> ${requested_ranking}</td>
+                        <td style="padding: 8px 20px;"><strong>Catégorie demandée :</strong> ${requested_ranking}</td>
                       </tr>
                       <tr>
                         <td style="padding: 8px 20px;"><strong>Tournoi :</strong> ${tournament_number}</td>
@@ -3127,7 +3127,7 @@ router.post('/enrollment-notification', async (req, res) => {
                     </table>
 
                     <p style="font-size: 14px; color: #666666; margin: 20px 0 0 0; text-align: center;">
-                      → Gerez cette demande dans l'application Tournois
+                      → Gérez cette demande dans l'application Tournois
                     </p>
                   </td>
                 </tr>
