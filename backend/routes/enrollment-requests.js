@@ -223,8 +223,10 @@ router.get('/', async (req, res) => {
  * Permanently delete all 'deleted' enrollment requests for a season
  */
 router.delete('/purge', async (req, res) => {
+  console.log('[PURGE] Purge endpoint called');
   try {
     const { season } = req.query;
+    console.log(`[PURGE] Season: ${season}`);
 
     if (!season) {
       return res.status(400).json({ error: 'Season is required' });
@@ -234,6 +236,7 @@ router.delete('/purge', async (req, res) => {
     const [startYear] = season.split('-').map(Number);
     const seasonStart = `${startYear}-09-01`;
     const seasonEnd = `${startYear + 1}-08-31`;
+    console.log(`[PURGE] Date range: ${seasonStart} to ${seasonEnd}`);
 
     // Count before purging
     const countResult = await db.query(`
@@ -244,6 +247,7 @@ router.delete('/purge', async (req, res) => {
     `, [seasonStart, seasonEnd]);
 
     const countToPurge = parseInt(countResult.rows[0]?.count || 0);
+    console.log(`[PURGE] Count to purge: ${countToPurge}`);
 
     if (countToPurge === 0) {
       return res.json({ success: true, purged: 0, message: 'Aucune demande à purger' });
@@ -256,20 +260,24 @@ router.delete('/purge', async (req, res) => {
         AND created_at >= $1 AND created_at <= $2
     `, [seasonStart, seasonEnd]);
 
-    // Log admin action
-    logAdminAction(
-      req.user.id,
-      req.user.username,
-      req.user.role,
-      'enrollment_requests_purged',
-      `Purged ${countToPurge} deleted enrollment requests for season ${season}`,
-      'enrollment_request',
-      'bulk',
-      `Season ${season}`,
-      req
-    );
+    // Log admin action (non-blocking)
+    try {
+      logAdminAction(
+        req.user.id,
+        req.user.username,
+        req.user.role,
+        'enrollment_requests_purged',
+        `Purged ${countToPurge} deleted enrollment requests for season ${season}`,
+        'enrollment_request',
+        'bulk',
+        `Season ${season}`,
+        req
+      );
+    } catch (logErr) {
+      console.error('[PURGE] Failed to log admin action:', logErr.message);
+    }
 
-    console.log(`[PURGE] Purged ${countToPurge} deleted enrollment requests for season ${season}`);
+    console.log(`[PURGE] Successfully purged ${countToPurge} deleted enrollment requests for season ${season}`);
 
     res.json({
       success: true,
@@ -278,9 +286,15 @@ router.delete('/purge', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error purging enrollment requests:', error);
-    res.status(500).json({ error: 'Failed to purge enrollment requests' });
+    console.error('[PURGE] Error purging enrollment requests:', error.message);
+    console.error('[PURGE] Stack:', error.stack);
+    res.status(500).json({ error: 'Failed to purge enrollment requests', details: error.message });
   }
+});
+
+// Debug route to check route matching
+router.all('/test-route', (req, res) => {
+  res.json({ route: 'test-route', method: req.method });
 });
 
 /**
