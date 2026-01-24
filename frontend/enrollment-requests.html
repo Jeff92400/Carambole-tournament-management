@@ -178,32 +178,20 @@
   </style>
 </head>
 <body>
-  <nav class="navbar">
-    <div class="nav-brand">
-      <a href="dashboard.html" class="brand-link">
-        <img src="images/FrenchBillard-Icon-small.png" alt="" style="height: 24px; width: 24px; vertical-align: middle;">
-        Tournois CDBHS
-      </a>
-    </div>
+  <div class="navbar">
+    <h2><img src="images/FrenchBillard-Icon-small.png" alt="" style="height: 28px; width: 28px; vertical-align: middle; margin-right: 8px;">Demandes d'inscription</h2>
     <div class="nav-links">
-      <a href="dashboard.html">Tableau de bord</a>
+      <a href="dashboard.html">Accueil</a>
+      <a href="rankings.html">Classements</a>
+      <a href="generate-poules.html">Competitions</a>
       <a href="inscriptions-list.html">Inscriptions</a>
       <a href="enrollment-requests.html" class="active">Demandes</a>
-      <a href="generate-poules.html">Poules</a>
-      <a href="settings.html">Parametres</a>
+      <a href="settings.html" class="admin-only">Parametres</a>
+      <a href="#" id="logoutBtn" class="nav-logout">Deconnexion</a>
     </div>
-    <div class="nav-user">
-      <span id="userDisplay"></span>
-      <button onclick="logout()" class="btn-logout">Deconnexion</button>
-    </div>
-  </nav>
+  </div>
 
-  <main class="main-content">
-    <div class="page-header">
-      <h1>Demandes d'inscription aux competitions</h1>
-      <p>Gerer les demandes des joueurs souhaitant s'inscrire a des categories non officielles</p>
-    </div>
-
+  <main class="main-content" style="padding: 20px; max-width: 1400px; margin: 0 auto;">
     <div id="errorMessage" class="alert alert-danger" style="display: none;"></div>
     <div id="successMessage" class="alert alert-success" style="display: none;"></div>
 
@@ -275,11 +263,16 @@
     }
     const token = localStorage.getItem('token');
 
-    // Display username
-    const user = getCurrentUser();
-    document.getElementById('userDisplay').textContent = user?.username || '';
-
     let currentRejectId = null;
+
+    // Logout handler
+    document.getElementById('logoutBtn').addEventListener('click', (e) => {
+      e.preventDefault();
+      localStorage.removeItem('token');
+      localStorage.removeItem('userRole');
+      localStorage.removeItem('username');
+      window.location.href = 'login.html';
+    });
 
     // Load requests on page load
     document.addEventListener('DOMContentLoaded', () => {
