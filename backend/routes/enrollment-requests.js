@@ -386,6 +386,75 @@ router.delete('/:id', async (req, res) => {
 
     const request = requestResult.rows[0];
 
+    // If the request was approved, we need to also delete the inscription and ranking
+    if (request.status === 'approved') {
+      // Find and delete the inscription that was created
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = now.getMonth();
+      let seasonStart, seasonEnd;
+      if (month >= 8) {
+        seasonStart = `${year}-09-01`;
+        seasonEnd = `${year + 1}-08-31`;
+      } else {
+        seasonStart = `${year - 1}-09-01`;
+        seasonEnd = `${year}-08-31`;
+      }
+
+      // Find the tournament that matches (same logic as approve)
+      const tournamentResult = await db.query(`
+        SELECT tournoi_id
+        FROM tournoi_ext
+        WHERE UPPER(mode) LIKE UPPER($1)
+          AND UPPER(categorie) = UPPER($2)
+          AND debut >= $3 AND debut <= $4
+          AND (UPPER(nom) LIKE '%T${request.tournament_number}%'
+               OR UPPER(nom) LIKE '%TOURNOI ${request.tournament_number}%'
+               OR UPPER(nom) LIKE '%TOUR ${request.tournament_number}%')
+          AND UPPER(nom) NOT LIKE '%FINALE%'
+          AND (status IS NULL OR status != 'cancelled')
+        ORDER BY debut ASC
+        LIMIT 1
+      `, ['%' + request.game_mode_name + '%', request.requested_ranking, seasonStart, seasonEnd]);
+
+      if (tournamentResult.rows.length > 0) {
+        const tournamentId = tournamentResult.rows[0].tournoi_id;
+
+        // Delete the inscription
+        await db.query(`
+          DELETE FROM inscriptions
+          WHERE REPLACE(UPPER(licence), ' ', '') = REPLACE(UPPER($1), ' ', '')
+            AND tournoi_id = $2
+            AND source = 'player_app'
+        `, [request.licence, tournamentId]);
+
+        console.log(`Deleted inscription for ${request.player_name} from tournament ${tournamentId}`);
+      }
+
+      // Delete the ranking record if it exists
+      const categoryResult = await db.query(`
+        SELECT id FROM categories
+        WHERE UPPER(game_type) = UPPER($1)
+          AND UPPER(level) = UPPER($2)
+      `, [request.game_mode_name, request.requested_ranking]);
+
+      if (categoryResult.rows.length > 0) {
+        const categoryId = categoryResult.rows[0].id;
+        const seasonYear = month >= 8 ? year : year - 1;
+        const currentSeason = `${seasonYear}-${seasonYear + 1}`;
+
+        await db.query(`
+          DELETE FROM rankings
+          WHERE REPLACE(UPPER(licence), ' ', '') = REPLACE(UPPER($1), ' ', '')
+            AND category_id = $2
+            AND season = $3
+            AND total_match_points = 0
+        `, [request.licence, categoryId, currentSeason]);
+
+        console.log(`Deleted ranking for ${request.player_name} in category ${categoryId}`);
+      }
+    }
+
     // Soft delete - mark as deleted instead of removing
     await db.query(`
       UPDATE enrollment_requests
