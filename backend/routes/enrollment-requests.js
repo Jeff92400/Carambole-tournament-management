@@ -14,10 +14,28 @@ const router = express.Router();
 const db = require('../db-loader');
 const { authenticateToken, requireAdmin } = require('./auth');
 const { logAdminAction, ACTION_TYPES } = require('../utils/admin-logger');
-const fetch = require('node-fetch');
+const { Resend } = require('resend');
+const appSettings = require('../utils/app-settings');
 
-// API key for internal email calls
-const API_KEY = process.env.PLAYER_APP_API_KEY;
+// Initialize Resend for direct email sending
+const getResend = () => {
+  if (!process.env.RESEND_API_KEY) {
+    console.log('[EMAIL] RESEND_API_KEY not configured');
+    return null;
+  }
+  return new Resend(process.env.RESEND_API_KEY);
+};
+
+// Get email settings from database
+async function getEmailSettings() {
+  const settings = {};
+  settings.primary_color = await appSettings.getSetting('primary_color') || '#1F4788';
+  settings.sender_name = await appSettings.getSetting('email_sender_name') || 'CDBHS';
+  settings.email_from = await appSettings.getSetting('email_noreply') || 'noreply@cdbhs.net';
+  settings.org_short_name = await appSettings.getSetting('organization_short_name') || 'CDBHS';
+  settings.contact_email = await appSettings.getSetting('summary_email') || '';
+  return settings;
+}
 
 /**
  * GET /api/enrollment-requests/debug-announcements/:licence
@@ -50,47 +68,93 @@ router.get('/debug-announcements/:licence', async (req, res) => {
 router.use(authenticateToken);
 router.use(requireAdmin);
 
-// Helper function to send approval email via email route (same pattern as acknowledgment)
+// Helper function to send approval email directly via Resend
 async function sendApprovalEmail(request) {
   console.log(`[APPROVAL EMAIL] Starting email send to ${request.player_email}`);
-  console.log(`[APPROVAL EMAIL] API_KEY configured: ${!!API_KEY}`);
 
-  if (!API_KEY) {
-    console.log('[APPROVAL EMAIL] API_KEY not configured, skipping email');
-    return { success: false, reason: 'no_api_key' };
+  const resend = getResend();
+  if (!resend) {
+    console.log('[APPROVAL EMAIL] Resend not configured, skipping email');
+    return { success: false, reason: 'resend_not_configured' };
   }
 
   try {
-    const url = `http://localhost:${process.env.PORT || 3000}/api/email/enrollment-approved`;
-    console.log(`[APPROVAL EMAIL] Calling ${url}`);
+    const settings = await getEmailSettings();
+    console.log(`[APPROVAL EMAIL] Using sender: ${settings.sender_name} <${settings.email_from}>`);
 
-    const payload = {
-      player_email: request.player_email,
-      player_name: request.player_name,
-      game_mode: request.game_mode_name,
-      requested_ranking: request.requested_ranking,
-      tournament_number: request.tournament_number,
-      api_key: API_KEY
-    };
-    console.log(`[APPROVAL EMAIL] Payload:`, JSON.stringify(payload, null, 2));
+    const emailHtml = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      </head>
+      <body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f5f5f5;">
+        <table role="presentation" cellpadding="0" cellspacing="0" style="width: 100%; background-color: #f5f5f5;">
+          <tr>
+            <td align="center" style="padding: 20px;">
+              <table role="presentation" cellpadding="0" cellspacing="0" style="max-width: 600px; width: 100%; background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                <tr>
+                  <td style="background: linear-gradient(135deg, #28a745, #20c997); padding: 30px; text-align: center; border-radius: 8px 8px 0 0;">
+                    <h1 style="color: #ffffff; margin: 0; font-size: 24px;">Demande acceptée !</h1>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding: 30px;">
+                    <p style="font-size: 16px; color: #333333; margin: 0 0 20px 0;">
+                      Bonjour <strong>${request.player_name}</strong>,
+                    </p>
+                    <p style="font-size: 16px; color: #333333; margin: 0 0 20px 0;">
+                      Bonne nouvelle ! Votre demande d'inscription a été <strong style="color: #28a745;">acceptée</strong>.
+                    </p>
+                    <table style="width: 100%; background-color: #d4edda; border-radius: 8px; padding: 20px; margin: 20px 0;">
+                      <tr>
+                        <td style="padding: 8px 20px;">
+                          <strong>Mode de jeu :</strong> ${request.game_mode_name || '-'}
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 8px 20px;">
+                          <strong>Catégorie :</strong> ${request.requested_ranking || '-'}
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 8px 20px;">
+                          <strong>Tournoi :</strong> ${request.tournament_number || '-'}
+                        </td>
+                      </tr>
+                    </table>
+                    <p style="font-size: 16px; color: #333333; margin: 20px 0;">
+                      Vous recevrez une convocation avec les détails (lieu, heure, poule) quelques jours avant la compétition.
+                    </p>
+                    <p style="font-size: 16px; color: #333333; margin: 20px 0 0 0;">
+                      Cordialement,<br>
+                      <strong>${settings.org_short_name}</strong>
+                    </p>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="background-color: #f8f9fa; padding: 20px; text-align: center; border-radius: 0 0 8px 8px; font-size: 12px; color: #666666;">
+                    ${settings.contact_email ? `Contact : <a href="mailto:${settings.contact_email}" style="color: ${settings.primary_color};">${settings.contact_email}</a>` : ''}
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </body>
+      </html>
+    `;
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+    await resend.emails.send({
+      from: `${settings.sender_name} <${settings.email_from}>`,
+      to: request.player_email,
+      subject: `Demande acceptée - ${request.game_mode_name} ${request.requested_ranking} T${request.tournament_number}`,
+      html: emailHtml
     });
 
-    const responseText = await response.text();
-    console.log(`[APPROVAL EMAIL] Response status: ${response.status}`);
-    console.log(`[APPROVAL EMAIL] Response body: ${responseText}`);
-
-    if (!response.ok) {
-      console.error('[APPROVAL EMAIL] Failed to send email:', responseText);
-      return { success: false, reason: 'api_error', status: response.status, body: responseText };
-    } else {
-      console.log(`[APPROVAL EMAIL] Email sent successfully to ${request.player_email}`);
-      return { success: true };
-    }
+    console.log(`[APPROVAL EMAIL] Email sent successfully to ${request.player_email}`);
+    return { success: true };
   } catch (error) {
     console.error('[APPROVAL EMAIL] Error sending email:', error.message);
     return { success: false, reason: 'exception', error: error.message };
@@ -98,36 +162,96 @@ async function sendApprovalEmail(request) {
 }
 
 // Helper function to send rejection email directly via Resend
-// Helper function to send rejection email via email route
 async function sendRejectionEmail(request, reason) {
-  if (!API_KEY) {
-    console.log('[REJECTION] API_KEY not configured, skipping email');
-    return;
+  console.log(`[REJECTION EMAIL] Starting email send to ${request.player_email}`);
+
+  const resend = getResend();
+  if (!resend) {
+    console.log('[REJECTION EMAIL] Resend not configured, skipping email');
+    return { success: false, reason: 'resend_not_configured' };
   }
 
   try {
-    const response = await fetch(`http://localhost:${process.env.PORT || 3000}/api/email/enrollment-rejected`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        player_email: request.player_email,
-        player_name: request.player_name,
-        game_mode: request.game_mode_name,
-        requested_ranking: request.requested_ranking,
-        tournament_number: request.tournament_number,
-        rejection_reason: reason,
-        api_key: API_KEY
-      })
+    const settings = await getEmailSettings();
+    console.log(`[REJECTION EMAIL] Using sender: ${settings.sender_name} <${settings.email_from}>`);
+
+    const emailHtml = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      </head>
+      <body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f5f5f5;">
+        <table role="presentation" cellpadding="0" cellspacing="0" style="width: 100%; background-color: #f5f5f5;">
+          <tr>
+            <td align="center" style="padding: 20px;">
+              <table role="presentation" cellpadding="0" cellspacing="0" style="max-width: 600px; width: 100%; background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                <tr>
+                  <td style="background: linear-gradient(135deg, #dc3545, #c82333); padding: 30px; text-align: center; border-radius: 8px 8px 0 0;">
+                    <h1 style="color: #ffffff; margin: 0; font-size: 24px;">Demande refusée</h1>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding: 30px;">
+                    <p style="font-size: 16px; color: #333333; margin: 0 0 20px 0;">
+                      Bonjour <strong>${request.player_name}</strong>,
+                    </p>
+                    <p style="font-size: 16px; color: #333333; margin: 0 0 20px 0;">
+                      Nous sommes au regret de vous informer que votre demande d'inscription a été <strong style="color: #dc3545;">refusée</strong>.
+                    </p>
+                    <table style="width: 100%; background-color: #f8d7da; border-radius: 8px; padding: 20px; margin: 20px 0;">
+                      <tr>
+                        <td style="padding: 8px 20px;">
+                          <strong>Mode de jeu :</strong> ${request.game_mode_name || '-'}
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 8px 20px;">
+                          <strong>Catégorie :</strong> ${request.requested_ranking || '-'}
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 8px 20px;">
+                          <strong>Tournoi :</strong> ${request.tournament_number || '-'}
+                        </td>
+                      </tr>
+                      ${reason ? `<tr><td style="padding: 8px 20px;"><strong>Raison :</strong> ${reason}</td></tr>` : ''}
+                    </table>
+                    <p style="font-size: 16px; color: #333333; margin: 20px 0;">
+                      Si vous avez des questions, n'hésitez pas à nous contacter.
+                    </p>
+                    <p style="font-size: 16px; color: #333333; margin: 20px 0 0 0;">
+                      Cordialement,<br>
+                      <strong>${settings.org_short_name}</strong>
+                    </p>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="background-color: #f8f9fa; padding: 20px; text-align: center; border-radius: 0 0 8px 8px; font-size: 12px; color: #666666;">
+                    ${settings.contact_email ? `Contact : <a href="mailto:${settings.contact_email}" style="color: ${settings.primary_color};">${settings.contact_email}</a>` : ''}
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </body>
+      </html>
+    `;
+
+    await resend.emails.send({
+      from: `${settings.sender_name} <${settings.email_from}>`,
+      to: request.player_email,
+      subject: `Demande refusée - ${request.game_mode_name} ${request.requested_ranking} T${request.tournament_number}`,
+      html: emailHtml
     });
 
-    if (!response.ok) {
-      const error = await response.json();
-      console.error('[REJECTION] Failed to send email:', error);
-    } else {
-      console.log(`[REJECTION] Email sent to ${request.player_email}`);
-    }
+    console.log(`[REJECTION EMAIL] Email sent successfully to ${request.player_email}`);
+    return { success: true };
   } catch (error) {
-    console.error('[REJECTION] Error sending email:', error.message);
+    console.error('[REJECTION EMAIL] Error sending email:', error.message);
+    return { success: false, reason: 'exception', error: error.message };
   }
 }
 
