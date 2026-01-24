@@ -303,18 +303,24 @@ router.put('/:id/approve', async (req, res) => {
     );
 
     // Create in-app notification for the player
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 30); // Expires in 30 days
-    await db.query(`
-      INSERT INTO announcements (title, message, type, is_active, expires_at, created_by, target_licence)
-      VALUES ($1, $2, 'success', TRUE, $3, $4, $5)
-    `, [
-      'Demande acceptée',
-      `Votre demande d'inscription en ${request.game_mode_name} ${request.requested_ranking} (Tournoi ${request.tournament_number}) a été acceptée. Vous recevrez une convocation avant la compétition.`,
-      expiresAt,
-      req.user.username || 'admin',
-      request.licence
-    ]);
+    try {
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 30); // Expires in 30 days
+      const announcementResult = await db.query(`
+        INSERT INTO announcements (title, message, type, is_active, expires_at, created_by, target_licence)
+        VALUES ($1, $2, 'success', TRUE, $3, $4, $5)
+        RETURNING id
+      `, [
+        'Demande acceptée',
+        `Votre demande d'inscription en ${request.game_mode_name} ${request.requested_ranking} (Tournoi ${request.tournament_number}) a été acceptée. Vous recevrez une convocation avant la compétition.`,
+        expiresAt,
+        req.user.username || 'admin',
+        request.licence
+      ]);
+      console.log(`Created announcement ${announcementResult.rows[0]?.id} for player ${request.licence}`);
+    } catch (announcementError) {
+      console.error('Failed to create announcement:', announcementError.message);
+    }
 
     // Send approval email to player (non-blocking)
     sendApprovalEmail(req, request).catch(err => {
@@ -534,6 +540,33 @@ router.delete('/:id', async (req, res) => {
   } catch (error) {
     console.error('Error deleting enrollment request:', error);
     res.status(500).json({ error: 'Failed to delete request' });
+  }
+});
+
+/**
+ * GET /api/enrollment-requests/debug-announcements/:licence
+ * Debug endpoint to check announcements for a player
+ */
+router.get('/debug-announcements/:licence', async (req, res) => {
+  try {
+    const { licence } = req.params;
+    const normalizedLicence = licence.replace(/\s+/g, '').toUpperCase();
+
+    const result = await db.query(`
+      SELECT id, title, message, type, is_active, expires_at, target_licence, created_at
+      FROM announcements
+      WHERE UPPER(REPLACE(COALESCE(target_licence, ''), ' ', '')) = $1
+      ORDER BY created_at DESC
+      LIMIT 10
+    `, [normalizedLicence]);
+
+    res.json({
+      licence: normalizedLicence,
+      count: result.rows.length,
+      announcements: result.rows
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 
