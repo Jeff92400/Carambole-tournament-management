@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Demandes d'inscription - CDB</title>
+  <link rel="icon" type="image/png" href="images/FrenchBillard-Icon-small.png">
+  <link rel="stylesheet" href="css/styles.css">
+  <script src="js/branding.js"></script>
+  <style>
+    .stats-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 15px;
+      margin-bottom: 25px;
+    }
+    .stat-card {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      text-align: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      border: 1px solid #e0e0e0;
+    }
+    .stat-card .stat-value {
+      font-size: 32px;
+      font-weight: bold;
+      color: var(--color-primary, #1F4788);
+    }
+    .stat-card .stat-label {
+      font-size: 12px;
+      color: #666;
+      text-transform: uppercase;
+      margin-top: 5px;
+    }
+    .stat-card.pending .stat-value { color: #ffc107; }
+    .stat-card.approved .stat-value { color: #28a745; }
+    .stat-card.rejected .stat-value { color: #dc3545; }
+
+    .filter-bar {
+      display: flex;
+      gap: 15px;
+      flex-wrap: wrap;
+      margin-bottom: 20px;
+      padding: 15px;
+      background: #f8f9fa;
+      border-radius: 8px;
+    }
+    .filter-bar select {
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 14px;
+      min-width: 150px;
+    }
+
+    .requests-table {
+      width: 100%;
+      border-collapse: collapse;
+      background: white;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    .requests-table th, .requests-table td {
+      padding: 12px 15px;
+      text-align: left;
+      border-bottom: 1px solid #eee;
+    }
+    .requests-table th {
+      background: #f8f9fa;
+      font-weight: 600;
+      color: #333;
+      font-size: 13px;
+      text-transform: uppercase;
+    }
+    .requests-table tr:hover {
+      background: #f5f5f5;
+    }
+
+    .status-badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+    .status-badge.pending {
+      background: #fff3cd;
+      color: #856404;
+    }
+    .status-badge.approved {
+      background: #d4edda;
+      color: #155724;
+    }
+    .status-badge.rejected {
+      background: #f8d7da;
+      color: #721c24;
+    }
+    .status-badge.convoked {
+      background: #cce5ff;
+      color: #004085;
+    }
+
+    .action-btn {
+      padding: 6px 12px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      margin-right: 5px;
+    }
+    .action-btn.approve {
+      background: #28a745;
+      color: white;
+    }
+    .action-btn.approve:hover {
+      background: #218838;
+    }
+    .action-btn.reject {
+      background: #dc3545;
+      color: white;
+    }
+    .action-btn.reject:hover {
+      background: #c82333;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: #666;
+    }
+    .empty-state .icon {
+      font-size: 48px;
+      margin-bottom: 15px;
+    }
+
+    /* Modal styles */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 1000;
+      justify-content: center;
+      align-items: center;
+    }
+    .modal-overlay.active {
+      display: flex;
+    }
+    .modal-content {
+      background: white;
+      border-radius: 12px;
+      max-width: 500px;
+      width: 90%;
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+    .modal-header {
+      padding: 20px;
+      border-bottom: 1px solid #eee;
+      font-weight: 600;
+      font-size: 18px;
+    }
+    .modal-body {
+      padding: 20px;
+    }
+    .modal-footer {
+      padding: 15px 20px;
+      border-top: 1px solid #eee;
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+    }
+  </style>
+</head>
+<body>
+  <nav class="navbar">
+    <div class="nav-brand">
+      <a href="dashboard.html" class="brand-link">
+        <img src="images/FrenchBillard-Icon-small.png" alt="" style="height: 24px; width: 24px; vertical-align: middle;">
+        Tournois CDBHS
+      </a>
+    </div>
+    <div class="nav-links">
+      <a href="dashboard.html">Tableau de bord</a>
+      <a href="inscriptions-list.html">Inscriptions</a>
+      <a href="enrollment-requests.html" class="active">Demandes</a>
+      <a href="generate-poules.html">Poules</a>
+      <a href="settings.html">Parametres</a>
+    </div>
+    <div class="nav-user">
+      <span id="userDisplay"></span>
+      <button onclick="logout()" class="btn-logout">Deconnexion</button>
+    </div>
+  </nav>
+
+  <main class="main-content">
+    <div class="page-header">
+      <h1>Demandes d'inscription aux competitions</h1>
+      <p>Gerer les demandes des joueurs souhaitant s'inscrire a des categories non officielles</p>
+    </div>
+
+    <div id="errorMessage" class="alert alert-danger" style="display: none;"></div>
+    <div id="successMessage" class="alert alert-success" style="display: none;"></div>
+
+    <!-- Stats Cards -->
+    <div class="stats-cards">
+      <div class="stat-card pending">
+        <div class="stat-value" id="pendingCount">-</div>
+        <div class="stat-label">En attente</div>
+      </div>
+      <div class="stat-card approved">
+        <div class="stat-value" id="approvedCount">-</div>
+        <div class="stat-label">Approuvees</div>
+      </div>
+      <div class="stat-card rejected">
+        <div class="stat-value" id="rejectedCount">-</div>
+        <div class="stat-label">Refusees</div>
+      </div>
+    </div>
+
+    <!-- Filter Bar -->
+    <div class="filter-bar">
+      <select id="statusFilter" onchange="loadRequests()">
+        <option value="">Tous les statuts</option>
+        <option value="pending" selected>En attente</option>
+        <option value="approved">Approuvees</option>
+        <option value="rejected">Refusees</option>
+        <option value="convoked">Convoquees</option>
+      </select>
+      <button onclick="loadRequests()" class="btn btn-primary" style="padding: 10px 20px;">
+        Actualiser
+      </button>
+    </div>
+
+    <!-- Requests Table -->
+    <div id="requestsContainer">
+      <div class="empty-state">
+        <div class="icon">...</div>
+        <p>Chargement...</p>
+      </div>
+    </div>
+  </main>
+
+  <!-- Reject Modal -->
+  <div class="modal-overlay" id="rejectModal">
+    <div class="modal-content">
+      <div class="modal-header">Refuser la demande</div>
+      <div class="modal-body">
+        <p>Voulez-vous refuser cette demande ?</p>
+        <p><strong id="rejectPlayerName"></strong> - <span id="rejectDetails"></span></p>
+        <div style="margin-top: 15px;">
+          <label style="display: block; margin-bottom: 8px; font-weight: 500;">Raison du refus (optionnel)</label>
+          <textarea id="rejectReason" rows="3" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px;"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button onclick="closeRejectModal()" class="btn" style="background: #e0e0e0;">Annuler</button>
+        <button onclick="confirmReject()" class="btn btn-danger">Refuser</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/auth-utils.js"></script>
+  <script>
+    const API_URL = '/api';
+
+    // Check auth
+    if (!requireAuth()) {
+      throw new Error('Not authenticated');
+    }
+    const token = localStorage.getItem('token');
+
+    // Display username
+    const user = getCurrentUser();
+    document.getElementById('userDisplay').textContent = user?.username || '';
+
+    let currentRejectId = null;
+
+    // Load requests on page load
+    document.addEventListener('DOMContentLoaded', () => {
+      loadRequests();
+    });
+
+    async function loadRequests() {
+      const container = document.getElementById('requestsContainer');
+      const statusFilter = document.getElementById('statusFilter').value;
+
+      try {
+        const url = statusFilter
+          ? `${API_URL}/enrollment-requests?status=${statusFilter}`
+          : `${API_URL}/enrollment-requests`;
+
+        const response = await authFetch(url);
+        if (!response.ok) throw new Error('Failed to load requests');
+
+        const data = await response.json();
+
+        // Update stats
+        document.getElementById('pendingCount').textContent = data.counts?.pending || 0;
+        document.getElementById('approvedCount').textContent = data.counts?.approved || 0;
+        document.getElementById('rejectedCount').textContent = data.counts?.rejected || 0;
+
+        if (!data.requests || data.requests.length === 0) {
+          container.innerHTML = `
+            <div class="empty-state">
+              <div class="icon">📝</div>
+              <p>Aucune demande ${statusFilter ? 'avec ce statut' : ''}</p>
+            </div>
+          `;
+          return;
+        }
+
+        container.innerHTML = `
+          <table class="requests-table">
+            <thead>
+              <tr>
+                <th>Joueur</th>
+                <th>Club</th>
+                <th>Mode de jeu</th>
+                <th>Classement actuel</th>
+                <th>Categorie demandee</th>
+                <th>Tournoi</th>
+                <th>Date demande</th>
+                <th>Statut</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${data.requests.map(r => renderRequestRow(r)).join('')}
+            </tbody>
+          </table>
+        `;
+
+      } catch (error) {
+        console.error('Error loading requests:', error);
+        container.innerHTML = `
+          <div class="alert alert-danger">
+            Erreur de chargement. <a href="#" onclick="loadRequests(); return false;">Reessayer</a>
+          </div>
+        `;
+      }
+    }
+
+    function renderRequestRow(request) {
+      const statusClass = request.status;
+      const statusLabel = {
+        'pending': 'En attente',
+        'approved': 'Approuvee',
+        'rejected': 'Refusee',
+        'convoked': 'Convoquee'
+      }[request.status] || request.status;
+
+      const actions = request.status === 'pending' ? `
+        <button class="action-btn approve" onclick="approveRequest(${request.id}, '${escapeHtml(request.player_name)}')">
+          Approuver
+        </button>
+        <button class="action-btn reject" onclick="showRejectModal(${request.id}, '${escapeHtml(request.player_name)}', '${escapeHtml(request.game_mode_name)} ${request.requested_ranking} T${request.tournament_number}')">
+          Refuser
+        </button>
+      ` : '';
+
+      return `
+        <tr>
+          <td>
+            <strong>${escapeHtml(request.player_name || '-')}</strong><br>
+            <small style="color: #666;">${escapeHtml(request.licence || '')}</small><br>
+            <small><a href="mailto:${escapeHtml(request.player_email)}" style="color: var(--color-primary);">${escapeHtml(request.player_email || '')}</a></small>
+          </td>
+          <td>${escapeHtml(request.player_club || '-')}</td>
+          <td>${escapeHtml(request.game_mode_name || request.game_mode_display || '-')}</td>
+          <td>${escapeHtml(request.current_ranking || 'NC')}</td>
+          <td><strong>${escapeHtml(request.requested_ranking)}</strong></td>
+          <td>T${request.tournament_number}</td>
+          <td>${formatDate(request.created_at)}</td>
+          <td>
+            <span class="status-badge ${statusClass}">${statusLabel}</span>
+            ${request.rejection_reason ? `<br><small style="color: #721c24; font-style: italic;">${escapeHtml(request.rejection_reason)}</small>` : ''}
+          </td>
+          <td>${actions}</td>
+        </tr>
+      `;
+    }
+
+    async function approveRequest(id, playerName) {
+      if (!confirm(`Approuver la demande de ${playerName} ?`)) return;
+
+      try {
+        const response = await authFetch(`${API_URL}/enrollment-requests/${id}/approve`, {
+          method: 'PUT'
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.error || 'Failed to approve');
+        }
+
+        showSuccess(`Demande approuvee${result.inscriptionCreated ? ' et inscription creee' : ''}`);
+        loadRequests();
+
+      } catch (error) {
+        showError(error.message);
+      }
+    }
+
+    function showRejectModal(id, playerName, details) {
+      currentRejectId = id;
+      document.getElementById('rejectPlayerName').textContent = playerName;
+      document.getElementById('rejectDetails').textContent = details;
+      document.getElementById('rejectReason').value = '';
+      document.getElementById('rejectModal').classList.add('active');
+    }
+
+    function closeRejectModal() {
+      document.getElementById('rejectModal').classList.remove('active');
+      currentRejectId = null;
+    }
+
+    async function confirmReject() {
+      if (!currentRejectId) return;
+
+      const reason = document.getElementById('rejectReason').value.trim();
+
+      try {
+        const response = await authFetch(`${API_URL}/enrollment-requests/${currentRejectId}/reject`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reason })
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.error || 'Failed to reject');
+        }
+
+        closeRejectModal();
+        showSuccess('Demande refusee');
+        loadRequests();
+
+      } catch (error) {
+        showError(error.message);
+      }
+    }
+
+    function formatDate(dateStr) {
+      if (!dateStr) return '-';
+      const date = new Date(dateStr);
+      return date.toLocaleDateString('fr-FR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    }
+
+    function escapeHtml(text) {
+      if (!text) return '';
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    function showError(message) {
+      const el = document.getElementById('errorMessage');
+      el.textContent = message;
+      el.style.display = 'block';
+      setTimeout(() => { el.style.display = 'none'; }, 5000);
+    }
+
+    function showSuccess(message) {
+      const el = document.getElementById('successMessage');
+      el.textContent = message;
+      el.style.display = 'block';
+      setTimeout(() => { el.style.display = 'none'; }, 5000);
+    }
+  </script>
+</body>
+</html>

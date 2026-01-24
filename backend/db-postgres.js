@@ -739,6 +739,38 @@ async function initializeDatabase() {
       CREATE INDEX IF NOT EXISTS idx_player_invitations_email ON player_invitations(email)
     `);
 
+    // Enrollment requests table - players request to enroll in competitions they're not officially registered for
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS enrollment_requests (
+        id SERIAL PRIMARY KEY,
+        licence VARCHAR(50) NOT NULL,
+        player_name VARCHAR(255),
+        player_email VARCHAR(255),
+        player_club VARCHAR(255),
+        game_mode_id INTEGER NOT NULL REFERENCES game_modes(id),
+        game_mode_name VARCHAR(50),
+        current_ranking VARCHAR(10),
+        requested_ranking VARCHAR(10) NOT NULL,
+        tournament_number INTEGER NOT NULL,
+        status VARCHAR(20) DEFAULT 'pending',
+        rejection_reason TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        processed_at TIMESTAMP,
+        processed_by VARCHAR(100)
+      )
+    `);
+    // Create indexes for enrollment_requests
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_enrollment_requests_licence ON enrollment_requests(REPLACE(licence, ' ', ''))
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_enrollment_requests_status ON enrollment_requests(status)
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_enrollment_requests_game_mode ON enrollment_requests(game_mode_id)
+    `);
+    console.log('enrollment_requests table ready');
+
     // Import profiles table - stores configurable CSV column mappings for each import type
     await client.query(`
       CREATE TABLE IF NOT EXISTS import_profiles (

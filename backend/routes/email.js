@@ -2926,4 +2926,233 @@ router.post('/poules/:tournoiId/regenerate', authenticateToken, async (req, res)
   }
 });
 
+// ============ ENROLLMENT REQUEST EMAILS ============
+
+/**
+ * POST /api/email/enrollment-acknowledgment
+ * Send acknowledgment email to player when they submit an enrollment request
+ */
+router.post('/enrollment-acknowledgment', async (req, res) => {
+  const { player_email, player_name, game_mode, requested_ranking, tournament_number, api_key } = req.body;
+
+  // Verify API key (shared secret between apps)
+  if (api_key !== process.env.PLAYER_APP_API_KEY) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const resend = getResend();
+  if (!resend) {
+    return res.status(500).json({ error: 'Email not configured' });
+  }
+
+  if (!player_email || !player_name || !game_mode || !requested_ranking) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  try {
+    // Load email settings for dynamic branding
+    const emailSettings = await getEmailTemplateSettings();
+    const contactEmail = await getContactEmail();
+    const primaryColor = emailSettings.primary_color || '#1F4788';
+    const senderName = emailSettings.email_sender_name || 'CDBHS';
+    const emailFrom = emailSettings.email_noreply || 'noreply@cdbhs.net';
+    const orgShortName = emailSettings.organization_short_name || 'CDBHS';
+
+    const emailHtml = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      </head>
+      <body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f5f5f5;">
+        <table role="presentation" cellpadding="0" cellspacing="0" style="width: 100%; background-color: #f5f5f5;">
+          <tr>
+            <td align="center" style="padding: 20px;">
+              <table role="presentation" cellpadding="0" cellspacing="0" style="max-width: 600px; width: 100%; background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                <tr>
+                  <td style="background: linear-gradient(135deg, ${primaryColor}, #667eea); padding: 30px; text-align: center; border-radius: 8px 8px 0 0;">
+                    <h1 style="color: #ffffff; margin: 0; font-size: 24px;">Confirmation de votre demande</h1>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding: 30px;">
+                    <p style="font-size: 16px; color: #333333; margin: 0 0 20px 0;">
+                      Bonjour <strong>${player_name}</strong>,
+                    </p>
+                    <p style="font-size: 16px; color: #333333; margin: 0 0 20px 0;">
+                      Votre demande d'inscription a bien ete enregistree :
+                    </p>
+                    <table style="width: 100%; background-color: #f8f9fa; border-radius: 8px; padding: 20px; margin: 20px 0;">
+                      <tr>
+                        <td style="padding: 8px 20px;">
+                          <strong>Mode de jeu :</strong> ${game_mode}
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 8px 20px;">
+                          <strong>Categorie :</strong> ${requested_ranking}
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 8px 20px;">
+                          <strong>Tournoi :</strong> ${tournament_number}
+                        </td>
+                      </tr>
+                    </table>
+                    <p style="font-size: 16px; color: #333333; margin: 20px 0;">
+                      Nous reviendrons vers vous rapidement.
+                    </p>
+                    <p style="font-size: 16px; color: #333333; margin: 20px 0 0 0;">
+                      Cordialement,<br>
+                      <strong>${orgShortName}</strong>
+                    </p>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="background-color: #f8f9fa; padding: 20px; text-align: center; border-radius: 0 0 8px 8px; font-size: 12px; color: #666666;">
+                    ${contactEmail ? `Contact : <a href="mailto:${contactEmail}" style="color: ${primaryColor};">${contactEmail}</a>` : ''}
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </body>
+      </html>
+    `;
+
+    await resend.emails.send({
+      from: `${senderName} <${emailFrom}>`,
+      to: player_email,
+      subject: `Confirmation de votre demande d'inscription - ${orgShortName}`,
+      html: emailHtml
+    });
+
+    console.log(`Enrollment acknowledgment email sent to ${player_email}`);
+    res.json({ success: true });
+
+  } catch (error) {
+    console.error('Error sending enrollment acknowledgment email:', error);
+    res.status(500).json({ error: 'Failed to send email' });
+  }
+});
+
+/**
+ * POST /api/email/enrollment-notification
+ * Send notification email to org when a player submits an enrollment request
+ */
+router.post('/enrollment-notification', async (req, res) => {
+  const { player_name, player_licence, player_email, player_club, game_mode, current_ranking, requested_ranking, tournament_number, api_key } = req.body;
+
+  // Verify API key (shared secret between apps)
+  if (api_key !== process.env.PLAYER_APP_API_KEY) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const resend = getResend();
+  if (!resend) {
+    return res.status(500).json({ error: 'Email not configured' });
+  }
+
+  if (!player_name || !player_email || !game_mode || !requested_ranking) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  try {
+    // Load email settings for dynamic branding
+    const emailSettings = await getEmailTemplateSettings();
+    const summaryEmail = emailSettings.summary_email || 'cdbhs92@gmail.com';
+    const primaryColor = emailSettings.primary_color || '#1F4788';
+    const senderName = emailSettings.email_sender_name || 'CDBHS';
+    const emailFrom = emailSettings.email_noreply || 'noreply@cdbhs.net';
+
+    const emailHtml = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      </head>
+      <body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f5f5f5;">
+        <table role="presentation" cellpadding="0" cellspacing="0" style="width: 100%; background-color: #f5f5f5;">
+          <tr>
+            <td align="center" style="padding: 20px;">
+              <table role="presentation" cellpadding="0" cellspacing="0" style="max-width: 600px; width: 100%; background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                <tr>
+                  <td style="background: linear-gradient(135deg, ${primaryColor}, #667eea); padding: 30px; text-align: center; border-radius: 8px 8px 0 0;">
+                    <h1 style="color: #ffffff; margin: 0; font-size: 24px;">Nouvelle demande d'inscription</h1>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding: 30px;">
+                    <p style="font-size: 16px; color: #333333; margin: 0 0 20px 0;">
+                      Le joueur suivant souhaite s'inscrire a une competition :
+                    </p>
+
+                    <h3 style="color: ${primaryColor}; margin: 20px 0 10px 0; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">
+                      Informations joueur
+                    </h3>
+                    <table style="width: 100%; background-color: #f8f9fa; border-radius: 8px; padding: 15px;">
+                      <tr>
+                        <td style="padding: 8px 20px;"><strong>Nom :</strong> ${player_name}</td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 8px 20px;"><strong>Licence :</strong> ${player_licence || 'Non renseignee'}</td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 8px 20px;"><strong>Club :</strong> ${player_club || 'Non renseigne'}</td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 8px 20px;"><strong>Email :</strong> <a href="mailto:${player_email}" style="color: ${primaryColor};">${player_email}</a></td>
+                      </tr>
+                    </table>
+
+                    <h3 style="color: ${primaryColor}; margin: 20px 0 10px 0; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">
+                      Demande d'inscription
+                    </h3>
+                    <table style="width: 100%; background-color: #e3f2fd; border-radius: 8px; padding: 15px;">
+                      <tr>
+                        <td style="padding: 8px 20px;"><strong>Mode de jeu :</strong> ${game_mode}</td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 8px 20px;"><strong>Classement actuel :</strong> ${current_ranking || 'Non classe'}</td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 8px 20px;"><strong>Categorie demandee :</strong> ${requested_ranking}</td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 8px 20px;"><strong>Tournoi :</strong> ${tournament_number}</td>
+                      </tr>
+                    </table>
+
+                    <p style="font-size: 14px; color: #666666; margin: 20px 0 0 0; text-align: center;">
+                      → Gerez cette demande dans l'application Tournois
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </body>
+      </html>
+    `;
+
+    await resend.emails.send({
+      from: `${senderName} <${emailFrom}>`,
+      to: summaryEmail,
+      subject: `Nouvelle demande d'inscription - ${player_name}`,
+      html: emailHtml
+    });
+
+    console.log(`Enrollment notification email sent to ${summaryEmail}`);
+    res.json({ success: true });
+
+  } catch (error) {
+    console.error('Error sending enrollment notification email:', error);
+    res.status(500).json({ error: 'Failed to send email' });
+  }
+});
+
 module.exports = router;
