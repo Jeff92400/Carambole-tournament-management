@@ -178,20 +178,21 @@
   </style>
 </head>
 <body>
-  <div class="navbar">
-    <h2><img src="images/FrenchBillard-Icon-small.png" alt="" style="height: 28px; width: 28px; vertical-align: middle; margin-right: 8px;">Demandes d'inscription</h2>
-    <div class="nav-links">
-      <a href="dashboard.html">Accueil</a>
-      <a href="rankings.html">Classements</a>
-      <a href="generate-poules.html">Competitions</a>
-      <a href="inscriptions-list.html">Inscriptions</a>
-      <a href="enrollment-requests.html" class="active">Demandes</a>
-      <a href="settings.html" class="admin-only">Parametres</a>
-      <a href="#" id="logoutBtn" class="nav-logout">Deconnexion</a>
+  <div class="container">
+    <div class="navbar">
+      <h2><img src="images/FrenchBillard-Icon-small.png" alt="" style="height: 28px; width: 28px; vertical-align: middle; margin-right: 8px;">Demandes d'inscription</h2>
+      <div class="nav-links">
+        <a href="dashboard.html">Accueil</a>
+        <a href="rankings.html">Classements</a>
+        <a href="generate-poules.html">Competitions</a>
+        <a href="inscriptions-list.html">Inscriptions</a>
+        <a href="enrollment-requests.html" class="active">Demandes</a>
+        <a href="settings.html" class="admin-only">Parametres</a>
+        <a href="#" id="logoutBtn" class="nav-logout">Deconnexion</a>
+      </div>
     </div>
-  </div>
 
-  <main class="main-content" style="padding: 20px; max-width: 1400px; margin: 0 auto;">
+    <div class="content">
     <div id="errorMessage" class="alert alert-danger" style="display: none;"></div>
     <div id="successMessage" class="alert alert-success" style="display: none;"></div>
 
@@ -232,7 +233,8 @@
         <p>Chargement...</p>
       </div>
     </div>
-  </main>
+    </div><!-- end content -->
+  </div><!-- end container -->
 
   <!-- Reject Modal -->
   <div class="modal-overlay" id="rejectModal">
