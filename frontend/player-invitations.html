@@ -347,10 +347,6 @@
         <div class="stat-value" id="statPending">-</div>
         <div class="stat-label">En attente</div>
       </div>
-      <div class="stat-card">
-        <div class="stat-value" id="statRate">-</div>
-        <div class="stat-label">Taux d'inscription</div>
-      </div>
     </div>
 
     <!-- Tabs -->
@@ -586,7 +582,6 @@
           document.getElementById('statTotal').textContent = stats.total_sent;
           document.getElementById('statSignedUp').textContent = stats.signed_up;
           document.getElementById('statPending').textContent = stats.pending;
-          document.getElementById('statRate').textContent = `${stats.signup_rate}%`;
         }
       } catch (error) {
         console.error('Error loading stats:', error);
