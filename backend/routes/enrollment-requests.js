@@ -221,45 +221,63 @@ router.put('/:id/approve', async (req, res) => {
     }
 
     // Add player to rankings with 0 points if not already present
-    // Find the matching category
-    const categoryResult = await db.query(`
-      SELECT id FROM categories
-      WHERE UPPER(game_type) = UPPER($1)
-        AND UPPER(level) = UPPER($2)
-    `, [request.game_mode_name, request.requested_ranking]);
+    // This is non-blocking - if it fails, the approval still proceeds
+    try {
+      // Find the matching category
+      const categoryResult = await db.query(`
+        SELECT id FROM categories
+        WHERE UPPER(game_type) = UPPER($1)
+          AND UPPER(level) = UPPER($2)
+      `, [request.game_mode_name, request.requested_ranking]);
 
-    if (categoryResult.rows.length > 0) {
-      const categoryId = categoryResult.rows[0].id;
+      if (categoryResult.rows.length > 0) {
+        const categoryId = categoryResult.rows[0].id;
 
-      // Determine current season
-      const seasonYear = month >= 8 ? year : year - 1;
-      const currentSeason = `${seasonYear}-${seasonYear + 1}`;
+        // Determine current season
+        const seasonYear = month >= 8 ? year : year - 1;
+        const currentSeason = `${seasonYear}-${seasonYear + 1}`;
 
-      // Check if player already has a ranking for this category/season
-      const existingRanking = await db.query(`
-        SELECT id FROM rankings
-        WHERE REPLACE(UPPER(licence), ' ', '') = REPLACE(UPPER($1), ' ', '')
-          AND category_id = $2
-          AND season = $3
-      `, [request.licence, categoryId, currentSeason]);
+        // Check if player exists in players table (required for foreign key)
+        const playerExists = await db.query(`
+          SELECT licence FROM players
+          WHERE REPLACE(UPPER(licence), ' ', '') = REPLACE(UPPER($1), ' ', '')
+        `, [request.licence]);
 
-      if (existingRanking.rows.length === 0) {
-        // Get current max rank position for this category/season
-        const maxRankResult = await db.query(`
-          SELECT COALESCE(MAX(rank_position), 0) as max_rank
-          FROM rankings
-          WHERE category_id = $1 AND season = $2
-        `, [categoryId, currentSeason]);
-        const newRankPosition = maxRankResult.rows[0].max_rank + 1;
+        if (playerExists.rows.length > 0) {
+          const actualLicence = playerExists.rows[0].licence;
 
-        // Insert ranking with 0 points (player starts at bottom)
-        await db.query(`
-          INSERT INTO rankings (category_id, season, licence, total_match_points, avg_moyenne, best_serie, rank_position, tournament_1_points, tournament_2_points, tournament_3_points)
-          VALUES ($1, $2, $3, 0, 0, 0, $4, NULL, NULL, NULL)
-        `, [categoryId, currentSeason, request.licence, newRankPosition]);
+          // Check if player already has a ranking for this category/season
+          const existingRanking = await db.query(`
+            SELECT id FROM rankings
+            WHERE REPLACE(UPPER(licence), ' ', '') = REPLACE(UPPER($1), ' ', '')
+              AND category_id = $2
+              AND season = $3
+          `, [request.licence, categoryId, currentSeason]);
 
-        console.log(`Added ${request.player_name} to rankings for category ${categoryId} (${request.game_mode_name} ${request.requested_ranking}) at position ${newRankPosition}`);
+          if (existingRanking.rows.length === 0) {
+            // Get current max rank position for this category/season
+            const maxRankResult = await db.query(`
+              SELECT COALESCE(MAX(rank_position), 0) as max_rank
+              FROM rankings
+              WHERE category_id = $1 AND season = $2
+            `, [categoryId, currentSeason]);
+            const newRankPosition = maxRankResult.rows[0].max_rank + 1;
+
+            // Insert ranking with 0 points (player starts at bottom)
+            await db.query(`
+              INSERT INTO rankings (category_id, season, licence, total_match_points, avg_moyenne, best_serie, rank_position, tournament_1_points, tournament_2_points, tournament_3_points)
+              VALUES ($1, $2, $3, 0, 0, 0, $4, NULL, NULL, NULL)
+            `, [categoryId, currentSeason, actualLicence, newRankPosition]);
+
+            console.log(`Added ${request.player_name} to rankings for category ${categoryId} (${request.game_mode_name} ${request.requested_ranking}) at position ${newRankPosition}`);
+          }
+        } else {
+          console.log(`Player ${request.licence} not found in players table - skipping ranking creation`);
+        }
       }
+    } catch (rankingError) {
+      // Don't fail the approval if ranking creation fails
+      console.error('Error adding player to rankings (non-blocking):', rankingError.message);
     }
 
     // Update request status to approved
