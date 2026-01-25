@@ -1690,14 +1690,16 @@ router.post('/send-finale-results', authenticateToken, async (req, res) => {
       );
     });
 
-    // Update tournament results_email_sent flag
-    await new Promise((resolve) => {
-      db.run(
-        `UPDATE tournaments SET results_email_sent = TRUE, results_email_sent_at = CURRENT_TIMESTAMP WHERE id = $1`,
-        [tournamentId],
-        () => resolve()
-      );
-    });
+    // Update tournament results_email_sent flag (only if NOT test mode and at least one email sent)
+    if (!testMode && sentResults.sent.length > 0) {
+      await new Promise((resolve) => {
+        db.run(
+          `UPDATE tournaments SET results_email_sent = TRUE, results_email_sent_at = CURRENT_TIMESTAMP WHERE id = $1`,
+          [tournamentId],
+          () => resolve()
+        );
+      });
+    }
 
     const modeLabel = testMode ? ' (MODE TEST)' : '';
     res.json({
