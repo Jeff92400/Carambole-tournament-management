@@ -808,12 +808,17 @@ router.get('/:id/results', authenticateToken, (req, res) => {
 
       console.log('Tournament found:', tournament);
 
-      // Get tournament results with club name and player first/last name
+      // Get tournament results with club name, player first/last name, and email
       db.all(
-        `SELECT tr.*, p.club as club_name, p.first_name, p.last_name, c.logo_filename as club_logo
+        `SELECT tr.*, p.club as club_name,
+                COALESCE(pc.first_name, p.first_name) as first_name,
+                COALESCE(pc.last_name, p.last_name) as last_name,
+                c.logo_filename as club_logo,
+                pc.email
          FROM tournament_results tr
-         LEFT JOIN players p ON tr.licence = p.licence
-         LEFT JOIN clubs c ON REPLACE(REPLACE(REPLACE(UPPER(p.club), ' ', ''), '.', ''), '-', '') = REPLACE(REPLACE(REPLACE(UPPER(c.name), ' ', ''), '.', ''), '-', '')
+         LEFT JOIN players p ON REPLACE(tr.licence, ' ', '') = REPLACE(p.licence, ' ', '')
+         LEFT JOIN player_contacts pc ON REPLACE(tr.licence, ' ', '') = REPLACE(pc.licence, ' ', '')
+         LEFT JOIN clubs c ON REPLACE(REPLACE(REPLACE(UPPER(COALESCE(pc.club, p.club)), ' ', ''), '.', ''), '-', '') = REPLACE(REPLACE(REPLACE(UPPER(c.name), ' ', ''), '.', ''), '-', '')
          WHERE tr.tournament_id = ?
          ORDER BY tr.position ASC`,
         [tournamentId],
