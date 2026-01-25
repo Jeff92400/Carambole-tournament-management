@@ -349,6 +349,7 @@
       <div class="tab tooltip" data-tab="compose" data-tooltip="Email avec texte libre et destinataires à sélectionner depuis la base joueurs">Composer</div>
       <div class="tab tooltip" data-tab="relances" data-tooltip="Rappels d'inscription par tournois et finales">Relances</div>
       <div class="tab tooltip" data-tab="results" data-tooltip="Classement à l'issue de chaque rencontre">Résultats Tournoi</div>
+      <div class="tab tooltip" data-tab="finale-results" data-tooltip="Résultats de la finale avec podium">Résultats Finale</div>
       <div class="tab tooltip" data-tab="contacts" data-tooltip="Modification infos joueur">Gestion Contacts</div>
       <div class="tab tooltip" data-tab="templates" data-tooltip="Emails type à composer et à utiliser pour relance et convocation">Templates</div>
       <div class="tab tooltip" data-tab="history" data-tooltip="Logs d'envois des emails">Historique</div>
@@ -926,6 +927,114 @@
       </div>
     </div>
 
+    <!-- TAB: Finale Results -->
+    <div id="tab-finale-results" class="tab-content">
+      <div class="card">
+        <h3>🏆 Envoyer les Résultats d'une Finale</h3>
+        <p style="color: #666; margin-bottom: 20px;">
+          Sélectionnez une finale importée pour envoyer les résultats avec le podium à tous les participants par email.
+        </p>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+          <!-- Left: Finale Selection -->
+          <div>
+            <label style="display: block; font-weight: bold; margin-bottom: 10px;">Sélectionner une finale importée</label>
+            <select id="finaleResultsSelect" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
+              <option value="">-- Choisir une finale --</option>
+            </select>
+
+            <div id="finaleInfo" style="display: none; margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+              <h4 style="margin: 0 0 10px 0;" id="finaleInfoTitle">-</h4>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 14px;">
+                <div><strong>Date:</strong> <span id="finaleInfoDate">-</span></div>
+                <div><strong>Lieu:</strong> <span id="finaleInfoLieu">-</span></div>
+                <div><strong>Mode:</strong> <span id="finaleInfoMode">-</span></div>
+                <div><strong>Catégorie:</strong> <span id="finaleInfoCategory">-</span></div>
+                <div><strong>Participants:</strong> <span id="finaleInfoParticipants">-</span></div>
+                <div><strong>Emails disponibles:</strong> <span id="finaleInfoEmails">-</span></div>
+              </div>
+            </div>
+
+            <!-- Podium Preview -->
+            <div id="finalePodiumPreview" style="display: none; margin-top: 20px;">
+              <h4>🏆 Aperçu du Podium</h4>
+              <div id="podiumPreviewContainer" style="display: flex; justify-content: center; gap: 10px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+                <!-- Filled dynamically -->
+              </div>
+            </div>
+
+            <div id="finaleResultsPreview" style="display: none; margin-top: 20px;">
+              <h4>Classement Complet</h4>
+              <div style="max-height: 250px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px;">
+                <table style="width: 100%; font-size: 13px;">
+                  <thead style="background: #f8f9fa; position: sticky; top: 0;">
+                    <tr>
+                      <th style="padding: 10px; text-align: left;">Pos</th>
+                      <th style="padding: 10px; text-align: left;">Joueur</th>
+                      <th style="padding: 10px; text-align: center;">Pts Match</th>
+                      <th style="padding: 10px; text-align: center;">Moyenne</th>
+                      <th style="padding: 10px; text-align: center;">Email</th>
+                    </tr>
+                  </thead>
+                  <tbody id="finaleResultsPreviewBody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right: Email Customization -->
+          <div>
+            <div style="margin-bottom: 15px;">
+              <label style="display: block; font-weight: bold; margin-bottom: 5px;">Texte d'introduction</label>
+              <div id="finaleResultsIntroTextEditor"></div>
+            </div>
+
+            <div style="margin-bottom: 15px;">
+              <label style="display: block; font-weight: bold; margin-bottom: 5px;">Texte de conclusion</label>
+              <div id="finaleResultsOutroTextEditor"></div>
+            </div>
+
+            <div class="template-vars" style="margin-bottom: 20px;">
+              <strong>Variables disponibles:</strong>
+              <code>{first_name}</code>
+              <code>{last_name}</code>
+              <code>{finale_name}</code>
+              <code>{finale_date}</code>
+              <code>{finale_lieu}</code>
+              <code>{organization_name}</code>
+              <code>{organization_short_name}</code>
+            </div>
+
+            <!-- Summary Email Option -->
+            <div style="background: #e7f3ff; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+              <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                <input type="checkbox" id="finaleCcCheck" checked style="width: 18px; height: 18px;">
+                <strong>📋 Récapitulatif</strong> - Envoyer un email de synthèse
+              </label>
+              <div id="finaleCcEmailInput" style="margin-top: 10px;">
+                <input type="email" id="finaleCcEmail" value="cdbhs92@gmail.com" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+              </div>
+            </div>
+
+            <!-- Test Mode -->
+            <div style="background: #fff3cd; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+              <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                <input type="checkbox" id="finaleTestModeCheck" style="width: 18px; height: 18px;">
+                <strong>Mode Test</strong> - Envoyer uniquement à mon adresse
+              </label>
+              <div id="finaleTestEmailInput" style="display: none; margin-top: 10px;">
+                <input type="email" id="finaleTestEmail" placeholder="votre.email@exemple.com" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+              </div>
+            </div>
+
+            <button class="btn" id="sendFinaleResultsBtn" style="width: 100%; padding: 15px; font-size: 16px; background: #1F4788;" disabled>
+              🏆 Envoyer les Résultats de la Finale
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- TAB: Contacts Management -->
     <div id="tab-contacts" class="tab-content">
       <!-- Settings Section -->
@@ -1493,6 +1602,8 @@
     const quillRelanceTemplateIntro = new Quill('#relanceTemplateIntroEditor', { theme: 'snow', placeholder: 'Message d\'introduction...', modules: { toolbar: quillToolbar } });
     const quillRelanceTemplateOutro = new Quill('#relanceTemplateOutroEditor', { theme: 'snow', placeholder: 'Message de conclusion...', modules: { toolbar: quillToolbar } });
     const quillClubReminderBody = new Quill('#clubReminderBodyEditor', { theme: 'snow', placeholder: 'Corps du message...', modules: { toolbar: quillToolbar } });
+    const quillFinaleResultsIntroText = new Quill('#finaleResultsIntroTextEditor', { theme: 'snow', placeholder: 'Texte d\'introduction...', modules: { toolbar: quillToolbar } });
+    const quillFinaleResultsOutroText = new Quill('#finaleResultsOutroTextEditor', { theme: 'snow', placeholder: 'Texte de conclusion...', modules: { toolbar: quillToolbar } });
 
     // Get user role
     let userRole = 'viewer';
@@ -1532,6 +1643,7 @@
         // Load data for specific tabs
         if (tab.dataset.tab === 'relances') loadRelanceTemplates();
         if (tab.dataset.tab === 'results') loadImportedTournaments();
+        if (tab.dataset.tab === 'finale-results') loadImportedFinales();
         if (tab.dataset.tab === 'contacts') { loadAllContacts(); loadClubEmails(); }
         if (tab.dataset.tab === 'templates') {
           loadConvocationTemplate();
@@ -4830,6 +4942,239 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
     document.getElementById('resultsScheduleDate').addEventListener('input', () => {
       const hasDate = document.getElementById('resultsScheduleDate').value;
       document.getElementById('scheduleResultsBtn').disabled = !hasDate || !selectedTournamentData;
+    });
+
+    // ==================== FINALE RESULTS ====================
+
+    let selectedFinaleData = null;
+    let finaleResults = [];
+
+    async function loadImportedFinales() {
+      try {
+        // Load tournaments with tournament_number = 4 (finales)
+        const response = await fetch(`${API_URL}/tournaments?finale=true`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (!response.ok) throw new Error('Failed to load finales');
+
+        const tournaments = await response.json();
+        // Filter for finales only (tournament_number = 4)
+        const finales = tournaments.filter(t => t.tournament_number === 4);
+
+        const select = document.getElementById('finaleResultsSelect');
+        select.innerHTML = '<option value="">-- Choisir une finale --</option>';
+
+        // Group by season
+        const bySeason = {};
+        finales.forEach(t => {
+          const season = t.season || 'Autre';
+          if (!bySeason[season]) bySeason[season] = [];
+          bySeason[season].push(t);
+        });
+
+        // Sort seasons descending and add to select
+        Object.keys(bySeason).sort().reverse().forEach(season => {
+          const optgroup = document.createElement('optgroup');
+          optgroup.label = `Saison ${season}`;
+          bySeason[season].forEach(t => {
+            const option = document.createElement('option');
+            option.value = t.id;
+            const date = t.tournament_date ? new Date(t.tournament_date).toLocaleDateString('fr-FR') : '';
+            option.textContent = `${t.display_name} - Finale - ${date} (${t.player_count} joueurs)`;
+            option.dataset.tournament = JSON.stringify(t);
+            optgroup.appendChild(option);
+          });
+          select.appendChild(optgroup);
+        });
+
+        // Load summary email into finale CC field
+        try {
+          const settingsResponse = await fetch(`${API_URL}/settings/app/summary_email`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (settingsResponse.ok) {
+            const data = await settingsResponse.json();
+            document.getElementById('finaleCcEmail').value = data.value || 'cdbhs92@gmail.com';
+          }
+        } catch (e) { /* ignore */ }
+
+      } catch (error) {
+        console.error('Error loading finales:', error);
+      }
+    }
+
+    document.getElementById('finaleResultsSelect').addEventListener('change', async (e) => {
+      const finaleId = e.target.value;
+      const infoDiv = document.getElementById('finaleInfo');
+      const podiumDiv = document.getElementById('finalePodiumPreview');
+      const previewDiv = document.getElementById('finaleResultsPreview');
+      const sendBtn = document.getElementById('sendFinaleResultsBtn');
+
+      if (!finaleId) {
+        infoDiv.style.display = 'none';
+        podiumDiv.style.display = 'none';
+        previewDiv.style.display = 'none';
+        sendBtn.disabled = true;
+        selectedFinaleData = null;
+        return;
+      }
+
+      try {
+        // Load finale details and results
+        const response = await fetch(`${API_URL}/tournaments/${finaleId}/results`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to load data');
+        }
+
+        const data = await response.json();
+        const tournament = data.tournament;
+
+        selectedFinaleData = tournament;
+        finaleResults = data.results || [];
+
+        // Sort results by match_points desc, then moyenne desc
+        finaleResults.sort((a, b) => {
+          if (b.match_points !== a.match_points) return b.match_points - a.match_points;
+          const moyA = a.reprises > 0 ? a.points / a.reprises : 0;
+          const moyB = b.reprises > 0 ? b.points / b.reprises : 0;
+          return moyB - moyA;
+        });
+
+        // Count emails
+        const emailCount = finaleResults.filter(r => r.email && r.email.includes('@')).length;
+
+        // Update info section
+        document.getElementById('finaleInfoTitle').textContent = tournament.display_name || '-';
+        document.getElementById('finaleInfoDate').textContent = tournament.tournament_date ? new Date(tournament.tournament_date).toLocaleDateString('fr-FR') : '-';
+        document.getElementById('finaleInfoLieu').textContent = tournament.location || '-';
+        document.getElementById('finaleInfoMode').textContent = tournament.game_type || '-';
+        document.getElementById('finaleInfoCategory').textContent = tournament.level || '-';
+        document.getElementById('finaleInfoParticipants').textContent = finaleResults.length;
+        document.getElementById('finaleInfoEmails').textContent = emailCount;
+
+        infoDiv.style.display = 'block';
+
+        // Update podium preview (top 3)
+        if (finaleResults.length >= 3) {
+          const podiumContainer = document.getElementById('podiumPreviewContainer');
+          const medals = ['🥇', '🥈', '🥉'];
+          const topThree = finaleResults.slice(0, 3);
+
+          podiumContainer.innerHTML = topThree.map((r, idx) => {
+            const playerName = r.first_name && r.last_name
+              ? `${r.first_name} ${r.last_name}`
+              : r.player_name;
+            const moyenne = r.reprises > 0 ? (r.points / r.reprises).toFixed(3) : '0.000';
+            return `
+              <div style="text-align: center; padding: 10px; background: ${idx === 0 ? '#FFFBEB' : idx === 1 ? '#F9FAFB' : '#FEF3E7'}; border-radius: 8px; min-width: 120px;">
+                <div style="font-size: 28px;">${medals[idx]}</div>
+                <div style="font-weight: 600; font-size: 13px; margin-top: 5px;">${playerName}</div>
+                <div style="font-size: 11px; color: #666;">${r.match_points} pts · Moy: ${moyenne}</div>
+              </div>
+            `;
+          }).join('');
+
+          podiumDiv.style.display = 'block';
+        } else {
+          podiumDiv.style.display = 'none';
+        }
+
+        // Update results preview
+        const tbody = document.getElementById('finaleResultsPreviewBody');
+        tbody.innerHTML = '';
+
+        finaleResults.forEach((r, idx) => {
+          const playerName = r.first_name && r.last_name
+            ? `${r.first_name} ${r.last_name}`
+            : r.player_name;
+          const moyenne = r.reprises > 0 ? (r.points / r.reprises).toFixed(3) : '0.000';
+          const row = document.createElement('tr');
+          if (idx < 3) row.style.background = idx === 0 ? '#FFFBEB' : idx === 1 ? '#F9FAFB' : '#FEF3E7';
+          row.innerHTML = `
+            <td style="padding: 8px; font-weight: ${idx < 3 ? 'bold' : 'normal'};">${idx + 1}</td>
+            <td style="padding: 8px;">${playerName}</td>
+            <td style="padding: 8px; text-align: center;">${r.match_points}</td>
+            <td style="padding: 8px; text-align: center;">${moyenne}</td>
+            <td style="padding: 8px; text-align: center;">${r.email ? '✅' : '❌'}</td>
+          `;
+          tbody.appendChild(row);
+        });
+
+        previewDiv.style.display = 'block';
+        sendBtn.disabled = emailCount === 0;
+
+      } catch (error) {
+        console.error('Error loading finale data:', error);
+        showError('Erreur: ' + error.message);
+      }
+    });
+
+    // Toggle test mode input visibility
+    document.getElementById('finaleTestModeCheck').addEventListener('change', (e) => {
+      document.getElementById('finaleTestEmailInput').style.display = e.target.checked ? 'block' : 'none';
+    });
+
+    // Send finale results
+    document.getElementById('sendFinaleResultsBtn').addEventListener('click', async () => {
+      if (!selectedFinaleData) {
+        showError('Sélectionnez une finale');
+        return;
+      }
+
+      const testMode = document.getElementById('finaleTestModeCheck').checked;
+      const testEmail = testMode ? document.getElementById('finaleTestEmail').value.trim() : null;
+
+      if (testMode && !testEmail) {
+        showError('Email de test requis en mode test');
+        return;
+      }
+
+      const emailCount = finaleResults.filter(r => r.email && r.email.includes('@')).length;
+      const modeLabel = testMode ? ` (MODE TEST vers ${testEmail})` : '';
+      const confirmMsg = testMode
+        ? `Envoyer un email de test à ${testEmail} ?`
+        : `Envoyer les résultats de la finale à ${emailCount} participant(s) avec email ?`;
+
+      if (!confirm(confirmMsg)) return;
+
+      const btn = document.getElementById('sendFinaleResultsBtn');
+      btn.disabled = true;
+      btn.textContent = 'Envoi en cours...';
+
+      try {
+        const response = await fetch(`${API_URL}/emailing/send-finale-results`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            tournamentId: selectedFinaleData.id,
+            introText: quillFinaleResultsIntroText.root.innerHTML,
+            outroText: quillFinaleResultsOutroText.root.innerHTML,
+            ccEmail: document.getElementById('finaleCcCheck').checked ? document.getElementById('finaleCcEmail').value.trim() : null,
+            testMode,
+            testEmail
+          })
+        });
+
+        const result = await response.json();
+        if (response.ok) {
+          showSuccess(result.message);
+        } else {
+          showError(result.error || 'Erreur lors de l\'envoi');
+        }
+      } catch (error) {
+        showError('Erreur: ' + error.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '🏆 Envoyer les Résultats de la Finale';
+      }
     });
 
     // ==================== SUMMARY EMAIL SETTING ====================
