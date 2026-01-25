@@ -4778,7 +4778,10 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
 
         if (!response.ok) throw new Error('Failed to load tournaments');
 
-        const tournaments = await response.json();
+        const allTournaments = await response.json();
+        // Filter out finales (tournament_number = 4) - they have their own tab
+        const tournaments = allTournaments.filter(t => t.tournament_number !== 4);
+
         const select = document.getElementById('resultsTournamentSelect');
         select.innerHTML = '<option value="">-- Choisir un tournoi --</option>';
 
