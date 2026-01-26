@@ -3916,10 +3916,16 @@
           throw new Error(error.error || 'Erreur lors de la réintégration');
         }
 
+        // Reset UI state - close preview if open, show normal view
+        document.getElementById('forfaitPreview').style.display = 'none';
+        document.getElementById('forfaitPoulesContainer').style.display = 'block';
+        document.getElementById('forfaitActions').style.display = 'block';
+        forfaitPreviewData = null;
+
         // Reload forfait players list
         await loadForfaitPlayers(forfaitSelectedTournoi);
 
-        alert(`${playerName} a été réintégré. Cliquez sur "Régénérer les poules" pour mettre à jour les poules.`);
+        alert(`${playerName} a été réintégré.\n\nCliquez sur "Régénérer les poules" pour l'inclure dans les nouvelles poules.`);
       } catch (error) {
         console.error('Error reintegrating player:', error);
         alert('Erreur: ' + error.message);
