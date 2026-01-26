@@ -1500,20 +1500,23 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
       console.log(`Updated convoque status and convocation details for ${sentPlayers.length} players in tournament ${tournoiId}`);
 
       // Save full poule composition to convocation_poules table
-      // First, clear any existing poule data for this tournament
-      await new Promise((resolve, reject) => {
-        db.run(
-          `DELETE FROM convocation_poules WHERE tournoi_id = $1`,
-          [tournoiId],
-          (err) => {
-            if (err) reject(err);
-            else resolve();
-          }
-        );
-      });
+      // Safety check: only delete and re-insert if we have poules with players
+      const totalPlayersInPoules = (poules || []).reduce((sum, p) => sum + (p.players?.length || 0), 0);
+      if (totalPlayersInPoules > 0) {
+        // First, clear any existing poule data for this tournament
+        await new Promise((resolve, reject) => {
+          db.run(
+            `DELETE FROM convocation_poules WHERE tournoi_id = $1`,
+            [tournoiId],
+            (err) => {
+              if (err) reject(err);
+              else resolve();
+            }
+          );
+        });
 
-      // Insert all players from all poules
-      for (const poule of poules) {
+        // Insert all players from all poules
+        for (const poule of poules) {
         const locNum = poule.locationNum || '1';
         const loc = locations.find(l => l.locationNum === locNum) || locations[0];
         const fullAddress = loc ? [loc.street, loc.zip_code, loc.city].filter(Boolean).join(' ') : '';
@@ -1545,7 +1548,10 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
           });
         }
       }
-      console.log(`Saved ${poules.reduce((sum, p) => sum + p.players.length, 0)} players across ${poules.length} poules for tournament ${tournoiId}`);
+        console.log(`Saved ${poules.reduce((sum, p) => sum + p.players.length, 0)} players across ${poules.length} poules for tournament ${tournoiId}`);
+      } else {
+        console.warn(`[Send Convocations] Skipping poule save - no players in poules array for tournament ${tournoiId}`);
+      }
 
       // Mark convocation as sent on tournoi_ext
       await new Promise((resolve, reject) => {
@@ -1590,6 +1596,13 @@ router.post('/save-poules', authenticateToken, async (req, res) => {
 
   if (!tournoiId || !poules || !Array.isArray(poules)) {
     return res.status(400).json({ error: 'tournoiId and poules array required' });
+  }
+
+  // Safety check: don't delete if no poules to insert
+  const totalPlayersToInsert = poules.reduce((sum, p) => sum + (p.players?.length || 0), 0);
+  if (totalPlayersToInsert === 0) {
+    console.warn(`[Save Poules] Refusing to save empty poules for tournament ${tournoiId} - this would delete existing data`);
+    return res.status(400).json({ error: 'Cannot save empty poules - no players in poules array' });
   }
 
   try {
@@ -2925,6 +2938,13 @@ router.post('/poules/:tournoiId/regenerate', authenticateToken, async (req, res)
 
     // Save new poules to database only if not preview
     if (!previewOnly) {
+      // Safety check: ensure we have players to insert
+      const totalPlayersToSave = newPoules.reduce((sum, p) => sum + (p.players?.length || 0), 0);
+      if (totalPlayersToSave === 0) {
+        console.warn(`[Regenerate Poules] No players to save for tournament ${tournoiId} - aborting to preserve existing data`);
+        return res.status(400).json({ error: 'Cannot regenerate - no active players remain' });
+      }
+
       await new Promise((resolve, reject) => {
         db.run(`DELETE FROM convocation_poules WHERE tournoi_id = $1`, [tournoiId], (err) => {
           if (err) reject(err);
@@ -2947,6 +2967,7 @@ router.post('/poules/:tournoiId/regenerate', authenticateToken, async (req, res)
           });
         }
       }
+      console.log(`[Regenerate Poules] Saved ${totalPlayersToSave} players across ${newPoules.length} poules for tournament ${tournoiId}`);
     }
 
     // Log the action (only if not preview)
