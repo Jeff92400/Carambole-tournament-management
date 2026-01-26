@@ -3896,13 +3896,32 @@
 
     // Show configuration screen after regeneration
     async function showForfaitConfiguration(poules) {
+      console.log('[ForfaitConfig] Starting with poules:', poules);
+
       // Hide other sections
       document.getElementById('forfaitPoulesContainer').style.display = 'none';
       document.getElementById('forfaitActions').style.display = 'none';
       document.getElementById('forfaitPreview').style.display = 'none';
 
+      // If no poules provided, reload from database
+      if (!poules || poules.length === 0) {
+        console.log('[ForfaitConfig] No poules provided, reloading from server...');
+        try {
+          const response = await fetch(`${API_URL}/email/poules/${forfaitSelectedTournoi}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (response.ok) {
+            const data = await response.json();
+            poules = data.poules || [];
+            console.log('[ForfaitConfig] Reloaded poules:', poules.length);
+          }
+        } catch (e) {
+          console.error('[ForfaitConfig] Error reloading poules:', e);
+        }
+      }
+
       // Store poules for manipulation
-      forfaitConfigPoules = poules || forfaitCurrentPoules;
+      forfaitConfigPoules = poules || forfaitCurrentPoules || [];
 
       // Fetch tournament details
       try {
@@ -4042,13 +4061,18 @@
       const container = document.getElementById('forfaitConfigPoules');
       const numPoules = forfaitConfigPoules.length;
 
-      container.innerHTML = forfaitConfigPoules.map((poule, pouleIdx) => `
+      container.innerHTML = forfaitConfigPoules.map((poule, pouleIdx) => {
+        return `
         <div class="poule-card" data-poule="${poule.number}" style="border: 2px solid #28a745; border-radius: 8px; padding: 15px; background: white;">
           <h4 style="color: #28a745; margin: 0 0 10px 0;">Poule ${poule.number} (${poule.players.length} joueurs)</h4>
-          ${poule.players.map((p, idx) => `
+          ${poule.players.map((p, idx) => {
+            // Handle different data structures from API vs stored poules
+            const playerName = p.name || p.player_name || ((p.last_name || '') + ' ' + (p.first_name || '')).trim() || 'Joueur';
+            const playerRank = p.finalRank || p.rank || idx + 1;
+            return `
             <div class="poule-player" style="display: flex; align-items: center; gap: 8px; padding: 5px 0; border-bottom: 1px solid #eee;">
               <span style="font-weight: bold; color: #666; width: 25px;">${idx + 1}.</span>
-              <span style="flex: 1;">${p.last_name || ''} ${p.first_name || ''} <strong style="color: #1F4788;">(${p.finalRank || p.rank || idx + 1})</strong></span>
+              <span style="flex: 1;">${playerName} <strong style="color: #1F4788;">(${playerRank})</strong></span>
               ${numPoules > 1 ? `
                 <select class="forfait-move-player" data-licence="${p.licence}" data-from-poule="${poule.number}"
                         onchange="moveForfaitPlayer(this)"
@@ -4060,7 +4084,7 @@
                 </select>
               ` : ''}
             </div>
-          `).join('')}
+          `;}).join('')}
           <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #ddd;">
             <select class="forfait-poule-location" data-poule="${poule.number}"
                     style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
@@ -4068,7 +4092,7 @@
             </select>
           </div>
         </div>
-      `).join('');
+      `;}).join('');
 
       // Populate poule location dropdowns with clubs
       loadForfaitPouleLocationOptions();
