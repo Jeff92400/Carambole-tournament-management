@@ -2635,31 +2635,42 @@ router.get('/poules/:tournoiId', authenticateToken, async (req, res) => {
     const forfaitLicences = new Set(forfaits.map(f => f.licence?.replace(/\s/g, '')));
 
     // Get all inscribed players (not forfait) to check for missing players
-    const inscribedPlayers = await new Promise((resolve, reject) => {
-      db.all(`
-        SELECT i.licence, i.nom, i.prenom, i.club
-        FROM inscriptions i
-        WHERE i.tournoi_id = $1
-          AND i.statut = 'inscrit'
-          AND (i.forfait IS NULL OR i.forfait = 0)
-          AND UPPER(i.licence) NOT LIKE 'TEST%'
-      `, [tournoiId], (err, rows) => {
-        if (err) reject(err);
-        else resolve(rows || []);
+    // Wrapped in try-catch to not break the whole endpoint if this fails
+    let missingPlayers = [];
+    try {
+      const inscribedPlayers = await new Promise((resolve, reject) => {
+        db.all(`
+          SELECT i.licence, i.nom, i.prenom, i.club
+          FROM inscriptions i
+          WHERE i.tournoi_id = $1
+            AND i.statut = 'inscrit'
+            AND (i.forfait IS NULL OR i.forfait = 0)
+            AND UPPER(i.licence) NOT LIKE 'TEST%'
+        `, [tournoiId], (err, rows) => {
+          if (err) {
+            console.error('[Get Poules] Error fetching inscribed players:', err);
+            reject(err);
+          } else {
+            resolve(rows || []);
+          }
+        });
       });
-    });
 
-    // Find licences in poules
-    const poulesLicences = new Set(poules.map(p => p.licence?.replace(/\s/g, '')));
+      // Find licences in poules
+      const poulesLicences = new Set(poules.map(p => p.licence?.replace(/\s/g, '')));
 
-    // Find inscribed players who are NOT in the stored poules
-    const missingPlayers = inscribedPlayers.filter(p =>
-      !poulesLicences.has(p.licence?.replace(/\s/g, ''))
-    ).map(p => ({
-      licence: p.licence,
-      name: `${p.nom || ''} ${p.prenom || ''}`.trim(),
-      club: p.club
-    }));
+      // Find inscribed players who are NOT in the stored poules
+      missingPlayers = inscribedPlayers.filter(p =>
+        !poulesLicences.has(p.licence?.replace(/\s/g, ''))
+      ).map(p => ({
+        licence: p.licence,
+        name: `${p.nom || ''} ${p.prenom || ''}`.trim(),
+        club: p.club
+      }));
+    } catch (inscribedErr) {
+      console.error('[Get Poules] Failed to fetch inscribed players, continuing without missing players check:', inscribedErr);
+      // Continue without the missing players feature
+    }
 
     // Group by poule number and add forfait status
     const poulesGrouped = {};
