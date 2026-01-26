@@ -1165,6 +1165,7 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
   const emailSettings = await getEmailTemplateSettings();
   const primaryColor = emailSettings.primary_color || '#1F4788';
   const orgShortName = emailSettings.organization_short_name || 'CDBHS';
+  const baseUrl = process.env.BASE_URL || 'https://cdbhs-tournament-management-production.up.railway.app';
 
   // Process each player
   for (const player of players) {
@@ -1266,7 +1267,9 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
             <div style="background: ${primaryColor}; color: white; padding: 20px; text-align: center;">
-              <h1 style="margin: 0; font-size: 24px;">CONVOCATION</h1>
+              <img src="${baseUrl}/logo.png?v=${Date.now()}" alt="${orgShortName}" style="height: 50px; margin-bottom: 10px;" onerror="this.style.display='none'">
+              <h1 style="margin: 0; font-size: 24px;">${orgShortName}</h1>
+              <p style="margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">CONVOCATION</p>
             </div>
 
             <div style="padding: 20px; background: #f8f9fa;">
@@ -2546,7 +2549,7 @@ router.post('/fix-corrupted-names', authenticateToken, async (req, res) => {
       db.run(`
         UPDATE convocation_poules
         SET player_name = (
-          SELECT CONCAT(p.last_name, ' ', p.first_name)
+          SELECT CONCAT(p.first_name, ' ', p.last_name)
           FROM players p
           WHERE REPLACE(p.licence, ' ', '') = REPLACE(convocation_poules.licence, ' ', '')
         )

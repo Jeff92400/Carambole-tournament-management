@@ -604,10 +604,11 @@
         </div>
       </div>
 
-      <div class="action-buttons">
+      <div class="action-buttons" style="flex-wrap: wrap; gap: 10px;">
         <button class="btn" id="backToStep2Btn" style="background: #6c757d;">Modifier la liste</button>
         <button class="btn btn-success" id="generateExcelBtn" style="background: #28a745;">Générer le fichier Excel</button>
         <button class="btn" id="generateSummaryPdfBtn" style="background: #dc3545; color: white;">Générer PDF Récapitulatif</button>
+        <button class="btn" id="goToEmailBtn" style="background: #17a2b8; color: white;">Envoyer les convocations</button>
       </div>
     </div>
 
@@ -1841,6 +1842,9 @@
         lastMinutePlayers = [];
         selectedLastMinutePlayer = null;
 
+        // Reset forfait flow flag (normal flow)
+        cameFromForfait = false;
+
         renderPlayerLists();
         goToStep(2);
 
@@ -2150,7 +2154,14 @@
     }
 
     document.getElementById('backToStep1Btn').addEventListener('click', () => goToStep(1));
-    document.getElementById('backToStep2Btn').addEventListener('click', () => goToStep(2));
+    document.getElementById('backToStep2Btn').addEventListener('click', () => {
+      if (cameFromForfait) {
+        // Return to forfait modal instead of Step 2
+        openForfaitModal();
+      } else {
+        goToStep(2);
+      }
+    });
     document.getElementById('backToStep3Btn').addEventListener('click', () => goToStep(3));
     document.getElementById('newGenerationBtn').addEventListener('click', () => {
       // Reset state
@@ -2527,22 +2538,7 @@
           a.remove();
           window.URL.revokeObjectURL(url);
 
-          // Store data for email functionality
-          const selectedDistance = document.getElementById('distanceSelect')?.value || 'normale';
-          storeGenerationData({
-            poules: poules,
-            tournamentDate: matchingTournoi?.debut || null,
-            tournoiId: matchingTournoi?.tournoi_id || null,
-            locations: [
-              location1 ? { ...location1, startTime: startTime1, locationNum: '1' } : null,
-              location2 ? { ...location2, startTime: startTime2, locationNum: '2' } : null
-            ].filter(Boolean),
-            gameParams: currentGameParams,
-            selectedDistance: selectedDistance
-          });
-
-          goToStep(4);
-          updateEmailStats();
+          // Excel downloaded successfully - stay on Step 3
         } else {
           const error = await response.json();
           document.getElementById('errorMessage').textContent = error.error || 'Erreur lors de la génération';
@@ -2553,6 +2549,71 @@
         document.getElementById('errorMessage').textContent = 'Erreur lors de la génération du fichier';
         document.getElementById('errorMessage').style.display = 'block';
       }
+    });
+
+    // Go to Email screen (Step 4)
+    document.getElementById('goToEmailBtn').addEventListener('click', () => {
+      const config = getPouleConfig(selectedPlayers.length);
+      const poules = currentPoules.length > 0 ? currentPoules : distributeSerpentine(selectedPlayers, config.poules);
+
+      // Get selected locations and times
+      const location1Select = document.getElementById('locationSelect1');
+      const loc1Option = location1Select.options[location1Select.selectedIndex];
+      const location1 = location1Select.value ? {
+        id: location1Select.value,
+        name: loc1Option.dataset.name,
+        street: loc1Option.dataset.street,
+        city: loc1Option.dataset.city,
+        zip_code: loc1Option.dataset.zipcode,
+        phone: loc1Option.dataset.phone,
+        email: loc1Option.dataset.email,
+        address: loc1Option.dataset.address
+      } : null;
+
+      const location2Select = document.getElementById('locationSelect2');
+      const loc2Option = location2Select.options[location2Select.selectedIndex];
+      const location2 = location2Select.value ? {
+        id: location2Select.value,
+        name: loc2Option.dataset.name,
+        street: loc2Option.dataset.street,
+        city: loc2Option.dataset.city,
+        zip_code: loc2Option.dataset.zipcode,
+        phone: loc2Option.dataset.phone,
+        email: loc2Option.dataset.email,
+        address: loc2Option.dataset.address
+      } : null;
+
+      const startTime1 = document.getElementById('startTime1').value || '13:30';
+      const startTime2 = document.getElementById('startTime2').value || '13:30';
+
+      // Get poule location assignments
+      const pouleAssignments = {};
+      document.querySelectorAll('.poule-location').forEach(select => {
+        const pouleNum = select.dataset.poule;
+        pouleAssignments[pouleNum] = select.value; // '1' or '2'
+      });
+
+      // Add location assignment to each poule
+      poules.forEach(poule => {
+        poule.locationNum = pouleAssignments[poule.number] || '1';
+      });
+
+      // Store data for email functionality
+      const selectedDistance = document.getElementById('distanceSelect')?.value || 'normale';
+      storeGenerationData({
+        poules: poules,
+        tournamentDate: matchingTournoi?.debut || null,
+        tournoiId: matchingTournoi?.tournoi_id || null,
+        locations: [
+          location1 ? { ...location1, startTime: startTime1, locationNum: '1' } : null,
+          location2 ? { ...location2, startTime: startTime2, locationNum: '2' } : null
+        ].filter(Boolean),
+        gameParams: currentGameParams,
+        selectedDistance: selectedDistance
+      });
+
+      goToStep(4);
+      updateEmailStats();
     });
 
     // Generate Summary PDF (neutral - no personalization)
@@ -3571,6 +3632,7 @@
     let forfaitReplacementPlayer = null;
     let forfaitPreviewData = null;
     let forfaitTournamentData = null; // Store tournament info for transition to Step 3
+    let cameFromForfait = false; // Track if we came from forfait management to Step 3
 
     // Open forfait management modal - setup when DOM ready
     function setupForfaitListeners() {
@@ -4002,6 +4064,9 @@
 
     // Transition from forfait management to Step 3 (convocation flow)
     async function transitionToStep3(regenerateResult) {
+      // Mark that we came from forfait management
+      cameFromForfait = true;
+
       const t = forfaitTournamentData;
       if (!t) {
         alert('Erreur: données du tournoi manquantes');
