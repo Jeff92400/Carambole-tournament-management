@@ -3957,6 +3957,8 @@
 
       // Show configuration section
       document.getElementById('forfaitConfigSection').style.display = 'block';
+      console.log('[ForfaitConfig] Configuration section now visible');
+      alert('Configuration loaded with ' + forfaitConfigPoules.length + ' poules');
     }
 
     // Load game parameters for forfait configuration
@@ -4151,12 +4153,15 @@
 
     // Add second location for forfait
     function addForfaitLocation2() {
+      console.log('[DEBUG] addForfaitLocation2 called');
+      alert('addForfaitLocation2 clicked');
       document.getElementById('forfaitLocation2Container').style.display = 'block';
       document.getElementById('forfaitAddLocation2Btn').style.display = 'none';
     }
 
     // Remove second location for forfait
     function removeForfaitLocation2() {
+      console.log('[DEBUG] removeForfaitLocation2 called');
       document.getElementById('forfaitLocation2Container').style.display = 'none';
       document.getElementById('forfaitAddLocation2Btn').style.display = 'inline-block';
       document.getElementById('forfaitLocationSelect2').value = '';
@@ -4164,6 +4169,8 @@
 
     // Back to poules view from forfait config
     function backToForfaitPoules() {
+      console.log('[DEBUG] backToForfaitPoules called');
+      alert('backToForfaitPoules clicked');
       document.getElementById('forfaitConfigSection').style.display = 'none';
       document.getElementById('forfaitPoulesContainer').style.display = 'block';
       document.getElementById('forfaitActions').style.display = 'block';
