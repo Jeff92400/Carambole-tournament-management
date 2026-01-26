@@ -3451,6 +3451,7 @@
     let forfaitCurrentPoules = [];
     let forfaitReplacementPlayer = null;
     let forfaitPreviewData = null;
+    let forfaitTournamentData = null; // Store tournament info for transition to Step 3
 
     // Open forfait management modal - setup when DOM ready
     function setupForfaitListeners() {
@@ -3639,6 +3640,7 @@
         }
 
         forfaitCurrentPoules = data.poules;
+        forfaitTournamentData = data.tournament; // Store for later use
 
         // Display tournament info
         const t = data.tournament;
@@ -3870,21 +3872,121 @@
 
         const result = await response.json();
 
-        alert(`Poules enregistrées avec succès!\n${result.playerCount} joueur(s) répartis en ${result.pouleCount} poule(s)`);
-
-        // Reload poules
-        forfaitSelectedPlayers.clear();
-        forfaitReplacementPlayer = null;
-        forfaitPreviewData = null;
-        await loadForfaitPoules(forfaitSelectedTournoi);
+        // Transition to Step 3 instead of staying in forfait modal
+        transitionToStep3(result);
 
       } catch (error) {
         console.error('Error regenerating poules:', error);
         alert('Erreur: ' + error.message);
-      } finally {
         btn.disabled = false;
         btn.textContent = '✓ Confirmer et enregistrer';
       }
+    }
+
+    // Transition from forfait management to Step 3 (convocation flow)
+    function transitionToStep3(regenerateResult) {
+      const t = forfaitTournamentData;
+      if (!t) {
+        alert('Erreur: données du tournoi manquantes');
+        return;
+      }
+
+      // Close forfait modal
+      closeForfaitModal();
+
+      // Reset forfait state
+      forfaitSelectedPlayers.clear();
+      forfaitReplacementPlayer = null;
+      forfaitPreviewData = null;
+
+      // Set up global variables for Step 3
+      // Extract tournament number from nom (e.g., "Tournoi 3" -> "3")
+      const tournamentNumMatch = t.nom?.match(/(\d+)/);
+      currentTournament = tournamentNumMatch ? tournamentNumMatch[1] : '1';
+
+      // Set up category
+      currentCategory = {
+        display_name: `${t.mode} - ${t.categorie}`,
+        game_type: t.mode,
+        level: t.categorie
+      };
+
+      // Set up matchingTournoi for date/lieu display
+      matchingTournoi = {
+        tournoi_id: forfaitSelectedTournoi,
+        nom: t.nom,
+        debut: t.debut,
+        lieu: t.lieu
+      };
+
+      // Build selectedPlayers from regenerate result
+      selectedPlayers = [];
+      let rankIndex = 1;
+      regenerateResult.poules.forEach(poule => {
+        poule.players.forEach(player => {
+          selectedPlayers.push({
+            licence: player.licence,
+            name: player.name,
+            club: player.club,
+            rank: player.rank,
+            finalRank: rankIndex++,
+            isNouveau: player.isNouveau
+          });
+        });
+      });
+
+      // Fill summary elements
+      document.getElementById('summaryCategory').textContent = currentCategory.display_name;
+      const isFinale = t.nom?.toLowerCase().includes('finale') || currentTournament === '4';
+      document.getElementById('summaryTournament').textContent = isFinale ? 'Finale Départementale' : `Tournoi ${currentTournament}`;
+      window.currentCompetitionIsFinale = isFinale;
+
+      const dateStr = t.debut
+        ? new Date(t.debut).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+        : 'Non définie';
+      document.getElementById('summaryDate').textContent = dateStr;
+      document.getElementById('summaryLieu').textContent = t.lieu || 'Non défini';
+      document.getElementById('summaryPlayers').textContent = regenerateResult.playerCount;
+
+      // Calculate config description
+      const pouleDesc = regenerateResult.poules.map(p => `${p.players.length}`).join(', ');
+      document.getElementById('summaryConfig').textContent = `${regenerateResult.pouleCount} poules (${pouleDesc} joueurs)`;
+      document.getElementById('summaryTables').textContent = regenerateResult.pouleCount;
+
+      // Convert poules format for renderPoulePreview
+      const poulesForPreview = regenerateResult.poules.map(p => ({
+        number: p.number,
+        size: p.players.length,
+        players: p.players.map((player, idx) => ({
+          licence: player.licence,
+          name: player.name,
+          club: player.club,
+          finalRank: player.rank || 0,
+          pouleRank: idx + 1,
+          isNouveau: player.isNouveau
+        }))
+      }));
+
+      // Render poule preview
+      document.getElementById('poulePreviewTitle').innerHTML = 'Aperçu des Poules (Distribution Serpentine)';
+      renderPoulePreview(poulesForPreview);
+
+      // Pre-select location if available
+      if (t.lieu) {
+        preselectLocation(t.lieu);
+      }
+
+      // Reset second location
+      document.getElementById('location2Container').style.display = 'none';
+      document.getElementById('addLocation2Btn').style.display = 'inline-block';
+      document.getElementById('locationSelect2').value = '';
+
+      // Load game parameters
+      loadGameParameters();
+
+      // Show step indicators and navigate to step 3
+      document.getElementById('stepIndicatorContainer').style.display = 'flex';
+      goToStep(3);
     }
 
     // Resend convocations - navigate to the existing email screen with data pre-loaded
