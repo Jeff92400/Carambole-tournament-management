@@ -3748,17 +3748,19 @@
     }
 
     async function previewPoules() {
+      const missingWarningEl = document.getElementById('forfaitMissingPlayersWarning');
+      const hasMissingPlayers = missingWarningEl && missingWarningEl.style.display !== 'none';
+
       console.log('previewPoules called', {
         forfaitSelectedTournoi,
         forfaitSelectedPlayers: Array.from(forfaitSelectedPlayers),
-        forfaitReplacementPlayer
+        forfaitReplacementPlayer,
+        hasMissingPlayers,
+        missingWarningDisplay: missingWarningEl?.style.display
       });
 
-      // Check if there are missing players (shown in warning)
-      const hasMissingPlayers = document.getElementById('forfaitMissingPlayersWarning')?.style.display !== 'none';
-
       if (forfaitSelectedPlayers.size === 0 && !forfaitReplacementPlayer && !hasMissingPlayers) {
-        alert('Veuillez sélectionner au moins un joueur forfait');
+        alert('Veuillez sélectionner au moins un joueur forfait ou avoir des joueurs manquants à réintégrer');
         return;
       }
 
@@ -4590,10 +4592,18 @@
     async function regeneratePoules(withReplacement = false) {
       // This is now a fallback - main flow uses preview + confirm
       // Check if there are missing players (shown in warning)
-      const hasMissingPlayers = document.getElementById('forfaitMissingPlayersWarning')?.style.display !== 'none';
+      const missingWarningEl = document.getElementById('forfaitMissingPlayersWarning');
+      const hasMissingPlayers = missingWarningEl && missingWarningEl.style.display !== 'none';
+
+      console.log('regeneratePoules called', {
+        withReplacement,
+        forfaitSelectedPlayers: Array.from(forfaitSelectedPlayers),
+        hasMissingPlayers,
+        missingWarningDisplay: missingWarningEl?.style.display
+      });
 
       if (forfaitSelectedPlayers.size === 0 && !withReplacement && !hasMissingPlayers) {
-        alert('Veuillez sélectionner au moins un joueur forfait');
+        alert('Veuillez sélectionner au moins un joueur forfait ou avoir des joueurs manquants à réintégrer');
         return;
       }
 
