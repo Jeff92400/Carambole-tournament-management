@@ -3873,7 +3873,7 @@
         const result = await response.json();
 
         // Transition to Step 3 instead of staying in forfait modal
-        transitionToStep3(result);
+        await transitionToStep3(result);
 
       } catch (error) {
         console.error('Error regenerating poules:', error);
@@ -3884,11 +3884,31 @@
     }
 
     // Transition from forfait management to Step 3 (convocation flow)
-    function transitionToStep3(regenerateResult) {
+    async function transitionToStep3(regenerateResult) {
       const t = forfaitTournamentData;
       if (!t) {
         alert('Erreur: données du tournoi manquantes');
         return;
+      }
+
+      // Fetch inscriptions to get player emails BEFORE closing modal
+      try {
+        const inscResponse = await fetch(`${API_URL}/inscriptions?tournoi_id=${forfaitSelectedTournoi}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (inscResponse.ok) {
+          const inscData = await inscResponse.json();
+          playerEmails = {};
+          const inscriptions = Array.isArray(inscData) ? inscData : (inscData.inscriptions || []);
+          inscriptions.forEach(insc => {
+            const cleanLicence = insc.licence?.replace(/\s/g, '');
+            if (cleanLicence && insc.email) {
+              playerEmails[cleanLicence] = insc.email;
+            }
+          });
+        }
+      } catch (e) {
+        console.error('Error loading inscriptions for emails:', e);
       }
 
       // Close forfait modal
@@ -3920,17 +3940,28 @@
       };
 
       // Build selectedPlayers from regenerate result
+      // Include first_name, last_name, and email (needed by updateEmailStats in Step 4)
       selectedPlayers = [];
       let rankIndex = 1;
       regenerateResult.poules.forEach(poule => {
         poule.players.forEach(player => {
+          const nameParts = (player.name || '').trim().split(' ');
+          const firstName = nameParts[0] || '';
+          const lastName = nameParts.slice(1).join(' ') || '';
+          const cleanLicence = player.licence?.replace(/\s/g, '');
+          const email = playerEmails[cleanLicence] || '';
+
           selectedPlayers.push({
             licence: player.licence,
+            first_name: firstName,
+            last_name: lastName,
             name: player.name,
             club: player.club,
             rank: player.rank,
             finalRank: rankIndex++,
-            isNouveau: player.isNouveau
+            isNouveau: player.isNouveau,
+            isNew: player.isNouveau,
+            email: email
           });
         });
       });
