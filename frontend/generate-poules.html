@@ -3669,6 +3669,9 @@
         renderForfaitPoules(data.poules);
         document.getElementById('forfaitPoulesContainer').style.display = 'block';
         document.getElementById('forfaitActions').style.display = 'block';
+
+        // Update button states (enables buttons if missing players exist)
+        updateForfaitSummary();
       } catch (error) {
         console.error('Error loading forfait poules:', error);
         document.getElementById('forfaitLoading').style.display = 'none';
@@ -3726,6 +3729,11 @@
       const summary = document.getElementById('forfaitSummary');
       const list = document.getElementById('forfaitList');
       const previewBtn = document.getElementById('previewPoulesBtn');
+      const regenBtn = document.getElementById('regeneratePoulesBtn');
+
+      // Check if there are missing players to reintegrate
+      const missingWarningEl = document.getElementById('forfaitMissingPlayersWarning');
+      const hasMissingPlayers = missingWarningEl && missingWarningEl.style.display !== 'none';
 
       if (forfaitSelectedPlayers.size > 0) {
         const names = [];
@@ -3739,9 +3747,16 @@
         if (list) list.textContent = names.join(', ');
         if (summary) summary.style.display = 'block';
         if (previewBtn) previewBtn.disabled = false;
+        if (regenBtn) regenBtn.disabled = false;
+      } else if (hasMissingPlayers) {
+        // Enable buttons when there are missing players to reintegrate
+        if (summary) summary.style.display = 'none';
+        if (previewBtn) previewBtn.disabled = false;
+        if (regenBtn) regenBtn.disabled = false;
       } else {
         if (summary) summary.style.display = 'none';
         if (previewBtn) previewBtn.disabled = true;
+        if (regenBtn) regenBtn.disabled = true;
       }
       // Close any open preview when selection changes
       closePreview();
