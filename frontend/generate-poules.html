@@ -3797,7 +3797,7 @@
         alert('Erreur: ' + error.message);
       } finally {
         if (btn) {
-          btn.disabled = forfaitSelectedPlayers.size === 0;
+          btn.disabled = false;
           btn.textContent = '👁️ Prévisualiser';
         }
       }
