@@ -2157,6 +2157,8 @@
     document.getElementById('backToStep2Btn').addEventListener('click', () => {
       if (cameFromForfait) {
         // Return to forfait modal instead of Step 2
+        // Hide Step 3 first
+        document.getElementById('step3').style.display = 'none';
         openForfaitModal();
       } else {
         goToStep(2);
