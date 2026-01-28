@@ -440,13 +440,14 @@
                 <th>Club</th>
                 <th>Email</th>
                 <th>Date d'envoi</th>
+                <th>Envois</th>
                 <th>Envoye par</th>
                 <th>Statut</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody id="trackingTable">
-              <tr><td colspan="8" class="empty-state">Chargement...</td></tr>
+              <tr><td colspan="9" class="empty-state">Chargement...</td></tr>
             </tbody>
           </table>
         </div>
@@ -810,7 +811,7 @@
       updateBatchActionBar();
 
       if (invitations.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="8" class="empty-state">
+        tbody.innerHTML = `<tr><td colspan="9" class="empty-state">
           <h4>Aucune invitation</h4>
           <p>Aucune invitation n'a encore ete envoyee.</p>
         </td></tr>`;
@@ -833,9 +834,8 @@
           day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
         }) : '-';
 
-        const resendInfo = inv.resend_count > 0
-          ? `<br><small style="color:#666">Renvoye ${inv.resend_count}x</small>`
-          : '';
+        // Number of sends: 1 (initial) + resend_count
+        const totalSends = 1 + (inv.resend_count || 0);
 
         // Only show checkbox for pending invitations
         const checkboxHtml = !inv.has_signed_up
@@ -848,7 +848,8 @@
             <td><strong>${inv.first_name || ''} ${inv.last_name || ''}</strong><br><small style="color:#666">${inv.licence || ''}</small></td>
             <td>${inv.club || '-'}</td>
             <td>${inv.email}</td>
-            <td>${sentDate}${resendInfo}</td>
+            <td>${sentDate}</td>
+            <td style="text-align: center;"><span style="background: ${totalSends > 1 ? '#fff3cd' : '#e8f5e9'}; padding: 3px 10px; border-radius: 12px; font-weight: 600;">${totalSends}</span></td>
             <td>${inv.sent_by_username || '-'}</td>
             <td>${statusHtml}</td>
             <td style="white-space: nowrap;">
