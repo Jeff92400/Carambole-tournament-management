@@ -620,23 +620,90 @@
       </div>
     </div>
 
+    <!-- Time Thresholds Section - Admin Only -->
+    <div class="card admin-only" id="timeThresholdsSection">
+      <h3>Delais des Competitions</h3>
+      <p style="margin-bottom: 20px; color: #666;">
+        Configurez les delais (en jours) utilises pour les fonctionnalites liees aux competitions.
+      </p>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px;">
+        <div>
+          <label style="display: block; margin-bottom: 8px; font-weight: 500;">Desactivation simulation (jours) :</label>
+          <input type="number" id="thresholdSimulationDisabled" min="1" max="30" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+          <small style="color: #666;">La simulation des poules est desactivee X jours avant le tournoi</small>
+        </div>
+        <div>
+          <label style="display: block; margin-bottom: 8px; font-weight: 500;">Debut fenetre relance (jours) :</label>
+          <input type="number" id="thresholdRelanceStart" min="1" max="30" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+          <small style="color: #666;">Les tournois apparaissent dans la fenetre de relance X jours avant</small>
+        </div>
+        <div>
+          <label style="display: block; margin-bottom: 8px; font-weight: 500;">Fin fenetre relance (jours) :</label>
+          <input type="number" id="thresholdRelanceEnd" min="1" max="60" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+          <small style="color: #666;">Les tournois disparaissent de la fenetre de relance X jours avant</small>
+        </div>
+        <div>
+          <label style="display: block; margin-bottom: 8px; font-weight: 500;">Recherche relances (jours) :</label>
+          <input type="number" id="thresholdRelanceSearch" min="7" max="90" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+          <small style="color: #666;">Fenetre de recherche pour marquer les relances par type (T2, T3, Finale)</small>
+        </div>
+        <div>
+          <label style="display: block; margin-bottom: 8px; font-weight: 500;">Delai inscription emails (jours) :</label>
+          <input type="number" id="thresholdRegistrationDeadline" min="1" max="30" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+          <small style="color: #666;">Date limite d'inscription = date tournoi - X jours (affichee dans les emails)</small>
+        </div>
+        <div>
+          <label style="display: block; margin-bottom: 8px; font-weight: 500;">Alerte import obsolete (jours) :</label>
+          <input type="number" id="thresholdStaleImportWarning" min="1" max="30" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+          <small style="color: #666;">Affiche un avertissement si le dernier import date de plus de X jours</small>
+        </div>
+        <div>
+          <label style="display: block; margin-bottom: 8px; font-weight: 500;">Alerte urgente (jours) :</label>
+          <input type="number" id="thresholdUrgentAlert" min="1" max="14" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+          <small style="color: #666;">Les alertes de tournois passent en rouge X jours avant le tournoi</small>
+        </div>
+        <div>
+          <label style="display: block; margin-bottom: 8px; font-weight: 500;">Affichage competitions (jours) :</label>
+          <input type="number" id="thresholdDisplayCompetitions" min="7" max="90" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+          <small style="color: #666;">Les competitions apparaissent dans "Competitions a venir" X jours avant</small>
+        </div>
+      </div>
+
+      <button onclick="saveTimeThresholds()" class="btn" style="background: #28a745; padding: 12px 25px; margin-top: 20px;">
+        Enregistrer
+      </button>
+      <div id="timeThresholdsMessage" style="display: none; margin-top: 15px; padding: 10px; border-radius: 4px;"></div>
+
+      <div style="margin-top: 20px; padding: 15px; background: #e7f3ff; border-left: 4px solid #1F4788; border-radius: 4px;">
+        <strong>Information :</strong>
+        <p style="margin: 10px 0 0 0; color: #666;">
+          Ces delais controlent le comportement de l'application pour les competitions :<br>
+          - <strong>Simulation</strong> : la generation de poules de test est desactivee a l'approche du tournoi<br>
+          - <strong>Relances</strong> : fenetre pendant laquelle les tournois apparaissent pour les relances<br>
+          - <strong>Alertes</strong> : seuil de passage en mode urgent (rouge) sur le tableau de bord<br>
+          - <strong>Affichage</strong> : delai d'apparition des competitions sur la page Competitions
+        </p>
+      </div>
+    </div>
+
     <!-- Classements Section - Admin Only -->
     <div class="card admin-only" id="rankingsConfigSection">
-      <h3>🏆 Configuration des Classements</h3>
+      <h3>Configuration des Classements</h3>
       <p style="margin-bottom: 20px; color: #666;">
-        Configurez les règles de qualification pour la finale départementale.
+        Configurez les regles de qualification pour la finale departementale.
       </p>
 
       <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px;">
         <div>
-          <label style="display: block; margin-bottom: 8px; font-weight: 500;">Seuil petite catégorie :</label>
+          <label style="display: block; margin-bottom: 8px; font-weight: 500;">Seuil petite categorie :</label>
           <input type="number" id="qualificationThreshold" min="1" max="20" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
-          <small style="color: #666;">Si moins de X joueurs, c'est une petite catégorie</small>
+          <small style="color: #666;">Si moins de X joueurs, c'est une petite categorie</small>
         </div>
         <div>
-          <label style="display: block; margin-bottom: 8px; font-weight: 500;">Qualifiés (petite catégorie) :</label>
+          <label style="display: block; margin-bottom: 8px; font-weight: 500;">Qualifies (petite categorie) :</label>
           <input type="number" id="qualificationSmall" min="1" max="10" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
-          <small style="color: #666;">Nombre de qualifiés pour la finale</small>
+          <small style="color: #666;">Nombre de qualifies pour la finale</small>
         </div>
         <div>
           <label style="display: block; margin-bottom: 8px; font-weight: 500;">Qualifiés (grande catégorie) :</label>
@@ -2617,6 +2684,85 @@
     loadSeasonSettings();
 
     // ============= END SEASON SETTINGS =============
+
+    // ============= TIME THRESHOLDS SETTINGS =============
+
+    async function loadTimeThresholds() {
+      try {
+        const response = await fetch(`${API_URL}/settings/app-all`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          const settings = await response.json();
+          document.getElementById('thresholdSimulationDisabled').value = settings.threshold_simulation_disabled || '7';
+          document.getElementById('thresholdRelanceStart').value = settings.threshold_relance_start || '7';
+          document.getElementById('thresholdRelanceEnd').value = settings.threshold_relance_end || '14';
+          document.getElementById('thresholdRelanceSearch').value = settings.threshold_relance_search || '28';
+          document.getElementById('thresholdRegistrationDeadline').value = settings.threshold_registration_deadline || '7';
+          document.getElementById('thresholdStaleImportWarning').value = settings.threshold_stale_import_warning || '7';
+          document.getElementById('thresholdUrgentAlert').value = settings.threshold_urgent_alert || '7';
+          document.getElementById('thresholdDisplayCompetitions').value = settings.threshold_display_competitions || '28';
+        }
+      } catch (error) {
+        console.error('Error loading time thresholds:', error);
+      }
+    }
+
+    async function saveTimeThresholds() {
+      const msgDiv = document.getElementById('timeThresholdsMessage');
+
+      const thresholds = {
+        threshold_simulation_disabled: document.getElementById('thresholdSimulationDisabled').value,
+        threshold_relance_start: document.getElementById('thresholdRelanceStart').value,
+        threshold_relance_end: document.getElementById('thresholdRelanceEnd').value,
+        threshold_relance_search: document.getElementById('thresholdRelanceSearch').value,
+        threshold_registration_deadline: document.getElementById('thresholdRegistrationDeadline').value,
+        threshold_stale_import_warning: document.getElementById('thresholdStaleImportWarning').value,
+        threshold_urgent_alert: document.getElementById('thresholdUrgentAlert').value,
+        threshold_display_competitions: document.getElementById('thresholdDisplayCompetitions').value
+      };
+
+      // Validate relance window (start should be less than end)
+      if (parseInt(thresholds.threshold_relance_start) >= parseInt(thresholds.threshold_relance_end)) {
+        msgDiv.textContent = 'Erreur : le debut de la fenetre de relance doit etre inferieur a la fin';
+        msgDiv.style.background = '#f8d7da';
+        msgDiv.style.color = '#721c24';
+        msgDiv.style.display = 'block';
+        setTimeout(() => { msgDiv.style.display = 'none'; }, 4000);
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API_URL}/settings/app-bulk`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(thresholds)
+        });
+
+        if (response.ok) {
+          msgDiv.textContent = 'Delais des competitions enregistres';
+          msgDiv.style.background = '#d4edda';
+          msgDiv.style.color = '#155724';
+        } else {
+          throw new Error('Erreur lors de la sauvegarde');
+        }
+      } catch (error) {
+        console.error('Error saving time thresholds:', error);
+        msgDiv.textContent = error.message;
+        msgDiv.style.background = '#f8d7da';
+        msgDiv.style.color = '#721c24';
+      }
+
+      msgDiv.style.display = 'block';
+      setTimeout(() => { msgDiv.style.display = 'none'; }, 3000);
+    }
+
+    loadTimeThresholds();
+
+    // ============= END TIME THRESHOLDS SETTINGS =============
 
     // ============= RANKINGS CONFIG SETTINGS =============
 
