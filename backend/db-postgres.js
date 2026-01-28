@@ -81,24 +81,30 @@ async function initializeDatabase() {
     await client.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS gdpr_consent_date TIMESTAMP`);
     await client.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS gdpr_consent_version VARCHAR(10)`);
 
-    // Migrate existing admins from player_accounts.is_admin to players.player_app_role
-    await client.query(`
-      UPDATE players p
-      SET player_app_role = 'admin'
-      FROM player_accounts pa
-      WHERE REPLACE(p.licence, ' ', '') = REPLACE(pa.licence, ' ', '')
-        AND pa.is_admin = true
-        AND (p.player_app_role IS NULL OR p.player_app_role != 'admin')
-    `);
+    // Migrations that depend on player_accounts - wrapped in try-catch for fresh databases
+    try {
+      // Migrate existing admins from player_accounts.is_admin to players.player_app_role
+      await client.query(`
+        UPDATE players p
+        SET player_app_role = 'admin'
+        FROM player_accounts pa
+        WHERE REPLACE(p.licence, ' ', '') = REPLACE(pa.licence, ' ', '')
+          AND pa.is_admin = true
+          AND (p.player_app_role IS NULL OR p.player_app_role != 'admin')
+      `);
 
-    // Migrate existing player_accounts to mark them as Player App users
-    await client.query(`
-      UPDATE players p
-      SET player_app_user = TRUE
-      FROM player_accounts pa
-      WHERE REPLACE(p.licence, ' ', '') = REPLACE(pa.licence, ' ', '')
-        AND p.player_app_user = FALSE
-    `);
+      // Migrate existing player_accounts to mark them as Player App users
+      await client.query(`
+        UPDATE players p
+        SET player_app_user = TRUE
+        FROM player_accounts pa
+        WHERE REPLACE(p.licence, ' ', '') = REPLACE(pa.licence, ' ', '')
+          AND p.player_app_user = FALSE
+      `);
+    } catch (migrationErr) {
+      // Silently ignore - player_accounts table may not exist on fresh databases
+      console.log('Skipping player_accounts migration (table may not exist yet)');
+    }
 
     // Set player_app_role = 'joueur' for players who are Player App users but have no role
     // This consolidates player_app_user boolean into player_app_role
