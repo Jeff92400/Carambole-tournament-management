@@ -9,7 +9,8 @@
     "dev": "nodemon server.js",
     "setup": "npm install && echo '✅ Installation terminée! Lancez \"npm start\" pour démarrer le serveur.'",
     "backup": "cp ../billard.db ../billard_backup_$(date +%Y-%m-%d).db && echo '✅ Sauvegarde créée!'",
-    "info": "echo 'Billard Ranking App v1.0.0' && echo 'Server: http://localhost:3000' && node --version && npm --version"
+    "info": "echo 'Billard Ranking App v1.0.0' && echo 'Server: http://localhost:3000' && node --version && npm --version",
+    "seed-demo": "node scripts/seed-demo.js"
   },
   "keywords": [
     "billiard",
