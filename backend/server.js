@@ -260,7 +260,7 @@ app.get('/api/seed-demo', async (req, res) => {
     });
     await new Promise((resolve, reject) => {
       db.run(
-        `INSERT INTO users (username, password, email, role, is_active) VALUES ($1, $2, $3, $4, true)`,
+        `INSERT INTO users (username, password_hash, email, role, is_active) VALUES ($1, $2, $3, $4, 1)`,
         ['demo', hashedPassword, 'demo@example.com', 'admin'],
         (err) => err ? reject(err) : resolve()
       );
