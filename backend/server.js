@@ -195,6 +195,62 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// TEMPORARY: Demo seed endpoint - REMOVE AFTER SEEDING
+app.get('/api/seed-demo', async (req, res) => {
+  const secret = req.query.secret;
+  if (secret !== 'seed-demo-2024') {
+    return res.status(403).json({ error: 'Invalid secret' });
+  }
+
+  const bcrypt = require('bcrypt');
+
+  try {
+    // Demo branding
+    const demoBranding = {
+      organization_name: 'Comite Departemental de Billard - DEMO',
+      organization_short_name: 'CDBHS DEMO',
+      primary_color: '#E67E22',
+      secondary_color: '#F39C12',
+      accent_color: '#3498DB',
+      background_color: '#FFFFFF',
+      background_secondary_color: '#FDF2E9'
+    };
+
+    for (const [key, value] of Object.entries(demoBranding)) {
+      await new Promise((resolve, reject) => {
+        db.run(
+          `INSERT INTO app_settings (key, value, updated_at) VALUES ($1, $2, CURRENT_TIMESTAMP)
+           ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = CURRENT_TIMESTAMP`,
+          [key, value],
+          (err) => err ? reject(err) : resolve()
+        );
+      });
+    }
+
+    // Create demo admin
+    const hashedPassword = await bcrypt.hash('demo123', 10);
+    await new Promise((resolve, reject) => {
+      db.run(`DELETE FROM users WHERE username = $1`, ['demo'], (err) => err ? reject(err) : resolve());
+    });
+    await new Promise((resolve, reject) => {
+      db.run(
+        `INSERT INTO users (username, password, email, role, is_active) VALUES ($1, $2, $3, $4, true)`,
+        ['demo', hashedPassword, 'demo@example.com', 'admin'],
+        (err) => err ? reject(err) : resolve()
+      );
+    });
+
+    res.json({
+      success: true,
+      message: 'Demo data seeded successfully!',
+      login: { username: 'demo', password: 'demo123' }
+    });
+  } catch (error) {
+    console.error('Seed error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Serve frontend pages
 app.get('/', (req, res) => {
   res.sendFile(path.join(frontendPath, 'login.html'));
