@@ -22,6 +22,11 @@ async function initAppBranding() {
       headerIcon.onerror = function() {
         this.src = DEFAULT_LOGO_PATH;
       };
+
+      // Apply dynamic logo size from settings
+      const logoSize = await getHeaderLogoSize();
+      headerIcon.style.width = logoSize + 'px';
+      headerIcon.style.height = logoSize + 'px';
     }
 
     // Update organization name if element exists
@@ -34,6 +39,29 @@ async function initAppBranding() {
     console.log('[Branding] Error loading branding, using defaults:', error);
     updateFavicon(DEFAULT_LOGO_PATH);
   }
+}
+
+/**
+ * Get header logo size from settings
+ */
+async function getHeaderLogoSize() {
+  try {
+    const token = localStorage.getItem('token');
+    if (!token) return 48; // Default size
+
+    const response = await fetch('/api/settings/app/header_logo_size', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      return parseInt(data.value) || 48;
+    }
+  } catch (error) {
+    console.log('[Branding] Could not fetch logo size:', error);
+  }
+
+  return 48; // Default size
 }
 
 /**
@@ -110,14 +138,8 @@ async function initPublicBranding() {
   updateFavicon(logoUrl);
 
   const headerIcon = document.getElementById('app-header-icon');
-  if (headerIcon) {
-    headerIcon.src = logoUrl;
-    headerIcon.onerror = function() {
-      this.src = DEFAULT_LOGO_PATH;
-    };
-  }
 
-  // Fetch organization name from public branding endpoint
+  // Fetch organization name and logo size from public branding endpoint
   try {
     const response = await fetch('/api/settings/branding/colors');
     if (response.ok) {
@@ -126,9 +148,23 @@ async function initPublicBranding() {
       if (orgNameEl && data.organization_short_name) {
         orgNameEl.textContent = data.organization_short_name;
       }
+
+      // Apply logo size from settings
+      if (headerIcon && data.header_logo_size) {
+        const logoSize = parseInt(data.header_logo_size) || 48;
+        headerIcon.style.width = logoSize + 'px';
+        headerIcon.style.height = logoSize + 'px';
+      }
     }
   } catch (error) {
-    console.log('[Branding] Could not fetch org name for public page:', error);
+    console.log('[Branding] Could not fetch branding for public page:', error);
+  }
+
+  if (headerIcon) {
+    headerIcon.src = logoUrl;
+    headerIcon.onerror = function() {
+      this.src = DEFAULT_LOGO_PATH;
+    };
   }
 }
 

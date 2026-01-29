@@ -481,6 +481,19 @@
         </div>
       </div>
 
+      <!-- Logo Size Setting -->
+      <div style="margin-top: 20px;">
+        <label style="display: block; margin-bottom: 8px; font-weight: 500;">Taille du logo dans l'en-tête :</label>
+        <div style="display: flex; gap: 15px; align-items: center;">
+          <input type="range" id="headerLogoSize" min="24" max="80" value="48" style="width: 200px;" oninput="document.getElementById('headerLogoSizeValue').textContent = this.value + 'px'; document.getElementById('logoSizePreview').style.width = this.value + 'px'; document.getElementById('logoSizePreview').style.height = this.value + 'px';">
+          <span id="headerLogoSizeValue" style="font-weight: 500; min-width: 50px;">48px</span>
+          <div style="border: 1px solid #ddd; border-radius: 6px; padding: 10px; background: #f8f9fa;">
+            <img id="logoSizePreview" src="images/FrenchBillard-Icon-small.png" alt="Aperçu" style="width: 48px; height: 48px; display: block;">
+          </div>
+        </div>
+        <small style="color: #666;">Taille recommandée : 40-60px. Affecte toutes les pages de l'application.</small>
+      </div>
+
       <button onclick="saveOrganisationSettings()" class="btn" style="background: #28a745; padding: 12px 25px; margin-top: 20px;">
         Enregistrer
       </button>
@@ -2342,6 +2355,13 @@
           document.getElementById('organizationName').value = settings.organization_name || '';
           document.getElementById('organizationShortName').value = settings.organization_short_name || '';
           document.getElementById('organizationEmail').value = settings.summary_email || '';
+
+          // Load header logo size
+          const logoSize = parseInt(settings.header_logo_size) || 48;
+          document.getElementById('headerLogoSize').value = logoSize;
+          document.getElementById('headerLogoSizeValue').textContent = logoSize + 'px';
+          document.getElementById('logoSizePreview').style.width = logoSize + 'px';
+          document.getElementById('logoSizePreview').style.height = logoSize + 'px';
         }
 
         // Load logo info
@@ -2456,7 +2476,8 @@
           body: JSON.stringify({
             organization_name: document.getElementById('organizationName').value.trim(),
             organization_short_name: document.getElementById('organizationShortName').value.trim(),
-            summary_email: email
+            summary_email: email,
+            header_logo_size: document.getElementById('headerLogoSize').value
           })
         });
 
