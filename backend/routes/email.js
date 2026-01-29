@@ -1329,18 +1329,32 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
     }
   }
 
-  // Send summary email after all individual emails
+  // Send summary email after all individual emails (even if all failed)
   const summaryEmailAddress = await getSummaryEmail();
-  if (results.sent.length > 0 && summaryEmailAddress) {
+  const totalAttempted = results.sent.length + results.failed.length + results.skipped.length;
+  if (totalAttempted > 0 && summaryEmailAddress) {
     try {
-      // Build recipient list HTML
-      const recipientListHtml = results.sent.map((r, idx) =>
-        `<tr style="background: ${idx % 2 === 0 ? 'white' : '#f8f9fa'};">
-          <td style="padding: 8px; border: 1px solid #ddd;">${idx + 1}</td>
-          <td style="padding: 8px; border: 1px solid #ddd;">${r.name}</td>
-          <td style="padding: 8px; border: 1px solid #ddd;">${r.email}</td>
-        </tr>`
-      ).join('');
+      // Build recipient list HTML (sent emails)
+      const recipientListHtml = results.sent.length > 0
+        ? results.sent.map((r, idx) =>
+            `<tr style="background: ${idx % 2 === 0 ? 'white' : '#f8f9fa'};">
+              <td style="padding: 8px; border: 1px solid #ddd;">${idx + 1}</td>
+              <td style="padding: 8px; border: 1px solid #ddd;">${r.name}</td>
+              <td style="padding: 8px; border: 1px solid #ddd;">${r.email}</td>
+            </tr>`
+          ).join('')
+        : '<tr><td colspan="3" style="padding: 8px; text-align: center; color: #666;">Aucune convocation envoyée</td></tr>';
+
+      // Build failed list HTML
+      const failedListHtml = results.failed.length > 0
+        ? results.failed.map((r, idx) =>
+            `<tr style="background: ${idx % 2 === 0 ? '#fff5f5' : '#ffe0e0'};">
+              <td style="padding: 8px; border: 1px solid #ddd;">${r.name}</td>
+              <td style="padding: 8px; border: 1px solid #ddd;">${r.email}</td>
+              <td style="padding: 8px; border: 1px solid #ddd; color: #dc3545;">${r.error || 'Erreur inconnue'}</td>
+            </tr>`
+          ).join('')
+        : '';
 
       // Build poules summary
       const poulesSummaryHtml = poules.map(poule => {
@@ -1354,6 +1368,21 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
         </div>`;
       }).join('');
 
+      // Determine status banner based on results
+      const allFailed = results.sent.length === 0 && results.failed.length > 0;
+      const statusBanner = allFailed
+        ? `<div style="background: #f8d7da; border-left: 4px solid #dc3545; padding: 15px; margin-bottom: 20px;">
+             <strong>❌ Échec de l'envoi</strong><br>
+             Aucune convocation n'a pu être envoyée (${results.failed.length} échec(s))
+             ${results.skipped.length > 0 ? `<br><span style="color: #856404;">${results.skipped.length} ignoré(s) (pas d'email)</span>` : ''}
+           </div>`
+        : `<div style="background: #d4edda; border-left: 4px solid #28a745; padding: 15px; margin-bottom: 20px;">
+             <strong>✅ Envoi terminé</strong><br>
+             ${results.sent.length} convocation(s) envoyée(s) sur ${players.length} joueur(s)
+             ${results.failed.length > 0 ? `<br><span style="color: #dc3545;">${results.failed.length} échec(s)</span>` : ''}
+             ${results.skipped.length > 0 ? `<br><span style="color: #856404;">${results.skipped.length} ignoré(s) (pas d'email)</span>` : ''}
+           </div>`;
+
       const summaryHtml = `
         <div style="font-family: Arial, sans-serif; max-width: 700px; margin: 0 auto;">
           <div style="background: ${primaryColor}; color: white; padding: 20px; text-align: center;">
@@ -1362,12 +1391,7 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
             <p style="margin: 10px 0 0 0; opacity: 0.9;">${category.display_name}</p>
           </div>
           <div style="padding: 20px; background: #f8f9fa; line-height: 1.6;">
-            <div style="background: #d4edda; border-left: 4px solid #28a745; padding: 15px; margin-bottom: 20px;">
-              <strong>✅ Envoi terminé avec succès</strong><br>
-              ${results.sent.length} convocation(s) envoyée(s) sur ${players.length} joueur(s)
-              ${results.failed.length > 0 ? `<br><span style="color: #dc3545;">${results.failed.length} échec(s)</span>` : ''}
-              ${results.skipped.length > 0 ? `<br><span style="color: #856404;">${results.skipped.length} ignoré(s) (pas d'email)</span>` : ''}
-            </div>
+            ${statusBanner}
 
             <div style="background: white; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #ddd;">
               <h3 style="margin-top: 0; color: ${primaryColor};">📍 Informations du Tournoi</h3>
@@ -1390,6 +1414,22 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
                 ${recipientListHtml}
               </tbody>
             </table>
+
+            ${results.failed.length > 0 ? `
+            <h3 style="color: #dc3545;">❌ Échecs d'envoi (${results.failed.length})</h3>
+            <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 13px;">
+              <thead>
+                <tr style="background: #dc3545; color: white;">
+                  <th style="padding: 10px; border: 1px solid #ddd; text-align: left;">Joueur</th>
+                  <th style="padding: 10px; border: 1px solid #ddd; text-align: left;">Email</th>
+                  <th style="padding: 10px; border: 1px solid #ddd; text-align: left;">Erreur</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${failedListHtml}
+              </tbody>
+            </table>
+            ` : ''}
 
             <h3 style="color: #28a745;">🎯 Composition des Poules (${poules.length})</h3>
             ${poulesSummaryHtml}
