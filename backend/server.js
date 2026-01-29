@@ -151,6 +151,14 @@ app.get('/logo.png', (req, res) => {
   });
 });
 
+// Debug endpoint to check BASE_URL (temporary)
+app.get('/api/debug-env', (req, res) => {
+  res.json({
+    BASE_URL: process.env.BASE_URL || '(not set)',
+    NODE_ENV: process.env.NODE_ENV || '(not set)'
+  });
+});
+
 // API Routes with rate limiting
 // Apply strict rate limit only to login/password endpoints, general limit for other auth routes
 app.use('/api/auth/login', authLimiter);
