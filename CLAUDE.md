@@ -11,17 +11,55 @@ This file provides guidance to Claude Code when working with this repository.
 
 ## Deployment Workflow
 
-**We work directly in production.** No staging environment.
+### Environments
+
+| Branch | Environment | URL | Purpose |
+|--------|-------------|-----|---------|
+| `staging` | Demo | https://carambole-competition-app-demo.up.railway.app | Pre-prod testing & user training |
+| `main` | Production | https://cdbhs-tournament-management-production.up.railway.app | Live system |
 
 ### Process
-1. Work on `main` branch
-2. Commit changes with descriptive message
-3. **Update version number** in `frontend/login.html` (see Versioning below)
-4. Push to deploy: `git push origin main` (auto-deploys to Railway)
+
+1. **Develop & Test on Demo first:**
+   ```bash
+   git checkout staging
+   # Make changes...
+   git add .
+   git commit -m "Feature description"
+   git push origin staging
+   ```
+   → Auto-deploys to Demo app
+
+2. **Test on Demo** - Verify feature works correctly
+
+3. **Deploy to Production** (after testing OK):
+   ```bash
+   git checkout main
+   git merge staging
+   git push origin main
+   ```
+   → Auto-deploys to Production
+
+4. **Update version number** in `frontend/login.html` before production deploy
+
+### Rollback
+
+If issues in production:
+```bash
+git revert HEAD
+git push origin main
+```
+
+Or revert to specific commit:
+```bash
+git checkout <commit-hash> -- path/to/file
+git commit -m "Rollback: description"
+git push origin main
+```
 
 ## Versioning
 
-**Current Version:** V 2.0.103 01/26
+**Current Version:** V 2.0.133 01/26
 
 Version is displayed at the bottom of the login screen (`frontend/login.html`).
 

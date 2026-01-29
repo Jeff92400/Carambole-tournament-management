@@ -67,6 +67,26 @@ router.get('/branding/colors', async (req, res) => {
   );
 });
 
+// Public endpoint for CSV import feature toggle
+router.get('/branding/csv-imports', async (req, res) => {
+  const db = getDb();
+
+  db.get(
+    `SELECT value FROM app_settings WHERE key = $1`,
+    ['enable_csv_imports'],
+    (err, row) => {
+      if (err) {
+        console.error('Error fetching CSV import setting:', err);
+        return res.status(500).json({ error: err.message });
+      }
+
+      res.json({
+        enable_csv_imports: row?.value || '1' // Default to enabled
+      });
+    }
+  );
+});
+
 // ==================== AUTHENTICATED ENDPOINTS ====================
 
 // Get all game parameters (with display_name from game_modes)
@@ -317,7 +337,10 @@ const initAppSettings = async () => {
         ['threshold_registration_deadline', '7'],    // Days before tournament for registration deadline in emails
         ['threshold_stale_import_warning', '7'],     // Days after which import data is considered stale
         ['threshold_urgent_alert', '7'],             // Days threshold for urgent (red) alerts on dashboard
-        ['threshold_display_competitions', '28']     // Days ahead to display competitions in "Compétitions à venir"
+        ['threshold_display_competitions', '28'],    // Days ahead to display competitions in "Compétitions à venir"
+
+        // Feature toggles
+        ['enable_csv_imports', '1']                  // Enable/disable CSV import functionality (1=enabled, 0=disabled)
       ];
 
       // Insert default values using INSERT OR IGNORE / ON CONFLICT

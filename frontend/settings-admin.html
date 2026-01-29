@@ -468,6 +468,17 @@
         </div>
       </div>
 
+      <!-- CSV Import Toggle -->
+      <div style="margin-top: 25px; padding-top: 20px; border-top: 1px solid #eee;">
+        <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
+          <input type="checkbox" id="enableCsvImports" style="width: 20px; height: 20px; cursor: pointer;">
+          <span style="font-weight: 500;">Activer les imports CSV</span>
+        </label>
+        <small style="color: #666; margin-left: 32px; display: block; margin-top: 4px;">
+          Affiche les boutons d'import CSV pour les joueurs, tournois et inscriptions. Désactivez si vous utilisez uniquement l'Espace Joueur.
+        </small>
+      </div>
+
       <!-- Logo Upload -->
       <div style="margin-top: 25px; padding-top: 20px; border-top: 1px solid #eee;">
         <label style="display: block; margin-bottom: 8px; font-weight: 500;">Logo de l'organisation (pour les emails) :</label>
@@ -2356,6 +2367,10 @@
           document.getElementById('organizationShortName').value = settings.organization_short_name || '';
           document.getElementById('organizationEmail').value = settings.summary_email || '';
 
+          // Load CSV import toggle (default to enabled)
+          const csvEnabled = settings.enable_csv_imports !== '0';
+          document.getElementById('enableCsvImports').checked = csvEnabled;
+
           // Load header logo size
           const logoSize = parseInt(settings.header_logo_size) || 48;
           document.getElementById('headerLogoSize').value = logoSize;
@@ -2477,7 +2492,8 @@
             organization_name: document.getElementById('organizationName').value.trim(),
             organization_short_name: document.getElementById('organizationShortName').value.trim(),
             summary_email: email,
-            header_logo_size: document.getElementById('headerLogoSize').value
+            header_logo_size: document.getElementById('headerLogoSize').value,
+            enable_csv_imports: document.getElementById('enableCsvImports').checked ? '1' : '0'
           })
         });
 
