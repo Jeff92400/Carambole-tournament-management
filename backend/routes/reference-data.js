@@ -154,7 +154,8 @@ router.put('/game-modes/:id', authenticateToken, async (req, res) => {
         ? `Mode de jeu mis à jour (${categoriesUpdated} catégories, ${tournoiUpdated} tournois synchronisés)`
         : 'Mode de jeu mis à jour',
       categoriesUpdated,
-      tournoiUpdated
+      tournoiUpdated,
+      debug: { oldDisplayName, newDisplayName: display_name, displayNameChanged }
     });
 
   } catch (err) {

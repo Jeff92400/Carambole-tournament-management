@@ -707,6 +707,7 @@
         });
 
         const result = await response.json();
+        console.log('[saveGameMode] Response:', result);
 
         if (response.ok) {
           showMessage('success', result.message || 'Mode de jeu mis a jour');
