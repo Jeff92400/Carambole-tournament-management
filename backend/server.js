@@ -652,6 +652,77 @@ app.get('/api/reset-categories', async (req, res) => {
   }
 });
 
+// TEMPORARY: Test game mode cascade to categories
+app.get('/api/test-cascade', async (req, res) => {
+  const secret = req.query.secret;
+  if (secret !== 'seed-demo-2024') {
+    return res.status(403).json({ error: 'Invalid secret' });
+  }
+
+  const oldName = req.query.old || 'Libre';
+  const newName = req.query.new || 'Libre Test';
+
+  const dbRun = (sql, params = []) => new Promise((resolve, reject) => {
+    db.run(sql, params, function(err) {
+      if (err) reject(err);
+      else resolve({ changes: this.changes, lastID: this.lastID });
+    });
+  });
+
+  const dbAll = (sql, params = []) => new Promise((resolve, reject) => {
+    db.all(sql, params, (err, rows) => {
+      if (err) reject(err);
+      else resolve(rows || []);
+    });
+  });
+
+  try {
+    // 1. Check current state
+    const beforeCategories = await dbAll(
+      `SELECT id, game_type, level, display_name FROM categories WHERE game_type = $1`,
+      [oldName]
+    );
+
+    // 2. Update categories.game_type
+    const result1 = await dbRun(
+      `UPDATE categories SET game_type = $1 WHERE game_type = $2`,
+      [newName, oldName]
+    );
+
+    // 3. Update categories.display_name
+    const result2 = await dbRun(
+      `UPDATE categories SET display_name = game_type || ' - ' || level WHERE game_type = $1`,
+      [newName]
+    );
+
+    // 4. Check after state
+    const afterCategories = await dbAll(
+      `SELECT id, game_type, level, display_name FROM categories WHERE game_type = $1`,
+      [newName]
+    );
+
+    // 5. Also update game_modes table
+    const result3 = await dbRun(
+      `UPDATE game_modes SET display_name = $1 WHERE display_name = $2`,
+      [newName, oldName]
+    );
+
+    res.json({
+      success: true,
+      oldName,
+      newName,
+      categoriesFound: beforeCategories.length,
+      categoriesUpdated: result1.changes,
+      gameModeUpdated: result3.changes,
+      before: beforeCategories.slice(0, 3),
+      after: afterCategories.slice(0, 3)
+    });
+  } catch (error) {
+    console.error('Test cascade error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // TEMPORARY: Sync categories with game_modes (fixes display_name inconsistencies)
 app.get('/api/sync-categories', async (req, res) => {
   const secret = req.query.secret;
