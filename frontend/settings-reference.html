@@ -709,10 +709,11 @@
         const result = await response.json();
 
         if (response.ok) {
-          showMessage('success', 'Mode de jeu mis a jour');
+          showMessage('success', result.message || 'Mode de jeu mis a jour');
           closeModal('editGameModeModal');
           loadGameModes();
-          loadCategoryDropdowns(); // Refresh category dropdown with updated game modes
+          loadCategories(); // Refresh categories table to show updated game_type
+          loadCategoryDropdowns(); // Refresh category dropdown
         } else {
           showMessage('error', result.error || 'Erreur lors de la mise a jour');
         }
