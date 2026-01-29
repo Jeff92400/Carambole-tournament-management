@@ -118,11 +118,11 @@ Required:
 - `DATABASE_URL` - PostgreSQL connection string
 - `JWT_SECRET` - JWT signing secret
 - `RESEND_API_KEY` - Email sending
+- `BASE_URL` - Public URL of the app (e.g., `https://mon-comite.up.railway.app`). **Critical for emails**: logos and links in convocations use this URL. Without it, defaults to production URL.
 
 Optional:
 - `PORT` - Server port (default 3000)
 - `ALLOWED_ORIGINS` - CORS origins
-- `BASE_URL` - For email links
 
 ## Development Notes
 
