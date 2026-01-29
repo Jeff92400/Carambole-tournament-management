@@ -300,7 +300,23 @@ app.get('/api/seed-demo-full', async (req, res) => {
   const FFB_RANKINGS = ['N1', 'N2', 'N3', 'R1', 'R2', 'R3', 'R4', 'D1', 'D2', 'D3'];
 
   try {
-    let stats = { clubs: 0, players: 0, tournaments: 0, inscriptions: 0 };
+    let stats = { clubs: 0, players: 0, tournaments: 0, inscriptions: 0, cleared: { tournaments: 0, inscriptions: 0 } };
+
+    // 0. Clear old demo data for fresh seeding
+    // Delete inscriptions for demo tournaments (those with 'Tournoi' in the name)
+    const demoTournois = await dbAll(`SELECT tournoi_id FROM tournoi_ext WHERE nom LIKE 'Tournoi %'`);
+    const demoTournoiIds = demoTournois.map(t => t.tournoi_id);
+
+    if (demoTournoiIds.length > 0) {
+      for (const tid of demoTournoiIds) {
+        const deleted = await dbRun(`DELETE FROM inscriptions WHERE tournoi_id = $1`, [tid]);
+        stats.cleared.inscriptions += deleted.changes || 0;
+      }
+      for (const tid of demoTournoiIds) {
+        await dbRun(`DELETE FROM tournoi_ext WHERE tournoi_id = $1`, [tid]);
+        stats.cleared.tournaments++;
+      }
+    }
 
     // 1. Create clubs
     for (const club of DEMO_CLUBS) {
@@ -410,7 +426,7 @@ app.get('/api/seed-demo-full', async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Full demo data seeded successfully!',
+      message: 'Full demo data seeded successfully! Old demo tournaments cleared and fresh data created with current dates.',
       stats,
       login: { username: 'demo', password: 'demo123' }
     });
