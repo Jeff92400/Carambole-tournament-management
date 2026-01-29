@@ -229,10 +229,193 @@ app.get('/api/seed-demo', async (req, res) => {
       success: true,
       message: 'Demo admin user created successfully!',
       login: { username: 'demo', password: 'demo123' },
-      note: 'For full demo data (players, tournaments, inscriptions), run: node backend/scripts/seed-demo.js via Railway shell'
+      note: 'For full demo data, call /api/seed-demo-full?secret=seed-demo-2024'
     });
   } catch (error) {
     console.error('Seed error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// TEMPORARY: Full demo seed endpoint - creates players, clubs, tournaments, inscriptions
+app.get('/api/seed-demo-full', async (req, res) => {
+  const secret = req.query.secret;
+  if (secret !== 'seed-demo-2024') {
+    return res.status(403).json({ error: 'Invalid secret' });
+  }
+
+  // Helper functions
+  const dbRun = (sql, params = []) => new Promise((resolve, reject) => {
+    db.run(sql, params, function(err) {
+      if (err) reject(err);
+      else resolve(this);
+    });
+  });
+
+  const dbGet = (sql, params = []) => new Promise((resolve, reject) => {
+    db.get(sql, params, (err, row) => {
+      if (err) reject(err);
+      else resolve(row);
+    });
+  });
+
+  const dbAll = (sql, params = []) => new Promise((resolve, reject) => {
+    db.all(sql, params, (err, rows) => {
+      if (err) reject(err);
+      else resolve(rows || []);
+    });
+  });
+
+  const randomElement = (arr) => arr[Math.floor(Math.random() * arr.length)];
+  const randomInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+  const generateLicence = (index) => {
+    const letters = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+    const num = String(100000 + index).slice(1);
+    return `D${num}${letters[index % letters.length]}`;
+  };
+
+  // Demo data
+  const DEMO_CLUBS = [
+    { name: 'ACADEMIE BILLARD CLICHY', display_name: 'Académie Billard Clichy', city: 'Clichy' },
+    { name: 'BILLARD CLUB BOULOGNE', display_name: 'Billard Club Boulogne', city: 'Boulogne-Billancourt' },
+    { name: 'CERCLE BILLARD NEUILLY', display_name: 'Cercle Billard Neuilly', city: 'Neuilly-sur-Seine' },
+    { name: 'ASSOCIATION BILLARD LEVALLOIS', display_name: 'Association Billard Levallois', city: 'Levallois-Perret' },
+    { name: 'BILLARD CLUB COLOMBES', display_name: 'Billard Club Colombes', city: 'Colombes' },
+    { name: 'ENTENTE BILLARD NANTERRE', display_name: 'Entente Billard Nanterre', city: 'Nanterre' },
+    { name: 'BILLARD CLUB RUEIL', display_name: 'Billard Club Rueil', city: 'Rueil-Malmaison' },
+    { name: 'ACADEMIE CARAMBOLE ASNIERES', display_name: 'Académie Carambole Asnières', city: 'Asnières-sur-Seine' }
+  ];
+
+  const FIRST_NAMES = ['Jean', 'Pierre', 'Michel', 'Philippe', 'Alain', 'Bernard', 'Jacques', 'Daniel',
+    'Patrick', 'Serge', 'Christian', 'Claude', 'Marc', 'Laurent', 'Stephane', 'Thierry',
+    'Francois', 'Eric', 'Pascal', 'Olivier', 'Nicolas', 'David', 'Christophe', 'Didier',
+    'Bruno', 'Robert', 'Gilles', 'Andre', 'Gerard', 'Yves', 'Paul', 'Henri',
+    'Marie', 'Isabelle', 'Catherine', 'Nathalie', 'Sophie', 'Sandrine', 'Valerie', 'Christine'];
+
+  const LAST_NAMES = ['MARTIN', 'BERNARD', 'THOMAS', 'PETIT', 'ROBERT', 'RICHARD', 'DURAND', 'DUBOIS',
+    'MOREAU', 'LAURENT', 'SIMON', 'MICHEL', 'LEFEBVRE', 'LEROY', 'ROUX', 'DAVID',
+    'BERTRAND', 'MOREL', 'FOURNIER', 'GIRARD', 'BONNET', 'DUPONT', 'LAMBERT', 'FONTAINE',
+    'ROUSSEAU', 'VINCENT', 'MULLER', 'LEFEVRE', 'FAURE', 'ANDRE', 'MERCIER', 'BLANC'];
+
+  const FFB_RANKINGS = ['N1', 'N2', 'N3', 'R1', 'R2', 'R3', 'R4', 'D1', 'D2', 'D3'];
+
+  try {
+    let stats = { clubs: 0, players: 0, tournaments: 0, inscriptions: 0 };
+
+    // 1. Create clubs
+    for (const club of DEMO_CLUBS) {
+      const existing = await dbGet(`SELECT id FROM clubs WHERE name = $1`, [club.name]);
+      if (!existing) {
+        await dbRun(`INSERT INTO clubs (name, display_name, city) VALUES ($1, $2, $3)`,
+          [club.name, club.display_name, club.city]);
+        stats.clubs++;
+      }
+    }
+
+    // 2. Create players
+    const existingPlayers = await dbAll(`SELECT licence FROM players WHERE licence LIKE 'D%'`);
+    const existingLicences = new Set(existingPlayers.map(p => p.licence));
+    const usedNames = new Set();
+    const players = [];
+
+    for (let i = 0; i < 80; i++) {
+      let firstName, lastName, fullName;
+      do {
+        firstName = randomElement(FIRST_NAMES);
+        lastName = randomElement(LAST_NAMES);
+        fullName = `${firstName} ${lastName}`;
+      } while (usedNames.has(fullName));
+      usedNames.add(fullName);
+
+      const licence = generateLicence(i);
+      if (existingLicences.has(licence)) continue;
+
+      const club = randomElement(DEMO_CLUBS);
+      players.push({
+        licence, first_name: firstName, last_name: lastName, club: club.name,
+        rank_libre: randomElement(FFB_RANKINGS), rank_cadre: randomElement(FFB_RANKINGS),
+        rank_bande: randomElement(FFB_RANKINGS), rank_3bandes: randomElement(FFB_RANKINGS),
+        email: `${firstName.toLowerCase()}.${lastName.toLowerCase()}@demo.com`
+      });
+    }
+
+    for (const p of players) {
+      await dbRun(
+        `INSERT INTO players (licence, first_name, last_name, club, rank_libre, rank_cadre, rank_bande, rank_3bandes, email)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        [p.licence, p.first_name, p.last_name, p.club, p.rank_libre, p.rank_cadre, p.rank_bande, p.rank_3bandes, p.email]
+      );
+      stats.players++;
+    }
+
+    // 3. Create tournaments
+    const maxIdResult = await dbGet(`SELECT COALESCE(MAX(tournoi_id), 0) as max_id FROM tournoi_ext`);
+    let tournoiId = (maxIdResult?.max_id || 0) + 1;
+    const tournaments = [];
+    const now = new Date();
+
+    for (const mode of ['LIBRE', 'BANDE', '3 BANDES']) {
+      for (const categorie of ['N3', 'R1', 'R2']) {
+        for (let t = 1; t <= 3; t++) {
+          const tDate = new Date(now);
+          tDate.setMonth(tDate.getMonth() + (t - 2)); // T1: -1 month, T2: now, T3: +1 month
+          tDate.setDate(randomInt(1, 28));
+
+          tournaments.push({
+            tournoi_id: tournoiId++,
+            nom: `Tournoi ${t} ${mode} ${categorie}`,
+            mode, categorie,
+            debut: tDate.toISOString().split('T')[0],
+            lieu: randomElement(DEMO_CLUBS.map(c => c.city))
+          });
+        }
+      }
+    }
+
+    for (const t of tournaments) {
+      await dbRun(
+        `INSERT INTO tournoi_ext (tournoi_id, nom, mode, categorie, debut, lieu) VALUES ($1, $2, $3, $4, $5, $6)`,
+        [t.tournoi_id, t.nom, t.mode, t.categorie, t.debut, t.lieu]
+      );
+      stats.tournaments++;
+    }
+
+    // 4. Create inscriptions
+    const allPlayers = await dbAll(`SELECT licence, email FROM players WHERE licence LIKE 'D%'`);
+
+    for (const tournament of tournaments) {
+      const numInscriptions = randomInt(8, 16);
+      const shuffled = [...allPlayers].sort(() => Math.random() - 0.5);
+      const selected = shuffled.slice(0, Math.min(numInscriptions, shuffled.length));
+
+      for (const player of selected) {
+        const existing = await dbGet(
+          `SELECT inscription_id FROM inscriptions WHERE tournoi_id = $1 AND licence = $2`,
+          [tournament.tournoi_id, player.licence]
+        );
+
+        if (!existing) {
+          const maxInscId = await dbGet(`SELECT COALESCE(MAX(inscription_id), 0) as max_id FROM inscriptions`);
+          const inscriptionId = (maxInscId?.max_id || 0) + 1;
+
+          await dbRun(
+            `INSERT INTO inscriptions (inscription_id, tournoi_id, licence, email, source, timestamp)
+             VALUES ($1, $2, $3, $4, 'demo', CURRENT_TIMESTAMP)`,
+            [inscriptionId, tournament.tournoi_id, player.licence, player.email]
+          );
+          stats.inscriptions++;
+        }
+      }
+    }
+
+    res.json({
+      success: true,
+      message: 'Full demo data seeded successfully!',
+      stats,
+      login: { username: 'demo', password: 'demo123' }
+    });
+  } catch (error) {
+    console.error('Full seed error:', error);
     res.status(500).json({ error: error.message });
   }
 });
