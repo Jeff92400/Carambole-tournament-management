@@ -318,9 +318,6 @@ app.get('/api/seed-demo-full', async (req, res) => {
       }
     }
 
-    // Clean up any wrongly created categories (with '3 BANDES' instead of '3BANDES')
-    await dbRun(`DELETE FROM tournaments WHERE category_id IN (SELECT id FROM categories WHERE game_type = '3 BANDES')`);
-    await dbRun(`DELETE FROM categories WHERE game_type = '3 BANDES'`);
 
     // 1. Create clubs
     for (const club of DEMO_CLUBS) {
@@ -400,53 +397,45 @@ app.get('/api/seed-demo-full', async (req, res) => {
       stats.tournaments++;
     }
 
-    // 3b. Create categories and internal tournaments (for generate-poules season dropdown)
+    // 3b. Create internal tournaments for existing categories (for generate-poules season dropdown)
     const currentMonth = now.getMonth();
     const currentYear = now.getFullYear();
     const currentSeason = currentMonth >= 8 ? `${currentYear}-${currentYear + 1}` : `${currentYear - 1}-${currentYear}`;
 
-    // Create categories for each mode/level combination
-    const GAME_TYPES = ['LIBRE', 'BANDE', '3BANDES'];
-    const LEVELS = ['N3', 'R1', 'R2'];
-    stats.categories = 0;
     stats.internalTournaments = 0;
 
-    for (const gameType of GAME_TYPES) {
-      for (const level of LEVELS) {
-        const displayName = `${gameType} ${level}`;
+    // Get valid game mode codes from settings
+    const gameModes = await dbAll(`SELECT code FROM game_modes WHERE is_active = true`);
+    const validCodes = new Set(gameModes.map(m => m.code.toUpperCase()));
 
-        // Insert or get category
-        let category = await dbGet(
-          `SELECT id FROM categories WHERE game_type = $1 AND level = $2`,
-          [gameType, level]
+    // Clean up wrongly created categories (those whose game_type doesn't match a valid game_mode code)
+    const allCategories = await dbAll(`SELECT id, game_type FROM categories`);
+    for (const cat of allCategories) {
+      if (!validCodes.has(cat.game_type.toUpperCase())) {
+        // Delete tournaments referencing this category first
+        await dbRun(`DELETE FROM tournaments WHERE category_id = $1`, [cat.id]);
+        await dbRun(`DELETE FROM categories WHERE id = $1`, [cat.id]);
+        stats.cleared.categories = (stats.cleared.categories || 0) + 1;
+      }
+    }
+
+    // Get existing valid categories and create tournaments for them
+    const existingCategories = await dbAll(`SELECT id, game_type, level FROM categories`);
+
+    for (const category of existingCategories) {
+      // Create tournaments 1, 2, 3 for current season
+      for (let tournamentNum = 1; tournamentNum <= 3; tournamentNum++) {
+        const existing = await dbGet(
+          `SELECT id FROM tournaments WHERE category_id = $1 AND tournament_number = $2 AND season = $3`,
+          [category.id, tournamentNum, currentSeason]
         );
 
-        if (!category) {
+        if (!existing) {
           await dbRun(
-            `INSERT INTO categories (game_type, level, display_name) VALUES ($1, $2, $3)`,
-            [gameType, level, displayName]
-          );
-          category = await dbGet(
-            `SELECT id FROM categories WHERE game_type = $1 AND level = $2`,
-            [gameType, level]
-          );
-          stats.categories++;
-        }
-
-        // Create tournaments 1, 2, 3 for current season
-        for (let tournamentNum = 1; tournamentNum <= 3; tournamentNum++) {
-          const existing = await dbGet(
-            `SELECT id FROM tournaments WHERE category_id = $1 AND tournament_number = $2 AND season = $3`,
+            `INSERT INTO tournaments (category_id, tournament_number, season) VALUES ($1, $2, $3)`,
             [category.id, tournamentNum, currentSeason]
           );
-
-          if (!existing) {
-            await dbRun(
-              `INSERT INTO tournaments (category_id, tournament_number, season) VALUES ($1, $2, $3)`,
-              [category.id, tournamentNum, currentSeason]
-            );
-            stats.internalTournaments++;
-          }
+          stats.internalTournaments++;
         }
       }
     }
