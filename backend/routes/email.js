@@ -1847,6 +1847,92 @@ router.get('/convocation-files/filters', authenticateToken, async (req, res) => 
   }
 });
 
+// Purge convocation files (with role-based restrictions)
+// - Admin: can purge anytime (all or by date range)
+// - Viewer/Editor: can only purge 2 months before season start
+router.delete('/convocation-files/purge', authenticateToken, async (req, res) => {
+  const db = require('../db-loader');
+  const { startDate, endDate } = req.query;
+  const userRole = req.user?.role || 'viewer';
+
+  try {
+    // Get season cutoff month from settings (default September = 8)
+    const seasonCutoffMonth = parseInt(await appSettings.getSetting('season_cutoff_month') || '8');
+
+    // Check if viewer/editor is allowed to purge (only 2 months before season start)
+    if (userRole !== 'admin') {
+      const now = new Date();
+      const currentMonth = now.getMonth(); // 0-indexed
+
+      // Calculate allowed purge period (2 months before season start)
+      // If season starts in September (8), purge allowed from July (6) onwards
+      const purgeAllowedFromMonth = (seasonCutoffMonth - 2 + 12) % 12;
+
+      // Check if current month is within the allowed window
+      // Window is: (purgeAllowedFromMonth) to (seasonCutoffMonth - 1)
+      let isAllowed = false;
+      if (purgeAllowedFromMonth <= seasonCutoffMonth - 1) {
+        // Normal case: e.g., July(6) to August(7) for September start
+        isAllowed = currentMonth >= purgeAllowedFromMonth && currentMonth < seasonCutoffMonth;
+      } else {
+        // Wrap around case (unlikely but handle it)
+        isAllowed = currentMonth >= purgeAllowedFromMonth || currentMonth < seasonCutoffMonth;
+      }
+
+      if (!isAllowed) {
+        const monthNames = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+                           'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
+        return res.status(403).json({
+          error: `Purge non autorisée. Les utilisateurs non-admin peuvent uniquement purger à partir de ${monthNames[purgeAllowedFromMonth]} (2 mois avant le début de saison).`
+        });
+      }
+    }
+
+    // Build delete query
+    let query = 'DELETE FROM convocation_files WHERE 1=1';
+    const params = [];
+    let paramIndex = 1;
+
+    if (startDate) {
+      query += ` AND created_at >= $${paramIndex++}`;
+      params.push(startDate);
+    }
+    if (endDate) {
+      query += ` AND created_at <= $${paramIndex++}`;
+      params.push(endDate + ' 23:59:59');
+    }
+
+    // Execute delete
+    const result = await new Promise((resolve, reject) => {
+      db.run(query, params, function(err) {
+        if (err) reject(err);
+        else resolve({ deletedCount: this.changes });
+      });
+    });
+
+    // Log the action
+    const { logAdminAction, ACTION_TYPES } = require('../utils/admin-logger');
+    logAdminAction({
+      req,
+      action: ACTION_TYPES.DELETE_DATA || 'DELETE_DATA',
+      details: `Purge convocation files: ${result.deletedCount} fichier(s) supprimé(s)${startDate ? ` du ${startDate}` : ''}${endDate ? ` au ${endDate}` : ''}`,
+      targetType: 'convocation_files',
+      targetId: null,
+      targetName: 'Historique convocations'
+    });
+
+    res.json({
+      success: true,
+      message: `${result.deletedCount} fichier(s) supprimé(s)`,
+      deletedCount: result.deletedCount
+    });
+
+  } catch (error) {
+    console.error('Error purging convocation files:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Send club reminder email when hosting a tournament
 router.post('/send-club-reminder', authenticateToken, async (req, res) => {
   const db = require('../db-loader');

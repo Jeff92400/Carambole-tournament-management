@@ -744,6 +744,25 @@
         </div>
       </div>
 
+      <!-- Purge Section (Admin expanded, others simple) -->
+      <div id="purgeSection" style="margin-bottom: 20px; padding: 15px; background: #fff5f5; border: 1px solid #f5c6cb; border-radius: 8px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 15px;">
+          <div>
+            <strong style="color: #721c24;">🗑️ Purge de l'historique</strong>
+            <p style="margin: 5px 0 0 0; font-size: 13px; color: #856404;" id="purgeRestrictionNote"></p>
+          </div>
+          <div class="admin-only" style="display: none; align-items: center; gap: 10px; flex-wrap: wrap;">
+            <label style="font-size: 13px; color: #495057;">Du:</label>
+            <input type="date" id="purgeStartDate" style="padding: 8px; border: 1px solid #ced4da; border-radius: 4px;">
+            <label style="font-size: 13px; color: #495057;">Au:</label>
+            <input type="date" id="purgeEndDate" style="padding: 8px; border: 1px solid #ced4da; border-radius: 4px;">
+          </div>
+          <button class="btn btn-danger" id="purgeHistoryBtn" style="padding: 8px 15px; font-size: 13px;">
+            Purger
+          </button>
+        </div>
+      </div>
+
       <!-- History Table -->
       <div style="overflow-x: auto;">
         <table id="historyTable" style="width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden;">
@@ -4853,6 +4872,75 @@
     document.getElementById('historyFilterCategory').addEventListener('change', loadConvocationHistory);
     document.getElementById('historyFilterTournament').addEventListener('change', loadConvocationHistory);
     document.getElementById('historyFilterSeason').addEventListener('change', loadConvocationHistory);
+
+    // Purge functionality
+    function updatePurgeRestrictionNote() {
+      const noteEl = document.getElementById('purgeRestrictionNote');
+      const isAdmin = userRole === 'admin';
+
+      if (isAdmin) {
+        noteEl.textContent = 'Admin: purge possible à tout moment (tous les fichiers ou par période)';
+        noteEl.style.color = '#155724';
+        // Show date inputs for admin
+        document.querySelectorAll('#purgeSection .admin-only').forEach(el => el.style.display = 'flex');
+      } else {
+        noteEl.textContent = 'Purge autorisée uniquement 2 mois avant le début de la nouvelle saison.';
+        noteEl.style.color = '#856404';
+      }
+    }
+
+    // Initialize purge section
+    updatePurgeRestrictionNote();
+
+    // Purge button handler
+    document.getElementById('purgeHistoryBtn').addEventListener('click', async () => {
+      const isAdmin = userRole === 'admin';
+      const startDate = document.getElementById('purgeStartDate')?.value;
+      const endDate = document.getElementById('purgeEndDate')?.value;
+
+      // Build confirmation message
+      let confirmMsg = 'Êtes-vous sûr de vouloir supprimer ';
+      if (isAdmin && (startDate || endDate)) {
+        if (startDate && endDate) {
+          confirmMsg += `les fichiers du ${startDate} au ${endDate}`;
+        } else if (startDate) {
+          confirmMsg += `les fichiers à partir du ${startDate}`;
+        } else {
+          confirmMsg += `les fichiers jusqu'au ${endDate}`;
+        }
+      } else {
+        confirmMsg += 'TOUS les fichiers de l\'historique';
+      }
+      confirmMsg += ' ? Cette action est irréversible.';
+
+      if (!confirm(confirmMsg)) return;
+
+      try {
+        const params = new URLSearchParams();
+        if (isAdmin) {
+          if (startDate) params.append('startDate', startDate);
+          if (endDate) params.append('endDate', endDate);
+        }
+
+        const response = await fetch(`${API_URL}/email/convocation-files/purge?${params}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          alert(result.error || 'Erreur lors de la purge');
+          return;
+        }
+
+        alert(result.message);
+        loadConvocationHistory(); // Refresh the list
+      } catch (error) {
+        console.error('Error purging files:', error);
+        alert('Erreur lors de la purge');
+      }
+    });
   </script>
 
   <!-- Forfait Management Modal -->
