@@ -1448,11 +1448,18 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
         html: summaryHtml
       });
 
+      results.summarySent = true;
+      results.summaryEmail = summaryEmailAddress;
       console.log(`Summary email sent to ${summaryEmailAddress}`);
     } catch (summaryError) {
+      results.summarySent = false;
+      results.summaryError = summaryError.message;
       console.error('Error sending summary email:', summaryError);
       // Don't fail the whole operation if summary email fails
     }
+  } else {
+    results.summarySent = false;
+    results.summaryError = !summaryEmailAddress ? 'No summary email configured' : 'No emails attempted';
   }
 
   // Update campaign record with results
@@ -1691,9 +1698,10 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
     targetName: `${category.display_name} - ${tournamentLabel}`
   });
 
+  const summaryStatus = results.summarySent ? ' + récapitulatif envoyé' : (results.summaryError ? ` (récap: ${results.summaryError})` : '');
   res.json({
     success: true,
-    message: `Emails envoyes: ${results.sent.length}, Echecs: ${results.failed.length}, Ignores: ${results.skipped.length}${results.sent.length > 0 ? ' + récapitulatif envoyé' : ''}`,
+    message: `Emails envoyes: ${results.sent.length}, Echecs: ${results.failed.length}, Ignores: ${results.skipped.length}${summaryStatus}`,
     results
   });
 });
