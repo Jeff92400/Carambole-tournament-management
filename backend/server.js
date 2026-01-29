@@ -590,6 +590,68 @@ app.get('/api/normalize-modes', async (req, res) => {
   }
 });
 
+// TEMPORARY: Reset categories - delete all and recreate from game_modes × ffb_rankings
+app.get('/api/reset-categories', async (req, res) => {
+  const secret = req.query.secret;
+  if (secret !== 'seed-demo-2024') {
+    return res.status(403).json({ error: 'Invalid secret' });
+  }
+
+  const dbRun = (sql, params = []) => new Promise((resolve, reject) => {
+    db.run(sql, params, function(err) {
+      if (err) reject(err);
+      else resolve(this);
+    });
+  });
+
+  const dbAll = (sql, params = []) => new Promise((resolve, reject) => {
+    db.all(sql, params, (err, rows) => {
+      if (err) reject(err);
+      else resolve(rows || []);
+    });
+  });
+
+  try {
+    // 1. Delete all dependent data first (order matters for foreign keys)
+    await dbRun(`DELETE FROM convocation_files`);
+    await dbRun(`DELETE FROM rankings`);
+    await dbRun(`DELETE FROM tournaments`);
+    await dbRun(`DELETE FROM category_mapping`);
+    await dbRun(`DELETE FROM categories`);
+
+    // 2. Get all active game_modes and ffb_rankings
+    const gameModes = await dbAll(`SELECT code, display_name FROM game_modes WHERE is_active = true ORDER BY display_order`);
+    const rankings = await dbAll(`SELECT code, display_name FROM ffb_rankings WHERE is_active = true ORDER BY level_order`);
+
+    // 3. Create categories for each combination
+    let created = 0;
+    for (const mode of gameModes) {
+      for (const rank of rankings) {
+        const displayName = `${mode.display_name} - ${rank.code}`;
+        await dbRun(
+          `INSERT INTO categories (game_type, level, display_name, is_active) VALUES ($1, $2, $3, true)`,
+          [mode.display_name, rank.code, displayName]
+        );
+        created++;
+      }
+    }
+
+    // 4. Get final state
+    const categories = await dbAll(`SELECT * FROM categories ORDER BY game_type, level`);
+
+    res.json({
+      success: true,
+      message: `Categories reset: ${created} created from ${gameModes.length} modes × ${rankings.length} rankings`,
+      gameModes: gameModes.map(m => m.display_name),
+      rankings: rankings.map(r => r.code),
+      categories: categories.map(c => ({ id: c.id, game_type: c.game_type, level: c.level, display_name: c.display_name }))
+    });
+  } catch (error) {
+    console.error('Reset categories error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // TEMPORARY: Sync categories with game_modes (fixes display_name inconsistencies)
 app.get('/api/sync-categories', async (req, res) => {
   const secret = req.query.secret;
