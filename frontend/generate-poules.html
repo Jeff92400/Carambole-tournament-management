@@ -287,19 +287,19 @@
     <div id="successMessage" class="success" style="display: none;"></div>
 
     <!-- Warning: Update inscriptions -->
-    <div class="card csv-import-btn" id="inscriptionWarning" style="background: linear-gradient(135deg, #fff3cd 0%, #ffeeba 100%); border-left: 5px solid #ffc107; margin-bottom: 20px;">
+    <div class="card" id="inscriptionWarning" style="background: linear-gradient(135deg, #fff3cd 0%, #ffeeba 100%); border-left: 5px solid #ffc107; margin-bottom: 20px;">
       <div style="display: flex; align-items: flex-start; gap: 15px;">
         <div style="font-size: 32px;">⚠️</div>
         <div style="flex: 1;">
           <h3 style="margin: 0 0 10px 0; color: #856404;">Mise à jour des inscriptions</h3>
-          <p style="margin: 0 0 10px 0; color: #856404;">
+          <p class="csv-import-btn" style="margin: 0 0 10px 0; color: #856404;">
             Avant de générer les poules, assurez-vous que les fichiers CSV sont à jour.
           </p>
-          <div id="lastImportInfo" style="margin: 0 0 15px 0; padding: 10px 12px; background: rgba(255,255,255,0.5); border-radius: 4px;">
+          <div id="lastImportInfo" class="csv-import-btn" style="margin: 0 0 15px 0; padding: 10px 12px; background: rgba(255,255,255,0.5); border-radius: 4px;">
             <span style="color: #666;">Chargement des informations...</span>
           </div>
           <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-            <a href="import-external.html" class="btn" style="background: #ffc107; color: #856404; font-weight: bold;">
+            <a href="import-external.html" class="btn csv-import-btn" style="background: #ffc107; color: #856404; font-weight: bold;">
               📤 Mettre à jour les inscriptions
             </a>
             <button class="btn" id="skipInscriptionUpdate" style="background: #6c757d;">
