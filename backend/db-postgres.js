@@ -682,6 +682,31 @@ async function initializeDatabase() {
       CREATE INDEX IF NOT EXISTS idx_convocation_poules_tournoi ON convocation_poules(tournoi_id)
     `);
 
+    // Convocation files archive table (stores PDF versions)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS convocation_files (
+        id SERIAL PRIMARY KEY,
+        category_id INTEGER REFERENCES categories(id),
+        tournament_num INTEGER NOT NULL,
+        season VARCHAR(20) NOT NULL,
+        tournoi_ext_id INTEGER REFERENCES tournoi_ext(tournoi_id),
+        pdf_data BYTEA NOT NULL,
+        filename TEXT NOT NULL,
+        file_size INTEGER,
+        is_sent BOOLEAN DEFAULT FALSE,
+        sent_at TIMESTAMP,
+        created_by TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        notes TEXT
+      )
+    `);
+
+    // Index for efficient history queries
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_convocation_files_lookup
+        ON convocation_files(category_id, tournament_num, season)
+    `);
+
     // Game modes reference table (Modes de jeu)
     await client.query(`
       CREATE TABLE IF NOT EXISTS game_modes (

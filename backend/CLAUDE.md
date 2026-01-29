@@ -66,6 +66,10 @@ npm run backup
 - `convocation_poules`: Stores full poule composition when convocations are sent
   - Shared with Player App so players can view all poules for their tournament
   - Columns: `tournoi_id`, `poule_number`, `licence`, `player_name`, `club`, `location_name`, `location_address`, `start_time`, `player_order`
+- `convocation_files`: Archives PDF convocations when sent (for history/download)
+  - Stores all versions: new entry created each time convocations are sent (e.g., after forfait)
+  - Columns: `category_id`, `tournament_num`, `season`, `tournoi_ext_id`, `pdf_data` (BYTEA), `filename`, `is_sent`, `sent_at`, `notes`
+  - API: `GET /api/email/convocation-files` (list), `GET /api/email/convocation-files/:id/download`
 - `player_accounts`: Separate auth for Player App with `player_app_role` (joueur/admin)
 - `player_invitations`: Tracks invitation emails sent to players for Player App registration
   - Links to `player_contacts` table, stores sent_at, sent_by, has_signed_up status

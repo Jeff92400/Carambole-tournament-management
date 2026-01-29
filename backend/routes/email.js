@@ -1577,6 +1577,70 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
     }
   }
 
+  // Archive the convocation PDF (if not test mode and emails were sent)
+  if (!isTestMode && results.sent.length > 0) {
+    try {
+      // Build tournament info for PDF generation
+      const tournamentInfo = {
+        categoryName: category.display_name,
+        tournamentNum: tournament,
+        season: season,
+        date: tournamentDate,
+        isFinale: isFinale || tournament === 'Finale' || tournament === '4'
+      };
+
+      // Get branding settings
+      const brandingSettings = await appSettings.getSettingsBatch([
+        'primary_color', 'secondary_color', 'accent_color'
+      ]);
+
+      // Generate summary PDF for archival
+      const archivePdfBuffer = await generateSummaryConvocationPDF(
+        tournamentInfo,
+        poules,
+        locations || [],
+        gameParams,
+        selectedDistance,
+        rankingData,
+        brandingSettings
+      );
+
+      // Build filename with timestamp
+      const tournamentNumForFile = (isFinale || tournament === 'Finale' || tournament === '4') ? 'Finale' : `T${tournament}`;
+      const filename = `Convocation_${category.display_name.replace(/\s+/g, '_')}_${tournamentNumForFile}_${season}_${Date.now()}.pdf`;
+      const tournamentNumInt = (isFinale || tournament === 'Finale' || tournament === '4') ? 4 : parseInt(tournament);
+
+      // Save to convocation_files table
+      await new Promise((resolve, reject) => {
+        db.run(
+          `INSERT INTO convocation_files
+           (category_id, tournament_num, season, tournoi_ext_id, pdf_data, filename, file_size, is_sent, sent_at, created_by, notes)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, TRUE, CURRENT_TIMESTAMP, $8, $9)`,
+          [
+            category.id,
+            tournamentNumInt,
+            season,
+            tournoiId,
+            archivePdfBuffer,
+            filename,
+            archivePdfBuffer.length,
+            req.user?.username || 'system',
+            `Convocations envoyees a ${results.sent.length} joueur(s)`
+          ],
+          (err) => {
+            if (err) reject(err);
+            else resolve();
+          }
+        );
+      });
+
+      console.log(`[Convocation Archive] Saved PDF: ${filename}`);
+    } catch (archiveErr) {
+      console.error('Error archiving convocation PDF:', archiveErr);
+      // Don't fail the whole operation if archiving fails
+    }
+  }
+
   // Log the convocation action
   logAdminAction({
     req,
@@ -1671,6 +1735,115 @@ router.post('/save-poules', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Error saving poules:', error);
     res.status(500).json({ error: 'Failed to save poules' });
+  }
+});
+
+// ============================================
+// CONVOCATION FILES ARCHIVE ENDPOINTS
+// ============================================
+
+// Get convocation file history with filters
+router.get('/convocation-files', authenticateToken, async (req, res) => {
+  const db = require('../db-loader');
+  const { categoryId, tournamentNum, season, tournoiExtId } = req.query;
+
+  let query = `
+    SELECT cf.id, cf.category_id, cf.tournament_num, cf.season, cf.tournoi_ext_id,
+           cf.filename, cf.file_size, cf.is_sent, cf.sent_at, cf.created_by,
+           cf.created_at, cf.notes,
+           c.display_name as category_name,
+           t.nom as tournament_name, t.mode, t.categorie as tournament_category
+    FROM convocation_files cf
+    LEFT JOIN categories c ON cf.category_id = c.id
+    LEFT JOIN tournoi_ext t ON cf.tournoi_ext_id = t.tournoi_id
+    WHERE 1=1
+  `;
+  const params = [];
+  let paramIndex = 1;
+
+  if (categoryId) {
+    query += ` AND cf.category_id = $${paramIndex++}`;
+    params.push(categoryId);
+  }
+  if (tournamentNum) {
+    query += ` AND cf.tournament_num = $${paramIndex++}`;
+    params.push(tournamentNum);
+  }
+  if (season) {
+    query += ` AND cf.season = $${paramIndex++}`;
+    params.push(season);
+  }
+  if (tournoiExtId) {
+    query += ` AND cf.tournoi_ext_id = $${paramIndex++}`;
+    params.push(tournoiExtId);
+  }
+
+  query += ` ORDER BY cf.created_at DESC`;
+
+  db.all(query, params, (err, rows) => {
+    if (err) {
+      console.error('Error fetching convocation files:', err);
+      return res.status(500).json({ error: err.message });
+    }
+    res.json(rows || []);
+  });
+});
+
+// Download specific convocation file
+router.get('/convocation-files/:id/download', authenticateToken, async (req, res) => {
+  const db = require('../db-loader');
+  const { id } = req.params;
+
+  db.get(
+    'SELECT pdf_data, filename FROM convocation_files WHERE id = $1',
+    [id],
+    (err, row) => {
+      if (err) {
+        console.error('Error fetching convocation file:', err);
+        return res.status(500).json({ error: err.message });
+      }
+      if (!row) {
+        return res.status(404).json({ error: 'File not found' });
+      }
+
+      const pdfBuffer = Buffer.isBuffer(row.pdf_data) ? row.pdf_data : Buffer.from(row.pdf_data);
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${row.filename}"`);
+      res.send(pdfBuffer);
+    }
+  );
+});
+
+// Get available filter options for history dropdowns
+router.get('/convocation-files/filters', authenticateToken, async (req, res) => {
+  const db = require('../db-loader');
+
+  try {
+    // Get distinct categories with files
+    const categories = await new Promise((resolve, reject) => {
+      db.all(
+        `SELECT DISTINCT cf.category_id, c.display_name, cf.season
+         FROM convocation_files cf
+         JOIN categories c ON cf.category_id = c.id
+         ORDER BY c.display_name`,
+        [],
+        (err, rows) => err ? reject(err) : resolve(rows || [])
+      );
+    });
+
+    // Get distinct seasons
+    const seasons = await new Promise((resolve, reject) => {
+      db.all(
+        `SELECT DISTINCT season FROM convocation_files ORDER BY season DESC`,
+        [],
+        (err, rows) => err ? reject(err) : resolve(rows || [])
+      );
+    });
+
+    res.json({ categories, seasons: seasons.map(s => s.season) });
+  } catch (error) {
+    console.error('Error fetching filter options:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 

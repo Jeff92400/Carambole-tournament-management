@@ -702,6 +702,76 @@
         </div>
       </div>
     </div>
+
+    <!-- Historique & Archives Section -->
+    <div class="card" id="historySection" style="margin-top: 30px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-top: 4px solid #6c757d;">
+      <h3 style="color: #495057; display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">
+        <span style="font-size: 24px;">📁</span>
+        Historique & Archives des Convocations
+      </h3>
+      <p style="color: #6c757d; margin-bottom: 20px; font-size: 14px;">
+        Retrouvez toutes les versions des convocations envoyées, incluant les modifications suite aux forfaits ou changements de lieu.
+      </p>
+
+      <!-- Filters -->
+      <div style="display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 15px; margin-bottom: 20px; padding: 15px; background: white; border-radius: 8px;">
+        <div>
+          <label style="display: block; margin-bottom: 5px; font-weight: 500; color: #495057; font-size: 13px;">Catégorie</label>
+          <select id="historyFilterCategory" style="width: 100%; padding: 10px; border: 1px solid #ced4da; border-radius: 4px;">
+            <option value="">Toutes les catégories</option>
+          </select>
+        </div>
+        <div>
+          <label style="display: block; margin-bottom: 5px; font-weight: 500; color: #495057; font-size: 13px;">Tournoi</label>
+          <select id="historyFilterTournament" style="width: 100%; padding: 10px; border: 1px solid #ced4da; border-radius: 4px;">
+            <option value="">Tous les tournois</option>
+            <option value="1">Tournoi 1</option>
+            <option value="2">Tournoi 2</option>
+            <option value="3">Tournoi 3</option>
+            <option value="4">Finale</option>
+          </select>
+        </div>
+        <div>
+          <label style="display: block; margin-bottom: 5px; font-weight: 500; color: #495057; font-size: 13px;">Saison</label>
+          <select id="historyFilterSeason" style="width: 100%; padding: 10px; border: 1px solid #ced4da; border-radius: 4px;">
+            <option value="">Toutes les saisons</option>
+          </select>
+        </div>
+        <div style="display: flex; align-items: flex-end;">
+          <button class="btn" id="refreshHistoryBtn" style="background: #6c757d; padding: 10px 20px;">
+            🔄 Actualiser
+          </button>
+        </div>
+      </div>
+
+      <!-- History Table -->
+      <div style="overflow-x: auto;">
+        <table id="historyTable" style="width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden;">
+          <thead>
+            <tr style="background: #495057; color: white;">
+              <th style="padding: 12px 15px; text-align: left;">Date</th>
+              <th style="padding: 12px 15px; text-align: left;">Catégorie</th>
+              <th style="padding: 12px 15px; text-align: left;">Tournoi</th>
+              <th style="padding: 12px 15px; text-align: center;">Statut</th>
+              <th style="padding: 12px 15px; text-align: left;">Notes</th>
+              <th style="padding: 12px 15px; text-align: center;">Action</th>
+            </tr>
+          </thead>
+          <tbody id="historyTableBody">
+            <tr>
+              <td colspan="6" style="padding: 40px; text-align: center; color: #6c757d;">
+                Chargement de l'historique...
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div id="noHistoryMessage" style="display: none; text-align: center; padding: 40px; color: #6c757d;">
+        <span style="font-size: 48px;">📭</span>
+        <p style="margin-top: 15px;">Aucune convocation archivée pour ces critères.</p>
+      </div>
+    </div>
   </div>
 
   <script src="js/auth-utils.js"></script>
@@ -4616,6 +4686,173 @@
       closeReplacementModal();
       await regeneratePoules(true);
     }
+
+    // ============================================
+    // CONVOCATION HISTORY SECTION
+    // ============================================
+
+    // Load convocation history
+    async function loadConvocationHistory() {
+      const tbody = document.getElementById('historyTableBody');
+      const noHistoryMsg = document.getElementById('noHistoryMessage');
+      const table = document.getElementById('historyTable');
+
+      // Build query params from filters
+      const params = new URLSearchParams();
+      const categoryFilter = document.getElementById('historyFilterCategory').value;
+      const tournamentFilter = document.getElementById('historyFilterTournament').value;
+      const seasonFilter = document.getElementById('historyFilterSeason').value;
+
+      if (categoryFilter) params.append('categoryId', categoryFilter);
+      if (tournamentFilter) params.append('tournamentNum', tournamentFilter);
+      if (seasonFilter) params.append('season', seasonFilter);
+
+      try {
+        const response = await fetch(`${API_URL}/email/convocation-files?${params}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (!response.ok) throw new Error('Failed to load history');
+
+        const files = await response.json();
+
+        if (files.length === 0) {
+          table.style.display = 'none';
+          noHistoryMsg.style.display = 'block';
+          return;
+        }
+
+        table.style.display = 'table';
+        noHistoryMsg.style.display = 'none';
+
+        // Find latest version per category/tournament combo
+        const latestVersions = {};
+        files.forEach(f => {
+          const key = `${f.category_id}-${f.tournament_num}-${f.season}`;
+          if (!latestVersions[key] || new Date(f.created_at) > new Date(latestVersions[key].created_at)) {
+            latestVersions[key] = f;
+          }
+        });
+
+        tbody.innerHTML = files.map(file => {
+          const dateStr = new Date(file.created_at).toLocaleDateString('fr-FR', {
+            day: '2-digit', month: '2-digit', year: 'numeric',
+            hour: '2-digit', minute: '2-digit'
+          });
+
+          const tournamentLabel = file.tournament_num === 4 ? 'Finale' : `Tournoi ${file.tournament_num}`;
+          const key = `${file.category_id}-${file.tournament_num}-${file.season}`;
+          const isLatest = latestVersions[key]?.id === file.id;
+
+          const statusBadge = file.is_sent
+            ? `<span style="background: #28a745; color: white; padding: 4px 10px; border-radius: 12px; font-size: 12px;">Envoyé</span>`
+            : `<span style="background: #ffc107; color: #333; padding: 4px 10px; border-radius: 12px; font-size: 12px;">Brouillon</span>`;
+
+          const latestBadge = isLatest
+            ? `<span style="background: #17a2b8; color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px; margin-left: 5px;">ACTUEL</span>`
+            : '';
+
+          const rowStyle = isLatest ? 'background: #e7f5ff;' : '';
+
+          return `
+            <tr style="border-bottom: 1px solid #dee2e6; ${rowStyle}">
+              <td style="padding: 12px 15px;">${dateStr}${latestBadge}</td>
+              <td style="padding: 12px 15px;">${file.category_name || file.tournament_category || '-'}</td>
+              <td style="padding: 12px 15px;">${tournamentLabel}</td>
+              <td style="padding: 12px 15px; text-align: center;">${statusBadge}</td>
+              <td style="padding: 12px 15px; font-size: 13px; color: #666;">${file.notes || '-'}</td>
+              <td style="padding: 12px 15px; text-align: center;">
+                <button onclick="downloadConvocationFile(${file.id}, '${file.filename.replace(/'/g, "\\'")}')"
+                        class="btn" style="background: var(--color-primary, #1F4788); padding: 6px 12px; font-size: 12px;">
+                  Télécharger
+                </button>
+              </td>
+            </tr>
+          `;
+        }).join('');
+
+      } catch (error) {
+        console.error('Error loading history:', error);
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="6" style="padding: 40px; text-align: center; color: #dc3545;">
+              Erreur lors du chargement de l'historique
+            </td>
+          </tr>
+        `;
+      }
+    }
+
+    // Download a specific convocation file
+    async function downloadConvocationFile(fileId, filename) {
+      try {
+        const response = await fetch(`${API_URL}/email/convocation-files/${fileId}/download`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (!response.ok) throw new Error('Download failed');
+
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+      } catch (error) {
+        console.error('Error downloading file:', error);
+        alert('Erreur lors du téléchargement');
+      }
+    }
+
+    // Load filter options for history dropdowns
+    async function loadHistoryFilters() {
+      try {
+        const response = await fetch(`${API_URL}/email/convocation-files/filters`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (!response.ok) return;
+
+        const { categories, seasons } = await response.json();
+
+        // Populate category filter
+        const categorySelect = document.getElementById('historyFilterCategory');
+        const uniqueCategories = [...new Map(categories.map(c => [c.category_id, c])).values()];
+        uniqueCategories.forEach(cat => {
+          const option = document.createElement('option');
+          option.value = cat.category_id;
+          option.textContent = cat.display_name;
+          categorySelect.appendChild(option);
+        });
+
+        // Populate season filter
+        const seasonSelect = document.getElementById('historyFilterSeason');
+        seasons.forEach(season => {
+          const option = document.createElement('option');
+          option.value = season;
+          option.textContent = season;
+          seasonSelect.appendChild(option);
+        });
+
+      } catch (error) {
+        console.error('Error loading history filters:', error);
+      }
+    }
+
+    // Initialize history section on page load
+    loadHistoryFilters();
+    loadConvocationHistory();
+
+    // Refresh button
+    document.getElementById('refreshHistoryBtn').addEventListener('click', loadConvocationHistory);
+
+    // Filter change handlers
+    document.getElementById('historyFilterCategory').addEventListener('change', loadConvocationHistory);
+    document.getElementById('historyFilterTournament').addEventListener('change', loadConvocationHistory);
+    document.getElementById('historyFilterSeason').addEventListener('change', loadConvocationHistory);
   </script>
 
   <!-- Forfait Management Modal -->
