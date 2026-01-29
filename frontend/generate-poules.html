@@ -3411,9 +3411,20 @@
           }
 
           if (result.results.skipped.length > 0) {
-            results.innerHTML += `<div style="background: #fff3cd; padding: 10px; border-radius: 4px;">
+            results.innerHTML += `<div style="background: #fff3cd; padding: 10px; border-radius: 4px; margin-bottom: 10px;">
               <strong>⚠️ Ignorés (${result.results.skipped.length}):</strong>
               <ul style="margin: 5px 0 0 20px;">${result.results.skipped.map(s => `<li>${s.name} - ${s.reason}</li>`).join('')}</ul>
+            </div>`;
+          }
+
+          // Show summary email status
+          if (result.results.summarySent) {
+            results.innerHTML += `<div style="background: #cce5ff; padding: 10px; border-radius: 4px; margin-bottom: 10px; border-left: 4px solid #004085;">
+              <strong>📋 Récapitulatif envoyé à ${result.results.summaryEmail}</strong>
+            </div>`;
+          } else if (result.results.summaryError) {
+            results.innerHTML += `<div style="background: #f8d7da; padding: 10px; border-radius: 4px; margin-bottom: 10px; border-left: 4px solid #721c24;">
+              <strong>📋 Récapitulatif non envoyé:</strong> ${result.results.summaryError}
             </div>`;
           }
 
