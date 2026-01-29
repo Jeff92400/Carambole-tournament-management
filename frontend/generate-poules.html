@@ -2288,6 +2288,17 @@
 
     // Validate and preview
     document.getElementById('validatePlayersBtn').addEventListener('click', () => {
+      // Count selected players first
+      const selectedCount =
+        rankedPlayers.filter(p => p.selected).length +
+        newPlayers.filter(p => p.selected).length +
+        lastMinutePlayers.filter(p => p.selected).length;
+
+      if (selectedCount < 3) {
+        alert('Pour être organisée, une compétition doit comporter au moins 3 inscrits.');
+        return;
+      }
+
       // Build final player list with re-ranking
       selectedPlayers = [];
 
