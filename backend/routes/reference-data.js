@@ -73,7 +73,7 @@ router.post('/game-modes', authenticateToken, (req, res) => {
 });
 
 // Update game mode
-router.put('/game-modes/:id', authenticateToken, (req, res) => {
+router.put('/game-modes/:id', authenticateToken, async (req, res) => {
   const db = getDb();
   const { id } = req.params;
   const { code, display_name, color, display_order, is_active, rank_column } = req.body;
@@ -82,84 +82,88 @@ router.put('/game-modes/:id', authenticateToken, (req, res) => {
     return res.status(400).json({ error: 'Code et nom sont requis' });
   }
 
-  // First get the old values to update categories
-  db.get('SELECT code, display_name FROM game_modes WHERE id = $1', [id], (err, oldMode) => {
-    if (err) {
-      console.error('Error fetching game mode:', err);
-      return res.status(500).json({ error: 'Erreur lors de la récupération' });
-    }
+  // Promisified db helpers
+  const dbGet = (sql, params) => new Promise((resolve, reject) => {
+    db.get(sql, params, (err, row) => err ? reject(err) : resolve(row));
+  });
+  const dbRun = (sql, params) => new Promise((resolve, reject) => {
+    db.run(sql, params, function(err) {
+      if (err) reject(err);
+      else resolve({ changes: this.changes, lastID: this.lastID });
+    });
+  });
 
+  try {
+    // 1. Get old values
+    const oldMode = await dbGet('SELECT code, display_name FROM game_modes WHERE id = $1', [id]);
     if (!oldMode) {
       return res.status(404).json({ error: 'Mode de jeu non trouvé' });
     }
 
     const oldCode = oldMode.code;
     const oldDisplayName = oldMode.display_name;
+    console.log(`[game-modes PUT] Updating mode ${id}: "${oldDisplayName}" -> "${display_name}"`);
 
-    db.run(
+    // 2. Update game_modes table
+    const updateResult = await dbRun(
       `UPDATE game_modes
        SET code = $1, display_name = $2, color = $3, display_order = $4, is_active = $5, rank_column = $6, updated_at = CURRENT_TIMESTAMP
        WHERE id = $7`,
-      [code.toUpperCase(), display_name, color || '#1F4788', display_order || 0, is_active !== false, rank_column || null, id],
-      function(err) {
-        if (err) {
-          console.error('Error updating game mode:', err);
-          if (err.message.includes('UNIQUE') || err.message.includes('unique')) {
-            return res.status(400).json({ error: 'Ce code existe déjà' });
-          }
-          return res.status(500).json({ error: 'Erreur lors de la mise à jour du mode de jeu' });
-        }
-        if (this.changes === 0) {
-          return res.status(404).json({ error: 'Mode de jeu non trouvé' });
-        }
-
-        // Check if code or display_name changed
-        const codeChanged = oldCode.toUpperCase() !== code.toUpperCase();
-        const displayNameChanged = oldDisplayName.toUpperCase() !== display_name.toUpperCase();
-
-        if (codeChanged || displayNameChanged) {
-          // Update categories that match OLD code or OLD display_name
-          // Set game_type to NEW display_name
-          db.run(
-            `UPDATE categories SET game_type = $1
-             WHERE UPPER(game_type) = UPPER($2) OR UPPER(game_type) = UPPER($3)`,
-            [display_name, oldDisplayName, oldCode],
-            (err) => {
-              if (err) {
-                console.error('Error updating categories game_type:', err);
-              }
-
-              // Also update display_name in categories to reflect new game_type
-              db.run(
-                `UPDATE categories SET display_name = $1 || ' - ' || level WHERE UPPER(game_type) = UPPER($2)`,
-                [display_name, display_name],
-                (err) => {
-                  if (err) {
-                    console.error('Error updating categories display_name:', err);
-                  }
-
-                  // Also update tournoi_ext.mode (EXACT matching only on old values)
-                  db.run(
-                    `UPDATE tournoi_ext SET mode = $1
-                     WHERE UPPER(mode) = UPPER($2) OR UPPER(mode) = UPPER($3)`,
-                    [display_name.toUpperCase(), oldDisplayName, oldCode],
-                    (err) => {
-                      if (err) {
-                        console.error('Error updating tournoi_ext mode:', err);
-                      }
-                      res.json({ success: true, message: 'Mode de jeu mis à jour (catégories et tournois synchronisés)' });
-                    }
-                  );
-                }
-              );
-            }
-          );
-        } else {
-          res.json({ success: true, message: 'Mode de jeu mis à jour' });
-        }
-      }
+      [code.toUpperCase(), display_name, color || '#1F4788', display_order || 0, is_active !== false, rank_column || null, id]
     );
-  });
+
+    if (updateResult.changes === 0) {
+      return res.status(404).json({ error: 'Mode de jeu non trouvé' });
+    }
+
+    // 3. Check if display_name changed - cascade to categories
+    const displayNameChanged = oldDisplayName !== display_name;
+    let categoriesUpdated = 0;
+    let tournoiUpdated = 0;
+
+    if (displayNameChanged) {
+      console.log(`[game-modes PUT] Display name changed, updating categories where game_type = "${oldDisplayName}"`);
+
+      // Update categories.game_type
+      const catResult = await dbRun(
+        `UPDATE categories SET game_type = $1 WHERE game_type = $2`,
+        [display_name, oldDisplayName]
+      );
+      categoriesUpdated = catResult.changes;
+      console.log(`[game-modes PUT] Updated ${categoriesUpdated} categories game_type`);
+
+      // Update categories.display_name
+      await dbRun(
+        `UPDATE categories SET display_name = game_type || ' - ' || level WHERE game_type = $1`,
+        [display_name]
+      );
+      console.log(`[game-modes PUT] Updated categories display_name`);
+
+      // Update tournoi_ext.mode
+      const tournoiResult = await dbRun(
+        `UPDATE tournoi_ext SET mode = $1 WHERE mode = $2`,
+        [display_name, oldDisplayName]
+      );
+      tournoiUpdated = tournoiResult.changes;
+      console.log(`[game-modes PUT] Updated ${tournoiUpdated} tournoi_ext`);
+    }
+
+    res.json({
+      success: true,
+      message: displayNameChanged
+        ? `Mode de jeu mis à jour (${categoriesUpdated} catégories, ${tournoiUpdated} tournois synchronisés)`
+        : 'Mode de jeu mis à jour',
+      categoriesUpdated,
+      tournoiUpdated
+    });
+
+  } catch (err) {
+    console.error('Error updating game mode:', err);
+    if (err.message && (err.message.includes('UNIQUE') || err.message.includes('unique'))) {
+      return res.status(400).json({ error: 'Ce code existe déjà' });
+    }
+    res.status(500).json({ error: 'Erreur lors de la mise à jour: ' + err.message });
+  }
 });
 
 // Delete game mode
