@@ -320,7 +320,7 @@
         <div style="flex: 1;">
           <h3 style="margin: 0 0 10px 0; color: #1F4788;">Gestion des compétitions</h3>
           <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-            <button class="btn" id="goToCompetitions" style="background: #1F4788; color: white; font-weight: bold;" onclick="document.getElementById('upcomingTournamentsCard').scrollIntoView({behavior: 'smooth'});">
+            <button class="btn" id="goToCompetitions" style="background: #1F4788; color: white; font-weight: bold;">
               📅 Voir les compétitions à venir
             </button>
             <button class="btn" id="openForfaitManager2" style="background: #dc3545; color: white; font-weight: bold;">
@@ -3777,11 +3777,38 @@
     let cameFromForfait = false; // Track if we came from forfait management to Step 3
 
     // Open forfait management modal - setup when DOM ready
+    // Show competitions and hide history (for CSV-disabled mode)
+    function showCompetitionsHideHistory() {
+      const competitionsCard = document.getElementById('upcomingTournamentsCard');
+      const historySection = document.getElementById('historySection');
+      const quickActionsCard = document.getElementById('quickActionsCard');
+
+      if (competitionsCard) competitionsCard.style.display = 'block';
+      if (historySection) historySection.style.display = 'none';
+      if (quickActionsCard) quickActionsCard.style.display = 'none';
+
+      // Scroll to competitions
+      if (competitionsCard) competitionsCard.scrollIntoView({behavior: 'smooth'});
+    }
+
     function setupForfaitListeners() {
       const openBtn = document.getElementById('openForfaitManager');
       if (openBtn) openBtn.addEventListener('click', openForfaitModal);
+
+      // Forfait button in CSV-disabled mode - show competitions + open forfait
       const openBtn2 = document.getElementById('openForfaitManager2');
-      if (openBtn2) openBtn2.addEventListener('click', openForfaitModal);
+      if (openBtn2) {
+        openBtn2.addEventListener('click', () => {
+          showCompetitionsHideHistory();
+          openForfaitModal();
+        });
+      }
+
+      // "Voir les compétitions" button in CSV-disabled mode
+      const goToCompBtn = document.getElementById('goToCompetitions');
+      if (goToCompBtn) {
+        goToCompBtn.addEventListener('click', showCompetitionsHideHistory);
+      }
 
       const categorySelect = document.getElementById('forfaitCategorySelect');
       if (categorySelect) {
