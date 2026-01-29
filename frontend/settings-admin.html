@@ -50,27 +50,58 @@
     <div id="errorMessage" class="error" style="display: none;"></div>
     <div id="successMessage" class="success" style="display: none;"></div>
 
-    <!-- My Settings Section -->
-    <div class="card">
-      <h3>Mes paramètres</h3>
-      <form id="mySettingsForm">
-        <div class="form-group">
-          <label for="myEmail">Mon email :</label>
-          <input type="email" id="myEmail" placeholder="ex: mon.email@exemple.com" style="width: 100%; max-width: 400px;">
-          <small style="color: #666; display: block; margin-top: 5px;">Utilisé pour la réinitialisation du mot de passe et les notifications</small>
-        </div>
-        <div class="form-group" style="margin-top: 20px;">
-          <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
-            <input type="checkbox" id="myTournamentAlerts" style="width: 20px; height: 20px; cursor: pointer;">
-            <span>Recevoir les alertes de tournois à venir</span>
-          </label>
-          <small style="color: #666; display: block; margin-top: 5px; margin-left: 30px;">
-            Vous serez notifié par email lorsqu'un tournoi approche (2 semaines avant) et que les relances n'ont pas encore été envoyées
-          </small>
-        </div>
-        <button type="submit" class="btn btn-primary" style="margin-top: 15px;">Enregistrer mes paramètres</button>
-      </form>
-      <div id="mySettingsMessage" style="display: none; margin-top: 15px; padding: 10px; border-radius: 4px;"></div>
+    <!-- My Settings Section - Two column layout -->
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+      <div class="card" style="margin-bottom: 0;">
+        <h3>👤 Mon compte</h3>
+        <form id="mySettingsForm">
+          <div class="form-group">
+            <label for="myEmail">Mon email :</label>
+            <input type="email" id="myEmail" placeholder="ex: mon.email@exemple.com" style="width: 100%;">
+            <small style="color: #666; display: block; margin-top: 5px;">Pour réinitialisation et notifications</small>
+          </div>
+          <div class="form-group" style="margin-top: 15px;">
+            <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+              <input type="checkbox" id="myTournamentAlerts" style="width: 18px; height: 18px; cursor: pointer;">
+              <span>Recevoir les alertes tournois</span>
+            </label>
+            <small style="color: #666; display: block; margin-top: 5px; margin-left: 28px;">
+              Notification 2 semaines avant si relances non envoyées
+            </small>
+          </div>
+          <button type="submit" class="btn btn-primary" style="margin-top: 15px;">Enregistrer</button>
+        </form>
+        <div id="mySettingsMessage" style="display: none; margin-top: 15px; padding: 10px; border-radius: 4px;"></div>
+      </div>
+
+      <div class="card" style="margin-bottom: 0;">
+        <h3>🔒 Changer mon mot de passe</h3>
+        <form id="changePasswordForm">
+          <div class="form-group">
+            <label for="currentPassword">Mot de passe actuel :</label>
+            <div class="password-wrapper">
+              <input type="password" id="currentPassword" required style="width: 100%;">
+              <button type="button" class="toggle-password" onclick="togglePassword('currentPassword', this)">👁️</button>
+            </div>
+          </div>
+          <div class="form-group" style="margin-top: 15px;">
+            <label for="newPassword">Nouveau mot de passe :</label>
+            <div class="password-wrapper">
+              <input type="password" id="newPassword" required minlength="6" style="width: 100%;">
+              <button type="button" class="toggle-password" onclick="togglePassword('newPassword', this)">👁️</button>
+            </div>
+          </div>
+          <div class="form-group" style="margin-top: 15px;">
+            <label for="confirmPassword">Confirmer :</label>
+            <div class="password-wrapper">
+              <input type="password" id="confirmPassword" required style="width: 100%;">
+              <button type="button" class="toggle-password" onclick="togglePassword('confirmPassword', this)">👁️</button>
+            </div>
+          </div>
+          <button type="submit" class="btn" style="margin-top: 15px; background: #6c757d;">Modifier</button>
+        </form>
+        <div id="changePasswordMessage" style="display: none; margin-top: 15px; padding: 10px; border-radius: 4px;"></div>
+      </div>
     </div>
 
     <!-- User Management Section - Admin Only -->
@@ -918,6 +949,65 @@
 
     // Load my settings on page load
     loadMySettings();
+
+    // Change password form handler
+    document.getElementById('changePasswordForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const currentPassword = document.getElementById('currentPassword').value;
+      const newPassword = document.getElementById('newPassword').value;
+      const confirmPassword = document.getElementById('confirmPassword').value;
+      const msgDiv = document.getElementById('changePasswordMessage');
+
+      // Validation
+      if (newPassword.length < 6) {
+        msgDiv.textContent = 'Le nouveau mot de passe doit faire au moins 6 caractères';
+        msgDiv.style.background = '#f8d7da';
+        msgDiv.style.color = '#721c24';
+        msgDiv.style.display = 'block';
+        setTimeout(() => { msgDiv.style.display = 'none'; }, 3000);
+        return;
+      }
+
+      if (newPassword !== confirmPassword) {
+        msgDiv.textContent = 'Les mots de passe ne correspondent pas';
+        msgDiv.style.background = '#f8d7da';
+        msgDiv.style.color = '#721c24';
+        msgDiv.style.display = 'block';
+        setTimeout(() => { msgDiv.style.display = 'none'; }, 3000);
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API_URL}/auth/change-password`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ currentPassword, newPassword })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          msgDiv.textContent = 'Mot de passe modifié avec succès !';
+          msgDiv.style.background = '#d4edda';
+          msgDiv.style.color = '#155724';
+          document.getElementById('changePasswordForm').reset();
+        } else {
+          throw new Error(data.error || 'Erreur lors du changement de mot de passe');
+        }
+      } catch (error) {
+        console.error('Error changing password:', error);
+        msgDiv.textContent = error.message;
+        msgDiv.style.background = '#f8d7da';
+        msgDiv.style.color = '#721c24';
+      }
+
+      msgDiv.style.display = 'block';
+      setTimeout(() => { msgDiv.style.display = 'none'; }, 3000);
+    });
 
     // ============= END MY SETTINGS =============
 
