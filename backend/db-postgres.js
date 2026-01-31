@@ -1347,6 +1347,51 @@ Le CDBHS`;
       [clubReminderBody]
     );
 
+    // Inscription confirmation template (sent by Player App)
+    const inscriptionConfirmationBody = `Bonjour {player_name},
+
+Votre inscription a bien été enregistrée pour la compétition suivante :
+
+Compétition : {tournament_name}
+Mode : {mode} - {category}
+Date : {tournament_date}
+Lieu : {location}
+
+Vous recevrez une convocation avec les détails (horaires, poules) quelques jours avant la compétition.
+
+En cas d'empêchement, merci de vous désinscrire via l'application ou de nous prévenir par email.
+
+Sportivement,
+{organization_name}`;
+    await client.query(
+      `INSERT INTO email_templates (template_key, subject_template, body_template)
+       VALUES ('inscription_confirmation', 'Confirmation d''inscription - {tournament_name}', $1)
+       ON CONFLICT (template_key) DO NOTHING`,
+      [inscriptionConfirmationBody]
+    );
+
+    // Inscription cancellation template (sent by Player App)
+    const inscriptionCancellationBody = `Bonjour {player_name},
+
+Nous avons bien pris en compte votre désinscription du tournoi suivant :
+
+Tournoi : {tournament_name}
+Mode : {mode}
+Catégorie : {category}
+Date : {tournament_date}
+Lieu : {location}
+
+Si cette désinscription est une erreur, veuillez contacter le comité via "Contact" ou par email à {organization_email}.
+
+Sportivement,
+{organization_name}`;
+    await client.query(
+      `INSERT INTO email_templates (template_key, subject_template, body_template)
+       VALUES ('inscription_cancellation', 'Confirmation de désinscription - {mode} {category}', $1)
+       ON CONFLICT (template_key) DO NOTHING`,
+      [inscriptionCancellationBody]
+    );
+
     // Initialize default clubs (5 clubs in CDBHS)
     const clubResult = await client.query('SELECT COUNT(*) as count FROM clubs');
     if (clubResult.rows[0].count == 0) {

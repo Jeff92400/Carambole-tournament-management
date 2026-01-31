@@ -2427,7 +2427,28 @@ router.post('/inscription-confirmation', async (req, res) => {
     // Load email settings for dynamic branding
     const emailSettings = await getEmailTemplateSettings();
     const contactEmail = await getContactEmail();
-    const template = DEFAULT_INSCRIPTION_CONFIRMATION_TEMPLATE;
+    const baseUrl = process.env.BASE_URL || 'https://cdbhs-tournament-management-production.up.railway.app';
+    const primaryColor = emailSettings.primary_color || '#1F4788';
+    const orgShortName = emailSettings.organization_short_name || 'CDB';
+
+    // Load template from database (with fallback to default)
+    const db = require('../db-loader');
+    const template = await new Promise((resolve) => {
+      db.get(
+        'SELECT subject_template, body_template FROM email_templates WHERE template_key = $1',
+        ['inscription_confirmation'],
+        (err, row) => {
+          if (err || !row) {
+            resolve(DEFAULT_INSCRIPTION_CONFIRMATION_TEMPLATE);
+          } else {
+            resolve({
+              subject: row.subject_template,
+              body: row.body_template
+            });
+          }
+        }
+      );
+    });
 
     // Look up club phone from location name
     const locationPhone = await getClubPhoneByLocation(location);
@@ -2460,11 +2481,13 @@ router.post('/inscription-confirmation', async (req, res) => {
       subject: subject,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <div style="background: #28a745; color: white; padding: 20px; text-align: center;">
-            <h1 style="margin: 0; font-size: 24px;">Inscription Confirmée</h1>
+          <div style="background: ${primaryColor}; color: white; padding: 20px; text-align: center;">
+            <img src="${baseUrl}/logo.png?v=${Date.now()}" alt="${orgShortName}" style="height: 60px; max-width: 80%; width: auto; margin-bottom: 10px;" onerror="this.style.display='none'">
+            <h1 style="margin: 0; font-size: 24px;">${orgShortName}</h1>
+            <p style="margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">INSCRIPTION CONFIRMÉE</p>
           </div>
           <div style="padding: 20px; background: #f8f9fa;">
-            <div style="margin-bottom: 20px; padding: 15px; background: white; border-radius: 4px; border-left: 4px solid #28a745;">
+            <div style="margin-bottom: 20px; padding: 15px; background: white; border-radius: 4px; border-left: 4px solid ${primaryColor};">
               <p style="margin: 5px 0;"><strong>Tournoi :</strong> ${tournament_name}</p>
               <p style="margin: 5px 0;"><strong>Mode :</strong> ${mode || '-'}</p>
               <p style="margin: 5px 0;"><strong>Catégorie :</strong> ${category || '-'}</p>
@@ -2532,7 +2555,28 @@ router.post('/inscription-cancellation', async (req, res) => {
     // Load email settings for dynamic branding
     const emailSettings = await getEmailTemplateSettings();
     const contactEmail = await getContactEmail();
-    const template = DEFAULT_INSCRIPTION_CANCELLATION_TEMPLATE;
+    const baseUrl = process.env.BASE_URL || 'https://cdbhs-tournament-management-production.up.railway.app';
+    const primaryColor = emailSettings.primary_color || '#1F4788';
+    const orgShortName = emailSettings.organization_short_name || 'CDB';
+
+    // Load template from database (with fallback to default)
+    const db = require('../db-loader');
+    const template = await new Promise((resolve) => {
+      db.get(
+        'SELECT subject_template, body_template FROM email_templates WHERE template_key = $1',
+        ['inscription_cancellation'],
+        (err, row) => {
+          if (err || !row) {
+            resolve(DEFAULT_INSCRIPTION_CANCELLATION_TEMPLATE);
+          } else {
+            resolve({
+              subject: row.subject_template,
+              body: row.body_template
+            });
+          }
+        }
+      );
+    });
 
     // Look up club phone from location name
     const locationPhone = await getClubPhoneByLocation(location);
@@ -2565,16 +2609,18 @@ router.post('/inscription-cancellation', async (req, res) => {
       subject: subject,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <div style="background: #dc3545; color: white; padding: 20px; text-align: center;">
-            <h1 style="margin: 0; font-size: 24px;">Désinscription Confirmée</h1>
+          <div style="background: ${primaryColor}; color: white; padding: 20px; text-align: center;">
+            <img src="${baseUrl}/logo.png?v=${Date.now()}" alt="${orgShortName}" style="height: 60px; max-width: 80%; width: auto; margin-bottom: 10px;" onerror="this.style.display='none'">
+            <h1 style="margin: 0; font-size: 24px;">${orgShortName}</h1>
+            <p style="margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">DÉSINSCRIPTION CONFIRMÉE</p>
           </div>
           <div style="padding: 20px; background: #f8f9fa;">
-            <div style="margin-bottom: 20px; padding: 15px; background: white; border-radius: 4px; border-left: 4px solid #dc3545;">
-              <p style="margin: 5px 0;">📅 <strong>Tournoi :</strong> ${tournament_name}</p>
-              <p style="margin: 5px 0;">${FRENCH_BILLARD_ICON_IMG} <strong>Mode :</strong> ${mode || '-'}</p>
-              <p style="margin: 5px 0;">🏆 <strong>Catégorie :</strong> ${category || '-'}</p>
-              <p style="margin: 5px 0;">📆 <strong>Date :</strong> ${dateStr}</p>
-              <p style="margin: 5px 0;">📍 <strong>Lieu :</strong> ${location || 'Non défini'}</p>
+            <div style="margin-bottom: 20px; padding: 15px; background: white; border-radius: 4px; border-left: 4px solid ${primaryColor};">
+              <p style="margin: 5px 0;"><strong>Tournoi :</strong> ${tournament_name}</p>
+              <p style="margin: 5px 0;"><strong>Mode :</strong> ${mode || '-'}</p>
+              <p style="margin: 5px 0;"><strong>Catégorie :</strong> ${category || '-'}</p>
+              <p style="margin: 5px 0;"><strong>Date :</strong> ${dateStr}</p>
+              <p style="margin: 5px 0;"><strong>Lieu :</strong> ${location || 'Non défini'}</p>
               ${locationPhone ? `<p style="margin: 5px 0; color: #666;">📞 ${locationPhone}</p>` : ''}
             </div>
             <div style="line-height: 1.6;">

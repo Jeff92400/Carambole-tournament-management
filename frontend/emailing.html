@@ -1389,6 +1389,58 @@
         </div>
       </div>
 
+      <!-- Inscription Confirmation Template (Player App) -->
+      <div class="card" style="margin-top: 20px;">
+        <h3>📱 Template Confirmation d'Inscription (App Joueur)</h3>
+        <p style="color: #666; margin-bottom: 15px;">Email automatique envoyé lors d'une inscription via l'application joueur.</p>
+
+        <div style="margin-bottom: 15px; padding: 10px; background: #d4edda; border-radius: 4px; font-size: 13px;">
+          <strong>Variables disponibles :</strong>
+          <code>{player_name}</code> <code>{tournament_name}</code> <code>{mode}</code> <code>{category}</code>
+          <code>{tournament_date}</code> <code>{location}</code>
+          <code>{organization_name}</code> <code>{organization_short_name}</code> <code>{organization_email}</code>
+        </div>
+
+        <div style="margin-bottom: 15px;">
+          <label style="display: block; font-weight: bold; margin-bottom: 5px;">Objet</label>
+          <input type="text" id="inscriptionConfirmationSubject" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+        </div>
+
+        <div style="margin-bottom: 15px;">
+          <label style="display: block; font-weight: bold; margin-bottom: 5px;">Corps du message</label>
+          <div id="inscriptionConfirmationBodyEditor"></div>
+        </div>
+
+        <button class="btn" id="saveInscriptionConfirmationTemplateBtn" style="background: #28a745;">Enregistrer</button>
+        <button class="btn" id="resetInscriptionConfirmationTemplateBtn" style="background: #6c757d; margin-left: 10px;">Réinitialiser par défaut</button>
+      </div>
+
+      <!-- Inscription Cancellation Template (Player App) -->
+      <div class="card" style="margin-top: 20px;">
+        <h3>📱 Template Désinscription (App Joueur)</h3>
+        <p style="color: #666; margin-bottom: 15px;">Email automatique envoyé lors d'une désinscription via l'application joueur.</p>
+
+        <div style="margin-bottom: 15px; padding: 10px; background: #f8d7da; border-radius: 4px; font-size: 13px;">
+          <strong>Variables disponibles :</strong>
+          <code>{player_name}</code> <code>{tournament_name}</code> <code>{mode}</code> <code>{category}</code>
+          <code>{tournament_date}</code> <code>{location}</code>
+          <code>{organization_name}</code> <code>{organization_short_name}</code> <code>{organization_email}</code>
+        </div>
+
+        <div style="margin-bottom: 15px;">
+          <label style="display: block; font-weight: bold; margin-bottom: 5px;">Objet</label>
+          <input type="text" id="inscriptionCancellationSubject" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+        </div>
+
+        <div style="margin-bottom: 15px;">
+          <label style="display: block; font-weight: bold; margin-bottom: 5px;">Corps du message</label>
+          <div id="inscriptionCancellationBodyEditor"></div>
+        </div>
+
+        <button class="btn" id="saveInscriptionCancellationTemplateBtn" style="background: #28a745;">Enregistrer</button>
+        <button class="btn" id="resetInscriptionCancellationTemplateBtn" style="background: #6c757d; margin-left: 10px;">Réinitialiser par défaut</button>
+      </div>
+
       <!-- Custom Templates -->
       <div class="card" style="margin-top: 20px;">
         <h3>Templates Personnalisés</h3>
@@ -1667,6 +1719,8 @@
     const quillRelanceTemplateIntro = new Quill('#relanceTemplateIntroEditor', { theme: 'snow', placeholder: 'Message d\'introduction...', modules: { toolbar: quillToolbar } });
     const quillRelanceTemplateOutro = new Quill('#relanceTemplateOutroEditor', { theme: 'snow', placeholder: 'Message de conclusion...', modules: { toolbar: quillToolbar } });
     const quillClubReminderBody = new Quill('#clubReminderBodyEditor', { theme: 'snow', placeholder: 'Corps du message...', modules: { toolbar: quillToolbar } });
+    const quillInscriptionConfirmationBody = new Quill('#inscriptionConfirmationBodyEditor', { theme: 'snow', placeholder: 'Corps du message...', modules: { toolbar: quillToolbar } });
+    const quillInscriptionCancellationBody = new Quill('#inscriptionCancellationBodyEditor', { theme: 'snow', placeholder: 'Corps du message...', modules: { toolbar: quillToolbar } });
     const quillFinaleResultsIntroText = new Quill('#finaleResultsIntroTextEditor', { theme: 'snow', placeholder: 'Texte d\'introduction...', modules: { toolbar: quillToolbar } });
     const quillFinaleResultsOutroText = new Quill('#finaleResultsOutroTextEditor', { theme: 'snow', placeholder: 'Texte de conclusion...', modules: { toolbar: quillToolbar } });
 
@@ -2564,6 +2618,43 @@ Sportivement,
 Le CDBHS`
     };
 
+    const DEFAULT_INSCRIPTION_CONFIRMATION_TEMPLATE = {
+      subject: 'Confirmation d\'inscription - {tournament_name}',
+      body: `Bonjour {player_name},
+
+Votre inscription a bien été enregistrée pour la compétition suivante :
+
+Compétition : {tournament_name}
+Mode : {mode} - {category}
+Date : {tournament_date}
+Lieu : {location}
+
+Vous recevrez une convocation avec les détails (horaires, poules) quelques jours avant la compétition.
+
+En cas d'empêchement, merci de vous désinscrire via l'application ou de nous prévenir par email.
+
+Sportivement,
+{organization_name}`
+    };
+
+    const DEFAULT_INSCRIPTION_CANCELLATION_TEMPLATE = {
+      subject: 'Confirmation de désinscription - {mode} {category}',
+      body: `Bonjour {player_name},
+
+Nous avons bien pris en compte votre désinscription du tournoi suivant :
+
+Tournoi : {tournament_name}
+Mode : {mode}
+Catégorie : {category}
+Date : {tournament_date}
+Lieu : {location}
+
+Si cette désinscription est une erreur, veuillez contacter le comité via "Contact" ou par email à {organization_email}.
+
+Sportivement,
+{organization_name}`
+    };
+
     async function loadConvocationTemplate() {
       try {
         const response = await fetch(`${API_URL}/settings/email-template/convocation`, {
@@ -2966,6 +3057,140 @@ Le CDBHS`
       } catch (error) {
         showError('Erreur: ' + error.message);
       }
+    });
+
+    // ==================== INSCRIPTION TEMPLATES (PLAYER APP) ====================
+
+    async function loadInscriptionConfirmationTemplate() {
+      try {
+        const response = await fetch(`${API_URL}/emailing/templates/inscription_confirmation`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (response.ok) {
+          const template = await response.json();
+          document.getElementById('inscriptionConfirmationSubject').value = template.subject_template || DEFAULT_INSCRIPTION_CONFIRMATION_TEMPLATE.subject;
+          quillInscriptionConfirmationBody.setContents([]);
+          quillInscriptionConfirmationBody.clipboard.dangerouslyPasteHTML((template.body_template || DEFAULT_INSCRIPTION_CONFIRMATION_TEMPLATE.body).replace(/\n/g, '<br>'));
+        } else {
+          document.getElementById('inscriptionConfirmationSubject').value = DEFAULT_INSCRIPTION_CONFIRMATION_TEMPLATE.subject;
+          quillInscriptionConfirmationBody.setContents([]);
+          quillInscriptionConfirmationBody.clipboard.dangerouslyPasteHTML(DEFAULT_INSCRIPTION_CONFIRMATION_TEMPLATE.body.replace(/\n/g, '<br>'));
+        }
+      } catch (error) {
+        document.getElementById('inscriptionConfirmationSubject').value = DEFAULT_INSCRIPTION_CONFIRMATION_TEMPLATE.subject;
+        quillInscriptionConfirmationBody.setContents([]);
+        quillInscriptionConfirmationBody.clipboard.dangerouslyPasteHTML(DEFAULT_INSCRIPTION_CONFIRMATION_TEMPLATE.body.replace(/\n/g, '<br>'));
+      }
+    }
+
+    async function loadInscriptionCancellationTemplate() {
+      try {
+        const response = await fetch(`${API_URL}/emailing/templates/inscription_cancellation`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (response.ok) {
+          const template = await response.json();
+          document.getElementById('inscriptionCancellationSubject').value = template.subject_template || DEFAULT_INSCRIPTION_CANCELLATION_TEMPLATE.subject;
+          quillInscriptionCancellationBody.setContents([]);
+          quillInscriptionCancellationBody.clipboard.dangerouslyPasteHTML((template.body_template || DEFAULT_INSCRIPTION_CANCELLATION_TEMPLATE.body).replace(/\n/g, '<br>'));
+        } else {
+          document.getElementById('inscriptionCancellationSubject').value = DEFAULT_INSCRIPTION_CANCELLATION_TEMPLATE.subject;
+          quillInscriptionCancellationBody.setContents([]);
+          quillInscriptionCancellationBody.clipboard.dangerouslyPasteHTML(DEFAULT_INSCRIPTION_CANCELLATION_TEMPLATE.body.replace(/\n/g, '<br>'));
+        }
+      } catch (error) {
+        document.getElementById('inscriptionCancellationSubject').value = DEFAULT_INSCRIPTION_CANCELLATION_TEMPLATE.subject;
+        quillInscriptionCancellationBody.setContents([]);
+        quillInscriptionCancellationBody.clipboard.dangerouslyPasteHTML(DEFAULT_INSCRIPTION_CANCELLATION_TEMPLATE.body.replace(/\n/g, '<br>'));
+      }
+    }
+
+    // Load inscription templates on page load
+    loadInscriptionConfirmationTemplate();
+    loadInscriptionCancellationTemplate();
+
+    // Save Inscription Confirmation Template
+    document.getElementById('saveInscriptionConfirmationTemplateBtn').addEventListener('click', async () => {
+      const subject = document.getElementById('inscriptionConfirmationSubject').value.trim();
+      const body = quillInscriptionConfirmationBody.root.innerHTML;
+      const bodyText = quillInscriptionConfirmationBody.getText().trim();
+
+      if (!subject || !bodyText) {
+        showError('Tous les champs sont obligatoires.');
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API_URL}/emailing/templates/inscription_confirmation`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            subject_template: subject,
+            body_template: body
+          })
+        });
+
+        if (response.ok) {
+          showSuccess('Template confirmation d\'inscription enregistré!');
+        } else {
+          showError('Erreur lors de la sauvegarde.');
+        }
+      } catch (error) {
+        showError('Erreur: ' + error.message);
+      }
+    });
+
+    document.getElementById('resetInscriptionConfirmationTemplateBtn').addEventListener('click', () => {
+      document.getElementById('inscriptionConfirmationSubject').value = DEFAULT_INSCRIPTION_CONFIRMATION_TEMPLATE.subject;
+      quillInscriptionConfirmationBody.setContents([]);
+      quillInscriptionConfirmationBody.clipboard.dangerouslyPasteHTML(DEFAULT_INSCRIPTION_CONFIRMATION_TEMPLATE.body.replace(/\n/g, '<br>'));
+      showSuccess('Template réinitialisé. Cliquez sur Enregistrer pour sauvegarder.');
+    });
+
+    // Save Inscription Cancellation Template
+    document.getElementById('saveInscriptionCancellationTemplateBtn').addEventListener('click', async () => {
+      const subject = document.getElementById('inscriptionCancellationSubject').value.trim();
+      const body = quillInscriptionCancellationBody.root.innerHTML;
+      const bodyText = quillInscriptionCancellationBody.getText().trim();
+
+      if (!subject || !bodyText) {
+        showError('Tous les champs sont obligatoires.');
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API_URL}/emailing/templates/inscription_cancellation`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            subject_template: subject,
+            body_template: body
+          })
+        });
+
+        if (response.ok) {
+          showSuccess('Template désinscription enregistré!');
+        } else {
+          showError('Erreur lors de la sauvegarde.');
+        }
+      } catch (error) {
+        showError('Erreur: ' + error.message);
+      }
+    });
+
+    document.getElementById('resetInscriptionCancellationTemplateBtn').addEventListener('click', () => {
+      document.getElementById('inscriptionCancellationSubject').value = DEFAULT_INSCRIPTION_CANCELLATION_TEMPLATE.subject;
+      quillInscriptionCancellationBody.setContents([]);
+      quillInscriptionCancellationBody.clipboard.dangerouslyPasteHTML(DEFAULT_INSCRIPTION_CANCELLATION_TEMPLATE.body.replace(/\n/g, '<br>'));
+      showSuccess('Template réinitialisé. Cliquez sur Enregistrer pour sauvegarder.');
     });
 
     // ==================== RELANCE TEMPLATES EDITOR ====================
