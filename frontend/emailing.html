@@ -4233,10 +4233,18 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
             <strong>Participants T1:</strong> ${relanceParticipants.length} joueurs
           `;
         } else if (relanceType === 't3' && relanceData.category) {
-          infoContent.innerHTML = `
+          let t3Info = `
             <strong>Catégorie:</strong> ${relanceData.category.display_name}<br>
             <strong>Joueurs au classement:</strong> ${relanceParticipants.length}
           `;
+          // Show T3 tournament info if found
+          if (relanceData.t3Tournament) {
+            const t3Date = relanceData.t3Tournament.date ? new Date(relanceData.t3Tournament.date).toLocaleDateString('fr-FR') : '-';
+            t3Info += `<br><strong>T3:</strong> ${t3Date} - ${relanceData.t3Tournament.location || '-'}`;
+          } else {
+            t3Info += `<br><em style="color: #999;">Aucun T3 trouvé dans les tournois externes (nom doit contenir "T3")</em>`;
+          }
+          infoContent.innerHTML = t3Info;
         } else if (relanceType === 'finale' && relanceData.category) {
           infoContent.innerHTML = `
             <strong>Catégorie:</strong> ${relanceData.category.display_name}<br>
