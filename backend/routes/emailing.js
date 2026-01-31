@@ -4508,6 +4508,59 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
         emailIntro = replaceVar(emailIntro, 'organization_short_name', organizationShortName);
         emailIntro = replaceVar(emailIntro, 'organization_email', organizationEmail);
 
+        // Smart inscription method - check if player has app account
+        const playerAppUrl = 'https://cdbhs-player-app-production.up.railway.app';
+        let inscriptionMethodHtml;
+
+        if (testMode) {
+          // In test mode, show both versions for preview
+          inscriptionMethodHtml = `
+            <div style="border: 2px dashed #ff9800; padding: 15px; margin: 20px 0; background: #fff3e0;">
+              <p style="margin: 0 0 10px 0; font-weight: bold; color: #e65100;">⚠️ MODE TEST - Aperçu des 2 versions :</p>
+              <div style="background: #e8f5e9; padding: 10px; border-radius: 8px; margin-bottom: 15px;">
+                <p style="margin: 0 0 8px 0; font-size: 12px; color: #2e7d32; font-weight: bold;">✅ Version joueur AVEC compte Espace Joueur :</p>
+                <div style="text-align: center;">
+                  <a href="${playerAppUrl}/?page=tournaments" target="_blank" style="display: inline-block; background: ${primaryColor}; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
+                    📱 S'inscrire via l'Espace Joueur
+                  </a>
+                </div>
+              </div>
+              <div style="background: #ffebee; padding: 10px; border-radius: 8px;">
+                <p style="margin: 0 0 8px 0; font-size: 12px; color: #c62828; font-weight: bold;">❌ Version joueur SANS compte Espace Joueur :</p>
+                <div style="margin: 0; padding: 15px; background: #fff; border-left: 4px solid ${primaryColor};">
+                  <p style="margin: 0;">Confirmez votre inscription sur <a href="https://cdbhs.net" target="_blank" style="color: ${primaryColor}; font-weight: bold;">cdbhs.net</a> ou en répondant à cet email.</p>
+                </div>
+              </div>
+            </div>`;
+        } else {
+          // Check if player has an account
+          const participantLicence = participant.licence || '';
+          const hasAppAccount = await new Promise((resolve, reject) => {
+            db.get(
+              `SELECT 1 FROM player_accounts WHERE REPLACE(licence, ' ', '') = REPLACE($1, ' ', '')`,
+              [participantLicence],
+              (err, row) => {
+                if (err) reject(err);
+                else resolve(!!row);
+              }
+            );
+          });
+
+          if (hasAppAccount) {
+            inscriptionMethodHtml = `<div style="text-align: center; margin: 20px 0;">
+              <a href="${playerAppUrl}/?page=tournaments" target="_blank" style="display: inline-block; background: ${primaryColor}; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
+                📱 S'inscrire via l'Espace Joueur
+              </a>
+            </div>`;
+          } else {
+            inscriptionMethodHtml = `<div style="margin: 15px 0; padding: 15px; background: #fff; border-left: 4px solid ${primaryColor};">
+              <p style="margin: 0;">Confirmez votre inscription sur <a href="https://cdbhs.net" target="_blank" style="color: ${primaryColor}; font-weight: bold;">cdbhs.net</a> ou en répondant à cet email.</p>
+            </div>`;
+          }
+        }
+
+        emailIntro = replaceVar(emailIntro, 'inscription_method', inscriptionMethodHtml);
+
         // Outro replacements
         emailOutro = replaceVar(emailOutro, 'first_name', participant.first_name || '');
         emailOutro = replaceVar(emailOutro, 'last_name', participant.last_name || '');
