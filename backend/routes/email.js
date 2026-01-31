@@ -2458,8 +2458,15 @@ router.post('/inscription-confirmation', async (req, res) => {
       ? new Date(tournament_date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
       : 'Date à définir';
 
+    // Split player_name into first_name and last_name
+    const nameParts = (player_name || '').trim().split(/\s+/);
+    const first_name = nameParts[0] || '';
+    const last_name = nameParts.slice(1).join(' ') || '';
+
     const variables = {
       player_name,
+      first_name,
+      last_name,
       tournament_name,
       mode: mode || '',
       category: category || '',
@@ -2585,8 +2592,15 @@ router.post('/inscription-cancellation', async (req, res) => {
       ? new Date(tournament_date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
       : 'Date à définir';
 
+    // Split player_name into first_name and last_name
+    const nameParts = (player_name || '').trim().split(/\s+/);
+    const first_name = nameParts[0] || '';
+    const last_name = nameParts.slice(1).join(' ') || '';
+
     const variables = {
       player_name,
+      first_name,
+      last_name,
       tournament_name,
       mode: mode || '',
       category: category || '',
