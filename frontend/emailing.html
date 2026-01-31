@@ -324,6 +324,118 @@
     .status-active { background: #d4edda; color: #155724; }
     .status-inactive { background: #f8d7da; color: #721c24; }
     .status-expired { background: #fff3cd; color: #856404; }
+
+    /* Template Grid Styles */
+    .template-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 20px;
+      margin-bottom: 20px;
+    }
+    .template-card {
+      background: white;
+      border: 1px solid #e0e0e0;
+      border-radius: 12px;
+      padding: 20px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .template-card:hover {
+      border-color: var(--color-primary, #1F4788);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      transform: translateY(-2px);
+    }
+    .template-card-icon {
+      font-size: 32px;
+      margin-bottom: 5px;
+    }
+    .template-card-title {
+      font-weight: 600;
+      font-size: 16px;
+      color: #333;
+    }
+    .template-card-desc {
+      font-size: 13px;
+      color: #666;
+      line-height: 1.4;
+    }
+    .template-card-category {
+      font-size: 11px;
+      text-transform: uppercase;
+      color: #999;
+      letter-spacing: 0.5px;
+    }
+
+    /* Template Modal */
+    .template-modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.5);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+      padding: 20px;
+    }
+    .template-modal.active {
+      display: flex;
+    }
+    .template-modal-content {
+      background: white;
+      border-radius: 12px;
+      width: 100%;
+      max-width: 800px;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    }
+    .template-modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 20px 25px;
+      border-bottom: 1px solid #eee;
+      position: sticky;
+      top: 0;
+      background: white;
+      z-index: 1;
+    }
+    .template-modal-header h3 {
+      margin: 0;
+      font-size: 18px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .template-modal-close {
+      background: none;
+      border: none;
+      font-size: 28px;
+      cursor: pointer;
+      color: #666;
+      padding: 0;
+      line-height: 1;
+    }
+    .template-modal-close:hover {
+      color: #333;
+    }
+    .template-modal-body {
+      padding: 25px;
+    }
+    .template-modal-footer {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+      padding: 20px 25px;
+      border-top: 1px solid #eee;
+      background: #f8f9fa;
+    }
   </style>
 </head>
 <body>
@@ -1202,9 +1314,72 @@
 
     <!-- TAB: Templates -->
     <div id="tab-templates" class="tab-content">
+      <!-- Template Card Grid -->
+      <div class="template-grid">
+        <div class="template-card" data-template="convocation">
+          <div class="template-card-category">Convocations</div>
+          <div class="template-card-icon">📨</div>
+          <div class="template-card-title">Convocation Tournoi</div>
+          <div class="template-card-desc">Email envoyé aux joueurs pour les tournois T1, T2, T3</div>
+        </div>
+        <div class="template-card" data-template="convocation-finale">
+          <div class="template-card-category">Convocations</div>
+          <div class="template-card-icon">🏆</div>
+          <div class="template-card-title">Convocation Finale</div>
+          <div class="template-card-desc">Email envoyé aux qualifiés pour la finale départementale</div>
+        </div>
+        <div class="template-card" data-template="results">
+          <div class="template-card-category">Résultats</div>
+          <div class="template-card-icon">📊</div>
+          <div class="template-card-title">Résultats Tournoi</div>
+          <div class="template-card-desc">Email avec classement après chaque tournoi</div>
+        </div>
+        <div class="template-card" data-template="finale-results">
+          <div class="template-card-category">Résultats</div>
+          <div class="template-card-icon">🥇</div>
+          <div class="template-card-title">Résultats Finale</div>
+          <div class="template-card-desc">Email avec podium après la finale</div>
+        </div>
+        <div class="template-card" data-template="relances">
+          <div class="template-card-category">Relances</div>
+          <div class="template-card-icon">🔔</div>
+          <div class="template-card-title">Relances Inscriptions</div>
+          <div class="template-card-desc">Rappels pour T2, T3 et Finale</div>
+        </div>
+        <div class="template-card" data-template="club-reminder">
+          <div class="template-card-category">Clubs</div>
+          <div class="template-card-icon">🏠</div>
+          <div class="template-card-title">Rappel Club</div>
+          <div class="template-card-desc">Email aux clubs hébergeant les compétitions</div>
+        </div>
+        <div class="template-card" data-template="inscription-confirmation">
+          <div class="template-card-category">App Joueur</div>
+          <div class="template-card-icon">✅</div>
+          <div class="template-card-title">Confirmation Inscription</div>
+          <div class="template-card-desc">Email automatique après inscription</div>
+        </div>
+        <div class="template-card" data-template="inscription-cancellation">
+          <div class="template-card-category">App Joueur</div>
+          <div class="template-card-icon">❌</div>
+          <div class="template-card-title">Désinscription</div>
+          <div class="template-card-desc">Email automatique après désinscription</div>
+        </div>
+        <div class="template-card" data-template="custom">
+          <div class="template-card-category">Personnalisé</div>
+          <div class="template-card-icon">✏️</div>
+          <div class="template-card-title">Templates Personnalisés</div>
+          <div class="template-card-desc">Créer et gérer vos propres templates</div>
+        </div>
+      </div>
+
+      <!-- Template Editors (hidden by default, shown on card click) -->
+
       <!-- Convocation Template -->
-      <div class="card">
-        <h3>Template Convocation</h3>
+      <div class="card template-editor-section" id="template-convocation" style="display: none;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+          <h3 style="margin: 0;">📨 Template Convocation</h3>
+          <button class="btn template-back-btn" style="background: #6c757d; padding: 8px 15px;">← Retour</button>
+        </div>
         <p style="color: #666; margin-bottom: 15px;">Template utilisé pour les emails de convocation aux tournois.</p>
 
         <div style="margin-bottom: 15px; padding: 10px; background: #e7f3ff; border-radius: 4px; font-size: 13px;">
@@ -1229,8 +1404,11 @@
       </div>
 
       <!-- Convocation Finale Template -->
-      <div class="card" style="margin-top: 20px;">
-        <h3>🏆 Template Convocation Finale</h3>
+      <div class="card template-editor-section" id="template-convocation-finale" style="display: none;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+          <h3 style="margin: 0;">🏆 Template Convocation Finale</h3>
+          <button class="btn template-back-btn" style="background: #6c757d; padding: 8px 15px;">← Retour</button>
+        </div>
         <p style="color: #666; margin-bottom: 15px;">Template utilisé pour les emails de convocation aux finales départementales.</p>
 
         <div style="margin-bottom: 15px; padding: 10px; background: #fff3cd; border-radius: 4px; font-size: 13px;">
@@ -1256,8 +1434,11 @@
       </div>
 
       <!-- Results Template -->
-      <div class="card" style="margin-top: 20px;">
-        <h3>Template Résultats Tournoi</h3>
+      <div class="card template-editor-section" id="template-results" style="display: none;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+          <h3 style="margin: 0;">📊 Template Résultats Tournoi</h3>
+          <button class="btn template-back-btn" style="background: #6c757d; padding: 8px 15px;">← Retour</button>
+        </div>
         <p style="color: #666; margin-bottom: 15px;">Template utilisé pour les emails de résultats après un tournoi.</p>
 
         <div style="margin-bottom: 15px; padding: 10px; background: #e7f3ff; border-radius: 4px; font-size: 13px;">
@@ -1282,9 +1463,12 @@
       </div>
 
       <!-- Finale Results Template -->
-      <div class="card" style="margin-top: 20px;">
-        <h3>🏆 Template Résultats Finale</h3>
-        <p style="color: #666; margin-bottom: 15px;">Template utilisé pour les emails de résultats après une finale départementale (onglet "Résultats Finale").</p>
+      <div class="card template-editor-section" id="template-finale-results" style="display: none;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+          <h3 style="margin: 0;">🥇 Template Résultats Finale</h3>
+          <button class="btn template-back-btn" style="background: #6c757d; padding: 8px 15px;">← Retour</button>
+        </div>
+        <p style="color: #666; margin-bottom: 15px;">Template utilisé pour les emails de résultats après une finale départementale.</p>
 
         <div style="margin-bottom: 15px; padding: 10px; background: #fff3cd; border-radius: 4px; font-size: 13px;">
           <strong>Variables disponibles :</strong>
@@ -1312,8 +1496,11 @@
       </div>
 
       <!-- Relance Templates -->
-      <div class="card" style="margin-top: 20px;">
-        <h3>Templates Relances Inscriptions</h3>
+      <div class="card template-editor-section" id="template-relances" style="display: none;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+          <h3 style="margin: 0;">🔔 Templates Relances Inscriptions</h3>
+          <button class="btn template-back-btn" style="background: #6c757d; padding: 8px 15px;">← Retour</button>
+        </div>
         <p style="color: #666; margin-bottom: 15px;">Personnalisez les templates pour les relances d'inscription (T2, T3, Finale).</p>
 
         <div style="margin-bottom: 20px;">
@@ -1355,8 +1542,11 @@
       </div>
 
       <!-- Club Reminder Template -->
-      <div class="card" style="margin-top: 20px;">
-        <h3>📧 Template Rappel Club</h3>
+      <div class="card template-editor-section" id="template-club-reminder" style="display: none;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+          <h3 style="margin: 0;">🏠 Template Rappel Club</h3>
+          <button class="btn template-back-btn" style="background: #6c757d; padding: 8px 15px;">← Retour</button>
+        </div>
         <p style="color: #666; margin-bottom: 15px;">Template utilisé pour les emails de rappel envoyés aux clubs hébergeant les compétitions.</p>
 
         <div style="margin-bottom: 15px; padding: 10px; background: #e7f3ff; border-radius: 4px; font-size: 13px;">
@@ -1390,8 +1580,11 @@
       </div>
 
       <!-- Inscription Confirmation Template (Player App) -->
-      <div class="card" style="margin-top: 20px;">
-        <h3>📱 Template Confirmation d'Inscription (App Joueur)</h3>
+      <div class="card template-editor-section" id="template-inscription-confirmation" style="display: none;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+          <h3 style="margin: 0;">✅ Template Confirmation d'Inscription</h3>
+          <button class="btn template-back-btn" style="background: #6c757d; padding: 8px 15px;">← Retour</button>
+        </div>
         <p style="color: #666; margin-bottom: 15px;">Email automatique envoyé lors d'une inscription via l'application joueur.</p>
 
         <div style="margin-bottom: 15px; padding: 10px; background: #d4edda; border-radius: 4px; font-size: 13px;">
@@ -1417,8 +1610,11 @@
       </div>
 
       <!-- Inscription Cancellation Template (Player App) -->
-      <div class="card" style="margin-top: 20px;">
-        <h3>📱 Template Désinscription (App Joueur)</h3>
+      <div class="card template-editor-section" id="template-inscription-cancellation" style="display: none;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+          <h3 style="margin: 0;">❌ Template Désinscription</h3>
+          <button class="btn template-back-btn" style="background: #6c757d; padding: 8px 15px;">← Retour</button>
+        </div>
         <p style="color: #666; margin-bottom: 15px;">Email automatique envoyé lors d'une désinscription via l'application joueur.</p>
 
         <div style="margin-bottom: 15px; padding: 10px; background: #f8d7da; border-radius: 4px; font-size: 13px;">
@@ -1444,8 +1640,11 @@
       </div>
 
       <!-- Custom Templates -->
-      <div class="card" style="margin-top: 20px;">
-        <h3>Templates Personnalisés</h3>
+      <div class="card template-editor-section" id="template-custom" style="display: none;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+          <h3 style="margin: 0;">✏️ Templates Personnalisés</h3>
+          <button class="btn template-back-btn" style="background: #6c757d; padding: 8px 15px;">← Retour</button>
+        </div>
 
         <div style="margin-bottom: 20px;">
           <label style="font-weight: bold;">Sélectionner un template:</label>
@@ -1767,12 +1966,18 @@
         if (tab.dataset.tab === 'finale-results') loadImportedFinales();
         if (tab.dataset.tab === 'contacts') { loadAllContacts(); loadClubEmails(); }
         if (tab.dataset.tab === 'templates') {
+          // Reset to grid view when switching to templates tab
+          hideAllTemplateEditors();
+          document.querySelector('.template-grid').style.display = 'grid';
+          // Pre-load all templates in background
           loadConvocationTemplate();
           loadFinaleConvocationTemplate();
           loadResultsTemplate();
           loadFinaleResultsTemplate();
           loadRelanceTemplates();
           loadClubReminderTemplate();
+          loadInscriptionConfirmationTemplate();
+          loadInscriptionCancellationTemplate();
         }
         if (tab.dataset.tab === 'history') {
           loadHistory();
@@ -1780,6 +1985,41 @@
           loadInscriptionEmailLogs();
         }
         if (tab.dataset.tab === 'scheduled') loadScheduled();
+      });
+    });
+
+    // ==================== TEMPLATE CARD GRID HANDLERS ====================
+
+    function hideAllTemplateEditors() {
+      document.querySelectorAll('.template-editor-section').forEach(section => {
+        section.style.display = 'none';
+      });
+    }
+
+    function showTemplateEditor(templateId) {
+      hideAllTemplateEditors();
+      document.querySelector('.template-grid').style.display = 'none';
+      const editor = document.getElementById('template-' + templateId);
+      if (editor) {
+        editor.style.display = 'block';
+        editor.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }
+
+    // Template card click handlers
+    document.querySelectorAll('.template-card').forEach(card => {
+      card.addEventListener('click', () => {
+        const templateId = card.dataset.template;
+        showTemplateEditor(templateId);
+      });
+    });
+
+    // Back button handlers
+    document.querySelectorAll('.template-back-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        hideAllTemplateEditors();
+        document.querySelector('.template-grid').style.display = 'grid';
       });
     });
 
