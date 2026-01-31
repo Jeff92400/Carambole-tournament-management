@@ -3361,9 +3361,13 @@ Sportivement,
 
 Vous avez participé au premier tournoi {category} qui s'est déroulé le {t1_date} où vous avez terminé à la {t1_position}ème place.
 
+Si vous êtes déjà enregistré, ne tenez pas compte de cet email de relance.
+
 Le deuxième tournoi de la saison aura lieu le {tournament_date} à {tournament_lieu}.
 
-Pour participer, merci de confirmer votre inscription en répondant à cet email avant le {deadline_date}.`,
+Pour participer, merci de confirmer votre inscription avant le {deadline_date}, date au-delà de laquelle aucune inscription n'est acceptée.
+
+{inscription_method}`,
     outro: `Pour toute question ou information, écrivez à {organization_email}
 
 Sportivement,
