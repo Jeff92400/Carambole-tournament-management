@@ -63,6 +63,66 @@ async function getEmailTemplateSettings() {
   return settings;
 }
 
+// Build universal variables object for all email templates
+// This provides ALL common variables - unused ones become empty strings
+function buildUniversalVariables(data = {}, emailSettings = {}, contactEmail = '') {
+  // Split player_name into first_name and last_name if not provided separately
+  let first_name = data.first_name || '';
+  let last_name = data.last_name || '';
+
+  if (!first_name && data.player_name) {
+    const nameParts = (data.player_name || '').trim().split(/\s+/);
+    first_name = nameParts[0] || '';
+    last_name = nameParts.slice(1).join(' ') || '';
+  }
+
+  return {
+    // Player variables
+    player_name: data.player_name || `${first_name} ${last_name}`.trim() || '',
+    first_name: first_name,
+    last_name: last_name,
+    player_email: data.player_email || data.email || '',
+    licence: data.licence || '',
+    club: data.club || '',
+
+    // Tournament variables
+    tournament_name: data.tournament_name || data.tournament || '',
+    tournament: data.tournament || data.tournament_name || '',
+    mode: data.mode || '',
+    category: data.category || '',
+    tournament_date: data.tournament_date || data.date || '',
+    date: data.date || data.tournament_date || '',
+    location: data.location || data.lieu || '',
+    lieu: data.lieu || data.location || '',
+    tournament_lieu: data.tournament_lieu || data.location || data.lieu || '',
+
+    // Ranking variables
+    rank_position: data.rank_position || '',
+    total_points: data.total_points || '',
+    player_position: data.player_position || '',
+    player_points: data.player_points || '',
+
+    // Finale variables
+    finale_name: data.finale_name || '',
+
+    // Relance variables
+    t1_date: data.t1_date || '',
+    t1_position: data.t1_position || '',
+    deadline_date: data.deadline_date || '',
+
+    // Club reminder variables
+    club_name: data.club_name || '',
+    time: data.time || '',
+    num_players: data.num_players || '',
+    num_tables: data.num_tables || '',
+
+    // Organization variables
+    organization_name: emailSettings.organization_name || 'Comité Départemental de Billard',
+    organization_short_name: emailSettings.organization_short_name || 'CDB',
+    organization_email: emailSettings.summary_email || contactEmail || ''
+  };
+}
+
 // Build email header HTML with dynamic settings
 function buildEmailHeader(title, settings) {
   const primaryColor = settings.primary_color || '#1F4788';
@@ -2453,29 +2513,21 @@ router.post('/inscription-confirmation', async (req, res) => {
     // Look up club phone from location name
     const locationPhone = await getClubPhoneByLocation(location);
 
-    // Replace template variables
+    // Format date for display
     const dateStr = tournament_date
       ? new Date(tournament_date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
       : 'Date à définir';
 
-    // Split player_name into first_name and last_name
-    const nameParts = (player_name || '').trim().split(/\s+/);
-    const first_name = nameParts[0] || '';
-    const last_name = nameParts.slice(1).join(' ') || '';
-
-    const variables = {
+    // Build universal variables (all common variables available)
+    const variables = buildUniversalVariables({
       player_name,
-      first_name,
-      last_name,
+      player_email,
       tournament_name,
-      mode: mode || '',
-      category: category || '',
+      mode,
+      category,
       tournament_date: dateStr,
-      location: location || 'Lieu à définir',
-      organization_name: emailSettings.organization_name || 'Comité Départemental de Billard',
-      organization_short_name: emailSettings.organization_short_name || 'CDB',
-      organization_email: emailSettings.summary_email || contactEmail
-    };
+      location: location || 'Lieu à définir'
+    }, emailSettings, contactEmail);
 
     const subject = replaceTemplateVariables(template.subject, variables);
     const bodyText = replaceTemplateVariables(template.body, variables);
@@ -2587,29 +2639,21 @@ router.post('/inscription-cancellation', async (req, res) => {
     // Look up club phone from location name
     const locationPhone = await getClubPhoneByLocation(location);
 
-    // Replace template variables
+    // Format date for display
     const dateStr = tournament_date
       ? new Date(tournament_date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
       : 'Date à définir';
 
-    // Split player_name into first_name and last_name
-    const nameParts = (player_name || '').trim().split(/\s+/);
-    const first_name = nameParts[0] || '';
-    const last_name = nameParts.slice(1).join(' ') || '';
-
-    const variables = {
+    // Build universal variables (all common variables available)
+    const variables = buildUniversalVariables({
       player_name,
-      first_name,
-      last_name,
+      player_email,
       tournament_name,
-      mode: mode || '',
-      category: category || '',
+      mode,
+      category,
       tournament_date: dateStr,
-      location: location || 'Non défini',
-      organization_name: emailSettings.organization_name || 'Comité Départemental de Billard',
-      organization_short_name: emailSettings.organization_short_name || 'CDB',
-      organization_email: emailSettings.summary_email || contactEmail
-    };
+      location: location || 'Non défini'
+    }, emailSettings, contactEmail);
 
     const subject = replaceTemplateVariables(template.subject, variables);
     const bodyText = replaceTemplateVariables(template.body, variables);
