@@ -3864,13 +3864,41 @@ router.get('/ranking-for-relance', authenticateToken, async (req, res) => {
     });
 
     // Also try to get T3 from tournoi_ext
+    // First get all IONOS mode variations for this game_type from mode_mapping
+    const modeMappings = await new Promise((resolve, reject) => {
+      db.all(
+        'SELECT ionos_mode FROM mode_mapping WHERE UPPER(game_type) = UPPER($1)',
+        [mode],
+        (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows || []);
+        }
+      );
+    });
+
+    // Build mode matching condition
+    let modeCondition;
+    let modeParams = [];
+    if (modeMappings.length > 0) {
+      const placeholders = modeMappings.map((_, i) => `$${i + 1}`).join(', ');
+      modeCondition = `UPPER(mode) IN (${placeholders})`;
+      modeParams = modeMappings.map(m => m.ionos_mode.toUpperCase());
+    } else {
+      modeCondition = 'UPPER(mode) = $1';
+      modeParams = [mode.toUpperCase()];
+    }
+
+    // Use flexible name matching (same as next-tournament endpoint)
+    const nameCondition = "(UPPER(nom) LIKE '%T3%' OR UPPER(nom) LIKE '%TOURNOI 3%' OR UPPER(nom) LIKE '%TOURNOI3%')";
+    const catParamIdx = modeParams.length + 1;
+
     const t3External = await new Promise((resolve, reject) => {
       db.get(
         `SELECT * FROM tournoi_ext
-         WHERE UPPER(mode) = $1 AND UPPER(categorie) = $2
-         AND UPPER(nom) LIKE '%T3%'
+         WHERE ${modeCondition} AND UPPER(categorie) = $${catParamIdx}
+         AND ${nameCondition}
          ORDER BY debut DESC LIMIT 1`,
-        [mode.toUpperCase(), category.toUpperCase()],
+        [...modeParams, category.toUpperCase()],
         (err, row) => {
           if (err) reject(err);
           else resolve(row);
