@@ -3896,11 +3896,33 @@ router.get('/ranking-for-relance', authenticateToken, async (req, res) => {
       );
     });
 
+    // Get inscriptions for T3 tournament to mark already inscribed players
+    let inscribedLicences = new Set();
+    const t3TournoiId = t3External?.tournoi_id;
+    if (t3TournoiId) {
+      const inscriptions = await new Promise((resolve, reject) => {
+        db.all(
+          `SELECT REPLACE(UPPER(licence), ' ', '') as normalized_licence FROM inscriptions WHERE tournoi_id = $1`,
+          [t3TournoiId],
+          (err, rows) => {
+            if (err) reject(err);
+            else resolve(rows || []);
+          }
+        );
+      });
+      inscribedLicences = new Set(inscriptions.map(i => i.normalized_licence));
+    }
+
+    const alreadyInscribedCount = rankings.filter(r =>
+      inscribedLicences.has(r.licence?.replace(/\s/g, '').toUpperCase())
+    ).length;
+
     res.json({
       category: categoryRow,
       t3Tournament: t3Tournament || t3External ? {
         date: t3Tournament?.tournament_date || t3External?.debut,
-        location: t3Tournament?.location || t3External?.lieu
+        location: t3Tournament?.location || t3External?.lieu,
+        tournoi_id: t3TournoiId
       } : null,
       participants: rankings.map(r => ({
         licence: r.licence,
@@ -3913,9 +3935,11 @@ router.get('/ranking-for-relance', authenticateToken, async (req, res) => {
         rank_position: r.rank_position,
         total_points: r.total_match_points,
         avg_moyenne: r.avg_moyenne,
-        email_optin: r.email_optin
+        email_optin: r.email_optin,
+        already_inscribed: inscribedLicences.has(r.licence?.replace(/\s/g, '').toUpperCase())
       })),
-      emailCount: rankings.filter(r => r.email && r.email.includes('@')).length
+      emailCount: rankings.filter(r => r.email && r.email.includes('@')).length,
+      alreadyInscribedCount
     });
 
   } catch (error) {
