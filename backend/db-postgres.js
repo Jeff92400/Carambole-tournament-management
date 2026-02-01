@@ -385,6 +385,24 @@ async function initializeDatabase() {
       ON inscriptions (REPLACE(UPPER(licence), ' ', ''), tournoi_id)
     `);
 
+    // Fix Player App inscriptions that incorrectly have convoque=1
+    // These were created before the bug fix - they should be convoque=0 (Inscrit)
+    // Only fix if no convocation was actually sent (no record in convocation_poules)
+    const fixResult = await client.query(`
+      UPDATE inscriptions i
+      SET convoque = 0
+      WHERE i.source = 'player_app'
+        AND i.convoque = 1
+        AND NOT EXISTS (
+          SELECT 1 FROM convocation_poules cp
+          WHERE cp.tournoi_id = i.tournoi_id
+            AND REPLACE(UPPER(cp.licence), ' ', '') = REPLACE(UPPER(i.licence), ' ', '')
+        )
+    `);
+    if (fixResult.rowCount > 0) {
+      console.log(`[Migration] Fixed ${fixResult.rowCount} Player App inscriptions: set convoque=0`);
+    }
+
     // Calendar storage table
     await client.query(`
       CREATE TABLE IF NOT EXISTS calendar (
