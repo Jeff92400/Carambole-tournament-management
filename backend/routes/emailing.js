@@ -2779,6 +2779,71 @@ router.get('/finales', authenticateToken, async (req, res) => {
   );
 });
 
+// Get finale winners for a season (from tournament_results where position = 1 and tournament_number = 4)
+router.get('/finale-winners', authenticateToken, async (req, res) => {
+  const db = require('../db-loader');
+  const { season } = req.query;
+
+  // Calculate season if not provided
+  let targetSeason = season;
+  if (!targetSeason) {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth();
+    targetSeason = currentMonth >= 8 ? `${currentYear}-${currentYear + 1}` : `${currentYear - 1}-${currentYear}`;
+  }
+
+  try {
+    // Get all finale winners for the season
+    // tournament_number = 4 means finale, position = 1 means winner
+    const winners = await new Promise((resolve, reject) => {
+      db.all(
+        `SELECT
+          t.id as tournament_id,
+          t.tournament_date,
+          t.location,
+          t.season,
+          c.id as category_id,
+          c.display_name as category_name,
+          c.game_type as mode,
+          c.level,
+          tr.licence,
+          tr.player_name,
+          tr.position,
+          tr.match_points,
+          tr.moyenne,
+          tr.serie,
+          pc.club,
+          pc.email
+         FROM tournaments t
+         JOIN categories c ON t.category_id = c.id
+         JOIN tournament_results tr ON tr.tournament_id = t.id
+         LEFT JOIN player_contacts pc ON REPLACE(tr.licence, ' ', '') = REPLACE(pc.licence, ' ', '')
+         WHERE t.tournament_number = 4
+           AND t.season = $1
+           AND tr.position = 1
+           AND UPPER(tr.licence) NOT LIKE 'TEST%'
+         ORDER BY c.game_type, c.level`,
+        [targetSeason],
+        (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows || []);
+        }
+      );
+    });
+
+    res.json({
+      season: targetSeason,
+      winners: winners,
+      count: winners.length
+    });
+
+  } catch (error) {
+    console.error('Error fetching finale winners:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Get finalists for a specific finale (qualified players from ranking after T3)
 router.get('/finalists/:finaleId', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
@@ -4681,30 +4746,51 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
       let finaleLieu = customData?.finale_lieu || '';
       let deadlineDate = customData?.deadline_date || '';
 
-      // Auto-fetch from tournoi_ext if not provided
-      if (!finaleDate || !finaleLieu) {
-        const finale = await new Promise((resolve, reject) => {
-          db.get(
-            `SELECT * FROM tournoi_ext
-             WHERE UPPER(mode) = $1
-             AND (UPPER(categorie) = $2 OR UPPER(categorie) LIKE $3)
-             AND debut >= $4
-             ORDER BY debut ASC LIMIT 1`,
-            [mode.toUpperCase(), categoryUpper, categoryUpper + '%', new Date().toISOString().split('T')[0]],
-            (err, row) => {
-              if (err) reject(err);
-              else resolve(row);
-            }
-          );
-        });
+      // Always query for the finale tournament to get its tournoi_id
+      const finale = await new Promise((resolve, reject) => {
+        db.get(
+          `SELECT * FROM tournoi_ext
+           WHERE UPPER(mode) = $1
+           AND (UPPER(categorie) = $2 OR UPPER(categorie) LIKE $3)
+           AND (UPPER(nom) LIKE '%FINALE%' OR UPPER(nom) LIKE '%FINAL%')
+           AND debut >= $4
+           ORDER BY debut ASC LIMIT 1`,
+          [mode.toUpperCase(), categoryUpper, categoryUpper + '%', new Date().toISOString().split('T')[0]],
+          (err, row) => {
+            if (err) reject(err);
+            else resolve(row);
+          }
+        );
+      });
 
-        if (finale) {
-          if (!finaleDate && finale.debut) {
-            finaleDate = new Date(finale.debut).toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-          }
-          if (!finaleLieu && finale.lieu) {
-            finaleLieu = finale.lieu;
-          }
+      // Auto-fill date/lieu from database if not provided
+      if (finale) {
+        if (!finaleDate && finale.debut) {
+          finaleDate = new Date(finale.debut).toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+        }
+        if (!finaleLieu && finale.lieu) {
+          finaleLieu = finale.lieu;
+        }
+
+        // Update tournoi_ext.lieu if a new location is provided (not in test mode)
+        // This saves the finale location for future reference since it's often not known in advance
+        if (!testMode && customData?.finale_lieu && finale.tournoi_id) {
+          await new Promise((resolve, reject) => {
+            db.run(
+              `UPDATE tournoi_ext SET lieu = $1 WHERE tournoi_id = $2`,
+              [customData.finale_lieu, finale.tournoi_id],
+              (err) => {
+                if (err) {
+                  console.error('Error updating finale location:', err);
+                  // Don't fail the whole operation for this
+                  resolve();
+                } else {
+                  console.log(`[Relance Finale] Updated tournoi_ext.lieu for tournoi_id ${finale.tournoi_id} to: ${customData.finale_lieu}`);
+                  resolve();
+                }
+              }
+            );
+          });
         }
       }
 
