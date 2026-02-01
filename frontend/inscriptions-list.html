@@ -255,8 +255,7 @@
             <div>
               <label style="display: block; margin-bottom: 5px; font-weight: bold;">Statut</label>
               <select id="edit_statut" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-                <option value="inscrit">Inscrit</option>
-                <option value="désinscrit">Désinscrit</option>
+                <option value="">Chargement...</option>
               </select>
             </div>
           </div>
@@ -269,9 +268,7 @@
           <div style="margin-bottom: 15px;">
             <label style="display: block; margin-bottom: 5px; font-weight: bold;">Source</label>
             <select id="edit_source" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-              <option value="ionos">Fichier CSV</option>
-              <option value="player_app">Player App</option>
-              <option value="manual">Manuel</option>
+              <option value="">Chargement...</option>
             </select>
           </div>
 
@@ -306,6 +303,7 @@
 
   <script src="js/auth-utils.js"></script>
   <script src="js/app-branding.js"></script>
+  <script src="js/reference-data.js"></script>
   <script>
     const API_URL = '/api';
 
@@ -1216,9 +1214,24 @@
       }
     }
 
+    // Load reference data for dynamic selectors
+    async function initReferenceData() {
+      await Promise.all([
+        ReferenceData.populateSelect('edit_statut', 'inscription-statuses', {
+          showPlaceholder: false,
+          selectedValue: 'inscrit'
+        }),
+        ReferenceData.populateSelect('edit_source', 'inscription-sources', {
+          showPlaceholder: false,
+          selectedValue: 'ionos'
+        })
+      ]);
+    }
+
     // Initialize
     async function initialize() {
       loadOrgShortName();
+      await initReferenceData();
       await loadGameModes();
       await loadTournois();
       await loadInscriptions();

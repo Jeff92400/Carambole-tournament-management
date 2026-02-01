@@ -222,8 +222,7 @@
             <div style="grid-column: 1 / -1;">
               <label style="display: block; margin-bottom: 5px; font-weight: bold;">Statut</label>
               <select id="edit_status" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-                <option value="active">Actif</option>
-                <option value="cancelled">Annulé</option>
+                <option value="">Chargement...</option>
               </select>
             </div>
           </div>
@@ -299,6 +298,7 @@
 
   <script src="js/auth-utils.js"></script>
   <script src="js/app-branding.js"></script>
+  <script src="js/reference-data.js"></script>
   <script>
     const API_URL = '/api';
 
@@ -1077,7 +1077,16 @@
       document.getElementById('simulationModal').style.display = 'none';
     }
 
+    // Load reference data for dynamic selectors
+    async function initReferenceData() {
+      await ReferenceData.populateSelect('edit_status', 'tournament-statuses', {
+        showPlaceholder: false,
+        selectedValue: 'active'
+      });
+    }
+
     // Initialize
+    initReferenceData();
     loadGameModes(); // Load game modes for dropdowns
     loadCategories(); // Load categories for modal dropdowns
     loadTournois();
