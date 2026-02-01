@@ -525,11 +525,7 @@
             <div class="form-group">
               <label for="announcementType">Type :</label>
               <select id="announcementType" style="padding: 8px;">
-                <option value="info">ℹ️ Information</option>
-                <option value="resultats">🏆 Résultats</option>
-                <option value="warning">⚠️ Avertissement</option>
-                <option value="urgent">🚨 Urgent</option>
-                <option value="perso">💬 Message perso</option>
+                <option value="">Chargement...</option>
               </select>
             </div>
             <div class="form-group">
@@ -581,11 +577,7 @@
               <div>
                 <label style="display: block; margin-bottom: 5px; font-size: 13px; font-weight: 500;">Critère</label>
                 <select id="purgeCriteria" style="padding: 8px 12px; border-radius: 4px; border: 1px solid #ddd;">
-                  <option value="">-- Sélectionner --</option>
-                  <option value="expired">Toutes les expirées</option>
-                  <option value="inactive">Toutes les inactives</option>
-                  <option value="all_inactive_and_expired">Inactives + Expirées</option>
-                  <option value="date_range">Par période de création</option>
+                  <option value="">Chargement...</option>
                 </select>
               </div>
               <div id="purgeDateRange" style="display: none;">
@@ -795,11 +787,7 @@
               <div>
                 <label style="display: block; font-weight: bold; margin-bottom: 5px;">Type de Relance</label>
                 <select id="relanceTypeSelect" style="padding: 10px; border: 1px solid #ddd; border-radius: 4px; min-width: 200px;" disabled>
-                  <option value="">-- Sélectionner --</option>
-                  <option value="t1">Relance T1 (ouverture de saison)</option>
-                  <option value="t2">Relance T2 (joueurs du T1)</option>
-                  <option value="t3">Relance T3 (joueurs au classement)</option>
-                  <option value="finale">Relance Finale (qualifiés)</option>
+                  <option value="">Chargement...</option>
                 </select>
               </div>
             </div>
@@ -1294,9 +1282,7 @@
             <div style="margin-bottom: 15px;">
               <label style="display: block; margin-bottom: 5px; font-weight: bold;">Statut</label>
               <select id="edit_contact_statut" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-                <option value="Actif">Actif</option>
-                <option value="Inactif">Inactif</option>
-                <option value="Suspendu">Suspendu</option>
+                <option value="">Chargement...</option>
               </select>
             </div>
 
@@ -1514,11 +1500,7 @@
         <div style="margin-bottom: 20px;">
           <label style="font-weight: bold;">Sélectionner un template:</label>
           <select id="relanceTemplateSelect" style="padding: 10px; border: 1px solid #ddd; border-radius: 4px; min-width: 200px;">
-            <option value="">-- Choisir --</option>
-            <option value="relance_t1">Relance T1 (ouverture de saison)</option>
-            <option value="relance_t2">Relance T2 (joueurs du T1)</option>
-            <option value="relance_t3">Relance T3 (joueurs au classement)</option>
-            <option value="relance_finale">Relance Finale (qualifiés)</option>
+            <option value="">Chargement...</option>
           </select>
         </div>
 
@@ -1864,6 +1846,7 @@
 
   <script src="js/auth-utils.js"></script>
   <script src="js/app-branding.js"></script>
+  <script src="js/reference-data.js"></script>
   <script>
     const API_URL = '/api';
 
@@ -6147,7 +6130,34 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
 
     // ==================== INIT ====================
 
+    async function initReferenceData() {
+      // Load all dynamic selectors from reference data API
+      await Promise.all([
+        ReferenceData.populateSelect('announcementType', 'announcement-types', {
+          showPlaceholder: false,
+          iconField: 'icon',
+          selectedValue: 'info'
+        }),
+        ReferenceData.populateSelect('relanceTypeSelect', 'relance-types', {
+          placeholder: '-- Sélectionner --',
+          valueField: 'code'
+        }),
+        ReferenceData.populateSelect('relanceTemplateSelect', 'relance-types', {
+          placeholder: '-- Choisir --',
+          valueField: 'template_key'
+        }),
+        ReferenceData.populateSelect('edit_contact_statut', 'contact-statuses', {
+          showPlaceholder: false,
+          selectedValue: 'Actif'
+        }),
+        ReferenceData.populateSelect('purgeCriteria', 'purge-criteria', {
+          placeholder: '-- Sélectionner --'
+        })
+      ]);
+    }
+
     async function initialize() {
+      await initReferenceData(); // Load dynamic selectors first
       await loadGameModes(); // Load game modes for dropdowns
       await loadClubs();
       await loadTournois();

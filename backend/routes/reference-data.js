@@ -552,4 +552,135 @@ router.post('/categories/sync', authenticateToken, async (req, res) => {
   }
 });
 
+// ==================== ANNOUNCEMENT TYPES ====================
+// These are semi-static but loaded from API for consistency
+
+router.get('/announcement-types', authenticateToken, (req, res) => {
+  // Return announcement types - could be moved to database table later
+  const types = [
+    { code: 'info', display_name: 'Information', icon: 'ℹ️', color: '#1565c0' },
+    { code: 'resultats', display_name: 'Résultats', icon: '🏆', color: '#2e7d32' },
+    { code: 'warning', display_name: 'Avertissement', icon: '⚠️', color: '#e65100' },
+    { code: 'urgent', display_name: 'Urgent', icon: '🚨', color: '#c62828' },
+    { code: 'perso', display_name: 'Message perso', icon: '💬', color: '#7b1fa2' }
+  ];
+  res.json(types);
+});
+
+// ==================== CONTACT STATUSES ====================
+
+router.get('/contact-statuses', authenticateToken, (req, res) => {
+  const statuses = [
+    { code: 'Actif', display_name: 'Actif' },
+    { code: 'Inactif', display_name: 'Inactif' },
+    { code: 'Suspendu', display_name: 'Suspendu' }
+  ];
+  res.json(statuses);
+});
+
+// ==================== INSCRIPTION SOURCES ====================
+
+router.get('/inscription-sources', authenticateToken, (req, res) => {
+  const sources = [
+    { code: 'ionos', display_name: 'Fichier CSV (IONOS)' },
+    { code: 'player_app', display_name: 'Player App' },
+    { code: 'manual', display_name: 'Manuel' }
+  ];
+  res.json(sources);
+});
+
+// ==================== INSCRIPTION STATUSES ====================
+
+router.get('/inscription-statuses', authenticateToken, (req, res) => {
+  const statuses = [
+    { code: 'inscrit', display_name: 'Inscrit' },
+    { code: 'désinscrit', display_name: 'Désinscrit' }
+  ];
+  res.json(statuses);
+});
+
+// ==================== TOURNAMENT ROUNDS ====================
+
+router.get('/tournament-rounds', authenticateToken, (req, res) => {
+  const rounds = [
+    { code: 'T1', display_name: 'Tournoi 1', order: 1 },
+    { code: 'T2', display_name: 'Tournoi 2', order: 2 },
+    { code: 'T3', display_name: 'Tournoi 3', order: 3 },
+    { code: 'F', display_name: 'Finale', order: 4, icon: '🏆' }
+  ];
+  res.json(rounds);
+});
+
+// ==================== USER ROLES ====================
+
+router.get('/user-roles', authenticateToken, (req, res) => {
+  const roles = [
+    { code: 'viewer', display_name: 'Viewer (lecture seule)' },
+    { code: 'editor', display_name: 'Éditeur' },
+    { code: 'admin', display_name: 'Administrateur' }
+  ];
+  res.json(roles);
+});
+
+// ==================== TOURNAMENT STATUSES ====================
+
+router.get('/tournament-statuses', authenticateToken, (req, res) => {
+  const statuses = [
+    { code: 'active', display_name: 'Actif' },
+    { code: 'cancelled', display_name: 'Annulé' }
+  ];
+  res.json(statuses);
+});
+
+// ==================== ACTIVITY LOG TYPES ====================
+
+router.get('/activity-log-types', authenticateToken, (req, res) => {
+  const types = [
+    { code: 'login_success', display_name: 'Connexions' },
+    { code: 'login_failed', display_name: 'Échecs connexion' },
+    { code: 'account_created', display_name: 'Créations compte' },
+    { code: 'inscription_created', display_name: 'Inscriptions' },
+    { code: 'inscription_cancelled', display_name: 'Annulations' },
+    { code: 'admin_impersonate', display_name: 'Impersonations' }
+  ];
+  res.json(types);
+});
+
+// ==================== RELANCE TYPES ====================
+
+router.get('/relance-types', authenticateToken, (req, res) => {
+  const types = [
+    { code: 't1', display_name: 'Relance T1 (ouverture de saison)', template_key: 'relance_t1' },
+    { code: 't2', display_name: 'Relance T2 (joueurs du T1)', template_key: 'relance_t2' },
+    { code: 't3', display_name: 'Relance T3 (joueurs au classement)', template_key: 'relance_t3' },
+    { code: 'finale', display_name: 'Relance Finale (qualifiés)', template_key: 'relance_finale' }
+  ];
+  res.json(types);
+});
+
+// ==================== PURGE CRITERIA ====================
+
+router.get('/purge-criteria', authenticateToken, (req, res) => {
+  const criteria = [
+    { code: 'expired', display_name: 'Toutes les expirées' },
+    { code: 'inactive', display_name: 'Toutes les inactives' },
+    { code: 'all_inactive_and_expired', display_name: 'Inactives + Expirées' },
+    { code: 'date_range', display_name: 'Par période de création' }
+  ];
+  res.json(criteria);
+});
+
+// ==================== TIME SLOTS ====================
+
+router.get('/time-slots', authenticateToken, (req, res) => {
+  const slots = [];
+  for (let hour = 8; hour <= 18; hour++) {
+    slots.push({ code: `${hour.toString().padStart(2, '0')}:00`, display_name: `${hour.toString().padStart(2, '0')}:00` });
+    if (hour < 18) {
+      slots.push({ code: `${hour.toString().padStart(2, '0')}:30`, display_name: `${hour.toString().padStart(2, '0')}:30` });
+    }
+  }
+  res.json(slots);
+});
+
 module.exports = router;

@@ -131,8 +131,7 @@
           <div class="form-group" style="margin-bottom: 0;">
             <label for="newUserRole">Rôle :</label>
             <select id="newUserRole" required style="padding: 10px; border: 1px solid #ddd; border-radius: 4px; width: 100%;">
-              <option value="viewer">Viewer (lecture seule)</option>
-              <option value="admin">Administrateur</option>
+              <option value="">Chargement...</option>
             </select>
           </div>
           <button type="submit" class="btn btn-primary" style="padding: 10px 20px;">Ajouter</button>
@@ -254,11 +253,7 @@
           <div class="form-group" style="margin-bottom: 0;">
             <label for="newMappingGameType">Mode :</label>
             <select id="newMappingGameType" required style="padding: 10px; border: 1px solid #ddd; border-radius: 4px; width: 100%;">
-              <option value="">Sélectionner...</option>
-              <option value="LIBRE">LIBRE</option>
-              <option value="CADRE">CADRE</option>
-              <option value="BANDE">BANDE</option>
-              <option value="3BANDES">3 BANDES</option>
+              <option value="">Chargement...</option>
             </select>
           </div>
           <div class="form-group" style="margin-bottom: 0;">
@@ -848,6 +843,7 @@
 
   <script src="js/auth-utils.js"></script>
   <script src="js/app-branding.js"></script>
+  <script src="js/reference-data.js"></script>
   <script>
     const API_URL = '/api';
 
@@ -1402,7 +1398,23 @@
       }
     }
 
-    // Load users on page load
+    // Load reference data for dynamic selectors
+    async function initReferenceData() {
+      await Promise.all([
+        ReferenceData.populateSelect('newUserRole', 'user-roles', {
+          showPlaceholder: false,
+          selectedValue: 'viewer'
+        }),
+        ReferenceData.populateSelect('newMappingGameType', 'game-modes', {
+          placeholder: 'Sélectionner...',
+          valueField: 'code',
+          activeOnly: true
+        })
+      ]);
+    }
+
+    // Initialize reference data and load users on page load
+    initReferenceData();
     loadUsers();
 
     // ============= END USER MANAGEMENT =============
