@@ -385,13 +385,29 @@ async function initializeDatabase() {
       ON inscriptions (REPLACE(UPPER(licence), ' ', ''), tournoi_id)
     `);
 
-    // Fix Player App inscriptions that incorrectly have convoque=1
-    // These were created before the bug fix - they should be convoque=0 (Inscrit)
-    // Only fix if no convocation was actually sent (no record in convocation_poules)
-    const fixResult = await client.query(`
+    // Fix inscription convoque status based on tournament date
+    // 1. PAST tournaments (debut <= today): all players should be convoque=1 (they played)
+    const fixPastResult = await client.query(`
+      UPDATE inscriptions i
+      SET convoque = 1
+      FROM tournoi_ext t
+      WHERE i.tournoi_id = t.tournoi_id
+        AND t.debut <= CURRENT_DATE
+        AND i.convoque = 0
+    `);
+    if (fixPastResult.rowCount > 0) {
+      console.log(`[Migration] Fixed ${fixPastResult.rowCount} past tournament inscriptions: set convoque=1`);
+    }
+
+    // 2. FUTURE tournaments: Player App inscriptions should be convoque=0 (Inscrit)
+    //    unless convocation was actually sent (record exists in convocation_poules)
+    const fixFutureResult = await client.query(`
       UPDATE inscriptions i
       SET convoque = 0
-      WHERE i.source = 'player_app'
+      FROM tournoi_ext t
+      WHERE i.tournoi_id = t.tournoi_id
+        AND t.debut > CURRENT_DATE
+        AND i.source = 'player_app'
         AND i.convoque = 1
         AND NOT EXISTS (
           SELECT 1 FROM convocation_poules cp
@@ -399,8 +415,8 @@ async function initializeDatabase() {
             AND REPLACE(UPPER(cp.licence), ' ', '') = REPLACE(UPPER(i.licence), ' ', '')
         )
     `);
-    if (fixResult.rowCount > 0) {
-      console.log(`[Migration] Fixed ${fixResult.rowCount} Player App inscriptions: set convoque=0`);
+    if (fixFutureResult.rowCount > 0) {
+      console.log(`[Migration] Fixed ${fixFutureResult.rowCount} future Player App inscriptions: set convoque=0`);
     }
 
     // Calendar storage table
