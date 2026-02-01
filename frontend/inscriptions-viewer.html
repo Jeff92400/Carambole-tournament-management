@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Inscriptions - CDBHS</title>
+  <link rel="icon" type="image/png" href="images/FrenchBillard-Icon-small.png">
+  <link rel="stylesheet" href="css/styles.css">
+  <script src="js/branding.js"></script>
+  <style>
+    .filter-bar {
+      display: flex;
+      gap: 15px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .filter-bar select, .filter-bar input {
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+    .filter-bar select {
+      min-width: 150px;
+    }
+    .filter-bar input[type="text"] {
+      flex: 1;
+      min-width: 200px;
+    }
+    .badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: bold;
+    }
+    .badge-convoque { background: #e8f5e9; color: #2e7d32; }
+    .badge-non-convoque { background: #fff3e0; color: #e65100; }
+    .badge-forfait { background: #ffebee; color: #c62828; }
+    .badge-libre { background: #e3f2fd; color: #1565c0; }
+    .badge-cadre { background: #fff3e0; color: #e65100; }
+    .badge-bande { background: #f3e5f5; color: #7b1fa2; }
+    .badge-3bandes { background: #e8f5e9; color: #2e7d32; }
+    .badge-csv { background: #e3f2fd; color: #0d47a1; }
+    .badge-player-app { background: #e8f5e9; color: #2e7d32; }
+    .badge-manual { background: #f5f5f5; color: #616161; }
+    .results-count {
+      background: #f8f9fa;
+      padding: 8px 15px;
+      border-radius: 4px;
+      font-size: 13px;
+      color: #666;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="navbar">
+      <h2><img id="app-header-icon" src="images/FrenchBillard-Icon-small.png" alt="" style="height: 48px; width: 48px; vertical-align: middle; margin-right: 8px;" onerror="this.src='images/FrenchBillard-Icon-small.png';"><span id="app-org-name-short">CDBHS</span> Inscriptions</h2>
+      <div class="nav-links">
+        <a href="dashboard.html">Accueil</a>
+        <a href="rankings.html" class="nav-tooltip" data-tooltip="Classement par catégorie de jeu au fur et à mesure des tournois">Classements</a>
+        <a href="generate-poules.html" class="nav-tooltip" data-tooltip="Compétitions à jouer / Convocations">Compétitions</a>
+        <a href="inscriptions-viewer.html" class="active nav-tooltip" data-tooltip="Liste des inscriptions">Inscriptions</a>
+        <a href="calendar.html" class="nav-tooltip" data-tooltip="Calendrier de la saison">Calendrier</a>
+        <a href="emailing.html" class="nav-tooltip" data-tooltip="Annonces, relances, résultats, convocation">Com joueurs</a>
+        <a href="settings.html" class="admin-only nav-tooltip" data-tooltip="Réservé aux administrateurs">Paramètres</a>
+        <a href="#" id="logoutBtn" class="nav-logout">Déconnexion</a>
+      </div>
+    </div>
+
+    <div id="errorMessage" class="error" style="display: none;"></div>
+
+    <!-- Season stats - green theme -->
+    <div class="stats-grid" style="margin-bottom: 20px;">
+      <div class="stat-card" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
+        <h4 id="seasonTotalLabel">Inscriptions Saison en cours</h4>
+        <div class="stat-value" id="seasonTotalCount">-</div>
+      </div>
+      <div class="stat-card" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
+        <h4 id="seasonConvoqueLabel">Convoqués Saison en cours</h4>
+        <div class="stat-value" id="seasonConvoqueCount">-</div>
+      </div>
+      <div class="stat-card" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
+        <h4 id="seasonForfaitLabel">Forfaits Saison en cours</h4>
+        <div class="stat-value" id="seasonForfaitCount">-</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h3 style="margin: 0;">Liste des Inscriptions</h3>
+        <span id="resultsCount" class="results-count"></span>
+      </div>
+
+      <div class="filter-bar">
+        <select id="seasonFilter">
+          <option value="">Toutes les saisons</option>
+        </select>
+        <select id="modeFilter">
+          <option value="">Mode de jeu : tous</option>
+        </select>
+        <select id="categorieFilter">
+          <option value="">Classement FFB : tous</option>
+        </select>
+        <select id="tournoiFilter">
+          <option value="">Tous les tournois</option>
+        </select>
+        <select id="statusFilter">
+          <option value="">Tous les statuts</option>
+          <option value="convoque">Convoqués</option>
+          <option value="non-convoque">Non convoqués</option>
+          <option value="forfait">Forfaits</option>
+        </select>
+        <select id="sourceFilter">
+          <option value="">Toutes les sources</option>
+          <option value="ionos">Fichier CSV</option>
+          <option value="player_app">Appli Joueur</option>
+          <option value="manual">Manuel</option>
+        </select>
+        <input type="text" id="searchInput" placeholder="Rechercher par licence ou email...">
+      </div>
+
+      <div id="loadingInscriptions" class="loading">
+        <div class="spinner"></div>
+        Chargement des inscriptions...
+      </div>
+
+      <div id="inscriptionsTable" style="display: none;">
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Licence</th>
+                <th>Tournoi</th>
+                <th>Mode</th>
+                <th>Catégorie</th>
+                <th>Email</th>
+                <th>Téléphone</th>
+                <th>Statut</th>
+                <th>Source</th>
+                <th>Date inscription</th>
+              </tr>
+            </thead>
+            <tbody id="inscriptionsBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/auth-utils.js"></script>
+  <script src="js/app-branding.js"></script>
+  <script src="js/reference-data.js"></script>
+  <script>
+    const API_URL = '/api';
+
+    // Check authentication
+    if (!requireAuth()) {
+      throw new Error('Not authenticated');
+    }
+    const token = localStorage.getItem('token');
+
+    // Check user role and show/hide admin elements
+    const userRole = localStorage.getItem('userRole');
+    if (userRole === 'admin') {
+      document.querySelectorAll('.admin-only').forEach(el => el.style.display = '');
+    } else {
+      document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');
+    }
+
+    // Initialize app branding
+    initAppBranding();
+
+    // Logout
+    document.getElementById('logoutBtn').addEventListener('click', (e) => {
+      e.preventDefault();
+      localStorage.removeItem('token');
+      localStorage.removeItem('userRole');
+      localStorage.removeItem('username');
+      window.location.href = 'login.html';
+    });
+
+    let allInscriptions = [];
+    let allTournois = [];
+    let gameModesList = [];
+    let categoriesByMode = {};
+
+    // Parse date that might be in various formats
+    function parseDate(dateStr) {
+      if (!dateStr) return null;
+      if (dateStr instanceof Date) return dateStr;
+      if (dateStr.includes('-')) {
+        return new Date(dateStr);
+      }
+      if (dateStr.includes('/')) {
+        const parts = dateStr.split('/');
+        if (parts.length === 3) {
+          const day = parseInt(parts[0], 10);
+          const month = parseInt(parts[1], 10) - 1;
+          const year = parseInt(parts[2], 10);
+          return new Date(year, month, day);
+        }
+      }
+      return new Date(dateStr);
+    }
+
+    // Get season for a given date
+    function getSeasonForDate(date) {
+      const year = date.getFullYear();
+      const month = date.getMonth();
+      if (month >= 8) {
+        return `${year}-${year + 1}`;
+      } else {
+        return `${year - 1}-${year}`;
+      }
+    }
+
+    // Helper to normalize mode/category to Title Case
+    function toTitleCase(str) {
+      if (!str) return '';
+      return str.toLowerCase().split(' ').map(word =>
+        word.charAt(0).toUpperCase() + word.slice(1)
+      ).join(' ');
+    }
+
+    // Load tournois for filter and display
+    async function loadTournois() {
+      try {
+        const response = await fetch(`${API_URL}/inscriptions/tournoi`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (response.ok) {
+          allTournois = await response.json();
+          populateModeFilter();
+          populateCategorieFilter();
+          populateTournoiFilter();
+        }
+      } catch (error) {
+        console.error('Error loading tournois:', error);
+      }
+    }
+
+    // Load game modes from reference data API
+    async function loadGameModes() {
+      try {
+        const response = await fetch(`${API_URL}/reference-data/game-modes?active_only=true`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (response.ok) {
+          gameModesList = await response.json();
+        }
+
+        const catResponse = await fetch(`${API_URL}/reference-data/categories`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (catResponse.ok) {
+          const categories = await catResponse.json();
+          categoriesByMode = {};
+          categories.forEach(cat => {
+            const normalizedMode = cat.game_type.toUpperCase().replace(/ /g, '');
+            if (!categoriesByMode[normalizedMode]) {
+              categoriesByMode[normalizedMode] = [];
+            }
+            if (!categoriesByMode[normalizedMode].includes(cat.level)) {
+              categoriesByMode[normalizedMode].push(cat.level);
+            }
+          });
+        }
+      } catch (error) {
+        console.error('Error loading game modes:', error);
+      }
+    }
+
+    // Populate mode filter
+    function populateModeFilter() {
+      const select = document.getElementById('modeFilter');
+      select.innerHTML = '<option value="">Mode de jeu : tous</option>';
+
+      gameModesList.forEach(gm => {
+        const option = document.createElement('option');
+        option.value = gm.display_name;
+        option.textContent = gm.display_name;
+        select.appendChild(option);
+      });
+    }
+
+    // Populate categorie filter
+    function populateCategorieFilter() {
+      const select = document.getElementById('categorieFilter');
+      const selectedMode = document.getElementById('modeFilter').value;
+
+      select.innerHTML = '<option value="">Classement FFB : tous</option>';
+
+      if (selectedMode) {
+        const modeNormalized = selectedMode.toUpperCase().replace(/ /g, '');
+
+        if (categoriesByMode[modeNormalized]) {
+          select.disabled = false;
+          categoriesByMode[modeNormalized].sort().forEach(cat => {
+            const option = document.createElement('option');
+            option.value = cat;
+            option.textContent = cat;
+            select.appendChild(option);
+          });
+        } else {
+          select.disabled = true;
+        }
+      } else {
+        select.disabled = true;
+      }
+    }
+
+    // Populate tournoi filter
+    function populateTournoiFilter() {
+      const select = document.getElementById('tournoiFilter');
+      const selectedSeason = document.getElementById('seasonFilter').value;
+      const selectedMode = document.getElementById('modeFilter').value;
+      const selectedCategorie = document.getElementById('categorieFilter').value;
+
+      select.innerHTML = '<option value="">Tous les tournois</option>';
+
+      let filteredTournois = allTournois;
+      if (selectedSeason) {
+        filteredTournois = filteredTournois.filter(t => {
+          if (!t.debut) return false;
+          const date = parseDate(t.debut);
+          if (!date || isNaN(date.getTime())) return false;
+          return getSeasonForDate(date) === selectedSeason;
+        });
+      }
+      if (selectedMode) {
+        filteredTournois = filteredTournois.filter(t => toTitleCase(t.mode) === selectedMode);
+      }
+      if (selectedCategorie) {
+        filteredTournois = filteredTournois.filter(t => (t.categorie || '').toUpperCase().trim() === selectedCategorie);
+      }
+
+      filteredTournois.sort((a, b) => {
+        const dateA = a.debut ? new Date(a.debut) : new Date(0);
+        const dateB = b.debut ? new Date(b.debut) : new Date(0);
+        return dateB - dateA;
+      });
+
+      filteredTournois.forEach(t => {
+        const option = document.createElement('option');
+        option.value = t.tournoi_id;
+        const date = t.debut ? new Date(t.debut).toLocaleDateString('fr-FR') : '';
+        option.textContent = `${t.nom} ${date ? `(${date})` : ''}`;
+        select.appendChild(option);
+      });
+    }
+
+    // Get tournoi info by ID
+    function getTournoiById(tournoiId) {
+      return allTournois.find(t => t.tournoi_id === tournoiId) || {};
+    }
+
+    // Load inscriptions
+    async function loadInscriptions() {
+      try {
+        const response = await fetch(`${API_URL}/inscriptions`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to load inscriptions');
+        }
+
+        allInscriptions = await response.json();
+
+        populateSeasonFilter();
+        updateSeasonStats();
+        displayInscriptions(allInscriptions);
+
+        document.getElementById('loadingInscriptions').style.display = 'none';
+        document.getElementById('inscriptionsTable').style.display = 'block';
+
+      } catch (error) {
+        console.error('Error loading inscriptions:', error);
+        document.getElementById('loadingInscriptions').style.display = 'none';
+        document.getElementById('errorMessage').textContent = 'Erreur lors du chargement des inscriptions';
+        document.getElementById('errorMessage').style.display = 'block';
+      }
+    }
+
+    // Update season stats
+    function updateSeasonStats() {
+      const seasonFilter = document.getElementById('seasonFilter');
+      const selectedSeason = seasonFilter.value || getSeasonForDate(new Date());
+
+      const seasonInscriptions = allInscriptions.filter(i => {
+        if (!selectedSeason) return true;
+        const tournoi = getTournoiById(i.tournoi_id);
+        if (!tournoi.debut) return false;
+        const date = parseDate(tournoi.debut);
+        if (!date || isNaN(date.getTime())) return false;
+        return getSeasonForDate(date) === selectedSeason;
+      });
+
+      const seasonConvoques = seasonInscriptions.filter(i => i.convoque === 1);
+      const seasonForfaits = seasonInscriptions.filter(i => i.forfait === 1);
+
+      const seasonLabel = selectedSeason || 'Toutes saisons';
+      document.getElementById('seasonTotalLabel').textContent = `Inscriptions Saison ${seasonLabel}`;
+      document.getElementById('seasonConvoqueLabel').textContent = `Convoqués Saison ${seasonLabel}`;
+      document.getElementById('seasonForfaitLabel').textContent = `Forfaits Saison ${seasonLabel}`;
+
+      document.getElementById('seasonTotalCount').textContent = seasonInscriptions.length;
+      document.getElementById('seasonConvoqueCount').textContent = seasonConvoques.length;
+      document.getElementById('seasonForfaitCount').textContent = seasonForfaits.length;
+    }
+
+    // Populate season filter
+    function populateSeasonFilter() {
+      const seasons = new Set();
+
+      allInscriptions.forEach(i => {
+        const tournoi = getTournoiById(i.tournoi_id);
+        if (tournoi.debut) {
+          const date = parseDate(tournoi.debut);
+          if (date && !isNaN(date.getTime())) {
+            seasons.add(getSeasonForDate(date));
+          }
+        }
+      });
+
+      const select = document.getElementById('seasonFilter');
+      const currentSeason = getSeasonForDate(new Date());
+      const sortedSeasons = Array.from(seasons)
+        .filter(season => season >= currentSeason)
+        .sort().reverse();
+
+      sortedSeasons.forEach(season => {
+        const option = document.createElement('option');
+        option.value = season;
+        option.textContent = `Saison ${season}`;
+        select.appendChild(option);
+      });
+
+      if (sortedSeasons.includes(currentSeason)) {
+        select.value = currentSeason;
+        populateModeFilter();
+        populateCategorieFilter();
+        populateTournoiFilter();
+        applyFilters();
+      }
+    }
+
+    // Get mode badge class
+    function getModeBadgeClass(mode) {
+      const modeUpper = (mode || '').toUpperCase();
+      if (modeUpper.includes('LIBRE')) return 'badge-libre';
+      if (modeUpper.includes('CADRE')) return 'badge-cadre';
+      if (modeUpper.includes('3') || modeUpper.includes('TROIS')) return 'badge-3bandes';
+      if (modeUpper.includes('BANDE')) return 'badge-bande';
+      return '';
+    }
+
+    // Format datetime
+    function formatDateTime(dateStr) {
+      if (!dateStr) return '-';
+      const date = new Date(dateStr);
+      return date.toLocaleDateString('fr-FR') + ' ' + date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    // Get status badge
+    function getStatusBadge(inscription) {
+      if (inscription.statut === 'désinscrit') {
+        return '<span class="badge" style="background: #6c757d; color: white;">Désinscrit</span>';
+      }
+      if (inscription.forfait === 1) {
+        return '<span class="badge badge-forfait">Forfait</span>';
+      }
+      if (inscription.convoque === 1) {
+        return '<span class="badge badge-convoque">Convoqué</span>';
+      }
+      return '<span class="badge badge-non-convoque">Inscrit</span>';
+    }
+
+    // Get source badge
+    function getSourceBadge(source) {
+      if (source === 'player_app') {
+        return '<span class="badge badge-player-app">Appli Joueur</span>';
+      }
+      if (source === 'ionos') {
+        return '<span class="badge badge-csv">Fichier CSV</span>';
+      }
+      return '<span class="badge badge-manual">Manuel</span>';
+    }
+
+    // Display inscriptions in table
+    function displayInscriptions(inscriptions) {
+      const tbody = document.getElementById('inscriptionsBody');
+      tbody.innerHTML = '';
+
+      // Update results count
+      document.getElementById('resultsCount').textContent = `${inscriptions.length} inscription${inscriptions.length > 1 ? 's' : ''}`;
+
+      if (inscriptions.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 20px;">Aucune inscription trouvée</td></tr>';
+        return;
+      }
+
+      // Sort by timestamp (most recent first)
+      inscriptions.sort((a, b) => {
+        const dateA = a.timestamp ? new Date(a.timestamp) : new Date(0);
+        const dateB = b.timestamp ? new Date(b.timestamp) : new Date(0);
+        return dateB - dateA;
+      });
+
+      inscriptions.forEach(inscription => {
+        const tournoi = getTournoiById(inscription.tournoi_id);
+        const row = document.createElement('tr');
+
+        if (inscription.forfait === 1) {
+          row.style.opacity = '0.6';
+          row.style.textDecoration = 'line-through';
+        }
+
+        row.innerHTML = `
+          <td><strong>${inscription.licence || '-'}</strong></td>
+          <td>${inscription.tournoi_nom || tournoi.nom || `Tournoi #${inscription.tournoi_id}`}</td>
+          <td><span class="badge ${getModeBadgeClass(inscription.mode || tournoi.mode)}">${inscription.mode || tournoi.mode || '-'}</span></td>
+          <td>${inscription.categorie || tournoi.categorie || '-'}</td>
+          <td>${inscription.email || '-'}</td>
+          <td>${inscription.telephone || '-'}</td>
+          <td>${getStatusBadge(inscription)}</td>
+          <td>${getSourceBadge(inscription.source)}</td>
+          <td>${formatDateTime(inscription.timestamp)}</td>
+        `;
+
+        tbody.appendChild(row);
+      });
+    }
+
+    // Apply filters
+    function applyFilters() {
+      const selectedSeason = document.getElementById('seasonFilter').value;
+      const selectedMode = document.getElementById('modeFilter').value;
+      const selectedCategorie = document.getElementById('categorieFilter').value;
+      const selectedTournoi = document.getElementById('tournoiFilter').value;
+      const selectedStatus = document.getElementById('statusFilter').value;
+      const selectedSource = document.getElementById('sourceFilter').value;
+      const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+
+      let filtered = allInscriptions;
+
+      // Filter by season
+      if (selectedSeason) {
+        filtered = filtered.filter(i => {
+          const tournoi = getTournoiById(i.tournoi_id);
+          if (!tournoi.debut) return false;
+          const date = parseDate(tournoi.debut);
+          if (!date || isNaN(date.getTime())) return false;
+          return getSeasonForDate(date) === selectedSeason;
+        });
+      }
+
+      // Filter by mode
+      if (selectedMode) {
+        filtered = filtered.filter(i => {
+          const tournoi = getTournoiById(i.tournoi_id);
+          const inscMode = toTitleCase(i.mode || tournoi.mode);
+          return inscMode === selectedMode;
+        });
+      }
+
+      // Filter by categorie
+      if (selectedCategorie) {
+        filtered = filtered.filter(i => {
+          const tournoi = getTournoiById(i.tournoi_id);
+          const inscCategorie = (i.categorie || tournoi.categorie || '').toUpperCase().trim();
+          return inscCategorie === selectedCategorie;
+        });
+      }
+
+      // Filter by tournoi
+      if (selectedTournoi) {
+        filtered = filtered.filter(i => i.tournoi_id == selectedTournoi);
+      }
+
+      // Filter by status
+      if (selectedStatus === 'convoque') {
+        filtered = filtered.filter(i => i.convoque === 1 && i.forfait !== 1);
+      } else if (selectedStatus === 'non-convoque') {
+        filtered = filtered.filter(i => i.convoque !== 1 && i.forfait !== 1);
+      } else if (selectedStatus === 'forfait') {
+        filtered = filtered.filter(i => i.forfait === 1);
+      }
+
+      // Filter by source
+      if (selectedSource) {
+        filtered = filtered.filter(i => i.source === selectedSource);
+      }
+
+      // Filter by search term
+      if (searchTerm) {
+        filtered = filtered.filter(i => {
+          const licence = (i.licence || '').toLowerCase();
+          const email = (i.email || '').toLowerCase();
+          return licence.includes(searchTerm) || email.includes(searchTerm);
+        });
+      }
+
+      displayInscriptions(filtered);
+    }
+
+    // Filter change handlers
+    document.getElementById('seasonFilter').addEventListener('change', () => {
+      populateModeFilter();
+      populateCategorieFilter();
+      populateTournoiFilter();
+      updateSeasonStats();
+      applyFilters();
+    });
+
+    document.getElementById('modeFilter').addEventListener('change', () => {
+      populateCategorieFilter();
+      populateTournoiFilter();
+      applyFilters();
+    });
+
+    document.getElementById('categorieFilter').addEventListener('change', () => {
+      populateTournoiFilter();
+      applyFilters();
+    });
+
+    document.getElementById('tournoiFilter').addEventListener('change', applyFilters);
+    document.getElementById('statusFilter').addEventListener('change', applyFilters);
+    document.getElementById('sourceFilter').addEventListener('change', applyFilters);
+    document.getElementById('searchInput').addEventListener('input', applyFilters);
+
+    // Initialize page
+    async function initPage() {
+      await loadGameModes();
+      await loadTournois();
+      await loadInscriptions();
+    }
+
+    initPage();
+  </script>
+</body>
+</html>
