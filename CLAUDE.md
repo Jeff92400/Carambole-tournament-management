@@ -59,7 +59,7 @@ git push origin main
 
 ## Versioning
 
-**Current Version:** V 2.0.133 01/26
+**Current Version:** V 2.0.144 02/26
 
 Version is displayed at the bottom of the login screen (`frontend/login.html`).
 
@@ -172,7 +172,7 @@ Optional:
 - CSV imports use semicolon delimiter
 - **Billiard icon:** Never use the American 8-ball emoji (🎱). Always use the French billiard icon image instead: `<img src="images/FrenchBillard-Icon-small.png" alt="" style="height: 24px; width: 24px; vertical-align: middle;">`
 - **Test data exclusion:** ALWAYS exclude test accounts from counts and lists. Test accounts have licences starting with "TEST" (case-insensitive). Use `WHERE UPPER(licence) NOT LIKE 'TEST%'` in queries.
-- **No hardcoding reference data:** NEVER hardcode values like game modes, FFB rankings, clubs, or categories. Always load them dynamically from the reference tables (`game_modes`, `ffb_rankings`, `clubs`, `categories`) via the API (`/api/reference-data/*`).
+- **No hardcoding reference data:** NEVER hardcode values like game modes, FFB rankings, clubs, or categories. Always load them dynamically from the reference tables (`game_modes`, `ffb_rankings`, `clubs`, `categories`) via the API (`/api/reference-data/*`). See "Dynamic Selectors" section below.
 - **Helmet security headers:** The helmet middleware sets restrictive headers by default. For public endpoints that need to be accessed by external services (email clients, embeds, etc.), you must override specific headers. Common issue: `Cross-Origin-Resource-Policy: same-origin` blocks email clients from loading images. Fix by adding `res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');` to the endpoint.
 - **Case-insensitive mode/game_type queries:** ALWAYS use `UPPER()` for case-insensitive comparisons when querying `mode_mapping`, `game_parameters`, or any table that stores game modes/types. Frontend may pass "Libre" (INITCAP) while tables store "LIBRE" (uppercase). Example: `WHERE UPPER(game_type) = UPPER($1)` instead of `WHERE game_type = $1`. This applies to all mode, game_type, and categorie comparisons across `inscriptions.js`, `emailing.js`, and other routes.
 
@@ -212,6 +212,41 @@ Include branding.js after styles.css:
 ```html
 <link rel="stylesheet" href="css/styles.css">
 <script src="js/branding.js"></script>
+```
+
+## Dynamic Selectors (CRITICAL)
+
+**All dropdown/select options must load dynamically from the database.** Never hardcode reference data like game modes, FFB rankings, categories, tournament rounds, etc.
+
+### Rollback Point
+- **Tag:** `pre-dynamic-selectors-v2.0.144`
+- **Date:** February 2026
+- **Purpose:** Rollback point before dynamic selectors refactoring
+
+### Reference Data Tables & Endpoints
+
+| Data Type | Database Table | API Endpoint |
+|-----------|---------------|--------------|
+| Game Modes | `game_modes` | `/api/reference-data/game-modes` |
+| FFB Rankings | `ffb_rankings` | `/api/reference-data/ffb-rankings` |
+| Categories | `categories` | `/api/reference-data/categories` |
+| Clubs | `clubs` | `/api/clubs` |
+| Announcement Types | `announcement_types` | `/api/reference-data/announcement-types` |
+| Contact Statuses | `contact_statuses` | `/api/reference-data/contact-statuses` |
+| Inscription Sources | `inscription_sources` | `/api/reference-data/inscription-sources` |
+| Tournament Rounds | `tournament_rounds` | `/api/reference-data/tournament-rounds` |
+| User Roles | `user_roles` | `/api/reference-data/user-roles` |
+
+### Implementation Pattern
+```javascript
+// Load reference data on page init
+async function loadGameModes() {
+  const response = await authFetch('/api/reference-data/game-modes');
+  const modes = await response.json();
+  const select = document.getElementById('gameModeSelect');
+  select.innerHTML = '<option value="">-- Sélectionner --</option>' +
+    modes.map(m => `<option value="${m.code}">${m.display_name}</option>`).join('');
+}
 ```
 
 ## See Also
