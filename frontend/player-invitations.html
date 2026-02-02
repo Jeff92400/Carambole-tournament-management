@@ -515,8 +515,8 @@
         </div>
       </div>
       <div class="modal-footer">
-        <button class="btn btn-secondary" onclick="closeSendModal()">Annuler</button>
-        <button class="btn" onclick="confirmSend()">Envoyer</button>
+        <button class="btn btn-secondary" onclick="closeSendModal()" id="cancelSendBtn">Annuler</button>
+        <button class="btn" onclick="confirmSend()" id="confirmSendBtn">Envoyer</button>
       </div>
     </div>
   </div>
@@ -991,6 +991,14 @@
         return;
       }
 
+      // Disable buttons and show loading state to prevent double-click
+      const confirmBtn = document.getElementById('confirmSendBtn');
+      const cancelBtn = document.getElementById('cancelSendBtn');
+      const originalText = confirmBtn.textContent;
+      confirmBtn.disabled = true;
+      confirmBtn.textContent = 'Envoi en cours...';
+      cancelBtn.disabled = true;
+
       const body = {
         player_contact_ids: Array.from(selectedIds)
       };
@@ -1012,6 +1020,10 @@
 
         if (response.ok) {
           closeSendModal();
+          // Reset button state for next time
+          confirmBtn.disabled = false;
+          confirmBtn.textContent = originalText;
+          cancelBtn.disabled = false;
           showSuccess(`${data.sent} invitation(s) envoyee(s)${data.test_mode ? ' (mode test)' : ''}`);
           if (!testMode) {
             clearSelection();
@@ -1020,10 +1032,18 @@
             loadStats();
           }
         } else {
+          // Re-enable on error
+          confirmBtn.disabled = false;
+          confirmBtn.textContent = originalText;
+          cancelBtn.disabled = false;
           showError(data.error || 'Erreur lors de l\'envoi');
         }
       } catch (error) {
         console.error('Error sending:', error);
+        // Re-enable on error
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = originalText;
+        cancelBtn.disabled = false;
         showError('Erreur de connexion');
       }
     }
