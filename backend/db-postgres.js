@@ -399,8 +399,23 @@ async function initializeDatabase() {
       console.log(`[Migration] Fixed ${fixPastResult.rowCount} past tournament inscriptions: set convoque=1`);
     }
 
-    // 2. FUTURE tournaments: Player App inscriptions should be convoque=0 (Inscrit)
-    //    unless convocation was actually sent (record exists in convocation_poules)
+    // 2. FUTURE tournaments with convocation SENT: set convoque=1
+    //    (record exists in convocation_poules means convocation was sent)
+    const fixConvokedResult = await client.query(`
+      UPDATE inscriptions i
+      SET convoque = 1
+      WHERE i.convoque = 0
+        AND EXISTS (
+          SELECT 1 FROM convocation_poules cp
+          WHERE cp.tournoi_id = i.tournoi_id
+            AND REPLACE(UPPER(cp.licence), ' ', '') = REPLACE(UPPER(i.licence), ' ', '')
+        )
+    `);
+    if (fixConvokedResult.rowCount > 0) {
+      console.log(`[Migration] Fixed ${fixConvokedResult.rowCount} inscriptions with convocation sent: set convoque=1`);
+    }
+
+    // 3. FUTURE tournaments without convocation: Player App inscriptions should be convoque=0
     const fixFutureResult = await client.query(`
       UPDATE inscriptions i
       SET convoque = 0
