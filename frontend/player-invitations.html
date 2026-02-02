@@ -1019,6 +1019,13 @@
         const accounts = await response.json();
 
         if (response.ok) {
+          // Sort by last name (last word of player_name)
+          accounts.sort((a, b) => {
+            const nameA = (a.player_name || a.licence || '').split(' ').pop().toUpperCase();
+            const nameB = (b.player_name || b.licence || '').split(' ').pop().toUpperCase();
+            return nameA.localeCompare(nameB, 'fr');
+          });
+
           const tbody = document.getElementById('signedUpTableBody');
           tbody.innerHTML = accounts.map((acc, index) => `
             <tr>
