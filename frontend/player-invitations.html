@@ -339,7 +339,7 @@
         <div class="stat-value" id="statTotal">-</div>
         <div class="stat-label">Invitations envoyees</div>
       </div>
-      <div class="stat-card success">
+      <div class="stat-card success" onclick="showSignedUpList()" style="cursor: pointer;" title="Cliquer pour voir la liste">
         <div class="stat-value" id="statSignedUp">-</div>
         <div class="stat-label">Inscrits</div>
       </div>
@@ -492,6 +492,33 @@
           <p style="margin: 0; color: #666;">Cliquez pour telecharger un nouveau PDF</p>
           <p style="margin: 5px 0 0 0; font-size: 12px; color: #999;">Taille max: 10 MB</p>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Signed Up Players Modal -->
+  <div class="modal" id="signedUpModal">
+    <div class="modal-content" style="max-width: 700px;">
+      <div class="modal-header">
+        <h3>Joueurs inscrits a l'App Joueur</h3>
+        <button class="modal-close" onclick="closeSignedUpModal()">&times;</button>
+      </div>
+      <div class="modal-body" style="max-height: 500px; overflow-y: auto;">
+        <div id="signedUpLoading" style="text-align: center; padding: 20px;">Chargement...</div>
+        <table id="signedUpTable" class="data-table" style="display: none;">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Joueur</th>
+              <th>Club</th>
+              <th>Date d'inscription</th>
+            </tr>
+          </thead>
+          <tbody id="signedUpTableBody"></tbody>
+        </table>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeSignedUpModal()">Fermer</button>
       </div>
     </div>
   </div>
@@ -980,6 +1007,46 @@
 
     function closeSendModal() {
       document.getElementById('sendModal').style.display = 'none';
+    }
+
+    // Show signed up players modal
+    async function showSignedUpList() {
+      document.getElementById('signedUpModal').style.display = 'block';
+      document.getElementById('signedUpLoading').style.display = 'block';
+      document.getElementById('signedUpTable').style.display = 'none';
+
+      try {
+        const response = await fetch(`${API_URL}/player-invitations/tracking?status=signed_up&page=1&limit=500`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+
+        if (response.ok) {
+          const tbody = document.getElementById('signedUpTableBody');
+          tbody.innerHTML = data.invitations.map((inv, index) => `
+            <tr>
+              <td>${index + 1}</td>
+              <td><strong>${inv.first_name} ${inv.last_name}</strong></td>
+              <td>${inv.club || '-'}</td>
+              <td>${inv.signed_up_at ? new Date(inv.signed_up_at).toLocaleDateString('fr-FR') : (inv.sent_at ? new Date(inv.sent_at).toLocaleDateString('fr-FR') : '-')}</td>
+            </tr>
+          `).join('');
+
+          document.getElementById('signedUpLoading').style.display = 'none';
+          document.getElementById('signedUpTable').style.display = 'table';
+        } else {
+          showError(data.error || 'Erreur lors du chargement');
+          closeSignedUpModal();
+        }
+      } catch (error) {
+        console.error('Error loading signed up list:', error);
+        showError('Erreur de connexion');
+        closeSignedUpModal();
+      }
+    }
+
+    function closeSignedUpModal() {
+      document.getElementById('signedUpModal').style.display = 'none';
     }
 
     async function confirmSend() {
