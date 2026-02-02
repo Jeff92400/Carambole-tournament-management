@@ -1016,7 +1016,7 @@
       document.getElementById('signedUpTable').style.display = 'none';
 
       try {
-        const response = await fetch(`${API_URL}/player-invitations/tracking?status=signed_up&page=1&limit=500`, {
+        const response = await fetch(`${API_URL}/player-invitations?status=signed_up&limit=500`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();
