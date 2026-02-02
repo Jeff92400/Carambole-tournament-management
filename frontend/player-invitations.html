@@ -1016,26 +1016,27 @@
       document.getElementById('signedUpTable').style.display = 'none';
 
       try {
-        const response = await fetch(`${API_URL}/player-invitations?status=signed_up&limit=500`, {
+        // Get actual player accounts (app users)
+        const response = await fetch(`${API_URL}/player-accounts?all=true`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
-        const data = await response.json();
+        const accounts = await response.json();
 
         if (response.ok) {
           const tbody = document.getElementById('signedUpTableBody');
-          tbody.innerHTML = data.invitations.map((inv, index) => `
+          tbody.innerHTML = accounts.map((acc, index) => `
             <tr>
               <td>${index + 1}</td>
-              <td><strong>${inv.first_name} ${inv.last_name}</strong></td>
-              <td>${inv.club || '-'}</td>
-              <td>${inv.signed_up_at ? new Date(inv.signed_up_at).toLocaleDateString('fr-FR') : (inv.sent_at ? new Date(inv.sent_at).toLocaleDateString('fr-FR') : '-')}</td>
+              <td><strong>${acc.player_name || acc.licence}</strong></td>
+              <td>${acc.club || '-'}</td>
+              <td>${acc.created_at ? new Date(acc.created_at).toLocaleDateString('fr-FR') : '-'}</td>
             </tr>
           `).join('');
 
           document.getElementById('signedUpLoading').style.display = 'none';
           document.getElementById('signedUpTable').style.display = 'table';
         } else {
-          showError(data.error || 'Erreur lors du chargement');
+          showError(accounts.error || 'Erreur lors du chargement');
           closeSignedUpModal();
         }
       } catch (error) {
