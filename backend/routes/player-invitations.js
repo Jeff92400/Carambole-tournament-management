@@ -119,9 +119,9 @@ router.get('/', authenticateToken, async (req, res) => {
     }
 
     if (status === 'signed_up') {
-      query += ` AND (pi.has_signed_up = TRUE OR pi.has_signed_up = 1)`;
+      query += ` AND pi.has_signed_up = TRUE`;
     } else if (status === 'pending') {
-      query += ` AND (pi.has_signed_up = FALSE OR pi.has_signed_up = 0 OR pi.has_signed_up IS NULL)`;
+      query += ` AND (pi.has_signed_up = FALSE OR pi.has_signed_up IS NULL)`;
     }
 
     if (search) {
@@ -151,9 +151,9 @@ router.get('/', authenticateToken, async (req, res) => {
       countParams.push(club);
     }
     if (status === 'signed_up') {
-      countQuery += ` AND (pi.has_signed_up = TRUE OR pi.has_signed_up = 1)`;
+      countQuery += ` AND pi.has_signed_up = TRUE`;
     } else if (status === 'pending') {
-      countQuery += ` AND (pi.has_signed_up = FALSE OR pi.has_signed_up = 0 OR pi.has_signed_up IS NULL)`;
+      countQuery += ` AND (pi.has_signed_up = FALSE OR pi.has_signed_up IS NULL)`;
     }
     if (search) {
       countQuery += ` AND (pi.first_name ILIKE $${countParamIndex} OR pi.last_name ILIKE $${countParamIndex} OR pi.email ILIKE $${countParamIndex} OR pi.licence ILIKE $${countParamIndex})`;
