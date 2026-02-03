@@ -108,6 +108,21 @@ async function initializeDatabase() {
         WHERE REPLACE(p.licence, ' ', '') = REPLACE(pa.licence, ' ', '')
           AND p.player_app_user = FALSE
       `);
+
+      // Sync GDPR consent from player_accounts to players table
+      // (Player App stores GDPR in player_accounts, but exports read from players)
+      const gdprSyncResult = await client.query(`
+        UPDATE players p
+        SET gdpr_consent_date = pa.gdpr_consent_date,
+            gdpr_consent_version = pa.gdpr_consent_version
+        FROM player_accounts pa
+        WHERE REPLACE(p.licence, ' ', '') = REPLACE(pa.licence, ' ', '')
+          AND pa.gdpr_consent_date IS NOT NULL
+          AND p.gdpr_consent_date IS NULL
+      `);
+      if (gdprSyncResult.rowCount > 0) {
+        console.log(`[Migration] Synced GDPR consent for ${gdprSyncResult.rowCount} players from player_accounts`);
+      }
     } else {
       console.log('Skipping player_accounts migration (table does not exist yet)');
     }
