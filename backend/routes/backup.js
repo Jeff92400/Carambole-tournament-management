@@ -16,17 +16,22 @@ router.get('/export-players', authenticateToken, async (req, res) => {
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet('Joueurs');
 
-      // Add headers
+      // Add headers with all fields
       worksheet.columns = [
         { header: 'Licence', key: 'licence', width: 15 },
-        { header: 'Prénom', key: 'first_name', width: 20 },
         { header: 'Nom', key: 'last_name', width: 20 },
+        { header: 'Prénom', key: 'first_name', width: 20 },
         { header: 'Club', key: 'club', width: 30 },
-        { header: 'Rang Libre', key: 'rank_libre', width: 15 },
-        { header: 'Rang Cadre', key: 'rank_cadre', width: 15 },
-        { header: 'Rang Bande', key: 'rank_bande', width: 15 },
-        { header: 'Rang 3 Bandes', key: 'rank_3bandes', width: 15 },
-        { header: 'Actif', key: 'is_active', width: 10 }
+        { header: 'Email', key: 'email', width: 30 },
+        { header: 'Téléphone', key: 'telephone', width: 15 },
+        { header: 'Libre', key: 'rank_libre', width: 10 },
+        { header: 'Bande', key: 'rank_bande', width: 10 },
+        { header: '3 Bandes', key: 'rank_3bandes', width: 10 },
+        { header: 'Cadre', key: 'rank_cadre', width: 10 },
+        { header: 'Statut', key: 'is_active', width: 10 },
+        { header: 'Utilisateur App', key: 'player_app_user', width: 15 },
+        { header: 'Role App', key: 'player_app_role', width: 12 },
+        { header: 'RGPD', key: 'gdpr_consent', width: 12 }
       ];
 
       // Style headers
@@ -42,14 +47,19 @@ router.get('/export-players', authenticateToken, async (req, res) => {
       players.forEach(player => {
         worksheet.addRow({
           licence: player.licence,
-          first_name: player.first_name,
           last_name: player.last_name,
+          first_name: player.first_name,
           club: player.club,
-          rank_libre: player.rank_libre,
-          rank_cadre: player.rank_cadre,
-          rank_bande: player.rank_bande,
-          rank_3bandes: player.rank_3bandes,
-          is_active: player.is_active ? 'Oui' : 'Non'
+          email: player.email || '',
+          telephone: player.telephone || '',
+          rank_libre: player.rank_libre || 'NC',
+          rank_bande: player.rank_bande || 'NC',
+          rank_3bandes: player.rank_3bandes || 'NC',
+          rank_cadre: player.rank_cadre || 'NC',
+          is_active: player.is_active ? 'Actif' : 'Inactif',
+          player_app_user: player.player_app_user ? 'Oui' : 'Non',
+          player_app_role: player.player_app_role || '',
+          gdpr_consent: player.gdpr_consent_date ? 'Oui' : 'Non'
         });
       });
 
