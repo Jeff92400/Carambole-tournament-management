@@ -296,13 +296,9 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
     let errors = [];
     let seasonImported = 0;
 
-    // Get current season (Sept-Aug cycle)
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth(); // 0-11
-    const currentSeason = currentMonth >= 8
-      ? `${currentYear}-${currentYear + 1}`
-      : `${currentYear - 1}-${currentYear}`;
+    // Get season start month from settings (configurable)
+    const seasonStartMonth = await appSettings.getSeasonStartMonth();
+    const currentSeason = await appSettings.getCurrentSeason();
 
     // Pre-fetch all tournaments to determine season
     const tournoiMap = await new Promise((resolve, reject) => {
@@ -316,14 +312,12 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
       });
     });
 
-    // Helper to get season for a tournament
+    // Helper to get season for a tournament (uses configurable start month)
     const getSeasonForTournoi = (tournoiId) => {
       const tournoi = tournoiMap[tournoiId];
       if (!tournoi || !tournoi.debut) return null;
       const date = new Date(tournoi.debut);
-      const year = date.getFullYear();
-      const month = date.getMonth();
-      return month >= 8 ? `${year}-${year + 1}` : `${year - 1}-${year}`;
+      return appSettings.getCurrentSeasonSync(seasonStartMonth, date);
     };
 
     // Track last generated ID for collision handling within this import session
@@ -2765,11 +2759,9 @@ router.get('/tournoi/:id/simulation', authenticateToken, async (req, res) => {
     // For Finales, filter to only include qualified finalists
     const isFinale = tournament.nom && tournament.nom.toUpperCase().includes('FINALE');
     if (isFinale) {
-      // Get season from tournament date
+      // Get season from tournament date (uses configurable start month)
       const tournamentDate = new Date(tournament.debut);
-      const year = tournamentDate.getFullYear();
-      const month = tournamentDate.getMonth();
-      const season = month >= 8 ? `${year}-${year + 1}` : `${year - 1}-${year}`;
+      const season = await appSettings.getCurrentSeason(tournamentDate);
 
       // Get category for this tournament
       const gameType = tournament.mode?.toUpperCase();

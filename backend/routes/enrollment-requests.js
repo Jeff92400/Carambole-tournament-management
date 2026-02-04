@@ -442,18 +442,9 @@ router.put('/:id/approve', async (req, res) => {
       return res.status(400).json({ error: 'Request is not pending' });
     }
 
-    // Find the matching tournament for this season
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth();
-    let seasonStart, seasonEnd;
-    if (month >= 8) {
-      seasonStart = `${year}-09-01`;
-      seasonEnd = `${year + 1}-08-31`;
-    } else {
-      seasonStart = `${year - 1}-09-01`;
-      seasonEnd = `${year}-08-31`;
-    }
+    // Find the matching tournament for this season (uses configurable start month)
+    const currentSeason = await appSettings.getCurrentSeason();
+    const { start: seasonStart, end: seasonEnd } = await appSettings.getSeasonDateRange(currentSeason);
 
     // Find the tournament matching mode, category, and tournament number
     const tournamentNum = request.tournament_number;
@@ -523,9 +514,7 @@ router.put('/:id/approve', async (req, res) => {
       if (categoryResult.rows.length > 0) {
         const categoryId = categoryResult.rows[0].id;
 
-        // Determine current season
-        const seasonYear = month >= 8 ? year : year - 1;
-        const currentSeason = `${seasonYear}-${seasonYear + 1}`;
+        // currentSeason already defined above
 
         // Check if player exists in players table (required for foreign key)
         const playerExists = await db.query(`
@@ -785,18 +774,9 @@ router.delete('/:id', async (req, res) => {
     if (request.status === 'approved') {
       console.log(`[DELETE] Request was approved, cleaning up inscriptions and rankings...`);
 
-      // Find and delete the inscription that was created
-      const now = new Date();
-      const year = now.getFullYear();
-      const month = now.getMonth();
-      let seasonStart, seasonEnd;
-      if (month >= 8) {
-        seasonStart = `${year}-09-01`;
-        seasonEnd = `${year + 1}-08-31`;
-      } else {
-        seasonStart = `${year - 1}-09-01`;
-        seasonEnd = `${year}-08-31`;
-      }
+      // Find and delete the inscription that was created (uses configurable start month)
+      const currentSeason = await appSettings.getCurrentSeason();
+      const { start: seasonStart, end: seasonEnd } = await appSettings.getSeasonDateRange(currentSeason);
 
       // Find the tournament that matches (same logic as approve)
       // Use parameterized query for tournament_number
@@ -853,8 +833,7 @@ router.delete('/:id', async (req, res) => {
 
       if (categoryResult.rows.length > 0) {
         const categoryId = categoryResult.rows[0].id;
-        const seasonYear = month >= 8 ? year : year - 1;
-        const currentSeason = `${seasonYear}-${seasonYear + 1}`;
+        // currentSeason already defined above
 
         console.log(`[DELETE] Found category ${categoryId}, deleting ranking for season ${currentSeason}...`);
         await db.query(`

@@ -34,7 +34,7 @@ const defaults = {
   email_sender_name: 'CDBHS',
 
   // Season settings
-  season_cutoff_month: '8', // September (0-indexed)
+  season_start_month: '9', // September (1-12 format)
 
   // Ranking settings
   qualification_threshold: '9',
@@ -170,6 +170,89 @@ async function getQualificationSettings() {
   };
 }
 
+// ==================== SEASON HELPERS ====================
+
+/**
+ * Get the season start month (1-12, where 9 = September)
+ * @returns {Promise<number>} Month number (1-12)
+ */
+async function getSeasonStartMonth() {
+  const setting = await getSetting('season_start_month');
+  const month = parseInt(setting, 10) || 9; // Default to September
+  // Ensure valid range 1-12
+  return Math.max(1, Math.min(12, month));
+}
+
+/**
+ * Calculate season string for a given date
+ * @param {Date} date - Date to calculate season for (defaults to now)
+ * @returns {Promise<string>} Season string in format "YYYY-YYYY" (e.g., "2025-2026")
+ */
+async function getCurrentSeason(date = new Date()) {
+  const startMonth = await getSeasonStartMonth();
+  const month = date.getMonth() + 1; // Convert to 1-indexed
+  const year = date.getFullYear();
+
+  if (month >= startMonth) {
+    return `${year}-${year + 1}`;
+  } else {
+    return `${year - 1}-${year}`;
+  }
+}
+
+/**
+ * Get season date range
+ * @param {string} season - Season string (e.g., "2025-2026")
+ * @returns {Promise<{start: string, end: string}>} Date range in YYYY-MM-DD format
+ */
+async function getSeasonDateRange(season) {
+  const startMonth = await getSeasonStartMonth();
+  const [startYear] = season.split('-').map(Number);
+  const endYear = startYear + 1;
+
+  // Season starts on 1st of start month
+  const startDate = `${startYear}-${String(startMonth).padStart(2, '0')}-01`;
+
+  // Season ends on last day of month before start month
+  const endMonth = startMonth === 1 ? 12 : startMonth - 1;
+  const endMonthYear = startMonth === 1 ? endYear : endYear;
+  const lastDay = new Date(endMonthYear, endMonth, 0).getDate(); // Last day of previous month
+  const endDate = `${endMonthYear}-${String(endMonth).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+
+  return { start: startDate, end: endDate };
+}
+
+/**
+ * Check if a date falls within a given season
+ * @param {Date|string} date - Date to check
+ * @param {string} season - Season string (e.g., "2025-2026")
+ * @returns {Promise<boolean>}
+ */
+async function isDateInSeason(date, season) {
+  const dateObj = typeof date === 'string' ? new Date(date) : date;
+  const { start, end } = await getSeasonDateRange(season);
+  const dateStr = dateObj.toISOString().split('T')[0];
+  return dateStr >= start && dateStr <= end;
+}
+
+/**
+ * Synchronous version of getCurrentSeason (uses cached startMonth)
+ * Call getSeasonStartMonth() first to warm the cache, then use this for sync contexts
+ * @param {number} startMonth - The season start month (1-12)
+ * @param {Date} date - Date to calculate season for (defaults to now)
+ * @returns {string} Season string
+ */
+function getCurrentSeasonSync(startMonth, date = new Date()) {
+  const month = date.getMonth() + 1; // Convert to 1-indexed
+  const year = date.getFullYear();
+
+  if (month >= startMonth) {
+    return `${year}-${year + 1}`;
+  } else {
+    return `${year - 1}-${year}`;
+  }
+}
+
 module.exports = {
   getSettings,
   getSetting,
@@ -178,5 +261,11 @@ module.exports = {
   getEmailSettings,
   getBrandingSettings,
   getQualificationSettings,
+  // Season helpers
+  getSeasonStartMonth,
+  getCurrentSeason,
+  getSeasonDateRange,
+  isDateInSeason,
+  getCurrentSeasonSync,
   defaults
 };

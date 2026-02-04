@@ -11,6 +11,7 @@ const bcrypt = require('bcrypt');
 
 // Get database connection
 const db = require('../db-loader');
+const appSettings = require('../utils/app-settings');
 
 // Demo configuration
 const DEMO_ADMIN = {
@@ -66,12 +67,9 @@ function generateLicence(index) {
   return `D${num}${letters[index % letters.length]}`;
 }
 
-// Get current season
-function getCurrentSeason() {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth();
-  return month >= 8 ? `${year}-${year + 1}` : `${year - 1}-${year}`;
+// Get current season (uses configurable start month from app_settings)
+async function getCurrentSeason() {
+  return appSettings.getCurrentSeason();
 }
 
 // Promise wrapper for db.run
@@ -111,7 +109,7 @@ async function seedDemoData() {
   console.log('='.repeat(60));
   console.log('');
 
-  const season = getCurrentSeason();
+  const season = await getCurrentSeason();
   console.log(`Current season: ${season}`);
   console.log('');
 

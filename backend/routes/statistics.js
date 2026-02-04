@@ -1,19 +1,12 @@
 const express = require('express');
 const { authenticateToken } = require('./auth');
+const appSettings = require('../utils/app-settings');
 
 const router = express.Router();
 
-// Helper to get current season
-function getCurrentSeason() {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth();
-  // Season runs Sept-June
-  if (month >= 8) {
-    return `${year}-${year + 1}`;
-  } else {
-    return `${year - 1}-${year}`;
-  }
+// Helper to get current season (uses configurable start month from app_settings)
+async function getCurrentSeason() {
+  return appSettings.getCurrentSeason();
 }
 
 // FIX: Remove duplicate club aliases (keep only one per normalized alias)
@@ -123,7 +116,7 @@ router.get('/seasons', authenticateToken, async (req, res) => {
       }
       const seasons = (rows || []).map(r => r.season);
       // Add current season if not in list
-      const currentSeason = getCurrentSeason();
+      const currentSeason = await getCurrentSeason();
       if (!seasons.includes(currentSeason)) {
         seasons.unshift(currentSeason);
       }
@@ -136,7 +129,7 @@ router.get('/seasons', authenticateToken, async (req, res) => {
 router.get('/categories', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
   const { season } = req.query;
-  const targetSeason = season || getCurrentSeason();
+  const targetSeason = season || await getCurrentSeason();
 
   const query = `
     SELECT DISTINCT
@@ -165,7 +158,7 @@ router.get('/categories', authenticateToken, async (req, res) => {
 router.get('/clubs/wins', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
   const { season } = req.query;
-  const targetSeason = season || getCurrentSeason();
+  const targetSeason = season || await getCurrentSeason();
 
   const query = `
     SELECT
@@ -209,7 +202,7 @@ router.get('/clubs/wins', authenticateToken, async (req, res) => {
 router.get('/clubs/podiums', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
   const { season } = req.query;
-  const targetSeason = season || getCurrentSeason();
+  const targetSeason = season || await getCurrentSeason();
 
   const query = `
     SELECT
@@ -260,7 +253,7 @@ router.get('/clubs/podiums', authenticateToken, async (req, res) => {
 router.get('/clubs/participations', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
   const { season } = req.query;
-  const targetSeason = season || getCurrentSeason();
+  const targetSeason = season || await getCurrentSeason();
 
   const query = `
     SELECT
@@ -318,7 +311,7 @@ router.get('/clubs/active-players', authenticateToken, async (req, res) => {
 router.get('/clubs/competing-players', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
   const { season } = req.query;
-  const targetSeason = season || getCurrentSeason();
+  const targetSeason = season || await getCurrentSeason();
 
   const query = `
     SELECT
@@ -348,7 +341,7 @@ router.get('/clubs/competing-players', authenticateToken, async (req, res) => {
 router.get('/clubs/moyenne', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
   const { season } = req.query;
-  const targetSeason = season || getCurrentSeason();
+  const targetSeason = season || await getCurrentSeason();
 
   const query = `
     SELECT
@@ -397,7 +390,7 @@ router.get('/clubs/moyenne', authenticateToken, async (req, res) => {
 router.get('/players/active', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
   const { season, limit } = req.query;
-  const targetSeason = season || getCurrentSeason();
+  const targetSeason = season || await getCurrentSeason();
   const resultLimit = parseInt(limit) || 10;
 
   const query = `
@@ -430,7 +423,7 @@ router.get('/players/active', authenticateToken, async (req, res) => {
 router.get('/players/wins', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
   const { season, category_id } = req.query;
-  const targetSeason = season || getCurrentSeason();
+  const targetSeason = season || await getCurrentSeason();
 
   if (category_id) {
     const query = `
@@ -466,7 +459,7 @@ router.get('/players/wins', authenticateToken, async (req, res) => {
 router.get('/players/moyenne', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
   const { season, category_id } = req.query;
-  const targetSeason = season || getCurrentSeason();
+  const targetSeason = season || await getCurrentSeason();
 
   // If category_id is provided, filter by specific category
   if (category_id) {
@@ -514,7 +507,7 @@ router.get('/players/moyenne', authenticateToken, async (req, res) => {
 router.get('/players/serie', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
   const { season, category_id } = req.query;
-  const targetSeason = season || getCurrentSeason();
+  const targetSeason = season || await getCurrentSeason();
 
   // If category_id is provided, filter by specific category
   if (category_id) {
@@ -571,7 +564,7 @@ router.get('/players/serie', authenticateToken, async (req, res) => {
 router.get('/players/consistent', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
   const { season } = req.query;
-  const targetSeason = season || getCurrentSeason();
+  const targetSeason = season || await getCurrentSeason();
 
   const query = `
     SELECT
@@ -605,7 +598,7 @@ router.get('/players/consistent', authenticateToken, async (req, res) => {
 router.get('/players/progression', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
   const { season } = req.query;
-  const targetSeason = season || getCurrentSeason();
+  const targetSeason = season || await getCurrentSeason();
 
   const query = `
     WITH player_tournaments AS (
@@ -662,7 +655,7 @@ router.get('/players/progression', authenticateToken, async (req, res) => {
 router.get('/general/participation', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
   const { season } = req.query;
-  const targetSeason = season || getCurrentSeason();
+  const targetSeason = season || await getCurrentSeason();
 
   // Get season date range
   const [startYear] = targetSeason.split('-');
@@ -719,7 +712,7 @@ router.get('/general/participation', authenticateToken, async (req, res) => {
 router.get('/general/categories', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
   const { season } = req.query;
-  const targetSeason = season || getCurrentSeason();
+  const targetSeason = season || await getCurrentSeason();
 
   const query = `
     SELECT
@@ -750,7 +743,7 @@ router.get('/general/categories', authenticateToken, async (req, res) => {
 router.get('/general/locations', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
   const { season } = req.query;
-  const targetSeason = season || getCurrentSeason();
+  const targetSeason = season || await getCurrentSeason();
 
   const query = `
     SELECT
@@ -777,7 +770,7 @@ router.get('/general/locations', authenticateToken, async (req, res) => {
 router.get('/summary', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
   const { season } = req.query;
-  const targetSeason = season || getCurrentSeason();
+  const targetSeason = season || await getCurrentSeason();
 
   const queries = {
     totalTournaments: `
@@ -817,7 +810,7 @@ router.get('/summary', authenticateToken, async (req, res) => {
 router.get('/players/new', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
   const { season } = req.query;
-  const targetSeason = season || getCurrentSeason();
+  const targetSeason = season || await getCurrentSeason();
 
   const query = `
     WITH first_appearance AS (
@@ -970,7 +963,7 @@ router.get('/players/multi-category/list', authenticateToken, async (req, res) =
 router.get('/debug/game-types', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
   const { season } = req.query;
-  const targetSeason = season || getCurrentSeason();
+  const targetSeason = season || await getCurrentSeason();
 
   const query = `
     SELECT DISTINCT c.game_type, COUNT(*) as count
@@ -995,7 +988,7 @@ router.get('/players/debug/:licence', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
   const { licence } = req.params;
   const { season } = req.query;
-  const targetSeason = season || getCurrentSeason();
+  const targetSeason = season || await getCurrentSeason();
 
   const query = `
     SELECT

@@ -13,6 +13,7 @@ const express = require('express');
 const bcrypt = require('bcrypt');
 const router = express.Router();
 const db = require('../db-loader');
+const appSettings = require('../utils/app-settings');
 
 /**
  * Load game modes with rank_column mapping from database
@@ -334,8 +335,8 @@ router.get('/:licence/calendar.ics', async (req, res) => {
     // Get current season (but only future tournaments from today)
     const now = new Date();
     const today = now.toISOString().split('T')[0]; // YYYY-MM-DD
-    const currentYear = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
-    const seasonEnd = `${currentYear + 1}-08-31`;
+    const currentSeason = await appSettings.getCurrentSeason();
+    const { end: seasonEnd } = await appSettings.getSeasonDateRange(currentSeason);
 
     // Build query for eligible tournaments (only future ones)
     const categoryConditions = eligibleCategories.map((_, i) =>

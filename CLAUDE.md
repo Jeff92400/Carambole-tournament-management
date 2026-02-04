@@ -59,7 +59,7 @@ git push origin main
 
 ## Versioning
 
-**Current Version:** V 2.0.147 02/26
+**Current Version:** V 2.0.154 02/26
 
 Version is displayed at the bottom of the login screen (`frontend/login.html`).
 
@@ -166,7 +166,7 @@ Optional:
 
 - All text is in **French**
 - Dates: Paris timezone, displayed as DD/MM/YYYY
-- Season format: `YYYY-YYYY+1` (e.g., "2024-2025"), September cutoff
+- Season format: `YYYY-YYYY+1` (e.g., "2024-2025"), configurable start month via `app_settings.season_start_month` (default: 9 = September)
 - **Dynamic branding colors:** Colors are loaded from `app_settings` table and applied via CSS variables. See "Branding System" section below.
 - Licence numbers normalized by removing spaces
 - CSV imports use semicolon delimiter
