@@ -2514,12 +2514,12 @@
           }
         }
 
-        // If no override, use defaults
+        // If no override, use defaults (auto-validated since defaults are valid)
         if (!hasOverride) {
           document.getElementById('distanceInput').value = currentGameParams.distance_normale;
           document.getElementById('distanceTypeSelect').value = 'normale';
           document.getElementById('reprisesInput').value = currentGameParams.reprises;
-          isValidated = false;
+          isValidated = true; // Defaults are auto-validated - no click needed
         }
 
         // Update distance type dropdown handler
