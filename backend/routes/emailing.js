@@ -4914,6 +4914,11 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
         emailIntro = replaceVar(emailIntro, 'tournament_lieu', tournamentInfo.tournament_lieu || '');
         emailIntro = replaceVar(emailIntro, 'deadline_date', tournamentInfo.deadline_date || '');
 
+        // Game parameters (distance/reprises from validated overrides)
+        const gameParams = customData?.game_params || {};
+        emailIntro = replaceVar(emailIntro, 'distance', gameParams.distance || '');
+        emailIntro = replaceVar(emailIntro, 'reprises', gameParams.reprises || '');
+
         // Finale info
         emailIntro = replaceVar(emailIntro, 'finale_date', tournamentInfo.finale_date || '');
         emailIntro = replaceVar(emailIntro, 'finale_lieu', tournamentInfo.finale_lieu || '');
@@ -4983,6 +4988,8 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
         emailOutro = replaceVar(emailOutro, 'organization_name', organizationName);
         emailOutro = replaceVar(emailOutro, 'organization_short_name', organizationShortName);
         emailOutro = replaceVar(emailOutro, 'organization_email', organizationEmail);
+        emailOutro = replaceVar(emailOutro, 'distance', gameParams.distance || '');
+        emailOutro = replaceVar(emailOutro, 'reprises', gameParams.reprises || '');
 
         // Debug log after replacement
         if (participant === recipientsToEmail[0]) {
