@@ -509,27 +509,14 @@
                 <div>
                   <label style="font-size: 12px; color: #333; font-weight: bold;">Mode de jeu :</label>
                   <select id="filterModes" multiple style="width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #ddd; border-radius: 4px; min-height: 80px;">
-                    <option value="LIBRE">Libre</option>
-                    <option value="CADRE">Cadre</option>
-                    <option value="BANDE">Bande</option>
-                    <option value="3 BANDES">3 Bandes</option>
+                    <!-- Loaded dynamically from game_modes table -->
                   </select>
                   <p style="font-size: 10px; color: #666; margin: 3px 0 0 0;">Ctrl+clic pour sélection multiple</p>
                 </div>
                 <div>
                   <label style="font-size: 12px; color: #333; font-weight: bold;">Classement FFB :</label>
                   <select id="filterRankings" multiple style="width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #ddd; border-radius: 4px; min-height: 80px;">
-                    <option value="N1">N1</option>
-                    <option value="N2">N2</option>
-                    <option value="N3">N3</option>
-                    <option value="R1">R1</option>
-                    <option value="R2">R2</option>
-                    <option value="R3">R3</option>
-                    <option value="R4">R4</option>
-                    <option value="R5">R5</option>
-                    <option value="D1">D1</option>
-                    <option value="D2">D2</option>
-                    <option value="D3">D3</option>
+                    <!-- Loaded dynamically from ffb_rankings table -->
                   </select>
                   <p style="font-size: 10px; color: #666; margin: 3px 0 0 0;">Ctrl+clic pour sélection multiple</p>
                 </div>
@@ -6622,11 +6609,53 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
           clearSelectedPlayer();
         }
         if (e.target.value === 'filter') {
+          loadFilterModes();
+          loadFilterRankings();
           loadFilterClubs();
           updateFilteredCount();
         }
       });
     });
+
+    // Load game modes for filter dropdown (from game_modes table)
+    async function loadFilterModes() {
+      const modesSelect = document.getElementById('filterModes');
+      if (modesSelect.options.length > 0) return; // Already loaded
+
+      try {
+        const response = await fetch(`${API_URL}/reference-data/game-modes`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          const modes = await response.json();
+          modesSelect.innerHTML = modes.map(m =>
+            `<option value="${escapeHtmlAnn(m.code)}">${escapeHtmlAnn(m.display_name)}</option>`
+          ).join('');
+        }
+      } catch (err) {
+        console.error('Error loading game modes:', err);
+      }
+    }
+
+    // Load FFB rankings for filter dropdown (from ffb_rankings table)
+    async function loadFilterRankings() {
+      const rankingsSelect = document.getElementById('filterRankings');
+      if (rankingsSelect.options.length > 0) return; // Already loaded
+
+      try {
+        const response = await fetch(`${API_URL}/reference-data/ffb-rankings`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          const rankings = await response.json();
+          rankingsSelect.innerHTML = rankings.map(r =>
+            `<option value="${escapeHtmlAnn(r.code)}">${escapeHtmlAnn(r.display_name || r.code)}</option>`
+          ).join('');
+        }
+      } catch (err) {
+        console.error('Error loading FFB rankings:', err);
+      }
+    }
 
     // Load clubs for filter dropdown
     async function loadFilterClubs() {

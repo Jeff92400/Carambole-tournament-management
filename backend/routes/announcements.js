@@ -38,16 +38,33 @@ router.post('/filtered-audience-count', authenticateToken, async (req, res) => {
     let paramIndex = 1;
 
     // Mode filter: player has ranking (not NC) in any of the target modes
+    // Load mode -> rank_column mapping from game_modes table
     if (target_modes && target_modes.length > 0) {
+      const gameModes = await new Promise((resolve, reject) => {
+        db.all('SELECT code, rank_column FROM game_modes WHERE rank_column IS NOT NULL', [], (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows || []);
+        });
+      });
+
+      // Build mapping from code to rank_column
+      const modeToColumn = {};
+      for (const gm of gameModes) {
+        modeToColumn[gm.code.toUpperCase()] = gm.rank_column;
+      }
+
       const modeConditions = target_modes.map(mode => {
         const m = mode.toUpperCase();
-        if (m === 'LIBRE') return `(p.rank_libre IS NOT NULL AND p.rank_libre != 'NC')`;
-        if (m === 'CADRE') return `(p.rank_cadre IS NOT NULL AND p.rank_cadre != 'NC')`;
-        if (m === 'BANDE') return `(p.rank_bande IS NOT NULL AND p.rank_bande != 'NC')`;
-        if (m === '3 BANDES' || m === '3BANDES') return `(p.rank_3bandes IS NOT NULL AND p.rank_3bandes != 'NC')`;
+        const rankColumn = modeToColumn[m];
+        if (rankColumn) {
+          return `(p.${rankColumn} IS NOT NULL AND p.${rankColumn} != 'NC')`;
+        }
         return 'FALSE';
-      });
-      conditions.push(`(${modeConditions.join(' OR ')})`);
+      }).filter(c => c !== 'FALSE');
+
+      if (modeConditions.length > 0) {
+        conditions.push(`(${modeConditions.join(' OR ')})`);
+      }
     }
 
     // Ranking filter: player has any of the target rankings
@@ -118,6 +135,18 @@ router.get('/active', async (req, res) => {
   const normalizedLicence = licence ? licence.replace(/\s+/g, '') : null;
 
   try {
+    // Load game modes mapping (code -> rank_column)
+    const gameModes = await new Promise((resolve, reject) => {
+      db.all('SELECT code, rank_column FROM game_modes WHERE rank_column IS NOT NULL', [], (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows || []);
+      });
+    });
+    const modeToColumn = {};
+    for (const gm of gameModes) {
+      modeToColumn[gm.code.toUpperCase()] = gm.rank_column;
+    }
+
     // First, get player data if licence provided (for filter matching)
     let playerData = null;
     if (normalizedLicence) {
@@ -170,28 +199,26 @@ router.get('/active', async (req, res) => {
 
         let matchesFilter = true;
 
-        // Check mode filter
+        // Check mode filter (using dynamic game_modes mapping)
         if (ann.target_modes) {
           const modes = JSON.parse(ann.target_modes);
           // Player matches if they have a ranking in any of the target modes
-          const playerModes = [];
-          if (playerData.rank_libre && playerData.rank_libre !== 'NC') playerModes.push('LIBRE');
-          if (playerData.rank_cadre && playerData.rank_cadre !== 'NC') playerModes.push('CADRE');
-          if (playerData.rank_bande && playerData.rank_bande !== 'NC') playerModes.push('BANDE');
-          if (playerData.rank_3bandes && playerData.rank_3bandes !== 'NC') playerModes.push('3 BANDES');
-          matchesFilter = matchesFilter && modes.some(m => playerModes.includes(m.toUpperCase()));
+          const playerHasMode = modes.some(m => {
+            const rankColumn = modeToColumn[m.toUpperCase()];
+            if (!rankColumn) return false;
+            const playerRank = playerData[rankColumn];
+            return playerRank && playerRank !== 'NC';
+          });
+          matchesFilter = matchesFilter && playerHasMode;
         }
 
-        // Check ranking filter
+        // Check ranking filter (check all rank columns dynamically)
         if (ann.target_rankings && matchesFilter) {
           const rankings = JSON.parse(ann.target_rankings);
-          // Player matches if any of their rankings match
-          const playerRankings = [
-            playerData.rank_libre,
-            playerData.rank_cadre,
-            playerData.rank_bande,
-            playerData.rank_3bandes
-          ].filter(r => r && r !== 'NC');
+          // Get all player rankings from all mode columns
+          const playerRankings = Object.values(modeToColumn)
+            .map(col => playerData[col])
+            .filter(r => r && r !== 'NC');
           matchesFilter = matchesFilter && rankings.some(r => playerRankings.includes(r));
         }
 

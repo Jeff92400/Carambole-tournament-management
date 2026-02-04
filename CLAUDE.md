@@ -220,6 +220,18 @@ Include branding.js after styles.css:
 
 **All dropdown/select options must load dynamically from the database.** Never hardcode reference data like game modes, FFB rankings, categories, tournament rounds, etc.
 
+### WARNING: NEVER HARDCODE OPTIONS
+
+This rule applies to ALL selectors, filters, and dropdowns across the entire application:
+- **Game modes** (Libre, Cadre, Bande, 3 Bandes) - load from `game_modes` table
+- **FFB rankings** (N1, N2, N3, R1-R5, D1-D3) - load from `ffb_rankings` table
+- **Categories** (Libre N2, Cadre 47/2 R3, etc.) - load from `categories` table
+- **Clubs** - load from `clubs` table
+
+**Common mistake:** Writing `<option value="CADRE">Cadre</option>` directly in HTML. This WILL break when category names change (e.g., "Cadre" → "Cadre 47/2").
+
+**Correct approach:** Empty `<select>` tags populated via JavaScript calling the API endpoints listed below.
+
 ### Rollback Point
 - **Tag:** `pre-dynamic-selectors-v2.0.144`
 - **Date:** February 2026
