@@ -1166,7 +1166,7 @@ router.delete('/all', authenticateToken, (req, res) => {
 
 // Generate Excel file with poules
 router.post('/generate-poules', authenticateToken, async (req, res) => {
-  const { category, season, tournament, players, poules, config, tournamentDate, tournamentLieu } = req.body;
+  const { category, season, tournament, players, poules, config, tournamentDate, tournamentLieu, gameParams, selectedDistance } = req.body;
 
   try {
     const workbook = new ExcelJS.Workbook();
@@ -1362,18 +1362,20 @@ router.post('/generate-poules', authenticateToken, async (req, res) => {
     // ============= SECOND WORKSHEET: CONVOCATION =============
     const convocationSheet = workbook.addWorksheet('Convocation');
 
-    // Get game parameters for this category
-    let gameParams = null;
-    try {
-      const gameParamsResult = await db.query(
-        'SELECT * FROM game_parameters WHERE UPPER(mode) = UPPER($1) AND UPPER(categorie) = UPPER($2)',
-        [category.mode, category.categorie]
-      );
-      if (gameParamsResult.rows.length > 0) {
-        gameParams = gameParamsResult.rows[0];
+    // Use passed gameParams (with overrides) or fetch from database as fallback
+    let finalGameParams = gameParams; // gameParams from request body
+    if (!finalGameParams) {
+      try {
+        const gameParamsResult = await db.query(
+          'SELECT * FROM game_parameters WHERE UPPER(mode) = UPPER($1) AND UPPER(categorie) = UPPER($2)',
+          [category.mode, category.categorie]
+        );
+        if (gameParamsResult.rows.length > 0) {
+          finalGameParams = gameParamsResult.rows[0];
+        }
+      } catch (e) {
+        console.log('Could not fetch game parameters:', e.message);
       }
-    } catch (e) {
-      console.log('Could not fetch game parameters:', e.message);
     }
 
     // Get ranking data for players
@@ -1436,14 +1438,14 @@ router.post('/generate-poules', authenticateToken, async (req, res) => {
     }
 
     // Game parameters (use override values if available)
-    if (gameParams) {
+    if (finalGameParams) {
       convRow++;
       // Use override values if available, otherwise fall back to defaults
-      const distance = gameParams.distance_override
-        ? gameParams.distance_override
-        : (gameParams.distance_reduite || gameParams.distance_normale);
-      const reprises = gameParams.reprises; // Already contains override value from frontend
-      const coinLabel = gameParams.coin === 'GC' ? 'Grand Coin' : 'Petit Coin';
+      const distance = finalGameParams.distance_override
+        ? finalGameParams.distance_override
+        : (finalGameParams.distance_reduite || finalGameParams.distance_normale);
+      const reprises = finalGameParams.reprises; // Already contains override value from frontend
+      const coinLabel = finalGameParams.coin === 'GC' ? 'Grand Coin' : 'Petit Coin';
 
       convocationSheet.mergeCells(`A${convRow}:H${convRow}`);
       convocationSheet.getCell(`A${convRow}`).value = `${distance} points  /  ${coinLabel}  /  en ${reprises} reprises`;
@@ -1452,7 +1454,7 @@ router.post('/generate-poules', authenticateToken, async (req, res) => {
       convRow++;
 
       convocationSheet.mergeCells(`A${convRow}:H${convRow}`);
-      convocationSheet.getCell(`A${convRow}`).value = `La moyenne qualificative pour cette catégorie est entre ${parseFloat(gameParams.moyenne_mini).toFixed(3)} et ${parseFloat(gameParams.moyenne_maxi).toFixed(3)}`;
+      convocationSheet.getCell(`A${convRow}`).value = `La moyenne qualificative pour cette catégorie est entre ${parseFloat(finalGameParams.moyenne_mini).toFixed(3)} et ${parseFloat(finalGameParams.moyenne_maxi).toFixed(3)}`;
       convocationSheet.getCell(`A${convRow}`).font = { size: 10, italic: true, color: { argb: 'FF666666' } };
       convocationSheet.getCell(`A${convRow}`).alignment = { horizontal: 'center' };
       convRow++;
