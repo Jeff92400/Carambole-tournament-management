@@ -132,6 +132,14 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 const frontendPath = fs.existsSync(path.join(__dirname, 'frontend'))
   ? path.join(__dirname, 'frontend')
   : path.join(__dirname, '../frontend');
+
+// Allow cross-origin access for club images (used by Player App)
+app.use('/images/clubs', (req, res, next) => {
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  next();
+});
+
 app.use(express.static(frontendPath));
 
 // Public endpoint for organization logo (needed for emails)
