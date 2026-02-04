@@ -59,7 +59,7 @@ git push origin main
 
 ## Versioning
 
-**Current Version:** V 2.0.154 02/26
+**Current Version:** V 2.0.155 02/26
 
 Version is displayed at the bottom of the login screen (`frontend/login.html`).
 
@@ -149,6 +149,8 @@ Key tables:
 - `convocation_poules` - Stored poule compositions (shared with Player App)
 - `player_accounts` - Player App authentication
 - `player_invitations` - Tracks invitations sent to players for Player App registration
+- `game_parameters` - Default Distance/Reprises per mode+category for the season
+- `tournament_parameter_overrides` - Per-tournament overrides for Distance/Reprises
 
 ## Environment Variables
 
@@ -247,6 +249,32 @@ async function loadGameModes() {
   select.innerHTML = '<option value="">-- Sélectionner --</option>' +
     modes.map(m => `<option value="${m.code}">${m.display_name}</option>`).join('');
 }
+```
+
+## Per-Tournament Game Parameter Overrides
+
+Organizers can override default **Distance** and **Reprises** values for specific tournaments (T1, T2, T3, Finale).
+
+### How It Works
+1. Default values come from `game_parameters` table (per mode+category for the season)
+2. In `generate-poules.html`, Distance and Reprises are now editable
+3. User must click "Valider les parametres" before sending convocations
+4. Overrides are stored in `tournament_parameter_overrides` table (one per tournament)
+5. For finale relances in `emailing.html`, a game params section appears requiring validation
+
+### API Endpoints
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| GET | `/api/settings/tournament-overrides/:tournoiId` | Get override or defaults |
+| PUT | `/api/settings/tournament-overrides/:tournoiId` | Save/validate override |
+| DELETE | `/api/settings/tournament-overrides/:tournoiId` | Reset to defaults |
+
+### Database Table
+```sql
+tournament_parameter_overrides (
+  id, tournoi_id, distance, distance_type, reprises,
+  validated_at, validated_by, created_at
+)
 ```
 
 ## See Also
