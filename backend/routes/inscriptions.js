@@ -1435,14 +1435,18 @@ router.post('/generate-poules', authenticateToken, async (req, res) => {
       convRow++;
     }
 
-    // Game parameters
+    // Game parameters (use override values if available)
     if (gameParams) {
       convRow++;
-      const distance = gameParams.distance_reduite || gameParams.distance_normale;
+      // Use override values if available, otherwise fall back to defaults
+      const distance = gameParams.distance_override
+        ? gameParams.distance_override
+        : (gameParams.distance_reduite || gameParams.distance_normale);
+      const reprises = gameParams.reprises; // Already contains override value from frontend
       const coinLabel = gameParams.coin === 'GC' ? 'Grand Coin' : 'Petit Coin';
 
       convocationSheet.mergeCells(`A${convRow}:H${convRow}`);
-      convocationSheet.getCell(`A${convRow}`).value = `${distance} points  /  ${coinLabel}  /  en ${gameParams.reprises} reprises`;
+      convocationSheet.getCell(`A${convRow}`).value = `${distance} points  /  ${coinLabel}  /  en ${reprises} reprises`;
       convocationSheet.getCell(`A${convRow}`).font = { size: 11, bold: true };
       convocationSheet.getCell(`A${convRow}`).alignment = { horizontal: 'center' };
       convRow++;

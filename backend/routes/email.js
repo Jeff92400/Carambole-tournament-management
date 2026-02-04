@@ -484,14 +484,16 @@ async function generatePlayerConvocationPDF(player, tournamentInfo, allPoules, l
 
       // Game parameters info (if available)
       if (gameParams) {
-        const distance = selectedDistance === 'reduite' && gameParams.distance_reduite
-          ? gameParams.distance_reduite
-          : gameParams.distance_normale;
+        // Use override values if available, otherwise fall back to defaults
+        const distance = gameParams.distance_override
+          ? gameParams.distance_override
+          : (selectedDistance === 'reduite' && gameParams.distance_reduite ? gameParams.distance_reduite : gameParams.distance_normale);
+        const reprises = gameParams.reprises; // Already contains override value from frontend
         const coinLabel = gameParams.coin === 'GC' ? 'Grand Coin' : 'Petit Coin';
 
         // Line 1: Distance / Coin / Reprises
         doc.fillColor('#333333').fontSize(10).font('Helvetica-Bold')
-           .text(`${distance} points  /  ${coinLabel}  /  en ${gameParams.reprises} reprises`, 40, y, { width: pageWidth, align: 'center' });
+           .text(`${distance} points  /  ${coinLabel}  /  en ${reprises} reprises`, 40, y, { width: pageWidth, align: 'center' });
         y += 15;
 
         // Line 2: Moyenne qualificative
@@ -826,14 +828,16 @@ async function generateSummaryConvocationPDF(tournamentInfo, allPoules, location
 
       // Game parameters info (if available)
       if (gameParams) {
-        const distance = selectedDistance === 'reduite' && gameParams.distance_reduite
-          ? gameParams.distance_reduite
-          : gameParams.distance_normale;
+        // Use override values if available, otherwise fall back to defaults
+        const distance = gameParams.distance_override
+          ? gameParams.distance_override
+          : (selectedDistance === 'reduite' && gameParams.distance_reduite ? gameParams.distance_reduite : gameParams.distance_normale);
+        const reprises = gameParams.reprises; // Already contains override value from frontend
         const coinLabel = gameParams.coin === 'GC' ? 'Grand Coin' : 'Petit Coin';
 
         // Line 1: Distance / Coin / Reprises
         doc.fillColor('#333333').fontSize(10).font('Helvetica-Bold')
-           .text(`${distance} points  /  ${coinLabel}  /  en ${gameParams.reprises} reprises`, 40, y, { width: pageWidth, align: 'center' });
+           .text(`${distance} points  /  ${coinLabel}  /  en ${reprises} reprises`, 40, y, { width: pageWidth, align: 'center' });
         y += 15;
 
         // Line 2: Moyenne qualificative
