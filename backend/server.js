@@ -134,9 +134,17 @@ const frontendPath = fs.existsSync(path.join(__dirname, 'frontend'))
   : path.join(__dirname, '../frontend');
 
 // Allow cross-origin access for club images (used by Player App)
+// Safari requires explicit CORS headers
 app.use('/images/clubs', (req, res, next) => {
   res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
   res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Vary', 'Origin');
+  // Handle preflight OPTIONS request
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
   next();
 });
 
