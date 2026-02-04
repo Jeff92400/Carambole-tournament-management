@@ -2778,7 +2778,7 @@
     // Generate Excel
     document.getElementById('generateExcelBtn').addEventListener('click', async () => {
       // Check if game params are validated before generating Excel
-      const excelParamsValidated = document.getElementById('gameParamsStatus')?.textContent?.includes('valides');
+      const excelParamsValidated = document.getElementById('gameParamsValidationStatus')?.textContent?.includes('valides');
       if (!excelParamsValidated) {
         alert('Veuillez valider les paramètres de jeu avant de générer le fichier Excel.');
         return;
@@ -3025,7 +3025,7 @@
       }
 
       // Check if game params are validated before generating PDF
-      const pdfParamsValidated = document.getElementById('gameParamsStatus')?.textContent?.includes('valides');
+      const pdfParamsValidated = document.getElementById('gameParamsValidationStatus')?.textContent?.includes('valides');
       if (!pdfParamsValidated) {
         alert('Veuillez valider les paramètres de jeu avant de générer le PDF.');
         return;
