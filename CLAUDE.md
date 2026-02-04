@@ -277,6 +277,41 @@ tournament_parameter_overrides (
 )
 ```
 
+## Email Template Variables
+
+**Policy:** ALL template variables must be available for ALL email templates (convocations, relances, campaigns, results). When adding new variables, add them to every email template location.
+
+### Available Variables
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `{first_name}` | Player's first name | Jean |
+| `{last_name}` | Player's last name | Dupont |
+| `{player_name}` | Full name | Jean Dupont |
+| `{club}` | Player's club | BC Paris |
+| `{category}` | Competition category | Libre N2 |
+| `{tournament}` | Tournament label | T1, T2, Finale |
+| `{date}` | Tournament date | 15/03/2026 |
+| `{tournament_date}` | Tournament date (relances) | 15/03/2026 |
+| `{tournament_lieu}` | Tournament location | Salle Charenton |
+| `{time}` | Start time | 14H00 |
+| `{location}` | Location name | Salle Charenton |
+| `{poule}` | Poule number | 1 |
+| `{distance}` | Game distance (points) | 80 |
+| `{reprises}` | Number of reprises | 25 |
+| `{deadline_date}` | Registration deadline | 08/03/2026 |
+| `{organization_name}` | Full org name | Comité Départemental... |
+| `{organization_short_name}` | Short org name | CDBHS |
+| `{organization_email}` | Contact email | contact@cdbhs.net |
+
+### Adding New Variables
+
+When adding a new template variable:
+1. Add to `backend/routes/email.js` - convocation templateVariables (~line 1331)
+2. Add to `backend/routes/emailing.js` - relance replaceVar calls (~line 4915)
+3. Add to this documentation table
+4. Variables not applicable to a context will be empty strings
+
 ## See Also
 
 - `backend/CLAUDE.md` - Detailed backend documentation

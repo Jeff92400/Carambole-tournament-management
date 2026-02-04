@@ -1327,7 +1327,13 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
            </div>`
         : '';
 
-      // Prepare template variables
+      // Calculate distance and reprises from gameParams
+      const emailDistance = gameParams?.distance_override
+        ? gameParams.distance_override
+        : (selectedDistance === 'reduite' && gameParams?.distance_reduite ? gameParams.distance_reduite : gameParams?.distance_normale || '');
+      const emailReprises = gameParams?.reprises || '';
+
+      // Prepare template variables (all variables available for all templates)
       const templateVariables = {
         player_name: `${player.first_name} ${player.last_name}`,
         first_name: player.first_name,
@@ -1340,7 +1346,9 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
         poule: playerPoule.pouleNumber,
         organization_name: emailSettings.organization_name || 'Comité Départemental de Billard',
         organization_short_name: emailSettings.organization_short_name || 'CDB',
-        organization_email: emailSettings.summary_email || contactEmail
+        organization_email: emailSettings.summary_email || contactEmail,
+        distance: emailDistance,
+        reprises: emailReprises
       };
 
       // Generate subject and body from template
