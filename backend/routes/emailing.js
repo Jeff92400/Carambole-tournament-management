@@ -4490,14 +4490,11 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
     return res.status(400).json({ error: 'Email de test invalide.' });
   }
 
-  // For finale relances, validate that game parameters are provided
-  if (relanceType === 'finale' && customData && !customData.game_params) {
-    console.log('Warning: Finale relance sent without game_params validation');
-    // Not blocking for backwards compatibility, but log for monitoring
-  }
-
-  if (relanceType === 'finale' && customData?.game_params) {
-    console.log(`Finale relance using validated game params: distance=${customData.game_params.distance}, reprises=${customData.game_params.reprises}`);
+  // Log game parameters usage for all relance types
+  if (customData?.game_params) {
+    console.log(`Relance ${relanceType} using validated game params: distance=${customData.game_params.distance}, reprises=${customData.game_params.reprises}`);
+  } else {
+    console.log(`Note: Relance ${relanceType} sent without game_params`);
   }
 
   try {

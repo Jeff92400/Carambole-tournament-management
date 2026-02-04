@@ -846,10 +846,10 @@
               <div id="relanceCustomFieldsContent"></div>
             </div>
 
-            <!-- Game Parameters for Finale Relances -->
+            <!-- Game Parameters for Relances -->
             <div id="relanceGameParamsSection" style="display: none; margin-bottom: 20px; padding: 15px; background: #e7f3ff; border-left: 4px solid #1F4788; border-radius: 8px;">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                <h4 style="margin: 0; color: #1F4788;">Parametres de l'epreuve (Finale)</h4>
+                <h4 style="margin: 0; color: #1F4788;">Parametres de l'epreuve</h4>
                 <span id="relanceGameParamsStatus" style="display: none; padding: 5px 10px; border-radius: 4px; font-size: 12px;"></span>
               </div>
               <div style="display: grid; grid-template-columns: 1fr 1fr auto; gap: 15px; align-items: end;">
@@ -874,7 +874,7 @@
                 </div>
               </div>
               <p style="margin: 10px 0 0; font-size: 12px; color: #666;">
-                Ces valeurs seront utilisees pour cette relance finale. Validez avant d'envoyer.
+                Ces valeurs seront utilisees pour cette relance. Validez avant d'envoyer.
               </p>
             </div>
 
@@ -4465,8 +4465,8 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
         return;
       }
 
-      // For finale relances, check game params validation
-      if (relanceType === 'finale' && !window.relanceGameParamsValidated) {
+      // For all relances, check game params validation
+      if (!window.relanceGameParamsValidated) {
         const proceed = confirm('Les parametres de jeu n\'ont pas ete valides.\n\nVoulez-vous les valider avec les valeurs actuelles et continuer ?');
         if (proceed) {
           document.getElementById('validateRelanceGameParamsBtn').click();
@@ -4508,13 +4508,14 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
         customData.finale_date = dateInput?.value ? new Date(dateInput.value).toLocaleDateString('fr-FR') : '';
         customData.finale_lieu = lieuInput?.value || '';
         customData.deadline_date = deadlineInput?.value ? new Date(deadlineInput.value).toLocaleDateString('fr-FR') : '';
-        // Include validated game parameters
-        if (window.relanceGameParams) {
-          customData.game_params = {
-            distance: window.relanceGameParams.distance,
-            reprises: window.relanceGameParams.reprises
-          };
-        }
+      }
+
+      // Include validated game parameters for all relance types
+      if (window.relanceGameParams) {
+        customData.game_params = {
+          distance: window.relanceGameParams.distance,
+          reprises: window.relanceGameParams.reprises
+        };
       }
 
       const selectedCount = selectedRelanceIds.size;
@@ -4655,10 +4656,10 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
       document.getElementById('relanceParticipantsSection').style.display = 'none';
       document.getElementById('sendRelanceBtn').disabled = true;
 
-      // Show/hide game parameters section for finale
+      // Show/hide game parameters section for all relance types
       const relanceType = document.getElementById('relanceTypeSelect').value;
       const gameParamsSection = document.getElementById('relanceGameParamsSection');
-      if (relanceType === 'finale') {
+      if (relanceType) {
         gameParamsSection.style.display = 'block';
         loadRelanceGameParams();
       } else {
