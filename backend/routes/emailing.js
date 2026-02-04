@@ -4490,12 +4490,16 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
     return res.status(400).json({ error: 'Email de test invalide.' });
   }
 
-  // Log game parameters usage for all relance types
-  if (customData?.game_params) {
-    console.log(`Relance ${relanceType} using validated game params: distance=${customData.game_params.distance}, reprises=${customData.game_params.reprises}`);
-  } else {
-    console.log(`Note: Relance ${relanceType} sent without game_params`);
+  // Check that game parameters are validated before sending relances
+  if (!customData?.game_params || !customData.game_params.distance || !customData.game_params.reprises) {
+    return res.status(400).json({
+      error: 'Les paramètres de jeu (distance et reprises) doivent être validés avant l\'envoi des relances.',
+      requiresValidation: true
+    });
   }
+
+  // Log game parameters usage
+  console.log(`Relance ${relanceType} using validated game params: distance=${customData.game_params.distance}, reprises=${customData.game_params.reprises}`);
 
   try {
     const baseUrl = process.env.BASE_URL || 'https://cdbhs-tournament-management-production.up.railway.app';
