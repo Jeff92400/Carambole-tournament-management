@@ -1144,13 +1144,40 @@ function replaceTemplateVariables(template, variables) {
 
 // Send convocation emails
 router.post('/send-convocations', authenticateToken, async (req, res) => {
-  const { players, poules, category, season, tournament, tournamentDate, tournoiId, locations, sendToAll, specialNote, gameParams, selectedDistance, mockRankingData, isFinale, isTestMode, skipSavePoules } = req.body;
+  const { players, poules, category, season, tournament, tournamentDate, tournoiId, locations, sendToAll, specialNote, gameParams, selectedDistance, mockRankingData, isFinale, isTestMode, skipSavePoules, gameParamsValidated } = req.body;
 
   const resend = getResend();
   if (!resend) {
     return res.status(500).json({
       error: 'Email not configured. Please set RESEND_API_KEY environment variable.'
     });
+  }
+
+  // Check for game parameter override validation if tournoiId is provided
+  if (tournoiId) {
+    const db = require('../db-loader');
+    try {
+      const override = await new Promise((resolve, reject) => {
+        db.get(
+          'SELECT * FROM tournament_parameter_overrides WHERE tournoi_id = $1',
+          [tournoiId],
+          (err, row) => err ? reject(err) : resolve(row)
+        );
+      });
+
+      if (override) {
+        if (!override.validated_at) {
+          return res.status(400).json({
+            error: 'Les parametres de jeu doivent etre valides avant envoi des convocations.',
+            requiresValidation: true
+          });
+        }
+        console.log(`Using validated parameter overrides for tournoi ${tournoiId}: distance=${override.distance}, reprises=${override.reprises}`);
+      }
+    } catch (error) {
+      // Table might not exist yet, continue without validation
+      console.log('Note: tournament_parameter_overrides table not available, skipping validation');
+    }
   }
 
   console.log('Using Resend API for email sending');

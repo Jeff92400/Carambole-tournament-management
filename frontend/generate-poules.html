@@ -512,28 +512,60 @@
         </div>
       </div>
 
-      <!-- Game Parameters Section -->
+      <!-- Game Parameters Section - Editable with Validation -->
       <div id="gameParamsSection" style="display: none; margin: 20px 0; padding: 15px; background: #e7f3ff; border-left: 4px solid #1F4788; border-radius: 4px;">
-        <h4 style="margin: 0 0 15px 0; color: #1F4788;">Paramètres de l'épreuve</h4>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+          <h4 style="margin: 0; color: #1F4788;">Parametres de l'epreuve</h4>
+          <span id="gameParamsValidationStatus" style="display: none; padding: 5px 10px; border-radius: 4px; font-size: 12px;"></span>
+        </div>
+
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+          <!-- Distance - EDITABLE -->
           <div>
-            <label style="display: block; font-weight: 500; margin-bottom: 5px;">Distance :</label>
-            <select id="distanceSelect" style="width: 100%; padding: 10px; border: 1px solid #1F4788; border-radius: 4px; font-size: 14px;">
-              <option value="normale">Distance Normale</option>
-            </select>
+            <label style="display: block; font-weight: 500; margin-bottom: 5px;">Distance (points) :</label>
+            <div style="display: flex; gap: 10px; align-items: center;">
+              <input type="number" id="distanceInput"
+                     style="width: 100px; padding: 10px; border: 1px solid #1F4788; border-radius: 4px; font-size: 14px;"
+                     min="10" max="500" step="5">
+              <select id="distanceTypeSelect" style="padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                <option value="normale">Normale</option>
+                <option value="reduite">Reduite</option>
+                <option value="custom">Personnalisee</option>
+              </select>
+            </div>
+            <small id="distanceDefaultHint" style="color: #666; margin-top: 5px; display: block;"></small>
           </div>
+
+          <!-- Coin - READ ONLY -->
           <div>
             <span style="display: block; font-weight: 500; margin-bottom: 5px;">Coin :</span>
             <span id="gameParamCoin" style="display: inline-block; padding: 8px 15px; border-radius: 4px; background: #17a2b8; color: white; font-weight: bold;">-</span>
           </div>
+
+          <!-- Reprises - EDITABLE -->
           <div>
-            <span style="display: block; font-weight: 500; margin-bottom: 5px;">Reprises max :</span>
-            <span id="gameParamReprises" style="font-size: 18px; font-weight: bold; color: #1F4788;">-</span>
+            <label style="display: block; font-weight: 500; margin-bottom: 5px;">Reprises max :</label>
+            <input type="number" id="reprisesInput"
+                   style="width: 80px; padding: 10px; border: 1px solid #1F4788; border-radius: 4px; font-size: 14px; font-weight: bold;"
+                   min="1" max="100" step="1">
+            <small id="reprisesDefaultHint" style="color: #666; margin-top: 5px; display: block;"></small>
           </div>
         </div>
+
         <p id="gameParamMoyenne" style="margin: 15px 0 0 0; padding: 10px; background: #fff; border-radius: 4px; font-size: 13px; color: #666;">
           -
         </p>
+
+        <!-- Validation Buttons -->
+        <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #ccc;">
+          <button class="btn" id="validateGameParamsBtn" style="background: #28a745; padding: 10px 20px;">
+            Valider les parametres
+          </button>
+          <button class="btn" id="resetGameParamsBtn" style="background: #6c757d; padding: 10px 20px; margin-left: 10px;">
+            Reinitialiser
+          </button>
+          <span id="validationMessage" style="margin-left: 15px; color: #28a745; display: none;"></span>
+        </div>
       </div>
 
       <h4 id="poulePreviewTitle">Aperçu des Poules (Distribution Serpentine)</h4>
@@ -2426,40 +2458,97 @@
       goToStep(3);
     });
 
-    // Load and display game parameters for the current category
+    // Track validation state
+    let gameParamsValidated = false;
+
+    // Load and display game parameters for the current category (with override support)
     async function loadGameParameters() {
       if (!currentCategory) {
         document.getElementById('gameParamsSection').style.display = 'none';
         return;
       }
 
+      const tournoiId = matchingTournoi?.tournoi_id;
+
       try {
         // URL encode parameters and uppercase for consistent lookup
         const mode = encodeURIComponent(currentCategory.game_type.toUpperCase());
         const level = encodeURIComponent(currentCategory.level.toUpperCase());
-        const response = await fetch(`${API_URL}/settings/game-parameters/${mode}/${level}`, {
+
+        // Load default game parameters
+        const defaultResponse = await fetch(`${API_URL}/settings/game-parameters/${mode}/${level}`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
 
-        if (!response.ok) {
+        if (!defaultResponse.ok) {
           document.getElementById('gameParamsSection').style.display = 'none';
           currentGameParams = null;
           return;
         }
 
-        currentGameParams = await response.json();
+        currentGameParams = await defaultResponse.json();
 
-        // Show the game parameters section
-        document.getElementById('gameParamsSection').style.display = 'block';
+        // Check for existing override if we have a tournament ID
+        let hasOverride = false;
+        let isValidated = false;
 
-        // Update distance selector
-        const distanceSelect = document.getElementById('distanceSelect');
-        distanceSelect.innerHTML = `<option value="normale">${currentGameParams.distance_normale} points (Distance normale)</option>`;
-        if (currentGameParams.distance_reduite) {
-          distanceSelect.innerHTML += `<option value="reduite">${currentGameParams.distance_reduite} points (Distance réduite)</option>`;
+        if (tournoiId) {
+          try {
+            const overrideResponse = await fetch(`${API_URL}/settings/tournament-overrides/${tournoiId}`, {
+              headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (overrideResponse.ok) {
+              const override = await overrideResponse.json();
+              if (override.isOverride) {
+                hasOverride = true;
+                isValidated = !!override.validated_at;
+                // Apply override values to inputs
+                document.getElementById('distanceInput').value = override.distance;
+                document.getElementById('distanceTypeSelect').value = override.distance_type || 'custom';
+                document.getElementById('reprisesInput').value = override.reprises;
+              }
+            }
+          } catch (e) {
+            console.log('No override found, using defaults');
+          }
         }
 
-        // Update coin display
+        // If no override, use defaults
+        if (!hasOverride) {
+          document.getElementById('distanceInput').value = currentGameParams.distance_normale;
+          document.getElementById('distanceTypeSelect').value = 'normale';
+          document.getElementById('reprisesInput').value = currentGameParams.reprises;
+          isValidated = false;
+        }
+
+        // Update distance type dropdown handler
+        document.getElementById('distanceTypeSelect').onchange = function() {
+          if (this.value === 'normale' && currentGameParams.distance_normale) {
+            document.getElementById('distanceInput').value = currentGameParams.distance_normale;
+          } else if (this.value === 'reduite' && currentGameParams.distance_reduite) {
+            document.getElementById('distanceInput').value = currentGameParams.distance_reduite;
+          }
+          // Mark as needing re-validation
+          updateValidationStatus(false);
+        };
+
+        // Mark inputs as needing re-validation when changed
+        document.getElementById('distanceInput').oninput = function() {
+          document.getElementById('distanceTypeSelect').value = 'custom';
+          updateValidationStatus(false);
+        };
+        document.getElementById('reprisesInput').oninput = function() {
+          updateValidationStatus(false);
+        };
+
+        // Show default hints
+        document.getElementById('distanceDefaultHint').textContent =
+          `Par defaut: ${currentGameParams.distance_normale} (normale)${currentGameParams.distance_reduite ? ' / ' + currentGameParams.distance_reduite + ' (reduite)' : ''}`;
+        document.getElementById('reprisesDefaultHint').textContent =
+          `Par defaut: ${currentGameParams.reprises}`;
+
+        // Update coin display (read-only)
         const coinSpan = document.getElementById('gameParamCoin');
         if (currentGameParams.coin === 'GC') {
           coinSpan.textContent = 'Grand Coin';
@@ -2475,12 +2564,15 @@
           coinSpan.style.color = '#fff';
         }
 
-        // Update reprises
-        document.getElementById('gameParamReprises').textContent = currentGameParams.reprises;
-
         // Update moyenne info
         document.getElementById('gameParamMoyenne').textContent =
-          `La moyenne qualificative pour cette catégorie est entre ${parseFloat(currentGameParams.moyenne_mini).toFixed(3)} et ${parseFloat(currentGameParams.moyenne_maxi).toFixed(3)}`;
+          `La moyenne qualificative pour cette categorie est entre ${parseFloat(currentGameParams.moyenne_mini).toFixed(3)} et ${parseFloat(currentGameParams.moyenne_maxi).toFixed(3)}`;
+
+        // Update validation status
+        updateValidationStatus(isValidated);
+
+        // Show the game parameters section
+        document.getElementById('gameParamsSection').style.display = 'block';
 
       } catch (error) {
         console.error('Error loading game parameters:', error);
@@ -2488,6 +2580,99 @@
         currentGameParams = null;
       }
     }
+
+    // Update validation status display
+    function updateValidationStatus(isValidated) {
+      gameParamsValidated = isValidated;
+      const statusEl = document.getElementById('gameParamsValidationStatus');
+      const validateBtn = document.getElementById('validateGameParamsBtn');
+
+      if (isValidated) {
+        statusEl.textContent = 'Parametres valides';
+        statusEl.style.background = '#d4edda';
+        statusEl.style.color = '#155724';
+        statusEl.style.display = 'inline-block';
+        validateBtn.textContent = 'Re-valider';
+        validateBtn.style.background = '#17a2b8';
+      } else {
+        statusEl.textContent = 'Non valide - Validation requise';
+        statusEl.style.background = '#fff3cd';
+        statusEl.style.color = '#856404';
+        statusEl.style.display = 'inline-block';
+        validateBtn.textContent = 'Valider les parametres';
+        validateBtn.style.background = '#28a745';
+      }
+    }
+
+    // Validate game parameters button handler
+    document.getElementById('validateGameParamsBtn').addEventListener('click', async () => {
+      const tournoiId = matchingTournoi?.tournoi_id;
+      if (!tournoiId) {
+        alert('Aucun tournoi selectionne');
+        return;
+      }
+
+      const distance = parseInt(document.getElementById('distanceInput').value);
+      const distanceType = document.getElementById('distanceTypeSelect').value;
+      const reprises = parseInt(document.getElementById('reprisesInput').value);
+
+      if (!distance || !reprises) {
+        alert('Veuillez remplir tous les champs');
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API_URL}/settings/tournament-overrides/${tournoiId}`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ distance, distance_type: distanceType, reprises })
+        });
+
+        if (response.ok) {
+          updateValidationStatus(true);
+          const msgEl = document.getElementById('validationMessage');
+          msgEl.textContent = 'Parametres valides !';
+          msgEl.style.display = 'inline';
+          setTimeout(() => { msgEl.style.display = 'none'; }, 3000);
+        } else {
+          const error = await response.json();
+          alert('Erreur: ' + (error.error || 'Echec de la validation'));
+        }
+      } catch (error) {
+        console.error('Error validating parameters:', error);
+        alert('Erreur lors de la validation des parametres');
+      }
+    });
+
+    // Reset game parameters to defaults
+    document.getElementById('resetGameParamsBtn').addEventListener('click', async () => {
+      const tournoiId = matchingTournoi?.tournoi_id;
+      if (!tournoiId || !currentGameParams) {
+        alert('Aucun tournoi selectionne');
+        return;
+      }
+
+      if (!confirm('Reinitialiser les parametres aux valeurs par defaut ?')) return;
+
+      try {
+        await fetch(`${API_URL}/settings/tournament-overrides/${tournoiId}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        // Reset to defaults
+        document.getElementById('distanceInput').value = currentGameParams.distance_normale;
+        document.getElementById('distanceTypeSelect').value = 'normale';
+        document.getElementById('reprisesInput').value = currentGameParams.reprises;
+        updateValidationStatus(false);
+
+      } catch (error) {
+        console.error('Error resetting parameters:', error);
+      }
+    });
 
     // Store current poules globally for manipulation
     let currentPoules = [];
@@ -2733,8 +2918,11 @@
         poule.locationNum = pouleAssignments[poule.number] || '1';
       });
 
-      // Store data for email functionality
-      const selectedDistance = document.getElementById('distanceSelect')?.value || 'normale';
+      // Store data for email functionality (include override values)
+      const selectedDistanceType = document.getElementById('distanceTypeSelect')?.value || 'normale';
+      const overrideDistance = parseInt(document.getElementById('distanceInput')?.value) || currentGameParams?.distance_normale;
+      const overrideReprises = parseInt(document.getElementById('reprisesInput')?.value) || currentGameParams?.reprises;
+
       storeGenerationData({
         poules: poules,
         tournamentDate: matchingTournoi?.debut || null,
@@ -2743,8 +2931,13 @@
           location1 ? { ...location1, startTime: startTime1, locationNum: '1' } : null,
           location2 ? { ...location2, startTime: startTime2, locationNum: '2' } : null
         ].filter(Boolean),
-        gameParams: currentGameParams,
-        selectedDistance: selectedDistance
+        gameParams: {
+          ...currentGameParams,
+          distance_override: overrideDistance,
+          reprises: overrideReprises
+        },
+        selectedDistance: selectedDistanceType,
+        gameParamsValidated: gameParamsValidated
       });
 
       goToStep(4);
@@ -3324,6 +3517,25 @@
       if (!lastGeneratedData) {
         alert('Veuillez d\'abord générer le fichier Excel');
         return;
+      }
+
+      // Check if game parameters are validated
+      if (!lastGeneratedData.gameParamsValidated) {
+        const proceed = confirm('Les parametres de jeu n\'ont pas ete valides.\n\nVoulez-vous les valider avec les valeurs actuelles et continuer ?');
+        if (proceed) {
+          // Trigger validation
+          document.getElementById('validateGameParamsBtn').click();
+          // Wait for validation to complete
+          await new Promise(resolve => setTimeout(resolve, 800));
+          // Update lastGeneratedData with validated status
+          lastGeneratedData.gameParamsValidated = gameParamsValidated;
+          if (!gameParamsValidated) {
+            alert('La validation a echoue. Veuillez reessayer.');
+            return;
+          }
+        } else {
+          return;
+        }
       }
 
       const btn = document.getElementById('sendConvocationsBtn');

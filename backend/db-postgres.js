@@ -361,6 +361,22 @@ async function initializeDatabase() {
     // Controls whether date/location changes trigger automatic email notifications
     await client.query(`ALTER TABLE tournoi_ext ADD COLUMN IF NOT EXISTS notify_on_changes BOOLEAN DEFAULT TRUE`);
 
+    // Tournament parameter overrides table (migration - February 2026)
+    // Allows per-tournament customization of Distance and Reprises values
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS tournament_parameter_overrides (
+        id SERIAL PRIMARY KEY,
+        tournoi_id INTEGER NOT NULL REFERENCES tournoi_ext(tournoi_id) ON DELETE CASCADE,
+        distance INTEGER NOT NULL,
+        distance_type TEXT DEFAULT 'normale',
+        reprises INTEGER NOT NULL,
+        validated_at TIMESTAMP,
+        validated_by TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(tournoi_id)
+      )
+    `);
+
     // Player inscriptions table (from CDBHS external DB)
     await client.query(`
       CREATE TABLE IF NOT EXISTS inscriptions (

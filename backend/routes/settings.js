@@ -280,6 +280,165 @@ router.delete('/game-parameters/:id', authenticateToken, requireAdmin, (req, res
   );
 });
 
+// ============= TOURNAMENT PARAMETER OVERRIDES =============
+
+// Get tournament parameter override (or defaults if no override exists)
+router.get('/tournament-overrides/:tournoiId', authenticateToken, async (req, res) => {
+  const db = getDb();
+  const { tournoiId } = req.params;
+
+  try {
+    // First, get the tournament to know its mode/categorie
+    const tournament = await new Promise((resolve, reject) => {
+      db.get(
+        'SELECT tournoi_id, mode, categorie FROM tournoi_ext WHERE tournoi_id = $1',
+        [tournoiId],
+        (err, row) => err ? reject(err) : resolve(row)
+      );
+    });
+
+    if (!tournament) {
+      return res.status(404).json({ error: 'Tournoi non trouve' });
+    }
+
+    // Get default game parameters for this mode/categorie
+    const defaults = await new Promise((resolve, reject) => {
+      db.get(
+        'SELECT * FROM game_parameters WHERE UPPER(mode) = UPPER($1) AND UPPER(categorie) = UPPER($2)',
+        [tournament.mode, tournament.categorie],
+        (err, row) => err ? reject(err) : resolve(row)
+      );
+    });
+
+    // Check for existing override
+    const override = await new Promise((resolve, reject) => {
+      db.get(
+        'SELECT * FROM tournament_parameter_overrides WHERE tournoi_id = $1',
+        [tournoiId],
+        (err, row) => err ? reject(err) : resolve(row)
+      );
+    });
+
+    if (override) {
+      res.json({
+        distance: override.distance,
+        distance_type: override.distance_type,
+        reprises: override.reprises,
+        isOverride: true,
+        validated_at: override.validated_at,
+        validated_by: override.validated_by,
+        defaults: defaults ? {
+          distance_normale: defaults.distance_normale,
+          distance_reduite: defaults.distance_reduite,
+          reprises: defaults.reprises
+        } : null
+      });
+    } else if (defaults) {
+      res.json({
+        distance: defaults.distance_normale,
+        distance_type: 'normale',
+        reprises: defaults.reprises,
+        isOverride: false,
+        validated_at: null,
+        validated_by: null,
+        defaults: {
+          distance_normale: defaults.distance_normale,
+          distance_reduite: defaults.distance_reduite,
+          reprises: defaults.reprises
+        }
+      });
+    } else {
+      res.status(404).json({ error: 'Aucun parametre trouve pour ce mode/categorie' });
+    }
+  } catch (error) {
+    console.error('Error fetching tournament override:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Create or update tournament parameter override
+router.put('/tournament-overrides/:tournoiId', authenticateToken, async (req, res) => {
+  const db = getDb();
+  const { tournoiId } = req.params;
+  const { distance, distance_type, reprises } = req.body;
+  const username = req.user?.username || 'unknown';
+
+  if (!distance || !reprises) {
+    return res.status(400).json({ error: 'Distance et reprises sont requis' });
+  }
+
+  try {
+    // Verify tournament exists
+    const tournament = await new Promise((resolve, reject) => {
+      db.get(
+        'SELECT tournoi_id FROM tournoi_ext WHERE tournoi_id = $1',
+        [tournoiId],
+        (err, row) => err ? reject(err) : resolve(row)
+      );
+    });
+
+    if (!tournament) {
+      return res.status(404).json({ error: 'Tournoi non trouve' });
+    }
+
+    // Upsert the override
+    await new Promise((resolve, reject) => {
+      db.run(
+        `INSERT INTO tournament_parameter_overrides (tournoi_id, distance, distance_type, reprises, validated_at, validated_by)
+         VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, $5)
+         ON CONFLICT (tournoi_id) DO UPDATE SET
+           distance = EXCLUDED.distance,
+           distance_type = EXCLUDED.distance_type,
+           reprises = EXCLUDED.reprises,
+           validated_at = CURRENT_TIMESTAMP,
+           validated_by = EXCLUDED.validated_by`,
+        [tournoiId, distance, distance_type || 'custom', reprises, username],
+        function(err) {
+          if (err) reject(err);
+          else resolve(this);
+        }
+      );
+    });
+
+    res.json({
+      success: true,
+      message: 'Parametres valides et enregistres',
+      validated_at: new Date().toISOString(),
+      validated_by: username
+    });
+  } catch (error) {
+    console.error('Error saving tournament override:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete tournament parameter override (revert to defaults)
+router.delete('/tournament-overrides/:tournoiId', authenticateToken, async (req, res) => {
+  const db = getDb();
+  const { tournoiId } = req.params;
+
+  try {
+    const result = await new Promise((resolve, reject) => {
+      db.run(
+        'DELETE FROM tournament_parameter_overrides WHERE tournoi_id = $1',
+        [tournoiId],
+        function(err) {
+          if (err) reject(err);
+          else resolve(this);
+        }
+      );
+    });
+
+    res.json({
+      success: true,
+      message: 'Parametres reinitialises aux valeurs par defaut'
+    });
+  } catch (error) {
+    console.error('Error deleting tournament override:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ============= APP SETTINGS =============
 
 // Initialize app_settings table if not exists

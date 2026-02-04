@@ -846,6 +846,38 @@
               <div id="relanceCustomFieldsContent"></div>
             </div>
 
+            <!-- Game Parameters for Finale Relances -->
+            <div id="relanceGameParamsSection" style="display: none; margin-bottom: 20px; padding: 15px; background: #e7f3ff; border-left: 4px solid #1F4788; border-radius: 8px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <h4 style="margin: 0; color: #1F4788;">Parametres de l'epreuve (Finale)</h4>
+                <span id="relanceGameParamsStatus" style="display: none; padding: 5px 10px; border-radius: 4px; font-size: 12px;"></span>
+              </div>
+              <div style="display: grid; grid-template-columns: 1fr 1fr auto; gap: 15px; align-items: end;">
+                <div>
+                  <label style="display: block; font-weight: 500; margin-bottom: 5px;">Distance (points) :</label>
+                  <input type="number" id="relanceDistanceInput"
+                         style="width: 100%; padding: 10px; border: 1px solid #1F4788; border-radius: 4px;"
+                         min="10" max="500" step="5">
+                  <small id="relanceDistanceHint" style="color: #666; display: block; margin-top: 3px;"></small>
+                </div>
+                <div>
+                  <label style="display: block; font-weight: 500; margin-bottom: 5px;">Reprises max :</label>
+                  <input type="number" id="relanceReprisesInput"
+                         style="width: 100%; padding: 10px; border: 1px solid #1F4788; border-radius: 4px;"
+                         min="1" max="100" step="1">
+                  <small id="relanceReprisesHint" style="color: #666; display: block; margin-top: 3px;"></small>
+                </div>
+                <div>
+                  <button class="btn" id="validateRelanceGameParamsBtn" style="background: #28a745; padding: 10px 20px;">
+                    Valider
+                  </button>
+                </div>
+              </div>
+              <p style="margin: 10px 0 0; font-size: 12px; color: #666;">
+                Ces valeurs seront utilisees pour cette relance finale. Validez avant d'envoyer.
+              </p>
+            </div>
+
             <div style="margin-bottom: 15px;">
               <label style="display: block; font-weight: bold; margin-bottom: 5px;">Sujet</label>
               <input type="text" id="relanceSubject" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
@@ -4433,6 +4465,20 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
         return;
       }
 
+      // For finale relances, check game params validation
+      if (relanceType === 'finale' && !window.relanceGameParamsValidated) {
+        const proceed = confirm('Les parametres de jeu n\'ont pas ete valides.\n\nVoulez-vous les valider avec les valeurs actuelles et continuer ?');
+        if (proceed) {
+          document.getElementById('validateRelanceGameParamsBtn').click();
+          if (!window.relanceGameParamsValidated) {
+            showError('La validation des parametres a echoue.');
+            return;
+          }
+        } else {
+          return;
+        }
+      }
+
       // Get selected participant licences
       const selectedLicences = Array.from(selectedRelanceIds).map(idx => relanceParticipants[idx]?.licence).filter(Boolean);
 
@@ -4462,6 +4508,13 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
         customData.finale_date = dateInput?.value ? new Date(dateInput.value).toLocaleDateString('fr-FR') : '';
         customData.finale_lieu = lieuInput?.value || '';
         customData.deadline_date = deadlineInput?.value ? new Date(deadlineInput.value).toLocaleDateString('fr-FR') : '';
+        // Include validated game parameters
+        if (window.relanceGameParams) {
+          customData.game_params = {
+            distance: window.relanceGameParams.distance,
+            reprises: window.relanceGameParams.reprises
+          };
+        }
       }
 
       const selectedCount = selectedRelanceIds.size;
@@ -4601,6 +4654,17 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
       document.getElementById('relanceAlreadySentWarning').style.display = 'none';
       document.getElementById('relanceParticipantsSection').style.display = 'none';
       document.getElementById('sendRelanceBtn').disabled = true;
+
+      // Show/hide game parameters section for finale
+      const relanceType = document.getElementById('relanceTypeSelect').value;
+      const gameParamsSection = document.getElementById('relanceGameParamsSection');
+      if (relanceType === 'finale') {
+        gameParamsSection.style.display = 'block';
+        loadRelanceGameParams();
+      } else {
+        gameParamsSection.style.display = 'none';
+        window.relanceGameParamsValidated = false;
+      }
     });
 
     document.getElementById('loadRelanceParticipantsBtn').addEventListener('click', loadRelanceParticipants);
@@ -4636,6 +4700,94 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
     document.getElementById('relanceTestModeCheck').addEventListener('change', (e) => {
       document.getElementById('relanceTestEmailInput').style.display = e.target.checked ? 'block' : 'none';
     });
+
+    // ============= GAME PARAMETERS FOR FINALE RELANCES =============
+
+    window.relanceGameParamsValidated = false;
+    let relanceGameParamsDefaults = null;
+
+    // Load game parameters for finale relance
+    async function loadRelanceGameParams() {
+      const mode = document.getElementById('relanceModeFilter').value;
+      const category = document.getElementById('relanceCategoryFilter').value;
+
+      if (!mode || !category) return;
+
+      try {
+        const response = await authFetch(`/api/settings/game-parameters/${encodeURIComponent(mode)}/${encodeURIComponent(category)}`);
+        if (response.ok) {
+          relanceGameParamsDefaults = await response.json();
+
+          // Populate inputs with defaults
+          document.getElementById('relanceDistanceInput').value = relanceGameParamsDefaults.distance_normale;
+          document.getElementById('relanceReprisesInput').value = relanceGameParamsDefaults.reprises;
+
+          // Show hints
+          document.getElementById('relanceDistanceHint').textContent =
+            `Par defaut: ${relanceGameParamsDefaults.distance_normale}${relanceGameParamsDefaults.distance_reduite ? ' / ' + relanceGameParamsDefaults.distance_reduite + ' (red.)' : ''}`;
+          document.getElementById('relanceReprisesHint').textContent =
+            `Par defaut: ${relanceGameParamsDefaults.reprises}`;
+
+          // Reset validation status
+          updateRelanceGameParamsStatus(false);
+        }
+      } catch (error) {
+        console.error('Error loading game params for relance:', error);
+      }
+    }
+
+    // Update validation status display for relance game params
+    function updateRelanceGameParamsStatus(isValidated) {
+      window.relanceGameParamsValidated = isValidated;
+      const statusEl = document.getElementById('relanceGameParamsStatus');
+      const btn = document.getElementById('validateRelanceGameParamsBtn');
+
+      if (isValidated) {
+        statusEl.textContent = 'Valide';
+        statusEl.style.background = '#d4edda';
+        statusEl.style.color = '#155724';
+        statusEl.style.display = 'inline-block';
+        btn.textContent = 'Re-valider';
+        btn.style.background = '#17a2b8';
+      } else {
+        statusEl.textContent = 'Non valide';
+        statusEl.style.background = '#fff3cd';
+        statusEl.style.color = '#856404';
+        statusEl.style.display = 'inline-block';
+        btn.textContent = 'Valider';
+        btn.style.background = '#28a745';
+      }
+    }
+
+    // Mark as needing re-validation when inputs change
+    document.getElementById('relanceDistanceInput').addEventListener('input', () => {
+      updateRelanceGameParamsStatus(false);
+    });
+    document.getElementById('relanceReprisesInput').addEventListener('input', () => {
+      updateRelanceGameParamsStatus(false);
+    });
+
+    // Validate game params button for relance
+    document.getElementById('validateRelanceGameParamsBtn').addEventListener('click', () => {
+      const distance = document.getElementById('relanceDistanceInput').value;
+      const reprises = document.getElementById('relanceReprisesInput').value;
+
+      if (!distance || !reprises) {
+        alert('Veuillez remplir Distance et Reprises');
+        return;
+      }
+
+      // Store validated values
+      window.relanceGameParams = {
+        distance: parseInt(distance),
+        reprises: parseInt(reprises),
+        validated: true
+      };
+
+      updateRelanceGameParamsStatus(true);
+    });
+
+    // ============= END GAME PARAMETERS FOR FINALE RELANCES =============
 
     // Schedule relance button
     document.getElementById('scheduleRelanceBtn').addEventListener('click', async () => {
