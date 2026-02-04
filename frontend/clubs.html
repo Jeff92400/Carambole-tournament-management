@@ -167,6 +167,10 @@
             <input type="email" id="clubEmail" placeholder="contact@club.fr">
           </div>
           <div class="form-group">
+            <label for="clubPresident">Président :</label>
+            <input type="text" id="clubPresident" placeholder="Prénom Nom">
+          </div>
+          <div class="form-group">
             <label for="clubCalendarCode">Code calendrier :</label>
             <input type="text" id="clubCalendarCode" maxlength="2" style="width: 60px; text-transform: uppercase;" placeholder="Ex: A">
             <small style="color: #666;">Lettre pour l'import Excel</small>
@@ -231,6 +235,10 @@
           <div class="form-group">
             <label for="editClubEmail">Email :</label>
             <input type="email" id="editClubEmail">
+          </div>
+          <div class="form-group">
+            <label for="editClubPresident">Président :</label>
+            <input type="text" id="editClubPresident" placeholder="Prénom Nom">
           </div>
           <div class="form-group">
             <label for="editClubCalendarCode">Code calendrier :</label>
@@ -332,6 +340,10 @@
              </div>`
           : '';
 
+        const presidentHtml = club.president
+          ? `<div style="font-size: 11px; color: #555; margin-bottom: 5px;">👤 Président: <strong>${club.president}</strong></div>`
+          : '';
+
         const calendarCodeHtml = club.calendar_code
           ? `<div style="font-size: 11px; color: #1565c0; margin-bottom: 5px; background: #e3f2fd; padding: 2px 8px; border-radius: 4px; display: inline-block;">📅 Code: <strong>${club.calendar_code}</strong></div>`
           : '';
@@ -342,6 +354,7 @@
           <div class="club-display-name">${club.display_name}</div>
           ${addressHtml}
           ${contactHtml}
+          ${presidentHtml}
           ${calendarCodeHtml}
           <div class="club-actions">
             <button class="btn-edit" onclick="openEditModal(${club.id})">✏️ Modifier</button>
@@ -413,6 +426,7 @@
       formData.append('zip_code', document.getElementById('clubZipCode').value);
       formData.append('phone', document.getElementById('clubPhone').value);
       formData.append('email', document.getElementById('clubEmail').value);
+      formData.append('president', document.getElementById('clubPresident').value);
       formData.append('calendar_code', document.getElementById('clubCalendarCode').value.toUpperCase());
 
       const logoFile = document.getElementById('clubLogo').files[0];
@@ -459,6 +473,7 @@
       document.getElementById('editClubZipCode').value = club.zip_code || '';
       document.getElementById('editClubPhone').value = club.phone || '';
       document.getElementById('editClubEmail').value = club.email || '';
+      document.getElementById('editClubPresident').value = club.president || '';
       document.getElementById('editClubCalendarCode').value = club.calendar_code || '';
       document.getElementById('editLogoPreview').style.display = 'none';
       document.getElementById('editClubLogo').value = '';
@@ -495,6 +510,7 @@
       formData.append('zip_code', document.getElementById('editClubZipCode').value);
       formData.append('phone', document.getElementById('editClubPhone').value);
       formData.append('email', document.getElementById('editClubEmail').value);
+      formData.append('president', document.getElementById('editClubPresident').value);
       formData.append('calendar_code', document.getElementById('editClubCalendarCode').value.toUpperCase());
 
       const logoFile = document.getElementById('editClubLogo').files[0];

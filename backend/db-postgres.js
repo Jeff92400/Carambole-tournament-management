@@ -295,7 +295,7 @@ async function initializeDatabase() {
     `);
 
     // Add new columns to clubs if they don't exist (migration)
-    const clubColumns = ['street', 'city', 'zip_code', 'phone', 'email', 'calendar_code'];
+    const clubColumns = ['street', 'city', 'zip_code', 'phone', 'email', 'calendar_code', 'president'];
     for (const col of clubColumns) {
       try {
         await client.query(`ALTER TABLE clubs ADD COLUMN IF NOT EXISTS ${col} TEXT`);

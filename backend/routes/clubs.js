@@ -151,7 +151,7 @@ router.get('/:id', authenticateToken, (req, res) => {
 
 // Add new club
 router.post('/', authenticateToken, upload.single('logo'), (req, res) => {
-  const { name, display_name, street, city, zip_code, phone, email, calendar_code } = req.body;
+  const { name, display_name, street, city, zip_code, phone, email, president, calendar_code } = req.body;
   const logo_filename = req.file ? req.file.filename : null;
 
   if (!name || !display_name) {
@@ -159,8 +159,8 @@ router.post('/', authenticateToken, upload.single('logo'), (req, res) => {
   }
 
   db.run(
-    'INSERT INTO clubs (name, display_name, logo_filename, street, city, zip_code, phone, email, calendar_code) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-    [name, display_name, logo_filename, street || null, city || null, zip_code || null, phone || null, email || null, calendar_code || null],
+    'INSERT INTO clubs (name, display_name, logo_filename, street, city, zip_code, phone, email, president, calendar_code) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    [name, display_name, logo_filename, street || null, city || null, zip_code || null, phone || null, email || null, president || null, calendar_code || null],
     function(err) {
       if (err) {
         if (err.message.includes('UNIQUE')) {
@@ -178,6 +178,7 @@ router.post('/', authenticateToken, upload.single('logo'), (req, res) => {
         zip_code,
         phone,
         email,
+        president,
         calendar_code
       });
     }
@@ -186,7 +187,7 @@ router.post('/', authenticateToken, upload.single('logo'), (req, res) => {
 
 // Update club
 router.put('/:id', authenticateToken, upload.single('logo'), (req, res) => {
-  const { name, display_name, street, city, zip_code, phone, email, calendar_code } = req.body;
+  const { name, display_name, street, city, zip_code, phone, email, president, calendar_code } = req.body;
   const clubId = req.params.id;
 
   // Get current club data
@@ -206,11 +207,12 @@ router.put('/:id', authenticateToken, upload.single('logo'), (req, res) => {
     const newZipCode = zip_code !== undefined ? zip_code : club.zip_code;
     const newPhone = phone !== undefined ? phone : club.phone;
     const newEmail = email !== undefined ? email : club.email;
+    const newPresident = president !== undefined ? president : club.president;
     const newCalendarCode = calendar_code !== undefined ? (calendar_code || null) : club.calendar_code;
 
     db.run(
-      'UPDATE clubs SET name = ?, display_name = ?, logo_filename = ?, street = ?, city = ?, zip_code = ?, phone = ?, email = ?, calendar_code = ? WHERE id = ?',
-      [newName, newDisplayName, newLogoFilename, newStreet, newCity, newZipCode, newPhone, newEmail, newCalendarCode, clubId],
+      'UPDATE clubs SET name = ?, display_name = ?, logo_filename = ?, street = ?, city = ?, zip_code = ?, phone = ?, email = ?, president = ?, calendar_code = ? WHERE id = ?',
+      [newName, newDisplayName, newLogoFilename, newStreet, newCity, newZipCode, newPhone, newEmail, newPresident, newCalendarCode, clubId],
       function(err) {
         if (err) {
           if (err.message.includes('UNIQUE')) {
@@ -237,6 +239,7 @@ router.put('/:id', authenticateToken, upload.single('logo'), (req, res) => {
           zip_code: newZipCode,
           phone: newPhone,
           email: newEmail,
+          president: newPresident,
           calendar_code: newCalendarCode
         });
       }
