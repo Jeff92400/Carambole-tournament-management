@@ -3028,8 +3028,6 @@
       const pdfParamsValidated = document.getElementById('gameParamsStatus')?.textContent?.includes('valides');
       if (!pdfParamsValidated) {
         alert('Veuillez valider les paramètres de jeu avant de générer le PDF.');
-        btn.disabled = false;
-        btn.textContent = 'Générer PDF Récapitulatif';
         return;
       }
 
