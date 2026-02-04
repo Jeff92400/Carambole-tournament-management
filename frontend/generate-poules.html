@@ -2777,6 +2777,13 @@
 
     // Generate Excel
     document.getElementById('generateExcelBtn').addEventListener('click', async () => {
+      // Check if game params are validated before generating Excel
+      const excelParamsValidated = document.getElementById('gameParamsStatus')?.textContent?.includes('valides');
+      if (!excelParamsValidated) {
+        alert('Veuillez valider les paramètres de jeu avant de générer le fichier Excel.');
+        return;
+      }
+
       const config = getPouleConfig(selectedPlayers.length);
       // Use currentPoules which may have been modified by moving players
       const poules = currentPoules.length > 0 ? currentPoules : distributeSerpentine(selectedPlayers, config.poules);
@@ -3017,6 +3024,19 @@
         };
       }
 
+      // Check if game params are validated before generating PDF
+      const pdfParamsValidated = document.getElementById('gameParamsStatus')?.textContent?.includes('valides');
+      if (!pdfParamsValidated) {
+        alert('Veuillez valider les paramètres de jeu avant de générer le PDF.');
+        btn.disabled = false;
+        btn.textContent = 'Générer PDF Récapitulatif';
+        return;
+      }
+
+      // Get override values from UI
+      const pdfOverrideDistance = parseInt(document.getElementById('distanceInput')?.value) || currentGameParams?.distance_normale;
+      const pdfOverrideReprises = parseInt(document.getElementById('reprisesInput')?.value) || currentGameParams?.reprises;
+
       try {
         const response = await fetch(`${API_URL}/email/generate-summary-pdf`, {
           method: 'POST',
@@ -3034,7 +3054,11 @@
               location1 ? { ...location1, startTime: startTime1, locationNum: '1' } : null,
               location2 ? { ...location2, startTime: startTime2, locationNum: '2' } : null
             ].filter(Boolean),
-            gameParams: currentGameParams,
+            gameParams: currentGameParams ? {
+              ...currentGameParams,
+              distance_override: pdfOverrideDistance,
+              reprises: pdfOverrideReprises
+            } : null,
             selectedDistance: selectedDistance,
             mockRankingData: mockRankingData,
             isFinale: isFinale
