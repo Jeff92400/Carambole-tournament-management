@@ -106,6 +106,9 @@ router.post('/fix/positions', async (req, res) => {
 router.get('/seasons', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
 
+  // Get current season before callback
+  const currentSeason = await getCurrentSeason();
+
   db.all(
     `SELECT DISTINCT season FROM tournaments ORDER BY season DESC`,
     [],
@@ -116,7 +119,6 @@ router.get('/seasons', authenticateToken, async (req, res) => {
       }
       const seasons = (rows || []).map(r => r.season);
       // Add current season if not in list
-      const currentSeason = await getCurrentSeason();
       if (!seasons.includes(currentSeason)) {
         seasons.unshift(currentSeason);
       }
