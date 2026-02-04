@@ -740,6 +740,12 @@ async function initializeDatabase() {
     await client.query(`ALTER TABLE announcements ADD COLUMN IF NOT EXISTS test_licence VARCHAR(20)`);
     await client.query(`ALTER TABLE announcements ADD COLUMN IF NOT EXISTS target_licence VARCHAR(20)`);
 
+    // Add filter columns for announcements (migration - Feb 2026)
+    // Stores JSON arrays for filtering by mode, ranking, or club
+    await client.query(`ALTER TABLE announcements ADD COLUMN IF NOT EXISTS target_modes TEXT`);
+    await client.query(`ALTER TABLE announcements ADD COLUMN IF NOT EXISTS target_rankings TEXT`);
+    await client.query(`ALTER TABLE announcements ADD COLUMN IF NOT EXISTS target_clubs TEXT`);
+
     // Convocation poules table - stores full poule composition when convocations are sent
     await client.query(`
       CREATE TABLE IF NOT EXISTS convocation_poules (

@@ -26,6 +26,71 @@ router.get('/audience-count', authenticateToken, (req, res) => {
   );
 });
 
+// Get filtered audience count based on mode/ranking/club criteria
+router.post('/filtered-audience-count', authenticateToken, async (req, res) => {
+  const db = getDb();
+  const { target_modes, target_rankings, target_clubs } = req.body;
+
+  try {
+    // Build dynamic WHERE clause
+    let conditions = [`(p.player_app_role IS NULL OR p.player_app_role != 'test')`];
+    let params = [];
+    let paramIndex = 1;
+
+    // Mode filter: player has ranking (not NC) in any of the target modes
+    if (target_modes && target_modes.length > 0) {
+      const modeConditions = target_modes.map(mode => {
+        const m = mode.toUpperCase();
+        if (m === 'LIBRE') return `(p.rank_libre IS NOT NULL AND p.rank_libre != 'NC')`;
+        if (m === 'CADRE') return `(p.rank_cadre IS NOT NULL AND p.rank_cadre != 'NC')`;
+        if (m === 'BANDE') return `(p.rank_bande IS NOT NULL AND p.rank_bande != 'NC')`;
+        if (m === '3 BANDES' || m === '3BANDES') return `(p.rank_3bandes IS NOT NULL AND p.rank_3bandes != 'NC')`;
+        return 'FALSE';
+      });
+      conditions.push(`(${modeConditions.join(' OR ')})`);
+    }
+
+    // Ranking filter: player has any of the target rankings
+    if (target_rankings && target_rankings.length > 0) {
+      const rankPlaceholders = target_rankings.map(() => `$${paramIndex++}`).join(', ');
+      conditions.push(`(
+        p.rank_libre IN (${rankPlaceholders}) OR
+        p.rank_cadre IN (${rankPlaceholders}) OR
+        p.rank_bande IN (${rankPlaceholders}) OR
+        p.rank_3bandes IN (${rankPlaceholders})
+      )`);
+      // Add ranking params 4 times (once for each rank column)
+      params.push(...target_rankings, ...target_rankings, ...target_rankings, ...target_rankings);
+    }
+
+    // Club filter
+    if (target_clubs && target_clubs.length > 0) {
+      const clubConditions = target_clubs.map(() => `UPPER(p.club) LIKE UPPER($${paramIndex++})`);
+      conditions.push(`(${clubConditions.join(' OR ')})`);
+      params.push(...target_clubs.map(c => `%${c}%`));
+    }
+
+    const query = `
+      SELECT COUNT(DISTINCT pa.licence) as count
+      FROM player_accounts pa
+      JOIN players p ON REPLACE(pa.licence, ' ', '') = REPLACE(p.licence, ' ', '')
+      WHERE ${conditions.join(' AND ')}
+    `;
+
+    const result = await new Promise((resolve, reject) => {
+      db.get(query, params, (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
+
+    res.json({ count: result?.count || 0 });
+  } catch (err) {
+    console.error('Error fetching filtered audience count:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Get all announcements (includes inactive)
 router.get('/', authenticateToken, (req, res) => {
   const db = getDb();
@@ -44,40 +109,118 @@ router.get('/', authenticateToken, (req, res) => {
 });
 
 // Get active announcements (public - for Player App)
-// If licence query param is provided, also show test/targeted announcements for that licence
-router.get('/active', (req, res) => {
+// If licence query param is provided, also show test/targeted/filtered announcements for that licence
+router.get('/active', async (req, res) => {
   const db = getDb();
   const { licence } = req.query;
 
   // Normalize licence (remove spaces)
   const normalizedLicence = licence ? licence.replace(/\s+/g, '') : null;
 
-  db.all(
-    `SELECT id, title, message, type, created_at, test_licence, target_licence
-     FROM announcements
-     WHERE is_active = TRUE
-       AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
-       AND (
-         (test_licence IS NULL AND target_licence IS NULL)
-         OR REPLACE(test_licence, ' ', '') = $1
-         OR REPLACE(target_licence, ' ', '') = $1
-       )
-     ORDER BY created_at DESC`,
-    [normalizedLicence],
-    (err, rows) => {
-      if (err) {
-        console.error('Error fetching active announcements:', err);
-        return res.status(500).json({ error: err.message });
-      }
-      res.json(rows || []);
+  try {
+    // First, get player data if licence provided (for filter matching)
+    let playerData = null;
+    if (normalizedLicence) {
+      playerData = await new Promise((resolve, reject) => {
+        db.get(
+          `SELECT licence, club, rank_libre, rank_cadre, rank_bande, rank_3bandes
+           FROM players WHERE REPLACE(licence, ' ', '') = $1`,
+          [normalizedLicence],
+          (err, row) => {
+            if (err) reject(err);
+            else resolve(row);
+          }
+        );
+      });
     }
-  );
+
+    // Get all active announcements
+    const announcements = await new Promise((resolve, reject) => {
+      db.all(
+        `SELECT id, title, message, type, created_at, test_licence, target_licence,
+                target_modes, target_rankings, target_clubs
+         FROM announcements
+         WHERE is_active = TRUE
+           AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
+         ORDER BY created_at DESC`,
+        [],
+        (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows || []);
+        }
+      );
+    });
+
+    // Filter announcements based on targeting
+    const filteredAnnouncements = announcements.filter(ann => {
+      // Test announcement - only show to test licence
+      if (ann.test_licence) {
+        return normalizedLicence && ann.test_licence.replace(/\s+/g, '') === normalizedLicence;
+      }
+
+      // Single player target
+      if (ann.target_licence) {
+        return normalizedLicence && ann.target_licence.replace(/\s+/g, '') === normalizedLicence;
+      }
+
+      // Filter by mode/ranking/club
+      const hasFilters = ann.target_modes || ann.target_rankings || ann.target_clubs;
+      if (hasFilters) {
+        if (!playerData) return false; // No player data, can't match filters
+
+        let matchesFilter = true;
+
+        // Check mode filter
+        if (ann.target_modes) {
+          const modes = JSON.parse(ann.target_modes);
+          // Player matches if they have a ranking in any of the target modes
+          const playerModes = [];
+          if (playerData.rank_libre && playerData.rank_libre !== 'NC') playerModes.push('LIBRE');
+          if (playerData.rank_cadre && playerData.rank_cadre !== 'NC') playerModes.push('CADRE');
+          if (playerData.rank_bande && playerData.rank_bande !== 'NC') playerModes.push('BANDE');
+          if (playerData.rank_3bandes && playerData.rank_3bandes !== 'NC') playerModes.push('3 BANDES');
+          matchesFilter = matchesFilter && modes.some(m => playerModes.includes(m.toUpperCase()));
+        }
+
+        // Check ranking filter
+        if (ann.target_rankings && matchesFilter) {
+          const rankings = JSON.parse(ann.target_rankings);
+          // Player matches if any of their rankings match
+          const playerRankings = [
+            playerData.rank_libre,
+            playerData.rank_cadre,
+            playerData.rank_bande,
+            playerData.rank_3bandes
+          ].filter(r => r && r !== 'NC');
+          matchesFilter = matchesFilter && rankings.some(r => playerRankings.includes(r));
+        }
+
+        // Check club filter
+        if (ann.target_clubs && matchesFilter) {
+          const clubs = JSON.parse(ann.target_clubs);
+          matchesFilter = matchesFilter && clubs.some(c =>
+            playerData.club && playerData.club.toUpperCase().includes(c.toUpperCase())
+          );
+        }
+
+        return matchesFilter;
+      }
+
+      // No targeting - show to everyone
+      return true;
+    });
+
+    res.json(filteredAnnouncements);
+  } catch (err) {
+    console.error('Error fetching active announcements:', err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Create announcement
 router.post('/', authenticateToken, (req, res) => {
   const db = getDb();
-  const { title, message, type, expires_at, test_licence, target_licence } = req.body;
+  const { title, message, type, expires_at, test_licence, target_licence, target_modes, target_rankings, target_clubs } = req.body;
   const created_by = req.user?.username || 'admin';
 
   if (!title || !message) {
@@ -89,11 +232,16 @@ router.post('/', authenticateToken, (req, res) => {
   const normalizedTestLicence = test_licence ? test_licence.replace(/\s+/g, '') : null;
   const normalizedTargetLicence = target_licence ? target_licence.replace(/\s+/g, '') : null;
 
+  // Store filter arrays as JSON strings
+  const modesJson = target_modes && target_modes.length > 0 ? JSON.stringify(target_modes) : null;
+  const rankingsJson = target_rankings && target_rankings.length > 0 ? JSON.stringify(target_rankings) : null;
+  const clubsJson = target_clubs && target_clubs.length > 0 ? JSON.stringify(target_clubs) : null;
+
   db.run(
-    `INSERT INTO announcements (title, message, type, expires_at, created_by, test_licence, target_licence)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
+    `INSERT INTO announcements (title, message, type, expires_at, created_by, test_licence, target_licence, target_modes, target_rankings, target_clubs)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
      RETURNING id`,
-    [title, message, announcementType, expires_at || null, created_by, normalizedTestLicence, normalizedTargetLicence],
+    [title, message, announcementType, expires_at || null, created_by, normalizedTestLicence, normalizedTargetLicence, modesJson, rankingsJson, clubsJson],
     function(err) {
       if (err) {
         console.error('Error creating announcement:', err);
@@ -102,6 +250,7 @@ router.post('/', authenticateToken, (req, res) => {
       let msg = 'Announcement created';
       if (normalizedTestLicence) msg = `Announcement test created for ${normalizedTestLicence}`;
       else if (normalizedTargetLicence) msg = `Personal message sent to ${normalizedTargetLicence}`;
+      else if (modesJson || rankingsJson || clubsJson) msg = `Announcement created for filtered audience`;
 
       res.json({
         success: true,

@@ -494,9 +494,56 @@
                 <span style="font-size: 14px;">👥 Tous les joueurs</span>
               </label>
               <label style="display: flex; align-items: center; gap: 8px; padding: 10px 15px; background: white; border: 2px solid #ddd; border-radius: 8px; cursor: pointer; transition: all 0.2s;" class="recipient-option">
+                <input type="radio" name="announcementRecipient" value="filter" style="width: 16px; height: 16px;">
+                <span style="font-size: 14px;">🎯 Par catégorie/club</span>
+              </label>
+              <label style="display: flex; align-items: center; gap: 8px; padding: 10px 15px; background: white; border: 2px solid #ddd; border-radius: 8px; cursor: pointer; transition: all 0.2s;" class="recipient-option">
                 <input type="radio" name="announcementRecipient" value="one" style="width: 16px; height: 16px;">
                 <span style="font-size: 14px;">👤 Un joueur</span>
               </label>
+            </div>
+            <!-- Filter section (hidden by default) -->
+            <div id="filterSection" style="display: none; margin-top: 15px; padding: 15px; background: #e3f2fd; border-radius: 8px;">
+              <p style="margin: 0 0 10px 0; font-size: 13px; color: #1565c0;">Sélectionnez un ou plusieurs critères (combinés avec ET) :</p>
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                <div>
+                  <label style="font-size: 12px; color: #333; font-weight: bold;">Mode de jeu :</label>
+                  <select id="filterModes" multiple style="width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #ddd; border-radius: 4px; min-height: 80px;">
+                    <option value="LIBRE">Libre</option>
+                    <option value="CADRE">Cadre</option>
+                    <option value="BANDE">Bande</option>
+                    <option value="3 BANDES">3 Bandes</option>
+                  </select>
+                  <p style="font-size: 10px; color: #666; margin: 3px 0 0 0;">Ctrl+clic pour sélection multiple</p>
+                </div>
+                <div>
+                  <label style="font-size: 12px; color: #333; font-weight: bold;">Classement FFB :</label>
+                  <select id="filterRankings" multiple style="width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #ddd; border-radius: 4px; min-height: 80px;">
+                    <option value="N1">N1</option>
+                    <option value="N2">N2</option>
+                    <option value="N3">N3</option>
+                    <option value="R1">R1</option>
+                    <option value="R2">R2</option>
+                    <option value="R3">R3</option>
+                    <option value="R4">R4</option>
+                    <option value="R5">R5</option>
+                    <option value="D1">D1</option>
+                    <option value="D2">D2</option>
+                    <option value="D3">D3</option>
+                  </select>
+                  <p style="font-size: 10px; color: #666; margin: 3px 0 0 0;">Ctrl+clic pour sélection multiple</p>
+                </div>
+                <div>
+                  <label style="font-size: 12px; color: #333; font-weight: bold;">Club :</label>
+                  <select id="filterClubs" multiple style="width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #ddd; border-radius: 4px; min-height: 80px;">
+                    <!-- Loaded dynamically -->
+                  </select>
+                  <p style="font-size: 10px; color: #666; margin: 3px 0 0 0;">Ctrl+clic pour sélection multiple</p>
+                </div>
+              </div>
+              <div id="filteredCountDisplay" style="margin-top: 15px; padding: 10px; background: #fff; border-radius: 4px; text-align: center;">
+                <span style="font-size: 14px; color: #1565c0;">🎯 <strong id="filteredCount">0</strong> joueur(s) correspondant(s)</span>
+              </div>
             </div>
             <!-- Player search (hidden by default) -->
             <div id="playerSearchSection" style="display: none; margin-top: 15px;">
@@ -6557,6 +6604,7 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
     document.querySelectorAll('input[name="announcementRecipient"]').forEach(radio => {
       radio.addEventListener('change', (e) => {
         const playerSearch = document.getElementById('playerSearchSection');
+        const filterSection = document.getElementById('filterSection');
         const options = document.querySelectorAll('.recipient-option');
 
         options.forEach(opt => {
@@ -6566,14 +6614,78 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
         e.target.closest('.recipient-option').style.borderColor = '#1F4788';
         e.target.closest('.recipient-option').classList.add('selected');
 
-        if (e.target.value === 'one') {
-          playerSearch.style.display = 'block';
-        } else {
-          playerSearch.style.display = 'none';
+        // Show/hide appropriate sections
+        playerSearch.style.display = e.target.value === 'one' ? 'block' : 'none';
+        filterSection.style.display = e.target.value === 'filter' ? 'block' : 'none';
+
+        if (e.target.value !== 'one') {
           clearSelectedPlayer();
+        }
+        if (e.target.value === 'filter') {
+          loadFilterClubs();
+          updateFilteredCount();
         }
       });
     });
+
+    // Load clubs for filter dropdown
+    async function loadFilterClubs() {
+      const clubsSelect = document.getElementById('filterClubs');
+      if (clubsSelect.options.length > 0) return; // Already loaded
+
+      try {
+        const response = await fetch(`${API_URL}/clubs`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          const clubs = await response.json();
+          clubsSelect.innerHTML = clubs.map(c =>
+            `<option value="${escapeHtmlAnn(c.display_name || c.name)}">${escapeHtmlAnn(c.display_name || c.name)}</option>`
+          ).join('');
+        }
+      } catch (err) {
+        console.error('Error loading clubs:', err);
+      }
+    }
+
+    // Update filtered audience count
+    async function updateFilteredCount() {
+      const modes = Array.from(document.getElementById('filterModes').selectedOptions).map(o => o.value);
+      const rankings = Array.from(document.getElementById('filterRankings').selectedOptions).map(o => o.value);
+      const clubs = Array.from(document.getElementById('filterClubs').selectedOptions).map(o => o.value);
+
+      // If no filters selected, show total count
+      if (modes.length === 0 && rankings.length === 0 && clubs.length === 0) {
+        document.getElementById('filteredCount').textContent = document.getElementById('audienceCount')?.textContent || '0';
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API_URL}/announcements/filtered-audience-count`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            target_modes: modes.length > 0 ? modes : null,
+            target_rankings: rankings.length > 0 ? rankings : null,
+            target_clubs: clubs.length > 0 ? clubs : null
+          })
+        });
+        if (response.ok) {
+          const data = await response.json();
+          document.getElementById('filteredCount').textContent = data.count;
+        }
+      } catch (err) {
+        console.error('Error fetching filtered count:', err);
+      }
+    }
+
+    // Update count when filter selections change
+    document.getElementById('filterModes')?.addEventListener('change', updateFilteredCount);
+    document.getElementById('filterRankings')?.addEventListener('change', updateFilteredCount);
+    document.getElementById('filterClubs')?.addEventListener('change', updateFilteredCount);
 
     // Player search autocomplete
     let searchTimeout;
@@ -6669,13 +6781,44 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
         return;
       }
 
+      // Get filter values if filter mode is selected
+      let target_modes = null;
+      let target_rankings = null;
+      let target_clubs = null;
+
+      if (recipientType === 'filter') {
+        const modesSelect = document.getElementById('filterModes');
+        const rankingsSelect = document.getElementById('filterRankings');
+        const clubsSelect = document.getElementById('filterClubs');
+
+        target_modes = Array.from(modesSelect.selectedOptions).map(opt => opt.value);
+        target_rankings = Array.from(rankingsSelect.selectedOptions).map(opt => opt.value);
+        target_clubs = Array.from(clubsSelect.selectedOptions).map(opt => opt.value);
+
+        // Validate at least one filter is selected
+        if (target_modes.length === 0 && target_rankings.length === 0 && target_clubs.length === 0) {
+          showError('Veuillez sélectionner au moins un critère de filtre (mode, classement ou club)');
+          return;
+        }
+
+        // Check filtered count is > 0
+        const filteredCount = parseInt(document.getElementById('filteredCount').textContent) || 0;
+        if (filteredCount === 0) {
+          showError('Aucun joueur ne correspond aux critères sélectionnés');
+          return;
+        }
+      }
+
       const data = {
         title: document.getElementById('announcementTitle').value,
         message: document.getElementById('announcementMessage').value,
         type: document.getElementById('announcementType').value,
         expires_at: document.getElementById('announcementExpiry').value || null,
         test_licence: isTestMode ? testLicence : null,
-        target_licence: recipientType === 'one' ? targetLicence : null
+        target_licence: recipientType === 'one' ? targetLicence : null,
+        target_modes: recipientType === 'filter' && target_modes.length > 0 ? target_modes : null,
+        target_rankings: recipientType === 'filter' && target_rankings.length > 0 ? target_rankings : null,
+        target_clubs: recipientType === 'filter' && target_clubs.length > 0 ? target_clubs : null
       };
 
       try {
@@ -6700,6 +6843,9 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
         } else if (recipientType === 'one') {
           const playerName = document.getElementById('selectedPlayerName').textContent;
           successMsg = `Message envoyé à ${playerName}`;
+        } else if (recipientType === 'filter') {
+          const filteredCount = document.getElementById('filteredCount').textContent;
+          successMsg = `Annonce publiée pour ${filteredCount} joueur(s) correspondant aux critères !`;
         }
         showSuccess(successMsg);
 
@@ -6707,7 +6853,13 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
         e.target.reset();
         document.getElementById('announcementTestFields').style.display = 'none';
         document.getElementById('playerSearchSection').style.display = 'none';
+        document.getElementById('filterSection').style.display = 'none';
         clearSelectedPlayer();
+        // Reset filter selections
+        document.getElementById('filterModes').selectedIndex = -1;
+        document.getElementById('filterRankings').selectedIndex = -1;
+        document.getElementById('filterClubs').selectedIndex = -1;
+        document.getElementById('filteredCount').textContent = '0';
         // Reset recipient selection UI
         document.querySelectorAll('.recipient-option').forEach((opt, i) => {
           opt.style.borderColor = i === 0 ? '#1F4788' : '#ddd';
