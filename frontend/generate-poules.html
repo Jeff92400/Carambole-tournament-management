@@ -1912,8 +1912,7 @@
             if (isFinaleCompetition) {
               newPlayers = [];
 
-              // Mark finalists who have inscribed AND auto-select ALL finalists
-              // (convocation is sent to all qualified, regardless of inscription status)
+              // Mark finalists who have inscribed AND auto-select only INSCRIBED finalists
               rankedPlayers.forEach(p => {
                 const inscription = inscriptions.find(i =>
                   i.licence?.replace(/\s/g, '') === p.licence?.replace(/\s/g, '')
@@ -1923,11 +1922,10 @@
                   p.forfait = inscription.forfait === 1;
                   p.desinscrit = inscription.statut === 'désinscrit';
                   p.inscription_id = inscription.inscription_id;
-                }
-                // Auto-select ALL finalists (not forfait and not désinscrit)
-                // They need to receive convocation whether inscribed or not
-                if (!p.forfait && !p.desinscrit) {
-                  p.selected = true;
+                  // Auto-select only INSCRIBED finalists (not forfait and not désinscrit)
+                  if (!p.forfait && !p.desinscrit) {
+                    p.selected = true;
+                  }
                 }
               });
             } else {
