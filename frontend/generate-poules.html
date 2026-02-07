@@ -2481,12 +2481,19 @@
         });
 
         if (!defaultResponse.ok) {
-          document.getElementById('gameParamsSection').style.display = 'none';
-          currentGameParams = null;
-          return;
+          // No defaults found - show section with empty values for manual entry
+          console.log('No default game parameters found for', mode, level);
+          currentGameParams = {
+            distance_normale: '',
+            distance_reduite: '',
+            reprises: '',
+            coin: '',
+            moyenne_mini: 0,
+            moyenne_maxi: 0
+          };
+        } else {
+          currentGameParams = await defaultResponse.json();
         }
-
-        currentGameParams = await defaultResponse.json();
 
         // Check for existing override if we have a tournament ID
         let hasOverride = false;
@@ -2514,12 +2521,13 @@
           }
         }
 
-        // If no override, use defaults (auto-validated since defaults are valid)
+        // If no override, use defaults (auto-validated if defaults exist)
         if (!hasOverride) {
-          document.getElementById('distanceInput').value = currentGameParams.distance_normale;
-          document.getElementById('distanceTypeSelect').value = 'normale';
-          document.getElementById('reprisesInput').value = currentGameParams.reprises;
-          isValidated = true; // Defaults are auto-validated - no click needed
+          document.getElementById('distanceInput').value = currentGameParams.distance_normale || '';
+          document.getElementById('distanceTypeSelect').value = currentGameParams.distance_normale ? 'normale' : 'custom';
+          document.getElementById('reprisesInput').value = currentGameParams.reprises || '';
+          // Only auto-validate if defaults actually exist
+          isValidated = !!(currentGameParams.distance_normale && currentGameParams.reprises);
         }
 
         // Update distance type dropdown handler
@@ -2542,11 +2550,19 @@
           updateValidationStatus(false);
         };
 
-        // Show default hints
-        document.getElementById('distanceDefaultHint').textContent =
-          `Par defaut: ${currentGameParams.distance_normale} (normale)${currentGameParams.distance_reduite ? ' / ' + currentGameParams.distance_reduite + ' (reduite)' : ''}`;
-        document.getElementById('reprisesDefaultHint').textContent =
-          `Par defaut: ${currentGameParams.reprises}`;
+        // Show default hints (only if defaults exist)
+        if (currentGameParams.distance_normale) {
+          document.getElementById('distanceDefaultHint').textContent =
+            `Par defaut: ${currentGameParams.distance_normale} (normale)${currentGameParams.distance_reduite ? ' / ' + currentGameParams.distance_reduite + ' (reduite)' : ''}`;
+        } else {
+          document.getElementById('distanceDefaultHint').textContent = 'Aucune valeur par defaut - saisie manuelle requise';
+        }
+        if (currentGameParams.reprises) {
+          document.getElementById('reprisesDefaultHint').textContent =
+            `Par defaut: ${currentGameParams.reprises}`;
+        } else {
+          document.getElementById('reprisesDefaultHint').textContent = 'Aucune valeur par defaut - saisie manuelle requise';
+        }
 
         // Update coin display (read-only)
         const coinSpan = document.getElementById('gameParamCoin');
@@ -2564,9 +2580,13 @@
           coinSpan.style.color = '#fff';
         }
 
-        // Update moyenne info
-        document.getElementById('gameParamMoyenne').textContent =
-          `La moyenne qualificative pour cette categorie est entre ${parseFloat(currentGameParams.moyenne_mini).toFixed(3)} et ${parseFloat(currentGameParams.moyenne_maxi).toFixed(3)}`;
+        // Update moyenne info (only if values exist)
+        if (currentGameParams.moyenne_mini && currentGameParams.moyenne_maxi) {
+          document.getElementById('gameParamMoyenne').textContent =
+            `La moyenne qualificative pour cette categorie est entre ${parseFloat(currentGameParams.moyenne_mini).toFixed(3)} et ${parseFloat(currentGameParams.moyenne_maxi).toFixed(3)}`;
+        } else {
+          document.getElementById('gameParamMoyenne').textContent = '';
+        }
 
         // Update validation status
         updateValidationStatus(isValidated);
