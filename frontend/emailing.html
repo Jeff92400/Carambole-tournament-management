@@ -512,25 +512,25 @@
               </div>
               <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
                 <div>
-                  <label style="font-size: 12px; color: #333; font-weight: bold;">Mode de jeu :</label>
+                  <label style="font-size: 12px; color: #333; font-weight: bold;">Mode de jeu : <span id="modeStatus" style="font-weight: normal; color: #888;">(tous)</span></label>
                   <select id="filterModes" multiple style="width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #ddd; border-radius: 4px; min-height: 80px;">
                     <!-- Loaded dynamically from game_modes table -->
                   </select>
-                  <p style="font-size: 10px; color: #666; margin: 3px 0 0 0;">Ctrl+clic pour sélection multiple</p>
+                  <p style="font-size: 10px; color: #888; margin: 3px 0 0 0;">Aucune sélection = tous les modes</p>
                 </div>
                 <div>
-                  <label style="font-size: 12px; color: #333; font-weight: bold;">Classement FFB :</label>
+                  <label style="font-size: 12px; color: #333; font-weight: bold;">Classement FFB : <span id="rankingStatus" style="font-weight: normal; color: #888;">(tous)</span></label>
                   <select id="filterRankings" multiple style="width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #ddd; border-radius: 4px; min-height: 80px;">
                     <!-- Loaded dynamically from ffb_rankings table -->
                   </select>
-                  <p style="font-size: 10px; color: #666; margin: 3px 0 0 0;">Ctrl+clic pour sélection multiple</p>
+                  <p style="font-size: 10px; color: #888; margin: 3px 0 0 0;">Aucune sélection = tous les classements</p>
                 </div>
                 <div>
-                  <label style="font-size: 12px; color: #333; font-weight: bold;">Club :</label>
+                  <label style="font-size: 12px; color: #333; font-weight: bold;">Club : <span id="clubStatus" style="font-weight: normal; color: #888;">(tous)</span></label>
                   <select id="filterClubs" multiple style="width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #ddd; border-radius: 4px; min-height: 80px;">
                     <!-- Loaded dynamically -->
                   </select>
-                  <p style="font-size: 10px; color: #666; margin: 3px 0 0 0;">Ctrl+clic pour sélection multiple</p>
+                  <p style="font-size: 10px; color: #888; margin: 3px 0 0 0;">Aucune sélection = tous les clubs</p>
                 </div>
               </div>
               <div id="filteredCountDisplay" style="margin-top: 15px; padding: 12px; background: #fff; border-radius: 4px;">

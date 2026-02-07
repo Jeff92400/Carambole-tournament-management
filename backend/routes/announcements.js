@@ -82,8 +82,8 @@ router.post('/filtered-audience-count', authenticateToken, async (req, res) => {
         p.rank_bande IN (${rankPlaceholders}) OR
         p.rank_3bandes IN (${rankPlaceholders})
       )`);
-      // Add ranking params 4 times (once for each rank column)
-      params.push(...target_rankings, ...target_rankings, ...target_rankings, ...target_rankings);
+      // Add ranking params once (same placeholders reused in each column)
+      params.push(...target_rankings);
     }
 
     // Build club condition
