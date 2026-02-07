@@ -332,4 +332,14 @@ When adding a new template variable:
 
 ## TODO / Future Work
 
+- **CRITICAL - Mode/game_type refactoring:** Remove ALL hardcoded mode values ('LIBRE', 'BANDE', '3BANDES', 'CADRE') and replace with dynamic lookups from `game_modes` table. This is causing recurring bugs due to inconsistent values ('3 BANDES' vs '3BANDES'). Files with hardcoded modes:
+  - `backend/routes/players.js` (lines 171-174, 322-325) - CSV column mappings
+  - `backend/routes/inscriptions.js` (lines 2826-2833) - mode normalization map
+  - `backend/routes/emailing.js` (lines 4173-4176) - rank column mapping
+  - `backend/routes/player-invitations.js` (lines 214-217) - rank column mapping
+  - `backend/routes/calendar.js` (lines 534-537) - Excel parsing
+  - `backend/routes/settings.js` (lines 135-138) - ORDER BY sorting
+
+  **Solution:** Always load `game_modes` table with `rank_column` field and use it for all mode-to-rank mappings. The `game_modes.code` should be the canonical format used everywhere.
+
 - **Email address consolidation:** Replace all hardcoded `cdbhs92@gmail.com` references across email flows with the `summary_email` setting from Organization settings (`app_settings` table). Files to update include: `backend/routes/emailing.js`, `backend/routes/email.js`, `backend/routes/inscriptions.js`, `frontend/emailing.html`, `frontend/generate-poules.html`, and others. The notification email should always be loaded dynamically from the database.
