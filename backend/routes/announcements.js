@@ -27,32 +27,38 @@ router.get('/audience-count', authenticateToken, (req, res) => {
 });
 
 // Get filtered audience count based on mode/ranking/club criteria
+// Logic: (category criteria) OR (club criteria)
+// - Category = mode AND ranking (if both specified)
+// - Clubs = separate OR group
+// - If both category and clubs selected: matches category OR matches clubs
 router.post('/filtered-audience-count', authenticateToken, async (req, res) => {
   const db = getDb();
   const { target_modes, target_rankings, target_clubs } = req.body;
 
   try {
-    // Build dynamic WHERE clause
-    let conditions = [`(p.player_app_role IS NULL OR p.player_app_role != 'test')`];
+    // Base condition: exclude test accounts
+    const baseCondition = `(p.player_app_role IS NULL OR p.player_app_role != 'test')`;
     let params = [];
     let paramIndex = 1;
 
-    // Mode filter: player has ranking (not NC) in any of the target modes
     // Load mode -> rank_column mapping from game_modes table
-    if (target_modes && target_modes.length > 0) {
-      const gameModes = await new Promise((resolve, reject) => {
-        db.all('SELECT code, rank_column FROM game_modes WHERE rank_column IS NOT NULL', [], (err, rows) => {
-          if (err) reject(err);
-          else resolve(rows || []);
-        });
+    const gameModes = await new Promise((resolve, reject) => {
+      db.all('SELECT code, rank_column FROM game_modes WHERE rank_column IS NOT NULL', [], (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows || []);
       });
+    });
 
-      // Build mapping from code to rank_column
-      const modeToColumn = {};
-      for (const gm of gameModes) {
-        modeToColumn[gm.code.toUpperCase()] = gm.rank_column;
-      }
+    const modeToColumn = {};
+    for (const gm of gameModes) {
+      modeToColumn[gm.code.toUpperCase()] = gm.rank_column;
+    }
 
+    // Build category condition (mode AND ranking)
+    let categoryConditions = [];
+
+    // Mode filter: player has ranking (not NC) in any of the target modes
+    if (target_modes && target_modes.length > 0) {
       const modeConditions = target_modes.map(mode => {
         const m = mode.toUpperCase();
         const rankColumn = modeToColumn[m];
@@ -63,14 +69,14 @@ router.post('/filtered-audience-count', authenticateToken, async (req, res) => {
       }).filter(c => c !== 'FALSE');
 
       if (modeConditions.length > 0) {
-        conditions.push(`(${modeConditions.join(' OR ')})`);
+        categoryConditions.push(`(${modeConditions.join(' OR ')})`);
       }
     }
 
-    // Ranking filter: player has any of the target rankings
+    // Ranking filter: player has any of the target rankings in any mode
     if (target_rankings && target_rankings.length > 0) {
       const rankPlaceholders = target_rankings.map(() => `$${paramIndex++}`).join(', ');
-      conditions.push(`(
+      categoryConditions.push(`(
         p.rank_libre IN (${rankPlaceholders}) OR
         p.rank_cadre IN (${rankPlaceholders}) OR
         p.rank_bande IN (${rankPlaceholders}) OR
@@ -80,18 +86,39 @@ router.post('/filtered-audience-count', authenticateToken, async (req, res) => {
       params.push(...target_rankings, ...target_rankings, ...target_rankings, ...target_rankings);
     }
 
-    // Club filter
+    // Build club condition
+    let clubCondition = null;
     if (target_clubs && target_clubs.length > 0) {
       const clubConditions = target_clubs.map(() => `UPPER(p.club) LIKE UPPER($${paramIndex++})`);
-      conditions.push(`(${clubConditions.join(' OR ')})`);
+      clubCondition = `(${clubConditions.join(' OR ')})`;
       params.push(...target_clubs.map(c => `%${c}%`));
+    }
+
+    // Combine conditions with OR logic between category group and club group
+    let filterCondition;
+    const hasCategory = categoryConditions.length > 0;
+    const hasClubs = clubCondition !== null;
+
+    if (hasCategory && hasClubs) {
+      // Both: (category match) OR (club match)
+      const categoryGroup = categoryConditions.join(' AND ');
+      filterCondition = `((${categoryGroup}) OR ${clubCondition})`;
+    } else if (hasCategory) {
+      // Category only
+      filterCondition = `(${categoryConditions.join(' AND ')})`;
+    } else if (hasClubs) {
+      // Clubs only
+      filterCondition = clubCondition;
+    } else {
+      // No filters - return total count
+      filterCondition = 'TRUE';
     }
 
     const query = `
       SELECT COUNT(DISTINCT pa.licence) as count
       FROM player_accounts pa
       JOIN players p ON REPLACE(pa.licence, ' ', '') = REPLACE(p.licence, ' ', '')
-      WHERE ${conditions.join(' AND ')}
+      WHERE ${baseCondition} AND ${filterCondition}
     `;
 
     const result = await new Promise((resolve, reject) => {
@@ -193,11 +220,13 @@ router.get('/active', async (req, res) => {
       }
 
       // Filter by mode/ranking/club
+      // Logic: (category criteria) OR (club criteria)
       const hasFilters = ann.target_modes || ann.target_rankings || ann.target_clubs;
       if (hasFilters) {
         if (!playerData) return false; // No player data, can't match filters
 
-        let matchesFilter = true;
+        // Check category criteria (mode AND ranking)
+        let matchesCategory = true;
 
         // Check mode filter (using dynamic game_modes mapping)
         if (ann.target_modes) {
@@ -209,28 +238,44 @@ router.get('/active', async (req, res) => {
             const playerRank = playerData[rankColumn];
             return playerRank && playerRank !== 'NC';
           });
-          matchesFilter = matchesFilter && playerHasMode;
+          matchesCategory = matchesCategory && playerHasMode;
         }
 
         // Check ranking filter (check all rank columns dynamically)
-        if (ann.target_rankings && matchesFilter) {
+        if (ann.target_rankings) {
           const rankings = JSON.parse(ann.target_rankings);
           // Get all player rankings from all mode columns
           const playerRankings = Object.values(modeToColumn)
             .map(col => playerData[col])
             .filter(r => r && r !== 'NC');
-          matchesFilter = matchesFilter && rankings.some(r => playerRankings.includes(r));
+          matchesCategory = matchesCategory && rankings.some(r => playerRankings.includes(r));
         }
 
-        // Check club filter
-        if (ann.target_clubs && matchesFilter) {
+        // Check club filter separately
+        let matchesClub = false;
+        if (ann.target_clubs) {
           const clubs = JSON.parse(ann.target_clubs);
-          matchesFilter = matchesFilter && clubs.some(c =>
+          matchesClub = clubs.some(c =>
             playerData.club && playerData.club.toUpperCase().includes(c.toUpperCase())
           );
         }
 
-        return matchesFilter;
+        // Determine match based on which filters are present
+        const hasCategoryFilter = ann.target_modes || ann.target_rankings;
+        const hasClubFilter = ann.target_clubs;
+
+        if (hasCategoryFilter && hasClubFilter) {
+          // Both: match if category OR club
+          return matchesCategory || matchesClub;
+        } else if (hasCategoryFilter) {
+          // Category only
+          return matchesCategory;
+        } else if (hasClubFilter) {
+          // Club only
+          return matchesClub;
+        }
+
+        return false;
       }
 
       // No targeting - show to everyone
