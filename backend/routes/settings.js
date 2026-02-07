@@ -174,12 +174,12 @@ router.get('/game-parameters/:mode/:categorie', authenticateToken, (req, res) =>
   const db = getDb();
   const { mode, categorie } = req.params;
 
-  // Normalize: uppercase and preserve spaces as stored in DB
-  const normalizedMode = decodeURIComponent(mode).toUpperCase();
+  // Normalize: uppercase and remove spaces (DB stores '3BANDES' not '3 BANDES')
+  const normalizedMode = decodeURIComponent(mode).toUpperCase().replace(/\s+/g, '');
   const normalizedCategorie = decodeURIComponent(categorie).toUpperCase();
 
   db.get(
-    'SELECT * FROM game_parameters WHERE UPPER(mode) = $1 AND UPPER(categorie) = $2',
+    'SELECT * FROM game_parameters WHERE UPPER(REPLACE(mode, \' \', \'\')) = $1 AND UPPER(categorie) = $2',
     [normalizedMode, normalizedCategorie],
     (err, row) => {
       if (err) {
