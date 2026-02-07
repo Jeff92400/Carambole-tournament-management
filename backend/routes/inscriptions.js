@@ -1367,7 +1367,7 @@ router.post('/generate-poules', authenticateToken, async (req, res) => {
     if (!finalGameParams) {
       try {
         const gameParamsResult = await db.query(
-          'SELECT * FROM game_parameters WHERE UPPER(mode) = UPPER($1) AND UPPER(categorie) = UPPER($2)',
+          'SELECT * FROM game_parameters WHERE UPPER(REPLACE(mode, \' \', \'\')) = UPPER(REPLACE($1, \' \', \'\')) AND UPPER(categorie) = UPPER($2)',
           [category.mode, category.categorie]
         );
         if (gameParamsResult.rows.length > 0) {

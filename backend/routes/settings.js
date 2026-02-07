@@ -301,10 +301,10 @@ router.get('/tournament-overrides/:tournoiId', authenticateToken, async (req, re
       return res.status(404).json({ error: 'Tournoi non trouve' });
     }
 
-    // Get default game parameters for this mode/categorie
+    // Get default game parameters for this mode/categorie (normalize spaces)
     const defaults = await new Promise((resolve, reject) => {
       db.get(
-        'SELECT * FROM game_parameters WHERE UPPER(mode) = UPPER($1) AND UPPER(categorie) = UPPER($2)',
+        'SELECT * FROM game_parameters WHERE UPPER(REPLACE(mode, \' \', \'\')) = UPPER(REPLACE($1, \' \', \'\')) AND UPPER(categorie) = UPPER($2)',
         [tournament.mode, tournament.categorie],
         (err, row) => err ? reject(err) : resolve(row)
       );
