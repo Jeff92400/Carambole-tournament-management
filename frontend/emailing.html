@@ -533,9 +533,21 @@
                   <p style="font-size: 10px; color: #666; margin: 3px 0 0 0;">Ctrl+clic pour sélection multiple</p>
                 </div>
               </div>
-              <div id="filteredCountDisplay" style="margin-top: 15px; padding: 10px; background: #fff; border-radius: 4px; text-align: center;">
-                <span style="font-size: 14px; color: #1565c0;">🎯 <strong id="filteredCount">0</strong> joueur(s) correspondant(s)</span>
+              <div id="filteredCountDisplay" style="margin-top: 15px; padding: 12px; background: #fff; border-radius: 4px;">
+                <div id="filterCriteriaSummary" style="font-size: 12px; color: #666; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid #e0e0e0; display: none;"></div>
+                <div style="text-align: center;">
+                  <span id="filteredCountLoading" style="display: none; color: #888;">
+                    <span style="display: inline-block; animation: spin 1s linear infinite;">⏳</span> Calcul en cours...
+                  </span>
+                  <span id="filteredCountResult" style="font-size: 14px; color: #1565c0;">
+                    🎯 <strong id="filteredCount">0</strong> joueur(s) correspondant(s)
+                    <span id="filteredCountTotal" style="color: #666; font-weight: normal;"></span>
+                  </span>
+                </div>
               </div>
+              <style>
+                @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+              </style>
             </div>
             <!-- Player search (hidden by default) -->
             <div id="playerSearchSection" style="display: none; margin-top: 15px;">
@@ -6684,15 +6696,53 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
 
     // Update filtered audience count
     async function updateFilteredCount() {
-      const modes = Array.from(document.getElementById('filterModes').selectedOptions).map(o => o.value);
-      const rankings = Array.from(document.getElementById('filterRankings').selectedOptions).map(o => o.value);
-      const clubs = Array.from(document.getElementById('filterClubs').selectedOptions).map(o => o.value);
+      const modesSelect = document.getElementById('filterModes');
+      const rankingsSelect = document.getElementById('filterRankings');
+      const clubsSelect = document.getElementById('filterClubs');
+
+      const modes = Array.from(modesSelect.selectedOptions).map(o => o.value);
+      const rankings = Array.from(rankingsSelect.selectedOptions).map(o => o.value);
+      const clubs = Array.from(clubsSelect.selectedOptions).map(o => o.value);
+
+      const totalCount = parseInt(document.getElementById('audienceCount')?.textContent) || 0;
+      const loadingEl = document.getElementById('filteredCountLoading');
+      const resultEl = document.getElementById('filteredCountResult');
+      const countEl = document.getElementById('filteredCount');
+      const totalEl = document.getElementById('filteredCountTotal');
+      const summaryEl = document.getElementById('filterCriteriaSummary');
+
+      // Build criteria summary
+      const criteriaParts = [];
+      if (modes.length > 0) {
+        const modeLabels = Array.from(modesSelect.selectedOptions).map(o => o.text);
+        criteriaParts.push(`<b>Mode:</b> ${modeLabels.join(', ')}`);
+      }
+      if (rankings.length > 0) {
+        criteriaParts.push(`<b>Classement:</b> ${rankings.join(', ')}`);
+      }
+      if (clubs.length > 0) {
+        const clubLabels = Array.from(clubsSelect.selectedOptions).map(o => o.text);
+        criteriaParts.push(`<b>Club:</b> ${clubLabels.join(', ')}`);
+      }
+
+      // Show/hide criteria summary
+      if (criteriaParts.length > 0) {
+        summaryEl.innerHTML = '📋 Critères sélectionnés : ' + criteriaParts.join(' • ');
+        summaryEl.style.display = 'block';
+      } else {
+        summaryEl.style.display = 'none';
+      }
 
       // If no filters selected, show total count
       if (modes.length === 0 && rankings.length === 0 && clubs.length === 0) {
-        document.getElementById('filteredCount').textContent = document.getElementById('audienceCount')?.textContent || '0';
+        countEl.textContent = totalCount;
+        totalEl.textContent = '';
         return;
       }
+
+      // Show loading state
+      loadingEl.style.display = 'inline';
+      resultEl.style.display = 'none';
 
       try {
         const response = await fetch(`${API_URL}/announcements/filtered-audience-count`, {
@@ -6709,10 +6759,25 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
         });
         if (response.ok) {
           const data = await response.json();
-          document.getElementById('filteredCount').textContent = data.count;
+          countEl.textContent = data.count;
+          totalEl.textContent = ` sur ${totalCount} joueurs`;
+
+          // Visual feedback based on count
+          if (data.count === 0) {
+            countEl.parentElement.style.color = '#e53935'; // Red for no matches
+          } else if (data.count < totalCount) {
+            countEl.parentElement.style.color = '#1565c0'; // Blue for filtered
+          } else {
+            countEl.parentElement.style.color = '#2e7d32'; // Green for all
+          }
         }
       } catch (err) {
         console.error('Error fetching filtered count:', err);
+        countEl.textContent = '?';
+        totalEl.textContent = '';
+      } finally {
+        loadingEl.style.display = 'none';
+        resultEl.style.display = 'inline';
       }
     }
 
