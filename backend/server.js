@@ -534,6 +534,71 @@ app.get('/api/seed-demo-full', async (req, res) => {
   }
 });
 
+// Audit: Check tournament modes against game_modes table
+app.get('/api/audit-modes', async (req, res) => {
+  const dbAll = (sql, params = []) => new Promise((resolve, reject) => {
+    db.all(sql, params, (err, rows) => {
+      if (err) reject(err);
+      else resolve(rows || []);
+    });
+  });
+
+  try {
+    // Get all valid modes from game_modes table
+    const gameModes = await dbAll(`SELECT code, display_name FROM game_modes ORDER BY display_order`);
+    const validModes = gameModes.map(m => m.display_name.toUpperCase());
+    const validModesNormalized = gameModes.map(m => m.display_name.toUpperCase().replace(/\s+/g, ''));
+
+    // Get all distinct modes from tournoi_ext
+    const tournoiModes = await dbAll(`SELECT DISTINCT mode, COUNT(*) as count FROM tournoi_ext GROUP BY mode ORDER BY mode`);
+
+    // Check each tournament mode against valid modes
+    const issues = [];
+    const valid = [];
+
+    for (const tm of tournoiModes) {
+      const modeUpper = (tm.mode || '').toUpperCase();
+      const modeNormalized = modeUpper.replace(/\s+/g, '');
+
+      if (validModes.includes(modeUpper) || validModesNormalized.includes(modeNormalized)) {
+        valid.push({ mode: tm.mode, count: tm.count });
+      } else {
+        issues.push({ mode: tm.mode, count: tm.count, suggestion: 'Unknown mode - not in game_modes table' });
+      }
+    }
+
+    // Also check categories.game_type
+    const categoryModes = await dbAll(`SELECT DISTINCT game_type, COUNT(*) as count FROM categories GROUP BY game_type ORDER BY game_type`);
+    const categoryIssues = [];
+
+    for (const cm of categoryModes) {
+      const modeUpper = (cm.game_type || '').toUpperCase();
+      const modeNormalized = modeUpper.replace(/\s+/g, '');
+
+      if (!validModes.includes(modeUpper) && !validModesNormalized.includes(modeNormalized)) {
+        categoryIssues.push({ game_type: cm.game_type, count: cm.count });
+      }
+    }
+
+    res.json({
+      game_modes: gameModes.map(m => m.display_name),
+      tournoi_ext: {
+        valid,
+        issues,
+        total: tournoiModes.reduce((sum, t) => sum + t.count, 0)
+      },
+      categories: {
+        issues: categoryIssues,
+        total: categoryModes.reduce((sum, c) => sum + c.count, 0)
+      },
+      status: issues.length === 0 && categoryIssues.length === 0 ? 'OK' : 'ISSUES_FOUND'
+    });
+  } catch (error) {
+    console.error('Audit modes error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // TEMPORARY: Normalize game modes across all tables
 app.get('/api/normalize-modes', async (req, res) => {
   const secret = req.query.secret;
