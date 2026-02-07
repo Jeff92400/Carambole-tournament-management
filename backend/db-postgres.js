@@ -1055,8 +1055,8 @@ async function initializeDatabase() {
     // Update existing game_modes with their rank_column values
     await client.query(`UPDATE game_modes SET rank_column = 'rank_libre' WHERE UPPER(code) LIKE '%LIBRE%' AND rank_column IS NULL`);
     await client.query(`UPDATE game_modes SET rank_column = 'rank_cadre' WHERE UPPER(code) LIKE '%CADRE%' AND rank_column IS NULL`);
-    await client.query(`UPDATE game_modes SET rank_column = 'rank_bande' WHERE UPPER(code) = 'BANDE' OR UPPER(code) = '1BANDE' AND rank_column IS NULL`);
-    await client.query(`UPDATE game_modes SET rank_column = 'rank_3bandes' WHERE UPPER(code) LIKE '%3BANDES%' OR UPPER(code) LIKE '%3 BANDES%' AND rank_column IS NULL`);
+    await client.query(`UPDATE game_modes SET rank_column = 'rank_bande' WHERE (UPPER(code) = 'BANDE' OR UPPER(code) = '1BANDE') AND rank_column IS NULL`);
+    await client.query(`UPDATE game_modes SET rank_column = 'rank_3bandes' WHERE (UPPER(code) LIKE '%3BANDES%' OR UPPER(code) LIKE '%3 BANDES%') AND rank_column IS NULL`);
 
     // FIX: Restore BANDE tournaments by specific IDs (from IONOS export)
     // These tournament IDs were incorrectly migrated to 3 BANDES

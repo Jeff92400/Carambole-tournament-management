@@ -124,9 +124,9 @@ router.put('/game-modes/:id', authenticateToken, async (req, res) => {
     if (displayNameChanged) {
       console.log(`[game-modes PUT] Display name changed, updating categories where game_type = "${oldDisplayName}"`);
 
-      // Update categories.game_type
+      // Update categories.game_type (normalize spaces for comparison)
       const catResult = await dbRun(
-        `UPDATE categories SET game_type = $1 WHERE game_type = $2`,
+        `UPDATE categories SET game_type = $1 WHERE UPPER(REPLACE(game_type, ' ', '')) = UPPER(REPLACE($2, ' ', ''))`,
         [display_name, oldDisplayName]
       );
       categoriesUpdated = catResult.changes;
@@ -134,14 +134,14 @@ router.put('/game-modes/:id', authenticateToken, async (req, res) => {
 
       // Update categories.display_name
       await dbRun(
-        `UPDATE categories SET display_name = game_type || ' - ' || level WHERE game_type = $1`,
+        `UPDATE categories SET display_name = game_type || ' - ' || level WHERE UPPER(REPLACE(game_type, ' ', '')) = UPPER(REPLACE($1, ' ', ''))`,
         [display_name]
       );
       console.log(`[game-modes PUT] Updated categories display_name`);
 
-      // Update tournoi_ext.mode
+      // Update tournoi_ext.mode (normalize spaces for comparison)
       const tournoiResult = await dbRun(
-        `UPDATE tournoi_ext SET mode = $1 WHERE mode = $2`,
+        `UPDATE tournoi_ext SET mode = $1 WHERE UPPER(REPLACE(mode, ' ', '')) = UPPER(REPLACE($2, ' ', ''))`,
         [display_name, oldDisplayName]
       );
       tournoiUpdated = tournoiResult.changes;
