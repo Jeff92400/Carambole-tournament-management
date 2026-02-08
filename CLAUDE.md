@@ -343,3 +343,42 @@ When adding a new template variable:
   **Solution:** Always load `game_modes` table with `rank_column` field and use it for all mode-to-rank mappings. The `game_modes.code` should be the canonical format used everywhere.
 
 - **Email address consolidation:** Replace all hardcoded `cdbhs92@gmail.com` references across email flows with the `summary_email` setting from Organization settings (`app_settings` table). Files to update include: `backend/routes/emailing.js`, `backend/routes/email.js`, `backend/routes/inscriptions.js`, `frontend/emailing.html`, `frontend/generate-poules.html`, and others. The notification email should always be loaded dynamically from the database.
+
+- **EMAIL TEMPLATE VARIABLES REFACTORING (REMINDER: June 26, 2026):** Centralize all email template variables into a single source of truth. Currently variables are scattered across multiple locations causing maintenance issues and inconsistencies.
+
+  **Current problem:**
+  - `buildUniversalVariables()` in email.js defines some variables
+  - Each email endpoint adds its own specific variables
+  - Frontend HTML hardcodes variable lists in each template editor (8+ places)
+  - CLAUDE.md documents variables separately
+  - Adding a new variable requires changes in 5+ files
+
+  **Proposed solution:**
+  1. Create `backend/utils/email-variables.js` module with single source of truth:
+     ```javascript
+     const EMAIL_VARIABLES = {
+       player: [
+         { key: 'first_name', description: 'Prénom du joueur' },
+         { key: 'last_name', description: 'Nom du joueur' },
+         // ...
+       ],
+       tournament: [
+         { key: 'tournament', description: 'Numéro (T1, T2, T3, Finale)' },
+         { key: 'tournament_name', description: 'Nom complet du tournoi' },
+         // ...
+       ],
+       organization: [
+         { key: 'organization_name', description: 'Nom complet' },
+         // ...
+       ]
+     };
+     ```
+  2. Add API endpoint `GET /api/email/available-variables` to serve variable definitions
+  3. Frontend loads variables dynamically from API instead of hardcoding in HTML
+  4. All email sending functions use the centralized `replaceAllVariables()` function
+  5. Optional: Store in `email_template_variables` table for admin-editable descriptions
+
+  **Files to refactor:**
+  - `backend/routes/email.js` - buildUniversalVariables, all email endpoints
+  - `backend/routes/emailing.js` - replaceVar calls in send-results, relances, etc.
+  - `frontend/emailing.html` - 8+ template editor variable lists
