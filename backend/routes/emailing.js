@@ -3630,15 +3630,76 @@ router.put('/finale-results-template', authenticateToken, async (req, res) => {
   }
 });
 
-// Reset finale results template to defaults
+// Reset finale results template to defaults (first try custom default, then hardcoded)
 router.post('/finale-results-template/reset', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
 
   try {
+    // First, check if there's a custom default
+    const customDefault = await new Promise((resolve, reject) => {
+      db.get(
+        `SELECT * FROM email_templates WHERE template_key = 'finale_results_default'`,
+        [],
+        (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        }
+      );
+    });
+
+    if (customDefault) {
+      // Use custom default
+      const parts = (customDefault.body_template || '').split('---OUTRO---');
+      res.json({
+        success: true,
+        template: {
+          subject: customDefault.subject_template || DEFAULT_FINALE_RESULTS_TEMPLATE.subject,
+          intro: parts[0] || DEFAULT_FINALE_RESULTS_TEMPLATE.intro,
+          outro: parts[1] || DEFAULT_FINALE_RESULTS_TEMPLATE.outro
+        },
+        isCustomDefault: true
+      });
+    } else {
+      // Fall back to hardcoded default
+      res.json({ success: true, template: DEFAULT_FINALE_RESULTS_TEMPLATE });
+    }
+  } catch (error) {
+    console.error('Error resetting finale results template:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Save finale results template as default
+router.post('/finale-results-template/save-as-default', authenticateToken, async (req, res) => {
+  const db = require('../db-loader');
+
+  try {
+    // Get the current template
+    const currentTemplate = await new Promise((resolve, reject) => {
+      db.get(
+        `SELECT * FROM email_templates WHERE template_key = 'finale_results'`,
+        [],
+        (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        }
+      );
+    });
+
+    if (!currentTemplate) {
+      return res.status(404).json({ error: 'Template not found. Please save the template first.' });
+    }
+
+    // Save as default
     await new Promise((resolve, reject) => {
       db.run(
-        `DELETE FROM email_templates WHERE template_key = 'finale_results'`,
-        [],
+        `INSERT INTO email_templates (template_key, subject_template, body_template, updated_at)
+         VALUES ('finale_results_default', $1, $2, CURRENT_TIMESTAMP)
+         ON CONFLICT (template_key) DO UPDATE SET
+           subject_template = EXCLUDED.subject_template,
+           body_template = EXCLUDED.body_template,
+           updated_at = CURRENT_TIMESTAMP`,
+        [currentTemplate.subject_template, currentTemplate.body_template],
         function(err) {
           if (err) reject(err);
           else resolve();
@@ -3646,9 +3707,9 @@ router.post('/finale-results-template/reset', authenticateToken, async (req, res
       );
     });
 
-    res.json({ success: true, template: DEFAULT_FINALE_RESULTS_TEMPLATE });
+    res.json({ success: true, message: 'Template saved as default' });
   } catch (error) {
-    console.error('Error resetting finale results template:', error);
+    console.error('Error saving finale results template as default:', error);
     res.status(500).json({ error: error.message });
   }
 });

@@ -769,6 +769,82 @@ router.put('/email-template/:key', authenticateToken, requireAdmin, (req, res) =
   );
 });
 
+// Save current template as default (copies current to {key}_default)
+router.post('/email-template/:key/save-as-default', authenticateToken, requireAdmin, async (req, res) => {
+  const db = getDb();
+  const { key } = req.params;
+  const defaultKey = `${key}_default`;
+
+  try {
+    // First, get the current template
+    const currentTemplate = await new Promise((resolve, reject) => {
+      db.get(
+        'SELECT * FROM email_templates WHERE template_key = $1',
+        [key],
+        (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        }
+      );
+    });
+
+    if (!currentTemplate) {
+      return res.status(404).json({ error: 'Template not found. Please save the template first.' });
+    }
+
+    // Save as default (using the _default suffix)
+    await new Promise((resolve, reject) => {
+      db.run(
+        `INSERT INTO email_templates (template_key, subject_template, body_template, updated_at)
+         VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
+         ON CONFLICT (template_key) DO UPDATE SET
+           subject_template = EXCLUDED.subject_template,
+           body_template = EXCLUDED.body_template,
+           updated_at = CURRENT_TIMESTAMP`,
+        [defaultKey, currentTemplate.subject_template, currentTemplate.body_template],
+        function(err) {
+          if (err) reject(err);
+          else resolve();
+        }
+      );
+    });
+
+    res.json({ success: true, message: 'Template saved as default' });
+  } catch (err) {
+    console.error('Error saving template as default:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get default template (returns {key}_default if exists, otherwise null)
+router.get('/email-template/:key/default', authenticateToken, (req, res) => {
+  const db = getDb();
+  const { key } = req.params;
+  const defaultKey = `${key}_default`;
+
+  db.get(
+    'SELECT * FROM email_templates WHERE template_key = $1',
+    [defaultKey],
+    (err, row) => {
+      if (err) {
+        console.error('Error fetching default email template:', err);
+        return res.status(500).json({ error: err.message });
+      }
+      if (!row) {
+        // No custom default saved
+        return res.json({ hasCustomDefault: false });
+      }
+      res.json({
+        hasCustomDefault: true,
+        template_key: key,
+        subject_template: row.subject_template,
+        body_template: row.body_template,
+        updated_at: row.updated_at
+      });
+    }
+  );
+});
+
 // ============= CATEGORY MAPPINGS =============
 
 // Get all category mappings
