@@ -171,6 +171,31 @@
             <input type="text" id="clubPresident" placeholder="Prénom Nom">
           </div>
           <div class="form-group">
+            <label for="clubPresidentEmail">Email président :</label>
+            <input type="email" id="clubPresidentEmail" placeholder="president@club.fr">
+            <small style="color: #666;">Pour accès tableau de bord club</small>
+          </div>
+        </div>
+        <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin: 15px 0;">
+          <h4 style="margin: 0 0 10px 0; color: #1F4788;">Responsable sportif</h4>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+            <div class="form-group" style="margin-bottom: 0;">
+              <label for="clubResponsableName">Nom :</label>
+              <input type="text" id="clubResponsableName" placeholder="Prénom Nom">
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+              <label for="clubResponsableEmail">Email :</label>
+              <input type="email" id="clubResponsableEmail" placeholder="responsable@club.fr">
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+              <label for="clubResponsableLicence">N° Licence FFB :</label>
+              <input type="text" id="clubResponsableLicence" placeholder="123456">
+              <small style="color: #666;">Pour lier au profil joueur</small>
+            </div>
+          </div>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+          <div class="form-group">
             <label for="clubCalendarCode">Code calendrier :</label>
             <input type="text" id="clubCalendarCode" maxlength="2" style="width: 60px; text-transform: uppercase;" placeholder="Ex: A">
             <small style="color: #666;">Lettre pour l'import Excel</small>
@@ -240,6 +265,31 @@
             <label for="editClubPresident">Président :</label>
             <input type="text" id="editClubPresident" placeholder="Prénom Nom">
           </div>
+          <div class="form-group">
+            <label for="editClubPresidentEmail">Email président :</label>
+            <input type="email" id="editClubPresidentEmail" placeholder="president@club.fr">
+            <small style="color: #666;">Pour accès tableau de bord club</small>
+          </div>
+        </div>
+        <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin: 15px 0;">
+          <h4 style="margin: 0 0 10px 0; color: #1F4788;">Responsable sportif</h4>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+            <div class="form-group" style="margin-bottom: 0;">
+              <label for="editClubResponsableName">Nom :</label>
+              <input type="text" id="editClubResponsableName" placeholder="Prénom Nom">
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+              <label for="editClubResponsableEmail">Email :</label>
+              <input type="email" id="editClubResponsableEmail" placeholder="responsable@club.fr">
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+              <label for="editClubResponsableLicence">N° Licence FFB :</label>
+              <input type="text" id="editClubResponsableLicence" placeholder="123456">
+              <small style="color: #666;">Pour lier au profil joueur</small>
+            </div>
+          </div>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
           <div class="form-group">
             <label for="editClubCalendarCode">Code calendrier :</label>
             <input type="text" id="editClubCalendarCode" maxlength="2" style="width: 60px; text-transform: uppercase;" placeholder="Ex: A">
@@ -341,7 +391,11 @@
           : '';
 
         const presidentHtml = club.president
-          ? `<div style="font-size: 11px; color: #555; margin-bottom: 5px;">👤 Président: <strong>${club.president}</strong></div>`
+          ? `<div style="font-size: 11px; color: #555; margin-bottom: 5px;">👤 Président: <strong>${club.president}</strong>${club.president_email ? ` (${club.president_email})` : ''}</div>`
+          : '';
+
+        const responsableHtml = club.responsable_sportif_name
+          ? `<div style="font-size: 11px; color: #555; margin-bottom: 5px;">⚽ Resp. sportif: <strong>${club.responsable_sportif_name}</strong>${club.responsable_sportif_email ? ` (${club.responsable_sportif_email})` : ''}</div>`
           : '';
 
         const calendarCodeHtml = club.calendar_code
@@ -355,6 +409,7 @@
           ${addressHtml}
           ${contactHtml}
           ${presidentHtml}
+          ${responsableHtml}
           ${calendarCodeHtml}
           <div class="club-actions">
             <button class="btn-edit" onclick="openEditModal(${club.id})">✏️ Modifier</button>
@@ -427,6 +482,10 @@
       formData.append('phone', document.getElementById('clubPhone').value);
       formData.append('email', document.getElementById('clubEmail').value);
       formData.append('president', document.getElementById('clubPresident').value);
+      formData.append('president_email', document.getElementById('clubPresidentEmail').value);
+      formData.append('responsable_sportif_name', document.getElementById('clubResponsableName').value);
+      formData.append('responsable_sportif_email', document.getElementById('clubResponsableEmail').value);
+      formData.append('responsable_sportif_licence', document.getElementById('clubResponsableLicence').value);
       formData.append('calendar_code', document.getElementById('clubCalendarCode').value.toUpperCase());
 
       const logoFile = document.getElementById('clubLogo').files[0];
@@ -474,6 +533,10 @@
       document.getElementById('editClubPhone').value = club.phone || '';
       document.getElementById('editClubEmail').value = club.email || '';
       document.getElementById('editClubPresident').value = club.president || '';
+      document.getElementById('editClubPresidentEmail').value = club.president_email || '';
+      document.getElementById('editClubResponsableName').value = club.responsable_sportif_name || '';
+      document.getElementById('editClubResponsableEmail').value = club.responsable_sportif_email || '';
+      document.getElementById('editClubResponsableLicence').value = club.responsable_sportif_licence || '';
       document.getElementById('editClubCalendarCode').value = club.calendar_code || '';
       document.getElementById('editLogoPreview').style.display = 'none';
       document.getElementById('editClubLogo').value = '';
@@ -511,6 +574,10 @@
       formData.append('phone', document.getElementById('editClubPhone').value);
       formData.append('email', document.getElementById('editClubEmail').value);
       formData.append('president', document.getElementById('editClubPresident').value);
+      formData.append('president_email', document.getElementById('editClubPresidentEmail').value);
+      formData.append('responsable_sportif_name', document.getElementById('editClubResponsableName').value);
+      formData.append('responsable_sportif_email', document.getElementById('editClubResponsableEmail').value);
+      formData.append('responsable_sportif_licence', document.getElementById('editClubResponsableLicence').value);
       formData.append('calendar_code', document.getElementById('editClubCalendarCode').value.toUpperCase());
 
       const logoFile = document.getElementById('editClubLogo').files[0];

@@ -304,6 +304,13 @@ async function initializeDatabase() {
       }
     }
 
+    // Add club officials columns (migration - February 2026)
+    // President email and Responsable sportif for club dashboard access in Player App
+    await client.query(`ALTER TABLE clubs ADD COLUMN IF NOT EXISTS president_email VARCHAR(255)`);
+    await client.query(`ALTER TABLE clubs ADD COLUMN IF NOT EXISTS responsable_sportif_name VARCHAR(255)`);
+    await client.query(`ALTER TABLE clubs ADD COLUMN IF NOT EXISTS responsable_sportif_email VARCHAR(255)`);
+    await client.query(`ALTER TABLE clubs ADD COLUMN IF NOT EXISTS responsable_sportif_licence VARCHAR(50)`);
+
     // Initialize default calendar codes for existing clubs
     const defaultCalendarCodes = [
       { name_pattern: '%COURBEVOIE%', code: 'A' },
