@@ -3551,6 +3551,97 @@ router.put('/relance-templates/:key', authenticateToken, async (req, res) => {
   }
 });
 
+// Save relance template as default
+router.post('/relance-templates/:key/save-as-default', authenticateToken, async (req, res) => {
+  const db = require('../db-loader');
+  const { key } = req.params;
+
+  if (!['relance_t1', 'relance_t2', 'relance_t3', 'relance_finale'].includes(key)) {
+    return res.status(400).json({ error: 'Invalid template key' });
+  }
+
+  try {
+    // Get the current template
+    const currentTemplate = await new Promise((resolve, reject) => {
+      db.get(
+        `SELECT * FROM email_templates WHERE template_key = $1`,
+        [key],
+        (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        }
+      );
+    });
+
+    if (!currentTemplate) {
+      return res.status(404).json({ error: 'Template not found. Please save the template first.' });
+    }
+
+    // Save as default
+    const defaultKey = `${key}_default`;
+    await new Promise((resolve, reject) => {
+      db.run(
+        `INSERT INTO email_templates (template_key, subject_template, body_template, updated_at)
+         VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
+         ON CONFLICT (template_key) DO UPDATE SET
+           subject_template = EXCLUDED.subject_template,
+           body_template = EXCLUDED.body_template,
+           updated_at = CURRENT_TIMESTAMP`,
+        [defaultKey, currentTemplate.subject_template, currentTemplate.body_template],
+        function(err) {
+          if (err) reject(err);
+          else resolve();
+        }
+      );
+    });
+
+    res.json({ success: true, message: 'Template saved as default' });
+  } catch (error) {
+    console.error('Error saving relance template as default:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get relance template default
+router.get('/relance-templates/:key/default', authenticateToken, async (req, res) => {
+  const db = require('../db-loader');
+  const { key } = req.params;
+
+  if (!['relance_t1', 'relance_t2', 'relance_t3', 'relance_finale'].includes(key)) {
+    return res.status(400).json({ error: 'Invalid template key' });
+  }
+
+  try {
+    const defaultKey = `${key}_default`;
+    const customDefault = await new Promise((resolve, reject) => {
+      db.get(
+        `SELECT * FROM email_templates WHERE template_key = $1`,
+        [defaultKey],
+        (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        }
+      );
+    });
+
+    if (customDefault) {
+      // Parse the body to extract intro and outro
+      const parts = (customDefault.body_template || '').split('---OUTRO---');
+      res.json({
+        hasCustomDefault: true,
+        subject: customDefault.subject_template,
+        intro: parts[0] || '',
+        outro: parts[1] || ''
+      });
+    } else {
+      res.json({ hasCustomDefault: false });
+    }
+  } catch (error) {
+    console.error('Error fetching relance template default:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ==================== FINALE RESULTS TEMPLATE ====================
 
 // Default template for finale results email

@@ -3922,7 +3922,7 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
       if (!currentRelanceTemplateKey) return;
       if (!confirm('Sauvegarder le template actuel comme nouveau défaut ?')) return;
       try {
-        const response = await fetch(`${API_URL}/settings/email-template/relance_${currentRelanceTemplateKey}/save-as-default`, {
+        const response = await fetch(`${API_URL}/emailing/relance-templates/${currentRelanceTemplateKey}/save-as-default`, {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -3942,21 +3942,18 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
       if (!currentRelanceTemplateKey) return;
 
       try {
-        const response = await fetch(`${API_URL}/settings/email-template/relance_${currentRelanceTemplateKey}/default`, {
+        const response = await fetch(`${API_URL}/emailing/relance-templates/${currentRelanceTemplateKey}/default`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();
 
         if (data.hasCustomDefault) {
-          // Parse subject and body from custom default
-          const parts = (data.body_template || '').split('---OUTRO---');
-          const intro = parts[0] || '';
-          const outro = parts[1] || '';
-          document.getElementById('relanceTemplateSubject').value = data.subject_template || DEFAULT_RELANCE_TEMPLATES_CLIENT[currentRelanceTemplateKey].subject;
+          // Use custom default
+          document.getElementById('relanceTemplateSubject').value = data.subject || DEFAULT_RELANCE_TEMPLATES_CLIENT[currentRelanceTemplateKey].subject;
           quillRelanceTemplateIntro.setContents([]);
-          quillRelanceTemplateIntro.clipboard.dangerouslyPasteHTML(intro);
+          quillRelanceTemplateIntro.clipboard.dangerouslyPasteHTML(data.intro || '');
           quillRelanceTemplateOutro.setContents([]);
-          quillRelanceTemplateOutro.clipboard.dangerouslyPasteHTML(outro);
+          quillRelanceTemplateOutro.clipboard.dangerouslyPasteHTML(data.outro || '');
           showSuccess('Template réinitialisé (défaut personnalisé). Cliquez sur Enregistrer pour sauvegarder.');
         } else {
           const defaultTemplate = DEFAULT_RELANCE_TEMPLATES_CLIENT[currentRelanceTemplateKey];
