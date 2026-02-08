@@ -42,8 +42,16 @@
         </div>
       </div>
 
-      <div style="margin-bottom: 20px; display: flex; gap: 10px; flex-wrap: wrap;">
-        <input type="text" id="searchInput" placeholder="🔍 Rechercher par catégorie..." style="flex: 1; min-width: 250px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+      <div style="margin-bottom: 20px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+        <input type="text" id="searchInput" placeholder="🔍 Rechercher par catégorie..." style="flex: 1; min-width: 200px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+
+        <select id="gameModeFilter" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+          <option value="">Tous les modes</option>
+        </select>
+
+        <select id="rankingFilter" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+          <option value="">Tous les classements</option>
+        </select>
 
         <select id="seasonFilter" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
           <option value="">Toutes les saisons</option>
@@ -56,7 +64,9 @@
           <option value="3">Tournoi 3</option>
           <option value="4">Finale</option>
         </select>
+      </div>
 
+      <div style="margin-bottom: 15px;">
         <button class="btn" onclick="resetFilters()">Réinitialiser</button>
       </div>
 
@@ -119,6 +129,45 @@
 
     let allTournaments = [];
     let currentSort = { column: 'tournament_date', direction: 'desc' };
+    let gameModes = [];
+    let ffbRankings = [];
+
+    // Load reference data (game modes and FFB rankings)
+    async function loadReferenceData() {
+      try {
+        // Load game modes
+        const modesResponse = await fetch(`${API_URL}/reference-data/game-modes`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (modesResponse.ok) {
+          gameModes = await modesResponse.json();
+          const modeSelect = document.getElementById('gameModeFilter');
+          gameModes.forEach(mode => {
+            const option = document.createElement('option');
+            option.value = mode.display_name;
+            option.textContent = mode.display_name;
+            modeSelect.appendChild(option);
+          });
+        }
+
+        // Load FFB rankings
+        const rankingsResponse = await fetch(`${API_URL}/reference-data/ffb-rankings`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (rankingsResponse.ok) {
+          ffbRankings = await rankingsResponse.json();
+          const rankingSelect = document.getElementById('rankingFilter');
+          ffbRankings.forEach(ranking => {
+            const option = document.createElement('option');
+            option.value = ranking.code;
+            option.textContent = ranking.code;
+            rankingSelect.appendChild(option);
+          });
+        }
+      } catch (error) {
+        console.error('Error loading reference data:', error);
+      }
+    }
 
     // Load all tournaments
     async function loadTournaments() {
@@ -155,9 +204,30 @@
       }
     }
 
+    // Extract mode from display_name (e.g., "Libre - R2" -> "Libre", "Cadre 42/2 - N3" -> "Cadre 42/2")
+    function extractModeFromDisplayName(displayName) {
+      const parts = displayName.split(' - ');
+      if (parts.length >= 2) {
+        // Everything except the last part is the mode
+        return parts.slice(0, -1).join(' - ');
+      }
+      return displayName;
+    }
+
+    // Extract ranking from display_name (e.g., "Libre - R2" -> "R2", "Cadre 42/2 - N3" -> "N3")
+    function extractRankingFromDisplayName(displayName) {
+      const parts = displayName.split(' - ');
+      if (parts.length >= 2) {
+        return parts[parts.length - 1];
+      }
+      return '';
+    }
+
     // Filter tournaments
     function filterTournaments() {
       const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+      const gameModeFilter = document.getElementById('gameModeFilter').value;
+      const rankingFilter = document.getElementById('rankingFilter').value;
       const seasonFilter = document.getElementById('seasonFilter').value;
       const tournamentNumberFilter = document.getElementById('tournamentNumberFilter').value;
 
@@ -166,7 +236,15 @@
         const matchesSeason = !seasonFilter || tournament.season === seasonFilter;
         const matchesTournamentNumber = !tournamentNumberFilter || tournament.tournament_number.toString() === tournamentNumberFilter;
 
-        return matchesSearch && matchesSeason && matchesTournamentNumber;
+        // Mode filter: check if display_name starts with the selected mode
+        const tournamentMode = extractModeFromDisplayName(tournament.display_name);
+        const matchesMode = !gameModeFilter || tournamentMode.toLowerCase().includes(gameModeFilter.toLowerCase());
+
+        // Ranking filter: check if display_name ends with the selected ranking
+        const tournamentRanking = extractRankingFromDisplayName(tournament.display_name);
+        const matchesRanking = !rankingFilter || tournamentRanking === rankingFilter;
+
+        return matchesSearch && matchesSeason && matchesTournamentNumber && matchesMode && matchesRanking;
       });
     }
 
@@ -368,6 +446,8 @@
     // Reset filters
     function resetFilters() {
       document.getElementById('searchInput').value = '';
+      document.getElementById('gameModeFilter').value = '';
+      document.getElementById('rankingFilter').value = '';
       document.getElementById('seasonFilter').value = '';
       document.getElementById('tournamentNumberFilter').value = '';
       renderTournaments();
@@ -375,6 +455,8 @@
 
     // Setup event listeners
     document.getElementById('searchInput').addEventListener('input', renderTournaments);
+    document.getElementById('gameModeFilter').addEventListener('change', renderTournaments);
+    document.getElementById('rankingFilter').addEventListener('change', renderTournaments);
     document.getElementById('seasonFilter').addEventListener('change', renderTournaments);
     document.getElementById('tournamentNumberFilter').addEventListener('change', renderTournaments);
 
@@ -489,6 +571,7 @@
     });
 
     // Initialize
+    loadReferenceData();
     loadTournaments();
   </script>
 
