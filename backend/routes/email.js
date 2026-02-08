@@ -76,6 +76,14 @@ function buildUniversalVariables(data = {}, emailSettings = {}, contactEmail = '
     last_name = nameParts.slice(1).join(' ') || '';
   }
 
+  // Tournament number label (T1, T2, T3, or Finale)
+  let tournamentLabel = '';
+  if (data.tournament_number) {
+    tournamentLabel = data.tournament_number === 4 || data.tournament_number === '4'
+      ? 'Finale'
+      : `T${data.tournament_number}`;
+  }
+
   return {
     // Player variables
     player_name: data.player_name || `${first_name} ${last_name}`.trim() || '',
@@ -86,8 +94,8 @@ function buildUniversalVariables(data = {}, emailSettings = {}, contactEmail = '
     club: data.club || '',
 
     // Tournament variables
-    tournament_name: data.tournament_name || data.tournament || '',
-    tournament: data.tournament || data.tournament_name || '',
+    tournament_name: data.tournament_name || '',
+    tournament: tournamentLabel || '',
     mode: data.mode || '',
     category: data.category || '',
     tournament_date: data.tournament_date || data.date || '',
@@ -2506,7 +2514,7 @@ Sportivement,
 
 // Send inscription confirmation email (called by Player App)
 router.post('/inscription-confirmation', async (req, res) => {
-  const { player_email, player_name, tournament_name, mode, category, tournament_date, location, api_key } = req.body;
+  const { player_email, player_name, tournament_name, tournament_number, mode, category, tournament_date, location, api_key } = req.body;
 
   // Verify API key (shared secret between apps)
   if (api_key !== process.env.PLAYER_APP_API_KEY) {
@@ -2562,6 +2570,7 @@ router.post('/inscription-confirmation', async (req, res) => {
       player_name,
       player_email,
       tournament_name,
+      tournament_number,
       mode,
       category,
       tournament_date: dateStr,
@@ -2632,7 +2641,7 @@ router.post('/inscription-confirmation', async (req, res) => {
 
 // Send inscription cancellation email (called by Player App)
 router.post('/inscription-cancellation', async (req, res) => {
-  const { player_email, player_name, tournament_name, mode, category, tournament_date, location, api_key } = req.body;
+  const { player_email, player_name, tournament_name, tournament_number, mode, category, tournament_date, location, api_key } = req.body;
 
   // Verify API key (shared secret between apps)
   if (api_key !== process.env.PLAYER_APP_API_KEY) {
@@ -2688,6 +2697,7 @@ router.post('/inscription-cancellation', async (req, res) => {
       player_name,
       player_email,
       tournament_name,
+      tournament_number,
       mode,
       category,
       tournament_date: dateStr,
