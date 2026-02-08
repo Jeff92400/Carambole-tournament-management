@@ -2500,9 +2500,13 @@ router.post('/send-results', authenticateToken, async (req, res) => {
         }
 
         // Replace template variables (handles both plain and HTML-encoded from Quill)
+        // Tournament label: T1, T2, T3 or "Finale" for tournament_number = 4
+        const tournamentNumberLabel = tournament.tournament_number === 4 ? 'Finale' : `T${tournament.tournament_number}`;
+
         let personalizedIntro = introText;
         personalizedIntro = replaceVar(personalizedIntro, 'first_name', participant.first_name || participant.player_name.split(' ')[0] || '');
         personalizedIntro = replaceVar(personalizedIntro, 'last_name', participant.last_name || '');
+        personalizedIntro = replaceVar(personalizedIntro, 'tournament', tournamentNumberLabel);
         personalizedIntro = replaceVar(personalizedIntro, 'tournament_name', tournament.display_name);
         personalizedIntro = replaceVar(personalizedIntro, 'tournament_date', tournamentDate);
         personalizedIntro = replaceVar(personalizedIntro, 'tournament_lieu', tournament.location || '');
@@ -2516,6 +2520,7 @@ router.post('/send-results', authenticateToken, async (req, res) => {
         let personalizedOutro = outroText;
         personalizedOutro = replaceVar(personalizedOutro, 'first_name', participant.first_name || '');
         personalizedOutro = replaceVar(personalizedOutro, 'last_name', participant.last_name || '');
+        personalizedOutro = replaceVar(personalizedOutro, 'tournament', tournamentNumberLabel);
         personalizedOutro = replaceVar(personalizedOutro, 'organization_name', organizationName);
         personalizedOutro = replaceVar(personalizedOutro, 'organization_short_name', organizationShortName);
         personalizedOutro = replaceVar(personalizedOutro, 'organization_email', organizationEmail);
