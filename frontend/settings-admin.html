@@ -685,9 +685,8 @@
       <div style="display: flex; gap: 20px; align-items: flex-end; flex-wrap: wrap;">
         <div style="flex: 1; min-width: 200px; max-width: 300px;">
           <label style="display: block; margin-bottom: 8px; font-weight: 500;">Saison :</label>
-          <input type="text" id="snapshotSeason" placeholder="ex: 2025-2026" autocomplete="off"
-                 style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
-          <small style="color: #666;">Laissez vide pour la saison en cours</small>
+          <select id="snapshotSeason" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+          </select>
         </div>
         <button onclick="takeSeasonSnapshot()" class="btn" style="background: #17a2b8; padding: 12px 25px;">
           📊 Clôturer les statistiques
@@ -2851,8 +2850,28 @@
 
     // ============= SEASON STATS SNAPSHOT =============
 
+    // Populate season selector with current + 2 previous seasons
+    (function populateSnapshotSeasons() {
+      const now = new Date();
+      const month = now.getMonth() + 1;
+      const year = now.getFullYear();
+      // Use September as default start (matches most configs)
+      const startMonth = parseInt(document.getElementById('seasonCutoffMonth')?.value || '8') + 1;
+      const currentStartYear = month >= startMonth ? year : year - 1;
+      const select = document.getElementById('snapshotSeason');
+      for (let i = 0; i < 3; i++) {
+        const sy = currentStartYear - i;
+        const label = `${sy}-${sy + 1}`;
+        const opt = document.createElement('option');
+        opt.value = label;
+        opt.textContent = label;
+        if (i === 0) opt.selected = true;
+        select.appendChild(opt);
+      }
+    })();
+
     async function takeSeasonSnapshot() {
-      const season = document.getElementById('snapshotSeason').value.trim();
+      const season = document.getElementById('snapshotSeason').value;
       const msgEl = document.getElementById('snapshotMessage');
 
       if (!confirm(`Voulez-vous clôturer les statistiques clubs${season ? ' pour ' + season : ' pour la saison en cours'} ?`)) {
