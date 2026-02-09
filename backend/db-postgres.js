@@ -343,6 +343,25 @@ async function initializeDatabase() {
     // Add email column to club_aliases for club reminder emails
     await client.query(`ALTER TABLE club_aliases ADD COLUMN IF NOT EXISTS email TEXT`);
 
+    // Club season stats snapshot table - stores end-of-season dashboard stats per club
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS club_season_stats (
+        id SERIAL PRIMARY KEY,
+        club_id INTEGER NOT NULL REFERENCES clubs(id),
+        season VARCHAR(20) NOT NULL,
+        total_players INTEGER DEFAULT 0,
+        active_players INTEGER DEFAULT 0,
+        total_inscriptions INTEGER DEFAULT 0,
+        mode_distribution JSONB DEFAULT '{}',
+        competitions_hosted INTEGER DEFAULT 0,
+        tournament_podiums INTEGER DEFAULT 0,
+        finale_medals INTEGER DEFAULT 0,
+        finalists_count INTEGER DEFAULT 0,
+        snapshot_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(club_id, season)
+      )
+    `);
+
     // External tournament definitions table (from CDBHS external DB)
     await client.query(`
       CREATE TABLE IF NOT EXISTS tournoi_ext (

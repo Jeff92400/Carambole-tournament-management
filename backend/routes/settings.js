@@ -1098,4 +1098,237 @@ router.delete('/organization-logo', authenticateToken, requireAdmin, (req, res) 
   });
 });
 
+// ==================== SEASON STATS SNAPSHOT ====================
+
+// Promise wrappers for callback-style db
+function dbAll(db, sql, params) {
+  return new Promise((resolve, reject) => {
+    db.all(sql, params, (err, rows) => err ? reject(err) : resolve(rows || []));
+  });
+}
+function dbGet(db, sql, params) {
+  return new Promise((resolve, reject) => {
+    db.get(sql, params, (err, row) => err ? reject(err) : resolve(row));
+  });
+}
+function dbRun(db, sql, params) {
+  return new Promise((resolve, reject) => {
+    db.run(sql, params, (err) => err ? reject(err) : resolve());
+  });
+}
+
+/**
+ * POST /snapshot-season-stats
+ * Snapshot all club dashboard stats for a given season into club_season_stats table.
+ * Admin only. Idempotent (upserts on club_id + season).
+ */
+router.post('/snapshot-season-stats', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const db = getDb();
+    const season = req.body.season || await appSettings.getCurrentSeason();
+    const { start: seasonStart, end: seasonEnd } = await appSettings.getSeasonDateRange(season);
+
+    console.log(`[Snapshot] Starting season stats snapshot for ${season} (${seasonStart} → ${seasonEnd})`);
+
+    // Get all clubs
+    const clubs = await dbAll(db, 'SELECT id, name, display_name, city FROM clubs', []);
+
+    let snapshotCount = 0;
+    const errors = [];
+
+    for (const club of clubs) {
+      try {
+        // 1. Count total players
+        const playersRows = await dbAll(db,
+          `SELECT licence FROM players
+           WHERE UPPER(REPLACE(club, ' ', '')) LIKE UPPER(REPLACE($1, ' ', '')) || '%'`,
+          [club.display_name]
+        );
+        const totalPlayers = playersRows.length;
+        const playerLicences = playersRows.map(p => p.licence?.replace(/\s/g, ''));
+
+        // 2. Count inscriptions per player
+        const inscRows = await dbAll(db,
+          `SELECT REPLACE(i.licence, ' ', '') as licence, COUNT(*) as cnt
+           FROM inscriptions i
+           JOIN tournoi_ext t ON i.tournoi_id = t.tournoi_id
+           WHERE t.debut >= $1 AND t.debut <= $2
+             AND (i.statut IS NULL OR i.statut != 'désinscrit')
+             AND (i.forfait IS NULL OR i.forfait = 0)
+           GROUP BY REPLACE(i.licence, ' ', '')`,
+          [seasonStart, seasonEnd]
+        );
+        const inscriptionCounts = {};
+        inscRows.forEach(r => { inscriptionCounts[r.licence] = parseInt(r.cnt); });
+
+        let activePlayers = 0;
+        let totalInscriptions = 0;
+        playerLicences.forEach(lic => {
+          const cnt = inscriptionCounts[lic] || 0;
+          if (cnt > 0) activePlayers++;
+          totalInscriptions += cnt;
+        });
+
+        // 3. Mode distribution
+        const modeRows = await dbAll(db,
+          `SELECT UPPER(t.mode) as mode, COUNT(DISTINCT REPLACE(i.licence, ' ', '')) as player_count
+           FROM inscriptions i
+           JOIN tournoi_ext t ON i.tournoi_id = t.tournoi_id
+           WHERE t.debut >= $1 AND t.debut <= $2
+             AND (i.statut IS NULL OR i.statut != 'désinscrit')
+             AND (i.forfait IS NULL OR i.forfait = 0)
+             AND REPLACE(i.licence, ' ', '') IN (
+               SELECT REPLACE(p.licence, ' ', '') FROM players p
+               WHERE UPPER(REPLACE(p.club, ' ', '')) LIKE UPPER(REPLACE($3, ' ', '')) || '%'
+             )
+           GROUP BY UPPER(t.mode)`,
+          [seasonStart, seasonEnd, club.display_name]
+        );
+        const modeDistribution = {};
+        modeRows.forEach(r => { modeDistribution[r.mode] = parseInt(r.player_count); });
+
+        // 4. Competitions hosted (via club_aliases)
+        const clubMatchValues = [club.city, club.name, club.display_name].filter(Boolean).map(v => v.toUpperCase());
+        const aliasRows = await dbAll(db,
+          `SELECT UPPER(alias) as alias FROM club_aliases WHERE UPPER(canonical_name) = UPPER($1)`,
+          [club.name || club.display_name]
+        );
+        aliasRows.forEach(r => clubMatchValues.push(r.alias));
+        const uniqueMatchValues = [...new Set(clubMatchValues)];
+
+        let competitionsHosted = 0;
+        if (uniqueMatchValues.length > 0) {
+          const placeholders = uniqueMatchValues.map((_, i) => `$${i + 2}`).join(', ');
+          const hostedRow = await dbGet(db,
+            `SELECT COUNT(*) as count FROM tournaments
+             WHERE season = $1
+               AND (UPPER(location) IN (${placeholders})
+                    OR UPPER(location_2) IN (${placeholders}))`,
+            [season, ...uniqueMatchValues]
+          );
+          competitionsHosted = parseInt(hostedRow?.count || 0);
+        }
+
+        // 5. Tournament results → podiums + finale medals
+        const resultsRows = await dbAll(db,
+          `SELECT tr.licence, tr.position, t.tournament_number
+           FROM tournament_results tr
+           LEFT JOIN tournaments t ON tr.tournament_id = t.id
+           WHERE t.season = $1
+           ORDER BY tr.position`,
+          [season]
+        );
+
+        const playerResults = {};
+        resultsRows.forEach(r => {
+          const lic = r.licence?.replace(/\s/g, '');
+          if (!playerResults[lic]) playerResults[lic] = [];
+          playerResults[lic].push({
+            position: r.position,
+            isFinale: r.tournament_number === 4
+          });
+        });
+
+        let tournamentPodiums = 0;
+        let finaleMedals = 0;
+        playerLicences.forEach(lic => {
+          const results = playerResults[lic] || [];
+          tournamentPodiums += results.filter(r => r.position <= 3 && !r.isFinale).length;
+          finaleMedals += results.filter(r => r.position <= 3 && r.isFinale).length;
+        });
+
+        // 6. Finalists count (qualified + finale results, deduplicated by licence)
+        let finalistsCount = 0;
+        try {
+          const finaleResultsRows = await dbAll(db,
+            `SELECT DISTINCT REPLACE(tr.licence, ' ', '') as licence
+             FROM tournament_results tr
+             JOIN tournaments t ON tr.tournament_id = t.id
+             WHERE t.season = $1 AND t.tournament_number = 4
+               AND REPLACE(tr.licence, ' ', '') IN (
+                 SELECT REPLACE(p.licence, ' ', '') FROM players p
+                 WHERE UPPER(REPLACE(p.club, ' ', '')) LIKE UPPER(REPLACE($2, ' ', '')) || '%'
+               )`,
+            [season, club.display_name]
+          );
+
+          const eligibleRows = await dbAll(db,
+            `WITH category_counts AS (
+               SELECT category_id, COUNT(*) as total_players,
+                      CASE WHEN COUNT(*) < 9 THEN 4 ELSE 6 END as qualified_count
+               FROM rankings
+               WHERE season = $1
+               GROUP BY category_id
+             )
+             SELECT DISTINCT REPLACE(r.licence, ' ', '') as licence
+             FROM rankings r
+             JOIN category_counts cc ON cc.category_id = r.category_id
+             WHERE r.season = $1
+               AND r.rank_position <= cc.qualified_count
+               AND EXISTS (
+                 SELECT 1 FROM tournaments t3
+                 JOIN tournament_results tr3 ON tr3.tournament_id = t3.id
+                 WHERE t3.category_id = r.category_id
+                   AND t3.season = $1
+                   AND t3.tournament_number = 3
+               )
+               AND REPLACE(r.licence, ' ', '') IN (
+                 SELECT REPLACE(pl.licence, ' ', '') FROM players pl
+                 WHERE UPPER(REPLACE(pl.club, ' ', '')) LIKE UPPER(REPLACE($2, ' ', '')) || '%'
+               )`,
+            [season, club.display_name]
+          );
+
+          // Deduplicate: a player in both finale results and eligible counts once
+          const finalistLicences = new Set();
+          finaleResultsRows.forEach(r => finalistLicences.add(r.licence));
+          eligibleRows.forEach(r => finalistLicences.add(r.licence));
+          finalistsCount = finalistLicences.size;
+        } catch (finErr) {
+          console.error(`[Snapshot] Error computing finalists for ${club.display_name}:`, finErr.message);
+        }
+
+        // UPSERT
+        await dbRun(db,
+          `INSERT INTO club_season_stats
+            (club_id, season, total_players, active_players, total_inscriptions,
+             mode_distribution, competitions_hosted, tournament_podiums,
+             finale_medals, finalists_count, snapshot_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+           ON CONFLICT (club_id, season) DO UPDATE SET
+             total_players = EXCLUDED.total_players,
+             active_players = EXCLUDED.active_players,
+             total_inscriptions = EXCLUDED.total_inscriptions,
+             mode_distribution = EXCLUDED.mode_distribution,
+             competitions_hosted = EXCLUDED.competitions_hosted,
+             tournament_podiums = EXCLUDED.tournament_podiums,
+             finale_medals = EXCLUDED.finale_medals,
+             finalists_count = EXCLUDED.finalists_count,
+             snapshot_at = NOW()`,
+          [club.id, season, totalPlayers, activePlayers, totalInscriptions,
+           JSON.stringify(modeDistribution), competitionsHosted, tournamentPodiums,
+           finaleMedals, finalistsCount]
+        );
+
+        snapshotCount++;
+      } catch (clubErr) {
+        console.error(`[Snapshot] Error for club ${club.display_name}:`, clubErr.message);
+        errors.push({ club: club.display_name, error: clubErr.message });
+      }
+    }
+
+    console.log(`[Snapshot] Done: ${snapshotCount}/${clubs.length} clubs snapshotted for ${season}`);
+    res.json({
+      success: true,
+      season,
+      clubs_snapshotted: snapshotCount,
+      total_clubs: clubs.length,
+      errors: errors.length > 0 ? errors : undefined
+    });
+  } catch (error) {
+    console.error('[Snapshot] Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;

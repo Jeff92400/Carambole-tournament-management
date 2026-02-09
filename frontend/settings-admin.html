@@ -675,6 +675,29 @@
       </div>
     </div>
 
+    <!-- Season Stats Closure - Admin Only -->
+    <div class="card admin-only" id="seasonSnapshotSection">
+      <h3>📊 Clôturer les statistiques Clubs</h3>
+      <p style="margin-bottom: 20px; color: #666;">
+        Archive les statistiques de chaque club pour la saison sélectionnée.
+        À exécuter en fin de saison pour permettre la comparaison l'année suivante.
+      </p>
+
+      <div style="display: flex; gap: 20px; align-items: flex-end; flex-wrap: wrap;">
+        <div style="flex: 1; min-width: 200px; max-width: 300px;">
+          <label style="display: block; margin-bottom: 8px; font-weight: 500;">Saison :</label>
+          <input type="text" id="snapshotSeason" placeholder="ex: 2025-2026"
+                 style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+          <small style="color: #666;">Laissez vide pour la saison en cours</small>
+        </div>
+        <button onclick="takeSeasonSnapshot()" class="btn" style="background: #17a2b8; padding: 12px 25px;">
+          📊 Clôturer les statistiques
+        </button>
+      </div>
+
+      <div id="snapshotMessage" style="display: none; margin-top: 15px; padding: 10px; border-radius: 4px;"></div>
+    </div>
+
     <!-- Time Thresholds Section - Admin Only -->
     <div class="card admin-only" id="timeThresholdsSection">
       <h3>Delais des Competitions</h3>
@@ -2826,6 +2849,46 @@
     }
 
     loadSeasonSettings();
+
+    // ============= SEASON STATS SNAPSHOT =============
+
+    async function takeSeasonSnapshot() {
+      const season = document.getElementById('snapshotSeason').value.trim();
+      const msgEl = document.getElementById('snapshotMessage');
+
+      if (!confirm(`Voulez-vous clôturer les statistiques clubs${season ? ' pour ' + season : ' pour la saison en cours'} ?`)) {
+        return;
+      }
+
+      msgEl.style.display = 'block';
+      msgEl.style.background = '#fff3cd';
+      msgEl.style.color = '#856404';
+      msgEl.textContent = 'Clôture en cours...';
+
+      try {
+        const response = await authFetch(`${API_URL}/settings/snapshot-season-stats`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ season: season || undefined })
+        });
+        const data = await response.json();
+
+        if (data.success) {
+          msgEl.style.background = '#d4edda';
+          msgEl.style.color = '#155724';
+          msgEl.textContent = `Statistiques clôturées : ${data.clubs_snapshotted}/${data.total_clubs} clubs pour la saison ${data.season}`;
+          if (data.errors && data.errors.length > 0) {
+            msgEl.textContent += ` (${data.errors.length} erreur(s))`;
+          }
+        } else {
+          throw new Error(data.error || 'Erreur inconnue');
+        }
+      } catch (err) {
+        msgEl.style.background = '#f8d7da';
+        msgEl.style.color = '#721c24';
+        msgEl.textContent = 'Erreur: ' + err.message;
+      }
+    }
 
     // ============= END SEASON SETTINGS =============
 
