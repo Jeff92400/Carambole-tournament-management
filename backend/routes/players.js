@@ -5,6 +5,7 @@ const fs = require('fs');
 const db = require('../db-loader');
 const { authenticateToken } = require('./auth');
 const { getColumnMapping } = require('./import-config');
+const appSettings = require('../utils/app-settings');
 
 const router = express.Router();
 
@@ -768,6 +769,151 @@ router.get('/:licence', authenticateToken, async (req, res) => {
     });
   } catch (err) {
     console.error('Get player error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ============ FFB CLASSIFICATIONS ============
+
+// Helper: promise wrapper for db callbacks
+function dbAllP(sql, params) {
+  return new Promise((resolve, reject) => {
+    db.all(sql, params, (err, rows) => err ? reject(err) : resolve(rows || []));
+  });
+}
+function dbRunP(sql, params) {
+  return new Promise((resolve, reject) => {
+    db.run(sql, params, (err) => err ? reject(err) : resolve());
+  });
+}
+
+// GET /api/players/:licence/ffb-classifications
+// Returns FFB classification averages + computed season averages + progression
+router.get('/:licence/ffb-classifications', authenticateToken, async (req, res) => {
+  try {
+    const licence = req.params.licence;
+    const currentSeason = await appSettings.getCurrentSeason();
+
+    // 1. Get FFB classifications for this player + season
+    const ffbRows = await dbAllP(
+      `SELECT pfc.game_mode_id, pfc.moyenne_ffb, pfc.updated_at,
+              gm.code, gm.display_name
+       FROM player_ffb_classifications pfc
+       JOIN game_modes gm ON pfc.game_mode_id = gm.id
+       WHERE REPLACE(pfc.licence, ' ', '') = REPLACE($1, ' ', '')
+         AND pfc.season = $2`,
+      [licence, currentSeason]
+    );
+
+    // 2. Compute season averages per discipline from tournament_results (including Finales)
+    const seasonAvgs = await dbAllP(
+      `SELECT UPPER(c.game_type) as game_type,
+              CASE WHEN SUM(tr.reprises) > 0
+                THEN CAST(SUM(tr.points) AS FLOAT) / CAST(SUM(tr.reprises) AS FLOAT)
+                ELSE NULL END as computed_moyenne
+       FROM tournament_results tr
+       JOIN tournaments t ON tr.tournament_id = t.id
+       JOIN categories c ON t.category_id = c.id
+       WHERE REPLACE(tr.licence, ' ', '') = REPLACE($1, ' ', '')
+         AND t.season = $2
+       GROUP BY UPPER(c.game_type)`,
+      [licence, currentSeason]
+    );
+
+    // Build map: game_type -> computed_moyenne
+    const avgMap = {};
+    for (const row of seasonAvgs) {
+      avgMap[row.game_type] = row.computed_moyenne;
+    }
+
+    // 3. Build response: merge FFB + computed + progression
+    const classifications = ffbRows.map(row => {
+      const moyenneSaison = avgMap[row.code.toUpperCase()] || null;
+      let progressionPct = null;
+      if (moyenneSaison !== null && row.moyenne_ffb > 0) {
+        progressionPct = Math.round(((moyenneSaison - row.moyenne_ffb) / row.moyenne_ffb) * 1000) / 10;
+      }
+      return {
+        game_mode_id: row.game_mode_id,
+        code: row.code,
+        display_name: row.display_name,
+        moyenne_ffb: row.moyenne_ffb,
+        moyenne_saison: moyenneSaison,
+        progression_pct: progressionPct,
+        updated_at: row.updated_at
+      };
+    });
+
+    // 4. Get all active game modes (for showing empty inputs for modes not yet entered)
+    const allModes = await dbAllP(
+      `SELECT id, code, display_name FROM game_modes WHERE is_active = true ORDER BY display_order`
+    );
+    const enteredModeIds = new Set(ffbRows.map(r => r.game_mode_id));
+
+    // Get player rankings to know which modes they play
+    const playerRankings = await getPlayerRankings(licence);
+
+    const availableModes = allModes
+      .filter(m => !enteredModeIds.has(m.id) && playerRankings[m.id] && playerRankings[m.id].ranking !== 'NC')
+      .map(m => ({
+        id: m.id,
+        code: m.code,
+        display_name: m.display_name,
+        moyenne_saison: avgMap[m.code.toUpperCase()] || null
+      }));
+
+    res.json({
+      season: currentSeason,
+      classifications,
+      available_modes: availableModes
+    });
+  } catch (err) {
+    console.error('Get FFB classifications error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/players/:licence/ffb-classifications
+// Save/update FFB classification averages
+router.put('/:licence/ffb-classifications', authenticateToken, async (req, res) => {
+  try {
+    const licence = req.params.licence;
+    const { classifications } = req.body;
+    const currentSeason = await appSettings.getCurrentSeason();
+
+    if (!Array.isArray(classifications) || classifications.length === 0) {
+      return res.status(400).json({ error: 'classifications array is required' });
+    }
+
+    for (const entry of classifications) {
+      const { game_mode_id, moyenne_ffb } = entry;
+      if (!game_mode_id || moyenne_ffb === undefined || moyenne_ffb === null) continue;
+
+      const value = parseFloat(moyenne_ffb);
+      if (isNaN(value) || value < 0) continue;
+
+      if (value === 0) {
+        // Delete the entry if value is 0 (clear)
+        await dbRunP(
+          `DELETE FROM player_ffb_classifications
+           WHERE REPLACE(licence, ' ', '') = REPLACE($1, ' ', '')
+             AND game_mode_id = $2 AND season = $3`,
+          [licence, game_mode_id, currentSeason]
+        );
+      } else {
+        await dbRunP(
+          `INSERT INTO player_ffb_classifications (licence, game_mode_id, season, moyenne_ffb, updated_at)
+           VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
+           ON CONFLICT (licence, game_mode_id, season)
+           DO UPDATE SET moyenne_ffb = $4, updated_at = CURRENT_TIMESTAMP`,
+          [licence, game_mode_id, currentSeason, value]
+        );
+      }
+    }
+
+    res.json({ success: true, message: 'Moyennes de classification enregistrées' });
+  } catch (err) {
+    console.error('Save FFB classifications error:', err);
     res.status(500).json({ error: err.message });
   }
 });

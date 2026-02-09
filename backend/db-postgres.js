@@ -1138,6 +1138,24 @@ async function initializeDatabase() {
       CREATE INDEX IF NOT EXISTS idx_player_rankings_game_mode ON player_rankings(game_mode_id)
     `);
 
+    // Create player_ffb_classifications table for self-entered FFB classification averages
+    // Stores one average per player per discipline per season
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS player_ffb_classifications (
+        id SERIAL PRIMARY KEY,
+        licence TEXT NOT NULL REFERENCES players(licence) ON DELETE CASCADE,
+        game_mode_id INTEGER NOT NULL REFERENCES game_modes(id) ON DELETE CASCADE,
+        season TEXT NOT NULL,
+        moyenne_ffb REAL NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(licence, game_mode_id, season)
+      )
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_ffb_class_licence ON player_ffb_classifications(licence)
+    `);
+
     // Migrate existing player rankings from hardcoded columns to player_rankings table
     // This runs only once - checks if player_rankings is empty and players have rank data
     const playerRankingsCount = await client.query('SELECT COUNT(*) as count FROM player_rankings');

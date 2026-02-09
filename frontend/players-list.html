@@ -223,6 +223,13 @@
             </div>
           </div>
 
+          <div style="margin-bottom: 15px;">
+            <label style="display: block; margin-bottom: 8px; font-weight: bold; color: #1F4788;">Moyennes de classification FFB (au 01/09)</label>
+            <div id="edit_ffb_classifications_container">
+              <!-- Dynamic FFB classification fields will be inserted here by JavaScript -->
+            </div>
+          </div>
+
           <div style="margin-bottom: 15px; padding: 12px; background: #fff3e0; border-radius: 6px;">
             <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
               <input type="checkbox" id="edit_is_active" style="width: 18px; height: 18px; cursor: pointer;">
@@ -796,6 +803,9 @@
       clubSelect.innerHTML = '<option value="">-- Sélectionner un club --</option>' +
         clubsList.map(club => `<option value="${club}" ${club === player.club ? 'selected' : ''}>${club}</option>`).join('');
 
+      // Load FFB classifications
+      loadFfbClassifications(player.licence);
+
       // GDPR consent section - always visible, editable for any player
       const gdprSection = document.getElementById('gdprConsentSection');
       const gdprCheckbox = document.getElementById('edit_gdpr_consent');
@@ -819,6 +829,119 @@
     // Close edit modal
     function closeEditModal() {
       document.getElementById('editPlayerModal').style.display = 'none';
+    }
+
+    // Load and render FFB classifications for a player
+    async function loadFfbClassifications(licence) {
+      const container = document.getElementById('edit_ffb_classifications_container');
+      container.innerHTML = '<p style="color: #666; font-style: italic; font-size: 12px;">Chargement...</p>';
+
+      try {
+        const response = await fetch(`${API_URL}/players/${licence}/ffb-classifications`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!response.ok) throw new Error('Failed to load');
+        const data = await response.json();
+
+        let html = '';
+
+        // Disciplines with FFB data entered
+        for (const c of data.classifications) {
+          const moySaison = c.moyenne_saison !== null ? c.moyenne_saison.toFixed(3) : '-';
+          const progHtml = c.progression_pct !== null
+            ? `<span style="font-weight: 600; color: ${c.progression_pct >= 0 ? '#28a745' : '#dc3545'};">${c.progression_pct >= 0 ? '+' : ''}${c.progression_pct}%</span>`
+            : '<span style="color: #999;">-</span>';
+
+          html += `
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 8px; align-items: center; padding: 8px 0; border-bottom: 1px solid #eee;">
+              <div style="font-weight: 600; font-size: 13px;">${c.display_name}</div>
+              <div>
+                <label style="font-size: 10px; color: #999; display: block;">Moy. FFB</label>
+                <input type="number" step="0.001" min="0" value="${c.moyenne_ffb}" data-ffb-mode-id="${c.game_mode_id}"
+                  style="width: 80px; padding: 4px 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px; text-align: center;">
+              </div>
+              <div>
+                <label style="font-size: 10px; color: #999; display: block;">Moy. Saison</label>
+                <span style="font-size: 13px; font-weight: 600; color: #1F4788;">${moySaison}</span>
+              </div>
+              <div>
+                <label style="font-size: 10px; color: #999; display: block;">Progression</label>
+                ${progHtml}
+              </div>
+            </div>
+          `;
+        }
+
+        // Disciplines without FFB data (available to enter)
+        for (const m of data.available_modes) {
+          const moySaison = m.moyenne_saison !== null ? m.moyenne_saison.toFixed(3) : '-';
+
+          html += `
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 8px; align-items: center; padding: 8px 0; border-bottom: 1px solid #eee;">
+              <div style="font-weight: 600; font-size: 13px;">${m.display_name}</div>
+              <div>
+                <label style="font-size: 10px; color: #999; display: block;">Moy. FFB</label>
+                <input type="number" step="0.001" min="0" placeholder="0.000" data-ffb-mode-id="${m.id}"
+                  style="width: 80px; padding: 4px 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px; text-align: center;">
+              </div>
+              <div>
+                <label style="font-size: 10px; color: #999; display: block;">Moy. Saison</label>
+                <span style="font-size: 13px; font-weight: 600; color: #1F4788;">${moySaison}</span>
+              </div>
+              <div>
+                <label style="font-size: 10px; color: #999; display: block;">Progression</label>
+                <span style="color: #999;">-</span>
+              </div>
+            </div>
+          `;
+        }
+
+        if (!html) {
+          html = '<p style="color: #999; font-size: 12px;">Aucun mode de jeu classé pour ce joueur</p>';
+        }
+
+        container.innerHTML = html;
+      } catch (err) {
+        console.error('Error loading FFB classifications:', err);
+        container.innerHTML = '<p style="color: #999; font-size: 12px;">Impossible de charger les moyennes FFB</p>';
+      }
+    }
+
+    // Collect FFB classification values from the edit form
+    function collectFfbClassifications() {
+      const inputs = document.querySelectorAll('#edit_ffb_classifications_container input[data-ffb-mode-id]');
+      const classifications = [];
+      inputs.forEach(input => {
+        const value = parseFloat(input.value);
+        if (!isNaN(value)) {
+          classifications.push({
+            game_mode_id: parseInt(input.dataset.ffbModeId),
+            moyenne_ffb: value
+          });
+        }
+      });
+      return classifications;
+    }
+
+    // Save FFB classifications for a player
+    async function saveFfbClassifications(licence) {
+      const classifications = collectFfbClassifications();
+      if (classifications.length === 0) return true;
+
+      try {
+        const response = await fetch(`${API_URL}/players/${licence}/ffb-classifications`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ classifications })
+        });
+        return response.ok;
+      } catch (err) {
+        console.error('Error saving FFB classifications:', err);
+        return false;
+      }
     }
 
     // Update player
@@ -1102,6 +1225,8 @@
 
       const success = await updatePlayer(playerData);
       if (success) {
+        // Also save FFB classifications
+        await saveFfbClassifications(playerData.licence);
         closeEditModal();
         // Reload players
         await loadPlayers();
