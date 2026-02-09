@@ -2855,8 +2855,8 @@
       const now = new Date();
       const month = now.getMonth() + 1;
       const year = now.getFullYear();
-      // Use September as default start (matches most configs)
-      const startMonth = parseInt(document.getElementById('seasonCutoffMonth')?.value || '8') + 1;
+      // September = 9 (matches app_settings default)
+      const startMonth = 9;
       const currentStartYear = month >= startMonth ? year : year - 1;
       const select = document.getElementById('snapshotSeason');
       for (let i = 0; i < 1; i++) {
