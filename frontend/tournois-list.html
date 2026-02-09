@@ -202,6 +202,11 @@
               <input type="text" id="edit_lieu" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
             </div>
 
+            <div style="grid-column: 1 / -1;">
+              <label style="display: block; margin-bottom: 5px; font-weight: bold;">Lieu 2 <span style="font-weight: normal; color: #888;">(si split sur 2 sites)</span></label>
+              <input type="text" id="edit_lieu_2" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" placeholder="Laisser vide si un seul lieu">
+            </div>
+
             <div>
               <label style="display: block; margin-bottom: 5px; font-weight: bold;">Taille</label>
               <input type="number" id="edit_taille" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
@@ -274,6 +279,11 @@
             <div style="grid-column: 1 / -1;">
               <label style="display: block; margin-bottom: 5px; font-weight: bold;">Lieu</label>
               <input type="text" id="create_lieu" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" placeholder="Ex: Courbevoie, Antony...">
+            </div>
+
+            <div style="grid-column: 1 / -1;">
+              <label style="display: block; margin-bottom: 5px; font-weight: bold;">Lieu 2 <span style="font-weight: normal; color: #888;">(si split sur 2 sites)</span></label>
+              <input type="text" id="create_lieu_2" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" placeholder="Laisser vide si un seul lieu">
             </div>
 
             <div>
@@ -600,7 +610,7 @@
           <td>${tournoi.categorie || '-'}</td>
           <td class="${getDateClass(tournoi.debut)}">${formatDate(tournoi.debut)}</td>
           <td class="${getDateClass(tournoi.fin)}">${formatDate(tournoi.fin)}</td>
-          <td>${tournoi.lieu || '-'}</td>
+          <td>${tournoi.lieu || '-'}${tournoi.lieu_2 ? ' + ' + tournoi.lieu_2 : ''}</td>
           <td style="text-align: center;">${tournoi.taille || '-'}</td>
           ${isAdmin ? `
           <td style="text-align: center; white-space: nowrap;">
@@ -762,6 +772,7 @@
       document.getElementById('edit_debut').value = tournoi.debut ? tournoi.debut.split('T')[0] : '';
       document.getElementById('edit_fin').value = tournoi.fin ? tournoi.fin.split('T')[0] : '';
       document.getElementById('edit_lieu').value = tournoi.lieu || '';
+      document.getElementById('edit_lieu_2').value = tournoi.lieu_2 || '';
       document.getElementById('edit_taille').value = tournoi.taille || '';
       document.getElementById('edit_taille_cadre').value = tournoi.taille_cadre || '';
 
@@ -825,6 +836,7 @@
         debut: document.getElementById('edit_debut').value || null,
         fin: document.getElementById('edit_fin').value || null,
         lieu: document.getElementById('edit_lieu').value || null,
+        lieu_2: document.getElementById('edit_lieu_2').value || null,
         taille: parseInt(document.getElementById('edit_taille').value) || null,
         taille_cadre: document.getElementById('edit_taille_cadre').value || null,
         notify_on_changes: document.getElementById('edit_notify_on_changes').checked,
@@ -892,6 +904,7 @@
         debut: document.getElementById('create_debut').value || null,
         fin: document.getElementById('create_fin').value || null,
         lieu: document.getElementById('create_lieu').value || null,
+        lieu_2: document.getElementById('create_lieu_2').value || null,
         taille: parseInt(document.getElementById('create_taille').value) || null,
         taille_cadre: document.getElementById('create_taille_cadre').value || null
       };

@@ -1350,6 +1350,7 @@
                    data-tournament-num="${tournamentNum}"
                    data-tournoi-id="${t.tournoi_id}"
                    data-lieu="${t.lieu || ''}"
+                   data-lieu-2="${t.lieu_2 || ''}"
                    data-date="${t.debut || ''}"
                    data-is-finale="${t.isFinale}"
                    data-finalist-count="${t.finalist_count || 0}"
@@ -1358,7 +1359,7 @@
                 <div class="tournament-name">${t.isFinale ? 'Finale Départementale' : t.nom}</div>
                 <div class="tournament-details">
                   <span class="tournament-date">📅 ${dateStr}</span>
-                  <span>📍 ${t.lieu || 'Lieu non défini'}</span>
+                  <span>📍 ${t.lieu || 'Lieu non défini'}${t.lieu_2 ? ' + ' + t.lieu_2 : ''}</span>
                 </div>
                 <div class="tournament-inscrits">
                   👥 ${t.isFinale ? `${t.inscribed_finalist_count || 0}/${t.finalist_count || 0} inscrits` : `${t.inscrit_count || 0} inscrit(s)`}
@@ -1594,6 +1595,24 @@
         }
       }
       console.log('[preselectLocation] No match found for:', locationName, 'Available clubs:', clubs.map(c => ({ name: c.name, display_name: c.display_name, city: c.city })));
+    }
+
+    function preselectLocation2(locationName) {
+      if (!locationName || clubs.length === 0) return;
+      const select2 = document.getElementById('locationSelect2');
+      const locationNorm = normalizeString(locationName);
+      for (const club of clubs) {
+        const clubNameNorm = normalizeString(club.name);
+        const clubDisplayNorm = normalizeString(club.display_name);
+        const clubCityNorm = normalizeString(club.city);
+        if (clubNameNorm.includes(locationNorm) || locationNorm.includes(clubNameNorm) ||
+            (clubDisplayNorm && (clubDisplayNorm.includes(locationNorm) || locationNorm.includes(clubDisplayNorm))) ||
+            (clubCityNorm && (clubCityNorm === locationNorm || clubCityNorm.includes(locationNorm) || locationNorm.includes(clubCityNorm)))) {
+          select2.value = club.id;
+          updatePouleLocationLabels();
+          return;
+        }
+      }
     }
 
     loadClubs();
@@ -2445,10 +2464,17 @@
         preselectLocation(matchingTournoi.lieu);
       }
 
-      // Reset second location
-      document.getElementById('location2Container').style.display = 'none';
-      document.getElementById('addLocation2Btn').style.display = 'inline-block';
-      document.getElementById('locationSelect2').value = '';
+      // Pre-select second location if tournament has lieu_2
+      if (matchingTournoi && matchingTournoi.lieu_2) {
+        document.getElementById('location2Container').style.display = 'block';
+        document.getElementById('addLocation2Btn').style.display = 'none';
+        preselectLocation2(matchingTournoi.lieu_2);
+      } else {
+        // Reset second location
+        document.getElementById('location2Container').style.display = 'none';
+        document.getElementById('addLocation2Btn').style.display = 'inline-block';
+        document.getElementById('locationSelect2').value = '';
+      }
 
       // Load game parameters for this category
       loadGameParameters();

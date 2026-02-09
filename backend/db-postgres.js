@@ -217,6 +217,9 @@ async function initializeDatabase() {
       ALTER TABLE tournaments ADD COLUMN IF NOT EXISTS location TEXT
     `);
 
+    // Add location_2 column to tournaments for split tournaments (migration - February 2026)
+    await client.query(`ALTER TABLE tournaments ADD COLUMN IF NOT EXISTS location_2 TEXT`);
+
     // Add results_email_sent columns (migration for tracking email status)
     await client.query(`
       ALTER TABLE tournaments ADD COLUMN IF NOT EXISTS results_email_sent BOOLEAN DEFAULT FALSE
@@ -367,6 +370,9 @@ async function initializeDatabase() {
     // Add notify_on_changes column to tournoi_ext (migration - January 2026)
     // Controls whether date/location changes trigger automatic email notifications
     await client.query(`ALTER TABLE tournoi_ext ADD COLUMN IF NOT EXISTS notify_on_changes BOOLEAN DEFAULT TRUE`);
+
+    // Add lieu_2 column to tournoi_ext for split tournaments (migration - February 2026)
+    await client.query(`ALTER TABLE tournoi_ext ADD COLUMN IF NOT EXISTS lieu_2 TEXT`);
 
     // Tournament parameter overrides table (migration - February 2026)
     // Allows per-tournament customization of Distance and Reprises values

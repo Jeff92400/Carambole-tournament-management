@@ -738,6 +738,7 @@ router.get('/', authenticateToken, (req, res) => {
       t.tournament_date,
       t.import_date,
       t.location,
+      t.location_2,
       t.results_email_sent,
       t.results_email_sent_at,
       c.id as category_id,
@@ -756,7 +757,7 @@ router.get('/', authenticateToken, (req, res) => {
     params.push(season);
   }
 
-  query += ' GROUP BY t.id, t.tournament_number, t.season, t.tournament_date, t.import_date, t.location, t.results_email_sent, t.results_email_sent_at, c.id, c.game_type, c.level, c.display_name ORDER BY t.import_date DESC';
+  query += ' GROUP BY t.id, t.tournament_number, t.season, t.tournament_date, t.import_date, t.location, t.location_2, t.results_email_sent, t.results_email_sent_at, c.id, c.game_type, c.level, c.display_name ORDER BY t.import_date DESC';
 
   db.all(query, params, (err, rows) => {
     if (err) {
@@ -1246,7 +1247,7 @@ router.post('/recalculate-all-rankings', authenticateToken, async (req, res) => 
 // Update tournament (location, date, etc.)
 router.put('/:id', authenticateToken, (req, res) => {
   const { id } = req.params;
-  const { location, tournament_date, results_email_sent } = req.body;
+  const { location, location_2, tournament_date, results_email_sent } = req.body;
 
   // Build update query dynamically
   const updates = [];
@@ -1255,6 +1256,10 @@ router.put('/:id', authenticateToken, (req, res) => {
   if (location !== undefined) {
     updates.push('location = ?');
     params.push(location);
+  }
+  if (location_2 !== undefined) {
+    updates.push('location_2 = ?');
+    params.push(location_2);
   }
   if (tournament_date !== undefined) {
     updates.push('tournament_date = ?');

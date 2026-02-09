@@ -290,7 +290,7 @@
           const tournamentLabel = tournament.tournament_number === 4 ? 'Finale Départementale' : `Tournoi ${tournament.tournament_number}`;
 
           const editBtn = userRole === 'admin'
-            ? `<button onclick="editTournament(${tournament.id}, '${(tournament.location || '').replace(/'/g, "\\'")}', ${tournament.results_email_sent ? 'true' : 'false'})" title="Modifier" style="background: #ffc107; color: black; border: none; padding: 4px 6px; cursor: pointer; border-radius: 3px; font-size: 12px;">✏️</button>`
+            ? `<button onclick="editTournament(${tournament.id}, '${(tournament.location || '').replace(/'/g, "\\'")}', '${(tournament.location_2 || '').replace(/'/g, "\\'")}', ${tournament.results_email_sent ? 'true' : 'false'})" title="Modifier" style="background: #ffc107; color: black; border: none; padding: 4px 6px; cursor: pointer; border-radius: 3px; font-size: 12px;">✏️</button>`
             : '';
 
           const deleteBtn = userRole === 'admin'
@@ -313,7 +313,7 @@
             <td>${tournament.season}</td>
             <td style="text-align: center;">${tournament.player_count}</td>
             <td>${tournament.tournament_date ? new Date(tournament.tournament_date).toLocaleDateString('fr-FR') : 'N/A'}</td>
-            <td title="${tournament.location || 'Non défini'}" style="max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${tournament.location || '-'}</td>
+            <td title="${tournament.location || 'Non défini'}${tournament.location_2 ? ' + ' + tournament.location_2 : ''}" style="max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${tournament.location || '-'}${tournament.location_2 ? ' + ' + tournament.location_2 : ''}</td>
             <td style="text-align: center; padding: 4px; white-space: nowrap;">
               <button onclick="viewTournament(${tournament.id})" title="Voir les résultats" style="background: #28a745; color: white; border: none; padding: 4px 6px; cursor: pointer; border-radius: 3px; font-size: 12px;">👁️</button>
               ${editBtn}
@@ -463,9 +463,10 @@
     // Edit tournament
     let editingTournamentId = null;
 
-    function editTournament(id, location, resultsSent) {
+    function editTournament(id, location, location_2, resultsSent) {
       editingTournamentId = id;
       document.getElementById('editLocation').value = location || '';
+      document.getElementById('editLocation2').value = location_2 || '';
       document.getElementById('editResultsSent').checked = resultsSent;
       document.getElementById('editModal').style.display = 'flex';
     }
@@ -479,6 +480,7 @@
       if (!editingTournamentId) return;
 
       const location = document.getElementById('editLocation').value.trim();
+      const location_2 = document.getElementById('editLocation2').value.trim() || null;
       const results_email_sent = document.getElementById('editResultsSent').checked;
 
       try {
@@ -488,7 +490,7 @@
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({ location, results_email_sent })
+          body: JSON.stringify({ location, location_2, results_email_sent })
         });
 
         if (response.ok) {
@@ -583,6 +585,11 @@
       <div style="margin-bottom: 20px;">
         <label style="display: block; font-weight: bold; margin-bottom: 5px;">Lieu du tournoi</label>
         <input type="text" id="editLocation" placeholder="Ex: BC Boulogne" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
+      </div>
+
+      <div style="margin-bottom: 20px;">
+        <label style="display: block; font-weight: bold; margin-bottom: 5px;">Lieu 2 <span style="font-weight: normal; color: #888;">(si split sur 2 sites)</span></label>
+        <input type="text" id="editLocation2" placeholder="Laisser vide si un seul lieu" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
       </div>
 
       <div style="margin-bottom: 20px;">

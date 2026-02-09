@@ -1597,7 +1597,7 @@ router.post('/tournoi', authenticateToken, async (req, res) => {
     return res.status(403).json({ error: 'Admin access required' });
   }
 
-  const { nom, mode, categorie, taille, debut, fin, grand_coin, taille_cadre, lieu } = req.body;
+  const { nom, mode, categorie, taille, debut, fin, grand_coin, taille_cadre, lieu, lieu_2 } = req.body;
 
   if (!nom || !mode || !categorie) {
     return res.status(400).json({ error: 'nom, mode, and categorie are required' });
@@ -1617,9 +1617,9 @@ router.post('/tournoi', authenticateToken, async (req, res) => {
     // Insert the new tournament
     await new Promise((resolve, reject) => {
       db.run(`
-        INSERT INTO tournoi_ext (tournoi_id, nom, mode, categorie, taille, debut, fin, grand_coin, taille_cadre, lieu)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-      `, [nextId, nom, mode, categorie, taille || null, debut || null, fin || null, grand_coin || 0, taille_cadre || null, lieu || null], function(err) {
+        INSERT INTO tournoi_ext (tournoi_id, nom, mode, categorie, taille, debut, fin, grand_coin, taille_cadre, lieu, lieu_2)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      `, [nextId, nom, mode, categorie, taille || null, debut || null, fin || null, grand_coin || 0, taille_cadre || null, lieu || null, lieu_2 || null], function(err) {
         if (err) reject(err);
         else resolve({ id: nextId, changes: this.changes });
       });
@@ -1645,7 +1645,7 @@ router.put('/tournoi/:id', authenticateToken, async (req, res) => {
   }
 
   const { id } = req.params;
-  const { nom, mode, categorie, taille, debut, fin, grand_coin, taille_cadre, lieu, status, notify_on_changes } = req.body;
+  const { nom, mode, categorie, taille, debut, fin, grand_coin, taille_cadre, lieu, lieu_2, status, notify_on_changes } = req.body;
 
   try {
     // Get current tournament data to detect date change
@@ -1665,10 +1665,12 @@ router.put('/tournoi/:id', authenticateToken, async (req, res) => {
     const newDate = debut ? new Date(debut).toISOString().split('T')[0] : null;
     const dateChanged = oldDate !== newDate && oldDate && newDate;
 
-    // Check if location changed
+    // Check if location changed (either lieu or lieu_2)
     const oldLieu = (currentTournament.lieu || '').trim();
     const newLieu = (lieu || '').trim();
-    const locationChanged = oldLieu !== newLieu && newLieu;
+    const oldLieu2 = (currentTournament.lieu_2 || '').trim();
+    const newLieu2 = (lieu_2 || '').trim();
+    const locationChanged = (oldLieu !== newLieu && newLieu) || (oldLieu2 !== newLieu2 && newLieu2);
 
     // Check if status is being changed to cancelled
     const statusChangedToCancelled = status === 'cancelled' && currentTournament.status !== 'cancelled';
@@ -1685,9 +1687,10 @@ router.put('/tournoi/:id', authenticateToken, async (req, res) => {
         grand_coin = $7,
         taille_cadre = $8,
         lieu = $9,
-        status = $10,
-        notify_on_changes = $11
-      WHERE tournoi_id = $12
+        lieu_2 = $10,
+        status = $11,
+        notify_on_changes = $12
+      WHERE tournoi_id = $13
     `;
 
     // Determine new status and notify_on_changes values
@@ -1695,7 +1698,7 @@ router.put('/tournoi/:id', authenticateToken, async (req, res) => {
     const newNotifyOnChanges = notify_on_changes !== undefined ? notify_on_changes : (currentTournament.notify_on_changes !== false);
 
     await new Promise((resolve, reject) => {
-      db.run(query, [nom, mode, categorie, taille || null, debut || null, fin || null, grand_coin || 0, taille_cadre, lieu, newStatus, newNotifyOnChanges, id], function(err) {
+      db.run(query, [nom, mode, categorie, taille || null, debut || null, fin || null, grand_coin || 0, taille_cadre, lieu, lieu_2 || null, newStatus, newNotifyOnChanges, id], function(err) {
         if (err) reject(err);
         else resolve(this.changes);
       });
