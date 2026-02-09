@@ -1145,11 +1145,35 @@ async function getEmailTemplate(templateType = 'convocation') {
   });
 }
 
+// Replace a single template variable, handling Quill HTML formatting inside braces
+// e.g., {distance}, {<strong>distance</strong>}, &#123;distance&#125;
+function replaceVar(text, varName, value) {
+  if (!text || typeof text !== 'string') return text || '';
+  const val = (value !== null && value !== undefined) ? String(value) : '';
+  let result = text;
+
+  // 1. Replace plain {varName}
+  result = result.replace(new RegExp(`\\{${varName}\\}`, 'g'), val);
+
+  // 2. Replace HTML-encoded &#123;varName&#125;
+  result = result.replace(new RegExp(`&#123;${varName}&#125;`, 'g'), val);
+
+  // 3. Handle HTML tags INSIDE braces and PRESERVE the formatting
+  // Pattern: {<tag>varName</tag>} -> <tag>value</tag>
+  const htmlInsidePattern = new RegExp(`\\{((?:<[^>]+>)*)${varName}((?:<\\/[^>]+>)*)\\}`, 'gi');
+  result = result.replace(htmlInsidePattern, (match, openTags, closeTags) => {
+    return (openTags || '') + val + (closeTags || '');
+  });
+
+  return result;
+}
+
 // Replace template variables with actual values
+// Handles plain {var}, HTML-encoded &#123;var&#125;, and HTML tags inside braces from Quill
 function replaceTemplateVariables(template, variables) {
   let result = template;
   for (const [key, value] of Object.entries(variables)) {
-    result = result.replace(new RegExp(`\\{${key}\\}`, 'g'), value || '');
+    result = replaceVar(result, key, value);
   }
   return result;
 }
