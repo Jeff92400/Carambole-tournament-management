@@ -1710,19 +1710,25 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
         console.log('Test mode - skipping poule save to database');
       }
 
-      // Mark convocation as sent on tournoi_ext (skip in test mode)
+      // Mark convocation as sent on tournoi_ext and write back locations (skip in test mode)
       if (!isTestMode && !skipSavePoules) {
+        // Extract lieu and lieu_2 from convocation locations
+        const loc1 = locations?.find(l => l.locationNum === '1') || locations?.[0];
+        const loc2 = locations?.find(l => l.locationNum === '2');
+        const lieu1Name = loc1?.name || null;
+        const lieu2Name = loc2?.name || null;
+
         await new Promise((resolve, reject) => {
           db.run(
-            `UPDATE tournoi_ext SET convocation_sent_at = CURRENT_TIMESTAMP WHERE tournoi_id = $1`,
-            [tournoiId],
+            `UPDATE tournoi_ext SET convocation_sent_at = CURRENT_TIMESTAMP, lieu = COALESCE($2, lieu), lieu_2 = $3 WHERE tournoi_id = $1`,
+            [tournoiId, lieu1Name, lieu2Name],
             (err) => {
               if (err) reject(err);
               else resolve();
             }
           );
         });
-        console.log(`Marked convocation_sent_at for tournament ${tournoiId}`);
+        console.log(`Marked convocation_sent_at for tournament ${tournoiId}, lieu=${lieu1Name}, lieu_2=${lieu2Name}`);
       }
 
     } catch (convoqueError) {
