@@ -899,16 +899,14 @@ router.get('/:licence/ffb-classifications', authenticateToken, async (req, res) 
     });
 
     // 4. Get all active game modes (for showing empty inputs for modes not yet entered)
+    // Show ALL active modes so admins/club can add FFB data for any discipline
     const allModes = await dbAllP(
       `SELECT id, code, display_name FROM game_modes WHERE is_active = true ORDER BY display_order`
     );
     const enteredModeIds = new Set(ffbRows.map(r => r.game_mode_id));
 
-    // Get player rankings to know which modes they play
-    const playerRankings = await getPlayerRankings(licence);
-
     const availableModes = allModes
-      .filter(m => !enteredModeIds.has(m.id) && playerRankings[m.id] && playerRankings[m.id].ranking !== 'NC')
+      .filter(m => !enteredModeIds.has(m.id))
       .map(m => ({
         id: m.id,
         code: m.code,

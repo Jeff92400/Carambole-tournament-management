@@ -494,6 +494,95 @@ app.get('/api/seed-demo-full', async (req, res) => {
       }
     }
 
+    // 3c. Create tournament results and rankings for internal tournaments
+    stats.tournamentResults = 0;
+    stats.rankings = 0;
+
+    // Map game_type to rank column for picking demo players
+    const gameTypeToRankCol = {
+      'LIBRE': 'rank_libre', 'BANDE': 'rank_bande',
+      '3 BANDES': 'rank_3bandes', '3BANDES': 'rank_3bandes',
+      'CADRE 47/2': 'rank_cadre', 'CADRE 47/1': 'rank_cadre',
+      'CADRE 71/2': 'rank_cadre', 'CADRE 42/2': 'rank_cadre'
+    };
+
+    for (const category of existingCategories) {
+      const rankCol = gameTypeToRankCol[category.game_type.toUpperCase()] || 'rank_libre';
+
+      // Get demo players for results
+      const demoPlayers = await dbAll(
+        `SELECT licence, first_name, last_name FROM players
+         WHERE licence LIKE 'D%' AND ${rankCol} IS NOT NULL AND ${rankCol} != 'NC'
+         ORDER BY RANDOM() LIMIT 12`
+      );
+      if (demoPlayers.length < 4) continue;
+
+      // Create results for T1 and T2 (T3 hasn't been played yet)
+      for (const tNum of [1, 2]) {
+        const tournament = await dbGet(
+          `SELECT id FROM tournaments WHERE category_id = $1 AND tournament_number = $2 AND season = $3`,
+          [category.id, tNum, currentSeason]
+        );
+        if (!tournament) continue;
+
+        // Check if results already exist
+        const existingResults = await dbGet(
+          `SELECT COUNT(*) as cnt FROM tournament_results WHERE tournament_id = $1`, [tournament.id]
+        );
+        if (existingResults && existingResults.cnt > 0) continue;
+
+        const numPlayers = Math.min(demoPlayers.length, randomInt(6, 10));
+        const shuffled = [...demoPlayers].sort(() => Math.random() - 0.5);
+        const participants = shuffled.slice(0, numPlayers);
+        const matchPointsList = participants.map(() => randomInt(2, 14)).sort((a, b) => b - a);
+
+        for (let i = 0; i < participants.length; i++) {
+          const p = participants[i];
+          const points = randomInt(40, 200);
+          const reprises = randomInt(15, 40);
+          const serie = randomInt(3, 25);
+
+          await dbRun(
+            `INSERT INTO tournament_results (tournament_id, licence, player_name, position, match_points, moyenne, serie, points, reprises)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+            [tournament.id, p.licence, `${p.first_name} ${p.last_name}`, i + 1, matchPointsList[i],
+             parseFloat((points / reprises).toFixed(3)), serie, points, reprises]
+          );
+          stats.tournamentResults++;
+        }
+      }
+
+      // Calculate rankings for this category/season
+      const rankingResults = await dbAll(
+        `SELECT REPLACE(tr.licence, ' ', '') as licence,
+          SUM(tr.match_points) as total_match_points,
+          CASE WHEN SUM(tr.reprises) > 0 THEN CAST(SUM(tr.points) AS FLOAT) / CAST(SUM(tr.reprises) AS FLOAT) ELSE 0 END as avg_moyenne,
+          MAX(tr.serie) as best_serie,
+          MAX(CASE WHEN t.tournament_number = 1 THEN tr.match_points ELSE NULL END) as t1_points,
+          MAX(CASE WHEN t.tournament_number = 2 THEN tr.match_points ELSE NULL END) as t2_points,
+          MAX(CASE WHEN t.tournament_number = 3 THEN tr.match_points ELSE NULL END) as t3_points
+        FROM tournament_results tr
+        JOIN tournaments t ON tr.tournament_id = t.id
+        WHERE t.category_id = $1 AND t.season = $2 AND t.tournament_number <= 3
+        GROUP BY REPLACE(tr.licence, ' ', '')
+        ORDER BY total_match_points DESC, avg_moyenne DESC, best_serie DESC`,
+        [category.id, currentSeason]
+      );
+
+      if (rankingResults.length > 0) {
+        await dbRun(`DELETE FROM rankings WHERE category_id = $1 AND season = $2`, [category.id, currentSeason]);
+        for (let i = 0; i < rankingResults.length; i++) {
+          const r = rankingResults[i];
+          await dbRun(
+            `INSERT INTO rankings (category_id, season, licence, total_match_points, avg_moyenne, best_serie, rank_position, tournament_1_points, tournament_2_points, tournament_3_points)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+            [category.id, currentSeason, r.licence, r.total_match_points, r.avg_moyenne, r.best_serie, i + 1, r.t1_points || 0, r.t2_points || 0, r.t3_points || 0]
+          );
+          stats.rankings++;
+        }
+      }
+    }
+
     // 4. Create inscriptions
     const allPlayers = await dbAll(`SELECT licence, email FROM players WHERE licence LIKE 'D%'`);
 
