@@ -219,7 +219,20 @@
           </div>
 
           <div style="margin-bottom: 15px;">
-            <label style="display: block; margin-bottom: 8px; font-weight: bold; color: #1F4788;">Classements FFB</label>
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+              <label style="font-weight: bold; color: #1F4788; margin: 0;">Classements FFB</label>
+              <button type="button" id="addGameModeBtn" onclick="toggleAddGameModeForm()" style="background: #28a745; color: white; border: none; border-radius: 50%; width: 24px; height: 24px; font-size: 16px; cursor: pointer; line-height: 1; display: flex; align-items: center; justify-content: center;" title="Ajouter un mode de jeu">+</button>
+            </div>
+            <div id="addGameModeForm" style="display: none; margin-bottom: 12px; padding: 10px; background: #f0f7ff; border: 1px solid #d0e0f0; border-radius: 6px;">
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
+                <input type="text" id="newGameModeName" placeholder="Nom (ex: Snooker)" style="padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                <input type="color" id="newGameModeColor" value="#1F4788" style="padding: 2px; border: 1px solid #ddd; border-radius: 4px; height: 32px; cursor: pointer;">
+              </div>
+              <div style="display: flex; gap: 8px;">
+                <button type="button" onclick="createGameMode()" style="background: #28a745; color: white; border: none; padding: 6px 14px; border-radius: 4px; font-size: 12px; cursor: pointer;">Ajouter</button>
+                <button type="button" onclick="toggleAddGameModeForm()" style="background: #6c757d; color: white; border: none; padding: 6px 14px; border-radius: 4px; font-size: 12px; cursor: pointer;">Annuler</button>
+              </div>
+            </div>
             <div id="edit_rankings_container" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
               <!-- Dynamic ranking fields will be inserted here by JavaScript -->
             </div>
@@ -529,6 +542,85 @@
       }
 
       return rankings;
+    }
+
+    // Toggle add game mode form visibility
+    function toggleAddGameModeForm() {
+      const form = document.getElementById('addGameModeForm');
+      form.style.display = form.style.display === 'none' ? 'block' : 'none';
+      if (form.style.display === 'block') {
+        document.getElementById('newGameModeName').focus();
+      }
+    }
+
+    // Create a new game mode and refresh the rankings section
+    async function createGameMode() {
+      const name = document.getElementById('newGameModeName').value.trim();
+      const color = document.getElementById('newGameModeColor').value;
+
+      if (!name) {
+        alert('Veuillez saisir un nom pour le mode de jeu');
+        return;
+      }
+
+      const code = name.toUpperCase().replace(/\s+/g, ' ');
+
+      try {
+        const response = await fetch(`${API_URL}/reference-data/game-modes`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            code: code,
+            display_name: name,
+            color: color,
+            display_order: (gameModesList.length + 1) * 10
+          })
+        });
+
+        const data = await response.json();
+        if (!response.ok) {
+          alert('Erreur: ' + (data.error || 'Impossible de créer le mode'));
+          return;
+        }
+
+        // Reload game modes list
+        const modesResponse = await fetch(`${API_URL}/reference-data/game-modes`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (modesResponse.ok) {
+          gameModesList = await modesResponse.json();
+        }
+
+        // Refresh the rankings containers in edit modal
+        const editContainer = document.getElementById('edit_rankings_container');
+        if (editContainer.children.length > 0) {
+          // Re-collect current values before refreshing
+          const currentRankings = collectRankingsFromForm('edit');
+          const rankingsData = {};
+          for (const [modeId, ranking] of Object.entries(currentRankings)) {
+            rankingsData[modeId] = { ranking };
+          }
+          editContainer.innerHTML = generateRankingFieldsHTML('edit', rankingsData);
+        }
+
+        // Refresh FFB section if a player is being edited
+        const licence = document.getElementById('edit_licence').value;
+        if (licence) {
+          loadFfbClassifications(licence);
+        }
+
+        // Reset and hide the form
+        document.getElementById('newGameModeName').value = '';
+        document.getElementById('addGameModeForm').style.display = 'none';
+
+        alert(`Mode "${name}" ajouté avec succès !`);
+      } catch (err) {
+        console.error('Error creating game mode:', err);
+        alert('Erreur lors de la création du mode de jeu');
+      }
     }
 
     // Generate dynamic ranking fields HTML
