@@ -8,13 +8,15 @@
 
     // Only check API calls (not external resources)
     const url = typeof args[0] === 'string' ? args[0] : args[0]?.url || '';
-    if (url.startsWith('/api/') && (response.status === 401 || response.status === 403)) {
-      console.log('[Auth] API returned 401/403, session expired');
+    if (url.startsWith('/api/') && response.status === 401) {
+      console.log('[Auth] API returned 401, session expired');
       // Don't redirect for login endpoints
       if (!url.includes('/auth/login') && !url.includes('/auth/forgot')) {
         handleSessionExpired();
       }
     }
+    // Note: 403 means "forbidden" (insufficient role), NOT session expired.
+    // Do not redirect on 403 — let the caller handle it gracefully.
 
     return response;
   };
@@ -43,12 +45,13 @@ async function authFetch(url, options = {}) {
 
   const response = await fetch(url, options);
 
-  // Handle server-side token invalidation (401/403)
-  if (response.status === 401 || response.status === 403) {
-    console.log('[Auth] Server rejected token (401/403), redirecting to login...');
+  // Handle server-side token invalidation (401 only)
+  if (response.status === 401) {
+    console.log('[Auth] Server rejected token (401), redirecting to login...');
     handleSessionExpired();
     throw new Error('Session expirée');
   }
+  // 403 = forbidden (role insufficient), not session expired — let caller handle
 
   return response;
 }
