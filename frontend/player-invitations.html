@@ -574,8 +574,11 @@
 
     // Show/hide admin elements
     document.querySelectorAll('.admin-only').forEach(el => {
-      el.style.display = userRole === 'admin' ? '' : 'none';
+      el.style.display = (userRole === 'admin' || userRole === 'lecteur') ? '' : 'none';
     });
+    if (userRole === 'lecteur') {
+      document.body.classList.add('role-lecteur');
+    }
 
     // State
     let candidates = [];

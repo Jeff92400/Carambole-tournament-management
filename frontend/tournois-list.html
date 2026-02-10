@@ -328,9 +328,14 @@
     }
 
     const isAdmin = userRole === 'admin';
+    const isLecteur = userRole === 'lecteur';
+    const canSeeAdminUI = isAdmin || isLecteur;
+    const canEdit = isAdmin; // lecteur cannot edit
 
-    // Hide admin-only elements for non-admin users
-    if (!isAdmin) {
+    if (isLecteur) document.body.classList.add('role-lecteur');
+
+    // Hide admin-only elements for non-admin/non-lecteur users
+    if (!canSeeAdminUI) {
       document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');
     }
 
@@ -575,7 +580,7 @@
       tbody.innerHTML = '';
 
       if (tournois.length === 0) {
-        const colspan = isAdmin ? 9 : 8;
+        const colspan = canSeeAdminUI ? 9 : 8;
         tbody.innerHTML = `<tr><td colspan="${colspan}" style="text-align: center; padding: 20px;">Aucun tournoi trouve</td></tr>`;
         return;
       }
@@ -612,18 +617,18 @@
           <td class="${getDateClass(tournoi.fin)}">${formatDate(tournoi.fin)}</td>
           <td>${tournoi.lieu || '-'}${tournoi.lieu_2 ? ' + ' + tournoi.lieu_2 : ''}</td>
           <td style="text-align: center;">${tournoi.taille || '-'}</td>
-          ${isAdmin ? `
+          ${canSeeAdminUI ? `
           <td style="text-align: center; white-space: nowrap;">
             ${showSimulation && !isCancelled ? `<button class="btn btn-small simulation-btn" data-tournoi-id="${tournoi.tournoi_id}" style="background: #17a2b8; padding: 5px 10px; font-size: 12px; margin-right: 5px;" title="Voir la simulation des poules">Simulation</button>` : ''}
-            <button class="btn btn-small edit-tournoi-btn" style="background: #4CAF50; padding: 5px 10px; font-size: 12px;">Modifier</button>
+            ${canEdit ? `<button class="btn btn-small edit-tournoi-btn" style="background: #4CAF50; padding: 5px 10px; font-size: 12px;">Modifier</button>` : ''}
           </td>
           ` : ''}
         `;
 
         tbody.appendChild(row);
 
-        // Add click event to edit button (only for admin)
-        if (isAdmin) {
+        // Add click event to edit button (only for admin, not lecteur)
+        if (canEdit) {
           const editBtn = row.querySelector('.edit-tournoi-btn');
           if (editBtn) {
             editBtn.onclick = (e) => {

@@ -2039,9 +2039,13 @@
     }
 
     const isAdmin = userRole === 'admin';
+    const isLecteur = userRole === 'lecteur';
+    const canSeeAdminUI = isAdmin || isLecteur;
+
+    if (isLecteur) document.body.classList.add('role-lecteur');
 
     // Hide "Traiter maintenant" button for non-admins
-    if (!isAdmin) {
+    if (!canSeeAdminUI) {
       const triggerBtn = document.getElementById('triggerSchedulerBtn');
       if (triggerBtn) {
         triggerBtn.style.display = 'none';
@@ -5288,7 +5292,7 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
         const userRole = localStorage.getItem('userRole');
         const btn = document.getElementById('showPurgeOptionsBtn');
 
-        if (userRole === 'admin') {
+        if (userRole === 'admin' || userRole === 'lecteur') {
           btn.style.display = 'inline-block';
         } else {
           btn.style.display = 'none';
@@ -5584,9 +5588,9 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
       const noLogsEl = document.getElementById('noInscriptionLogs');
       tbody.innerHTML = '';
 
-      // Check if user is admin to show delete buttons
-      const isAdmin = userRole === 'admin';
-      if (isAdmin) {
+      // Check if user is admin/lecteur to show admin columns
+      const isAdminOrLecteur = userRole === 'admin' || userRole === 'lecteur';
+      if (isAdminOrLecteur) {
         document.querySelectorAll('.admin-only-column').forEach(el => el.style.display = '');
       }
 
@@ -5606,9 +5610,9 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
           ? '<span class="badge badge-actif">Envoyé</span>'
           : `<span class="badge badge-inactif" title="${log.error_message || ''}">Échec</span>`;
 
-        const deleteBtn = isAdmin
+        const deleteBtn = (userRole === 'admin')
           ? `<td><button class="btn" style="background: #dc3545; color: white; padding: 4px 8px; font-size: 0.75rem;" onclick="deleteInscriptionLog(${log.id})">🗑️</button></td>`
-          : '';
+          : (isAdminOrLecteur ? '<td>-</td>' : '');
 
         row.innerHTML = `
           <td>${date}</td>

@@ -3210,10 +3210,15 @@
       }
     }
 
-    // Load logs stats on page load (admin only)
+    // Load logs stats on page load (admin and lecteur)
     const userRole = localStorage.getItem('userRole');
-    if (userRole === 'admin') {
+    if (userRole === 'admin' || userRole === 'lecteur') {
       loadLogsQuickStats();
+    }
+    if (userRole === 'lecteur') {
+      document.body.classList.add('role-lecteur');
+      // Hide all forms and action buttons for lecteur
+      document.querySelectorAll('form, .not-lecteur').forEach(el => el.style.display = 'none');
     }
 
     // ============= END ACTIVITY LOGS QUICK STATS =============

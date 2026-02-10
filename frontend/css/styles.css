@@ -14,6 +14,9 @@
   box-sizing: border-box;
 }
 
+/* Lecteur (read-only) role: hide write actions globally */
+body.role-lecteur .not-lecteur { display: none !important; }
+
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   background: linear-gradient(135deg, var(--color-secondary) 0%, var(--color-secondary-dark) 100%);

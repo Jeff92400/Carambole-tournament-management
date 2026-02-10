@@ -323,9 +323,14 @@
     }
 
     const isAdmin = userRole === 'admin';
+    const isLecteur = userRole === 'lecteur';
+    const canSeeAdminUI = isAdmin || isLecteur;
+    const canEdit = isAdmin; // lecteur cannot edit
 
-    // Hide admin-only elements for non-admin users
-    if (!isAdmin) {
+    if (isLecteur) document.body.classList.add('role-lecteur');
+
+    // Hide admin-only elements for non-admin/non-lecteur users
+    if (!canSeeAdminUI) {
       document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');
     }
 
@@ -736,7 +741,7 @@
       tbody.innerHTML = '';
 
       if (inscriptions.length === 0) {
-        const colspan = isAdmin ? 11 : 10;
+        const colspan = canSeeAdminUI ? 11 : 10;
         tbody.innerHTML = `<tr><td colspan="${colspan}" style="text-align: center; padding: 20px;">Aucune inscription trouvee</td></tr>`;
         return;
       }
@@ -768,18 +773,18 @@
           <td>${getStatusBadge(inscription)}</td>
           <td>${getSourceBadge(inscription.source)}</td>
           <td>${formatDateTime(inscription.timestamp)}</td>
-          ${isAdmin ? `
+          ${canSeeAdminUI ? `
           <td style="text-align: center;">
-            <button class="btn btn-small edit-inscription-btn" style="background: #4CAF50; padding: 5px 10px; font-size: 12px;">Modifier</button>
-            <button class="btn btn-small delete-inscription-btn" style="background: #dc3545; padding: 5px 10px; font-size: 12px; margin-left: 5px;">Supprimer</button>
+            ${canEdit ? `<button class="btn btn-small edit-inscription-btn" style="background: #4CAF50; padding: 5px 10px; font-size: 12px;">Modifier</button>
+            <button class="btn btn-small delete-inscription-btn" style="background: #dc3545; padding: 5px 10px; font-size: 12px; margin-left: 5px;">Supprimer</button>` : '-'}
           </td>
           ` : ''}
         `;
 
         tbody.appendChild(row);
 
-        // Add click event to edit and delete buttons (only for admin)
-        if (isAdmin) {
+        // Add click event to edit and delete buttons (only for admin, not lecteur)
+        if (canEdit) {
           const editBtn = row.querySelector('.edit-inscription-btn');
           if (editBtn) {
             editBtn.onclick = (e) => {

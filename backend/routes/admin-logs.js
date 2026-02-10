@@ -11,11 +11,19 @@ const router = express.Router();
 const db = require('../db-loader');
 const { authenticateToken, requireAdmin } = require('./auth');
 
+// Middleware: admin or lecteur (read-only admin access)
+function requireAdminOrLecteur(req, res, next) {
+  if (req.user.role === 'admin' || req.user.role === 'lecteur' || req.user.admin) {
+    return next();
+  }
+  return res.status(403).json({ error: 'Access denied' });
+}
+
 /**
  * GET /api/admin-logs
  * Get admin activity logs with optional filters
  */
-router.get('/', authenticateToken, requireAdmin, (req, res) => {
+router.get('/', authenticateToken, requireAdminOrLecteur, (req, res) => {
   const {
     startDate,
     endDate,
@@ -107,7 +115,7 @@ router.get('/', authenticateToken, requireAdmin, (req, res) => {
  * GET /api/admin-logs/stats
  * Get quick statistics for dashboard
  */
-router.get('/stats', authenticateToken, requireAdmin, (req, res) => {
+router.get('/stats', authenticateToken, requireAdminOrLecteur, (req, res) => {
   // Last 7 days stats
   db.get(`
     SELECT
@@ -150,7 +158,7 @@ router.get('/stats', authenticateToken, requireAdmin, (req, res) => {
  * GET /api/admin-logs/action-types
  * Get list of distinct action types for filtering
  */
-router.get('/action-types', authenticateToken, requireAdmin, (req, res) => {
+router.get('/action-types', authenticateToken, requireAdminOrLecteur, (req, res) => {
   db.all(`
     SELECT DISTINCT action_type, COUNT(*) as count
     FROM admin_activity_logs
