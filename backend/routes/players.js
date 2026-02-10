@@ -10,14 +10,15 @@ const appSettings = require('../utils/app-settings');
 const router = express.Router();
 
 /**
- * Get club display_name from club_id (for club role filtering)
+ * Get club name from club_id (for club role filtering)
+ * Returns the `name` field (uppercase, no accents) which matches players.club
  */
-async function getClubDisplayName(clubId) {
+async function getClubNameForFilter(clubId) {
   if (!clubId) return null;
   return new Promise((resolve, reject) => {
-    db.get('SELECT display_name FROM clubs WHERE id = $1', [clubId], (err, row) => {
+    db.get('SELECT name FROM clubs WHERE id = $1', [clubId], (err, row) => {
       if (err) reject(err);
-      else resolve(row ? row.display_name : null);
+      else resolve(row ? row.name : null);
     });
   });
 }
@@ -25,12 +26,12 @@ async function getClubDisplayName(clubId) {
 /**
  * Check if a player belongs to a specific club
  */
-async function playerBelongsToClub(licence, clubDisplayName) {
-  if (!clubDisplayName) return false;
+async function playerBelongsToClub(licence, clubName) {
+  if (!clubName) return false;
   return new Promise((resolve, reject) => {
     db.get(
       `SELECT licence FROM players WHERE REPLACE(licence, ' ', '') = REPLACE($1, ' ', '') AND UPPER(club) = UPPER($2)`,
-      [licence, clubDisplayName],
+      [licence, clubName],
       (err, row) => {
         if (err) reject(err);
         else resolve(!!row);
@@ -543,7 +544,7 @@ router.post('/', authenticateToken, requireClubOrAdmin, async (req, res) => {
   // Club role: force club to their own club
   let effectiveClub = club;
   if (req.user.role === 'club' && req.user.clubId) {
-    effectiveClub = await getClubDisplayName(req.user.clubId);
+    effectiveClub = await getClubNameForFilter(req.user.clubId);
   }
 
   const normalizedLicence = licence.replace(/\s+/g, '').toUpperCase();
@@ -672,7 +673,7 @@ router.get('/', authenticateToken, async (req, res) => {
     // For club role, get their club's display_name to filter
     let clubFilter = null;
     if (req.user.role === 'club' && req.user.clubId) {
-      clubFilter = await getClubDisplayName(req.user.clubId);
+      clubFilter = await getClubNameForFilter(req.user.clubId);
     }
 
     // GDPR consent can come from either players table (admin set) or player_accounts (registration)
@@ -983,7 +984,7 @@ router.put('/:licence', authenticateToken, requireClubOrAdmin, async (req, res) 
   try {
     // Club role: verify the player belongs to their club
     if (req.user.role === 'club' && req.user.clubId) {
-      const clubName = await getClubDisplayName(req.user.clubId);
+      const clubName = await getClubNameForFilter(req.user.clubId);
       const belongs = await playerBelongsToClub(licence, clubName);
       if (!belongs) {
         return res.status(403).json({ error: 'Vous ne pouvez modifier que les joueurs de votre club' });

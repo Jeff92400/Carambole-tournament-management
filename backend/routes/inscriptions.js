@@ -1038,12 +1038,12 @@ router.get('/', authenticateToken, async (req, res) => {
   if (req.user.role === 'club' && req.user.clubId) {
     try {
       const clubRow = await new Promise((resolve, reject) => {
-        db.get('SELECT display_name FROM clubs WHERE id = $1', [req.user.clubId], (err, row) => {
+        db.get('SELECT name FROM clubs WHERE id = $1', [req.user.clubId], (err, row) => {
           if (err) reject(err);
           else resolve(row);
         });
       });
-      if (clubRow) clubFilter = clubRow.display_name;
+      if (clubRow) clubFilter = clubRow.name;
     } catch (e) {
       console.error('Error fetching club name for filter:', e);
     }
