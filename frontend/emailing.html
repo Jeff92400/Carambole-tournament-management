@@ -2039,8 +2039,9 @@
     }
 
     const isAdmin = userRole === 'admin';
+    const isLecteur = userRole === 'lecteur';
 
-    // Hide "Traiter maintenant" button for non-admins
+    // Hide "Traiter maintenant" button for non-admins (lecteur included)
     if (!isAdmin) {
       const triggerBtn = document.getElementById('triggerSchedulerBtn');
       if (triggerBtn) {
@@ -5584,9 +5585,10 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
       const noLogsEl = document.getElementById('noInscriptionLogs');
       tbody.innerHTML = '';
 
-      // Check if user is admin to show delete buttons
+      // Check if user is admin/lecteur to show admin columns
       const isAdmin = userRole === 'admin';
-      if (isAdmin) {
+      const canSeeAdminUI = isAdmin || userRole === 'lecteur';
+      if (canSeeAdminUI) {
         document.querySelectorAll('.admin-only-column').forEach(el => el.style.display = '');
       }
 

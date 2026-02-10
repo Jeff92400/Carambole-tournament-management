@@ -118,15 +118,15 @@
         <button id="exportPlayersBtn" class="btn" style="background-color: #1F4788; color: white; font-size: 12px; padding: 5px 10px;">
           Exporter Excel
         </button>
-        <button class="btn admin-only csv-import-btn" onclick="window.location.href='import-players.html'" style="background-color: #1F4788; color: white; font-size: 12px; padding: 5px 10px;">
+        <button class="btn admin-only not-lecteur csv-import-btn" onclick="window.location.href='import-players.html'" style="background-color: #1F4788; color: white; font-size: 12px; padding: 5px 10px;">
           Importer Joueurs
         </button>
-        <button id="createPlayerBtn" class="btn admin-or-club" style="display:none; background-color: #1F4788; color: white; font-size: 12px; padding: 5px 10px;">
+        <button id="createPlayerBtn" class="btn admin-or-club not-lecteur" style="display:none; background-color: #1F4788; color: white; font-size: 12px; padding: 5px 10px;">
           + Créer Joueur
         </button>
       </div>
       <div style="display: flex; gap: 6px;">
-        <button id="clearPlayersBtn" class="btn admin-only" style="background-color: #1F4788; color: white; font-size: 12px; padding: 5px 10px;">
+        <button id="clearPlayersBtn" class="btn admin-only not-lecteur" style="background-color: #1F4788; color: white; font-size: 12px; padding: 5px 10px;">
           Effacer tous les joueurs
         </button>
       </div>
@@ -391,13 +391,16 @@
     }
 
     const isAdmin = userRole === 'admin';
+    const isLecteur = userRole === 'lecteur';
     const isClub = userRole === 'club';
+    const canSeeAdminUI = isAdmin || isLecteur;
+    const canEdit = isAdmin || isClub; // lecteur cannot edit
 
     // Apply role-based nav filtering
     applyRoleBasedNav();
 
-    // Hide admin-only elements for non-admin/non-club users
-    if (!isAdmin && !isClub) {
+    // Hide admin-only elements for non-admin/non-lecteur/non-club users
+    if (!canSeeAdminUI && !isClub) {
       // Hide Actions column header
       const actionsHeader = document.querySelector('thead th:last-child');
       if (actionsHeader && actionsHeader.textContent === 'Actions') {
@@ -1166,7 +1169,7 @@
       if (players.length === 0) {
         // Calculate colspan: 6 fixed + N ranking + 4 admin (Statut, Role, RGPD, Actions) or 2 non-admin
         const rankingCols = getTableGameModes().length;
-        const colspan = isAdmin ? (6 + rankingCols + 4) : (6 + rankingCols + 2);
+        const colspan = canSeeAdminUI ? (6 + rankingCols + 4) : (6 + rankingCols + 2);
         tbody.innerHTML = `<tr><td colspan="${colspan}" style="text-align: center; padding: 20px;">Aucun joueur trouvé</td></tr>`;
         return;
       }
@@ -1188,9 +1191,9 @@
               ${player.is_active ? '✓ Actif' : '✗ Inactif'}
             </span>
           </td>
-          ${isAdmin ? `
+          ${canSeeAdminUI ? `
           <td style="text-align: center;" class="role-cell" data-licence="${player.licence}">
-            <select class="role-select" data-licence="${player.licence}" style="padding: 4px 8px; border-radius: 4px; border: 1px solid #ddd; font-size: 12px; ${player.player_app_role === 'admin' ? 'background: #ffebee; color: #d32f2f; font-weight: bold;' : player.player_app_role === 'test' ? 'background: #fff3e0; color: #e65100;' : ''}">
+            <select class="role-select" data-licence="${player.licence}" ${isLecteur ? 'disabled' : ''} style="padding: 4px 8px; border-radius: 4px; border: 1px solid #ddd; font-size: 12px; ${player.player_app_role === 'admin' ? 'background: #ffebee; color: #d32f2f; font-weight: bold;' : player.player_app_role === 'test' ? 'background: #fff3e0; color: #e65100;' : ''}">
               <option value="" ${!player.player_app_role ? 'selected' : ''}>Non inscrit</option>
               <option value="joueur" ${player.player_app_role === 'joueur' ? 'selected' : ''}>Joueur</option>
               <option value="admin" ${player.player_app_role === 'admin' ? 'selected' : ''}>Admin</option>
@@ -1198,14 +1201,14 @@
             </select>
           </td>
           ` : ''}
-          ${isAdmin ? `
+          ${canSeeAdminUI ? `
           <td style="text-align: center;" title="${player.gdpr_consent_date ? new Date(player.gdpr_consent_date).toLocaleDateString('fr-FR') : 'Pas de consentement'}">
             ${player.gdpr_consent_date
               ? '<span style="color: #2e7d32; font-size: 16px;">✓</span>'
               : (['joueur', 'admin'].includes(player.player_app_role) ? '<span style="color: #ff9800; font-size: 14px;">⚠</span>' : '<span style="color: #ccc;">-</span>')}
           </td>
           ` : ''}
-          ${(isAdmin || isClub) ? `
+          ${canEdit ? `
           <td style="text-align: center;">
             <button class="btn btn-small edit-player-btn" style="background: #4CAF50; padding: 5px 10px; font-size: 12px;">✏️</button>
             ${isAdmin ? `<button class="btn btn-small reset-pwd-btn" style="background: #ff9800; padding: 5px 10px; font-size: 12px; display: none;" title="Réinitialiser le mot de passe">🔑</button>
@@ -1216,8 +1219,8 @@
 
         tbody.appendChild(row);
 
-        // Add click event to edit button (admin and club)
-        if (isAdmin || isClub) {
+        // Add click event to edit button (admin and club, not lecteur)
+        if (canEdit) {
           const editBtn = row.querySelector('.edit-player-btn');
           if (editBtn) {
             editBtn.onclick = (e) => {

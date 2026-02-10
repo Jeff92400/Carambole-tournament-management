@@ -3252,10 +3252,16 @@
       }
     }
 
-    // Load logs stats on page load (admin only)
+    // Load logs stats on page load (admin and lecteur)
     const userRole = localStorage.getItem('userRole');
-    if (userRole === 'admin') {
+    if (userRole === 'admin' || userRole === 'lecteur') {
       loadLogsQuickStats();
+    }
+
+    // Lecteur: hide all forms and action buttons (read-only mode)
+    if (userRole === 'lecteur') {
+      document.querySelectorAll('form, button[onclick*="delete"], button[onclick*="toggle"], .btn-danger').forEach(el => el.style.display = 'none');
+      document.getElementById('addUserForm')?.closest('.card')?.querySelectorAll('form').forEach(el => el.style.display = 'none');
     }
 
     // ============= END ACTIVITY LOGS QUICK STATS =============

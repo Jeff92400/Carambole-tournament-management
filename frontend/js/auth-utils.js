@@ -195,12 +195,19 @@ if (localStorage.getItem('token')) {
 function applyRoleBasedNav() {
   const userRole = localStorage.getItem('userRole');
 
-  if (userRole === 'admin') {
-    // Admin sees everything, including admin-only
+  if (userRole === 'admin' || userRole === 'lecteur') {
+    // Admin and lecteur see everything, including admin-only
     document.querySelectorAll('.admin-only').forEach(el => el.style.display = '');
   } else {
     // Non-admin: hide admin-only
     document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');
+  }
+
+  // Lecteur: show everything but disable all write actions
+  if (userRole === 'lecteur') {
+    document.body.classList.add('role-lecteur');
+    // Hide elements explicitly marked as not for lecteur
+    document.querySelectorAll('.not-lecteur').forEach(el => el.style.display = 'none');
   }
 
   if (userRole === 'club') {

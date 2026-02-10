@@ -706,7 +706,7 @@
     const token = localStorage.getItem('token');
 
     const userRole = localStorage.getItem('userRole');
-    if (userRole === 'admin') {
+    if (userRole === 'admin' || userRole === 'lecteur') {
       document.querySelectorAll('.admin-only').forEach(el => el.style.display = '');
     } else {
       document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');

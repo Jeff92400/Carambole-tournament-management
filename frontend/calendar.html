@@ -140,7 +140,7 @@
 
     // Check user role and show upload section for admins
     const userRole = localStorage.getItem('userRole');
-    if (userRole === 'admin') {
+    if (userRole === 'admin' || userRole === 'lecteur') {
       document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'block');
     }
 
@@ -249,7 +249,7 @@
     });
 
     // Load calendar info on page load (for admins)
-    if (userRole === 'admin') {
+    if (userRole === 'admin' || userRole === 'lecteur') {
       loadCalendarInfo();
     }
 

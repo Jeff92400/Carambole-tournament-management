@@ -208,8 +208,8 @@
     // Check user role and show/hide elements based on role
     const userRole = localStorage.getItem('userRole');
     applyRoleBasedNav();
-    if (userRole === 'admin') {
-      // Load tournament alerts for admins
+    if (userRole === 'admin' || userRole === 'lecteur') {
+      // Load tournament alerts for admins and lecteurs
       loadTournamentAlerts();
     }
     if (userRole === 'club') {
@@ -402,10 +402,10 @@
       await loadPendingEnrollmentRequests();
     }
 
-    // Load pending enrollment requests count (admin only)
+    // Load pending enrollment requests count (admin and lecteur)
     async function loadPendingEnrollmentRequests() {
       const userRole = localStorage.getItem('userRole');
-      if (userRole !== 'admin') return;
+      if (userRole !== 'admin' && userRole !== 'lecteur') return;
 
       try {
         const response = await fetch(`${API_URL}/enrollment-requests?status=pending&limit=1`, {
@@ -430,10 +430,10 @@
       }
     }
 
-    // Load tournaments with unsent results (admin only)
+    // Load tournaments with unsent results (admin and lecteur)
     async function loadUnsentResults() {
       const userRole = localStorage.getItem('userRole');
-      if (userRole !== 'admin') return;
+      if (userRole !== 'admin' && userRole !== 'lecteur') return;
 
       try {
         const response = await fetch(`${API_URL}/tournaments/unsent-results`, {

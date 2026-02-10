@@ -574,8 +574,11 @@ router.post('/reset-with-code', async (req, res) => {
 
 // ==================== USER MANAGEMENT (Admin only) ====================
 
-// Get all users (admin only)
-router.get('/users', authenticateToken, requireAdmin, (req, res) => {
+// Get all users (admin and lecteur)
+router.get('/users', authenticateToken, (req, res) => {
+  if (req.user.role !== 'admin' && req.user.role !== 'lecteur' && !req.user.admin) {
+    return res.status(403).json({ error: 'Access denied' });
+  }
   db.all(`SELECT u.id, u.username, u.email, u.role, u.is_active, u.receive_tournament_alerts, u.created_at, u.last_login, u.club_id, c.display_name as club_name
     FROM users u LEFT JOIN clubs c ON u.club_id = c.id ORDER BY u.username`, [], (err, users) => {
     if (err) {
