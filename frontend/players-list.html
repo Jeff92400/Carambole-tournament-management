@@ -55,10 +55,12 @@
       <h2><img id="app-header-icon" src="images/FrenchBillard-Icon-small.png" alt="" style="height: 48px; width: 48px; vertical-align: middle; margin-right: 8px;" onerror="this.src='images/FrenchBillard-Icon-small.png';">Joueurs</h2>
       <div class="nav-links">
         <a href="dashboard.html">Accueil</a>
+        <a href="players-list.html" class="active club-visible" style="display:none;">Joueurs</a>
         <a href="rankings.html" class="nav-tooltip" data-tooltip="Classement par catégorie de jeu au fur et à mesure des tournois">Classements</a>
-        <a href="generate-poules.html" class="nav-tooltip" data-tooltip="Compétitions à jouer / Convocations">Compétitions</a>
-        <a href="calendar.html" class="nav-tooltip" data-tooltip="Calendrier de la saison">Calendrier</a>
-        <a href="emailing.html" class="nav-tooltip" data-tooltip="Annonces, relances, résultats, convocation">Com joueurs</a>
+        <a href="generate-poules.html" class="not-club nav-tooltip" data-tooltip="Compétitions à jouer / Convocations">Compétitions</a>
+        <a href="inscriptions-viewer.html" class="club-visible" style="display:none;">Inscriptions</a>
+        <a href="calendar.html" class="not-club nav-tooltip" data-tooltip="Calendrier de la saison">Calendrier</a>
+        <a href="emailing.html" class="not-club nav-tooltip" data-tooltip="Annonces, relances, résultats, convocation">Com joueurs</a>
         <a href="settings.html" class="admin-only nav-tooltip" data-tooltip="Réservé aux administrateurs">Paramètres</a>
         <a href="#" id="logoutBtn" class="nav-logout">Déconnexion</a>
       </div>
@@ -97,7 +99,7 @@
         <button class="btn admin-only csv-import-btn" onclick="window.location.href='import-players.html'" style="background-color: #28a745; color: white;">
           📤 Importer Joueurs
         </button>
-        <button id="createPlayerBtn" class="btn admin-only" style="background-color: #1F4788; color: white;">
+        <button id="createPlayerBtn" class="btn admin-or-club" style="display:none; background-color: #1F4788; color: white;">
           ➕ Créer Joueur
         </button>
       </div>
@@ -238,7 +240,7 @@
             <p style="margin: 8px 0 0 28px; font-size: 12px; color: #666;">Décochez pour marquer le joueur comme inactif (ne joue plus cette saison)</p>
           </div>
 
-          <div style="margin-bottom: 15px;">
+          <div class="admin-only" style="margin-bottom: 15px;">
             <label style="display: block; margin-bottom: 5px; font-weight: bold;">Statut Player App</label>
             <select id="edit_player_app_role" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
               <option value="">Non inscrit</option>
@@ -249,7 +251,7 @@
             <p style="margin: 5px 0 0 0; font-size: 12px; color: #666;">Non inscrit = pas encore dans Player App. Passe à "Joueur" lors de l'inscription.</p>
           </div>
 
-          <div id="gdprConsentSection" style="margin-bottom: 15px; padding: 12px; background: #e3f2fd; border-radius: 6px; display: none;">
+          <div id="gdprConsentSection" class="admin-only" style="margin-bottom: 15px; padding: 12px; background: #e3f2fd; border-radius: 6px; display: none;">
             <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
               <input type="checkbox" id="edit_gdpr_consent" style="width: 18px; height: 18px; cursor: pointer;">
               <span style="font-weight: bold; color: #1565c0;">📋 Consentement RGPD</span>
@@ -351,17 +353,24 @@
     }
 
     const isAdmin = userRole === 'admin';
+    const isClub = userRole === 'club';
 
-    // Hide admin-only elements for non-admin users
-    if (!isAdmin) {
-      // Hide all admin-only elements (including nav links)
-      document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');
+    // Apply role-based nav filtering
+    applyRoleBasedNav();
 
+    // Hide admin-only elements for non-admin/non-club users
+    if (!isAdmin && !isClub) {
       // Hide Actions column header
       const actionsHeader = document.querySelector('thead th:last-child');
       if (actionsHeader && actionsHeader.textContent === 'Actions') {
         actionsHeader.style.display = 'none';
       }
+    }
+
+    // Show create player button for admin and club roles
+    if (isAdmin || isClub) {
+      const createBtn = document.getElementById('createPlayerBtn');
+      if (createBtn) createBtn.style.display = '';
     }
 
     // Logout
@@ -1043,19 +1052,19 @@
               : (['joueur', 'admin'].includes(player.player_app_role) ? '<span style="color: #ff9800; font-size: 14px;">⚠</span>' : '<span style="color: #ccc;">-</span>')}
           </td>
           ` : ''}
-          ${isAdmin ? `
+          ${(isAdmin || isClub) ? `
           <td style="text-align: center;">
             <button class="btn btn-small edit-player-btn" style="background: #4CAF50; padding: 5px 10px; font-size: 12px;">✏️</button>
-            <button class="btn btn-small reset-pwd-btn" style="background: #ff9800; padding: 5px 10px; font-size: 12px; display: none;" title="Réinitialiser le mot de passe">🔑</button>
-            <button class="btn btn-small delete-player-btn" style="background: #dc3545; padding: 5px 10px; font-size: 12px;">🗑️</button>
+            ${isAdmin ? `<button class="btn btn-small reset-pwd-btn" style="background: #ff9800; padding: 5px 10px; font-size: 12px; display: none;" title="Réinitialiser le mot de passe">🔑</button>
+            <button class="btn btn-small delete-player-btn" style="background: #dc3545; padding: 5px 10px; font-size: 12px;">🗑️</button>` : ''}
           </td>
           ` : ''}
         `;
 
         tbody.appendChild(row);
 
-        // Add click event to edit button (only for admin)
-        if (isAdmin) {
+        // Add click event to edit button (admin and club)
+        if (isAdmin || isClub) {
           const editBtn = row.querySelector('.edit-player-btn');
           if (editBtn) {
             editBtn.onclick = (e) => {

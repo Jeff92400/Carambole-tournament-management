@@ -617,6 +617,7 @@ router.get('/user-roles', authenticateToken, (req, res) => {
   const roles = [
     { code: 'viewer', display_name: 'Viewer (lecture seule)' },
     { code: 'editor', display_name: 'Éditeur' },
+    { code: 'club', display_name: 'Responsable Club' },
     { code: 'admin', display_name: 'Administrateur' }
   ];
   res.json(roles);

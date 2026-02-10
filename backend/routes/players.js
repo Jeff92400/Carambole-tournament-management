@@ -3,11 +3,41 @@ const multer = require('multer');
 const { parse } = require('csv-parse');
 const fs = require('fs');
 const db = require('../db-loader');
-const { authenticateToken } = require('./auth');
+const { authenticateToken, requireClubOrAdmin } = require('./auth');
 const { getColumnMapping } = require('./import-config');
 const appSettings = require('../utils/app-settings');
 
 const router = express.Router();
+
+/**
+ * Get club display_name from club_id (for club role filtering)
+ */
+async function getClubDisplayName(clubId) {
+  if (!clubId) return null;
+  return new Promise((resolve, reject) => {
+    db.get('SELECT display_name FROM clubs WHERE id = $1', [clubId], (err, row) => {
+      if (err) reject(err);
+      else resolve(row ? row.display_name : null);
+    });
+  });
+}
+
+/**
+ * Check if a player belongs to a specific club
+ */
+async function playerBelongsToClub(licence, clubDisplayName) {
+  if (!clubDisplayName) return false;
+  return new Promise((resolve, reject) => {
+    db.get(
+      `SELECT licence FROM players WHERE REPLACE(licence, ' ', '') = REPLACE($1, ' ', '') AND UPPER(club) = UPPER($2)`,
+      [licence, clubDisplayName],
+      (err, row) => {
+        if (err) reject(err);
+        else resolve(!!row);
+      }
+    );
+  });
+}
 
 /**
  * Normalize a club name to its canonical form from the clubs table
@@ -487,7 +517,7 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
 });
 
 // Create a new player
-router.post('/', authenticateToken, async (req, res) => {
+router.post('/', authenticateToken, requireClubOrAdmin, async (req, res) => {
   const {
     licence,
     first_name,
@@ -508,6 +538,12 @@ router.post('/', authenticateToken, async (req, res) => {
 
   if (!licence || !first_name || !last_name) {
     return res.status(400).json({ error: 'Licence, prénom et nom sont obligatoires' });
+  }
+
+  // Club role: force club to their own club
+  let effectiveClub = club;
+  if (req.user.role === 'club' && req.user.clubId) {
+    effectiveClub = await getClubDisplayName(req.user.clubId);
   }
 
   const normalizedLicence = licence.replace(/\s+/g, '').toUpperCase();
@@ -566,7 +602,7 @@ router.post('/', authenticateToken, async (req, res) => {
     });
 
     // Normalize club name to canonical form from clubs table
-    const normalizedClub = club ? await normalizeClubName(club) : null;
+    const normalizedClub = effectiveClub ? await normalizeClubName(effectiveClub) : null;
 
     // Build INSERT for players table
     const baseCols = ['licence', 'first_name', 'last_name', 'club', 'email', 'telephone'];
@@ -633,6 +669,12 @@ router.get('/', authenticateToken, async (req, res) => {
   const { active } = req.query;
 
   try {
+    // For club role, get their club's display_name to filter
+    let clubFilter = null;
+    if (req.user.role === 'club' && req.user.clubId) {
+      clubFilter = await getClubDisplayName(req.user.clubId);
+    }
+
     // GDPR consent can come from either players table (admin set) or player_accounts (registration)
     // Use COALESCE to show consent from either source
     let query = `
@@ -643,11 +685,22 @@ router.get('/', authenticateToken, async (req, res) => {
       LEFT JOIN player_accounts pa ON REPLACE(p.licence, ' ', '') = REPLACE(pa.licence, ' ', '')
     `;
     const params = [];
+    const conditions = [];
 
     if (active === 'true') {
-      query += ' WHERE p.is_active = 1';
+      conditions.push('p.is_active = 1');
     } else if (active === 'false') {
-      query += ' WHERE p.is_active = 0';
+      conditions.push('p.is_active = 0');
+    }
+
+    // Club role: filter to their club's players only
+    if (clubFilter) {
+      params.push(clubFilter);
+      conditions.push(`UPPER(p.club) = UPPER($${params.length})`);
+    }
+
+    if (conditions.length > 0) {
+      query += ' WHERE ' + conditions.join(' AND ');
     }
 
     query += ' ORDER BY p.last_name, p.first_name';
@@ -919,7 +972,7 @@ router.put('/:licence/ffb-classifications', authenticateToken, async (req, res) 
 });
 
 // Update player (all fields)
-router.put('/:licence', authenticateToken, async (req, res) => {
+router.put('/:licence', authenticateToken, requireClubOrAdmin, async (req, res) => {
   const { licence } = req.params;
   const {
     club, first_name, last_name, is_active,
@@ -928,6 +981,17 @@ router.put('/:licence', authenticateToken, async (req, res) => {
   } = req.body;
 
   try {
+    // Club role: verify the player belongs to their club
+    if (req.user.role === 'club' && req.user.clubId) {
+      const clubName = await getClubDisplayName(req.user.clubId);
+      const belongs = await playerBelongsToClub(licence, clubName);
+      if (!belongs) {
+        return res.status(403).json({ error: 'Vous ne pouvez modifier que les joueurs de votre club' });
+      }
+      // Club users cannot change certain fields
+      delete req.body.player_app_role;
+      delete req.body.gdpr_consent;
+    }
     // Build dynamic UPDATE query based on provided fields
     const updates = [];
     const values = [];

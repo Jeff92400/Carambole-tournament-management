@@ -98,6 +98,8 @@
           localStorage.setItem('token', data.token);
           localStorage.setItem('userRole', data.user.role);
           localStorage.setItem('username', data.user.username || username);
+          localStorage.setItem('userClub', data.user.club_name || '');
+          localStorage.setItem('userClubId', data.user.club_id || '');
           window.location.href = 'dashboard.html';
         } else {
           errorDiv.textContent = data.error || 'Erreur de connexion';

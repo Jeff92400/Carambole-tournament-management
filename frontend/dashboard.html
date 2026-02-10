@@ -17,11 +17,12 @@
       </div>
       <div class="nav-links">
         <a href="dashboard.html" class="active">Accueil</a>
+        <a href="players-list.html" class="club-visible" style="display:none;">Joueurs</a>
         <a href="rankings.html" class="nav-tooltip" data-tooltip="Classement par catégorie de jeu au fur et à mesure des tournois">Classements</a>
-        <a href="generate-poules.html" class="nav-tooltip" data-tooltip="Compétitions à jouer / Convocations">Compétitions</a>
+        <a href="generate-poules.html" class="not-club nav-tooltip" data-tooltip="Compétitions à jouer / Convocations">Compétitions</a>
         <a href="inscriptions-viewer.html" class="nav-tooltip" data-tooltip="Liste des inscriptions">Inscriptions</a>
-        <a href="calendar.html" class="nav-tooltip" data-tooltip="Calendrier de la saison">Calendrier</a>
-        <a href="emailing.html" class="nav-tooltip" data-tooltip="Annonces, relances, résultats, convocation">Com joueurs</a>
+        <a href="calendar.html" class="not-club nav-tooltip" data-tooltip="Calendrier de la saison">Calendrier</a>
+        <a href="emailing.html" class="not-club nav-tooltip" data-tooltip="Annonces, relances, résultats, convocation">Com joueurs</a>
         <a href="settings.html" class="admin-only nav-tooltip" data-tooltip="Réservé aux administrateurs">Paramètres</a>
         <a href="#" id="logoutBtn" class="nav-logout">Déconnexion</a>
       </div>
@@ -29,6 +30,12 @@
 
     <div id="errorMessage" class="error" style="display: none;"></div>
     <div id="successMessage" class="success" style="display: none;"></div>
+
+    <!-- Club Welcome Banner - Club Role Only -->
+    <div id="clubWelcomeBanner" class="club-visible" style="display: none; background: linear-gradient(135deg, #28a745 0%, #20c997 100%); color: white; padding: 15px 20px; border-radius: 8px; margin-bottom: 15px;">
+      <h3 style="margin: 0 0 5px 0;">Bienvenue, <span id="clubWelcomeName"></span></h3>
+      <p style="margin: 0; opacity: 0.9; font-size: 14px;">Espace de gestion des joueurs de votre club</p>
+    </div>
 
     <!-- Tournament Alerts - Admin Only (Ultra Compact) -->
     <div id="tournamentAlertsCard" class="admin-only" style="display: none; background: #fff3cd; border-left: 3px solid #ffc107; margin-bottom: 10px; padding: 6px 10px; border-radius: 4px;">
@@ -42,7 +49,7 @@
     <div class="card" style="margin-bottom: 15px; padding: 15px;">
       <h3 style="margin-top: 0; margin-bottom: 12px;">Actions Rapides</h3>
       <div class="action-buttons">
-        <button class="btn" style="background: #dc3545;" onclick="window.location.href='generate-poules.html'">
+        <button class="btn not-club" style="background: #dc3545;" onclick="window.location.href='generate-poules.html'">
           Competitions a jouer
         </button>
         <button id="enrollmentRequestsBtn" class="btn admin-only" style="background: #ffc107; color: #333;" onclick="window.location.href='enrollment-requests.html'">
@@ -51,13 +58,16 @@
         <button class="btn btn-success admin-only" onclick="window.location.href='import-tournament.html'">
           Importer une competition
         </button>
-        <button class="btn" onclick="window.location.href='tournaments-list.html'">
+        <button class="btn not-club" onclick="window.location.href='tournaments-list.html'">
           Compétitions jouées
+        </button>
+        <button class="btn club-visible" style="display:none;" onclick="window.location.href='players-list.html'">
+          Joueurs du Club
         </button>
         <button class="btn" onclick="window.location.href='rankings.html'">
           Voir les Classements
         </button>
-        <button class="btn" style="background: #17a2b8;" onclick="showFinaleWinners()">
+        <button class="btn not-club" style="background: #17a2b8;" onclick="showFinaleWinners()">
           Vainqueurs Finales
         </button>
       </div>
@@ -195,14 +205,17 @@
     // Initialize app branding (dynamic logo + org name)
     initAppBranding();
 
-    // Check user role and show/hide admin elements
+    // Check user role and show/hide elements based on role
     const userRole = localStorage.getItem('userRole');
+    applyRoleBasedNav();
     if (userRole === 'admin') {
-      document.querySelectorAll('.admin-only').forEach(el => el.style.display = '');
       // Load tournament alerts for admins
       loadTournamentAlerts();
-    } else {
-      document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');
+    }
+    if (userRole === 'club') {
+      // Populate club welcome banner
+      const clubName = localStorage.getItem('userClub') || 'votre club';
+      document.getElementById('clubWelcomeName').textContent = clubName;
     }
 
     // Load tournament alerts (tournaments needing relances + already sent)
@@ -322,6 +335,8 @@
       e.preventDefault();
       localStorage.removeItem('token');
       localStorage.removeItem('userRole');
+      localStorage.removeItem('userClub');
+      localStorage.removeItem('userClubId');
       localStorage.removeItem('username');
       window.location.href = 'login.html';
     });

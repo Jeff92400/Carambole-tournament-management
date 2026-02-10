@@ -1030,8 +1030,24 @@ router.get('/tournoi/:id/inscriptions', authenticateToken, (req, res) => {
 });
 
 // Get all inscriptions
-router.get('/', authenticateToken, (req, res) => {
+router.get('/', authenticateToken, async (req, res) => {
   const { tournoi_id, licence, source } = req.query;
+
+  // For club role, get their club's display_name to filter
+  let clubFilter = null;
+  if (req.user.role === 'club' && req.user.clubId) {
+    try {
+      const clubRow = await new Promise((resolve, reject) => {
+        db.get('SELECT display_name FROM clubs WHERE id = $1', [req.user.clubId], (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        });
+      });
+      if (clubRow) clubFilter = clubRow.display_name;
+    } catch (e) {
+      console.error('Error fetching club name for filter:', e);
+    }
+  }
 
   let query = `
     SELECT
@@ -1061,6 +1077,12 @@ router.get('/', authenticateToken, (req, res) => {
   if (source) {
     conditions.push(`i.source = $${params.length + 1}`);
     params.push(source);
+  }
+
+  // Club role: filter to their club's players only
+  if (clubFilter) {
+    conditions.push(`UPPER(p.club) = UPPER($${params.length + 1})`);
+    params.push(clubFilter);
   }
 
   if (conditions.length > 0) {

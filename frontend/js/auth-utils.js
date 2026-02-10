@@ -61,6 +61,9 @@ function handleSessionExpired() {
   localStorage.removeItem('token');
   localStorage.removeItem('username');
   localStorage.removeItem('role');
+  localStorage.removeItem('userRole');
+  localStorage.removeItem('userClub');
+  localStorage.removeItem('userClubId');
 
   // Store message for login page to display
   sessionStorage.setItem('sessionExpiredMessage', 'Votre session a expiré. Veuillez vous reconnecter.');
@@ -105,6 +108,9 @@ function logout() {
   localStorage.removeItem('token');
   localStorage.removeItem('username');
   localStorage.removeItem('role');
+  localStorage.removeItem('userRole');
+  localStorage.removeItem('userClub');
+  localStorage.removeItem('userClubId');
   window.location.href = '/login.html';
 }
 
@@ -172,4 +178,49 @@ async function checkAppVersion() {
 if (localStorage.getItem('token')) {
   checkAppVersion();
   setInterval(checkAppVersion, 60 * 60 * 1000); // 1 hour
+}
+
+// ============================================
+// Role-based navbar filtering
+// ============================================
+
+/**
+ * Apply role-based visibility to navbar items.
+ * - Admin: sees everything
+ * - Club: sees only Accueil, Joueurs, Classements, Inscriptions, Déconnexion
+ * - Viewer: sees everything except admin-only items
+ *
+ * Call this after DOM is loaded on pages with navbars.
+ */
+function applyRoleBasedNav() {
+  const userRole = localStorage.getItem('userRole');
+
+  if (userRole === 'admin') {
+    // Admin sees everything, including admin-only
+    document.querySelectorAll('.admin-only').forEach(el => el.style.display = '');
+  } else {
+    // Non-admin: hide admin-only
+    document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');
+  }
+
+  if (userRole === 'club') {
+    // Club role: hide items marked not-club
+    document.querySelectorAll('.not-club').forEach(el => el.style.display = 'none');
+    // Show items marked club-visible
+    document.querySelectorAll('.club-visible').forEach(el => el.style.display = '');
+
+    // If on a page that club shouldn't access, redirect to dashboard
+    const restrictedPages = ['generate-poules.html', 'calendar.html', 'emailing.html',
+      'settings.html', 'settings-admin.html', 'import-players.html', 'import-inscriptions.html',
+      'import-tournament.html', 'import-tournois.html', 'import-external.html', 'import-config.html',
+      'player-accounts.html', 'player-invitations.html', 'enrollment-requests.html',
+      'activity-logs.html', 'admin-activity-logs.html', 'privacy-policy-editor.html',
+      'settings-reference.html', 'statistiques.html', 'clubs.html',
+      'inscriptions-list.html'];
+    const currentPage = window.location.pathname.split('/').pop();
+    if (restrictedPages.includes(currentPage)) {
+      window.location.href = 'dashboard.html';
+      return;
+    }
+  }
 }
