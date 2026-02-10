@@ -377,6 +377,8 @@ app.get('/api/seed-demo-full', async (req, res) => {
 
     if (demoTournoiIds.length > 0) {
       for (const tid of demoTournoiIds) {
+        await dbRun(`DELETE FROM convocation_poules WHERE tournoi_id = $1`, [tid]);
+        await dbRun(`DELETE FROM convocation_files WHERE tournoi_ext_id = $1`, [tid]);
         const deleted = await dbRun(`DELETE FROM inscriptions WHERE tournoi_id = $1`, [tid]);
         stats.cleared.inscriptions += deleted.changes || 0;
       }
@@ -495,6 +497,14 @@ app.get('/api/seed-demo-full', async (req, res) => {
     }
 
     // 3c. Create tournament results and rankings for internal tournaments
+    // First clear existing demo tournament results (for demo players only)
+    await dbRun(`DELETE FROM rankings WHERE licence LIKE 'D%' AND season = $1`, [currentSeason]);
+    await dbRun(
+      `DELETE FROM tournament_results WHERE licence LIKE 'D%' AND tournament_id IN (
+        SELECT id FROM tournaments WHERE season = $1
+      )`, [currentSeason]
+    );
+
     stats.tournamentResults = 0;
     stats.rankings = 0;
 
