@@ -12,7 +12,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db-loader');
-const { authenticateToken, requireAdmin } = require('./auth');
+const { authenticateToken, requireAdmin, requireViewer } = require('./auth');
 const { logAdminAction, ACTION_TYPES } = require('../utils/admin-logger');
 const { Resend } = require('resend');
 const appSettings = require('../utils/app-settings');
@@ -64,9 +64,9 @@ router.get('/debug-announcements/:licence', async (req, res) => {
   }
 });
 
-// All routes below require authentication and admin role
+// All routes below require authentication (viewers can read, admins can modify)
 router.use(authenticateToken);
-router.use(requireAdmin);
+router.use(requireViewer);
 
 // Helper function to send approval email directly via Resend
 async function sendApprovalEmail(request) {
@@ -346,7 +346,7 @@ router.get('/', async (req, res) => {
  * DELETE /api/enrollment-requests/purge
  * Permanently delete all 'deleted' enrollment requests for a season
  */
-router.delete('/purge', async (req, res) => {
+router.delete('/purge', requireAdmin, async (req, res) => {
   console.log('[PURGE] Purge endpoint called');
   try {
     const { season } = req.query;
@@ -422,7 +422,7 @@ router.all('/test-route', (req, res) => {
  * PUT /api/enrollment-requests/:id/approve
  * Approve an enrollment request and create inscription
  */
-router.put('/:id/approve', async (req, res) => {
+router.put('/:id/approve', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -666,7 +666,7 @@ router.put('/:id/approve', async (req, res) => {
  * PUT /api/enrollment-requests/:id/reject
  * Reject an enrollment request
  */
-router.put('/:id/reject', async (req, res) => {
+router.put('/:id/reject', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const { reason } = req.body;
@@ -752,7 +752,7 @@ router.put('/:id/reject', async (req, res) => {
  * DELETE /api/enrollment-requests/:id
  * Soft delete an enrollment request (marks as 'deleted')
  */
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     console.log(`[DELETE] Starting delete for enrollment request ${id}`);
