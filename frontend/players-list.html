@@ -133,7 +133,10 @@
     </div>
 
     <div class="card">
-      <h3>Tous les Joueurs</h3>
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <h3 style="margin: 0;">Tous les Joueurs</h3>
+        <span id="recordCount" style="font-size: 13px; color: #666; font-weight: 600;"></span>
+      </div>
 
       <!-- Advanced Filters -->
       <div style="margin-bottom: 20px; display: flex; gap: 15px; flex-wrap: wrap; align-items: flex-end;">
@@ -1152,6 +1155,13 @@
     function displayPlayers(players) {
       const tbody = document.getElementById('playersBody');
       tbody.innerHTML = '';
+
+      // Update record count
+      const countEl = document.getElementById('recordCount');
+      if (countEl) {
+        const realCount = players.filter(p => p.player_app_role !== 'test').length;
+        countEl.textContent = `${realCount} joueur${realCount !== 1 ? 's' : ''}`;
+      }
 
       if (players.length === 0) {
         // Calculate colspan: 6 fixed + N ranking + 4 admin (Statut, Role, RGPD, Actions) or 2 non-admin
