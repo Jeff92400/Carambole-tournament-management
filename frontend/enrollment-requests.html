@@ -288,6 +288,7 @@
       throw new Error('Not authenticated');
     }
     const token = localStorage.getItem('token');
+    const isLecteur = localStorage.getItem('userRole') === 'lecteur';
 
     let currentRejectId = null;
 
@@ -404,23 +405,25 @@
       }[request.status] || request.status;
 
       let actions = '';
-      if (request.status === 'pending') {
-        actions = `
-          <button class="action-btn approve" onclick="approveRequest(${request.id}, '${escapeHtml(request.player_name)}')">
-            Approuver
-          </button>
-          <button class="action-btn reject" onclick="showRejectModal(${request.id}, '${escapeHtml(request.player_name)}', '${escapeHtml(request.game_mode_name)} ${request.requested_ranking} T${request.tournament_number}')">
-            Refuser
-          </button>
-        `;
-      }
-      // Delete button available for all statuses except already deleted
-      if (request.status !== 'deleted') {
-        actions += `
-          <button class="action-btn delete" onclick="deleteRequest(${request.id}, '${escapeHtml(request.player_name)}')" title="Supprimer">
-            Supprimer
-          </button>
-        `;
+      if (!isLecteur) {
+        if (request.status === 'pending') {
+          actions = `
+            <button class="action-btn approve" onclick="approveRequest(${request.id}, '${escapeHtml(request.player_name)}')">
+              Approuver
+            </button>
+            <button class="action-btn reject" onclick="showRejectModal(${request.id}, '${escapeHtml(request.player_name)}', '${escapeHtml(request.game_mode_name)} ${request.requested_ranking} T${request.tournament_number}')">
+              Refuser
+            </button>
+          `;
+        }
+        // Delete button available for all statuses except already deleted
+        if (request.status !== 'deleted') {
+          actions += `
+            <button class="action-btn delete" onclick="deleteRequest(${request.id}, '${escapeHtml(request.player_name)}')" title="Supprimer">
+              Supprimer
+            </button>
+          `;
+        }
       }
 
       return `

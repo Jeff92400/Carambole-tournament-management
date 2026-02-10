@@ -615,8 +615,8 @@ router.get('/tournament-rounds', authenticateToken, (req, res) => {
 
 router.get('/user-roles', authenticateToken, (req, res) => {
   const roles = [
-    { code: 'viewer', display_name: 'Viewer (lecture seule)' },
-    { code: 'editor', display_name: 'Éditeur' },
+    { code: 'lecteur', display_name: 'Lecteur (consultation uniquement)' },
+    { code: 'viewer', display_name: 'Viewer (lecture + actions)' },
     { code: 'club', display_name: 'Responsable Club' },
     { code: 'admin', display_name: 'Administrateur' }
   ];
