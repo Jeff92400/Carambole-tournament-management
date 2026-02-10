@@ -578,7 +578,7 @@ router.post('/users', authenticateToken, requireAdmin, (req, res) => {
     return res.status(400).json({ error: 'Password must be at least 6 characters' });
   }
 
-  const validRoles = ['admin', 'viewer'];
+  const validRoles = ['admin', 'viewer', 'lecteur'];
   const userRole = validRoles.includes(role) ? role : 'viewer';
   const userEmail = email ? email.toLowerCase().trim() : null;
 
@@ -805,15 +805,24 @@ function requireAdmin(req, res, next) {
 
 // Middleware to require at least viewer role (for read-only access)
 function requireViewer(req, res, next) {
-  // Both admin and viewer can access
-  if (req.user.role === 'admin' || req.user.role === 'viewer' || req.user.admin) {
+  // admin, viewer, and lecteur can access read endpoints
+  if (req.user.role === 'admin' || req.user.role === 'viewer' || req.user.role === 'lecteur' || req.user.admin) {
     return next();
   }
   return res.status(403).json({ error: 'Access denied' });
+}
+
+// Middleware to require viewer or above (excludes lecteur - for write operations)
+function requireViewerWrite(req, res, next) {
+  if (req.user.role === 'admin' || req.user.role === 'viewer' || req.user.admin) {
+    return next();
+  }
+  return res.status(403).json({ error: 'Access denied - read-only role' });
 }
 
 module.exports = router;
 module.exports.authenticateToken = authenticateToken;
 module.exports.requireAdmin = requireAdmin;
 module.exports.requireViewer = requireViewer;
+module.exports.requireViewerWrite = requireViewerWrite;
 module.exports.JWT_SECRET = JWT_SECRET;

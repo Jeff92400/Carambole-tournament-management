@@ -12,7 +12,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db-loader');
-const { authenticateToken, requireAdmin, requireViewer } = require('./auth');
+const { authenticateToken, requireAdmin, requireViewer, requireViewerWrite } = require('./auth');
 const { logAdminAction, ACTION_TYPES } = require('../utils/admin-logger');
 const { Resend } = require('resend');
 const appSettings = require('../utils/app-settings');
@@ -422,7 +422,7 @@ router.all('/test-route', (req, res) => {
  * PUT /api/enrollment-requests/:id/approve
  * Approve an enrollment request and create inscription
  */
-router.put('/:id/approve', async (req, res) => {
+router.put('/:id/approve', requireViewerWrite, async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -666,7 +666,7 @@ router.put('/:id/approve', async (req, res) => {
  * PUT /api/enrollment-requests/:id/reject
  * Reject an enrollment request
  */
-router.put('/:id/reject', async (req, res) => {
+router.put('/:id/reject', requireViewerWrite, async (req, res) => {
   try {
     const { id } = req.params;
     const { reason } = req.body;
@@ -752,7 +752,7 @@ router.put('/:id/reject', async (req, res) => {
  * DELETE /api/enrollment-requests/:id
  * Soft delete an enrollment request (marks as 'deleted')
  */
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requireViewerWrite, async (req, res) => {
   try {
     const { id } = req.params;
     console.log(`[DELETE] Starting delete for enrollment request ${id}`);
