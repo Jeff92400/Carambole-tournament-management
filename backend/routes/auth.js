@@ -692,7 +692,7 @@ router.put('/users/:id', authenticateToken, requireAdmin, (req, res) => {
       params.push(username);
     }
 
-    if (role && ['admin', 'viewer', 'club'].includes(role)) {
+    if (role && ['admin', 'viewer', 'lecteur', 'club'].includes(role)) {
       updates.push(`role = $${paramIndex++}`);
       params.push(role);
     }
