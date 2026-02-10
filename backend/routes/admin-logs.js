@@ -178,7 +178,7 @@ router.get('/action-types', authenticateToken, requireAdminOrLecteur, (req, res)
  * DELETE /api/admin-logs
  * Clear logs between two dates (admin only)
  */
-router.delete('/', authenticateToken, requireAdminOrLecteur, (req, res) => {
+router.delete('/', authenticateToken, requireAdmin, (req, res) => {
   const { startDate, endDate } = req.body;
 
   if (!startDate || !endDate) {
