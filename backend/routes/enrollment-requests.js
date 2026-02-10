@@ -422,7 +422,7 @@ router.all('/test-route', (req, res) => {
  * PUT /api/enrollment-requests/:id/approve
  * Approve an enrollment request and create inscription
  */
-router.put('/:id/approve', requireAdmin, async (req, res) => {
+router.put('/:id/approve', async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -666,7 +666,7 @@ router.put('/:id/approve', requireAdmin, async (req, res) => {
  * PUT /api/enrollment-requests/:id/reject
  * Reject an enrollment request
  */
-router.put('/:id/reject', requireAdmin, async (req, res) => {
+router.put('/:id/reject', async (req, res) => {
   try {
     const { id } = req.params;
     const { reason } = req.body;
@@ -752,7 +752,7 @@ router.put('/:id/reject', requireAdmin, async (req, res) => {
  * DELETE /api/enrollment-requests/:id
  * Soft delete an enrollment request (marks as 'deleted')
  */
-router.delete('/:id', requireAdmin, async (req, res) => {
+router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     console.log(`[DELETE] Starting delete for enrollment request ${id}`);
