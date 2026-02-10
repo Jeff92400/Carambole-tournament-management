@@ -12,7 +12,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db-loader');
-const { authenticateToken, requireAdmin } = require('./auth');
+const { authenticateToken, requireAdmin, requireViewer } = require('./auth');
 const { logAdminAction, ACTION_TYPES } = require('../utils/admin-logger');
 const { Resend } = require('resend');
 const appSettings = require('../utils/app-settings');
@@ -64,9 +64,9 @@ router.get('/debug-announcements/:licence', async (req, res) => {
   }
 });
 
-// All routes below require authentication and admin role
+// All routes below require authentication
 router.use(authenticateToken);
-router.use(requireAdmin);
+router.use(requireViewer);
 
 // Helper function to send approval email directly via Resend
 async function sendApprovalEmail(request) {
@@ -346,7 +346,7 @@ router.get('/', async (req, res) => {
  * DELETE /api/enrollment-requests/purge
  * Permanently delete all 'deleted' enrollment requests for a season
  */
-router.delete('/purge', async (req, res) => {
+router.delete('/purge', requireAdmin, async (req, res) => {
   console.log('[PURGE] Purge endpoint called');
   try {
     const { season } = req.query;
