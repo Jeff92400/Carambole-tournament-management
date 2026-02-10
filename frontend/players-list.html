@@ -47,6 +47,26 @@
       font-size: 12px;
       margin-left: 5px;
     }
+    /* Compact stat cards for this page */
+    .stats-grid {
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)) !important;
+      gap: 10px !important;
+    }
+    .stat-card {
+      padding: 10px !important;
+    }
+    .stat-card h4 {
+      font-size: 12px !important;
+      margin-bottom: 4px !important;
+    }
+    .stat-card .stat-value {
+      font-size: 22px !important;
+    }
+    .stat-pct {
+      font-size: 11px;
+      opacity: 0.8;
+      margin-top: 2px;
+    }
   </style>
 </head>
 <body>
@@ -90,6 +110,8 @@
         <div class="stat-value" id="adminCount" style="color: #d32f2f;">-</div>
       </div>
     </div>
+
+    <div id="gameModeStatsGrid" class="stats-grid" style="margin-bottom: 20px; display: none;"></div>
 
     <div style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
       <div style="display: flex; gap: 10px;">
@@ -429,6 +451,7 @@
         document.getElementById('appUserCount').textContent = appUsers.length;
         document.getElementById('adminCount').textContent = adminPlayers.length;
 
+        renderGameModeStats();
         displayPlayers(allPlayers);
 
         document.getElementById('loadingPlayers').style.display = 'none';
@@ -487,7 +510,35 @@
       } catch (error) {
         console.error('Error loading game modes:', error);
       }
+      renderGameModeStats();
       return gameModesList;
+    }
+
+    // Render game mode stat cards
+    function renderGameModeStats() {
+      const grid = document.getElementById('gameModeStatsGrid');
+      if (!gameModesList.length || !allPlayers.length) return;
+
+      const realPlayers = allPlayers.filter(p => p.player_app_role !== 'test');
+      const activePlayers = realPlayers.filter(p => p.is_active === 1);
+      const totalActive = activePlayers.length;
+
+      let html = '';
+      gameModesList.forEach(mode => {
+        const count = activePlayers.filter(p =>
+          p.player_rankings && p.player_rankings[mode.id] && p.player_rankings[mode.id].ranking && p.player_rankings[mode.id].ranking !== 'NC'
+        ).length;
+        const pct = totalActive > 0 ? Math.round(count / totalActive * 100) : 0;
+        const color = mode.color || '#667eea';
+        html += `<div class="stat-card" style="background: linear-gradient(135deg, ${color} 0%, ${color}dd 100%);">
+          <h4>${mode.display_name}</h4>
+          <div class="stat-value">${count}</div>
+          <div class="stat-pct">${pct}% des actifs</div>
+        </div>`;
+      });
+
+      grid.innerHTML = html;
+      grid.style.display = '';
     }
 
     // Load categories and build mapping of game_mode -> valid rankings
