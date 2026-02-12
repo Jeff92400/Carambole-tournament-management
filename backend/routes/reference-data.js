@@ -839,4 +839,125 @@ router.delete('/poule-configurations/:id', authenticateToken, (req, res) => {
   });
 });
 
+// ==================== SCORING RULES ====================
+
+// Get all scoring rules (optional ?rule_type=MOYENNE_BONUS filter)
+router.get('/scoring-rules', authenticateToken, (req, res) => {
+  const db = getDb();
+  const { rule_type } = req.query;
+
+  let query = 'SELECT * FROM scoring_rules ORDER BY rule_type, display_order';
+  let params = [];
+
+  if (rule_type) {
+    query = 'SELECT * FROM scoring_rules WHERE rule_type = $1 ORDER BY display_order';
+    params = [rule_type];
+  }
+
+  db.all(query, params, (err, rows) => {
+    if (err) {
+      console.error('Error fetching scoring rules:', err);
+      return res.status(500).json({ error: 'Erreur lors du chargement des règles de scoring' });
+    }
+    res.json(rows || []);
+  });
+});
+
+// Create a scoring rule
+router.post('/scoring-rules', authenticateToken, (req, res) => {
+  const db = getDb();
+  const { rule_type, condition_key, points, display_order, description } = req.body;
+
+  if (!rule_type || !condition_key) {
+    return res.status(400).json({ error: 'Type de règle et clé de condition sont requis' });
+  }
+
+  if (!['BASE_VDL', 'MOYENNE_BONUS'].includes(rule_type)) {
+    return res.status(400).json({ error: 'Type de règle invalide (BASE_VDL ou MOYENNE_BONUS)' });
+  }
+
+  if (points === undefined || points === null || isNaN(parseInt(points))) {
+    return res.status(400).json({ error: 'Le nombre de points est requis' });
+  }
+
+  db.run(
+    `INSERT INTO scoring_rules (rule_type, condition_key, points, display_order, description)
+     VALUES ($1, $2, $3, $4, $5)`,
+    [rule_type, condition_key, parseInt(points), display_order || 0, description || ''],
+    function(err) {
+      if (err) {
+        console.error('Error creating scoring rule:', err);
+        if (err.message && (err.message.includes('UNIQUE') || err.message.includes('unique'))) {
+          return res.status(400).json({ error: 'Cette combinaison type/condition existe déjà' });
+        }
+        return res.status(500).json({ error: 'Erreur lors de la création de la règle' });
+      }
+      res.status(201).json({ success: true, id: this.lastID, message: 'Règle créée' });
+    }
+  );
+});
+
+// Update a scoring rule
+router.put('/scoring-rules/:id', authenticateToken, (req, res) => {
+  const db = getDb();
+  const { id } = req.params;
+  const { points, display_order, description, is_active } = req.body;
+
+  if (points === undefined || points === null || isNaN(parseInt(points))) {
+    return res.status(400).json({ error: 'Le nombre de points est requis' });
+  }
+
+  // Build dynamic update - only update fields that are provided
+  const setClauses = ['points = $1', 'updated_at = CURRENT_TIMESTAMP'];
+  const params = [parseInt(points)];
+  let paramIndex = 2;
+
+  if (display_order !== undefined) {
+    setClauses.push(`display_order = $${paramIndex++}`);
+    params.push(display_order);
+  }
+  if (description !== undefined) {
+    setClauses.push(`description = $${paramIndex++}`);
+    params.push(description);
+  }
+  if (is_active !== undefined) {
+    setClauses.push(`is_active = $${paramIndex++}`);
+    params.push(is_active);
+  }
+
+  params.push(id);
+
+  db.run(
+    `UPDATE scoring_rules SET ${setClauses.join(', ')} WHERE id = $${paramIndex}`,
+    params,
+    function(err) {
+      if (err) {
+        console.error('Error updating scoring rule:', err);
+        return res.status(500).json({ error: 'Erreur lors de la mise à jour de la règle' });
+      }
+      if (this.changes === 0) {
+        return res.status(404).json({ error: 'Règle non trouvée' });
+      }
+      res.json({ success: true, message: 'Règle mise à jour' });
+    }
+  );
+});
+
+// Delete a scoring rule
+router.delete('/scoring-rules/:id', authenticateToken, (req, res) => {
+  const db = getDb();
+  const { id } = req.params;
+
+  db.run('DELETE FROM scoring_rules WHERE id = $1', [id], function(err) {
+    if (err) {
+      console.error('Error deleting scoring rule:', err);
+      return res.status(500).json({ error: 'Erreur lors de la suppression' });
+    }
+    if (this.changes === 0) {
+      return res.status(404).json({ error: 'Règle non trouvée' });
+    }
+    res.json({ success: true, message: 'Règle supprimée' });
+  });
+});
+
 module.exports = router;

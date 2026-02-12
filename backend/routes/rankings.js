@@ -69,6 +69,7 @@ router.get('/', authenticateToken, (req, res) => {
             p.club, 'Non renseigné'
           ) as club,
           r.total_match_points,
+          COALESCE(r.total_bonus_points, 0) as total_bonus_points,
           r.avg_moyenne,
           r.best_serie,
           r.tournament_1_points,
@@ -172,6 +173,7 @@ router.get('/export', authenticateToken, async (req, res) => {
           p.club, 'Non renseigné'
         ) as club,
         r.total_match_points,
+        COALESCE(r.total_bonus_points, 0) as total_bonus_points,
         r.avg_moyenne,
         r.best_serie,
         r.tournament_1_points,
@@ -275,15 +277,16 @@ router.get('/export', authenticateToken, async (req, res) => {
         'T2',
         'T3',
         'Total Pts Match',
+        'Dont Bonus',
         'Total Points',
         'Total Reprises',
         'Moyenne',
         'Meilleure Série'
       ];
 
-      // Style headers (only columns 1-14)
+      // Style headers (only columns 1-15)
       worksheet.getRow(4).height = 28;
-      for (let col = 1; col <= 14; col++) {
+      for (let col = 1; col <= 15; col++) {
         const cell = worksheet.getRow(4).getCell(col);
         cell.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11 };
         cell.fill = {
@@ -344,6 +347,7 @@ router.get('/export', authenticateToken, async (req, res) => {
           formatTournamentPoints(row.tournament_2_points, tournamentsPlayed.t2),
           formatTournamentPoints(row.tournament_3_points, tournamentsPlayed.t3),
           row.total_match_points,
+          row.total_bonus_points || 0,
           row.cumulated_points,
           row.cumulated_reprises,
           moyenne,
@@ -353,7 +357,7 @@ router.get('/export', authenticateToken, async (req, res) => {
         // Green highlighting for qualified players (only columns 1-14)
         if (row.rank_position <= qualifiedCount) {
           // Light green background for qualified players - apply to each cell individually
-          for (let col = 1; col <= 14; col++) {
+          for (let col = 1; col <= 15; col++) {
             excelRow.getCell(col).fill = {
               type: 'pattern',
               pattern: 'solid',
@@ -367,7 +371,7 @@ router.get('/export', authenticateToken, async (req, res) => {
         } else {
           // Alternate row colors for non-qualified (only columns 1-14)
           const bgColor = index % 2 === 0 ? 'FFF8F9FA' : 'FFFFFFFF';
-          for (let col = 1; col <= 14; col++) {
+          for (let col = 1; col <= 15; col++) {
             excelRow.getCell(col).fill = {
               type: 'pattern',
               pattern: 'solid',
@@ -424,6 +428,7 @@ router.get('/export', authenticateToken, async (req, res) => {
         { width: 8 },   // T2
         { width: 8 },   // T3
         { width: 14 },  // Total Pts Match
+        { width: 10 },  // Dont Bonus
         { width: 12 },  // Total Points
         { width: 14 },  // Total Reprises
         { width: 12 },  // Moyenne

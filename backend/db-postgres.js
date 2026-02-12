@@ -274,6 +274,11 @@ async function initializeDatabase() {
       ALTER TABLE tournament_results ADD COLUMN IF NOT EXISTS position INTEGER DEFAULT 0
     `);
 
+    // Add bonus_points column (scoring rules feature)
+    await client.query(`
+      ALTER TABLE tournament_results ADD COLUMN IF NOT EXISTS bonus_points INTEGER DEFAULT 0
+    `);
+
     // Rankings table
     await client.query(`
       CREATE TABLE IF NOT EXISTS rankings (
@@ -291,6 +296,11 @@ async function initializeDatabase() {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         UNIQUE(category_id, season, licence)
       )
+    `);
+
+    // Add total_bonus_points column to rankings (scoring rules feature)
+    await client.query(`
+      ALTER TABLE rankings ADD COLUMN IF NOT EXISTS total_bonus_points INTEGER DEFAULT 0
     `);
 
     // Clubs table
@@ -877,6 +887,22 @@ async function initializeDatabase() {
       )
     `);
 
+    // Scoring rules table - configurable tournament scoring system
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS scoring_rules (
+        id SERIAL PRIMARY KEY,
+        rule_type TEXT NOT NULL,
+        condition_key TEXT NOT NULL,
+        points INTEGER NOT NULL DEFAULT 0,
+        display_order INTEGER DEFAULT 0,
+        description TEXT,
+        is_active BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(rule_type, condition_key)
+      )
+    `);
+
     // Admin activity logs table - tracks admin/viewer actions in Tournament App
     await client.query(`
       CREATE TABLE IF NOT EXISTS admin_activity_logs (
@@ -1272,6 +1298,25 @@ async function initializeDatabase() {
       );
     }
     console.log('Poule configurations initialized');
+
+    // Seed default scoring rules
+    const scoringRules = [
+      // Base V/D/L scoring (reference only - actual values come from CSV import)
+      { rule_type: 'BASE_VDL', condition_key: 'VICTORY', points: 2, display_order: 1, description: 'Victoire' },
+      { rule_type: 'BASE_VDL', condition_key: 'DRAW', points: 1, display_order: 2, description: 'Match nul' },
+      { rule_type: 'BASE_VDL', condition_key: 'LOSS', points: 0, display_order: 3, description: 'Défaite' },
+      // Moyenne bonus (applied by app after import)
+      { rule_type: 'MOYENNE_BONUS', condition_key: 'ABOVE_MAX', points: 0, display_order: 1, description: 'Moyenne supérieure au maximum de la catégorie' },
+      { rule_type: 'MOYENNE_BONUS', condition_key: 'IN_RANGE', points: 0, display_order: 2, description: 'Moyenne dans la fourchette de la catégorie' },
+      { rule_type: 'MOYENNE_BONUS', condition_key: 'BELOW_MIN', points: 0, display_order: 3, description: 'Moyenne inférieure au minimum de la catégorie' }
+    ];
+    for (const rule of scoringRules) {
+      await client.query(
+        'INSERT INTO scoring_rules (rule_type, condition_key, points, display_order, description) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (rule_type, condition_key) DO NOTHING',
+        [rule.rule_type, rule.condition_key, rule.points, rule.display_order, rule.description]
+      );
+    }
+    console.log('Scoring rules initialized');
 
     // Initialize mode mappings (IONOS mode names -> internal game_type)
     const modeMappings = [

@@ -537,7 +537,8 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
                       return res.status(500).json({ error: 'Error finalizing import' });
                     }
 
-                    // Recalculate rankings for this category and season
+                    // Compute bonus points then recalculate rankings
+                    computeBonusPoints(finalTournamentId, categoryId, () => {
                     recalculateRankings(categoryId, season, () => {
                       // Clean up uploaded file
                       fs.unlinkSync(req.file.path);
@@ -559,6 +560,7 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
                         errors: errors.length > 0 ? errors : undefined
                       });
                     });
+                    }); // close computeBonusPoints
                   });
                 } // Close insertTournamentResults function
               });
@@ -577,6 +579,100 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
   }
 });
 
+// Compute bonus points for tournament results based on scoring rules and game parameters
+function computeBonusPoints(tournamentId, categoryId, callback) {
+  // 1. Load MOYENNE_BONUS rules
+  db.all(
+    "SELECT condition_key, points FROM scoring_rules WHERE rule_type = 'MOYENNE_BONUS' AND is_active = true",
+    [],
+    (err, rules) => {
+      if (err || !rules || rules.length === 0) {
+        // No rules or error - default all bonuses to 0 (no-op)
+        console.log('[BONUS] No MOYENNE_BONUS rules found, skipping bonus computation');
+        return callback(null);
+      }
+
+      // Build bonus map
+      const bonusMap = {};
+      rules.forEach(r => { bonusMap[r.condition_key] = r.points; });
+
+      // Check if all bonuses are 0 - skip computation entirely
+      if (Object.values(bonusMap).every(v => v === 0)) {
+        console.log('[BONUS] All MOYENNE_BONUS values are 0, skipping computation');
+        return callback(null);
+      }
+
+      // 2. Get the category's game mode to find moyenne thresholds from game_parameters
+      db.get(
+        `SELECT c.name as category_name, c.game_type,
+                gp.moyenne_mini, gp.moyenne_maxi
+         FROM categories c
+         LEFT JOIN game_parameters gp ON UPPER(gp.mode) = UPPER(c.game_type) AND UPPER(gp.categorie) = UPPER(c.name)
+         WHERE c.id = ?`,
+        [categoryId],
+        (err, catInfo) => {
+          if (err || !catInfo) {
+            console.warn('[BONUS] Could not load category/game_parameters, skipping bonus:', err);
+            return callback(null);
+          }
+
+          const moyenneMin = catInfo.moyenne_mini;
+          const moyenneMax = catInfo.moyenne_maxi;
+
+          if (moyenneMin === null || moyenneMin === undefined || moyenneMax === null || moyenneMax === undefined) {
+            console.log(`[BONUS] No moyenne thresholds for category ${catInfo.category_name}, skipping bonus`);
+            return callback(null);
+          }
+
+          console.log(`[BONUS] Category ${catInfo.category_name}: min=${moyenneMin}, max=${moyenneMax}, bonuses: above=${bonusMap.ABOVE_MAX || 0}, range=${bonusMap.IN_RANGE || 0}, below=${bonusMap.BELOW_MIN || 0}`);
+
+          // 3. Get all results for this tournament
+          db.all(
+            'SELECT id, licence, moyenne FROM tournament_results WHERE tournament_id = ?',
+            [tournamentId],
+            (err, results) => {
+              if (err || !results || results.length === 0) {
+                console.log('[BONUS] No results to process');
+                return callback(null);
+              }
+
+              let updateCount = 0;
+              let completed = 0;
+
+              results.forEach(result => {
+                let bonus = 0;
+                const playerMoyenne = result.moyenne || 0;
+
+                if (playerMoyenne > moyenneMax) {
+                  bonus = bonusMap.ABOVE_MAX || 0;
+                } else if (playerMoyenne >= moyenneMin) {
+                  bonus = bonusMap.IN_RANGE || 0;
+                } else {
+                  bonus = bonusMap.BELOW_MIN || 0;
+                }
+
+                db.run(
+                  'UPDATE tournament_results SET bonus_points = ? WHERE id = ?',
+                  [bonus, result.id],
+                  (err) => {
+                    completed++;
+                    if (!err && bonus > 0) updateCount++;
+
+                    if (completed === results.length) {
+                      console.log(`[BONUS] Applied bonus to ${updateCount}/${results.length} results for tournament ${tournamentId}`);
+                      callback(null);
+                    }
+                  }
+                );
+              });
+            }
+          );
+        }
+      );
+    }
+  );
+}
+
 // Recalculate rankings for a category and season
 function recalculateRankings(categoryId, season, callback) {
   console.log(`[RANKING] Starting recalculation for category ${categoryId}, season ${season}`);
@@ -588,7 +684,8 @@ function recalculateRankings(categoryId, season, callback) {
     SELECT
       REPLACE(tr.licence, ' ', '') as licence,
       MAX(tr.player_name) as player_name,
-      SUM(tr.match_points) as total_match_points,
+      SUM(tr.match_points) + SUM(COALESCE(tr.bonus_points, 0)) as total_match_points,
+      SUM(COALESCE(tr.bonus_points, 0)) as total_bonus_points,
       SUM(tr.points) as total_points,
       SUM(tr.reprises) as total_reprises,
       CASE
@@ -596,9 +693,9 @@ function recalculateRankings(categoryId, season, callback) {
         ELSE 0
       END as avg_moyenne,
       MAX(tr.serie) as best_serie,
-      MAX(CASE WHEN t.tournament_number = 1 THEN tr.match_points ELSE NULL END) as t1_points,
-      MAX(CASE WHEN t.tournament_number = 2 THEN tr.match_points ELSE NULL END) as t2_points,
-      MAX(CASE WHEN t.tournament_number = 3 THEN tr.match_points ELSE NULL END) as t3_points
+      MAX(CASE WHEN t.tournament_number = 1 THEN tr.match_points + COALESCE(tr.bonus_points, 0) ELSE NULL END) as t1_points,
+      MAX(CASE WHEN t.tournament_number = 2 THEN tr.match_points + COALESCE(tr.bonus_points, 0) ELSE NULL END) as t2_points,
+      MAX(CASE WHEN t.tournament_number = 3 THEN tr.match_points + COALESCE(tr.bonus_points, 0) ELSE NULL END) as t3_points
     FROM tournament_results tr
     JOIN tournaments t ON tr.tournament_id = t.id
     WHERE t.category_id = ? AND t.season = ? AND t.tournament_number <= 3
@@ -635,8 +732,8 @@ function recalculateRankings(categoryId, season, callback) {
       const stmt = db.prepare(`
         INSERT INTO rankings (
           category_id, season, licence, total_match_points, avg_moyenne, best_serie,
-          rank_position, tournament_1_points, tournament_2_points, tournament_3_points
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          rank_position, tournament_1_points, tournament_2_points, tournament_3_points, total_bonus_points
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
       let insertCount = 0;
@@ -655,6 +752,7 @@ function recalculateRankings(categoryId, season, callback) {
           result.t1_points,
           result.t2_points,
           result.t3_points,
+          result.total_bonus_points || 0,
           (err) => {
             insertCount++;
 
@@ -700,6 +798,26 @@ function recalculateRankings(categoryId, season, callback) {
   });
 }
 
+// Recompute bonus points for all tournaments in a category/season
+function recomputeAllBonuses(categoryId, season, callback) {
+  db.all(
+    'SELECT id FROM tournaments WHERE category_id = ? AND season = ? AND tournament_number <= 3',
+    [categoryId, season],
+    (err, tournaments) => {
+      if (err || !tournaments || tournaments.length === 0) {
+        return callback(null);
+      }
+      let completed = 0;
+      tournaments.forEach(t => {
+        computeBonusPoints(t.id, categoryId, () => {
+          completed++;
+          if (completed === tournaments.length) callback(null);
+        });
+      });
+    }
+  );
+}
+
 // Recalculate rankings for a category/season (without reimporting)
 router.post('/recalculate-rankings', authenticateToken, (req, res) => {
   const { categoryId, season } = req.body;
@@ -708,6 +826,8 @@ router.post('/recalculate-rankings', authenticateToken, (req, res) => {
     return res.status(400).json({ error: 'categoryId and season required' });
   }
 
+  // Recompute bonuses first (in case scoring rules changed), then recalculate rankings
+  recomputeAllBonuses(categoryId, season, () => {
   recalculateRankings(categoryId, season, (err) => {
     if (err) {
       return res.status(500).json({ error: err.message });
@@ -723,6 +843,7 @@ router.post('/recalculate-rankings', authenticateToken, (req, res) => {
         });
       });
   });
+  }); // close recomputeAllBonuses
 });
 
 // Get all tournaments
@@ -1222,13 +1343,15 @@ router.post('/recalculate-all-rankings', authenticateToken, async (req, res) => 
 
       for (const combo of combinations) {
         await new Promise((resolve) => {
-          recalculateRankings(combo.category_id, combo.season, (err) => {
-            if (err) {
-              errors.push({ categoryId: combo.category_id, season: combo.season, error: err.message });
-            } else {
-              recalculated++;
-            }
-            resolve();
+          recomputeAllBonuses(combo.category_id, combo.season, () => {
+            recalculateRankings(combo.category_id, combo.season, (err) => {
+              if (err) {
+                errors.push({ categoryId: combo.category_id, season: combo.season, error: err.message });
+              } else {
+                recalculated++;
+              }
+              resolve();
+            });
           });
         });
       }

@@ -393,7 +393,7 @@
               <td style="text-align: center;">${formatTournamentPoints(rank.tournament_1_points, tournamentsPlayed.t1)}</td>
               <td style="text-align: center;">${formatTournamentPoints(rank.tournament_2_points, tournamentsPlayed.t2)}</td>
               <td style="text-align: center;">${formatTournamentPoints(rank.tournament_3_points, tournamentsPlayed.t3)}</td>
-              <td style="text-align: center; font-weight: bold;">${rank.total_match_points}</td>
+              <td style="text-align: center; font-weight: bold;">${rank.total_match_points}${rank.total_bonus_points > 0 ? ` <span style="color: #28a745; font-size: 11px;">(+${rank.total_bonus_points})</span>` : ''}</td>
               <td style="text-align: center;">${rank.cumulated_points}</td>
               <td style="text-align: center;">${rank.cumulated_reprises}</td>
               <td style="text-align: center;">${moyenne}</td>
