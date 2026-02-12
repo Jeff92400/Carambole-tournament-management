@@ -243,6 +243,22 @@ router.get('/ffb-rankings/:id', authenticateToken, (req, res) => {
   });
 });
 
+// Get distinct FFB tiers
+router.get('/ffb-tiers', authenticateToken, (req, res) => {
+  const db = getDb();
+  db.all(
+    `SELECT DISTINCT tier FROM ffb_rankings WHERE tier IS NOT NULL ORDER BY tier`,
+    [],
+    (err, rows) => {
+      if (err) {
+        console.error('Error fetching FFB tiers:', err);
+        return res.status(500).json({ error: 'Erreur lors de la récupération des tiers' });
+      }
+      res.json((rows || []).map(r => r.tier));
+    }
+  );
+});
+
 // Create FFB ranking
 router.post('/ffb-rankings', authenticateToken, (req, res) => {
   const db = getDb();

@@ -354,12 +354,8 @@
             </div>
             <div class="form-group small">
               <label for="frTier">Tier *</label>
-              <select id="frTier" required>
-                <option value="N">National</option>
-                <option value="R">Regional</option>
-                <option value="D">Departemental</option>
-                <option value="NC">Non Classe</option>
-              </select>
+              <input type="text" id="frTier" required list="tierList" placeholder="ex: N, R, D" style="text-transform: uppercase;">
+              <datalist id="tierList"></datalist>
             </div>
             <div class="form-group small">
               <label for="frOrder">Niveau</label>
@@ -504,12 +500,8 @@
           </div>
           <div class="form-group">
             <label for="editFrTier">Tier *</label>
-            <select id="editFrTier" required>
-              <option value="N">National</option>
-              <option value="R">Regional</option>
-              <option value="D">Departemental</option>
-              <option value="NC">Non Classe</option>
-            </select>
+            <input type="text" id="editFrTier" required list="editTierList" placeholder="ex: N, R, D" style="text-transform: uppercase;">
+            <datalist id="editTierList"></datalist>
           </div>
           <div class="form-group">
             <label for="editFrOrder">Niveau (ordre)</label>
@@ -750,6 +742,24 @@
 
     // ==================== FFB RANKINGS ====================
 
+    let tiersList = [];
+
+    async function loadTiers() {
+      try {
+        const response = await fetch(`${API_URL}/reference-data/ffb-tiers`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          tiersList = await response.json();
+          const options = tiersList.map(t => `<option value="${t}">`).join('');
+          document.getElementById('tierList').innerHTML = options;
+          document.getElementById('editTierList').innerHTML = options;
+        }
+      } catch (error) {
+        console.error('Error loading tiers:', error);
+      }
+    }
+
     async function loadRankings() {
       try {
         const response = await fetch(`${API_URL}/reference-data/ffb-rankings`, {
@@ -793,8 +803,7 @@
     }
 
     function getTierName(tier) {
-      const names = { 'N': 'National', 'R': 'Regional', 'D': 'Departemental', 'NC': 'Non Classe' };
-      return names[tier] || tier;
+      return tier || '';
     }
 
     // Add ranking
@@ -802,9 +811,9 @@
       e.preventDefault();
 
       const data = {
-        code: document.getElementById('frCode').value,
+        code: document.getElementById('frCode').value.toUpperCase(),
         display_name: document.getElementById('frName').value,
-        tier: document.getElementById('frTier').value,
+        tier: document.getElementById('frTier').value.toUpperCase().trim(),
         level_order: parseInt(document.getElementById('frOrder').value) || 0
       };
 
@@ -824,6 +833,7 @@
           showMessage('success', 'Classement ajoute');
           document.getElementById('addRankingForm').reset();
           loadRankings();
+          loadTiers();
         } else {
           showMessage('error', result.error || 'Erreur lors de l\'ajout');
         }
@@ -859,9 +869,9 @@
     async function saveRanking() {
       const id = document.getElementById('editFrId').value;
       const data = {
-        code: document.getElementById('editFrCode').value,
+        code: document.getElementById('editFrCode').value.toUpperCase(),
         display_name: document.getElementById('editFrName').value,
-        tier: document.getElementById('editFrTier').value,
+        tier: document.getElementById('editFrTier').value.toUpperCase().trim(),
         level_order: parseInt(document.getElementById('editFrOrder').value) || 0,
         is_active: document.getElementById('editFrActive').checked
       };
@@ -882,6 +892,7 @@
           showMessage('success', 'Classement mis a jour');
           closeModal('editRankingModal');
           loadRankings();
+          loadTiers();
         } else {
           showMessage('error', result.error || 'Erreur lors de la mise a jour');
         }
@@ -1163,6 +1174,7 @@
 
     // Initialize
     loadGameModes();
+    loadTiers();
     loadRankings();
     loadCategories();
     loadCategoryDropdowns();
