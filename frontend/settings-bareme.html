@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Barème de points - CDBHS</title>
+  <link rel="icon" type="image/png" href="images/FrenchBillard-Icon-small.png">
+  <link rel="stylesheet" href="css/styles.css">
+  <script src="js/branding.js"></script>
+</head>
+<body>
+  <div class="container">
+    <div class="navbar">
+      <h2><img id="app-header-icon" src="images/FrenchBillard-Icon-small.png" alt="" style="height: 48px; width: 48px; vertical-align: middle; margin-right: 8px;" onerror="this.src='images/FrenchBillard-Icon-small.png';">Gestion des Fichiers</h2>
+      <div class="nav-links">
+        <a href="dashboard.html">Accueil</a>
+        <a href="rankings.html">Classements</a>
+        <a href="generate-poules.html">Competitions</a>
+        <a href="calendar.html">Calendrier</a>
+        <a href="emailing.html">Com joueurs</a>
+        <a href="settings.html" class="active">Parametres</a>
+        <a href="#" id="logoutBtn" class="nav-logout">Deconnexion</a>
+      </div>
+    </div>
+
+    <div id="errorMessage" class="error" style="display: none;"></div>
+    <div id="successMessage" class="success" style="display: none;"></div>
+
+    <div class="card">
+      <h3>Barème de points</h3>
+
+      <div style="margin-bottom: 15px; padding: 10px; background: #e8f4fd; border-radius: 6px; font-size: 13px; color: #1F4788;">
+        <strong>Barème de base (V/D/N) :</strong> Ces valeurs sont calculées dans le fichier CSV importé par la FFB.<br>
+        <strong>Bonus Moyenne :</strong> Points supplémentaires appliqués automatiquement après import, basés sur la moyenne du joueur vs les seuils de la catégorie (définis dans Paramètres des épreuves).
+      </div>
+
+      <h4 style="margin: 15px 0 10px;">Barème de base (Victoire / Nul / Défaite)</h4>
+      <table class="data-table" id="scoringBaseTable">
+        <thead>
+          <tr>
+            <th>Condition</th>
+            <th style="width: 100px;">Points</th>
+            <th style="width: 120px;">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="scoringBaseBody">
+          <tr><td colspan="3" class="empty-state">Chargement...</td></tr>
+        </tbody>
+      </table>
+
+      <h4 style="margin: 25px 0 10px;">Bonus Moyenne</h4>
+      <table class="data-table" id="scoringBonusTable">
+        <thead>
+          <tr>
+            <th>Condition</th>
+            <th style="width: 100px;">Points</th>
+            <th style="width: 120px;">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="scoringBonusBody">
+          <tr><td colspan="3" class="empty-state">Chargement...</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div style="margin-top: 20px;">
+      <a href="settings.html" style="color: #1F4788;">&larr; Retour aux Parametres</a>
+    </div>
+  </div>
+
+  <!-- Edit Scoring Rule Modal -->
+  <div id="editScoringRuleModal" class="modal-overlay" onclick="if(event.target === this) closeModal('editScoringRuleModal')">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Modifier le Barème</h3>
+        <button class="modal-close" onclick="closeModal('editScoringRuleModal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="editScoringRuleForm">
+          <input type="hidden" id="editSrId">
+          <div class="form-group">
+            <label for="editSrDescription">Condition</label>
+            <input type="text" id="editSrDescription" readonly style="background: #f0f0f0;">
+          </div>
+          <div class="form-group">
+            <label for="editSrPoints">Points *</label>
+            <input type="number" id="editSrPoints" required min="0" max="99">
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn" onclick="closeModal('editScoringRuleModal')">Annuler</button>
+        <button type="button" class="btn btn-primary" onclick="saveScoringRule()">Enregistrer</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/auth-utils.js"></script>
+  <script src="js/app-branding.js"></script>
+  <script>
+    const API_URL = '/api';
+
+    if (!requireAuth()) {
+      throw new Error('Not authenticated');
+    }
+    const token = localStorage.getItem('token');
+
+    // Logout
+    document.getElementById('logoutBtn').addEventListener('click', (e) => {
+      e.preventDefault();
+      logout();
+    });
+
+    // Modal helpers
+    function openModal(id) {
+      document.getElementById(id).style.display = 'flex';
+    }
+    function closeModal(id) {
+      document.getElementById(id).style.display = 'none';
+    }
+
+    function showMessage(type, text) {
+      const id = type === 'error' ? 'errorMessage' : 'successMessage';
+      const el = document.getElementById(id);
+      el.textContent = text;
+      el.style.display = 'block';
+      setTimeout(() => { el.style.display = 'none'; }, 3000);
+    }
+
+    // Load scoring rules
+    async function loadScoringRules() {
+      try {
+        const response = await authFetch(`${API_URL}/reference-data/scoring-rules`);
+        if (!response.ok) {
+          console.error('Error loading scoring rules: status', response.status);
+          return;
+        }
+        const rules = await response.json();
+        if (Array.isArray(rules)) {
+          renderScoringRules(rules);
+        }
+      } catch (error) {
+        console.error('Error loading scoring rules:', error);
+      }
+    }
+
+    function renderScoringRules(rules) {
+      const baseRules = rules.filter(r => r.rule_type === 'BASE_VDL');
+      const bonusRules = rules.filter(r => r.rule_type === 'MOYENNE_BONUS');
+
+      const baseBody = document.getElementById('scoringBaseBody');
+      const bonusBody = document.getElementById('scoringBonusBody');
+
+      if (baseRules.length === 0) {
+        baseBody.innerHTML = '<tr><td colspan="3" class="empty-state">Aucune règle définie</td></tr>';
+      } else {
+        baseBody.innerHTML = baseRules.map(rule => `
+          <tr>
+            <td>${rule.description || rule.condition_key}</td>
+            <td style="text-align: center; font-weight: bold;">${rule.points}</td>
+            <td>
+              <button class="btn btn-sm" onclick="editScoringRule(${rule.id}, '${escapeQuotes(rule.description || rule.condition_key)}', ${rule.points})">Modifier</button>
+            </td>
+          </tr>
+        `).join('');
+      }
+
+      if (bonusRules.length === 0) {
+        bonusBody.innerHTML = '<tr><td colspan="3" class="empty-state">Aucune règle définie</td></tr>';
+      } else {
+        bonusBody.innerHTML = bonusRules.map(rule => `
+          <tr>
+            <td>${rule.description || rule.condition_key}</td>
+            <td style="text-align: center; font-weight: bold; ${rule.points > 0 ? 'color: #28a745;' : ''}">${rule.points}</td>
+            <td>
+              <button class="btn btn-sm" onclick="editScoringRule(${rule.id}, '${escapeQuotes(rule.description || rule.condition_key)}', ${rule.points})">Modifier</button>
+            </td>
+          </tr>
+        `).join('');
+      }
+    }
+
+    function escapeQuotes(str) {
+      return str.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    }
+
+    function editScoringRule(id, description, points) {
+      document.getElementById('editSrId').value = id;
+      document.getElementById('editSrDescription').value = description;
+      document.getElementById('editSrPoints').value = points;
+      openModal('editScoringRuleModal');
+    }
+
+    async function saveScoringRule() {
+      const id = document.getElementById('editSrId').value;
+      const points = parseInt(document.getElementById('editSrPoints').value);
+
+      if (isNaN(points) || points < 0) {
+        showMessage('error', 'Veuillez saisir un nombre de points valide');
+        return;
+      }
+
+      try {
+        const response = await authFetch(`${API_URL}/reference-data/scoring-rules/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ points })
+        });
+
+        if (response.ok) {
+          closeModal('editScoringRuleModal');
+          loadScoringRules();
+          showMessage('success', 'Barème mis à jour');
+        } else {
+          const data = await response.json();
+          showMessage('error', data.error || 'Erreur lors de la mise à jour');
+        }
+      } catch (error) {
+        console.error('Error saving scoring rule:', error);
+        showMessage('error', 'Erreur de connexion');
+      }
+    }
+
+    // Initialize
+    loadScoringRules();
+  </script>
+</body>
+</html>
