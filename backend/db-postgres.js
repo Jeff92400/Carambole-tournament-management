@@ -78,6 +78,11 @@ async function initializeDatabase() {
     // Add player_app_user column to track Player App users (boolean)
     await client.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS player_app_user BOOLEAN DEFAULT FALSE`);
 
+    // Widen ffb_rankings columns to support longer codes like "14.1 CONTINU" (migration - February 2026)
+    await client.query(`ALTER TABLE ffb_rankings ALTER COLUMN code TYPE VARCHAR(20)`);
+    await client.query(`ALTER TABLE ffb_rankings ALTER COLUMN display_name TYPE VARCHAR(100)`);
+    await client.query(`ALTER TABLE ffb_rankings ALTER COLUMN tier TYPE VARCHAR(20)`);
+
     // Add GDPR consent columns to players table (migration - January 2026)
     await client.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS gdpr_consent_date TIMESTAMP`);
     await client.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS gdpr_consent_version VARCHAR(10)`);
@@ -844,9 +849,9 @@ async function initializeDatabase() {
     await client.query(`
       CREATE TABLE IF NOT EXISTS ffb_rankings (
         id SERIAL PRIMARY KEY,
-        code VARCHAR(10) NOT NULL UNIQUE,
-        display_name VARCHAR(50) NOT NULL,
-        tier VARCHAR(5) NOT NULL,
+        code VARCHAR(20) NOT NULL UNIQUE,
+        display_name VARCHAR(100) NOT NULL,
+        tier VARCHAR(20) NOT NULL,
         level_order INTEGER DEFAULT 0,
         is_active BOOLEAN DEFAULT TRUE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
