@@ -865,6 +865,18 @@ async function initializeDatabase() {
       )
     `);
 
+    // Poule configurations table - configurable poule sizes per player count
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS poule_configurations (
+        id SERIAL PRIMARY KEY,
+        num_players INTEGER NOT NULL UNIQUE,
+        poule_sizes JSONB NOT NULL,
+        tables_needed INTEGER NOT NULL DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
     // Admin activity logs table - tracks admin/viewer actions in Tournament App
     await client.query(`
       CREATE TABLE IF NOT EXISTS admin_activity_logs (
@@ -1231,6 +1243,35 @@ async function initializeDatabase() {
       }
       console.log('FFB rankings initialized');
     }
+
+    // Seed default poule configurations (3-20 players)
+    const pouleConfigs = [
+      { num_players: 3,  poule_sizes: [3],             tables_needed: 1 },
+      { num_players: 4,  poule_sizes: [4],             tables_needed: 2 },
+      { num_players: 5,  poule_sizes: [5],             tables_needed: 2 },
+      { num_players: 6,  poule_sizes: [3, 3],          tables_needed: 2 },
+      { num_players: 7,  poule_sizes: [3, 4],          tables_needed: 3 },
+      { num_players: 8,  poule_sizes: [3, 5],          tables_needed: 3 },
+      { num_players: 9,  poule_sizes: [3, 3, 3],       tables_needed: 3 },
+      { num_players: 10, poule_sizes: [3, 3, 4],       tables_needed: 4 },
+      { num_players: 11, poule_sizes: [3, 3, 5],       tables_needed: 4 },
+      { num_players: 12, poule_sizes: [3, 3, 3, 3],    tables_needed: 4 },
+      { num_players: 13, poule_sizes: [3, 3, 3, 4],    tables_needed: 5 },
+      { num_players: 14, poule_sizes: [3, 3, 3, 5],    tables_needed: 5 },
+      { num_players: 15, poule_sizes: [3, 3, 3, 3, 3], tables_needed: 5 },
+      { num_players: 16, poule_sizes: [3, 3, 3, 3, 4], tables_needed: 6 },
+      { num_players: 17, poule_sizes: [3, 3, 3, 3, 5], tables_needed: 6 },
+      { num_players: 18, poule_sizes: [3, 3, 3, 3, 3, 3], tables_needed: 6 },
+      { num_players: 19, poule_sizes: [3, 3, 3, 3, 3, 4], tables_needed: 7 },
+      { num_players: 20, poule_sizes: [3, 3, 3, 3, 3, 5], tables_needed: 7 }
+    ];
+    for (const config of pouleConfigs) {
+      await client.query(
+        'INSERT INTO poule_configurations (num_players, poule_sizes, tables_needed) VALUES ($1, $2, $3) ON CONFLICT (num_players) DO NOTHING',
+        [config.num_players, JSON.stringify(config.poule_sizes), config.tables_needed]
+      );
+    }
+    console.log('Poule configurations initialized');
 
     // Initialize mode mappings (IONOS mode names -> internal game_type)
     const modeMappings = [

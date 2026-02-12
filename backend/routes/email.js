@@ -3337,8 +3337,8 @@ router.post('/poules/:tournoiId/regenerate', authenticateToken, async (req, res)
       }
     }
 
-    // Poule configuration - same as frontend
-    const POULE_CONFIG = {
+    // Load poule configuration from DB (with hardcoded fallback)
+    const DEFAULT_POULE_CONFIG = {
       3: [3], 4: [4], 5: [5],
       6: [3, 3], 7: [3, 4], 8: [3, 5],
       9: [3, 3, 3], 10: [3, 3, 4], 11: [3, 3, 5],
@@ -3347,19 +3347,44 @@ router.post('/poules/:tournoiId/regenerate', authenticateToken, async (req, res)
       18: [3, 3, 3, 3, 3, 3], 19: [3, 3, 3, 3, 3, 4], 20: [3, 3, 3, 3, 3, 5]
     };
 
+    let POULE_CONFIG = { ...DEFAULT_POULE_CONFIG };
+    let minPouleSize = 3;
+    try {
+      const configRows = await new Promise((resolve, reject) => {
+        db.all('SELECT num_players, poule_sizes FROM poule_configurations ORDER BY num_players', [], (err, rows) => {
+          if (err) reject(err); else resolve(rows || []);
+        });
+      });
+      if (configRows.length > 0) {
+        POULE_CONFIG = {};
+        for (const row of configRows) {
+          const sizes = typeof row.poule_sizes === 'string' ? JSON.parse(row.poule_sizes) : row.poule_sizes;
+          POULE_CONFIG[row.num_players] = sizes;
+        }
+        const allSizes = configRows.flatMap(r => {
+          const s = typeof r.poule_sizes === 'string' ? JSON.parse(r.poule_sizes) : r.poule_sizes;
+          return s;
+        });
+        if (allSizes.length > 0) minPouleSize = Math.min(...allSizes);
+      }
+    } catch (configErr) {
+      console.warn('Could not load poule config from DB, using defaults:', configErr.message);
+    }
+
     // Get poule sizes for player count
     const playerCount = activePlayers.length;
     let pouleSizes;
-    if (playerCount < 3) {
+    if (playerCount < minPouleSize) {
       pouleSizes = [];
-    } else if (playerCount > 20) {
+    } else if (POULE_CONFIG[playerCount]) {
+      pouleSizes = POULE_CONFIG[playerCount];
+    } else {
+      // Dynamic fallback for unconfigured player counts
       const base = Math.floor(playerCount / 3);
       const remainder = playerCount % 3;
       pouleSizes = Array(base).fill(3);
       if (remainder === 1) pouleSizes[pouleSizes.length - 1] = 4;
       else if (remainder === 2) pouleSizes[pouleSizes.length - 1] = 5;
-    } else {
-      pouleSizes = POULE_CONFIG[playerCount] || [];
     }
 
     // Create poules with sizes

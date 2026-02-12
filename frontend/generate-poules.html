@@ -1055,8 +1055,8 @@
     let currentGameParams = null;
     let isFinale = false;
 
-    // Poule configuration based on number of players
-    const POULE_CONFIG = {
+    // Default poule configuration (fallback if API unavailable)
+    const DEFAULT_POULE_CONFIG = {
       3: { poules: [3], tables: 1 },
       4: { poules: [4], tables: 2 },
       5: { poules: [5], tables: 2 },
@@ -1077,29 +1077,68 @@
       20: { poules: [3, 3, 3, 3, 3, 5], tables: 7 }
     };
 
+    // Active config (loaded from API, falls back to defaults)
+    let POULE_CONFIG = { ...DEFAULT_POULE_CONFIG };
+    let minPouleSize = 3; // Updated from DB config if 2-player poules exist
+
+    // Load poule configuration from API
+    async function loadPouleConfiguration() {
+      try {
+        const response = await fetch(`${API_URL}/reference-data/poule-configurations`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          const configs = await response.json();
+          if (configs.length > 0) {
+            POULE_CONFIG = {};
+            for (const config of configs) {
+              POULE_CONFIG[config.num_players] = {
+                poules: config.poule_sizes,
+                tables: config.tables_needed
+              };
+            }
+            // Detect minimum poule size from config
+            const allSizes = configs.flatMap(c => c.poule_sizes);
+            if (allSizes.length > 0) {
+              minPouleSize = Math.min(...allSizes);
+            }
+            console.log(`Poule config loaded from DB: ${configs.length} entries, min poule size: ${minPouleSize}`);
+          }
+        }
+      } catch (error) {
+        console.warn('Could not load poule config from API, using defaults:', error.message);
+      }
+    }
+
+    // Load config early (non-blocking)
+    loadPouleConfiguration();
+
     // Get poule configuration for a given number of players
     function getPouleConfig(numPlayers) {
-      if (numPlayers < 3) {
+      if (numPlayers < minPouleSize) {
         return { poules: [], tables: 0, description: 'Pas assez de joueurs' };
       }
-      if (numPlayers > 20) {
-        // Extend pattern for more than 20 players
-        const base = Math.floor(numPlayers / 3);
-        const remainder = numPlayers % 3;
-        const poules = Array(base).fill(3);
-        if (remainder === 1) {
-          poules[poules.length - 1] = 4;
-        } else if (remainder === 2) {
-          poules[poules.length - 1] = 5;
-        }
-        return {
-          poules,
-          tables: poules.length + 1,
-          description: formatPouleDescription(poules)
-        };
+
+      // Check configured values first
+      if (POULE_CONFIG[numPlayers]) {
+        const config = POULE_CONFIG[numPlayers];
+        return { ...config, description: formatPouleDescription(config.poules) };
       }
-      const config = POULE_CONFIG[numPlayers];
-      return { ...config, description: formatPouleDescription(config.poules) };
+
+      // Dynamic fallback for unconfigured player counts
+      const base = Math.floor(numPlayers / 3);
+      const remainder = numPlayers % 3;
+      const poules = Array(base).fill(3);
+      if (remainder === 1) {
+        poules[poules.length - 1] = 4;
+      } else if (remainder === 2) {
+        poules[poules.length - 1] = 5;
+      }
+      return {
+        poules,
+        tables: poules.length + 1,
+        description: formatPouleDescription(poules)
+      };
     }
 
     // Format poule description: "5 poules de 3 et 1 poule de 4 (6 poules)"

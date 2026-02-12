@@ -290,6 +290,7 @@
         <button class="tab active" data-tab="game-modes">Modes de Jeu</button>
         <button class="tab" data-tab="ffb-rankings">Classements FFB</button>
         <button class="tab" data-tab="categories">Categories</button>
+        <button class="tab" data-tab="poule-config">Config. Poules</button>
       </div>
 
       <!-- Tab: Game Modes -->
@@ -429,6 +430,45 @@
           </tbody>
         </table>
       </div>
+
+      <!-- Tab: Poule Configuration -->
+      <div class="tab-content" id="tab-poule-config">
+        <div class="add-form">
+          <h4>Ajouter une Configuration</h4>
+          <form id="addPouleConfigForm" class="form-row">
+            <div class="form-group">
+              <label for="pcNumPlayers">Nb Joueurs *</label>
+              <input type="number" id="pcNumPlayers" required min="2" max="50" placeholder="ex: 8">
+            </div>
+            <div class="form-group">
+              <label for="pcPouleSizes">Composition *</label>
+              <input type="text" id="pcPouleSizes" required placeholder="ex: 3,3,4" title="Tailles des poules separees par des virgules">
+            </div>
+            <div class="form-group">
+              <label for="pcTables">Tables</label>
+              <input type="number" id="pcTables" min="0" placeholder="auto">
+            </div>
+            <div class="form-group" style="flex: 0 0 auto;">
+              <button type="submit" class="btn btn-primary">Ajouter</button>
+            </div>
+          </form>
+        </div>
+
+        <table class="data-table" id="pouleConfigTable">
+          <thead>
+            <tr>
+              <th style="width: 100px;">Nb Joueurs</th>
+              <th>Composition des Poules</th>
+              <th style="width: 80px;">Tables</th>
+              <th style="width: 120px;">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="pouleConfigBody">
+            <tr><td colspan="4" class="empty-state">Chargement...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
     </div>
 
     <!-- Back to settings link -->
@@ -514,6 +554,37 @@
       <div class="modal-footer">
         <button type="button" class="btn" onclick="closeModal('editRankingModal')">Annuler</button>
         <button type="button" class="btn btn-primary" onclick="saveRanking()">Enregistrer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit Poule Config Modal -->
+  <div id="editPouleConfigModal" class="modal-overlay" onclick="if(event.target === this) closeModal('editPouleConfigModal')">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Modifier la Configuration</h3>
+        <button class="modal-close" onclick="closeModal('editPouleConfigModal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="editPouleConfigForm">
+          <input type="hidden" id="editPcId">
+          <div class="form-group">
+            <label for="editPcNumPlayers">Nb Joueurs *</label>
+            <input type="number" id="editPcNumPlayers" required min="2" max="50">
+          </div>
+          <div class="form-group">
+            <label for="editPcPouleSizes">Composition * (ex: 3,3,4)</label>
+            <input type="text" id="editPcPouleSizes" required>
+          </div>
+          <div class="form-group">
+            <label for="editPcTables">Tables</label>
+            <input type="number" id="editPcTables" min="0">
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn" onclick="closeModal('editPouleConfigModal')">Annuler</button>
+        <button type="button" class="btn btn-primary" onclick="savePouleConfig()">Enregistrer</button>
       </div>
     </div>
   </div>
@@ -1175,12 +1246,190 @@
       }
     });
 
+    // ==================== POULE CONFIGURATIONS ====================
+
+    let pouleConfigData = [];
+
+    async function loadPouleConfigurations() {
+      try {
+        const response = await fetch(`${API_URL}/reference-data/poule-configurations`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (response.ok) {
+          pouleConfigData = await response.json();
+          renderPouleConfigurations(pouleConfigData);
+        }
+      } catch (error) {
+        console.error('Error loading poule configurations:', error);
+        document.getElementById('pouleConfigBody').innerHTML =
+          '<tr><td colspan="4" class="empty-state">Erreur de chargement</td></tr>';
+      }
+    }
+
+    function formatPouleComposition(pouleSizes) {
+      if (!pouleSizes || pouleSizes.length === 0) return '-';
+      const numPoules = pouleSizes.length;
+      return `${numPoules} poule${numPoules > 1 ? 's' : ''} : ${pouleSizes.join(' + ')}`;
+    }
+
+    function renderPouleConfigurations(configs) {
+      const tbody = document.getElementById('pouleConfigBody');
+
+      if (configs.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" class="empty-state">Aucune configuration</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = configs.map(config => `
+        <tr>
+          <td style="text-align: center; font-weight: 600;">${config.num_players}</td>
+          <td>${formatPouleComposition(config.poule_sizes)}</td>
+          <td style="text-align: center;">${config.tables_needed}</td>
+          <td class="action-btns">
+            <button class="btn-icon btn-edit" onclick="editPouleConfig(${config.id})" title="Modifier">Modif</button>
+            <button class="btn-icon btn-delete" onclick="deletePouleConfig(${config.id}, ${config.num_players})" title="Supprimer">Suppr</button>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    // Add poule configuration
+    document.getElementById('addPouleConfigForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const numPlayers = parseInt(document.getElementById('pcNumPlayers').value);
+      const pouleSizesStr = document.getElementById('pcPouleSizes').value.trim();
+      const tablesInput = document.getElementById('pcTables').value;
+
+      // Parse composition
+      const pouleSizes = pouleSizesStr.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
+
+      if (pouleSizes.length === 0) {
+        showMessage('error', 'Composition invalide. Utilisez le format: 3,3,4');
+        return;
+      }
+
+      const data = {
+        num_players: numPlayers,
+        poule_sizes: pouleSizes,
+        tables_needed: tablesInput ? parseInt(tablesInput) : undefined
+      };
+
+      try {
+        const response = await fetch(`${API_URL}/reference-data/poule-configurations`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(data)
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+          showMessage('success', 'Configuration ajoutee');
+          document.getElementById('addPouleConfigForm').reset();
+          loadPouleConfigurations();
+        } else {
+          showMessage('error', result.error || 'Erreur lors de l\'ajout');
+        }
+      } catch (error) {
+        console.error('Error adding poule config:', error);
+        showMessage('error', 'Erreur de connexion');
+      }
+    });
+
+    // Edit poule configuration
+    function editPouleConfig(id) {
+      const config = pouleConfigData.find(c => c.id === id);
+      if (!config) return;
+
+      document.getElementById('editPcId').value = config.id;
+      document.getElementById('editPcNumPlayers').value = config.num_players;
+      document.getElementById('editPcPouleSizes').value = config.poule_sizes.join(',');
+      document.getElementById('editPcTables').value = config.tables_needed;
+
+      openModal('editPouleConfigModal');
+    }
+
+    // Save edited poule configuration
+    async function savePouleConfig() {
+      const id = document.getElementById('editPcId').value;
+      const numPlayers = parseInt(document.getElementById('editPcNumPlayers').value);
+      const pouleSizesStr = document.getElementById('editPcPouleSizes').value.trim();
+      const tablesInput = document.getElementById('editPcTables').value;
+
+      const pouleSizes = pouleSizesStr.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
+
+      if (pouleSizes.length === 0) {
+        showMessage('error', 'Composition invalide. Utilisez le format: 3,3,4');
+        return;
+      }
+
+      const data = {
+        num_players: numPlayers,
+        poule_sizes: pouleSizes,
+        tables_needed: tablesInput ? parseInt(tablesInput) : undefined
+      };
+
+      try {
+        const response = await fetch(`${API_URL}/reference-data/poule-configurations/${id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(data)
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+          showMessage('success', 'Configuration mise a jour');
+          closeModal('editPouleConfigModal');
+          loadPouleConfigurations();
+        } else {
+          showMessage('error', result.error || 'Erreur lors de la mise a jour');
+        }
+      } catch (error) {
+        console.error('Error updating poule config:', error);
+        showMessage('error', 'Erreur de connexion');
+      }
+    }
+
+    // Delete poule configuration
+    async function deletePouleConfig(id, numPlayers) {
+      if (!confirm(`Supprimer la configuration pour ${numPlayers} joueurs ?`)) return;
+
+      try {
+        const response = await fetch(`${API_URL}/reference-data/poule-configurations/${id}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+          showMessage('success', 'Configuration supprimee');
+          loadPouleConfigurations();
+        } else {
+          showMessage('error', result.error || 'Erreur lors de la suppression');
+        }
+      } catch (error) {
+        console.error('Error deleting poule config:', error);
+        showMessage('error', 'Erreur de connexion');
+      }
+    }
+
     // Initialize
     loadGameModes();
     loadTiers();
     loadRankings();
     loadCategories();
     loadCategoryDropdowns();
+    loadPouleConfigurations();
     handleHashNavigation(); // Handle initial hash on page load
   </script>
 </body>

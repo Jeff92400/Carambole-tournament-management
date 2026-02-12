@@ -700,4 +700,143 @@ router.get('/time-slots', authenticateToken, (req, res) => {
   res.json(slots);
 });
 
+// ==================== POULE CONFIGURATIONS ====================
+
+// Get all poule configurations
+router.get('/poule-configurations', authenticateToken, (req, res) => {
+  const db = getDb();
+
+  db.all(
+    'SELECT * FROM poule_configurations ORDER BY num_players',
+    [],
+    (err, rows) => {
+      if (err) {
+        console.error('Error fetching poule configurations:', err);
+        return res.status(500).json({ error: 'Erreur lors de la récupération des configurations de poules' });
+      }
+      // Parse JSONB poule_sizes if returned as string
+      const parsed = (rows || []).map(row => ({
+        ...row,
+        poule_sizes: typeof row.poule_sizes === 'string' ? JSON.parse(row.poule_sizes) : row.poule_sizes
+      }));
+      res.json(parsed);
+    }
+  );
+});
+
+// Create poule configuration
+router.post('/poule-configurations', authenticateToken, (req, res) => {
+  const db = getDb();
+  const { num_players, poule_sizes, tables_needed } = req.body;
+
+  if (!num_players || !poule_sizes || !Array.isArray(poule_sizes)) {
+    return res.status(400).json({ error: 'Nombre de joueurs et composition des poules sont requis' });
+  }
+
+  if (num_players < 2) {
+    return res.status(400).json({ error: 'Le nombre de joueurs doit être au moins 2' });
+  }
+
+  // Validate: each poule size must be >= 2
+  if (poule_sizes.some(s => s < 2)) {
+    return res.status(400).json({ error: 'Chaque poule doit avoir au moins 2 joueurs' });
+  }
+
+  // Validate: sum of poule sizes must equal num_players
+  const sum = poule_sizes.reduce((a, b) => a + b, 0);
+  if (sum !== num_players) {
+    return res.status(400).json({ error: `La somme des poules (${sum}) ne correspond pas au nombre de joueurs (${num_players})` });
+  }
+
+  // Calculate tables_needed if not provided: sum of Math.ceil(size/2) per poule size,
+  // but for 3-player poule it's 1 table (round-robin), for 4 it's 2, for 5 it's 2, etc.
+  const tables = tables_needed || poule_sizes.reduce((total, size) => {
+    if (size <= 3) return total + 1;
+    return total + Math.ceil(size / 2);
+  }, 0);
+
+  db.run(
+    `INSERT INTO poule_configurations (num_players, poule_sizes, tables_needed)
+     VALUES ($1, $2, $3)
+     RETURNING id`,
+    [num_players, JSON.stringify(poule_sizes), tables],
+    function(err) {
+      if (err) {
+        console.error('Error creating poule configuration:', err);
+        if (err.message && (err.message.includes('UNIQUE') || err.message.includes('unique'))) {
+          return res.status(400).json({ error: `Une configuration pour ${num_players} joueurs existe déjà` });
+        }
+        return res.status(500).json({ error: 'Erreur lors de la création de la configuration' });
+      }
+      res.json({ success: true, id: this.lastID, message: 'Configuration créée' });
+    }
+  );
+});
+
+// Update poule configuration
+router.put('/poule-configurations/:id', authenticateToken, (req, res) => {
+  const db = getDb();
+  const { id } = req.params;
+  const { num_players, poule_sizes, tables_needed } = req.body;
+
+  if (!num_players || !poule_sizes || !Array.isArray(poule_sizes)) {
+    return res.status(400).json({ error: 'Nombre de joueurs et composition des poules sont requis' });
+  }
+
+  if (num_players < 2) {
+    return res.status(400).json({ error: 'Le nombre de joueurs doit être au moins 2' });
+  }
+
+  if (poule_sizes.some(s => s < 2)) {
+    return res.status(400).json({ error: 'Chaque poule doit avoir au moins 2 joueurs' });
+  }
+
+  const sum = poule_sizes.reduce((a, b) => a + b, 0);
+  if (sum !== num_players) {
+    return res.status(400).json({ error: `La somme des poules (${sum}) ne correspond pas au nombre de joueurs (${num_players})` });
+  }
+
+  const tables = tables_needed || poule_sizes.reduce((total, size) => {
+    if (size <= 3) return total + 1;
+    return total + Math.ceil(size / 2);
+  }, 0);
+
+  db.run(
+    `UPDATE poule_configurations
+     SET num_players = $1, poule_sizes = $2, tables_needed = $3, updated_at = CURRENT_TIMESTAMP
+     WHERE id = $4`,
+    [num_players, JSON.stringify(poule_sizes), tables, id],
+    function(err) {
+      if (err) {
+        console.error('Error updating poule configuration:', err);
+        if (err.message && (err.message.includes('UNIQUE') || err.message.includes('unique'))) {
+          return res.status(400).json({ error: `Une configuration pour ${num_players} joueurs existe déjà` });
+        }
+        return res.status(500).json({ error: 'Erreur lors de la mise à jour de la configuration' });
+      }
+      if (this.changes === 0) {
+        return res.status(404).json({ error: 'Configuration non trouvée' });
+      }
+      res.json({ success: true, message: 'Configuration mise à jour' });
+    }
+  );
+});
+
+// Delete poule configuration
+router.delete('/poule-configurations/:id', authenticateToken, (req, res) => {
+  const db = getDb();
+  const { id } = req.params;
+
+  db.run('DELETE FROM poule_configurations WHERE id = $1', [id], function(err) {
+    if (err) {
+      console.error('Error deleting poule configuration:', err);
+      return res.status(500).json({ error: 'Erreur lors de la suppression' });
+    }
+    if (this.changes === 0) {
+      return res.status(404).json({ error: 'Configuration non trouvée' });
+    }
+    res.json({ success: true, message: 'Configuration supprimée' });
+  });
+});
+
 module.exports = router;
