@@ -7,6 +7,100 @@
   <link rel="icon" type="image/png" href="images/FrenchBillard-Icon-small.png">
   <link rel="stylesheet" href="css/styles.css">
   <script src="js/branding.js"></script>
+  <style>
+    .scoring-block {
+      margin-bottom: 30px;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .scoring-block-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 16px;
+      background: var(--color-primary, #1F4788);
+      color: white;
+    }
+    .scoring-block-header h4 {
+      margin: 0;
+      font-size: 15px;
+    }
+    .scoring-block-body {
+      padding: 0;
+    }
+    .scoring-block table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .scoring-block th {
+      padding: 10px 16px;
+      text-align: left;
+      background: #f0f0f0;
+      font-size: 13px;
+      color: #555;
+    }
+    .scoring-block td {
+      padding: 10px 16px;
+      border-bottom: 1px solid #eee;
+      font-size: 14px;
+    }
+    .add-condition-row {
+      display: flex;
+      gap: 10px;
+      padding: 10px 16px;
+      background: #fafafa;
+      border-top: 1px solid #eee;
+      align-items: center;
+    }
+    .add-condition-row input {
+      padding: 6px 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 13px;
+    }
+    .add-condition-row input[type="text"] {
+      flex: 1;
+    }
+    .add-condition-row input[type="number"] {
+      width: 80px;
+    }
+    .btn-add-sm {
+      padding: 6px 14px;
+      background: #28a745;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 13px;
+      white-space: nowrap;
+    }
+    .btn-add-sm:hover { background: #218838; }
+    .btn-delete-sm {
+      padding: 4px 8px;
+      background: none;
+      color: #dc3545;
+      border: 1px solid #dc3545;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    .btn-delete-sm:hover { background: #dc3545; color: white; }
+    .add-block-form {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+    .add-block-form input {
+      padding: 8px 12px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+      flex: 1;
+      max-width: 300px;
+    }
+  </style>
 </head>
 <body>
   <div class="container">
@@ -29,38 +123,22 @@
     <div class="card">
       <h3>Barème de points</h3>
 
-      <div style="margin-bottom: 15px; padding: 10px; background: #e8f4fd; border-radius: 6px; font-size: 13px; color: #1F4788;">
-        <strong>Barème de base (V/D/N) :</strong> Ces valeurs sont calculées dans le fichier CSV importé par la FFB.<br>
-        <strong>Bonus Moyenne :</strong> Points supplémentaires appliqués automatiquement après import, basés sur la moyenne du joueur vs les seuils de la catégorie (définis dans Paramètres des épreuves).
+      <div style="margin-bottom: 20px; padding: 10px; background: #e8f4fd; border-radius: 6px; font-size: 13px; color: #1F4788;">
+        Configurez les composantes du barème de points pour les compétitions. Chaque bloc regroupe des conditions avec des points associés.
       </div>
 
-      <h4 style="margin: 15px 0 10px;">Barème de base (Victoire / Nul / Défaite)</h4>
-      <table class="data-table" id="scoringBaseTable">
-        <thead>
-          <tr>
-            <th>Condition</th>
-            <th style="width: 100px;">Points</th>
-            <th style="width: 120px;">Actions</th>
-          </tr>
-        </thead>
-        <tbody id="scoringBaseBody">
-          <tr><td colspan="3" class="empty-state">Chargement...</td></tr>
-        </tbody>
-      </table>
+      <div id="scoringBlocks">
+        <div style="text-align: center; padding: 20px; color: #666;">Chargement...</div>
+      </div>
 
-      <h4 style="margin: 25px 0 10px;">Bonus Moyenne</h4>
-      <table class="data-table" id="scoringBonusTable">
-        <thead>
-          <tr>
-            <th>Condition</th>
-            <th style="width: 100px;">Points</th>
-            <th style="width: 120px;">Actions</th>
-          </tr>
-        </thead>
-        <tbody id="scoringBonusBody">
-          <tr><td colspan="3" class="empty-state">Chargement...</td></tr>
-        </tbody>
-      </table>
+      <!-- Add new block -->
+      <div style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+        <h4 style="margin: 0 0 10px; font-size: 14px; color: #1F4788;">Ajouter un nouveau bloc de conditions</h4>
+        <div class="add-block-form">
+          <input type="text" id="newBlockName" placeholder="Nom du bloc (ex: Bonus Présence)" maxlength="50">
+          <button class="btn-add-sm" onclick="addBlock()">Ajouter le bloc</button>
+        </div>
+      </div>
     </div>
 
     <div style="margin-top: 20px;">
@@ -72,7 +150,7 @@
   <div id="editScoringRuleModal" class="modal-overlay" onclick="if(event.target === this) closeModal('editScoringRuleModal')">
     <div class="modal-content">
       <div class="modal-header">
-        <h3>Modifier le Barème</h3>
+        <h3>Modifier la condition</h3>
         <button class="modal-close" onclick="closeModal('editScoringRuleModal')">&times;</button>
       </div>
       <div class="modal-body">
@@ -80,7 +158,7 @@
           <input type="hidden" id="editSrId">
           <div class="form-group">
             <label for="editSrDescription">Condition</label>
-            <input type="text" id="editSrDescription" readonly style="background: #f0f0f0;">
+            <input type="text" id="editSrDescription" required>
           </div>
           <div class="form-group">
             <label for="editSrPoints">Points *</label>
@@ -105,13 +183,19 @@
     }
     const token = localStorage.getItem('token');
 
-    // Logout
+    let allRules = [];
+
+    // Block display names (for built-in types)
+    const BLOCK_LABELS = {
+      'BASE_VDL': 'Barème de base (Victoire / Nul / Défaite)',
+      'MOYENNE_BONUS': 'Bonus Moyenne'
+    };
+
     document.getElementById('logoutBtn').addEventListener('click', (e) => {
       e.preventDefault();
       logout();
     });
 
-    // Modal helpers
     function openModal(id) {
       document.getElementById(id).style.display = 'flex';
     }
@@ -127,72 +211,198 @@
       setTimeout(() => { el.style.display = 'none'; }, 3000);
     }
 
+    function escapeHtml(str) {
+      return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
     // Load scoring rules
     async function loadScoringRules() {
       try {
         const response = await authFetch(`${API_URL}/reference-data/scoring-rules`);
-        if (!response.ok) {
-          console.error('Error loading scoring rules: status', response.status);
-          return;
-        }
+        if (!response.ok) return;
         const rules = await response.json();
         if (Array.isArray(rules)) {
-          renderScoringRules(rules);
+          allRules = rules;
+          renderBlocks(rules);
         }
       } catch (error) {
         console.error('Error loading scoring rules:', error);
       }
     }
 
-    function renderScoringRules(rules) {
-      const baseRules = rules.filter(r => r.rule_type === 'BASE_VDL');
-      const bonusRules = rules.filter(r => r.rule_type === 'MOYENNE_BONUS');
+    function renderBlocks(rules) {
+      const container = document.getElementById('scoringBlocks');
 
-      const baseBody = document.getElementById('scoringBaseBody');
-      const bonusBody = document.getElementById('scoringBonusBody');
+      // Group by rule_type, preserving order
+      const blocks = [];
+      const seen = new Set();
+      rules.forEach(r => {
+        if (!seen.has(r.rule_type)) {
+          seen.add(r.rule_type);
+          blocks.push(r.rule_type);
+        }
+      });
 
-      if (baseRules.length === 0) {
-        baseBody.innerHTML = '<tr><td colspan="3" class="empty-state">Aucune règle définie</td></tr>';
-      } else {
-        baseBody.innerHTML = baseRules.map(rule => `
-          <tr>
-            <td>${rule.description || rule.condition_key}</td>
-            <td style="text-align: center; font-weight: bold;">${rule.points}</td>
-            <td>
-              <button class="btn btn-sm" onclick="editScoringRule(${rule.id}, '${escapeQuotes(rule.description || rule.condition_key)}', ${rule.points})">Modifier</button>
-            </td>
-          </tr>
-        `).join('');
+      if (blocks.length === 0) {
+        container.innerHTML = '<div style="text-align: center; padding: 20px; color: #666;">Aucun barème configuré</div>';
+        return;
       }
 
-      if (bonusRules.length === 0) {
-        bonusBody.innerHTML = '<tr><td colspan="3" class="empty-state">Aucune règle définie</td></tr>';
-      } else {
-        bonusBody.innerHTML = bonusRules.map(rule => `
-          <tr>
-            <td>${rule.description || rule.condition_key}</td>
-            <td style="text-align: center; font-weight: bold; ${rule.points > 0 ? 'color: #28a745;' : ''}">${rule.points}</td>
-            <td>
-              <button class="btn btn-sm" onclick="editScoringRule(${rule.id}, '${escapeQuotes(rule.description || rule.condition_key)}', ${rule.points})">Modifier</button>
-            </td>
-          </tr>
-        `).join('');
+      container.innerHTML = blocks.map(blockType => {
+        const blockRules = rules.filter(r => r.rule_type === blockType);
+        const label = BLOCK_LABELS[blockType] || blockType;
+        const isBuiltIn = blockType === 'BASE_VDL' || blockType === 'MOYENNE_BONUS';
+
+        return `
+          <div class="scoring-block">
+            <div class="scoring-block-header">
+              <h4>${escapeHtml(label)}</h4>
+              ${!isBuiltIn ? `<button class="btn-delete-sm" style="border-color: white; color: white;" onclick="deleteBlock('${escapeHtml(blockType)}')">Supprimer le bloc</button>` : ''}
+            </div>
+            <div class="scoring-block-body">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Condition</th>
+                    <th style="width: 100px; text-align: center;">Points</th>
+                    <th style="width: 150px; text-align: center;">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${blockRules.map(rule => `
+                    <tr>
+                      <td>${escapeHtml(rule.description || rule.condition_key)}</td>
+                      <td style="text-align: center; font-weight: bold; ${rule.points > 0 ? 'color: #28a745;' : ''}">${rule.points}</td>
+                      <td style="text-align: center;">
+                        <button class="btn btn-sm" onclick="editScoringRule(${rule.id})">Modifier</button>
+                        <button class="btn-delete-sm" onclick="deleteCondition(${rule.id})">Suppr</button>
+                      </td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+              <div class="add-condition-row">
+                <input type="text" id="newCond_${blockType}" placeholder="Nouvelle condition...">
+                <input type="number" id="newPts_${blockType}" placeholder="Pts" min="0" value="0">
+                <button class="btn-add-sm" onclick="addCondition('${escapeHtml(blockType)}')">Ajouter</button>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // Add a new block
+    async function addBlock() {
+      const nameInput = document.getElementById('newBlockName');
+      const name = nameInput.value.trim();
+
+      if (!name) {
+        showMessage('error', 'Veuillez saisir un nom pour le bloc');
+        return;
+      }
+
+      // Convert to uppercase key
+      const ruleType = name.toUpperCase().replace(/\s+/g, '_').replace(/[^A-Z0-9_]/g, '');
+
+      if (!ruleType) {
+        showMessage('error', 'Nom invalide');
+        return;
+      }
+
+      // Check if block already exists
+      if (allRules.some(r => r.rule_type === ruleType)) {
+        showMessage('error', 'Ce bloc existe déjà');
+        return;
+      }
+
+      // Create with a default first condition
+      try {
+        const response = await authFetch(`${API_URL}/reference-data/scoring-rules`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            rule_type: ruleType,
+            condition_key: 'CONDITION_1',
+            points: 0,
+            display_order: 1,
+            description: 'Condition 1'
+          })
+        });
+
+        if (response.ok) {
+          // Also store the display name as the block label
+          BLOCK_LABELS[ruleType] = name;
+          nameInput.value = '';
+          loadScoringRules();
+          showMessage('success', `Bloc "${name}" créé`);
+        } else {
+          const data = await response.json();
+          showMessage('error', data.error || 'Erreur lors de la création');
+        }
+      } catch (error) {
+        showMessage('error', 'Erreur de connexion');
       }
     }
 
-    function escapeQuotes(str) {
-      return str.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    // Add a condition to a block
+    async function addCondition(ruleType) {
+      const condInput = document.getElementById(`newCond_${ruleType}`);
+      const ptsInput = document.getElementById(`newPts_${ruleType}`);
+
+      const description = condInput.value.trim();
+      const points = parseInt(ptsInput.value) || 0;
+
+      if (!description) {
+        showMessage('error', 'Veuillez saisir une description pour la condition');
+        return;
+      }
+
+      // Generate a unique condition_key
+      const blockRules = allRules.filter(r => r.rule_type === ruleType);
+      const conditionKey = description.toUpperCase().replace(/\s+/g, '_').replace(/[^A-Z0-9_]/g, '').substring(0, 30) || `COND_${blockRules.length + 1}`;
+
+      try {
+        const response = await authFetch(`${API_URL}/reference-data/scoring-rules`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            rule_type: ruleType,
+            condition_key: conditionKey,
+            points: points,
+            display_order: blockRules.length + 1,
+            description: description
+          })
+        });
+
+        if (response.ok) {
+          condInput.value = '';
+          ptsInput.value = '0';
+          loadScoringRules();
+          showMessage('success', 'Condition ajoutée');
+        } else {
+          const data = await response.json();
+          showMessage('error', data.error || 'Erreur lors de la création');
+        }
+      } catch (error) {
+        showMessage('error', 'Erreur de connexion');
+      }
     }
 
-    function editScoringRule(id, description, points) {
+    // Edit a condition
+    function editScoringRule(id) {
+      const rule = allRules.find(r => r.id === id);
+      if (!rule) return;
+
       document.getElementById('editSrId').value = id;
-      document.getElementById('editSrDescription').value = description;
-      document.getElementById('editSrPoints').value = points;
+      document.getElementById('editSrDescription').value = rule.description || rule.condition_key;
+      document.getElementById('editSrPoints').value = rule.points;
       openModal('editScoringRuleModal');
     }
 
     async function saveScoringRule() {
       const id = document.getElementById('editSrId').value;
+      const description = document.getElementById('editSrDescription').value.trim();
       const points = parseInt(document.getElementById('editSrPoints').value);
 
       if (isNaN(points) || points < 0) {
@@ -204,19 +414,58 @@
         const response = await authFetch(`${API_URL}/reference-data/scoring-rules/${id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ points })
+          body: JSON.stringify({ points, description: description || undefined })
         });
 
         if (response.ok) {
           closeModal('editScoringRuleModal');
           loadScoringRules();
-          showMessage('success', 'Barème mis à jour');
+          showMessage('success', 'Condition mise à jour');
         } else {
           const data = await response.json();
           showMessage('error', data.error || 'Erreur lors de la mise à jour');
         }
       } catch (error) {
-        console.error('Error saving scoring rule:', error);
+        showMessage('error', 'Erreur de connexion');
+      }
+    }
+
+    // Delete a single condition
+    async function deleteCondition(id) {
+      if (!confirm('Supprimer cette condition ?')) return;
+
+      try {
+        const response = await authFetch(`${API_URL}/reference-data/scoring-rules/${id}`, {
+          method: 'DELETE'
+        });
+
+        if (response.ok) {
+          loadScoringRules();
+          showMessage('success', 'Condition supprimée');
+        } else {
+          const data = await response.json();
+          showMessage('error', data.error || 'Erreur');
+        }
+      } catch (error) {
+        showMessage('error', 'Erreur de connexion');
+      }
+    }
+
+    // Delete an entire block (all conditions in it)
+    async function deleteBlock(ruleType) {
+      const blockRules = allRules.filter(r => r.rule_type === ruleType);
+      if (!confirm(`Supprimer le bloc "${BLOCK_LABELS[ruleType] || ruleType}" et ses ${blockRules.length} condition(s) ?`)) return;
+
+      try {
+        for (const rule of blockRules) {
+          await authFetch(`${API_URL}/reference-data/scoring-rules/${rule.id}`, {
+            method: 'DELETE'
+          });
+        }
+        delete BLOCK_LABELS[ruleType];
+        loadScoringRules();
+        showMessage('success', 'Bloc supprimé');
+      } catch (error) {
         showMessage('error', 'Erreur de connexion');
       }
     }

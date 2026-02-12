@@ -872,10 +872,6 @@ router.post('/scoring-rules', authenticateToken, (req, res) => {
     return res.status(400).json({ error: 'Type de règle et clé de condition sont requis' });
   }
 
-  if (!['BASE_VDL', 'MOYENNE_BONUS'].includes(rule_type)) {
-    return res.status(400).json({ error: 'Type de règle invalide (BASE_VDL ou MOYENNE_BONUS)' });
-  }
-
   if (points === undefined || points === null || isNaN(parseInt(points))) {
     return res.status(400).json({ error: 'Le nombre de points est requis' });
   }
