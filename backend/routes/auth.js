@@ -138,7 +138,7 @@ router.post('/login', (req, res) => {
       return res.status(401).json({ error: 'Nom d\'utilisateur ou mot de passe incorrect' });
     }
 
-    bcrypt.compare(password, user.password_hash, (err, result) => {
+    bcrypt.compare(password, user.password_hash, async (err, result) => {
       if (err || !result) {
         // Log failed login attempt (wrong password)
         logAdminAction({
@@ -152,15 +152,14 @@ router.post('/login', (req, res) => {
       // Update last login
       db.run('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = $1', [user.id], () => {});
 
-      const token = jwt.sign(
-        {
-          userId: user.id,
-          username: user.username,
-          role: user.role
-        },
-        JWT_SECRET,
-        { expiresIn: '24h' }
-      );
+      const tokenPayload = {
+        userId: user.id,
+        username: user.username,
+        role: user.role,
+        clubId: user.club_id || null
+      };
+
+      const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '24h' });
 
       // Log successful login
       logAdminAction({
@@ -169,13 +168,31 @@ router.post('/login', (req, res) => {
         details: `Connexion réussie pour ${user.username}`
       });
 
+      // If club role, fetch club name for frontend
+      let clubName = null;
+      if (user.club_id) {
+        try {
+          const clubRow = await new Promise((resolve, reject) => {
+            db.get('SELECT display_name FROM clubs WHERE id = $1', [user.club_id], (err, row) => {
+              if (err) reject(err);
+              else resolve(row);
+            });
+          });
+          if (clubRow) clubName = clubRow.display_name;
+        } catch (e) {
+          console.error('Error fetching club name:', e);
+        }
+      }
+
       res.json({
         token,
         message: 'Connexion réussie',
         user: {
           id: user.id,
           username: user.username,
-          role: user.role
+          role: user.role,
+          club_id: user.club_id || null,
+          club_name: clubName
         }
       });
     });
@@ -184,7 +201,7 @@ router.post('/login', (req, res) => {
 
 // Get current user info
 router.get('/me', authenticateToken, (req, res) => {
-  db.get('SELECT id, username, email, role, receive_tournament_alerts FROM users WHERE id = $1', [req.user.userId], (err, user) => {
+  db.get('SELECT id, username, email, role, receive_tournament_alerts, club_id FROM users WHERE id = $1', [req.user.userId], (err, user) => {
     if (err || !user) {
       return res.json({
         userId: req.user.userId,
@@ -197,6 +214,7 @@ router.get('/me', authenticateToken, (req, res) => {
       username: user.username,
       email: user.email,
       role: user.role,
+      club_id: user.club_id || null,
       receive_tournament_alerts: user.receive_tournament_alerts || false
     });
   });
@@ -561,7 +579,8 @@ router.get('/users', authenticateToken, (req, res) => {
   if (req.user.role !== 'admin' && req.user.role !== 'lecteur' && !req.user.admin) {
     return res.status(403).json({ error: 'Access denied' });
   }
-  db.all('SELECT id, username, email, role, is_active, receive_tournament_alerts, created_at, last_login FROM users ORDER BY username', [], (err, users) => {
+  db.all(`SELECT u.id, u.username, u.email, u.role, u.is_active, u.receive_tournament_alerts, u.created_at, u.last_login, u.club_id, c.display_name as club_name
+    FROM users u LEFT JOIN clubs c ON u.club_id = c.id ORDER BY u.username`, [], (err, users) => {
     if (err) {
       return res.status(500).json({ error: 'Database error' });
     }
@@ -571,7 +590,7 @@ router.get('/users', authenticateToken, (req, res) => {
 
 // Create new user (admin only)
 router.post('/users', authenticateToken, requireAdmin, (req, res) => {
-  const { username, password, role, email } = req.body;
+  const { username, password, role, email, club_id } = req.body;
 
   if (!username || !password) {
     return res.status(400).json({ error: 'Username and password required' });
@@ -581,9 +600,15 @@ router.post('/users', authenticateToken, requireAdmin, (req, res) => {
     return res.status(400).json({ error: 'Password must be at least 6 characters' });
   }
 
-  const validRoles = ['admin', 'viewer', 'lecteur'];
+  const validRoles = ['admin', 'viewer', 'lecteur', 'club'];
   const userRole = validRoles.includes(role) ? role : 'viewer';
   const userEmail = email ? email.toLowerCase().trim() : null;
+  const userClubId = (userRole === 'club' && club_id) ? parseInt(club_id) : null;
+
+  // Validate club_id is required for club role
+  if (userRole === 'club' && !userClubId) {
+    return res.status(400).json({ error: 'Un club doit être sélectionné pour le rôle Responsable Club' });
+  }
 
   // Check if username exists
   db.get('SELECT id FROM users WHERE username = $1', [username], (err, existing) => {
@@ -595,36 +620,50 @@ router.post('/users', authenticateToken, requireAdmin, (req, res) => {
       return res.status(400).json({ error: 'Username already exists' });
     }
 
-    bcrypt.hash(password, 10, (err, hash) => {
-      if (err) {
-        return res.status(500).json({ error: 'Error hashing password' });
-      }
-
-      db.run(
-        'INSERT INTO users (username, password_hash, role, email) VALUES ($1, $2, $3, $4) RETURNING id',
-        [username, hash, userRole, userEmail],
-        function(err) {
-          if (err) {
-            return res.status(500).json({ error: 'Error creating user' });
-          }
-
-          // Log user creation
-          logAdminAction({
-            req,
-            action: ACTION_TYPES.USER_CREATED,
-            details: `Création utilisateur: ${username} (${userRole})`,
-            targetType: 'user',
-            targetId: this.lastID,
-            targetName: username
-          });
-
-          res.json({
-            message: 'User created successfully',
-            user: { id: this.lastID, username, role: userRole, email: userEmail }
-          });
+    // If club role, validate club exists
+    const proceed = () => {
+      bcrypt.hash(password, 10, (err, hash) => {
+        if (err) {
+          return res.status(500).json({ error: 'Error hashing password' });
         }
-      );
-    });
+
+        db.run(
+          'INSERT INTO users (username, password_hash, role, email, club_id) VALUES ($1, $2, $3, $4, $5) RETURNING id',
+          [username, hash, userRole, userEmail, userClubId],
+          function(err) {
+            if (err) {
+              return res.status(500).json({ error: 'Error creating user' });
+            }
+
+            // Log user creation
+            logAdminAction({
+              req,
+              action: ACTION_TYPES.USER_CREATED,
+              details: `Création utilisateur: ${username} (${userRole})${userClubId ? ' - Club ID: ' + userClubId : ''}`,
+              targetType: 'user',
+              targetId: this.lastID,
+              targetName: username
+            });
+
+            res.json({
+              message: 'User created successfully',
+              user: { id: this.lastID, username, role: userRole, email: userEmail, club_id: userClubId }
+            });
+          }
+        );
+      });
+    };
+
+    if (userClubId) {
+      db.get('SELECT id FROM clubs WHERE id = $1', [userClubId], (err, club) => {
+        if (err || !club) {
+          return res.status(400).json({ error: 'Club non trouvé' });
+        }
+        proceed();
+      });
+    } else {
+      proceed();
+    }
   });
 });
 
@@ -656,9 +695,15 @@ router.put('/users/:id', authenticateToken, requireAdmin, (req, res) => {
       params.push(username);
     }
 
-    if (role && ['admin', 'viewer', 'lecteur'].includes(role)) {
+    if (role && ['admin', 'viewer', 'lecteur', 'club'].includes(role)) {
       updates.push(`role = $${paramIndex++}`);
       params.push(role);
+    }
+
+    // Handle club_id update (only relevant for club role)
+    if (req.body.club_id !== undefined) {
+      updates.push(`club_id = $${paramIndex++}`);
+      params.push(req.body.club_id ? parseInt(req.body.club_id) : null);
     }
 
     if (typeof is_active === 'number') {
@@ -806,10 +851,18 @@ function requireAdmin(req, res, next) {
   next();
 }
 
+// Middleware to require club or admin role (for player management)
+function requireClubOrAdmin(req, res, next) {
+  if (req.user.role === 'admin' || req.user.role === 'club' || req.user.admin) {
+    return next();
+  }
+  return res.status(403).json({ error: 'Access denied' });
+}
+
 // Middleware to require at least viewer role (for read-only access)
 function requireViewer(req, res, next) {
-  // admin, viewer, and lecteur can access read endpoints
-  if (req.user.role === 'admin' || req.user.role === 'viewer' || req.user.role === 'lecteur' || req.user.admin) {
+  // admin, viewer, lecteur and club can access read endpoints
+  if (req.user.role === 'admin' || req.user.role === 'viewer' || req.user.role === 'lecteur' || req.user.role === 'club' || req.user.admin) {
     return next();
   }
   return res.status(403).json({ error: 'Access denied' });
@@ -817,7 +870,7 @@ function requireViewer(req, res, next) {
 
 // Middleware to require viewer or above (excludes lecteur - for write operations)
 function requireViewerWrite(req, res, next) {
-  if (req.user.role === 'admin' || req.user.role === 'viewer' || req.user.admin) {
+  if (req.user.role === 'admin' || req.user.role === 'viewer' || req.user.role === 'club' || req.user.admin) {
     return next();
   }
   return res.status(403).json({ error: 'Access denied - read-only role' });
@@ -826,6 +879,7 @@ function requireViewerWrite(req, res, next) {
 module.exports = router;
 module.exports.authenticateToken = authenticateToken;
 module.exports.requireAdmin = requireAdmin;
+module.exports.requireClubOrAdmin = requireClubOrAdmin;
 module.exports.requireViewer = requireViewer;
 module.exports.requireViewerWrite = requireViewerWrite;
 module.exports.JWT_SECRET = JWT_SECRET;

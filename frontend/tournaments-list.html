@@ -112,7 +112,8 @@
 
     // Check user role and show/hide admin elements
     const userRole = localStorage.getItem('userRole');
-    if (userRole === 'admin' || userRole === 'lecteur') {
+    const isLecteur = userRole === 'lecteur';
+    if (userRole === 'admin' || isLecteur) {
       document.querySelectorAll('.admin-only').forEach(el => el.style.display = '');
     } else {
       document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');

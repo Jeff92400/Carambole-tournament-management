@@ -1030,8 +1030,24 @@ router.get('/tournoi/:id/inscriptions', authenticateToken, (req, res) => {
 });
 
 // Get all inscriptions
-router.get('/', authenticateToken, (req, res) => {
+router.get('/', authenticateToken, async (req, res) => {
   const { tournoi_id, licence, source } = req.query;
+
+  // For club role, get their club's display_name to filter
+  let clubFilter = null;
+  if (req.user.role === 'club' && req.user.clubId) {
+    try {
+      const clubRow = await new Promise((resolve, reject) => {
+        db.get('SELECT name FROM clubs WHERE id = $1', [req.user.clubId], (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        });
+      });
+      if (clubRow) clubFilter = clubRow.name;
+    } catch (e) {
+      console.error('Error fetching club name for filter:', e);
+    }
+  }
 
   let query = `
     SELECT
@@ -1061,6 +1077,12 @@ router.get('/', authenticateToken, (req, res) => {
   if (source) {
     conditions.push(`i.source = $${params.length + 1}`);
     params.push(source);
+  }
+
+  // Club role: filter to their club's players only
+  if (clubFilter) {
+    conditions.push(`UPPER(p.club) = UPPER($${params.length + 1})`);
+    params.push(clubFilter);
   }
 
   if (conditions.length > 0) {
@@ -2814,11 +2836,22 @@ router.get('/tournoi/:id/simulation', authenticateToken, async (req, res) => {
       }
     }
 
-    if (activeInscriptions.length < 3) {
+    // Get minimum players needed from poule config (default: 3)
+    let minPlayersNeeded = 3;
+    try {
+      const minRow = await new Promise((resolve, reject) => {
+        db.get('SELECT MIN(num_players) as min_players FROM poule_configurations', [], (err, row) => {
+          if (err) reject(err); else resolve(row);
+        });
+      });
+      if (minRow && minRow.min_players) minPlayersNeeded = minRow.min_players;
+    } catch (e) { /* keep default */ }
+
+    if (activeInscriptions.length < minPlayersNeeded) {
       return res.json({
         available: false,
         reason: 'not_enough_players',
-        message: `Pas assez de joueurs inscrits (${activeInscriptions.length}/3 minimum)`,
+        message: `Pas assez de joueurs inscrits (${activeInscriptions.length}/${minPlayersNeeded} minimum)`,
         inscriptionCount: activeInscriptions.length
       });
     }
@@ -2942,7 +2975,7 @@ router.get('/tournoi/:id/simulation', authenticateToken, async (req, res) => {
     });
 
     // Get poule configuration
-    const config = getSimulationPouleConfig(playersWithRanks.length);
+    const config = await getSimulationPouleConfig(playersWithRanks.length);
 
     // Distribute players using serpentine algorithm
     const poules = distributeSimulationSerpentine(playersWithRanks, config.poules);
@@ -2982,8 +3015,8 @@ router.get('/tournoi/:id/simulation', authenticateToken, async (req, res) => {
   }
 });
 
-// Poule configuration for simulation
-const SIMULATION_POULE_CONFIG = {
+// Default poule configuration for simulation (fallback if DB unavailable)
+const DEFAULT_SIMULATION_POULE_CONFIG = {
   3: { poules: [3], tables: 1 },
   4: { poules: [4], tables: 2 },
   5: { poules: [5], tables: 2 },
@@ -3004,27 +3037,55 @@ const SIMULATION_POULE_CONFIG = {
   20: { poules: [3, 3, 3, 3, 3, 5], tables: 7 }
 };
 
-function getSimulationPouleConfig(numPlayers) {
-  if (numPlayers < 3) {
+async function getSimulationPouleConfig(numPlayers) {
+  // Load config from DB with fallback to defaults
+  let SIMULATION_POULE_CONFIG = { ...DEFAULT_SIMULATION_POULE_CONFIG };
+  let minPouleSize = 3;
+  try {
+    const configRows = await new Promise((resolve, reject) => {
+      db.all('SELECT num_players, poule_sizes, tables_needed FROM poule_configurations ORDER BY num_players', [], (err, rows) => {
+        if (err) reject(err); else resolve(rows || []);
+      });
+    });
+    if (configRows.length > 0) {
+      SIMULATION_POULE_CONFIG = {};
+      for (const row of configRows) {
+        const sizes = typeof row.poule_sizes === 'string' ? JSON.parse(row.poule_sizes) : row.poule_sizes;
+        SIMULATION_POULE_CONFIG[row.num_players] = { poules: sizes, tables: row.tables_needed };
+      }
+      const allSizes = configRows.flatMap(r => {
+        const s = typeof r.poule_sizes === 'string' ? JSON.parse(r.poule_sizes) : r.poule_sizes;
+        return s;
+      });
+      if (allSizes.length > 0) minPouleSize = Math.min(...allSizes);
+    }
+  } catch (configErr) {
+    console.warn('Could not load poule config from DB, using defaults:', configErr.message);
+  }
+
+  if (numPlayers < minPouleSize) {
     return { poules: [], tables: 0, description: 'Pas assez de joueurs' };
   }
-  if (numPlayers > 20) {
-    const base = Math.floor(numPlayers / 3);
-    const remainder = numPlayers % 3;
-    const poules = Array(base).fill(3);
-    if (remainder === 1) {
-      poules[poules.length - 1] = 4;
-    } else if (remainder === 2) {
-      poules[poules.length - 1] = 5;
-    }
-    return {
-      poules,
-      tables: poules.length + 1,
-      description: formatSimulationPouleDescription(poules)
-    };
+
+  if (SIMULATION_POULE_CONFIG[numPlayers]) {
+    const config = SIMULATION_POULE_CONFIG[numPlayers];
+    return { ...config, description: formatSimulationPouleDescription(config.poules) };
   }
-  const config = SIMULATION_POULE_CONFIG[numPlayers];
-  return { ...config, description: formatSimulationPouleDescription(config.poules) };
+
+  // Dynamic fallback for unconfigured player counts
+  const base = Math.floor(numPlayers / 3);
+  const remainder = numPlayers % 3;
+  const poules = Array(base).fill(3);
+  if (remainder === 1) {
+    poules[poules.length - 1] = 4;
+  } else if (remainder === 2) {
+    poules[poules.length - 1] = 5;
+  }
+  return {
+    poules,
+    tables: poules.length + 1,
+    description: formatSimulationPouleDescription(poules)
+  };
 }
 
 function formatSimulationPouleDescription(poules) {

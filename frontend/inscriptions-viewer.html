@@ -59,11 +59,12 @@
       <h2><img id="app-header-icon" src="images/FrenchBillard-Icon-small.png" alt="" style="height: 48px; width: 48px; vertical-align: middle; margin-right: 8px;" onerror="this.src='images/FrenchBillard-Icon-small.png';"><span id="app-org-name-short">CDBHS</span> Inscriptions</h2>
       <div class="nav-links">
         <a href="dashboard.html">Accueil</a>
+        <a href="players-list.html" class="club-visible" style="display:none;">Joueurs</a>
         <a href="rankings.html" class="nav-tooltip" data-tooltip="Classement par catégorie de jeu au fur et à mesure des tournois">Classements</a>
-        <a href="generate-poules.html" class="nav-tooltip" data-tooltip="Compétitions à jouer / Convocations">Compétitions</a>
+        <a href="generate-poules.html" class="not-club nav-tooltip" data-tooltip="Compétitions à jouer / Convocations">Compétitions</a>
         <a href="inscriptions-viewer.html" class="active nav-tooltip" data-tooltip="Liste des inscriptions">Inscriptions</a>
-        <a href="calendar.html" class="nav-tooltip" data-tooltip="Calendrier de la saison">Calendrier</a>
-        <a href="emailing.html" class="nav-tooltip" data-tooltip="Annonces, relances, résultats, convocation">Com joueurs</a>
+        <a href="calendar.html" class="not-club nav-tooltip" data-tooltip="Calendrier de la saison">Calendrier</a>
+        <a href="emailing.html" class="not-club nav-tooltip" data-tooltip="Annonces, relances, résultats, convocation">Com joueurs</a>
         <a href="settings.html" class="admin-only nav-tooltip" data-tooltip="Réservé aux administrateurs">Paramètres</a>
         <a href="#" id="logoutBtn" class="nav-logout">Déconnexion</a>
       </div>
@@ -161,13 +162,9 @@
     }
     const token = localStorage.getItem('token');
 
-    // Check user role and show/hide admin elements
+    // Apply role-based nav filtering
     const userRole = localStorage.getItem('userRole');
-    if (userRole === 'admin') {
-      document.querySelectorAll('.admin-only').forEach(el => el.style.display = '');
-    } else {
-      document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');
-    }
+    applyRoleBasedNav();
 
     // Initialize app branding
     initAppBranding();

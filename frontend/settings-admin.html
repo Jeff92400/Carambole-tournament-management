@@ -130,12 +130,20 @@
           </div>
           <div class="form-group" style="margin-bottom: 0;">
             <label for="newUserRole">Rôle :</label>
-            <select id="newUserRole" required style="padding: 10px; border: 1px solid #ddd; border-radius: 4px; width: 100%;">
+            <select id="newUserRole" required style="padding: 10px; border: 1px solid #ddd; border-radius: 4px; width: 100%;" onchange="toggleClubSelect()">
               <option value="">Chargement...</option>
             </select>
           </div>
           <button type="submit" class="btn btn-primary" style="padding: 10px 20px;">Ajouter</button>
         </form>
+        <div id="clubSelectRow" style="display: none; margin-top: 10px;">
+          <div class="form-group" style="margin-bottom: 0; max-width: 400px;">
+            <label for="newUserClub">Club :</label>
+            <select id="newUserClub" style="padding: 10px; border: 1px solid #ddd; border-radius: 4px; width: 100%;">
+              <option value="">-- Sélectionner un club --</option>
+            </select>
+          </div>
+        </div>
       </div>
 
       <!-- Users List -->
@@ -1075,15 +1083,16 @@
       container.innerHTML = users.map(user => `
         <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 15px; background: white; border: 1px solid #ddd; border-radius: 8px; flex-wrap: wrap; gap: 10px;">
           <div style="display: flex; align-items: center; gap: 12px; flex: 1; min-width: 250px;">
-            <div style="width: 36px; height: 36px; border-radius: 50%; background: ${user.role === 'admin' ? '#1F4788' : '#6c757d'}; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px;">
+            <div style="width: 36px; height: 36px; border-radius: 50%; background: ${user.role === 'admin' ? '#1F4788' : user.role === 'club' ? '#28a745' : '#6c757d'}; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px;">
               ${user.username.charAt(0).toUpperCase()}
             </div>
             <div>
               <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                 <strong>${user.username}</strong>
-                <span style="padding: 2px 6px; border-radius: 10px; font-size: 11px; background: ${user.role === 'admin' ? '#d4edda' : '#e2e3e5'}; color: ${user.role === 'admin' ? '#155724' : '#383d41'};">
-                  ${user.role === 'admin' ? 'Admin' : 'Viewer'}
+                <span style="padding: 2px 6px; border-radius: 10px; font-size: 11px; background: ${user.role === 'admin' ? '#d4edda' : user.role === 'club' ? '#d1ecf1' : '#e2e3e5'}; color: ${user.role === 'admin' ? '#155724' : user.role === 'club' ? '#0c5460' : '#383d41'};">
+                  ${user.role === 'admin' ? 'Admin' : user.role === 'club' ? 'Club' : 'Viewer'}
                 </span>
+                ${user.club_name ? `<span style="padding: 2px 6px; border-radius: 10px; font-size: 11px; background: #fff3cd; color: #856404;">${user.club_name}</span>` : ''}
                 ${user.is_active === false ? '<span style="padding: 2px 6px; border-radius: 10px; font-size: 11px; background: #f8d7da; color: #721c24;">Inactif</span>' : ''}
               </div>
               <div style="display: flex; align-items: center; gap: 10px; margin-top: 4px; font-size: 12px;">
@@ -1126,6 +1135,13 @@
       const email = document.getElementById('newUserEmail').value.trim();
       const password = document.getElementById('newUserPassword').value;
       const role = document.getElementById('newUserRole').value;
+      const club_id = document.getElementById('newUserClub').value || null;
+
+      if (role === 'club' && !club_id) {
+        document.getElementById('errorMessage').textContent = 'Veuillez sélectionner un club pour le rôle Responsable Club';
+        document.getElementById('errorMessage').style.display = 'block';
+        return;
+      }
 
       try {
         const response = await fetch(`${API_URL}/auth/users`, {
@@ -1134,7 +1150,7 @@
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({ username, email: email || null, password, role })
+          body: JSON.stringify({ username, email: email || null, password, role, club_id })
         });
 
         const data = await response.json();
@@ -1419,6 +1435,31 @@
       }
     }
 
+    // Toggle club dropdown visibility when role changes
+    function toggleClubSelect() {
+      const role = document.getElementById('newUserRole').value;
+      const clubRow = document.getElementById('clubSelectRow');
+      clubRow.style.display = role === 'club' ? 'block' : 'none';
+    }
+
+    // Load clubs for the dropdown
+    async function loadClubsForSelect() {
+      try {
+        const response = await fetch(`${API_URL}/clubs`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          const clubs = await response.json();
+          const select = document.getElementById('newUserClub');
+          select.innerHTML = '<option value="">-- Sélectionner un club --</option>' +
+            clubs.sort((a, b) => (a.display_name || '').localeCompare(b.display_name || ''))
+              .map(c => `<option value="${c.id}">${c.display_name || c.name}</option>`).join('');
+        }
+      } catch (e) {
+        console.error('Error loading clubs:', e);
+      }
+    }
+
     // Load reference data for dynamic selectors
     async function initReferenceData() {
       await Promise.all([
@@ -1430,7 +1471,8 @@
           placeholder: 'Sélectionner...',
           valueField: 'code',
           activeOnly: true
-        })
+        }),
+        loadClubsForSelect()
       ]);
     }
 
@@ -3219,6 +3261,12 @@
       document.body.classList.add('role-lecteur');
       // Hide all forms and action buttons for lecteur
       document.querySelectorAll('form, .not-lecteur').forEach(el => el.style.display = 'none');
+    }
+
+    // Lecteur: hide all forms and action buttons (read-only mode)
+    if (userRole === 'lecteur') {
+      document.querySelectorAll('form, button[onclick*="delete"], button[onclick*="toggle"], .btn-danger').forEach(el => el.style.display = 'none');
+      document.getElementById('addUserForm')?.closest('.card')?.querySelectorAll('form').forEach(el => el.style.display = 'none');
     }
 
     // ============= END ACTIVITY LOGS QUICK STATS =============

@@ -75,10 +75,12 @@
       <h2><img id="app-header-icon" src="images/FrenchBillard-Icon-small.png" alt="" style="height: 48px; width: 48px; vertical-align: middle; margin-right: 8px;" onerror="this.src='images/FrenchBillard-Icon-small.png';">Joueurs</h2>
       <div class="nav-links">
         <a href="dashboard.html">Accueil</a>
+        <a href="players-list.html" class="active club-visible" style="display:none;">Joueurs</a>
         <a href="rankings.html" class="nav-tooltip" data-tooltip="Classement par catégorie de jeu au fur et à mesure des tournois">Classements</a>
-        <a href="generate-poules.html" class="nav-tooltip" data-tooltip="Compétitions à jouer / Convocations">Compétitions</a>
-        <a href="calendar.html" class="nav-tooltip" data-tooltip="Calendrier de la saison">Calendrier</a>
-        <a href="emailing.html" class="nav-tooltip" data-tooltip="Annonces, relances, résultats, convocation">Com joueurs</a>
+        <a href="generate-poules.html" class="not-club nav-tooltip" data-tooltip="Compétitions à jouer / Convocations">Compétitions</a>
+        <a href="inscriptions-viewer.html" class="club-visible" style="display:none;">Inscriptions</a>
+        <a href="calendar.html" class="not-club nav-tooltip" data-tooltip="Calendrier de la saison">Calendrier</a>
+        <a href="emailing.html" class="not-club nav-tooltip" data-tooltip="Annonces, relances, résultats, convocation">Com joueurs</a>
         <a href="settings.html" class="admin-only nav-tooltip" data-tooltip="Réservé aux administrateurs">Paramètres</a>
         <a href="#" id="logoutBtn" class="nav-logout">Déconnexion</a>
       </div>
@@ -119,7 +121,7 @@
         <button class="btn admin-only not-lecteur csv-import-btn" onclick="window.location.href='import-players.html'" style="background-color: #1F4788; color: white; font-size: 12px; padding: 5px 10px;">
           Importer Joueurs
         </button>
-        <button id="createPlayerBtn" class="btn admin-only not-lecteur" style="background-color: #1F4788; color: white; font-size: 12px; padding: 5px 10px;">
+        <button id="createPlayerBtn" class="btn admin-or-club not-lecteur" style="display:none; background-color: #1F4788; color: white; font-size: 12px; padding: 5px 10px;">
           + Créer Joueur
         </button>
       </div>
@@ -242,7 +244,20 @@
           </div>
 
           <div style="margin-bottom: 15px;">
-            <label style="display: block; margin-bottom: 8px; font-weight: bold; color: #1F4788;">Classements FFB</label>
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+              <label style="font-weight: bold; color: #1F4788; margin: 0;">Classements FFB</label>
+              <button type="button" id="addGameModeBtn" onclick="toggleAddGameModeForm()" style="background: #28a745; color: white; border: none; border-radius: 50%; width: 24px; height: 24px; font-size: 16px; cursor: pointer; line-height: 1; display: flex; align-items: center; justify-content: center;" title="Ajouter un mode de jeu">+</button>
+            </div>
+            <div id="addGameModeForm" style="display: none; margin-bottom: 12px; padding: 10px; background: #f0f7ff; border: 1px solid #d0e0f0; border-radius: 6px;">
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
+                <input type="text" id="newGameModeName" placeholder="Nom (ex: Snooker)" style="padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                <input type="color" id="newGameModeColor" value="#1F4788" style="padding: 2px; border: 1px solid #ddd; border-radius: 4px; height: 32px; cursor: pointer;">
+              </div>
+              <div style="display: flex; gap: 8px;">
+                <button type="button" onclick="createGameMode()" style="background: #28a745; color: white; border: none; padding: 6px 14px; border-radius: 4px; font-size: 12px; cursor: pointer;">Ajouter</button>
+                <button type="button" onclick="toggleAddGameModeForm()" style="background: #6c757d; color: white; border: none; padding: 6px 14px; border-radius: 4px; font-size: 12px; cursor: pointer;">Annuler</button>
+              </div>
+            </div>
             <div id="edit_rankings_container" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
               <!-- Dynamic ranking fields will be inserted here by JavaScript -->
             </div>
@@ -263,7 +278,7 @@
             <p style="margin: 8px 0 0 28px; font-size: 12px; color: #666;">Décochez pour marquer le joueur comme inactif (ne joue plus cette saison)</p>
           </div>
 
-          <div style="margin-bottom: 15px;">
+          <div class="admin-only" style="margin-bottom: 15px;">
             <label style="display: block; margin-bottom: 5px; font-weight: bold;">Statut Player App</label>
             <select id="edit_player_app_role" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
               <option value="">Non inscrit</option>
@@ -274,7 +289,7 @@
             <p style="margin: 5px 0 0 0; font-size: 12px; color: #666;">Non inscrit = pas encore dans Player App. Passe à "Joueur" lors de l'inscription.</p>
           </div>
 
-          <div id="gdprConsentSection" style="margin-bottom: 15px; padding: 12px; background: #e3f2fd; border-radius: 6px; display: none;">
+          <div id="gdprConsentSection" class="admin-only" style="margin-bottom: 15px; padding: 12px; background: #e3f2fd; border-radius: 6px; display: none;">
             <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
               <input type="checkbox" id="edit_gdpr_consent" style="width: 18px; height: 18px; cursor: pointer;">
               <span style="font-weight: bold; color: #1565c0;">📋 Consentement RGPD</span>
@@ -377,21 +392,28 @@
 
     const isAdmin = userRole === 'admin';
     const isLecteur = userRole === 'lecteur';
+    const isClub = userRole === 'club';
     const canSeeAdminUI = isAdmin || isLecteur;
-    const canEdit = isAdmin; // lecteur cannot edit
+    const canEdit = isAdmin || isClub; // lecteur cannot edit
 
     if (isLecteur) document.body.classList.add('role-lecteur');
 
-    // Hide admin-only elements for non-admin/non-lecteur users
-    if (!canSeeAdminUI) {
-      // Hide all admin-only elements (including nav links)
-      document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');
+    // Apply role-based nav filtering
+    applyRoleBasedNav();
 
+    // Hide admin-only elements for non-admin/non-lecteur/non-club users
+    if (!canSeeAdminUI && !isClub) {
       // Hide Actions column header
       const actionsHeader = document.querySelector('thead th:last-child');
       if (actionsHeader && actionsHeader.textContent === 'Actions') {
         actionsHeader.style.display = 'none';
       }
+    }
+
+    // Show create player button for admin and club roles
+    if (isAdmin || isClub) {
+      const createBtn = document.getElementById('createPlayerBtn');
+      if (createBtn) createBtn.style.display = '';
     }
 
     // Logout
@@ -579,6 +601,85 @@
       }
 
       return rankings;
+    }
+
+    // Toggle add game mode form visibility
+    function toggleAddGameModeForm() {
+      const form = document.getElementById('addGameModeForm');
+      form.style.display = form.style.display === 'none' ? 'block' : 'none';
+      if (form.style.display === 'block') {
+        document.getElementById('newGameModeName').focus();
+      }
+    }
+
+    // Create a new game mode and refresh the rankings section
+    async function createGameMode() {
+      const name = document.getElementById('newGameModeName').value.trim();
+      const color = document.getElementById('newGameModeColor').value;
+
+      if (!name) {
+        alert('Veuillez saisir un nom pour le mode de jeu');
+        return;
+      }
+
+      const code = name.toUpperCase().replace(/\s+/g, ' ');
+
+      try {
+        const response = await fetch(`${API_URL}/reference-data/game-modes`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            code: code,
+            display_name: name,
+            color: color,
+            display_order: (gameModesList.length + 1) * 10
+          })
+        });
+
+        const data = await response.json();
+        if (!response.ok) {
+          alert('Erreur: ' + (data.error || 'Impossible de créer le mode'));
+          return;
+        }
+
+        // Reload game modes list
+        const modesResponse = await fetch(`${API_URL}/reference-data/game-modes`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (modesResponse.ok) {
+          gameModesList = await modesResponse.json();
+        }
+
+        // Refresh the rankings containers in edit modal
+        const editContainer = document.getElementById('edit_rankings_container');
+        if (editContainer.children.length > 0) {
+          // Re-collect current values before refreshing
+          const currentRankings = collectRankingsFromForm('edit');
+          const rankingsData = {};
+          for (const [modeId, ranking] of Object.entries(currentRankings)) {
+            rankingsData[modeId] = { ranking };
+          }
+          editContainer.innerHTML = generateRankingFieldsHTML('edit', rankingsData);
+        }
+
+        // Refresh FFB section if a player is being edited
+        const licence = document.getElementById('edit_licence').value;
+        if (licence) {
+          loadFfbClassifications(licence);
+        }
+
+        // Reset and hide the form
+        document.getElementById('newGameModeName').value = '';
+        document.getElementById('addGameModeForm').style.display = 'none';
+
+        alert(`Mode "${name}" ajouté avec succès !`);
+      } catch (err) {
+        console.error('Error creating game mode:', err);
+        alert('Erreur lors de la création du mode de jeu');
+      }
     }
 
     // Generate dynamic ranking fields HTML
@@ -1112,15 +1213,15 @@
           ${canEdit ? `
           <td style="text-align: center;">
             <button class="btn btn-small edit-player-btn" style="background: #4CAF50; padding: 5px 10px; font-size: 12px;">✏️</button>
-            <button class="btn btn-small reset-pwd-btn" style="background: #ff9800; padding: 5px 10px; font-size: 12px; display: none;" title="Réinitialiser le mot de passe">🔑</button>
-            <button class="btn btn-small delete-player-btn" style="background: #dc3545; padding: 5px 10px; font-size: 12px;">🗑️</button>
+            ${isAdmin ? `<button class="btn btn-small reset-pwd-btn" style="background: #ff9800; padding: 5px 10px; font-size: 12px; display: none;" title="Réinitialiser le mot de passe">🔑</button>
+            <button class="btn btn-small delete-player-btn" style="background: #dc3545; padding: 5px 10px; font-size: 12px;">🗑️</button>` : ''}
           </td>
           ` : ''}
         `;
 
         tbody.appendChild(row);
 
-        // Add click event to edit button (only for admin, not lecteur)
+        // Add click event to edit button (admin and club, not lecteur)
         if (canEdit) {
           const editBtn = row.querySelector('.edit-player-btn');
           if (editBtn) {

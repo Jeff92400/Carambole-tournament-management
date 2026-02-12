@@ -294,7 +294,152 @@ async function seedDemoData() {
     console.log(`   Created ${inscriptionCount} inscriptions`);
     console.log('');
 
-    // 6. Summary
+    // 6. Create tournament results and rankings
+    console.log('6. Creating tournament results and rankings...');
+
+    // Get all categories from the database
+    const categories = await dbAll(`SELECT id, game_type, level, display_name FROM categories`);
+    console.log(`   Found ${categories.length} categories`);
+
+    let tournamentsCreated = 0;
+    let resultsCreated = 0;
+    let rankingsCreated = 0;
+
+    // Map game_type to rank column for filtering eligible players
+    const gameTypeToRankCol = {
+      'LIBRE': 'rank_libre',
+      'BANDE': 'rank_bande',
+      '3 BANDES': 'rank_3bandes',
+      '3BANDES': 'rank_3bandes',
+      'CADRE 47/2': 'rank_cadre',
+      'CADRE 47/1': 'rank_cadre',
+      'CADRE 71/2': 'rank_cadre',
+      'CADRE 42/2': 'rank_cadre'
+    };
+
+    for (const cat of categories) {
+      // Get rank column for this game type
+      const rankCol = gameTypeToRankCol[cat.game_type.toUpperCase()] || 'rank_libre';
+
+      // Get eligible players: those whose ranking matches the category level
+      // For demo purposes, pick players at or near the category level
+      const eligiblePlayers = await dbAll(
+        `SELECT licence, first_name, last_name, club, ${rankCol} as player_rank
+         FROM players WHERE licence LIKE 'D%' AND ${rankCol} IS NOT NULL AND ${rankCol} != 'NC'
+         ORDER BY RANDOM() LIMIT 12`
+      );
+
+      if (eligiblePlayers.length < 4) continue; // Skip if not enough players
+
+      // Create T1 and T2 (played tournaments)
+      for (const tNum of [1, 2]) {
+        // Check if tournament already exists
+        const existingTournament = await dbGet(
+          `SELECT id FROM tournaments WHERE category_id = $1 AND tournament_number = $2 AND season = $3`,
+          [cat.id, tNum, season]
+        );
+
+        let tournamentId;
+        if (existingTournament) {
+          tournamentId = existingTournament.id;
+        } else {
+          const tDate = new Date(now);
+          tDate.setMonth(tDate.getMonth() - (3 - tNum)); // T1: 2 months ago, T2: 1 month ago
+          tDate.setDate(randomInt(1, 28));
+
+          const result = await dbRun(
+            `INSERT INTO tournaments (category_id, tournament_number, season, tournament_date, location)
+             VALUES ($1, $2, $3, $4, $5)`,
+            [cat.id, tNum, season, tDate.toISOString(), randomElement(DEMO_CLUBS).city]
+          );
+          // Get the id of the inserted row
+          const inserted = await dbGet(
+            `SELECT id FROM tournaments WHERE category_id = $1 AND tournament_number = $2 AND season = $3`,
+            [cat.id, tNum, season]
+          );
+          tournamentId = inserted.id;
+          tournamentsCreated++;
+        }
+
+        // Create results for players in this tournament
+        const numPlayers = Math.min(eligiblePlayers.length, randomInt(6, 10));
+        const shuffled = [...eligiblePlayers].sort(() => Math.random() - 0.5);
+        const participants = shuffled.slice(0, numPlayers);
+
+        // Generate realistic match points (sorted desc for position)
+        const matchPointsList = participants.map(() => randomInt(2, 14)).sort((a, b) => b - a);
+
+        for (let i = 0; i < participants.length; i++) {
+          const p = participants[i];
+          const matchPoints = matchPointsList[i];
+          const points = randomInt(40, 200); // total points scored
+          const reprises = randomInt(15, 40); // total reprises played
+          const serie = randomInt(3, 25); // best series
+
+          // Check if result already exists
+          const existingResult = await dbGet(
+            `SELECT id FROM tournament_results WHERE tournament_id = $1 AND licence = $2`,
+            [tournamentId, p.licence]
+          );
+
+          if (!existingResult) {
+            await dbRun(
+              `INSERT INTO tournament_results (tournament_id, licence, player_name, position, match_points, moyenne, serie, points, reprises)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+              [tournamentId, p.licence, `${p.first_name} ${p.last_name}`, i + 1, matchPoints,
+               parseFloat((points / reprises).toFixed(3)), serie, points, reprises]
+            );
+            resultsCreated++;
+          }
+        }
+      }
+
+      // Calculate rankings for this category
+      // Get aggregated results
+      const rankingResults = await dbAll(
+        `SELECT
+          REPLACE(tr.licence, ' ', '') as licence,
+          MAX(tr.player_name) as player_name,
+          SUM(tr.match_points) as total_match_points,
+          SUM(tr.points) as total_points,
+          SUM(tr.reprises) as total_reprises,
+          CASE
+            WHEN SUM(tr.reprises) > 0 THEN CAST(SUM(tr.points) AS FLOAT) / CAST(SUM(tr.reprises) AS FLOAT)
+            ELSE 0
+          END as avg_moyenne,
+          MAX(tr.serie) as best_serie,
+          MAX(CASE WHEN t.tournament_number = 1 THEN tr.match_points ELSE NULL END) as t1_points,
+          MAX(CASE WHEN t.tournament_number = 2 THEN tr.match_points ELSE NULL END) as t2_points,
+          MAX(CASE WHEN t.tournament_number = 3 THEN tr.match_points ELSE NULL END) as t3_points
+        FROM tournament_results tr
+        JOIN tournaments t ON tr.tournament_id = t.id
+        WHERE t.category_id = $1 AND t.season = $2 AND t.tournament_number <= 3
+        GROUP BY REPLACE(tr.licence, ' ', '')
+        ORDER BY total_match_points DESC, avg_moyenne DESC, best_serie DESC`,
+        [cat.id, season]
+      );
+
+      // Delete existing rankings for this category/season
+      await dbRun(`DELETE FROM rankings WHERE category_id = $1 AND season = $2`, [cat.id, season]);
+
+      // Insert new rankings
+      for (let i = 0; i < rankingResults.length; i++) {
+        const r = rankingResults[i];
+        await dbRun(
+          `INSERT INTO rankings (category_id, season, licence, total_match_points, avg_moyenne, best_serie, rank_position, tournament_1_points, tournament_2_points, tournament_3_points)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+          [cat.id, season, r.licence, r.total_match_points, r.avg_moyenne, r.best_serie, i + 1, r.t1_points || 0, r.t2_points || 0, r.t3_points || 0]
+        );
+        rankingsCreated++;
+      }
+    }
+
+    console.log(`   Created ${tournamentsCreated} tournament entries`);
+    console.log(`   Created ${resultsCreated} tournament results`);
+    console.log(`   Created ${rankingsCreated} ranking entries`);
+    console.log('');
+
+    // 7. Summary
     console.log('='.repeat(60));
     console.log('DEMO DATA SEED COMPLETE');
     console.log('='.repeat(60));
@@ -303,8 +448,10 @@ async function seedDemoData() {
     console.log(`  - Admin account: ${DEMO_ADMIN.username} / ${DEMO_ADMIN.password}`);
     console.log(`  - Clubs: ${DEMO_CLUBS.length}`);
     console.log(`  - Players: ${players.length} new`);
-    console.log(`  - Tournaments: ${tournaments.length}`);
+    console.log(`  - External tournaments (tournoi_ext): ${tournaments.length}`);
     console.log(`  - Inscriptions: ${inscriptionCount}`);
+    console.log(`  - Tournament results: ${tournamentsCreated} tournaments, ${resultsCreated} results`);
+    console.log(`  - Rankings: ${rankingsCreated} entries`);
     console.log('');
     console.log('The demo environment is ready for training!');
     console.log('');

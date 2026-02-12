@@ -12,6 +12,7 @@ const db = require('../db-loader');
 const { authenticateToken, requireAdmin } = require('./auth');
 
 // Middleware: admin or lecteur (read-only admin access)
+// Admin and lecteur can view logs
 function requireAdminOrLecteur(req, res, next) {
   if (req.user.role === 'admin' || req.user.role === 'lecteur' || req.user.admin) {
     return next();

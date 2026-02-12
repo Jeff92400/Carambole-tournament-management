@@ -3,11 +3,42 @@ const multer = require('multer');
 const { parse } = require('csv-parse');
 const fs = require('fs');
 const db = require('../db-loader');
-const { authenticateToken } = require('./auth');
+const { authenticateToken, requireClubOrAdmin } = require('./auth');
 const { getColumnMapping } = require('./import-config');
 const appSettings = require('../utils/app-settings');
 
 const router = express.Router();
+
+/**
+ * Get club name from club_id (for club role filtering)
+ * Returns the `name` field (uppercase, no accents) which matches players.club
+ */
+async function getClubNameForFilter(clubId) {
+  if (!clubId) return null;
+  return new Promise((resolve, reject) => {
+    db.get('SELECT name FROM clubs WHERE id = $1', [clubId], (err, row) => {
+      if (err) reject(err);
+      else resolve(row ? row.name : null);
+    });
+  });
+}
+
+/**
+ * Check if a player belongs to a specific club
+ */
+async function playerBelongsToClub(licence, clubName) {
+  if (!clubName) return false;
+  return new Promise((resolve, reject) => {
+    db.get(
+      `SELECT licence FROM players WHERE REPLACE(licence, ' ', '') = REPLACE($1, ' ', '') AND UPPER(club) = UPPER($2)`,
+      [licence, clubName],
+      (err, row) => {
+        if (err) reject(err);
+        else resolve(!!row);
+      }
+    );
+  });
+}
 
 /**
  * Normalize a club name to its canonical form from the clubs table
@@ -487,7 +518,7 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
 });
 
 // Create a new player
-router.post('/', authenticateToken, async (req, res) => {
+router.post('/', authenticateToken, requireClubOrAdmin, async (req, res) => {
   const {
     licence,
     first_name,
@@ -508,6 +539,12 @@ router.post('/', authenticateToken, async (req, res) => {
 
   if (!licence || !first_name || !last_name) {
     return res.status(400).json({ error: 'Licence, prénom et nom sont obligatoires' });
+  }
+
+  // Club role: force club to their own club
+  let effectiveClub = club;
+  if (req.user.role === 'club' && req.user.clubId) {
+    effectiveClub = await getClubNameForFilter(req.user.clubId);
   }
 
   const normalizedLicence = licence.replace(/\s+/g, '').toUpperCase();
@@ -566,7 +603,7 @@ router.post('/', authenticateToken, async (req, res) => {
     });
 
     // Normalize club name to canonical form from clubs table
-    const normalizedClub = club ? await normalizeClubName(club) : null;
+    const normalizedClub = effectiveClub ? await normalizeClubName(effectiveClub) : null;
 
     // Build INSERT for players table
     const baseCols = ['licence', 'first_name', 'last_name', 'club', 'email', 'telephone'];
@@ -633,6 +670,12 @@ router.get('/', authenticateToken, async (req, res) => {
   const { active } = req.query;
 
   try {
+    // For club role, get their club's display_name to filter
+    let clubFilter = null;
+    if (req.user.role === 'club' && req.user.clubId) {
+      clubFilter = await getClubNameForFilter(req.user.clubId);
+    }
+
     // GDPR consent can come from either players table (admin set) or player_accounts (registration)
     // Use COALESCE to show consent from either source
     let query = `
@@ -643,11 +686,22 @@ router.get('/', authenticateToken, async (req, res) => {
       LEFT JOIN player_accounts pa ON REPLACE(p.licence, ' ', '') = REPLACE(pa.licence, ' ', '')
     `;
     const params = [];
+    const conditions = [];
 
     if (active === 'true') {
-      query += ' WHERE p.is_active = 1';
+      conditions.push('p.is_active = 1');
     } else if (active === 'false') {
-      query += ' WHERE p.is_active = 0';
+      conditions.push('p.is_active = 0');
+    }
+
+    // Club role: filter to their club's players only
+    if (clubFilter) {
+      params.push(clubFilter);
+      conditions.push(`UPPER(p.club) = UPPER($${params.length})`);
+    }
+
+    if (conditions.length > 0) {
+      query += ' WHERE ' + conditions.join(' AND ');
     }
 
     query += ' ORDER BY p.last_name, p.first_name';
@@ -845,16 +899,14 @@ router.get('/:licence/ffb-classifications', authenticateToken, async (req, res) 
     });
 
     // 4. Get all active game modes (for showing empty inputs for modes not yet entered)
+    // Show ALL active modes so admins/club can add FFB data for any discipline
     const allModes = await dbAllP(
       `SELECT id, code, display_name FROM game_modes WHERE is_active = true ORDER BY display_order`
     );
     const enteredModeIds = new Set(ffbRows.map(r => r.game_mode_id));
 
-    // Get player rankings to know which modes they play
-    const playerRankings = await getPlayerRankings(licence);
-
     const availableModes = allModes
-      .filter(m => !enteredModeIds.has(m.id) && playerRankings[m.id] && playerRankings[m.id].ranking !== 'NC')
+      .filter(m => !enteredModeIds.has(m.id))
       .map(m => ({
         id: m.id,
         code: m.code,
@@ -919,7 +971,7 @@ router.put('/:licence/ffb-classifications', authenticateToken, async (req, res) 
 });
 
 // Update player (all fields)
-router.put('/:licence', authenticateToken, async (req, res) => {
+router.put('/:licence', authenticateToken, requireClubOrAdmin, async (req, res) => {
   const { licence } = req.params;
   const {
     club, first_name, last_name, is_active,
@@ -928,6 +980,17 @@ router.put('/:licence', authenticateToken, async (req, res) => {
   } = req.body;
 
   try {
+    // Club role: verify the player belongs to their club
+    if (req.user.role === 'club' && req.user.clubId) {
+      const clubName = await getClubNameForFilter(req.user.clubId);
+      const belongs = await playerBelongsToClub(licence, clubName);
+      if (!belongs) {
+        return res.status(403).json({ error: 'Vous ne pouvez modifier que les joueurs de votre club' });
+      }
+      // Club users cannot change certain fields
+      delete req.body.player_app_role;
+      delete req.body.gdpr_consent;
+    }
     // Build dynamic UPDATE query based on provided fields
     const updates = [];
     const values = [];

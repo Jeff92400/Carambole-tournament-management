@@ -2044,8 +2044,8 @@
 
     if (isLecteur) document.body.classList.add('role-lecteur');
 
-    // Hide "Traiter maintenant" button for non-admins
-    if (!canSeeAdminUI) {
+    // Hide "Traiter maintenant" button for non-admins (lecteur included)
+    if (!isAdmin) {
       const triggerBtn = document.getElementById('triggerSchedulerBtn');
       if (triggerBtn) {
         triggerBtn.style.display = 'none';
