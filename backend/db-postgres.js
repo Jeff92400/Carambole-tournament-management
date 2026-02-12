@@ -80,7 +80,13 @@ async function initializeDatabase() {
     // Widen ffb_rankings columns to support longer codes like "14.1 CONTINU" (migration - February 2026)
     await client.query(`ALTER TABLE ffb_rankings ALTER COLUMN code TYPE VARCHAR(20)`);
     await client.query(`ALTER TABLE ffb_rankings ALTER COLUMN display_name TYPE VARCHAR(100)`);
-    await client.query(`ALTER TABLE ffb_rankings ALTER COLUMN tier TYPE VARCHAR(20)`);
+    await client.query(`ALTER TABLE ffb_rankings ALTER COLUMN tier TYPE VARCHAR(50)`);
+
+    // Migrate tier short codes to full names (February 2026)
+    await client.query(`UPDATE ffb_rankings SET tier = 'NATIONAL' WHERE tier = 'N'`);
+    await client.query(`UPDATE ffb_rankings SET tier = 'REGIONAL' WHERE tier = 'R'`);
+    await client.query(`UPDATE ffb_rankings SET tier = 'DEPARTEMENTAL' WHERE tier = 'D'`);
+    await client.query(`UPDATE ffb_rankings SET tier = 'NON CLASSE' WHERE tier = 'NC'`);
 
     // Add GDPR consent columns to players table (migration - January 2026)
     await client.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS gdpr_consent_date TIMESTAMP`);
@@ -1200,21 +1206,21 @@ async function initializeDatabase() {
     if (rankingResult.rows[0].count == 0) {
       const rankings = [
         // National
-        { code: 'N1', display_name: 'Nationale 1', tier: 'N', level_order: 1 },
-        { code: 'N2', display_name: 'Nationale 2', tier: 'N', level_order: 2 },
-        { code: 'N3', display_name: 'Nationale 3', tier: 'N', level_order: 3 },
+        { code: 'N1', display_name: 'Nationale 1', tier: 'NATIONAL', level_order: 1 },
+        { code: 'N2', display_name: 'Nationale 2', tier: 'NATIONAL', level_order: 2 },
+        { code: 'N3', display_name: 'Nationale 3', tier: 'NATIONAL', level_order: 3 },
         // Regional
-        { code: 'R1', display_name: 'Régionale 1', tier: 'R', level_order: 4 },
-        { code: 'R2', display_name: 'Régionale 2', tier: 'R', level_order: 5 },
-        { code: 'R3', display_name: 'Régionale 3', tier: 'R', level_order: 6 },
-        { code: 'R4', display_name: 'Régionale 4', tier: 'R', level_order: 7 },
+        { code: 'R1', display_name: 'Régionale 1', tier: 'REGIONAL', level_order: 4 },
+        { code: 'R2', display_name: 'Régionale 2', tier: 'REGIONAL', level_order: 5 },
+        { code: 'R3', display_name: 'Régionale 3', tier: 'REGIONAL', level_order: 6 },
+        { code: 'R4', display_name: 'Régionale 4', tier: 'REGIONAL', level_order: 7 },
         // Departemental
-        { code: 'D1', display_name: 'Départementale 1', tier: 'D', level_order: 8 },
-        { code: 'D2', display_name: 'Départementale 2', tier: 'D', level_order: 9 },
-        { code: 'D3', display_name: 'Départementale 3', tier: 'D', level_order: 10 },
-        { code: 'D4', display_name: 'Départementale 4', tier: 'D', level_order: 11 },
+        { code: 'D1', display_name: 'Départementale 1', tier: 'DEPARTEMENTAL', level_order: 8 },
+        { code: 'D2', display_name: 'Départementale 2', tier: 'DEPARTEMENTAL', level_order: 9 },
+        { code: 'D3', display_name: 'Départementale 3', tier: 'DEPARTEMENTAL', level_order: 10 },
+        { code: 'D4', display_name: 'Départementale 4', tier: 'DEPARTEMENTAL', level_order: 11 },
         // Non classé
-        { code: 'NC', display_name: 'Non Classé', tier: 'NC', level_order: 99 }
+        { code: 'NC', display_name: 'Non Classé', tier: 'NON CLASSE', level_order: 99 }
       ];
       for (const rank of rankings) {
         await client.query(

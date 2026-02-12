@@ -84,10 +84,7 @@
       font-weight: 600;
     }
 
-    .tier-N { background: #e3f2fd; color: #1565c0; }
-    .tier-R { background: #e8f5e9; color: #2e7d32; }
-    .tier-D { background: #fff3e0; color: #ef6c00; }
-    .tier-NC { background: #f5f5f5; color: #757575; }
+    /* Tier badge colors are applied inline via getTierStyle() */
 
     .status-active {
       color: #28a745;
@@ -354,7 +351,7 @@
             </div>
             <div class="form-group small">
               <label for="frTier">Tier *</label>
-              <input type="text" id="frTier" required list="tierList" placeholder="ex: N, R, D" style="text-transform: uppercase;">
+              <input type="text" id="frTier" required list="tierList" placeholder="ex: NATIONAL, MASTER" style="text-transform: uppercase;">
               <datalist id="tierList"></datalist>
             </div>
             <div class="form-group small">
@@ -500,7 +497,7 @@
           </div>
           <div class="form-group">
             <label for="editFrTier">Tier *</label>
-            <input type="text" id="editFrTier" required list="editTierList" placeholder="ex: N, R, D" style="text-transform: uppercase;">
+            <input type="text" id="editFrTier" required list="editTierList" placeholder="ex: NATIONAL, MASTER" style="text-transform: uppercase;">
             <datalist id="editTierList"></datalist>
           </div>
           <div class="form-group">
@@ -790,7 +787,7 @@
           <td>${rank.level_order}</td>
           <td><strong>${rank.code}</strong></td>
           <td>${rank.display_name}</td>
-          <td><span class="tier-badge tier-${rank.tier}">${getTierName(rank.tier)}</span></td>
+          <td><span class="tier-badge" style="${getTierStyle(rank.tier)}">${rank.tier || ''}</span></td>
           <td class="${rank.is_active ? 'status-active' : 'status-inactive'}">
             ${rank.is_active ? 'Actif' : 'Inactif'}
           </td>
@@ -802,8 +799,14 @@
       `).join('');
     }
 
-    function getTierName(tier) {
-      return tier || '';
+    function getTierStyle(tier) {
+      const styles = {
+        'NATIONAL': 'background:#e3f2fd;color:#1565c0;',
+        'REGIONAL': 'background:#e8f5e9;color:#2e7d32;',
+        'DEPARTEMENTAL': 'background:#fff3e0;color:#ef6c00;',
+        'NON CLASSE': 'background:#f5f5f5;color:#757575;'
+      };
+      return styles[(tier || '').toUpperCase()] || 'background:#f0e6ff;color:#6a1b9a;';
     }
 
     // Add ranking
