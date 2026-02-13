@@ -303,34 +303,9 @@ async function initializeDatabase() {
       ALTER TABLE rankings ADD COLUMN IF NOT EXISTS total_bonus_points INTEGER DEFAULT 0
     `);
 
-    // Add structured expression columns to scoring_rules (rule engine)
-    await client.query(`ALTER TABLE scoring_rules ADD COLUMN IF NOT EXISTS field_1 TEXT`);
-    await client.query(`ALTER TABLE scoring_rules ADD COLUMN IF NOT EXISTS operator_1 TEXT`);
-    await client.query(`ALTER TABLE scoring_rules ADD COLUMN IF NOT EXISTS value_1 TEXT`);
-    await client.query(`ALTER TABLE scoring_rules ADD COLUMN IF NOT EXISTS logical_op TEXT`);
-    await client.query(`ALTER TABLE scoring_rules ADD COLUMN IF NOT EXISTS field_2 TEXT`);
-    await client.query(`ALTER TABLE scoring_rules ADD COLUMN IF NOT EXISTS operator_2 TEXT`);
-    await client.query(`ALTER TABLE scoring_rules ADD COLUMN IF NOT EXISTS value_2 TEXT`);
-    await client.query(`ALTER TABLE scoring_rules ADD COLUMN IF NOT EXISTS column_label TEXT`);
-
     // Add bonus_detail JSON column to tournament_results and rankings
     await client.query(`ALTER TABLE tournament_results ADD COLUMN IF NOT EXISTS bonus_detail TEXT`);
     await client.query(`ALTER TABLE rankings ADD COLUMN IF NOT EXISTS bonus_detail TEXT`);
-
-    // Backfill existing MOYENNE_BONUS rules with structured expressions
-    await client.query(`
-      UPDATE scoring_rules SET field_1 = 'MOYENNE', operator_1 = '>', value_1 = 'MOYENNE_MAXI', column_label = 'Bonus Moy.'
-      WHERE rule_type = 'MOYENNE_BONUS' AND condition_key = 'ABOVE_MAX' AND field_1 IS NULL
-    `);
-    await client.query(`
-      UPDATE scoring_rules SET field_1 = 'MOYENNE', operator_1 = '>=', value_1 = 'MOYENNE_MINI',
-        logical_op = 'AND', field_2 = 'MOYENNE', operator_2 = '<=', value_2 = 'MOYENNE_MAXI', column_label = 'Bonus Moy.'
-      WHERE rule_type = 'MOYENNE_BONUS' AND condition_key = 'IN_RANGE' AND field_1 IS NULL
-    `);
-    await client.query(`
-      UPDATE scoring_rules SET field_1 = 'MOYENNE', operator_1 = '<', value_1 = 'MOYENNE_MINI', column_label = 'Bonus Moy.'
-      WHERE rule_type = 'MOYENNE_BONUS' AND condition_key = 'BELOW_MIN' AND field_1 IS NULL
-    `);
 
     // Clubs table
     await client.query(`
@@ -930,6 +905,31 @@ async function initializeDatabase() {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         UNIQUE(rule_type, condition_key)
       )
+    `);
+
+    // Add structured expression columns to scoring_rules (rule engine) - must be AFTER CREATE TABLE
+    await client.query(`ALTER TABLE scoring_rules ADD COLUMN IF NOT EXISTS field_1 TEXT`);
+    await client.query(`ALTER TABLE scoring_rules ADD COLUMN IF NOT EXISTS operator_1 TEXT`);
+    await client.query(`ALTER TABLE scoring_rules ADD COLUMN IF NOT EXISTS value_1 TEXT`);
+    await client.query(`ALTER TABLE scoring_rules ADD COLUMN IF NOT EXISTS logical_op TEXT`);
+    await client.query(`ALTER TABLE scoring_rules ADD COLUMN IF NOT EXISTS field_2 TEXT`);
+    await client.query(`ALTER TABLE scoring_rules ADD COLUMN IF NOT EXISTS operator_2 TEXT`);
+    await client.query(`ALTER TABLE scoring_rules ADD COLUMN IF NOT EXISTS value_2 TEXT`);
+    await client.query(`ALTER TABLE scoring_rules ADD COLUMN IF NOT EXISTS column_label TEXT`);
+
+    // Backfill existing MOYENNE_BONUS rules with structured expressions
+    await client.query(`
+      UPDATE scoring_rules SET field_1 = 'MOYENNE', operator_1 = '>', value_1 = 'MOYENNE_MAXI', column_label = 'Bonus Moy.'
+      WHERE rule_type = 'MOYENNE_BONUS' AND condition_key = 'ABOVE_MAX' AND field_1 IS NULL
+    `);
+    await client.query(`
+      UPDATE scoring_rules SET field_1 = 'MOYENNE', operator_1 = '>=', value_1 = 'MOYENNE_MINI',
+        logical_op = 'AND', field_2 = 'MOYENNE', operator_2 = '<=', value_2 = 'MOYENNE_MAXI', column_label = 'Bonus Moy.'
+      WHERE rule_type = 'MOYENNE_BONUS' AND condition_key = 'IN_RANGE' AND field_1 IS NULL
+    `);
+    await client.query(`
+      UPDATE scoring_rules SET field_1 = 'MOYENNE', operator_1 = '<', value_1 = 'MOYENNE_MINI', column_label = 'Bonus Moy.'
+      WHERE rule_type = 'MOYENNE_BONUS' AND condition_key = 'BELOW_MIN' AND field_1 IS NULL
     `);
 
     // Admin activity logs table - tracks admin/viewer actions in Tournament App
