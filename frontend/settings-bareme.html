@@ -59,6 +59,21 @@
       font-size: 12px;
     }
     .btn-delete-sm:hover { background: #dc3545; color: white; }
+    /* Toggle switch */
+    .toggle-switch { position: relative; display: inline-block; width: 44px; height: 24px; margin: 0 10px; vertical-align: middle; }
+    .toggle-switch input { opacity: 0; width: 0; height: 0; }
+    .toggle-slider {
+      position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+      background-color: rgba(255,255,255,0.3); border-radius: 24px; transition: 0.3s;
+    }
+    .toggle-slider:before {
+      position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px;
+      background-color: white; border-radius: 50%; transition: 0.3s;
+    }
+    .toggle-switch input:checked + .toggle-slider { background-color: #28a745; }
+    .toggle-switch input:checked + .toggle-slider:before { transform: translateX(20px); }
+    .scoring-block.inactive { opacity: 0.55; }
+    .scoring-block.inactive .scoring-block-header { background: #999; }
     .add-block-form {
       display: flex;
       gap: 10px;
@@ -338,11 +353,20 @@
         const label = BLOCK_LABELS[blockType] || blockType;
         const isBuiltIn = blockType === 'BASE_VDL';
         const isDisplayOnly = blockRules.every(r => !r.field_1);
+        const isActive = blockRules.some(r => r.is_active !== false && r.is_active !== 0);
 
         return `
-          <div class="scoring-block">
+          <div class="scoring-block ${!isBuiltIn && !isActive ? 'inactive' : ''}">
             <div class="scoring-block-header">
-              <h4>${escapeHtml(label)}</h4>
+              <div style="display: flex; align-items: center;">
+                ${!isBuiltIn ? `
+                  <label class="toggle-switch" title="${isActive ? 'Actif — cliquer pour désactiver' : 'Inactif — cliquer pour activer'}">
+                    <input type="checkbox" ${isActive ? 'checked' : ''} onchange="toggleBlock('${escapeHtml(blockType)}', this.checked)">
+                    <span class="toggle-slider"></span>
+                  </label>
+                ` : ''}
+                <h4>${escapeHtml(label)}${!isBuiltIn && !isActive ? ' <span style="font-weight: normal; font-size: 12px; opacity: 0.8;">(inactif)</span>' : ''}</h4>
+              </div>
               ${!isBuiltIn ? `<button class="btn-delete-sm" style="border-color: white; color: white;" onclick="deleteBlock('${escapeHtml(blockType)}')">Supprimer le bloc</button>` : ''}
             </div>
             <div class="scoring-block-body">
@@ -638,6 +662,24 @@
           const data = await response.json();
           showMessage('error', data.error || 'Erreur');
         }
+      } catch (error) {
+        showMessage('error', 'Erreur de connexion');
+      }
+    }
+
+    // Toggle all rules in a block active/inactive
+    async function toggleBlock(ruleType, isActive) {
+      const blockRules = allRules.filter(r => r.rule_type === ruleType);
+      try {
+        for (const rule of blockRules) {
+          await authFetch(`${API_URL}/reference-data/scoring-rules/${rule.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ is_active: isActive })
+          });
+        }
+        loadScoringRules();
+        showMessage('success', isActive ? 'Bloc activé' : 'Bloc désactivé');
       } catch (error) {
         showMessage('error', 'Erreur de connexion');
       }
