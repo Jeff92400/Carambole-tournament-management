@@ -612,7 +612,7 @@
     }
 
     // Add a new block
-    async function addBlock() {
+    function addBlock() {
       const nameInput = document.getElementById('newBlockName');
       const labelInput = document.getElementById('newBlockLabel');
       const name = nameInput.value.trim();
@@ -637,22 +637,10 @@
       nameInput.value = '';
       labelInput.value = '';
 
-      // Open the modal to create the first rule for this block
-      populateDropdowns();
+      // Reuse openCreateModal (proven to work) then override title + label
+      openCreateModal(ruleType);
       document.getElementById('modalTitle').textContent = 'Première condition du bloc';
-      document.getElementById('editSrId').value = '';
-      document.getElementById('editSrRuleType').value = ruleType;
-      document.getElementById('editField1').value = '';
-      document.getElementById('editOp1').value = '>';
-      document.getElementById('editValueType1').value = 'literal';
-      document.getElementById('editValueLit1').value = '';
-      toggleValueInput(1);
-      document.getElementById('editLogicalOp').value = '';
-      toggleCondition2();
-      document.getElementById('editSrPoints').value = 0;
       document.getElementById('editColumnLabel').value = colLabel || '';
-      document.getElementById('editSrDescription').value = '';
-      openModal('editScoringRuleModal');
     }
 
     // Delete a single condition
