@@ -8,97 +8,82 @@
   <link rel="stylesheet" href="css/styles.css">
   <script src="js/branding.js"></script>
   <style>
-    .scoring-block {
-      margin-bottom: 30px;
-      border: 1px solid #e0e0e0;
-      border-radius: 8px;
-      overflow: hidden;
-    }
+    /* Scoring blocks */
+    .scoring-block { margin-bottom: 24px; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden; }
     .scoring-block-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 12px 16px;
-      background: var(--color-primary, #1F4788);
-      color: white;
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 12px 16px; background: var(--color-primary, #1F4788); color: white;
     }
     .scoring-block-header h4 { margin: 0; font-size: 15px; }
     .scoring-block-body { padding: 0; }
     .scoring-block table { width: 100%; border-collapse: collapse; }
     .scoring-block th { padding: 10px 16px; text-align: left; background: #f0f0f0; font-size: 13px; color: #555; }
     .scoring-block td { padding: 10px 16px; border-bottom: 1px solid #eee; font-size: 14px; }
-    .rule-expression { font-family: monospace; font-size: 13px; color: #333; }
-    .rule-expression .keyword { color: #1F4788; font-weight: bold; }
+    .rule-expression { font-size: 13px; color: #333; }
+    .rule-expression .keyword { color: #1F4788; font-weight: 600; }
     .rule-expression .op { color: #d63384; font-weight: bold; }
     .rule-expression .ref { color: #0d6efd; }
-    .rule-expression .val { color: #198754; }
-    .add-rule-bar {
-      padding: 10px 16px;
-      background: #fafafa;
-      border-top: 1px solid #eee;
-      text-align: center;
-    }
-    .btn-add-sm {
-      padding: 6px 14px;
-      background: #28a745;
-      color: white;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 13px;
-      white-space: nowrap;
-    }
+    .rule-expression .val { color: #198754; font-weight: 600; }
+    .add-rule-bar { padding: 10px 16px; background: #fafafa; border-top: 1px solid #eee; text-align: center; }
+
+    /* Buttons */
+    .btn-add-sm { padding: 6px 14px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; }
     .btn-add-sm:hover { background: #218838; }
-    .btn-delete-sm {
-      padding: 4px 8px;
-      background: none;
-      color: #dc3545;
-      border: 1px solid #dc3545;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 12px;
-    }
+    .btn-delete-sm { padding: 4px 8px; background: none; color: #dc3545; border: 1px solid #dc3545; border-radius: 4px; cursor: pointer; font-size: 12px; }
     .btn-delete-sm:hover { background: #dc3545; color: white; }
+
     /* Toggle switch */
-    .toggle-switch { position: relative; display: inline-block; width: 44px; height: 24px; margin: 0 10px; vertical-align: middle; }
+    .toggle-switch { position: relative; display: inline-block; width: 40px; height: 22px; margin-right: 10px; vertical-align: middle; flex-shrink: 0; }
     .toggle-switch input { opacity: 0; width: 0; height: 0; }
     .toggle-slider {
       position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
-      background-color: rgba(255,255,255,0.3); border-radius: 24px; transition: 0.3s;
+      background-color: rgba(255,255,255,0.3); border-radius: 22px; transition: 0.3s;
     }
     .toggle-slider:before {
-      position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px;
+      position: absolute; content: ""; height: 16px; width: 16px; left: 3px; bottom: 3px;
       background-color: white; border-radius: 50%; transition: 0.3s;
     }
     .toggle-switch input:checked + .toggle-slider { background-color: #28a745; }
-    .toggle-switch input:checked + .toggle-slider:before { transform: translateX(20px); }
-    .scoring-block.inactive { opacity: 0.55; }
+    .toggle-switch input:checked + .toggle-slider:before { transform: translateX(18px); }
+    .scoring-block.inactive { opacity: 0.5; }
     .scoring-block.inactive .scoring-block-header { background: #999; }
-    .add-block-form {
-      display: flex;
-      gap: 10px;
-      align-items: center;
-      margin-bottom: 20px;
+
+    /* Add block form */
+    .add-block-form { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .add-block-form input { padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; flex: 1; max-width: 300px; }
+
+    /* Modal */
+    .modal-overlay {
+      display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center;
     }
-    .add-block-form input {
-      padding: 8px 12px;
-      border: 1px solid #ddd;
-      border-radius: 4px;
-      font-size: 14px;
-      flex: 1;
-      max-width: 300px;
+    .modal-content {
+      background: white; border-radius: 12px; max-width: 600px; width: 92%;
+      max-height: 85vh; overflow-y: auto; box-shadow: 0 10px 40px rgba(0,0,0,0.2);
     }
-    .modal-row {
-      display: flex;
-      gap: 8px;
-      align-items: center;
-      margin-bottom: 12px;
-      flex-wrap: wrap;
+    .modal-header {
+      background: linear-gradient(135deg, #1F4788 0%, #3B5998 100%);
+      color: white; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center;
     }
-    .modal-row label { min-width: 30px; font-weight: bold; font-size: 13px; }
-    .modal-row select, .modal-row input { padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px; }
-    .modal-row select { min-width: 100px; }
-    .value-group { display: flex; gap: 4px; align-items: center; }
+    .modal-header h3 { margin: 0; font-size: 16px; }
+    .modal-close { background: none; border: none; color: white; font-size: 24px; cursor: pointer; padding: 0; line-height: 1; }
+    .modal-body { padding: 20px; }
+    .modal-footer { padding: 15px 20px; border-top: 1px solid #e0e0e0; display: flex; justify-content: flex-end; gap: 10px; }
+
+    /* Form rows in modal */
+    .form-row { margin-bottom: 16px; }
+    .form-row label { display: block; font-weight: 600; font-size: 13px; color: #555; margin-bottom: 6px; }
+    .form-row .row-fields { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .form-row select, .form-row input[type="number"], .form-row input[type="text"] {
+      padding: 8px 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px;
+      background: white;
+    }
+    .form-row select { min-width: 140px; }
+    .form-row select:focus, .form-row input:focus { border-color: #1F4788; outline: none; box-shadow: 0 0 0 2px rgba(31,71,136,0.15); }
+    .condition-box {
+      background: #f8f9fa; border: 1px solid #e0e0e0; border-radius: 8px; padding: 14px; margin-bottom: 14px;
+    }
+    .condition-box .condition-label { font-weight: 600; font-size: 12px; color: #1F4788; text-transform: uppercase; margin-bottom: 8px; }
   </style>
 </head>
 <body>
@@ -147,7 +132,7 @@
 
   <!-- Edit/Create Scoring Rule Modal -->
   <div id="editScoringRuleModal" class="modal-overlay" onclick="if(event.target === this) closeModal('editScoringRuleModal')">
-    <div class="modal-content" style="max-width: 750px;">
+    <div class="modal-content">
       <div class="modal-header">
         <h3 id="modalTitle">Modifier la condition</h3>
         <button class="modal-close" onclick="closeModal('editScoringRuleModal')">&times;</button>
@@ -158,63 +143,78 @@
           <input type="hidden" id="editSrRuleType">
 
           <!-- Condition 1 -->
-          <div class="modal-row">
-            <label>Si</label>
-            <select id="editField1" style="flex: 1;"></select>
-            <select id="editOp1"></select>
-            <div class="value-group">
-              <select id="editValueType1" onchange="toggleValueInput(1)" style="width: 110px;">
-                <option value="reference">Référence</option>
-                <option value="literal">Valeur fixe</option>
-              </select>
-              <select id="editValueRef1"></select>
-              <input type="number" id="editValueLit1" step="0.001" style="width: 90px; display: none;" placeholder="0">
+          <div class="condition-box">
+            <div class="condition-label">Condition 1</div>
+            <div class="form-row">
+              <label>Champ</label>
+              <select id="editField1" style="width: 100%;"></select>
+            </div>
+            <div class="form-row">
+              <label>Opérateur et valeur</label>
+              <div class="row-fields">
+                <select id="editOp1"></select>
+                <select id="editValueType1" onchange="toggleValueInput(1)">
+                  <option value="reference">Référence</option>
+                  <option value="literal">Valeur fixe</option>
+                </select>
+                <select id="editValueRef1" style="min-width: 160px;"></select>
+                <input type="number" id="editValueLit1" step="0.001" style="width: 100px; display: none;" placeholder="0">
+              </div>
             </div>
           </div>
 
           <!-- Logical operator -->
-          <div class="modal-row">
-            <label></label>
-            <select id="editLogicalOp" onchange="toggleCondition2()" style="width: 140px;">
+          <div class="form-row" style="text-align: center;">
+            <select id="editLogicalOp" onchange="toggleCondition2()" style="margin: 0 auto; display: block; width: auto; min-width: 180px;">
               <option value="">Pas de 2e condition</option>
             </select>
           </div>
 
           <!-- Condition 2 -->
-          <div class="modal-row" id="condition2Row" style="display: none;">
-            <label></label>
-            <select id="editField2" style="flex: 1;"></select>
-            <select id="editOp2"></select>
-            <div class="value-group">
-              <select id="editValueType2" onchange="toggleValueInput(2)" style="width: 110px;">
-                <option value="reference">Référence</option>
-                <option value="literal">Valeur fixe</option>
-              </select>
-              <select id="editValueRef2"></select>
-              <input type="number" id="editValueLit2" step="0.001" style="width: 90px; display: none;" placeholder="0">
+          <div class="condition-box" id="condition2Row" style="display: none;">
+            <div class="condition-label">Condition 2</div>
+            <div class="form-row">
+              <label>Champ</label>
+              <select id="editField2" style="width: 100%;"></select>
+            </div>
+            <div class="form-row">
+              <label>Opérateur et valeur</label>
+              <div class="row-fields">
+                <select id="editOp2"></select>
+                <select id="editValueType2" onchange="toggleValueInput(2)">
+                  <option value="reference">Référence</option>
+                  <option value="literal">Valeur fixe</option>
+                </select>
+                <select id="editValueRef2" style="min-width: 160px;"></select>
+                <input type="number" id="editValueLit2" step="0.001" style="width: 100px; display: none;" placeholder="0">
+              </div>
             </div>
           </div>
 
-          <hr style="margin: 15px 0; border: none; border-top: 1px solid #eee;">
+          <hr style="margin: 16px 0; border: none; border-top: 1px solid #e0e0e0;">
 
-          <!-- Points + label -->
-          <div class="modal-row">
-            <label>Points</label>
-            <input type="number" id="editSrPoints" required min="0" max="99" style="width: 80px;">
-            <span style="margin-left: 20px; font-size: 13px; color: #666;">Libellé colonne:</span>
-            <input type="text" id="editColumnLabel" placeholder="Ex: Bonus Moy." maxlength="30" style="width: 150px;">
+          <!-- Points + Column label -->
+          <div style="display: flex; gap: 16px; flex-wrap: wrap;">
+            <div class="form-row" style="flex: 0 0 auto;">
+              <label>Points attribués</label>
+              <input type="number" id="editSrPoints" required min="0" max="99" style="width: 80px;">
+            </div>
+            <div class="form-row" style="flex: 1;">
+              <label>Libellé colonne (affichage)</label>
+              <input type="text" id="editColumnLabel" placeholder="Ex: Bonus Moy." maxlength="30" style="width: 100%;">
+            </div>
           </div>
 
           <!-- Description -->
-          <div class="modal-row">
-            <label style="min-width: 80px;">Description</label>
-            <input type="text" id="editSrDescription" style="flex: 1;" placeholder="Description libre (optionnel)">
+          <div class="form-row">
+            <label>Description (optionnel)</label>
+            <input type="text" id="editSrDescription" style="width: 100%;" placeholder="Description libre">
           </div>
         </form>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn" onclick="closeModal('editScoringRuleModal')">Annuler</button>
-        <button type="button" class="btn btn-primary" onclick="saveScoringRule()">Enregistrer</button>
+        <button type="button" class="btn btn-success" onclick="saveScoringRule()">Enregistrer</button>
       </div>
     </div>
   </div>
@@ -239,6 +239,12 @@
       'BASE_VDL': 'Barème de base (Victoire / Nul / Défaite)',
       'MOYENNE_BONUS': 'Bonus Moyenne'
     };
+
+    // Derive a readable label from a rule_type code (NOMBRE_DE_JOUEURS → Nombre de joueurs)
+    function formatBlockLabel(ruleType) {
+      if (BLOCK_LABELS[ruleType]) return BLOCK_LABELS[ruleType];
+      return ruleType.replace(/_/g, ' ').replace(/\w\S*/g, w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+    }
 
     document.getElementById('logoutBtn').addEventListener('click', (e) => {
       e.preventDefault();
@@ -350,7 +356,7 @@
 
       container.innerHTML = blocks.map(blockType => {
         const blockRules = rules.filter(r => r.rule_type === blockType);
-        const label = BLOCK_LABELS[blockType] || blockType;
+        const label = formatBlockLabel(blockType);
         const isBuiltIn = blockType === 'BASE_VDL';
         const isDisplayOnly = blockRules.every(r => !r.field_1);
         const isActive = blockRules.some(r => r.is_active !== false && r.is_active !== 0);
@@ -688,7 +694,7 @@
     // Delete an entire block
     async function deleteBlock(ruleType) {
       const blockRules = allRules.filter(r => r.rule_type === ruleType);
-      if (!confirm(`Supprimer le bloc "${BLOCK_LABELS[ruleType] || ruleType}" et ses ${blockRules.length} condition(s) ?`)) return;
+      if (!confirm(`Supprimer le bloc "${formatBlockLabel(ruleType)}" et ses ${blockRules.length} condition(s) ?`)) return;
       try {
         for (const rule of blockRules) {
           await authFetch(`${API_URL}/reference-data/scoring-rules/${rule.id}`, { method: 'DELETE' });
