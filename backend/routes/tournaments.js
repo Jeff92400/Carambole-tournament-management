@@ -537,7 +537,8 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
                       return res.status(500).json({ error: 'Error finalizing import' });
                     }
 
-                    // Recalculate rankings for this category and season
+                    // Compute bonus points then recalculate rankings
+                    computeBonusPoints(finalTournamentId, categoryId, () => {
                     recalculateRankings(categoryId, season, () => {
                       // Clean up uploaded file
                       fs.unlinkSync(req.file.path);
@@ -559,6 +560,7 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
                         errors: errors.length > 0 ? errors : undefined
                       });
                     });
+                    }); // close computeBonusPoints
                   });
                 } // Close insertTournamentResults function
               });
@@ -577,6 +579,180 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
   }
 });
 
+// --- Scoring Rule Engine ---
+
+// Resolve a field code to its numeric value
+function resolveField(fieldCode, playerResult, tournamentContext) {
+  switch (fieldCode) {
+    case 'MOYENNE':
+      return playerResult.reprises > 0 ? playerResult.points / playerResult.reprises : 0;
+    case 'NB_JOUEURS':
+      return tournamentContext.nb_joueurs || 0;
+    case 'MATCH_POINTS':
+      return playerResult.match_points || 0;
+    case 'SERIE':
+      return playerResult.serie || 0;
+    default:
+      console.warn(`[SCORING] Unknown field: ${fieldCode}`);
+      return 0;
+  }
+}
+
+// Resolve a value string: either a number or a reference keyword
+function resolveValue(valueStr, referenceValues) {
+  if (referenceValues.hasOwnProperty(valueStr)) {
+    return referenceValues[valueStr];
+  }
+  const num = parseFloat(valueStr);
+  return isNaN(num) ? 0 : num;
+}
+
+// Evaluate: left OP right
+function evaluateOp(left, op, right) {
+  switch (op) {
+    case '>':  return left > right;
+    case '>=': return left >= right;
+    case '<':  return left < right;
+    case '<=': return left <= right;
+    case '=':  return Math.abs(left - right) < 0.0001;
+    default: return false;
+  }
+}
+
+// Evaluate a single structured rule for a given player
+function evaluateRule(rule, playerResult, tournamentContext, referenceValues) {
+  if (!rule.field_1) return false;
+
+  const left1 = resolveField(rule.field_1, playerResult, tournamentContext);
+  const right1 = resolveValue(rule.value_1, referenceValues);
+  const cond1 = evaluateOp(left1, rule.operator_1, right1);
+
+  if (!rule.logical_op || !rule.field_2) {
+    return cond1;
+  }
+
+  const left2 = resolveField(rule.field_2, playerResult, tournamentContext);
+  const right2 = resolveValue(rule.value_2, referenceValues);
+  const cond2 = evaluateOp(left2, rule.operator_2, right2);
+
+  if (rule.logical_op === 'AND') return cond1 && cond2;
+  if (rule.logical_op === 'OR')  return cond1 || cond2;
+  return false;
+}
+
+// Compute bonus points for tournament results using the generic rule engine
+function computeBonusPoints(tournamentId, categoryId, callback) {
+  // 1. Load ALL active structured rules (field_1 IS NOT NULL skips display-only BASE_VDL)
+  db.all(
+    "SELECT * FROM scoring_rules WHERE is_active = true AND field_1 IS NOT NULL ORDER BY rule_type, display_order",
+    [],
+    (err, rules) => {
+      if (err || !rules || rules.length === 0) {
+        console.log('[BONUS] No evaluatable scoring rules found, skipping');
+        return callback(null);
+      }
+
+      // Skip if all points are 0
+      if (rules.every(r => r.points === 0)) {
+        console.log('[BONUS] All scoring rule points are 0, skipping');
+        return callback(null);
+      }
+
+      // 2. Get game_parameters for reference values
+      db.get(
+        `SELECT c.display_name as category_name, c.game_type, c.level,
+                gp.moyenne_mini, gp.moyenne_maxi
+         FROM categories c
+         LEFT JOIN game_parameters gp ON UPPER(gp.mode) = UPPER(c.game_type) AND UPPER(gp.categorie) = UPPER(c.level)
+         WHERE c.id = ?`,
+        [categoryId],
+        (err, catInfo) => {
+          if (err) {
+            console.warn('[BONUS] Could not load category info:', err);
+            return callback(null);
+          }
+
+          const referenceValues = {};
+          if (catInfo) {
+            if (catInfo.moyenne_mini !== null && catInfo.moyenne_mini !== undefined)
+              referenceValues.MOYENNE_MINI = parseFloat(catInfo.moyenne_mini);
+            if (catInfo.moyenne_maxi !== null && catInfo.moyenne_maxi !== undefined)
+              referenceValues.MOYENNE_MAXI = parseFloat(catInfo.moyenne_maxi);
+          }
+
+          console.log(`[BONUS] Category ${catInfo ? catInfo.category_name : categoryId}: refs=${JSON.stringify(referenceValues)}, ${rules.length} rules`);
+
+          // 3. Get tournament context (nb_joueurs)
+          db.get(
+            'SELECT COUNT(*) as nb_joueurs FROM tournament_results WHERE tournament_id = ?',
+            [tournamentId],
+            (err, countRow) => {
+              const tournamentContext = { nb_joueurs: countRow ? countRow.nb_joueurs : 0 };
+
+              // 4. Get all player results
+              db.all(
+                'SELECT id, licence, points, reprises, match_points, serie FROM tournament_results WHERE tournament_id = ?',
+                [tournamentId],
+                (err, results) => {
+                  if (err || !results || results.length === 0) {
+                    console.log('[BONUS] No results to process');
+                    return callback(null);
+                  }
+
+                  // Group rules by rule_type
+                  const ruleTypes = [...new Set(rules.map(r => r.rule_type))];
+                  let completed = 0;
+                  let updateCount = 0;
+
+                  results.forEach(result => {
+                    let totalBonus = 0;
+                    const bonusDetail = {};
+
+                    ruleTypes.forEach(ruleType => {
+                      const typeRules = rules.filter(r => r.rule_type === ruleType);
+
+                      // First match wins within a rule_type (mutually exclusive conditions)
+                      for (const rule of typeRules) {
+                        // Skip rules referencing values we don't have
+                        const needsRef = [rule.value_1, rule.value_2].some(
+                          v => v === 'MOYENNE_MAXI' || v === 'MOYENNE_MINI'
+                        );
+                        if (needsRef && Object.keys(referenceValues).length === 0) continue;
+
+                        if (evaluateRule(rule, result, tournamentContext, referenceValues)) {
+                          if (rule.points > 0) {
+                            bonusDetail[ruleType] = (bonusDetail[ruleType] || 0) + rule.points;
+                            totalBonus += rule.points;
+                            console.log(`[BONUS] ${result.licence}: ${ruleType} matched → +${rule.points}`);
+                          }
+                          break; // First match wins
+                        }
+                      }
+                    });
+
+                    db.run(
+                      'UPDATE tournament_results SET bonus_points = ?, bonus_detail = ? WHERE id = ?',
+                      [totalBonus, JSON.stringify(bonusDetail), result.id],
+                      (err) => {
+                        completed++;
+                        if (!err && totalBonus > 0) updateCount++;
+                        if (completed === results.length) {
+                          console.log(`[BONUS] Applied bonus to ${updateCount}/${results.length} results for tournament ${tournamentId}`);
+                          callback(null);
+                        }
+                      }
+                    );
+                  });
+                }
+              );
+            }
+          );
+        }
+      );
+    }
+  );
+}
+
 // Recalculate rankings for a category and season
 function recalculateRankings(categoryId, season, callback) {
   console.log(`[RANKING] Starting recalculation for category ${categoryId}, season ${season}`);
@@ -588,7 +764,8 @@ function recalculateRankings(categoryId, season, callback) {
     SELECT
       REPLACE(tr.licence, ' ', '') as licence,
       MAX(tr.player_name) as player_name,
-      SUM(tr.match_points) as total_match_points,
+      SUM(tr.match_points) + SUM(COALESCE(tr.bonus_points, 0)) as total_match_points,
+      SUM(COALESCE(tr.bonus_points, 0)) as total_bonus_points,
       SUM(tr.points) as total_points,
       SUM(tr.reprises) as total_reprises,
       CASE
@@ -596,9 +773,9 @@ function recalculateRankings(categoryId, season, callback) {
         ELSE 0
       END as avg_moyenne,
       MAX(tr.serie) as best_serie,
-      MAX(CASE WHEN t.tournament_number = 1 THEN tr.match_points ELSE NULL END) as t1_points,
-      MAX(CASE WHEN t.tournament_number = 2 THEN tr.match_points ELSE NULL END) as t2_points,
-      MAX(CASE WHEN t.tournament_number = 3 THEN tr.match_points ELSE NULL END) as t3_points
+      MAX(CASE WHEN t.tournament_number = 1 THEN tr.match_points + COALESCE(tr.bonus_points, 0) ELSE NULL END) as t1_points,
+      MAX(CASE WHEN t.tournament_number = 2 THEN tr.match_points + COALESCE(tr.bonus_points, 0) ELSE NULL END) as t2_points,
+      MAX(CASE WHEN t.tournament_number = 3 THEN tr.match_points + COALESCE(tr.bonus_points, 0) ELSE NULL END) as t3_points
     FROM tournament_results tr
     JOIN tournaments t ON tr.tournament_id = t.id
     WHERE t.category_id = ? AND t.season = ? AND t.tournament_number <= 3
@@ -635,8 +812,8 @@ function recalculateRankings(categoryId, season, callback) {
       const stmt = db.prepare(`
         INSERT INTO rankings (
           category_id, season, licence, total_match_points, avg_moyenne, best_serie,
-          rank_position, tournament_1_points, tournament_2_points, tournament_3_points
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          rank_position, tournament_1_points, tournament_2_points, tournament_3_points, total_bonus_points
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
       let insertCount = 0;
@@ -655,6 +832,7 @@ function recalculateRankings(categoryId, season, callback) {
           result.t1_points,
           result.t2_points,
           result.t3_points,
+          result.total_bonus_points || 0,
           (err) => {
             insertCount++;
 
@@ -688,7 +866,52 @@ function recalculateRankings(categoryId, season, callback) {
                         console.error(`[RANKING] WARNING: Expected ${results.length} but found ${row.count} in database!`);
                       }
                     }
-                    callback(insertErrors.length > 0 ? new Error(`${insertErrors.length} insertions failed`) : finalizeErr);
+
+                    // Aggregate bonus_detail per player across tournaments
+                    db.all(
+                      `SELECT REPLACE(tr.licence, ' ', '') as licence, tr.bonus_detail
+                       FROM tournament_results tr
+                       JOIN tournaments t ON tr.tournament_id = t.id
+                       WHERE t.category_id = ? AND t.season = ? AND t.tournament_number <= 3
+                       AND tr.bonus_detail IS NOT NULL`,
+                      [categoryId, season],
+                      (err, detailRows) => {
+                        if (!err && detailRows && detailRows.length > 0) {
+                          const playerDetails = {};
+                          detailRows.forEach(dr => {
+                            const lic = dr.licence;
+                            if (!playerDetails[lic]) playerDetails[lic] = {};
+                            try {
+                              const detail = JSON.parse(dr.bonus_detail);
+                              for (const [ruleType, pts] of Object.entries(detail)) {
+                                playerDetails[lic][ruleType] = (playerDetails[lic][ruleType] || 0) + pts;
+                              }
+                            } catch (e) { /* ignore */ }
+                          });
+
+                          let detailUpdates = 0;
+                          const entries = Object.entries(playerDetails);
+                          if (entries.length === 0) {
+                            return callback(insertErrors.length > 0 ? new Error(`${insertErrors.length} insertions failed`) : finalizeErr);
+                          }
+                          entries.forEach(([licence, detail]) => {
+                            db.run(
+                              'UPDATE rankings SET bonus_detail = ? WHERE category_id = ? AND season = ? AND licence = ?',
+                              [JSON.stringify(detail), categoryId, season, licence],
+                              () => {
+                                detailUpdates++;
+                                if (detailUpdates === entries.length) {
+                                  console.log(`[RANKING] Updated bonus_detail for ${detailUpdates} players`);
+                                  callback(insertErrors.length > 0 ? new Error(`${insertErrors.length} insertions failed`) : finalizeErr);
+                                }
+                              }
+                            );
+                          });
+                        } else {
+                          callback(insertErrors.length > 0 ? new Error(`${insertErrors.length} insertions failed`) : finalizeErr);
+                        }
+                      }
+                    );
                   }
                 );
               });
@@ -700,6 +923,26 @@ function recalculateRankings(categoryId, season, callback) {
   });
 }
 
+// Recompute bonus points for all tournaments in a category/season
+function recomputeAllBonuses(categoryId, season, callback) {
+  db.all(
+    'SELECT id FROM tournaments WHERE category_id = ? AND season = ? AND tournament_number <= 3',
+    [categoryId, season],
+    (err, tournaments) => {
+      if (err || !tournaments || tournaments.length === 0) {
+        return callback(null);
+      }
+      let completed = 0;
+      tournaments.forEach(t => {
+        computeBonusPoints(t.id, categoryId, () => {
+          completed++;
+          if (completed === tournaments.length) callback(null);
+        });
+      });
+    }
+  );
+}
+
 // Recalculate rankings for a category/season (without reimporting)
 router.post('/recalculate-rankings', authenticateToken, (req, res) => {
   const { categoryId, season } = req.body;
@@ -708,6 +951,8 @@ router.post('/recalculate-rankings', authenticateToken, (req, res) => {
     return res.status(400).json({ error: 'categoryId and season required' });
   }
 
+  // Recompute bonuses first (in case scoring rules changed), then recalculate rankings
+  recomputeAllBonuses(categoryId, season, () => {
   recalculateRankings(categoryId, season, (err) => {
     if (err) {
       return res.status(500).json({ error: err.message });
@@ -723,6 +968,7 @@ router.post('/recalculate-rankings', authenticateToken, (req, res) => {
         });
       });
   });
+  }); // close recomputeAllBonuses
 });
 
 // Get all tournaments
@@ -828,10 +1074,48 @@ router.get('/:id/results', authenticateToken, (req, res) => {
             return res.status(500).json({ error: err.message });
           }
 
-          res.json({
-            tournament,
-            results
+          // Extract bonus column metadata from results' bonus_detail
+          const seenTypes = new Set();
+          let hasLegacyBonus = false;
+          (results || []).forEach(r => {
+            if (r.bonus_detail) {
+              try {
+                const detail = JSON.parse(r.bonus_detail);
+                Object.keys(detail).forEach(k => { if (detail[k] > 0) seenTypes.add(k); });
+              } catch (e) {}
+            }
+            // Backward compat: results with bonus_points but no bonus_detail (pre-rule-engine)
+            if (!r.bonus_detail && r.bonus_points > 0) hasLegacyBonus = true;
           });
+
+          // Backfill legacy results: inject bonus_detail from bonus_points
+          if (hasLegacyBonus && seenTypes.size === 0) {
+            seenTypes.add('MOYENNE_BONUS');
+            (results || []).forEach(r => {
+              if (!r.bonus_detail && r.bonus_points > 0) {
+                r.bonus_detail = JSON.stringify({ MOYENNE_BONUS: r.bonus_points });
+              }
+            });
+          }
+
+          if (seenTypes.size > 0) {
+            // Get column labels from scoring_rules
+            const placeholders = [...seenTypes].map((_, i) => `$${i + 1}`).join(',');
+            db.all(
+              `SELECT DISTINCT rule_type, column_label FROM scoring_rules WHERE rule_type IN (${placeholders}) AND column_label IS NOT NULL`,
+              [...seenTypes],
+              (err, labelRows) => {
+                const labelMap = {};
+                (labelRows || []).forEach(r => { labelMap[r.rule_type] = r.column_label; });
+                res.json({
+                  tournament, results,
+                  bonusColumns: [...seenTypes].map(rt => ({ ruleType: rt, label: labelMap[rt] || rt }))
+                });
+              }
+            );
+          } else {
+            res.json({ tournament, results, bonusColumns: [] });
+          }
         }
       );
     }
@@ -874,6 +1158,50 @@ router.get('/:id/export', authenticateToken, async (req, res) => {
           }
 
           try {
+            // Parse bonus_detail to find dynamic bonus columns
+            const seenTypes = new Set();
+            let hasLegacyBonus = false;
+            (results || []).forEach(r => {
+              if (r.bonus_detail) {
+                try {
+                  const detail = JSON.parse(r.bonus_detail);
+                  Object.keys(detail).forEach(k => { if (detail[k] > 0) seenTypes.add(k); });
+                } catch(e) {}
+              }
+              if (!r.bonus_detail && r.bonus_points > 0) hasLegacyBonus = true;
+            });
+
+            // Backfill legacy results for Excel export
+            if (hasLegacyBonus && seenTypes.size === 0) {
+              seenTypes.add('MOYENNE_BONUS');
+              (results || []).forEach(r => {
+                if (!r.bonus_detail && r.bonus_points > 0) {
+                  r.bonus_detail = JSON.stringify({ MOYENNE_BONUS: r.bonus_points });
+                }
+              });
+            }
+
+            let bonusColumns = [];
+            if (seenTypes.size > 0) {
+              const placeholders = [...seenTypes].map((_, i) => `$${i + 1}`).join(',');
+              const labelRows = await new Promise((resolve, reject) => {
+                db.all(
+                  `SELECT DISTINCT rule_type, column_label FROM scoring_rules WHERE rule_type IN (${placeholders}) AND column_label IS NOT NULL`,
+                  [...seenTypes],
+                  (err, rows) => { if (err) reject(err); else resolve(rows || []); }
+                );
+              });
+              const labelMap = {};
+              labelRows.forEach(r => { labelMap[r.rule_type] = r.column_label; });
+              bonusColumns = [...seenTypes].map(rt => ({ ruleType: rt, label: labelMap[rt] || rt }));
+            }
+
+            const hasBonusCols = bonusColumns.length > 0;
+            // Base cols: Position, Licence, Joueur, Club, Logo, Pts Match = 6
+            // + bonus columns + Total (if bonus) + Points, Reprises, Moyenne, Meilleure Série = 4
+            const totalExcelCols = 10 + bonusColumns.length + (hasBonusCols ? 1 : 0);
+            const lastCol = String.fromCharCode(64 + totalExcelCols);
+
             const workbook = new ExcelJS.Workbook();
             const worksheet = workbook.addWorksheet('Résultats');
 
@@ -895,7 +1223,7 @@ router.get('/:id/export', authenticateToken, async (req, res) => {
             }
 
             // Title - Row 1
-            worksheet.mergeCells('B1:J1');
+            worksheet.mergeCells(`B1:${lastCol}1`);
             worksheet.getCell('B1').value = `RÉSULTATS ${tournament.display_name.toUpperCase()}`;
             worksheet.getCell('B1').font = { size: 18, bold: true, color: { argb: 'FF1F4788' } };
             worksheet.getCell('B1').alignment = { horizontal: 'center', vertical: 'middle' };
@@ -912,7 +1240,7 @@ router.get('/:id/export', authenticateToken, async (req, res) => {
             worksheet.getRow(1).height = 35;
 
             // Subtitle - Row 2
-            worksheet.mergeCells('A2:J2');
+            worksheet.mergeCells(`A2:${lastCol}2`);
             const tournamentDate = tournament.tournament_date
               ? new Date(tournament.tournament_date).toLocaleDateString('fr-FR', { year: 'numeric', month: 'long', day: 'numeric' })
               : '';
@@ -925,7 +1253,7 @@ router.get('/:id/export', authenticateToken, async (req, res) => {
             // Add podium section for finale
             if (tournament.tournament_number === 4 && results.length >= 3) {
               // Podium section in Row 3
-              worksheet.mergeCells('A3:J3');
+              worksheet.mergeCells(`A3:${lastCol}3`);
               worksheet.getCell('A3').value = '🏆 PODIUM DE LA FINALE 🏆';
               worksheet.getCell('A3').font = { size: 14, bold: true, color: { argb: 'FFFFD700' } };
               worksheet.getCell('A3').alignment = { horizontal: 'center', vertical: 'middle' };
@@ -947,7 +1275,7 @@ router.get('/:id/export', authenticateToken, async (req, res) => {
                 const moyenne = result.reprises > 0 ? (result.points / result.reprises).toFixed(3) : '0.000';
                 const clubName = result.club_name || 'N/A';
 
-                worksheet.mergeCells(`A${row}:J${row}`);
+                worksheet.mergeCells(`A${row}:${lastCol}${row}`);
                 worksheet.getCell(`A${row}`).value = `${medals[i]} ${positions[i]} - ${result.player_name} • ${result.match_points} pts • Moy: ${moyenne} • Meilleure Série: ${result.serie} • ${clubName}`;
                 worksheet.getCell(`A${row}`).font = { size: 12, bold: true };
                 worksheet.getCell(`A${row}`).alignment = { horizontal: 'center', vertical: 'middle' };
@@ -965,18 +1293,20 @@ router.get('/:id/export', authenticateToken, async (req, res) => {
 
             // Headers - Row 4 for regular, Row 8 for finale
             const headerRow = tournament.tournament_number === 4 ? 8 : 4;
-            worksheet.getRow(headerRow).values = [
+            const headerValues = [
               'Position',
               'Licence',
               'Joueur',
               'Club',
               '', // Empty header for logo column
-              'Pts Match',
-              'Points',
-              'Reprises',
-              'Moyenne',
-              'Meilleure Série'
+              'Pts Match'
             ];
+            if (hasBonusCols) {
+              bonusColumns.forEach(col => headerValues.push(col.label));
+              headerValues.push('Total');
+            }
+            headerValues.push('Points', 'Reprises', 'Moyenne', 'Meilleure Série');
+            worksheet.getRow(headerRow).values = headerValues;
 
             // Style headers
             worksheet.getRow(headerRow).font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11 };
@@ -997,18 +1327,24 @@ router.get('/:id/export', authenticateToken, async (req, res) => {
                 ? (result.points / result.reprises).toFixed(3)
                 : '0.000';
 
-              const excelRow = worksheet.addRow([
+              const bonusDetail = (() => { try { return JSON.parse(result.bonus_detail || '{}'); } catch(e) { return {}; } })();
+              const totalBonus = Object.values(bonusDetail).reduce((s, v) => s + (v || 0), 0);
+
+              const rowValues = [
                 index + 1,
                 result.licence,
                 result.player_name,
                 result.club_name || 'N/A',
                 '', // Empty cell for logo
-                result.match_points,
-                result.points,
-                result.reprises,
-                moyenne,
-                result.serie
-              ]);
+                result.match_points
+              ];
+              if (hasBonusCols) {
+                bonusColumns.forEach(col => rowValues.push(bonusDetail[col.ruleType] || 0));
+                rowValues.push(result.match_points + totalBonus);
+              }
+              rowValues.push(result.points, result.reprises, moyenne, result.serie);
+
+              const excelRow = worksheet.addRow(rowValues);
 
               // Podium colors for top 3
               if (index === 0) {
@@ -1056,9 +1392,12 @@ router.get('/:id/export', authenticateToken, async (req, res) => {
               }
 
               // Center alignment for numeric columns and logo column
-              [1, 5, 6, 7, 8, 9, 10].forEach(col => {
-                excelRow.getCell(col).alignment = { horizontal: 'center', vertical: 'middle' };
-              });
+              const totalCols = totalExcelCols;
+              for (let col = 1; col <= totalCols; col++) {
+                if (![2, 3, 4].includes(col)) {
+                  excelRow.getCell(col).alignment = { horizontal: 'center', vertical: 'middle' };
+                }
+              }
 
               // Left alignment for licence, player name, and club
               [2, 3, 4].forEach(col => {
@@ -1091,18 +1430,25 @@ router.get('/:id/export', authenticateToken, async (req, res) => {
             });
 
             // Column widths
-            worksheet.columns = [
+            const colWidths = [
               { width: 12 },  // Position
               { width: 15 },  // Licence
               { width: 30 },  // Joueur
               { width: 35 },  // Club
               { width: 4 },   // Logo
-              { width: 12 },  // Pts Match
+              { width: 12 }   // Pts Match
+            ];
+            if (hasBonusCols) {
+              bonusColumns.forEach(() => colWidths.push({ width: 12 })); // Bonus columns
+              colWidths.push({ width: 10 }); // Total
+            }
+            colWidths.push(
               { width: 12 },  // Points
               { width: 12 },  // Reprises
               { width: 12 },  // Moyenne
               { width: 16 }   // Meilleure Série
-            ];
+            );
+            worksheet.columns = colWidths;
 
             // Borders for all data cells
             worksheet.eachRow((row, rowNumber) => {
@@ -1222,13 +1568,15 @@ router.post('/recalculate-all-rankings', authenticateToken, async (req, res) => 
 
       for (const combo of combinations) {
         await new Promise((resolve) => {
-          recalculateRankings(combo.category_id, combo.season, (err) => {
-            if (err) {
-              errors.push({ categoryId: combo.category_id, season: combo.season, error: err.message });
-            } else {
-              recalculated++;
-            }
-            resolve();
+          recomputeAllBonuses(combo.category_id, combo.season, () => {
+            recalculateRankings(combo.category_id, combo.season, (err) => {
+              if (err) {
+                errors.push({ categoryId: combo.category_id, season: combo.season, error: err.message });
+              } else {
+                recalculated++;
+              }
+              resolve();
+            });
           });
         });
       }

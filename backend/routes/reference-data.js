@@ -839,4 +839,157 @@ router.delete('/poule-configurations/:id', authenticateToken, (req, res) => {
   });
 });
 
+// ==================== SCORING RULES ====================
+
+// Get all scoring rules (optional ?rule_type=MOYENNE_BONUS filter)
+router.get('/scoring-rules', authenticateToken, (req, res) => {
+  const db = getDb();
+  const { rule_type } = req.query;
+
+  let query = 'SELECT * FROM scoring_rules ORDER BY rule_type, display_order';
+  let params = [];
+
+  if (rule_type) {
+    query = 'SELECT * FROM scoring_rules WHERE rule_type = $1 ORDER BY display_order';
+    params = [rule_type];
+  }
+
+  db.all(query, params, (err, rows) => {
+    if (err) {
+      console.error('Error fetching scoring rules:', err);
+      return res.status(500).json({ error: 'Erreur lors du chargement des règles de scoring' });
+    }
+    res.json(rows || []);
+  });
+});
+
+// Create a scoring rule
+router.post('/scoring-rules', authenticateToken, (req, res) => {
+  const db = getDb();
+  const { rule_type, condition_key, points, display_order, description,
+          field_1, operator_1, value_1, logical_op, field_2, operator_2, value_2, column_label } = req.body;
+
+  if (!rule_type || !condition_key) {
+    return res.status(400).json({ error: 'Type de règle et clé de condition sont requis' });
+  }
+
+  if (points === undefined || points === null || isNaN(parseInt(points))) {
+    return res.status(400).json({ error: 'Le nombre de points est requis' });
+  }
+
+  db.run(
+    `INSERT INTO scoring_rules (rule_type, condition_key, points, display_order, description,
+      field_1, operator_1, value_1, logical_op, field_2, operator_2, value_2, column_label)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+    [rule_type, condition_key, parseInt(points), display_order || 0, description || '',
+     field_1 || null, operator_1 || null, value_1 || null, logical_op || null,
+     field_2 || null, operator_2 || null, value_2 || null, column_label || null],
+    function(err) {
+      if (err) {
+        console.error('Error creating scoring rule:', err);
+        if (err.message && (err.message.includes('UNIQUE') || err.message.includes('unique'))) {
+          return res.status(400).json({ error: 'Cette combinaison type/condition existe déjà' });
+        }
+        return res.status(500).json({ error: 'Erreur lors de la création de la règle' });
+      }
+      res.status(201).json({ success: true, id: this.lastID, message: 'Règle créée' });
+    }
+  );
+});
+
+// Update a scoring rule
+router.put('/scoring-rules/:id', authenticateToken, (req, res) => {
+  const db = getDb();
+  const { id } = req.params;
+
+  // Build dynamic update - only update fields that are provided
+  const setClauses = ['updated_at = CURRENT_TIMESTAMP'];
+  const params = [];
+  let paramIndex = 1;
+
+  const updatableFields = ['points', 'display_order', 'description', 'is_active',
+    'field_1', 'operator_1', 'value_1', 'logical_op', 'field_2', 'operator_2', 'value_2', 'column_label'];
+
+  for (const field of updatableFields) {
+    if (req.body[field] !== undefined) {
+      setClauses.push(`${field} = $${paramIndex++}`);
+      params.push(field === 'points' ? parseInt(req.body[field]) : req.body[field]);
+    }
+  }
+
+  if (params.length === 0) {
+    return res.status(400).json({ error: 'Aucun champ à mettre à jour' });
+  }
+
+  params.push(id);
+
+  db.run(
+    `UPDATE scoring_rules SET ${setClauses.join(', ')} WHERE id = $${paramIndex}`,
+    params,
+    function(err) {
+      if (err) {
+        console.error('Error updating scoring rule:', err);
+        return res.status(500).json({ error: 'Erreur lors de la mise à jour de la règle' });
+      }
+      if (this.changes === 0) {
+        return res.status(404).json({ error: 'Règle non trouvée' });
+      }
+      res.json({ success: true, message: 'Règle mise à jour' });
+    }
+  );
+});
+
+// Delete a scoring rule
+router.delete('/scoring-rules/:id', authenticateToken, (req, res) => {
+  const db = getDb();
+  const { id } = req.params;
+
+  db.run('DELETE FROM scoring_rules WHERE id = $1', [id], function(err) {
+    if (err) {
+      console.error('Error deleting scoring rule:', err);
+      return res.status(500).json({ error: 'Erreur lors de la suppression' });
+    }
+    if (this.changes === 0) {
+      return res.status(404).json({ error: 'Règle non trouvée' });
+    }
+    res.json({ success: true, message: 'Règle supprimée' });
+  });
+});
+
+// Get available scoring fields and operators for the rule engine UI
+router.get('/scoring-fields', authenticateToken, (req, res) => {
+  const fields = [
+    { code: 'MOYENNE', label: 'Moyenne du joueur', type: 'decimal', scope: 'player',
+      description: 'Points / Reprises (calculé automatiquement)' },
+    { code: 'NB_JOUEURS', label: 'Nombre de joueurs', type: 'integer', scope: 'tournament',
+      description: 'Nombre total de joueurs dans le tournoi' },
+    { code: 'MATCH_POINTS', label: 'Points match', type: 'integer', scope: 'player',
+      description: 'Points de match du joueur (V/D/N)' },
+    { code: 'SERIE', label: 'Meilleure série', type: 'integer', scope: 'player',
+      description: 'Meilleure série du joueur dans le tournoi' }
+  ];
+
+  const referenceValues = [
+    { code: 'MOYENNE_MAXI', label: 'Seuil max catégorie',
+      description: 'Valeur de moyenne_maxi dans les paramètres de jeu' },
+    { code: 'MOYENNE_MINI', label: 'Seuil min catégorie',
+      description: 'Valeur de moyenne_mini dans les paramètres de jeu' }
+  ];
+
+  const operators = [
+    { code: '>', label: 'Supérieur à (>)' },
+    { code: '>=', label: 'Supérieur ou égal à (>=)' },
+    { code: '<', label: 'Inférieur à (<)' },
+    { code: '<=', label: 'Inférieur ou égal à (<=)' },
+    { code: '=', label: 'Égal à (=)' }
+  ];
+
+  const logicalOps = [
+    { code: 'AND', label: 'ET' },
+    { code: 'OR', label: 'OU' }
+  ];
+
+  res.json({ fields, referenceValues, operators, logicalOps });
+});
+
 module.exports = router;

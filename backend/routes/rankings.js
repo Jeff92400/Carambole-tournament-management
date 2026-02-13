@@ -69,6 +69,8 @@ router.get('/', authenticateToken, (req, res) => {
             p.club, 'Non renseigné'
           ) as club,
           r.total_match_points,
+          COALESCE(r.total_bonus_points, 0) as total_bonus_points,
+          COALESCE(r.bonus_detail, '{}') as bonus_detail,
           r.avg_moyenne,
           r.best_serie,
           r.tournament_1_points,
@@ -111,11 +113,48 @@ router.get('/', authenticateToken, (req, res) => {
       if (err) {
         return res.status(500).json({ error: err.message });
       }
-      // Return rankings with tournaments played info
-      res.json({
-        rankings: rows,
-        tournamentsPlayed
+
+      // Extract bonus column metadata from rankings' bonus_detail
+      const seenTypes = new Set();
+      let hasLegacyBonus = false;
+      (rows || []).forEach(r => {
+        if (r.bonus_detail && r.bonus_detail !== '{}') {
+          try {
+            const detail = JSON.parse(r.bonus_detail);
+            Object.keys(detail).forEach(k => { if (detail[k] > 0) seenTypes.add(k); });
+          } catch (e) {}
+        }
+        // Backward compat: rankings with total_bonus_points but no bonus_detail (pre-rule-engine)
+        if ((!r.bonus_detail || r.bonus_detail === '{}') && r.total_bonus_points > 0) hasLegacyBonus = true;
       });
+
+      // Backfill legacy rankings: inject bonus_detail from total_bonus_points
+      if (hasLegacyBonus && seenTypes.size === 0) {
+        seenTypes.add('MOYENNE_BONUS');
+        (rows || []).forEach(r => {
+          if ((!r.bonus_detail || r.bonus_detail === '{}') && r.total_bonus_points > 0) {
+            r.bonus_detail = JSON.stringify({ MOYENNE_BONUS: r.total_bonus_points });
+          }
+        });
+      }
+
+      if (seenTypes.size > 0) {
+        const placeholders = [...seenTypes].map((_, i) => `$${i + 1}`).join(',');
+        db.all(
+          `SELECT DISTINCT rule_type, column_label FROM scoring_rules WHERE rule_type IN (${placeholders}) AND column_label IS NOT NULL`,
+          [...seenTypes],
+          (err2, labelRows) => {
+            const labelMap = {};
+            (labelRows || []).forEach(r => { labelMap[r.rule_type] = r.column_label; });
+            res.json({
+              rankings: rows, tournamentsPlayed,
+              bonusColumns: [...seenTypes].map(rt => ({ ruleType: rt, label: labelMap[rt] || rt }))
+            });
+          }
+        );
+      } else {
+        res.json({ rankings: rows, tournamentsPlayed, bonusColumns: [] });
+      }
     });
   });
 });
@@ -172,6 +211,8 @@ router.get('/export', authenticateToken, async (req, res) => {
           p.club, 'Non renseigné'
         ) as club,
         r.total_match_points,
+        COALESCE(r.total_bonus_points, 0) as total_bonus_points,
+        COALESCE(r.bonus_detail, '{}') as bonus_detail,
         r.avg_moyenne,
         r.best_serie,
         r.tournament_1_points,
@@ -216,6 +257,50 @@ router.get('/export', authenticateToken, async (req, res) => {
     }
 
     try {
+      // Parse bonus_detail to find dynamic bonus columns
+      const seenTypes = new Set();
+      let hasLegacyBonus = false;
+      (rows || []).forEach(r => {
+        if (r.bonus_detail && r.bonus_detail !== '{}') {
+          try {
+            const detail = JSON.parse(r.bonus_detail);
+            Object.keys(detail).forEach(k => { if (detail[k] > 0) seenTypes.add(k); });
+          } catch(e) {}
+        }
+        if ((!r.bonus_detail || r.bonus_detail === '{}') && r.total_bonus_points > 0) hasLegacyBonus = true;
+      });
+
+      // Backfill legacy rankings for Excel export
+      if (hasLegacyBonus && seenTypes.size === 0) {
+        seenTypes.add('MOYENNE_BONUS');
+        (rows || []).forEach(r => {
+          if ((!r.bonus_detail || r.bonus_detail === '{}') && r.total_bonus_points > 0) {
+            r.bonus_detail = JSON.stringify({ MOYENNE_BONUS: r.total_bonus_points });
+          }
+        });
+      }
+
+      let bonusColumns = [];
+      if (seenTypes.size > 0) {
+        const placeholders = [...seenTypes].map((_, i) => `$${i + 1}`).join(',');
+        const labelRows = await new Promise((resolve, reject) => {
+          db.all(
+            `SELECT DISTINCT rule_type, column_label FROM scoring_rules WHERE rule_type IN (${placeholders}) AND column_label IS NOT NULL`,
+            [...seenTypes],
+            (err, rows) => { if (err) reject(err); else resolve(rows || []); }
+          );
+        });
+        const labelMap = {};
+        labelRows.forEach(r => { labelMap[r.rule_type] = r.column_label; });
+        bonusColumns = [...seenTypes].map(rt => ({ ruleType: rt, label: labelMap[rt] || rt }));
+      }
+
+      const hasBonusCols = bonusColumns.length > 0;
+      // Base cols: Position, Licence, Prénom, Nom, Club, Logo, T1, T2, T3, Pts Match, Total, Total Points, Total Reprises, Moyenne, Meilleure Série = 15
+      // + bonus columns (inserted between Pts Match and Total)
+      const totalExcelCols = 15 + bonusColumns.length;
+      const lastColLetter = String.fromCharCode(64 + totalExcelCols);
+
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet('Classement');
 
@@ -239,7 +324,7 @@ router.get('/export', authenticateToken, async (req, res) => {
       }
 
       // Title - Row 1
-      worksheet.mergeCells('B1:M1');
+      worksheet.mergeCells(`B1:${lastColLetter}1`);
       worksheet.getCell('B1').value = `CLASSEMENT ${categoryName.toUpperCase()}`;
       worksheet.getCell('B1').font = { size: 18, bold: true, color: { argb: 'FF1F4788' } };
       worksheet.getCell('B1').alignment = { horizontal: 'center', vertical: 'middle' };
@@ -256,7 +341,7 @@ router.get('/export', authenticateToken, async (req, res) => {
       worksheet.getRow(1).height = 35;
 
       // Subtitle - Row 2
-      worksheet.mergeCells('A2:M2');
+      worksheet.mergeCells(`A2:${lastColLetter}2`);
       const exportDate = new Date().toLocaleDateString('fr-FR', { year: 'numeric', month: 'long', day: 'numeric' });
       worksheet.getCell('A2').value = `Saison ${season} • Exporté le ${exportDate}`;
       worksheet.getCell('A2').font = { size: 11, italic: true, color: { argb: 'FF666666' } };
@@ -264,7 +349,7 @@ router.get('/export', authenticateToken, async (req, res) => {
       worksheet.getRow(2).height = 20;
 
       // Headers - Row 4
-      worksheet.getRow(4).values = [
+      const headerValues = [
         'Position',
         'Licence',
         'Prénom',
@@ -274,16 +359,15 @@ router.get('/export', authenticateToken, async (req, res) => {
         'T1',
         'T2',
         'T3',
-        'Total Pts Match',
-        'Total Points',
-        'Total Reprises',
-        'Moyenne',
-        'Meilleure Série'
+        'Pts Match'
       ];
-
-      // Style headers (only columns 1-14)
+      if (hasBonusCols) {
+        bonusColumns.forEach(col => headerValues.push(col.label));
+      }
+      headerValues.push('Total', 'Total Points', 'Total Reprises', 'Moyenne', 'Meilleure Série');
+      worksheet.getRow(4).values = headerValues;
       worksheet.getRow(4).height = 28;
-      for (let col = 1; col <= 14; col++) {
+      for (let col = 1; col <= totalExcelCols; col++) {
         const cell = worksheet.getRow(4).getCell(col);
         cell.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11 };
         cell.fill = {
@@ -316,7 +400,7 @@ router.get('/export', authenticateToken, async (req, res) => {
 
       // Add legend if needed
       if (hasAbsentPlayers) {
-        worksheet.mergeCells('A3:M3');
+        worksheet.mergeCells(`A3:${lastColLetter}3`);
         worksheet.getCell('A3').value = '(*) Non-participation au tournoi concerné';
         worksheet.getCell('A3').font = { size: 10, italic: true, color: { argb: 'FF666666' } };
         worksheet.getCell('A3').alignment = { horizontal: 'left', vertical: 'middle' };
@@ -333,7 +417,11 @@ router.get('/export', authenticateToken, async (req, res) => {
           ? (row.cumulated_points / row.cumulated_reprises).toFixed(3)
           : '0.000';
 
-        const excelRow = worksheet.addRow([
+        const bonusDetail = (() => { try { return JSON.parse(row.bonus_detail || '{}'); } catch(e) { return {}; } })();
+        const totalBonus = Object.values(bonusDetail).reduce((s, v) => s + (v || 0), 0);
+        const pureMatchPoints = row.total_match_points - totalBonus;
+
+        const rowValues = [
           row.rank_position,
           row.licence,
           row.first_name,
@@ -343,17 +431,18 @@ router.get('/export', authenticateToken, async (req, res) => {
           formatTournamentPoints(row.tournament_1_points, tournamentsPlayed.t1),
           formatTournamentPoints(row.tournament_2_points, tournamentsPlayed.t2),
           formatTournamentPoints(row.tournament_3_points, tournamentsPlayed.t3),
-          row.total_match_points,
-          row.cumulated_points,
-          row.cumulated_reprises,
-          moyenne,
-          row.best_serie || 0
-        ]);
+          pureMatchPoints
+        ];
+        if (hasBonusCols) {
+          bonusColumns.forEach(col => rowValues.push(bonusDetail[col.ruleType] || 0));
+        }
+        rowValues.push(row.total_match_points, row.cumulated_points, row.cumulated_reprises, moyenne, row.best_serie || 0);
 
-        // Green highlighting for qualified players (only columns 1-14)
+        const excelRow = worksheet.addRow(rowValues);
+
+        // Green highlighting for qualified players
         if (row.rank_position <= qualifiedCount) {
-          // Light green background for qualified players - apply to each cell individually
-          for (let col = 1; col <= 14; col++) {
+          for (let col = 1; col <= totalExcelCols; col++) {
             excelRow.getCell(col).fill = {
               type: 'pattern',
               pattern: 'solid',
@@ -365,9 +454,9 @@ router.get('/export', authenticateToken, async (req, res) => {
           excelRow.getCell(1).font = { bold: true, size: 11, color: { argb: 'FF2E7D32' } };
           excelRow.getCell(1).value = `✓ ${row.rank_position}`;
         } else {
-          // Alternate row colors for non-qualified (only columns 1-14)
+          // Alternate row colors for non-qualified
           const bgColor = index % 2 === 0 ? 'FFF8F9FA' : 'FFFFFFFF';
-          for (let col = 1; col <= 14; col++) {
+          for (let col = 1; col <= totalExcelCols; col++) {
             excelRow.getCell(col).fill = {
               type: 'pattern',
               pattern: 'solid',
@@ -377,9 +466,11 @@ router.get('/export', authenticateToken, async (req, res) => {
         }
 
         // Center alignment for numeric columns and logo column
-        [1, 6, 7, 8, 9, 10, 11, 12, 13, 14].forEach(col => {
-          excelRow.getCell(col).alignment = { horizontal: 'center', vertical: 'middle' };
-        });
+        for (let col = 1; col <= totalExcelCols; col++) {
+          if (![2, 3, 4, 5].includes(col)) {
+            excelRow.getCell(col).alignment = { horizontal: 'center', vertical: 'middle' };
+          }
+        }
 
         // Left alignment for licence, names, and club
         [2, 3, 4, 5].forEach(col => {
@@ -413,7 +504,7 @@ router.get('/export', authenticateToken, async (req, res) => {
       });
 
       // Column widths
-      worksheet.columns = [
+      const colWidths = [
         { width: 12 },  // Position
         { width: 15 },  // Licence
         { width: 18 },  // Prénom
@@ -423,12 +514,19 @@ router.get('/export', authenticateToken, async (req, res) => {
         { width: 8 },   // T1
         { width: 8 },   // T2
         { width: 8 },   // T3
-        { width: 14 },  // Total Pts Match
+        { width: 12 }   // Pts Match
+      ];
+      if (hasBonusCols) {
+        bonusColumns.forEach(() => colWidths.push({ width: 12 })); // Bonus columns
+      }
+      colWidths.push(
+        { width: 10 },  // Total
         { width: 12 },  // Total Points
         { width: 14 },  // Total Reprises
         { width: 12 },  // Moyenne
         { width: 14 }   // Meilleure Série
-      ];
+      );
+      worksheet.columns = colWidths;
 
       // Borders for all data cells
       worksheet.eachRow((row, rowNumber) => {

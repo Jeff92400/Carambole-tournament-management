@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Barème de points - CDBHS</title>
+  <link rel="icon" type="image/png" href="images/FrenchBillard-Icon-small.png">
+  <link rel="stylesheet" href="css/styles.css">
+  <script src="js/branding.js"></script>
+  <style>
+    /* Scoring blocks */
+    .scoring-block { margin-bottom: 24px; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden; }
+    .scoring-block-header {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 12px 16px; background: var(--color-primary, #1F4788); color: white;
+    }
+    .scoring-block-header h4 { margin: 0; font-size: 15px; }
+    .scoring-block-body { padding: 0; }
+    .scoring-block table { width: 100%; border-collapse: collapse; }
+    .scoring-block th { padding: 10px 16px; text-align: left; background: #f0f0f0; font-size: 13px; color: #555; }
+    .scoring-block td { padding: 10px 16px; border-bottom: 1px solid #eee; font-size: 14px; }
+    .rule-expression { font-size: 13px; color: #333; }
+    .rule-expression .keyword { color: #1F4788; font-weight: 600; }
+    .rule-expression .op { color: #d63384; font-weight: bold; }
+    .rule-expression .ref { color: #0d6efd; }
+    .rule-expression .val { color: #198754; font-weight: 600; }
+    .add-rule-bar { padding: 10px 16px; background: #fafafa; border-top: 1px solid #eee; text-align: center; }
+
+    /* Buttons */
+    .btn-add-sm { padding: 6px 14px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; }
+    .btn-add-sm:hover { background: #218838; }
+    .btn-delete-sm { padding: 4px 8px; background: none; color: #dc3545; border: 1px solid #dc3545; border-radius: 4px; cursor: pointer; font-size: 12px; }
+    .btn-delete-sm:hover { background: #dc3545; color: white; }
+
+    /* Toggle switch */
+    .toggle-switch { position: relative; display: inline-block; width: 40px; height: 22px; margin-right: 10px; vertical-align: middle; flex-shrink: 0; }
+    .toggle-switch input { opacity: 0; width: 0; height: 0; }
+    .toggle-slider {
+      position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+      background-color: rgba(255,255,255,0.3); border-radius: 22px; transition: 0.3s;
+    }
+    .toggle-slider:before {
+      position: absolute; content: ""; height: 16px; width: 16px; left: 3px; bottom: 3px;
+      background-color: white; border-radius: 50%; transition: 0.3s;
+    }
+    .toggle-switch input:checked + .toggle-slider { background-color: #28a745; }
+    .toggle-switch input:checked + .toggle-slider:before { transform: translateX(18px); }
+    .scoring-block.inactive { opacity: 0.5; }
+    .scoring-block.inactive .scoring-block-header { background: #999; }
+
+    /* Add block form */
+    .add-block-form { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .add-block-form input { padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; flex: 1; max-width: 300px; }
+
+    /* Modal */
+    .modal-overlay {
+      display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center;
+    }
+    .modal-content {
+      background: white; border-radius: 12px; max-width: 600px; width: 92%;
+      max-height: 85vh; overflow-y: auto; box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+    }
+    .modal-header {
+      background: linear-gradient(135deg, #1F4788 0%, #3B5998 100%);
+      color: white; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center;
+    }
+    .modal-header h3 { margin: 0; font-size: 16px; }
+    .modal-close { background: none; border: none; color: white; font-size: 24px; cursor: pointer; padding: 0; line-height: 1; }
+    .modal-body { padding: 20px; }
+    .modal-footer { padding: 15px 20px; border-top: 1px solid #e0e0e0; display: flex; justify-content: flex-end; gap: 10px; }
+
+    /* Form rows in modal */
+    .form-row { margin-bottom: 16px; }
+    .form-row label { display: block; font-weight: 600; font-size: 13px; color: #555; margin-bottom: 6px; }
+    .form-row .row-fields { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .form-row select, .form-row input[type="number"], .form-row input[type="text"] {
+      padding: 8px 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px;
+      background: white;
+    }
+    .form-row select { min-width: 140px; }
+    .form-row select:focus, .form-row input:focus { border-color: #1F4788; outline: none; box-shadow: 0 0 0 2px rgba(31,71,136,0.15); }
+    .condition-box {
+      background: #f8f9fa; border: 1px solid #e0e0e0; border-radius: 8px; padding: 14px; margin-bottom: 14px;
+    }
+    .condition-box .condition-label { font-weight: 600; font-size: 12px; color: #1F4788; text-transform: uppercase; margin-bottom: 8px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="navbar">
+      <h2><img id="app-header-icon" src="images/FrenchBillard-Icon-small.png" alt="" style="height: 48px; width: 48px; vertical-align: middle; margin-right: 8px;" onerror="this.src='images/FrenchBillard-Icon-small.png';">Gestion des Fichiers</h2>
+      <div class="nav-links">
+        <a href="dashboard.html">Accueil</a>
+        <a href="rankings.html">Classements</a>
+        <a href="generate-poules.html">Competitions</a>
+        <a href="calendar.html">Calendrier</a>
+        <a href="emailing.html">Com joueurs</a>
+        <a href="settings.html" class="active">Parametres</a>
+        <a href="#" id="logoutBtn" class="nav-logout">Deconnexion</a>
+      </div>
+    </div>
+
+    <div id="errorMessage" class="error" style="display: none;"></div>
+    <div id="successMessage" class="success" style="display: none;"></div>
+
+    <div class="card">
+      <h3>Barème de points</h3>
+      <div style="margin-bottom: 20px; padding: 10px; background: #e8f4fd; border-radius: 6px; font-size: 13px; color: #1F4788;">
+        Configurez les règles de calcul des bonus. Chaque règle est une condition structurée évaluée automatiquement après l'import des résultats.
+      </div>
+
+      <div id="scoringBlocks">
+        <div style="text-align: center; padding: 20px; color: #666;">Chargement...</div>
+      </div>
+
+      <!-- Add new block -->
+      <div style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+        <h4 style="margin: 0 0 10px; font-size: 14px; color: #1F4788;">Ajouter un nouveau bloc de conditions</h4>
+        <div class="add-block-form">
+          <input type="text" id="newBlockName" placeholder="Nom du bloc (ex: Bonus Participation)" maxlength="50">
+          <input type="text" id="newBlockLabel" placeholder="Libellé colonne (ex: Bonus Part.)" maxlength="30" style="max-width: 200px;">
+          <button class="btn-add-sm" onclick="addBlock()">Ajouter le bloc</button>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top: 20px;">
+      <a href="settings.html" style="color: #1F4788;">&larr; Retour aux Parametres</a>
+    </div>
+  </div>
+
+  <!-- Edit/Create Scoring Rule Modal -->
+  <div id="editScoringRuleModal" class="modal-overlay" onclick="if(event.target === this) closeModal('editScoringRuleModal')">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="modalTitle">Modifier la condition</h3>
+        <button class="modal-close" onclick="closeModal('editScoringRuleModal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="editScoringRuleForm">
+          <input type="hidden" id="editSrId">
+          <input type="hidden" id="editSrRuleType">
+
+          <!-- Condition 1 -->
+          <div class="condition-box">
+            <div class="condition-label">Condition 1</div>
+            <div class="form-row">
+              <label>Champ</label>
+              <select id="editField1" style="width: 100%;"></select>
+            </div>
+            <div class="form-row">
+              <label>Opérateur et valeur</label>
+              <div class="row-fields">
+                <select id="editOp1"></select>
+                <select id="editValueType1" onchange="toggleValueInput(1)">
+                  <option value="reference">Référence</option>
+                  <option value="literal">Valeur fixe</option>
+                </select>
+                <select id="editValueRef1" style="min-width: 160px;"></select>
+                <input type="number" id="editValueLit1" step="0.001" style="width: 100px; display: none;" placeholder="0">
+              </div>
+            </div>
+          </div>
+
+          <!-- Logical operator -->
+          <div class="form-row" style="text-align: center;">
+            <select id="editLogicalOp" onchange="toggleCondition2()" style="margin: 0 auto; display: block; width: auto; min-width: 180px;">
+              <option value="">Pas de 2e condition</option>
+            </select>
+          </div>
+
+          <!-- Condition 2 -->
+          <div class="condition-box" id="condition2Row" style="display: none;">
+            <div class="condition-label">Condition 2</div>
+            <div class="form-row">
+              <label>Champ</label>
+              <select id="editField2" style="width: 100%;"></select>
+            </div>
+            <div class="form-row">
+              <label>Opérateur et valeur</label>
+              <div class="row-fields">
+                <select id="editOp2"></select>
+                <select id="editValueType2" onchange="toggleValueInput(2)">
+                  <option value="reference">Référence</option>
+                  <option value="literal">Valeur fixe</option>
+                </select>
+                <select id="editValueRef2" style="min-width: 160px;"></select>
+                <input type="number" id="editValueLit2" step="0.001" style="width: 100px; display: none;" placeholder="0">
+              </div>
+            </div>
+          </div>
+
+          <hr style="margin: 16px 0; border: none; border-top: 1px solid #e0e0e0;">
+
+          <!-- Points + Column label -->
+          <div style="display: flex; gap: 16px; flex-wrap: wrap;">
+            <div class="form-row" style="flex: 0 0 auto;">
+              <label>Points attribués</label>
+              <input type="number" id="editSrPoints" required min="0" max="99" style="width: 80px;">
+            </div>
+            <div class="form-row" style="flex: 1;">
+              <label>Libellé colonne (affichage)</label>
+              <input type="text" id="editColumnLabel" placeholder="Ex: Bonus Moy." maxlength="30" style="width: 100%;">
+            </div>
+          </div>
+
+          <!-- Description -->
+          <div class="form-row">
+            <label>Description (optionnel)</label>
+            <input type="text" id="editSrDescription" style="width: 100%;" placeholder="Description libre">
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn" onclick="closeModal('editScoringRuleModal')">Annuler</button>
+        <button type="button" class="btn btn-success" onclick="saveScoringRule()">Enregistrer</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/auth-utils.js"></script>
+  <script src="js/app-branding.js"></script>
+  <script>
+    const API_URL = '/api';
+
+    if (!requireAuth()) {
+      throw new Error('Not authenticated');
+    }
+    const token = localStorage.getItem('token');
+
+    let allRules = [];
+    let scoringFields = [];
+    let referenceValues = [];
+    let operators = [];
+    let logicalOps = [];
+
+    const BLOCK_LABELS = {
+      'BASE_VDL': 'Barème de base (Victoire / Nul / Défaite)',
+      'MOYENNE_BONUS': 'Bonus Moyenne'
+    };
+
+    // Derive a readable label from a rule_type code (NOMBRE_DE_JOUEURS → Nombre de joueurs)
+    function formatBlockLabel(ruleType) {
+      if (BLOCK_LABELS[ruleType]) return BLOCK_LABELS[ruleType];
+      return ruleType.replace(/_/g, ' ').replace(/\w\S*/g, w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+    }
+
+    document.getElementById('logoutBtn').addEventListener('click', (e) => {
+      e.preventDefault();
+      logout();
+    });
+
+    function openModal(id) { document.getElementById(id).style.display = 'flex'; }
+    function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+
+    function showMessage(type, text) {
+      const id = type === 'error' ? 'errorMessage' : 'successMessage';
+      const el = document.getElementById(id);
+      el.textContent = text;
+      el.style.display = 'block';
+      setTimeout(() => { el.style.display = 'none'; }, 3000);
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    // Get label for a field code
+    function fieldLabel(code) {
+      const f = scoringFields.find(f => f.code === code);
+      return f ? f.label : code;
+    }
+
+    // Get label for a value (reference or literal)
+    function valueLabel(val) {
+      const r = referenceValues.find(v => v.code === val);
+      return r ? r.label : val;
+    }
+
+    // Check if a value is a reference code
+    function isReference(val) {
+      return referenceValues.some(r => r.code === val);
+    }
+
+    // Render a rule's expression as readable HTML
+    function renderExpression(rule) {
+      if (!rule.field_1) {
+        return `<span>${escapeHtml(rule.description || rule.condition_key)}</span>`;
+      }
+
+      const valClass = (v) => isReference(v) ? 'ref' : 'val';
+
+      let html = `<span class="keyword">${escapeHtml(fieldLabel(rule.field_1))}</span> `;
+      html += `<span class="op">${escapeHtml(rule.operator_1)}</span> `;
+      html += `<span class="${valClass(rule.value_1)}">${escapeHtml(valueLabel(rule.value_1))}</span>`;
+
+      if (rule.logical_op && rule.field_2) {
+        html += ` <span class="keyword">${rule.logical_op === 'AND' ? 'ET' : 'OU'}</span> `;
+        html += `<span class="keyword">${escapeHtml(fieldLabel(rule.field_2))}</span> `;
+        html += `<span class="op">${escapeHtml(rule.operator_2)}</span> `;
+        html += `<span class="${valClass(rule.value_2)}">${escapeHtml(valueLabel(rule.value_2))}</span>`;
+      }
+
+      return html;
+    }
+
+    // Load scoring metadata (fields, operators, references)
+    async function loadScoringMetadata() {
+      try {
+        const response = await authFetch(`${API_URL}/reference-data/scoring-fields`);
+        if (response.ok) {
+          const meta = await response.json();
+          scoringFields = meta.fields;
+          referenceValues = meta.referenceValues;
+          operators = meta.operators;
+          logicalOps = meta.logicalOps;
+        }
+      } catch (error) {
+        console.error('Error loading scoring metadata:', error);
+      }
+    }
+
+    // Load scoring rules
+    async function loadScoringRules() {
+      try {
+        const response = await authFetch(`${API_URL}/reference-data/scoring-rules`);
+        if (!response.ok) return;
+        const rules = await response.json();
+        if (Array.isArray(rules)) {
+          allRules = rules;
+          renderBlocks(rules);
+        }
+      } catch (error) {
+        console.error('Error loading scoring rules:', error);
+      }
+    }
+
+    function renderBlocks(rules) {
+      const container = document.getElementById('scoringBlocks');
+
+      const blocks = [];
+      const seen = new Set();
+      rules.forEach(r => {
+        if (!seen.has(r.rule_type)) {
+          seen.add(r.rule_type);
+          blocks.push(r.rule_type);
+        }
+      });
+
+      if (blocks.length === 0) {
+        container.innerHTML = '<div style="text-align: center; padding: 20px; color: #666;">Aucun barème configuré</div>';
+        return;
+      }
+
+      container.innerHTML = blocks.map(blockType => {
+        const blockRules = rules.filter(r => r.rule_type === blockType);
+        const label = formatBlockLabel(blockType);
+        const isBuiltIn = blockType === 'BASE_VDL';
+        const isActive = blockRules.some(r => r.is_active !== false && r.is_active !== 0);
+
+        return `
+          <div class="scoring-block ${!isBuiltIn && !isActive ? 'inactive' : ''}">
+            <div class="scoring-block-header">
+              <div style="display: flex; align-items: center;">
+                ${!isBuiltIn ? `
+                  <label class="toggle-switch" title="${isActive ? 'Actif — cliquer pour désactiver' : 'Inactif — cliquer pour activer'}">
+                    <input type="checkbox" ${isActive ? 'checked' : ''} onchange="toggleBlock('${escapeHtml(blockType)}', this.checked)">
+                    <span class="toggle-slider"></span>
+                  </label>
+                ` : ''}
+                <h4>${escapeHtml(label)}${!isBuiltIn && !isActive ? ' <span style="font-weight: normal; font-size: 12px; opacity: 0.8;">(inactif)</span>' : ''}</h4>
+              </div>
+              ${!isBuiltIn ? `<button class="btn-delete-sm" style="border-color: white; color: white;" onclick="deleteBlock('${escapeHtml(blockType)}')">Supprimer le bloc</button>` : ''}
+            </div>
+            <div class="scoring-block-body">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Condition</th>
+                    <th style="width: 80px; text-align: center;">Points</th>
+                    <th style="width: 150px; text-align: center;">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${blockRules.map(rule => `
+                    <tr>
+                      <td class="rule-expression">${renderExpression(rule)}</td>
+                      <td style="text-align: center; font-weight: bold; ${rule.points > 0 ? 'color: #28a745;' : ''}">${rule.points}</td>
+                      <td style="text-align: center;">
+                        <button class="btn btn-sm" onclick="editScoringRule(${rule.id})">Modifier</button>
+                        ${!isBuiltIn ? `<button class="btn-delete-sm" onclick="deleteCondition(${rule.id})">Suppr</button>` : ''}
+                      </td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+              ${!isBuiltIn ? `
+                <div class="add-rule-bar">
+                  <button class="btn-add-sm" onclick="openCreateModal('${escapeHtml(blockType)}')">+ Ajouter une condition</button>
+                </div>
+              ` : ''}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // Populate modal dropdowns from metadata
+    function populateDropdowns() {
+      ['editField1', 'editField2'].forEach(id => {
+        const sel = document.getElementById(id);
+        sel.innerHTML = '<option value="">-- Champ --</option>' +
+          scoringFields.map(f => `<option value="${f.code}">${f.label}</option>`).join('');
+      });
+
+      ['editOp1', 'editOp2'].forEach(id => {
+        const sel = document.getElementById(id);
+        sel.innerHTML = operators.map(o => `<option value="${o.code}">${o.label}</option>`).join('');
+      });
+
+      ['editValueRef1', 'editValueRef2'].forEach(id => {
+        const sel = document.getElementById(id);
+        sel.innerHTML = referenceValues.map(v => `<option value="${v.code}">${v.label}</option>`).join('');
+      });
+
+      const logSel = document.getElementById('editLogicalOp');
+      logSel.innerHTML = '<option value="">Pas de 2e condition</option>' +
+        logicalOps.map(l => `<option value="${l.code}">${l.label}</option>`).join('');
+    }
+
+    function toggleValueInput(n) {
+      const typeSelect = document.getElementById(`editValueType${n}`);
+      const refSelect = document.getElementById(`editValueRef${n}`);
+      const litInput = document.getElementById(`editValueLit${n}`);
+      if (typeSelect.value === 'reference') {
+        refSelect.style.display = '';
+        litInput.style.display = 'none';
+      } else {
+        refSelect.style.display = 'none';
+        litInput.style.display = '';
+      }
+    }
+
+    function toggleCondition2() {
+      const logOp = document.getElementById('editLogicalOp').value;
+      document.getElementById('condition2Row').style.display = logOp ? 'flex' : 'none';
+    }
+
+    // Get value from modal (reference or literal)
+    function getModalValue(n) {
+      const typeSelect = document.getElementById(`editValueType${n}`);
+      if (typeSelect.value === 'reference') {
+        return document.getElementById(`editValueRef${n}`).value;
+      }
+      return document.getElementById(`editValueLit${n}`).value;
+    }
+
+    // Set value in modal (detect reference vs literal)
+    function setModalValue(n, val) {
+      if (!val) {
+        document.getElementById(`editValueType${n}`).value = 'reference';
+        toggleValueInput(n);
+        return;
+      }
+      if (isReference(val)) {
+        document.getElementById(`editValueType${n}`).value = 'reference';
+        document.getElementById(`editValueRef${n}`).value = val;
+      } else {
+        document.getElementById(`editValueType${n}`).value = 'literal';
+        document.getElementById(`editValueLit${n}`).value = val;
+      }
+      toggleValueInput(n);
+    }
+
+    // Open modal for editing
+    function editScoringRule(id) {
+      const rule = allRules.find(r => r.id === id);
+      if (!rule) return;
+
+      populateDropdowns();
+      document.getElementById('modalTitle').textContent = 'Modifier la condition';
+      document.getElementById('editSrId').value = id;
+      document.getElementById('editSrRuleType').value = rule.rule_type;
+
+      // Fill structured fields
+      document.getElementById('editField1').value = rule.field_1 || '';
+      document.getElementById('editOp1').value = rule.operator_1 || '>';
+      setModalValue(1, rule.value_1);
+
+      document.getElementById('editLogicalOp').value = rule.logical_op || '';
+      toggleCondition2();
+
+      document.getElementById('editField2').value = rule.field_2 || '';
+      document.getElementById('editOp2').value = rule.operator_2 || '>';
+      setModalValue(2, rule.value_2);
+
+      document.getElementById('editSrPoints').value = rule.points;
+      document.getElementById('editColumnLabel').value = rule.column_label || '';
+      document.getElementById('editSrDescription').value = rule.description || '';
+
+      openModal('editScoringRuleModal');
+    }
+
+    // Open modal for creating a new rule in a block
+    function openCreateModal(ruleType) {
+      populateDropdowns();
+      document.getElementById('modalTitle').textContent = 'Ajouter une condition';
+      document.getElementById('editSrId').value = '';
+      document.getElementById('editSrRuleType').value = ruleType;
+
+      // Reset fields
+      document.getElementById('editField1').value = '';
+      document.getElementById('editOp1').value = '>';
+      document.getElementById('editValueType1').value = 'literal';
+      document.getElementById('editValueLit1').value = '';
+      toggleValueInput(1);
+
+      document.getElementById('editLogicalOp').value = '';
+      toggleCondition2();
+
+      document.getElementById('editField2').value = '';
+      document.getElementById('editOp2').value = '>';
+      document.getElementById('editValueType2').value = 'literal';
+      document.getElementById('editValueLit2').value = '';
+      toggleValueInput(2);
+
+      document.getElementById('editSrPoints').value = 0;
+
+      // Default column_label from existing rules in same block
+      const existing = allRules.find(r => r.rule_type === ruleType && r.column_label);
+      document.getElementById('editColumnLabel').value = existing ? existing.column_label : '';
+      document.getElementById('editSrDescription').value = '';
+
+      openModal('editScoringRuleModal');
+    }
+
+    // Save (create or update)
+    async function saveScoringRule() {
+      const id = document.getElementById('editSrId').value;
+      const ruleType = document.getElementById('editSrRuleType').value;
+      const points = parseInt(document.getElementById('editSrPoints').value);
+      const description = document.getElementById('editSrDescription').value.trim();
+      const columnLabel = document.getElementById('editColumnLabel').value.trim();
+
+      const field_1 = document.getElementById('editField1').value || null;
+      const operator_1 = document.getElementById('editOp1').value || null;
+      const value_1 = getModalValue(1) || null;
+
+      const logical_op = document.getElementById('editLogicalOp').value || null;
+
+      let field_2 = null, operator_2 = null, value_2 = null;
+      if (logical_op) {
+        field_2 = document.getElementById('editField2').value || null;
+        operator_2 = document.getElementById('editOp2').value || null;
+        value_2 = getModalValue(2) || null;
+      }
+
+      if (!field_1) {
+        showMessage('error', 'Veuillez sélectionner un champ pour la condition');
+        return;
+      }
+      if (isNaN(points) || points < 0) {
+        showMessage('error', 'Veuillez saisir un nombre de points valide');
+        return;
+      }
+
+      const body = {
+        points, description: description || undefined,
+        field_1, operator_1, value_1,
+        logical_op, field_2, operator_2, value_2,
+        column_label: columnLabel || null
+      };
+
+      try {
+        let response;
+        if (id) {
+          // Update
+          response = await authFetch(`${API_URL}/reference-data/scoring-rules/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+          });
+        } else {
+          // Create
+          const blockRules = allRules.filter(r => r.rule_type === ruleType);
+          const conditionKey = (field_1 + '_' + (operator_1 || '').replace(/[>=<]/g, '') + '_' + (value_1 || '')).toUpperCase().replace(/[^A-Z0-9_]/g, '').substring(0, 30) || `COND_${blockRules.length + 1}`;
+
+          body.rule_type = ruleType;
+          body.condition_key = conditionKey;
+          body.display_order = blockRules.length + 1;
+
+          response = await authFetch(`${API_URL}/reference-data/scoring-rules`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+          });
+        }
+
+        if (response.ok) {
+          closeModal('editScoringRuleModal');
+          loadScoringRules();
+          showMessage('success', id ? 'Condition mise à jour' : 'Condition ajoutée');
+        } else {
+          const data = await response.json();
+          showMessage('error', data.error || 'Erreur');
+        }
+      } catch (error) {
+        showMessage('error', 'Erreur de connexion');
+      }
+    }
+
+    // Add a new block
+    function addBlock() {
+      const nameInput = document.getElementById('newBlockName');
+      const labelInput = document.getElementById('newBlockLabel');
+      const name = nameInput.value.trim();
+      const colLabel = labelInput.value.trim();
+
+      if (!name) {
+        showMessage('error', 'Veuillez saisir un nom pour le bloc');
+        return;
+      }
+
+      const ruleType = name.toUpperCase().replace(/\s+/g, '_').replace(/[^A-Z0-9_]/g, '');
+      if (!ruleType) {
+        showMessage('error', 'Nom invalide');
+        return;
+      }
+      if (allRules.some(r => r.rule_type === ruleType)) {
+        showMessage('error', 'Ce bloc existe déjà');
+        return;
+      }
+
+      BLOCK_LABELS[ruleType] = name;
+      nameInput.value = '';
+      labelInput.value = '';
+
+      // Reuse openCreateModal (proven to work) then override title + label
+      openCreateModal(ruleType);
+      document.getElementById('modalTitle').textContent = 'Première condition du bloc';
+      document.getElementById('editColumnLabel').value = colLabel || '';
+    }
+
+    // Delete a single condition
+    async function deleteCondition(id) {
+      if (!confirm('Supprimer cette condition ?')) return;
+      try {
+        const response = await authFetch(`${API_URL}/reference-data/scoring-rules/${id}`, { method: 'DELETE' });
+        if (response.ok) {
+          loadScoringRules();
+          showMessage('success', 'Condition supprimée');
+        } else {
+          const data = await response.json();
+          showMessage('error', data.error || 'Erreur');
+        }
+      } catch (error) {
+        showMessage('error', 'Erreur de connexion');
+      }
+    }
+
+    // Toggle all rules in a block active/inactive
+    async function toggleBlock(ruleType, isActive) {
+      const blockRules = allRules.filter(r => r.rule_type === ruleType);
+      try {
+        for (const rule of blockRules) {
+          await authFetch(`${API_URL}/reference-data/scoring-rules/${rule.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ is_active: isActive })
+          });
+        }
+        loadScoringRules();
+        showMessage('success', isActive ? 'Bloc activé' : 'Bloc désactivé');
+      } catch (error) {
+        showMessage('error', 'Erreur de connexion');
+      }
+    }
+
+    // Delete an entire block
+    async function deleteBlock(ruleType) {
+      const blockRules = allRules.filter(r => r.rule_type === ruleType);
+      if (!confirm(`Supprimer le bloc "${formatBlockLabel(ruleType)}" et ses ${blockRules.length} condition(s) ?`)) return;
+      try {
+        for (const rule of blockRules) {
+          await authFetch(`${API_URL}/reference-data/scoring-rules/${rule.id}`, { method: 'DELETE' });
+        }
+        delete BLOCK_LABELS[ruleType];
+        loadScoringRules();
+        showMessage('success', 'Bloc supprimé');
+      } catch (error) {
+        showMessage('error', 'Erreur de connexion');
+      }
+    }
+
+    // Initialize
+    async function init() {
+      await loadScoringMetadata();
+      await loadScoringRules();
+    }
+    init();
+  </script>
+</body>
+</html>
