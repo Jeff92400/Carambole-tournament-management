@@ -358,7 +358,6 @@
         const blockRules = rules.filter(r => r.rule_type === blockType);
         const label = formatBlockLabel(blockType);
         const isBuiltIn = blockType === 'BASE_VDL';
-        const isDisplayOnly = blockRules.every(r => !r.field_1);
         const isActive = blockRules.some(r => r.is_active !== false && r.is_active !== 0);
 
         return `
@@ -397,7 +396,7 @@
                   `).join('')}
                 </tbody>
               </table>
-              ${!isDisplayOnly ? `
+              ${!isBuiltIn ? `
                 <div class="add-rule-bar">
                   <button class="btn-add-sm" onclick="openCreateModal('${escapeHtml(blockType)}')">+ Ajouter une condition</button>
                 </div>
