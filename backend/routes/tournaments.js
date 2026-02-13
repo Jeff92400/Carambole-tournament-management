@@ -604,10 +604,10 @@ function computeBonusPoints(tournamentId, categoryId, callback) {
 
       // 2. Get the category's game mode to find moyenne thresholds from game_parameters
       db.get(
-        `SELECT c.name as category_name, c.game_type,
+        `SELECT c.display_name as category_name, c.game_type, c.level,
                 gp.moyenne_mini, gp.moyenne_maxi
          FROM categories c
-         LEFT JOIN game_parameters gp ON UPPER(gp.mode) = UPPER(c.game_type) AND UPPER(gp.categorie) = UPPER(c.name)
+         LEFT JOIN game_parameters gp ON UPPER(gp.mode) = UPPER(c.game_type) AND UPPER(gp.categorie) = UPPER(c.level)
          WHERE c.id = ?`,
         [categoryId],
         (err, catInfo) => {
