@@ -116,6 +116,7 @@ router.get('/', authenticateToken, (req, res) => {
 
       // Extract bonus column metadata from rankings' bonus_detail
       const seenTypes = new Set();
+      let hasLegacyBonus = false;
       (rows || []).forEach(r => {
         if (r.bonus_detail && r.bonus_detail !== '{}') {
           try {
@@ -123,7 +124,19 @@ router.get('/', authenticateToken, (req, res) => {
             Object.keys(detail).forEach(k => { if (detail[k] > 0) seenTypes.add(k); });
           } catch (e) {}
         }
+        // Backward compat: rankings with total_bonus_points but no bonus_detail (pre-rule-engine)
+        if ((!r.bonus_detail || r.bonus_detail === '{}') && r.total_bonus_points > 0) hasLegacyBonus = true;
       });
+
+      // Backfill legacy rankings: inject bonus_detail from total_bonus_points
+      if (hasLegacyBonus && seenTypes.size === 0) {
+        seenTypes.add('MOYENNE_BONUS');
+        (rows || []).forEach(r => {
+          if ((!r.bonus_detail || r.bonus_detail === '{}') && r.total_bonus_points > 0) {
+            r.bonus_detail = JSON.stringify({ MOYENNE_BONUS: r.total_bonus_points });
+          }
+        });
+      }
 
       if (seenTypes.size > 0) {
         const placeholders = [...seenTypes].map((_, i) => `$${i + 1}`).join(',');
@@ -246,6 +259,7 @@ router.get('/export', authenticateToken, async (req, res) => {
     try {
       // Parse bonus_detail to find dynamic bonus columns
       const seenTypes = new Set();
+      let hasLegacyBonus = false;
       (rows || []).forEach(r => {
         if (r.bonus_detail && r.bonus_detail !== '{}') {
           try {
@@ -253,7 +267,18 @@ router.get('/export', authenticateToken, async (req, res) => {
             Object.keys(detail).forEach(k => { if (detail[k] > 0) seenTypes.add(k); });
           } catch(e) {}
         }
+        if ((!r.bonus_detail || r.bonus_detail === '{}') && r.total_bonus_points > 0) hasLegacyBonus = true;
       });
+
+      // Backfill legacy rankings for Excel export
+      if (hasLegacyBonus && seenTypes.size === 0) {
+        seenTypes.add('MOYENNE_BONUS');
+        (rows || []).forEach(r => {
+          if ((!r.bonus_detail || r.bonus_detail === '{}') && r.total_bonus_points > 0) {
+            r.bonus_detail = JSON.stringify({ MOYENNE_BONUS: r.total_bonus_points });
+          }
+        });
+      }
 
       let bonusColumns = [];
       if (seenTypes.size > 0) {
