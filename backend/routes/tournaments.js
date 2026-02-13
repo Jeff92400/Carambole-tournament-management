@@ -628,7 +628,7 @@ function computeBonusPoints(tournamentId, categoryId, callback) {
 
           // 3. Get all results for this tournament
           db.all(
-            'SELECT id, licence, moyenne FROM tournament_results WHERE tournament_id = ?',
+            'SELECT id, licence, points, reprises FROM tournament_results WHERE tournament_id = ?',
             [tournamentId],
             (err, results) => {
               if (err || !results || results.length === 0) {
@@ -641,7 +641,8 @@ function computeBonusPoints(tournamentId, categoryId, callback) {
 
               results.forEach(result => {
                 let bonus = 0;
-                const playerMoyenne = result.moyenne || 0;
+                // Compute moyenne from points/reprises (not the stored CSV moyenne column)
+                const playerMoyenne = (result.reprises > 0) ? (result.points / result.reprises) : 0;
 
                 if (playerMoyenne > moyenneMax) {
                   bonus = bonusMap.ABOVE_MAX || 0;
@@ -649,6 +650,10 @@ function computeBonusPoints(tournamentId, categoryId, callback) {
                   bonus = bonusMap.IN_RANGE || 0;
                 } else {
                   bonus = bonusMap.BELOW_MIN || 0;
+                }
+
+                if (bonus > 0) {
+                  console.log(`[BONUS] ${result.licence}: moyenne=${playerMoyenne.toFixed(3)} (${result.points}/${result.reprises}), threshold=[${moyenneMin},${moyenneMax}] → bonus=${bonus}`);
                 }
 
                 db.run(
@@ -1015,8 +1020,11 @@ router.get('/:id/export', authenticateToken, async (req, res) => {
               console.log('Logo not found for Excel:', err.message);
             }
 
+            // Determine last column letter based on bonus columns
+            const lastCol = hasBonus ? 'L' : 'J';
+
             // Title - Row 1
-            worksheet.mergeCells('B1:J1');
+            worksheet.mergeCells(`B1:${lastCol}1`);
             worksheet.getCell('B1').value = `RÉSULTATS ${tournament.display_name.toUpperCase()}`;
             worksheet.getCell('B1').font = { size: 18, bold: true, color: { argb: 'FF1F4788' } };
             worksheet.getCell('B1').alignment = { horizontal: 'center', vertical: 'middle' };
@@ -1033,7 +1041,7 @@ router.get('/:id/export', authenticateToken, async (req, res) => {
             worksheet.getRow(1).height = 35;
 
             // Subtitle - Row 2
-            worksheet.mergeCells('A2:J2');
+            worksheet.mergeCells(`A2:${lastCol}2`);
             const tournamentDate = tournament.tournament_date
               ? new Date(tournament.tournament_date).toLocaleDateString('fr-FR', { year: 'numeric', month: 'long', day: 'numeric' })
               : '';
@@ -1046,7 +1054,7 @@ router.get('/:id/export', authenticateToken, async (req, res) => {
             // Add podium section for finale
             if (tournament.tournament_number === 4 && results.length >= 3) {
               // Podium section in Row 3
-              worksheet.mergeCells('A3:J3');
+              worksheet.mergeCells(`A3:${lastCol}3`);
               worksheet.getCell('A3').value = '🏆 PODIUM DE LA FINALE 🏆';
               worksheet.getCell('A3').font = { size: 14, bold: true, color: { argb: 'FFFFD700' } };
               worksheet.getCell('A3').alignment = { horizontal: 'center', vertical: 'middle' };
@@ -1068,7 +1076,7 @@ router.get('/:id/export', authenticateToken, async (req, res) => {
                 const moyenne = result.reprises > 0 ? (result.points / result.reprises).toFixed(3) : '0.000';
                 const clubName = result.club_name || 'N/A';
 
-                worksheet.mergeCells(`A${row}:J${row}`);
+                worksheet.mergeCells(`A${row}:${lastCol}${row}`);
                 worksheet.getCell(`A${row}`).value = `${medals[i]} ${positions[i]} - ${result.player_name} • ${result.match_points} pts • Moy: ${moyenne} • Meilleure Série: ${result.serie} • ${clubName}`;
                 worksheet.getCell(`A${row}`).font = { size: 12, bold: true };
                 worksheet.getCell(`A${row}`).alignment = { horizontal: 'center', vertical: 'middle' };
@@ -1084,20 +1092,24 @@ router.get('/:id/export', authenticateToken, async (req, res) => {
               worksheet.getRow(7).height = 5;
             }
 
+            // Check if any result has bonus
+            const hasBonus = results.some(r => (r.bonus_points || 0) > 0);
+
             // Headers - Row 4 for regular, Row 8 for finale
             const headerRow = tournament.tournament_number === 4 ? 8 : 4;
-            worksheet.getRow(headerRow).values = [
+            const headerValues = [
               'Position',
               'Licence',
               'Joueur',
               'Club',
               '', // Empty header for logo column
-              'Pts Match',
-              'Points',
-              'Reprises',
-              'Moyenne',
-              'Meilleure Série'
+              'Pts Match'
             ];
+            if (hasBonus) {
+              headerValues.push('Bonus Moy.', 'Total');
+            }
+            headerValues.push('Points', 'Reprises', 'Moyenne', 'Meilleure Série');
+            worksheet.getRow(headerRow).values = headerValues;
 
             // Style headers
             worksheet.getRow(headerRow).font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11 };
@@ -1118,18 +1130,20 @@ router.get('/:id/export', authenticateToken, async (req, res) => {
                 ? (result.points / result.reprises).toFixed(3)
                 : '0.000';
 
-              const excelRow = worksheet.addRow([
+              const rowValues = [
                 index + 1,
                 result.licence,
                 result.player_name,
                 result.club_name || 'N/A',
                 '', // Empty cell for logo
-                result.match_points,
-                result.points,
-                result.reprises,
-                moyenne,
-                result.serie
-              ]);
+                result.match_points
+              ];
+              if (hasBonus) {
+                rowValues.push(result.bonus_points || 0, result.match_points + (result.bonus_points || 0));
+              }
+              rowValues.push(result.points, result.reprises, moyenne, result.serie);
+
+              const excelRow = worksheet.addRow(rowValues);
 
               // Podium colors for top 3
               if (index === 0) {
@@ -1177,9 +1191,12 @@ router.get('/:id/export', authenticateToken, async (req, res) => {
               }
 
               // Center alignment for numeric columns and logo column
-              [1, 5, 6, 7, 8, 9, 10].forEach(col => {
-                excelRow.getCell(col).alignment = { horizontal: 'center', vertical: 'middle' };
-              });
+              const totalCols = hasBonus ? 12 : 10;
+              for (let col = 1; col <= totalCols; col++) {
+                if (![2, 3, 4].includes(col)) {
+                  excelRow.getCell(col).alignment = { horizontal: 'center', vertical: 'middle' };
+                }
+              }
 
               // Left alignment for licence, player name, and club
               [2, 3, 4].forEach(col => {
@@ -1212,18 +1229,24 @@ router.get('/:id/export', authenticateToken, async (req, res) => {
             });
 
             // Column widths
-            worksheet.columns = [
+            const colWidths = [
               { width: 12 },  // Position
               { width: 15 },  // Licence
               { width: 30 },  // Joueur
               { width: 35 },  // Club
               { width: 4 },   // Logo
-              { width: 12 },  // Pts Match
+              { width: 12 }   // Pts Match
+            ];
+            if (hasBonus) {
+              colWidths.push({ width: 12 }, { width: 10 }); // Bonus Moy., Total
+            }
+            colWidths.push(
               { width: 12 },  // Points
               { width: 12 },  // Reprises
               { width: 12 },  // Moyenne
               { width: 16 }   // Meilleure Série
-            ];
+            );
+            worksheet.columns = colWidths;
 
             // Borders for all data cells
             worksheet.eachRow((row, rowNumber) => {

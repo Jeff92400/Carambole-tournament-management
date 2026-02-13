@@ -186,6 +186,8 @@
                 <th>Joueur</th>
                 <th>Club</th>
                 <th style="text-align: center;">Pts Match</th>
+                <th id="bonusHeader" style="text-align: center; display: none;">Bonus Moy.</th>
+                <th id="totalHeader" style="text-align: center; display: none;">Total</th>
                 <th style="text-align: center;">Points</th>
                 <th style="text-align: center;">Reprises</th>
                 <th style="text-align: center;">Moyenne</th>
@@ -392,6 +394,13 @@
         const tbody = document.getElementById('resultsBody');
         tbody.innerHTML = '';
 
+        // Check if any result has bonus_points > 0 to show bonus columns
+        const hasBonus = data.results.some(r => (r.bonus_points || 0) > 0);
+        if (hasBonus) {
+          document.getElementById('bonusHeader').style.display = '';
+          document.getElementById('totalHeader').style.display = '';
+        }
+
         data.results.forEach((result, index) => {
           const row = document.createElement('tr');
 
@@ -410,6 +419,15 @@
             ? `${result.first_name} ${result.last_name}`
             : result.player_name;
 
+          const bonus = result.bonus_points || 0;
+          const total = result.match_points + bonus;
+
+          // Build bonus columns HTML (hidden if no bonus in this tournament)
+          const bonusCols = hasBonus
+            ? `<td style="text-align: center; color: ${bonus > 0 ? '#28a745' : '#999'};">${bonus > 0 ? '+' + bonus : '0'}</td>
+               <td style="text-align: center; font-weight: bold;">${total}</td>`
+            : '';
+
           // Create cells individually to use innerHTML for club logo
           row.innerHTML = `
             <td style="text-align: center; font-weight: bold;">${index + 1}</td>
@@ -421,6 +439,7 @@
             </td>
             <td></td>
             <td style="text-align: center; font-weight: bold;">${result.match_points}</td>
+            ${bonusCols}
             <td style="text-align: center;">${result.points}</td>
             <td style="text-align: center;">${result.reprises}</td>
             <td style="text-align: center;">${moyenne}</td>
@@ -475,7 +494,7 @@
             <div class="podium-rank">${positions[index]}</div>
             <div class="podium-name">${playerName}</div>
             <div class="podium-stats">
-              <strong>${result.match_points}</strong> pts match<br>
+              <strong>${result.match_points}</strong> pts match${(result.bonus_points || 0) > 0 ? ` <span style="color: #28a745;">(+${result.bonus_points} bonus)</span>` : ''}<br>
               Moy: <strong>${moyenne}</strong><br>
               Meilleure Série: <strong>${result.serie || 0}</strong><br>
               <div class="podium-club-container"></div>

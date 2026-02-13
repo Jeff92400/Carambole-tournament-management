@@ -240,8 +240,11 @@ router.get('/export', authenticateToken, async (req, res) => {
         console.log('Logo not found for Excel:', err.message);
       }
 
+      // Determine last column letter for merge cells
+      const lastColLetter = hasBonus ? 'P' : 'O';
+
       // Title - Row 1
-      worksheet.mergeCells('B1:M1');
+      worksheet.mergeCells(`B1:${lastColLetter}1`);
       worksheet.getCell('B1').value = `CLASSEMENT ${categoryName.toUpperCase()}`;
       worksheet.getCell('B1').font = { size: 18, bold: true, color: { argb: 'FF1F4788' } };
       worksheet.getCell('B1').alignment = { horizontal: 'center', vertical: 'middle' };
@@ -258,15 +261,18 @@ router.get('/export', authenticateToken, async (req, res) => {
       worksheet.getRow(1).height = 35;
 
       // Subtitle - Row 2
-      worksheet.mergeCells('A2:M2');
+      worksheet.mergeCells(`A2:${lastColLetter}2`);
       const exportDate = new Date().toLocaleDateString('fr-FR', { year: 'numeric', month: 'long', day: 'numeric' });
       worksheet.getCell('A2').value = `Saison ${season} • Exporté le ${exportDate}`;
       worksheet.getCell('A2').font = { size: 11, italic: true, color: { argb: 'FF666666' } };
       worksheet.getCell('A2').alignment = { horizontal: 'center', vertical: 'middle' };
       worksheet.getRow(2).height = 20;
 
+      // Check if any ranking has bonus
+      const hasBonus = rows.some(r => (r.total_bonus_points || 0) > 0);
+
       // Headers - Row 4
-      worksheet.getRow(4).values = [
+      const headerValues = [
         'Position',
         'Licence',
         'Prénom',
@@ -276,17 +282,18 @@ router.get('/export', authenticateToken, async (req, res) => {
         'T1',
         'T2',
         'T3',
-        'Total Pts Match',
-        'Dont Bonus',
-        'Total Points',
-        'Total Reprises',
-        'Moyenne',
-        'Meilleure Série'
+        'Pts Match'
       ];
+      if (hasBonus) {
+        headerValues.push('Bonus Moy.');
+      }
+      headerValues.push('Total', 'Total Points', 'Total Reprises', 'Moyenne', 'Meilleure Série');
+      worksheet.getRow(4).values = headerValues;
 
-      // Style headers (only columns 1-15)
+      // Style headers
+      const totalExcelCols = hasBonus ? 16 : 15;
       worksheet.getRow(4).height = 28;
-      for (let col = 1; col <= 15; col++) {
+      for (let col = 1; col <= totalExcelCols; col++) {
         const cell = worksheet.getRow(4).getCell(col);
         cell.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11 };
         cell.fill = {
@@ -319,7 +326,7 @@ router.get('/export', authenticateToken, async (req, res) => {
 
       // Add legend if needed
       if (hasAbsentPlayers) {
-        worksheet.mergeCells('A3:M3');
+        worksheet.mergeCells(`A3:${lastColLetter}3`);
         worksheet.getCell('A3').value = '(*) Non-participation au tournoi concerné';
         worksheet.getCell('A3').font = { size: 10, italic: true, color: { argb: 'FF666666' } };
         worksheet.getCell('A3').alignment = { horizontal: 'left', vertical: 'middle' };
@@ -336,7 +343,10 @@ router.get('/export', authenticateToken, async (req, res) => {
           ? (row.cumulated_points / row.cumulated_reprises).toFixed(3)
           : '0.000';
 
-        const excelRow = worksheet.addRow([
+        const bonus = row.total_bonus_points || 0;
+        const pureMatchPoints = row.total_match_points - bonus;
+
+        const rowValues = [
           row.rank_position,
           row.licence,
           row.first_name,
@@ -346,18 +356,18 @@ router.get('/export', authenticateToken, async (req, res) => {
           formatTournamentPoints(row.tournament_1_points, tournamentsPlayed.t1),
           formatTournamentPoints(row.tournament_2_points, tournamentsPlayed.t2),
           formatTournamentPoints(row.tournament_3_points, tournamentsPlayed.t3),
-          row.total_match_points,
-          row.total_bonus_points || 0,
-          row.cumulated_points,
-          row.cumulated_reprises,
-          moyenne,
-          row.best_serie || 0
-        ]);
+          pureMatchPoints
+        ];
+        if (hasBonus) {
+          rowValues.push(bonus);
+        }
+        rowValues.push(row.total_match_points, row.cumulated_points, row.cumulated_reprises, moyenne, row.best_serie || 0);
 
-        // Green highlighting for qualified players (only columns 1-14)
+        const excelRow = worksheet.addRow(rowValues);
+
+        // Green highlighting for qualified players
         if (row.rank_position <= qualifiedCount) {
-          // Light green background for qualified players - apply to each cell individually
-          for (let col = 1; col <= 15; col++) {
+          for (let col = 1; col <= totalExcelCols; col++) {
             excelRow.getCell(col).fill = {
               type: 'pattern',
               pattern: 'solid',
@@ -369,9 +379,9 @@ router.get('/export', authenticateToken, async (req, res) => {
           excelRow.getCell(1).font = { bold: true, size: 11, color: { argb: 'FF2E7D32' } };
           excelRow.getCell(1).value = `✓ ${row.rank_position}`;
         } else {
-          // Alternate row colors for non-qualified (only columns 1-14)
+          // Alternate row colors for non-qualified
           const bgColor = index % 2 === 0 ? 'FFF8F9FA' : 'FFFFFFFF';
-          for (let col = 1; col <= 15; col++) {
+          for (let col = 1; col <= totalExcelCols; col++) {
             excelRow.getCell(col).fill = {
               type: 'pattern',
               pattern: 'solid',
@@ -381,9 +391,11 @@ router.get('/export', authenticateToken, async (req, res) => {
         }
 
         // Center alignment for numeric columns and logo column
-        [1, 6, 7, 8, 9, 10, 11, 12, 13, 14].forEach(col => {
-          excelRow.getCell(col).alignment = { horizontal: 'center', vertical: 'middle' };
-        });
+        for (let col = 1; col <= totalExcelCols; col++) {
+          if (![2, 3, 4, 5].includes(col)) {
+            excelRow.getCell(col).alignment = { horizontal: 'center', vertical: 'middle' };
+          }
+        }
 
         // Left alignment for licence, names, and club
         [2, 3, 4, 5].forEach(col => {
@@ -417,7 +429,7 @@ router.get('/export', authenticateToken, async (req, res) => {
       });
 
       // Column widths
-      worksheet.columns = [
+      const colWidths = [
         { width: 12 },  // Position
         { width: 15 },  // Licence
         { width: 18 },  // Prénom
@@ -427,13 +439,19 @@ router.get('/export', authenticateToken, async (req, res) => {
         { width: 8 },   // T1
         { width: 8 },   // T2
         { width: 8 },   // T3
-        { width: 14 },  // Total Pts Match
-        { width: 10 },  // Dont Bonus
+        { width: 12 }   // Pts Match
+      ];
+      if (hasBonus) {
+        colWidths.push({ width: 12 }); // Bonus Moy.
+      }
+      colWidths.push(
+        { width: 10 },  // Total
         { width: 12 },  // Total Points
         { width: 14 },  // Total Reprises
         { width: 12 },  // Moyenne
         { width: 14 }   // Meilleure Série
-      ];
+      );
+      worksheet.columns = colWidths;
 
       // Borders for all data cells
       worksheet.eachRow((row, rowNumber) => {

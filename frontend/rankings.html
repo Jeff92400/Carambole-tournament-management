@@ -89,7 +89,9 @@
               <th>T1</th>
               <th>T2</th>
               <th>T3</th>
-              <th>Total Pts Match</th>
+              <th>Pts Match</th>
+              <th id="bonusHeader" style="display: none;">Bonus Moy.</th>
+              <th id="totalHeader">Total</th>
               <th>Total Points</th>
               <th>Total Reprises</th>
               <th>Moyenne</th>
@@ -369,6 +371,12 @@
         const totalPlayers = rankings.length;
         const qualifiedCount = totalPlayers < 9 ? 4 : 6;
 
+        // Check if any ranking has bonus to show bonus column
+        const hasBonus = rankings.some(r => (r.total_bonus_points || 0) > 0);
+        if (hasBonus) {
+          document.getElementById('bonusHeader').style.display = '';
+        }
+
         rankings.forEach(rank => {
           const row = document.createElement('tr');
 
@@ -380,6 +388,14 @@
           const moyenne = rank.cumulated_reprises > 0
             ? (rank.cumulated_points / rank.cumulated_reprises).toFixed(3)
             : '0.000';
+
+          const bonus = rank.total_bonus_points || 0;
+          const pureMatchPoints = rank.total_match_points - bonus;
+
+          // Build bonus column HTML (hidden if no bonus in this category)
+          const bonusCol = hasBonus
+            ? `<td style="text-align: center; color: ${bonus > 0 ? '#28a745' : '#999'};">${bonus > 0 ? '+' + bonus : '0'}</td>`
+            : '';
 
           row.innerHTML = `
               <td style="text-align: center; font-weight: bold;">${rank.rank_position}</td>
@@ -393,7 +409,9 @@
               <td style="text-align: center;">${formatTournamentPoints(rank.tournament_1_points, tournamentsPlayed.t1)}</td>
               <td style="text-align: center;">${formatTournamentPoints(rank.tournament_2_points, tournamentsPlayed.t2)}</td>
               <td style="text-align: center;">${formatTournamentPoints(rank.tournament_3_points, tournamentsPlayed.t3)}</td>
-              <td style="text-align: center; font-weight: bold;">${rank.total_match_points}${rank.total_bonus_points > 0 ? ` <span style="color: #28a745; font-size: 11px;">(+${rank.total_bonus_points})</span>` : ''}</td>
+              <td style="text-align: center;">${pureMatchPoints}</td>
+              ${bonusCol}
+              <td style="text-align: center; font-weight: bold;">${rank.total_match_points}</td>
               <td style="text-align: center;">${rank.cumulated_points}</td>
               <td style="text-align: center;">${rank.cumulated_reprises}</td>
               <td style="text-align: center;">${moyenne}</td>
