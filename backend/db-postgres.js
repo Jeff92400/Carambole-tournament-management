@@ -303,6 +303,35 @@ async function initializeDatabase() {
       ALTER TABLE rankings ADD COLUMN IF NOT EXISTS total_bonus_points INTEGER DEFAULT 0
     `);
 
+    // Add structured expression columns to scoring_rules (rule engine)
+    await client.query(`ALTER TABLE scoring_rules ADD COLUMN IF NOT EXISTS field_1 TEXT`);
+    await client.query(`ALTER TABLE scoring_rules ADD COLUMN IF NOT EXISTS operator_1 TEXT`);
+    await client.query(`ALTER TABLE scoring_rules ADD COLUMN IF NOT EXISTS value_1 TEXT`);
+    await client.query(`ALTER TABLE scoring_rules ADD COLUMN IF NOT EXISTS logical_op TEXT`);
+    await client.query(`ALTER TABLE scoring_rules ADD COLUMN IF NOT EXISTS field_2 TEXT`);
+    await client.query(`ALTER TABLE scoring_rules ADD COLUMN IF NOT EXISTS operator_2 TEXT`);
+    await client.query(`ALTER TABLE scoring_rules ADD COLUMN IF NOT EXISTS value_2 TEXT`);
+    await client.query(`ALTER TABLE scoring_rules ADD COLUMN IF NOT EXISTS column_label TEXT`);
+
+    // Add bonus_detail JSON column to tournament_results and rankings
+    await client.query(`ALTER TABLE tournament_results ADD COLUMN IF NOT EXISTS bonus_detail TEXT`);
+    await client.query(`ALTER TABLE rankings ADD COLUMN IF NOT EXISTS bonus_detail TEXT`);
+
+    // Backfill existing MOYENNE_BONUS rules with structured expressions
+    await client.query(`
+      UPDATE scoring_rules SET field_1 = 'MOYENNE', operator_1 = '>', value_1 = 'MOYENNE_MAXI', column_label = 'Bonus Moy.'
+      WHERE rule_type = 'MOYENNE_BONUS' AND condition_key = 'ABOVE_MAX' AND field_1 IS NULL
+    `);
+    await client.query(`
+      UPDATE scoring_rules SET field_1 = 'MOYENNE', operator_1 = '>=', value_1 = 'MOYENNE_MINI',
+        logical_op = 'AND', field_2 = 'MOYENNE', operator_2 = '<=', value_2 = 'MOYENNE_MAXI', column_label = 'Bonus Moy.'
+      WHERE rule_type = 'MOYENNE_BONUS' AND condition_key = 'IN_RANGE' AND field_1 IS NULL
+    `);
+    await client.query(`
+      UPDATE scoring_rules SET field_1 = 'MOYENNE', operator_1 = '<', value_1 = 'MOYENNE_MINI', column_label = 'Bonus Moy.'
+      WHERE rule_type = 'MOYENNE_BONUS' AND condition_key = 'BELOW_MIN' AND field_1 IS NULL
+    `);
+
     // Clubs table
     await client.query(`
       CREATE TABLE IF NOT EXISTS clubs (
@@ -1301,19 +1330,35 @@ async function initializeDatabase() {
 
     // Seed default scoring rules
     const scoringRules = [
-      // Base V/D/L scoring (reference only - actual values come from CSV import)
-      { rule_type: 'BASE_VDL', condition_key: 'VICTORY', points: 2, display_order: 1, description: 'Victoire' },
-      { rule_type: 'BASE_VDL', condition_key: 'DRAW', points: 1, display_order: 2, description: 'Match nul' },
-      { rule_type: 'BASE_VDL', condition_key: 'LOSS', points: 0, display_order: 3, description: 'Défaite' },
-      // Moyenne bonus (applied by app after import)
-      { rule_type: 'MOYENNE_BONUS', condition_key: 'ABOVE_MAX', points: 0, display_order: 1, description: 'Moyenne supérieure au maximum de la catégorie' },
-      { rule_type: 'MOYENNE_BONUS', condition_key: 'IN_RANGE', points: 0, display_order: 2, description: 'Moyenne dans la fourchette de la catégorie' },
-      { rule_type: 'MOYENNE_BONUS', condition_key: 'BELOW_MIN', points: 0, display_order: 3, description: 'Moyenne inférieure au minimum de la catégorie' }
+      // Base V/D/L scoring (display-only, no structured expression - field_1 is null)
+      { rule_type: 'BASE_VDL', condition_key: 'VICTORY', points: 2, display_order: 1, description: 'Victoire',
+        field_1: null, operator_1: null, value_1: null, logical_op: null, field_2: null, operator_2: null, value_2: null, column_label: null },
+      { rule_type: 'BASE_VDL', condition_key: 'DRAW', points: 1, display_order: 2, description: 'Match nul',
+        field_1: null, operator_1: null, value_1: null, logical_op: null, field_2: null, operator_2: null, value_2: null, column_label: null },
+      { rule_type: 'BASE_VDL', condition_key: 'LOSS', points: 0, display_order: 3, description: 'Défaite',
+        field_1: null, operator_1: null, value_1: null, logical_op: null, field_2: null, operator_2: null, value_2: null, column_label: null },
+      // Moyenne bonus (evaluatable structured rules)
+      { rule_type: 'MOYENNE_BONUS', condition_key: 'ABOVE_MAX', points: 0, display_order: 1,
+        description: 'Moyenne supérieure au maximum de la catégorie',
+        field_1: 'MOYENNE', operator_1: '>', value_1: 'MOYENNE_MAXI',
+        logical_op: null, field_2: null, operator_2: null, value_2: null, column_label: 'Bonus Moy.' },
+      { rule_type: 'MOYENNE_BONUS', condition_key: 'IN_RANGE', points: 0, display_order: 2,
+        description: 'Moyenne dans la fourchette de la catégorie',
+        field_1: 'MOYENNE', operator_1: '>=', value_1: 'MOYENNE_MINI',
+        logical_op: 'AND', field_2: 'MOYENNE', operator_2: '<=', value_2: 'MOYENNE_MAXI', column_label: 'Bonus Moy.' },
+      { rule_type: 'MOYENNE_BONUS', condition_key: 'BELOW_MIN', points: 0, display_order: 3,
+        description: 'Moyenne inférieure au minimum de la catégorie',
+        field_1: 'MOYENNE', operator_1: '<', value_1: 'MOYENNE_MINI',
+        logical_op: null, field_2: null, operator_2: null, value_2: null, column_label: 'Bonus Moy.' }
     ];
     for (const rule of scoringRules) {
       await client.query(
-        'INSERT INTO scoring_rules (rule_type, condition_key, points, display_order, description) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (rule_type, condition_key) DO NOTHING',
-        [rule.rule_type, rule.condition_key, rule.points, rule.display_order, rule.description]
+        `INSERT INTO scoring_rules (rule_type, condition_key, points, display_order, description,
+          field_1, operator_1, value_1, logical_op, field_2, operator_2, value_2, column_label)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+         ON CONFLICT (rule_type, condition_key) DO NOTHING`,
+        [rule.rule_type, rule.condition_key, rule.points, rule.display_order, rule.description,
+         rule.field_1, rule.operator_1, rule.value_1, rule.logical_op, rule.field_2, rule.operator_2, rule.value_2, rule.column_label]
       );
     }
     console.log('Scoring rules initialized');

@@ -70,6 +70,7 @@ router.get('/', authenticateToken, (req, res) => {
           ) as club,
           r.total_match_points,
           COALESCE(r.total_bonus_points, 0) as total_bonus_points,
+          COALESCE(r.bonus_detail, '{}') as bonus_detail,
           r.avg_moyenne,
           r.best_serie,
           r.tournament_1_points,
@@ -112,11 +113,35 @@ router.get('/', authenticateToken, (req, res) => {
       if (err) {
         return res.status(500).json({ error: err.message });
       }
-      // Return rankings with tournaments played info
-      res.json({
-        rankings: rows,
-        tournamentsPlayed
+
+      // Extract bonus column metadata from rankings' bonus_detail
+      const seenTypes = new Set();
+      (rows || []).forEach(r => {
+        if (r.bonus_detail && r.bonus_detail !== '{}') {
+          try {
+            const detail = JSON.parse(r.bonus_detail);
+            Object.keys(detail).forEach(k => { if (detail[k] > 0) seenTypes.add(k); });
+          } catch (e) {}
+        }
       });
+
+      if (seenTypes.size > 0) {
+        const placeholders = [...seenTypes].map((_, i) => `$${i + 1}`).join(',');
+        db.all(
+          `SELECT DISTINCT rule_type, column_label FROM scoring_rules WHERE rule_type IN (${placeholders}) AND column_label IS NOT NULL`,
+          [...seenTypes],
+          (err2, labelRows) => {
+            const labelMap = {};
+            (labelRows || []).forEach(r => { labelMap[r.rule_type] = r.column_label; });
+            res.json({
+              rankings: rows, tournamentsPlayed,
+              bonusColumns: [...seenTypes].map(rt => ({ ruleType: rt, label: labelMap[rt] || rt }))
+            });
+          }
+        );
+      } else {
+        res.json({ rankings: rows, tournamentsPlayed, bonusColumns: [] });
+      }
     });
   });
 });
@@ -174,6 +199,7 @@ router.get('/export', authenticateToken, async (req, res) => {
         ) as club,
         r.total_match_points,
         COALESCE(r.total_bonus_points, 0) as total_bonus_points,
+        COALESCE(r.bonus_detail, '{}') as bonus_detail,
         r.avg_moyenne,
         r.best_serie,
         r.tournament_1_points,
@@ -218,6 +244,38 @@ router.get('/export', authenticateToken, async (req, res) => {
     }
 
     try {
+      // Parse bonus_detail to find dynamic bonus columns
+      const seenTypes = new Set();
+      (rows || []).forEach(r => {
+        if (r.bonus_detail && r.bonus_detail !== '{}') {
+          try {
+            const detail = JSON.parse(r.bonus_detail);
+            Object.keys(detail).forEach(k => { if (detail[k] > 0) seenTypes.add(k); });
+          } catch(e) {}
+        }
+      });
+
+      let bonusColumns = [];
+      if (seenTypes.size > 0) {
+        const placeholders = [...seenTypes].map((_, i) => `$${i + 1}`).join(',');
+        const labelRows = await new Promise((resolve, reject) => {
+          db.all(
+            `SELECT DISTINCT rule_type, column_label FROM scoring_rules WHERE rule_type IN (${placeholders}) AND column_label IS NOT NULL`,
+            [...seenTypes],
+            (err, rows) => { if (err) reject(err); else resolve(rows || []); }
+          );
+        });
+        const labelMap = {};
+        labelRows.forEach(r => { labelMap[r.rule_type] = r.column_label; });
+        bonusColumns = [...seenTypes].map(rt => ({ ruleType: rt, label: labelMap[rt] || rt }));
+      }
+
+      const hasBonusCols = bonusColumns.length > 0;
+      // Base cols: Position, Licence, Prénom, Nom, Club, Logo, T1, T2, T3, Pts Match, Total, Total Points, Total Reprises, Moyenne, Meilleure Série = 15
+      // + bonus columns (inserted between Pts Match and Total)
+      const totalExcelCols = 15 + bonusColumns.length;
+      const lastColLetter = String.fromCharCode(64 + totalExcelCols);
+
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet('Classement');
 
@@ -239,9 +297,6 @@ router.get('/export', authenticateToken, async (req, res) => {
       } catch (err) {
         console.log('Logo not found for Excel:', err.message);
       }
-
-      // Determine last column letter for merge cells
-      const lastColLetter = hasBonus ? 'P' : 'O';
 
       // Title - Row 1
       worksheet.mergeCells(`B1:${lastColLetter}1`);
@@ -268,9 +323,6 @@ router.get('/export', authenticateToken, async (req, res) => {
       worksheet.getCell('A2').alignment = { horizontal: 'center', vertical: 'middle' };
       worksheet.getRow(2).height = 20;
 
-      // Check if any ranking has bonus
-      const hasBonus = rows.some(r => (r.total_bonus_points || 0) > 0);
-
       // Headers - Row 4
       const headerValues = [
         'Position',
@@ -284,14 +336,11 @@ router.get('/export', authenticateToken, async (req, res) => {
         'T3',
         'Pts Match'
       ];
-      if (hasBonus) {
-        headerValues.push('Bonus Moy.');
+      if (hasBonusCols) {
+        bonusColumns.forEach(col => headerValues.push(col.label));
       }
       headerValues.push('Total', 'Total Points', 'Total Reprises', 'Moyenne', 'Meilleure Série');
       worksheet.getRow(4).values = headerValues;
-
-      // Style headers
-      const totalExcelCols = hasBonus ? 16 : 15;
       worksheet.getRow(4).height = 28;
       for (let col = 1; col <= totalExcelCols; col++) {
         const cell = worksheet.getRow(4).getCell(col);
@@ -343,8 +392,9 @@ router.get('/export', authenticateToken, async (req, res) => {
           ? (row.cumulated_points / row.cumulated_reprises).toFixed(3)
           : '0.000';
 
-        const bonus = row.total_bonus_points || 0;
-        const pureMatchPoints = row.total_match_points - bonus;
+        const bonusDetail = (() => { try { return JSON.parse(row.bonus_detail || '{}'); } catch(e) { return {}; } })();
+        const totalBonus = Object.values(bonusDetail).reduce((s, v) => s + (v || 0), 0);
+        const pureMatchPoints = row.total_match_points - totalBonus;
 
         const rowValues = [
           row.rank_position,
@@ -358,8 +408,8 @@ router.get('/export', authenticateToken, async (req, res) => {
           formatTournamentPoints(row.tournament_3_points, tournamentsPlayed.t3),
           pureMatchPoints
         ];
-        if (hasBonus) {
-          rowValues.push(bonus);
+        if (hasBonusCols) {
+          bonusColumns.forEach(col => rowValues.push(bonusDetail[col.ruleType] || 0));
         }
         rowValues.push(row.total_match_points, row.cumulated_points, row.cumulated_reprises, moyenne, row.best_serie || 0);
 
@@ -441,8 +491,8 @@ router.get('/export', authenticateToken, async (req, res) => {
         { width: 8 },   // T3
         { width: 12 }   // Pts Match
       ];
-      if (hasBonus) {
-        colWidths.push({ width: 12 }); // Bonus Moy.
+      if (hasBonusCols) {
+        bonusColumns.forEach(() => colWidths.push({ width: 12 })); // Bonus columns
       }
       colWidths.push(
         { width: 10 },  // Total

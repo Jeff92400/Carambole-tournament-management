@@ -866,7 +866,8 @@ router.get('/scoring-rules', authenticateToken, (req, res) => {
 // Create a scoring rule
 router.post('/scoring-rules', authenticateToken, (req, res) => {
   const db = getDb();
-  const { rule_type, condition_key, points, display_order, description } = req.body;
+  const { rule_type, condition_key, points, display_order, description,
+          field_1, operator_1, value_1, logical_op, field_2, operator_2, value_2, column_label } = req.body;
 
   if (!rule_type || !condition_key) {
     return res.status(400).json({ error: 'Type de règle et clé de condition sont requis' });
@@ -877,9 +878,12 @@ router.post('/scoring-rules', authenticateToken, (req, res) => {
   }
 
   db.run(
-    `INSERT INTO scoring_rules (rule_type, condition_key, points, display_order, description)
-     VALUES ($1, $2, $3, $4, $5)`,
-    [rule_type, condition_key, parseInt(points), display_order || 0, description || ''],
+    `INSERT INTO scoring_rules (rule_type, condition_key, points, display_order, description,
+      field_1, operator_1, value_1, logical_op, field_2, operator_2, value_2, column_label)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+    [rule_type, condition_key, parseInt(points), display_order || 0, description || '',
+     field_1 || null, operator_1 || null, value_1 || null, logical_op || null,
+     field_2 || null, operator_2 || null, value_2 || null, column_label || null],
     function(err) {
       if (err) {
         console.error('Error creating scoring rule:', err);
@@ -897,28 +901,24 @@ router.post('/scoring-rules', authenticateToken, (req, res) => {
 router.put('/scoring-rules/:id', authenticateToken, (req, res) => {
   const db = getDb();
   const { id } = req.params;
-  const { points, display_order, description, is_active } = req.body;
-
-  if (points === undefined || points === null || isNaN(parseInt(points))) {
-    return res.status(400).json({ error: 'Le nombre de points est requis' });
-  }
 
   // Build dynamic update - only update fields that are provided
-  const setClauses = ['points = $1', 'updated_at = CURRENT_TIMESTAMP'];
-  const params = [parseInt(points)];
-  let paramIndex = 2;
+  const setClauses = ['updated_at = CURRENT_TIMESTAMP'];
+  const params = [];
+  let paramIndex = 1;
 
-  if (display_order !== undefined) {
-    setClauses.push(`display_order = $${paramIndex++}`);
-    params.push(display_order);
+  const updatableFields = ['points', 'display_order', 'description', 'is_active',
+    'field_1', 'operator_1', 'value_1', 'logical_op', 'field_2', 'operator_2', 'value_2', 'column_label'];
+
+  for (const field of updatableFields) {
+    if (req.body[field] !== undefined) {
+      setClauses.push(`${field} = $${paramIndex++}`);
+      params.push(field === 'points' ? parseInt(req.body[field]) : req.body[field]);
+    }
   }
-  if (description !== undefined) {
-    setClauses.push(`description = $${paramIndex++}`);
-    params.push(description);
-  }
-  if (is_active !== undefined) {
-    setClauses.push(`is_active = $${paramIndex++}`);
-    params.push(is_active);
+
+  if (params.length === 0) {
+    return res.status(400).json({ error: 'Aucun champ à mettre à jour' });
   }
 
   params.push(id);
@@ -954,6 +954,42 @@ router.delete('/scoring-rules/:id', authenticateToken, (req, res) => {
     }
     res.json({ success: true, message: 'Règle supprimée' });
   });
+});
+
+// Get available scoring fields and operators for the rule engine UI
+router.get('/scoring-fields', authenticateToken, (req, res) => {
+  const fields = [
+    { code: 'MOYENNE', label: 'Moyenne du joueur', type: 'decimal', scope: 'player',
+      description: 'Points / Reprises (calculé automatiquement)' },
+    { code: 'NB_JOUEURS', label: 'Nombre de joueurs', type: 'integer', scope: 'tournament',
+      description: 'Nombre total de joueurs dans le tournoi' },
+    { code: 'MATCH_POINTS', label: 'Points match', type: 'integer', scope: 'player',
+      description: 'Points de match du joueur (V/D/N)' },
+    { code: 'SERIE', label: 'Meilleure série', type: 'integer', scope: 'player',
+      description: 'Meilleure série du joueur dans le tournoi' }
+  ];
+
+  const referenceValues = [
+    { code: 'MOYENNE_MAXI', label: 'Seuil max catégorie',
+      description: 'Valeur de moyenne_maxi dans les paramètres de jeu' },
+    { code: 'MOYENNE_MINI', label: 'Seuil min catégorie',
+      description: 'Valeur de moyenne_mini dans les paramètres de jeu' }
+  ];
+
+  const operators = [
+    { code: '>', label: 'Supérieur à (>)' },
+    { code: '>=', label: 'Supérieur ou égal à (>=)' },
+    { code: '<', label: 'Inférieur à (<)' },
+    { code: '<=', label: 'Inférieur ou égal à (<=)' },
+    { code: '=', label: 'Égal à (=)' }
+  ];
+
+  const logicalOps = [
+    { code: 'AND', label: 'ET' },
+    { code: 'OR', label: 'OU' }
+  ];
+
+  res.json({ fields, referenceValues, operators, logicalOps });
 });
 
 module.exports = router;

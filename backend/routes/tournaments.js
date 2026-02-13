@@ -579,30 +579,86 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
   }
 });
 
-// Compute bonus points for tournament results based on scoring rules and game parameters
+// --- Scoring Rule Engine ---
+
+// Resolve a field code to its numeric value
+function resolveField(fieldCode, playerResult, tournamentContext) {
+  switch (fieldCode) {
+    case 'MOYENNE':
+      return playerResult.reprises > 0 ? playerResult.points / playerResult.reprises : 0;
+    case 'NB_JOUEURS':
+      return tournamentContext.nb_joueurs || 0;
+    case 'MATCH_POINTS':
+      return playerResult.match_points || 0;
+    case 'SERIE':
+      return playerResult.serie || 0;
+    default:
+      console.warn(`[SCORING] Unknown field: ${fieldCode}`);
+      return 0;
+  }
+}
+
+// Resolve a value string: either a number or a reference keyword
+function resolveValue(valueStr, referenceValues) {
+  if (referenceValues.hasOwnProperty(valueStr)) {
+    return referenceValues[valueStr];
+  }
+  const num = parseFloat(valueStr);
+  return isNaN(num) ? 0 : num;
+}
+
+// Evaluate: left OP right
+function evaluateOp(left, op, right) {
+  switch (op) {
+    case '>':  return left > right;
+    case '>=': return left >= right;
+    case '<':  return left < right;
+    case '<=': return left <= right;
+    case '=':  return Math.abs(left - right) < 0.0001;
+    default: return false;
+  }
+}
+
+// Evaluate a single structured rule for a given player
+function evaluateRule(rule, playerResult, tournamentContext, referenceValues) {
+  if (!rule.field_1) return false;
+
+  const left1 = resolveField(rule.field_1, playerResult, tournamentContext);
+  const right1 = resolveValue(rule.value_1, referenceValues);
+  const cond1 = evaluateOp(left1, rule.operator_1, right1);
+
+  if (!rule.logical_op || !rule.field_2) {
+    return cond1;
+  }
+
+  const left2 = resolveField(rule.field_2, playerResult, tournamentContext);
+  const right2 = resolveValue(rule.value_2, referenceValues);
+  const cond2 = evaluateOp(left2, rule.operator_2, right2);
+
+  if (rule.logical_op === 'AND') return cond1 && cond2;
+  if (rule.logical_op === 'OR')  return cond1 || cond2;
+  return false;
+}
+
+// Compute bonus points for tournament results using the generic rule engine
 function computeBonusPoints(tournamentId, categoryId, callback) {
-  // 1. Load MOYENNE_BONUS rules
+  // 1. Load ALL active structured rules (field_1 IS NOT NULL skips display-only BASE_VDL)
   db.all(
-    "SELECT condition_key, points FROM scoring_rules WHERE rule_type = 'MOYENNE_BONUS' AND is_active = true",
+    "SELECT * FROM scoring_rules WHERE is_active = true AND field_1 IS NOT NULL ORDER BY rule_type, display_order",
     [],
     (err, rules) => {
       if (err || !rules || rules.length === 0) {
-        // No rules or error - default all bonuses to 0 (no-op)
-        console.log('[BONUS] No MOYENNE_BONUS rules found, skipping bonus computation');
+        console.log('[BONUS] No evaluatable scoring rules found, skipping');
         return callback(null);
       }
 
-      // Build bonus map
-      const bonusMap = {};
-      rules.forEach(r => { bonusMap[r.condition_key] = r.points; });
-
-      // Check if all bonuses are 0 - skip computation entirely
-      if (Object.values(bonusMap).every(v => v === 0)) {
-        console.log('[BONUS] All MOYENNE_BONUS values are 0, skipping computation');
+      // Skip if all points are 0
+      if (rules.every(r => r.points === 0)) {
+        console.log('[BONUS] All scoring rule points are 0, skipping');
         return callback(null);
       }
 
-      // 2. Get the category's game mode to find moyenne thresholds from game_parameters
+      // 2. Get game_parameters for reference values
       db.get(
         `SELECT c.display_name as category_name, c.game_type, c.level,
                 gp.moyenne_mini, gp.moyenne_maxi
@@ -611,65 +667,84 @@ function computeBonusPoints(tournamentId, categoryId, callback) {
          WHERE c.id = ?`,
         [categoryId],
         (err, catInfo) => {
-          if (err || !catInfo) {
-            console.warn('[BONUS] Could not load category/game_parameters, skipping bonus:', err);
+          if (err) {
+            console.warn('[BONUS] Could not load category info:', err);
             return callback(null);
           }
 
-          const moyenneMin = catInfo.moyenne_mini;
-          const moyenneMax = catInfo.moyenne_maxi;
-
-          if (moyenneMin === null || moyenneMin === undefined || moyenneMax === null || moyenneMax === undefined) {
-            console.log(`[BONUS] No moyenne thresholds for category ${catInfo.category_name}, skipping bonus`);
-            return callback(null);
+          const referenceValues = {};
+          if (catInfo) {
+            if (catInfo.moyenne_mini !== null && catInfo.moyenne_mini !== undefined)
+              referenceValues.MOYENNE_MINI = parseFloat(catInfo.moyenne_mini);
+            if (catInfo.moyenne_maxi !== null && catInfo.moyenne_maxi !== undefined)
+              referenceValues.MOYENNE_MAXI = parseFloat(catInfo.moyenne_maxi);
           }
 
-          console.log(`[BONUS] Category ${catInfo.category_name}: min=${moyenneMin}, max=${moyenneMax}, bonuses: above=${bonusMap.ABOVE_MAX || 0}, range=${bonusMap.IN_RANGE || 0}, below=${bonusMap.BELOW_MIN || 0}`);
+          console.log(`[BONUS] Category ${catInfo ? catInfo.category_name : categoryId}: refs=${JSON.stringify(referenceValues)}, ${rules.length} rules`);
 
-          // 3. Get all results for this tournament
-          db.all(
-            'SELECT id, licence, points, reprises FROM tournament_results WHERE tournament_id = ?',
+          // 3. Get tournament context (nb_joueurs)
+          db.get(
+            'SELECT COUNT(*) as nb_joueurs FROM tournament_results WHERE tournament_id = ?',
             [tournamentId],
-            (err, results) => {
-              if (err || !results || results.length === 0) {
-                console.log('[BONUS] No results to process');
-                return callback(null);
-              }
+            (err, countRow) => {
+              const tournamentContext = { nb_joueurs: countRow ? countRow.nb_joueurs : 0 };
 
-              let updateCount = 0;
-              let completed = 0;
-
-              results.forEach(result => {
-                let bonus = 0;
-                // Compute moyenne from points/reprises (not the stored CSV moyenne column)
-                const playerMoyenne = (result.reprises > 0) ? (result.points / result.reprises) : 0;
-
-                if (playerMoyenne > moyenneMax) {
-                  bonus = bonusMap.ABOVE_MAX || 0;
-                } else if (playerMoyenne >= moyenneMin) {
-                  bonus = bonusMap.IN_RANGE || 0;
-                } else {
-                  bonus = bonusMap.BELOW_MIN || 0;
-                }
-
-                if (bonus > 0) {
-                  console.log(`[BONUS] ${result.licence}: moyenne=${playerMoyenne.toFixed(3)} (${result.points}/${result.reprises}), threshold=[${moyenneMin},${moyenneMax}] → bonus=${bonus}`);
-                }
-
-                db.run(
-                  'UPDATE tournament_results SET bonus_points = ? WHERE id = ?',
-                  [bonus, result.id],
-                  (err) => {
-                    completed++;
-                    if (!err && bonus > 0) updateCount++;
-
-                    if (completed === results.length) {
-                      console.log(`[BONUS] Applied bonus to ${updateCount}/${results.length} results for tournament ${tournamentId}`);
-                      callback(null);
-                    }
+              // 4. Get all player results
+              db.all(
+                'SELECT id, licence, points, reprises, match_points, serie FROM tournament_results WHERE tournament_id = ?',
+                [tournamentId],
+                (err, results) => {
+                  if (err || !results || results.length === 0) {
+                    console.log('[BONUS] No results to process');
+                    return callback(null);
                   }
-                );
-              });
+
+                  // Group rules by rule_type
+                  const ruleTypes = [...new Set(rules.map(r => r.rule_type))];
+                  let completed = 0;
+                  let updateCount = 0;
+
+                  results.forEach(result => {
+                    let totalBonus = 0;
+                    const bonusDetail = {};
+
+                    ruleTypes.forEach(ruleType => {
+                      const typeRules = rules.filter(r => r.rule_type === ruleType);
+
+                      // First match wins within a rule_type (mutually exclusive conditions)
+                      for (const rule of typeRules) {
+                        // Skip rules referencing values we don't have
+                        const needsRef = [rule.value_1, rule.value_2].some(
+                          v => v === 'MOYENNE_MAXI' || v === 'MOYENNE_MINI'
+                        );
+                        if (needsRef && Object.keys(referenceValues).length === 0) continue;
+
+                        if (evaluateRule(rule, result, tournamentContext, referenceValues)) {
+                          if (rule.points > 0) {
+                            bonusDetail[ruleType] = (bonusDetail[ruleType] || 0) + rule.points;
+                            totalBonus += rule.points;
+                            console.log(`[BONUS] ${result.licence}: ${ruleType} matched → +${rule.points}`);
+                          }
+                          break; // First match wins
+                        }
+                      }
+                    });
+
+                    db.run(
+                      'UPDATE tournament_results SET bonus_points = ?, bonus_detail = ? WHERE id = ?',
+                      [totalBonus, JSON.stringify(bonusDetail), result.id],
+                      (err) => {
+                        completed++;
+                        if (!err && totalBonus > 0) updateCount++;
+                        if (completed === results.length) {
+                          console.log(`[BONUS] Applied bonus to ${updateCount}/${results.length} results for tournament ${tournamentId}`);
+                          callback(null);
+                        }
+                      }
+                    );
+                  });
+                }
+              );
             }
           );
         }
@@ -791,7 +866,52 @@ function recalculateRankings(categoryId, season, callback) {
                         console.error(`[RANKING] WARNING: Expected ${results.length} but found ${row.count} in database!`);
                       }
                     }
-                    callback(insertErrors.length > 0 ? new Error(`${insertErrors.length} insertions failed`) : finalizeErr);
+
+                    // Aggregate bonus_detail per player across tournaments
+                    db.all(
+                      `SELECT REPLACE(tr.licence, ' ', '') as licence, tr.bonus_detail
+                       FROM tournament_results tr
+                       JOIN tournaments t ON tr.tournament_id = t.id
+                       WHERE t.category_id = ? AND t.season = ? AND t.tournament_number <= 3
+                       AND tr.bonus_detail IS NOT NULL`,
+                      [categoryId, season],
+                      (err, detailRows) => {
+                        if (!err && detailRows && detailRows.length > 0) {
+                          const playerDetails = {};
+                          detailRows.forEach(dr => {
+                            const lic = dr.licence;
+                            if (!playerDetails[lic]) playerDetails[lic] = {};
+                            try {
+                              const detail = JSON.parse(dr.bonus_detail);
+                              for (const [ruleType, pts] of Object.entries(detail)) {
+                                playerDetails[lic][ruleType] = (playerDetails[lic][ruleType] || 0) + pts;
+                              }
+                            } catch (e) { /* ignore */ }
+                          });
+
+                          let detailUpdates = 0;
+                          const entries = Object.entries(playerDetails);
+                          if (entries.length === 0) {
+                            return callback(insertErrors.length > 0 ? new Error(`${insertErrors.length} insertions failed`) : finalizeErr);
+                          }
+                          entries.forEach(([licence, detail]) => {
+                            db.run(
+                              'UPDATE rankings SET bonus_detail = ? WHERE category_id = ? AND season = ? AND licence = ?',
+                              [JSON.stringify(detail), categoryId, season, licence],
+                              () => {
+                                detailUpdates++;
+                                if (detailUpdates === entries.length) {
+                                  console.log(`[RANKING] Updated bonus_detail for ${detailUpdates} players`);
+                                  callback(insertErrors.length > 0 ? new Error(`${insertErrors.length} insertions failed`) : finalizeErr);
+                                }
+                              }
+                            );
+                          });
+                        } else {
+                          callback(insertErrors.length > 0 ? new Error(`${insertErrors.length} insertions failed`) : finalizeErr);
+                        }
+                      }
+                    );
                   }
                 );
               });
@@ -954,10 +1074,35 @@ router.get('/:id/results', authenticateToken, (req, res) => {
             return res.status(500).json({ error: err.message });
           }
 
-          res.json({
-            tournament,
-            results
+          // Extract bonus column metadata from results' bonus_detail
+          const seenTypes = new Set();
+          (results || []).forEach(r => {
+            if (r.bonus_detail) {
+              try {
+                const detail = JSON.parse(r.bonus_detail);
+                Object.keys(detail).forEach(k => { if (detail[k] > 0) seenTypes.add(k); });
+              } catch (e) {}
+            }
           });
+
+          if (seenTypes.size > 0) {
+            // Get column labels from scoring_rules
+            const placeholders = [...seenTypes].map((_, i) => `$${i + 1}`).join(',');
+            db.all(
+              `SELECT DISTINCT rule_type, column_label FROM scoring_rules WHERE rule_type IN (${placeholders}) AND column_label IS NOT NULL`,
+              [...seenTypes],
+              (err, labelRows) => {
+                const labelMap = {};
+                (labelRows || []).forEach(r => { labelMap[r.rule_type] = r.column_label; });
+                res.json({
+                  tournament, results,
+                  bonusColumns: [...seenTypes].map(rt => ({ ruleType: rt, label: labelMap[rt] || rt }))
+                });
+              }
+            );
+          } else {
+            res.json({ tournament, results, bonusColumns: [] });
+          }
         }
       );
     }
@@ -1000,6 +1145,38 @@ router.get('/:id/export', authenticateToken, async (req, res) => {
           }
 
           try {
+            // Parse bonus_detail to find dynamic bonus columns
+            const seenTypes = new Set();
+            (results || []).forEach(r => {
+              if (r.bonus_detail) {
+                try {
+                  const detail = JSON.parse(r.bonus_detail);
+                  Object.keys(detail).forEach(k => { if (detail[k] > 0) seenTypes.add(k); });
+                } catch(e) {}
+              }
+            });
+
+            let bonusColumns = [];
+            if (seenTypes.size > 0) {
+              const placeholders = [...seenTypes].map((_, i) => `$${i + 1}`).join(',');
+              const labelRows = await new Promise((resolve, reject) => {
+                db.all(
+                  `SELECT DISTINCT rule_type, column_label FROM scoring_rules WHERE rule_type IN (${placeholders}) AND column_label IS NOT NULL`,
+                  [...seenTypes],
+                  (err, rows) => { if (err) reject(err); else resolve(rows || []); }
+                );
+              });
+              const labelMap = {};
+              labelRows.forEach(r => { labelMap[r.rule_type] = r.column_label; });
+              bonusColumns = [...seenTypes].map(rt => ({ ruleType: rt, label: labelMap[rt] || rt }));
+            }
+
+            const hasBonusCols = bonusColumns.length > 0;
+            // Base cols: Position, Licence, Joueur, Club, Logo, Pts Match = 6
+            // + bonus columns + Total (if bonus) + Points, Reprises, Moyenne, Meilleure Série = 4
+            const totalExcelCols = 10 + bonusColumns.length + (hasBonusCols ? 1 : 0);
+            const lastCol = String.fromCharCode(64 + totalExcelCols);
+
             const workbook = new ExcelJS.Workbook();
             const worksheet = workbook.addWorksheet('Résultats');
 
@@ -1019,9 +1196,6 @@ router.get('/:id/export', authenticateToken, async (req, res) => {
             } catch (err) {
               console.log('Logo not found for Excel:', err.message);
             }
-
-            // Determine last column letter based on bonus columns
-            const lastCol = hasBonus ? 'L' : 'J';
 
             // Title - Row 1
             worksheet.mergeCells(`B1:${lastCol}1`);
@@ -1092,9 +1266,6 @@ router.get('/:id/export', authenticateToken, async (req, res) => {
               worksheet.getRow(7).height = 5;
             }
 
-            // Check if any result has bonus
-            const hasBonus = results.some(r => (r.bonus_points || 0) > 0);
-
             // Headers - Row 4 for regular, Row 8 for finale
             const headerRow = tournament.tournament_number === 4 ? 8 : 4;
             const headerValues = [
@@ -1105,8 +1276,9 @@ router.get('/:id/export', authenticateToken, async (req, res) => {
               '', // Empty header for logo column
               'Pts Match'
             ];
-            if (hasBonus) {
-              headerValues.push('Bonus Moy.', 'Total');
+            if (hasBonusCols) {
+              bonusColumns.forEach(col => headerValues.push(col.label));
+              headerValues.push('Total');
             }
             headerValues.push('Points', 'Reprises', 'Moyenne', 'Meilleure Série');
             worksheet.getRow(headerRow).values = headerValues;
@@ -1130,6 +1302,9 @@ router.get('/:id/export', authenticateToken, async (req, res) => {
                 ? (result.points / result.reprises).toFixed(3)
                 : '0.000';
 
+              const bonusDetail = (() => { try { return JSON.parse(result.bonus_detail || '{}'); } catch(e) { return {}; } })();
+              const totalBonus = Object.values(bonusDetail).reduce((s, v) => s + (v || 0), 0);
+
               const rowValues = [
                 index + 1,
                 result.licence,
@@ -1138,8 +1313,9 @@ router.get('/:id/export', authenticateToken, async (req, res) => {
                 '', // Empty cell for logo
                 result.match_points
               ];
-              if (hasBonus) {
-                rowValues.push(result.bonus_points || 0, result.match_points + (result.bonus_points || 0));
+              if (hasBonusCols) {
+                bonusColumns.forEach(col => rowValues.push(bonusDetail[col.ruleType] || 0));
+                rowValues.push(result.match_points + totalBonus);
               }
               rowValues.push(result.points, result.reprises, moyenne, result.serie);
 
@@ -1191,7 +1367,7 @@ router.get('/:id/export', authenticateToken, async (req, res) => {
               }
 
               // Center alignment for numeric columns and logo column
-              const totalCols = hasBonus ? 12 : 10;
+              const totalCols = totalExcelCols;
               for (let col = 1; col <= totalCols; col++) {
                 if (![2, 3, 4].includes(col)) {
                   excelRow.getCell(col).alignment = { horizontal: 'center', vertical: 'middle' };
@@ -1237,8 +1413,9 @@ router.get('/:id/export', authenticateToken, async (req, res) => {
               { width: 4 },   // Logo
               { width: 12 }   // Pts Match
             ];
-            if (hasBonus) {
-              colWidths.push({ width: 12 }, { width: 10 }); // Bonus Moy., Total
+            if (hasBonusCols) {
+              bonusColumns.forEach(() => colWidths.push({ width: 12 })); // Bonus columns
+              colWidths.push({ width: 10 }); // Total
             }
             colWidths.push(
               { width: 12 },  // Points

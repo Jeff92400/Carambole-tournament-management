@@ -22,48 +22,21 @@
       background: var(--color-primary, #1F4788);
       color: white;
     }
-    .scoring-block-header h4 {
-      margin: 0;
-      font-size: 15px;
-    }
-    .scoring-block-body {
-      padding: 0;
-    }
-    .scoring-block table {
-      width: 100%;
-      border-collapse: collapse;
-    }
-    .scoring-block th {
-      padding: 10px 16px;
-      text-align: left;
-      background: #f0f0f0;
-      font-size: 13px;
-      color: #555;
-    }
-    .scoring-block td {
-      padding: 10px 16px;
-      border-bottom: 1px solid #eee;
-      font-size: 14px;
-    }
-    .add-condition-row {
-      display: flex;
-      gap: 10px;
+    .scoring-block-header h4 { margin: 0; font-size: 15px; }
+    .scoring-block-body { padding: 0; }
+    .scoring-block table { width: 100%; border-collapse: collapse; }
+    .scoring-block th { padding: 10px 16px; text-align: left; background: #f0f0f0; font-size: 13px; color: #555; }
+    .scoring-block td { padding: 10px 16px; border-bottom: 1px solid #eee; font-size: 14px; }
+    .rule-expression { font-family: monospace; font-size: 13px; color: #333; }
+    .rule-expression .keyword { color: #1F4788; font-weight: bold; }
+    .rule-expression .op { color: #d63384; font-weight: bold; }
+    .rule-expression .ref { color: #0d6efd; }
+    .rule-expression .val { color: #198754; }
+    .add-rule-bar {
       padding: 10px 16px;
       background: #fafafa;
       border-top: 1px solid #eee;
-      align-items: center;
-    }
-    .add-condition-row input {
-      padding: 6px 10px;
-      border: 1px solid #ddd;
-      border-radius: 4px;
-      font-size: 13px;
-    }
-    .add-condition-row input[type="text"] {
-      flex: 1;
-    }
-    .add-condition-row input[type="number"] {
-      width: 80px;
+      text-align: center;
     }
     .btn-add-sm {
       padding: 6px 14px;
@@ -100,6 +73,17 @@
       flex: 1;
       max-width: 300px;
     }
+    .modal-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+    .modal-row label { min-width: 30px; font-weight: bold; font-size: 13px; }
+    .modal-row select, .modal-row input { padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px; }
+    .modal-row select { min-width: 100px; }
+    .value-group { display: flex; gap: 4px; align-items: center; }
   </style>
 </head>
 <body>
@@ -122,9 +106,8 @@
 
     <div class="card">
       <h3>Barème de points</h3>
-
       <div style="margin-bottom: 20px; padding: 10px; background: #e8f4fd; border-radius: 6px; font-size: 13px; color: #1F4788;">
-        Configurez les composantes du barème de points pour les compétitions. Chaque bloc regroupe des conditions avec des points associés.
+        Configurez les règles de calcul des bonus. Chaque règle est une condition structurée évaluée automatiquement après l'import des résultats.
       </div>
 
       <div id="scoringBlocks">
@@ -135,7 +118,8 @@
       <div style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
         <h4 style="margin: 0 0 10px; font-size: 14px; color: #1F4788;">Ajouter un nouveau bloc de conditions</h4>
         <div class="add-block-form">
-          <input type="text" id="newBlockName" placeholder="Nom du bloc (ex: Bonus Présence)" maxlength="50">
+          <input type="text" id="newBlockName" placeholder="Nom du bloc (ex: Bonus Participation)" maxlength="50">
+          <input type="text" id="newBlockLabel" placeholder="Libellé colonne (ex: Bonus Part.)" maxlength="30" style="max-width: 200px;">
           <button class="btn-add-sm" onclick="addBlock()">Ajouter le bloc</button>
         </div>
       </div>
@@ -146,23 +130,70 @@
     </div>
   </div>
 
-  <!-- Edit Scoring Rule Modal -->
+  <!-- Edit/Create Scoring Rule Modal -->
   <div id="editScoringRuleModal" class="modal-overlay" onclick="if(event.target === this) closeModal('editScoringRuleModal')">
-    <div class="modal-content">
+    <div class="modal-content" style="max-width: 750px;">
       <div class="modal-header">
-        <h3>Modifier la condition</h3>
+        <h3 id="modalTitle">Modifier la condition</h3>
         <button class="modal-close" onclick="closeModal('editScoringRuleModal')">&times;</button>
       </div>
       <div class="modal-body">
         <form id="editScoringRuleForm">
           <input type="hidden" id="editSrId">
-          <div class="form-group">
-            <label for="editSrDescription">Condition</label>
-            <input type="text" id="editSrDescription" required>
+          <input type="hidden" id="editSrRuleType">
+
+          <!-- Condition 1 -->
+          <div class="modal-row">
+            <label>Si</label>
+            <select id="editField1" style="flex: 1;"></select>
+            <select id="editOp1"></select>
+            <div class="value-group">
+              <select id="editValueType1" onchange="toggleValueInput(1)" style="width: 110px;">
+                <option value="reference">Référence</option>
+                <option value="literal">Valeur fixe</option>
+              </select>
+              <select id="editValueRef1"></select>
+              <input type="number" id="editValueLit1" step="0.001" style="width: 90px; display: none;" placeholder="0">
+            </div>
           </div>
-          <div class="form-group">
-            <label for="editSrPoints">Points *</label>
-            <input type="number" id="editSrPoints" required min="0" max="99">
+
+          <!-- Logical operator -->
+          <div class="modal-row">
+            <label></label>
+            <select id="editLogicalOp" onchange="toggleCondition2()" style="width: 140px;">
+              <option value="">Pas de 2e condition</option>
+            </select>
+          </div>
+
+          <!-- Condition 2 -->
+          <div class="modal-row" id="condition2Row" style="display: none;">
+            <label></label>
+            <select id="editField2" style="flex: 1;"></select>
+            <select id="editOp2"></select>
+            <div class="value-group">
+              <select id="editValueType2" onchange="toggleValueInput(2)" style="width: 110px;">
+                <option value="reference">Référence</option>
+                <option value="literal">Valeur fixe</option>
+              </select>
+              <select id="editValueRef2"></select>
+              <input type="number" id="editValueLit2" step="0.001" style="width: 90px; display: none;" placeholder="0">
+            </div>
+          </div>
+
+          <hr style="margin: 15px 0; border: none; border-top: 1px solid #eee;">
+
+          <!-- Points + label -->
+          <div class="modal-row">
+            <label>Points</label>
+            <input type="number" id="editSrPoints" required min="0" max="99" style="width: 80px;">
+            <span style="margin-left: 20px; font-size: 13px; color: #666;">Libellé colonne:</span>
+            <input type="text" id="editColumnLabel" placeholder="Ex: Bonus Moy." maxlength="30" style="width: 150px;">
+          </div>
+
+          <!-- Description -->
+          <div class="modal-row">
+            <label style="min-width: 80px;">Description</label>
+            <input type="text" id="editSrDescription" style="flex: 1;" placeholder="Description libre (optionnel)">
           </div>
         </form>
       </div>
@@ -184,8 +215,11 @@
     const token = localStorage.getItem('token');
 
     let allRules = [];
+    let scoringFields = [];
+    let referenceValues = [];
+    let operators = [];
+    let logicalOps = [];
 
-    // Block display names (for built-in types)
     const BLOCK_LABELS = {
       'BASE_VDL': 'Barème de base (Victoire / Nul / Défaite)',
       'MOYENNE_BONUS': 'Bonus Moyenne'
@@ -196,12 +230,8 @@
       logout();
     });
 
-    function openModal(id) {
-      document.getElementById(id).style.display = 'flex';
-    }
-    function closeModal(id) {
-      document.getElementById(id).style.display = 'none';
-    }
+    function openModal(id) { document.getElementById(id).style.display = 'flex'; }
+    function closeModal(id) { document.getElementById(id).style.display = 'none'; }
 
     function showMessage(type, text) {
       const id = type === 'error' ? 'errorMessage' : 'successMessage';
@@ -212,7 +242,63 @@
     }
 
     function escapeHtml(str) {
-      return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+      if (!str) return '';
+      return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    // Get label for a field code
+    function fieldLabel(code) {
+      const f = scoringFields.find(f => f.code === code);
+      return f ? f.label : code;
+    }
+
+    // Get label for a value (reference or literal)
+    function valueLabel(val) {
+      const r = referenceValues.find(v => v.code === val);
+      return r ? r.label : val;
+    }
+
+    // Check if a value is a reference code
+    function isReference(val) {
+      return referenceValues.some(r => r.code === val);
+    }
+
+    // Render a rule's expression as readable HTML
+    function renderExpression(rule) {
+      if (!rule.field_1) {
+        return `<span>${escapeHtml(rule.description || rule.condition_key)}</span>`;
+      }
+
+      const valClass = (v) => isReference(v) ? 'ref' : 'val';
+
+      let html = `<span class="keyword">${escapeHtml(fieldLabel(rule.field_1))}</span> `;
+      html += `<span class="op">${escapeHtml(rule.operator_1)}</span> `;
+      html += `<span class="${valClass(rule.value_1)}">${escapeHtml(valueLabel(rule.value_1))}</span>`;
+
+      if (rule.logical_op && rule.field_2) {
+        html += ` <span class="keyword">${rule.logical_op === 'AND' ? 'ET' : 'OU'}</span> `;
+        html += `<span class="keyword">${escapeHtml(fieldLabel(rule.field_2))}</span> `;
+        html += `<span class="op">${escapeHtml(rule.operator_2)}</span> `;
+        html += `<span class="${valClass(rule.value_2)}">${escapeHtml(valueLabel(rule.value_2))}</span>`;
+      }
+
+      return html;
+    }
+
+    // Load scoring metadata (fields, operators, references)
+    async function loadScoringMetadata() {
+      try {
+        const response = await authFetch(`${API_URL}/reference-data/scoring-fields`);
+        if (response.ok) {
+          const meta = await response.json();
+          scoringFields = meta.fields;
+          referenceValues = meta.referenceValues;
+          operators = meta.operators;
+          logicalOps = meta.logicalOps;
+        }
+      } catch (error) {
+        console.error('Error loading scoring metadata:', error);
+      }
     }
 
     // Load scoring rules
@@ -233,7 +319,6 @@
     function renderBlocks(rules) {
       const container = document.getElementById('scoringBlocks');
 
-      // Group by rule_type, preserving order
       const blocks = [];
       const seen = new Set();
       rules.forEach(r => {
@@ -251,7 +336,8 @@
       container.innerHTML = blocks.map(blockType => {
         const blockRules = rules.filter(r => r.rule_type === blockType);
         const label = BLOCK_LABELS[blockType] || blockType;
-        const isBuiltIn = blockType === 'BASE_VDL' || blockType === 'MOYENNE_BONUS';
+        const isBuiltIn = blockType === 'BASE_VDL';
+        const isDisplayOnly = blockRules.every(r => !r.field_1);
 
         return `
           <div class="scoring-block">
@@ -264,181 +350,287 @@
                 <thead>
                   <tr>
                     <th>Condition</th>
-                    <th style="width: 100px; text-align: center;">Points</th>
+                    <th style="width: 80px; text-align: center;">Points</th>
                     <th style="width: 150px; text-align: center;">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   ${blockRules.map(rule => `
                     <tr>
-                      <td>${escapeHtml(rule.description || rule.condition_key)}</td>
+                      <td class="rule-expression">${renderExpression(rule)}</td>
                       <td style="text-align: center; font-weight: bold; ${rule.points > 0 ? 'color: #28a745;' : ''}">${rule.points}</td>
                       <td style="text-align: center;">
                         <button class="btn btn-sm" onclick="editScoringRule(${rule.id})">Modifier</button>
-                        <button class="btn-delete-sm" onclick="deleteCondition(${rule.id})">Suppr</button>
+                        ${!isBuiltIn ? `<button class="btn-delete-sm" onclick="deleteCondition(${rule.id})">Suppr</button>` : ''}
                       </td>
                     </tr>
                   `).join('')}
                 </tbody>
               </table>
-              <div class="add-condition-row">
-                <input type="text" id="newCond_${blockType}" placeholder="Nouvelle condition...">
-                <input type="number" id="newPts_${blockType}" placeholder="Pts" min="0" value="0">
-                <button class="btn-add-sm" onclick="addCondition('${escapeHtml(blockType)}')">Ajouter</button>
-              </div>
+              ${!isDisplayOnly ? `
+                <div class="add-rule-bar">
+                  <button class="btn-add-sm" onclick="openCreateModal('${escapeHtml(blockType)}')">+ Ajouter une condition</button>
+                </div>
+              ` : ''}
             </div>
           </div>
         `;
       }).join('');
     }
 
+    // Populate modal dropdowns from metadata
+    function populateDropdowns() {
+      ['editField1', 'editField2'].forEach(id => {
+        const sel = document.getElementById(id);
+        sel.innerHTML = '<option value="">-- Champ --</option>' +
+          scoringFields.map(f => `<option value="${f.code}">${f.label}</option>`).join('');
+      });
+
+      ['editOp1', 'editOp2'].forEach(id => {
+        const sel = document.getElementById(id);
+        sel.innerHTML = operators.map(o => `<option value="${o.code}">${o.label}</option>`).join('');
+      });
+
+      ['editValueRef1', 'editValueRef2'].forEach(id => {
+        const sel = document.getElementById(id);
+        sel.innerHTML = referenceValues.map(v => `<option value="${v.code}">${v.label}</option>`).join('');
+      });
+
+      const logSel = document.getElementById('editLogicalOp');
+      logSel.innerHTML = '<option value="">Pas de 2e condition</option>' +
+        logicalOps.map(l => `<option value="${l.code}">${l.label}</option>`).join('');
+    }
+
+    function toggleValueInput(n) {
+      const typeSelect = document.getElementById(`editValueType${n}`);
+      const refSelect = document.getElementById(`editValueRef${n}`);
+      const litInput = document.getElementById(`editValueLit${n}`);
+      if (typeSelect.value === 'reference') {
+        refSelect.style.display = '';
+        litInput.style.display = 'none';
+      } else {
+        refSelect.style.display = 'none';
+        litInput.style.display = '';
+      }
+    }
+
+    function toggleCondition2() {
+      const logOp = document.getElementById('editLogicalOp').value;
+      document.getElementById('condition2Row').style.display = logOp ? 'flex' : 'none';
+    }
+
+    // Get value from modal (reference or literal)
+    function getModalValue(n) {
+      const typeSelect = document.getElementById(`editValueType${n}`);
+      if (typeSelect.value === 'reference') {
+        return document.getElementById(`editValueRef${n}`).value;
+      }
+      return document.getElementById(`editValueLit${n}`).value;
+    }
+
+    // Set value in modal (detect reference vs literal)
+    function setModalValue(n, val) {
+      if (!val) {
+        document.getElementById(`editValueType${n}`).value = 'reference';
+        toggleValueInput(n);
+        return;
+      }
+      if (isReference(val)) {
+        document.getElementById(`editValueType${n}`).value = 'reference';
+        document.getElementById(`editValueRef${n}`).value = val;
+      } else {
+        document.getElementById(`editValueType${n}`).value = 'literal';
+        document.getElementById(`editValueLit${n}`).value = val;
+      }
+      toggleValueInput(n);
+    }
+
+    // Open modal for editing
+    function editScoringRule(id) {
+      const rule = allRules.find(r => r.id === id);
+      if (!rule) return;
+
+      populateDropdowns();
+      document.getElementById('modalTitle').textContent = 'Modifier la condition';
+      document.getElementById('editSrId').value = id;
+      document.getElementById('editSrRuleType').value = rule.rule_type;
+
+      // Fill structured fields
+      document.getElementById('editField1').value = rule.field_1 || '';
+      document.getElementById('editOp1').value = rule.operator_1 || '>';
+      setModalValue(1, rule.value_1);
+
+      document.getElementById('editLogicalOp').value = rule.logical_op || '';
+      toggleCondition2();
+
+      document.getElementById('editField2').value = rule.field_2 || '';
+      document.getElementById('editOp2').value = rule.operator_2 || '>';
+      setModalValue(2, rule.value_2);
+
+      document.getElementById('editSrPoints').value = rule.points;
+      document.getElementById('editColumnLabel').value = rule.column_label || '';
+      document.getElementById('editSrDescription').value = rule.description || '';
+
+      openModal('editScoringRuleModal');
+    }
+
+    // Open modal for creating a new rule in a block
+    function openCreateModal(ruleType) {
+      populateDropdowns();
+      document.getElementById('modalTitle').textContent = 'Ajouter une condition';
+      document.getElementById('editSrId').value = '';
+      document.getElementById('editSrRuleType').value = ruleType;
+
+      // Reset fields
+      document.getElementById('editField1').value = '';
+      document.getElementById('editOp1').value = '>';
+      document.getElementById('editValueType1').value = 'literal';
+      document.getElementById('editValueLit1').value = '';
+      toggleValueInput(1);
+
+      document.getElementById('editLogicalOp').value = '';
+      toggleCondition2();
+
+      document.getElementById('editField2').value = '';
+      document.getElementById('editOp2').value = '>';
+      document.getElementById('editValueType2').value = 'literal';
+      document.getElementById('editValueLit2').value = '';
+      toggleValueInput(2);
+
+      document.getElementById('editSrPoints').value = 0;
+
+      // Default column_label from existing rules in same block
+      const existing = allRules.find(r => r.rule_type === ruleType && r.column_label);
+      document.getElementById('editColumnLabel').value = existing ? existing.column_label : '';
+      document.getElementById('editSrDescription').value = '';
+
+      openModal('editScoringRuleModal');
+    }
+
+    // Save (create or update)
+    async function saveScoringRule() {
+      const id = document.getElementById('editSrId').value;
+      const ruleType = document.getElementById('editSrRuleType').value;
+      const points = parseInt(document.getElementById('editSrPoints').value);
+      const description = document.getElementById('editSrDescription').value.trim();
+      const columnLabel = document.getElementById('editColumnLabel').value.trim();
+
+      const field_1 = document.getElementById('editField1').value || null;
+      const operator_1 = document.getElementById('editOp1').value || null;
+      const value_1 = getModalValue(1) || null;
+
+      const logical_op = document.getElementById('editLogicalOp').value || null;
+
+      let field_2 = null, operator_2 = null, value_2 = null;
+      if (logical_op) {
+        field_2 = document.getElementById('editField2').value || null;
+        operator_2 = document.getElementById('editOp2').value || null;
+        value_2 = getModalValue(2) || null;
+      }
+
+      if (!field_1) {
+        showMessage('error', 'Veuillez sélectionner un champ pour la condition');
+        return;
+      }
+      if (isNaN(points) || points < 0) {
+        showMessage('error', 'Veuillez saisir un nombre de points valide');
+        return;
+      }
+
+      const body = {
+        points, description: description || undefined,
+        field_1, operator_1, value_1,
+        logical_op, field_2, operator_2, value_2,
+        column_label: columnLabel || null
+      };
+
+      try {
+        let response;
+        if (id) {
+          // Update
+          response = await authFetch(`${API_URL}/reference-data/scoring-rules/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+          });
+        } else {
+          // Create
+          const blockRules = allRules.filter(r => r.rule_type === ruleType);
+          const conditionKey = (field_1 + '_' + (operator_1 || '').replace(/[>=<]/g, '') + '_' + (value_1 || '')).toUpperCase().replace(/[^A-Z0-9_]/g, '').substring(0, 30) || `COND_${blockRules.length + 1}`;
+
+          body.rule_type = ruleType;
+          body.condition_key = conditionKey;
+          body.display_order = blockRules.length + 1;
+
+          response = await authFetch(`${API_URL}/reference-data/scoring-rules`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+          });
+        }
+
+        if (response.ok) {
+          closeModal('editScoringRuleModal');
+          loadScoringRules();
+          showMessage('success', id ? 'Condition mise à jour' : 'Condition ajoutée');
+        } else {
+          const data = await response.json();
+          showMessage('error', data.error || 'Erreur');
+        }
+      } catch (error) {
+        showMessage('error', 'Erreur de connexion');
+      }
+    }
+
     // Add a new block
     async function addBlock() {
       const nameInput = document.getElementById('newBlockName');
+      const labelInput = document.getElementById('newBlockLabel');
       const name = nameInput.value.trim();
+      const colLabel = labelInput.value.trim();
 
       if (!name) {
         showMessage('error', 'Veuillez saisir un nom pour le bloc');
         return;
       }
 
-      // Convert to uppercase key
       const ruleType = name.toUpperCase().replace(/\s+/g, '_').replace(/[^A-Z0-9_]/g, '');
-
       if (!ruleType) {
         showMessage('error', 'Nom invalide');
         return;
       }
-
-      // Check if block already exists
       if (allRules.some(r => r.rule_type === ruleType)) {
         showMessage('error', 'Ce bloc existe déjà');
         return;
       }
 
-      // Create with a default first condition
-      try {
-        const response = await authFetch(`${API_URL}/reference-data/scoring-rules`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            rule_type: ruleType,
-            condition_key: 'CONDITION_1',
-            points: 0,
-            display_order: 1,
-            description: 'Condition 1'
-          })
-        });
+      BLOCK_LABELS[ruleType] = name;
+      nameInput.value = '';
+      labelInput.value = '';
 
-        if (response.ok) {
-          // Also store the display name as the block label
-          BLOCK_LABELS[ruleType] = name;
-          nameInput.value = '';
-          loadScoringRules();
-          showMessage('success', `Bloc "${name}" créé`);
-        } else {
-          const data = await response.json();
-          showMessage('error', data.error || 'Erreur lors de la création');
-        }
-      } catch (error) {
-        showMessage('error', 'Erreur de connexion');
-      }
-    }
-
-    // Add a condition to a block
-    async function addCondition(ruleType) {
-      const condInput = document.getElementById(`newCond_${ruleType}`);
-      const ptsInput = document.getElementById(`newPts_${ruleType}`);
-
-      const description = condInput.value.trim();
-      const points = parseInt(ptsInput.value) || 0;
-
-      if (!description) {
-        showMessage('error', 'Veuillez saisir une description pour la condition');
-        return;
-      }
-
-      // Generate a unique condition_key
-      const blockRules = allRules.filter(r => r.rule_type === ruleType);
-      const conditionKey = description.toUpperCase().replace(/\s+/g, '_').replace(/[^A-Z0-9_]/g, '').substring(0, 30) || `COND_${blockRules.length + 1}`;
-
-      try {
-        const response = await authFetch(`${API_URL}/reference-data/scoring-rules`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            rule_type: ruleType,
-            condition_key: conditionKey,
-            points: points,
-            display_order: blockRules.length + 1,
-            description: description
-          })
-        });
-
-        if (response.ok) {
-          condInput.value = '';
-          ptsInput.value = '0';
-          loadScoringRules();
-          showMessage('success', 'Condition ajoutée');
-        } else {
-          const data = await response.json();
-          showMessage('error', data.error || 'Erreur lors de la création');
-        }
-      } catch (error) {
-        showMessage('error', 'Erreur de connexion');
-      }
-    }
-
-    // Edit a condition
-    function editScoringRule(id) {
-      const rule = allRules.find(r => r.id === id);
-      if (!rule) return;
-
-      document.getElementById('editSrId').value = id;
-      document.getElementById('editSrDescription').value = rule.description || rule.condition_key;
-      document.getElementById('editSrPoints').value = rule.points;
+      // Open the modal to create the first rule for this block
+      populateDropdowns();
+      document.getElementById('modalTitle').textContent = 'Première condition du bloc';
+      document.getElementById('editSrId').value = '';
+      document.getElementById('editSrRuleType').value = ruleType;
+      document.getElementById('editField1').value = '';
+      document.getElementById('editOp1').value = '>';
+      document.getElementById('editValueType1').value = 'literal';
+      document.getElementById('editValueLit1').value = '';
+      toggleValueInput(1);
+      document.getElementById('editLogicalOp').value = '';
+      toggleCondition2();
+      document.getElementById('editSrPoints').value = 0;
+      document.getElementById('editColumnLabel').value = colLabel || '';
+      document.getElementById('editSrDescription').value = '';
       openModal('editScoringRuleModal');
-    }
-
-    async function saveScoringRule() {
-      const id = document.getElementById('editSrId').value;
-      const description = document.getElementById('editSrDescription').value.trim();
-      const points = parseInt(document.getElementById('editSrPoints').value);
-
-      if (isNaN(points) || points < 0) {
-        showMessage('error', 'Veuillez saisir un nombre de points valide');
-        return;
-      }
-
-      try {
-        const response = await authFetch(`${API_URL}/reference-data/scoring-rules/${id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ points, description: description || undefined })
-        });
-
-        if (response.ok) {
-          closeModal('editScoringRuleModal');
-          loadScoringRules();
-          showMessage('success', 'Condition mise à jour');
-        } else {
-          const data = await response.json();
-          showMessage('error', data.error || 'Erreur lors de la mise à jour');
-        }
-      } catch (error) {
-        showMessage('error', 'Erreur de connexion');
-      }
     }
 
     // Delete a single condition
     async function deleteCondition(id) {
       if (!confirm('Supprimer cette condition ?')) return;
-
       try {
-        const response = await authFetch(`${API_URL}/reference-data/scoring-rules/${id}`, {
-          method: 'DELETE'
-        });
-
+        const response = await authFetch(`${API_URL}/reference-data/scoring-rules/${id}`, { method: 'DELETE' });
         if (response.ok) {
           loadScoringRules();
           showMessage('success', 'Condition supprimée');
@@ -451,16 +643,13 @@
       }
     }
 
-    // Delete an entire block (all conditions in it)
+    // Delete an entire block
     async function deleteBlock(ruleType) {
       const blockRules = allRules.filter(r => r.rule_type === ruleType);
       if (!confirm(`Supprimer le bloc "${BLOCK_LABELS[ruleType] || ruleType}" et ses ${blockRules.length} condition(s) ?`)) return;
-
       try {
         for (const rule of blockRules) {
-          await authFetch(`${API_URL}/reference-data/scoring-rules/${rule.id}`, {
-            method: 'DELETE'
-          });
+          await authFetch(`${API_URL}/reference-data/scoring-rules/${rule.id}`, { method: 'DELETE' });
         }
         delete BLOCK_LABELS[ruleType];
         loadScoringRules();
@@ -471,7 +660,11 @@
     }
 
     // Initialize
-    loadScoringRules();
+    async function init() {
+      await loadScoringMetadata();
+      await loadScoringRules();
+    }
+    init();
   </script>
 </body>
 </html>

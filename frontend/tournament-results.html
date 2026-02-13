@@ -180,14 +180,12 @@
         <div class="table-container">
           <table>
             <thead>
-              <tr>
+              <tr id="resultsHeaderRow">
                 <th style="width: 80px;">Position</th>
                 <th>Licence</th>
                 <th>Joueur</th>
                 <th>Club</th>
                 <th style="text-align: center;">Pts Match</th>
-                <th id="bonusHeader" style="text-align: center; display: none;">Bonus Moy.</th>
-                <th id="totalHeader" style="text-align: center; display: none;">Total</th>
                 <th style="text-align: center;">Points</th>
                 <th style="text-align: center;">Reprises</th>
                 <th style="text-align: center;">Moyenne</th>
@@ -394,11 +392,24 @@
         const tbody = document.getElementById('resultsBody');
         tbody.innerHTML = '';
 
-        // Check if any result has bonus_points > 0 to show bonus columns
-        const hasBonus = data.results.some(r => (r.bonus_points || 0) > 0);
-        if (hasBonus) {
-          document.getElementById('bonusHeader').style.display = '';
-          document.getElementById('totalHeader').style.display = '';
+        // Dynamic bonus columns from API
+        const bonusColumns = data.bonusColumns || [];
+        const hasBonusCols = bonusColumns.length > 0;
+
+        // Update header row dynamically based on bonus columns
+        if (hasBonusCols) {
+          document.getElementById('resultsHeaderRow').innerHTML = `
+            <th style="width: 80px;">Position</th>
+            <th>Licence</th>
+            <th>Joueur</th>
+            <th>Club</th>
+            <th style="text-align: center;">Pts Match</th>
+            ${bonusColumns.map(col => `<th style="text-align: center;">${col.label}</th>`).join('')}
+            <th style="text-align: center;">Total</th>
+            <th style="text-align: center;">Points</th>
+            <th style="text-align: center;">Reprises</th>
+            <th style="text-align: center;">Moyenne</th>
+            <th style="text-align: center;">Meilleure Série</th>`;
         }
 
         data.results.forEach((result, index) => {
@@ -419,14 +430,19 @@
             ? `${result.first_name} ${result.last_name}`
             : result.player_name;
 
-          const bonus = result.bonus_points || 0;
-          const total = result.match_points + bonus;
+          // Build dynamic bonus columns HTML from bonus_detail JSON
+          let bonusCellsHTML = '';
+          if (hasBonusCols) {
+            const bonusDetail = (() => { try { return JSON.parse(result.bonus_detail || '{}'); } catch(e) { return {}; } })();
+            const totalBonus = Object.values(bonusDetail).reduce((s, v) => s + (v || 0), 0);
+            const total = result.match_points + totalBonus;
 
-          // Build bonus columns HTML (hidden if no bonus in this tournament)
-          const bonusCols = hasBonus
-            ? `<td style="text-align: center; color: ${bonus > 0 ? '#28a745' : '#999'};">${bonus > 0 ? '+' + bonus : '0'}</td>
-               <td style="text-align: center; font-weight: bold;">${total}</td>`
-            : '';
+            bonusColumns.forEach(col => {
+              const val = bonusDetail[col.ruleType] || 0;
+              bonusCellsHTML += `<td style="text-align: center; color: ${val > 0 ? '#28a745' : '#999'};">${val > 0 ? '+' + val : '0'}</td>`;
+            });
+            bonusCellsHTML += `<td style="text-align: center; font-weight: bold;">${total}</td>`;
+          }
 
           // Create cells individually to use innerHTML for club logo
           row.innerHTML = `
@@ -439,7 +455,7 @@
             </td>
             <td></td>
             <td style="text-align: center; font-weight: bold;">${result.match_points}</td>
-            ${bonusCols}
+            ${bonusCellsHTML}
             <td style="text-align: center;">${result.points}</td>
             <td style="text-align: center;">${result.reprises}</td>
             <td style="text-align: center;">${moyenne}</td>
@@ -485,6 +501,10 @@
           ? `${result.first_name} ${result.last_name}`
           : result.player_name;
 
+        // Parse bonus_detail for podium display
+        const podiumBonusDetail = (() => { try { return JSON.parse(result.bonus_detail || '{}'); } catch(e) { return {}; } })();
+        const podiumTotalBonus = Object.values(podiumBonusDetail).reduce((s, v) => s + (v || 0), 0);
+
         const podiumPlace = document.createElement('div');
         podiumPlace.className = 'podium-place';
 
@@ -494,7 +514,7 @@
             <div class="podium-rank">${positions[index]}</div>
             <div class="podium-name">${playerName}</div>
             <div class="podium-stats">
-              <strong>${result.match_points}</strong> pts match${(result.bonus_points || 0) > 0 ? ` <span style="color: #28a745;">(+${result.bonus_points} bonus)</span>` : ''}<br>
+              <strong>${result.match_points}</strong> pts match${podiumTotalBonus > 0 ? ` <span style="color: #28a745;">(+${podiumTotalBonus} bonus)</span>` : ''}<br>
               Moy: <strong>${moyenne}</strong><br>
               Meilleure Série: <strong>${result.serie || 0}</strong><br>
               <div class="podium-club-container"></div>
