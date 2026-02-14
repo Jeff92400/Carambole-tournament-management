@@ -59,7 +59,7 @@ git push origin main
 
 ## Versioning
 
-**Current Version:** V 2.0.163 02/26
+**Current Version:** V 2.0.168 02/26
 
 Version is displayed at the bottom of the login screen (`frontend/login.html`).
 
@@ -324,6 +324,79 @@ When adding a new template variable:
 2. Add to `backend/routes/emailing.js` - relance replaceVar calls (~line 4915)
 3. Add to this documentation table
 4. Variables not applicable to a context will be empty strings
+
+## Structured Rule Engine (Scoring Rules)
+
+The scoring system uses a generic expression evaluator for bonus points. Rules are stored in `scoring_rules` with structured columns:
+
+### Database Columns (scoring_rules)
+- `field_1`, `operator_1`, `value_1` — First condition (e.g., MOYENNE > MOYENNE_MAXI)
+- `logical_op` — AND / OR / NULL
+- `field_2`, `operator_2`, `value_2` — Optional second condition
+- `column_label` — Display label (e.g., "Bonus Moy.")
+
+### Available Fields
+| Code | Description | Source |
+|------|-------------|--------|
+| `MOYENNE` | Player's average | `result.points / result.reprises` |
+| `NB_JOUEURS` | Number of players | `COUNT(*)` on tournament_results |
+| `MATCH_POINTS` | Match points | `result.match_points` |
+| `SERIE` | Best series | `result.serie` |
+
+### Reference Values
+- `MOYENNE_MAXI` → from `game_parameters.moyenne_maxi`
+- `MOYENNE_MINI` → from `game_parameters.moyenne_mini`
+
+### Backend Functions (tournaments.js)
+- `resolveField()`, `resolveValue()`, `evaluateOp()`, `evaluateRule()` — Generic evaluation engine
+- `computeBonusPoints()` — Evaluates all structured rules per player result
+- Results stored as `bonus_points` (total) + `bonus_detail` (JSON breakdown per rule_type)
+
+### Dynamic Bonus Columns
+- Tournament results and rankings API responses include `bonusColumns` metadata
+- Frontend renders dynamic columns from `bonus_detail` JSON (not hardcoded)
+- Excel exports also use dynamic columns
+- **Backward compatibility:** Old results with `bonus_points` but no `bonus_detail` get legacy fallback `{"MOYENNE_BONUS": bonus_points}`
+
+### Frontend (settings-bareme.html)
+- Structured expression builder with dropdowns (field, operator, value)
+- Rules displayed as readable French text
+- `/api/scoring-fields` endpoint provides metadata for dropdowns
+
+## UI Design System
+
+### Glassmorphism Navbar
+All pages use a modern floating navbar with depth effects:
+- `backdrop-filter: blur(12px)` with semi-transparent background
+- Multi-layer shadows (outer depth + colored glow + inset highlight)
+- Nav links in tinted container with border and inset shadow
+- Gradient logout button
+
+### Consistent Page Branding (app-branding.js)
+Every page navbar shows: **Logo → Org Name → Subtitle → Page Title**
+
+**Pattern:** Each page's `<h2>` contains:
+```html
+<span id="app-org-name" data-page-title="Page Name">CDB</span>
+```
+
+`app-branding.js` reads `data-page-title` and injects:
+1. Organization short name (from API)
+2. `<span class="navbar-subtitle">Gestion des compétitions<br>départementales FFB</span>`
+3. `<span class="navbar-page-title">Page Name</span>` (if data-page-title exists)
+
+**Dashboard** has no `data-page-title` (shows only org name + subtitle).
+
+### 3D Shadow Treatment
+Applied globally via `frontend/css/styles.css`:
+- **Cards:** `box-shadow` with hover lift effect (`translateY(-3px)`)
+- **Buttons:** Gradient backgrounds, colored glow shadows, cubic-bezier transitions
+- **Form inputs:** Inset shadow, focus glow ring
+- **Stat cards:** Deep shadows with hover lift (dashboard compact-stat)
+
+### CSS Classes
+- `.navbar-subtitle` — Small gray text below org name (10px)
+- `.navbar-page-title` — Primary-colored page name below subtitle (12px)
 
 ## See Also
 
