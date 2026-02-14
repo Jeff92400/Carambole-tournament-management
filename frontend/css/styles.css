@@ -164,6 +164,8 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
   margin-bottom: 30px;
   padding: 14px 20px;
   border-bottom: none;
@@ -171,7 +173,7 @@ body {
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border-radius: 16px;
-  border: 1px solid rgba(255,255,255,0.6);
+  border: 1px solid rgba(0,0,0,0.1);
   box-shadow:
     0 4px 10px rgba(0,0,0,0.07),
     0 12px 32px rgba(31,71,136,0.12),
@@ -186,11 +188,6 @@ body {
   gap: 10px;
   font-weight: 700;
   letter-spacing: -0.3px;
-  background: rgba(0,0,0,0.04);
-  padding: 8px 16px;
-  border-radius: 12px;
-  border: 1px solid rgba(0,0,0,0.13);
-  box-shadow: 0 2px 6px rgba(0,0,0,0.08) inset, 0 1px 2px rgba(0,0,0,0.04);
   margin: 0;
   flex-shrink: 0;
 }
@@ -199,9 +196,10 @@ body {
   display: block;
   font-size: 11px;
   font-weight: 500;
-  color: #666;
+  color: #888;
   letter-spacing: 0.2px;
-  margin-top: 2px;
+  margin-top: 4px;
+  margin-left: 14px;
 }
 
 .navbar .nav-links {

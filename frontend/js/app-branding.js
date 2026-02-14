@@ -34,13 +34,25 @@ async function initAppBranding() {
     if (orgNameEl) {
       const orgName = await getOrganizationShortName();
       orgNameEl.textContent = orgName || DEFAULT_ORG_NAME;
-      // Add subtitle if not already present
+      // Add subtitle below the h2
       if (!document.getElementById('app-org-subtitle')) {
-        const subtitle = document.createElement('span');
-        subtitle.id = 'app-org-subtitle';
-        subtitle.className = 'navbar-subtitle';
-        subtitle.textContent = 'Gestion des compétitions départementales FFB';
-        orgNameEl.parentElement.appendChild(subtitle);
+        const h2 = orgNameEl.closest('h2');
+        if (h2) {
+          // If h2 is wrapped in a div, append to that div; otherwise create a wrapper
+          const parent = h2.parentElement;
+          const isWrapped = parent && !parent.classList.contains('navbar');
+          const target = isWrapped ? parent : (() => {
+            const wrap = document.createElement('div');
+            h2.parentNode.insertBefore(wrap, h2);
+            wrap.appendChild(h2);
+            return wrap;
+          })();
+          const subtitle = document.createElement('div');
+          subtitle.id = 'app-org-subtitle';
+          subtitle.className = 'navbar-subtitle';
+          subtitle.textContent = 'Gestion des compétitions départementales FFB';
+          target.appendChild(subtitle);
+        }
       }
     }
   } catch (error) {
