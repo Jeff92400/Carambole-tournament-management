@@ -33,7 +33,15 @@ async function initAppBranding() {
     const orgNameEl = document.getElementById('app-org-name');
     if (orgNameEl) {
       const orgName = await getOrganizationShortName();
-      orgNameEl.textContent = (orgName || DEFAULT_ORG_NAME) + ' Tournois';
+      orgNameEl.textContent = orgName || DEFAULT_ORG_NAME;
+      // Add subtitle if not already present
+      if (!document.getElementById('app-org-subtitle')) {
+        const subtitle = document.createElement('span');
+        subtitle.id = 'app-org-subtitle';
+        subtitle.className = 'navbar-subtitle';
+        subtitle.textContent = 'Gestion des compétitions départementales FFB';
+        orgNameEl.parentElement.appendChild(subtitle);
+      }
     }
   } catch (error) {
     console.log('[Branding] Error loading branding, using defaults:', error);
