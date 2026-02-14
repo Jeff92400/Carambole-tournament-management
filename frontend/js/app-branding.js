@@ -33,27 +33,8 @@ async function initAppBranding() {
     const orgNameEl = document.getElementById('app-org-name');
     if (orgNameEl) {
       const orgName = await getOrganizationShortName();
-      orgNameEl.textContent = orgName || DEFAULT_ORG_NAME;
-      // Add subtitle below the h2
-      if (!document.getElementById('app-org-subtitle')) {
-        const h2 = orgNameEl.closest('h2');
-        if (h2) {
-          // If h2 is wrapped in a div, append to that div; otherwise create a wrapper
-          const parent = h2.parentElement;
-          const isWrapped = parent && !parent.classList.contains('navbar');
-          const target = isWrapped ? parent : (() => {
-            const wrap = document.createElement('div');
-            h2.parentNode.insertBefore(wrap, h2);
-            wrap.appendChild(h2);
-            return wrap;
-          })();
-          const subtitle = document.createElement('div');
-          subtitle.id = 'app-org-subtitle';
-          subtitle.className = 'navbar-subtitle';
-          subtitle.textContent = 'Gestion des compétitions départementales FFB';
-          target.appendChild(subtitle);
-        }
-      }
+      orgNameEl.innerHTML = (orgName || DEFAULT_ORG_NAME) +
+        '<span class="navbar-subtitle">Gestion des compétitions<br>départementales FFB</span>';
     }
   } catch (error) {
     console.log('[Branding] Error loading branding, using defaults:', error);
