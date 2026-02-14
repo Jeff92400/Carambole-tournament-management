@@ -210,6 +210,9 @@ The app supports dynamic branding for multi-organization deployment.
 - `frontend/css/styles.css` - CSS variables in `:root` section
 - `backend/routes/settings.js` - Public `/branding/colors` endpoint
 
+### Copyright Mark
+`branding.js` injects a "JR ©" mark in the top-right corner of all screens (fixed position, `z-index: 9999`). The login page also has a static "JR ©" below the version text.
+
 ### Adding to New Pages
 Include branding.js after styles.css:
 ```html
