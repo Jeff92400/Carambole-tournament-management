@@ -181,5 +181,19 @@
   window.applyCsvImportVisibility = applyCsvImportVisibility;
   window.isCsvImportsEnabled = isCsvImportsEnabled;
 
+  // ============= COPYRIGHT MARK =============
+  function addCopyrightMark() {
+    if (document.getElementById('jr-copyright')) return;
+    const mark = document.createElement('div');
+    mark.id = 'jr-copyright';
+    mark.textContent = 'JR ©';
+    mark.style.cssText = 'position:fixed;top:8px;right:12px;font-size:10px;color:#999;opacity:0.6;pointer-events:none;z-index:9999;font-family:sans-serif;';
+    document.body.appendChild(mark);
+  }
 
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', addCopyrightMark);
+  } else {
+    addCopyrightMark();
+  }
 })();
