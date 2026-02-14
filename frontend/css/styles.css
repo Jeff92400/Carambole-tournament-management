@@ -556,8 +556,15 @@ tbody tr:nth-child(even) {
   background: linear-gradient(135deg, var(--color-secondary) 0%, var(--color-secondary-dark) 100%);
   color: white;
   padding: 20px;
-  border-radius: 8px;
+  border-radius: 12px;
   text-align: center;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.1), 0 8px 24px color-mix(in srgb, var(--color-secondary) 25%, transparent);
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 14px rgba(0,0,0,0.12), 0 12px 32px color-mix(in srgb, var(--color-secondary) 30%, transparent);
 }
 
 .stat-card h4 {
