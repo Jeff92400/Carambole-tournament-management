@@ -78,6 +78,19 @@
     .section-title:first-of-type {
       margin-top: 0;
     }
+    .count-badge {
+      display: inline-block;
+      background: #1F4788;
+      color: white;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 1px 7px;
+      border-radius: 10px;
+      margin-left: 4px;
+      min-width: 18px;
+      text-align: center;
+    }
+    .count-badge:empty { display: none; }
   </style>
 </head>
 <body>
@@ -125,48 +138,45 @@
         </div>
       </div>
 
-      <h3 class="section-title">Paramétrages et Gestion de Fichiers</h3>
+      <h3 class="section-title">Paramétrage CDB, Jeux et Compétitions</h3>
       <div class="settings-hub">
         <div class="settings-card admin-only">
-          <h4><span class="icon">🏛️</span> Entité & Organisation</h4>
-          <p>Paramètres de l'organisation, identité visuelle et configuration.</p>
+          <h4><span class="icon">🏛️</span> Configuration CDB, Clubs et Joueurs</h4>
+          <p>Paramètres de l'organisation, identité visuelle, utilisateurs et gestion des clubs et joueurs.</p>
           <div class="card-links">
-            <a href="settings-admin.html#organisationSection" class="card-link"><span class="link-icon">🏛️</span> Nom et logo</a>
+            <a href="settings-admin.html#organisationSection" class="card-link"><span class="link-icon">🏛️</span> Nom et logo du CDB</a>
             <a href="settings-admin.html#brandingSection" class="card-link"><span class="link-icon">🎨</span> Identité visuelle</a>
+            <a href="settings-admin.html#userManagementSection" class="card-link"><span class="link-icon">👤</span> Gestion des utilisateurs <span id="countUsers" class="count-badge"></span></a>
+            <a href="clubs.html" class="card-link"><span class="link-icon">🏢</span> Clubs <span id="countClubs" class="count-badge"></span></a>
+            <a href="players-list.html" class="card-link"><span class="link-icon">👥</span> Joueurs <span id="countPlayers" class="count-badge"></span></a>
             <a href="settings-admin.html#emailsConfigSection" class="card-link"><span class="link-icon">📧</span> Configuration emails</a>
-            <a href="settings-admin.html#emailSchedulerSection" class="card-link"><span class="link-icon">🕐</span> Planification emails</a>
-            <a href="clubs.html" class="card-link"><span class="link-icon">🏢</span> Clubs</a>
-            <a href="settings-admin.html#userManagementSection" class="card-link"><span class="link-icon">👤</span> Gestion des utilisateurs</a>
-            <a href="settings-admin.html#seasonSection" class="card-link"><span class="link-icon">📅</span> Saison</a>
+            <a href="settings-admin.html#seasonSection" class="card-link"><span class="link-icon">📅</span> Paramètre Saisons</a>
             <a href="privacy-policy-editor.html" class="card-link"><span class="link-icon">📋</span> Politique de confidentialité</a>
           </div>
         </div>
 
         <div class="settings-card">
           <h4><span class="icon">🎯</span> Configuration jeux et distances</h4>
-          <p>Gérer les modes de jeu, catégories, paramètres des épreuves et qualifications.</p>
+          <p>Distances, moyennes, catégories, barème et critères de qualification.</p>
           <div class="card-links">
-            <a href="settings-admin.html#gameParametersSection" class="card-link"><span class="link-icon">⚙️</span> Paramètres des épreuves</a>
-            <a href="settings-reference.html" class="card-link"><img src="images/FrenchBillard-Icon-small.png" alt="" style="height: 16px; width: 16px; vertical-align: middle;"> Modes de jeu et Poules</a>
-            <a href="settings-reference.html#ffb-rankings" class="card-link"><span class="link-icon">🏅</span> Classements FFB</a>
-            <a href="settings-reference.html#categories" class="card-link"><span class="link-icon">📋</span> Catégories</a>
-            <a href="settings-bareme.html" class="card-link"><span class="link-icon">🎯</span> Barème de points</a>
-            <a href="settings-admin.html#rankingsConfigSection" class="card-link"><span class="link-icon">🏆</span> Classements / Qualifications</a>
-            <a href="settings-admin.html#tournamentTypesSection" class="card-link"><span class="link-icon">🎯</span> Types de tournoi</a>
-            <a href="calendar.html" class="card-link"><span class="link-icon">📄</span> Voir / Telecharger calendrier</a>
+            <a href="settings-admin.html#gameParametersSection" class="card-link"><span class="link-icon">⚙️</span> Distances et Moyennes</a>
+            <a href="settings-reference.html" class="card-link"><img src="images/FrenchBillard-Icon-small.png" alt="" style="height: 16px; width: 16px; vertical-align: middle;"> Catégories & configuration des poules</a>
+            <a href="settings-bareme.html" class="card-link"><span class="link-icon">🎯</span> Barème des points</a>
+            <a href="settings-admin.html#tournamentTypesSection" class="card-link"><span class="link-icon">🏆</span> Types de tournois</a>
+            <a href="settings-admin.html#rankingsConfigSection" class="card-link"><span class="link-icon">🏅</span> Critères finales départementales</a>
           </div>
         </div>
 
         <div class="settings-card">
-          <h4><span class="icon">🏆</span> Joueurs, Tournois & Compétitions</h4>
-          <p>Gérer les joueurs, tournois, compétitions et inscriptions.</p>
+          <h4><span class="icon">📅</span> Calendrier, Tournois et Compétitions</h4>
+          <p>Calendrier de la saison, tournois, inscriptions et statistiques.</p>
           <div class="card-links">
-            <a href="players-list.html" class="card-link"><span class="link-icon">👥</span> Liste des joueurs</a>
-            <a href="tournois-list.html" class="card-link"><span class="link-icon">📅</span> Liste des tournois</a>
-            <a href="inscriptions-list.html" class="card-link"><span class="link-icon">📝</span> Inscriptions</a>
-            <a href="tournaments-list.html" class="card-link"><span class="link-icon">📋</span> Competitions jouees</a>
-            <a href="statistiques.html" class="card-link"><span class="link-icon">📈</span> Statistiques</a>
-            <a href="settings-admin.html#timeThresholdsSection" class="card-link"><span class="link-icon">⏱️</span> Delais des competitions</a>
+            <a href="calendar.html" class="card-link"><span class="link-icon">📅</span> Calendrier (vue et téléchargement)</a>
+            <a href="settings-admin.html#timeThresholdsSection" class="card-link"><span class="link-icon">⏱️</span> Alertes, délais pour les compétitions</a>
+            <a href="tournois-list.html" class="card-link"><span class="link-icon">📋</span> Liste des tournois de la saison <span id="countTournois" class="count-badge"></span></a>
+            <a href="inscriptions-list.html" class="card-link"><span class="link-icon">📝</span> Inscriptions de la saison <span id="countInscriptions" class="count-badge"></span></a>
+            <a href="tournaments-list.html" class="card-link"><span class="link-icon">🏆</span> Compétitions jouées <span id="countCompetitions" class="count-badge"></span></a>
+            <a href="statistiques.html" class="card-link"><span class="link-icon">📈</span> Statistiques de la saison clubs et joueurs</a>
           </div>
         </div>
       </div>
@@ -334,6 +344,31 @@
     if (userRole === 'lecteur') {
       document.body.classList.add('role-lecteur');
     }
+
+    // Load counts for settings cards
+    async function loadSettingsCounts() {
+      const setBadge = (id, count) => {
+        const el = document.getElementById(id);
+        if (el && count !== undefined) el.textContent = count;
+      };
+      try {
+        const [clubsRes, playersRes, usersRes, tournoisRes, inscriptionsRes, competitionsRes] = await Promise.all([
+          authFetch(`${API_URL}/clubs`).catch(() => null),
+          authFetch(`${API_URL}/players`).catch(() => null),
+          authFetch(`${API_URL}/auth/users`).catch(() => null),
+          authFetch(`${API_URL}/tournois`).catch(() => null),
+          authFetch(`${API_URL}/inscriptions`).catch(() => null),
+          authFetch(`${API_URL}/tournaments?season=`).catch(() => null)
+        ]);
+        if (clubsRes && clubsRes.ok) { const d = await clubsRes.json(); setBadge('countClubs', Array.isArray(d) ? d.length : 0); }
+        if (playersRes && playersRes.ok) { const d = await playersRes.json(); setBadge('countPlayers', Array.isArray(d) ? d.length : (d.players ? d.players.length : 0)); }
+        if (usersRes && usersRes.ok) { const d = await usersRes.json(); setBadge('countUsers', Array.isArray(d) ? d.length : 0); }
+        if (tournoisRes && tournoisRes.ok) { const d = await tournoisRes.json(); setBadge('countTournois', Array.isArray(d) ? d.length : 0); }
+        if (inscriptionsRes && inscriptionsRes.ok) { const d = await inscriptionsRes.json(); setBadge('countInscriptions', Array.isArray(d) ? d.length : (d.count || 0)); }
+        if (competitionsRes && competitionsRes.ok) { const d = await competitionsRes.json(); setBadge('countCompetitions', Array.isArray(d) ? d.length : 0); }
+      } catch (e) { console.error('Error loading counts:', e); }
+    }
+    if (userRole === 'admin' || userRole === 'lecteur') loadSettingsCounts();
 
     // Load my settings
     async function loadMySettings() {
