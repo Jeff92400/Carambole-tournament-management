@@ -33,8 +33,13 @@ async function initAppBranding() {
     const orgNameEl = document.getElementById('app-org-name');
     if (orgNameEl) {
       const orgName = await getOrganizationShortName();
-      orgNameEl.innerHTML = (orgName || DEFAULT_ORG_NAME) +
+      const pageTitle = orgNameEl.getAttribute('data-page-title');
+      let html = (orgName || DEFAULT_ORG_NAME) +
         '<span class="navbar-subtitle">Gestion des compétitions<br>départementales FFB</span>';
+      if (pageTitle) {
+        html += '<span class="navbar-page-title">' + pageTitle + '</span>';
+      }
+      orgNameEl.innerHTML = html;
     }
   } catch (error) {
     console.log('[Branding] Error loading branding, using defaults:', error);
