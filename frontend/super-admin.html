@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Super Admin - Plateforme</title>
+  <link rel="icon" type="image/png" href="images/FrenchBillard-Icon-small.png">
+  <link rel="stylesheet" href="css/styles.css">
+  <script src="js/branding.js"></script>
+  <style>
+    .compact-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 10px; }
+    .compact-stat {
+      padding: 12px; border-radius: 12px; text-align: center; color: white;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15), 0 10px 28px rgba(0,0,0,0.12);
+      transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .compact-stat:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 8px 20px rgba(0,0,0,0.18), 0 16px 36px rgba(0,0,0,0.14);
+    }
+    .compact-stat h5 { margin: 0 0 4px 0; font-size: 11px; opacity: 0.9; text-transform: uppercase; }
+    .compact-stat .val { font-size: 28px; font-weight: bold; line-height: 1; }
+    .section-title { font-size: 13px; color: #666; margin: 12px 0 8px 0; font-weight: bold; text-transform: uppercase; }
+    .progress-card { background: white; border-radius: 12px; padding: 16px; margin-bottom: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+    .progress-item {
+      display: flex; align-items: center; gap: 10px; padding: 8px 0;
+      border-bottom: 1px solid #f0f0f0; font-size: 14px;
+    }
+    .progress-item:last-child { border-bottom: none; }
+    .progress-icon { font-size: 18px; width: 24px; text-align: center; }
+    .progress-label { flex: 1; color: #333; }
+    .progress-badge {
+      padding: 2px 10px; border-radius: 12px; font-size: 11px; font-weight: bold;
+    }
+    .badge-done { background: #d4edda; color: #155724; }
+    .badge-pending { background: #f8d7da; color: #721c24; }
+    .ffb-status-card { background: white; border-radius: 12px; padding: 16px; margin-bottom: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+    .ffb-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; font-size: 14px; }
+    .ffb-label { color: #666; }
+    .ffb-value { font-weight: bold; color: #333; }
+    .users-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .users-table th { background: #f5f5f5; padding: 8px 10px; text-align: left; font-size: 11px; text-transform: uppercase; color: #666; }
+    .users-table td { padding: 8px 10px; border-bottom: 1px solid #f0f0f0; }
+    .users-table tr:hover { background: #fafafa; }
+    .role-badge { padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: bold; }
+    .role-admin { background: #cce5ff; color: #004085; }
+    .role-viewer { background: #d4edda; color: #155724; }
+    .role-lecteur { background: #fff3cd; color: #856404; }
+    .role-club { background: #e2e3e5; color: #383d41; }
+    .sa-toggle { cursor: pointer; padding: 4px 10px; border-radius: 4px; border: 1px solid #ddd; font-size: 11px; background: white; }
+    .sa-toggle.active { background: #dc3545; color: white; border-color: #dc3545; }
+    .system-card { background: white; border-radius: 12px; padding: 16px; margin-bottom: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+    .system-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 13px; }
+    .system-label { color: #888; }
+    .system-value { color: #333; font-weight: 500; }
+    .back-link { display: inline-block; margin-bottom: 10px; color: var(--color-primary, #1F4788); text-decoration: none; font-size: 13px; }
+    .back-link:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="navbar">
+      <div>
+        <h2 style="margin-bottom: 0;"><img id="app-header-icon" src="images/FrenchBillard-Icon-small.png" alt="" style="height: 48px; width: 48px; vertical-align: middle; margin-right: 8px;" onerror="this.src='images/FrenchBillard-Icon-small.png';"><span id="app-org-name" data-page-title="Super Admin">CDB</span></h2>
+      </div>
+      <div class="nav-links">
+        <a href="dashboard.html">Accueil</a>
+        <a href="settings.html">Paramètres</a>
+        <a href="#" id="logoutBtn" class="nav-logout">Déconnexion</a>
+      </div>
+    </div>
+
+    <a href="dashboard.html" class="back-link">&larr; Retour au tableau de bord</a>
+
+    <div id="accessDenied" style="display: none; text-align: center; padding: 40px; color: #666;">
+      <h3>Accès refusé</h3>
+      <p>Cette page est réservée au Super Admin.</p>
+      <a href="dashboard.html" class="btn">Retour</a>
+    </div>
+
+    <div id="dashboardContent" style="display: none;">
+      <!-- Platform KPIs -->
+      <div class="section-title">Plateforme</div>
+      <div class="compact-stats">
+        <div class="compact-stat" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+          <h5>Utilisateurs</h5>
+          <div class="val" id="kpiUsers">-</div>
+        </div>
+        <div class="compact-stat" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+          <h5>Admins</h5>
+          <div class="val" id="kpiAdmins">-</div>
+        </div>
+        <div class="compact-stat" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+          <h5>Joueurs</h5>
+          <div class="val" id="kpiPlayers">-</div>
+        </div>
+        <div class="compact-stat" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+          <h5>Clubs</h5>
+          <div class="val" id="kpiClubs">-</div>
+        </div>
+        <div class="compact-stat" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+          <h5>Comptes joueur</h5>
+          <div class="val" id="kpiPlayerAccounts">-</div>
+        </div>
+      </div>
+
+      <!-- Season KPIs -->
+      <div class="section-title" id="seasonTitle">Saison en cours</div>
+      <div class="compact-stats">
+        <div class="compact-stat" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
+          <h5>Compétitions planifiées</h5>
+          <div class="val" id="kpiTournaments">-</div>
+        </div>
+        <div class="compact-stat" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
+          <h5>Inscriptions</h5>
+          <div class="val" id="kpiInscriptions">-</div>
+        </div>
+        <div class="compact-stat" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
+          <h5>Compétitions jouées</h5>
+          <div class="val" id="kpiPlayed">-</div>
+        </div>
+      </div>
+
+      <!-- FFB Integration Status -->
+      <div class="section-title">Intégration FFB</div>
+      <div class="ffb-status-card">
+        <div class="ffb-row">
+          <span class="ffb-label">Statut</span>
+          <span class="ffb-value" id="ffbStatus">-</span>
+        </div>
+        <div class="ffb-row">
+          <span class="ffb-label">Code CDB</span>
+          <span class="ffb-value" id="ffbCdbCode">-</span>
+        </div>
+        <div class="ffb-row">
+          <span class="ffb-label">Dernière synchronisation</span>
+          <span class="ffb-value" id="ffbLastSync">-</span>
+        </div>
+        <div class="ffb-row">
+          <span class="ffb-label">Licences FFB</span>
+          <span class="ffb-value" id="ffbLicences">-</span>
+        </div>
+        <div class="ffb-row">
+          <span class="ffb-label">Clubs FFB</span>
+          <span class="ffb-value" id="ffbClubs">-</span>
+        </div>
+      </div>
+
+      <!-- Implementation Progress -->
+      <div class="section-title">Avancement Plan FFB</div>
+      <div class="progress-card">
+        <div class="progress-item">
+          <span class="progress-icon" id="iconA"></span>
+          <span class="progress-label">Phase A : Schéma DB (tables FFB)</span>
+          <span class="progress-badge" id="badgeA"></span>
+        </div>
+        <div class="progress-item">
+          <span class="progress-icon" id="iconB"></span>
+          <span class="progress-label">Phase B : Import fichiers FFB</span>
+          <span class="progress-badge" id="badgeB"></span>
+        </div>
+        <div class="progress-item">
+          <span class="progress-icon" id="iconC"></span>
+          <span class="progress-label">Phase C : Sync Joueurs</span>
+          <span class="progress-badge" id="badgeC"></span>
+        </div>
+        <div class="progress-item">
+          <span class="progress-icon" id="iconD"></span>
+          <span class="progress-label">Phase D : Mapping Clubs</span>
+          <span class="progress-badge" id="badgeD"></span>
+        </div>
+        <div class="progress-item">
+          <span class="progress-icon" id="iconE"></span>
+          <span class="progress-label">Phase E : Interface Admin FFB</span>
+          <span class="progress-badge" id="badgeE"></span>
+        </div>
+        <div class="progress-item">
+          <span class="progress-icon" id="iconF"></span>
+          <span class="progress-label">Phase F : FTP Auto-sync</span>
+          <span class="progress-badge" id="badgeF"></span>
+        </div>
+      </div>
+
+      <!-- User Management -->
+      <div class="section-title">Gestion des utilisateurs</div>
+      <div class="progress-card" style="overflow-x: auto;">
+        <table class="users-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Utilisateur</th>
+              <th>Email</th>
+              <th>Rôle</th>
+              <th>Actif</th>
+              <th>Super Admin</th>
+              <th>Dernière connexion</th>
+            </tr>
+          </thead>
+          <tbody id="usersTableBody">
+            <tr><td colspan="7" style="text-align: center; color: #999;">Chargement...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- System -->
+      <div class="section-title">Système</div>
+      <div class="system-card">
+        <div class="system-row">
+          <span class="system-label">Uptime</span>
+          <span class="system-value" id="sysUptime">-</span>
+        </div>
+        <div class="system-row">
+          <span class="system-label">Dernier email envoyé</span>
+          <span class="system-value" id="sysLastEmail">-</span>
+        </div>
+        <div class="system-row">
+          <span class="system-label">Emails programmés en attente</span>
+          <span class="system-value" id="sysPendingEmails">-</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/auth-utils.js"></script>
+  <script>
+    const API_URL = '/api';
+
+    if (!requireAuth()) {
+      throw new Error('Not authenticated');
+    }
+    const token = localStorage.getItem('token');
+
+    // Check super admin access
+    const isSuperAdmin = localStorage.getItem('isSuperAdmin') === 'true';
+    if (!isSuperAdmin) {
+      document.getElementById('accessDenied').style.display = 'block';
+      throw new Error('Not super admin');
+    }
+
+    document.getElementById('dashboardContent').style.display = 'block';
+
+    // Logout handler
+    document.getElementById('logoutBtn').addEventListener('click', (e) => {
+      e.preventDefault();
+      logout();
+    });
+
+    // Format date for display
+    function formatDate(dateStr) {
+      if (!dateStr) return '-';
+      const d = new Date(dateStr);
+      return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    }
+
+    // Set progress phase status
+    function setPhase(letter, done) {
+      document.getElementById('icon' + letter).textContent = done ? '\u2705' : '\u274C';
+      const badge = document.getElementById('badge' + letter);
+      badge.textContent = done ? 'OK' : 'En attente';
+      badge.className = 'progress-badge ' + (done ? 'badge-done' : 'badge-pending');
+    }
+
+    // FFB status label
+    function ffbStatusLabel(status) {
+      const labels = {
+        'not_configured': '\u{1F534} Non configuré',
+        'configured': '\u{1F7E1} Configuré',
+        'synced': '\u{1F7E2} Synchronisé'
+      };
+      return labels[status] || status;
+    }
+
+    // Load dashboard data
+    async function loadDashboard() {
+      try {
+        const response = await authFetch(`${API_URL}/super-admin/dashboard`);
+        if (response.status === 403) {
+          document.getElementById('dashboardContent').style.display = 'none';
+          document.getElementById('accessDenied').style.display = 'block';
+          return;
+        }
+        const data = await response.json();
+
+        // Platform KPIs
+        document.getElementById('kpiUsers').textContent = data.platform.total_users;
+        document.getElementById('kpiAdmins').textContent = data.platform.total_admins;
+        document.getElementById('kpiPlayers').textContent = data.platform.total_players;
+        document.getElementById('kpiClubs').textContent = data.platform.total_clubs;
+        document.getElementById('kpiPlayerAccounts').textContent = data.platform.total_player_accounts;
+
+        // Season KPIs
+        document.getElementById('seasonTitle').textContent = 'Saison ' + data.season.current_season;
+        document.getElementById('kpiTournaments').textContent = data.season.total_tournaments;
+        document.getElementById('kpiInscriptions').textContent = data.season.total_inscriptions;
+        document.getElementById('kpiPlayed').textContent = data.season.tournaments_played;
+
+        // FFB status
+        document.getElementById('ffbStatus').innerHTML = ffbStatusLabel(data.ffb.status);
+        document.getElementById('ffbCdbCode').textContent = data.ffb.cdb_code || 'Non défini';
+        document.getElementById('ffbLastSync').textContent = data.ffb.last_sync ? formatDate(data.ffb.last_sync) : 'Jamais';
+        document.getElementById('ffbLicences').textContent = data.ffb.ffb_licences_count.toLocaleString('fr-FR');
+        document.getElementById('ffbClubs').textContent = data.ffb.ffb_clubs_count.toLocaleString('fr-FR');
+
+        // Implementation progress
+        const p = data.implementation_progress;
+        setPhase('A', p.phase_A_db_schema);
+        setPhase('B', p.phase_B_import);
+        setPhase('C', p.phase_C_sync);
+        setPhase('D', p.phase_D_club_mapping);
+        setPhase('E', p.phase_E_frontend);
+        setPhase('F', p.phase_F_ftp);
+
+        // System
+        document.getElementById('sysUptime').textContent = data.system.uptime;
+        document.getElementById('sysLastEmail').textContent = formatDate(data.system.last_email_sent);
+        document.getElementById('sysPendingEmails').textContent = data.system.pending_scheduled_emails;
+
+      } catch (error) {
+        console.error('Error loading dashboard:', error);
+      }
+    }
+
+    // Load users
+    async function loadUsers() {
+      try {
+        const response = await authFetch(`${API_URL}/super-admin/users`);
+        const users = await response.json();
+        const tbody = document.getElementById('usersTableBody');
+
+        if (!users.length) {
+          tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#999;">Aucun utilisateur</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = users.map(u => {
+          const roleClass = 'role-' + u.role;
+          const saClass = u.is_super_admin ? 'active' : '';
+          const saLabel = u.is_super_admin ? 'SA' : '-';
+          return `<tr>
+            <td>${u.id}</td>
+            <td><strong>${u.username}</strong></td>
+            <td>${u.email || '-'}</td>
+            <td><span class="role-badge ${roleClass}">${u.role}</span></td>
+            <td>${u.is_active ? '\u2705' : '\u274C'}</td>
+            <td>
+              <button class="sa-toggle ${saClass}" onclick="toggleSuperAdmin(${u.id}, ${!u.is_super_admin})"
+                title="${u.is_super_admin ? 'Retirer Super Admin' : 'Accorder Super Admin'}">
+                ${saLabel}
+              </button>
+            </td>
+            <td>${u.last_login ? formatDate(u.last_login) : 'Jamais'}</td>
+          </tr>`;
+        }).join('');
+      } catch (error) {
+        console.error('Error loading users:', error);
+      }
+    }
+
+    // Toggle super admin for a user
+    async function toggleSuperAdmin(userId, newValue) {
+      if (!confirm(newValue ? 'Accorder le rôle Super Admin à cet utilisateur ?' : 'Retirer le rôle Super Admin à cet utilisateur ?')) {
+        return;
+      }
+      try {
+        const response = await authFetch(`${API_URL}/super-admin/users/${userId}/super-admin`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ is_super_admin: newValue })
+        });
+        const data = await response.json();
+        if (response.ok) {
+          loadUsers();
+        } else {
+          alert(data.error || 'Erreur');
+        }
+      } catch (error) {
+        alert('Erreur de connexion');
+      }
+    }
+
+    // Initialize
+    loadDashboard();
+    loadUsers();
+
+    // Role-based nav
+    if (typeof applyRoleBasedNav === 'function') {
+      applyRoleBasedNav();
+    }
+  </script>
+</body>
+</html>

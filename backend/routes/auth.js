@@ -156,7 +156,8 @@ router.post('/login', (req, res) => {
         userId: user.id,
         username: user.username,
         role: user.role,
-        clubId: user.club_id || null
+        clubId: user.club_id || null,
+        isSuperAdmin: user.is_super_admin || false
       };
 
       const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '24h' });
@@ -192,7 +193,8 @@ router.post('/login', (req, res) => {
           username: user.username,
           role: user.role,
           club_id: user.club_id || null,
-          club_name: clubName
+          club_name: clubName,
+          is_super_admin: user.is_super_admin || false
         }
       });
     });
@@ -876,10 +878,19 @@ function requireViewerWrite(req, res, next) {
   return res.status(403).json({ error: 'Access denied - read-only role' });
 }
 
+// Middleware to require super admin access
+function requireSuperAdmin(req, res, next) {
+  if (!req.user.isSuperAdmin) {
+    return res.status(403).json({ error: 'Super Admin access required' });
+  }
+  next();
+}
+
 module.exports = router;
 module.exports.authenticateToken = authenticateToken;
 module.exports.requireAdmin = requireAdmin;
 module.exports.requireClubOrAdmin = requireClubOrAdmin;
 module.exports.requireViewer = requireViewer;
 module.exports.requireViewerWrite = requireViewerWrite;
+module.exports.requireSuperAdmin = requireSuperAdmin;
 module.exports.JWT_SECRET = JWT_SECRET;

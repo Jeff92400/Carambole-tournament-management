@@ -53,6 +53,7 @@ async function initializeDatabase() {
     await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token_expiry TIMESTAMP`);
     await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS receive_tournament_alerts BOOLEAN DEFAULT FALSE`);
     await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS club_id INTEGER REFERENCES clubs(id)`);
+    await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_super_admin BOOLEAN DEFAULT FALSE`);
 
     // Players table
     await client.query(`

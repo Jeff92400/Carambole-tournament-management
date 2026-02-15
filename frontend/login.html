@@ -36,7 +36,7 @@
     </div>
 
     <div style="text-align: center; margin-top: 30px; color: #999; font-size: 12px;">
-      V 2.0.168 02/26
+      V 2.0.169 02/26
     </div>
     <div style="text-align: center; margin-top: 6px; color: #bbb; font-size: 10px;">
       JR ©
@@ -103,6 +103,7 @@
           localStorage.setItem('username', data.user.username || username);
           localStorage.setItem('userClub', data.user.club_name || '');
           localStorage.setItem('userClubId', data.user.club_id || '');
+          localStorage.setItem('isSuperAdmin', data.user.is_super_admin ? 'true' : 'false');
           window.location.href = 'dashboard.html';
         } else {
           errorDiv.textContent = data.error || 'Erreur de connexion';
