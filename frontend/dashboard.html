@@ -24,6 +24,7 @@
         <a href="calendar.html" class="not-club nav-tooltip" data-tooltip="Calendrier de la saison">Calendrier</a>
         <a href="emailing.html" class="not-club nav-tooltip" data-tooltip="Annonces, relances, résultats, convocation">Com joueurs</a>
         <a href="settings.html" class="admin-only nav-tooltip" data-tooltip="Réservé aux administrateurs">Paramètres</a>
+        <a href="super-admin.html" id="superAdminLink" style="display:none; background: #dc3545; color: white; border-radius: 4px; padding: 2px 8px; font-size: 11px;">SA</a>
         <a href="#" id="logoutBtn" class="nav-logout">Déconnexion</a>
       </div>
     </div>
@@ -216,6 +217,9 @@
     // Check user role and show/hide elements based on role
     const userRole = localStorage.getItem('userRole');
     applyRoleBasedNav();
+    if (localStorage.getItem('isSuperAdmin') === 'true') {
+      document.getElementById('superAdminLink').style.display = '';
+    }
     if (userRole === 'admin' || userRole === 'lecteur') {
       document.querySelectorAll('.admin-only').forEach(el => el.style.display = '');
       loadTournamentAlerts();
