@@ -49,6 +49,7 @@ const playerInvitationsRoutes = require('./routes/player-invitations');
 const importConfigRoutes = require('./routes/import-config');
 const enrollmentRequestsRoutes = require('./routes/enrollment-requests');
 const superAdminRoutes = require('./routes/super-admin');
+const ffbImportRoutes = require('./routes/ffb-import');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -196,6 +197,7 @@ app.use('/api/player-invitations', apiLimiter, playerInvitationsRoutes);
 app.use('/api/import-config', apiLimiter, importConfigRoutes);
 app.use('/api/enrollment-requests', apiLimiter, enrollmentRequestsRoutes);
 app.use('/api/super-admin', apiLimiter, superAdminRoutes);
+app.use('/api/ffb', apiLimiter, ffbImportRoutes);
 
 // App version endpoint (for automatic update detection)
 // INCREMENT THIS VERSION when deploying updates you want users to see
