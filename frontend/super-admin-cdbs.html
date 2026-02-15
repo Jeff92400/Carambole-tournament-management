@@ -181,16 +181,34 @@
           <label>Ligue FFB</label>
           <input type="text" id="orgLigue" placeholder="Auto-rempli" readonly style="background: #f5f5f5;">
         </div>
-        <div class="form-group">
-          <label></label>
+        <!-- Admin section -->
+        <div class="form-group" style="grid-column: 1 / -1; margin-top: 8px; border-top: 1px solid #eee; padding-top: 12px;">
+          <label style="font-size: 13px; font-weight: 700; color: #333;">Administrateur du CDB</label>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <input type="text" id="adminSearch" placeholder="Rechercher un licencié (nom, prénom ou licence)..." oninput="searchAdmin()" style="flex: 1;">
+            <span id="adminSearchSpinner" style="display: none; font-size: 12px; color: #888;">Recherche...</span>
+          </div>
+          <div id="adminSearchResults" style="display: none; max-height: 200px; overflow-y: auto; border: 1px solid #ddd; border-radius: 6px; margin-top: 4px; background: white;"></div>
+        </div>
+        <div id="adminSelectedInfo" style="grid-column: 1 / -1; display: none; background: #e8f5e9; padding: 12px; border-radius: 8px;">
+          <div style="display: flex; justify-content: space-between; align-items: start;">
+            <div>
+              <strong id="adminSelectedName" style="font-size: 14px;"></strong>
+              <span id="adminSelectedLicence" style="font-size: 12px; color: #666; margin-left: 8px;"></span>
+              <div style="margin-top: 6px; font-size: 13px;">
+                <span style="color: #555;">Email:</span> <span id="adminSelectedEmail" style="color: #333;">-</span>
+              </div>
+              <div style="margin-top: 2px; font-size: 13px;">
+                <span style="color: #555;">Tél. portable:</span> <span id="adminSelectedTelPort" style="color: #333;">-</span>
+                <span style="color: #555; margin-left: 12px;">Tél. fixe:</span> <span id="adminSelectedTelFixe" style="color: #333;">-</span>
+              </div>
+            </div>
+            <button class="btn-sm btn-outline" onclick="clearAdminSelection()" style="font-size: 11px;">Changer</button>
+          </div>
         </div>
         <div class="form-group">
           <label>Identifiant admin</label>
           <input type="text" id="adminUsername" placeholder="ex: admin94">
-        </div>
-        <div class="form-group">
-          <label>Email admin</label>
-          <input type="email" id="adminEmail" placeholder="ex: admin@cdb94.fr">
         </div>
         <div class="form-group">
           <label>Mot de passe admin (envoi par SMS)</label>
@@ -339,16 +357,15 @@
     function onFfbCdbSelected() {
       const code = document.getElementById('ffbCdbSelect').value;
       const cdb = ffbCdbs.find(c => c.code === code);
+      // Reset admin selection when CDB changes
+      clearAdminSelection();
       if (cdb) {
-        // Pre-fill name — editable, user should customize
         document.getElementById('orgName').value = `Comité Départemental de Billard ${cdb.code}`;
         document.getElementById('orgFfbCode').value = cdb.code;
         document.getElementById('orgLigue').value = cdb.ligue_numero || '';
-        // Auto-generate short name: "CDB" + code
         const shortName = 'CDB' + cdb.code;
         document.getElementById('orgShortName').value = shortName;
         autoSlug();
-        // Auto-generate admin username
         document.getElementById('adminUsername').value = 'admin' + cdb.code;
       } else {
         document.getElementById('orgName').value = '';
@@ -358,6 +375,83 @@
         document.getElementById('orgSlug').value = '';
         document.getElementById('adminUsername').value = '';
       }
+    }
+
+    // ==================== Admin Search ====================
+    let adminSearchTimeout = null;
+    let selectedAdmin = null;
+
+    function searchAdmin() {
+      clearTimeout(adminSearchTimeout);
+      const q = document.getElementById('adminSearch').value.trim();
+      const cdbCode = document.getElementById('orgFfbCode').value;
+      const resultsDiv = document.getElementById('adminSearchResults');
+
+      if (!cdbCode) {
+        showToast('Sélectionnez d\'abord un CDB', 'error');
+        return;
+      }
+      if (q.length < 2) {
+        resultsDiv.style.display = 'none';
+        return;
+      }
+
+      document.getElementById('adminSearchSpinner').style.display = 'inline';
+      adminSearchTimeout = setTimeout(async () => {
+        try {
+          const res = await authFetch(`${API_URL}/super-admin/ffb-licences/search?cdb_code=${encodeURIComponent(cdbCode)}&q=${encodeURIComponent(q)}`);
+          const players = await res.json();
+
+          if (players.length === 0) {
+            resultsDiv.innerHTML = '<div style="padding: 10px; color: #999; font-size: 13px;">Aucun résultat</div>';
+          } else {
+            resultsDiv.innerHTML = players.map(p => `
+              <div style="padding: 8px 10px; cursor: pointer; border-bottom: 1px solid #f0f0f0; font-size: 13px;"
+                   onmouseover="this.style.background='#f0f4ff'" onmouseout="this.style.background='white'"
+                   onclick='selectAdmin(${JSON.stringify(p).replace(/'/g, "&#39;")})'>
+                <strong>${p.prenom} ${p.nom}</strong>
+                <span style="color: #888; margin-left: 8px;">${p.licence}</span>
+                ${p.email ? `<span style="color: #666; margin-left: 8px; font-size: 11px;">${p.email}</span>` : ''}
+              </div>
+            `).join('');
+          }
+          resultsDiv.style.display = 'block';
+        } catch (error) {
+          console.error('Admin search error:', error);
+        } finally {
+          document.getElementById('adminSearchSpinner').style.display = 'none';
+        }
+      }, 300);
+    }
+
+    function selectAdmin(player) {
+      selectedAdmin = player;
+      document.getElementById('adminSearchResults').style.display = 'none';
+      document.getElementById('adminSearch').style.display = 'none';
+
+      // Show selected info
+      const infoDiv = document.getElementById('adminSelectedInfo');
+      infoDiv.style.display = 'block';
+      document.getElementById('adminSelectedName').textContent = `${player.prenom} ${player.nom}`;
+      document.getElementById('adminSelectedLicence').textContent = `(${player.licence})`;
+      document.getElementById('adminSelectedEmail').textContent = player.email || '-';
+      document.getElementById('adminSelectedTelPort').textContent = player.tel_port || '-';
+      document.getElementById('adminSelectedTelFixe').textContent = player.tel_fixe || '-';
+
+      // Auto-fill admin username if not already set
+      const usernameField = document.getElementById('adminUsername');
+      if (!usernameField.value || usernameField.value.startsWith('admin')) {
+        const cdbCode = document.getElementById('orgFfbCode').value;
+        usernameField.value = 'admin' + cdbCode;
+      }
+    }
+
+    function clearAdminSelection() {
+      selectedAdmin = null;
+      document.getElementById('adminSelectedInfo').style.display = 'none';
+      document.getElementById('adminSearch').style.display = 'block';
+      document.getElementById('adminSearch').value = '';
+      document.getElementById('adminSearch').focus();
     }
 
     // ==================== Create Form ====================
@@ -382,7 +476,9 @@
         ffb_cdb_code: document.getElementById('orgFfbCode').value.trim(),
         ffb_ligue_numero: document.getElementById('orgLigue').value.trim(),
         admin_username: document.getElementById('adminUsername').value.trim(),
-        admin_email: document.getElementById('adminEmail').value.trim(),
+        admin_email: selectedAdmin?.email || '',
+        admin_phone: selectedAdmin?.tel_port || selectedAdmin?.tel_fixe || '',
+        admin_licence: selectedAdmin?.licence || '',
         admin_password: document.getElementById('adminPassword').value.trim()
       };
 

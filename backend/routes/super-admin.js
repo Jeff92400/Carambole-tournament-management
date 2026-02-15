@@ -149,6 +149,33 @@ router.get('/ffb-cdbs', async (req, res) => {
   }
 });
 
+// GET /api/super-admin/ffb-licences/search — Search FFB licences by name for a CDB
+router.get('/ffb-licences/search', async (req, res) => {
+  const { cdb_code, q } = req.query;
+  if (!cdb_code || !q || q.length < 2) {
+    return res.json([]);
+  }
+
+  try {
+    const search = `%${q.toUpperCase()}%`;
+    const results = await dbAll(`
+      SELECT licence, prenom, nom, email,
+        raw_data->>'Tel_fixe' as tel_fixe,
+        raw_data->>'Tel_port' as tel_port,
+        categorie, discipline, num_club
+      FROM ffb_licences
+      WHERE cdb_code = $1
+        AND (UPPER(nom) LIKE $2 OR UPPER(prenom) LIKE $2 OR licence LIKE $2)
+      ORDER BY nom, prenom
+      LIMIT 20
+    `, [cdb_code, search]);
+    res.json(results);
+  } catch (error) {
+    console.error('Error searching FFB licences:', error);
+    res.status(500).json({ error: 'Erreur' });
+  }
+});
+
 // GET /api/super-admin/users — List all users
 router.get('/users', (req, res) => {
   db.all(
