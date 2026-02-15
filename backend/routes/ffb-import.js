@@ -451,6 +451,7 @@ router.get('/clubs', async (req, res) => {
     const clubs = await dbAll(`
       SELECT c.numero, c.nom, c.sigle, c.ville, c.code_postal, c.cdb_code, c.email, c.tel,
         c.nb_car_310, c.nb_car_280, c.nb_car_autres,
+        c.raw_data,
         l.nom as ligue_nom,
         (SELECT COUNT(*) FROM ffb_licences fl WHERE fl.num_club = c.numero) as licence_count
       FROM ffb_clubs c
@@ -462,6 +463,18 @@ router.get('/clubs', async (req, res) => {
     res.json(clubs);
   } catch (error) {
     console.error('Error listing clubs:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/ffb/clubs/raw-keys — Discover keys in clubs raw_data (diagnostic)
+router.get('/clubs/raw-keys', async (req, res) => {
+  try {
+    const row = await dbGet(`SELECT raw_data FROM ffb_clubs WHERE raw_data IS NOT NULL LIMIT 1`);
+    if (!row?.raw_data) return res.json({ keys: [] });
+    const keys = typeof row.raw_data === 'string' ? Object.keys(JSON.parse(row.raw_data)) : Object.keys(row.raw_data);
+    res.json({ keys, sample: row.raw_data });
+  } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
