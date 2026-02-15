@@ -3,11 +3,19 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Super Admin - Plateforme</title>
-  <link rel="icon" type="image/png" href="images/FrenchBillard-Icon-small.png">
+  <title>Super Admin - Plateforme FFB</title>
+  <link rel="icon" type="image/png" href="images/FFB.png">
   <link rel="stylesheet" href="css/styles.css">
   <script src="js/branding.js"></script>
   <style>
+    .sa-nav { display: flex; gap: 0; background: white; border-radius: 12px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); overflow: hidden; }
+    .sa-nav a {
+      flex: 1; text-align: center; padding: 12px 8px; text-decoration: none; font-size: 13px; font-weight: 600;
+      color: #666; border-bottom: 3px solid transparent; transition: all 0.2s;
+    }
+    .sa-nav a:hover { background: #f8f9fa; color: #333; }
+    .sa-nav a.active { color: var(--color-primary, #1F4788); border-bottom-color: var(--color-primary, #1F4788); background: #f0f4ff; }
+    .sa-nav a .nav-icon { display: block; font-size: 18px; margin-bottom: 2px; }
     .compact-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 10px; }
     .compact-stat {
       padding: 12px; border-radius: 12px; text-align: center; color: white;
@@ -53,24 +61,43 @@
     .system-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 13px; }
     .system-label { color: #888; }
     .system-value { color: #333; font-weight: 500; }
-    .back-link { display: inline-block; margin-bottom: 10px; color: var(--color-primary, #1F4788); text-decoration: none; font-size: 13px; }
-    .back-link:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
   <div class="container">
     <div class="navbar">
       <div>
-        <h2 style="margin-bottom: 0;"><img id="app-header-icon" src="images/FFB.png" alt="" style="height: 48px; width: 48px; vertical-align: middle; margin-right: 8px; border-radius: 6px;" onerror="this.src='images/FrenchBillard-Icon-small.png';"><span id="app-org-name" data-page-title="Super Admin">CDB</span></h2>
+        <h2 style="margin-bottom: 0;"><img id="app-header-icon" src="images/FFB.png" alt="" style="height: 48px; width: 48px; vertical-align: middle; margin-right: 8px; border-radius: 6px;" onerror="this.src='images/FrenchBillard-Icon-small.png';"><span id="app-org-name" data-page-title="Super Admin">Plateforme FFB</span></h2>
       </div>
       <div class="nav-links">
-        <a href="dashboard.html">Accueil</a>
-        <a href="settings.html">Paramètres</a>
+        <a href="dashboard.html" class="nav-tooltip" data-tooltip="Retour au CDB">CDB</a>
         <a href="#" id="logoutBtn" class="nav-logout">Déconnexion</a>
       </div>
     </div>
 
-    <a href="dashboard.html" class="back-link">&larr; Retour au tableau de bord</a>
+    <!-- Super Admin Navigation -->
+    <nav class="sa-nav">
+      <a href="super-admin.html" class="active">
+        <span class="nav-icon">&#x1F4CA;</span>
+        Tableau de bord
+      </a>
+      <a href="#" onclick="return false;" style="opacity: 0.4; cursor: default;">
+        <span class="nav-icon">&#x1F3E2;</span>
+        CDBs
+      </a>
+      <a href="#" onclick="return false;" style="opacity: 0.4; cursor: default;">
+        <span class="nav-icon">&#x1F4C1;</span>
+        Données FFB
+      </a>
+      <a href="#" onclick="return false;" style="opacity: 0.4; cursor: default;">
+        <span class="nav-icon">&#x1F465;</span>
+        Utilisateurs
+      </a>
+      <a href="#" onclick="return false;" style="opacity: 0.4; cursor: default;">
+        <span class="nav-icon">&#x2699;</span>
+        Paramètres
+      </a>
+    </nav>
 
     <div id="accessDenied" style="display: none; text-align: center; padding: 40px; color: #666;">
       <h3>Accès refusé</h3>
@@ -82,6 +109,10 @@
       <!-- Platform KPIs -->
       <div class="section-title">Plateforme</div>
       <div class="compact-stats">
+        <div class="compact-stat" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+          <h5>CDBs</h5>
+          <div class="val" id="kpiCdbs">-</div>
+        </div>
         <div class="compact-stat" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
           <h5>Utilisateurs</h5>
           <div class="val" id="kpiUsers">-</div>
@@ -101,23 +132,6 @@
         <div class="compact-stat" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
           <h5>Comptes joueur</h5>
           <div class="val" id="kpiPlayerAccounts">-</div>
-        </div>
-      </div>
-
-      <!-- Season KPIs -->
-      <div class="section-title" id="seasonTitle">Saison en cours</div>
-      <div class="compact-stats">
-        <div class="compact-stat" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
-          <h5>Compétitions planifiées</h5>
-          <div class="val" id="kpiTournaments">-</div>
-        </div>
-        <div class="compact-stat" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
-          <h5>Inscriptions</h5>
-          <div class="val" id="kpiInscriptions">-</div>
-        </div>
-        <div class="compact-stat" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
-          <h5>Compétitions jouées</h5>
-          <div class="val" id="kpiPlayed">-</div>
         </div>
       </div>
 
@@ -282,17 +296,12 @@
         const data = await response.json();
 
         // Platform KPIs
+        document.getElementById('kpiCdbs').textContent = data.platform.total_cdbs;
         document.getElementById('kpiUsers').textContent = data.platform.total_users;
         document.getElementById('kpiAdmins').textContent = data.platform.total_admins;
         document.getElementById('kpiPlayers').textContent = data.platform.total_players;
         document.getElementById('kpiClubs').textContent = data.platform.total_clubs;
         document.getElementById('kpiPlayerAccounts').textContent = data.platform.total_player_accounts;
-
-        // Season KPIs
-        document.getElementById('seasonTitle').textContent = 'Saison ' + data.season.current_season;
-        document.getElementById('kpiTournaments').textContent = data.season.total_tournaments;
-        document.getElementById('kpiInscriptions').textContent = data.season.total_inscriptions;
-        document.getElementById('kpiPlayed').textContent = data.season.tournaments_played;
 
         // FFB status
         document.getElementById('ffbStatus').innerHTML = ffbStatusLabel(data.ffb.status);
@@ -381,11 +390,6 @@
     // Initialize
     loadDashboard();
     loadUsers();
-
-    // Role-based nav
-    if (typeof applyRoleBasedNav === 'function') {
-      applyRoleBasedNav();
-    }
   </script>
 </body>
 </html>

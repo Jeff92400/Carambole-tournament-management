@@ -39,19 +39,14 @@ router.get('/dashboard', async (req, res) => {
     const currentSeason = await appSettings.getCurrentSeason();
 
     // Platform stats
-    const [totalUsers, totalAdmins, totalPlayers, totalClubs, totalPlayerAccounts] = await Promise.all([
+    const ffbCdbsExists = await tableExists('ffb_cdbs');
+    const [totalUsers, totalAdmins, totalPlayers, totalClubs, totalPlayerAccounts, totalCdbs] = await Promise.all([
       safeCount(`SELECT COUNT(*) as count FROM users WHERE is_active = 1`),
       safeCount(`SELECT COUNT(*) as count FROM users WHERE is_active = 1 AND role = 'admin'`),
       safeCount(`SELECT COUNT(*) as count FROM players WHERE UPPER(licence) NOT LIKE 'TEST%'`),
       safeCount(`SELECT COUNT(*) as count FROM clubs`),
-      safeCount(`SELECT COUNT(*) as count FROM player_accounts`)
-    ]);
-
-    // Season stats
-    const [totalTournaments, totalInscriptions, tournamentsPlayed] = await Promise.all([
-      safeCount(`SELECT COUNT(*) as count FROM tournoi_ext WHERE saison = $1`, [currentSeason]),
-      safeCount(`SELECT COUNT(*) as count FROM inscriptions i JOIN tournoi_ext t ON i.tournoi_id = t.id WHERE t.saison = $1`, [currentSeason]),
-      safeCount(`SELECT COUNT(*) as count FROM tournaments WHERE season = $1`, [currentSeason])
+      safeCount(`SELECT COUNT(*) as count FROM player_accounts`),
+      ffbCdbsExists ? safeCount(`SELECT COUNT(*) as count FROM ffb_cdbs`) : Promise.resolve(1) // 1 = current CDB before FFB tables exist
     ]);
 
     // FFB status
@@ -99,17 +94,12 @@ router.get('/dashboard', async (req, res) => {
 
     res.json({
       platform: {
+        total_cdbs: totalCdbs,
         total_users: totalUsers,
         total_admins: totalAdmins,
         total_players: totalPlayers,
         total_clubs: totalClubs,
         total_player_accounts: totalPlayerAccounts
-      },
-      season: {
-        current_season: currentSeason,
-        total_tournaments: totalTournaments,
-        total_inscriptions: totalInscriptions,
-        tournaments_played: tournamentsPlayed
       },
       ffb: {
         status: ffbStatus,
