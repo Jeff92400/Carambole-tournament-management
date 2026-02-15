@@ -214,31 +214,61 @@ app.get('/api/health', (req, res) => {
 });
 
 // TEMPORARY: Demo seed endpoint - REMOVE AFTER SEEDING
-// Set a user as super admin (one-time seed)
+// Create dedicated super admin user + remove SA from shared admin
 app.get('/api/seed-super-admin', async (req, res) => {
   const secret = req.query.secret;
   if (secret !== 'seed-demo-2024') {
     return res.status(403).json({ error: 'Invalid secret' });
   }
 
+  const bcrypt = require('bcrypt');
   const username = req.query.username || 'admin';
 
   try {
+    // If just granting to existing user
+    if (!req.query.create) {
+      await new Promise((resolve, reject) => {
+        db.run(
+          `UPDATE users SET is_super_admin = true WHERE username = $1`,
+          [username],
+          function(err) {
+            if (err) return reject(err);
+            if (this.changes === 0) return reject(new Error('User not found: ' + username));
+            resolve();
+          }
+        );
+      });
+      return res.json({ success: true, message: `Super Admin granted to "${username}".` });
+    }
+
+    // Create new user with super admin
+    const password = req.query.password;
+    if (!password) return res.status(400).json({ error: 'password required' });
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Delete existing user with same username if exists
+    await new Promise((resolve) => {
+      db.run(`DELETE FROM users WHERE username = $1`, [username], () => resolve());
+    });
+
+    // Create the super admin user
     await new Promise((resolve, reject) => {
       db.run(
-        `UPDATE users SET is_super_admin = true WHERE username = $1`,
-        [username],
-        function(err) {
-          if (err) return reject(err);
-          if (this.changes === 0) return reject(new Error('User not found: ' + username));
-          resolve();
-        }
+        `INSERT INTO users (username, password_hash, role, is_active, is_super_admin) VALUES ($1, $2, 'admin', 1, true)`,
+        [username, hashedPassword],
+        (err) => err ? reject(err) : resolve()
       );
+    });
+
+    // Remove super admin from shared 'admin' account
+    await new Promise((resolve) => {
+      db.run(`UPDATE users SET is_super_admin = false WHERE username = 'admin'`, [], () => resolve());
     });
 
     res.json({
       success: true,
-      message: `Super Admin granted to "${username}". Log out and log back in to activate.`
+      message: `Super Admin user "${username}" created. Super Admin removed from "admin" account. Log in with your new credentials.`
     });
   } catch (error) {
     console.error('Seed super admin error:', error);
