@@ -54,6 +54,16 @@ function dbGet(sql, params = []) {
   });
 }
 
+// Helper: promisified db.all
+function dbAll(sql, params = []) {
+  return new Promise((resolve, reject) => {
+    db.all(sql, params, (err, rows) => {
+      if (err) return reject(err);
+      resolve(rows || []);
+    });
+  });
+}
+
 // Helper: parse CSV file into array of objects
 function parseCSV(filePath) {
   return new Promise((resolve, reject) => {
@@ -380,6 +390,122 @@ router.get('/import/history', async (req, res) => {
     res.json(logs);
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// ============= SYNC PLAYERS FROM FFB LICENCES =============
+
+// GET /api/ffb/sync/preview — Preview what will be synced (dry run)
+router.get('/sync/preview', async (req, res) => {
+  try {
+    // Find players that have a matching FFB licence
+    const matched = await dbAll(
+      `SELECT p.licence, p.first_name, p.last_name, p.club, p.ffb_last_sync,
+              fl.num_club AS ffb_club_numero, fl.date_de_naissance, fl.sexe,
+              fl.categorie AS ffb_categorie, fl.discipline, fl.arbitre,
+              fl.date_licence, fl.nationalite
+       FROM players p
+       INNER JOIN ffb_licences fl ON REPLACE(p.licence, ' ', '') = REPLACE(fl.licence, ' ', '')
+       WHERE UPPER(p.licence) NOT LIKE 'TEST%'
+       ORDER BY p.last_name, p.first_name`
+    );
+
+    // Find players with no FFB match
+    const unmatched = await dbAll(
+      `SELECT p.licence, p.first_name, p.last_name, p.club
+       FROM players p
+       LEFT JOIN ffb_licences fl ON REPLACE(p.licence, ' ', '') = REPLACE(fl.licence, ' ', '')
+       WHERE fl.licence IS NULL AND UPPER(p.licence) NOT LIKE 'TEST%'
+       ORDER BY p.last_name, p.first_name`
+    );
+
+    const alreadySynced = matched.filter(p => p.ffb_last_sync !== null).length;
+    const neverSynced = matched.filter(p => p.ffb_last_sync === null).length;
+
+    res.json({
+      matched_count: matched.length,
+      unmatched_count: unmatched.length,
+      already_synced: alreadySynced,
+      never_synced: neverSynced,
+      matched: matched.slice(0, 50), // First 50 for preview
+      unmatched: unmatched.slice(0, 20) // First 20 unmatched
+    });
+  } catch (error) {
+    console.error('FFB sync preview error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/ffb/sync/players — Execute sync: enrich players from ffb_licences
+router.post('/sync/players', async (req, res) => {
+  const startTime = Date.now();
+  const stats = { total: 0, updated: 0, already_current: 0, errors: 0 };
+  const errors = [];
+
+  try {
+    // Find all matching player-licence pairs
+    const matches = await dbAll(
+      `SELECT p.licence AS player_licence, fl.licence AS ffb_licence,
+              fl.num_club, fl.date_de_naissance, fl.sexe,
+              fl.categorie, fl.discipline, fl.arbitre,
+              fl.date_licence, fl.nationalite
+       FROM players p
+       INNER JOIN ffb_licences fl ON REPLACE(p.licence, ' ', '') = REPLACE(fl.licence, ' ', '')
+       WHERE UPPER(p.licence) NOT LIKE 'TEST%'`
+    );
+
+    stats.total = matches.length;
+
+    for (const m of matches) {
+      try {
+        await dbRun(
+          `UPDATE players SET
+            ffb_club_numero = $1,
+            date_of_birth = $2,
+            sexe = $3,
+            ffb_categorie = $4,
+            discipline = $5,
+            arbitre = $6,
+            date_licence = $7,
+            nationalite = $8,
+            ffb_last_sync = CURRENT_TIMESTAMP
+           WHERE licence = $9`,
+          [
+            m.num_club || null,
+            m.date_de_naissance || null,
+            m.sexe || null,
+            m.categorie || null,
+            m.discipline || null,
+            m.arbitre || null,
+            m.date_licence || null,
+            m.nationalite || null,
+            m.player_licence
+          ]
+        );
+        stats.updated++;
+      } catch (e) {
+        stats.errors++;
+        errors.push({ licence: m.player_licence, error: e.message });
+      }
+    }
+
+    // Update app setting for last sync date
+    await dbRun(
+      `UPDATE app_settings SET value = $1, updated_at = CURRENT_TIMESTAMP WHERE key = 'ffb_last_sync_date'`,
+      [new Date().toISOString()]
+    );
+
+    // Log this sync
+    await logImport('sync_players', 'manual', 'ffb_licences→players', stats, req.user.username, Date.now() - startTime, errors);
+
+    res.json({
+      success: true,
+      ...stats,
+      duration_ms: Date.now() - startTime
+    });
+  } catch (error) {
+    console.error('FFB sync players error:', error);
+    res.status(500).json({ error: 'Erreur lors de la synchronisation: ' + error.message });
   }
 });
 

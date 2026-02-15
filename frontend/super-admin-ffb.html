@@ -71,6 +71,16 @@
     }
     .import-notice strong { color: var(--color-primary, #1F4788); }
 
+    /* Sync card */
+    .sync-card {
+      background: white; border-radius: 12px; padding: 16px; margin-bottom: 16px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08); border-left: 4px solid #11998e;
+    }
+    .sync-stats { display: flex; gap: 16px; margin-top: 12px; flex-wrap: wrap; }
+    .sync-stat { text-align: center; flex: 1; min-width: 80px; }
+    .sync-stat-val { display: block; font-size: 24px; font-weight: bold; color: #333; }
+    .sync-stat-label { font-size: 11px; color: #888; text-transform: uppercase; }
+
     /* History table */
     .history-card { background: white; border-radius: 12px; padding: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); overflow-x: auto; }
     .history-table { width: 100%; border-collapse: collapse; font-size: 12px; }
@@ -81,6 +91,7 @@
     .type-ligues { background: #e2e3e5; color: #383d41; }
     .type-clubs { background: #cce5ff; color: #004085; }
     .type-licences { background: #d4edda; color: #155724; }
+    .type-sync_players { background: #fff3cd; color: #856404; }
 
     /* Last import info */
     .last-import-card {
@@ -218,8 +229,66 @@
 
       </div>
 
+      <!-- Sync Players Section -->
+      <div class="section-title">Synchronisation Joueurs</div>
+      <div class="sync-card">
+        <div class="sync-header">
+          <div>
+            <h4 style="margin: 0 0 4px 0; font-size: 15px;">Enrichir les joueurs depuis les licences FFB</h4>
+            <p style="margin: 0; font-size: 12px; color: #888;">
+              Compare les licences des joueurs existants avec la base FFB et enrichit leurs données
+              (date de naissance, sexe, catégorie, discipline, nationalité, etc.)
+            </p>
+          </div>
+        </div>
+
+        <!-- Preview area -->
+        <div id="syncPreview" style="display: none;">
+          <div class="sync-stats">
+            <div class="sync-stat">
+              <span class="sync-stat-val" id="syncMatched">-</span>
+              <span class="sync-stat-label">Correspondances</span>
+            </div>
+            <div class="sync-stat">
+              <span class="sync-stat-val" id="syncUnmatched" style="color: #dc3545;">-</span>
+              <span class="sync-stat-label">Sans correspondance</span>
+            </div>
+            <div class="sync-stat">
+              <span class="sync-stat-val" id="syncAlready" style="color: #28a745;">-</span>
+              <span class="sync-stat-label">Déjà synchronisés</span>
+            </div>
+            <div class="sync-stat">
+              <span class="sync-stat-val" id="syncNew" style="color: #007bff;">-</span>
+              <span class="sync-stat-label">Nouveaux à sync</span>
+            </div>
+          </div>
+
+          <!-- Unmatched players -->
+          <div id="unmatchedSection" style="display: none; margin-top: 10px;">
+            <details>
+              <summary style="cursor: pointer; font-size: 12px; color: #dc3545; font-weight: 600;">
+                Joueurs sans correspondance FFB
+              </summary>
+              <div id="unmatchedList" style="margin-top: 6px; font-size: 12px; color: #666; max-height: 150px; overflow-y: auto;"></div>
+            </details>
+          </div>
+        </div>
+
+        <!-- Action buttons -->
+        <div style="display: flex; gap: 10px; margin-top: 12px;">
+          <button class="upload-btn" id="btnSyncPreview" onclick="previewSync()" style="flex: 1;">
+            Analyser les correspondances
+          </button>
+          <button class="upload-btn" id="btnSyncExecute" onclick="executeSync()" disabled style="flex: 1; background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);">
+            Lancer la synchronisation
+          </button>
+        </div>
+
+        <div class="upload-result" id="syncResult"></div>
+      </div>
+
       <!-- Import History -->
-      <div class="section-title">Historique des imports</div>
+      <div class="section-title">Historique des imports & syncs</div>
       <div class="history-card">
         <table class="history-table">
           <thead>
@@ -454,6 +523,91 @@
         document.getElementById('historyBody').innerHTML =
           '<tr><td colspan="9" style="text-align:center;color:#dc3545;">Erreur de chargement</td></tr>';
       }
+    }
+
+    // ============= SYNC =============
+
+    async function previewSync() {
+      const btn = document.getElementById('btnSyncPreview');
+      btn.disabled = true;
+      btn.textContent = 'Analyse en cours...';
+
+      try {
+        const response = await authFetch(`${API_URL}/ffb/sync/preview`);
+        const data = await response.json();
+
+        document.getElementById('syncMatched').textContent = fmt(data.matched_count);
+        document.getElementById('syncUnmatched').textContent = fmt(data.unmatched_count);
+        document.getElementById('syncAlready').textContent = fmt(data.already_synced);
+        document.getElementById('syncNew').textContent = fmt(data.never_synced);
+
+        document.getElementById('syncPreview').style.display = 'block';
+
+        // Show unmatched players
+        if (data.unmatched && data.unmatched.length > 0) {
+          const section = document.getElementById('unmatchedSection');
+          section.style.display = 'block';
+          document.getElementById('unmatchedList').innerHTML = data.unmatched.map(p =>
+            `<div style="padding: 2px 0;">${p.last_name} ${p.first_name} <span style="color: #aaa;">(${p.licence})</span> — ${p.club || '-'}</div>`
+          ).join('') + (data.unmatched_count > 20 ? `<div style="padding: 4px 0; font-style: italic;">... et ${data.unmatched_count - 20} autres</div>` : '');
+        }
+
+        // Enable sync button if there are matches
+        if (data.matched_count > 0) {
+          document.getElementById('btnSyncExecute').disabled = false;
+        }
+      } catch (error) {
+        console.error('Sync preview error:', error);
+        showSyncResult('error', 'Erreur : ' + error.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Analyser les correspondances';
+      }
+    }
+
+    async function executeSync() {
+      if (!confirm(`Lancer la synchronisation ? Les données FFB vont enrichir les fiches joueurs existants.`)) {
+        return;
+      }
+
+      const btn = document.getElementById('btnSyncExecute');
+      btn.disabled = true;
+      btn.textContent = 'Synchronisation...';
+      showSyncResult('loading', 'Synchronisation en cours...');
+
+      try {
+        const response = await authFetch(`${API_URL}/ffb/sync/players`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+
+        const data = await response.json();
+
+        if (response.ok && data.success) {
+          let html = `<strong>Synchronisation terminée</strong> en ${(data.duration_ms / 1000).toFixed(1)}s<br>`;
+          html += `Joueurs traités : ${fmt(data.total)} | Mis à jour : ${fmt(data.updated)}`;
+          if (data.errors > 0) html += ` | Erreurs : ${data.errors}`;
+          showSyncResult('success', html);
+
+          // Refresh history and preview
+          loadHistory();
+          previewSync();
+        } else {
+          showSyncResult('error', data.error || 'Erreur inconnue');
+        }
+      } catch (error) {
+        showSyncResult('error', 'Erreur de connexion : ' + error.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Lancer la synchronisation';
+      }
+    }
+
+    function showSyncResult(status, html) {
+      const el = document.getElementById('syncResult');
+      el.className = 'upload-result ' + status;
+      el.innerHTML = html;
+      el.style.display = 'block';
     }
 
     // ============= INIT =============
