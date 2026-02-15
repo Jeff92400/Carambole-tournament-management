@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Données FFB - Plateforme Gestion des Tournois CDB</title>
+  <link rel="icon" type="image/png" href="images/FFB.png">
+  <link rel="stylesheet" href="css/styles.css">
+  <script src="js/branding.js"></script>
+  <style>
+    .sa-nav { display: flex; gap: 0; background: white; border-radius: 12px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); overflow: hidden; }
+    .sa-nav a {
+      flex: 1; text-align: center; padding: 12px 8px; text-decoration: none; font-size: 13px; font-weight: 600;
+      color: #666; border-bottom: 3px solid transparent; transition: all 0.2s;
+    }
+    .sa-nav a:hover { background: #f8f9fa; color: #333; }
+    .sa-nav a.active { color: var(--color-primary, #1F4788); border-bottom-color: var(--color-primary, #1F4788); background: #f0f4ff; }
+    .sa-nav a .nav-icon { display: block; font-size: 18px; margin-bottom: 2px; }
+    .compact-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 10px; }
+    .compact-stat {
+      padding: 12px; border-radius: 12px; text-align: center; color: white;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15), 0 10px 28px rgba(0,0,0,0.12);
+      transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .compact-stat:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 8px 20px rgba(0,0,0,0.18), 0 16px 36px rgba(0,0,0,0.14);
+    }
+    .compact-stat h5 { margin: 0 0 4px 0; font-size: 11px; opacity: 0.9; text-transform: uppercase; }
+    .compact-stat .val { font-size: 28px; font-weight: bold; line-height: 1; }
+    .section-title { font-size: 13px; color: #666; margin: 12px 0 8px 0; font-weight: bold; text-transform: uppercase; }
+
+    /* Upload cards */
+    .upload-grid { display: grid; grid-template-columns: 1fr; gap: 12px; margin-bottom: 16px; }
+    @media (min-width: 900px) { .upload-grid { grid-template-columns: repeat(3, 1fr); } }
+    .upload-card {
+      background: white; border-radius: 12px; padding: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      display: flex; flex-direction: column;
+    }
+    .upload-card h4 { margin: 0 0 4px 0; font-size: 15px; color: #333; }
+    .upload-card .upload-desc { font-size: 12px; color: #888; margin-bottom: 10px; }
+    .upload-card .upload-expected { font-size: 11px; color: #aaa; margin-bottom: 12px; font-style: italic; }
+    .upload-zone {
+      border: 2px dashed #ccc; border-radius: 8px; padding: 20px 12px; text-align: center;
+      cursor: pointer; transition: all 0.2s; background: #fafafa; flex: 1; display: flex;
+      flex-direction: column; align-items: center; justify-content: center; min-height: 100px;
+    }
+    .upload-zone:hover, .upload-zone.dragover { border-color: var(--color-primary, #1F4788); background: #f0f4ff; }
+    .upload-zone .upload-icon { font-size: 28px; margin-bottom: 6px; opacity: 0.5; }
+    .upload-zone .upload-text { font-size: 12px; color: #999; }
+    .upload-zone .upload-filename { font-size: 13px; color: #333; font-weight: 600; margin-top: 4px; }
+    .upload-zone input[type="file"] { display: none; }
+    .upload-btn {
+      margin-top: 10px; width: 100%; padding: 10px; border: none; border-radius: 8px; font-size: 13px;
+      font-weight: bold; color: white; cursor: pointer; transition: all 0.2s;
+      background: linear-gradient(135deg, var(--color-secondary, #667eea) 0%, #764ba2 100%);
+    }
+    .upload-btn:hover { opacity: 0.9; transform: translateY(-1px); }
+    .upload-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+    .upload-result {
+      margin-top: 10px; padding: 10px; border-radius: 8px; font-size: 12px; display: none;
+    }
+    .upload-result.success { background: #d4edda; color: #155724; display: block; }
+    .upload-result.error { background: #f8d7da; color: #721c24; display: block; }
+    .upload-result.loading { background: #fff3cd; color: #856404; display: block; }
+
+    /* Import order notice */
+    .import-notice {
+      background: #e8f4fd; border-left: 4px solid var(--color-primary, #1F4788); border-radius: 0 8px 8px 0;
+      padding: 12px 16px; margin-bottom: 16px; font-size: 13px; color: #333;
+    }
+    .import-notice strong { color: var(--color-primary, #1F4788); }
+
+    /* History table */
+    .history-card { background: white; border-radius: 12px; padding: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); overflow-x: auto; }
+    .history-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .history-table th { background: #f5f5f5; padding: 8px 10px; text-align: left; font-size: 11px; text-transform: uppercase; color: #666; white-space: nowrap; }
+    .history-table td { padding: 8px 10px; border-bottom: 1px solid #f0f0f0; white-space: nowrap; }
+    .history-table tr:hover { background: #fafafa; }
+    .type-badge { padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: bold; }
+    .type-ligues { background: #e2e3e5; color: #383d41; }
+    .type-clubs { background: #cce5ff; color: #004085; }
+    .type-licences { background: #d4edda; color: #155724; }
+
+    /* Last import info */
+    .last-import-card {
+      background: white; border-radius: 12px; padding: 12px 16px; margin-bottom: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08); font-size: 13px;
+    }
+    .last-import-card .li-label { color: #888; font-size: 12px; }
+    .last-import-card .li-value { font-weight: 600; color: #333; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="navbar">
+      <div>
+        <h2 style="margin-bottom: 0;"><img id="app-header-icon" src="images/FFB.png" alt="" style="height: 48px; width: 48px; vertical-align: middle; margin-right: 8px; border-radius: 6px;" onerror="this.src='images/FrenchBillard-Icon-small.png';"><span id="app-org-name" data-page-title="Données FFB">Plateforme Gestion des Tournois CDB</span></h2>
+      </div>
+      <div class="nav-links">
+        <a href="dashboard.html" class="nav-tooltip" data-tooltip="Retour au CDB">CDB</a>
+        <a href="#" id="logoutBtn" class="nav-logout">Déconnexion</a>
+      </div>
+    </div>
+
+    <!-- Super Admin Navigation -->
+    <nav class="sa-nav">
+      <a href="super-admin.html">
+        <span class="nav-icon">&#x1F4CA;</span>
+        Tableau de bord
+      </a>
+      <a href="#" onclick="return false;" style="opacity: 0.4; cursor: default;">
+        <span class="nav-icon">&#x1F3E2;</span>
+        CDBs
+      </a>
+      <a href="super-admin-ffb.html" class="active">
+        <span class="nav-icon">&#x1F4C1;</span>
+        Données FFB
+      </a>
+      <a href="#" onclick="return false;" style="opacity: 0.4; cursor: default;">
+        <span class="nav-icon">&#x1F465;</span>
+        Utilisateurs
+      </a>
+      <a href="#" onclick="return false;" style="opacity: 0.4; cursor: default;">
+        <span class="nav-icon">&#x2699;</span>
+        Paramètres
+      </a>
+    </nav>
+
+    <div id="accessDenied" style="display: none; text-align: center; padding: 40px; color: #666;">
+      <h3>Accès refusé</h3>
+      <p>Cette page est réservée au Super Admin.</p>
+      <a href="dashboard.html" class="btn">Retour</a>
+    </div>
+
+    <div id="mainContent" style="display: none;">
+
+      <!-- FFB Data Counts -->
+      <div class="section-title">Données FFB en base</div>
+      <div class="compact-stats">
+        <div class="compact-stat" style="background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);">
+          <h5>Ligues</h5>
+          <div class="val" id="countLigues">-</div>
+        </div>
+        <div class="compact-stat" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+          <h5>CDBs</h5>
+          <div class="val" id="countCdbs">-</div>
+        </div>
+        <div class="compact-stat" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+          <h5>Clubs</h5>
+          <div class="val" id="countClubs">-</div>
+        </div>
+        <div class="compact-stat" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
+          <h5>Licences</h5>
+          <div class="val" id="countLicences">-</div>
+        </div>
+      </div>
+
+      <!-- Last import info -->
+      <div class="last-import-card" id="lastImportCard" style="display: none;">
+        <span class="li-label">Dernier import :</span>
+        <span class="li-value" id="lastImportInfo">-</span>
+      </div>
+
+      <!-- Import order notice -->
+      <div class="import-notice">
+        <strong>Ordre d'import :</strong> Respectez l'ordre <strong>1. Ligues</strong> &rarr; <strong>2. Clubs</strong> &rarr; <strong>3. Licences</strong>. L'import des clubs crée automatiquement les CDBs, et l'import des licences référence les clubs.
+      </div>
+
+      <!-- Upload Cards -->
+      <div class="section-title">Import des fichiers FFB</div>
+      <div class="upload-grid">
+
+        <!-- 1. Ligues -->
+        <div class="upload-card">
+          <h4>1. Ligues</h4>
+          <div class="upload-desc">Fichier des ligues régionales FFB</div>
+          <div class="upload-expected">Fichier : ligues-e2i.csv (~16 ligues)</div>
+          <div class="upload-zone" id="dropLigues" onclick="document.getElementById('fileLigues').click();">
+            <div class="upload-icon">&#x1F4C4;</div>
+            <div class="upload-text">Glissez le fichier ici ou cliquez</div>
+            <div class="upload-filename" id="nameLigues"></div>
+            <input type="file" id="fileLigues" accept=".csv">
+          </div>
+          <button class="upload-btn" id="btnLigues" disabled onclick="uploadFile('ligues')">Importer les Ligues</button>
+          <div class="upload-result" id="resultLigues"></div>
+        </div>
+
+        <!-- 2. Clubs -->
+        <div class="upload-card">
+          <h4>2. Clubs</h4>
+          <div class="upload-desc">Fichier des clubs FFB (crée aussi les CDBs)</div>
+          <div class="upload-expected">Fichier : clubs-e2i.csv (~590 clubs)</div>
+          <div class="upload-zone" id="dropClubs" onclick="document.getElementById('fileClubs').click();">
+            <div class="upload-icon">&#x1F3E2;</div>
+            <div class="upload-text">Glissez le fichier ici ou cliquez</div>
+            <div class="upload-filename" id="nameClubs"></div>
+            <input type="file" id="fileClubs" accept=".csv">
+          </div>
+          <button class="upload-btn" id="btnClubs" disabled onclick="uploadFile('clubs')">Importer les Clubs</button>
+          <div class="upload-result" id="resultClubs"></div>
+        </div>
+
+        <!-- 3. Licences -->
+        <div class="upload-card">
+          <h4>3. Licences</h4>
+          <div class="upload-desc">Fichier des licenciés FFB (le plus volumineux)</div>
+          <div class="upload-expected">Fichier : licences-e2i-V2.csv (~20 000 licences)</div>
+          <div class="upload-zone" id="dropLicences" onclick="document.getElementById('fileLicences').click();">
+            <div class="upload-icon">&#x1F4CB;</div>
+            <div class="upload-text">Glissez le fichier ici ou cliquez</div>
+            <div class="upload-filename" id="nameLicences"></div>
+            <input type="file" id="fileLicences" accept=".csv">
+          </div>
+          <button class="upload-btn" id="btnLicences" disabled onclick="uploadFile('licences')">Importer les Licences</button>
+          <div class="upload-result" id="resultLicences"></div>
+        </div>
+
+      </div>
+
+      <!-- Import History -->
+      <div class="section-title">Historique des imports</div>
+      <div class="history-card">
+        <table class="history-table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Type</th>
+              <th>Fichier</th>
+              <th>Total</th>
+              <th>Nouveaux</th>
+              <th>Mis à jour</th>
+              <th>Erreurs</th>
+              <th>Par</th>
+              <th>Durée</th>
+            </tr>
+          </thead>
+          <tbody id="historyBody">
+            <tr><td colspan="9" style="text-align: center; color: #999;">Chargement...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+    </div>
+  </div>
+
+  <script src="js/auth-utils.js"></script>
+  <script>
+    const API_URL = '/api';
+
+    if (!requireAuth()) {
+      throw new Error('Not authenticated');
+    }
+    const token = localStorage.getItem('token');
+
+    // Check super admin access
+    const isSuperAdmin = localStorage.getItem('isSuperAdmin') === 'true';
+    if (!isSuperAdmin) {
+      document.getElementById('accessDenied').style.display = 'block';
+      throw new Error('Not super admin');
+    }
+
+    document.getElementById('mainContent').style.display = 'block';
+
+    // Logout handler
+    document.getElementById('logoutBtn').addEventListener('click', (e) => {
+      e.preventDefault();
+      logout();
+    });
+
+    // Selected files
+    const selectedFiles = { ligues: null, clubs: null, licences: null };
+
+    // Format date for display
+    function formatDate(dateStr) {
+      if (!dateStr) return '-';
+      const d = new Date(dateStr);
+      return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    }
+
+    // Format number
+    function fmt(n) {
+      return (n || 0).toLocaleString('fr-FR');
+    }
+
+    // ============= FILE SELECTION =============
+
+    // Setup file input handlers
+    ['ligues', 'clubs', 'licences'].forEach(type => {
+      const fileInput = document.getElementById('file' + capitalize(type));
+      const dropZone = document.getElementById('drop' + capitalize(type));
+      const nameEl = document.getElementById('name' + capitalize(type));
+      const btn = document.getElementById('btn' + capitalize(type));
+
+      // File input change
+      fileInput.addEventListener('change', (e) => {
+        if (e.target.files.length > 0) {
+          selectFile(type, e.target.files[0]);
+        }
+      });
+
+      // Drag & drop
+      dropZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropZone.classList.add('dragover');
+      });
+      dropZone.addEventListener('dragleave', () => {
+        dropZone.classList.remove('dragover');
+      });
+      dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('dragover');
+        if (e.dataTransfer.files.length > 0) {
+          const file = e.dataTransfer.files[0];
+          if (file.name.toLowerCase().endsWith('.csv')) {
+            selectFile(type, file);
+          } else {
+            showResult(type, 'error', 'Seuls les fichiers CSV sont acceptés');
+          }
+        }
+      });
+    });
+
+    function capitalize(str) {
+      return str.charAt(0).toUpperCase() + str.slice(1);
+    }
+
+    function selectFile(type, file) {
+      selectedFiles[type] = file;
+      const nameEl = document.getElementById('name' + capitalize(type));
+      const btn = document.getElementById('btn' + capitalize(type));
+      nameEl.textContent = file.name + ' (' + formatFileSize(file.size) + ')';
+      btn.disabled = false;
+      // Clear previous result
+      const resultEl = document.getElementById('result' + capitalize(type));
+      resultEl.className = 'upload-result';
+      resultEl.style.display = 'none';
+    }
+
+    function formatFileSize(bytes) {
+      if (bytes < 1024) return bytes + ' o';
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' Ko';
+      return (bytes / (1024 * 1024)).toFixed(1) + ' Mo';
+    }
+
+    function showResult(type, status, html) {
+      const el = document.getElementById('result' + capitalize(type));
+      el.className = 'upload-result ' + status;
+      el.innerHTML = html;
+      el.style.display = 'block';
+    }
+
+    // ============= UPLOAD =============
+
+    async function uploadFile(type) {
+      const file = selectedFiles[type];
+      if (!file) return;
+
+      const btn = document.getElementById('btn' + capitalize(type));
+      btn.disabled = true;
+      btn.textContent = 'Import en cours...';
+      showResult(type, 'loading', 'Envoi et traitement du fichier...');
+
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const response = await fetch(`${API_URL}/ffb/import/${type}`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` },
+          body: formData
+        });
+
+        const data = await response.json();
+
+        if (response.ok && data.success) {
+          let html = `<strong>Import réussi</strong> en ${(data.duration_ms / 1000).toFixed(1)}s<br>`;
+          html += `Total : ${fmt(data.total)} | Nouveaux : ${fmt(data.created)} | Mis à jour : ${fmt(data.updated)}`;
+          if (data.errors > 0) html += ` | Erreurs : ${data.errors}`;
+          if (data.cdbs_created > 0) html += `<br>CDBs créés : ${data.cdbs_created}`;
+          showResult(type, 'success', html);
+
+          // Refresh data
+          loadStatus();
+          loadHistory();
+        } else {
+          showResult(type, 'error', data.error || 'Erreur inconnue');
+        }
+      } catch (error) {
+        showResult(type, 'error', 'Erreur de connexion : ' + error.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Importer les ' + capitalize(type);
+        selectedFiles[type] = null;
+        document.getElementById('name' + capitalize(type)).textContent = '';
+        document.getElementById('file' + capitalize(type)).value = '';
+      }
+    }
+
+    // ============= LOAD STATUS =============
+
+    async function loadStatus() {
+      try {
+        const response = await authFetch(`${API_URL}/ffb/status`);
+        const data = await response.json();
+
+        document.getElementById('countLigues').textContent = fmt(data.counts.ligues);
+        document.getElementById('countCdbs').textContent = fmt(data.counts.cdbs);
+        document.getElementById('countClubs').textContent = fmt(data.counts.clubs);
+        document.getElementById('countLicences').textContent = fmt(data.counts.licences);
+
+        // Last import info
+        if (data.last_import) {
+          const li = data.last_import;
+          const card = document.getElementById('lastImportCard');
+          card.style.display = 'block';
+          document.getElementById('lastImportInfo').textContent =
+            `${li.file_type} - ${li.filename} (${fmt(li.record_count)} enreg.) - ${formatDate(li.imported_at)}`;
+        }
+      } catch (error) {
+        console.error('Error loading FFB status:', error);
+      }
+    }
+
+    // ============= LOAD HISTORY =============
+
+    async function loadHistory() {
+      try {
+        const response = await authFetch(`${API_URL}/ffb/import/history`);
+        const logs = await response.json();
+        const tbody = document.getElementById('historyBody');
+
+        if (!logs.length) {
+          tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#999;">Aucun import effectué</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = logs.map(log => {
+          const typeClass = 'type-' + log.file_type;
+          return `<tr>
+            <td>${formatDate(log.imported_at)}</td>
+            <td><span class="type-badge ${typeClass}">${log.file_type}</span></td>
+            <td>${log.filename || '-'}</td>
+            <td>${fmt(log.record_count)}</td>
+            <td style="color: #28a745; font-weight: 600;">${fmt(log.new_count)}</td>
+            <td style="color: #007bff; font-weight: 600;">${fmt(log.updated_count)}</td>
+            <td style="color: ${log.error_count > 0 ? '#dc3545' : '#999'}; font-weight: ${log.error_count > 0 ? '600' : 'normal'};">${fmt(log.error_count)}</td>
+            <td>${log.imported_by || '-'}</td>
+            <td>${log.duration_ms ? (log.duration_ms / 1000).toFixed(1) + 's' : '-'}</td>
+          </tr>`;
+        }).join('');
+      } catch (error) {
+        console.error('Error loading import history:', error);
+        document.getElementById('historyBody').innerHTML =
+          '<tr><td colspan="9" style="text-align:center;color:#dc3545;">Erreur de chargement</td></tr>';
+      }
+    }
+
+    // ============= INIT =============
+    loadStatus();
+    loadHistory();
+  </script>
+</body>
+</html>
