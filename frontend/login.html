@@ -104,6 +104,11 @@
           localStorage.setItem('userClub', data.user.club_name || '');
           localStorage.setItem('userClubId', data.user.club_id || '');
           localStorage.setItem('isSuperAdmin', data.user.is_super_admin ? 'true' : 'false');
+          // Store organization info for multi-CDB support
+          if (data.user.organization_id) {
+            localStorage.setItem('organizationId', data.user.organization_id);
+          }
+          // Keep orgSlug if already set from URL param (branding.js sets it)
           window.location.href = 'dashboard.html';
         } else {
           errorDiv.textContent = data.error || 'Erreur de connexion';

@@ -67,6 +67,8 @@ function handleSessionExpired() {
   localStorage.removeItem('userRole');
   localStorage.removeItem('userClub');
   localStorage.removeItem('userClubId');
+  localStorage.removeItem('organizationId');
+  localStorage.removeItem('orgSlug');
 
   // Store message for login page to display
   sessionStorage.setItem('sessionExpiredMessage', 'Votre session a expiré. Veuillez vous reconnecter.');
@@ -115,6 +117,8 @@ function logout() {
   localStorage.removeItem('userClub');
   localStorage.removeItem('userClubId');
   localStorage.removeItem('isSuperAdmin');
+  localStorage.removeItem('organizationId');
+  localStorage.removeItem('orgSlug');
   window.location.href = '/login.html';
 }
 

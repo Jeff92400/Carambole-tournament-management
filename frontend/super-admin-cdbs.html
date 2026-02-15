@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Plateforme Gestion des Tournois CDB - CDBs</title>
+  <link rel="icon" type="image/png" href="images/FFB.png">
+  <link rel="stylesheet" href="css/styles.css">
+  <script src="js/branding.js"></script>
+  <!-- Quill Rich Text Editor -->
+  <link href="https://cdn.quilljs.com/1.3.7/quill.snow.css" rel="stylesheet">
+  <script src="https://cdn.quilljs.com/1.3.7/quill.min.js"></script>
+  <style>
+    .sa-nav { display: flex; gap: 0; background: white; border-radius: 12px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); overflow: hidden; }
+    .sa-nav a {
+      flex: 1; text-align: center; padding: 12px 8px; text-decoration: none; font-size: 13px; font-weight: 600;
+      color: #666; border-bottom: 3px solid transparent; transition: all 0.2s;
+    }
+    .sa-nav a:hover { background: #f8f9fa; color: #333; }
+    .sa-nav a.active { color: var(--color-primary, #1F4788); border-bottom-color: var(--color-primary, #1F4788); background: #f0f4ff; }
+    .sa-nav a .nav-icon { display: block; font-size: 18px; margin-bottom: 2px; }
+
+    .section-title { font-size: 13px; color: #666; margin: 16px 0 8px 0; font-weight: bold; text-transform: uppercase; }
+    .card { background: white; border-radius: 12px; padding: 16px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+    .card h3 { margin: 0 0 12px 0; font-size: 15px; color: #333; }
+
+    /* CDB table */
+    .orgs-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .orgs-table th { background: #f5f5f5; padding: 8px 10px; text-align: left; font-size: 11px; text-transform: uppercase; color: #666; }
+    .orgs-table td { padding: 8px 10px; border-bottom: 1px solid #f0f0f0; }
+    .orgs-table tr:hover { background: #fafafa; }
+    .badge { padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: bold; }
+    .badge-active { background: #d4edda; color: #155724; }
+    .badge-inactive { background: #f8d7da; color: #721c24; }
+
+    /* Create form */
+    .create-form { display: none; }
+    .create-form.visible { display: block; }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    @media (max-width: 768px) { .form-grid { grid-template-columns: 1fr; } }
+    .form-grid .form-group { margin-bottom: 0; }
+    .form-grid label { display: block; font-size: 12px; font-weight: 600; color: #555; margin-bottom: 4px; }
+    .form-grid input { width: 100%; padding: 8px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; box-sizing: border-box; }
+    .form-grid input:focus { border-color: var(--color-primary, #1F4788); outline: none; box-shadow: 0 0 0 2px rgba(31,71,136,0.1); }
+    .form-actions { margin-top: 12px; display: flex; gap: 8px; }
+
+    /* Seeding section */
+    .seed-section { display: none; }
+    .seed-section.visible { display: block; }
+    .seed-preview { background: #e8f5e9; padding: 12px; border-radius: 8px; margin-bottom: 12px; }
+    .seed-preview .count { font-size: 24px; font-weight: bold; color: #2e7d32; }
+    .seed-preview table { width: 100%; margin-top: 8px; font-size: 12px; border-collapse: collapse; }
+    .seed-preview table th { text-align: left; padding: 4px 6px; color: #666; }
+    .seed-preview table td { padding: 4px 6px; border-top: 1px solid #c8e6c9; }
+
+    /* Welcome email section */
+    .email-section { display: none; }
+    .email-section.visible { display: block; }
+    .template-variables { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+    .var-btn { padding: 4px 10px; border-radius: 4px; border: 1px solid #ddd; background: #f8f9fa; cursor: pointer; font-size: 11px; }
+    .var-btn:hover { background: #e3f2fd; border-color: #90caf9; }
+    .ql-editor { min-height: 200px; }
+
+    /* Action buttons */
+    .btn-sm { padding: 4px 12px; font-size: 12px; border-radius: 4px; border: none; cursor: pointer; }
+    .btn-primary { background: var(--color-primary, #1F4788); color: white; }
+    .btn-primary:hover { opacity: 0.9; }
+    .btn-success { background: #28a745; color: white; }
+    .btn-success:hover { background: #218838; }
+    .btn-danger { background: #dc3545; color: white; }
+    .btn-danger:hover { background: #c82333; }
+    .btn-outline { background: white; color: #333; border: 1px solid #ddd; }
+    .btn-outline:hover { background: #f5f5f5; }
+    .btn-warning { background: #ffc107; color: #333; }
+    .btn-warning:hover { background: #e0a800; }
+    .btn-lg { padding: 10px 24px; font-size: 14px; border-radius: 6px; }
+
+    /* Login URL box */
+    .login-url-box { display: flex; align-items: center; gap: 8px; background: #f0f4ff; padding: 8px 12px; border-radius: 6px; font-family: monospace; font-size: 13px; margin-top: 8px; }
+    .login-url-box button { padding: 4px 10px; font-size: 11px; border-radius: 4px; border: 1px solid #aaa; background: white; cursor: pointer; }
+
+    /* Toast */
+    .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); padding: 12px 24px; border-radius: 8px; color: white; font-size: 14px; z-index: 10000; box-shadow: 0 4px 12px rgba(0,0,0,0.3); display: none; }
+    .toast.success { background: #28a745; }
+    .toast.error { background: #dc3545; }
+    .toast.visible { display: block; }
+
+    /* Spinner */
+    .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; animation: spin 0.8s linear infinite; vertical-align: middle; margin-right: 6px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="navbar">
+      <div>
+        <h2 style="margin-bottom: 0;"><img id="app-header-icon" src="images/FFB.png" alt="" style="height: 48px; width: 48px; vertical-align: middle; margin-right: 8px; border-radius: 6px;" onerror="this.src='images/FrenchBillard-Icon-small.png';"><span id="app-org-name" data-page-title="Super Admin">Plateforme Gestion des Tournois CDB</span></h2>
+      </div>
+      <div class="nav-links">
+        <a href="dashboard.html" class="nav-tooltip" data-tooltip="Retour au CDB">CDB</a>
+        <a href="#" id="logoutBtn" class="nav-logout">Déconnexion</a>
+      </div>
+    </div>
+
+    <!-- Super Admin Navigation -->
+    <nav class="sa-nav">
+      <a href="super-admin.html">
+        <span class="nav-icon">&#x1F4CA;</span>
+        Tableau de bord
+      </a>
+      <a href="super-admin-cdbs.html" class="active">
+        <span class="nav-icon">&#x1F3E2;</span>
+        CDBs
+      </a>
+      <a href="super-admin-ffb.html">
+        <span class="nav-icon">&#x1F4C1;</span>
+        Données FFB
+      </a>
+      <a href="#" onclick="return false;" style="opacity: 0.4; cursor: default;">
+        <span class="nav-icon">&#x1F465;</span>
+        Utilisateurs
+      </a>
+      <a href="#" onclick="return false;" style="opacity: 0.4; cursor: default;">
+        <span class="nav-icon">&#x2699;</span>
+        Paramètres
+      </a>
+    </nav>
+
+    <!-- CDB List -->
+    <div class="card">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+        <h3 style="margin: 0;">Organisations (CDBs)</h3>
+        <button class="btn-sm btn-primary btn-lg" onclick="toggleCreateForm()">+ Créer un CDB</button>
+      </div>
+      <div style="overflow-x: auto;">
+        <table class="orgs-table" id="orgsTable">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Nom</th>
+              <th>Slug</th>
+              <th>Code FFB</th>
+              <th>Joueurs</th>
+              <th>Utilisateurs</th>
+              <th>Statut</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="orgsTbody">
+            <tr><td colspan="8" style="text-align: center; color: #999;">Chargement...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Create CDB Form (hidden by default) -->
+    <div class="card create-form" id="createForm">
+      <h3>Créer un nouveau CDB</h3>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Nom complet</label>
+          <input type="text" id="orgName" placeholder="ex: Comité Départemental de Billard du Val-de-Marne">
+        </div>
+        <div class="form-group">
+          <label>Nom court</label>
+          <input type="text" id="orgShortName" placeholder="ex: CDB94" oninput="autoSlug()">
+        </div>
+        <div class="form-group">
+          <label>Slug (URL)</label>
+          <input type="text" id="orgSlug" placeholder="ex: cdb94">
+        </div>
+        <div class="form-group">
+          <label>Code CDB FFB</label>
+          <input type="text" id="orgFfbCode" placeholder="ex: 94">
+        </div>
+        <div class="form-group">
+          <label>Ligue FFB</label>
+          <input type="text" id="orgLigue" placeholder="ex: 11">
+        </div>
+        <div class="form-group">
+          <label></label>
+        </div>
+        <div class="form-group">
+          <label>Identifiant admin</label>
+          <input type="text" id="adminUsername" placeholder="ex: admin94">
+        </div>
+        <div class="form-group">
+          <label>Email admin</label>
+          <input type="email" id="adminEmail" placeholder="ex: admin@cdb94.fr">
+        </div>
+        <div class="form-group">
+          <label>Mot de passe admin (envoi par SMS)</label>
+          <input type="text" id="adminPassword" placeholder="Mot de passe à communiquer par SMS">
+        </div>
+      </div>
+      <div class="form-actions">
+        <button class="btn-sm btn-primary btn-lg" onclick="createOrganization()" id="btnCreate">Créer</button>
+        <button class="btn-sm btn-outline btn-lg" onclick="toggleCreateForm()">Annuler</button>
+      </div>
+    </div>
+
+    <!-- Post-creation: Seeding section (hidden until org is created) -->
+    <div class="card seed-section" id="seedSection">
+      <h3>Import des joueurs FFB — <span id="seedOrgName"></span></h3>
+      <div id="seedPreview" style="margin-bottom: 12px;"></div>
+      <div style="display: flex; gap: 8px;">
+        <button class="btn-sm btn-primary btn-lg" onclick="previewSeed()" id="btnPreview">Analyser les joueurs FFB</button>
+        <button class="btn-sm btn-success btn-lg" onclick="executeSeed()" id="btnSeed" style="display: none;">Importer les joueurs</button>
+      </div>
+      <div id="seedResult" style="margin-top: 12px;"></div>
+    </div>
+
+    <!-- Post-creation: Welcome Email section (hidden until org is created) -->
+    <div class="card email-section" id="emailSection">
+      <h3>Email de bienvenue — <span id="emailOrgName"></span></h3>
+
+      <div style="margin-bottom: 8px;">
+        <label style="font-size: 12px; font-weight: 600; color: #555;">Objet</label>
+        <input type="text" id="welcomeSubject" style="width: 100%; padding: 8px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; box-sizing: border-box;">
+      </div>
+
+      <label style="font-size: 12px; font-weight: 600; color: #555;">Variables disponibles</label>
+      <div class="template-variables">
+        <button class="var-btn" onclick="insertVar('{admin_name}')">{admin_name}</button>
+        <button class="var-btn" onclick="insertVar('{organization_name}')">{organization_name}</button>
+        <button class="var-btn" onclick="insertVar('{organization_short_name}')">{organization_short_name}</button>
+        <button class="var-btn" onclick="insertVar('{login_url}')">{login_url}</button>
+        <button class="var-btn" onclick="insertVar('{username}')">{username}</button>
+        <button class="var-btn" onclick="insertVar('{player_count}')">{player_count}</button>
+      </div>
+
+      <div id="welcomeEditor" style="margin-bottom: 12px;"></div>
+
+      <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+        <button class="btn-sm btn-outline btn-lg" onclick="saveWelcomeTemplate()">Enregistrer le template</button>
+        <button class="btn-sm btn-warning btn-lg" onclick="sendWelcomeTest()">Envoyer un test</button>
+        <button class="btn-sm btn-success btn-lg" onclick="sendWelcome()">Envoyer au CDB admin</button>
+      </div>
+
+      <div id="emailResult" style="margin-top: 12px;"></div>
+
+      <!-- Login URL -->
+      <div style="margin-top: 16px;">
+        <label style="font-size: 12px; font-weight: 600; color: #555;">URL de connexion</label>
+        <div class="login-url-box">
+          <span id="loginUrlText">-</span>
+          <button onclick="copyLoginUrl()">Copier</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast notification -->
+  <div class="toast" id="toast"></div>
+
+  <script src="js/auth-utils.js"></script>
+  <script src="js/app-branding.js"></script>
+  <script>
+    const API_URL = '/api';
+    if (!requireAuth()) throw new Error('Not authenticated');
+    const token = localStorage.getItem('token');
+    if (localStorage.getItem('isSuperAdmin') !== 'true') {
+      window.location.href = 'dashboard.html';
+    }
+
+    // Initialize branding
+    if (typeof initPublicBranding === 'function') initPublicBranding();
+
+    document.getElementById('logoutBtn').addEventListener('click', (e) => { e.preventDefault(); logout(); });
+
+    // State
+    let currentOrgId = null;
+    let quillEditor = null;
+
+    // ==================== Toast ====================
+    function showToast(message, type = 'success') {
+      const toast = document.getElementById('toast');
+      toast.textContent = message;
+      toast.className = `toast ${type} visible`;
+      setTimeout(() => toast.classList.remove('visible'), 4000);
+    }
+
+    // ==================== Load Organizations ====================
+    async function loadOrganizations() {
+      try {
+        const res = await authFetch(`${API_URL}/super-admin/organizations`);
+        const orgs = await res.json();
+        const tbody = document.getElementById('orgsTbody');
+
+        if (orgs.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: #999;">Aucune organisation</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = orgs.map(org => `
+          <tr>
+            <td>${org.id}</td>
+            <td><strong>${org.short_name}</strong><br><span style="font-size: 11px; color: #888;">${org.name}</span></td>
+            <td><code>${org.slug}</code></td>
+            <td>${org.ffb_cdb_code || '-'}</td>
+            <td>${org.player_count || 0}</td>
+            <td>${org.user_count || 0}</td>
+            <td><span class="badge ${org.is_active ? 'badge-active' : 'badge-inactive'}">${org.is_active ? 'Actif' : 'Inactif'}</span></td>
+            <td>
+              <button class="btn-sm btn-outline" onclick="selectOrg(${org.id}, '${org.short_name}', '${org.slug}')" title="Gérer">Gérer</button>
+              <button class="btn-sm ${org.is_active ? 'btn-danger' : 'btn-success'}" onclick="toggleActive(${org.id})" title="${org.is_active ? 'Désactiver' : 'Activer'}">${org.is_active ? 'Désact.' : 'Activer'}</button>
+            </td>
+          </tr>
+        `).join('');
+      } catch (error) {
+        console.error('Error loading orgs:', error);
+        showToast('Erreur de chargement', 'error');
+      }
+    }
+
+    // ==================== Create Form ====================
+    function toggleCreateForm() {
+      document.getElementById('createForm').classList.toggle('visible');
+    }
+
+    function autoSlug() {
+      const shortName = document.getElementById('orgShortName').value;
+      document.getElementById('orgSlug').value = shortName.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+    }
+
+    async function createOrganization() {
+      const data = {
+        name: document.getElementById('orgName').value.trim(),
+        short_name: document.getElementById('orgShortName').value.trim(),
+        slug: document.getElementById('orgSlug').value.trim(),
+        ffb_cdb_code: document.getElementById('orgFfbCode').value.trim(),
+        ffb_ligue_numero: document.getElementById('orgLigue').value.trim(),
+        admin_username: document.getElementById('adminUsername').value.trim(),
+        admin_email: document.getElementById('adminEmail').value.trim(),
+        admin_password: document.getElementById('adminPassword').value.trim()
+      };
+
+      if (!data.name || !data.short_name || !data.slug || !data.admin_username || !data.admin_password) {
+        showToast('Veuillez remplir tous les champs obligatoires', 'error');
+        return;
+      }
+
+      const btn = document.getElementById('btnCreate');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span>Création...';
+
+      try {
+        const res = await authFetch(`${API_URL}/super-admin/organizations`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+
+        const result = await res.json();
+        if (!res.ok) throw new Error(result.error || 'Erreur');
+
+        showToast(`Organisation "${data.short_name}" créée !`);
+        currentOrgId = result.organization.id;
+
+        // Hide create form, show seed + email sections
+        document.getElementById('createForm').classList.remove('visible');
+        selectOrg(currentOrgId, data.short_name, data.slug);
+
+        // Reload table
+        loadOrganizations();
+      } catch (error) {
+        showToast(error.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Créer';
+      }
+    }
+
+    // ==================== Select Org (show seed + email sections) ====================
+    function selectOrg(orgId, shortName, slug) {
+      currentOrgId = orgId;
+
+      // Show seed section
+      document.getElementById('seedSection').classList.add('visible');
+      document.getElementById('seedOrgName').textContent = shortName;
+      document.getElementById('seedPreview').innerHTML = '';
+      document.getElementById('seedResult').innerHTML = '';
+      document.getElementById('btnSeed').style.display = 'none';
+
+      // Show email section
+      document.getElementById('emailSection').classList.add('visible');
+      document.getElementById('emailOrgName').textContent = shortName;
+      document.getElementById('emailResult').innerHTML = '';
+
+      // Set login URL
+      const baseUrl = window.location.origin;
+      const loginUrl = `${baseUrl}/login.html?org=${slug}`;
+      document.getElementById('loginUrlText').textContent = loginUrl;
+
+      // Load welcome template
+      loadWelcomeTemplate();
+
+      // Initialize Quill if not done
+      if (!quillEditor) {
+        quillEditor = new Quill('#welcomeEditor', {
+          theme: 'snow',
+          modules: {
+            toolbar: [
+              [{ 'header': [1, 2, 3, false] }],
+              ['bold', 'italic', 'underline'],
+              [{ 'color': [] }, { 'background': [] }],
+              [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+              ['link'],
+              ['clean']
+            ]
+          }
+        });
+      }
+    }
+
+    // ==================== Player Seeding ====================
+    async function previewSeed() {
+      if (!currentOrgId) return;
+      const btn = document.getElementById('btnPreview');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span>Analyse...';
+
+      try {
+        const res = await authFetch(`${API_URL}/super-admin/organizations/${currentOrgId}/seed-preview`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Erreur');
+
+        const previewDiv = document.getElementById('seedPreview');
+        if (data.ffb_licences_count === 0) {
+          previewDiv.innerHTML = '<div style="background: #fff3cd; padding: 12px; border-radius: 8px; color: #856404;">Aucune licence FFB trouvée pour le code CDB "' + data.ffb_cdb_code + '". Vérifiez que les données FFB ont été importées.</div>';
+          return;
+        }
+
+        let html = `<div class="seed-preview">
+          <div class="count">${data.ffb_licences_count} joueurs FFB trouvés</div>
+          <div style="font-size: 13px; color: #555; margin: 4px 0;">Code CDB: ${data.ffb_cdb_code} | Joueurs existants: ${data.existing_players}</div>`;
+
+        if (data.preview && data.preview.length > 0) {
+          html += `<table><thead><tr><th>Licence</th><th>Prénom</th><th>Nom</th><th>Catégorie</th><th>Discipline</th></tr></thead><tbody>`;
+          data.preview.forEach(p => {
+            html += `<tr><td>${p.licence}</td><td>${p.prenom || ''}</td><td>${p.nom || ''}</td><td>${p.categorie || ''}</td><td>${p.discipline || ''}</td></tr>`;
+          });
+          html += `</tbody></table>`;
+          if (data.ffb_licences_count > 10) {
+            html += `<div style="font-size: 11px; color: #888; margin-top: 4px;">... et ${data.ffb_licences_count - 10} autres</div>`;
+          }
+        }
+        html += `</div>`;
+        previewDiv.innerHTML = html;
+
+        // Show import button
+        document.getElementById('btnSeed').style.display = 'inline-block';
+      } catch (error) {
+        showToast(error.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Analyser les joueurs FFB';
+      }
+    }
+
+    async function executeSeed() {
+      if (!currentOrgId) return;
+      if (!confirm('Importer les joueurs FFB dans cette organisation ?')) return;
+
+      const btn = document.getElementById('btnSeed');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span>Import...';
+
+      try {
+        const res = await authFetch(`${API_URL}/super-admin/organizations/${currentOrgId}/seed-players`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Erreur');
+
+        document.getElementById('seedResult').innerHTML = `
+          <div style="background: #d4edda; padding: 12px; border-radius: 8px; color: #155724;">
+            <strong>${data.created} joueurs créés</strong>, ${data.updated} mis à jour
+            ${data.errors > 0 ? `, <span style="color: #dc3545;">${data.errors} erreurs</span>` : ''}
+          </div>`;
+
+        showToast(`${data.created} joueurs importés pour ${data.organization}`);
+        loadOrganizations();
+      } catch (error) {
+        showToast(error.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Importer les joueurs';
+      }
+    }
+
+    // ==================== Welcome Email ====================
+    async function loadWelcomeTemplate() {
+      try {
+        const res = await authFetch(`${API_URL}/super-admin/email-templates/cdb_welcome`);
+        const data = await res.json();
+
+        document.getElementById('welcomeSubject').value = data.subject || '';
+        if (quillEditor) {
+          quillEditor.root.innerHTML = data.body || '';
+        }
+      } catch (error) {
+        console.error('Error loading welcome template:', error);
+      }
+    }
+
+    function insertVar(varName) {
+      if (!quillEditor) return;
+      const range = quillEditor.getSelection(true);
+      quillEditor.insertText(range.index, varName);
+    }
+
+    async function saveWelcomeTemplate() {
+      try {
+        const res = await authFetch(`${API_URL}/super-admin/email-templates/cdb_welcome`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            subject: document.getElementById('welcomeSubject').value,
+            body: quillEditor ? quillEditor.root.innerHTML : ''
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Erreur');
+        showToast('Template enregistré');
+      } catch (error) {
+        showToast(error.message, 'error');
+      }
+    }
+
+    async function sendWelcomeTest() {
+      if (!currentOrgId) return;
+
+      try {
+        // Save template first
+        await saveWelcomeTemplate();
+
+        const res = await authFetch(`${API_URL}/super-admin/organizations/${currentOrgId}/send-welcome-test`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Erreur');
+
+        document.getElementById('emailResult').innerHTML = `
+          <div style="background: #fff3cd; padding: 10px; border-radius: 8px; color: #856404; font-size: 13px;">
+            ${data.message}
+          </div>`;
+        showToast(data.message);
+      } catch (error) {
+        showToast(error.message, 'error');
+      }
+    }
+
+    async function sendWelcome() {
+      if (!currentOrgId) return;
+      if (!confirm('Envoyer l\'email de bienvenue à l\'administrateur du CDB ?')) return;
+
+      try {
+        // Save template first
+        await saveWelcomeTemplate();
+
+        const res = await authFetch(`${API_URL}/super-admin/organizations/${currentOrgId}/send-welcome`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Erreur');
+
+        document.getElementById('emailResult').innerHTML = `
+          <div style="background: #d4edda; padding: 10px; border-radius: 8px; color: #155724; font-size: 13px;">
+            ${data.message}
+          </div>`;
+        showToast(data.message);
+      } catch (error) {
+        showToast(error.message, 'error');
+      }
+    }
+
+    function copyLoginUrl() {
+      const url = document.getElementById('loginUrlText').textContent;
+      navigator.clipboard.writeText(url).then(() => showToast('URL copiée')).catch(() => {});
+    }
+
+    // ==================== Toggle Active ====================
+    async function toggleActive(orgId) {
+      try {
+        const res = await authFetch(`${API_URL}/super-admin/organizations/${orgId}/toggle-active`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Erreur');
+        showToast(data.message);
+        loadOrganizations();
+      } catch (error) {
+        showToast(error.message, 'error');
+      }
+    }
+
+    // ==================== Init ====================
+    loadOrganizations();
+  </script>
+</body>
+</html>

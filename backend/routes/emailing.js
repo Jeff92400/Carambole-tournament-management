@@ -52,14 +52,14 @@ function convertEmailsToMailtoLinks(text, primaryColor = '#1F4788') {
   );
 }
 
-// Get contact email from app_settings (with fallback to summary_email)
-async function getContactEmail() {
-  return appSettings.getSetting('summary_email');
+// Get contact email from app_settings (with fallback to summary_email, org-aware)
+async function getContactEmail(orgId) {
+  return appSettings.getOrgSetting(orgId, 'summary_email');
 }
 
-// Get all email-related settings at once (for templates)
-async function getEmailTemplateSettings() {
-  const settings = await appSettings.getSettingsBatch([
+// Get all email-related settings at once (for templates, org-aware)
+async function getEmailTemplateSettings(orgId) {
+  const settings = await appSettings.getOrgSettingsBatch(orgId, [
     'primary_color',
     'secondary_color',
     'accent_color',
@@ -121,19 +121,10 @@ function parseDateSafe(dateStr) {
   return null;
 }
 
-// Get summary email from app_settings (with fallback)
-async function getSummaryEmail() {
-  const db = require('../db-loader');
-  return new Promise((resolve) => {
-    db.get(
-      "SELECT value FROM app_settings WHERE key = 'summary_email'",
-      [],
-      (err, row) => {
-        // No hardcoded fallback - return null if not set, let callers handle appropriately
-        resolve(row?.value || null);
-      }
-    );
-  });
+// Get summary email from app_settings (with fallback, org-aware)
+async function getSummaryEmail(orgId) {
+  const value = await appSettings.getOrgSetting(orgId, 'summary_email');
+  return value || null;
 }
 
 // Upload image for email (supports pasted screenshots)
@@ -161,7 +152,7 @@ router.post('/upload-image', authenticateToken, imageUpload.single('image'), (re
 // API endpoint to get summary email
 router.get('/summary-email', authenticateToken, async (req, res) => {
   try {
-    const email = await getSummaryEmail();
+    const email = await getSummaryEmail(req.user?.organizationId);
     res.json({ email: email || '' });
   } catch (error) {
     res.json({ email: '' });
@@ -1035,16 +1026,16 @@ router.post('/send', authenticateToken, async (req, res) => {
       : recipients;
 
     // Get dynamic sender info and branding
-    const senderName = await appSettings.getSetting('email_sender_name') || 'CDBHS';
-    const senderEmail = await appSettings.getSetting('email_noreply') || 'noreply@cdbhs.net';
+    const senderName = await req.getOrgSetting('email_sender_name') || 'CDBHS';
+    const senderEmail = await req.getOrgSetting('email_noreply') || 'noreply@cdbhs.net';
     const emailFrom = `${senderName} <${senderEmail}>`;
-    const primaryColor = await appSettings.getSetting('primary_color') || '#1F4788';
-    const organizationName = await appSettings.getSetting('organization_name') || 'Comité Départemental de Billard';
-    const organizationShortName = await appSettings.getSetting('organization_short_name') || 'CDBHS';
-    const organizationEmail = await appSettings.getSetting('email_communication') || 'communication@cdbhs.net';
+    const primaryColor = await req.getOrgSetting('primary_color') || '#1F4788';
+    const organizationName = await req.getOrgSetting('organization_name') || 'Comité Départemental de Billard';
+    const organizationShortName = await req.getOrgSetting('organization_short_name') || 'CDBHS';
+    const organizationEmail = await req.getOrgSetting('email_communication') || 'communication@cdbhs.net';
 
     // Get contact email for the contact phrase
-    const contactEmail = await getContactEmail();
+    const contactEmail = await getContactEmail(req.user?.organizationId);
     const contactPhraseHtml = buildContactPhraseHtml(contactEmail, primaryColor);
     const baseUrl = process.env.BASE_URL || 'https://cdbhs-tournament-management-production.up.railway.app';
 
@@ -1087,7 +1078,7 @@ router.post('/send', authenticateToken, async (req, res) => {
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
               <div style="background: ${primaryColor}; color: white; padding: 20px; text-align: center;">
                 <img src="${baseUrl}/logo.png?v=${Date.now()}" alt="Logo" style="height: 60px; max-width: 80%; width: auto; margin-bottom: 10px;" onerror="this.style.display='none'">
-                <h1 style="margin: 0; font-size: 24px;">${await appSettings.getSetting('organization_name') || 'Comité Départemental de Billard'}</h1>
+                <h1 style="margin: 0; font-size: 24px;">${await req.getOrgSetting('organization_name') || 'Comité Départemental de Billard'}</h1>
               </div>
               <div style="padding: 20px; background: #f8f9fa; line-height: 1.6;">
                 ${imageHtml}
@@ -1486,7 +1477,7 @@ router.post('/send-finale-results', authenticateToken, async (req, res) => {
 
   try {
     // Get email branding settings
-    const emailSettings = await appSettings.getSettingsBatch([
+    const emailSettings = await req.getOrgSettingsBatch([
       'primary_color', 'email_communication', 'email_sender_name',
       'organization_name', 'organization_short_name', 'summary_email'
     ]);
@@ -1993,16 +1984,16 @@ router.post('/process-scheduled', async (req, res) => {
     let blockedCount = 0;
 
     // Get dynamic sender info and branding
-    const senderName = await appSettings.getSetting('email_sender_name') || 'CDBHS';
-    const senderEmail = await appSettings.getSetting('email_noreply') || 'noreply@cdbhs.net';
+    const senderName = await req.getOrgSetting('email_sender_name') || 'CDBHS';
+    const senderEmail = await req.getOrgSetting('email_noreply') || 'noreply@cdbhs.net';
     const emailFrom = `${senderName} <${senderEmail}>`;
-    const primaryColor = await appSettings.getSetting('primary_color') || '#1F4788';
-    const organizationName = await appSettings.getSetting('organization_name') || 'Comité Départemental de Billard';
-    const organizationShortName = await appSettings.getSetting('organization_short_name') || 'CDBHS';
-    const organizationEmail = await appSettings.getSetting('email_communication') || 'communication@cdbhs.net';
+    const primaryColor = await req.getOrgSetting('primary_color') || '#1F4788';
+    const organizationName = await req.getOrgSetting('organization_name') || 'Comité Départemental de Billard';
+    const organizationShortName = await req.getOrgSetting('organization_short_name') || 'CDBHS';
+    const organizationEmail = await req.getOrgSetting('email_communication') || 'communication@cdbhs.net';
 
     // Get configurable contact email
-    const contactEmail = await getContactEmail();
+    const contactEmail = await getContactEmail(req.user?.organizationId);
     const contactPhraseHtml = buildContactPhraseHtml(contactEmail, primaryColor);
 
     for (const scheduled of scheduledEmails) {
@@ -2276,13 +2267,13 @@ router.post('/send-results', authenticateToken, async (req, res) => {
     const baseUrl = process.env.BASE_URL || 'https://cdbhs-tournament-management-production.up.railway.app';
 
     // Get dynamic sender info
-    const senderName = await appSettings.getSetting('email_sender_name') || 'CDBHS';
-    const senderEmail = await appSettings.getSetting('email_noreply') || 'noreply@cdbhs.net';
+    const senderName = await req.getOrgSetting('email_sender_name') || 'CDBHS';
+    const senderEmail = await req.getOrgSetting('email_noreply') || 'noreply@cdbhs.net';
     const emailFrom = `${senderName} <${senderEmail}>`;
-    const primaryColor = await appSettings.getSetting('primary_color') || '#1F4788';
-    const organizationName = await appSettings.getSetting('organization_name') || 'Comité Départemental de Billard';
-    const organizationShortName = await appSettings.getSetting('organization_short_name') || 'CDBHS';
-    const organizationEmail = await appSettings.getSetting('email_communication') || 'communication@cdbhs.net';
+    const primaryColor = await req.getOrgSetting('primary_color') || '#1F4788';
+    const organizationName = await req.getOrgSetting('organization_name') || 'Comité Départemental de Billard';
+    const organizationShortName = await req.getOrgSetting('organization_short_name') || 'CDBHS';
+    const organizationEmail = await req.getOrgSetting('email_communication') || 'communication@cdbhs.net';
 
     // Get tournament details with category info
     const tournament = await new Promise((resolve, reject) => {
@@ -2419,7 +2410,7 @@ router.post('/send-results', authenticateToken, async (req, res) => {
     const participantsToEmail = testMode ? [{ ...results[0], email: testEmail }] : results;
 
     // Get configurable contact email
-    const contactEmail = await getContactEmail();
+    const contactEmail = await getContactEmail(req.user?.organizationId);
     const contactPhraseHtml = buildContactPhraseHtml(contactEmail, primaryColor);
 
     // Send email to each participant with email
@@ -2533,7 +2524,7 @@ router.post('/send-results', authenticateToken, async (req, res) => {
           <div style="font-family: Arial, sans-serif; max-width: 700px; margin: 0 auto;">
             <div style="background: ${primaryColor}; color: white; padding: 20px; text-align: center;">
               <img src="${baseUrl}/logo.png?v=${Date.now()}" alt="Logo" style="height: 60px; max-width: 80%; width: auto; margin-bottom: 10px;" onerror="this.style.display='none'">
-              <h1 style="margin: 0; font-size: 24px;">${await appSettings.getSetting('organization_name') || 'Comité Départemental de Billard'}</h1>
+              <h1 style="margin: 0; font-size: 24px;">${await req.getOrgSetting('organization_name') || 'Comité Départemental de Billard'}</h1>
               <p style="margin: 10px 0 0 0; opacity: 0.9;">Résultats - ${tournament.display_name}</p>
               <p style="margin: 5px 0 0 0; opacity: 0.8; font-size: 14px;">${tournamentDate}${tournament.location ? ' - ' + tournament.location : ''}</p>
             </div>
@@ -2638,7 +2629,7 @@ router.post('/send-results', authenticateToken, async (req, res) => {
           <div style="font-family: Arial, sans-serif; max-width: 700px; margin: 0 auto;">
             <div style="background: ${primaryColor}; color: white; padding: 20px; text-align: center;">
               <img src="${baseUrl}/logo.png?v=${Date.now()}" alt="Logo" style="height: 60px; max-width: 80%; width: auto; margin-bottom: 10px;" onerror="this.style.display='none'">
-              <h1 style="margin: 0; font-size: 24px;">${await appSettings.getSetting('organization_name') || 'Comité Départemental de Billard'}</h1>
+              <h1 style="margin: 0; font-size: 24px;">${await req.getOrgSetting('organization_name') || 'Comité Départemental de Billard'}</h1>
               <p style="margin: 10px 0 0 0; opacity: 0.9;">📋 Récapitulatif Envoi Résultats - ${tournament.display_name}</p>
             </div>
             <div style="padding: 20px; background: #f8f9fa; line-height: 1.6;">
@@ -2995,13 +2986,13 @@ router.post('/send-finale-convocation', authenticateToken, async (req, res) => {
 
   try {
     // Get dynamic sender info
-    const senderName = await appSettings.getSetting('email_sender_name') || 'CDBHS';
-    const senderEmail = await appSettings.getSetting('email_noreply') || 'noreply@cdbhs.net';
+    const senderName = await req.getOrgSetting('email_sender_name') || 'CDBHS';
+    const senderEmail = await req.getOrgSetting('email_noreply') || 'noreply@cdbhs.net';
     const emailFrom = `${senderName} <${senderEmail}>`;
-    const primaryColor = await appSettings.getSetting('primary_color') || '#1F4788';
-    const organizationName = await appSettings.getSetting('organization_name') || 'Comité Départemental de Billard';
-    const organizationShortName = await appSettings.getSetting('organization_short_name') || 'CDBHS';
-    const organizationEmail = await appSettings.getSetting('email_communication') || 'communication@cdbhs.net';
+    const primaryColor = await req.getOrgSetting('primary_color') || '#1F4788';
+    const organizationName = await req.getOrgSetting('organization_name') || 'Comité Départemental de Billard';
+    const organizationShortName = await req.getOrgSetting('organization_short_name') || 'CDBHS';
+    const organizationEmail = await req.getOrgSetting('email_communication') || 'communication@cdbhs.net';
 
     // Get finale details
     const finale = await new Promise((resolve, reject) => {
@@ -3088,7 +3079,7 @@ router.post('/send-finale-convocation', authenticateToken, async (req, res) => {
     const participantsToEmail = testMode ? [{ ...finalists[0], email: testEmail }] : finalists;
 
     // Get configurable contact email
-    const contactEmail = await getContactEmail();
+    const contactEmail = await getContactEmail(req.user?.organizationId);
     const contactPhraseHtml = buildContactPhraseHtml(contactEmail, primaryColor);
 
     for (const finalist of participantsToEmail) {
@@ -3273,7 +3264,7 @@ router.post('/send-finale-convocation', authenticateToken, async (req, res) => {
           <div style="font-family: Arial, sans-serif; max-width: 700px; margin: 0 auto;">
             <div style="background: ${primaryColor}; color: white; padding: 20px; text-align: center;">
               <img src="${baseUrl}/logo.png?v=${Date.now()}" alt="Logo" style="height: 60px; max-width: 80%; width: auto; margin-bottom: 10px;" onerror="this.style.display='none'">
-              <h1 style="margin: 0; font-size: 24px;">${await appSettings.getSetting('organization_name') || 'Comité Départemental de Billard'}</h1>
+              <h1 style="margin: 0; font-size: 24px;">${await req.getOrgSetting('organization_name') || 'Comité Départemental de Billard'}</h1>
               <p style="margin: 10px 0 0 0; opacity: 0.9;">📋 Récapitulatif Convocations Finale - ${category.display_name}</p>
             </div>
             <div style="padding: 20px; background: #f8f9fa; line-height: 1.6;">
@@ -4662,13 +4653,13 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
     const baseUrl = process.env.BASE_URL || 'https://cdbhs-tournament-management-production.up.railway.app';
 
     // Get dynamic sender info
-    const senderName = await appSettings.getSetting('email_sender_name') || 'CDBHS';
-    const senderEmail = await appSettings.getSetting('email_noreply') || 'noreply@cdbhs.net';
+    const senderName = await req.getOrgSetting('email_sender_name') || 'CDBHS';
+    const senderEmail = await req.getOrgSetting('email_noreply') || 'noreply@cdbhs.net';
     const emailFrom = `${senderName} <${senderEmail}>`;
-    const primaryColor = await appSettings.getSetting('primary_color') || '#1F4788';
-    const organizationName = await appSettings.getSetting('organization_name') || 'Comité Départemental de Billard';
-    const organizationShortName = await appSettings.getSetting('organization_short_name') || 'CDBHS';
-    const organizationEmail = await appSettings.getSetting('email_communication') || 'communication@cdbhs.net';
+    const primaryColor = await req.getOrgSetting('primary_color') || '#1F4788';
+    const organizationName = await req.getOrgSetting('organization_name') || 'Comité Départemental de Billard';
+    const organizationShortName = await req.getOrgSetting('organization_short_name') || 'CDBHS';
+    const organizationEmail = await req.getOrgSetting('email_communication') || 'communication@cdbhs.net';
 
     // Get participants based on relance type
     let participants = [];
@@ -5025,7 +5016,7 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
       : participants.filter(p => p.email && p.email.includes('@'));
 
     // Get configurable contact email
-    const contactEmail = await getContactEmail();
+    const contactEmail = await getContactEmail(req.user?.organizationId);
     const contactPhraseHtml = buildContactPhraseHtml(contactEmail, primaryColor);
 
     for (const participant of recipientsToEmail) {
@@ -5163,7 +5154,7 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
             <div style="background: ${primaryColor}; color: white; padding: 20px; text-align: center;">
               <img src="${baseUrl}/logo.png?v=${Date.now()}" alt="Logo" style="height: 60px; max-width: 80%; width: auto; margin-bottom: 10px;" onerror="this.style.display='none'">
-              <h1 style="margin: 0; font-size: 24px;">${await appSettings.getSetting('organization_name') || 'Comité Départemental de Billard'}</h1>
+              <h1 style="margin: 0; font-size: 24px;">${await req.getOrgSetting('organization_name') || 'Comité Départemental de Billard'}</h1>
             </div>
             <div style="padding: 20px; background: #f8f9fa; line-height: 1.6;">
               ${imageHtml}

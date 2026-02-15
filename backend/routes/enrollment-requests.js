@@ -26,14 +26,15 @@ const getResend = () => {
   return new Resend(process.env.RESEND_API_KEY);
 };
 
-// Get email settings from database
-async function getEmailSettings() {
+// Get email settings from database (org-aware via req)
+async function getEmailSettings(req) {
+  const getter = req && req.getOrgSetting ? req.getOrgSetting.bind(req) : (k) => appSettings.getSetting(k);
   const settings = {};
-  settings.primary_color = await appSettings.getSetting('primary_color') || '#1F4788';
-  settings.sender_name = await appSettings.getSetting('email_sender_name') || 'CDBHS';
-  settings.email_from = await appSettings.getSetting('email_noreply') || 'noreply@cdbhs.net';
-  settings.org_short_name = await appSettings.getSetting('organization_short_name') || 'CDBHS';
-  settings.contact_email = await appSettings.getSetting('summary_email') || '';
+  settings.primary_color = await getter('primary_color') || '#1F4788';
+  settings.sender_name = await getter('email_sender_name') || 'CDBHS';
+  settings.email_from = await getter('email_noreply') || 'noreply@cdbhs.net';
+  settings.org_short_name = await getter('organization_short_name') || 'CDBHS';
+  settings.contact_email = await getter('summary_email') || '';
   return settings;
 }
 
@@ -69,7 +70,7 @@ router.use(authenticateToken);
 router.use(requireViewer);
 
 // Helper function to send approval email directly via Resend
-async function sendApprovalEmail(request) {
+async function sendApprovalEmail(request, req) {
   console.log(`[APPROVAL EMAIL] Starting email send to ${request.player_email}`);
 
   const resend = getResend();
@@ -162,7 +163,7 @@ async function sendApprovalEmail(request) {
 }
 
 // Helper function to send rejection email directly via Resend
-async function sendRejectionEmail(request, reason) {
+async function sendRejectionEmail(request, reason, req) {
   console.log(`[REJECTION EMAIL] Starting email send to ${request.player_email}`);
 
   const resend = getResend();
@@ -639,7 +640,7 @@ router.put('/:id/approve', requireViewerWrite, async (req, res) => {
     // Send approval email to player
     let emailResult = null;
     try {
-      emailResult = await sendApprovalEmail(request);
+      emailResult = await sendApprovalEmail(request, req);
     } catch (err) {
       console.error('[APPROVAL] Failed to send approval email:', err);
       emailResult = { success: false, reason: 'exception', error: err.message };
@@ -733,7 +734,7 @@ router.put('/:id/reject', requireViewerWrite, async (req, res) => {
     }
 
     // Send rejection email to player (non-blocking)
-    sendRejectionEmail(request, reason).catch(err => {
+    sendRejectionEmail(request, reason, req).catch(err => {
       console.error('Failed to send rejection email:', err);
     });
 

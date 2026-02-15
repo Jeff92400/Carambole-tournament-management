@@ -2046,7 +2046,7 @@ router.put('/:id/desinscription', authenticateToken, async (req, res) => {
       if (resend) {
         try {
           // Load email settings for dynamic branding
-          const emailSettings = await appSettings.getSettingsBatch([
+          const emailSettings = await req.getOrgSettingsBatch([
             'email_noreply',
             'email_sender_name',
             'organization_name',

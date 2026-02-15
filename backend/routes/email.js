@@ -37,19 +37,19 @@ async function getOrganizationLogoBuffer() {
   });
 }
 
-// Get summary email from app_settings (with fallback)
-async function getSummaryEmail() {
-  return appSettings.getSetting('summary_email');
+// Get summary email from app_settings (with fallback, org-aware)
+async function getSummaryEmail(orgId) {
+  return appSettings.getOrgSetting(orgId, 'summary_email');
 }
 
-// Get contact email from app_settings (with fallback)
-async function getContactEmail() {
-  return appSettings.getSetting('summary_email'); // Uses summary_email as contact
+// Get contact email from app_settings (with fallback, org-aware)
+async function getContactEmail(orgId) {
+  return appSettings.getOrgSetting(orgId, 'summary_email');
 }
 
-// Get all email-related settings at once (for templates)
-async function getEmailTemplateSettings() {
-  const settings = await appSettings.getSettingsBatch([
+// Get all email-related settings at once (for templates, org-aware)
+async function getEmailTemplateSettings(orgId) {
+  const settings = await appSettings.getOrgSettingsBatch(orgId, [
     'primary_color',
     'secondary_color',
     'accent_color',
@@ -1284,8 +1284,8 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
   }
 
   // Get contact email and branding settings once for all emails
-  const contactEmail = await getContactEmail();
-  const emailSettings = await getEmailTemplateSettings();
+  const contactEmail = await getContactEmail(req.user?.organizationId);
+  const emailSettings = await getEmailTemplateSettings(req.user?.organizationId);
   const primaryColor = emailSettings.primary_color || '#1F4788';
   const orgShortName = emailSettings.organization_short_name || 'CDBHS';
   const baseUrl = process.env.BASE_URL || 'https://cdbhs-tournament-management-production.up.railway.app';
@@ -1461,7 +1461,7 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
   }
 
   // Send summary email after all individual emails (even if all failed)
-  const summaryEmailAddress = await getSummaryEmail();
+  const summaryEmailAddress = await getSummaryEmail(req.user?.organizationId);
   const totalAttempted = results.sent.length + results.failed.length + results.skipped.length;
   if (totalAttempted > 0 && summaryEmailAddress) {
     try {
@@ -1774,7 +1774,7 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
       };
 
       // Get branding settings
-      const brandingSettings = await appSettings.getSettingsBatch([
+      const brandingSettings = await appSettings.getOrgSettingsBatch(req.user?.organizationId, [
         'primary_color', 'secondary_color', 'accent_color'
       ]);
 
@@ -2141,7 +2141,7 @@ router.post('/send-club-reminder', authenticateToken, async (req, res) => {
 
   try {
     // Get email settings for organization branding
-    const emailSettings = await getEmailTemplateSettings();
+    const emailSettings = await getEmailTemplateSettings(req.user?.organizationId);
     const orgShortName = emailSettings.organization_short_name || 'CDB';
     const orgName = emailSettings.organization_name || orgShortName;
     const primaryColor = emailSettings.primary_color || '#1F4788';
@@ -2364,7 +2364,7 @@ router.post('/generate-summary-pdf', authenticateToken, async (req, res) => {
     }
 
     // Get branding settings
-    const brandingSettings = await appSettings.getSettingsBatch([
+    const brandingSettings = await appSettings.getOrgSettingsBatch(req.user?.organizationId, [
       'primary_color', 'secondary_color', 'accent_color'
     ]);
 
@@ -2562,8 +2562,8 @@ router.post('/inscription-confirmation', async (req, res) => {
 
   try {
     // Load email settings for dynamic branding
-    const emailSettings = await getEmailTemplateSettings();
-    const contactEmail = await getContactEmail();
+    const emailSettings = await getEmailTemplateSettings(req.user?.organizationId);
+    const contactEmail = await getContactEmail(req.user?.organizationId);
     const baseUrl = process.env.BASE_URL || 'https://cdbhs-tournament-management-production.up.railway.app';
     const primaryColor = emailSettings.primary_color || '#1F4788';
     const orgShortName = emailSettings.organization_short_name || 'CDB';
@@ -2689,8 +2689,8 @@ router.post('/inscription-cancellation', async (req, res) => {
 
   try {
     // Load email settings for dynamic branding
-    const emailSettings = await getEmailTemplateSettings();
-    const contactEmail = await getContactEmail();
+    const emailSettings = await getEmailTemplateSettings(req.user?.organizationId);
+    const contactEmail = await getContactEmail(req.user?.organizationId);
     const baseUrl = process.env.BASE_URL || 'https://cdbhs-tournament-management-production.up.railway.app';
     const primaryColor = emailSettings.primary_color || '#1F4788';
     const orgShortName = emailSettings.organization_short_name || 'CDB';
@@ -2816,10 +2816,10 @@ router.post('/contact', async (req, res) => {
 
   try {
     // Load email settings for dynamic branding
-    const emailSettings = await getEmailTemplateSettings();
+    const emailSettings = await getEmailTemplateSettings(req.user?.organizationId);
     const primaryColor = emailSettings.primary_color || '#1F4788';
     const shortName = emailSettings.organization_short_name || 'CDBHS';
-    const contactEmail = await getContactEmail();
+    const contactEmail = await getContactEmail(req.user?.organizationId);
 
     // Prepare email attachments
     const emailAttachments = (attachments || []).map(att => ({
@@ -3498,8 +3498,8 @@ router.post('/enrollment-acknowledgment', async (req, res) => {
 
   try {
     // Load email settings for dynamic branding
-    const emailSettings = await getEmailTemplateSettings();
-    const contactEmail = await getContactEmail();
+    const emailSettings = await getEmailTemplateSettings(req.user?.organizationId);
+    const contactEmail = await getContactEmail(req.user?.organizationId);
     const primaryColor = emailSettings.primary_color || '#1F4788';
     const senderName = emailSettings.email_sender_name || 'CDBHS';
     const emailFrom = emailSettings.email_noreply || 'noreply@cdbhs.net';
@@ -3608,7 +3608,7 @@ router.post('/enrollment-notification', async (req, res) => {
 
   try {
     // Load email settings for dynamic branding
-    const emailSettings = await getEmailTemplateSettings();
+    const emailSettings = await getEmailTemplateSettings(req.user?.organizationId);
     const summaryEmail = emailSettings.summary_email || 'cdbhs92@gmail.com';
     const primaryColor = emailSettings.primary_color || '#1F4788';
     const senderName = emailSettings.email_sender_name || 'CDBHS';
@@ -3727,8 +3727,8 @@ router.post('/enrollment-approved', async (req, res) => {
   }
 
   try {
-    const emailSettings = await getEmailTemplateSettings();
-    const contactEmail = await getContactEmail();
+    const emailSettings = await getEmailTemplateSettings(req.user?.organizationId);
+    const contactEmail = await getContactEmail(req.user?.organizationId);
     const primaryColor = emailSettings.primary_color || '#1F4788';
     const senderName = emailSettings.email_sender_name || 'CDBHS';
     const emailFrom = emailSettings.email_noreply || 'noreply@cdbhs.net';
@@ -3839,8 +3839,8 @@ router.post('/enrollment-rejected', async (req, res) => {
   }
 
   try {
-    const emailSettings = await getEmailTemplateSettings();
-    const contactEmail = await getContactEmail();
+    const emailSettings = await getEmailTemplateSettings(req.user?.organizationId);
+    const contactEmail = await getContactEmail(req.user?.organizationId);
     const primaryColor = emailSettings.primary_color || '#1F4788';
     const senderName = emailSettings.email_sender_name || 'CDBHS';
     const emailFrom = emailSettings.email_noreply || 'noreply@cdbhs.net';

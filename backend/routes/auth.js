@@ -345,8 +345,8 @@ router.post('/forgot-password', async (req, res) => {
           const { Resend } = require('resend');
           const resend = new Resend(process.env.RESEND_API_KEY);
 
-          // Get dynamic settings for email branding
-          const emailSettings = await appSettings.getSettingsBatch([
+          // Get dynamic settings for email branding (org-aware)
+          const emailSettings = await appSettings.getOrgSettingsBatch(user.organization_id, [
             'primary_color', 'email_convocations', 'email_sender_name',
             'organization_name', 'organization_short_name'
           ]);
@@ -476,8 +476,8 @@ router.post('/forgot', async (req, res) => {
       const { Resend } = require('resend');
       const resend = new Resend(process.env.RESEND_API_KEY);
 
-      // Get dynamic settings for email branding
-      const emailSettings = await appSettings.getSettingsBatch([
+      // Get dynamic settings for email branding (org-aware)
+      const emailSettings = await appSettings.getOrgSettingsBatch(user.organization_id, [
         'primary_color', 'email_noreply', 'email_sender_name',
         'organization_name', 'organization_short_name', 'summary_email'
       ]);

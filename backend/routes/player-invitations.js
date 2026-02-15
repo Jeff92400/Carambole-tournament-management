@@ -455,7 +455,7 @@ router.post('/send', authenticateToken, async (req, res) => {
 
   try {
     // Get email settings
-    const emailSettings = await appSettings.getSettingsBatch([
+    const emailSettings = await req.getOrgSettingsBatch([
       'primary_color', 'email_communication', 'email_sender_name',
       'organization_name', 'organization_short_name', 'summary_email'
     ]);
@@ -790,7 +790,7 @@ router.post('/resend/:id', authenticateToken, async (req, res) => {
     // Actually send the email using the logic from /send
     const resend = new Resend(process.env.RESEND_API_KEY);
 
-    const emailSettings = await appSettings.getSettingsBatch([
+    const emailSettings = await req.getOrgSettingsBatch([
       'primary_color', 'email_communication', 'email_sender_name',
       'organization_name', 'organization_short_name', 'summary_email'
     ]);
@@ -952,7 +952,7 @@ router.post('/resend-batch', authenticateToken, async (req, res) => {
     }
 
     // Get email settings
-    const emailSettings = await appSettings.getSettingsBatch([
+    const emailSettings = await req.getOrgSettingsBatch([
       'primary_color', 'email_communication', 'email_sender_name',
       'organization_name', 'organization_short_name', 'summary_email'
     ]);

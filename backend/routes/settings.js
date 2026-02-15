@@ -23,8 +23,11 @@ const getDb = () => require('../db-loader');
 // ==================== PUBLIC ENDPOINTS (NO AUTH) ====================
 
 // Get branding colors (public - needed for login page)
+// Supports ?org=slug for per-CDB branding resolution
 router.get('/branding/colors', async (req, res) => {
   const db = getDb();
+  const appSettings = require('../utils/app-settings');
+  const orgSlug = req.query.org;
 
   const colorKeys = [
     'primary_color',
@@ -36,6 +39,26 @@ router.get('/branding/colors', async (req, res) => {
     'header_logo_size'
   ];
 
+  // If org slug provided, resolve to org ID and use org-specific settings
+  if (orgSlug) {
+    try {
+      const org = await new Promise((resolve, reject) => {
+        db.get('SELECT id FROM organizations WHERE slug = $1 AND is_active = TRUE', [orgSlug], (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        });
+      });
+
+      if (org) {
+        const settings = await appSettings.getOrgSettingsBatch(org.id, colorKeys);
+        return res.json(settings);
+      }
+    } catch (e) {
+      console.error('Error resolving org slug for branding:', e);
+    }
+  }
+
+  // Fallback: global app_settings (backward compatible)
   const placeholders = colorKeys.map((_, i) => `$${i + 1}`).join(',');
 
   db.all(
@@ -47,7 +70,6 @@ router.get('/branding/colors', async (req, res) => {
         return res.status(500).json({ error: err.message });
       }
 
-      // Convert to object with defaults
       const colors = {
         primary_color: '#1F4788',
         secondary_color: '#667eea',
@@ -569,82 +591,122 @@ const initTournamentTypes = async () => {
   });
 };
 
-// Get a setting by key
+// Get a setting by key (org-aware: returns org-specific if user has organizationId)
 router.get('/app/:key', authenticateToken, async (req, res) => {
-  const db = getDb();
   const { key } = req.params;
 
-  await initAppSettings();
-
-  db.get(
-    'SELECT * FROM app_settings WHERE key = $1',
-    [key],
-    (err, row) => {
-      if (err) {
-        console.error('Error fetching setting:', err);
-        return res.status(500).json({ error: err.message });
-      }
-      res.json(row || { key, value: null });
+  try {
+    const orgId = req.user?.organizationId;
+    if (orgId) {
+      const value = await appSettings.getOrgSetting(orgId, key);
+      return res.json({ key, value });
     }
-  );
+
+    // Fallback: global app_settings
+    const db = getDb();
+    await initAppSettings();
+    db.get(
+      'SELECT * FROM app_settings WHERE key = $1',
+      [key],
+      (err, row) => {
+        if (err) {
+          console.error('Error fetching setting:', err);
+          return res.status(500).json({ error: err.message });
+        }
+        res.json(row || { key, value: null });
+      }
+    );
+  } catch (error) {
+    console.error('Error fetching setting:', error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
-// Update a setting (admin only)
+// Update a setting (admin only, org-aware)
 router.put('/app/:key', authenticateToken, requireAdmin, async (req, res) => {
-  const db = getDb();
   const { key } = req.params;
   const { value } = req.body;
 
-  await initAppSettings();
-
-  db.run(
-    `INSERT INTO app_settings (key, value, updated_at) VALUES ($1, $2, CURRENT_TIMESTAMP)
-     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = CURRENT_TIMESTAMP`,
-    [key, value],
-    function(err) {
-      if (err) {
-        console.error('Error updating setting:', err);
-        return res.status(500).json({ error: err.message });
-      }
-      // Clear settings cache so other routes pick up the change
-      appSettings.clearCache();
-      res.json({ success: true, message: 'Setting updated' });
+  try {
+    const orgId = req.user?.organizationId;
+    if (orgId) {
+      // Write to organization_settings
+      await appSettings.setOrgSetting(orgId, key, value);
+      return res.json({ success: true, message: 'Setting updated' });
     }
-  );
+
+    // Fallback: global app_settings
+    const db = getDb();
+    await initAppSettings();
+    db.run(
+      `INSERT INTO app_settings (key, value, updated_at) VALUES ($1, $2, CURRENT_TIMESTAMP)
+       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = CURRENT_TIMESTAMP`,
+      [key, value],
+      function(err) {
+        if (err) {
+          console.error('Error updating setting:', err);
+          return res.status(500).json({ error: err.message });
+        }
+        appSettings.clearCache();
+        res.json({ success: true, message: 'Setting updated' });
+      }
+    );
+  } catch (error) {
+    console.error('Error updating setting:', error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
-// Get all app settings at once
+// Get all app settings at once (org-aware)
 router.get('/app-all', authenticateToken, async (req, res) => {
-  const db = getDb();
-
-  await initAppSettings();
-
-  db.all(
-    'SELECT key, value FROM app_settings',
-    [],
-    (err, rows) => {
-      if (err) {
-        console.error('Error fetching all settings:', err);
-        return res.status(500).json({ error: err.message });
-      }
-      // Convert to object for easier use
-      const settings = {};
-      (rows || []).forEach(row => {
-        settings[row.key] = row.value;
-      });
-      res.json(settings);
+  try {
+    const orgId = req.user?.organizationId;
+    if (orgId) {
+      // Returns org-specific settings merged with global and defaults
+      const settings = await appSettings.getOrgSettings(orgId);
+      return res.json(settings);
     }
-  );
+
+    // Fallback: global app_settings
+    const db = getDb();
+    await initAppSettings();
+    db.all(
+      'SELECT key, value FROM app_settings',
+      [],
+      (err, rows) => {
+        if (err) {
+          console.error('Error fetching all settings:', err);
+          return res.status(500).json({ error: err.message });
+        }
+        const settings = {};
+        (rows || []).forEach(row => {
+          settings[row.key] = row.value;
+        });
+        res.json(settings);
+      }
+    );
+  } catch (error) {
+    console.error('Error fetching all settings:', error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
-// Update multiple settings at once (admin only)
+// Update multiple settings at once (admin only, org-aware)
 router.put('/app-bulk', authenticateToken, requireAdmin, async (req, res) => {
-  const db = getDb();
   const settings = req.body; // Object with key-value pairs
 
-  await initAppSettings();
-
   try {
+    const orgId = req.user?.organizationId;
+    if (orgId) {
+      for (const [key, value] of Object.entries(settings)) {
+        await appSettings.setOrgSetting(orgId, key, value);
+      }
+      return res.json({ success: true, message: 'Settings updated' });
+    }
+
+    // Fallback: global app_settings
+    const db = getDb();
+    await initAppSettings();
     for (const [key, value] of Object.entries(settings)) {
       await new Promise((resolve, reject) => {
         db.run(
@@ -658,7 +720,6 @@ router.put('/app-bulk', authenticateToken, requireAdmin, async (req, res) => {
         );
       });
     }
-    // Clear settings cache so other routes pick up the changes
     appSettings.clearCache();
     res.json({ success: true, message: 'Settings updated' });
   } catch (err) {
