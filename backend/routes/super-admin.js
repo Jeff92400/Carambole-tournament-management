@@ -601,7 +601,67 @@ router.put('/email-templates/cdb_welcome', async (req, res) => {
   }
 });
 
-// POST /api/super-admin/organizations/:id/send-welcome-test — Send test email to super admin
+// POST /api/super-admin/email-templates/cdb_welcome/test — Send test email with sample data (no org needed)
+router.post('/email-templates/cdb_welcome/test', async (req, res) => {
+  try {
+    if (!process.env.RESEND_API_KEY) {
+      return res.status(400).json({ error: 'RESEND_API_KEY non configurée' });
+    }
+
+    // Get super admin email
+    const superAdmin = await dbGet(`SELECT email FROM users WHERE id = $1`, [req.user.userId]);
+    if (!superAdmin?.email) {
+      return res.status(400).json({ error: 'Votre compte n\'a pas d\'adresse email configurée' });
+    }
+
+    // Sample data from request body (from create form) or defaults
+    const sampleData = req.body || {};
+
+    // Get template
+    const subjectRow = await dbGet(`SELECT value FROM organization_settings WHERE organization_id = 1 AND key = 'cdb_welcome_subject'`);
+    const bodyRow = await dbGet(`SELECT value FROM organization_settings WHERE organization_id = 1 AND key = 'cdb_welcome_body'`);
+
+    const baseUrl = process.env.BASE_URL || `https://${req.get('host')}`;
+    const sampleSlug = sampleData.slug || 'cdb-exemple';
+
+    const variables = {
+      admin_name: sampleData.admin_username || 'admin_exemple',
+      organization_name: sampleData.name || 'Comité Départemental de Billard Exemple',
+      organization_short_name: sampleData.short_name || 'CDB00',
+      login_url: `${baseUrl}/login.html?org=${sampleSlug}`,
+      username: sampleData.admin_username || 'admin_exemple',
+      player_count: sampleData.player_count || '250'
+    };
+
+    let subject = subjectRow?.value || 'Bienvenue - {organization_short_name}';
+    let body = bodyRow?.value || '';
+
+    for (const [key, value] of Object.entries(variables)) {
+      const regex = new RegExp(`\\{${key}\\}`, 'gi');
+      subject = subject.replace(regex, value);
+      const htmlRegex = new RegExp(`\\{(<[^>]*>)*${key}(<[^>]*>)*\\}`, 'gi');
+      body = body.replace(htmlRegex, value);
+    }
+
+    const resend = new Resend(process.env.RESEND_API_KEY);
+    const senderEmail = await appSettings.getSetting('email_noreply') || 'noreply@cdbhs.net';
+    const senderName = await appSettings.getSetting('email_sender_name') || 'CDB Tournois';
+
+    await resend.emails.send({
+      from: `${senderName} <${senderEmail}>`,
+      to: [superAdmin.email],
+      subject: `[TEST] ${subject}`,
+      html: body
+    });
+
+    res.json({ success: true, message: `Email de test envoyé à ${superAdmin.email}` });
+  } catch (error) {
+    console.error('Error sending test welcome email:', error);
+    res.status(500).json({ error: 'Erreur lors de l\'envoi: ' + error.message });
+  }
+});
+
+// POST /api/super-admin/organizations/:id/send-welcome-test — Send test email to super admin (for existing org)
 router.post('/organizations/:id/send-welcome-test', async (req, res) => {
   const { id } = req.params;
 
