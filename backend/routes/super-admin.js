@@ -130,6 +130,23 @@ router.get('/dashboard', async (req, res) => {
   }
 });
 
+// GET /api/super-admin/ffb-cdbs — List FFB CDBs for picklist (excludes already-created orgs)
+router.get('/ffb-cdbs', async (req, res) => {
+  try {
+    const cdbs = await dbAll(`
+      SELECT c.code, c.nom, c.ligue_numero, l.nom as ligue_nom
+      FROM ffb_cdbs c
+      LEFT JOIN ffb_ligues l ON c.ligue_numero = l.numero
+      WHERE c.code NOT IN (SELECT ffb_cdb_code FROM organizations WHERE ffb_cdb_code IS NOT NULL)
+      ORDER BY c.nom
+    `);
+    res.json(cdbs);
+  } catch (error) {
+    console.error('Error listing FFB CDBs:', error);
+    res.status(500).json({ error: 'Erreur' });
+  }
+});
+
 // GET /api/super-admin/users — List all users
 router.get('/users', (req, res) => {
   db.all(

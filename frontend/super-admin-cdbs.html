@@ -157,9 +157,15 @@
     <div class="card create-form" id="createForm">
       <h3>Créer un nouveau CDB</h3>
       <div class="form-grid">
+        <div class="form-group" style="grid-column: 1 / -1;">
+          <label>CDB (depuis fichier FFB)</label>
+          <select id="ffbCdbSelect" onchange="onFfbCdbSelected()" style="width: 100%; padding: 8px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; box-sizing: border-box;">
+            <option value="">-- Sélectionner un CDB --</option>
+          </select>
+        </div>
         <div class="form-group">
           <label>Nom complet</label>
-          <input type="text" id="orgName" placeholder="ex: Comité Départemental de Billard du Val-de-Marne">
+          <input type="text" id="orgName" placeholder="Auto-rempli depuis FFB">
         </div>
         <div class="form-group">
           <label>Nom court</label>
@@ -171,11 +177,11 @@
         </div>
         <div class="form-group">
           <label>Code CDB FFB</label>
-          <input type="text" id="orgFfbCode" placeholder="ex: 94">
+          <input type="text" id="orgFfbCode" placeholder="Auto-rempli" readonly style="background: #f5f5f5;">
         </div>
         <div class="form-group">
           <label>Ligue FFB</label>
-          <input type="text" id="orgLigue" placeholder="ex: 11">
+          <input type="text" id="orgLigue" placeholder="Auto-rempli" readonly style="background: #f5f5f5;">
         </div>
         <div class="form-group">
           <label></label>
@@ -313,9 +319,51 @@
       }
     }
 
+    // ==================== FFB CDB Picklist ====================
+    let ffbCdbs = [];
+
+    async function loadFfbCdbs() {
+      try {
+        const res = await authFetch(`${API_URL}/super-admin/ffb-cdbs`);
+        ffbCdbs = await res.json();
+        const select = document.getElementById('ffbCdbSelect');
+        select.innerHTML = '<option value="">-- Sélectionner un CDB --</option>' +
+          ffbCdbs.map(c => `<option value="${c.code}">${c.nom} (${c.code}) — Ligue: ${c.ligue_nom || c.ligue_numero}</option>`).join('');
+      } catch (error) {
+        console.error('Error loading FFB CDBs:', error);
+      }
+    }
+
+    function onFfbCdbSelected() {
+      const code = document.getElementById('ffbCdbSelect').value;
+      const cdb = ffbCdbs.find(c => c.code === code);
+      if (cdb) {
+        document.getElementById('orgName').value = cdb.nom;
+        document.getElementById('orgFfbCode').value = cdb.code;
+        document.getElementById('orgLigue').value = cdb.ligue_numero || '';
+        // Auto-generate short name: "CDB" + code
+        const shortName = 'CDB' + cdb.code;
+        document.getElementById('orgShortName').value = shortName;
+        autoSlug();
+        // Auto-generate admin username
+        document.getElementById('adminUsername').value = 'admin' + cdb.code;
+      } else {
+        document.getElementById('orgName').value = '';
+        document.getElementById('orgFfbCode').value = '';
+        document.getElementById('orgLigue').value = '';
+        document.getElementById('orgShortName').value = '';
+        document.getElementById('orgSlug').value = '';
+        document.getElementById('adminUsername').value = '';
+      }
+    }
+
     // ==================== Create Form ====================
     function toggleCreateForm() {
-      document.getElementById('createForm').classList.toggle('visible');
+      const form = document.getElementById('createForm');
+      form.classList.toggle('visible');
+      if (form.classList.contains('visible') && ffbCdbs.length === 0) {
+        loadFfbCdbs();
+      }
     }
 
     function autoSlug() {
