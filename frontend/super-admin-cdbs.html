@@ -328,7 +328,7 @@
         ffbCdbs = await res.json();
         const select = document.getElementById('ffbCdbSelect');
         select.innerHTML = '<option value="">-- Sélectionner un CDB --</option>' +
-          ffbCdbs.map(c => `<option value="${c.code}">${c.nom} (${c.code}) — Ligue: ${c.ligue_nom || c.ligue_numero}</option>`).join('');
+          ffbCdbs.map(c => `<option value="${c.code}">Dept. ${c.code} — ${c.ligue_nom || 'Ligue ' + c.ligue_numero} (${c.licence_count} licenciés, ${c.club_count} clubs)</option>`).join('');
       } catch (error) {
         console.error('Error loading FFB CDBs:', error);
       }
@@ -338,7 +338,8 @@
       const code = document.getElementById('ffbCdbSelect').value;
       const cdb = ffbCdbs.find(c => c.code === code);
       if (cdb) {
-        document.getElementById('orgName').value = cdb.nom;
+        // Pre-fill name — editable, user should customize
+        document.getElementById('orgName').value = `Comité Départemental de Billard ${cdb.code}`;
         document.getElementById('orgFfbCode').value = cdb.code;
         document.getElementById('orgLigue').value = cdb.ligue_numero || '';
         // Auto-generate short name: "CDB" + code

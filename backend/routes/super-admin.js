@@ -134,11 +134,13 @@ router.get('/dashboard', async (req, res) => {
 router.get('/ffb-cdbs', async (req, res) => {
   try {
     const cdbs = await dbAll(`
-      SELECT c.code, c.nom, c.ligue_numero, l.nom as ligue_nom
+      SELECT c.code, c.ligue_numero, l.nom as ligue_nom,
+        (SELECT COUNT(*) FROM ffb_licences fl WHERE fl.cdb_code = c.code) as licence_count,
+        (SELECT COUNT(*) FROM ffb_clubs fc WHERE fc.cdb_code = c.code) as club_count
       FROM ffb_cdbs c
       LEFT JOIN ffb_ligues l ON c.ligue_numero = l.numero
       WHERE c.code NOT IN (SELECT ffb_cdb_code FROM organizations WHERE ffb_cdb_code IS NOT NULL)
-      ORDER BY c.nom
+      ORDER BY l.nom, c.code
     `);
     res.json(cdbs);
   } catch (error) {
