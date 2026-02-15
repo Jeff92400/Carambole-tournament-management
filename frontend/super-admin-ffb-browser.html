@@ -314,17 +314,6 @@
       }
     }
 
-    // Find first carambole responsible from raw_data keys (handles various naming patterns)
-    function findFirstResponsable(rd) {
-      for (const key of Object.keys(rd)) {
-        const k = key.toLowerCase();
-        if ((k.includes('resp') || k.includes('responsable')) && k.includes('caramb') && rd[key]) {
-          return rd[key];
-        }
-      }
-      return '';
-    }
-
     function debounceLoadClubs() {
       clearTimeout(clubDebounce);
       clubDebounce = setTimeout(() => loadClubs(), 300);
@@ -352,20 +341,7 @@
           return;
         }
 
-        // Detect raw_data keys on first club (for president/responsible field names)
-        if (clubs.length > 0 && clubs[0].raw_data && !window._clubRawKeys) {
-          const rd = typeof clubs[0].raw_data === 'string' ? JSON.parse(clubs[0].raw_data) : clubs[0].raw_data;
-          window._clubRawKeys = Object.keys(rd);
-          console.log('Club raw_data keys:', window._clubRawKeys);
-        }
-
         tbody.innerHTML = clubs.map(c => {
-          const rd = c.raw_data ? (typeof c.raw_data === 'string' ? JSON.parse(c.raw_data) : c.raw_data) : {};
-          // Extract president — try common key names
-          const president = rd['President'] || rd['Nom_president'] || rd['president'] || '';
-          // Extract carambole responsible — take the first match from common key patterns
-          const respCarambole = rd['Resp_carambole'] || rd['Resp_Carambole'] || rd['Responsable_carambole']
-            || rd['Resp_car'] || rd['Nom_resp_carambole'] || rd['Resp_Carambole_1'] || findFirstResponsable(rd) || '';
           return `<tr>
             <td><code>${c.numero}</code></td>
             <td class="text-truncate" title="${c.nom || ''}">${c.nom || '-'}</td>
@@ -374,8 +350,8 @@
             <td>${c.code_postal || '-'}</td>
             <td>${c.cdb_code || '-'}</td>
             <td class="text-muted">${c.ligue_nom || '-'}</td>
-            <td>${president || '-'}</td>
-            <td class="text-truncate" title="${respCarambole}">${respCarambole || '-'}</td>
+            <td>${c.president_name || '-'}</td>
+            <td class="text-truncate" title="${c.resp_carambole_name || ''}">${c.resp_carambole_name || '-'}</td>
             <td>${c.tel || '-'}</td>
             <td class="text-truncate" title="${c.email || ''}">${c.email || '-'}</td>
             <td>${c.licence_count || 0}</td>

@@ -65,10 +65,41 @@ function dbAll(sql, params = []) {
 }
 
 // Helper: parse CSV file into array of objects
+// Handles Latin-1 encoding (FFB exports) and renames empty role sub-columns
 function parseCSV(filePath) {
   return new Promise((resolve, reject) => {
     const records = [];
-    const content = fs.readFileSync(filePath, 'utf-8');
+    // Try Latin-1 first (FFB CSVs), fall back to UTF-8
+    let content;
+    try {
+      const iconv = require('iconv-lite');
+      const buf = fs.readFileSync(filePath);
+      content = iconv.decode(buf, 'latin1');
+    } catch (e) {
+      content = fs.readFileSync(filePath, 'utf-8');
+    }
+
+    // Fix empty column headers for role sub-columns (FFB clubs CSV)
+    // Pattern: "Président; ; ;" → 3 columns: licence, name, email
+    const firstLine = content.split('\n')[0];
+    const headers = firstLine.split(';').map(h => h.trim());
+    let lastRoleName = '';
+    let emptyCount = 0;
+    const fixedHeaders = headers.map((h, i) => {
+      if (h !== '') {
+        lastRoleName = h;
+        emptyCount = 0;
+        return h;
+      }
+      emptyCount++;
+      if (lastRoleName && emptyCount === 1) return lastRoleName + '_nom';
+      if (lastRoleName && emptyCount === 2) return lastRoleName + '_email';
+      return `_col_${i}`;
+    });
+    // Replace first line with fixed headers
+    const lines = content.split('\n');
+    lines[0] = fixedHeaders.join(';');
+    content = lines.join('\n');
 
     const parser = parse(content, {
       delimiter: ';',
@@ -167,25 +198,31 @@ router.post('/import/clubs', upload.single('file'), async (req, res) => {
     const records = await parseCSV(req.file.path);
     stats.total = records.length;
 
+    // Helper: get value from row, trying multiple key names
+    const rv = (row, ...keys) => {
+      for (const k of keys) { if (row[k] !== undefined && row[k] !== '') return (row[k] || '').trim(); }
+      return '';
+    };
+
     for (const row of records) {
       try {
-        const numero = (row['Numero'] || '').trim();
-        const ligueNumero = (row['Ligue'] || '').trim();
-        const cdbCode = (row['CDB'] || '').trim();
-        const nom = (row['Nom'] || '').trim();
-        const sigle = (row['Sigle'] || '').trim();
-        const codePostal = (row['Code_postal'] || '').trim();
-        const ville = (row['Ville'] || '').trim();
-        const email = (row['Email'] || '').trim();
-        const tel = (row['Tel'] || '').trim();
-        const nbCar310 = parseInt(row['Nb_car_310']) || 0;
-        const nbCar280 = parseInt(row['Nb_car_280']) || 0;
-        const nbCarAutres = parseInt(row['Nb_car_autres']) || 0;
-        const nbBb = parseInt(row['Nb_bb']) || 0;
-        const nbSnook = parseInt(row['Nb_snook']) || 0;
-        const nbAmer = parseInt(row['Nb_amer']) || 0;
-        const typeSalle = (row['Type_salle'] || '').trim();
-        const accessHandicap = (row['Access_handicap'] || '').trim();
+        const numero = rv(row, 'Numero');
+        const ligueNumero = rv(row, 'Ligue');
+        const cdbCode = rv(row, 'CDB');
+        const nom = rv(row, 'Nom');
+        const sigle = rv(row, 'Sigle');
+        const codePostal = rv(row, 'Code_postal', 'Code postal');
+        const ville = rv(row, 'Ville');
+        const email = rv(row, 'Email');
+        const tel = rv(row, 'Tel', 'Tel club');
+        const nbCar310 = parseInt(rv(row, 'Nb_car_310', 'Nb carambole 3.10 m')) || 0;
+        const nbCar280 = parseInt(rv(row, 'Nb_car_280', 'Nb carambole 2.80 m')) || 0;
+        const nbCarAutres = parseInt(rv(row, 'Nb_car_autres', 'Nb carambole (autres dimensions)')) || 0;
+        const nbBb = parseInt(rv(row, 'Nb_bb', 'Nb blackball')) || 0;
+        const nbSnook = parseInt(rv(row, 'Nb_snook', 'Nb snooker')) || 0;
+        const nbAmer = parseInt(rv(row, 'Nb_amer', 'Nb américain')) || 0;
+        const typeSalle = rv(row, 'Type_salle', 'Type de salle');
+        const accessHandicap = rv(row, 'Access_handicap', 'Accès handicapés');
 
         if (!numero) { stats.errors++; continue; }
 
@@ -207,11 +244,15 @@ router.post('/import/clubs', upload.single('file'), async (req, res) => {
           }
         }
 
-        // Collect raw_data
+        // Collect raw_data (remove explicitly extracted columns)
         const rawData = { ...row };
-        ['Numero','Ligue','CDB','Nom','Sigle','Code_postal','Ville','Email','Tel',
-         'Nb_car_310','Nb_car_280','Nb_car_autres','Nb_bb','Nb_snook','Nb_amer',
-         'Type_salle','Access_handicap'].forEach(k => delete rawData[k]);
+        ['Numero','Ligue','CDB','Nom','Sigle','Code_postal','Code postal','Ville',
+         'Email','Tel','Tel club',
+         'Nb_car_310','Nb carambole 3.10 m','Nb_car_280','Nb carambole 2.80 m',
+         'Nb_car_autres','Nb carambole (autres dimensions)',
+         'Nb_bb','Nb blackball','Nb_snook','Nb snooker','Nb_amer','Nb américain',
+         'Type_salle','Type de salle','Access_handicap','Accès handicapés'
+        ].forEach(k => delete rawData[k]);
 
         const existing = await dbGet(`SELECT numero FROM ffb_clubs WHERE numero = $1`, [numero]);
         if (existing) {
@@ -460,6 +501,55 @@ router.get('/clubs', async (req, res) => {
       ORDER BY c.nom
       LIMIT 200
     `, params);
+
+    // Extract president/resp. carambole licence numbers from raw_data and resolve names
+    const licenceNumbers = new Set();
+    const clubRoles = clubs.map(c => {
+      const rd = c.raw_data ? (typeof c.raw_data === 'string' ? JSON.parse(c.raw_data) : c.raw_data) : {};
+      // Find president licence — key contains "sident" (handles encoding issues)
+      let presLicence = '', presName = '';
+      let respLicence = '', respName = '';
+      for (const [key, val] of Object.entries(rd)) {
+        const k = key.toLowerCase();
+        if (k.includes('sident') && !k.includes('_nom') && !k.includes('_email') && val) {
+          presLicence = val;
+        }
+        if (k.includes('sident') && k.includes('_nom') && val) {
+          presName = val;
+        }
+        if (k.includes('responsable') && k.includes('carambole') && !k.includes('_nom') && !k.includes('_email') && val) {
+          respLicence = val;
+        }
+        if (k.includes('responsable') && k.includes('carambole') && k.includes('_nom') && val) {
+          respName = val;
+        }
+      }
+      if (presLicence) licenceNumbers.add(presLicence);
+      if (respLicence) licenceNumbers.add(respLicence);
+      return { presLicence, presName, respLicence, respName };
+    });
+
+    // Batch lookup licence numbers → names
+    let licenceMap = {};
+    if (licenceNumbers.size > 0) {
+      const placeholders = [...licenceNumbers].map((_, i) => `$${i + 1}`).join(',');
+      const rows = await dbAll(
+        `SELECT licence, nom, prenom FROM ffb_licences WHERE licence IN (${placeholders})`,
+        [...licenceNumbers]
+      );
+      for (const r of rows) {
+        licenceMap[r.licence] = `${r.prenom || ''} ${r.nom || ''}`.trim();
+      }
+    }
+
+    // Attach resolved names to clubs
+    clubs.forEach((c, i) => {
+      const roles = clubRoles[i];
+      c.president_name = roles.presName || licenceMap[roles.presLicence] || '';
+      c.resp_carambole_name = roles.respName || licenceMap[roles.respLicence] || '';
+      delete c.raw_data; // Don't send full raw_data to frontend
+    });
+
     res.json(clubs);
   } catch (error) {
     console.error('Error listing clubs:', error);
