@@ -157,7 +157,8 @@ router.post('/login', (req, res) => {
         username: user.username,
         role: user.role,
         clubId: user.club_id || null,
-        isSuperAdmin: user.is_super_admin || false
+        isSuperAdmin: user.is_super_admin || false,
+        organizationId: user.organization_id || null
       };
 
       const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '24h' });
@@ -194,7 +195,8 @@ router.post('/login', (req, res) => {
           role: user.role,
           club_id: user.club_id || null,
           club_name: clubName,
-          is_super_admin: user.is_super_admin || false
+          is_super_admin: user.is_super_admin || false,
+          organization_id: user.organization_id || null
         }
       });
     });
@@ -841,6 +843,10 @@ function authenticateToken(req, res, next) {
     }
 
     req.user = user;
+    // Convenience helpers for org-aware settings
+    const appSettings = require('../utils/app-settings');
+    req.getOrgSetting = (key) => appSettings.getOrgSetting(user.organizationId, key);
+    req.getOrgSettingsBatch = (keys) => appSettings.getOrgSettingsBatch(user.organizationId, keys);
     next();
   });
 }

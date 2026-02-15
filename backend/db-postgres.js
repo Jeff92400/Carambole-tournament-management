@@ -34,6 +34,35 @@ async function initializeDatabase() {
       )
     `);
 
+    // ============= MULTI-CDB ORGANIZATIONS =============
+
+    // Organizations table — one per CDB (must be before users table)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS organizations (
+        id SERIAL PRIMARY KEY,
+        name TEXT NOT NULL,
+        short_name VARCHAR(20) NOT NULL UNIQUE,
+        slug VARCHAR(50) NOT NULL UNIQUE,
+        ffb_cdb_code VARCHAR(10),
+        ffb_ligue_numero VARCHAR(10),
+        is_active BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Per-CDB settings (mirrors app_settings pattern but scoped per org)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS organization_settings (
+        id SERIAL PRIMARY KEY,
+        organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        key TEXT NOT NULL,
+        value TEXT,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(organization_id, key)
+      )
+    `);
+
     // Users table with roles
     await client.query(`
       CREATE TABLE IF NOT EXISTS users (
@@ -54,6 +83,7 @@ async function initializeDatabase() {
     await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS receive_tournament_alerts BOOLEAN DEFAULT FALSE`);
     await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS club_id INTEGER REFERENCES clubs(id)`);
     await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_super_admin BOOLEAN DEFAULT FALSE`);
+    await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)`);
 
     // Players table
     await client.query(`
@@ -104,6 +134,7 @@ async function initializeDatabase() {
     await client.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS date_licence DATE`);
     await client.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS nationalite VARCHAR(50)`);
     await client.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS ffb_last_sync TIMESTAMP`);
+    await client.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)`);
 
     // Migrations that depend on player_accounts - check if table exists first
     const tableCheck = await client.query(`
@@ -351,6 +382,7 @@ async function initializeDatabase() {
     await client.query(`ALTER TABLE clubs ADD COLUMN IF NOT EXISTS responsable_sportif_name VARCHAR(255)`);
     await client.query(`ALTER TABLE clubs ADD COLUMN IF NOT EXISTS responsable_sportif_email VARCHAR(255)`);
     await client.query(`ALTER TABLE clubs ADD COLUMN IF NOT EXISTS responsable_sportif_licence VARCHAR(50)`);
+    await client.query(`ALTER TABLE clubs ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)`);
 
     // Initialize default calendar codes for existing clubs
     const defaultCalendarCodes = [
@@ -1208,6 +1240,47 @@ async function initializeDatabase() {
         imported_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         duration_ms INTEGER
       )
+    `);
+
+    // ============= SEED CDBHS AS ORGANIZATION #1 =============
+
+    // Create CDBHS as the first organization (idempotent)
+    await client.query(`
+      INSERT INTO organizations (id, name, short_name, slug, ffb_cdb_code, ffb_ligue_numero)
+      VALUES (1, 'Comité Départemental de Billard des Hauts-de-Seine', 'CDBHS', 'cdbhs', '92', '11')
+      ON CONFLICT (id) DO NOTHING
+    `);
+
+    // Assign all existing users/players/clubs to org #1 if not yet assigned
+    await client.query(`UPDATE users SET organization_id = 1 WHERE organization_id IS NULL`);
+    await client.query(`UPDATE players SET organization_id = 1 WHERE organization_id IS NULL`);
+    await client.query(`UPDATE clubs SET organization_id = 1 WHERE organization_id IS NULL`);
+
+    // Migrate CDB-specific settings from app_settings to organization_settings for org #1
+    const orgSettingsKeys = [
+      'organization_name', 'organization_short_name',
+      'primary_color', 'secondary_color', 'accent_color', 'background_color', 'background_secondary_color',
+      'email_communication', 'email_convocations', 'email_noreply', 'email_sender_name', 'summary_email',
+      'season_cutoff_month', 'enable_csv_imports', 'privacy_policy', 'header_logo_size'
+    ];
+    for (const key of orgSettingsKeys) {
+      await client.query(`
+        INSERT INTO organization_settings (organization_id, key, value)
+        SELECT 1, key, value FROM app_settings WHERE key = $1
+        ON CONFLICT (organization_id, key) DO NOTHING
+      `, [key]);
+    }
+
+    // Seed default welcome email template for CDB onboarding
+    await client.query(`
+      INSERT INTO organization_settings (organization_id, key, value)
+      VALUES (1, 'cdb_welcome_subject', 'Bienvenue sur la Plateforme Gestion des Tournois CDB - {organization_short_name}')
+      ON CONFLICT (organization_id, key) DO NOTHING
+    `);
+    await client.query(`
+      INSERT INTO organization_settings (organization_id, key, value)
+      VALUES (1, 'cdb_welcome_body', '<p>Bonjour {admin_name},</p><p>Nous avons le plaisir de vous informer que votre espace de gestion des compétitions pour le <strong>{organization_name}</strong> est désormais opérationnel.</p><p><strong>Votre URL de connexion :</strong> <a href="{login_url}">{login_url}</a><br><strong>Votre identifiant :</strong> {username}<br><strong>Votre mot de passe</strong> vous sera communiqué par SMS.</p><p>{player_count} joueurs ont été pré-chargés dans votre base depuis le fichier FFB.</p><p>Lors de votre première connexion, nous vous invitons à :</p><ol><li>Personnaliser les paramètres de votre comité (couleurs, logo, emails)</li><li>Vérifier la liste des joueurs importés</li><li>Configurer vos clubs</li><li>Créer votre premier tournoi</li></ol><p>Pour toute question, n''hésitez pas à nous contacter.</p><p>Cordialement,<br>L''équipe Plateforme Gestion des Tournois CDB</p>')
+      ON CONFLICT (organization_id, key) DO NOTHING
     `);
 
     await client.query('COMMIT');
