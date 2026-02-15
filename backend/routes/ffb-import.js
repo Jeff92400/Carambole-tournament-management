@@ -393,6 +393,158 @@ router.get('/import/history', async (req, res) => {
   }
 });
 
+// ============= BROWSE FFB DATA =============
+
+// GET /api/ffb/cdbs — List all FFB CDBs with counts (for browser filters)
+router.get('/cdbs', async (req, res) => {
+  try {
+    const cdbs = await dbAll(`
+      SELECT c.code, c.ligue_numero, l.nom as ligue_nom,
+        (SELECT COUNT(*) FROM ffb_licences fl WHERE fl.cdb_code = c.code) as licence_count,
+        (SELECT COUNT(*) FROM ffb_clubs fc WHERE fc.cdb_code = c.code) as club_count
+      FROM ffb_cdbs c
+      LEFT JOIN ffb_ligues l ON c.ligue_numero = l.numero
+      ORDER BY l.nom, c.code
+    `);
+    res.json(cdbs);
+  } catch (error) {
+    console.error('Error listing FFB CDBs:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/ffb/ligues — List all ligues with counts
+router.get('/ligues', async (req, res) => {
+  try {
+    const ligues = await dbAll(`
+      SELECT l.numero, l.nom,
+        (SELECT COUNT(*) FROM ffb_clubs c WHERE c.ligue_numero = l.numero) as club_count,
+        (SELECT COUNT(*) FROM ffb_licences fl WHERE fl.ligue_numero = l.numero) as licence_count
+      FROM ffb_ligues l
+      ORDER BY l.nom
+    `);
+    res.json(ligues);
+  } catch (error) {
+    console.error('Error listing ligues:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/ffb/clubs — List clubs with filters
+router.get('/clubs', async (req, res) => {
+  const { ligue, cdb, q } = req.query;
+  try {
+    let where = [];
+    let params = [];
+    let idx = 1;
+
+    if (ligue) { where.push(`c.ligue_numero = $${idx++}`); params.push(ligue); }
+    if (cdb) { where.push(`c.cdb_code = $${idx++}`); params.push(cdb); }
+    if (q && q.length >= 2) {
+      where.push(`(UPPER(c.nom) LIKE $${idx} OR UPPER(c.ville) LIKE $${idx} OR c.numero LIKE $${idx})`);
+      params.push(`%${q.toUpperCase()}%`);
+      idx++;
+    }
+
+    const whereClause = where.length > 0 ? 'WHERE ' + where.join(' AND ') : '';
+
+    const clubs = await dbAll(`
+      SELECT c.numero, c.nom, c.sigle, c.ville, c.code_postal, c.cdb_code, c.email, c.tel,
+        c.nb_car_310, c.nb_car_280, c.nb_car_autres,
+        l.nom as ligue_nom,
+        (SELECT COUNT(*) FROM ffb_licences fl WHERE fl.num_club = c.numero) as licence_count
+      FROM ffb_clubs c
+      LEFT JOIN ffb_ligues l ON c.ligue_numero = l.numero
+      ${whereClause}
+      ORDER BY c.nom
+      LIMIT 200
+    `, params);
+    res.json(clubs);
+  } catch (error) {
+    console.error('Error listing clubs:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/ffb/licences — List licences with filters (paginated)
+router.get('/licences', async (req, res) => {
+  const { cdb, club, categorie, discipline, q, page = 1 } = req.query;
+  const limit = 50;
+  const offset = (Math.max(1, parseInt(page)) - 1) * limit;
+
+  try {
+    let where = [];
+    let params = [];
+    let idx = 1;
+
+    if (cdb) { where.push(`fl.cdb_code = $${idx++}`); params.push(cdb); }
+    if (club) { where.push(`fl.num_club = $${idx++}`); params.push(club); }
+    if (categorie) { where.push(`fl.categorie = $${idx++}`); params.push(categorie); }
+    if (discipline) { where.push(`fl.discipline = $${idx++}`); params.push(discipline); }
+    if (q && q.length >= 2) {
+      where.push(`(UPPER(fl.nom) LIKE $${idx} OR UPPER(fl.prenom) LIKE $${idx} OR fl.licence LIKE $${idx})`);
+      params.push(`%${q.toUpperCase()}%`);
+      idx++;
+    }
+
+    const whereClause = where.length > 0 ? 'WHERE ' + where.join(' AND ') : '';
+
+    // Count total
+    const countRow = await dbGet(`SELECT COUNT(*) as count FROM ffb_licences fl ${whereClause}`, params);
+    const total = parseInt(countRow?.count || 0);
+
+    // Fetch page
+    const licences = await dbAll(`
+      SELECT fl.licence, fl.prenom, fl.nom, fl.sexe, fl.date_de_naissance, fl.categorie,
+        fl.discipline, fl.num_club, fl.email, fl.cdb_code, fl.nationalite, fl.arbitre,
+        fl.raw_data->>'Tel_port' as tel_port,
+        fl.raw_data->>'Tel_fixe' as tel_fixe,
+        fc.nom as club_nom, fc.ville as club_ville
+      FROM ffb_licences fl
+      LEFT JOIN ffb_clubs fc ON fl.num_club = fc.numero
+      ${whereClause}
+      ORDER BY fl.nom, fl.prenom
+      LIMIT $${idx++} OFFSET $${idx++}
+    `, [...params, limit, offset]);
+
+    res.json({ data: licences, total, page: parseInt(page), pages: Math.ceil(total / limit), limit });
+  } catch (error) {
+    console.error('Error listing licences:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/ffb/licences/filter-options — Get distinct values for filter dropdowns
+router.get('/licences/filter-options', async (req, res) => {
+  const { cdb } = req.query;
+  try {
+    const categories = await dbAll(
+      `SELECT DISTINCT categorie FROM ffb_licences WHERE categorie IS NOT NULL AND categorie != '' ${cdb ? 'AND cdb_code = $1' : ''} ORDER BY categorie`,
+      cdb ? [cdb] : []
+    );
+    const disciplines = await dbAll(
+      `SELECT DISTINCT discipline FROM ffb_licences WHERE discipline IS NOT NULL AND discipline != '' ${cdb ? 'AND cdb_code = $1' : ''} ORDER BY discipline`,
+      cdb ? [cdb] : []
+    );
+    // Clubs for selected CDB
+    let clubs = [];
+    if (cdb) {
+      clubs = await dbAll(
+        `SELECT numero, nom FROM ffb_clubs WHERE cdb_code = $1 ORDER BY nom`,
+        [cdb]
+      );
+    }
+    res.json({
+      categories: categories.map(r => r.categorie),
+      disciplines: disciplines.map(r => r.discipline),
+      clubs
+    });
+  } catch (error) {
+    console.error('Error fetching filter options:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ============= SYNC PLAYERS FROM FFB LICENCES =============
 
 // GET /api/ffb/sync/preview — Preview what will be synced (dry run)

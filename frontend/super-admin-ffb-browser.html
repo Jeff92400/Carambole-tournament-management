@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FFB Fichiers - Plateforme Gestion des Tournois CDB</title>
+  <link rel="icon" type="image/png" href="images/FFB.png">
+  <link rel="stylesheet" href="css/styles.css">
+  <script src="js/branding.js"></script>
+  <style>
+    .sa-nav { display: flex; gap: 0; background: white; border-radius: 12px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); overflow: hidden; }
+    .sa-nav a {
+      flex: 1; text-align: center; padding: 12px 8px; text-decoration: none; font-size: 13px; font-weight: 600;
+      color: #666; border-bottom: 3px solid transparent; transition: all 0.2s;
+    }
+    .sa-nav a:hover { background: #f8f9fa; color: #333; }
+    .sa-nav a.active { color: var(--color-primary, #1F4788); border-bottom-color: var(--color-primary, #1F4788); background: #f0f4ff; }
+    .sa-nav a .nav-icon { display: block; font-size: 18px; margin-bottom: 2px; }
+
+    .card { background: white; border-radius: 12px; padding: 16px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+
+    /* Sub-tabs */
+    .sub-tabs { display: flex; gap: 0; margin-bottom: 16px; border-bottom: 2px solid #eee; }
+    .sub-tab {
+      padding: 10px 20px; cursor: pointer; font-size: 14px; font-weight: 600; color: #888;
+      border-bottom: 3px solid transparent; margin-bottom: -2px; transition: all 0.2s;
+    }
+    .sub-tab:hover { color: #555; }
+    .sub-tab.active { color: var(--color-primary, #1F4788); border-bottom-color: var(--color-primary, #1F4788); }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    /* Filter bar */
+    .filter-bar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+    .filter-bar select, .filter-bar input {
+      padding: 7px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px;
+    }
+    .filter-bar select { min-width: 160px; }
+    .filter-bar input { min-width: 200px; }
+    .filter-bar select:focus, .filter-bar input:focus {
+      border-color: var(--color-primary, #1F4788); outline: none; box-shadow: 0 0 0 2px rgba(31,71,136,0.1);
+    }
+
+    /* Data tables */
+    .data-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .data-table th {
+      background: #f5f5f5; padding: 8px 8px; text-align: left; font-size: 11px;
+      text-transform: uppercase; color: #666; white-space: nowrap; position: sticky; top: 0;
+    }
+    .data-table td { padding: 6px 8px; border-bottom: 1px solid #f0f0f0; white-space: nowrap; }
+    .data-table tr:hover { background: #fafafa; }
+    .data-table .text-muted { color: #999; }
+    .data-table .text-truncate { max-width: 200px; overflow: hidden; text-overflow: ellipsis; }
+    .table-scroll { overflow-x: auto; max-height: 70vh; overflow-y: auto; }
+
+    /* Pagination */
+    .pagination { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; font-size: 13px; }
+    .pagination .info { color: #888; }
+    .pagination .controls { display: flex; gap: 6px; }
+    .pagination button {
+      padding: 6px 14px; border: 1px solid #ddd; border-radius: 4px; background: white;
+      font-size: 12px; cursor: pointer;
+    }
+    .pagination button:hover:not(:disabled) { background: #f0f4ff; border-color: var(--color-primary, #1F4788); }
+    .pagination button:disabled { opacity: 0.4; cursor: not-allowed; }
+    .pagination .current-page { padding: 6px 10px; font-weight: 600; color: var(--color-primary, #1F4788); }
+
+    /* Count badge */
+    .count-badge {
+      display: inline-block; background: #e8f5e9; color: #2e7d32; padding: 2px 8px;
+      border-radius: 10px; font-size: 11px; font-weight: 600; margin-left: 6px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="navbar">
+      <div>
+        <h2 style="margin-bottom: 0;"><img id="app-header-icon" src="images/FFB.png" alt="" style="height: 48px; width: 48px; vertical-align: middle; margin-right: 8px; border-radius: 6px;" onerror="this.src='images/FrenchBillard-Icon-small.png';"><span id="app-org-name" data-page-title="FFB Fichiers">Plateforme Gestion des Tournois CDB</span></h2>
+      </div>
+      <div class="nav-links">
+        <a href="dashboard.html" class="nav-tooltip" data-tooltip="Retour au CDB">CDB</a>
+        <a href="#" id="logoutBtn" class="nav-logout">Déconnexion</a>
+      </div>
+    </div>
+
+    <!-- Super Admin Navigation -->
+    <nav class="sa-nav">
+      <a href="super-admin.html">
+        <span class="nav-icon">&#x1F4CA;</span>
+        Tableau de bord
+      </a>
+      <a href="super-admin-cdbs.html">
+        <span class="nav-icon">&#x1F3E2;</span>
+        CDBs
+      </a>
+      <a href="super-admin-ffb.html">
+        <span class="nav-icon">&#x1F4C1;</span>
+        Données FFB
+      </a>
+      <a href="super-admin-ffb-browser.html" class="active">
+        <span class="nav-icon">&#x1F50D;</span>
+        FFB Fichiers
+      </a>
+      <a href="#" onclick="return false;" style="opacity: 0.4; cursor: default;">
+        <span class="nav-icon">&#x1F465;</span>
+        Utilisateurs
+      </a>
+      <a href="#" onclick="return false;" style="opacity: 0.4; cursor: default;">
+        <span class="nav-icon">&#x2699;</span>
+        Paramètres
+      </a>
+    </nav>
+
+    <!-- Sub-tabs -->
+    <div class="sub-tabs">
+      <div class="sub-tab active" onclick="switchTab('ligues')">Ligues</div>
+      <div class="sub-tab" onclick="switchTab('clubs')">Clubs</div>
+      <div class="sub-tab" onclick="switchTab('licences')">Licences</div>
+    </div>
+
+    <!-- ==================== LIGUES TAB ==================== -->
+    <div class="tab-content active" id="tab-ligues">
+      <div class="card">
+        <h3>Ligues FFB <span class="count-badge" id="liguesCount">-</span></h3>
+        <div class="table-scroll">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Numéro</th>
+                <th>Nom</th>
+                <th>Clubs</th>
+                <th>Licenciés</th>
+              </tr>
+            </thead>
+            <tbody id="liguesBody">
+              <tr><td colspan="4" style="text-align: center; color: #999;">Chargement...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== CLUBS TAB ==================== -->
+    <div class="tab-content" id="tab-clubs">
+      <div class="card">
+        <h3>Clubs FFB <span class="count-badge" id="clubsCount">-</span></h3>
+        <div class="filter-bar">
+          <select id="clubFilterLigue" onchange="loadClubs()">
+            <option value="">Toutes les ligues</option>
+          </select>
+          <select id="clubFilterCdb" onchange="loadClubs()">
+            <option value="">Tous les CDB</option>
+          </select>
+          <input type="text" id="clubFilterSearch" placeholder="Rechercher (nom, ville, numéro)..." oninput="debounceLoadClubs()">
+        </div>
+        <div class="table-scroll">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Numéro</th>
+                <th>Nom</th>
+                <th>Sigle</th>
+                <th>Ville</th>
+                <th>CP</th>
+                <th>CDB</th>
+                <th>Ligue</th>
+                <th>Tél</th>
+                <th>Email</th>
+                <th>Licenciés</th>
+              </tr>
+            </thead>
+            <tbody id="clubsBody">
+              <tr><td colspan="10" style="text-align: center; color: #999;">Sélectionnez un filtre ou recherchez...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== LICENCES TAB ==================== -->
+    <div class="tab-content" id="tab-licences">
+      <div class="card">
+        <h3>Licences FFB <span class="count-badge" id="licencesCount">-</span></h3>
+        <div class="filter-bar">
+          <select id="licFilterCdb" onchange="onLicCdbChanged()">
+            <option value="">Tous les CDB</option>
+          </select>
+          <select id="licFilterClub" onchange="loadLicences(1)">
+            <option value="">Tous les clubs</option>
+          </select>
+          <select id="licFilterCategorie" onchange="loadLicences(1)">
+            <option value="">Toutes catégories</option>
+          </select>
+          <select id="licFilterDiscipline" onchange="loadLicences(1)">
+            <option value="">Toutes disciplines</option>
+          </select>
+          <input type="text" id="licFilterSearch" placeholder="Rechercher (nom, prénom, licence)..." oninput="debounceLoadLicences()">
+        </div>
+        <div class="table-scroll">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Licence</th>
+                <th>Prénom</th>
+                <th>Nom</th>
+                <th>Sexe</th>
+                <th>Date naiss.</th>
+                <th>Catégorie</th>
+                <th>Discipline</th>
+                <th>Club</th>
+                <th>Email</th>
+                <th>Tél portable</th>
+              </tr>
+            </thead>
+            <tbody id="licencesBody">
+              <tr><td colspan="10" style="text-align: center; color: #999;">Sélectionnez un CDB ou recherchez...</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="pagination" id="licencesPagination" style="display: none;">
+          <div class="info" id="licPaginationInfo">-</div>
+          <div class="controls">
+            <button onclick="loadLicences(currentLicPage - 1)" id="licPrevBtn" disabled>&laquo; Précédent</button>
+            <span class="current-page" id="licPageNum">1</span>
+            <button onclick="loadLicences(currentLicPage + 1)" id="licNextBtn" disabled>Suivant &raquo;</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/auth-utils.js"></script>
+  <script src="js/app-branding.js"></script>
+  <script>
+    const API_URL = '/api';
+    if (!requireAuth()) throw new Error('Not authenticated');
+    if (localStorage.getItem('isSuperAdmin') !== 'true') {
+      window.location.href = 'dashboard.html';
+    }
+    if (typeof initPublicBranding === 'function') initPublicBranding();
+    document.getElementById('logoutBtn').addEventListener('click', (e) => { e.preventDefault(); logout(); });
+
+    // ==================== Tab Switching ====================
+    function switchTab(tab) {
+      document.querySelectorAll('.sub-tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+      document.querySelector(`.sub-tab[onclick="switchTab('${tab}')"]`).classList.add('active');
+      document.getElementById('tab-' + tab).classList.add('active');
+
+      // Lazy-load data on first visit
+      if (tab === 'ligues' && !liguesLoaded) loadLigues();
+      if (tab === 'clubs' && !clubFiltersLoaded) loadClubFilters();
+      if (tab === 'licences' && !licFiltersLoaded) loadLicFilters();
+    }
+
+    // ==================== LIGUES ====================
+    let liguesLoaded = false;
+
+    async function loadLigues() {
+      try {
+        const res = await authFetch(`${API_URL}/ffb/ligues`);
+        const ligues = await res.json();
+        liguesLoaded = true;
+
+        document.getElementById('liguesCount').textContent = ligues.length;
+        const tbody = document.getElementById('liguesBody');
+
+        if (ligues.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: #999;">Aucune ligue importée</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = ligues.map(l => `
+          <tr>
+            <td><strong>${l.numero}</strong></td>
+            <td>${l.nom || '-'}</td>
+            <td>${l.club_count || 0}</td>
+            <td>${l.licence_count || 0}</td>
+          </tr>
+        `).join('');
+      } catch (error) {
+        console.error('Error loading ligues:', error);
+      }
+    }
+
+    // ==================== CLUBS ====================
+    let clubFiltersLoaded = false;
+    let clubDebounce = null;
+
+    async function loadClubFilters() {
+      clubFiltersLoaded = true;
+      try {
+        // Load ligues for dropdown
+        const res = await authFetch(`${API_URL}/ffb/ligues`);
+        const ligues = await res.json();
+        const ligueSelect = document.getElementById('clubFilterLigue');
+        ligueSelect.innerHTML = '<option value="">Toutes les ligues</option>' +
+          ligues.map(l => `<option value="${l.numero}">${l.nom || l.numero}</option>`).join('');
+
+        // Load CDBs for dropdown
+        const cdbRes = await authFetch(`${API_URL}/ffb/cdbs`);
+        const cdbs = await cdbRes.json();
+        const cdbSelect = document.getElementById('clubFilterCdb');
+        cdbSelect.innerHTML = '<option value="">Tous les CDB</option>' +
+          cdbs.map(c => `<option value="${c.code}">Dept. ${c.code} — ${c.ligue_nom || ''} (${c.club_count} clubs)</option>`).join('');
+
+        loadClubs();
+      } catch (error) {
+        console.error('Error loading club filters:', error);
+        loadClubs();
+      }
+    }
+
+    function debounceLoadClubs() {
+      clearTimeout(clubDebounce);
+      clubDebounce = setTimeout(() => loadClubs(), 300);
+    }
+
+    async function loadClubs() {
+      const ligue = document.getElementById('clubFilterLigue').value;
+      const cdb = document.getElementById('clubFilterCdb').value;
+      const q = document.getElementById('clubFilterSearch').value.trim();
+
+      const params = new URLSearchParams();
+      if (ligue) params.set('ligue', ligue);
+      if (cdb) params.set('cdb', cdb);
+      if (q.length >= 2) params.set('q', q);
+
+      try {
+        const res = await authFetch(`${API_URL}/ffb/clubs?${params}`);
+        const clubs = await res.json();
+
+        document.getElementById('clubsCount').textContent = clubs.length + (clubs.length >= 200 ? '+' : '');
+        const tbody = document.getElementById('clubsBody');
+
+        if (clubs.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="10" style="text-align: center; color: #999;">Aucun club trouvé</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = clubs.map(c => `
+          <tr>
+            <td><code>${c.numero}</code></td>
+            <td class="text-truncate" title="${c.nom || ''}">${c.nom || '-'}</td>
+            <td>${c.sigle || '-'}</td>
+            <td>${c.ville || '-'}</td>
+            <td>${c.code_postal || '-'}</td>
+            <td>${c.cdb_code || '-'}</td>
+            <td class="text-muted">${c.ligue_nom || '-'}</td>
+            <td>${c.tel || '-'}</td>
+            <td class="text-truncate" title="${c.email || ''}">${c.email || '-'}</td>
+            <td>${c.licence_count || 0}</td>
+          </tr>
+        `).join('');
+      } catch (error) {
+        console.error('Error loading clubs:', error);
+      }
+    }
+
+    // ==================== LICENCES ====================
+    let licFiltersLoaded = false;
+    let licDebounce = null;
+    let currentLicPage = 1;
+
+    async function loadLicFilters() {
+      licFiltersLoaded = true;
+      try {
+        // Load CDBs for dropdown
+        const cdbRes = await authFetch(`${API_URL}/ffb/cdbs`);
+        const cdbs = await cdbRes.json();
+        const cdbSelect = document.getElementById('licFilterCdb');
+        cdbSelect.innerHTML = '<option value="">Tous les CDB</option>' +
+          cdbs.map(c => `<option value="${c.code}">Dept. ${c.code} — ${c.ligue_nom || ''} (${c.licence_count} lic.)</option>`).join('');
+
+        // Load categories and disciplines
+        const optRes = await authFetch(`${API_URL}/ffb/licences/filter-options`);
+        const opts = await optRes.json();
+        document.getElementById('licFilterCategorie').innerHTML = '<option value="">Toutes catégories</option>' +
+          opts.categories.map(c => `<option value="${c}">${c}</option>`).join('');
+        document.getElementById('licFilterDiscipline').innerHTML = '<option value="">Toutes disciplines</option>' +
+          opts.disciplines.map(d => `<option value="${d}">${d}</option>`).join('');
+      } catch (error) {
+        console.error('Error loading licence filters:', error);
+      }
+    }
+
+    async function onLicCdbChanged() {
+      const cdb = document.getElementById('licFilterCdb').value;
+
+      // Update club dropdown based on selected CDB
+      const clubSelect = document.getElementById('licFilterClub');
+      clubSelect.innerHTML = '<option value="">Tous les clubs</option>';
+
+      if (cdb) {
+        try {
+          const res = await authFetch(`${API_URL}/ffb/licences/filter-options?cdb=${encodeURIComponent(cdb)}`);
+          const opts = await res.json();
+          clubSelect.innerHTML = '<option value="">Tous les clubs</option>' +
+            opts.clubs.map(c => `<option value="${c.numero}">${c.nom}</option>`).join('');
+        } catch (e) {
+          console.error('Error loading clubs for CDB:', e);
+        }
+      }
+
+      loadLicences(1);
+    }
+
+    function debounceLoadLicences() {
+      clearTimeout(licDebounce);
+      licDebounce = setTimeout(() => loadLicences(1), 300);
+    }
+
+    async function loadLicences(page) {
+      currentLicPage = page || 1;
+
+      const cdb = document.getElementById('licFilterCdb').value;
+      const club = document.getElementById('licFilterClub').value;
+      const categorie = document.getElementById('licFilterCategorie').value;
+      const discipline = document.getElementById('licFilterDiscipline').value;
+      const q = document.getElementById('licFilterSearch').value.trim();
+
+      const params = new URLSearchParams();
+      if (cdb) params.set('cdb', cdb);
+      if (club) params.set('club', club);
+      if (categorie) params.set('categorie', categorie);
+      if (discipline) params.set('discipline', discipline);
+      if (q.length >= 2) params.set('q', q);
+      params.set('page', currentLicPage);
+
+      try {
+        const res = await authFetch(`${API_URL}/ffb/licences?${params}`);
+        const result = await res.json();
+
+        document.getElementById('licencesCount').textContent = result.total.toLocaleString('fr-FR');
+        const tbody = document.getElementById('licencesBody');
+
+        if (result.data.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="10" style="text-align: center; color: #999;">Aucune licence trouvée</td></tr>';
+          document.getElementById('licencesPagination').style.display = 'none';
+          return;
+        }
+
+        tbody.innerHTML = result.data.map(l => `
+          <tr>
+            <td><code>${l.licence}</code></td>
+            <td>${l.prenom || '-'}</td>
+            <td><strong>${l.nom || '-'}</strong></td>
+            <td>${l.sexe || '-'}</td>
+            <td>${l.date_de_naissance ? new Date(l.date_de_naissance).toLocaleDateString('fr-FR') : '-'}</td>
+            <td>${l.categorie || '-'}</td>
+            <td>${l.discipline || '-'}</td>
+            <td class="text-truncate" title="${l.club_nom || ''}">${l.club_nom || '-'}</td>
+            <td class="text-truncate" title="${l.email || ''}">${l.email || '-'}</td>
+            <td>${l.tel_port || '-'}</td>
+          </tr>
+        `).join('');
+
+        // Pagination
+        const pag = document.getElementById('licencesPagination');
+        pag.style.display = 'flex';
+        const start = (currentLicPage - 1) * result.limit + 1;
+        const end = Math.min(currentLicPage * result.limit, result.total);
+        document.getElementById('licPaginationInfo').textContent = `${start}-${end} sur ${result.total.toLocaleString('fr-FR')}`;
+        document.getElementById('licPageNum').textContent = `Page ${currentLicPage} / ${result.pages}`;
+        document.getElementById('licPrevBtn').disabled = currentLicPage <= 1;
+        document.getElementById('licNextBtn').disabled = currentLicPage >= result.pages;
+
+      } catch (error) {
+        console.error('Error loading licences:', error);
+      }
+    }
+
+    // ==================== Init ====================
+    // Load ligues tab by default
+    loadLigues();
+  </script>
+</body>
+</html>
