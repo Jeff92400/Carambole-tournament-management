@@ -214,6 +214,38 @@ app.get('/api/health', (req, res) => {
 });
 
 // TEMPORARY: Demo seed endpoint - REMOVE AFTER SEEDING
+// Set a user as super admin (one-time seed)
+app.get('/api/seed-super-admin', async (req, res) => {
+  const secret = req.query.secret;
+  if (secret !== 'seed-demo-2024') {
+    return res.status(403).json({ error: 'Invalid secret' });
+  }
+
+  const username = req.query.username || 'admin';
+
+  try {
+    await new Promise((resolve, reject) => {
+      db.run(
+        `UPDATE users SET is_super_admin = true WHERE username = $1`,
+        [username],
+        function(err) {
+          if (err) return reject(err);
+          if (this.changes === 0) return reject(new Error('User not found: ' + username));
+          resolve();
+        }
+      );
+    });
+
+    res.json({
+      success: true,
+      message: `Super Admin granted to "${username}". Log out and log back in to activate.`
+    });
+  } catch (error) {
+    console.error('Seed super admin error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.get('/api/seed-demo', async (req, res) => {
   const secret = req.query.secret;
   if (secret !== 'seed-demo-2024') {
