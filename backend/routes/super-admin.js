@@ -608,14 +608,18 @@ router.post('/email-templates/cdb_welcome/test', async (req, res) => {
       return res.status(400).json({ error: 'RESEND_API_KEY non configurée' });
     }
 
-    // Get super admin email
-    const superAdmin = await dbGet(`SELECT email FROM users WHERE id = $1`, [req.user.userId]);
-    if (!superAdmin?.email) {
-      return res.status(400).json({ error: 'Votre compte n\'a pas d\'adresse email configurée' });
-    }
-
     // Sample data from request body (from create form) or defaults
     const sampleData = req.body || {};
+
+    // Use test email from request, or fall back to super admin's email
+    let recipientEmail = sampleData.test_email;
+    if (!recipientEmail) {
+      const superAdmin = await dbGet(`SELECT email FROM users WHERE id = $1`, [req.user.userId]);
+      recipientEmail = superAdmin?.email;
+    }
+    if (!recipientEmail) {
+      return res.status(400).json({ error: 'Veuillez saisir une adresse email de test' });
+    }
 
     // Get template
     const subjectRow = await dbGet(`SELECT value FROM organization_settings WHERE organization_id = 1 AND key = 'cdb_welcome_subject'`);
@@ -649,19 +653,19 @@ router.post('/email-templates/cdb_welcome/test', async (req, res) => {
 
     await resend.emails.send({
       from: `${senderName} <${senderEmail}>`,
-      to: [superAdmin.email],
+      to: [recipientEmail],
       subject: `[TEST] ${subject}`,
       html: body
     });
 
-    res.json({ success: true, message: `Email de test envoyé à ${superAdmin.email}` });
+    res.json({ success: true, message: `Email de test envoyé à ${recipientEmail}` });
   } catch (error) {
     console.error('Error sending test welcome email:', error);
     res.status(500).json({ error: 'Erreur lors de l\'envoi: ' + error.message });
   }
 });
 
-// POST /api/super-admin/organizations/:id/send-welcome-test — Send test email to super admin (for existing org)
+// POST /api/super-admin/organizations/:id/send-welcome-test — Send test email (for existing org)
 router.post('/organizations/:id/send-welcome-test', async (req, res) => {
   const { id } = req.params;
 
@@ -673,10 +677,15 @@ router.post('/organizations/:id/send-welcome-test', async (req, res) => {
     const org = await dbGet(`SELECT * FROM organizations WHERE id = $1`, [id]);
     if (!org) return res.status(404).json({ error: 'Organisation non trouvée' });
 
-    // Get super admin email
-    const superAdmin = await dbGet(`SELECT email FROM users WHERE id = $1`, [req.user.userId]);
-    if (!superAdmin?.email) {
-      return res.status(400).json({ error: 'Votre compte n\'a pas d\'adresse email configurée' });
+    // Use test email from request, or fall back to super admin's email
+    const sampleData = req.body || {};
+    let recipientEmail = sampleData.test_email;
+    if (!recipientEmail) {
+      const superAdmin = await dbGet(`SELECT email FROM users WHERE id = $1`, [req.user.userId]);
+      recipientEmail = superAdmin?.email;
+    }
+    if (!recipientEmail) {
+      return res.status(400).json({ error: 'Veuillez saisir une adresse email de test' });
     }
 
     // Get admin user for this org
@@ -716,19 +725,19 @@ router.post('/organizations/:id/send-welcome-test', async (req, res) => {
       body = body.replace(htmlRegex, value);
     }
 
-    // Send test email to super admin
+    // Send test email
     const resend = new Resend(process.env.RESEND_API_KEY);
     const senderEmail = await appSettings.getSetting('email_noreply') || 'noreply@cdbhs.net';
     const senderName = await appSettings.getSetting('email_sender_name') || 'CDB Tournois';
 
     await resend.emails.send({
       from: `${senderName} <${senderEmail}>`,
-      to: [superAdmin.email],
+      to: [recipientEmail],
       subject: `[TEST] ${subject}`,
       html: body
     });
 
-    res.json({ success: true, message: `Email de test envoyé à ${superAdmin.email}` });
+    res.json({ success: true, message: `Email de test envoyé à ${recipientEmail}` });
   } catch (error) {
     console.error('Error sending test welcome email:', error);
     res.status(500).json({ error: 'Erreur lors de l\'envoi: ' + error.message });

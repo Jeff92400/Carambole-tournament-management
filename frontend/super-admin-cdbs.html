@@ -238,6 +238,7 @@
 
       <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
         <button class="btn-sm btn-outline btn-lg" onclick="saveWelcomeTemplate()">Enregistrer le template</button>
+        <input type="email" id="welcomeTestEmail" placeholder="Email de test" style="padding: 8px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; min-width: 220px;">
         <button class="btn-sm btn-warning btn-lg" onclick="sendWelcomeTest()">Envoyer un test</button>
         <span id="sendToAdminWrapper" style="display: none;">
           <button class="btn-sm btn-success btn-lg" onclick="sendWelcome()">Envoyer au CDB admin</button>
@@ -559,6 +560,13 @@
     }
 
     async function sendWelcomeTest() {
+      const testEmail = document.getElementById('welcomeTestEmail').value.trim();
+      if (!testEmail || !testEmail.includes('@')) {
+        showToast('Veuillez saisir une adresse email de test valide', 'error');
+        document.getElementById('welcomeTestEmail').focus();
+        return;
+      }
+
       try {
         // Save template first
         await saveWelcomeTemplate();
@@ -568,7 +576,8 @@
           name: document.getElementById('orgName').value.trim() || undefined,
           short_name: document.getElementById('orgShortName').value.trim() || undefined,
           slug: document.getElementById('orgSlug').value.trim() || undefined,
-          admin_username: document.getElementById('adminUsername').value.trim() || undefined
+          admin_username: document.getElementById('adminUsername').value.trim() || undefined,
+          test_email: testEmail
         };
 
         // If an org is selected, use the org-specific endpoint (has real player count)
