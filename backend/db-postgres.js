@@ -94,6 +94,17 @@ async function initializeDatabase() {
     await client.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS gdpr_consent_date TIMESTAMP`);
     await client.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS gdpr_consent_version VARCHAR(10)`);
 
+    // FFB enrichment columns for players table (migration - February 2026)
+    await client.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS ffb_club_numero VARCHAR(10)`);
+    await client.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS date_of_birth DATE`);
+    await client.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS sexe VARCHAR(2)`);
+    await client.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS ffb_categorie VARCHAR(30)`);
+    await client.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS discipline VARCHAR(30)`);
+    await client.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS arbitre VARCHAR(20)`);
+    await client.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS date_licence DATE`);
+    await client.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS nationalite VARCHAR(50)`);
+    await client.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS ffb_last_sync TIMESTAMP`);
+
     // Migrations that depend on player_accounts - check if table exists first
     const tableCheck = await client.query(`
       SELECT EXISTS (
@@ -1091,6 +1102,113 @@ async function initializeDatabase() {
 
       console.log('Default import profiles initialized');
     }
+
+    // ============= FFB INTEGRATION TABLES =============
+
+    // FFB Ligues — 16 regional leagues
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS ffb_ligues (
+        numero VARCHAR(10) PRIMARY KEY,
+        nom TEXT,
+        raw_data JSONB,
+        imported_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // FFB CDBs — ~88 departmental committees (inferred from clubs/licences)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS ffb_cdbs (
+        code VARCHAR(10) PRIMARY KEY,
+        ligue_numero VARCHAR(10) REFERENCES ffb_ligues(numero),
+        nom TEXT,
+        imported_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // FFB Clubs — 590 national clubs
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS ffb_clubs (
+        numero VARCHAR(10) PRIMARY KEY,
+        ligue_numero VARCHAR(10) REFERENCES ffb_ligues(numero),
+        cdb_code VARCHAR(10) REFERENCES ffb_cdbs(code),
+        nom TEXT,
+        sigle TEXT,
+        code_postal VARCHAR(10),
+        ville TEXT,
+        email TEXT,
+        tel TEXT,
+        nb_car_310 INTEGER DEFAULT 0,
+        nb_car_280 INTEGER DEFAULT 0,
+        nb_car_autres INTEGER DEFAULT 0,
+        nb_bb INTEGER DEFAULT 0,
+        nb_snook INTEGER DEFAULT 0,
+        nb_amer INTEGER DEFAULT 0,
+        type_salle TEXT,
+        access_handicap TEXT,
+        raw_data JSONB,
+        imported_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_ffb_clubs_cdb ON ffb_clubs(cdb_code)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_ffb_clubs_ligue ON ffb_clubs(ligue_numero)`);
+
+    // FFB Licences — 20,280 national licences
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS ffb_licences (
+        licence VARCHAR(20) PRIMARY KEY,
+        ligue_numero VARCHAR(10),
+        cdb_code VARCHAR(10),
+        num_club VARCHAR(10) REFERENCES ffb_clubs(numero),
+        prenom TEXT,
+        nom TEXT,
+        date_de_naissance DATE,
+        sexe VARCHAR(2),
+        categorie VARCHAR(30),
+        discipline VARCHAR(30),
+        arbitre VARCHAR(20),
+        date_licence DATE,
+        nationalite TEXT,
+        email TEXT,
+        raw_data JSONB,
+        imported_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_ffb_licences_cdb ON ffb_licences(cdb_code)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_ffb_licences_club ON ffb_licences(num_club)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_ffb_licences_nom ON ffb_licences(UPPER(nom), UPPER(prenom))`);
+
+    // Club FFB Mapping — links app clubs to FFB clubs (1:1)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS club_ffb_mapping (
+        id SERIAL PRIMARY KEY,
+        club_id INTEGER REFERENCES clubs(id) UNIQUE,
+        ffb_club_numero VARCHAR(10) REFERENCES ffb_clubs(numero) UNIQUE,
+        mapped_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        mapped_by TEXT
+      )
+    `);
+
+    // FFB Import Log — audit trail
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS ffb_import_log (
+        id SERIAL PRIMARY KEY,
+        file_type TEXT NOT NULL,
+        source TEXT DEFAULT 'manual',
+        filename TEXT,
+        record_count INTEGER DEFAULT 0,
+        new_count INTEGER DEFAULT 0,
+        updated_count INTEGER DEFAULT 0,
+        error_count INTEGER DEFAULT 0,
+        errors JSONB,
+        imported_by TEXT,
+        imported_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        duration_ms INTEGER
+      )
+    `);
 
     await client.query('COMMIT');
 

@@ -499,7 +499,19 @@ const initAppSettings = async () => {
         ['threshold_display_competitions', '28'],    // Days ahead to display competitions in "Compétitions à venir"
 
         // Feature toggles
-        ['enable_csv_imports', '1']                  // Enable/disable CSV import functionality (1=enabled, 0=disabled)
+        ['enable_csv_imports', '1'],                 // Enable/disable CSV import functionality (1=enabled, 0=disabled)
+
+        // FFB Integration settings
+        ['ffb_cdb_code', ''],                        // This instance's CDB code (e.g., "92")
+        ['ffb_ligue_numero', ''],                    // This instance's ligue (e.g., "11")
+        ['ffb_ftp_host', ''],
+        ['ffb_ftp_port', '21'],
+        ['ffb_ftp_username', ''],
+        ['ffb_ftp_password', ''],
+        ['ffb_ftp_path', '/'],
+        ['ffb_auto_sync_enabled', '0'],
+        ['ffb_sync_mode', 'manual'],                 // 'manual' or 'ftp'
+        ['ffb_last_sync_date', '']
       ];
 
       // Insert default values using INSERT OR IGNORE / ON CONFLICT
