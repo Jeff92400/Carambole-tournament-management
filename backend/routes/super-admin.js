@@ -35,94 +35,50 @@ function safeCount(query, params = []) {
   });
 }
 
-// GET /api/super-admin/dashboard — Platform overview KPIs
+// GET /api/super-admin/dashboard — FFB file data + CDB enrolments
 router.get('/dashboard', async (req, res) => {
   try {
-    const currentSeason = await appSettings.getCurrentSeason();
-
-    // Platform stats
-    const ffbCdbsExists = await tableExists('ffb_cdbs');
-    const [totalUsers, totalAdmins, totalPlayers, totalClubs, totalPlayerAccounts, totalCdbs] = await Promise.all([
-      safeCount(`SELECT COUNT(*) as count FROM users WHERE is_active = 1`),
-      safeCount(`SELECT COUNT(*) as count FROM users WHERE is_active = 1 AND role = 'admin'`),
-      safeCount(`SELECT COUNT(*) as count FROM players WHERE UPPER(licence) NOT LIKE 'TEST%'`),
-      safeCount(`SELECT COUNT(*) as count FROM clubs`),
-      safeCount(`SELECT COUNT(*) as count FROM player_accounts`),
-      ffbCdbsExists ? safeCount(`SELECT COUNT(*) as count FROM ffb_cdbs`) : Promise.resolve(1) // 1 = current CDB before FFB tables exist
-    ]);
-
-    // FFB status
-    const cdbCode = await appSettings.getSetting('ffb_cdb_code');
-    const lastSync = await appSettings.getSetting('ffb_last_sync_date');
-
+    // FFB file data
     const ffbLiguesExists = await tableExists('ffb_ligues');
     const ffbClubsExists = await tableExists('ffb_clubs');
     const ffbLicencesExists = await tableExists('ffb_licences');
+    const ffbCdbsExists = await tableExists('ffb_cdbs');
     const ffbImportLogExists = await tableExists('ffb_import_log');
-    const clubFfbMappingExists = await tableExists('club_ffb_mapping');
 
-    let ffbLicencesCount = 0;
-    let ffbClubsCount = 0;
-    if (ffbLicencesExists) {
-      ffbLicencesCount = await safeCount(`SELECT COUNT(*) as count FROM ffb_licences`);
+    const [ffbLiguesCount, ffbCdbsCount, ffbClubsCount, ffbLicencesCount] = await Promise.all([
+      ffbLiguesExists ? safeCount(`SELECT COUNT(*) as count FROM ffb_ligues`) : Promise.resolve(0),
+      ffbCdbsExists ? safeCount(`SELECT COUNT(*) as count FROM ffb_cdbs`) : Promise.resolve(0),
+      ffbClubsExists ? safeCount(`SELECT COUNT(*) as count FROM ffb_clubs`) : Promise.resolve(0),
+      ffbLicencesExists ? safeCount(`SELECT COUNT(*) as count FROM ffb_licences`) : Promise.resolve(0)
+    ]);
+
+    // Last FFB import info
+    let lastImport = null;
+    if (ffbImportLogExists) {
+      lastImport = await dbGet(
+        `SELECT file_type, filename, record_count, imported_at FROM ffb_import_log ORDER BY imported_at DESC LIMIT 1`
+      );
     }
-    if (ffbClubsExists) {
-      ffbClubsCount = await safeCount(`SELECT COUNT(*) as count FROM ffb_clubs`);
-    }
 
-    let ffbStatus = 'not_configured';
-    if (cdbCode) {
-      ffbStatus = lastSync ? 'synced' : 'configured';
-    }
-
-    // System stats
-    const lastEmailSent = await new Promise((resolve) => {
-      db.get(`SELECT sent_at FROM email_campaigns WHERE status = 'sent' ORDER BY sent_at DESC LIMIT 1`, [], (err, row) => {
-        resolve(row ? row.sent_at : null);
-      });
-    });
-    const pendingScheduled = await safeCount(`SELECT COUNT(*) as count FROM scheduled_emails WHERE status = 'pending'`);
-
-    const uptimeSeconds = process.uptime();
-    const days = Math.floor(uptimeSeconds / 86400);
-    const hours = Math.floor((uptimeSeconds % 86400) / 3600);
-    const uptime = days > 0 ? `${days}j ${hours}h` : `${hours}h`;
-
-    // Implementation progress — auto-detect phases
-    const hasImportRecords = ffbImportLogExists ? await safeCount(`SELECT COUNT(*) as count FROM ffb_import_log`) > 0 : false;
-    const hasSyncedPlayers = await safeCount(`SELECT COUNT(*) as count FROM players WHERE ffb_last_sync IS NOT NULL`) > 0;
-    const hasClubMapping = clubFfbMappingExists ? await safeCount(`SELECT COUNT(*) as count FROM club_ffb_mapping`) > 0 : false;
-    const syncMode = await appSettings.getSetting('ffb_sync_mode');
+    // CDB enrolments — progressive list ordered by creation
+    const enrolments = await dbAll(`
+      SELECT o.id, o.name, o.short_name, o.slug, o.ffb_cdb_code, o.is_active, o.created_at,
+        (SELECT COUNT(*) FROM players p WHERE p.organization_id = o.id AND UPPER(p.licence) NOT LIKE 'TEST%') as player_count,
+        (SELECT COUNT(*) FROM clubs c WHERE c.organization_id = o.id) as club_count,
+        (SELECT COUNT(*) FROM users u WHERE u.organization_id = o.id AND u.is_active = TRUE) as user_count
+      FROM organizations o
+      ORDER BY o.id
+    `);
 
     res.json({
-      platform: {
-        total_cdbs: totalCdbs,
-        total_users: totalUsers,
-        total_admins: totalAdmins,
-        total_players: totalPlayers,
-        total_clubs: totalClubs,
-        total_player_accounts: totalPlayerAccounts
+      ffb_file: {
+        ligues: ffbLiguesCount,
+        cdbs: ffbCdbsCount,
+        clubs: ffbClubsCount,
+        licences: ffbLicencesCount,
+        last_import: lastImport
       },
-      ffb: {
-        status: ffbStatus,
-        cdb_code: cdbCode || null,
-        last_sync: lastSync || null,
-        ffb_licences_count: ffbLicencesCount,
-        ffb_clubs_count: ffbClubsCount
-      },
-      system: {
-        uptime,
-        last_email_sent: lastEmailSent,
-        pending_scheduled_emails: pendingScheduled
-      },
-      implementation_progress: {
-        phase_A_db_schema: ffbLiguesExists && ffbClubsExists && ffbLicencesExists,
-        phase_B_import: hasImportRecords,
-        phase_C_sync: hasSyncedPlayers,
-        phase_D_club_mapping: hasClubMapping,
-        phase_E_frontend: await tableExists('ffb_licences'), // proxy: if tables exist, frontend likely exists
-        phase_F_ftp: syncMode === 'ftp'
-      }
+      enrolments
     });
   } catch (error) {
     console.error('Super admin dashboard error:', error);
