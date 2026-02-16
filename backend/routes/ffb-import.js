@@ -543,10 +543,17 @@ router.get('/clubs', async (req, res) => {
     }
 
     // Attach resolved names to clubs
+    let debugFirst = true;
     clubs.forEach((c, i) => {
       const roles = clubRoles[i];
       c.president_name = roles.presName || licenceMap[roles.presLicence] || '';
       c.resp_carambole_name = roles.respName || licenceMap[roles.respLicence] || '';
+      // Debug: log first club's role resolution for troubleshooting
+      if (debugFirst && (roles.presLicence || roles.presName)) {
+        console.log('[FFB clubs debug]', c.nom, '=> pres:', { licence: roles.presLicence, name: roles.presName, resolved: c.president_name },
+          'resp_car:', { licence: roles.respLicence, name: roles.respName, resolved: c.resp_carambole_name });
+        debugFirst = false;
+      }
       delete c.raw_data; // Don't send full raw_data to frontend
     });
 
