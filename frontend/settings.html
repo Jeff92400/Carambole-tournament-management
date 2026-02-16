@@ -489,7 +489,7 @@
     });
 
     // Player App button
-    document.getElementById('openPlayerAppBtn').addEventListener('click', (e) => {
+    document.getElementById('openPlayerAppBtn').addEventListener('click', async (e) => {
       e.preventDefault();
       const currentHost = window.location.hostname;
       let playerAppUrl;
@@ -497,7 +497,13 @@
       if (currentHost === 'localhost' || currentHost === '127.0.0.1') {
         playerAppUrl = 'http://localhost:3001';
       } else {
-        playerAppUrl = 'https://cdbhs-player-app-production.up.railway.app/?admin';
+        try {
+          const resp = await authFetch(`${API_URL}/settings/branding/colors`);
+          const settings = await resp.json();
+          playerAppUrl = (settings.player_app_url || 'https://cdbhs-player-app-production.up.railway.app') + '/?admin';
+        } catch (err) {
+          playerAppUrl = 'https://cdbhs-player-app-production.up.railway.app/?admin';
+        }
       }
 
       window.open(playerAppUrl, '_blank');

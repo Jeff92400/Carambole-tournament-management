@@ -5154,7 +5154,7 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
         emailIntro = replaceVar(emailIntro, 'organization_email', organizationEmail);
 
         // Smart inscription method - check if player has app account
-        const playerAppUrl = 'https://cdbhs-player-app-production.up.railway.app';
+        const playerAppUrl = await appSettings.getOrgSetting(orgId, 'player_app_url');
         let inscriptionMethodHtml;
 
         if (testMode) {

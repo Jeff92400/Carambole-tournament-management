@@ -36,7 +36,8 @@ router.get('/branding/colors', async (req, res) => {
     'background_color',
     'background_secondary_color',
     'organization_short_name',
-    'header_logo_size'
+    'header_logo_size',
+    'player_app_url'
   ];
 
   // If org slug provided, resolve to org ID and use org-specific settings

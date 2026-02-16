@@ -41,6 +41,9 @@ const defaults = {
   qualification_small: '4',
   qualification_large: '6',
 
+  // Player App
+  player_app_url: 'https://cdbhs-player-app-production.up.railway.app',
+
   // Privacy policy
   privacy_policy: ''
 };

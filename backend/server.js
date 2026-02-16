@@ -1118,7 +1118,8 @@ async function processTemplatedScheduledEmail(db, resend, scheduled, delay) {
   const qualificationSettings = await appSettings.getQualificationSettings();
   const emailSettings = await appSettings.getSettingsBatch([
     'primary_color', 'email_communication', 'email_sender_name',
-    'organization_name', 'organization_short_name', 'summary_email'
+    'organization_name', 'organization_short_name', 'summary_email',
+    'player_app_url'
   ]);
 
   let recipients = [];
@@ -1368,7 +1369,7 @@ async function processTemplatedScheduledEmail(db, resend, scheduled, delay) {
   const replyToEmail = emailSettings.summary_email || 'cdbhs92@gmail.com';
   const orgName = emailSettings.organization_name || 'Comité Départemental Billard Hauts-de-Seine';
   const orgShortName = emailSettings.organization_short_name || 'CDBHS';
-  const playerAppUrl = 'https://cdbhs-player-app-production.up.railway.app';
+  const playerAppUrl = emailSettings.player_app_url || 'https://cdbhs-player-app-production.up.railway.app';
 
   for (const recipient of recipients) {
     try {

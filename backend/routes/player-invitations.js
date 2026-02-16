@@ -46,7 +46,7 @@ Bon usage de ce nouvel outil et nous restons à disposition pour toute demande d
 Bien cordialement
 Le comité sportif du {organisation_name}
 
-https://cdbhs-player-app-production.up.railway.app/`;
+{player_app_url}`;
 
 // Get invitation statistics
 router.get('/stats', authenticateToken, async (req, res) => {
@@ -465,7 +465,8 @@ router.post('/send', authenticateToken, async (req, res) => {
     // Get email settings
     const emailSettings = await req.getOrgSettingsBatch([
       'primary_color', 'email_communication', 'email_sender_name',
-      'organization_name', 'organization_short_name', 'summary_email'
+      'organization_name', 'organization_short_name', 'summary_email',
+      'player_app_url'
     ]);
 
     // Get email template
@@ -536,6 +537,7 @@ router.post('/send', authenticateToken, async (req, res) => {
     const orgName = emailSettings.organization_name || 'Comité Départemental Billard Hauts-de-Seine';
     const orgShortName = emailSettings.organization_short_name || 'CDBHS';
     const replyToEmail = emailSettings.summary_email || 'cdbhs92@gmail.com';
+    const playerAppUrl = emailSettings.player_app_url || 'https://cdbhs-player-app-production.up.railway.app';
     const baseUrl = process.env.BASE_URL || 'https://cdbhs-tournament-management-production.up.railway.app';
 
     // Logo URL - always include, onerror will hide if not found
@@ -561,7 +563,8 @@ router.post('/send', authenticateToken, async (req, res) => {
           .replace(/\{organisation_short_name\}/g, orgShortName)
           .replace(/\{organization_short_name\}/g, orgShortName)
           .replace(/\{organisation_email\}/g, replyToEmail)
-          .replace(/\{organization_email\}/g, replyToEmail);
+          .replace(/\{organization_email\}/g, replyToEmail)
+          .replace(/\{player_app_url\}/g, playerAppUrl);
 
         const emailSubject = templateSubject
           .replace(/\{first_name\}/g, firstName)
@@ -804,7 +807,8 @@ router.post('/resend/:id', authenticateToken, async (req, res) => {
 
     const emailSettings = await req.getOrgSettingsBatch([
       'primary_color', 'email_communication', 'email_sender_name',
-      'organization_name', 'organization_short_name', 'summary_email'
+      'organization_name', 'organization_short_name', 'summary_email',
+      'player_app_url'
     ]);
 
     const templateSubject = await new Promise((resolve, reject) => {
@@ -836,6 +840,7 @@ router.post('/resend/:id', authenticateToken, async (req, res) => {
     const senderEmail = emailSettings.email_communication || 'communication@cdbhs.net';
     const primaryColor = emailSettings.primary_color || '#1F4788';
     const replyToEmail = emailSettings.summary_email || 'cdbhs92@gmail.com';
+    const playerAppUrl = emailSettings.player_app_url || 'https://cdbhs-player-app-production.up.railway.app';
     const baseUrl = process.env.BASE_URL || 'https://cdbhs-tournament-management-production.up.railway.app';
 
     // Logo URL - always include, onerror will hide if not found
@@ -850,7 +855,8 @@ router.post('/resend/:id', authenticateToken, async (req, res) => {
       .replace(/\{organisation_short_name\}/g, orgShortName)
       .replace(/\{organization_short_name\}/g, orgShortName)
       .replace(/\{organisation_email\}/g, replyToEmail)
-      .replace(/\{organization_email\}/g, replyToEmail);
+      .replace(/\{organization_email\}/g, replyToEmail)
+      .replace(/\{player_app_url\}/g, playerAppUrl);
 
     let emailSubject = templateSubject
       .replace(/\{first_name\}/g, firstName)
@@ -969,7 +975,8 @@ router.post('/resend-batch', authenticateToken, async (req, res) => {
     // Get email settings
     const emailSettings = await req.getOrgSettingsBatch([
       'primary_color', 'email_communication', 'email_sender_name',
-      'organization_name', 'organization_short_name', 'summary_email'
+      'organization_name', 'organization_short_name', 'summary_email',
+      'player_app_url'
     ]);
 
     const templateSubject = await new Promise((resolve, reject) => {
@@ -1000,6 +1007,7 @@ router.post('/resend-batch', authenticateToken, async (req, res) => {
     const senderEmail = emailSettings.email_communication || 'communication@cdbhs.net';
     const primaryColor = emailSettings.primary_color || '#1F4788';
     const replyToEmail = emailSettings.summary_email || 'cdbhs92@gmail.com';
+    const playerAppUrl = emailSettings.player_app_url || 'https://cdbhs-player-app-production.up.railway.app';
     const baseUrl = process.env.BASE_URL || 'https://cdbhs-tournament-management-production.up.railway.app';
     const logoUrl = `${baseUrl}/logo.png?v=${Date.now()}`;
     const logoHtml = `<img src="${logoUrl}" alt="${orgShortName}" style="height: 60px; max-width: 80%; width: auto; margin-bottom: 10px;" onerror="this.style.display='none'">`;
@@ -1027,7 +1035,8 @@ router.post('/resend-batch', authenticateToken, async (req, res) => {
           .replace(/\{organisation_short_name\}/g, orgShortName)
           .replace(/\{organization_short_name\}/g, orgShortName)
           .replace(/\{organisation_email\}/g, replyToEmail)
-          .replace(/\{organization_email\}/g, replyToEmail);
+          .replace(/\{organization_email\}/g, replyToEmail)
+          .replace(/\{player_app_url\}/g, playerAppUrl);
 
         const reminderCount = (invitation.resend_count || 0) + 1;
         let emailSubject = templateSubject
