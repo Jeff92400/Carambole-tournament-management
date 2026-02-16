@@ -1242,6 +1242,28 @@ async function initializeDatabase() {
       )
     `);
 
+    // ============= MULTI-ORG: ADD organization_id TO DATA TABLES =============
+
+    await client.query(`ALTER TABLE tournoi_ext ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)`);
+    await client.query(`ALTER TABLE tournaments ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)`);
+    await client.query(`ALTER TABLE rankings ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)`);
+    await client.query(`ALTER TABLE announcements ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)`);
+    await client.query(`ALTER TABLE inscriptions ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)`);
+    await client.query(`ALTER TABLE email_campaigns ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)`);
+    await client.query(`ALTER TABLE scheduled_emails ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)`);
+    await client.query(`ALTER TABLE player_invitations ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)`);
+    await client.query(`ALTER TABLE admin_activity_logs ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)`);
+
+    // Indexes for org-scoped queries
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_tournoi_ext_org ON tournoi_ext(organization_id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_tournaments_org ON tournaments(organization_id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_rankings_org ON rankings(organization_id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_announcements_org ON announcements(organization_id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_inscriptions_org ON inscriptions(organization_id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_email_campaigns_org ON email_campaigns(organization_id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_scheduled_emails_org ON scheduled_emails(organization_id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_player_invitations_org ON player_invitations(organization_id)`);
+
     // ============= SEED CDBHS AS ORGANIZATION #1 =============
 
     // Create CDBHS as the first organization (idempotent)
@@ -1251,10 +1273,19 @@ async function initializeDatabase() {
       ON CONFLICT (id) DO NOTHING
     `);
 
-    // Assign all existing users/players/clubs to org #1 if not yet assigned
+    // Assign all existing data to org #1 if not yet assigned
     await client.query(`UPDATE users SET organization_id = 1 WHERE organization_id IS NULL`);
     await client.query(`UPDATE players SET organization_id = 1 WHERE organization_id IS NULL`);
     await client.query(`UPDATE clubs SET organization_id = 1 WHERE organization_id IS NULL`);
+    await client.query(`UPDATE tournoi_ext SET organization_id = 1 WHERE organization_id IS NULL`);
+    await client.query(`UPDATE tournaments SET organization_id = 1 WHERE organization_id IS NULL`);
+    await client.query(`UPDATE rankings SET organization_id = 1 WHERE organization_id IS NULL`);
+    await client.query(`UPDATE announcements SET organization_id = 1 WHERE organization_id IS NULL`);
+    await client.query(`UPDATE inscriptions SET organization_id = 1 WHERE organization_id IS NULL`);
+    await client.query(`UPDATE email_campaigns SET organization_id = 1 WHERE organization_id IS NULL`);
+    await client.query(`UPDATE scheduled_emails SET organization_id = 1 WHERE organization_id IS NULL`);
+    await client.query(`UPDATE player_invitations SET organization_id = 1 WHERE organization_id IS NULL`);
+    await client.query(`UPDATE admin_activity_logs SET organization_id = 1 WHERE organization_id IS NULL`);
 
     // Migrate CDB-specific settings from app_settings to organization_settings for org #1
     const orgSettingsKeys = [
