@@ -506,11 +506,13 @@ router.put('/:id/approve', requireViewerWrite, async (req, res) => {
     // This is non-blocking - if it fails, the approval still proceeds
     try {
       // Find the matching category
+      const orgId = req.user.organizationId || null;
       const categoryResult = await db.query(`
         SELECT id FROM categories
         WHERE UPPER(game_type) = UPPER($1)
           AND UPPER(level) = UPPER($2)
-      `, [request.game_mode_name, request.requested_ranking]);
+          AND ($3::int IS NULL OR organization_id = $3)
+      `, [request.game_mode_name, request.requested_ranking, orgId]);
 
       if (categoryResult.rows.length > 0) {
         const categoryId = categoryResult.rows[0].id;
@@ -826,11 +828,13 @@ router.delete('/:id', requireViewerWrite, async (req, res) => {
 
       // Delete the ranking record if it exists
       console.log(`[DELETE] Looking for category: game_type=${request.game_mode_name}, level=${request.requested_ranking}`);
+      const orgId2 = req.user.organizationId || null;
       const categoryResult = await db.query(`
         SELECT id FROM categories
         WHERE UPPER(game_type) = UPPER($1)
           AND UPPER(level) = UPPER($2)
-      `, [request.game_mode_name, request.requested_ranking]);
+          AND ($3::int IS NULL OR organization_id = $3)
+      `, [request.game_mode_name, request.requested_ranking, orgId2]);
 
       if (categoryResult.rows.length > 0) {
         const categoryId = categoryResult.rows[0].id;

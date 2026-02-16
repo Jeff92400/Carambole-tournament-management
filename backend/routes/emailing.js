@@ -367,13 +367,13 @@ Cordialement,
 };
 
 // Fetch email template from database
-async function getEmailTemplate(templateKey = 'general') {
+async function getEmailTemplate(templateKey = 'general', orgId = null) {
   const db = require('../db-loader');
 
   return new Promise((resolve) => {
     db.get(
-      'SELECT * FROM email_templates WHERE template_key = $1',
-      [templateKey],
+      'SELECT * FROM email_templates WHERE template_key = $1 AND ($2::int IS NULL OR organization_id = $2)',
+      [templateKey, orgId],
       (err, row) => {
         if (err || !row) {
           resolve(DEFAULT_GENERAL_TEMPLATE);
@@ -897,10 +897,11 @@ router.get('/ranking-contacts', authenticateToken, async (req, res) => {
 // Get all email templates
 router.get('/templates', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
+  const orgId = req.user.organizationId || null;
 
   db.all(
-    'SELECT * FROM email_templates ORDER BY template_key',
-    [],
+    'SELECT * FROM email_templates WHERE ($1::int IS NULL OR organization_id = $1) ORDER BY template_key',
+    [orgId],
     (err, rows) => {
       if (err) {
         console.error('Error fetching templates:', err);
@@ -915,10 +916,11 @@ router.get('/templates', authenticateToken, async (req, res) => {
 router.get('/templates/:key', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
   const { key } = req.params;
+  const orgId = req.user.organizationId || null;
 
   db.get(
-    'SELECT * FROM email_templates WHERE template_key = $1',
-    [key],
+    'SELECT * FROM email_templates WHERE template_key = $1 AND ($2::int IS NULL OR organization_id = $2)',
+    [key, orgId],
     (err, row) => {
       if (err) {
         console.error('Error fetching template:', err);
@@ -937,15 +939,16 @@ router.put('/templates/:key', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
   const { key } = req.params;
   const { subject_template, body_template } = req.body;
+  const orgId = req.user.organizationId || null;
 
   db.run(
-    `INSERT INTO email_templates (template_key, subject_template, body_template)
-     VALUES ($1, $2, $3)
-     ON CONFLICT (template_key) DO UPDATE SET
+    `INSERT INTO email_templates (template_key, subject_template, body_template, organization_id)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (template_key, organization_id) DO UPDATE SET
        subject_template = EXCLUDED.subject_template,
        body_template = EXCLUDED.body_template,
        updated_at = CURRENT_TIMESTAMP`,
-    [key, subject_template, body_template],
+    [key, subject_template, body_template, orgId],
     function(err) {
       if (err) {
         console.error('Error saving template:', err);
@@ -1581,8 +1584,8 @@ router.post('/send-finale-results', authenticateToken, async (req, res) => {
     try {
       const templateRow = await new Promise((resolve, reject) => {
         db.get(
-          `SELECT subject_template FROM email_templates WHERE template_key = 'finale_results'`,
-          [],
+          `SELECT subject_template FROM email_templates WHERE template_key = 'finale_results' AND ($1::int IS NULL OR organization_id = $1)`,
+          [orgId],
           (err, row) => {
             if (err) reject(err);
             else resolve(row);
@@ -3508,13 +3511,14 @@ Sportivement,
 // Get relance templates
 router.get('/relance-templates', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
+  const orgId = req.user.organizationId || null;
 
   try {
     // Get all relance templates from database
     const templates = await new Promise((resolve, reject) => {
       db.all(
-        `SELECT * FROM email_templates WHERE template_key LIKE 'relance_%'`,
-        [],
+        `SELECT * FROM email_templates WHERE template_key LIKE 'relance_%' AND ($1::int IS NULL OR organization_id = $1)`,
+        [orgId],
         (err, rows) => {
           if (err) reject(err);
           else resolve(rows || []);
@@ -3549,6 +3553,7 @@ router.put('/relance-templates/:key', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
   const { key } = req.params;
   const { subject, intro, outro } = req.body;
+  const orgId = req.user.organizationId || null;
 
   if (!['relance_t1', 'relance_t2', 'relance_t3', 'relance_finale'].includes(key)) {
     return res.status(400).json({ error: 'Invalid template key' });
@@ -3557,14 +3562,14 @@ router.put('/relance-templates/:key', authenticateToken, async (req, res) => {
   try {
     await new Promise((resolve, reject) => {
       db.run(
-        `INSERT INTO email_templates (template_key, subject_template, body_template, outro_template)
-         VALUES ($1, $2, $3, $4)
-         ON CONFLICT (template_key) DO UPDATE SET
+        `INSERT INTO email_templates (template_key, subject_template, body_template, outro_template, organization_id)
+         VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (template_key, organization_id) DO UPDATE SET
            subject_template = EXCLUDED.subject_template,
            body_template = EXCLUDED.body_template,
            outro_template = EXCLUDED.outro_template,
            updated_at = CURRENT_TIMESTAMP`,
-        [key, subject, intro, outro],
+        [key, subject, intro, outro, orgId],
         function(err) {
           if (err) reject(err);
           else resolve();
@@ -3583,6 +3588,7 @@ router.put('/relance-templates/:key', authenticateToken, async (req, res) => {
 router.post('/relance-templates/:key/save-as-default', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
   const { key } = req.params;
+  const orgId = req.user.organizationId || null;
 
   if (!['relance_t1', 'relance_t2', 'relance_t3', 'relance_finale'].includes(key)) {
     return res.status(400).json({ error: 'Invalid template key' });
@@ -3592,8 +3598,8 @@ router.post('/relance-templates/:key/save-as-default', authenticateToken, async 
     // Get the current template
     const currentTemplate = await new Promise((resolve, reject) => {
       db.get(
-        `SELECT * FROM email_templates WHERE template_key = $1`,
-        [key],
+        `SELECT * FROM email_templates WHERE template_key = $1 AND ($2::int IS NULL OR organization_id = $2)`,
+        [key, orgId],
         (err, row) => {
           if (err) reject(err);
           else resolve(row);
@@ -3609,13 +3615,13 @@ router.post('/relance-templates/:key/save-as-default', authenticateToken, async 
     const defaultKey = `${key}_default`;
     await new Promise((resolve, reject) => {
       db.run(
-        `INSERT INTO email_templates (template_key, subject_template, body_template, updated_at)
-         VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
-         ON CONFLICT (template_key) DO UPDATE SET
+        `INSERT INTO email_templates (template_key, subject_template, body_template, organization_id, updated_at)
+         VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
+         ON CONFLICT (template_key, organization_id) DO UPDATE SET
            subject_template = EXCLUDED.subject_template,
            body_template = EXCLUDED.body_template,
            updated_at = CURRENT_TIMESTAMP`,
-        [defaultKey, currentTemplate.subject_template, currentTemplate.body_template],
+        [defaultKey, currentTemplate.subject_template, currentTemplate.body_template, orgId],
         function(err) {
           if (err) reject(err);
           else resolve();
@@ -3634,6 +3640,7 @@ router.post('/relance-templates/:key/save-as-default', authenticateToken, async 
 router.get('/relance-templates/:key/default', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
   const { key } = req.params;
+  const orgId = req.user.organizationId || null;
 
   if (!['relance_t1', 'relance_t2', 'relance_t3', 'relance_finale'].includes(key)) {
     return res.status(400).json({ error: 'Invalid template key' });
@@ -3643,8 +3650,8 @@ router.get('/relance-templates/:key/default', authenticateToken, async (req, res
     const defaultKey = `${key}_default`;
     const customDefault = await new Promise((resolve, reject) => {
       db.get(
-        `SELECT * FROM email_templates WHERE template_key = $1`,
-        [defaultKey],
+        `SELECT * FROM email_templates WHERE template_key = $1 AND ($2::int IS NULL OR organization_id = $2)`,
+        [defaultKey, orgId],
         (err, row) => {
           if (err) reject(err);
           else resolve(row);
@@ -3691,12 +3698,13 @@ Sportivement,
 // Get finale results template
 router.get('/finale-results-template', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
+  const orgId = req.user.organizationId || null;
 
   try {
     const template = await new Promise((resolve, reject) => {
       db.get(
-        `SELECT * FROM email_templates WHERE template_key = 'finale_results'`,
-        [],
+        `SELECT * FROM email_templates WHERE template_key = 'finale_results' AND ($1::int IS NULL OR organization_id = $1)`,
+        [orgId],
         (err, row) => {
           if (err) reject(err);
           else resolve(row);
@@ -3723,18 +3731,19 @@ router.get('/finale-results-template', authenticateToken, async (req, res) => {
 router.put('/finale-results-template', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
   const { subject, intro, outro } = req.body;
+  const orgId = req.user.organizationId || null;
 
   try {
     await new Promise((resolve, reject) => {
       db.run(
-        `INSERT INTO email_templates (template_key, subject_template, body_template, outro_template)
-         VALUES ('finale_results', $1, $2, $3)
-         ON CONFLICT (template_key) DO UPDATE SET
+        `INSERT INTO email_templates (template_key, subject_template, body_template, outro_template, organization_id)
+         VALUES ('finale_results', $1, $2, $3, $4)
+         ON CONFLICT (template_key, organization_id) DO UPDATE SET
            subject_template = EXCLUDED.subject_template,
            body_template = EXCLUDED.body_template,
            outro_template = EXCLUDED.outro_template,
            updated_at = CURRENT_TIMESTAMP`,
-        [subject, intro, outro],
+        [subject, intro, outro, orgId],
         function(err) {
           if (err) reject(err);
           else resolve();
@@ -3752,13 +3761,14 @@ router.put('/finale-results-template', authenticateToken, async (req, res) => {
 // Reset finale results template to defaults (first try custom default, then hardcoded)
 router.post('/finale-results-template/reset', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
+  const orgId = req.user.organizationId || null;
 
   try {
     // First, check if there's a custom default
     const customDefault = await new Promise((resolve, reject) => {
       db.get(
-        `SELECT * FROM email_templates WHERE template_key = 'finale_results_default'`,
-        [],
+        `SELECT * FROM email_templates WHERE template_key = 'finale_results_default' AND ($1::int IS NULL OR organization_id = $1)`,
+        [orgId],
         (err, row) => {
           if (err) reject(err);
           else resolve(row);
@@ -3791,13 +3801,14 @@ router.post('/finale-results-template/reset', authenticateToken, async (req, res
 // Save finale results template as default
 router.post('/finale-results-template/save-as-default', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
+  const orgId = req.user.organizationId || null;
 
   try {
     // Get the current template
     const currentTemplate = await new Promise((resolve, reject) => {
       db.get(
-        `SELECT * FROM email_templates WHERE template_key = 'finale_results'`,
-        [],
+        `SELECT * FROM email_templates WHERE template_key = 'finale_results' AND ($1::int IS NULL OR organization_id = $1)`,
+        [orgId],
         (err, row) => {
           if (err) reject(err);
           else resolve(row);
@@ -3812,13 +3823,13 @@ router.post('/finale-results-template/save-as-default', authenticateToken, async
     // Save as default
     await new Promise((resolve, reject) => {
       db.run(
-        `INSERT INTO email_templates (template_key, subject_template, body_template, updated_at)
-         VALUES ('finale_results_default', $1, $2, CURRENT_TIMESTAMP)
-         ON CONFLICT (template_key) DO UPDATE SET
+        `INSERT INTO email_templates (template_key, subject_template, body_template, organization_id, updated_at)
+         VALUES ('finale_results_default', $1, $2, $3, CURRENT_TIMESTAMP)
+         ON CONFLICT (template_key, organization_id) DO UPDATE SET
            subject_template = EXCLUDED.subject_template,
            body_template = EXCLUDED.body_template,
            updated_at = CURRENT_TIMESTAMP`,
-        [currentTemplate.subject_template, currentTemplate.body_template],
+        [currentTemplate.subject_template, currentTemplate.body_template, orgId],
         function(err) {
           if (err) reject(err);
           else resolve();

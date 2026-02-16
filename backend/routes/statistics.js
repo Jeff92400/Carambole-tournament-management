@@ -133,6 +133,7 @@ router.get('/categories', authenticateToken, async (req, res) => {
   const { season } = req.query;
   const targetSeason = season || await getCurrentSeason();
 
+  const orgId = req.user.organizationId || null;
   const query = `
     SELECT DISTINCT
       c.id,
@@ -141,11 +142,11 @@ router.get('/categories', authenticateToken, async (req, res) => {
       c.level
     FROM categories c
     JOIN tournaments t ON t.category_id = c.id
-    WHERE t.season = $1
+    WHERE t.season = $1 AND ($2::int IS NULL OR t.organization_id = $2)
     ORDER BY c.game_type, c.level
   `;
 
-  db.all(query, [targetSeason], (err, rows) => {
+  db.all(query, [targetSeason, orgId], (err, rows) => {
     if (err) {
       console.error('Error fetching categories:', err);
       return res.status(500).json({ error: err.message });

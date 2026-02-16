@@ -359,6 +359,7 @@ router.delete('/ffb-rankings/:id', authenticateToken, (req, res) => {
 // Get all categories with game mode and ranking info
 router.get('/categories', authenticateToken, (req, res) => {
   const db = getDb();
+  const orgId = req.user.organizationId || null;
 
   const query = `
     SELECT
@@ -377,10 +378,11 @@ router.get('/categories', authenticateToken, (req, res) => {
     LEFT JOIN game_modes gm ON UPPER(c.game_type) = UPPER(gm.display_name)
                             OR UPPER(c.game_type) = UPPER(gm.code)
     LEFT JOIN ffb_rankings fr ON UPPER(c.level) = UPPER(fr.code)
+    WHERE ($1::int IS NULL OR c.organization_id = $1)
     ORDER BY gm.display_order, fr.level_order
   `;
 
-  db.all(query, [], (err, rows) => {
+  db.all(query, [orgId], (err, rows) => {
     if (err) {
       console.error('Error fetching categories:', err);
       return res.status(500).json({ error: 'Erreur lors de la récupération des catégories' });
@@ -422,11 +424,12 @@ router.post('/categories', authenticateToken, (req, res) => {
 
       // Create category with game_type = game mode display_name, level = ranking code
       const categoryDisplayName = display_name || `${gameMode.display_name} ${ranking_code.toUpperCase()}`;
+      const orgId = req.user.organizationId || null;
 
       db.run(
-        `INSERT INTO categories (game_type, level, display_name)
-         VALUES ($1, $2, $3)`,
-        [gameMode.display_name, ranking_code.toUpperCase(), categoryDisplayName],
+        `INSERT INTO categories (game_type, level, display_name, organization_id)
+         VALUES ($1, $2, $3, $4)`,
+        [gameMode.display_name, ranking_code.toUpperCase(), categoryDisplayName, orgId],
         function(err) {
           if (err) {
             console.error('Error creating category:', err);
@@ -447,12 +450,13 @@ router.put('/categories/:id', authenticateToken, (req, res) => {
   const db = getDb();
   const { id } = req.params;
   const { is_active, display_name } = req.body;
+  const orgId = req.user.organizationId || null;
 
   db.run(
     `UPDATE categories
      SET is_active = $1, display_name = COALESCE($2, display_name), updated_at = CURRENT_TIMESTAMP
-     WHERE id = $3`,
-    [is_active, display_name, id],
+     WHERE id = $3 AND ($4::int IS NULL OR organization_id = $4)`,
+    [is_active, display_name, id, orgId],
     function(err) {
       if (err) {
         console.error('Error updating category:', err);
@@ -478,6 +482,8 @@ router.delete('/categories/:id', authenticateToken, (req, res) => {
       return res.status(400).json({ error: 'ID invalide' });
     }
 
+    const orgId = req.user.organizationId || null;
+
     // First delete from category_mapping (foreign key reference)
     db.run('DELETE FROM category_mapping WHERE category_id = $1', [id], function(err) {
       if (err) {
@@ -486,7 +492,7 @@ router.delete('/categories/:id', authenticateToken, (req, res) => {
       }
 
       // Then delete the category
-      db.run('DELETE FROM categories WHERE id = $1', [id], function(err) {
+      db.run('DELETE FROM categories WHERE id = $1 AND ($2::int IS NULL OR organization_id = $2)', [id, orgId], function(err) {
         if (err) {
           console.error('Error deleting category:', err);
           return res.status(500).json({ error: 'Erreur lors de la suppression: ' + err.message });
@@ -506,6 +512,7 @@ router.delete('/categories/:id', authenticateToken, (req, res) => {
 // Sync orphaned categories with game modes
 router.post('/categories/sync', authenticateToken, async (req, res) => {
   const db = getDb();
+  const orgId = req.user.organizationId || null;
 
   try {
     // First, get all game modes
@@ -516,9 +523,9 @@ router.post('/categories/sync', authenticateToken, async (req, res) => {
       });
     });
 
-    // Get all categories
+    // Get all categories for this org
     const categories = await new Promise((resolve, reject) => {
-      db.all('SELECT id, game_type, level, display_name FROM categories', [], (err, rows) => {
+      db.all('SELECT id, game_type, level, display_name FROM categories WHERE ($1::int IS NULL OR organization_id = $1)', [orgId], (err, rows) => {
         if (err) reject(err);
         else resolve(rows || []);
       });
@@ -845,13 +852,14 @@ router.delete('/poule-configurations/:id', authenticateToken, (req, res) => {
 router.get('/scoring-rules', authenticateToken, (req, res) => {
   const db = getDb();
   const { rule_type } = req.query;
+  const orgId = req.user.organizationId || null;
 
-  let query = 'SELECT * FROM scoring_rules ORDER BY rule_type, display_order';
-  let params = [];
+  let query = 'SELECT * FROM scoring_rules WHERE ($1::int IS NULL OR organization_id = $1) ORDER BY rule_type, display_order';
+  let params = [orgId];
 
   if (rule_type) {
-    query = 'SELECT * FROM scoring_rules WHERE rule_type = $1 ORDER BY display_order';
-    params = [rule_type];
+    query = 'SELECT * FROM scoring_rules WHERE rule_type = $1 AND ($2::int IS NULL OR organization_id = $2) ORDER BY display_order';
+    params = [rule_type, orgId];
   }
 
   db.all(query, params, (err, rows) => {
@@ -877,13 +885,15 @@ router.post('/scoring-rules', authenticateToken, (req, res) => {
     return res.status(400).json({ error: 'Le nombre de points est requis' });
   }
 
+  const orgId = req.user.organizationId || null;
+
   db.run(
     `INSERT INTO scoring_rules (rule_type, condition_key, points, display_order, description,
-      field_1, operator_1, value_1, logical_op, field_2, operator_2, value_2, column_label)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+      field_1, operator_1, value_1, logical_op, field_2, operator_2, value_2, column_label, organization_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
     [rule_type, condition_key, parseInt(points), display_order || 0, description || '',
      field_1 || null, operator_1 || null, value_1 || null, logical_op || null,
-     field_2 || null, operator_2 || null, value_2 || null, column_label || null],
+     field_2 || null, operator_2 || null, value_2 || null, column_label || null, orgId],
     function(err) {
       if (err) {
         console.error('Error creating scoring rule:', err);
@@ -901,6 +911,7 @@ router.post('/scoring-rules', authenticateToken, (req, res) => {
 router.put('/scoring-rules/:id', authenticateToken, (req, res) => {
   const db = getDb();
   const { id } = req.params;
+  const orgId = req.user.organizationId || null;
 
   // Build dynamic update - only update fields that are provided
   const setClauses = ['updated_at = CURRENT_TIMESTAMP'];
@@ -922,9 +933,10 @@ router.put('/scoring-rules/:id', authenticateToken, (req, res) => {
   }
 
   params.push(id);
+  params.push(orgId);
 
   db.run(
-    `UPDATE scoring_rules SET ${setClauses.join(', ')} WHERE id = $${paramIndex}`,
+    `UPDATE scoring_rules SET ${setClauses.join(', ')} WHERE id = $${paramIndex} AND ($${paramIndex + 1}::int IS NULL OR organization_id = $${paramIndex + 1})`,
     params,
     function(err) {
       if (err) {
@@ -943,8 +955,9 @@ router.put('/scoring-rules/:id', authenticateToken, (req, res) => {
 router.delete('/scoring-rules/:id', authenticateToken, (req, res) => {
   const db = getDb();
   const { id } = req.params;
+  const orgId = req.user.organizationId || null;
 
-  db.run('DELETE FROM scoring_rules WHERE id = $1', [id], function(err) {
+  db.run('DELETE FROM scoring_rules WHERE id = $1 AND ($2::int IS NULL OR organization_id = $2)', [id, orgId], function(err) {
     if (err) {
       console.error('Error deleting scoring rule:', err);
       return res.status(500).json({ error: 'Erreur lors de la suppression' });

@@ -1420,9 +1420,10 @@ router.post('/generate-poules', authenticateToken, async (req, res) => {
     let finalGameParams = gameParams; // gameParams from request body
     if (!finalGameParams) {
       try {
+        const orgId = req.user.organizationId || null;
         const gameParamsResult = await db.query(
-          'SELECT * FROM game_parameters WHERE UPPER(REPLACE(mode, \' \', \'\')) = UPPER(REPLACE($1, \' \', \'\')) AND UPPER(categorie) = UPPER($2)',
-          [category.mode, category.categorie]
+          'SELECT * FROM game_parameters WHERE UPPER(REPLACE(mode, \' \', \'\')) = UPPER(REPLACE($1, \' \', \'\')) AND UPPER(categorie) = UPPER($2) AND ($3::int IS NULL OR organization_id = $3)',
+          [category.mode, category.categorie, orgId]
         );
         if (gameParamsResult.rows.length > 0) {
           finalGameParams = gameParamsResult.rows[0];

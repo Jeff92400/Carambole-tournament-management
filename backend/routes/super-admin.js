@@ -288,12 +288,12 @@ router.post('/organizations', async (req, res) => {
     );
     const orgId = orgResult.lastID;
 
-    // Seed default organization settings
+    // Seed default organization settings (FFB colors = "not yet customized" signal)
     const defaultOrgSettings = [
       ['organization_name', name],
       ['organization_short_name', short_name],
-      ['primary_color', '#1F4788'],
-      ['secondary_color', '#667EEA'],
+      ['primary_color', '#C41E3A'],
+      ['secondary_color', '#1F4788'],
       ['accent_color', '#FFC107'],
       ['background_color', '#FFFFFF'],
       ['background_secondary_color', '#F5F5F5'],
@@ -319,6 +319,42 @@ router.post('/organizations', async (req, res) => {
        VALUES ($1, $2, $3, 'admin', 1, $4)`,
       [admin_username, passwordHash, admin_email || null, orgId]
     );
+
+    // Seed default categories (copy from org #1)
+    const refCategories = await dbAll(`SELECT game_type, level, display_name, is_active FROM categories WHERE organization_id = 1`);
+    for (const cat of refCategories) {
+      await dbRun(
+        `INSERT INTO categories (game_type, level, display_name, is_active, organization_id) VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING`,
+        [cat.game_type, cat.level, cat.display_name, cat.is_active, orgId]
+      );
+    }
+
+    // Seed default game parameters (copy from org #1)
+    const refGameParams = await dbAll(`SELECT mode, categorie, coin, distance_normale, distance_reduite, reprises, moyenne_mini, moyenne_maxi FROM game_parameters WHERE organization_id = 1`);
+    for (const gp of refGameParams) {
+      await dbRun(
+        `INSERT INTO game_parameters (mode, categorie, coin, distance_normale, distance_reduite, reprises, moyenne_mini, moyenne_maxi, organization_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) ON CONFLICT DO NOTHING`,
+        [gp.mode, gp.categorie, gp.coin, gp.distance_normale, gp.distance_reduite, gp.reprises, gp.moyenne_mini, gp.moyenne_maxi, orgId]
+      );
+    }
+
+    // Seed default scoring rules (copy from org #1)
+    const refScoringRules = await dbAll(`SELECT rule_type, condition_key, points, display_order, description, is_active, field_1, operator_1, value_1, logical_op, field_2, operator_2, value_2, column_label FROM scoring_rules WHERE organization_id = 1`);
+    for (const sr of refScoringRules) {
+      await dbRun(
+        `INSERT INTO scoring_rules (rule_type, condition_key, points, display_order, description, is_active, field_1, operator_1, value_1, logical_op, field_2, operator_2, value_2, column_label, organization_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) ON CONFLICT DO NOTHING`,
+        [sr.rule_type, sr.condition_key, sr.points, sr.display_order, sr.description, sr.is_active, sr.field_1, sr.operator_1, sr.value_1, sr.logical_op, sr.field_2, sr.operator_2, sr.value_2, sr.column_label, orgId]
+      );
+    }
+
+    // Seed default email templates (copy from org #1)
+    const refTemplates = await dbAll(`SELECT template_key, subject_template, body_template, outro_template FROM email_templates WHERE organization_id = 1`);
+    for (const tpl of refTemplates) {
+      await dbRun(
+        `INSERT INTO email_templates (template_key, subject_template, body_template, outro_template, organization_id) VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING`,
+        [tpl.template_key, tpl.subject_template, tpl.body_template, tpl.outro_template, orgId]
+      );
+    }
 
     logAdminAction({
       req,
@@ -425,6 +461,10 @@ router.delete('/organizations/:id', async (req, res) => {
       'rankings',
       'tournaments',
       'tournoi_ext',
+      'scoring_rules',
+      'game_parameters',
+      'email_templates',
+      'categories',
       'players',
       'clubs',
       'users',

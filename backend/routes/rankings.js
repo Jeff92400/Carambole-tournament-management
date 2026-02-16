@@ -139,10 +139,13 @@ router.get('/', authenticateToken, (req, res) => {
       }
 
       if (seenTypes.size > 0) {
-        const placeholders = [...seenTypes].map((_, i) => `$${i + 1}`).join(',');
+        const orgId = req.user.organizationId || null;
+        const typesArr = [...seenTypes];
+        const placeholders = typesArr.map((_, i) => `$${i + 1}`).join(',');
+        const orgParam = typesArr.length + 1;
         db.all(
-          `SELECT DISTINCT rule_type, column_label FROM scoring_rules WHERE rule_type IN (${placeholders}) AND column_label IS NOT NULL`,
-          [...seenTypes],
+          `SELECT DISTINCT rule_type, column_label FROM scoring_rules WHERE rule_type IN (${placeholders}) AND column_label IS NOT NULL AND ($${orgParam}::int IS NULL OR organization_id = $${orgParam})`,
+          [...typesArr, orgId],
           (err2, labelRows) => {
             const labelMap = {};
             (labelRows || []).forEach(r => { labelMap[r.rule_type] = r.column_label; });
@@ -282,11 +285,14 @@ router.get('/export', authenticateToken, async (req, res) => {
 
       let bonusColumns = [];
       if (seenTypes.size > 0) {
-        const placeholders = [...seenTypes].map((_, i) => `$${i + 1}`).join(',');
+        const orgId = req.user.organizationId || null;
+        const typesArr = [...seenTypes];
+        const placeholders = typesArr.map((_, i) => `$${i + 1}`).join(',');
+        const orgParam = typesArr.length + 1;
         const labelRows = await new Promise((resolve, reject) => {
           db.all(
-            `SELECT DISTINCT rule_type, column_label FROM scoring_rules WHERE rule_type IN (${placeholders}) AND column_label IS NOT NULL`,
-            [...seenTypes],
+            `SELECT DISTINCT rule_type, column_label FROM scoring_rules WHERE rule_type IN (${placeholders}) AND column_label IS NOT NULL AND ($${orgParam}::int IS NULL OR organization_id = $${orgParam})`,
+            [...typesArr, orgId],
             (err, rows) => { if (err) reject(err); else resolve(rows || []); }
           );
         });

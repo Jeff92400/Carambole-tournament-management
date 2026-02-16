@@ -1254,6 +1254,10 @@ async function initializeDatabase() {
     await client.query(`ALTER TABLE player_invitations ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)`);
     await client.query(`ALTER TABLE admin_activity_logs ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)`);
     await client.query(`ALTER TABLE organization_logo ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)`);
+    await client.query(`ALTER TABLE categories ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)`);
+    await client.query(`ALTER TABLE scoring_rules ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)`);
+    await client.query(`ALTER TABLE game_parameters ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)`);
+    await client.query(`ALTER TABLE email_templates ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)`);
 
     // Indexes for org-scoped queries
     await client.query(`CREATE INDEX IF NOT EXISTS idx_tournoi_ext_org ON tournoi_ext(organization_id)`);
@@ -1264,6 +1268,10 @@ async function initializeDatabase() {
     await client.query(`CREATE INDEX IF NOT EXISTS idx_email_campaigns_org ON email_campaigns(organization_id)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_scheduled_emails_org ON scheduled_emails(organization_id)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_player_invitations_org ON player_invitations(organization_id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_categories_org ON categories(organization_id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_scoring_rules_org ON scoring_rules(organization_id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_game_parameters_org ON game_parameters(organization_id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_email_templates_org ON email_templates(organization_id)`);
 
     // ============= SEED CDBHS AS ORGANIZATION #1 =============
 
@@ -1288,6 +1296,20 @@ async function initializeDatabase() {
     await client.query(`UPDATE player_invitations SET organization_id = 1 WHERE organization_id IS NULL`);
     await client.query(`UPDATE admin_activity_logs SET organization_id = 1 WHERE organization_id IS NULL`);
     await client.query(`UPDATE organization_logo SET organization_id = 1 WHERE organization_id IS NULL`);
+    await client.query(`UPDATE categories SET organization_id = 1 WHERE organization_id IS NULL`);
+    await client.query(`UPDATE scoring_rules SET organization_id = 1 WHERE organization_id IS NULL`);
+    await client.query(`UPDATE game_parameters SET organization_id = 1 WHERE organization_id IS NULL`);
+    await client.query(`UPDATE email_templates SET organization_id = 1 WHERE organization_id IS NULL`);
+
+    // Update unique constraints to include organization_id (Phase C)
+    await client.query(`ALTER TABLE categories DROP CONSTRAINT IF EXISTS categories_game_type_level_key`);
+    await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS categories_game_type_level_org_key ON categories(game_type, level, organization_id)`);
+    await client.query(`ALTER TABLE game_parameters DROP CONSTRAINT IF EXISTS game_parameters_mode_categorie_key`);
+    await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS game_parameters_mode_categorie_org_key ON game_parameters(mode, categorie, organization_id)`);
+    await client.query(`ALTER TABLE scoring_rules DROP CONSTRAINT IF EXISTS scoring_rules_rule_type_condition_key_key`);
+    await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS scoring_rules_rule_type_condition_key_org_key ON scoring_rules(rule_type, condition_key, organization_id)`);
+    await client.query(`ALTER TABLE email_templates DROP CONSTRAINT IF EXISTS email_templates_template_key_key`);
+    await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS email_templates_template_key_org_key ON email_templates(template_key, organization_id)`);
 
     // Migrate CDB-specific settings from app_settings to organization_settings for org #1
     const orgSettingsKeys = [
@@ -1362,7 +1384,7 @@ async function initializeDatabase() {
 
       for (const cat of categories) {
         await client.query(
-          'INSERT INTO categories (game_type, level, display_name) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
+          'INSERT INTO categories (game_type, level, display_name, organization_id) VALUES ($1, $2, $3, 1) ON CONFLICT DO NOTHING',
           [cat.game_type, cat.level, cat.display_name]
         );
       }
@@ -1377,9 +1399,9 @@ async function initializeDatabase() {
     `);
     // Ensure LIBRE N3 exists
     await client.query(`
-      INSERT INTO categories (game_type, level, display_name)
-      VALUES ('LIBRE', 'N3', 'LIBRE - NATIONALE 3')
-      ON CONFLICT (game_type, level) DO NOTHING
+      INSERT INTO categories (game_type, level, display_name, organization_id)
+      VALUES ('LIBRE', 'N3', 'LIBRE - NATIONALE 3', 1)
+      ON CONFLICT DO NOTHING
     `);
 
     // Add is_active and updated_at columns to categories (migration)

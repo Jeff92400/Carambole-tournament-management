@@ -540,7 +540,8 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
                     }
 
                     // Compute bonus points then recalculate rankings
-                    computeBonusPoints(finalTournamentId, categoryId, () => {
+                    const orgId = req.user.organizationId || null;
+                    computeBonusPoints(finalTournamentId, categoryId, orgId, () => {
                     recalculateRankings(categoryId, season, () => {
                       // Clean up uploaded file
                       fs.unlinkSync(req.file.path);
@@ -643,11 +644,11 @@ function evaluateRule(rule, playerResult, tournamentContext, referenceValues) {
 }
 
 // Compute bonus points for tournament results using the generic rule engine
-function computeBonusPoints(tournamentId, categoryId, callback) {
+function computeBonusPoints(tournamentId, categoryId, orgId, callback) {
   // 1. Load ALL active structured rules (field_1 IS NOT NULL skips display-only BASE_VDL)
   db.all(
-    "SELECT * FROM scoring_rules WHERE is_active = true AND field_1 IS NOT NULL ORDER BY rule_type, display_order",
-    [],
+    "SELECT * FROM scoring_rules WHERE is_active = true AND field_1 IS NOT NULL AND ($1::int IS NULL OR organization_id = $1) ORDER BY rule_type, display_order",
+    [orgId],
     (err, rules) => {
       if (err || !rules || rules.length === 0) {
         console.log('[BONUS] No evaluatable scoring rules found, skipping');
@@ -665,7 +666,7 @@ function computeBonusPoints(tournamentId, categoryId, callback) {
         `SELECT c.display_name as category_name, c.game_type, c.level,
                 gp.moyenne_mini, gp.moyenne_maxi
          FROM categories c
-         LEFT JOIN game_parameters gp ON UPPER(gp.mode) = UPPER(c.game_type) AND UPPER(gp.categorie) = UPPER(c.level)
+         LEFT JOIN game_parameters gp ON UPPER(gp.mode) = UPPER(c.game_type) AND UPPER(gp.categorie) = UPPER(c.level) AND gp.organization_id = c.organization_id
          WHERE c.id = ?`,
         [categoryId],
         (err, catInfo) => {
@@ -928,7 +929,7 @@ function recalculateRankings(categoryId, season, callback) {
 }
 
 // Recompute bonus points for all tournaments in a category/season
-function recomputeAllBonuses(categoryId, season, callback) {
+function recomputeAllBonuses(categoryId, season, orgId, callback) {
   db.all(
     'SELECT id FROM tournaments WHERE category_id = ? AND season = ? AND tournament_number <= 3',
     [categoryId, season],
@@ -938,7 +939,7 @@ function recomputeAllBonuses(categoryId, season, callback) {
       }
       let completed = 0;
       tournaments.forEach(t => {
-        computeBonusPoints(t.id, categoryId, () => {
+        computeBonusPoints(t.id, categoryId, orgId, () => {
           completed++;
           if (completed === tournaments.length) callback(null);
         });
@@ -956,7 +957,8 @@ router.post('/recalculate-rankings', authenticateToken, (req, res) => {
   }
 
   // Recompute bonuses first (in case scoring rules changed), then recalculate rankings
-  recomputeAllBonuses(categoryId, season, () => {
+  const orgId = req.user.organizationId || null;
+  recomputeAllBonuses(categoryId, season, orgId, () => {
   recalculateRankings(categoryId, season, (err) => {
     if (err) {
       return res.status(500).json({ error: err.message });
@@ -1107,10 +1109,13 @@ router.get('/:id/results', authenticateToken, (req, res) => {
 
           if (seenTypes.size > 0) {
             // Get column labels from scoring_rules
-            const placeholders = [...seenTypes].map((_, i) => `$${i + 1}`).join(',');
+            const orgId = req.user.organizationId || null;
+            const typesArr = [...seenTypes];
+            const placeholders = typesArr.map((_, i) => `$${i + 1}`).join(',');
+            const orgParam = typesArr.length + 1;
             db.all(
-              `SELECT DISTINCT rule_type, column_label FROM scoring_rules WHERE rule_type IN (${placeholders}) AND column_label IS NOT NULL`,
-              [...seenTypes],
+              `SELECT DISTINCT rule_type, column_label FROM scoring_rules WHERE rule_type IN (${placeholders}) AND column_label IS NOT NULL AND ($${orgParam}::int IS NULL OR organization_id = $${orgParam})`,
+              [...typesArr, orgId],
               (err, labelRows) => {
                 const labelMap = {};
                 (labelRows || []).forEach(r => { labelMap[r.rule_type] = r.column_label; });
@@ -1190,11 +1195,14 @@ router.get('/:id/export', authenticateToken, async (req, res) => {
 
             let bonusColumns = [];
             if (seenTypes.size > 0) {
-              const placeholders = [...seenTypes].map((_, i) => `$${i + 1}`).join(',');
+              const orgId = req.user.organizationId || null;
+              const typesArr = [...seenTypes];
+              const placeholders = typesArr.map((_, i) => `$${i + 1}`).join(',');
+              const orgParam = typesArr.length + 1;
               const labelRows = await new Promise((resolve, reject) => {
                 db.all(
-                  `SELECT DISTINCT rule_type, column_label FROM scoring_rules WHERE rule_type IN (${placeholders}) AND column_label IS NOT NULL`,
-                  [...seenTypes],
+                  `SELECT DISTINCT rule_type, column_label FROM scoring_rules WHERE rule_type IN (${placeholders}) AND column_label IS NOT NULL AND ($${orgParam}::int IS NULL OR organization_id = $${orgParam})`,
+                  [...typesArr, orgId],
                   (err, rows) => { if (err) reject(err); else resolve(rows || []); }
                 );
               });
@@ -1573,9 +1581,10 @@ router.post('/recalculate-all-rankings', authenticateToken, async (req, res) => 
       let recalculated = 0;
       let errors = [];
 
+      const orgId = req.user.organizationId || null;
       for (const combo of combinations) {
         await new Promise((resolve) => {
-          recomputeAllBonuses(combo.category_id, combo.season, () => {
+          recomputeAllBonuses(combo.category_id, combo.season, orgId, () => {
             recalculateRankings(combo.category_id, combo.season, (err) => {
               if (err) {
                 errors.push({ categoryId: combo.category_id, season: combo.season, error: err.message });

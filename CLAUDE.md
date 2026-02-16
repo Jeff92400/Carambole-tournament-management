@@ -401,6 +401,67 @@ Applied globally via `frontend/css/styles.css`:
 - `.navbar-subtitle` — Small gray text below org name (10px)
 - `.navbar-page-title` — Primary-colored page name below subtitle (12px)
 
+## Multi-Organization (Multi-CDB) Architecture
+
+The app supports multiple billiards committees (CDBs) sharing a single deployment. Each CDB has isolated data via `organization_id` on all data tables.
+
+### How It Works
+
+1. **Organizations table:** Each CDB has a row in `organizations` with `slug`, `name`, `is_active`
+2. **Admin JWT:** Contains `organizationId` — all CRUD operations auto-scope to the admin's org
+3. **Data isolation:** All queries on org-scoped tables filter by `organization_id`
+4. **Player App:** Uses `?org=<slug>` URL parameter to resolve org context pre-login, then JWT post-login
+
+### Org-Scoped Tables
+
+All these tables have an `organization_id` column with nullable filter pattern `($N::int IS NULL OR organization_id = $N)`:
+
+| Table | Scoped via |
+|-------|-----------|
+| `players` | Direct `organization_id` column |
+| `clubs` | Direct `organization_id` column |
+| `users` | Direct `organization_id` column |
+| `tournoi_ext` | Direct `organization_id` column |
+| `inscriptions` | Direct `organization_id` column |
+| `tournaments` | Direct `organization_id` column |
+| `rankings` | Direct `organization_id` column |
+| `announcements` | Direct `organization_id` column |
+| `email_campaigns` | Direct `organization_id` column |
+| `scheduled_emails` | Direct `organization_id` column |
+| `player_invitations` | Direct `organization_id` column |
+| `activity_logs` | Direct `organization_id` column |
+| `categories` | Direct `organization_id` column |
+| `scoring_rules` | Direct `organization_id` column |
+| `game_parameters` | Direct `organization_id` column |
+| `email_templates` | Direct `organization_id` column |
+
+### Tables NOT Org-Scoped (by design)
+
+| Table | Reason |
+|-------|--------|
+| `tournament_results` | Scoped via `tournament_id` JOIN |
+| `convocation_poules` | Scoped via `tournoi_id` JOIN |
+| `tournament_relances` | Scoped via `tournoi_ext_id` JOIN |
+| `player_contacts` | Shared contact directory |
+| `club_aliases` | Shared normalization |
+
+### Access Pattern in Route Handlers
+
+```javascript
+// Every authenticated route handler:
+const orgId = req.user.organizationId || null;
+
+// INSERTs include organization_id:
+INSERT INTO tournoi_ext (..., organization_id) VALUES (..., $N)
+
+// SELECTs/UPDATEs/DELETEs filter by org:
+WHERE ... AND ($N::int IS NULL OR organization_id = $N)
+```
+
+### Organization Settings
+
+Per-org settings stored in `organization_settings` table (key-value per org_id). Falls back to `app_settings` for missing keys. Manages: colors, logo, org name, contact email, etc.
+
 ## See Also
 
 - `backend/CLAUDE.md` - Detailed backend documentation

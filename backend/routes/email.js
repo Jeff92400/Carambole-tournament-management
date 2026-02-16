@@ -334,7 +334,7 @@ async function getRankingDataForCategory(categoryId, season) {
 }
 
 // Fetch ranking data by category display name (fallback when category_id is not available)
-async function getRankingDataByCategoryName(categoryDisplayName, season) {
+async function getRankingDataByCategoryName(categoryDisplayName, season, orgId = null) {
   const db = require('../db-loader');
 
   return new Promise((resolve) => {
@@ -342,14 +342,14 @@ async function getRankingDataByCategoryName(categoryDisplayName, season) {
     const normalizedName = (categoryDisplayName || '').toUpperCase().replace(/\s+/g, ' ').trim();
 
     db.get(
-      `SELECT id FROM categories WHERE UPPER(REPLACE(display_name, '  ', ' ')) = $1`,
-      [normalizedName],
+      `SELECT id FROM categories WHERE UPPER(REPLACE(display_name, '  ', ' ')) = $1 AND ($2::int IS NULL OR organization_id = $2)`,
+      [normalizedName, orgId],
       (err, cat) => {
         if (err || !cat) {
           // Try partial match
           db.get(
-            `SELECT id FROM categories WHERE UPPER(display_name) LIKE $1`,
-            [`%${normalizedName}%`],
+            `SELECT id FROM categories WHERE UPPER(display_name) LIKE $1 AND ($2::int IS NULL OR organization_id = $2)`,
+            [`%${normalizedName}%`, orgId],
             (err2, cat2) => {
               if (err2 || !cat2) {
                 console.log(`[Ranking] No category found for: ${normalizedName}`);
@@ -1119,7 +1119,7 @@ Sportivement,
 };
 
 // Fetch email template from database
-async function getEmailTemplate(templateType = 'convocation') {
+async function getEmailTemplate(templateType = 'convocation', orgId = null) {
   const db = require('../db-loader');
 
   // Determine which default template to use
@@ -1129,8 +1129,8 @@ async function getEmailTemplate(templateType = 'convocation') {
 
   return new Promise((resolve) => {
     db.get(
-      'SELECT * FROM email_templates WHERE template_key = $1',
-      [templateType],
+      'SELECT * FROM email_templates WHERE template_key = $1 AND ($2::int IS NULL OR organization_id = $2)',
+      [templateType, orgId],
       (err, row) => {
         if (err || !row) {
           resolve(defaultTemplate);
@@ -1220,8 +1220,9 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
   console.log(`Competition type: ${isFinale ? 'FINALE' : 'TOURNAMENT'}`);
 
   // Fetch email template - use finale template if isFinale
+  const orgId = req.user.organizationId || null;
   const templateType = isFinale ? 'convocation-finale' : 'convocation';
-  const emailTemplate = await getEmailTemplate(templateType);
+  const emailTemplate = await getEmailTemplate(templateType, orgId);
 
   // Fetch ranking data for this category/season (or use mock data for testing)
   let rankingData = {};
@@ -1236,7 +1237,7 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
   } else if (category.display_name) {
     // Fallback: try to find category by name and fetch ranking data
     console.log(`[Ranking] No category ID, trying to find by name: ${category.display_name}`);
-    rankingData = await getRankingDataByCategoryName(category.display_name, season);
+    rankingData = await getRankingDataByCategoryName(category.display_name, season, orgId);
     console.log(`Fetched ranking data for ${Object.keys(rankingData).length} players by category name`);
   }
 
@@ -2215,10 +2216,11 @@ router.post('/send-club-reminder', authenticateToken, async (req, res) => {
       : `Tournoi ${tournament}`;
 
     // Fetch template from database
+    const orgId = req.user.organizationId || null;
     const template = await new Promise((resolve, reject) => {
       db.get(
-        `SELECT subject_template, body_template FROM email_templates WHERE template_key = 'club_reminder'`,
-        [],
+        `SELECT subject_template, body_template FROM email_templates WHERE template_key = 'club_reminder' AND ($1::int IS NULL OR organization_id = $1)`,
+        [orgId],
         (err, row) => {
           if (err) reject(err);
           else resolve(row);
@@ -2570,10 +2572,11 @@ router.post('/inscription-confirmation', async (req, res) => {
 
     // Load template from database (with fallback to default)
     const db = require('../db-loader');
+    const orgId = req.user?.organizationId || null;
     const template = await new Promise((resolve) => {
       db.get(
-        'SELECT subject_template, body_template FROM email_templates WHERE template_key = $1',
-        ['inscription_confirmation'],
+        'SELECT subject_template, body_template FROM email_templates WHERE template_key = $1 AND ($2::int IS NULL OR organization_id = $2)',
+        ['inscription_confirmation', orgId],
         (err, row) => {
           if (err || !row) {
             resolve(DEFAULT_INSCRIPTION_CONFIRMATION_TEMPLATE);
@@ -2697,10 +2700,11 @@ router.post('/inscription-cancellation', async (req, res) => {
 
     // Load template from database (with fallback to default)
     const db = require('../db-loader');
+    const orgId = req.user?.organizationId || null;
     const template = await new Promise((resolve) => {
       db.get(
-        'SELECT subject_template, body_template FROM email_templates WHERE template_key = $1',
-        ['inscription_cancellation'],
+        'SELECT subject_template, body_template FROM email_templates WHERE template_key = $1 AND ($2::int IS NULL OR organization_id = $2)',
+        ['inscription_cancellation', orgId],
         (err, row) => {
           if (err || !row) {
             resolve(DEFAULT_INSCRIPTION_CANCELLATION_TEMPLATE);
@@ -3180,11 +3184,13 @@ router.post('/poules/:tournoiId/regenerate', authenticateToken, async (req, res)
     const normalizedCategorie = (tournament.categorie || '').toUpperCase();
     console.log('Looking for category:', { mode: tournament.mode, normalizedMode, categorie: normalizedCategorie });
 
+    const orgId = req.user.organizationId || null;
     const category = await new Promise((resolve, reject) => {
       db.get(`
         SELECT id, game_type, level FROM categories
         WHERE UPPER(REPLACE(game_type, ' ', '')) = $1 AND UPPER(level) = $2
-      `, [normalizedMode, normalizedCategorie], (err, row) => {
+        AND ($3::int IS NULL OR organization_id = $3)
+      `, [normalizedMode, normalizedCategorie, orgId], (err, row) => {
         if (err) reject(err);
         else resolve(row);
       });

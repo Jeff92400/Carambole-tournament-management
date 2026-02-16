@@ -150,9 +150,10 @@ router.get('/game-parameters', authenticateToken, async (req, res) => {
     }
 
     // Get game parameters
+    const orgId = req.user.organizationId || null;
     const params = await new Promise((resolve, reject) => {
       db.all(
-        `SELECT * FROM game_parameters ORDER BY
+        `SELECT * FROM game_parameters WHERE ($1::int IS NULL OR organization_id = $1) ORDER BY
           CASE mode
             WHEN 'LIBRE' THEN 1
             WHEN 'CADRE' THEN 2
@@ -166,7 +167,7 @@ router.get('/game-parameters', authenticateToken, async (req, res) => {
             WHEN 'R3' THEN 4
             WHEN 'R4' THEN 5
           END`,
-        [],
+        [orgId],
         (err, rows) => {
           if (err) reject(err);
           else resolve(rows || []);
@@ -195,14 +196,15 @@ router.get('/game-parameters', authenticateToken, async (req, res) => {
 router.get('/game-parameters/:mode/:categorie', authenticateToken, (req, res) => {
   const db = getDb();
   const { mode, categorie } = req.params;
+  const orgId = req.user.organizationId || null;
 
   // Normalize: uppercase and remove spaces (DB stores '3BANDES' not '3 BANDES')
   const normalizedMode = decodeURIComponent(mode).toUpperCase().replace(/\s+/g, '');
   const normalizedCategorie = decodeURIComponent(categorie).toUpperCase();
 
   db.get(
-    'SELECT * FROM game_parameters WHERE UPPER(REPLACE(mode, \' \', \'\')) = $1 AND UPPER(categorie) = $2',
-    [normalizedMode, normalizedCategorie],
+    'SELECT * FROM game_parameters WHERE UPPER(REPLACE(mode, \' \', \'\')) = $1 AND UPPER(categorie) = $2 AND ($3::int IS NULL OR organization_id = $3)',
+    [normalizedMode, normalizedCategorie, orgId],
     (err, row) => {
       if (err) {
         console.error('Error fetching game parameter:', err);
@@ -220,15 +222,16 @@ router.get('/game-parameters/:mode/:categorie', authenticateToken, (req, res) =>
 router.post('/game-parameters', authenticateToken, requireAdmin, (req, res) => {
   const db = getDb();
   const { mode, categorie, coin, distance_normale, distance_reduite, reprises, moyenne_mini, moyenne_maxi } = req.body;
+  const orgId = req.user.organizationId || null;
 
   if (!mode || !categorie || !coin || !distance_normale || !reprises || moyenne_mini === undefined || moyenne_maxi === undefined) {
     return res.status(400).json({ error: 'Missing required fields' });
   }
 
   db.run(
-    `INSERT INTO game_parameters (mode, categorie, coin, distance_normale, distance_reduite, reprises, moyenne_mini, moyenne_maxi, updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CURRENT_TIMESTAMP)
-     ON CONFLICT (mode, categorie) DO UPDATE SET
+    `INSERT INTO game_parameters (mode, categorie, coin, distance_normale, distance_reduite, reprises, moyenne_mini, moyenne_maxi, organization_id, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, CURRENT_TIMESTAMP)
+     ON CONFLICT (mode, categorie, organization_id) DO UPDATE SET
        coin = EXCLUDED.coin,
        distance_normale = EXCLUDED.distance_normale,
        distance_reduite = EXCLUDED.distance_reduite,
@@ -236,7 +239,7 @@ router.post('/game-parameters', authenticateToken, requireAdmin, (req, res) => {
        moyenne_mini = EXCLUDED.moyenne_mini,
        moyenne_maxi = EXCLUDED.moyenne_maxi,
        updated_at = CURRENT_TIMESTAMP`,
-    [mode.toUpperCase(), categorie.toUpperCase(), coin, distance_normale, distance_reduite || null, reprises, moyenne_mini, moyenne_maxi],
+    [mode.toUpperCase(), categorie.toUpperCase(), coin, distance_normale, distance_reduite || null, reprises, moyenne_mini, moyenne_maxi, orgId],
     function(err) {
       if (err) {
         console.error('Error saving game parameter:', err);
@@ -256,6 +259,7 @@ router.put('/game-parameters/:id', authenticateToken, requireAdmin, (req, res) =
   const db = getDb();
   const { id } = req.params;
   const { coin, distance_normale, distance_reduite, reprises, moyenne_mini, moyenne_maxi } = req.body;
+  const orgId = req.user.organizationId || null;
 
   db.run(
     `UPDATE game_parameters SET
@@ -266,8 +270,8 @@ router.put('/game-parameters/:id', authenticateToken, requireAdmin, (req, res) =
        moyenne_mini = $5,
        moyenne_maxi = $6,
        updated_at = CURRENT_TIMESTAMP
-     WHERE id = $7`,
-    [coin, distance_normale, distance_reduite || null, reprises, moyenne_mini, moyenne_maxi, id],
+     WHERE id = $7 AND ($8::int IS NULL OR organization_id = $8)`,
+    [coin, distance_normale, distance_reduite || null, reprises, moyenne_mini, moyenne_maxi, id, orgId],
     function(err) {
       if (err) {
         console.error('Error updating game parameter:', err);
@@ -285,10 +289,11 @@ router.put('/game-parameters/:id', authenticateToken, requireAdmin, (req, res) =
 router.delete('/game-parameters/:id', authenticateToken, requireAdmin, (req, res) => {
   const db = getDb();
   const { id } = req.params;
+  const orgId = req.user.organizationId || null;
 
   db.run(
-    'DELETE FROM game_parameters WHERE id = $1',
-    [id],
+    'DELETE FROM game_parameters WHERE id = $1 AND ($2::int IS NULL OR organization_id = $2)',
+    [id, orgId],
     function(err) {
       if (err) {
         console.error('Error deleting game parameter:', err);
@@ -324,10 +329,11 @@ router.get('/tournament-overrides/:tournoiId', authenticateToken, async (req, re
     }
 
     // Get default game parameters for this mode/categorie (normalize spaces)
+    const orgId = req.user.organizationId || null;
     const defaults = await new Promise((resolve, reject) => {
       db.get(
-        'SELECT * FROM game_parameters WHERE UPPER(REPLACE(mode, \' \', \'\')) = UPPER(REPLACE($1, \' \', \'\')) AND UPPER(categorie) = UPPER($2)',
-        [tournament.mode, tournament.categorie],
+        'SELECT * FROM game_parameters WHERE UPPER(REPLACE(mode, \' \', \'\')) = UPPER(REPLACE($1, \' \', \'\')) AND UPPER(categorie) = UPPER($2) AND ($3::int IS NULL OR organization_id = $3)',
+        [tournament.mode, tournament.categorie, orgId],
         (err, row) => err ? reject(err) : resolve(row)
       );
     });
@@ -779,10 +785,11 @@ router.put('/tournament-types/:id', authenticateToken, requireAdmin, async (req,
 router.get('/email-template/:key', authenticateToken, (req, res) => {
   const db = getDb();
   const { key } = req.params;
+  const orgId = req.user.organizationId || null;
 
   db.get(
-    'SELECT * FROM email_templates WHERE template_key = $1',
-    [key],
+    'SELECT * FROM email_templates WHERE template_key = $1 AND ($2::int IS NULL OR organization_id = $2)',
+    [key, orgId],
     (err, row) => {
       if (err) {
         console.error('Error fetching email template:', err);
@@ -819,19 +826,20 @@ router.put('/email-template/:key', authenticateToken, requireAdmin, (req, res) =
   const db = getDb();
   const { key } = req.params;
   const { subject_template, body_template } = req.body;
+  const orgId = req.user.organizationId || null;
 
   if (!subject_template || !body_template) {
     return res.status(400).json({ error: 'Subject and body templates are required' });
   }
 
   db.run(
-    `INSERT INTO email_templates (template_key, subject_template, body_template, updated_at)
-     VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
-     ON CONFLICT (template_key) DO UPDATE SET
+    `INSERT INTO email_templates (template_key, subject_template, body_template, organization_id, updated_at)
+     VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
+     ON CONFLICT (template_key, organization_id) DO UPDATE SET
        subject_template = EXCLUDED.subject_template,
        body_template = EXCLUDED.body_template,
        updated_at = CURRENT_TIMESTAMP`,
-    [key, subject_template, body_template],
+    [key, subject_template, body_template, orgId],
     function(err) {
       if (err) {
         console.error('Error updating email template:', err);
@@ -847,13 +855,14 @@ router.post('/email-template/:key/save-as-default', authenticateToken, requireAd
   const db = getDb();
   const { key } = req.params;
   const defaultKey = `${key}_default`;
+  const orgId = req.user.organizationId || null;
 
   try {
     // First, get the current template
     const currentTemplate = await new Promise((resolve, reject) => {
       db.get(
-        'SELECT * FROM email_templates WHERE template_key = $1',
-        [key],
+        'SELECT * FROM email_templates WHERE template_key = $1 AND ($2::int IS NULL OR organization_id = $2)',
+        [key, orgId],
         (err, row) => {
           if (err) reject(err);
           else resolve(row);
@@ -868,13 +877,13 @@ router.post('/email-template/:key/save-as-default', authenticateToken, requireAd
     // Save as default (using the _default suffix)
     await new Promise((resolve, reject) => {
       db.run(
-        `INSERT INTO email_templates (template_key, subject_template, body_template, updated_at)
-         VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
-         ON CONFLICT (template_key) DO UPDATE SET
+        `INSERT INTO email_templates (template_key, subject_template, body_template, organization_id, updated_at)
+         VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
+         ON CONFLICT (template_key, organization_id) DO UPDATE SET
            subject_template = EXCLUDED.subject_template,
            body_template = EXCLUDED.body_template,
            updated_at = CURRENT_TIMESTAMP`,
-        [defaultKey, currentTemplate.subject_template, currentTemplate.body_template],
+        [defaultKey, currentTemplate.subject_template, currentTemplate.body_template, orgId],
         function(err) {
           if (err) reject(err);
           else resolve();
@@ -894,10 +903,11 @@ router.get('/email-template/:key/default', authenticateToken, (req, res) => {
   const db = getDb();
   const { key } = req.params;
   const defaultKey = `${key}_default`;
+  const orgId = req.user.organizationId || null;
 
   db.get(
-    'SELECT * FROM email_templates WHERE template_key = $1',
-    [defaultKey],
+    'SELECT * FROM email_templates WHERE template_key = $1 AND ($2::int IS NULL OR organization_id = $2)',
+    [defaultKey, orgId],
     (err, row) => {
       if (err) {
         console.error('Error fetching default email template:', err);
