@@ -49,7 +49,7 @@
   <div class="container">
     <div class="navbar">
       <div>
-        <h2 style="margin-bottom: 0;"><img src="images/FFB.png" alt="" style="height: 48px; width: 48px; vertical-align: middle; margin-right: 8px; border-radius: 6px;" onerror="this.src='images/FrenchBillard-Icon-small.png';"><span id="ligueTitle">Tableau de bord Ligue</span></h2>
+        <h2 style="margin-bottom: 0;"><img id="ligueLogo" src="images/FFB.png" alt="" style="height: 48px; width: 48px; vertical-align: middle; margin-right: 8px; border-radius: 6px;" onerror="this.src='images/FrenchBillard-Icon-small.png';"><span id="ligueTitle">Tableau de bord Ligue</span></h2>
       </div>
       <div class="nav-links">
         <a href="#" id="logoutBtn" class="nav-logout">Deconnexion</a>
@@ -180,10 +180,15 @@
         }
         const data = await response.json();
 
-        // Title
+        // Title + logo
         if (data.ligue) {
           document.getElementById('ligueTitle').textContent = `Ligue ${data.ligue.nom}`;
           document.getElementById('overviewTitle').textContent = `Vue d'ensemble — Ligue ${data.ligue.nom}`;
+          // Try to load ligue logo
+          const logoImg = document.getElementById('ligueLogo');
+          const logoUrl = `${API_URL}/ligue-admin/ligue-logo`;
+          fetch(logoUrl, { headers: { 'Authorization': `Bearer ${token}` } })
+            .then(r => { if (r.ok) logoImg.src = logoUrl + '?t=' + Date.now(); });
         }
 
         // Stats

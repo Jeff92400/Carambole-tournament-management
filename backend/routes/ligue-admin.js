@@ -163,4 +163,31 @@ router.get('/game-modes', async (req, res) => {
   }
 });
 
+// GET /api/ligue-admin/ligue-logo — Serve the ligue logo for the current ligue admin
+router.get('/ligue-logo', async (req, res) => {
+  try {
+    const ligueNumero = req.user.ligueNumero;
+    if (!ligueNumero) {
+      return res.status(404).json({ error: 'Pas de ligue associée' });
+    }
+
+    const ligue = await dbGet(
+      `SELECT logo_data, logo_content_type FROM ffb_ligues WHERE numero = $1`,
+      [ligueNumero]
+    );
+
+    if (!ligue || !ligue.logo_data) {
+      return res.status(404).json({ error: 'Pas de logo' });
+    }
+
+    res.setHeader('Content-Type', ligue.logo_content_type || 'image/png');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    res.send(ligue.logo_data);
+  } catch (error) {
+    console.error('Error serving ligue logo:', error);
+    res.status(500).json({ error: 'Erreur' });
+  }
+});
+
 module.exports = router;

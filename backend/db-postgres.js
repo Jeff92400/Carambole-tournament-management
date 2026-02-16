@@ -1243,6 +1243,15 @@ async function initializeDatabase() {
       )
     `);
 
+    // ============= FFB LIGUES ENRICHMENT (logo, contacts) =============
+    await client.query(`ALTER TABLE ffb_ligues ADD COLUMN IF NOT EXISTS logo_data BYTEA`);
+    await client.query(`ALTER TABLE ffb_ligues ADD COLUMN IF NOT EXISTS logo_content_type TEXT`);
+    await client.query(`ALTER TABLE ffb_ligues ADD COLUMN IF NOT EXISTS logo_filename TEXT`);
+    await client.query(`ALTER TABLE ffb_ligues ADD COLUMN IF NOT EXISTS email TEXT`);
+    await client.query(`ALTER TABLE ffb_ligues ADD COLUMN IF NOT EXISTS telephone TEXT`);
+    await client.query(`ALTER TABLE ffb_ligues ADD COLUMN IF NOT EXISTS website TEXT`);
+    await client.query(`ALTER TABLE ffb_ligues ADD COLUMN IF NOT EXISTS address TEXT`);
+
     // ============= MULTI-ORG: ADD organization_id TO DATA TABLES =============
 
     await client.query(`ALTER TABLE tournoi_ext ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)`);

@@ -82,6 +82,10 @@
         <span class="nav-icon">&#x1F3E2;</span>
         CDBs
       </a>
+      <a href="super-admin-ligues.html">
+        <span class="nav-icon">&#x1F3DB;</span>
+        Ligues
+      </a>
       <a href="super-admin-ffb.html">
         <span class="nav-icon">&#x1F4C1;</span>
         Données FFB
@@ -143,6 +147,28 @@
             <select id="ligueSelect" onchange="onLigueSelected()">
               <option value="">-- Sélectionner une ligue --</option>
             </select>
+          </div>
+          <div class="form-group" id="licenceSearchGroup" style="grid-column: 1 / -1; display: none;">
+            <label>Administrateur (licencié FFB) <span style="color: #c00;">*</span></label>
+            <div style="position: relative;">
+              <input type="text" id="licenceSearch" placeholder="Rechercher par nom ou n° de licence..." oninput="searchLigueLicence()" autocomplete="off">
+              <span id="licenceSearchSpinner" style="display: none; position: absolute; right: 10px; top: 10px;">
+                <span class="spinner"></span>
+              </span>
+              <div id="licenceSearchResults" style="display: none; position: absolute; z-index: 100; background: white; border: 1px solid #ddd; border-radius: 8px; max-height: 200px; overflow-y: auto; width: 100%; box-shadow: 0 4px 12px rgba(0,0,0,0.15);"></div>
+            </div>
+            <div id="licenceSelectedInfo" style="display: none; margin-top: 8px; padding: 12px; background: #f0f4ff; border-radius: 8px; border: 1px solid #d0d8f0;">
+              <div style="display: flex; justify-content: space-between; align-items: start;">
+                <div>
+                  <strong id="licenceSelectedName"></strong>
+                  <span id="licenceSelectedLicence" style="color: #666; margin-left: 8px;"></span>
+                  <br><span style="font-size: 12px; color: #666;">Club : </span><span id="licenceSelectedClub" style="font-size: 12px;"></span>
+                  <br><span style="font-size: 12px; color: #666;">Email : </span><span id="licenceSelectedEmail" style="font-size: 12px;"></span>
+                  <br><span style="font-size: 12px; color: #666;">Tél : </span><span id="licenceSelectedTel" style="font-size: 12px;"></span>
+                </div>
+                <button class="btn-sm btn-outline" onclick="clearLicenceSelection()" style="font-size: 11px;">Modifier</button>
+              </div>
+            </div>
           </div>
           <div class="form-group">
             <label>Identifiant</label>
@@ -278,13 +304,95 @@
 
     function onLigueSelected() {
       const numero = document.getElementById('ligueSelect').value;
+      clearLicenceSelection();
       if (numero) {
         const ligue = ligues.find(l => String(l.numero) === String(numero));
         const slug = (ligue?.nom || '').toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '').substring(0, 15);
         document.getElementById('adminUsername').value = 'ligue_' + (slug || numero);
+        document.getElementById('licenceSearchGroup').style.display = 'block';
       } else {
         document.getElementById('adminUsername').value = '';
+        document.getElementById('licenceSearchGroup').style.display = 'none';
       }
+    }
+
+    // ==================== FFB Licence Search ====================
+    let licenceSearchTimeout = null;
+    let selectedLicence = null;
+
+    function searchLigueLicence() {
+      clearTimeout(licenceSearchTimeout);
+      const q = document.getElementById('licenceSearch').value.trim();
+      const ligueNumero = document.getElementById('ligueSelect').value;
+      const resultsDiv = document.getElementById('licenceSearchResults');
+
+      if (!ligueNumero) {
+        showToast('Sélectionnez d\'abord une ligue', 'error');
+        return;
+      }
+      if (q.length < 2) {
+        resultsDiv.style.display = 'none';
+        return;
+      }
+
+      document.getElementById('licenceSearchSpinner').style.display = 'inline';
+      licenceSearchTimeout = setTimeout(async () => {
+        try {
+          const res = await authFetch(`${API_URL}/super-admin/ffb-licences/search-ligue?ligue_numero=${encodeURIComponent(ligueNumero)}&q=${encodeURIComponent(q)}`);
+          const players = await res.json();
+
+          if (players.length === 0) {
+            resultsDiv.innerHTML = '<div style="padding: 10px; color: #999; font-size: 13px;">Aucun résultat</div>';
+          } else {
+            resultsDiv.innerHTML = players.map(p => `
+              <div style="padding: 8px 10px; cursor: pointer; border-bottom: 1px solid #f0f0f0; font-size: 13px;"
+                   onmouseover="this.style.background='#f0f4ff'" onmouseout="this.style.background='white'"
+                   onclick='selectLicence(${JSON.stringify(p).replace(/'/g, "&#39;")})'>
+                <strong>${p.prenom} ${p.nom}</strong>
+                <span style="color: #888; margin-left: 8px;">${p.licence}</span>
+                ${p.club_nom ? `<span style="color: #666; margin-left: 8px; font-size: 11px;">${p.club_nom}</span>` : ''}
+              </div>
+            `).join('');
+          }
+          resultsDiv.style.display = 'block';
+        } catch (error) {
+          console.error('Licence search error:', error);
+        } finally {
+          document.getElementById('licenceSearchSpinner').style.display = 'none';
+        }
+      }, 300);
+    }
+
+    function selectLicence(player) {
+      selectedLicence = player;
+      document.getElementById('licenceSearchResults').style.display = 'none';
+      document.getElementById('licenceSearch').style.display = 'none';
+
+      const infoDiv = document.getElementById('licenceSelectedInfo');
+      infoDiv.style.display = 'block';
+      document.getElementById('licenceSelectedName').textContent = `${player.prenom} ${player.nom}`;
+      document.getElementById('licenceSelectedLicence').textContent = `(${player.licence})`;
+      document.getElementById('licenceSelectedClub').textContent = player.club_nom || '-';
+      document.getElementById('licenceSelectedEmail').textContent = player.email || '-';
+      document.getElementById('licenceSelectedTel').textContent = player.tel_port || player.tel_fixe || '-';
+
+      // Auto-fill email if available
+      if (player.email) {
+        document.getElementById('adminEmail').value = player.email;
+      }
+    }
+
+    function clearLicenceSelection() {
+      selectedLicence = null;
+      const infoDiv = document.getElementById('licenceSelectedInfo');
+      if (infoDiv) infoDiv.style.display = 'none';
+      const searchInput = document.getElementById('licenceSearch');
+      if (searchInput) {
+        searchInput.style.display = 'block';
+        searchInput.value = '';
+      }
+      const resultsDiv = document.getElementById('licenceSearchResults');
+      if (resultsDiv) resultsDiv.style.display = 'none';
     }
 
     // ==================== Create Form ====================
@@ -302,8 +410,16 @@
       const email = document.getElementById('adminEmail').value.trim();
       const password = document.getElementById('adminPassword').value.trim();
 
-      if (!ffb_ligue_numero || !username || !password) {
-        showToast('Veuillez remplir la ligue, l\'identifiant et le mot de passe', 'error');
+      if (!ffb_ligue_numero) {
+        showToast('Veuillez sélectionner une ligue', 'error');
+        return;
+      }
+      if (!selectedLicence) {
+        showToast('Veuillez sélectionner un licencié FFB comme administrateur', 'error');
+        return;
+      }
+      if (!username || !password) {
+        showToast('Veuillez remplir l\'identifiant et le mot de passe', 'error');
         return;
       }
       if (password.length < 6) {
@@ -319,7 +435,7 @@
         const res = await authFetch(`${API_URL}/super-admin/ligue-admins`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username, email, password, ffb_ligue_numero })
+          body: JSON.stringify({ username, email, password, ffb_ligue_numero, ffb_licence: selectedLicence.licence })
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Erreur');
@@ -332,6 +448,8 @@
         document.getElementById('adminUsername').value = '';
         document.getElementById('adminEmail').value = '';
         document.getElementById('adminPassword').value = '';
+        clearLicenceSelection();
+        document.getElementById('licenceSearchGroup').style.display = 'none';
 
         loadLigueAdmins();
       } catch (error) {

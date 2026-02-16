@@ -1,10 +1,21 @@
 const express = require('express');
 const bcrypt = require('bcrypt');
+const multer = require('multer');
 const db = require('../db-loader');
 const appSettings = require('../utils/app-settings');
 const { authenticateToken, requireSuperAdmin } = require('./auth');
 const { logAdminAction, ACTION_TYPES } = require('../utils/admin-logger');
 const { Resend } = require('resend');
+
+// Logo upload config (memory storage, same pattern as settings.js)
+const logoUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 2 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) cb(null, true);
+    else cb(new Error('Seuls les fichiers image sont acceptés'));
+  }
+});
 
 const router = express.Router();
 
@@ -128,19 +139,50 @@ router.get('/ffb-licences/search', async (req, res) => {
   try {
     const search = `%${q.toUpperCase()}%`;
     const results = await dbAll(`
-      SELECT licence, prenom, nom, email,
-        raw_data->>'Tel_fixe' as tel_fixe,
-        raw_data->>'Tel_port' as tel_port,
-        categorie, discipline, num_club
-      FROM ffb_licences
-      WHERE cdb_code = $1
-        AND (UPPER(nom) LIKE $2 OR UPPER(prenom) LIKE $2 OR licence LIKE $2)
-      ORDER BY nom, prenom
+      SELECT fl.licence, fl.prenom, fl.nom, fl.email,
+        fl.raw_data->>'Tel_fixe' as tel_fixe,
+        fl.raw_data->>'Tel_port' as tel_port,
+        fl.categorie, fl.discipline, fl.num_club,
+        fc.nom as club_nom
+      FROM ffb_licences fl
+      LEFT JOIN ffb_clubs fc ON fl.num_club = fc.numero
+      WHERE fl.cdb_code = $1
+        AND (UPPER(fl.nom) LIKE $2 OR UPPER(fl.prenom) LIKE $2 OR fl.licence LIKE $2)
+      ORDER BY fl.nom, fl.prenom
       LIMIT 20
     `, [cdb_code, search]);
     res.json(results);
   } catch (error) {
     console.error('Error searching FFB licences:', error);
+    res.status(500).json({ error: 'Erreur' });
+  }
+});
+
+// GET /api/super-admin/ffb-licences/search-ligue — Search FFB licences by name within a ligue
+router.get('/ffb-licences/search-ligue', async (req, res) => {
+  const { ligue_numero, q } = req.query;
+  if (!ligue_numero || !q || q.length < 2) {
+    return res.json([]);
+  }
+
+  try {
+    const search = `%${q.toUpperCase()}%`;
+    const results = await dbAll(`
+      SELECT fl.licence, fl.prenom, fl.nom, fl.email,
+        fl.raw_data->>'Tel_fixe' as tel_fixe,
+        fl.raw_data->>'Tel_port' as tel_port,
+        fl.num_club,
+        fc.nom as club_nom
+      FROM ffb_licences fl
+      LEFT JOIN ffb_clubs fc ON fl.num_club = fc.numero
+      WHERE fl.ligue_numero = $1
+        AND (UPPER(fl.nom) LIKE $2 OR UPPER(fl.prenom) LIKE $2 OR fl.licence LIKE $2)
+      ORDER BY fl.nom, fl.prenom
+      LIMIT 20
+    `, [ligue_numero, search]);
+    res.json(results);
+  } catch (error) {
+    console.error('Error searching FFB licences by ligue:', error);
     res.status(500).json({ error: 'Erreur' });
   }
 });
@@ -201,10 +243,14 @@ router.put('/users/:id/super-admin', (req, res) => {
 
 // POST /api/super-admin/ligue-admins — Create a ligue admin user
 router.post('/ligue-admins', async (req, res) => {
-  const { username, email, password, ffb_ligue_numero } = req.body;
+  const { username, email, password, ffb_ligue_numero, ffb_licence } = req.body;
 
   if (!username || !password || !ffb_ligue_numero) {
     return res.status(400).json({ error: 'Champs requis: username, password, ffb_ligue_numero' });
+  }
+
+  if (!ffb_licence) {
+    return res.status(400).json({ error: 'Veuillez sélectionner un licencié FFB' });
   }
 
   if (password.length < 6) {
@@ -216,6 +262,15 @@ router.post('/ligue-admins', async (req, res) => {
     const ligue = await dbGet(`SELECT numero, nom FROM ffb_ligues WHERE numero = $1`, [ffb_ligue_numero]);
     if (!ligue) {
       return res.status(404).json({ error: 'Ligue introuvable' });
+    }
+
+    // Validate licence exists in FFB data for this ligue
+    const licenceRow = await dbGet(
+      `SELECT licence, prenom, nom FROM ffb_licences WHERE licence = $1 AND ligue_numero = $2`,
+      [ffb_licence, ffb_ligue_numero]
+    );
+    if (!licenceRow) {
+      return res.status(404).json({ error: 'Licencié introuvable dans les données FFB de cette ligue' });
     }
 
     // Check username uniqueness
@@ -290,6 +345,106 @@ router.put('/ligue-admins/:id/toggle-active', async (req, res) => {
     res.json({ success: true, is_active: newState, message: `Admin ligue ${newState ? 'activé' : 'désactivé'}` });
   } catch (error) {
     console.error('Error toggling ligue admin:', error);
+    res.status(500).json({ error: 'Erreur' });
+  }
+});
+
+// ==================== LIGUE MANAGEMENT ====================
+
+// GET /api/super-admin/ligues — List all ligues with enriched data + stats
+router.get('/ligues', async (req, res) => {
+  try {
+    const ligues = await dbAll(`
+      SELECT l.numero, l.nom, l.email, l.telephone, l.website, l.address,
+        l.logo_filename,
+        (l.logo_data IS NOT NULL) as has_logo,
+        (SELECT COUNT(*) FROM ffb_clubs c WHERE c.ligue_numero = l.numero) as club_count,
+        (SELECT COUNT(*) FROM ffb_licences fl WHERE fl.ligue_numero = l.numero) as licence_count,
+        (SELECT COUNT(*) FROM organizations o WHERE o.ffb_ligue_numero = l.numero) as cdb_count
+      FROM ffb_ligues l
+      ORDER BY l.nom
+    `);
+    res.json(ligues);
+  } catch (error) {
+    console.error('Error listing ligues:', error);
+    res.status(500).json({ error: 'Erreur lors du chargement des ligues' });
+  }
+});
+
+// PUT /api/super-admin/ligues/:numero — Update ligue info (contacts + optional logo)
+router.put('/ligues/:numero', logoUpload.single('logo'), async (req, res) => {
+  const { numero } = req.params;
+  const { email, telephone, website, address } = req.body;
+
+  try {
+    const ligue = await dbGet(`SELECT numero, nom FROM ffb_ligues WHERE numero = $1`, [numero]);
+    if (!ligue) return res.status(404).json({ error: 'Ligue introuvable' });
+
+    // Update contacts
+    await dbRun(
+      `UPDATE ffb_ligues SET email = $1, telephone = $2, website = $3, address = $4, updated_at = CURRENT_TIMESTAMP WHERE numero = $5`,
+      [email || null, telephone || null, website || null, address || null, numero]
+    );
+
+    // Update logo if provided
+    if (req.file) {
+      await dbRun(
+        `UPDATE ffb_ligues SET logo_data = $1, logo_content_type = $2, logo_filename = $3, updated_at = CURRENT_TIMESTAMP WHERE numero = $4`,
+        [req.file.buffer, req.file.mimetype, req.file.originalname, numero]
+      );
+    }
+
+    logAdminAction({
+      req,
+      action: ACTION_TYPES.USER_UPDATED,
+      targetType: 'ligue',
+      targetId: numero,
+      details: `Ligue "${ligue.nom}" (${numero}) mise à jour${req.file ? ' + logo' : ''}`
+    });
+
+    res.json({ success: true, message: `Ligue "${ligue.nom}" mise à jour` });
+  } catch (error) {
+    console.error('Error updating ligue:', error);
+    res.status(500).json({ error: 'Erreur lors de la mise à jour' });
+  }
+});
+
+// GET /api/super-admin/ligues/:numero/logo — Serve ligue logo binary
+router.get('/ligues/:numero/logo', async (req, res) => {
+  const { numero } = req.params;
+
+  try {
+    const ligue = await dbGet(
+      `SELECT logo_data, logo_content_type, logo_filename FROM ffb_ligues WHERE numero = $1`,
+      [numero]
+    );
+
+    if (!ligue || !ligue.logo_data) {
+      return res.status(404).json({ error: 'Pas de logo' });
+    }
+
+    res.setHeader('Content-Type', ligue.logo_content_type || 'image/png');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    res.send(ligue.logo_data);
+  } catch (error) {
+    console.error('Error serving ligue logo:', error);
+    res.status(500).json({ error: 'Erreur' });
+  }
+});
+
+// DELETE /api/super-admin/ligues/:numero/logo — Remove ligue logo
+router.delete('/ligues/:numero/logo', async (req, res) => {
+  const { numero } = req.params;
+
+  try {
+    await dbRun(
+      `UPDATE ffb_ligues SET logo_data = NULL, logo_content_type = NULL, logo_filename = NULL, updated_at = CURRENT_TIMESTAMP WHERE numero = $1`,
+      [numero]
+    );
+    res.json({ success: true, message: 'Logo supprimé' });
+  } catch (error) {
+    console.error('Error deleting ligue logo:', error);
     res.status(500).json({ error: 'Erreur' });
   }
 });
