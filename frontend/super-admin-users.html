@@ -251,7 +251,7 @@
             ? '<span class="badge badge-active">Actif</span>'
             : '<span class="badge badge-inactive">Inactif</span>';
           return `<tr>
-            <td><strong>${a.ligue_nom || 'Ligue ' + a.ffb_ligue_numero}</strong><br><span style="font-size: 11px; color: #888;">N° ${a.ffb_ligue_numero}</span></td>
+            <td><img src="${API_URL}/super-admin/ligues/${a.ffb_ligue_numero}/logo" alt="" style="height: 24px; width: 24px; vertical-align: middle; margin-right: 6px; border-radius: 4px; object-fit: contain;" onerror="this.style.display='none'"><strong>${a.ligue_nom || 'Ligue ' + a.ffb_ligue_numero}</strong><br><span style="font-size: 11px; color: #888;">N° ${a.ffb_ligue_numero}</span></td>
             <td><strong>${a.username}</strong></td>
             <td>${a.email || '<span style="color: #ccc;">-</span>'}</td>
             <td>${statusBadge}</td>
