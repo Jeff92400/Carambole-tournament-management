@@ -126,6 +126,31 @@
         </div>
       </div>
 
+      <!-- Platform Stats -->
+      <div class="section-title">Plateforme</div>
+      <div class="compact-stats">
+        <div class="compact-stat" style="background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);">
+          <h5>CDBs actifs</h5>
+          <div class="val" id="kpiPlatformCdbs">-</div>
+        </div>
+        <div class="compact-stat" style="background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);">
+          <h5>Joueurs</h5>
+          <div class="val" id="kpiPlatformPlayers">-</div>
+        </div>
+        <div class="compact-stat" style="background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);">
+          <h5>Clubs</h5>
+          <div class="val" id="kpiPlatformClubs">-</div>
+        </div>
+        <div class="compact-stat" style="background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);">
+          <h5>Tournois</h5>
+          <div class="val" id="kpiPlatformTournaments">-</div>
+        </div>
+        <div class="compact-stat" style="background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);">
+          <h5>Admins</h5>
+          <div class="val" id="kpiPlatformUsers">-</div>
+        </div>
+      </div>
+
       <!-- CDB Enrolments -->
       <div class="section-title">Inscriptions CDB <span id="enrolmentCount" style="font-weight: normal; color: #999;"></span></div>
       <div class="progress-card" style="overflow-x: auto;">
@@ -134,6 +159,7 @@
             <tr>
               <th>#</th>
               <th>CDB</th>
+              <th>Ligue</th>
               <th>Code FFB</th>
               <th>Joueurs</th>
               <th>Clubs</th>
@@ -143,7 +169,7 @@
             </tr>
           </thead>
           <tbody id="enrolmentsBody">
-            <tr><td colspan="8" style="text-align: center; color: #999;">Chargement...</td></tr>
+            <tr><td colspan="9" style="text-align: center; color: #999;">Chargement...</td></tr>
           </tbody>
         </table>
       </div>
@@ -212,13 +238,21 @@
             `${ffb.last_import.file_type} — ${ffb.last_import.record_count.toLocaleString('fr-FR')} enregistrements — ${formatDate(ffb.last_import.imported_at)}`;
         }
 
+        // Platform stats
+        const pf = data.platform;
+        document.getElementById('kpiPlatformCdbs').textContent = pf.cdbs.toLocaleString('fr-FR');
+        document.getElementById('kpiPlatformPlayers').textContent = pf.players.toLocaleString('fr-FR');
+        document.getElementById('kpiPlatformClubs').textContent = pf.clubs.toLocaleString('fr-FR');
+        document.getElementById('kpiPlatformTournaments').textContent = pf.tournaments.toLocaleString('fr-FR');
+        document.getElementById('kpiPlatformUsers').textContent = pf.users.toLocaleString('fr-FR');
+
         // CDB enrolments table
         const enrolments = data.enrolments;
         document.getElementById('enrolmentCount').textContent = `(${enrolments.length})`;
         const tbody = document.getElementById('enrolmentsBody');
 
         if (!enrolments.length) {
-          tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#999;">Aucun CDB inscrit</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#999;">Aucun CDB inscrit</td></tr>';
           return;
         }
 
@@ -229,6 +263,7 @@
           return `<tr>
             <td><strong>${idx + 1}</strong></td>
             <td><strong>${org.short_name}</strong><br><span style="font-size:11px;color:#888;">${org.name}</span></td>
+            <td>${org.ligue_nom || '-'}</td>
             <td>${org.ffb_cdb_code || '-'}</td>
             <td>${parseInt(org.player_count).toLocaleString('fr-FR')}</td>
             <td>${parseInt(org.club_count)}</td>

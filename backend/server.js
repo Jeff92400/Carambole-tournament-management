@@ -49,6 +49,7 @@ const playerInvitationsRoutes = require('./routes/player-invitations');
 const importConfigRoutes = require('./routes/import-config');
 const enrollmentRequestsRoutes = require('./routes/enrollment-requests');
 const superAdminRoutes = require('./routes/super-admin');
+const ligueAdminRoutes = require('./routes/ligue-admin');
 const ffbImportRoutes = require('./routes/ffb-import');
 
 const app = express();
@@ -197,6 +198,7 @@ app.use('/api/player-invitations', apiLimiter, playerInvitationsRoutes);
 app.use('/api/import-config', apiLimiter, importConfigRoutes);
 app.use('/api/enrollment-requests', apiLimiter, enrollmentRequestsRoutes);
 app.use('/api/super-admin', apiLimiter, superAdminRoutes);
+app.use('/api/ligue-admin', apiLimiter, ligueAdminRoutes);
 app.use('/api/ffb', apiLimiter, ffbImportRoutes);
 
 // App version endpoint (for automatic update detection)

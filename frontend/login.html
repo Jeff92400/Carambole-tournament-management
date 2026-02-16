@@ -108,8 +108,16 @@
           if (data.user.organization_id) {
             localStorage.setItem('organizationId', data.user.organization_id);
           }
-          // Keep orgSlug if already set from URL param (branding.js sets it)
-          window.location.href = 'dashboard.html';
+          // Store ligue info for ligue_admin
+          if (data.user.ffb_ligue_numero) {
+            localStorage.setItem('ligueNumero', data.user.ffb_ligue_numero);
+          }
+          // Redirect based on role
+          if (data.user.role === 'ligue_admin') {
+            window.location.href = 'ligue-dashboard.html';
+          } else {
+            window.location.href = 'dashboard.html';
+          }
         } else {
           errorDiv.textContent = data.error || 'Erreur de connexion';
           errorDiv.style.display = 'block';

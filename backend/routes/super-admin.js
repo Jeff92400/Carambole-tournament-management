@@ -60,15 +60,27 @@ router.get('/dashboard', async (req, res) => {
       );
     }
 
-    // CDB enrolments — progressive list ordered by creation
+    // CDB enrolments — progressive list ordered by creation, with ligue name
     const enrolments = await dbAll(`
-      SELECT o.id, o.name, o.short_name, o.slug, o.ffb_cdb_code, o.is_active, o.created_at,
+      SELECT o.id, o.name, o.short_name, o.slug, o.ffb_cdb_code, o.ffb_ligue_numero, o.is_active, o.created_at,
+        l.nom as ligue_nom,
         (SELECT COUNT(*) FROM players p WHERE p.organization_id = o.id AND UPPER(p.licence) NOT LIKE 'TEST%') as player_count,
         (SELECT COUNT(*) FROM clubs c WHERE c.organization_id = o.id) as club_count,
         (SELECT COUNT(*) FROM users u WHERE u.organization_id = o.id AND u.is_active = 1) as user_count
       FROM organizations o
+      LEFT JOIN ffb_ligues l ON o.ffb_ligue_numero = l.numero
       ORDER BY o.id
     `);
+
+    // Platform aggregates (across all enrolled CDBs)
+    const tournamentCount = await safeCount(`SELECT COUNT(*) as count FROM tournoi_ext WHERE organization_id IS NOT NULL`);
+    const platform = {
+      cdbs: enrolments.filter(e => e.is_active).length,
+      players: enrolments.reduce((sum, e) => sum + parseInt(e.player_count || 0), 0),
+      clubs: enrolments.reduce((sum, e) => sum + parseInt(e.club_count || 0), 0),
+      users: enrolments.reduce((sum, e) => sum + parseInt(e.user_count || 0), 0),
+      tournaments: tournamentCount
+    };
 
     res.json({
       ffb_file: {
@@ -78,6 +90,7 @@ router.get('/dashboard', async (req, res) => {
         licences: ffbLicencesCount,
         last_import: lastImport
       },
+      platform,
       enrolments
     });
   } catch (error) {
@@ -184,6 +197,75 @@ router.put('/users/:id/super-admin', (req, res) => {
       res.json({ success: true, message: `Super Admin ${is_super_admin ? 'accordé' : 'retiré'}` });
     }
   );
+});
+
+// POST /api/super-admin/ligue-admins — Create a ligue admin user
+router.post('/ligue-admins', async (req, res) => {
+  const { username, email, password, ffb_ligue_numero } = req.body;
+
+  if (!username || !password || !ffb_ligue_numero) {
+    return res.status(400).json({ error: 'Champs requis: username, password, ffb_ligue_numero' });
+  }
+
+  if (password.length < 6) {
+    return res.status(400).json({ error: 'Le mot de passe doit contenir au moins 6 caractères' });
+  }
+
+  try {
+    // Validate ligue exists
+    const ligue = await dbGet(`SELECT numero, nom FROM ffb_ligues WHERE numero = $1`, [ffb_ligue_numero]);
+    if (!ligue) {
+      return res.status(404).json({ error: 'Ligue introuvable' });
+    }
+
+    // Check username uniqueness
+    const existing = await dbGet(`SELECT id FROM users WHERE username = $1`, [username]);
+    if (existing) {
+      return res.status(409).json({ error: 'Ce nom d\'utilisateur existe déjà' });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    const result = await dbRun(
+      `INSERT INTO users (username, password_hash, email, role, is_active, ffb_ligue_numero)
+       VALUES ($1, $2, $3, 'ligue_admin', 1, $4)`,
+      [username, passwordHash, email || null, ffb_ligue_numero]
+    );
+
+    logAdminAction({
+      req,
+      action: ACTION_TYPES.USER_CREATED,
+      targetType: 'user',
+      targetId: result.lastID,
+      details: `Admin ligue créé: ${username} pour ligue ${ligue.nom} (${ffb_ligue_numero})`
+    });
+
+    res.status(201).json({
+      success: true,
+      message: `Admin ligue créé pour ${ligue.nom}`,
+      user: { id: result.lastID, username, role: 'ligue_admin', ffb_ligue_numero, ligue_nom: ligue.nom }
+    });
+  } catch (error) {
+    console.error('Error creating ligue admin:', error);
+    res.status(500).json({ error: 'Erreur lors de la création de l\'admin ligue' });
+  }
+});
+
+// GET /api/super-admin/ligue-admins — List ligue admin users
+router.get('/ligue-admins', async (req, res) => {
+  try {
+    const admins = await dbAll(`
+      SELECT u.id, u.username, u.email, u.ffb_ligue_numero, u.is_active, u.last_login, u.created_at,
+             l.nom as ligue_nom
+      FROM users u
+      LEFT JOIN ffb_ligues l ON u.ffb_ligue_numero = l.numero
+      WHERE u.role = 'ligue_admin'
+      ORDER BY l.nom, u.username
+    `);
+    res.json(admins);
+  } catch (error) {
+    console.error('Error listing ligue admins:', error);
+    res.status(500).json({ error: 'Erreur' });
+  }
 });
 
 // GET /api/super-admin/health — System health check

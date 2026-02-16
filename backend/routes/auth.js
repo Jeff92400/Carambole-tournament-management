@@ -158,7 +158,8 @@ router.post('/login', (req, res) => {
         role: user.role,
         clubId: user.club_id || null,
         isSuperAdmin: user.is_super_admin || false,
-        organizationId: user.organization_id || null
+        organizationId: user.organization_id || null,
+        ligueNumero: user.ffb_ligue_numero || null
       };
 
       const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '24h' });
@@ -196,7 +197,8 @@ router.post('/login', (req, res) => {
           club_id: user.club_id || null,
           club_name: clubName,
           is_super_admin: user.is_super_admin || false,
-          organization_id: user.organization_id || null
+          organization_id: user.organization_id || null,
+          ffb_ligue_numero: user.ffb_ligue_numero || null
         }
       });
     });
@@ -604,7 +606,7 @@ router.post('/users', authenticateToken, requireAdmin, (req, res) => {
     return res.status(400).json({ error: 'Password must be at least 6 characters' });
   }
 
-  const validRoles = ['admin', 'viewer', 'lecteur', 'club'];
+  const validRoles = ['admin', 'viewer', 'lecteur', 'club', 'ligue_admin'];
   const userRole = validRoles.includes(role) ? role : 'viewer';
   const userEmail = email ? email.toLowerCase().trim() : null;
   const userClubId = (userRole === 'club' && club_id) ? parseInt(club_id) : null;
@@ -699,7 +701,7 @@ router.put('/users/:id', authenticateToken, requireAdmin, (req, res) => {
       params.push(username);
     }
 
-    if (role && ['admin', 'viewer', 'lecteur', 'club'].includes(role)) {
+    if (role && ['admin', 'viewer', 'lecteur', 'club', 'ligue_admin'].includes(role)) {
       updates.push(`role = $${paramIndex++}`);
       params.push(role);
     }
@@ -892,6 +894,14 @@ function requireSuperAdmin(req, res, next) {
   next();
 }
 
+// Middleware to require ligue admin or super admin access
+function requireLigueAdmin(req, res, next) {
+  if (req.user.role === 'ligue_admin' || req.user.isSuperAdmin) {
+    return next();
+  }
+  return res.status(403).json({ error: 'Accès réservé aux administrateurs de ligue' });
+}
+
 module.exports = router;
 module.exports.authenticateToken = authenticateToken;
 module.exports.requireAdmin = requireAdmin;
@@ -899,4 +909,5 @@ module.exports.requireClubOrAdmin = requireClubOrAdmin;
 module.exports.requireViewer = requireViewer;
 module.exports.requireViewerWrite = requireViewerWrite;
 module.exports.requireSuperAdmin = requireSuperAdmin;
+module.exports.requireLigueAdmin = requireLigueAdmin;
 module.exports.JWT_SECRET = JWT_SECRET;
