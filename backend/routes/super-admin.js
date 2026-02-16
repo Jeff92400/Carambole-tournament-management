@@ -65,7 +65,7 @@ router.get('/dashboard', async (req, res) => {
       SELECT o.id, o.name, o.short_name, o.slug, o.ffb_cdb_code, o.is_active, o.created_at,
         (SELECT COUNT(*) FROM players p WHERE p.organization_id = o.id AND UPPER(p.licence) NOT LIKE 'TEST%') as player_count,
         (SELECT COUNT(*) FROM clubs c WHERE c.organization_id = o.id) as club_count,
-        (SELECT COUNT(*) FROM users u WHERE u.organization_id = o.id AND u.is_active = TRUE) as user_count
+        (SELECT COUNT(*) FROM users u WHERE u.organization_id = o.id AND u.is_active = 1) as user_count
       FROM organizations o
       ORDER BY o.id
     `);
