@@ -108,7 +108,7 @@ app.use(cors({
 // Rate limiting for authentication endpoints
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // Limit each IP to 5 requests per windowMs
+  max: 20, // Limit each IP to 20 requests per windowMs
   message: { error: 'Trop de tentatives de connexion. Veuillez réessayer dans 15 minutes.' },
   standardHeaders: true,
   legacyHeaders: false,
