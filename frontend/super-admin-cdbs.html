@@ -334,6 +334,7 @@
             <td>
               <button class="btn-sm btn-outline" onclick="selectOrg(${org.id}, '${org.short_name}', '${org.slug}')" title="Gérer">Gérer</button>
               <button class="btn-sm ${org.is_active ? 'btn-danger' : 'btn-success'}" onclick="toggleActive(${org.id})" title="${org.is_active ? 'Désactiver' : 'Activer'}">${org.is_active ? 'Désact.' : 'Activer'}</button>
+              ${org.id !== 1 ? `<button class="btn-sm btn-danger" onclick="deleteOrg(${org.id}, '${org.short_name.replace(/'/g, "\\'")}')" title="Supprimer" style="margin-left: 4px;">Suppr.</button>` : ''}
             </td>
           </tr>
         `).join('');
@@ -743,6 +744,34 @@
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Erreur');
         showToast(data.message);
+        loadOrganizations();
+      } catch (error) {
+        showToast(error.message, 'error');
+      }
+    }
+
+    // ==================== Delete Organization ====================
+    async function deleteOrg(orgId, shortName) {
+      if (!confirm(`Supprimer définitivement "${shortName}" et toutes ses données (joueurs, clubs, tournois, inscriptions, utilisateurs) ?\n\nCette action est irréversible.`)) return;
+      if (!confirm(`Dernière confirmation : êtes-vous sûr de vouloir supprimer "${shortName}" ?`)) return;
+
+      try {
+        const res = await authFetch(`${API_URL}/super-admin/organizations/${orgId}`, {
+          method: 'DELETE'
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Erreur');
+
+        showToast(data.message);
+
+        // Hide seed/email sections if this org was selected
+        if (currentOrgId === orgId) {
+          currentOrgId = null;
+          document.getElementById('seedSection').classList.remove('visible');
+          document.getElementById('sendToAdminWrapper').style.display = 'none';
+          document.getElementById('loginUrlSection').style.display = 'none';
+        }
+
         loadOrganizations();
       } catch (error) {
         showToast(error.message, 'error');

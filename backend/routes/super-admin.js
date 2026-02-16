@@ -401,6 +401,78 @@ router.put('/organizations/:id/toggle-active', async (req, res) => {
   }
 });
 
+// DELETE /api/super-admin/organizations/:id — Fully delete a CDB and all its data
+router.delete('/organizations/:id', async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const org = await dbGet(`SELECT id, short_name, name FROM organizations WHERE id = $1`, [id]);
+    if (!org) return res.status(404).json({ error: 'Organisation non trouvée' });
+
+    // Safety: prevent deleting org id=1 (primary CDB)
+    if (parseInt(id) === 1) {
+      return res.status(403).json({ error: 'Impossible de supprimer l\'organisation principale' });
+    }
+
+    // Cascade delete all org-scoped data in dependency order
+    const tables = [
+      'activity_logs',
+      'player_invitations',
+      'scheduled_emails',
+      'email_campaigns',
+      'announcements',
+      'inscriptions',
+      'rankings',
+      'tournaments',
+      'tournoi_ext',
+      'players',
+      'clubs',
+      'users',
+      'organization_settings',
+      'organization_logo'
+    ];
+
+    const counts = {};
+    for (const table of tables) {
+      try {
+        const result = await dbRun(
+          `DELETE FROM ${table} WHERE organization_id = $1`,
+          [id]
+        );
+        counts[table] = result.rowCount || 0;
+      } catch (err) {
+        // Table might not exist or have no organization_id column — skip
+        counts[table] = 0;
+      }
+    }
+
+    // Delete the organization itself
+    await dbRun(`DELETE FROM organizations WHERE id = $1`, [id]);
+
+    // Log the action
+    try {
+      await logAdminAction({
+        req,
+        action: ACTION_TYPES.DELETE,
+        target_type: 'organization',
+        target_id: id,
+        details: `Organisation "${org.short_name}" (${org.name}) supprimée avec toutes ses données`
+      });
+    } catch (logErr) {
+      // Don't fail if logging fails
+    }
+
+    res.json({
+      success: true,
+      message: `Organisation "${org.short_name}" supprimée`,
+      deleted: counts
+    });
+  } catch (error) {
+    console.error('Error deleting organization:', error);
+    res.status(500).json({ error: 'Erreur lors de la suppression' });
+  }
+});
+
 // ==================== PLAYER SEEDING FROM FFB ====================
 
 // GET /api/super-admin/organizations/:id/seed-preview — Preview FFB licences for this CDB
