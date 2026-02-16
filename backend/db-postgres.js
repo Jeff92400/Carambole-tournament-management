@@ -1322,7 +1322,9 @@ async function initializeDatabase() {
     await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS categories_game_type_level_org_key ON categories(game_type, level, organization_id)`);
     await client.query(`ALTER TABLE game_parameters DROP CONSTRAINT IF EXISTS game_parameters_mode_categorie_key`);
     await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS game_parameters_mode_categorie_org_key ON game_parameters(mode, categorie, organization_id)`);
+    // Try both possible constraint names (auto-generated name varies by DB)
     await client.query(`ALTER TABLE scoring_rules DROP CONSTRAINT IF EXISTS scoring_rules_rule_type_condition_key_key`);
+    await client.query(`DROP INDEX IF EXISTS scoring_rules_rule_type_condition_key_key`);
     await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS scoring_rules_rule_type_condition_key_org_key ON scoring_rules(rule_type, condition_key, organization_id)`);
     await client.query(`ALTER TABLE email_templates DROP CONSTRAINT IF EXISTS email_templates_template_key_key`);
     await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS email_templates_template_key_org_key ON email_templates(template_key, organization_id)`);
@@ -1617,9 +1619,9 @@ async function initializeDatabase() {
     for (const rule of scoringRules) {
       await client.query(
         `INSERT INTO scoring_rules (rule_type, condition_key, points, display_order, description,
-          field_1, operator_1, value_1, logical_op, field_2, operator_2, value_2, column_label)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-         ON CONFLICT (rule_type, condition_key) DO NOTHING`,
+          field_1, operator_1, value_1, logical_op, field_2, operator_2, value_2, column_label, organization_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 1)
+         ON CONFLICT (rule_type, condition_key, organization_id) DO NOTHING`,
         [rule.rule_type, rule.condition_key, rule.points, rule.display_order, rule.description,
          rule.field_1, rule.operator_1, rule.value_1, rule.logical_op, rule.field_2, rule.operator_2, rule.value_2, rule.column_label]
       );

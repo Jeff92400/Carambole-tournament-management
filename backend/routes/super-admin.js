@@ -546,7 +546,7 @@ router.post('/organizations', async (req, res) => {
     // Create organization
     const orgResult = await dbRun(
       `INSERT INTO organizations (name, short_name, slug, ffb_cdb_code, ffb_ligue_numero)
-       VALUES ($1, $2, $3, $4, $5)`,
+       VALUES ($1, $2, $3, $4, $5) RETURNING id`,
       [name, short_name, slug, ffb_cdb_code || null, ffb_ligue_numero || null]
     );
     const orgId = orgResult.lastID;
