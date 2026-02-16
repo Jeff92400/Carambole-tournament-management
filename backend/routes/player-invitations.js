@@ -63,7 +63,7 @@ router.get('/stats', authenticateToken, async (req, res) => {
 
     // Count actual Player App users (signed up) - exclude test accounts
     const playerAccountStats = await new Promise((resolve, reject) => {
-      db.get(`SELECT COUNT(*) as signed_up FROM player_accounts WHERE UPPER(licence) NOT LIKE 'TEST%'`, [], (err, row) => {
+      db.get(`SELECT COUNT(*) as signed_up FROM player_accounts WHERE UPPER(licence) NOT LIKE 'TEST%' AND ($1::int IS NULL OR organization_id = $1)`, [orgId], (err, row) => {
         if (err) reject(err);
         else resolve(row || { signed_up: 0 });
       });
@@ -78,6 +78,7 @@ router.get('/stats', authenticateToken, async (req, res) => {
           AND NOT EXISTS (
           SELECT 1 FROM player_accounts pa
           WHERE REPLACE(pa.licence, ' ', '') = REPLACE(pi.licence, ' ', '')
+            AND ($1::int IS NULL OR pa.organization_id = $1)
         )
       `, [orgId], (err, row) => {
         if (err) reject(err);
@@ -185,6 +186,7 @@ router.get('/', authenticateToken, async (req, res) => {
 router.get('/candidates', authenticateToken, async (req, res) => {
   try {
     const { club, mode, rank, search, exclude_invited } = req.query;
+    const orgId = req.user.organizationId || null;
 
     let query = `
       SELECT pc.id, pc.licence, pc.first_name, pc.last_name, pc.club, pc.email,
@@ -197,14 +199,16 @@ router.get('/candidates', authenticateToken, async (req, res) => {
         AND pc.email LIKE '%@%'
         AND COALESCE(pc.email_optin, 1) = 1
         AND COALESCE(pc.statut, 'Actif') = 'Actif'
+        AND ($1::int IS NULL OR pc.organization_id = $1)
     `;
-    const params = [];
-    let paramIndex = 1;
+    const params = [orgId];
+    let paramIndex = 2;
 
     // Exclude players who already have a Player App account
     query += ` AND NOT EXISTS (
       SELECT 1 FROM player_accounts pa
       WHERE REPLACE(pa.licence, ' ', '') = REPLACE(pc.licence, ' ', '')
+        AND ($1::int IS NULL OR pa.organization_id = $1)
     )`;
 
     if (club) {
@@ -488,11 +492,13 @@ router.post('/send', authenticateToken, async (req, res) => {
     });
 
     // Get players to invite
+    const orgId = req.user.organizationId || null;
     const placeholders = player_contact_ids.map((_, i) => `$${i + 1}`).join(',');
+    const orgParamIdx = player_contact_ids.length + 1;
     const players = await new Promise((resolve, reject) => {
       db.all(
-        `SELECT * FROM player_contacts WHERE id IN (${placeholders})`,
-        player_contact_ids,
+        `SELECT * FROM player_contacts WHERE id IN (${placeholders}) AND ($${orgParamIdx}::int IS NULL OR organization_id = $${orgParamIdx})`,
+        [...player_contact_ids, orgId],
         (err, rows) => {
           if (err) reject(err);
           else resolve(rows || []);
@@ -632,7 +638,6 @@ router.post('/send', authenticateToken, async (req, res) => {
             });
           } else {
             // Create new invitation record
-            const orgId = req.user.organizationId || null;
             await new Promise((resolve, reject) => {
               db.run(
                 `INSERT INTO player_invitations
@@ -1136,11 +1141,11 @@ router.post('/sync-signups', authenticateToken, async (req, res) => {
 
     console.log(`Found ${pendingInvitations.length} pending invitations`);
 
-    // Get all player accounts
+    // Get all player accounts (filtered by org)
     const playerAccounts = await new Promise((resolve, reject) => {
       db.all(
-        `SELECT licence, created_at FROM player_accounts`,
-        [],
+        `SELECT licence, created_at FROM player_accounts WHERE ($1::int IS NULL OR organization_id = $1)`,
+        [orgId],
         (err, rows) => {
           if (err) {
             console.error('Error fetching player accounts:', err);

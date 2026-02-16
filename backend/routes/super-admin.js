@@ -268,6 +268,32 @@ router.get('/ligue-admins', async (req, res) => {
   }
 });
 
+// PUT /api/super-admin/ligue-admins/:id/toggle-active — Activate/deactivate a ligue admin
+router.put('/ligue-admins/:id/toggle-active', async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const user = await dbGet(`SELECT id, username, is_active, role FROM users WHERE id = $1 AND role = 'ligue_admin'`, [id]);
+    if (!user) return res.status(404).json({ error: 'Admin ligue non trouvé' });
+
+    const newState = !user.is_active;
+    await dbRun(`UPDATE users SET is_active = $1 WHERE id = $2`, [newState, id]);
+
+    logAdminAction({
+      req,
+      action: ACTION_TYPES.USER_UPDATED,
+      targetType: 'user',
+      targetId: id,
+      details: `Admin ligue "${user.username}" ${newState ? 'activé' : 'désactivé'}`
+    });
+
+    res.json({ success: true, is_active: newState, message: `Admin ligue ${newState ? 'activé' : 'désactivé'}` });
+  } catch (error) {
+    console.error('Error toggling ligue admin:', error);
+    res.status(500).json({ error: 'Erreur' });
+  }
+});
+
 // GET /api/super-admin/health — System health check
 router.get('/health', async (req, res) => {
   try {
@@ -534,6 +560,8 @@ router.delete('/organizations/:id', async (req, res) => {
 
     // Cascade delete all org-scoped data in dependency order
     const tables = [
+      'player_accounts',
+      'player_contacts',
       'activity_logs',
       'player_invitations',
       'scheduled_emails',

@@ -1259,6 +1259,10 @@ async function initializeDatabase() {
     await client.query(`ALTER TABLE scoring_rules ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)`);
     await client.query(`ALTER TABLE game_parameters ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)`);
     await client.query(`ALTER TABLE email_templates ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)`);
+    await client.query(`ALTER TABLE player_accounts ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)`);
+    await client.query(`ALTER TABLE player_contacts ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_player_accounts_org ON player_accounts(organization_id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_player_contacts_org ON player_contacts(organization_id)`);
 
     // Indexes for org-scoped queries
     await client.query(`CREATE INDEX IF NOT EXISTS idx_tournoi_ext_org ON tournoi_ext(organization_id)`);
@@ -1301,6 +1305,8 @@ async function initializeDatabase() {
     await client.query(`UPDATE scoring_rules SET organization_id = 1 WHERE organization_id IS NULL`);
     await client.query(`UPDATE game_parameters SET organization_id = 1 WHERE organization_id IS NULL`);
     await client.query(`UPDATE email_templates SET organization_id = 1 WHERE organization_id IS NULL`);
+    await client.query(`UPDATE player_accounts SET organization_id = 1 WHERE organization_id IS NULL`);
+    await client.query(`UPDATE player_contacts SET organization_id = 1 WHERE organization_id IS NULL`);
 
     // Update unique constraints to include organization_id (Phase C)
     await client.query(`ALTER TABLE categories DROP CONSTRAINT IF EXISTS categories_game_type_level_key`);

@@ -14,6 +14,7 @@ const bcrypt = require('bcrypt');
 const router = express.Router();
 const db = require('../db-loader');
 const appSettings = require('../utils/app-settings');
+const { authenticateToken } = require('./auth');
 
 /**
  * Load game modes with rank_column mapping from database
@@ -39,8 +40,9 @@ async function loadGameModes() {
  * - search: Filter by name, licence, or email (min 2 chars required)
  * - all: Set to 'true' to return all accounts (for dedicated management page)
  */
-router.get('/', (req, res) => {
+router.get('/', authenticateToken, (req, res) => {
   const { search, all } = req.query;
+  const orgId = req.user.organizationId || null;
 
   // If all=true, return all accounts (for dedicated player-accounts.html page)
   if (all === 'true') {
@@ -52,10 +54,11 @@ router.get('/', (req, res) => {
       FROM player_accounts pa
       LEFT JOIN players p ON REPLACE(pa.licence, ' ', '') = REPLACE(p.licence, ' ', '')
       WHERE UPPER(pa.licence) NOT LIKE 'TEST%'
+        AND ($1::int IS NULL OR pa.organization_id = $1)
       ORDER BY pa.created_at DESC
     `;
 
-    return db.all(query, [], (err, rows) => {
+    return db.all(query, [orgId], (err, rows) => {
       if (err) {
         console.error('Error loading player accounts:', err);
         return res.status(500).json({ error: 'Failed to load player accounts' });
@@ -79,14 +82,15 @@ router.get('/', (req, res) => {
     FROM player_accounts pa
     LEFT JOIN players p ON REPLACE(pa.licence, ' ', '') = REPLACE(p.licence, ' ', '')
     WHERE UPPER(pa.licence) NOT LIKE 'TEST%'
-      AND (UPPER(pa.licence) LIKE UPPER($1)
-        OR UPPER(pa.email) LIKE UPPER($1)
-        OR UPPER(CONCAT(p.first_name, ' ', p.last_name)) LIKE UPPER($1))
+      AND ($1::int IS NULL OR pa.organization_id = $1)
+      AND (UPPER(pa.licence) LIKE UPPER($2)
+        OR UPPER(pa.email) LIKE UPPER($2)
+        OR UPPER(CONCAT(p.first_name, ' ', p.last_name)) LIKE UPPER($2))
     ORDER BY pa.created_at DESC
     LIMIT 20
   `;
 
-  db.all(query, [searchTerm], (err, rows) => {
+  db.all(query, [orgId, searchTerm], (err, rows) => {
     if (err) {
       console.error('Error loading player accounts:', err);
       return res.status(500).json({ error: 'Failed to load player accounts' });
@@ -99,7 +103,7 @@ router.get('/', (req, res) => {
  * POST /api/player-accounts
  * Create a new player account
  */
-router.post('/', async (req, res) => {
+router.post('/', authenticateToken, async (req, res) => {
   try {
     const { licence, email, password, isAdmin } = req.body;
 
@@ -153,10 +157,11 @@ router.post('/', async (req, res) => {
             const passwordHash = await bcrypt.hash(password, 10);
 
             // Create account
+            const orgId = req.user.organizationId || null;
             db.run(
-              `INSERT INTO player_accounts (licence, email, password_hash, email_verified, is_admin)
-               VALUES ($1, $2, $3, true, $4)`,
-              [licence.toUpperCase(), email, passwordHash, isAdmin || false],
+              `INSERT INTO player_accounts (licence, email, password_hash, email_verified, is_admin, organization_id)
+               VALUES ($1, $2, $3, true, $4, $5)`,
+              [licence.toUpperCase(), email, passwordHash, isAdmin || false, orgId],
               function(err) {
                 if (err) {
                   console.error('Error creating account:', err);
@@ -185,9 +190,10 @@ router.post('/', async (req, res) => {
  * PUT /api/player-accounts/:id
  * Update a player account (admin status or password)
  */
-router.put('/:id', async (req, res) => {
+router.put('/:id', authenticateToken, async (req, res) => {
   const { id } = req.params;
   const { isAdmin, password } = req.body;
+  const orgId = req.user.organizationId || null;
 
   // Must have at least one field to update
   if (isAdmin === undefined && !password) {
@@ -214,8 +220,8 @@ router.put('/:id', async (req, res) => {
       const passwordHash = await bcrypt.hash(password, 10);
 
       db.run(
-        `UPDATE player_accounts SET password_hash = $1 WHERE id = $2`,
-        [passwordHash, id],
+        `UPDATE player_accounts SET password_hash = $1 WHERE id = $2 AND ($3::int IS NULL OR organization_id = $3)`,
+        [passwordHash, id, orgId],
         function(err) {
           if (err) {
             console.error('Error updating player password:', err);
@@ -234,8 +240,8 @@ router.put('/:id', async (req, res) => {
 
     // Handle admin status update
     db.run(
-      `UPDATE player_accounts SET is_admin = $1 WHERE id = $2`,
-      [isAdmin, id],
+      `UPDATE player_accounts SET is_admin = $1 WHERE id = $2 AND ($3::int IS NULL OR organization_id = $3)`,
+      [isAdmin, id, orgId],
       function(err) {
         if (err) {
           console.error('Error updating player account:', err);
@@ -259,12 +265,13 @@ router.put('/:id', async (req, res) => {
  * DELETE /api/player-accounts/:id
  * Delete a player account
  */
-router.delete('/:id', (req, res) => {
+router.delete('/:id', authenticateToken, (req, res) => {
   const { id } = req.params;
+  const orgId = req.user.organizationId || null;
 
   db.run(
-    `DELETE FROM player_accounts WHERE id = $1`,
-    [id],
+    `DELETE FROM player_accounts WHERE id = $1 AND ($2::int IS NULL OR organization_id = $2)`,
+    [id, orgId],
     function(err) {
       if (err) {
         console.error('Error deleting player account:', err);
