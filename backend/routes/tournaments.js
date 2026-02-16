@@ -383,15 +383,17 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
 
     // Start transaction
     db.serialize(() => {
+      const orgId = req.user.organizationId || null;
+
       // Create or get tournament
       db.run(
-        `INSERT INTO tournaments (category_id, tournament_number, season, tournament_date)
-         VALUES (?, ?, ?, ?)
+        `INSERT INTO tournaments (category_id, tournament_number, season, tournament_date, organization_id)
+         VALUES (?, ?, ?, ?, ?)
          ON CONFLICT(category_id, tournament_number, season) DO UPDATE SET
            tournament_date = ?,
            import_date = CURRENT_TIMESTAMP
          RETURNING id`,
-        [categoryId, tournamentNumber, season, tournamentDate, tournamentDate],
+        [categoryId, tournamentNumber, season, tournamentDate, orgId, tournamentDate],
         function(err) {
           if (err) {
             fs.unlinkSync(req.file.path);
@@ -775,7 +777,8 @@ function recalculateRankings(categoryId, season, callback) {
       MAX(tr.serie) as best_serie,
       MAX(CASE WHEN t.tournament_number = 1 THEN tr.match_points + COALESCE(tr.bonus_points, 0) ELSE NULL END) as t1_points,
       MAX(CASE WHEN t.tournament_number = 2 THEN tr.match_points + COALESCE(tr.bonus_points, 0) ELSE NULL END) as t2_points,
-      MAX(CASE WHEN t.tournament_number = 3 THEN tr.match_points + COALESCE(tr.bonus_points, 0) ELSE NULL END) as t3_points
+      MAX(CASE WHEN t.tournament_number = 3 THEN tr.match_points + COALESCE(tr.bonus_points, 0) ELSE NULL END) as t3_points,
+      MAX(t.organization_id) as org_id
     FROM tournament_results tr
     JOIN tournaments t ON tr.tournament_id = t.id
     WHERE t.category_id = ? AND t.season = ? AND t.tournament_number <= 3
@@ -812,8 +815,8 @@ function recalculateRankings(categoryId, season, callback) {
       const stmt = db.prepare(`
         INSERT INTO rankings (
           category_id, season, licence, total_match_points, avg_moyenne, best_serie,
-          rank_position, tournament_1_points, tournament_2_points, tournament_3_points, total_bonus_points
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          rank_position, tournament_1_points, tournament_2_points, tournament_3_points, total_bonus_points, organization_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
       let insertCount = 0;
@@ -833,6 +836,7 @@ function recalculateRankings(categoryId, season, callback) {
           result.t2_points,
           result.t3_points,
           result.total_bonus_points || 0,
+          result.org_id || null,
           (err) => {
             insertCount++;
 
@@ -975,6 +979,7 @@ router.post('/recalculate-rankings', authenticateToken, (req, res) => {
 router.get('/', authenticateToken, (req, res) => {
   console.log('GET /api/tournaments called, season:', req.query.season);
   const { season } = req.query;
+  const orgId = req.user.organizationId || null;
 
   let query = `
     SELECT
@@ -995,11 +1000,12 @@ router.get('/', authenticateToken, (req, res) => {
     FROM tournaments t
     JOIN categories c ON t.category_id = c.id
     LEFT JOIN tournament_results tr ON tr.tournament_id = t.id
+    WHERE (? IS NULL OR t.organization_id = ?)
   `;
 
-  const params = [];
+  const params = [orgId, orgId];
   if (season) {
-    query += ' WHERE t.season = ?';
+    query += ' AND t.season = ?';
     params.push(season);
   }
 
@@ -1018,9 +1024,10 @@ router.get('/', authenticateToken, (req, res) => {
 // Mark ALL tournaments as results sent (bulk action for migration)
 // IMPORTANT: This must be defined BEFORE routes with :id parameter
 router.post('/mark-all-results-sent', authenticateToken, (req, res) => {
+  const orgId = req.user.organizationId || null;
   db.run(
-    `UPDATE tournaments SET results_email_sent = $1, results_email_sent_at = CURRENT_TIMESTAMP WHERE results_email_sent IS NULL OR NOT results_email_sent`,
-    [true],
+    `UPDATE tournaments SET results_email_sent = $1, results_email_sent_at = CURRENT_TIMESTAMP WHERE (results_email_sent IS NULL OR NOT results_email_sent) AND ($2::int IS NULL OR organization_id = $2)`,
+    [true, orgId],
     function(err) {
       if (err) {
         return res.status(500).json({ error: err.message });
@@ -1627,10 +1634,14 @@ router.put('/:id', authenticateToken, (req, res) => {
     return res.status(400).json({ error: 'No fields to update' });
   }
 
+  const orgId = req.user.organizationId || null;
   params.push(id);
+  if (orgId) {
+    params.push(orgId);
+  }
 
   db.run(
-    `UPDATE tournaments SET ${updates.join(', ')} WHERE id = ?`,
+    `UPDATE tournaments SET ${updates.join(', ')} WHERE id = ?${orgId ? ' AND organization_id = ?' : ''}`,
     params,
     function(err) {
       if (err) {
@@ -1652,6 +1663,7 @@ router.get('/unsent-results', authenticateToken, (req, res) => {
   const currentYear = now.getFullYear();
   const currentMonth = now.getMonth();
   const season = currentMonth >= 8 ? `${currentYear}-${currentYear + 1}` : `${currentYear - 1}-${currentYear}`;
+  const orgId = req.user.organizationId || null;
 
   db.all(`
     SELECT t.*, c.display_name, c.game_type, c.level,
@@ -1661,8 +1673,9 @@ router.get('/unsent-results', authenticateToken, (req, res) => {
     WHERE t.season = $1
       AND (t.results_email_sent IS NULL OR NOT t.results_email_sent)
       AND (SELECT COUNT(*) FROM tournament_results WHERE tournament_id = t.id) > 0
+      AND ($2::int IS NULL OR t.organization_id = $2)
     ORDER BY t.tournament_date DESC
-  `, [season], (err, rows) => {
+  `, [season, orgId], (err, rows) => {
     if (err) {
       return res.status(500).json({ error: err.message });
     }
@@ -1673,10 +1686,11 @@ router.get('/unsent-results', authenticateToken, (req, res) => {
 // Mark tournament results as sent (manual action from UI)
 router.post('/:id/mark-results-sent', authenticateToken, (req, res) => {
   const { id } = req.params;
+  const orgId = req.user.organizationId || null;
 
   db.run(
-    `UPDATE tournaments SET results_email_sent = $1, results_email_sent_at = CURRENT_TIMESTAMP WHERE id = $2`,
-    [true, id],
+    `UPDATE tournaments SET results_email_sent = $1, results_email_sent_at = CURRENT_TIMESTAMP WHERE id = $2 AND ($3::int IS NULL OR organization_id = $3)`,
+    [true, id, orgId],
     function(err) {
       if (err) {
         return res.status(500).json({ error: err.message });
@@ -1692,10 +1706,11 @@ router.post('/:id/mark-results-sent', authenticateToken, (req, res) => {
 // Mark tournament results as NOT sent (undo action)
 router.post('/:id/mark-results-unsent', authenticateToken, (req, res) => {
   const { id } = req.params;
+  const orgId = req.user.organizationId || null;
 
   db.run(
-    `UPDATE tournaments SET results_email_sent = $1, results_email_sent_at = NULL WHERE id = $2`,
-    [false, id],
+    `UPDATE tournaments SET results_email_sent = $1, results_email_sent_at = NULL WHERE id = $2 AND ($3::int IS NULL OR organization_id = $3)`,
+    [false, id, orgId],
     function(err) {
       if (err) {
         return res.status(500).json({ error: err.message });

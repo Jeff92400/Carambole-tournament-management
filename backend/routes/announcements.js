@@ -9,13 +9,15 @@ const getDb = () => require('../db-loader');
 // Get audience count (number of Player App users, excluding test accounts)
 router.get('/audience-count', authenticateToken, (req, res) => {
   const db = getDb();
+  const orgId = req.user.organizationId;
 
   db.get(
     `SELECT COUNT(*) as count
      FROM player_accounts pa
      LEFT JOIN players p ON REPLACE(pa.licence, ' ', '') = REPLACE(p.licence, ' ', '')
-     WHERE p.player_app_role IS NULL OR p.player_app_role != 'test'`,
-    [],
+     WHERE (p.player_app_role IS NULL OR p.player_app_role != 'test')
+       AND ($1::int IS NULL OR p.organization_id = $1)`,
+    [orgId || null],
     (err, row) => {
       if (err) {
         console.error('Error fetching audience count:', err);
@@ -114,6 +116,12 @@ router.post('/filtered-audience-count', authenticateToken, async (req, res) => {
       filterCondition = 'TRUE';
     }
 
+    const orgId = req.user.organizationId;
+    if (orgId) {
+      params.push(orgId);
+      filterCondition = `${filterCondition} AND p.organization_id = $${paramIndex++}`;
+    }
+
     const query = `
       SELECT COUNT(DISTINCT pa.licence) as count
       FROM player_accounts pa
@@ -138,10 +146,11 @@ router.post('/filtered-audience-count', authenticateToken, async (req, res) => {
 // Get all announcements (includes inactive)
 router.get('/', authenticateToken, (req, res) => {
   const db = getDb();
+  const orgId = req.user.organizationId;
 
   db.all(
-    `SELECT * FROM announcements ORDER BY created_at DESC`,
-    [],
+    `SELECT * FROM announcements WHERE ($1::int IS NULL OR organization_id = $1) ORDER BY created_at DESC`,
+    [orgId || null],
     (err, rows) => {
       if (err) {
         console.error('Error fetching announcements:', err);
@@ -154,9 +163,11 @@ router.get('/', authenticateToken, (req, res) => {
 
 // Get active announcements (public - for Player App)
 // If licence query param is provided, also show test/targeted/filtered announcements for that licence
+// Supports ?org_id=N for multi-org filtering
 router.get('/active', async (req, res) => {
   const db = getDb();
-  const { licence } = req.query;
+  const { licence, org_id } = req.query;
+  const orgIdFilter = org_id ? parseInt(org_id) : null;
 
   // Normalize licence (remove spaces)
   const normalizedLicence = licence ? licence.replace(/\s+/g, '') : null;
@@ -190,7 +201,7 @@ router.get('/active', async (req, res) => {
       });
     }
 
-    // Get all active announcements
+    // Get all active announcements (filtered by org if provided)
     const announcements = await new Promise((resolve, reject) => {
       db.all(
         `SELECT id, title, message, type, created_at, test_licence, target_licence,
@@ -198,8 +209,9 @@ router.get('/active', async (req, res) => {
          FROM announcements
          WHERE is_active = TRUE
            AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
+           AND ($1::int IS NULL OR organization_id = $1)
          ORDER BY created_at DESC`,
-        [],
+        [orgIdFilter],
         (err, rows) => {
           if (err) reject(err);
           else resolve(rows || []);
@@ -309,11 +321,13 @@ router.post('/', authenticateToken, (req, res) => {
   const rankingsJson = target_rankings && target_rankings.length > 0 ? JSON.stringify(target_rankings) : null;
   const clubsJson = target_clubs && target_clubs.length > 0 ? JSON.stringify(target_clubs) : null;
 
+  const orgId = req.user.organizationId || null;
+
   db.run(
-    `INSERT INTO announcements (title, message, type, expires_at, created_by, test_licence, target_licence, target_modes, target_rankings, target_clubs)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+    `INSERT INTO announcements (title, message, type, expires_at, created_by, test_licence, target_licence, target_modes, target_rankings, target_clubs, organization_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
      RETURNING id`,
-    [title, message, announcementType, expires_at || null, created_by, normalizedTestLicence, normalizedTargetLicence, modesJson, rankingsJson, clubsJson],
+    [title, message, announcementType, expires_at || null, created_by, normalizedTestLicence, normalizedTargetLicence, modesJson, rankingsJson, clubsJson, orgId],
     function(err) {
       if (err) {
         console.error('Error creating announcement:', err);
@@ -343,11 +357,13 @@ router.put('/:id', authenticateToken, (req, res) => {
     return res.status(400).json({ error: 'Title and message are required' });
   }
 
+  const orgId = req.user.organizationId || null;
+
   db.run(
     `UPDATE announcements
      SET title = $1, message = $2, type = $3, is_active = $4, expires_at = $5
-     WHERE id = $6`,
-    [title, message, type || 'info', is_active !== false, expires_at || null, id],
+     WHERE id = $6 AND ($7::int IS NULL OR organization_id = $7)`,
+    [title, message, type || 'info', is_active !== false, expires_at || null, id, orgId],
     function(err) {
       if (err) {
         console.error('Error updating announcement:', err);
@@ -365,10 +381,11 @@ router.put('/:id', authenticateToken, (req, res) => {
 router.patch('/:id/toggle', authenticateToken, (req, res) => {
   const db = getDb();
   const { id } = req.params;
+  const orgId = req.user.organizationId || null;
 
   db.run(
-    `UPDATE announcements SET is_active = NOT is_active WHERE id = $1`,
-    [id],
+    `UPDATE announcements SET is_active = NOT is_active WHERE id = $1 AND ($2::int IS NULL OR organization_id = $2)`,
+    [id, orgId],
     function(err) {
       if (err) {
         console.error('Error toggling announcement:', err);
@@ -386,10 +403,11 @@ router.patch('/:id/toggle', authenticateToken, (req, res) => {
 router.delete('/:id', authenticateToken, (req, res) => {
   const db = getDb();
   const { id } = req.params;
+  const orgId = req.user.organizationId || null;
 
   db.run(
-    'DELETE FROM announcements WHERE id = $1',
-    [id],
+    'DELETE FROM announcements WHERE id = $1 AND ($2::int IS NULL OR organization_id = $2)',
+    [id, orgId],
     function(err) {
       if (err) {
         console.error('Error deleting announcement:', err);
@@ -415,30 +433,28 @@ router.post('/purge', authenticateToken, async (req, res) => {
 
   let query = '';
   let params = [];
+  const orgId = req.user.organizationId || null;
+  const orgCondition = orgId ? `organization_id = ${parseInt(orgId)}` : 'TRUE';
 
   try {
     switch (criteria) {
       case 'expired':
-        // Delete all expired announcements (expires_at < now)
-        query = 'DELETE FROM announcements WHERE expires_at IS NOT NULL AND expires_at < CURRENT_TIMESTAMP';
+        query = `DELETE FROM announcements WHERE expires_at IS NOT NULL AND expires_at < CURRENT_TIMESTAMP AND ${orgCondition}`;
         break;
 
       case 'inactive':
-        // Delete all inactive announcements
-        query = 'DELETE FROM announcements WHERE is_active = FALSE';
+        query = `DELETE FROM announcements WHERE is_active = FALSE AND ${orgCondition}`;
         break;
 
       case 'all_inactive_and_expired':
-        // Delete both inactive and expired
-        query = `DELETE FROM announcements WHERE is_active = FALSE OR (expires_at IS NOT NULL AND expires_at < CURRENT_TIMESTAMP)`;
+        query = `DELETE FROM announcements WHERE (is_active = FALSE OR (expires_at IS NOT NULL AND expires_at < CURRENT_TIMESTAMP)) AND ${orgCondition}`;
         break;
 
       case 'date_range':
-        // Delete announcements created between two dates
         if (!dateFrom || !dateTo) {
           return res.status(400).json({ error: 'dateFrom and dateTo required for date_range criteria' });
         }
-        query = 'DELETE FROM announcements WHERE created_at >= $1 AND created_at <= $2';
+        query = `DELETE FROM announcements WHERE created_at >= $1 AND created_at <= $2 AND ${orgCondition}`;
         params = [dateFrom, dateTo + ' 23:59:59'];
         break;
 

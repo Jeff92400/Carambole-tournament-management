@@ -163,6 +163,7 @@ router.get('/summary-email', authenticateToken, async (req, res) => {
 router.get('/check-campaign', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
   const { campaign_type, mode, category, tournament_id } = req.query;
+  const orgId = req.user.organizationId || null;
 
   if (!campaign_type) {
     return res.status(400).json({ error: 'campaign_type required' });
@@ -175,9 +176,10 @@ router.get('/check-campaign', authenticateToken, async (req, res) => {
                  FROM email_campaigns
                  WHERE campaign_type = $1
                    AND status IN ('completed', 'sending')
-                   AND (test_mode = FALSE OR test_mode IS NULL)`;
-    const params = [campaign_type];
-    let paramIndex = 2;
+                   AND (test_mode = FALSE OR test_mode IS NULL)
+                   AND ($2::int IS NULL OR organization_id = $2)`;
+    const params = [campaign_type, orgId];
+    let paramIndex = 3;
 
     // Mode/category matching: if provided, match OR allow NULL (for manually tagged records)
     if (mode) {
@@ -222,6 +224,7 @@ router.get('/check-campaign', authenticateToken, async (req, res) => {
 // Get count of campaigns to purge (before current season) - Admin only
 router.get('/campaigns/purge-count', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
+  const orgId = req.user.organizationId || null;
 
   // Check if user is admin
   if (req.user.role !== 'admin') {
@@ -249,8 +252,8 @@ router.get('/campaigns/purge-count', authenticateToken, async (req, res) => {
   try {
     const result = await new Promise((resolve, reject) => {
       db.get(
-        `SELECT COUNT(*) as count FROM email_campaigns WHERE sent_at < $1 OR (sent_at IS NULL AND created_at < $1)`,
-        [previousSeasonStart],
+        `SELECT COUNT(*) as count FROM email_campaigns WHERE (sent_at < $1 OR (sent_at IS NULL AND created_at < $1)) AND ($2::int IS NULL OR organization_id = $2)`,
+        [previousSeasonStart, orgId],
         (err, row) => {
           if (err) reject(err);
           else resolve(row);
@@ -274,6 +277,7 @@ router.get('/campaigns/purge-count', authenticateToken, async (req, res) => {
 // Optional: testOnly=true to only purge TEST campaigns
 router.delete('/campaigns/purge', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
+  const orgId = req.user.organizationId || null;
 
   // Check if user is admin
   if (req.user.role !== 'admin') {
@@ -301,8 +305,8 @@ router.delete('/campaigns/purge', authenticateToken, async (req, res) => {
       // Purge ALL campaigns (optionally only TEST)
       result = await new Promise((resolve, reject) => {
         db.run(
-          `DELETE FROM email_campaigns WHERE 1=1${testFilter}`,
-          [],
+          `DELETE FROM email_campaigns WHERE ($1::int IS NULL OR organization_id = $1)${testFilter}`,
+          [orgId],
           function(err) {
             if (err) reject(err);
             else resolve({ deleted: this.changes });
@@ -317,8 +321,9 @@ router.delete('/campaigns/purge', authenticateToken, async (req, res) => {
         db.run(
           `DELETE FROM email_campaigns
            WHERE ((sent_at >= $1 AND sent_at <= $2)
-              OR (sent_at IS NULL AND created_at >= $1 AND created_at <= $2))${testFilter}`,
-          [startDate, endDate],
+              OR (sent_at IS NULL AND created_at >= $1 AND created_at <= $2))
+              AND ($3::int IS NULL OR organization_id = $3)${testFilter}`,
+          [startDate, endDate, orgId],
           function(err) {
             if (err) reject(err);
             else resolve({ deleted: this.changes });
@@ -662,6 +667,7 @@ router.post('/contacts/sync', authenticateToken, async (req, res) => {
 // Get available tournaments for filtering (current season: Sept - June)
 router.get('/tournois', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
+  const orgId = req.user.organizationId || null;
 
   // Calculate current season dates
   // Season runs from September 1st to June 30th
@@ -682,11 +688,12 @@ router.get('/tournois', authenticateToken, async (req, res) => {
 
   db.all(
     `SELECT t.tournoi_id, t.nom, t.mode, t.categorie, t.debut, t.lieu,
-            (SELECT COUNT(*) FROM inscriptions i WHERE i.tournoi_id = t.tournoi_id AND i.forfait != 1) as nb_inscrits
+            (SELECT COUNT(*) FROM inscriptions i WHERE i.tournoi_id = t.tournoi_id AND i.forfait != 1 AND ($3::int IS NULL OR i.organization_id = $3)) as nb_inscrits
      FROM tournoi_ext t
      WHERE t.debut >= $1 AND t.debut <= $2
+       AND ($3::int IS NULL OR t.organization_id = $3)
      ORDER BY t.debut ASC, t.mode, t.categorie`,
-    [seasonStart, seasonEnd],
+    [seasonStart, seasonEnd, orgId],
     (err, rows) => {
       if (err) {
         console.error('Error fetching tournois:', err);
@@ -809,17 +816,18 @@ router.get('/club-email/:locationName', authenticateToken, async (req, res) => {
 // Get ranking categories for filter dropdown (categories that have rankings)
 router.get('/ranking-categories', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
+  const orgId = req.user.organizationId || null;
 
   // Get categories that have rankings in the current season
   const query = `
     SELECT DISTINCT c.id, c.game_type, c.level, c.display_name,
-           (SELECT COUNT(*) FROM rankings r WHERE r.category_id = c.id AND r.season = (SELECT MAX(season) FROM rankings)) as player_count
+           (SELECT COUNT(*) FROM rankings r WHERE r.category_id = c.id AND r.season = (SELECT MAX(season) FROM rankings WHERE ($1::int IS NULL OR organization_id = $1)) AND ($1::int IS NULL OR r.organization_id = $1)) as player_count
     FROM categories c
-    WHERE c.id IN (SELECT DISTINCT category_id FROM rankings WHERE season = (SELECT MAX(season) FROM rankings))
+    WHERE c.id IN (SELECT DISTINCT category_id FROM rankings WHERE season = (SELECT MAX(season) FROM rankings WHERE ($1::int IS NULL OR organization_id = $1)) AND ($1::int IS NULL OR organization_id = $1))
     ORDER BY c.game_type, c.level
   `;
 
-  db.all(query, [], (err, rows) => {
+  db.all(query, [orgId], (err, rows) => {
     if (err) {
       console.error('Error fetching ranking categories:', err);
       return res.status(500).json({ error: err.message });
@@ -832,15 +840,16 @@ router.get('/ranking-categories', authenticateToken, async (req, res) => {
 router.get('/ranking-contacts', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
   const { categoryId } = req.query;
+  const orgId = req.user.organizationId || null;
 
   if (!categoryId) {
     return res.status(400).json({ error: 'Category ID required' });
   }
 
   // Get current season
-  const seasonQuery = `SELECT MAX(season) as season FROM rankings`;
+  const seasonQuery = `SELECT MAX(season) as season FROM rankings WHERE ($1::int IS NULL OR organization_id = $1)`;
 
-  db.get(seasonQuery, [], (err, seasonRow) => {
+  db.get(seasonQuery, [orgId], (err, seasonRow) => {
     if (err) {
       console.error('Error fetching season:', err);
       return res.status(500).json({ error: err.message });
@@ -869,10 +878,11 @@ router.get('/ranking-contacts', authenticateToken, async (req, res) => {
       JOIN categories c ON r.category_id = c.id
       WHERE r.category_id = $1 AND r.season = $2
         AND pc.email IS NOT NULL AND pc.email != '' AND pc.email LIKE '%@%'
+        AND ($3::int IS NULL OR r.organization_id = $3)
       ORDER BY r.rank_position
     `;
 
-    db.all(query, [categoryId, season], (err, rows) => {
+    db.all(query, [categoryId, season, orgId], (err, rows) => {
       if (err) {
         console.error('Error fetching ranking contacts:', err);
         return res.status(500).json({ error: err.message });
@@ -952,6 +962,7 @@ router.put('/templates/:key', authenticateToken, async (req, res) => {
 router.post('/send', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
   const { recipientIds, subject, body, templateKey, imageUrl, testMode, testEmail, ccEmail } = req.body;
+  const orgId = req.user.organizationId || null;
 
   const resend = getResend();
   if (!resend) {
@@ -1009,10 +1020,10 @@ router.post('/send', authenticateToken, async (req, res) => {
     const sentBy = req.user?.username || 'unknown';
     const campaignId = await new Promise((resolve, reject) => {
       db.run(
-        `INSERT INTO email_campaigns (subject, body, template_key, recipients_count, status, sent_by, campaign_type, test_mode)
-         VALUES ($1, $2, $3, $4, 'sending', $5, 'composer', $6)
+        `INSERT INTO email_campaigns (subject, body, template_key, recipients_count, status, sent_by, campaign_type, test_mode, organization_id)
+         VALUES ($1, $2, $3, $4, 'sending', $5, 'composer', $6, $7)
          RETURNING id`,
-        [subject, body, templateKey || null, testMode ? 1 : (recipientIds ? recipientIds.length : 0), sentBy, testMode ? true : false],
+        [subject, body, templateKey || null, testMode ? 1 : (recipientIds ? recipientIds.length : 0), sentBy, testMode ? true : false, orgId],
         function(err) {
           if (err) reject(err);
           else resolve(this.lastID);
@@ -1124,8 +1135,8 @@ router.post('/send', authenticateToken, async (req, res) => {
       db.run(
         `UPDATE email_campaigns
          SET sent_count = $1, failed_count = $2, status = 'completed', sent_at = CURRENT_TIMESTAMP
-         WHERE id = $3`,
-        [results.sent.length, results.failed.length, campaignId],
+         WHERE id = $3 AND ($4::int IS NULL OR organization_id = $4)`,
+        [results.sent.length, results.failed.length, campaignId, orgId],
         () => resolve()
       );
     });
@@ -1210,6 +1221,7 @@ router.post('/send', authenticateToken, async (req, res) => {
 router.post('/schedule', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
   const { recipientIds, subject, body, templateKey, imageUrl, scheduledAt } = req.body;
+  const orgId = req.user.organizationId || null;
 
   if (!recipientIds || recipientIds.length === 0) {
     return res.status(400).json({ error: 'Aucun destinataire selectionne.' });
@@ -1222,9 +1234,9 @@ router.post('/schedule', authenticateToken, async (req, res) => {
   try {
     await new Promise((resolve, reject) => {
       db.run(
-        `INSERT INTO scheduled_emails (subject, body, template_key, image_url, recipient_ids, scheduled_at, status)
-         VALUES ($1, $2, $3, $4, $5, $6, 'pending')`,
-        [subject, body, templateKey || null, imageUrl || null, JSON.stringify(recipientIds), scheduledAt],
+        `INSERT INTO scheduled_emails (subject, body, template_key, image_url, recipient_ids, scheduled_at, status, organization_id)
+         VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7)`,
+        [subject, body, templateKey || null, imageUrl || null, JSON.stringify(recipientIds), scheduledAt, orgId],
         function(err) {
           if (err) reject(err);
           else resolve(this.lastID);
@@ -1246,10 +1258,11 @@ router.post('/schedule', authenticateToken, async (req, res) => {
 // Get scheduled emails (all statuses, sorted by most recent)
 router.get('/scheduled', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
+  const orgId = req.user.organizationId || null;
 
   db.all(
-    `SELECT * FROM scheduled_emails ORDER BY scheduled_at DESC LIMIT 50`,
-    [],
+    `SELECT * FROM scheduled_emails WHERE ($1::int IS NULL OR organization_id = $1) ORDER BY scheduled_at DESC LIMIT 50`,
+    [orgId],
     (err, rows) => {
       if (err) {
         console.error('Error fetching scheduled emails:', err);
@@ -1277,14 +1290,15 @@ router.put('/scheduled/:id', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
   const { id } = req.params;
   const { scheduled_at } = req.body;
+  const orgId = req.user.organizationId || null;
 
   if (!scheduled_at) {
     return res.status(400).json({ error: 'Date requise' });
   }
 
   db.run(
-    `UPDATE scheduled_emails SET scheduled_at = $1 WHERE id = $2 AND status = 'pending'`,
-    [scheduled_at, id],
+    `UPDATE scheduled_emails SET scheduled_at = $1 WHERE id = $2 AND status = 'pending' AND ($3::int IS NULL OR organization_id = $3)`,
+    [scheduled_at, id, orgId],
     function(err) {
       if (err) {
         console.error('Error updating scheduled email:', err);
@@ -1302,10 +1316,11 @@ router.put('/scheduled/:id', authenticateToken, async (req, res) => {
 router.delete('/scheduled/:id', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
   const { id } = req.params;
+  const orgId = req.user.organizationId || null;
 
   db.run(
-    `UPDATE scheduled_emails SET status = 'cancelled' WHERE id = $1`,
-    [id],
+    `UPDATE scheduled_emails SET status = 'cancelled' WHERE id = $1 AND ($2::int IS NULL OR organization_id = $2)`,
+    [id, orgId],
     function(err) {
       if (err) {
         console.error('Error cancelling scheduled email:', err);
@@ -1320,6 +1335,7 @@ router.delete('/scheduled/:id', authenticateToken, async (req, res) => {
 router.post('/schedule-relance', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
   const { relanceType, mode, category, subject, intro, outro, imageUrl, scheduledAt, ccEmail, customData, testMode, testEmail } = req.body;
+  const orgId = req.user.organizationId || null;
 
   if (!relanceType || !mode || !category || !subject || !intro || !scheduledAt) {
     return res.status(400).json({ error: 'Champs obligatoires manquants' });
@@ -1336,9 +1352,9 @@ router.post('/schedule-relance', authenticateToken, async (req, res) => {
   try {
     await new Promise((resolve, reject) => {
       db.run(
-        `INSERT INTO scheduled_emails (subject, body, template_key, image_url, recipient_ids, scheduled_at, status, email_type, mode, category, outro_text, cc_email, custom_data, created_by, test_mode, test_email)
-         VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
-        [finalSubject, intro, `relance_${relanceType}`, imageUrl || null, '[]', scheduledAt, `relance_${relanceType}`, mode, category, outro || null, ccEmail || null, JSON.stringify(customData || {}), req.user?.username || 'unknown', testMode || false, testEmail || null],
+        `INSERT INTO scheduled_emails (subject, body, template_key, image_url, recipient_ids, scheduled_at, status, email_type, mode, category, outro_text, cc_email, custom_data, created_by, test_mode, test_email, organization_id)
+         VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
+        [finalSubject, intro, `relance_${relanceType}`, imageUrl || null, '[]', scheduledAt, `relance_${relanceType}`, mode, category, outro || null, ccEmail || null, JSON.stringify(customData || {}), req.user?.username || 'unknown', testMode || false, testEmail || null, orgId],
         function(err) {
           if (err) reject(err);
           else resolve(this.lastID);
@@ -1358,6 +1374,7 @@ router.post('/schedule-relance', authenticateToken, async (req, res) => {
 router.post('/schedule-results', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
   const { tournamentId, introText, outroText, imageUrl, scheduledAt, ccEmail, testMode, testEmail } = req.body;
+  const orgId = req.user.organizationId || null;
 
   if (!tournamentId || !scheduledAt) {
     return res.status(400).json({ error: 'Champs obligatoires manquants' });
@@ -1373,7 +1390,7 @@ router.post('/schedule-results', authenticateToken, async (req, res) => {
       db.get(`SELECT t.*, c.display_name, c.game_type, c.level
               FROM tournaments t
               JOIN categories c ON t.category_id = c.id
-              WHERE t.id = $1`, [tournamentId], (err, row) => {
+              WHERE t.id = $1 AND ($2::int IS NULL OR t.organization_id = $2)`, [tournamentId, orgId], (err, row) => {
         if (err) reject(err);
         else resolve(row);
       });
@@ -1388,9 +1405,9 @@ router.post('/schedule-results', authenticateToken, async (req, res) => {
 
     await new Promise((resolve, reject) => {
       db.run(
-        `INSERT INTO scheduled_emails (subject, body, template_key, image_url, recipient_ids, scheduled_at, status, email_type, mode, category, tournament_id, outro_text, cc_email, created_by, test_mode, test_email)
-         VALUES ($1, $2, 'tournament_results', $3, $4, $5, 'pending', 'tournament_results', $6, $7, $8, $9, $10, $11, $12, $13)`,
-        [subject, introText || '', imageUrl || null, '[]', scheduledAt, tournament.game_type, tournament.level, tournamentId, outroText || null, ccEmail || null, req.user?.username || 'unknown', testMode || false, testEmail || null],
+        `INSERT INTO scheduled_emails (subject, body, template_key, image_url, recipient_ids, scheduled_at, status, email_type, mode, category, tournament_id, outro_text, cc_email, created_by, test_mode, test_email, organization_id)
+         VALUES ($1, $2, 'tournament_results', $3, $4, $5, 'pending', 'tournament_results', $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+        [subject, introText || '', imageUrl || null, '[]', scheduledAt, tournament.game_type, tournament.level, tournamentId, outroText || null, ccEmail || null, req.user?.username || 'unknown', testMode || false, testEmail || null, orgId],
         function(err) {
           if (err) reject(err);
           else resolve(this.lastID);
@@ -1410,6 +1427,7 @@ router.post('/schedule-results', authenticateToken, async (req, res) => {
 router.post('/schedule-finale-convocation', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
   const { finaleId, introText, outroText, imageUrl, scheduledAt, ccEmail, testMode, testEmail } = req.body;
+  const orgId = req.user.organizationId || null;
 
   if (!finaleId || !scheduledAt) {
     return res.status(400).json({ error: 'Champs obligatoires manquants' });
@@ -1422,7 +1440,7 @@ router.post('/schedule-finale-convocation', authenticateToken, async (req, res) 
   try {
     // Get finale info
     const finale = await new Promise((resolve, reject) => {
-      db.get(`SELECT * FROM tournoi_ext WHERE tournoi_id = $1`, [finaleId], (err, row) => {
+      db.get(`SELECT * FROM tournoi_ext WHERE tournoi_id = $1 AND ($2::int IS NULL OR organization_id = $2)`, [finaleId, orgId], (err, row) => {
         if (err) reject(err);
         else resolve(row);
       });
@@ -1436,9 +1454,9 @@ router.post('/schedule-finale-convocation', authenticateToken, async (req, res) 
 
     await new Promise((resolve, reject) => {
       db.run(
-        `INSERT INTO scheduled_emails (subject, body, template_key, image_url, recipient_ids, scheduled_at, status, email_type, mode, category, tournament_id, outro_text, cc_email, created_by, test_mode, test_email)
-         VALUES ($1, $2, 'finale_convocation', $3, $4, $5, 'pending', 'finale_convocation', $6, $7, $8, $9, $10, $11, $12, $13)`,
-        [subject, introText || '', imageUrl || null, '[]', scheduledAt, finale.mode, finale.categorie, finaleId, outroText || null, ccEmail || null, req.user?.username || 'unknown', testMode || false, testEmail || null],
+        `INSERT INTO scheduled_emails (subject, body, template_key, image_url, recipient_ids, scheduled_at, status, email_type, mode, category, tournament_id, outro_text, cc_email, created_by, test_mode, test_email, organization_id)
+         VALUES ($1, $2, 'finale_convocation', $3, $4, $5, 'pending', 'finale_convocation', $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+        [subject, introText || '', imageUrl || null, '[]', scheduledAt, finale.mode, finale.categorie, finaleId, outroText || null, ccEmail || null, req.user?.username || 'unknown', testMode || false, testEmail || null, orgId],
         function(err) {
           if (err) reject(err);
           else resolve(this.lastID);
@@ -1459,6 +1477,7 @@ router.post('/send-finale-results', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
   const { Resend } = require('resend');
   const { tournamentId, introText, outroText, ccEmail, testMode, testEmail } = req.body;
+  const orgId = req.user.organizationId || null;
 
   if (!tournamentId) {
     return res.status(400).json({ error: 'tournamentId requis' });
@@ -1496,8 +1515,8 @@ router.post('/send-finale-results', authenticateToken, async (req, res) => {
         `SELECT t.*, c.display_name, c.game_type, c.level
          FROM tournaments t
          JOIN categories c ON t.category_id = c.id
-         WHERE t.id = $1`,
-        [tournamentId],
+         WHERE t.id = $1 AND ($2::int IS NULL OR t.organization_id = $2)`,
+        [tournamentId, orgId],
         (err, row) => {
           if (err) reject(err);
           else resolve(row);
@@ -1674,9 +1693,9 @@ router.post('/send-finale-results', authenticateToken, async (req, res) => {
     // Log the campaign
     await new Promise((resolve, reject) => {
       db.run(
-        `INSERT INTO email_campaigns (subject, body, template_key, recipients_count, sent_count, failed_count, status, sent_at, campaign_type, mode, category, tournament_id, sent_by, test_mode)
-         VALUES ($1, $2, 'finale_results', $3, $4, $5, 'completed', CURRENT_TIMESTAMP, 'finale_results', $6, $7, $8, $9, $10)`,
-        [subject, introText || '', recipients.length, sentResults.sent.length, sentResults.failed.length, tournament.game_type, tournament.level, tournamentId, req.user?.username || 'unknown', testMode || false],
+        `INSERT INTO email_campaigns (subject, body, template_key, recipients_count, sent_count, failed_count, status, sent_at, campaign_type, mode, category, tournament_id, sent_by, test_mode, organization_id)
+         VALUES ($1, $2, 'finale_results', $3, $4, $5, 'completed', CURRENT_TIMESTAMP, 'finale_results', $6, $7, $8, $9, $10, $11)`,
+        [subject, introText || '', recipients.length, sentResults.sent.length, sentResults.failed.length, tournament.game_type, tournament.level, tournamentId, req.user?.username || 'unknown', testMode || false, orgId],
         function(err) {
           if (err) reject(err);
           else resolve(this.lastID);
@@ -1688,8 +1707,8 @@ router.post('/send-finale-results', authenticateToken, async (req, res) => {
     if (!testMode && sentResults.sent.length > 0) {
       await new Promise((resolve) => {
         db.run(
-          `UPDATE tournaments SET results_email_sent = TRUE, results_email_sent_at = CURRENT_TIMESTAMP WHERE id = $1`,
-          [tournamentId],
+          `UPDATE tournaments SET results_email_sent = TRUE, results_email_sent_at = CURRENT_TIMESTAMP WHERE id = $1 AND ($2::int IS NULL OR organization_id = $2)`,
+          [tournamentId, orgId],
           () => resolve()
         );
       });
@@ -1924,14 +1943,15 @@ function buildResultsTableHtml(results, primaryColor) {
 }
 
 // Helper function to check if a campaign was already manually sent
-async function checkIfAlreadySent(db, emailType, mode, category, tournamentId) {
+async function checkIfAlreadySent(db, emailType, mode, category, tournamentId, orgId = null) {
   return new Promise((resolve, reject) => {
     let query = `SELECT id FROM email_campaigns
                  WHERE campaign_type = $1
                    AND status IN ('completed', 'sending')
-                   AND (test_mode = FALSE OR test_mode IS NULL)`;
-    const params = [emailType];
-    let paramIndex = 2;
+                   AND (test_mode = FALSE OR test_mode IS NULL)
+                   AND ($2::int IS NULL OR organization_id = $2)`;
+    const params = [emailType, orgId];
+    let paramIndex = 3;
 
     if (mode) {
       query += ` AND (mode = $${paramIndex++} OR mode IS NULL)`;
@@ -1967,7 +1987,7 @@ router.post('/process-scheduled', async (req, res) => {
   }
 
   try {
-    // Get emails that are due
+    // Get emails that are due (process all orgs - scheduler runs globally)
     const scheduledEmails = await new Promise((resolve, reject) => {
       db.all(
         `SELECT * FROM scheduled_emails
@@ -2004,7 +2024,8 @@ router.post('/process-scheduled', async (req, res) => {
           scheduled.email_type,
           scheduled.mode,
           scheduled.category,
-          scheduled.tournament_id
+          scheduled.tournament_id,
+          scheduled.organization_id || null
         );
 
         if (alreadySent) {
@@ -2114,9 +2135,9 @@ router.post('/process-scheduled', async (req, res) => {
       // Create campaign record
       await new Promise((resolve) => {
         db.run(
-          `INSERT INTO email_campaigns (subject, body, template_key, recipients_count, sent_count, failed_count, status, sent_at, sent_by, campaign_type, mode, category, tournament_id, test_mode)
-           VALUES ($1, $2, $3, $4, $5, $6, 'completed', CURRENT_TIMESTAMP, $7, $8, $9, $10, $11, $12)`,
-          [scheduled.subject, scheduled.body, scheduled.template_key, recipientIds.length, sentCount, failedCount, scheduled.created_by || 'scheduled', scheduled.email_type || 'scheduled', scheduled.mode || null, scheduled.category || null, scheduled.tournament_id || null, scheduled.test_mode || false],
+          `INSERT INTO email_campaigns (subject, body, template_key, recipients_count, sent_count, failed_count, status, sent_at, sent_by, campaign_type, mode, category, tournament_id, test_mode, organization_id)
+           VALUES ($1, $2, $3, $4, $5, $6, 'completed', CURRENT_TIMESTAMP, $7, $8, $9, $10, $11, $12, $13)`,
+          [scheduled.subject, scheduled.body, scheduled.template_key, recipientIds.length, sentCount, failedCount, scheduled.created_by || 'scheduled', scheduled.email_type || 'scheduled', scheduled.mode || null, scheduled.category || null, scheduled.tournament_id || null, scheduled.test_mode || false, scheduled.organization_id || null],
           () => resolve()
         );
       });
@@ -2139,6 +2160,7 @@ router.post('/process-scheduled', async (req, res) => {
 router.get('/tournament-results/:id', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
   const { id } = req.params;
+  const orgId = req.user.organizationId || null;
 
   try {
     // Get tournament details with category info
@@ -2147,8 +2169,8 @@ router.get('/tournament-results/:id', authenticateToken, async (req, res) => {
         SELECT t.*, c.display_name, c.game_type, c.level
         FROM tournaments t
         JOIN categories c ON t.category_id = c.id
-        WHERE t.id = $1
-      `, [id], (err, row) => {
+        WHERE t.id = $1 AND ($2::int IS NULL OR t.organization_id = $2)
+      `, [id, orgId], (err, row) => {
         if (err) reject(err);
         else resolve(row);
       });
@@ -2167,8 +2189,9 @@ router.get('/tournament-results/:id', authenticateToken, async (req, res) => {
         WHERE UPPER(REPLACE(te.mode, ' ', '')) = UPPER(REPLACE($1, ' ', ''))
           AND UPPER(REPLACE(te.categorie, ' ', '')) = UPPER(REPLACE($2, ' ', ''))
           AND DATE(te.debut) = DATE($3)
+          AND ($4::int IS NULL OR te.organization_id = $4)
         LIMIT 1
-      `, [tournament.game_type, tournament.level, tournament.tournament_date], (err, row) => {
+      `, [tournament.game_type, tournament.level, tournament.tournament_date, orgId], (err, row) => {
         if (err) reject(err);
         else resolve(row);
       });
@@ -2212,8 +2235,9 @@ router.get('/tournament-results/:id', authenticateToken, async (req, res) => {
         LEFT JOIN players p ON REPLACE(r.licence, ' ', '') = REPLACE(p.licence, ' ', '')
         LEFT JOIN player_contacts pc ON REPLACE(r.licence, ' ', '') = REPLACE(pc.licence, ' ', '')
         WHERE r.season = $1 AND r.category_id = $2
+          AND ($3::int IS NULL OR r.organization_id = $3)
         ORDER BY r.rank_position ASC
-      `, [tournament.season, tournament.category_id], (err, rows) => {
+      `, [tournament.season, tournament.category_id, orgId], (err, rows) => {
         if (err) reject(err);
         else resolve(rows || []);
       });
@@ -2250,6 +2274,7 @@ router.get('/tournament-results/:id', authenticateToken, async (req, res) => {
 router.post('/send-results', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
   const { tournamentId, introText, outroText, imageUrl, testMode, testEmail, ccEmail } = req.body;
+  const orgId = req.user.organizationId || null;
 
   const resend = getResend();
   if (!resend) {
@@ -2281,8 +2306,8 @@ router.post('/send-results', authenticateToken, async (req, res) => {
         SELECT t.*, c.display_name, c.game_type, c.level
         FROM tournaments t
         JOIN categories c ON t.category_id = c.id
-        WHERE t.id = $1
-      `, [tournamentId], (err, row) => {
+        WHERE t.id = $1 AND ($2::int IS NULL OR t.organization_id = $2)
+      `, [tournamentId, orgId], (err, row) => {
         if (err) reject(err);
         else resolve(row);
       });
@@ -2301,8 +2326,9 @@ router.post('/send-results', authenticateToken, async (req, res) => {
         WHERE UPPER(te.mode) = UPPER($1)
           AND UPPER(te.categorie) = UPPER($2)
           AND DATE(te.debut) = DATE($3)
+          AND ($4::int IS NULL OR te.organization_id = $4)
         LIMIT 1
-      `, [tournament.game_type, tournament.level, tournament.tournament_date], (err, row) => {
+      `, [tournament.game_type, tournament.level, tournament.tournament_date, orgId], (err, row) => {
         if (err) reject(err);
         else resolve(row);
       });
@@ -2342,8 +2368,9 @@ router.post('/send-results', authenticateToken, async (req, res) => {
         LEFT JOIN players p ON REPLACE(r.licence, ' ', '') = REPLACE(p.licence, ' ', '')
         LEFT JOIN player_contacts pc ON REPLACE(r.licence, ' ', '') = REPLACE(pc.licence, ' ', '')
         WHERE r.season = $1 AND r.category_id = $2
+          AND ($3::int IS NULL OR r.organization_id = $3)
         ORDER BY r.rank_position ASC
-      `, [tournament.season, tournament.category_id], (err, rows) => {
+      `, [tournament.season, tournament.category_id, orgId], (err, rows) => {
         if (err) reject(err);
         else resolve(rows || []);
       });
@@ -2389,11 +2416,11 @@ router.post('/send-results', authenticateToken, async (req, res) => {
     // Create campaign record with tracking info
     const campaignId = await new Promise((resolve, reject) => {
       db.run(
-        `INSERT INTO email_campaigns (subject, body, template_key, recipients_count, status, campaign_type, mode, category, tournament_id, sent_by, test_mode)
-         VALUES ($1, $2, 'tournament_results', $3, 'sending', 'tournament_results', $4, $5, $6, $7, $8)
+        `INSERT INTO email_campaigns (subject, body, template_key, recipients_count, status, campaign_type, mode, category, tournament_id, sent_by, test_mode, organization_id)
+         VALUES ($1, $2, 'tournament_results', $3, 'sending', 'tournament_results', $4, $5, $6, $7, $8, $9)
          RETURNING id`,
         [`Résultats - ${tournament.display_name}`, introText, results.filter(r => r.email).length,
-         tournament.game_type, tournament.level, tournamentId, req.user?.username || 'unknown', testMode ? true : false],
+         tournament.game_type, tournament.level, tournamentId, req.user?.username || 'unknown', testMode ? true : false, orgId],
         function(err) {
           if (err) reject(err);
           else resolve(this.lastID);
@@ -2594,8 +2621,8 @@ router.post('/send-results', authenticateToken, async (req, res) => {
       db.run(
         `UPDATE email_campaigns
          SET sent_count = $1, failed_count = $2, status = 'completed', sent_at = CURRENT_TIMESTAMP
-         WHERE id = $3`,
-        [sentResults.sent.length, sentResults.failed.length, campaignId],
+         WHERE id = $3 AND ($4::int IS NULL OR organization_id = $4)`,
+        [sentResults.sent.length, sentResults.failed.length, campaignId, orgId],
         () => resolve()
       );
     });
@@ -2705,8 +2732,8 @@ router.post('/send-results', authenticateToken, async (req, res) => {
     if (!testMode && sentResults.sent.length > 0) {
       await new Promise((resolve) => {
         db.run(
-          `UPDATE tournaments SET results_email_sent = $1, results_email_sent_at = CURRENT_TIMESTAMP WHERE id = $2`,
-          [true, tournamentId],
+          `UPDATE tournaments SET results_email_sent = $1, results_email_sent_at = CURRENT_TIMESTAMP WHERE id = $2 AND ($3::int IS NULL OR organization_id = $3)`,
+          [true, tournamentId, orgId],
           () => resolve()
         );
       });
@@ -2742,6 +2769,7 @@ router.post('/send-results', authenticateToken, async (req, res) => {
 // Get finales for current season (tournament_number = 4 or contains "FINALE" in name)
 router.get('/finales', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
+  const orgId = req.user.organizationId || null;
 
   // Calculate current season dates
   const now = new Date();
@@ -2759,12 +2787,13 @@ router.get('/finales', authenticateToken, async (req, res) => {
 
   db.all(
     `SELECT t.tournoi_id, t.nom, t.mode, t.categorie, t.debut, t.fin, t.lieu,
-            (SELECT COUNT(*) FROM inscriptions i WHERE i.tournoi_id = t.tournoi_id AND i.forfait != 1) as nb_inscrits
+            (SELECT COUNT(*) FROM inscriptions i WHERE i.tournoi_id = t.tournoi_id AND i.forfait != 1 AND ($3::int IS NULL OR i.organization_id = $3)) as nb_inscrits
      FROM tournoi_ext t
      WHERE (t.debut >= $1 AND t.debut <= $2)
        AND (UPPER(t.nom) LIKE '%FINALE%' OR UPPER(t.nom) LIKE '%FINAL%')
+       AND ($3::int IS NULL OR t.organization_id = $3)
      ORDER BY t.debut ASC, t.mode, t.categorie`,
-    [seasonStart, seasonEnd],
+    [seasonStart, seasonEnd, orgId],
     (err, rows) => {
       if (err) {
         console.error('Error fetching finales:', err);
@@ -2779,6 +2808,7 @@ router.get('/finales', authenticateToken, async (req, res) => {
 router.get('/finale-winners', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
   const { season } = req.query;
+  const orgId = req.user.organizationId || null;
 
   // Calculate season if not provided
   let targetSeason = season;
@@ -2819,8 +2849,9 @@ router.get('/finale-winners', authenticateToken, async (req, res) => {
            AND t.season = $1
            AND tr.position = 1
            AND UPPER(tr.licence) NOT LIKE 'TEST%'
+           AND ($2::int IS NULL OR t.organization_id = $2)
          ORDER BY c.game_type, c.level`,
-        [targetSeason],
+        [targetSeason, orgId],
         (err, rows) => {
           if (err) reject(err);
           else resolve(rows || []);
@@ -2844,13 +2875,14 @@ router.get('/finale-winners', authenticateToken, async (req, res) => {
 router.get('/finalists/:finaleId', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
   const { finaleId } = req.params;
+  const orgId = req.user.organizationId || null;
 
   try {
     // Get the finale details to determine mode/category
     const finale = await new Promise((resolve, reject) => {
       db.get(
-        `SELECT * FROM tournoi_ext WHERE tournoi_id = $1`,
-        [finaleId],
+        `SELECT * FROM tournoi_ext WHERE tournoi_id = $1 AND ($2::int IS NULL OR organization_id = $2)`,
+        [finaleId, orgId],
         (err, row) => {
           if (err) reject(err);
           else resolve(row);
@@ -2910,8 +2942,9 @@ router.get('/finalists/:finaleId', authenticateToken, async (req, res) => {
          LEFT JOIN players p ON REPLACE(r.licence, ' ', '') = REPLACE(p.licence, ' ', '')
          LEFT JOIN player_contacts pc ON REPLACE(r.licence, ' ', '') = REPLACE(pc.licence, ' ', '')
          WHERE r.season = $1 AND r.category_id = $2
+           AND ($3::int IS NULL OR r.organization_id = $3)
          ORDER BY r.rank_position ASC`,
-        [season, category.id],
+        [season, category.id, orgId],
         (err, rows) => {
           if (err) reject(err);
           else resolve(rows || []);
@@ -2972,6 +3005,7 @@ router.get('/finalists/:finaleId', authenticateToken, async (req, res) => {
 router.post('/send-finale-convocation', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
   const { finaleId, finaleHeure, introText, outroText, imageUrl, testMode, testEmail, ccEmail } = req.body;
+  const orgId = req.user.organizationId || null;
 
   const resend = getResend();
   if (!resend) {
@@ -2996,7 +3030,7 @@ router.post('/send-finale-convocation', authenticateToken, async (req, res) => {
 
     // Get finale details
     const finale = await new Promise((resolve, reject) => {
-      db.get(`SELECT * FROM tournoi_ext WHERE tournoi_id = $1`, [finaleId], (err, row) => {
+      db.get(`SELECT * FROM tournoi_ext WHERE tournoi_id = $1 AND ($2::int IS NULL OR organization_id = $2)`, [finaleId, orgId], (err, row) => {
         if (err) reject(err);
         else resolve(row);
       });
@@ -3041,8 +3075,9 @@ router.post('/send-finale-convocation', authenticateToken, async (req, res) => {
          LEFT JOIN players p ON REPLACE(r.licence, ' ', '') = REPLACE(p.licence, ' ', '')
          LEFT JOIN player_contacts pc ON REPLACE(r.licence, ' ', '') = REPLACE(pc.licence, ' ', '')
          WHERE r.season = $1 AND r.category_id = $2
+           AND ($3::int IS NULL OR r.organization_id = $3)
          ORDER BY r.rank_position ASC`,
-        [season, category.id],
+        [season, category.id, orgId],
         (err, rows) => {
           if (err) reject(err);
           else resolve(rows || []);
@@ -3063,11 +3098,11 @@ router.post('/send-finale-convocation', authenticateToken, async (req, res) => {
     // Create campaign record with tracking info
     const campaignId = await new Promise((resolve, reject) => {
       db.run(
-        `INSERT INTO email_campaigns (subject, body, template_key, recipients_count, status, campaign_type, mode, category, tournament_id, sent_by, test_mode)
-         VALUES ($1, $2, 'finale_convocation', $3, 'sending', 'finale_convocation', $4, $5, $6, $7, $8)
+        `INSERT INTO email_campaigns (subject, body, template_key, recipients_count, status, campaign_type, mode, category, tournament_id, sent_by, test_mode, organization_id)
+         VALUES ($1, $2, 'finale_convocation', $3, 'sending', 'finale_convocation', $4, $5, $6, $7, $8, $9)
          RETURNING id`,
         [`Convocation Finale - ${category.display_name}`, introText, finalists.filter(f => f.email).length,
-         finale.mode, finale.categorie, finaleId, req.user?.username || 'unknown', testMode ? true : false],
+         finale.mode, finale.categorie, finaleId, req.user?.username || 'unknown', testMode ? true : false, orgId],
         function(err) {
           if (err) reject(err);
           else resolve(this.lastID);
@@ -3231,8 +3266,8 @@ router.post('/send-finale-convocation', authenticateToken, async (req, res) => {
     // Update campaign
     await new Promise((resolve) => {
       db.run(
-        `UPDATE email_campaigns SET sent_count = $1, failed_count = $2, status = 'completed', sent_at = CURRENT_TIMESTAMP WHERE id = $3`,
-        [sentResults.sent.length, sentResults.failed.length, campaignId],
+        `UPDATE email_campaigns SET sent_count = $1, failed_count = $2, status = 'completed', sent_at = CURRENT_TIMESTAMP WHERE id = $3 AND ($4::int IS NULL OR organization_id = $4)`,
+        [sentResults.sent.length, sentResults.failed.length, campaignId, orgId],
         () => resolve()
       );
     });
@@ -3355,10 +3390,11 @@ router.post('/send-finale-convocation', authenticateToken, async (req, res) => {
 // Get email campaign history
 router.get('/history', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
+  const orgId = req.user.organizationId || null;
 
   db.all(
-    `SELECT * FROM email_campaigns ORDER BY created_at DESC LIMIT 50`,
-    [],
+    `SELECT * FROM email_campaigns WHERE ($1::int IS NULL OR organization_id = $1) ORDER BY created_at DESC LIMIT 50`,
+    [orgId],
     (err, rows) => {
       if (err) {
         console.error('Error fetching campaign history:', err);
@@ -3374,12 +3410,13 @@ router.put('/campaigns/:id', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
   const { id } = req.params;
   const { campaign_type } = req.body;
+  const orgId = req.user.organizationId || null;
 
   try {
     await new Promise((resolve, reject) => {
       db.run(
-        `UPDATE email_campaigns SET campaign_type = $1 WHERE id = $2`,
-        [campaign_type, id],
+        `UPDATE email_campaigns SET campaign_type = $1 WHERE id = $2 AND ($3::int IS NULL OR organization_id = $3)`,
+        [campaign_type, id, orgId],
         function(err) {
           if (err) reject(err);
           else resolve(this.changes);
@@ -3800,6 +3837,7 @@ router.post('/finale-results-template/save-as-default', authenticateToken, async
 router.get('/next-tournament', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
   const { mode, category, relanceType } = req.query;
+  const orgId = req.user.organizationId || null;
 
   if (!mode || !category || !relanceType) {
     return res.status(400).json({ error: 'Mode, category, and relanceType required' });
@@ -3880,14 +3918,16 @@ router.get('/next-tournament', authenticateToken, async (req, res) => {
 
     // Build the full query
     const catParamIdx = modeParams.length + 1;
+    const orgParamIdx = modeParams.length + 2;
 
     const tournament = await new Promise((resolve, reject) => {
       db.get(
         `SELECT * FROM tournoi_ext
          WHERE ${modeCondition} AND UPPER(categorie) = $${catParamIdx}
          AND ${nameCondition}
+         AND ($${orgParamIdx}::int IS NULL OR organization_id = $${orgParamIdx})
          ORDER BY debut DESC LIMIT 1`,
-        [...modeParams, category.toUpperCase()],
+        [...modeParams, category.toUpperCase(), orgId],
         (err, row) => {
           if (err) reject(err);
           else resolve(row);
@@ -3920,6 +3960,7 @@ router.get('/next-tournament', authenticateToken, async (req, res) => {
 router.get('/t1-participants', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
   const { mode, category } = req.query;
+  const orgId = req.user.organizationId || null;
 
   if (!mode || !category) {
     return res.status(400).json({ error: 'Mode and category required' });
@@ -3958,8 +3999,8 @@ router.get('/t1-participants', authenticateToken, async (req, res) => {
     // Get T1 tournament (tournament_number = 1)
     const t1Tournament = await new Promise((resolve, reject) => {
       db.get(
-        `SELECT * FROM tournaments WHERE category_id = $1 AND season = $2 AND tournament_number = 1`,
-        [categoryRow.id, season],
+        `SELECT * FROM tournaments WHERE category_id = $1 AND season = $2 AND tournament_number = 1 AND ($3::int IS NULL OR organization_id = $3)`,
+        [categoryRow.id, season, orgId],
         (err, row) => {
           if (err) reject(err);
           else resolve(row);
@@ -3991,8 +4032,8 @@ router.get('/t1-participants', authenticateToken, async (req, res) => {
     // Get T2 tournament info if exists
     const t2Tournament = await new Promise((resolve, reject) => {
       db.get(
-        `SELECT * FROM tournaments WHERE category_id = $1 AND season = $2 AND tournament_number = 2`,
-        [categoryRow.id, season],
+        `SELECT * FROM tournaments WHERE category_id = $1 AND season = $2 AND tournament_number = 2 AND ($3::int IS NULL OR organization_id = $3)`,
+        [categoryRow.id, season, orgId],
         (err, row) => {
           if (err) reject(err);
           else resolve(row);
@@ -4028,14 +4069,16 @@ router.get('/t1-participants', authenticateToken, async (req, res) => {
     // Use flexible name matching (T2, TOURNOI 2, TOURNOI2)
     const t2NameCondition = "(UPPER(nom) LIKE '%T2%' OR UPPER(nom) LIKE '%TOURNOI 2%' OR UPPER(nom) LIKE '%TOURNOI2%')";
     const t2CatParamIdx = t2ModeParams.length + 1;
+    const t2OrgParamIdx = t2ModeParams.length + 2;
 
     const t2External = await new Promise((resolve, reject) => {
       db.get(
         `SELECT * FROM tournoi_ext
          WHERE ${t2ModeCondition} AND UPPER(categorie) = $${t2CatParamIdx}
          AND ${t2NameCondition}
+         AND ($${t2OrgParamIdx}::int IS NULL OR organization_id = $${t2OrgParamIdx})
          ORDER BY debut DESC LIMIT 1`,
-        [...t2ModeParams, category.toUpperCase()],
+        [...t2ModeParams, category.toUpperCase(), orgId],
         (err, row) => {
           if (err) reject(err);
           else resolve(row);
@@ -4103,6 +4146,7 @@ router.get('/t1-participants', authenticateToken, async (req, res) => {
 router.get('/ranking-for-relance', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
   const { mode, category } = req.query;
+  const orgId = req.user.organizationId || null;
 
   if (!mode || !category) {
     return res.status(400).json({ error: 'Mode and category required' });
@@ -4141,8 +4185,8 @@ router.get('/ranking-for-relance', authenticateToken, async (req, res) => {
     // Get T3 tournament info if exists
     const t3Tournament = await new Promise((resolve, reject) => {
       db.get(
-        `SELECT * FROM tournaments WHERE category_id = $1 AND season = $2 AND tournament_number = 3`,
-        [categoryRow.id, season],
+        `SELECT * FROM tournaments WHERE category_id = $1 AND season = $2 AND tournament_number = 3 AND ($3::int IS NULL OR organization_id = $3)`,
+        [categoryRow.id, season, orgId],
         (err, row) => {
           if (err) reject(err);
           else resolve(row);
@@ -4178,14 +4222,16 @@ router.get('/ranking-for-relance', authenticateToken, async (req, res) => {
     // Use flexible name matching (same as next-tournament endpoint)
     const nameCondition = "(UPPER(nom) LIKE '%T3%' OR UPPER(nom) LIKE '%TOURNOI 3%' OR UPPER(nom) LIKE '%TOURNOI3%')";
     const catParamIdx = modeParams.length + 1;
+    const t3OrgParamIdx = modeParams.length + 2;
 
     const t3External = await new Promise((resolve, reject) => {
       db.get(
         `SELECT * FROM tournoi_ext
          WHERE ${modeCondition} AND UPPER(categorie) = $${catParamIdx}
          AND ${nameCondition}
+         AND ($${t3OrgParamIdx}::int IS NULL OR organization_id = $${t3OrgParamIdx})
          ORDER BY debut DESC LIMIT 1`,
-        [...modeParams, category.toUpperCase()],
+        [...modeParams, category.toUpperCase(), orgId],
         (err, row) => {
           if (err) reject(err);
           else resolve(row);
@@ -4202,8 +4248,9 @@ router.get('/ranking-for-relance', authenticateToken, async (req, res) => {
          FROM rankings r
          LEFT JOIN player_contacts pc ON REPLACE(r.licence, ' ', '') = REPLACE(pc.licence, ' ', '')
          WHERE r.season = $1 AND r.category_id = $2
+           AND ($3::int IS NULL OR r.organization_id = $3)
          ORDER BY r.rank_position ASC`,
-        [season, categoryRow.id],
+        [season, categoryRow.id, orgId],
         (err, rows) => {
           if (err) reject(err);
           else resolve(rows || []);
@@ -4267,6 +4314,7 @@ router.get('/ranking-for-relance', authenticateToken, async (req, res) => {
 router.get('/t1-players', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
   const { mode, category } = req.query;
+  const orgId = req.user.organizationId || null;
 
   if (!mode || !category) {
     return res.status(400).json({ error: 'Mode and category required' });
@@ -4372,14 +4420,16 @@ router.get('/t1-players', authenticateToken, async (req, res) => {
     // Use flexible name matching (T1, TOURNOI 1, TOURNOI1)
     const nameCondition = "(UPPER(nom) LIKE '%T1%' OR UPPER(nom) LIKE '%TOURNOI 1%' OR UPPER(nom) LIKE '%TOURNOI1%')";
     const catParamIdx = modeParams.length + 1;
+    const t1OrgParamIdx = modeParams.length + 2;
 
     const t1External = await new Promise((resolve, reject) => {
       db.get(
         `SELECT * FROM tournoi_ext
          WHERE ${modeCondition} AND UPPER(categorie) = $${catParamIdx}
          AND ${nameCondition}
+         AND ($${t1OrgParamIdx}::int IS NULL OR organization_id = $${t1OrgParamIdx})
          ORDER BY debut DESC LIMIT 1`,
-        [...modeParams, category.toUpperCase()],
+        [...modeParams, category.toUpperCase(), orgId],
         (err, row) => {
           if (err) reject(err);
           else resolve(row);
@@ -4442,6 +4492,7 @@ router.get('/t1-players', authenticateToken, async (req, res) => {
 router.get('/finale-qualified', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
   const { mode, category } = req.query;
+  const orgId = req.user.organizationId || null;
 
   if (!mode || !category) {
     return res.status(400).json({ error: 'Mode and category required' });
@@ -4486,8 +4537,9 @@ router.get('/finale-qualified', authenticateToken, async (req, res) => {
          AND (UPPER(category) = $2 OR UPPER(category) LIKE $3)
          AND status IN ('completed', 'sending')
          AND (test_mode = false OR test_mode IS NULL)
+         AND ($4::int IS NULL OR organization_id = $4)
          ORDER BY sent_at DESC LIMIT 1`,
-        [mode.toUpperCase(), categoryUpper, categoryUpper + '%'],
+        [mode.toUpperCase(), categoryUpper, categoryUpper + '%', orgId],
         (err, row) => {
           if (err) reject(err);
           else resolve(row);
@@ -4503,8 +4555,9 @@ router.get('/finale-qualified', authenticateToken, async (req, res) => {
            WHERE UPPER(subject) LIKE '%' || $1 || '%FINALE DEPARTEMENTALE%'
            AND status IN ('completed', 'sending')
            AND (test_mode = false OR test_mode IS NULL)
+           AND ($2::int IS NULL OR organization_id = $2)
            ORDER BY sent_at DESC LIMIT 1`,
-          [mode.toUpperCase()],
+          [mode.toUpperCase(), orgId],
           (err, row) => {
             if (err) reject(err);
             else resolve(row);
@@ -4519,8 +4572,9 @@ router.get('/finale-qualified', authenticateToken, async (req, res) => {
         `SELECT * FROM tournoi_ext
          WHERE UPPER(mode) = $1 AND UPPER(categorie) = $2
          AND (UPPER(nom) LIKE '%FINALE%' OR UPPER(nom) LIKE '%FINAL%')
+         AND ($3::int IS NULL OR organization_id = $3)
          ORDER BY debut DESC LIMIT 1`,
-        [mode.toUpperCase(), category.toUpperCase()],
+        [mode.toUpperCase(), category.toUpperCase(), orgId],
         (err, row) => {
           if (err) reject(err);
           else resolve(row);
@@ -4537,8 +4591,9 @@ router.get('/finale-qualified', authenticateToken, async (req, res) => {
          FROM rankings r
          LEFT JOIN player_contacts pc ON REPLACE(r.licence, ' ', '') = REPLACE(pc.licence, ' ', '')
          WHERE r.season = $1 AND r.category_id = $2
+           AND ($3::int IS NULL OR r.organization_id = $3)
          ORDER BY r.rank_position ASC`,
-        [season, categoryRow.id],
+        [season, categoryRow.id, orgId],
         (err, rows) => {
           if (err) reject(err);
           else resolve(rows || []);
@@ -4622,6 +4677,7 @@ router.get('/finale-qualified', authenticateToken, async (req, res) => {
 router.post('/send-relance', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
   const { relanceType, mode, category, subject, intro, outro, imageUrl, testMode, testEmail, ccEmail, customData, selectedLicences } = req.body;
+  const orgId = req.user.organizationId || null;
 
   const resend = getResend();
   if (!resend) {
@@ -4698,8 +4754,8 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
 
       const t1Tournament = await new Promise((resolve, reject) => {
         db.get(
-          `SELECT * FROM tournaments WHERE category_id = $1 AND season = $2 AND tournament_number = 1`,
-          [categoryRow.id, season],
+          `SELECT * FROM tournaments WHERE category_id = $1 AND season = $2 AND tournament_number = 1 AND ($3::int IS NULL OR organization_id = $3)`,
+          [categoryRow.id, season, orgId],
           (err, row) => {
             if (err) reject(err);
             else resolve(row);
@@ -4778,8 +4834,9 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
            FROM rankings r
            LEFT JOIN player_contacts pc ON REPLACE(r.licence, ' ', '') = REPLACE(pc.licence, ' ', '')
            WHERE r.season = $1 AND r.category_id = $2
+             AND ($3::int IS NULL OR r.organization_id = $3)
            ORDER BY r.rank_position ASC`,
-          [season, categoryRow.id],
+          [season, categoryRow.id, orgId],
           (err, rows) => {
             if (err) reject(err);
             else resolve(rows || []);
@@ -4845,8 +4902,9 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
              AND (UPPER(category) = $2 OR UPPER(category) LIKE $3)
              AND status IN ('completed', 'sending')
              AND (test_mode = false OR test_mode IS NULL)
+             AND ($4::int IS NULL OR organization_id = $4)
              ORDER BY sent_at DESC LIMIT 1`,
-            [mode.toUpperCase(), categoryUpper, categoryUpper + '%'],
+            [mode.toUpperCase(), categoryUpper, categoryUpper + '%', orgId],
             (err, row) => {
               if (err) reject(err);
               else resolve(row);
@@ -4863,8 +4921,9 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
                       OR subject LIKE '%Convocation Finale - %' || $1 || '%')
                AND status IN ('completed', 'sending')
                AND (test_mode = false OR test_mode IS NULL)
+               AND ($2::int IS NULL OR organization_id = $2)
                ORDER BY sent_at DESC LIMIT 1`,
-              [mode.toUpperCase()],
+              [mode.toUpperCase(), orgId],
               (err, row) => {
                 if (err) reject(err);
                 else resolve(row);
@@ -4888,8 +4947,9 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
            FROM rankings r
            LEFT JOIN player_contacts pc ON REPLACE(r.licence, ' ', '') = REPLACE(pc.licence, ' ', '')
            WHERE r.season = $1 AND r.category_id = $2
+             AND ($3::int IS NULL OR r.organization_id = $3)
            ORDER BY r.rank_position ASC`,
-          [season, categoryRow.id],
+          [season, categoryRow.id, orgId],
           (err, rows) => {
             if (err) reject(err);
             else resolve(rows || []);
@@ -4913,8 +4973,9 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
            AND (UPPER(categorie) = $2 OR UPPER(categorie) LIKE $3)
            AND (UPPER(nom) LIKE '%FINALE%' OR UPPER(nom) LIKE '%FINAL%')
            AND debut >= $4
+           AND ($5::int IS NULL OR organization_id = $5)
            ORDER BY debut ASC LIMIT 1`,
-          [mode.toUpperCase(), categoryUpper, categoryUpper + '%', new Date().toISOString().split('T')[0]],
+          [mode.toUpperCase(), categoryUpper, categoryUpper + '%', new Date().toISOString().split('T')[0], orgId],
           (err, row) => {
             if (err) reject(err);
             else resolve(row);
@@ -4936,8 +4997,8 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
         if (!testMode && customData?.finale_lieu && finale.tournoi_id) {
           await new Promise((resolve, reject) => {
             db.run(
-              `UPDATE tournoi_ext SET lieu = $1 WHERE tournoi_id = $2`,
-              [customData.finale_lieu, finale.tournoi_id],
+              `UPDATE tournoi_ext SET lieu = $1 WHERE tournoi_id = $2 AND ($3::int IS NULL OR organization_id = $3)`,
+              [customData.finale_lieu, finale.tournoi_id, orgId],
               (err) => {
                 if (err) {
                   console.error('Error updating finale location:', err);
@@ -4998,11 +5059,11 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
     // Create campaign record with tracking info
     const campaignId = await new Promise((resolve, reject) => {
       db.run(
-        `INSERT INTO email_campaigns (subject, body, template_key, recipients_count, status, campaign_type, mode, category, sent_by, test_mode)
-         VALUES ($1, $2, $3, $4, 'sending', $5, $6, $7, $8, $9)
+        `INSERT INTO email_campaigns (subject, body, template_key, recipients_count, status, campaign_type, mode, category, sent_by, test_mode, organization_id)
+         VALUES ($1, $2, $3, $4, 'sending', $5, $6, $7, $8, $9, $10)
          RETURNING id`,
         [logSubject, intro, `relance_${relanceType}`, testMode ? 1 : participants.filter(p => p.email).length,
-         `relance_${relanceType}`, mode, category, req.user?.username || 'unknown', testMode ? true : false],
+         `relance_${relanceType}`, mode, category, req.user?.username || 'unknown', testMode ? true : false, orgId],
         function(err) {
           if (err) reject(err);
           else resolve(this.lastID);
@@ -5209,8 +5270,8 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
     await new Promise((resolve) => {
       console.log(`[Relance] Updating campaign ${campaignId}: sent=${results.sent.length}, failed=${results.failed.length}`);
       db.run(
-        `UPDATE email_campaigns SET sent_count = $1, failed_count = $2, status = 'completed', sent_at = CURRENT_TIMESTAMP WHERE id = $3`,
-        [results.sent.length, results.failed.length, campaignId],
+        `UPDATE email_campaigns SET sent_count = $1, failed_count = $2, status = 'completed', sent_at = CURRENT_TIMESTAMP WHERE id = $3 AND ($4::int IS NULL OR organization_id = $4)`,
+        [results.sent.length, results.failed.length, campaignId, orgId],
         (err) => {
           if (err) console.error('[Relance] Error updating campaign status:', err);
           else console.log(`[Relance] Campaign ${campaignId} marked as completed`);

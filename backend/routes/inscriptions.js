@@ -149,6 +149,8 @@ router.post('/tournoi/import', authenticateToken, upload.single('file'), async (
     return res.status(400).json({ error: 'No file uploaded' });
   }
 
+  const orgId = req.user.organizationId || null;
+
   try {
     const fileContent = fs.readFileSync(req.file.path, 'utf-8');
     const records = [];
@@ -193,8 +195,8 @@ router.post('/tournoi/import', authenticateToken, upload.single('file'), async (
         }
 
         const query = `
-          INSERT INTO tournoi_ext (tournoi_id, nom, mode, categorie, taille, debut, fin, grand_coin, taille_cadre, lieu)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+          INSERT INTO tournoi_ext (tournoi_id, nom, mode, categorie, taille, debut, fin, grand_coin, taille_cadre, lieu, organization_id)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
           ON CONFLICT(tournoi_id) DO UPDATE SET
             nom = EXCLUDED.nom,
             mode = EXCLUDED.mode,
@@ -208,7 +210,7 @@ router.post('/tournoi/import', authenticateToken, upload.single('file'), async (
         `;
 
         await new Promise((resolve, reject) => {
-          db.run(query, [tournoiId, nom, mode, categorie, taille, debut || null, fin || null, grandCoin, tailleCadre, lieu], function(err) {
+          db.run(query, [tournoiId, nom, mode, categorie, taille, debut || null, fin || null, grandCoin, tailleCadre, lieu, orgId], function(err) {
             if (err) {
               reject(err);
             } else {
@@ -258,6 +260,8 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
     return res.status(400).json({ error: 'No file uploaded' });
   }
 
+  const orgId = req.user.organizationId || null;
+
   try {
     // Load configurable column mapping, fall back to defaults
     let columnMapping;
@@ -302,7 +306,7 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
 
     // Pre-fetch all tournaments to determine season
     const tournoiMap = await new Promise((resolve, reject) => {
-      db.all('SELECT tournoi_id, debut FROM tournoi_ext', [], (err, rows) => {
+      db.all('SELECT tournoi_id, debut FROM tournoi_ext WHERE ($1::int IS NULL OR organization_id = $1)', [orgId], (err, rows) => {
         if (err) reject(err);
         else {
           const map = {};
@@ -393,9 +397,10 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
                 forfait = $8,
                 commentaire = $9
               WHERE inscription_id = $10
+              AND ($11::int IS NULL OR organization_id = $11)
             `;
             await new Promise((resolve, reject) => {
-              db.run(updateCollisionQuery, [joueurId, tournoiId, timestamp, email, telephone, licence, convoque, forfait, commentaire, inscriptionId], function(err) {
+              db.run(updateCollisionQuery, [joueurId, tournoiId, timestamp, email, telephone, licence, convoque, forfait, commentaire, inscriptionId, orgId], function(err) {
                 if (err) reject(err);
                 else resolve();
               });
@@ -405,7 +410,7 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
             // ID collision with protected source - insert with a new generated ID
             // Find max inscription_id and add offset to generate unique ID within INTEGER range
             const maxIdResult = await new Promise((resolve, reject) => {
-              db.get(`SELECT MAX(inscription_id) as max_id FROM inscriptions`, [], (err, row) => {
+              db.get(`SELECT MAX(inscription_id) as max_id FROM inscriptions WHERE ($1::int IS NULL OR organization_id = $1)`, [orgId], (err, row) => {
                 if (err) reject(err);
                 else resolve(row);
               });
@@ -416,12 +421,12 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
             lastGeneratedId = newId;
             console.log(`[IONOS Import] ID collision with protected source ${idCollision.source}, inserting with new ID: ${newId}`);
             const insertWithNewIdQuery = `
-              INSERT INTO inscriptions (inscription_id, joueur_id, tournoi_id, timestamp, email, telephone, licence, convoque, forfait, commentaire, source)
-              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'ionos')
+              INSERT INTO inscriptions (inscription_id, joueur_id, tournoi_id, timestamp, email, telephone, licence, convoque, forfait, commentaire, source, organization_id)
+              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'ionos', $11)
             `;
             try {
               await new Promise((resolve, reject) => {
-                db.run(insertWithNewIdQuery, [newId, joueurId, tournoiId, timestamp, email, telephone, licence, convoque, forfait, commentaire], function(err) {
+                db.run(insertWithNewIdQuery, [newId, joueurId, tournoiId, timestamp, email, telephone, licence, convoque, forfait, commentaire, orgId], function(err) {
                   if (err) {
                     console.error(`[IONOS Import] Insert with new ID failed: ${err.message}`);
                     reject(err);
@@ -473,9 +478,10 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
               forfait = GREATEST(forfait, $6),
               commentaire = $7
             WHERE inscription_id = $8
+            AND ($9::int IS NULL OR organization_id = $9)
           `;
           await new Promise((resolve, reject) => {
-            db.run(updateQuery, [joueurId, timestamp, email, telephone, convoque, forfait, commentaire, existingInscription.inscription_id], function(err) {
+            db.run(updateQuery, [joueurId, timestamp, email, telephone, convoque, forfait, commentaire, existingInscription.inscription_id, orgId], function(err) {
               if (err) reject(err);
               else resolve();
             });
@@ -486,8 +492,8 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
           // Only update on conflict if existing record is from IONOS (protect manual and player_app)
           console.log(`[IONOS Import] Inserting new inscription: id=${inscriptionId}, licence=${licence}, tournoi=${tournoiId}`);
           const insertQuery = `
-            INSERT INTO inscriptions (inscription_id, joueur_id, tournoi_id, timestamp, email, telephone, licence, convoque, forfait, commentaire, source)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'ionos')
+            INSERT INTO inscriptions (inscription_id, joueur_id, tournoi_id, timestamp, email, telephone, licence, convoque, forfait, commentaire, source, organization_id)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'ionos', $11)
             ON CONFLICT (inscription_id) DO UPDATE SET
               joueur_id = EXCLUDED.joueur_id,
               tournoi_id = EXCLUDED.tournoi_id,
@@ -503,7 +509,7 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
           `;
           try {
             await new Promise((resolve, reject) => {
-              db.run(insertQuery, [inscriptionId, joueurId, tournoiId, timestamp, email, telephone, licence, convoque, forfait, commentaire], function(err) {
+              db.run(insertQuery, [inscriptionId, joueurId, tournoiId, timestamp, email, telephone, licence, convoque, forfait, commentaire, orgId], function(err) {
                 if (err) {
                   console.error(`[IONOS Import] Insert failed for id=${inscriptionId}: ${err.message}`);
                   reject(err);
@@ -567,6 +573,8 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
 
 // DIAGNOSTIC: Find orphaned inscriptions (inscriptions whose tournoi_id doesn't match expected)
 router.get('/diagnostic/n3-inscriptions', authenticateToken, async (req, res) => {
+  const orgId = req.user.organizationId || null;
+
   try {
     // Get all LIBRE N3 tournaments
     const tournaments = await new Promise((resolve, reject) => {
@@ -574,8 +582,9 @@ router.get('/diagnostic/n3-inscriptions', authenticateToken, async (req, res) =>
         SELECT tournoi_id, nom, mode, categorie, debut
         FROM tournoi_ext
         WHERE UPPER(mode) = 'LIBRE' AND UPPER(categorie) LIKE '%N3%'
+        AND ($1::int IS NULL OR organization_id = $1)
         ORDER BY debut DESC
-      `, [], (err, rows) => {
+      `, [orgId], (err, rows) => {
         if (err) reject(err);
         else resolve(rows || []);
       });
@@ -588,10 +597,11 @@ router.get('/diagnostic/n3-inscriptions', authenticateToken, async (req, res) =>
                t.nom as tournoi_nom, t.mode, t.categorie
         FROM inscriptions i
         LEFT JOIN tournoi_ext t ON i.tournoi_id = t.tournoi_id
-        WHERE t.mode IS NULL
-           OR (UPPER(t.mode) = 'LIBRE' AND UPPER(t.categorie) LIKE '%N3%')
+        WHERE (t.mode IS NULL
+           OR (UPPER(t.mode) = 'LIBRE' AND UPPER(t.categorie) LIKE '%N3%'))
+        AND ($1::int IS NULL OR i.organization_id = $1)
         ORDER BY i.tournoi_id
-      `, [], (err, rows) => {
+      `, [orgId], (err, rows) => {
         if (err) reject(err);
         else resolve(rows || []);
       });
@@ -614,10 +624,15 @@ router.get('/diagnostic/n3-inscriptions', authenticateToken, async (req, res) =>
 // Get all external tournaments
 router.get('/tournoi', authenticateToken, async (req, res) => {
   const { mode, categorie } = req.query;
+  const orgId = req.user.organizationId || null;
 
   let query = 'SELECT * FROM tournoi_ext';
   const params = [];
   const conditions = [];
+
+  // Organization filter
+  conditions.push(`($${params.length + 1}::int IS NULL OR organization_id = $${params.length + 1})`);
+  params.push(orgId);
 
   if (mode) {
     // Use mode_mapping table to find all IONOS mode variations for this game_type
@@ -811,6 +826,8 @@ router.post('/seed-import-history', authenticateToken, (req, res) => {
 // Get upcoming tournaments (for the current weekend and next weekend)
 // IMPORTANT: This route must be BEFORE /tournoi/:id to avoid :id catching "upcoming"
 router.get('/tournoi/upcoming', authenticateToken, (req, res) => {
+  const orgId = req.user.organizationId || null;
+
   // Get today's date
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -840,11 +857,12 @@ router.get('/tournoi/upcoming', authenticateToken, (req, res) => {
     LEFT JOIN inscriptions i ON t.tournoi_id = i.tournoi_id
     WHERE t.debut >= $1 AND t.debut <= $2
     AND LOWER(t.nom) NOT LIKE '%finale%'
+    AND ($3::int IS NULL OR t.organization_id = $3)
     GROUP BY t.tournoi_id
     ORDER BY t.debut ASC, t.mode, t.categorie
   `;
 
-  db.all(query, [startDate, endDate], (err, rows) => {
+  db.all(query, [startDate, endDate, orgId], (err, rows) => {
     if (err) {
       console.error('Error fetching upcoming tournaments:', err);
       return res.status(500).json({ error: err.message });
@@ -857,6 +875,8 @@ router.get('/tournoi/upcoming', authenticateToken, (req, res) => {
 
 // Get upcoming finals (within next 4 weeks)
 router.get('/finales/upcoming', authenticateToken, async (req, res) => {
+  const orgId = req.user.organizationId || null;
+
   try {
     // Get qualification settings for determining finalist counts
     const qualificationSettings = await appSettings.getQualificationSettings();
@@ -886,11 +906,12 @@ router.get('/finales/upcoming', authenticateToken, async (req, res) => {
       FROM tournoi_ext t
       WHERE t.debut >= $1 AND t.debut <= $2
       AND LOWER(t.nom) LIKE '%finale%'
+      AND ($3::int IS NULL OR t.organization_id = $3)
       ORDER BY t.debut ASC, t.mode, t.categorie
     `;
 
     const finals = await new Promise((resolve, reject) => {
-      db.all(finalsQuery, [startDate, endDate], (err, rows) => {
+      db.all(finalsQuery, [startDate, endDate, orgId], (err, rows) => {
         if (err) reject(err);
         else resolve(rows || []);
       });
@@ -957,8 +978,8 @@ router.get('/finales/upcoming', authenticateToken, async (req, res) => {
         // Get inscriptions for this tournament
         const inscriptions = await new Promise((resolve, reject) => {
           db.all(
-            `SELECT licence FROM inscriptions WHERE tournoi_id = $1 AND (forfait IS NULL OR forfait != 1)`,
-            [final.tournoi_id],
+            `SELECT licence FROM inscriptions WHERE tournoi_id = $1 AND (forfait IS NULL OR forfait != 1) AND ($2::int IS NULL OR organization_id = $2)`,
+            [final.tournoi_id, orgId],
             (err, rows) => {
               if (err) {
                 console.error(`Inscriptions query error:`, err);
@@ -996,7 +1017,8 @@ router.get('/finales/upcoming', authenticateToken, async (req, res) => {
 
 // Get a specific external tournament
 router.get('/tournoi/:id', authenticateToken, (req, res) => {
-  db.get('SELECT * FROM tournoi_ext WHERE tournoi_id = $1', [req.params.id], (err, row) => {
+  const orgId = req.user.organizationId || null;
+  db.get('SELECT * FROM tournoi_ext WHERE tournoi_id = $1 AND ($2::int IS NULL OR organization_id = $2)', [req.params.id, orgId], (err, row) => {
     if (err) {
       return res.status(500).json({ error: err.message });
     }
@@ -1009,6 +1031,7 @@ router.get('/tournoi/:id', authenticateToken, (req, res) => {
 
 // Get inscriptions for a specific tournament
 router.get('/tournoi/:id/inscriptions', authenticateToken, (req, res) => {
+  const orgId = req.user.organizationId || null;
   const query = `
     SELECT
       i.*,
@@ -1018,10 +1041,11 @@ router.get('/tournoi/:id/inscriptions', authenticateToken, (req, res) => {
     FROM inscriptions i
     LEFT JOIN players p ON REPLACE(i.licence, ' ', '') = REPLACE(p.licence, ' ', '')
     WHERE i.tournoi_id = $1
+    AND ($2::int IS NULL OR i.organization_id = $2)
     ORDER BY i.timestamp ASC
   `;
 
-  db.all(query, [req.params.id], (err, rows) => {
+  db.all(query, [req.params.id, orgId], (err, rows) => {
     if (err) {
       return res.status(500).json({ error: err.message });
     }
@@ -1032,6 +1056,7 @@ router.get('/tournoi/:id/inscriptions', authenticateToken, (req, res) => {
 // Get all inscriptions
 router.get('/', authenticateToken, async (req, res) => {
   const { tournoi_id, licence, source } = req.query;
+  const orgId = req.user.organizationId || null;
 
   // For club role, get their club's display_name to filter
   let clubFilter = null;
@@ -1065,6 +1090,10 @@ router.get('/', authenticateToken, async (req, res) => {
 
   const params = [];
   const conditions = [];
+
+  // Organization filter
+  conditions.push(`($${params.length + 1}::int IS NULL OR i.organization_id = $${params.length + 1})`);
+  params.push(orgId);
 
   if (tournoi_id) {
     conditions.push(`i.tournoi_id = $${params.length + 1}`);
@@ -1105,6 +1134,7 @@ router.post('/create', authenticateToken, async (req, res) => {
     return res.status(403).json({ error: 'Admin access required' });
   }
 
+  const orgId = req.user.organizationId || null;
   const { tournoi_id, licence, email, telephone, convoque, forfait, commentaire } = req.body;
 
   if (!tournoi_id || !licence) {
@@ -1114,7 +1144,7 @@ router.post('/create', authenticateToken, async (req, res) => {
   try {
     // Get the next inscription_id
     const maxIdResult = await new Promise((resolve, reject) => {
-      db.get('SELECT MAX(inscription_id) as max_id FROM inscriptions', [], (err, row) => {
+      db.get('SELECT MAX(inscription_id) as max_id FROM inscriptions WHERE ($1::int IS NULL OR organization_id = $1)', [orgId], (err, row) => {
         if (err) reject(err);
         else resolve(row);
       });
@@ -1128,9 +1158,9 @@ router.post('/create', authenticateToken, async (req, res) => {
     // Insert the new inscription
     await new Promise((resolve, reject) => {
       db.run(`
-        INSERT INTO inscriptions (inscription_id, tournoi_id, licence, email, telephone, convoque, forfait, commentaire, timestamp, source)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), 'manual')
-      `, [nextId, tournoi_id, cleanLicence, email || null, telephone || null, convoque || 0, forfait || 0, commentaire || null], function(err) {
+        INSERT INTO inscriptions (inscription_id, tournoi_id, licence, email, telephone, convoque, forfait, commentaire, timestamp, source, organization_id)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), 'manual', $9)
+      `, [nextId, tournoi_id, cleanLicence, email || null, telephone || null, convoque || 0, forfait || 0, commentaire || null, orgId], function(err) {
         if (err) reject(err);
         else resolve({ id: nextId, changes: this.changes });
       });
@@ -1160,7 +1190,8 @@ router.post('/create', authenticateToken, async (req, res) => {
 
 // Delete all tournoi_ext
 router.delete('/tournoi/all', authenticateToken, (req, res) => {
-  db.run('DELETE FROM tournoi_ext', [], function(err) {
+  const orgId = req.user.organizationId || null;
+  db.run('DELETE FROM tournoi_ext WHERE ($1::int IS NULL OR organization_id = $1)', [orgId], function(err) {
     if (err) {
       return res.status(500).json({ error: err.message });
     }
@@ -1174,7 +1205,8 @@ router.delete('/tournoi/all', authenticateToken, (req, res) => {
 
 // Delete all inscriptions
 router.delete('/all', authenticateToken, (req, res) => {
-  db.run('DELETE FROM inscriptions', [], function(err) {
+  const orgId = req.user.organizationId || null;
+  db.run('DELETE FROM inscriptions WHERE ($1::int IS NULL OR organization_id = $1)', [orgId], function(err) {
     if (err) {
       return res.status(500).json({ error: err.message });
     }
@@ -1619,6 +1651,7 @@ router.post('/tournoi', authenticateToken, async (req, res) => {
     return res.status(403).json({ error: 'Admin access required' });
   }
 
+  const orgId = req.user.organizationId || null;
   const { nom, mode, categorie, taille, debut, fin, grand_coin, taille_cadre, lieu, lieu_2 } = req.body;
 
   if (!nom || !mode || !categorie) {
@@ -1628,7 +1661,7 @@ router.post('/tournoi', authenticateToken, async (req, res) => {
   try {
     // Get the next tournoi_id
     const maxIdResult = await new Promise((resolve, reject) => {
-      db.get('SELECT MAX(tournoi_id) as max_id FROM tournoi_ext', [], (err, row) => {
+      db.get('SELECT MAX(tournoi_id) as max_id FROM tournoi_ext WHERE ($1::int IS NULL OR organization_id = $1)', [orgId], (err, row) => {
         if (err) reject(err);
         else resolve(row);
       });
@@ -1639,9 +1672,9 @@ router.post('/tournoi', authenticateToken, async (req, res) => {
     // Insert the new tournament
     await new Promise((resolve, reject) => {
       db.run(`
-        INSERT INTO tournoi_ext (tournoi_id, nom, mode, categorie, taille, debut, fin, grand_coin, taille_cadre, lieu, lieu_2)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-      `, [nextId, nom, mode, categorie, taille || null, debut || null, fin || null, grand_coin || 0, taille_cadre || null, lieu || null, lieu_2 || null], function(err) {
+        INSERT INTO tournoi_ext (tournoi_id, nom, mode, categorie, taille, debut, fin, grand_coin, taille_cadre, lieu, lieu_2, organization_id)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      `, [nextId, nom, mode, categorie, taille || null, debut || null, fin || null, grand_coin || 0, taille_cadre || null, lieu || null, lieu_2 || null, orgId], function(err) {
         if (err) reject(err);
         else resolve({ id: nextId, changes: this.changes });
       });
@@ -1666,13 +1699,14 @@ router.put('/tournoi/:id', authenticateToken, async (req, res) => {
     return res.status(403).json({ error: 'Admin access required' });
   }
 
+  const orgId = req.user.organizationId || null;
   const { id } = req.params;
   const { nom, mode, categorie, taille, debut, fin, grand_coin, taille_cadre, lieu, lieu_2, status, notify_on_changes } = req.body;
 
   try {
     // Get current tournament data to detect date change
     const currentTournament = await new Promise((resolve, reject) => {
-      db.get('SELECT * FROM tournoi_ext WHERE tournoi_id = $1', [id], (err, row) => {
+      db.get('SELECT * FROM tournoi_ext WHERE tournoi_id = $1 AND ($2::int IS NULL OR organization_id = $2)', [id, orgId], (err, row) => {
         if (err) reject(err);
         else resolve(row);
       });
@@ -1713,6 +1747,7 @@ router.put('/tournoi/:id', authenticateToken, async (req, res) => {
         status = $11,
         notify_on_changes = $12
       WHERE tournoi_id = $13
+      AND ($14::int IS NULL OR organization_id = $14)
     `;
 
     // Determine new status and notify_on_changes values
@@ -1720,7 +1755,7 @@ router.put('/tournoi/:id', authenticateToken, async (req, res) => {
     const newNotifyOnChanges = notify_on_changes !== undefined ? notify_on_changes : (currentTournament.notify_on_changes !== false);
 
     await new Promise((resolve, reject) => {
-      db.run(query, [nom, mode, categorie, taille || null, debut || null, fin || null, grand_coin || 0, taille_cadre, lieu, lieu_2 || null, newStatus, newNotifyOnChanges, id], function(err) {
+      db.run(query, [nom, mode, categorie, taille || null, debut || null, fin || null, grand_coin || 0, taille_cadre, lieu, lieu_2 || null, newStatus, newNotifyOnChanges, id, orgId], function(err) {
         if (err) reject(err);
         else resolve(this.changes);
       });
@@ -1743,7 +1778,7 @@ router.put('/tournoi/:id', authenticateToken, async (req, res) => {
         newDate,
         oldLieu,
         newLieu
-      });
+      }, orgId);
     }
 
     // Log if tournament was cancelled
@@ -1790,7 +1825,7 @@ router.put('/tournoi/:id', authenticateToken, async (req, res) => {
 /**
  * Send email notifications to inscribed players when tournament date or location changes
  */
-async function sendTournamentChangeNotifications(tournoiId, oldTournament, newData, changes) {
+async function sendTournamentChangeNotifications(tournoiId, oldTournament, newData, changes, orgId) {
   const resend = getResend();
   if (!resend) {
     console.log('[Tournament Change] Resend not configured, skipping notifications');
@@ -1810,7 +1845,8 @@ async function sendTournamentChangeNotifications(tournoiId, oldTournament, newDa
         WHERE i.tournoi_id = $1
           AND COALESCE(i.email, p.email) IS NOT NULL
           AND COALESCE(i.email, p.email) LIKE '%@%'
-      `, [tournoiId], (err, rows) => {
+          AND ($2::int IS NULL OR i.organization_id = $2)
+      `, [tournoiId, orgId], (err, rows) => {
         if (err) reject(err);
         else resolve(rows || []);
       });
@@ -1968,6 +2004,7 @@ router.put('/:id', authenticateToken, (req, res) => {
     return res.status(403).json({ error: 'Admin access required' });
   }
 
+  const orgId = req.user.organizationId || null;
   const { id } = req.params;
   const { licence, email, telephone, convoque, forfait, statut, commentaire, source } = req.body;
 
@@ -1982,9 +2019,10 @@ router.put('/:id', authenticateToken, (req, res) => {
       commentaire = $7,
       source = $8
     WHERE inscription_id = $9
+    AND ($10::int IS NULL OR organization_id = $10)
   `;
 
-  db.run(query, [licence, email, telephone, convoque || 0, forfait || 0, statut || 'inscrit', commentaire, source || 'ionos', id], function(err) {
+  db.run(query, [licence, email, telephone, convoque || 0, forfait || 0, statut || 'inscrit', commentaire, source || 'ionos', id, orgId], function(err) {
     if (err) {
       console.error('Error updating inscription:', err);
       return res.status(500).json({ error: err.message });
@@ -1999,6 +2037,7 @@ router.put('/:id', authenticateToken, (req, res) => {
 // Desinscription - mark a player as désinscrit (all users can do this, pre-convocation)
 // This is different from forfait which is only used after official convocation
 router.put('/:id/desinscription', authenticateToken, async (req, res) => {
+  const orgId = req.user.organizationId || null;
   const { id } = req.params;
   const { statut } = req.body; // 'désinscrit' or 'inscrit' (to undo)
 
@@ -2018,7 +2057,8 @@ router.put('/:id/desinscription', authenticateToken, async (req, res) => {
         LEFT JOIN tournoi_ext t ON i.tournoi_id = t.tournoi_id
         LEFT JOIN players p ON REPLACE(i.licence, ' ', '') = REPLACE(p.licence, ' ', '')
         WHERE i.inscription_id = $1
-      `, [id], (err, row) => {
+        AND ($2::int IS NULL OR i.organization_id = $2)
+      `, [id, orgId], (err, row) => {
         if (err) reject(err);
         else resolve(row);
       });
@@ -2031,8 +2071,8 @@ router.put('/:id/desinscription', authenticateToken, async (req, res) => {
     // Update the statut
     await new Promise((resolve, reject) => {
       db.run(
-        `UPDATE inscriptions SET statut = $1 WHERE inscription_id = $2`,
-        [newStatut, id],
+        `UPDATE inscriptions SET statut = $1 WHERE inscription_id = $2 AND ($3::int IS NULL OR organization_id = $3)`,
+        [newStatut, id, orgId],
         function(err) {
           if (err) reject(err);
           else resolve(this.changes);
@@ -2119,6 +2159,7 @@ ${orgName}`;
 
 // Reintegrate a forfait player - set forfait=0
 router.put('/:id/reintegrate', authenticateToken, async (req, res) => {
+  const orgId = req.user.organizationId || null;
   const { id } = req.params;
 
   try {
@@ -2130,7 +2171,8 @@ router.put('/:id/reintegrate', authenticateToken, async (req, res) => {
         FROM inscriptions i
         LEFT JOIN players p ON REPLACE(i.licence, ' ', '') = REPLACE(p.licence, ' ', '')
         WHERE i.inscription_id = $1
-      `, [id], (err, row) => {
+        AND ($2::int IS NULL OR i.organization_id = $2)
+      `, [id, orgId], (err, row) => {
         if (err) reject(err);
         else resolve(row);
       });
@@ -2143,8 +2185,8 @@ router.put('/:id/reintegrate', authenticateToken, async (req, res) => {
     // Update forfait to 0 and ensure convoque = 1 (player returns to "Convoqué" status)
     await new Promise((resolve, reject) => {
       db.run(
-        `UPDATE inscriptions SET forfait = 0, convoque = 1 WHERE inscription_id = $1`,
-        [id],
+        `UPDATE inscriptions SET forfait = 0, convoque = 1 WHERE inscription_id = $1 AND ($2::int IS NULL OR organization_id = $2)`,
+        [id, orgId],
         function(err) {
           if (err) reject(err);
           else resolve(this.changes);
@@ -2177,12 +2219,13 @@ router.delete('/:id', authenticateToken, async (req, res) => {
     return res.status(403).json({ error: 'Admin access required' });
   }
 
+  const orgId = req.user.organizationId || null;
   const { id } = req.params;
 
   try {
     // First get the inscription details for logging
     const inscription = await new Promise((resolve, reject) => {
-      db.get('SELECT licence, tournoi_id FROM inscriptions WHERE inscription_id = $1', [id], (err, row) => {
+      db.get('SELECT licence, tournoi_id FROM inscriptions WHERE inscription_id = $1 AND ($2::int IS NULL OR organization_id = $2)', [id, orgId], (err, row) => {
         if (err) reject(err);
         else resolve(row);
       });
@@ -2194,7 +2237,7 @@ router.delete('/:id', authenticateToken, async (req, res) => {
 
     // Delete the inscription
     await new Promise((resolve, reject) => {
-      db.run('DELETE FROM inscriptions WHERE inscription_id = $1', [id], function(err) {
+      db.run('DELETE FROM inscriptions WHERE inscription_id = $1 AND ($2::int IS NULL OR organization_id = $2)', [id, orgId], function(err) {
         if (err) reject(err);
         else resolve(this.changes);
       });
@@ -2223,6 +2266,8 @@ router.post('/create-test-finale', authenticateToken, async (req, res) => {
     return res.status(403).json({ error: 'Admin access required' });
   }
 
+  const orgId = req.user.organizationId || null;
+
   try {
     // Get the LIBRE R2 category ID
     const category = await new Promise((resolve, reject) => {
@@ -2239,14 +2284,14 @@ router.post('/create-test-finale', authenticateToken, async (req, res) => {
     // Create test finale tournament
     await new Promise((resolve, reject) => {
       db.run(`
-        INSERT INTO tournoi_ext (tournoi_id, nom, mode, categorie, debut, fin, lieu, taille)
-        VALUES (99901, 'Finale Départementale', 'LIBRE', 'R2', '2025-12-15', '2025-12-15', 'Courbevoie', 280)
+        INSERT INTO tournoi_ext (tournoi_id, nom, mode, categorie, debut, fin, lieu, taille, organization_id)
+        VALUES (99901, 'Finale Départementale', 'LIBRE', 'R2', '2025-12-15', '2025-12-15', 'Courbevoie', 280, $1)
         ON CONFLICT (tournoi_id) DO UPDATE SET
           nom = EXCLUDED.nom,
           mode = EXCLUDED.mode,
           categorie = EXCLUDED.categorie,
           debut = EXCLUDED.debut
-      `, [], (err) => {
+      `, [orgId], (err) => {
         if (err) reject(err);
         else resolve();
       });
@@ -2291,10 +2336,10 @@ router.post('/create-test-finale', authenticateToken, async (req, res) => {
     for (const p of players) {
       await new Promise((resolve, reject) => {
         db.run(`
-          INSERT INTO inscriptions (inscription_id, tournoi_id, licence, email, convoque, forfait, timestamp)
-          VALUES ($1, 99901, $2, 'jeff_rallet@hotmail.com', 1, 0, NOW())
+          INSERT INTO inscriptions (inscription_id, tournoi_id, licence, email, convoque, forfait, timestamp, organization_id)
+          VALUES ($1, 99901, $2, 'jeff_rallet@hotmail.com', 1, 0, NOW(), $3)
           ON CONFLICT (inscription_id) DO NOTHING
-        `, [inscriptionId, p.licence], (err) => {
+        `, [inscriptionId, p.licence, orgId], (err) => {
           if (err) reject(err);
           else resolve();
         });
@@ -2359,6 +2404,7 @@ router.post('/test-set-convocation/:id', authenticateToken, async (req, res) => 
     return res.status(403).json({ error: 'Admin access required' });
   }
 
+  const orgId = req.user.organizationId || null;
   const { id } = req.params;
   const { poule, lieu, adresse, heure, notes } = req.body;
 
@@ -2373,13 +2419,15 @@ router.post('/test-set-convocation/:id', authenticateToken, async (req, res) => 
           convocation_heure = $4,
           convocation_notes = $5
         WHERE inscription_id = $6
+        AND ($7::int IS NULL OR organization_id = $7)
       `, [
         poule || 'A',
         lieu || 'Billard Club de Châtillon',
         adresse || '15 rue de la Mairie 92320 Châtillon',
         heure || '14:00',
         notes || null,
-        id
+        id,
+        orgId
       ], function(err) {
         if (err) reject(err);
         else resolve(this);
@@ -2399,6 +2447,7 @@ router.post('/restore-convoque/:mode/:categorie', authenticateToken, async (req,
     return res.status(403).json({ error: 'Admin access required' });
   }
 
+  const orgId = req.user.organizationId || null;
   const { mode, categorie } = req.params;
 
   try {
@@ -2409,9 +2458,10 @@ router.post('/restore-convoque/:mode/:categorie', authenticateToken, async (req,
         WHERE UPPER(mode) LIKE UPPER($1)
           AND UPPER(categorie) LIKE UPPER($2)
           AND debut >= date('now')
+          AND ($3::int IS NULL OR organization_id = $3)
         ORDER BY debut ASC
         LIMIT 1
-      `, [`%${mode}%`, `%${categorie}%`], (err, row) => {
+      `, [`%${mode}%`, `%${categorie}%`, orgId], (err, row) => {
         if (err) reject(err);
         else resolve(row);
       });
@@ -2428,7 +2478,8 @@ router.post('/restore-convoque/:mode/:categorie', authenticateToken, async (req,
         SET convoque = 1
         WHERE tournoi_id = $1
           AND convocation_poule IS NOT NULL
-      `, [tournament.tournoi_id], function(err) {
+          AND ($2::int IS NULL OR organization_id = $2)
+      `, [tournament.tournoi_id, orgId], function(err) {
         if (err) reject(err);
         else resolve({ changes: this.changes });
       });
@@ -2449,6 +2500,8 @@ router.post('/restore-convoque/:mode/:categorie', authenticateToken, async (req,
 
 // Get recent inscriptions with convocation details (for testing)
 router.get('/test-recent-inscriptions', authenticateToken, async (req, res) => {
+  const orgId = req.user.organizationId || null;
+
   try {
     const inscriptions = await new Promise((resolve, reject) => {
       db.all(`
@@ -2457,9 +2510,10 @@ router.get('/test-recent-inscriptions', authenticateToken, async (req, res) => {
                t.nom as tournoi_nom, t.debut
         FROM inscriptions i
         LEFT JOIN tournoi_ext t ON i.tournoi_id = t.tournoi_id
+        WHERE ($1::int IS NULL OR i.organization_id = $1)
         ORDER BY t.debut DESC
         LIMIT 20
-      `, [], (err, rows) => {
+      `, [orgId], (err, rows) => {
         if (err) reject(err);
         else resolve(rows);
       });
@@ -2476,6 +2530,8 @@ router.get('/test-recent-inscriptions', authenticateToken, async (req, res) => {
 
 // Get upcoming tournaments (within 2 weeks) that need relances
 router.get('/upcoming-relances', authenticateToken, async (req, res) => {
+  const orgId = req.user.organizationId || null;
+
   try {
     // Get qualification settings for determining finalist counts
     const qualificationSettings = await appSettings.getQualificationSettings();
@@ -2499,8 +2555,9 @@ router.get('/upcoming-relances', authenticateToken, async (req, res) => {
         FROM tournoi_ext t
         LEFT JOIN tournament_relances r ON t.tournoi_id = r.tournoi_id
         WHERE t.debut >= $1 AND t.debut <= $2
+        AND ($3::int IS NULL OR t.organization_id = $3)
         ORDER BY t.debut ASC
-      `, [oneWeekFromNow.toISOString().split('T')[0], twoWeeksFromNow.toISOString().split('T')[0]], (err, rows) => {
+      `, [oneWeekFromNow.toISOString().split('T')[0], twoWeeksFromNow.toISOString().split('T')[0], orgId], (err, rows) => {
         if (err) reject(err);
         else resolve(rows || []);
       });
@@ -2556,8 +2613,8 @@ router.get('/upcoming-relances', authenticateToken, async (req, res) => {
         // Get inscriptions for this tournament (non-forfait)
         const inscriptions = await new Promise((resolve, reject) => {
           db.all(
-            `SELECT licence FROM inscriptions WHERE tournoi_id = $1 AND (forfait IS NULL OR forfait != 1)`,
-            [t.tournoi_id],
+            `SELECT licence FROM inscriptions WHERE tournoi_id = $1 AND (forfait IS NULL OR forfait != 1) AND ($2::int IS NULL OR organization_id = $2)`,
+            [t.tournoi_id, orgId],
             (err, rows) => {
               if (err) reject(err);
               else resolve(rows || []);
@@ -2611,6 +2668,7 @@ router.get('/upcoming-relances', authenticateToken, async (req, res) => {
 // Mark relance by mode/category/type (auto-find the tournament)
 // NOTE: This route MUST come BEFORE /relances/:tournoi_id to avoid Express matching 'mark-by-type' as a tournoi_id
 router.post('/relances/mark-by-type', authenticateToken, async (req, res) => {
+  const orgId = req.user.organizationId || null;
   const { mode, category, relanceType, recipients_count } = req.body;
   const sent_by = req.user.username;
 
@@ -2644,9 +2702,10 @@ router.post('/relances/mark-by-type', authenticateToken, async (req, res) => {
           AND (UPPER(categorie) = $2 OR UPPER(categorie) LIKE $3)
           AND UPPER(nom) LIKE UPPER($4)
           AND debut >= $5 AND debut <= $6
+          AND ($7::int IS NULL OR organization_id = $7)
         ORDER BY debut ASC
         LIMIT 1
-      `, [mode, categoryUpper, categoryUpper + ' %', tournamentNamePattern, today.toISOString().split('T')[0], fourWeeksFromNow.toISOString().split('T')[0]], (err, row) => {
+      `, [mode, categoryUpper, categoryUpper + ' %', tournamentNamePattern, today.toISOString().split('T')[0], fourWeeksFromNow.toISOString().split('T')[0], orgId], (err, row) => {
         if (err) reject(err);
         else resolve(row);
       });
@@ -2741,13 +2800,15 @@ router.get('/relances', authenticateToken, async (req, res) => {
  * Available to all authenticated users
  */
 router.get('/tournoi/:id/simulation', authenticateToken, async (req, res) => {
+  const orgId = req.user.organizationId || null;
+
   try {
     // Get qualification settings for determining finalist counts
     const qualificationSettings = await appSettings.getQualificationSettings();
 
     // Get tournament details
     const tournament = await new Promise((resolve, reject) => {
-      db.get('SELECT * FROM tournoi_ext WHERE tournoi_id = $1', [req.params.id], (err, row) => {
+      db.get('SELECT * FROM tournoi_ext WHERE tournoi_id = $1 AND ($2::int IS NULL OR organization_id = $2)', [req.params.id, orgId], (err, row) => {
         if (err) reject(err);
         else resolve(row);
       });
@@ -2778,7 +2839,8 @@ router.get('/tournoi/:id/simulation', authenticateToken, async (req, res) => {
         FROM inscriptions i
         LEFT JOIN players p ON REPLACE(i.licence, ' ', '') = REPLACE(p.licence, ' ', '')
         WHERE i.tournoi_id = $1
-      `, [req.params.id], (err, rows) => {
+        AND ($2::int IS NULL OR i.organization_id = $2)
+      `, [req.params.id, orgId], (err, rows) => {
         if (err) reject(err);
         else resolve(rows || []);
       });
@@ -3127,6 +3189,7 @@ router.post('/bulk-convoque-past', authenticateToken, async (req, res) => {
     return res.status(403).json({ error: 'Admin access required' });
   }
 
+  const orgId = req.user.organizationId || null;
   const { beforeDate } = req.body;
   const cutoffDate = beforeDate || '2026-01-03';
 
@@ -3140,7 +3203,8 @@ router.post('/bulk-convoque-past', authenticateToken, async (req, res) => {
         AND (i.convoque = 0 OR i.convoque IS NULL)
         AND (i.forfait = 0 OR i.forfait IS NULL)
         AND (i.statut IS NULL OR i.statut != 'désinscrit')
-      `, [cutoffDate], (err, row) => {
+        AND ($2::int IS NULL OR i.organization_id = $2)
+      `, [cutoffDate, orgId], (err, row) => {
         if (err) reject(err);
         else resolve(row);
       });
@@ -3152,11 +3216,12 @@ router.post('/bulk-convoque-past', authenticateToken, async (req, res) => {
     const updateResult = await new Promise((resolve, reject) => {
       db.run(`
         UPDATE inscriptions SET convoque = 1
-        WHERE tournoi_id IN (SELECT tournoi_id FROM tournoi_ext WHERE debut < $1)
+        WHERE tournoi_id IN (SELECT tournoi_id FROM tournoi_ext WHERE debut < $1 AND ($2::int IS NULL OR organization_id = $2))
         AND (convoque = 0 OR convoque IS NULL)
         AND (forfait = 0 OR forfait IS NULL)
         AND (statut IS NULL OR statut != 'désinscrit')
-      `, [cutoffDate], function(err) {
+        AND ($2::int IS NULL OR organization_id = $2)
+      `, [cutoffDate, orgId], function(err) {
         if (err) reject(err);
         else resolve({ changes: this.changes });
       });

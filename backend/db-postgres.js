@@ -1253,6 +1253,7 @@ async function initializeDatabase() {
     await client.query(`ALTER TABLE scheduled_emails ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)`);
     await client.query(`ALTER TABLE player_invitations ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)`);
     await client.query(`ALTER TABLE admin_activity_logs ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)`);
+    await client.query(`ALTER TABLE organization_logo ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)`);
 
     // Indexes for org-scoped queries
     await client.query(`CREATE INDEX IF NOT EXISTS idx_tournoi_ext_org ON tournoi_ext(organization_id)`);
@@ -1286,6 +1287,7 @@ async function initializeDatabase() {
     await client.query(`UPDATE scheduled_emails SET organization_id = 1 WHERE organization_id IS NULL`);
     await client.query(`UPDATE player_invitations SET organization_id = 1 WHERE organization_id IS NULL`);
     await client.query(`UPDATE admin_activity_logs SET organization_id = 1 WHERE organization_id IS NULL`);
+    await client.query(`UPDATE organization_logo SET organization_id = 1 WHERE organization_id IS NULL`);
 
     // Migrate CDB-specific settings from app_settings to organization_settings for org #1
     const orgSettingsKeys = [

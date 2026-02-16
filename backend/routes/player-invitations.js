@@ -51,9 +51,11 @@ https://cdbhs-player-app-production.up.railway.app/`;
 // Get invitation statistics
 router.get('/stats', authenticateToken, async (req, res) => {
   try {
+    const orgId = req.user.organizationId || null;
+
     // Count invitations sent
     const invitationStats = await new Promise((resolve, reject) => {
-      db.get(`SELECT COUNT(*) as total_sent FROM player_invitations`, [], (err, row) => {
+      db.get(`SELECT COUNT(*) as total_sent FROM player_invitations WHERE ($1::int IS NULL OR organization_id = $1)`, [orgId], (err, row) => {
         if (err) reject(err);
         else resolve(row || { total_sent: 0 });
       });
@@ -72,11 +74,12 @@ router.get('/stats', authenticateToken, async (req, res) => {
       db.get(`
         SELECT COUNT(*) as pending
         FROM player_invitations pi
-        WHERE NOT EXISTS (
+        WHERE ($1::int IS NULL OR pi.organization_id = $1)
+          AND NOT EXISTS (
           SELECT 1 FROM player_accounts pa
           WHERE REPLACE(pa.licence, ' ', '') = REPLACE(pi.licence, ' ', '')
         )
-      `, [], (err, row) => {
+      `, [orgId], (err, row) => {
         if (err) reject(err);
         else resolve(row || { pending: 0 });
       });
@@ -102,16 +105,17 @@ router.get('/stats', authenticateToken, async (req, res) => {
 router.get('/', authenticateToken, async (req, res) => {
   try {
     const { club, status, search, limit = 100, offset = 0 } = req.query;
+    const orgId = req.user.organizationId || null;
 
     let query = `
       SELECT pi.*,
              pc.email as contact_email, pc.telephone
       FROM player_invitations pi
       LEFT JOIN player_contacts pc ON pi.player_contact_id = pc.id
-      WHERE 1=1
+      WHERE ($1::int IS NULL OR pi.organization_id = $1)
     `;
-    const params = [];
-    let paramIndex = 1;
+    const params = [orgId];
+    let paramIndex = 2;
 
     if (club) {
       query += ` AND pi.club = $${paramIndex++}`;
@@ -142,9 +146,9 @@ router.get('/', authenticateToken, async (req, res) => {
     });
 
     // Get total count for pagination
-    let countQuery = `SELECT COUNT(*) as total FROM player_invitations pi WHERE 1=1`;
-    const countParams = [];
-    let countParamIndex = 1;
+    let countQuery = `SELECT COUNT(*) as total FROM player_invitations pi WHERE ($1::int IS NULL OR pi.organization_id = $1)`;
+    const countParams = [orgId];
+    let countParamIndex = 2;
 
     if (club) {
       countQuery += ` AND pi.club = $${countParamIndex++}`;
@@ -628,12 +632,13 @@ router.post('/send', authenticateToken, async (req, res) => {
             });
           } else {
             // Create new invitation record
+            const orgId = req.user.organizationId || null;
             await new Promise((resolve, reject) => {
               db.run(
                 `INSERT INTO player_invitations
-                 (player_contact_id, licence, email, first_name, last_name, club, sent_by_user_id, sent_by_username)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-                [player.id, player.licence, player.email, player.first_name, player.last_name, player.club, req.user?.userId, req.user?.username],
+                 (player_contact_id, licence, email, first_name, last_name, club, sent_by_user_id, sent_by_username, organization_id)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+                [player.id, player.licence, player.email, player.first_name, player.last_name, player.club, req.user?.userId, req.user?.username, orgId],
                 (err) => {
                   if (err) reject(err);
                   else resolve();
@@ -754,10 +759,12 @@ router.post('/resend/:id', authenticateToken, async (req, res) => {
     return res.status(500).json({ error: 'Configuration email manquante (RESEND_API_KEY)' });
   }
 
+  const orgId = req.user.organizationId || null;
+
   try {
     // Get the invitation
     const invitation = await new Promise((resolve, reject) => {
-      db.get('SELECT * FROM player_invitations WHERE id = $1', [id], (err, row) => {
+      db.get('SELECT * FROM player_invitations WHERE id = $1 AND ($2::int IS NULL OR organization_id = $2)', [id, orgId], (err, row) => {
         if (err) reject(err);
         else resolve(row);
       });
@@ -933,13 +940,16 @@ router.post('/resend-batch', authenticateToken, async (req, res) => {
 
   const resend = new Resend(process.env.RESEND_API_KEY);
 
+  const orgId = req.user.organizationId || null;
+
   try {
     // Get all pending invitations that match the IDs
     const placeholders = invitation_ids.map((_, i) => `$${i + 1}`).join(', ');
+    const orgParamIdx = invitation_ids.length + 1;
     const invitations = await new Promise((resolve, reject) => {
       db.all(
-        `SELECT * FROM player_invitations WHERE id IN (${placeholders}) AND has_signed_up IS NOT TRUE`,
-        invitation_ids,
+        `SELECT * FROM player_invitations WHERE id IN (${placeholders}) AND has_signed_up IS NOT TRUE AND ($${orgParamIdx}::int IS NULL OR organization_id = $${orgParamIdx})`,
+        [...invitation_ids, orgId],
         (err, rows) => {
           if (err) reject(err);
           else resolve(rows || []);
@@ -1106,11 +1116,13 @@ router.post('/resend-batch', authenticateToken, async (req, res) => {
 // Sync signed-up status from player_accounts
 router.post('/sync-signups', authenticateToken, async (req, res) => {
   try {
+    const orgId = req.user.organizationId || null;
+
     // Get all pending invitations
     const pendingInvitations = await new Promise((resolve, reject) => {
       db.all(
-        `SELECT id, licence FROM player_invitations WHERE has_signed_up IS NOT TRUE`,
-        [],
+        `SELECT id, licence FROM player_invitations WHERE has_signed_up IS NOT TRUE AND ($1::int IS NULL OR organization_id = $1)`,
+        [orgId],
         (err, rows) => {
           if (err) {
             console.error('Error fetching pending invitations:', err);
@@ -1194,11 +1206,12 @@ router.post('/sync-signups', authenticateToken, async (req, res) => {
 router.delete('/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
+    const orgId = req.user.organizationId || null;
 
     const result = await new Promise((resolve, reject) => {
       db.run(
-        'DELETE FROM player_invitations WHERE id = $1',
-        [id],
+        'DELETE FROM player_invitations WHERE id = $1 AND ($2::int IS NULL OR organization_id = $2)',
+        [id, orgId],
         function(err) {
           if (err) reject(err);
           else resolve({ changes: this.changes });
@@ -1220,10 +1233,11 @@ router.delete('/:id', authenticateToken, async (req, res) => {
 // Get list of clubs for filtering (from official clubs table only)
 router.get('/clubs', authenticateToken, async (req, res) => {
   try {
+    const orgId = req.user.organizationId || null;
     const clubs = await new Promise((resolve, reject) => {
       db.all(
-        `SELECT name FROM clubs ORDER BY name`,
-        [],
+        `SELECT name FROM clubs WHERE ($1::int IS NULL OR organization_id = $1) ORDER BY name`,
+        [orgId],
         (err, rows) => {
           if (err) reject(err);
           else resolve(rows || []);
