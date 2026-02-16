@@ -70,6 +70,38 @@
       display: inline-block; background: #e8f5e9; color: #2e7d32; padding: 2px 8px;
       border-radius: 10px; font-size: 11px; font-weight: 600; margin-left: 6px;
     }
+
+    /* Create form */
+    .create-form {
+      display: none; background: #f8f9fa; border: 1px solid #e0e0e0; border-radius: 8px;
+      padding: 16px; margin-bottom: 16px;
+    }
+    .create-form.active { display: block; }
+    .create-form h4 { margin: 0 0 12px 0; font-size: 14px; color: #333; }
+    .create-form .form-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 10px; }
+    .create-form .form-group { display: flex; flex-direction: column; gap: 4px; }
+    .create-form label { font-size: 11px; font-weight: 600; color: #666; text-transform: uppercase; }
+    .create-form input, .create-form select {
+      padding: 7px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; min-width: 140px;
+    }
+    .create-form input:focus, .create-form select:focus {
+      border-color: var(--color-primary, #1F4788); outline: none; box-shadow: 0 0 0 2px rgba(31,71,136,0.1);
+    }
+    .btn-create {
+      padding: 6px 14px; background: var(--color-primary, #1F4788); color: white; border: none;
+      border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer;
+    }
+    .btn-create:hover { opacity: 0.9; }
+    .btn-create-small {
+      padding: 4px 12px; background: #e8f5e9; color: #2e7d32; border: 1px solid #c8e6c9;
+      border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; margin-left: 10px;
+    }
+    .btn-create-small:hover { background: #c8e6c9; }
+    .btn-cancel {
+      padding: 6px 14px; background: #eee; color: #666; border: none;
+      border-radius: 6px; font-size: 12px; cursor: pointer; margin-left: 6px;
+    }
+    .btn-cancel:hover { background: #ddd; }
   </style>
 </head>
 <body>
@@ -126,7 +158,26 @@
     <!-- ==================== LIGUES TAB ==================== -->
     <div class="tab-content active" id="tab-ligues">
       <div class="card">
-        <h3>Ligues FFB <span class="count-badge" id="liguesCount">-</span></h3>
+        <h3>Ligues FFB <span class="count-badge" id="liguesCount">-</span>
+          <button class="btn-create-small" onclick="toggleCreateForm('ligue')">+ Ajouter</button>
+        </h3>
+        <div class="create-form" id="createLigueForm">
+          <h4>Créer une ligue (données test)</h4>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Numéro</label>
+              <input type="text" id="newLigueNumero" placeholder="ex: 99">
+            </div>
+            <div class="form-group">
+              <label>Nom</label>
+              <input type="text" id="newLigueNom" placeholder="ex: Ligue Test">
+            </div>
+            <div class="form-group" style="justify-content: flex-end;">
+              <button class="btn-create" onclick="createLigue()">Créer</button>
+              <button class="btn-cancel" onclick="toggleCreateForm('ligue')">Annuler</button>
+            </div>
+          </div>
+        </div>
         <div class="table-scroll">
           <table class="data-table">
             <thead>
@@ -148,7 +199,32 @@
     <!-- ==================== CLUBS TAB ==================== -->
     <div class="tab-content" id="tab-clubs">
       <div class="card">
-        <h3>Clubs FFB <span class="count-badge" id="clubsCount">-</span></h3>
+        <h3>Clubs FFB <span class="count-badge" id="clubsCount">-</span>
+          <button class="btn-create-small" onclick="toggleCreateForm('cdb')">+ Ajouter CDB</button>
+        </h3>
+        <div class="create-form" id="createCdbForm">
+          <h4>Créer un CDB (données test)</h4>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Code CDB</label>
+              <input type="text" id="newCdbCode" placeholder="ex: 99">
+            </div>
+            <div class="form-group">
+              <label>Ligue</label>
+              <select id="newCdbLigue">
+                <option value="">-- Sélectionner --</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Nom (optionnel)</label>
+              <input type="text" id="newCdbNom" placeholder="ex: CDB Test">
+            </div>
+            <div class="form-group" style="justify-content: flex-end;">
+              <button class="btn-create" onclick="createCdb()">Créer</button>
+              <button class="btn-cancel" onclick="toggleCreateForm('cdb')">Annuler</button>
+            </div>
+          </div>
+        </div>
         <div class="filter-bar">
           <select id="clubFilterLigue" onchange="loadClubs()">
             <option value="">Toutes les ligues</option>
@@ -187,7 +263,54 @@
     <!-- ==================== LICENCES TAB ==================== -->
     <div class="tab-content" id="tab-licences">
       <div class="card">
-        <h3>Licences FFB <span class="count-badge" id="licencesCount">-</span></h3>
+        <h3>Licences FFB <span class="count-badge" id="licencesCount">-</span>
+          <button class="btn-create-small" onclick="toggleCreateForm('licence')">+ Ajouter</button>
+        </h3>
+        <div class="create-form" id="createLicenceForm">
+          <h4>Créer une licence (données test)</h4>
+          <div class="form-row">
+            <div class="form-group">
+              <label>N° Licence</label>
+              <input type="text" id="newLicLicence" placeholder="ex: 999999">
+            </div>
+            <div class="form-group">
+              <label>Prénom</label>
+              <input type="text" id="newLicPrenom" placeholder="Jean">
+            </div>
+            <div class="form-group">
+              <label>Nom</label>
+              <input type="text" id="newLicNom" placeholder="DUPONT">
+            </div>
+            <div class="form-group">
+              <label>Email</label>
+              <input type="email" id="newLicEmail" placeholder="jean@test.fr">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Ligue</label>
+              <select id="newLicLigue" onchange="onNewLicLigueChanged()">
+                <option value="">-- Sélectionner --</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>CDB</label>
+              <select id="newLicCdb" onchange="onNewLicCdbChanged()">
+                <option value="">-- Sélectionner --</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Club</label>
+              <select id="newLicClub">
+                <option value="">-- Sélectionner --</option>
+              </select>
+            </div>
+            <div class="form-group" style="justify-content: flex-end;">
+              <button class="btn-create" onclick="createLicence()">Créer</button>
+              <button class="btn-cancel" onclick="toggleCreateForm('licence')">Annuler</button>
+            </div>
+          </div>
+        </div>
         <div class="filter-bar">
           <select id="licFilterCdb" onchange="onLicCdbChanged()">
             <option value="">Tous les CDB</option>
@@ -476,6 +599,154 @@
 
       } catch (error) {
         console.error('Error loading licences:', error);
+      }
+    }
+
+    // ==================== CREATE FORMS ====================
+
+    // Cached data for create form dropdowns
+    let allLigues = [];
+    let allCdbs = [];
+
+    function toggleCreateForm(type) {
+      const form = document.getElementById('create' + type.charAt(0).toUpperCase() + type.slice(1) + 'Form');
+      form.classList.toggle('active');
+
+      // Load dropdowns when opening
+      if (form.classList.contains('active')) {
+        if (type === 'cdb') loadCreateCdbDropdowns();
+        if (type === 'licence') loadCreateLicenceDropdowns();
+      }
+    }
+
+    async function loadCreateCdbDropdowns() {
+      if (allLigues.length === 0) {
+        const res = await authFetch(`${API_URL}/ffb/ligues`);
+        allLigues = await res.json();
+      }
+      const sel = document.getElementById('newCdbLigue');
+      sel.innerHTML = '<option value="">-- Sélectionner --</option>' +
+        allLigues.map(l => `<option value="${l.numero}">${l.nom || l.numero}</option>`).join('');
+    }
+
+    async function loadCreateLicenceDropdowns() {
+      if (allLigues.length === 0) {
+        const res = await authFetch(`${API_URL}/ffb/ligues`);
+        allLigues = await res.json();
+      }
+      if (allCdbs.length === 0) {
+        const res = await authFetch(`${API_URL}/ffb/cdbs`);
+        allCdbs = await res.json();
+      }
+      const ligueSel = document.getElementById('newLicLigue');
+      ligueSel.innerHTML = '<option value="">-- Sélectionner --</option>' +
+        allLigues.map(l => `<option value="${l.numero}">${l.nom || l.numero}</option>`).join('');
+      document.getElementById('newLicCdb').innerHTML = '<option value="">-- Sélectionner --</option>';
+      document.getElementById('newLicClub').innerHTML = '<option value="">-- Sélectionner --</option>';
+    }
+
+    function onNewLicLigueChanged() {
+      const ligue = document.getElementById('newLicLigue').value;
+      const cdbSel = document.getElementById('newLicCdb');
+      const filtered = ligue ? allCdbs.filter(c => c.ligue_numero === ligue) : allCdbs;
+      cdbSel.innerHTML = '<option value="">-- Sélectionner --</option>' +
+        filtered.map(c => `<option value="${c.code}">Dept. ${c.code} (${c.club_count || 0} clubs)</option>`).join('');
+      document.getElementById('newLicClub').innerHTML = '<option value="">-- Sélectionner --</option>';
+    }
+
+    async function onNewLicCdbChanged() {
+      const cdb = document.getElementById('newLicCdb').value;
+      const clubSel = document.getElementById('newLicClub');
+      if (!cdb) {
+        clubSel.innerHTML = '<option value="">-- Sélectionner --</option>';
+        return;
+      }
+      try {
+        const res = await authFetch(`${API_URL}/ffb/licences/filter-options?cdb=${encodeURIComponent(cdb)}`);
+        const opts = await res.json();
+        clubSel.innerHTML = '<option value="">-- Sélectionner --</option>' +
+          (opts.clubs || []).map(c => `<option value="${c.numero}">${c.nom}</option>`).join('');
+      } catch (e) {
+        console.error('Error loading clubs:', e);
+      }
+    }
+
+    async function createLigue() {
+      const numero = document.getElementById('newLigueNumero').value.trim();
+      const nom = document.getElementById('newLigueNom').value.trim();
+      if (!numero || !nom) return alert('Numéro et nom requis');
+
+      try {
+        const res = await authFetch(`${API_URL}/ffb/create/ligue`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ numero, nom })
+        });
+        const data = await res.json();
+        if (!res.ok) return alert(data.error || 'Erreur');
+        alert(data.message);
+        document.getElementById('newLigueNumero').value = '';
+        document.getElementById('newLigueNom').value = '';
+        toggleCreateForm('ligue');
+        allLigues = []; // Reset cache
+        loadLigues();
+      } catch (e) {
+        alert('Erreur: ' + e.message);
+      }
+    }
+
+    async function createCdb() {
+      const code = document.getElementById('newCdbCode').value.trim();
+      const ligue_numero = document.getElementById('newCdbLigue').value;
+      const nom = document.getElementById('newCdbNom').value.trim();
+      if (!code || !ligue_numero) return alert('Code et ligue requis');
+
+      try {
+        const res = await authFetch(`${API_URL}/ffb/create/cdb`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code, ligue_numero, nom })
+        });
+        const data = await res.json();
+        if (!res.ok) return alert(data.error || 'Erreur');
+        alert(data.message);
+        document.getElementById('newCdbCode').value = '';
+        document.getElementById('newCdbNom').value = '';
+        toggleCreateForm('cdb');
+        allCdbs = []; // Reset cache
+        loadClubs();
+      } catch (e) {
+        alert('Erreur: ' + e.message);
+      }
+    }
+
+    async function createLicence() {
+      const licence = document.getElementById('newLicLicence').value.trim();
+      const prenom = document.getElementById('newLicPrenom').value.trim();
+      const nom = document.getElementById('newLicNom').value.trim();
+      const email = document.getElementById('newLicEmail').value.trim();
+      const ligue_numero = document.getElementById('newLicLigue').value;
+      const cdb_code = document.getElementById('newLicCdb').value;
+      const num_club = document.getElementById('newLicClub').value;
+      if (!licence || !prenom || !nom) return alert('Licence, prénom et nom requis');
+
+      try {
+        const res = await authFetch(`${API_URL}/ffb/create/licence`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ licence, prenom, nom, email, ligue_numero, cdb_code, num_club })
+        });
+        const data = await res.json();
+        if (!res.ok) return alert(data.error || 'Erreur');
+        alert(data.message);
+        document.getElementById('newLicLicence').value = '';
+        document.getElementById('newLicPrenom').value = '';
+        document.getElementById('newLicNom').value = '';
+        document.getElementById('newLicEmail').value = '';
+        toggleCreateForm('licence');
+        loadLicences(currentLicPage);
+      } catch (e) {
+        alert('Erreur: ' + e.message);
       }
     }
 

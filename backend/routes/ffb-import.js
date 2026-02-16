@@ -655,6 +655,99 @@ router.get('/licences/filter-options', async (req, res) => {
   }
 });
 
+// ============= CREATE INDIVIDUAL FFB RECORDS (TEST DATA) =============
+
+// POST /api/ffb/create/ligue — Create a single ligue record
+router.post('/create/ligue', async (req, res) => {
+  try {
+    const { numero, nom } = req.body;
+    if (!numero || !nom) {
+      return res.status(400).json({ error: 'Numéro et nom requis' });
+    }
+
+    const existing = await dbGet('SELECT numero FROM ffb_ligues WHERE numero = $1', [numero]);
+    if (existing) {
+      return res.status(409).json({ error: `La ligue ${numero} existe déjà` });
+    }
+
+    await dbRun(
+      'INSERT INTO ffb_ligues (numero, nom) VALUES ($1, $2)',
+      [numero.trim(), nom.trim()]
+    );
+
+    res.json({ success: true, message: `Ligue ${numero} créée` });
+  } catch (error) {
+    console.error('Error creating FFB ligue:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/ffb/create/cdb — Create a single CDB record
+router.post('/create/cdb', async (req, res) => {
+  try {
+    const { code, ligue_numero, nom } = req.body;
+    if (!code || !ligue_numero) {
+      return res.status(400).json({ error: 'Code et ligue requis' });
+    }
+
+    // Validate ligue exists
+    const ligue = await dbGet('SELECT numero FROM ffb_ligues WHERE numero = $1', [ligue_numero]);
+    if (!ligue) {
+      return res.status(404).json({ error: `Ligue ${ligue_numero} introuvable` });
+    }
+
+    const existing = await dbGet('SELECT code FROM ffb_cdbs WHERE code = $1', [code]);
+    if (existing) {
+      return res.status(409).json({ error: `Le CDB ${code} existe déjà` });
+    }
+
+    await dbRun(
+      'INSERT INTO ffb_cdbs (code, ligue_numero, nom) VALUES ($1, $2, $3)',
+      [code.trim(), ligue_numero.trim(), (nom || '').trim()]
+    );
+
+    res.json({ success: true, message: `CDB ${code} créé` });
+  } catch (error) {
+    console.error('Error creating FFB CDB:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/ffb/create/licence — Create a single licence record
+router.post('/create/licence', async (req, res) => {
+  try {
+    const { licence, ligue_numero, cdb_code, num_club, prenom, nom, email } = req.body;
+    if (!licence || !nom || !prenom) {
+      return res.status(400).json({ error: 'Licence, nom et prénom requis' });
+    }
+
+    const existing = await dbGet('SELECT licence FROM ffb_licences WHERE licence = $1', [licence]);
+    if (existing) {
+      return res.status(409).json({ error: `La licence ${licence} existe déjà` });
+    }
+
+    // Validate club if provided
+    if (num_club) {
+      const club = await dbGet('SELECT numero FROM ffb_clubs WHERE numero = $1', [num_club]);
+      if (!club) {
+        return res.status(404).json({ error: `Club ${num_club} introuvable` });
+      }
+    }
+
+    await dbRun(
+      `INSERT INTO ffb_licences (licence, ligue_numero, cdb_code, num_club, prenom, nom, email)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [licence.trim(), (ligue_numero || '').trim() || null, (cdb_code || '').trim() || null,
+       (num_club || '').trim() || null, prenom.trim(), nom.trim(), (email || '').trim() || null]
+    );
+
+    res.json({ success: true, message: `Licence ${licence} créée (${prenom} ${nom})` });
+  } catch (error) {
+    console.error('Error creating FFB licence:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ============= SYNC PLAYERS FROM FFB LICENCES =============
 
 // GET /api/ffb/sync/preview — Preview what will be synced (dry run)
