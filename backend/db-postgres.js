@@ -1369,6 +1369,9 @@ async function initializeDatabase() {
       ON CONFLICT (id) DO NOTHING
     `);
 
+    // Reset organizations sequence to max id (needed after explicit id inserts)
+    await client.query(`SELECT setval(pg_get_serial_sequence('organizations', 'id'), COALESCE((SELECT MAX(id) FROM organizations), 1))`);
+
     // Create demo admin user if not exists
     const demoAdminExists = await client.query(`SELECT id FROM users WHERE username = 'demo'`);
     if (demoAdminExists.rows.length === 0) {
