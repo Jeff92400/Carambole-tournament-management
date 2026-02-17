@@ -1932,6 +1932,7 @@ router.post('/save-poules', authenticateToken, async (req, res) => {
 router.get('/convocation-files', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
   const { categoryId, tournamentNum, season, tournoiExtId } = req.query;
+  const orgId = req.user?.organizationId || null;
 
   let query = `
     SELECT cf.id, cf.category_id, cf.tournament_num, cf.season, cf.tournoi_ext_id,
@@ -1942,10 +1943,10 @@ router.get('/convocation-files', authenticateToken, async (req, res) => {
     FROM convocation_files cf
     LEFT JOIN categories c ON cf.category_id = c.id
     LEFT JOIN tournoi_ext t ON cf.tournoi_ext_id = t.tournoi_id
-    WHERE 1=1
+    WHERE ($${1}::int IS NULL OR t.organization_id = $${1})
   `;
-  const params = [];
-  let paramIndex = 1;
+  const params = [orgId];
+  let paramIndex = 2;
 
   if (categoryId) {
     query += ` AND cf.category_id = $${paramIndex++}`;
@@ -1979,10 +1980,13 @@ router.get('/convocation-files', authenticateToken, async (req, res) => {
 router.get('/convocation-files/:id/download', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
   const { id } = req.params;
+  const orgId = req.user?.organizationId || null;
 
   db.get(
-    'SELECT pdf_data, filename FROM convocation_files WHERE id = $1',
-    [id],
+    `SELECT cf.pdf_data, cf.filename FROM convocation_files cf
+     LEFT JOIN tournoi_ext t ON cf.tournoi_ext_id = t.tournoi_id
+     WHERE cf.id = $1 AND ($2::int IS NULL OR t.organization_id = $2)`,
+    [id, orgId],
     (err, row) => {
       if (err) {
         console.error('Error fetching convocation file:', err);
@@ -2003,25 +2007,31 @@ router.get('/convocation-files/:id/download', authenticateToken, async (req, res
 // Get available filter options for history dropdowns
 router.get('/convocation-files/filters', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
+  const orgId = req.user?.organizationId || null;
 
   try {
-    // Get distinct categories with files
+    // Get distinct categories with files (org-scoped via tournoi_ext)
     const categories = await new Promise((resolve, reject) => {
       db.all(
         `SELECT DISTINCT cf.category_id, c.display_name, cf.season
          FROM convocation_files cf
          JOIN categories c ON cf.category_id = c.id
+         LEFT JOIN tournoi_ext t ON cf.tournoi_ext_id = t.tournoi_id
+         WHERE ($1::int IS NULL OR t.organization_id = $1)
          ORDER BY c.display_name`,
-        [],
+        [orgId],
         (err, rows) => err ? reject(err) : resolve(rows || [])
       );
     });
 
-    // Get distinct seasons
+    // Get distinct seasons (org-scoped via tournoi_ext)
     const seasons = await new Promise((resolve, reject) => {
       db.all(
-        `SELECT DISTINCT season FROM convocation_files ORDER BY season DESC`,
-        [],
+        `SELECT DISTINCT cf.season FROM convocation_files cf
+         LEFT JOIN tournoi_ext t ON cf.tournoi_ext_id = t.tournoi_id
+         WHERE ($1::int IS NULL OR t.organization_id = $1)
+         ORDER BY cf.season DESC`,
+        [orgId],
         (err, rows) => err ? reject(err) : resolve(rows || [])
       );
     });
@@ -2074,19 +2084,24 @@ router.delete('/convocation-files/purge', authenticateToken, async (req, res) =>
       }
     }
 
-    // Build delete query
-    let query = 'DELETE FROM convocation_files WHERE 1=1';
-    const params = [];
-    let paramIndex = 1;
+    // Build delete query (org-scoped via tournoi_ext JOIN)
+    const orgId = req.user?.organizationId || null;
+    let query = `DELETE FROM convocation_files WHERE id IN (
+      SELECT cf.id FROM convocation_files cf
+      LEFT JOIN tournoi_ext t ON cf.tournoi_ext_id = t.tournoi_id
+      WHERE ($1::int IS NULL OR t.organization_id = $1)`;
+    const params = [orgId];
+    let paramIndex = 2;
 
     if (startDate) {
-      query += ` AND created_at >= $${paramIndex++}`;
+      query += ` AND cf.created_at >= $${paramIndex++}`;
       params.push(startDate);
     }
     if (endDate) {
-      query += ` AND created_at <= $${paramIndex++}`;
+      query += ` AND cf.created_at <= $${paramIndex++}`;
       params.push(endDate + ' 23:59:59');
     }
+    query += ')';
 
     // Execute delete
     const result = await new Promise((resolve, reject) => {

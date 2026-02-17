@@ -1107,11 +1107,29 @@ router.get('/organization-logo', authenticateToken, (req, res) => {
   });
 });
 
-// Download/view logo (public for email rendering)
+// Download/view logo (org-scoped via JWT if available, else returns default org logo)
 router.get('/organization-logo/download', (req, res) => {
   const db = getDb();
 
-  db.get('SELECT * FROM organization_logo ORDER BY created_at DESC LIMIT 1', [], (err, row) => {
+  // Try to extract org from JWT if present (authenticated pages)
+  let orgId = null;
+  const authHeader = req.headers['authorization'];
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    try {
+      const jwt = require('jsonwebtoken');
+      const decoded = jwt.verify(authHeader.split(' ')[1], process.env.JWT_SECRET);
+      orgId = decoded.organizationId || null;
+    } catch (e) {
+      // Token invalid or expired — fall through to default
+    }
+  }
+
+  const query = orgId
+    ? 'SELECT * FROM organization_logo WHERE organization_id = $1 ORDER BY created_at DESC LIMIT 1'
+    : 'SELECT * FROM organization_logo ORDER BY created_at DESC LIMIT 1';
+  const params = orgId ? [orgId] : [];
+
+  db.get(query, params, (err, row) => {
     if (err) {
       console.error('Error fetching logo:', err);
       return res.status(500).json({ error: 'Erreur' });

@@ -430,6 +430,7 @@ All these tables have an `organization_id` column with nullable filter pattern `
 |-------|--------|
 | `tournament_results` | Scoped via `tournament_id` JOIN |
 | `convocation_poules` | Scoped via `tournoi_id` JOIN |
+| `convocation_files` | Scoped via `tournoi_ext_id` JOIN to `tournoi_ext.organization_id` |
 | `tournament_relances` | Scoped via `tournoi_ext_id` JOIN |
 | `player_contacts` | Shared contact directory |
 | `club_aliases` | Shared normalization |
