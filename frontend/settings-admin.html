@@ -863,24 +863,33 @@
     <div class="card admin-only" id="tournamentTypesSection">
       <h3>🎯 Types de Tournoi</h3>
       <p style="margin-bottom: 20px; color: #666;">
-        Configurez les types de tournois disponibles et leurs libellés.
+        Configurez les types de tournois, leur déroulement et les paramètres par défaut. Chaque CDB peut définir son propre processus.
       </p>
 
       <div id="tournamentTypesTable" style="overflow-x: auto;">
-        <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
           <thead>
-            <tr style="background: #1F4788; color: white;">
-              <th style="padding: 12px; text-align: center;">N°</th>
-              <th style="padding: 12px; text-align: left;">Code</th>
-              <th style="padding: 12px; text-align: left;">Nom d'affichage</th>
-              <th style="padding: 12px; text-align: center;">Compte dans classement</th>
-              <th style="padding: 12px; text-align: center;">Actions</th>
+            <tr style="background: var(--color-primary, #1F4788); color: white;">
+              <th style="padding: 10px 8px; text-align: center; width: 40px;">N°</th>
+              <th style="padding: 10px 8px; text-align: left; width: 80px;">Code</th>
+              <th style="padding: 10px 8px; text-align: left;">Nom d'affichage</th>
+              <th style="padding: 10px 8px; text-align: center; width: 80px;">Heure</th>
+              <th style="padding: 10px 8px; text-align: center; width: 70px;">Joueurs / Poule</th>
+              <th style="padding: 10px 8px; text-align: left; width: 160px;">Format</th>
+              <th style="padding: 10px 8px; text-align: center; width: 50px;">Classement</th>
+              <th style="padding: 10px 8px; text-align: center; width: 140px;">Actions</th>
             </tr>
           </thead>
           <tbody id="tournamentTypesBody">
-            <tr><td colspan="5" style="text-align: center; padding: 20px; color: #666;">Chargement...</td></tr>
+            <tr><td colspan="8" style="text-align: center; padding: 20px; color: #666;">Chargement...</td></tr>
           </tbody>
         </table>
+      </div>
+
+      <div style="margin-top: 12px;">
+        <button onclick="addTournamentType()" class="btn" style="background: var(--color-primary, #1F4788); padding: 8px 16px; font-size: 13px;">
+          + Ajouter un type
+        </button>
       </div>
 
       <div id="tournamentTypesMessage" style="display: none; margin-top: 15px; padding: 10px; border-radius: 4px;"></div>
@@ -3282,6 +3291,13 @@
 
     // ============= TOURNAMENT TYPES SETTINGS =============
 
+    const FORMAT_OPTIONS = [
+      { value: 'poules', label: 'Poules' },
+      { value: 'poules_finale', label: 'Poules + Finale' },
+      { value: 'finale_seule', label: 'Finale seule' },
+      { value: 'elimination', label: 'Élimination directe' }
+    ];
+
     async function loadTournamentTypes() {
       try {
         const response = await fetch(`${API_URL}/settings/tournament-types`, {
@@ -3294,7 +3310,7 @@
       } catch (error) {
         console.error('Error loading tournament types:', error);
         document.getElementById('tournamentTypesBody').innerHTML =
-          '<tr><td colspan="5" style="text-align: center; padding: 20px; color: #dc3545;">Erreur de chargement</td></tr>';
+          '<tr><td colspan="8" style="text-align: center; padding: 20px; color: #dc3545;">Erreur de chargement</td></tr>';
       }
     }
 
@@ -3302,29 +3318,48 @@
       const tbody = document.getElementById('tournamentTypesBody');
 
       if (!types || types.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 20px; color: #666;">Aucun type de tournoi configuré</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 20px; color: #666;">Aucun type de tournoi configuré</td></tr>';
         return;
       }
 
-      tbody.innerHTML = types.map(t => `
+      tbody.innerHTML = types.map(t => {
+        const formatSelect = FORMAT_OPTIONS.map(opt =>
+          `<option value="${opt.value}" ${t.format === opt.value ? 'selected' : ''}>${opt.label}</option>`
+        ).join('');
+
+        return `
         <tr style="border-bottom: 1px solid #ddd;" data-id="${t.id}">
-          <td style="padding: 12px; text-align: center; font-weight: bold;">${t.tournament_number}</td>
-          <td style="padding: 12px;">
-            <input type="text" value="${t.code}" class="tt-code" style="width: 80px; padding: 6px; border: 1px solid #ddd; border-radius: 4px;">
+          <td style="padding: 8px; text-align: center; font-weight: bold; color: #888;">${t.tournament_number}</td>
+          <td style="padding: 8px;">
+            <input type="text" value="${t.code}" class="tt-code" style="width: 70px; padding: 5px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
           </td>
-          <td style="padding: 12px;">
-            <input type="text" value="${t.display_name}" class="tt-display-name" style="width: 200px; padding: 6px; border: 1px solid #ddd; border-radius: 4px;">
+          <td style="padding: 8px;">
+            <input type="text" value="${t.display_name || ''}" class="tt-display-name" style="width: 100%; min-width: 120px; padding: 5px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px; box-sizing: border-box;">
           </td>
-          <td style="padding: 12px; text-align: center;">
-            <input type="checkbox" ${t.include_in_ranking ? 'checked' : ''} class="tt-include" style="width: 20px; height: 20px; cursor: pointer;">
+          <td style="padding: 8px; text-align: center;">
+            <input type="time" value="${t.default_start_time || ''}" class="tt-start-time" style="width: 75px; padding: 5px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;">
           </td>
-          <td style="padding: 12px; text-align: center;">
-            <button onclick="saveTournamentType(${t.id})" class="btn" style="background: #28a745; padding: 5px 12px; font-size: 12px;">
+          <td style="padding: 8px; text-align: center;">
+            <input type="number" value="${t.nb_players_per_poule || 3}" min="2" max="6" class="tt-players-per-poule" style="width: 55px; padding: 5px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px; text-align: center;">
+          </td>
+          <td style="padding: 8px;">
+            <select class="tt-format" style="width: 100%; padding: 5px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;">
+              ${formatSelect}
+            </select>
+          </td>
+          <td style="padding: 8px; text-align: center;">
+            <input type="checkbox" ${t.include_in_ranking ? 'checked' : ''} class="tt-include" style="width: 18px; height: 18px; cursor: pointer;">
+          </td>
+          <td style="padding: 8px; text-align: center; white-space: nowrap;">
+            <button onclick="saveTournamentType(${t.id})" class="btn" style="background: #28a745; padding: 4px 10px; font-size: 11px; margin-right: 4px;">
               Sauver
+            </button>
+            <button onclick="deleteTournamentType(${t.id}, '${(t.display_name || t.code).replace(/'/g, "\\'")}')" class="btn" style="background: #dc3545; padding: 4px 10px; font-size: 11px;">
+              Suppr.
             </button>
           </td>
         </tr>
-      `).join('');
+      `}).join('');
     }
 
     async function saveTournamentType(id) {
@@ -3332,7 +3367,19 @@
       const code = row.querySelector('.tt-code').value.trim();
       const displayName = row.querySelector('.tt-display-name').value.trim();
       const includeInRanking = row.querySelector('.tt-include').checked;
+      const defaultStartTime = row.querySelector('.tt-start-time').value || null;
+      const nbPlayersPerPoule = parseInt(row.querySelector('.tt-players-per-poule').value) || 3;
+      const format = row.querySelector('.tt-format').value;
       const msgDiv = document.getElementById('tournamentTypesMessage');
+
+      if (!code || !displayName) {
+        msgDiv.textContent = 'Code et nom d\'affichage sont obligatoires';
+        msgDiv.style.background = '#f8d7da';
+        msgDiv.style.color = '#721c24';
+        msgDiv.style.display = 'block';
+        setTimeout(() => { msgDiv.style.display = 'none'; }, 3000);
+        return;
+      }
 
       try {
         const response = await fetch(`${API_URL}/settings/tournament-types/${id}`, {
@@ -3342,9 +3389,12 @@
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
-            code: code,
+            code,
             display_name: displayName,
-            include_in_ranking: includeInRanking
+            include_in_ranking: includeInRanking,
+            default_start_time: defaultStartTime,
+            nb_players_per_poule: nbPlayersPerPoule,
+            format
           })
         });
 
@@ -3353,7 +3403,8 @@
           msgDiv.style.background = '#d4edda';
           msgDiv.style.color = '#155724';
         } else {
-          throw new Error('Erreur lors de la sauvegarde');
+          const data = await response.json();
+          throw new Error(data.error || 'Erreur lors de la sauvegarde');
         }
       } catch (error) {
         console.error('Error saving tournament type:', error);
@@ -3364,6 +3415,75 @@
 
       msgDiv.style.display = 'block';
       setTimeout(() => { msgDiv.style.display = 'none'; }, 3000);
+    }
+
+    async function addTournamentType() {
+      const msgDiv = document.getElementById('tournamentTypesMessage');
+
+      try {
+        const response = await fetch(`${API_URL}/settings/tournament-types`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            code: 'NEW',
+            display_name: 'Nouveau tournoi',
+            include_in_ranking: true,
+            format: 'poules'
+          })
+        });
+
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Erreur');
+
+        msgDiv.textContent = 'Type de tournoi ajouté';
+        msgDiv.style.background = '#d4edda';
+        msgDiv.style.color = '#155724';
+        msgDiv.style.display = 'block';
+        setTimeout(() => { msgDiv.style.display = 'none'; }, 3000);
+
+        loadTournamentTypes();
+      } catch (error) {
+        console.error('Error adding tournament type:', error);
+        msgDiv.textContent = error.message;
+        msgDiv.style.background = '#f8d7da';
+        msgDiv.style.color = '#721c24';
+        msgDiv.style.display = 'block';
+        setTimeout(() => { msgDiv.style.display = 'none'; }, 3000);
+      }
+    }
+
+    async function deleteTournamentType(id, name) {
+      if (!confirm(`Supprimer le type de tournoi "${name}" ?`)) return;
+
+      const msgDiv = document.getElementById('tournamentTypesMessage');
+
+      try {
+        const response = await fetch(`${API_URL}/settings/tournament-types/${id}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Erreur');
+
+        msgDiv.textContent = 'Type de tournoi supprimé';
+        msgDiv.style.background = '#d4edda';
+        msgDiv.style.color = '#155724';
+        msgDiv.style.display = 'block';
+        setTimeout(() => { msgDiv.style.display = 'none'; }, 3000);
+
+        loadTournamentTypes();
+      } catch (error) {
+        console.error('Error deleting tournament type:', error);
+        msgDiv.textContent = error.message;
+        msgDiv.style.background = '#f8d7da';
+        msgDiv.style.color = '#721c24';
+        msgDiv.style.display = 'block';
+        setTimeout(() => { msgDiv.style.display = 'none'; }, 3000);
+      }
     }
 
     loadTournamentTypes();

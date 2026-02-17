@@ -560,21 +560,90 @@ const initAppSettings = async () => {
 };
 
 // Initialize tournament_types table
-const initTournamentTypes = async () => {
+const initTournamentTypes = async (orgId) => {
   const db = getDb();
-  return new Promise((resolve) => {
+
+  // Create table if not exists
+  await new Promise((resolve) => {
     db.run(`
       CREATE TABLE IF NOT EXISTS tournament_types (
         id SERIAL PRIMARY KEY,
-        tournament_number INTEGER NOT NULL UNIQUE,
+        tournament_number INTEGER NOT NULL,
         code TEXT NOT NULL,
         display_name TEXT NOT NULL,
-        include_in_ranking BOOLEAN DEFAULT TRUE
+        include_in_ranking BOOLEAN DEFAULT TRUE,
+        organization_id INTEGER REFERENCES organizations(id),
+        default_start_time TEXT,
+        nb_players_per_poule INTEGER DEFAULT 3,
+        format TEXT DEFAULT 'poules'
       )
-    `, [], async (err) => {
+    `, [], (err) => {
       if (err) console.error('Error creating tournament_types table:', err);
+      resolve();
+    });
+  });
 
-      // Default tournament types
+  // Migrations for existing tables
+  const migrations = [
+    `ALTER TABLE tournament_types ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)`,
+    `ALTER TABLE tournament_types ADD COLUMN IF NOT EXISTS default_start_time TEXT`,
+    `ALTER TABLE tournament_types ADD COLUMN IF NOT EXISTS nb_players_per_poule INTEGER DEFAULT 3`,
+    `ALTER TABLE tournament_types ADD COLUMN IF NOT EXISTS format TEXT DEFAULT 'poules'`
+  ];
+  for (const sql of migrations) {
+    await new Promise((res) => { db.run(sql, [], () => res()); });
+  }
+
+  // Drop old UNIQUE constraint on tournament_number alone (if exists) and add composite one
+  await new Promise((res) => {
+    db.run(`ALTER TABLE tournament_types DROP CONSTRAINT IF EXISTS tournament_types_tournament_number_key`, [], () => res());
+  });
+  await new Promise((res) => {
+    db.run(`
+      DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'tournament_types_number_org_key') THEN
+          ALTER TABLE tournament_types ADD CONSTRAINT tournament_types_number_org_key UNIQUE (tournament_number, organization_id);
+        END IF;
+      END $$;
+    `, [], () => res());
+  });
+
+  // Seed defaults for the given org if it has no types yet
+  if (orgId) {
+    const existing = await new Promise((res) => {
+      db.get(`SELECT COUNT(*) as cnt FROM tournament_types WHERE organization_id = $1`, [orgId], (err, row) => {
+        res(row ? row.cnt : 0);
+      });
+    });
+
+    if (existing === 0) {
+      const defaultTypes = [
+        [1, 'T1', 'Tournoi 1', true, 'poules'],
+        [2, 'T2', 'Tournoi 2', true, 'poules'],
+        [3, 'T3', 'Tournoi 3', true, 'poules'],
+        [4, 'FINALE', 'Finale Départementale', false, 'finale_seule']
+      ];
+
+      for (const [num, code, displayName, includeInRanking, fmt] of defaultTypes) {
+        await new Promise((res) => {
+          db.run(
+            `INSERT INTO tournament_types (tournament_number, code, display_name, include_in_ranking, organization_id, format)
+             VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING`,
+            [num, code, displayName, includeInRanking, orgId, fmt],
+            () => res()
+          );
+        });
+      }
+    }
+  } else {
+    // Legacy: seed without org_id for backward compatibility
+    const existing = await new Promise((res) => {
+      db.get(`SELECT COUNT(*) as cnt FROM tournament_types WHERE organization_id IS NULL`, [], (err, row) => {
+        res(row ? row.cnt : 0);
+      });
+    });
+
+    if (existing === 0) {
       const defaultTypes = [
         [1, 'T1', 'Tournoi 1', true],
         [2, 'T2', 'Tournoi 2', true],
@@ -586,16 +655,14 @@ const initTournamentTypes = async () => {
         await new Promise((res) => {
           db.run(
             `INSERT INTO tournament_types (tournament_number, code, display_name, include_in_ranking)
-             VALUES ($1, $2, $3, $4) ON CONFLICT (tournament_number) DO NOTHING`,
+             VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING`,
             [num, code, displayName, includeInRanking],
             () => res()
           );
         });
       }
-
-      resolve();
-    });
-  });
+    }
+  }
 };
 
 // Get a setting by key (org-aware: returns org-specific if user has organizationId)
@@ -737,15 +804,18 @@ router.put('/app-bulk', authenticateToken, requireAdmin, async (req, res) => {
 
 // ============= TOURNAMENT TYPES =============
 
-// Get all tournament types
+// Get all tournament types (org-scoped)
 router.get('/tournament-types', authenticateToken, async (req, res) => {
   const db = getDb();
+  const orgId = req.user?.organizationId || null;
 
-  await initTournamentTypes();
+  await initTournamentTypes(orgId);
 
   db.all(
-    'SELECT * FROM tournament_types ORDER BY tournament_number',
-    [],
+    `SELECT * FROM tournament_types
+     WHERE ($1::int IS NULL OR organization_id = $1)
+     ORDER BY tournament_number`,
+    [orgId],
     (err, rows) => {
       if (err) {
         console.error('Error fetching tournament types:', err);
@@ -756,17 +826,21 @@ router.get('/tournament-types', authenticateToken, async (req, res) => {
   );
 });
 
-// Update a tournament type (admin only)
+// Update a tournament type (admin only, org-scoped)
 router.put('/tournament-types/:id', authenticateToken, requireAdmin, async (req, res) => {
   const db = getDb();
   const { id } = req.params;
-  const { code, display_name, include_in_ranking } = req.body;
+  const orgId = req.user?.organizationId || null;
+  const { code, display_name, include_in_ranking, default_start_time, nb_players_per_poule, format } = req.body;
 
-  await initTournamentTypes();
+  await initTournamentTypes(orgId);
 
   db.run(
-    `UPDATE tournament_types SET code = $1, display_name = $2, include_in_ranking = $3 WHERE id = $4`,
-    [code, display_name, include_in_ranking, id],
+    `UPDATE tournament_types
+     SET code = $1, display_name = $2, include_in_ranking = $3,
+         default_start_time = $4, nb_players_per_poule = $5, format = $6
+     WHERE id = $7 AND ($8::int IS NULL OR organization_id = $8)`,
+    [code, display_name, include_in_ranking, default_start_time || null, nb_players_per_poule || 3, format || 'poules', id, orgId],
     function(err) {
       if (err) {
         console.error('Error updating tournament type:', err);
@@ -775,7 +849,76 @@ router.put('/tournament-types/:id', authenticateToken, requireAdmin, async (req,
       if (this.changes === 0) {
         return res.status(404).json({ error: 'Tournament type not found' });
       }
-      res.json({ success: true, message: 'Tournament type updated' });
+      res.json({ success: true, message: 'Type de tournoi mis à jour' });
+    }
+  );
+});
+
+// Create a new tournament type (admin only, org-scoped)
+router.post('/tournament-types', authenticateToken, requireAdmin, async (req, res) => {
+  const db = getDb();
+  const orgId = req.user?.organizationId || null;
+  const { code, display_name, include_in_ranking, default_start_time, nb_players_per_poule, format } = req.body;
+
+  if (!code || !display_name) {
+    return res.status(400).json({ error: 'Code et nom d\'affichage sont obligatoires' });
+  }
+
+  await initTournamentTypes(orgId);
+
+  // Auto-assign tournament_number = max + 1 for this org
+  db.get(
+    `SELECT COALESCE(MAX(tournament_number), 0) + 1 as next_num
+     FROM tournament_types
+     WHERE ($1::int IS NULL OR organization_id = $1)`,
+    [orgId],
+    (err, row) => {
+      if (err) {
+        console.error('Error getting next tournament number:', err);
+        return res.status(500).json({ error: err.message });
+      }
+
+      const nextNum = row ? row.next_num : 1;
+
+      db.run(
+        `INSERT INTO tournament_types (tournament_number, code, display_name, include_in_ranking, organization_id, default_start_time, nb_players_per_poule, format)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [nextNum, code, display_name, include_in_ranking !== false, orgId, default_start_time || null, nb_players_per_poule || 3, format || 'poules'],
+        function(err) {
+          if (err) {
+            console.error('Error creating tournament type:', err);
+            if (err.message.includes('duplicate key') || err.message.includes('UNIQUE')) {
+              return res.status(400).json({ error: 'Ce numéro de tournoi existe déjà' });
+            }
+            return res.status(500).json({ error: err.message });
+          }
+          res.json({ success: true, message: 'Type de tournoi créé', id: this.lastID, tournament_number: nextNum });
+        }
+      );
+    }
+  );
+});
+
+// Delete a tournament type (admin only, org-scoped)
+router.delete('/tournament-types/:id', authenticateToken, requireAdmin, async (req, res) => {
+  const db = getDb();
+  const { id } = req.params;
+  const orgId = req.user?.organizationId || null;
+
+  await initTournamentTypes(orgId);
+
+  db.run(
+    `DELETE FROM tournament_types WHERE id = $1 AND ($2::int IS NULL OR organization_id = $2)`,
+    [id, orgId],
+    function(err) {
+      if (err) {
+        console.error('Error deleting tournament type:', err);
+        return res.status(500).json({ error: err.message });
+      }
+      if (this.changes === 0) {
+        return res.status(404).json({ error: 'Type de tournoi non trouvé' });
+      }
+      res.json({ success: true, message: 'Type de tournoi supprimé' });
     }
   );
 });
