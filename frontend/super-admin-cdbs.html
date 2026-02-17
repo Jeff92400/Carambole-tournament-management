@@ -216,6 +216,36 @@
       </div>
     </div>
 
+    <!-- Post-creation / Manage: CDB summary with login URL + welcome email -->
+    <div class="card seed-section" id="orgSummarySection">
+      <h3>Gestion — <span id="summaryOrgName"></span></h3>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 16px;">
+        <div style="background: #e3f2fd; padding: 12px; border-radius: 8px;">
+          <div style="font-size: 11px; color: #666; text-transform: uppercase; font-weight: 600;">Clubs importés</div>
+          <div style="font-size: 22px; font-weight: bold; color: #1565c0;" id="summaryClubs">-</div>
+        </div>
+        <div style="background: #e8f5e9; padding: 12px; border-radius: 8px;">
+          <div style="font-size: 11px; color: #666; text-transform: uppercase; font-weight: 600;">Joueurs importés</div>
+          <div style="font-size: 22px; font-weight: bold; color: #2e7d32;" id="summaryPlayers">-</div>
+        </div>
+        <div style="background: #fff3e0; padding: 12px; border-radius: 8px;">
+          <div style="font-size: 11px; color: #666; text-transform: uppercase; font-weight: 600;">Administrateur</div>
+          <div style="font-size: 14px; font-weight: bold; color: #e65100;" id="summaryAdmin">-</div>
+        </div>
+      </div>
+      <div style="background: #f5f5f5; padding: 12px; border-radius: 8px; margin-bottom: 12px;">
+        <label style="font-size: 11px; color: #666; text-transform: uppercase; font-weight: 600; display: block; margin-bottom: 4px;">URL de connexion du CDB</label>
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <input type="text" id="summaryLoginUrl" readonly style="flex: 1; padding: 8px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; background: white; font-family: monospace;" />
+          <button class="btn-sm btn-outline" onclick="copyLoginUrl()" title="Copier l'URL">Copier</button>
+        </div>
+      </div>
+      <div style="display: flex; gap: 8px; align-items: center;">
+        <button class="btn-sm btn-primary btn-lg" onclick="sendWelcomeEmail()" id="btnSendWelcome">Envoyer l'email de bienvenue</button>
+        <span id="welcomeResult" style="font-size: 13px;"></span>
+      </div>
+    </div>
+
     <!-- Sync Players with FFB (visible when an org is selected) -->
     <div class="card seed-section" id="syncSection">
       <h3>Synchroniser les joueurs avec le fichier FFB — <span id="syncOrgName"></span></h3>
@@ -285,7 +315,7 @@
             <td><span class="badge ${org.is_active ? 'badge-active' : 'badge-inactive'}">${org.is_active ? 'Actif' : 'Inactif'}</span></td>
             <td style="white-space: nowrap;">
               <button class="btn-sm btn-primary" onclick="goToDashboard('${org.slug}')" title="Voir le dashboard">Dashboard</button>
-              <button class="btn-sm btn-outline" onclick="selectOrg(${org.id}, '${org.short_name}', '${org.slug}')" title="Gérer">Gérer</button>
+              <button class="btn-sm btn-outline" onclick="selectOrg(${org.id}, '${org.short_name}', '${org.slug}', {clubs: ${org.club_count || 0}, players: ${org.player_count || 0}, admin: '${(org.admin_username || '-').replace(/'/g, "\\'")}'})" title="Gérer">Gérer</button>
               <button class="btn-sm ${org.is_active ? 'btn-danger' : 'btn-success'}" onclick="toggleActive(${org.id})" title="${org.is_active ? 'Désactiver' : 'Activer'}">${org.is_active ? 'Désact.' : 'Activer'}</button>
               ${org.id !== 1 ? `<button class="btn-sm btn-danger" onclick="deleteOrg(${org.id}, '${org.short_name.replace(/'/g, "\\'")}')" title="Supprimer" style="margin-left: 4px;">Suppr.</button>` : ''}
             </td>
@@ -470,9 +500,13 @@
         showToast(`Organisation "${data.short_name}" créée !${details ? ` (${details} importés)` : ''}`);
         currentOrgId = result.organization.id;
 
-        // Hide create form, show seed + email sections
+        // Hide create form, show summary + sync sections
         document.getElementById('createForm').classList.remove('visible');
-        selectOrg(currentOrgId, data.short_name, data.slug);
+        selectOrg(currentOrgId, data.short_name, data.slug, {
+          clubs: clubCount,
+          players: playerCount,
+          admin: data.admin_username
+        });
 
         // Reload table
         loadOrganizations();
@@ -484,9 +518,20 @@
       }
     }
 
-    // ==================== Select Org (show seed + sync sections) ====================
-    function selectOrg(orgId, shortName, slug) {
+    // ==================== Select Org (show summary + sync sections) ====================
+    function selectOrg(orgId, shortName, slug, stats) {
       currentOrgId = orgId;
+
+      // Show summary section
+      const baseUrl = window.location.origin;
+      const loginUrl = `${baseUrl}/login.html?org=${slug}`;
+      document.getElementById('orgSummarySection').classList.add('visible');
+      document.getElementById('summaryOrgName').textContent = shortName;
+      document.getElementById('summaryLoginUrl').value = loginUrl;
+      document.getElementById('summaryClubs').textContent = stats?.clubs || '-';
+      document.getElementById('summaryPlayers').textContent = stats?.players || '-';
+      document.getElementById('summaryAdmin').textContent = stats?.admin || '-';
+      document.getElementById('welcomeResult').textContent = '';
 
       // Show sync section
       document.getElementById('syncSection').classList.add('visible');
@@ -494,6 +539,41 @@
       document.getElementById('syncPreview').innerHTML = '';
       document.getElementById('syncResult').innerHTML = '';
       document.getElementById('btnSyncApply').style.display = 'none';
+    }
+
+    // ==================== Login URL + Welcome Email ====================
+    function copyLoginUrl() {
+      const input = document.getElementById('summaryLoginUrl');
+      input.select();
+      navigator.clipboard.writeText(input.value);
+      showToast('URL copiée !');
+    }
+
+    async function sendWelcomeEmail() {
+      if (!currentOrgId) return;
+      if (!confirm('Envoyer l\'email de bienvenue à l\'administrateur de ce CDB ?')) return;
+
+      const btn = document.getElementById('btnSendWelcome');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span>Envoi...';
+
+      try {
+        const res = await authFetch(`${API_URL}/super-admin/organizations/${currentOrgId}/send-welcome`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Erreur');
+
+        document.getElementById('welcomeResult').innerHTML = `<span style="color: #28a745;">${data.message}</span>`;
+        showToast(data.message);
+      } catch (error) {
+        document.getElementById('welcomeResult').innerHTML = `<span style="color: #dc3545;">${error.message}</span>`;
+        showToast(error.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Envoyer l\'email de bienvenue';
+      }
     }
 
     // ==================== Navigate to CDB Dashboard ====================
@@ -703,9 +783,10 @@
 
         showToast(data.message);
 
-        // Hide sync section if this org was selected
+        // Hide summary + sync sections if this org was selected
         if (currentOrgId === orgId) {
           currentOrgId = null;
+          document.getElementById('orgSummarySection').classList.remove('visible');
           document.getElementById('syncSection').classList.remove('visible');
         }
 

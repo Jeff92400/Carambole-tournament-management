@@ -569,7 +569,8 @@ router.get('/organizations', async (req, res) => {
       SELECT o.*,
         (SELECT COUNT(*) FROM users u WHERE u.organization_id = o.id) as user_count,
         (SELECT COUNT(*) FROM players p WHERE p.organization_id = o.id AND UPPER(p.licence) NOT LIKE 'TEST%') as player_count,
-        (SELECT COUNT(*) FROM clubs c WHERE c.organization_id = o.id) as club_count
+        (SELECT COUNT(*) FROM clubs c WHERE c.organization_id = o.id) as club_count,
+        (SELECT u.username FROM users u WHERE u.organization_id = o.id AND u.role = 'admin' LIMIT 1) as admin_username
       FROM organizations o
       ORDER BY o.id
     `);
