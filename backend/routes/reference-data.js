@@ -625,38 +625,13 @@ router.get('/inscription-statuses', authenticateToken, (req, res) => {
 // ==================== TOURNAMENT ROUNDS ====================
 
 router.get('/tournament-rounds', authenticateToken, (req, res) => {
-  const db = getDb();
-  const orgId = req.user?.organizationId || null;
-
-  db.all(
-    `SELECT code, display_name, tournament_number as "order", format
-     FROM tournament_types
-     WHERE ($1::int IS NULL OR organization_id = $1)
-     ORDER BY tournament_number`,
-    [orgId],
-    (err, rows) => {
-      if (err) {
-        console.error('Error fetching tournament rounds:', err);
-        // Fallback to hardcoded defaults on error
-        return res.json([
-          { code: 'T1', display_name: 'Tournoi 1', order: 1 },
-          { code: 'T2', display_name: 'Tournoi 2', order: 2 },
-          { code: 'T3', display_name: 'Tournoi 3', order: 3 },
-          { code: 'F', display_name: 'Finale', order: 4 }
-        ]);
-      }
-      // If no rows found (table empty or not initialized yet), return defaults
-      if (!rows || rows.length === 0) {
-        return res.json([
-          { code: 'T1', display_name: 'Tournoi 1', order: 1 },
-          { code: 'T2', display_name: 'Tournoi 2', order: 2 },
-          { code: 'T3', display_name: 'Tournoi 3', order: 3 },
-          { code: 'F', display_name: 'Finale', order: 4 }
-        ]);
-      }
-      res.json(rows);
-    }
-  );
+  const rounds = [
+    { code: 'T1', display_name: 'Tournoi 1', order: 1 },
+    { code: 'T2', display_name: 'Tournoi 2', order: 2 },
+    { code: 'T3', display_name: 'Tournoi 3', order: 3 },
+    { code: 'F', display_name: 'Finale', order: 4, icon: '🏆' }
+  ];
+  res.json(rounds);
 });
 
 // ==================== USER ROLES ====================
