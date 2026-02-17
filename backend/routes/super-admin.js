@@ -756,41 +756,28 @@ router.delete('/organizations/:id', async (req, res) => {
       return res.status(403).json({ error: 'Impossible de supprimer l\'organisation principale' });
     }
 
-    // Cascade delete all org-scoped data in dependency order
-    const tables = [
-      'player_accounts',
-      'player_contacts',
-      'admin_activity_logs',
-      'player_invitations',
-      'scheduled_emails',
-      'email_campaigns',
-      'announcements',
-      'inscriptions',
-      'rankings',
-      'tournaments',
-      'tournoi_ext',
-      'scoring_rules',
-      'game_parameters',
-      'email_templates',
-      'categories',
-      'players',
-      'clubs',
-      'users',
-      'organization_settings',
-      'organization_logo'
-    ];
+    // Find ALL tables that reference organizations via FK (dynamic, covers future additions)
+    const fkTables = await dbAll(`
+      SELECT DISTINCT tc.table_name
+      FROM information_schema.table_constraints tc
+      JOIN information_schema.constraint_column_usage ccu ON tc.constraint_name = ccu.constraint_name
+      WHERE tc.constraint_type = 'FOREIGN KEY'
+        AND ccu.table_name = 'organizations'
+        AND tc.table_name != 'organizations'
+    `);
 
     const counts = {};
-    for (const table of tables) {
+    for (const row of fkTables) {
+      const table = row.table_name;
       try {
         const result = await dbRun(
           `DELETE FROM ${table} WHERE organization_id = $1`,
           [id]
         );
-        counts[table] = result.rowCount || 0;
+        counts[table] = result.changes || 0;
       } catch (err) {
-        // Table might not exist or have no organization_id column — skip
-        counts[table] = 0;
+        console.error(`  Delete from ${table} failed:`, err.message);
+        counts[table] = `error: ${err.message}`;
       }
     }
 
@@ -817,7 +804,7 @@ router.delete('/organizations/:id', async (req, res) => {
     });
   } catch (error) {
     console.error('Error deleting organization:', error);
-    res.status(500).json({ error: 'Erreur lors de la suppression' });
+    res.status(500).json({ error: 'Erreur lors de la suppression: ' + error.message });
   }
 });
 
