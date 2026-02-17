@@ -451,6 +451,90 @@ WHERE ... AND ($N::int IS NULL OR organization_id = $N)
 
 Per-org settings stored in `organization_settings` table (key-value per org_id). Falls back to `app_settings` for missing keys. Manages: colors, logo, org name, contact email, etc.
 
+## Super Admin Level
+
+The super admin (`is_super_admin = true` on user) has a dedicated set of pages for platform-wide management. These are separate from the CDB-level admin pages.
+
+### Super Admin Pages
+
+| Page | Purpose |
+|------|---------|
+| `super-admin.html` | Tableau de bord — FFB file KPIs, platform stats, CDB enrolments table |
+| `super-admin-cdbs.html` | CDB management — create/delete orgs, FFB player seeding, FFB sync, send welcome email to admin |
+| `super-admin-ligues.html` | Ligue management |
+| `super-admin-ffb.html` | Données FFB — FFB data browser |
+| `super-admin-ffb-browser.html` | FFB Fichiers — import FFB CSV files (Ligues, Clubs, Licences) |
+| `super-admin-users.html` | Utilisateurs — manage all platform users across CDBs |
+| `super-admin-settings.html` | Paramètres — platform email domain + welcome email template |
+
+### Super Admin Features
+
+- **CDB creation workflow:** Select FFB CDB from picklist → auto-fill org info → search FFB licencié for admin → create org + admin user + seed email settings
+- **FFB player seeding:** Import players from FFB licence file into a CDB's player table
+- **FFB player sync:** Compare CDB players against FFB file and show diffs before applying
+- **Platform email domain:** Configurable domain (e.g., `carambole-gestion.fr`) for new CDB email addresses (`{slug}@{domain}`)
+- **Welcome email template:** Quill editor for CDB admin welcome email with variable replacement
+- **CDB navbar dropdown:** All SA pages have a CDB dropdown in the navbar to navigate to a specific CDB's dashboard
+
+### Super Admin API Routes
+
+All routes in `backend/routes/super-admin.js` under `/api/super-admin/`:
+- `GET /dashboard` — platform-wide KPIs
+- `GET|POST /organizations` — list/create CDBs
+- `DELETE /organizations/:id` — delete CDB and all its data
+- `PUT /organizations/:id/toggle-active` — activate/deactivate CDB
+- `GET /organizations/:id/seed-preview` — preview FFB players to import
+- `POST /organizations/:id/seed-players` — import FFB players
+- `GET /organizations/:id/sync-preview` — preview FFB sync diffs
+- `POST /organizations/:id/sync-players` — apply FFB sync
+- `GET|PUT /platform-settings` — platform email domain
+- `GET|PUT /email-templates/cdb_welcome` — welcome email template CRUD
+- `POST /email-templates/cdb_welcome/test` — send test welcome email
+- `POST /organizations/:id/send-welcome` — send welcome to CDB admin
+- `GET /ffb-cdbs` — list FFB CDBs for picklist
+- `GET /ffb-licences/search` — search FFB licencés by CDB code
+
+## Modes de Qualification pour les Finales
+
+> **STATUS: WAITING FOR ADDITIONAL INFORMATION** — A second CDB has described a different qualification model ("Journées qualificatives"). We are waiting for detailed specifications from them before building this feature. Do NOT implement until specs are received.
+
+The app needs to support multiple qualification modes per CDB. This is controlled at the organization level.
+
+### Mode 1: "3 Tournois dans la saison" (current — CDBHS / CDB92)
+
+The current and fully implemented model:
+- **3 seasonal tournaments** (T1, T2, T3) per category, each on a separate date
+- **Rankings accumulate** match points across T1 + T2 + T3
+- **Finale qualification:** Top-ranked players after T3 are invited to the Finale Départementale
+- **Finale:** Separate event, single poule (round-robin), does NOT count in seasonal ranking
+
+### Mode 2: "Journées qualificatives" (planned — awaiting specs)
+
+Described by another CDB:
+- **Each competition day is self-contained:** poules in the morning (3 players/poule, 2 matches each) → bracket in the afternoon (2 semi-finals → 1 finale + 1 petite finale)
+- **Consolation matches** for non-qualifiers (minimum 3 matches per player per day)
+- **No seasonal ranking accumulation** — qualification is based on successive elimination across journées
+- **Different results model:** poule results + bracket results + consolation results per day
+
+### Dependency Inventory (18 areas, 15+ files)
+
+Building Mode 2 requires a **parallel competition engine**, not a refactoring of Mode 1. Key areas affected:
+
+| Area | Files | What changes |
+|------|-------|-------------|
+| **DB Schema** | `db-postgres.js` | `tournaments.tournament_number` (1-4 mapping), `rankings` table T1/T2/T3 columns |
+| **Ranking calc** | `tournaments.js`, `rankings.js` | `CASE WHEN tournament_number = 1/2/3` hardcoded aggregation |
+| **Cumulative points** | `inscriptions.js`, `email.js` | `tournament_number <= 3` filters |
+| **Relance system** | `emailing.js` | `['t1','t2','t3','finale']` validation, per-round templates |
+| **Poule generation** | `email.js`, `generate-poules.html` | Finale = single poule, T3 prerequisite check |
+| **Qualification rules** | `rankings.js` | Top 4-6 players after T3 |
+| **Frontend displays** | `rankings.html`, `dashboard.html`, `emailing.html`, `tournaments-list.html`, `tournament-results.html` | Hardcoded T1/T2/T3 columns and Finale tabs |
+| **Statistics** | `statistics.js` | T1→T3 progression tracking |
+| **Email templates** | `emailing.js`, `emailing.html` | Separate default templates per round |
+| **Calendar** | `calendar.js` | Tournament type label mapping |
+
+**Approach:** Build Mode 2 as a separate branch. Mode 1 stays untouched. Per-org setting (`qualification_mode`) determines which engine runs.
+
 ## See Also
 
 - `backend/CLAUDE.md` - Detailed backend documentation
