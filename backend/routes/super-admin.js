@@ -538,9 +538,14 @@ router.post('/organizations', async (req, res) => {
       return res.status(409).json({ error: 'Un CDB avec ce slug ou nom court existe déjà' });
     }
 
-    const existingUser = await dbGet(`SELECT id FROM users WHERE username = $1`, [admin_username]);
+    const existingUser = await dbGet(`SELECT id, organization_id FROM users WHERE username = $1`, [admin_username]);
     if (existingUser) {
-      return res.status(409).json({ error: 'Ce nom d\'utilisateur existe déjà' });
+      // Clean up orphaned user from a failed previous creation (NULL org_id)
+      if (existingUser.organization_id === null) {
+        await dbRun(`DELETE FROM users WHERE id = $1`, [existingUser.id]);
+      } else {
+        return res.status(409).json({ error: 'Ce nom d\'utilisateur existe déjà' });
+      }
     }
 
     // Create organization
