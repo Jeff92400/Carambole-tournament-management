@@ -817,8 +817,7 @@ router.delete('/organizations/:id', async (req, res) => {
 
     res.json({
       success: true,
-      message: `Organisation "${org.short_name}" supprimée`,
-      deleted: counts
+      message: `Organisation "${org.short_name}" supprimée`
     });
   } catch (error) {
     console.error('Error deleting organization:', error);
