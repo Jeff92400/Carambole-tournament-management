@@ -1375,7 +1375,7 @@ async function initializeDatabase() {
       const demoHash = await bcryptDemo.hash('demo123', 10);
       await client.query(
         `INSERT INTO users (username, password_hash, email, role, organization_id, is_active)
-         VALUES ('demo', $1, 'demo@example.com', 'admin', 2, true)`,
+         VALUES ('demo', $1, 'demo@example.com', 'admin', 2, 1)`,
         [demoHash]
       );
       console.log('Demo admin created: demo/demo123');
