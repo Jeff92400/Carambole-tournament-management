@@ -722,7 +722,8 @@ router.post('/organizations', async (req, res) => {
             await dbRun(
               `INSERT INTO clubs (name, display_name, city, zip_code, phone, email, president, president_email, responsable_sportif_name, responsable_sportif_email, responsable_sportif_licence, organization_id)
                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-               ON CONFLICT (name) DO NOTHING`,
+               ON CONFLICT (name) DO UPDATE SET organization_id = $12, display_name = $2, city = $3, zip_code = $4, phone = $5, email = $6,
+               president = $7, president_email = $8, responsable_sportif_name = $9, responsable_sportif_email = $10, responsable_sportif_licence = $11`,
               [clubName, fc.nom || clubName, fc.ville || null, fc.code_postal || null, fc.tel || null, fc.email || null,
                presName || null, presEmail || null, respName || null, respEmail || null, respLicence || null, orgId]
             );
@@ -906,7 +907,10 @@ router.delete('/organizations/:id', async (req, res) => {
       }
     }
 
-    // 3. Delete org data from all tables that have organization_id
+    // 3. Delete dependent tables without organization_id FIRST (FK ordering)
+    await dbRun(`DELETE FROM club_ffb_mapping WHERE club_id IN (SELECT id FROM clubs WHERE organization_id = $1)`, [id]);
+
+    // 3b. Delete org data from all tables that have organization_id
     const orgTables = await dbAll(`
       SELECT DISTINCT table_name FROM information_schema.columns
       WHERE column_name = 'organization_id' AND table_schema = 'public'
@@ -919,9 +923,6 @@ router.delete('/organizations/:id', async (req, res) => {
         console.log(`  ${row.table_name}: skip (${err.message.substring(0, 50)})`);
       }
     }
-
-    // 3b. Clean up club_ffb_mapping for deleted clubs (no organization_id column)
-    await dbRun(`DELETE FROM club_ffb_mapping WHERE club_id NOT IN (SELECT id FROM clubs)`);
 
     // 4. Delete the organization
     await dbRun(`DELETE FROM organizations WHERE id = $1`, [id]);
