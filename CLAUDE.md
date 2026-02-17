@@ -467,6 +467,12 @@ The super admin (`is_super_admin = true` on user) has a dedicated set of pages f
 | `super-admin-users.html` | Utilisateurs — manage all platform users across CDBs |
 | `super-admin-settings.html` | Paramètres — platform email domain + welcome email template |
 
+### Super Admin Versioning
+
+**Current SA Version:** SA 1.0.0
+
+Separate version from the CDB app (`V 2.0.x`). Displayed bottom-right on all SA pages. Increment on each SA-level deployment.
+
 ### Super Admin Features
 
 - **CDB creation workflow:** Select FFB CDB from picklist → auto-fill org info → search FFB licencié for admin → create org + admin user + seed email settings
