@@ -11,36 +11,25 @@ This file provides guidance to Claude Code when working with this repository.
 
 ## Deployment Workflow
 
-### Environments
+### Environment
 
-| Branch | Environment | URL | Purpose |
-|--------|-------------|-----|---------|
-| `staging` | Demo | https://carambole-competition-app-demo.up.railway.app | Pre-prod testing & user training |
-| `main` | Production | https://cdbhs-tournament-management-production.up.railway.app | Live system |
+| Branch | Environment | URL |
+|--------|-------------|-----|
+| `main` | Production | https://cdbhs-tournament-management-production.up.railway.app |
+
+**IMPORTANT:** Push all changes directly to `main`. Do NOT use the `staging` branch.
+
+The demo app (`carambole-competition-app-demo.up.railway.app`) exists but is **frozen** — it has its own separate database with stale demo data and should NOT receive updates.
 
 ### Process
 
-1. **Develop & Test on Demo first:**
-   ```bash
-   git checkout staging
-   # Make changes...
-   git add .
-   git commit -m "Feature description"
-   git push origin staging
-   ```
-   → Auto-deploys to Demo app
-
-2. **Test on Demo** - Verify feature works correctly
-
-3. **Deploy to Production** (after testing OK):
-   ```bash
-   git checkout main
-   git merge staging
-   git push origin main
-   ```
-   → Auto-deploys to Production
-
-4. **Update version number** in `frontend/login.html` before production deploy
+```bash
+# Make changes on main branch
+git add <files>
+git commit -m "Feature description"
+git push origin main
+```
+→ Auto-deploys to Production
 
 ### Rollback
 
