@@ -112,6 +112,30 @@
 
     <div id="pageContent" style="display: none;">
 
+      <!-- Super Admins + CDB Admins -->
+      <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <h3 style="margin: 0;">Super Admin &amp; Administrateurs CDB <span id="allAdminCount" style="font-weight: normal; color: #999; font-size: 13px;"></span></h3>
+        </div>
+        <div style="overflow-x: auto;">
+          <table class="users-table" id="allAdminsTable">
+            <thead>
+              <tr>
+                <th>Rôle</th>
+                <th>CDB</th>
+                <th>Identifiant</th>
+                <th>Email</th>
+                <th>Statut</th>
+                <th>Dernière connexion</th>
+              </tr>
+            </thead>
+            <tbody id="allAdminsTbody">
+              <tr><td colspan="6" style="text-align: center; color: #999;">Chargement...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       <!-- Ligue Admins -->
       <div class="card">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
@@ -225,6 +249,40 @@
       if (!dateStr) return '-';
       const d = new Date(dateStr);
       return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    }
+
+    // ==================== Load All Admins (Super + CDB) ====================
+    async function loadAllAdmins() {
+      try {
+        const res = await authFetch(`${API_URL}/super-admin/all-admins`);
+        const admins = await res.json();
+        const tbody = document.getElementById('allAdminsTbody');
+        document.getElementById('allAdminCount').textContent = `(${admins.length})`;
+
+        if (admins.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #999;">Aucun administrateur</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = admins.map(a => {
+          const roleBadge = a.is_super_admin
+            ? '<span style="background: #dc3545; color: white; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600;">Super Admin</span>'
+            : '<span style="background: #1F4788; color: white; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600;">Admin CDB</span>';
+          const statusBadge = a.is_active
+            ? '<span class="badge badge-active">Actif</span>'
+            : '<span class="badge badge-inactive">Inactif</span>';
+          return `<tr>
+            <td>${roleBadge}</td>
+            <td>${a.org_name || '<span style="color: #999;">-</span>'}</td>
+            <td><strong>${a.username}</strong></td>
+            <td>${a.email || '<span style="color: #ccc;">-</span>'}</td>
+            <td>${statusBadge}</td>
+            <td>${formatDate(a.last_login)}</td>
+          </tr>`;
+        }).join('');
+      } catch (error) {
+        console.error('Error loading all admins:', error);
+      }
     }
 
     // ==================== Load Ligue Admins ====================
@@ -461,6 +519,7 @@
     }
 
     // ==================== Init ====================
+    loadAllAdmins();
     loadLigueAdmins();
   </script>
 </body>

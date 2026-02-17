@@ -306,6 +306,24 @@ router.post('/ligue-admins', async (req, res) => {
 });
 
 // GET /api/super-admin/ligue-admins — List ligue admin users
+// GET /api/super-admin/all-admins — List super admins + CDB admins
+router.get('/all-admins', async (req, res) => {
+  try {
+    const admins = await dbAll(`
+      SELECT u.id, u.username, u.email, u.role, u.is_active, u.is_super_admin, u.last_login, u.created_at,
+             u.organization_id, o.short_name as org_name, o.slug as org_slug
+      FROM users u
+      LEFT JOIN organizations o ON u.organization_id = o.id
+      WHERE u.is_super_admin = true OR u.role = 'admin'
+      ORDER BY u.is_super_admin DESC, o.short_name, u.username
+    `);
+    res.json(admins);
+  } catch (error) {
+    console.error('Error listing all admins:', error);
+    res.status(500).json({ error: 'Erreur' });
+  }
+});
+
 router.get('/ligue-admins', async (req, res) => {
   try {
     const admins = await dbAll(`
