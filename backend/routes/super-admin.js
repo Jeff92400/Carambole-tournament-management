@@ -756,33 +756,33 @@ router.delete('/organizations/:id', async (req, res) => {
       return res.status(403).json({ error: 'Impossible de supprimer l\'organisation principale' });
     }
 
-    // Find ALL tables that reference organizations via FK (dynamic, covers future additions)
-    const fkTables = await dbAll(`
-      SELECT DISTINCT tc.table_name
-      FROM information_schema.table_constraints tc
-      JOIN information_schema.constraint_column_usage ccu ON tc.constraint_name = ccu.constraint_name
-      WHERE tc.constraint_type = 'FOREIGN KEY'
-        AND ccu.table_name = 'organizations'
-        AND tc.table_name != 'organizations'
+    // Delete all org-scoped data — use pg_constraint to find ALL FK references dynamically
+    const fkRows = await dbAll(`
+      SELECT DISTINCT conrelid::regclass::text AS table_name
+      FROM pg_constraint
+      WHERE confrelid = 'organizations'::regclass AND contype = 'f'
     `);
+    const fkTableNames = fkRows.map(r => r.table_name);
+    console.log(`[Delete org ${id}] FK tables found:`, fkTableNames);
 
     const counts = {};
-    for (const row of fkTables) {
-      const table = row.table_name;
+    for (const table of fkTableNames) {
       try {
         const result = await dbRun(
           `DELETE FROM ${table} WHERE organization_id = $1`,
           [id]
         );
         counts[table] = result.changes || 0;
+        console.log(`  Deleted from ${table}: ${result.changes || 0} rows`);
       } catch (err) {
-        console.error(`  Delete from ${table} failed:`, err.message);
+        console.error(`  Delete from ${table} FAILED:`, err.message);
         counts[table] = `error: ${err.message}`;
       }
     }
 
     // Delete the organization itself
     await dbRun(`DELETE FROM organizations WHERE id = $1`, [id]);
+    console.log(`[Delete org ${id}] Organization deleted successfully`);
 
     // Log the action
     try {
