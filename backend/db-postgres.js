@@ -1414,8 +1414,8 @@ async function initializeDatabase() {
     const demoParamCount = await client.query(`SELECT COUNT(*) as count FROM game_parameters WHERE organization_id = 2`);
     if (parseInt(demoParamCount.rows[0].count) === 0) {
       await client.query(`
-        INSERT INTO game_parameters (mode, categorie, distance, distance_type, reprises, moyenne_maxi, moyenne_mini, organization_id)
-        SELECT mode, categorie, distance, distance_type, reprises, moyenne_maxi, moyenne_mini, 2
+        INSERT INTO game_parameters (mode, categorie, coin, distance_normale, distance_reduite, reprises, moyenne_mini, moyenne_maxi, organization_id)
+        SELECT mode, categorie, coin, distance_normale, distance_reduite, reprises, moyenne_mini, moyenne_maxi, 2
         FROM game_parameters WHERE organization_id = 1
       `);
       console.log('Demo game parameters copied from CDBHS');
