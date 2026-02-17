@@ -2143,6 +2143,7 @@ router.post('/send-club-reminder', authenticateToken, async (req, res) => {
   try {
     // Get email settings for organization branding
     const emailSettings = await getEmailTemplateSettings(req.user?.organizationId);
+    const contactEmail = await getContactEmail(req.user?.organizationId);
     const orgShortName = emailSettings.organization_short_name || 'CDB';
     const orgName = emailSettings.organization_name || orgShortName;
     const primaryColor = emailSettings.primary_color || '#1F4788';
@@ -2308,7 +2309,8 @@ Le {organization_short_name}`;
       from: buildFromAddress(emailSettings, 'convocations'),
       to: recipients,
       subject: subject,
-      html: emailBody
+      html: emailBody,
+      replyTo: contactEmail
     });
 
     // Log to email_campaigns (include tournament_id for duplicate tracking)
@@ -3579,7 +3581,8 @@ router.post('/enrollment-acknowledgment', async (req, res) => {
       from: `${senderName} <${emailFrom}>`,
       to: player_email,
       subject: `Confirmation de votre demande d'inscription - ${orgShortName}`,
-      html: emailHtml
+      html: emailHtml,
+      replyTo: contactEmail
     });
 
     console.log(`Enrollment acknowledgment email sent to ${player_email}`);
@@ -3615,6 +3618,7 @@ router.post('/enrollment-notification', async (req, res) => {
   try {
     // Load email settings for dynamic branding
     const emailSettings = await getEmailTemplateSettings(req.user?.organizationId);
+    const contactEmail = await getContactEmail(req.user?.organizationId);
     const summaryEmail = emailSettings.summary_email || 'cdbhs92@gmail.com';
     const primaryColor = emailSettings.primary_color || '#1F4788';
     const senderName = emailSettings.email_sender_name || 'CDBHS';
@@ -3696,7 +3700,8 @@ router.post('/enrollment-notification', async (req, res) => {
       from: `${senderName} <${emailFrom}>`,
       to: summaryEmail,
       subject: `Nouvelle demande d'inscription - ${player_name}`,
-      html: emailHtml
+      html: emailHtml,
+      replyTo: contactEmail
     });
 
     console.log(`Enrollment notification email sent to ${summaryEmail}`);
@@ -3808,7 +3813,8 @@ router.post('/enrollment-approved', async (req, res) => {
       from: `${senderName} <${emailFrom}>`,
       to: player_email,
       subject: `Demande acceptée - ${game_mode} ${requested_ranking} T${tournament_number}`,
-      html: emailHtml
+      html: emailHtml,
+      replyTo: contactEmail
     });
 
     console.log(`Enrollment approved email sent to ${player_email}`);
@@ -3927,7 +3933,8 @@ router.post('/enrollment-rejected', async (req, res) => {
       from: `${senderName} <${emailFrom}>`,
       to: player_email,
       subject: `Demande refusée - ${game_mode} ${requested_ranking} T${tournament_number}`,
-      html: emailHtml
+      html: emailHtml,
+      replyTo: contactEmail
     });
 
     console.log(`Enrollment rejected email sent to ${player_email}`);

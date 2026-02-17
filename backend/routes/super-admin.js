@@ -622,6 +622,7 @@ router.post('/organizations', async (req, res) => {
     const orgId = orgResult.lastID;
 
     // Seed default organization settings (FFB colors = "not yet customized" signal)
+    const platformDomain = await appSettings.getSetting('platform_email_domain');
     const defaultOrgSettings = [
       ['organization_name', name],
       ['organization_short_name', short_name],
@@ -630,10 +631,11 @@ router.post('/organizations', async (req, res) => {
       ['accent_color', '#FFC107'],
       ['background_color', '#FFFFFF'],
       ['background_secondary_color', '#F5F5F5'],
-      ['email_communication', admin_email || ''],
-      ['email_convocations', admin_email || ''],
-      ['email_noreply', admin_email || ''],
-      ['email_sender_name', short_name]
+      ['email_communication', platformDomain ? `${slug}@${platformDomain}` : (admin_email || '')],
+      ['email_convocations', platformDomain ? `${slug}@${platformDomain}` : (admin_email || '')],
+      ['email_noreply', platformDomain ? `noreply@${platformDomain}` : (admin_email || '')],
+      ['email_sender_name', short_name],
+      ['summary_email', admin_email || '']
     ];
 
     for (const [key, value] of defaultOrgSettings) {
@@ -1506,6 +1508,40 @@ router.post('/organizations/:id/send-welcome', async (req, res) => {
   } catch (error) {
     console.error('Error sending welcome email:', error);
     res.status(500).json({ error: 'Erreur lors de l\'envoi: ' + error.message });
+  }
+});
+
+// ==================== PLATFORM SETTINGS ====================
+
+// GET /api/super-admin/platform-settings — Get global platform settings
+router.get('/platform-settings', async (req, res) => {
+  try {
+    const platformDomain = await appSettings.getSetting('platform_email_domain');
+    res.json({ platform_email_domain: platformDomain || '' });
+  } catch (error) {
+    console.error('Error fetching platform settings:', error);
+    res.status(500).json({ error: 'Erreur' });
+  }
+});
+
+// PUT /api/super-admin/platform-settings — Update global platform settings
+router.put('/platform-settings', async (req, res) => {
+  const { platform_email_domain } = req.body;
+  try {
+    const db = require('../db-loader');
+    await new Promise((resolve, reject) => {
+      db.run(
+        `INSERT INTO app_settings (key, value, updated_at) VALUES ('platform_email_domain', $1, CURRENT_TIMESTAMP)
+         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = CURRENT_TIMESTAMP`,
+        [platform_email_domain || ''],
+        (err) => err ? reject(err) : resolve()
+      );
+    });
+    appSettings.clearCache();
+    res.json({ success: true, message: 'Domaine email plateforme mis à jour' });
+  } catch (error) {
+    console.error('Error updating platform settings:', error);
+    res.status(500).json({ error: 'Erreur' });
   }
 });
 

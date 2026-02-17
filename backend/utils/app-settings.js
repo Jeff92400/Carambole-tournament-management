@@ -33,6 +33,9 @@ const defaults = {
   email_noreply: 'noreply@cdbhs.net',
   email_sender_name: 'CDBHS',
 
+  // Platform email domain (for multi-CDB: new CDBs send from {slug}@{domain})
+  platform_email_domain: '',
+
   // Season settings
   season_start_month: '9', // September (1-12 format)
 

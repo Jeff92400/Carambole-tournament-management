@@ -1858,6 +1858,14 @@ async function sendTournamentChangeNotifications(tournoiId, oldTournament, newDa
       return 0;
     }
 
+    // Load org-aware email settings
+    const emailSettings = await appSettings.getOrgSettingsBatch(orgId, [
+      'email_convocations', 'email_sender_name', 'summary_email'
+    ]);
+    const senderName = emailSettings.email_sender_name || 'CDB';
+    const senderEmail = emailSettings.email_convocations || 'noreply@cdbhs.net';
+    const contactEmail = emailSettings.summary_email || undefined;
+
     // Format dates for display
     const formatDate = (dateStr) => {
       if (!dateStr) return '';
@@ -1974,8 +1982,9 @@ async function sendTournamentChangeNotifications(tournoiId, oldTournament, newDa
 
       try {
         await resend.emails.send({
-          from: 'CDBHS <convocations@cdbhs.net>',
+          from: `${senderName} <${senderEmail}>`,
           to: inscription.player_email,
+          replyTo: contactEmail,
           subject: emailSubject,
           html: emailHtml
         });

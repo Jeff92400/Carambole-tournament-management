@@ -1518,7 +1518,7 @@ async function checkTournamentAlerts() {
   // Get dynamic settings for email branding
   const emailSettings = await appSettings.getSettingsBatch([
     'primary_color', 'email_convocations', 'email_sender_name',
-    'organization_short_name'
+    'organization_short_name', 'summary_email'
   ]);
 
   try {
@@ -1639,12 +1639,14 @@ async function checkTournamentAlerts() {
     const senderName = emailSettings.email_sender_name || 'CDBHS';
     const senderEmail = emailSettings.email_convocations || 'convocations@cdbhs.net';
     const orgShortName = emailSettings.organization_short_name || 'CDBHS';
+    const replyToEmail = emailSettings.summary_email || 'cdbhs92@gmail.com';
 
     for (const user of usersToNotify) {
       try {
         await resend.emails.send({
           from: `${senderName} <${senderEmail}>`,
           to: user.email,
+          replyTo: replyToEmail,
           subject: `⚠️ ${tournamentsNeeding.length} tournoi(s) à relancer - ${orgShortName}`,
           html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
@@ -1848,6 +1850,7 @@ async function processScheduledEmails() {
           await resend.emails.send({
             from: `${senderName} <${senderEmail}>`,
             to: [recipient.email],
+            replyTo: replyToEmail,
             subject: emailSubject,
             html: `<div style="font-family: Arial; max-width: 600px; margin: 0 auto;">
               <div style="background: ${primaryColor}; color: white; padding: 20px; text-align: center;">
