@@ -28,6 +28,7 @@
     .badge { padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: bold; }
     .badge-active { background: #d4edda; color: #155724; }
     .badge-inactive { background: #f8d7da; color: #721c24; }
+    .badge-warning { background: #fff3cd; color: #856404; }
 
     /* Create form */
     .create-form { display: none; }
@@ -134,12 +135,13 @@
               <th>Joueurs</th>
               <th>Utilisateurs</th>
               <th>Inscription</th>
+              <th>Bienvenue</th>
               <th>Statut</th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody id="orgsTbody">
-            <tr><td colspan="9" style="text-align: center; color: #999;">Chargement...</td></tr>
+            <tr><td colspan="10" style="text-align: center; color: #999;">Chargement...</td></tr>
           </tbody>
         </table>
       </div>
@@ -297,13 +299,17 @@
         const tbody = document.getElementById('orgsTbody');
 
         if (orgs.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; color: #999;">Aucune organisation</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="10" style="text-align: center; color: #999;">Aucune organisation</td></tr>';
           return;
         }
 
         tbody.innerHTML = orgs.map((org, idx) => {
           const enrollDate = org.created_at ? new Date(org.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-';
           const enrollNum = String(idx + 1).padStart(3, '0');
+          const welcomeSent = org.welcome_email_sent_at;
+          const welcomeBadge = welcomeSent
+            ? `<span class="badge badge-active" title="Envoyé le ${new Date(welcomeSent).toLocaleDateString('fr-FR')}">Envoyé</span>`
+            : `<span class="badge badge-warning" title="Email de bienvenue non envoyé">En attente</span>`;
           return `
           <tr>
             <td><strong>#${enrollNum}</strong></td>
@@ -313,10 +319,11 @@
             <td>${org.player_count || 0}</td>
             <td>${org.user_count || 0}</td>
             <td style="font-size: 12px; white-space: nowrap;">${enrollDate}</td>
+            <td>${welcomeBadge}</td>
             <td><span class="badge ${org.is_active ? 'badge-active' : 'badge-inactive'}">${org.is_active ? 'Actif' : 'Inactif'}</span></td>
             <td style="white-space: nowrap;">
               <button class="btn-sm btn-primary" onclick="goToDashboard('${org.slug}')" title="Voir le dashboard">Dashboard</button>
-              <button class="btn-sm btn-outline" onclick="selectOrg(${org.id}, '${org.short_name}', '${org.slug}', {clubs: ${org.club_count || 0}, players: ${org.player_count || 0}, admin: '${(org.admin_username || '-').replace(/'/g, "\\'")}'})" title="Gérer">Gérer</button>
+              <button class="btn-sm btn-outline" onclick="selectOrg(${org.id}, '${org.short_name}', '${org.slug}', {clubs: ${org.club_count || 0}, players: ${org.player_count || 0}, admin: '${(org.admin_username || '-').replace(/'/g, "\\'")}', welcomeSent: ${welcomeSent ? 'true' : 'false'}})" title="Gérer">Gérer</button>
               <button class="btn-sm ${org.is_active ? 'btn-danger' : 'btn-success'}" onclick="toggleActive(${org.id})" title="${org.is_active ? 'Désactiver' : 'Activer'}">${org.is_active ? 'Désact.' : 'Activer'}</button>
               ${org.id !== 1 ? `<button class="btn-sm btn-danger" onclick="deleteOrg(${org.id}, '${org.short_name.replace(/'/g, "\\'")}')" title="Supprimer" style="margin-left: 4px;">Suppr.</button>` : ''}
             </td>
@@ -532,7 +539,17 @@
       document.getElementById('summaryClubs').textContent = stats?.clubs || '-';
       document.getElementById('summaryPlayers').textContent = stats?.players || '-';
       document.getElementById('summaryAdmin').textContent = stats?.admin || '-';
-      document.getElementById('welcomeResult').textContent = '';
+
+      // Show welcome email status
+      const btn = document.getElementById('btnSendWelcome');
+      const result = document.getElementById('welcomeResult');
+      if (stats?.welcomeSent) {
+        btn.textContent = 'Renvoyer l\'email de bienvenue';
+        result.innerHTML = '<span style="color: #2e7d32;">Email de bienvenue déjà envoyé</span>';
+      } else {
+        btn.textContent = 'Envoyer l\'email de bienvenue';
+        result.innerHTML = '<span style="color: #e65100; font-weight: 600;">Email de bienvenue non envoyé</span>';
+      }
 
       // Show sync section
       document.getElementById('syncSection').classList.add('visible');
@@ -568,12 +585,14 @@
 
         document.getElementById('welcomeResult').innerHTML = `<span style="color: #28a745;">${data.message}</span>`;
         showToast(data.message);
+        btn.textContent = 'Renvoyer l\'email de bienvenue';
+        // Refresh table to update badge
+        loadOrganizations();
       } catch (error) {
         document.getElementById('welcomeResult').innerHTML = `<span style="color: #dc3545;">${error.message}</span>`;
         showToast(error.message, 'error');
       } finally {
         btn.disabled = false;
-        btn.textContent = 'Envoyer l\'email de bienvenue';
       }
     }
 

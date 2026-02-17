@@ -153,6 +153,18 @@
         </div>
       </div>
 
+      <!-- Pending welcome emails alert -->
+      <div id="pendingWelcomeAlert" style="display: none; background: #fff3cd; border: 1px solid #ffc107; border-radius: 8px; padding: 12px 16px; margin-bottom: 16px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="font-size: 20px;">&#9993;</span>
+          <div style="flex: 1;">
+            <strong style="color: #856404;">Emails de bienvenue en attente</strong>
+            <div id="pendingWelcomeList" style="font-size: 13px; color: #856404; margin-top: 4px;"></div>
+          </div>
+          <a href="super-admin-cdbs.html" class="btn-sm btn-primary" style="white-space: nowrap;">Aller aux CDBs</a>
+        </div>
+      </div>
+
       <!-- CDB Enrolments -->
       <div class="section-title">Inscriptions CDB <span id="enrolmentCount" style="font-weight: normal; color: #999;"></span></div>
       <div class="progress-card" style="overflow-x: auto;">
@@ -257,6 +269,14 @@
         if (!enrolments.length) {
           tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#999;">Aucun CDB inscrit</td></tr>';
           return;
+        }
+
+        // Show pending welcome email alert
+        const pendingWelcome = enrolments.filter(o => !o.welcome_email_sent_at && o.is_active);
+        if (pendingWelcome.length > 0) {
+          document.getElementById('pendingWelcomeAlert').style.display = 'block';
+          document.getElementById('pendingWelcomeList').textContent =
+            pendingWelcome.map(o => o.short_name).join(', ') + ` (${pendingWelcome.length})`;
         }
 
         tbody.innerHTML = enrolments.map((org, idx) => {

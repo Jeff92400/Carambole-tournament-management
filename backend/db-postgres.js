@@ -51,6 +51,9 @@ async function initializeDatabase() {
       )
     `);
 
+    // Migration: add welcome_email_sent_at column
+    await client.query(`ALTER TABLE organizations ADD COLUMN IF NOT EXISTS welcome_email_sent_at TIMESTAMP`);
+
     // Per-CDB settings (mirrors app_settings pattern but scoped per org)
     await client.query(`
       CREATE TABLE IF NOT EXISTS organization_settings (

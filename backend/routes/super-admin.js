@@ -73,7 +73,7 @@ router.get('/dashboard', async (req, res) => {
 
     // CDB enrolments — progressive list ordered by creation, with ligue name
     const enrolments = await dbAll(`
-      SELECT o.id, o.name, o.short_name, o.slug, o.ffb_cdb_code, o.ffb_ligue_numero, o.is_active, o.created_at,
+      SELECT o.id, o.name, o.short_name, o.slug, o.ffb_cdb_code, o.ffb_ligue_numero, o.is_active, o.created_at, o.welcome_email_sent_at,
         l.nom as ligue_nom,
         (SELECT COUNT(*) FROM players p WHERE p.organization_id = o.id AND UPPER(p.licence) NOT LIKE 'TEST%') as player_count,
         (SELECT COUNT(*) FROM clubs c WHERE c.organization_id = o.id) as club_count,
@@ -1559,6 +1559,9 @@ router.post('/organizations/:id/send-welcome', async (req, res) => {
       subject,
       html: body
     });
+
+    // Record that welcome email was sent
+    await dbRun(`UPDATE organizations SET welcome_email_sent_at = CURRENT_TIMESTAMP WHERE id = $1`, [id]);
 
     logAdminAction({
       req,
