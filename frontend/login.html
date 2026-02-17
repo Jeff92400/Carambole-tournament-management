@@ -47,8 +47,9 @@
   <script>
     const API_URL = '/api';
 
-    // Initialize public branding
-    initPublicBranding();
+    // Initialize public branding (pass org slug from URL if present)
+    const initOrgSlug = new URLSearchParams(window.location.search).get('org');
+    initPublicBranding(initOrgSlug);
 
     // Show session expired message if present
     const sessionExpiredMessage = sessionStorage.getItem('sessionExpiredMessage');

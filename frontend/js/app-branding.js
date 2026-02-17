@@ -136,18 +136,15 @@ function updateFavicon(url) {
  * Initialize branding for public pages (no auth required)
  * Uses /logo.png public endpoint for dynamic logo
  * Also fetches organization name from public branding endpoint
+ * @param {string} orgSlug - optional org slug from URL param (e.g., 'cdb94')
  */
-async function initPublicBranding() {
-  // Use the public /logo.png endpoint with cache-busting
-  const logoUrl = '/logo.png?v=' + Date.now();
-
-  updateFavicon(logoUrl);
-
+async function initPublicBranding(orgSlug) {
   const headerIcon = document.getElementById('app-header-icon');
 
-  // Fetch organization name and logo size from public branding endpoint
+  // Fetch organization name and colors from branding endpoint (with org slug if provided)
+  const brandingUrl = '/api/settings/branding/colors' + (orgSlug ? '?org=' + encodeURIComponent(orgSlug) : '');
   try {
-    const response = await fetch('/api/settings/branding/colors');
+    const response = await fetch(brandingUrl);
     if (response.ok) {
       const data = await response.json();
       const orgNameEl = document.getElementById('app-org-name');
@@ -165,6 +162,11 @@ async function initPublicBranding() {
   } catch (error) {
     console.log('[Branding] Could not fetch branding for public page:', error);
   }
+
+  // Logo: use org-specific logo only for default org, otherwise FFB icon
+  // (organization_logo table is not yet org-scoped, so only the primary CDB has a custom logo)
+  const logoUrl = orgSlug ? DEFAULT_LOGO_PATH : '/logo.png?v=' + Date.now();
+  updateFavicon(logoUrl);
 
   if (headerIcon) {
     headerIcon.src = logoUrl;

@@ -1085,8 +1085,9 @@ router.get('/category-mappings/lookup', authenticateToken, (req, res) => {
 // Get logo info
 router.get('/organization-logo', authenticateToken, (req, res) => {
   const db = getDb();
+  const orgId = req.user?.organizationId || null;
 
-  db.get('SELECT id, filename, content_type, LENGTH(file_data) as size, created_at FROM organization_logo ORDER BY created_at DESC LIMIT 1', [], (err, row) => {
+  db.get('SELECT id, filename, content_type, LENGTH(file_data) as size, created_at FROM organization_logo WHERE ($1::int IS NULL OR organization_id = $1) ORDER BY created_at DESC LIMIT 1', [orgId], (err, row) => {
     if (err) {
       console.error('Error checking logo:', err);
       return res.status(500).json({ error: 'Erreur lors de la vérification du logo' });
@@ -1138,15 +1139,17 @@ router.post('/organization-logo', authenticateToken, requireAdmin, logoUpload.si
   const { originalname, mimetype, buffer } = req.file;
   const uploadedBy = req.user?.username || 'admin';
 
-  // Delete existing logo and insert new one
-  db.run('DELETE FROM organization_logo', [], (err) => {
+  const orgId = req.user?.organizationId || null;
+
+  // Delete existing logo for this org and insert new one
+  db.run('DELETE FROM organization_logo WHERE ($1::int IS NULL OR organization_id = $1)', [orgId], (err) => {
     if (err) {
       console.error('Error deleting old logo:', err);
     }
 
     db.run(
-      'INSERT INTO organization_logo (filename, content_type, file_data, uploaded_by) VALUES ($1, $2, $3, $4)',
-      [originalname, mimetype, buffer, uploadedBy],
+      'INSERT INTO organization_logo (filename, content_type, file_data, uploaded_by, organization_id) VALUES ($1, $2, $3, $4, $5)',
+      [originalname, mimetype, buffer, uploadedBy, orgId],
       function(err) {
         if (err) {
           console.error('Error saving logo:', err);
@@ -1169,8 +1172,9 @@ router.post('/organization-logo', authenticateToken, requireAdmin, logoUpload.si
 // Delete logo (admin only)
 router.delete('/organization-logo', authenticateToken, requireAdmin, (req, res) => {
   const db = getDb();
+  const orgId = req.user?.organizationId || null;
 
-  db.run('DELETE FROM organization_logo', [], function(err) {
+  db.run('DELETE FROM organization_logo WHERE ($1::int IS NULL OR organization_id = $1)', [orgId], function(err) {
     if (err) {
       console.error('Error deleting logo:', err);
       return res.status(500).json({ error: 'Erreur lors de la suppression du logo' });
