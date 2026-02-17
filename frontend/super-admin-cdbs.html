@@ -82,12 +82,6 @@
         <h2 style="margin-bottom: 0;"><img id="app-header-icon" src="images/FFB.png" alt="" style="height: 48px; width: 48px; vertical-align: middle; margin-right: 8px; border-radius: 6px;" onerror="this.src='images/FrenchBillard-Icon-small.png';"><span id="app-org-name" data-page-title="Super Admin">Plateforme Gestion des Tournois CDB</span></h2>
       </div>
       <div class="nav-links">
-        <div class="nav-dropdown">
-          <button class="nav-dropdown-btn nav-tooltip" data-tooltip="Aller vers un CDB">CDB</button>
-          <div class="nav-dropdown-content" id="cdbDropdown">
-            <a href="dashboard.html" style="color:#999;font-size:12px;">Chargement...</a>
-          </div>
-        </div>
         <a href="#" id="logoutBtn" class="nav-logout">Déconnexion</a>
       </div>
     </div>
@@ -137,6 +131,7 @@
               <th>N°</th>
               <th>Nom</th>
               <th>Code FFB</th>
+              <th>Clubs</th>
               <th>Joueurs</th>
               <th>Utilisateurs</th>
               <th>Inscription</th>
@@ -145,7 +140,7 @@
             </tr>
           </thead>
           <tbody id="orgsTbody">
-            <tr><td colspan="8" style="text-align: center; color: #999;">Chargement...</td></tr>
+            <tr><td colspan="9" style="text-align: center; color: #999;">Chargement...</td></tr>
           </tbody>
         </table>
       </div>
@@ -221,17 +216,6 @@
       </div>
     </div>
 
-    <!-- Post-creation: Seeding section (hidden until org is created) -->
-    <div class="card seed-section" id="seedSection">
-      <h3>Import des joueurs FFB — <span id="seedOrgName"></span></h3>
-      <div id="seedPreview" style="margin-bottom: 12px;"></div>
-      <div style="display: flex; gap: 8px;">
-        <button class="btn-sm btn-primary btn-lg" onclick="previewSeed()" id="btnPreview">Analyser les joueurs FFB</button>
-        <button class="btn-sm btn-success btn-lg" onclick="executeSeed()" id="btnSeed" style="display: none;">Importer les joueurs</button>
-      </div>
-      <div id="seedResult" style="margin-top: 12px;"></div>
-    </div>
-
     <!-- Sync Players with FFB (visible when an org is selected) -->
     <div class="card seed-section" id="syncSection">
       <h3>Synchroniser les joueurs avec le fichier FFB — <span id="syncOrgName"></span></h3>
@@ -282,7 +266,7 @@
         const tbody = document.getElementById('orgsTbody');
 
         if (orgs.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: #999;">Aucune organisation</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; color: #999;">Aucune organisation</td></tr>';
           return;
         }
 
@@ -294,11 +278,13 @@
             <td><strong>#${enrollNum}</strong></td>
             <td><strong>${org.short_name}</strong><br><span style="font-size: 11px; color: #888;">${org.name}</span><br><code style="font-size: 10px; color: #aaa;">${org.slug}</code></td>
             <td>${org.ffb_cdb_code || '-'}</td>
+            <td>${org.club_count || 0}</td>
             <td>${org.player_count || 0}</td>
             <td>${org.user_count || 0}</td>
             <td style="font-size: 12px; white-space: nowrap;">${enrollDate}</td>
             <td><span class="badge ${org.is_active ? 'badge-active' : 'badge-inactive'}">${org.is_active ? 'Actif' : 'Inactif'}</span></td>
-            <td>
+            <td style="white-space: nowrap;">
+              <button class="btn-sm btn-primary" onclick="goToDashboard('${org.slug}')" title="Voir le dashboard">Dashboard</button>
               <button class="btn-sm btn-outline" onclick="selectOrg(${org.id}, '${org.short_name}', '${org.slug}')" title="Gérer">Gérer</button>
               <button class="btn-sm ${org.is_active ? 'btn-danger' : 'btn-success'}" onclick="toggleActive(${org.id})" title="${org.is_active ? 'Désactiver' : 'Activer'}">${org.is_active ? 'Désact.' : 'Activer'}</button>
               ${org.id !== 1 ? `<button class="btn-sm btn-danger" onclick="deleteOrg(${org.id}, '${org.short_name.replace(/'/g, "\\'")}')" title="Supprimer" style="margin-left: 4px;">Suppr.</button>` : ''}
@@ -502,13 +488,6 @@
     function selectOrg(orgId, shortName, slug) {
       currentOrgId = orgId;
 
-      // Show seed section
-      document.getElementById('seedSection').classList.add('visible');
-      document.getElementById('seedOrgName').textContent = shortName;
-      document.getElementById('seedPreview').innerHTML = '';
-      document.getElementById('seedResult').innerHTML = '';
-      document.getElementById('btnSeed').style.display = 'none';
-
       // Show sync section
       document.getElementById('syncSection').classList.add('visible');
       document.getElementById('syncOrgName').textContent = shortName;
@@ -517,81 +496,10 @@
       document.getElementById('btnSyncApply').style.display = 'none';
     }
 
-    // ==================== Player Seeding ====================
-    async function previewSeed() {
-      if (!currentOrgId) return;
-      const btn = document.getElementById('btnPreview');
-      btn.disabled = true;
-      btn.innerHTML = '<span class="spinner"></span>Analyse...';
-
-      try {
-        const res = await authFetch(`${API_URL}/super-admin/organizations/${currentOrgId}/seed-preview`);
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Erreur');
-
-        const previewDiv = document.getElementById('seedPreview');
-        if (data.ffb_licences_count === 0) {
-          previewDiv.innerHTML = '<div style="background: #fff3cd; padding: 12px; border-radius: 8px; color: #856404;">Aucune licence FFB trouvée pour le code CDB "' + data.ffb_cdb_code + '". Vérifiez que les données FFB ont été importées.</div>';
-          return;
-        }
-
-        let html = `<div class="seed-preview">
-          <div class="count">${data.ffb_licences_count} joueurs FFB trouvés</div>
-          <div style="font-size: 13px; color: #555; margin: 4px 0;">Code CDB: ${data.ffb_cdb_code} | Joueurs existants: ${data.existing_players}</div>`;
-
-        if (data.preview && data.preview.length > 0) {
-          html += `<table><thead><tr><th>Licence</th><th>Prénom</th><th>Nom</th><th>Catégorie</th><th>Discipline</th></tr></thead><tbody>`;
-          data.preview.forEach(p => {
-            html += `<tr><td>${p.licence}</td><td>${p.prenom || ''}</td><td>${p.nom || ''}</td><td>${p.categorie || ''}</td><td>${p.discipline || ''}</td></tr>`;
-          });
-          html += `</tbody></table>`;
-          if (data.ffb_licences_count > 10) {
-            html += `<div style="font-size: 11px; color: #888; margin-top: 4px;">... et ${data.ffb_licences_count - 10} autres</div>`;
-          }
-        }
-        html += `</div>`;
-        previewDiv.innerHTML = html;
-
-        // Show import button
-        document.getElementById('btnSeed').style.display = 'inline-block';
-      } catch (error) {
-        showToast(error.message, 'error');
-      } finally {
-        btn.disabled = false;
-        btn.textContent = 'Analyser les joueurs FFB';
-      }
-    }
-
-    async function executeSeed() {
-      if (!currentOrgId) return;
-      if (!confirm('Importer les joueurs FFB dans cette organisation ?')) return;
-
-      const btn = document.getElementById('btnSeed');
-      btn.disabled = true;
-      btn.innerHTML = '<span class="spinner"></span>Import...';
-
-      try {
-        const res = await authFetch(`${API_URL}/super-admin/organizations/${currentOrgId}/seed-players`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' }
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Erreur');
-
-        document.getElementById('seedResult').innerHTML = `
-          <div style="background: #d4edda; padding: 12px; border-radius: 8px; color: #155724;">
-            <strong>${data.created} joueurs créés</strong>, ${data.updated} mis à jour
-            ${data.errors > 0 ? `, <span style="color: #dc3545;">${data.errors} erreurs</span>` : ''}
-          </div>`;
-
-        showToast(`${data.created} joueurs importés pour ${data.organization}`);
-        loadOrganizations();
-      } catch (error) {
-        showToast(error.message, 'error');
-      } finally {
-        btn.disabled = false;
-        btn.textContent = 'Importer les joueurs';
-      }
+    // ==================== Navigate to CDB Dashboard ====================
+    function goToDashboard(slug) {
+      // Store the target org slug so the dashboard loads with that org context
+      window.open(`dashboard.html?org=${slug}`, '_blank');
     }
 
     // ==================== Sync Players with FFB ====================
@@ -795,10 +703,9 @@
 
         showToast(data.message);
 
-        // Hide seed/sync sections if this org was selected
+        // Hide sync section if this org was selected
         if (currentOrgId === orgId) {
           currentOrgId = null;
-          document.getElementById('seedSection').classList.remove('visible');
           document.getElementById('syncSection').classList.remove('visible');
         }
 
@@ -810,21 +717,6 @@
 
     // ==================== Init ====================
     loadOrganizations();
-
-    // Load CDB dropdown in navbar
-    async function loadCdbDropdown() {
-      try {
-        const res = await authFetch(`${API_URL}/super-admin/organizations`);
-        const orgs = await res.json();
-        const dropdown = document.getElementById('cdbDropdown');
-        if (!orgs || !orgs.length) { dropdown.innerHTML = '<a href="#" style="color:#999;">Aucun CDB</a>'; return; }
-        dropdown.innerHTML = orgs.map(o =>
-          `<a href="dashboard.html"><span>${o.short_name}${o.ffb_cdb_code ? ' (' + o.ffb_cdb_code + ')' : ''}</span></a>`
-        ).join('');
-      } catch(e) { console.error('CDB dropdown error:', e); }
-    }
-
-    loadCdbDropdown();
   </script>
   <div style="position: fixed; bottom: 8px; right: 12px; font-size: 10px; color: #bbb; z-index: 9999;">SA 1.0.0</div>
 </body>
