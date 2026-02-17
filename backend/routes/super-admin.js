@@ -756,37 +756,51 @@ router.delete('/organizations/:id', async (req, res) => {
       return res.status(403).json({ error: 'Impossible de supprimer l\'organisation principale' });
     }
 
-    // Delete all org-scoped data — find ALL FK references dynamically
-    const fkRows = await dbAll(`
-      SELECT DISTINCT conrelid::regclass::text AS table_name
+    // Delete org and ALL related data using temporary CASCADE on FK constraints
+    // 1. Find all FK constraints pointing to organizations
+    const fkConstraints = await dbAll(`
+      SELECT conname, conrelid::regclass::text AS table_name
       FROM pg_constraint
       WHERE confrelid = 'organizations'::regclass AND contype = 'f'
     `);
-    const fkTableNames = fkRows.map(r => r.table_name);
-    console.log(`[Delete org ${id}] FK tables found:`, fkTableNames);
+    console.log(`[Delete org ${id}] Dropping FK constraints temporarily...`);
 
-    // Multiple passes to handle inter-table FK dependencies
-    // (e.g. inscriptions → categories → organizations)
-    const counts = {};
-    for (let pass = 0; pass < 3; pass++) {
-      for (const table of fkTableNames) {
-        if (counts[table] === 'done') continue; // Already succeeded
-        try {
-          const result = await dbRun(
-            `DELETE FROM ${table} WHERE organization_id = $1`,
-            [id]
-          );
-          counts[table] = 'done';
-          console.log(`  [Pass ${pass + 1}] Deleted from ${table}: ${result.changes || 0} rows`);
-        } catch (err) {
-          console.log(`  [Pass ${pass + 1}] ${table}: deferred (${err.message.substring(0, 60)})`);
-        }
+    // 2. Drop all FK constraints to organizations
+    for (const fk of fkConstraints) {
+      try {
+        await dbRun(`ALTER TABLE ${fk.table_name} DROP CONSTRAINT ${fk.conname}`);
+      } catch (err) {
+        console.error(`  Could not drop ${fk.conname}:`, err.message);
       }
     }
 
-    // Delete the organization itself
+    // 3. Delete org data from all tables that have organization_id
+    const orgTables = await dbAll(`
+      SELECT DISTINCT table_name FROM information_schema.columns
+      WHERE column_name = 'organization_id' AND table_schema = 'public'
+        AND table_name != 'organizations'
+    `);
+    for (const row of orgTables) {
+      try {
+        await dbRun(`DELETE FROM ${row.table_name} WHERE organization_id = $1`, [id]);
+      } catch (err) {
+        console.log(`  ${row.table_name}: skip (${err.message.substring(0, 50)})`);
+      }
+    }
+
+    // 4. Delete the organization
     await dbRun(`DELETE FROM organizations WHERE id = $1`, [id]);
-    console.log(`[Delete org ${id}] Organization deleted successfully`);
+    console.log(`[Delete org ${id}] Organization deleted`);
+
+    // 5. Re-add FK constraints
+    for (const fk of fkConstraints) {
+      try {
+        await dbRun(`ALTER TABLE ${fk.table_name} ADD CONSTRAINT ${fk.conname} FOREIGN KEY (organization_id) REFERENCES organizations(id)`);
+      } catch (err) {
+        console.error(`  Could not re-add ${fk.conname}:`, err.message);
+      }
+    }
+    console.log(`[Delete org ${id}] FK constraints restored`);
 
     // Log the action
     try {
