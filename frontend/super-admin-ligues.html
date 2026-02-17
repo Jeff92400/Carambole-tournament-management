@@ -84,12 +84,6 @@
         <h2 style="margin-bottom: 0;"><img id="app-header-icon" src="images/FFB.png" alt="" style="height: 48px; width: 48px; vertical-align: middle; margin-right: 8px; border-radius: 6px;" onerror="this.src='images/FrenchBillard-Icon-small.png';"><span id="app-org-name" data-page-title="Super Admin">Plateforme Gestion des Tournois CDB</span></h2>
       </div>
       <div class="nav-links">
-        <div class="nav-dropdown">
-          <button class="nav-dropdown-btn nav-tooltip" data-tooltip="Aller vers un CDB">CDB</button>
-          <div class="nav-dropdown-content" id="cdbDropdown">
-            <a href="dashboard.html" style="color:#999;font-size:12px;">Chargement...</a>
-          </div>
-        </div>
         <a href="#" id="logoutBtn" class="nav-logout">Déconnexion</a>
       </div>
     </div>
@@ -400,22 +394,8 @@
       if (e.target === document.getElementById('editModal')) closeModal();
     });
 
-    // Load CDB dropdown in navbar
-    async function loadCdbDropdown() {
-      try {
-        const res = await authFetch(`${API_URL}/super-admin/organizations`);
-        const orgs = await res.json();
-        const dropdown = document.getElementById('cdbDropdown');
-        if (!orgs || !orgs.length) { dropdown.innerHTML = '<a href="#" style="color:#999;">Aucun CDB</a>'; return; }
-        dropdown.innerHTML = orgs.map(o =>
-          `<a href="dashboard.html"><span>${o.short_name}${o.ffb_cdb_code ? ' (' + o.ffb_cdb_code + ')' : ''}</span></a>`
-        ).join('');
-      } catch(e) { console.error('CDB dropdown error:', e); }
-    }
-
     // ==================== Init ====================
     loadLigues();
-    loadCdbDropdown();
   </script>
   <div style="position: fixed; bottom: 8px; right: 12px; font-size: 10px; color: #bbb; z-index: 9999;">SA 1.0.0</div>
 </body>
