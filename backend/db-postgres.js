@@ -1296,6 +1296,9 @@ async function initializeDatabase() {
       ON CONFLICT (id) DO NOTHING
     `);
 
+    // Rename legacy admin to admin92 (one-time migration)
+    await client.query(`UPDATE users SET username = 'admin92' WHERE username = 'admin' AND organization_id = 1`);
+
     // Assign all existing data to org #1 if not yet assigned
     await client.query(`UPDATE users SET organization_id = 1 WHERE organization_id IS NULL`);
     await client.query(`UPDATE players SET organization_id = 1 WHERE organization_id IS NULL`);

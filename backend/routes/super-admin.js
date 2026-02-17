@@ -241,6 +241,53 @@ router.put('/users/:id/super-admin', (req, res) => {
   );
 });
 
+// PUT /api/super-admin/users/:id — Edit user (username, email, password)
+router.put('/users/:id', async (req, res) => {
+  const { id } = req.params;
+  const { username, email, password } = req.body;
+
+  try {
+    const user = await dbGet(`SELECT id, username FROM users WHERE id = $1`, [id]);
+    if (!user) return res.status(404).json({ error: 'Utilisateur non trouvé' });
+
+    // Check username uniqueness if changed
+    if (username && username !== user.username) {
+      const dup = await dbGet(`SELECT id FROM users WHERE username = $1 AND id != $2`, [username, id]);
+      if (dup) return res.status(409).json({ error: 'Ce nom d\'utilisateur existe déjà' });
+    }
+
+    const updates = [];
+    const params = [];
+    let idx = 1;
+
+    if (username) { updates.push(`username = $${idx++}`); params.push(username); }
+    if (email !== undefined) { updates.push(`email = $${idx++}`); params.push(email || null); }
+    if (password) {
+      if (password.length < 6) return res.status(400).json({ error: 'Mot de passe: 6 caractères minimum' });
+      const hash = await bcrypt.hash(password, 10);
+      updates.push(`password_hash = $${idx++}`); params.push(hash);
+    }
+
+    if (updates.length === 0) return res.status(400).json({ error: 'Rien à modifier' });
+
+    params.push(id);
+    await dbRun(`UPDATE users SET ${updates.join(', ')} WHERE id = $${idx}`, params);
+
+    logAdminAction({
+      req,
+      action: ACTION_TYPES.USER_UPDATED,
+      targetType: 'user',
+      targetId: id,
+      details: `Utilisateur ${user.username} modifié${username && username !== user.username ? ` → ${username}` : ''}`
+    });
+
+    res.json({ success: true, message: 'Utilisateur modifié' });
+  } catch (error) {
+    console.error('Error updating user:', error);
+    res.status(500).json({ error: 'Erreur: ' + error.message });
+  }
+});
+
 // POST /api/super-admin/ligue-admins — Create a ligue admin user
 router.post('/ligue-admins', async (req, res) => {
   const { username, email, password, ffb_ligue_numero, ffb_licence } = req.body;
