@@ -151,10 +151,16 @@
     <div class="card create-form" id="createForm">
       <h3>Créer un nouveau CDB</h3>
       <div class="form-grid">
-        <div class="form-group" style="grid-column: 1 / -1;">
+        <div class="form-group">
+          <label>Ligue</label>
+          <select id="ffbLigueSelect" onchange="onLigueSelected()" style="width: 100%; padding: 8px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; box-sizing: border-box;">
+            <option value="">-- Sélectionner une Ligue --</option>
+          </select>
+        </div>
+        <div class="form-group">
           <label>CDB (depuis fichier FFB)</label>
           <select id="ffbCdbSelect" onchange="onFfbCdbSelected()" style="width: 100%; padding: 8px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; box-sizing: border-box;">
-            <option value="">-- Sélectionner un CDB --</option>
+            <option value="">-- Sélectionner d'abord une Ligue --</option>
           </select>
         </div>
         <div class="form-group">
@@ -308,8 +314,8 @@
           const enrollNum = String(idx + 1).padStart(3, '0');
           const welcomeSent = org.welcome_email_sent_at;
           const welcomeBadge = welcomeSent
-            ? `<span class="badge badge-active" title="Envoyé le ${new Date(welcomeSent).toLocaleDateString('fr-FR')}">Envoyé</span>`
-            : `<span class="badge badge-warning" title="Email de bienvenue non envoyé">En attente</span>`;
+            ? `<span class="badge badge-active" style="cursor: pointer;" onclick="toggleWelcomeStatus(${org.id}, false)" title="Envoyé le ${new Date(welcomeSent).toLocaleDateString('fr-FR')} — Cliquer pour remettre en attente">Envoyé</span>`
+            : `<span class="badge badge-warning" style="cursor: pointer;" onclick="toggleWelcomeStatus(${org.id}, true)" title="Cliquer pour marquer comme envoyé">En attente</span>`;
           return `
           <tr>
             <td><strong>#${enrollNum}</strong></td>
@@ -335,19 +341,53 @@
       }
     }
 
-    // ==================== FFB CDB Picklist ====================
+    // ==================== Toggle Welcome Email Status ====================
+    async function toggleWelcomeStatus(orgId, markAsSent) {
+      try {
+        await authFetch(`${API_URL}/super-admin/organizations/${orgId}/welcome-status`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sent: markAsSent })
+        });
+        showToast(markAsSent ? 'Marqué comme envoyé' : 'Remis en attente');
+        loadOrganizations();
+      } catch (error) {
+        showToast('Erreur', 'error');
+      }
+    }
+
+    // ==================== FFB CDB Picklist with Ligue Filter ====================
     let ffbCdbs = [];
 
     async function loadFfbCdbs() {
       try {
         const res = await authFetch(`${API_URL}/super-admin/ffb-cdbs`);
         ffbCdbs = await res.json();
-        const select = document.getElementById('ffbCdbSelect');
-        select.innerHTML = '<option value="">-- Sélectionner un CDB --</option>' +
-          ffbCdbs.map(c => `<option value="${c.code}">Dept. ${c.code} — ${c.ligue_nom || 'Ligue ' + c.ligue_numero} (${c.licence_count} licenciés, ${c.club_count} clubs)</option>`).join('');
+
+        // Populate ligue selector with distinct ligues
+        const ligues = [...new Map(ffbCdbs.map(c => [c.ligue_numero, c.ligue_nom || 'Ligue ' + c.ligue_numero])).entries()];
+        ligues.sort((a, b) => (a[1] || '').localeCompare(b[1] || ''));
+        const ligueSelect = document.getElementById('ffbLigueSelect');
+        ligueSelect.innerHTML = '<option value="">-- Sélectionner une Ligue --</option>' +
+          ligues.map(([num, nom]) => `<option value="${num}">${nom}</option>`).join('');
+
+        // CDB select starts empty until a ligue is chosen
+        document.getElementById('ffbCdbSelect').innerHTML = '<option value="">-- Sélectionner d\'abord une Ligue --</option>';
       } catch (error) {
         console.error('Error loading FFB CDBs:', error);
       }
+    }
+
+    function onLigueSelected() {
+      const ligueNum = document.getElementById('ffbLigueSelect').value;
+      const select = document.getElementById('ffbCdbSelect');
+      if (!ligueNum) {
+        select.innerHTML = '<option value="">-- Sélectionner d\'abord une Ligue --</option>';
+        return;
+      }
+      const filtered = ffbCdbs.filter(c => c.ligue_numero === ligueNum);
+      select.innerHTML = '<option value="">-- Sélectionner un CDB --</option>' +
+        filtered.map(c => `<option value="${c.code}">Dept. ${c.code} (${c.licence_count} licenciés, ${c.club_count} clubs)</option>`).join('');
     }
 
     function onFfbCdbSelected() {

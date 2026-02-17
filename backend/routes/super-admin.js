@@ -1578,6 +1578,23 @@ router.post('/organizations/:id/send-welcome', async (req, res) => {
   }
 });
 
+// PUT /api/super-admin/organizations/:id/welcome-status — Toggle welcome email status
+router.put('/organizations/:id/welcome-status', async (req, res) => {
+  const { id } = req.params;
+  const { sent } = req.body; // true = mark as sent, false = mark as pending
+  try {
+    if (sent) {
+      await dbRun(`UPDATE organizations SET welcome_email_sent_at = CURRENT_TIMESTAMP WHERE id = $1`, [id]);
+    } else {
+      await dbRun(`UPDATE organizations SET welcome_email_sent_at = NULL WHERE id = $1`, [id]);
+    }
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error updating welcome status:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ==================== PLATFORM SETTINGS ====================
 
 // GET /api/super-admin/platform-settings — Get global platform settings
