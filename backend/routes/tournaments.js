@@ -1002,12 +1002,12 @@ router.get('/', authenticateToken, (req, res) => {
     FROM tournaments t
     JOIN categories c ON t.category_id = c.id
     LEFT JOIN tournament_results tr ON tr.tournament_id = t.id
-    WHERE (? IS NULL OR t.organization_id = ?)
+    WHERE ($1::int IS NULL OR t.organization_id = $1)
   `;
 
-  const params = [orgId, orgId];
+  const params = [orgId];
   if (season) {
-    query += ' AND t.season = ?';
+    query += ' AND t.season = $2';
     params.push(season);
   }
 
