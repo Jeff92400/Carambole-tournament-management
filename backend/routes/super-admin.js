@@ -919,6 +919,9 @@ router.delete('/organizations/:id', async (req, res) => {
       }
     }
 
+    // 3b. Clean up club_ffb_mapping for deleted clubs (no organization_id column)
+    await dbRun(`DELETE FROM club_ffb_mapping WHERE club_id NOT IN (SELECT id FROM clubs)`);
+
     // 4. Delete the organization
     await dbRun(`DELETE FROM organizations WHERE id = $1`, [id]);
     console.log(`[Delete org ${id}] Organization deleted`);
