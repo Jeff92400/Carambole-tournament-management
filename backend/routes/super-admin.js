@@ -756,7 +756,7 @@ router.delete('/organizations/:id', async (req, res) => {
       return res.status(403).json({ error: 'Impossible de supprimer l\'organisation principale' });
     }
 
-    // Delete all org-scoped data — use pg_constraint to find ALL FK references dynamically
+    // Delete all org-scoped data — find ALL FK references dynamically
     const fkRows = await dbAll(`
       SELECT DISTINCT conrelid::regclass::text AS table_name
       FROM pg_constraint
@@ -765,18 +765,22 @@ router.delete('/organizations/:id', async (req, res) => {
     const fkTableNames = fkRows.map(r => r.table_name);
     console.log(`[Delete org ${id}] FK tables found:`, fkTableNames);
 
+    // Multiple passes to handle inter-table FK dependencies
+    // (e.g. inscriptions → categories → organizations)
     const counts = {};
-    for (const table of fkTableNames) {
-      try {
-        const result = await dbRun(
-          `DELETE FROM ${table} WHERE organization_id = $1`,
-          [id]
-        );
-        counts[table] = result.changes || 0;
-        console.log(`  Deleted from ${table}: ${result.changes || 0} rows`);
-      } catch (err) {
-        console.error(`  Delete from ${table} FAILED:`, err.message);
-        counts[table] = `error: ${err.message}`;
+    for (let pass = 0; pass < 3; pass++) {
+      for (const table of fkTableNames) {
+        if (counts[table] === 'done') continue; // Already succeeded
+        try {
+          const result = await dbRun(
+            `DELETE FROM ${table} WHERE organization_id = $1`,
+            [id]
+          );
+          counts[table] = 'done';
+          console.log(`  [Pass ${pass + 1}] Deleted from ${table}: ${result.changes || 0} rows`);
+        } catch (err) {
+          console.log(`  [Pass ${pass + 1}] ${table}: deferred (${err.message.substring(0, 60)})`);
+        }
       }
     }
 
