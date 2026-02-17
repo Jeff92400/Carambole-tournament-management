@@ -363,7 +363,7 @@
     if (!requireAuth()) throw new Error('Not authenticated');
     if (localStorage.getItem('isSuperAdmin') !== 'true') {
       localStorage.clear();
-      window.location.href = 'login.html';
+      window.location.href = 'login.html?sa=1';
       throw new Error('Not super admin');
     }
     if (typeof initPublicBranding === 'function') initPublicBranding();

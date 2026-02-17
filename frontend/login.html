@@ -47,9 +47,17 @@
   <script>
     const API_URL = '/api';
 
-    // Initialize public branding (pass org slug from URL if present)
+    // Initialize branding based on context
     const initOrgSlug = new URLSearchParams(window.location.search).get('org');
-    initPublicBranding(initOrgSlug);
+    const isSaLogin = new URLSearchParams(window.location.search).get('sa') === '1';
+    if (isSaLogin) {
+      // Neutral platform branding for SA login
+      document.getElementById('app-org-name').textContent = 'Plateforme FFB';
+      document.getElementById('app-header-icon').src = 'images/FFB.png';
+      document.title = 'Connexion - Super Admin';
+    } else {
+      initPublicBranding(initOrgSlug);
+    }
 
     // Show session expired message if present
     const sessionExpiredMessage = sessionStorage.getItem('sessionExpiredMessage');
@@ -128,8 +136,10 @@
           if (data.user.ffb_ligue_numero) {
             localStorage.setItem('ligueNumero', data.user.ffb_ligue_numero);
           }
-          // Redirect based on role
-          if (data.user.role === 'ligue_admin') {
+          // Redirect based on role and context
+          if (isSaLogin && data.user.is_super_admin) {
+            window.location.href = 'super-admin.html';
+          } else if (data.user.role === 'ligue_admin') {
             window.location.href = 'ligue-dashboard.html';
           } else {
             window.location.href = 'dashboard.html';
