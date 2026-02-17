@@ -691,6 +691,64 @@ router.post('/organizations', async (req, res) => {
       );
     }
 
+    // Auto-seed clubs from FFB clubs if CDB code is set
+    let clubStats = { created: 0, skipped: 0, errors: 0 };
+    if (ffb_cdb_code) {
+      try {
+        const ffbClubs = await dbAll(
+          `SELECT numero, nom, sigle, code_postal, ville, email, tel, raw_data FROM ffb_clubs WHERE cdb_code = $1`,
+          [ffb_cdb_code]
+        );
+
+        for (const fc of ffbClubs) {
+          try {
+            const clubName = (fc.nom || '').toUpperCase().trim();
+            if (!clubName) { clubStats.skipped++; continue; }
+
+            // Extract president/resp from raw_data
+            const rd = fc.raw_data ? (typeof fc.raw_data === 'string' ? JSON.parse(fc.raw_data) : fc.raw_data) : {};
+            let presName = '', presEmail = '';
+            let respName = '', respEmail = '', respLicence = '';
+            for (const [key, val] of Object.entries(rd)) {
+              const k = key.toLowerCase();
+              if (k.includes('sident') && k.includes('_nom') && val) presName = val;
+              if (k.includes('sident') && k.includes('_email') && val) presEmail = val;
+              if (k.includes('responsable') && k.includes('carambole') && k.includes('_nom') && val) respName = val;
+              if (k.includes('responsable') && k.includes('carambole') && k.includes('_email') && val) respEmail = val;
+              if (k.includes('responsable') && k.includes('carambole') && !k.includes('_nom') && !k.includes('_email') && val) respLicence = val;
+            }
+
+            await dbRun(
+              `INSERT INTO clubs (name, display_name, city, zip_code, phone, email, president, president_email, responsable_sportif_name, responsable_sportif_email, responsable_sportif_licence, organization_id)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+               ON CONFLICT (name) DO NOTHING`,
+              [clubName, fc.nom || clubName, fc.ville || null, fc.code_postal || null, fc.tel || null, fc.email || null,
+               presName || null, presEmail || null, respName || null, respEmail || null, respLicence || null, orgId]
+            );
+
+            // Create club_ffb_mapping linking club to FFB club numero
+            const insertedClub = await dbGet(`SELECT id FROM clubs WHERE name = $1`, [clubName]);
+            if (insertedClub) {
+              await dbRun(
+                `INSERT INTO club_ffb_mapping (club_id, ffb_club_numero, mapped_by) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
+                [insertedClub.id, fc.numero, 'auto-seed']
+              );
+            }
+            clubStats.created++;
+          } catch (clubErr) {
+            // ON CONFLICT counts as skipped, not error
+            if (clubErr.message && clubErr.message.includes('UNIQUE')) {
+              clubStats.skipped++;
+            } else {
+              clubStats.errors++;
+            }
+          }
+        }
+      } catch (seedErr) {
+        console.error('Error auto-seeding clubs:', seedErr);
+      }
+    }
+
     // Auto-seed players from FFB licences if CDB code is set
     let playerStats = { created: 0, updated: 0, errors: 0 };
     if (ffb_cdb_code) {
@@ -738,7 +796,7 @@ router.post('/organizations', async (req, res) => {
       action: ACTION_TYPES.USER_CREATED || 'user_created',
       targetType: 'organization',
       targetId: orgId,
-      details: `Organisation "${short_name}" créée avec admin "${admin_username}". Joueurs: ${playerStats.created} créés, ${playerStats.updated} mis à jour.`
+      details: `Organisation "${short_name}" créée avec admin "${admin_username}". Clubs: ${clubStats.created} créés. Joueurs: ${playerStats.created} créés, ${playerStats.updated} mis à jour.`
     });
 
     res.json({
@@ -751,9 +809,10 @@ router.post('/organizations', async (req, res) => {
         ffb_cdb_code,
         ffb_ligue_numero
       },
+      clubs: clubStats,
       players: playerStats,
       login_url: `/login.html?org=${slug}`,
-      message: `Organisation "${short_name}" créée avec succès${playerStats.created > 0 ? ` — ${playerStats.created} joueurs importés` : ''}`
+      message: `Organisation "${short_name}" créée avec succès${clubStats.created > 0 ? ` — ${clubStats.created} clubs` : ''}${playerStats.created > 0 ? `, ${playerStats.created} joueurs importés` : ''}`
     });
   } catch (error) {
     console.error('Error creating organization:', error);

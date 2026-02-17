@@ -478,7 +478,10 @@
         const result = await res.json();
         if (!res.ok) throw new Error(result.error || 'Erreur');
 
-        showToast(`Organisation "${data.short_name}" créée !`);
+        const clubCount = result.clubs?.created || 0;
+        const playerCount = result.players?.created || 0;
+        const details = [clubCount > 0 ? `${clubCount} clubs` : '', playerCount > 0 ? `${playerCount} joueurs` : ''].filter(Boolean).join(', ');
+        showToast(`Organisation "${data.short_name}" créée !${details ? ` (${details} importés)` : ''}`);
         currentOrgId = result.organization.id;
 
         // Hide create form, show seed + email sections

@@ -159,9 +159,10 @@ router.post('/', authenticateToken, upload.single('logo'), (req, res) => {
     return res.status(400).json({ error: 'Name and display name are required' });
   }
 
+  const orgId = req.user?.organizationId || null;
   db.run(
-    'INSERT INTO clubs (name, display_name, logo_filename, street, city, zip_code, phone, email, president, president_email, responsable_sportif_name, responsable_sportif_email, responsable_sportif_licence, calendar_code) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-    [name, display_name, logo_filename, street || null, city || null, zip_code || null, phone || null, email || null, president || null, president_email || null, responsable_sportif_name || null, responsable_sportif_email || null, responsable_sportif_licence || null, calendar_code || null],
+    'INSERT INTO clubs (name, display_name, logo_filename, street, city, zip_code, phone, email, president, president_email, responsable_sportif_name, responsable_sportif_email, responsable_sportif_licence, calendar_code, organization_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    [name, display_name, logo_filename, street || null, city || null, zip_code || null, phone || null, email || null, president || null, president_email || null, responsable_sportif_name || null, responsable_sportif_email || null, responsable_sportif_licence || null, calendar_code || null, orgId],
     function(err) {
       if (err) {
         if (err.message.includes('UNIQUE')) {
