@@ -903,7 +903,7 @@ router.post('/organizations/:id/seed-players', async (req, res) => {
 
     // Get all FFB licences for this CDB
     const ffbLicences = await dbAll(
-      `SELECT fl.*, fc.nom_court as club_name
+      `SELECT fl.*, fc.nom as club_name
        FROM ffb_licences fl
        LEFT JOIN ffb_clubs fc ON fl.num_club = fc.numero
        WHERE fl.cdb_code = $1`,
@@ -978,6 +978,216 @@ router.post('/organizations/:id/seed-players', async (req, res) => {
   } catch (error) {
     console.error('Error seeding players:', error);
     res.status(500).json({ error: 'Erreur lors de l\'import des joueurs: ' + error.message });
+  }
+});
+
+// ==================== SYNC PLAYERS WITH FFB ====================
+
+// GET /api/super-admin/organizations/:id/sync-preview — Detailed diff between local players and FFB licences
+router.get('/organizations/:id/sync-preview', async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const org = await dbGet(`SELECT id, short_name, ffb_cdb_code FROM organizations WHERE id = $1`, [id]);
+    if (!org) return res.status(404).json({ error: 'Organisation non trouvée' });
+    if (!org.ffb_cdb_code) return res.status(400).json({ error: 'Code CDB FFB non configuré' });
+
+    // Get all FFB licences for this CDB
+    const ffbRows = await dbAll(`
+      SELECT fl.licence, fl.prenom, fl.nom, fl.email, fl.num_club,
+             fl.date_de_naissance, fl.sexe, fl.categorie, fl.discipline,
+             fl.nationalite, fl.arbitre, fl.date_licence,
+             fc.nom as club_nom
+      FROM ffb_licences fl
+      LEFT JOIN ffb_clubs fc ON fl.num_club = fc.numero
+      WHERE fl.cdb_code = $1
+      ORDER BY fl.nom, fl.prenom
+    `, [org.ffb_cdb_code]);
+
+    // Get all existing players for this org
+    const localRows = await dbAll(`
+      SELECT licence, first_name, last_name, club, email,
+             ffb_club_numero, date_of_birth, sexe, ffb_categorie, discipline,
+             nationalite, ffb_last_sync
+      FROM players
+      WHERE organization_id = $1 AND UPPER(licence) NOT LIKE 'TEST%'
+      ORDER BY last_name, first_name
+    `, [id]);
+
+    // Build lookup maps (normalize licence: remove spaces)
+    const localByLicence = {};
+    for (const p of localRows) {
+      localByLicence[p.licence.replace(/\s/g, '')] = p;
+    }
+    const ffbByLicence = {};
+    for (const f of ffbRows) {
+      ffbByLicence[f.licence.replace(/\s/g, '')] = f;
+    }
+
+    const newPlayers = [];
+    const changed = [];
+    const unchanged = [];
+
+    for (const f of ffbRows) {
+      const key = f.licence.replace(/\s/g, '');
+      const local = localByLicence[key];
+
+      if (!local) {
+        newPlayers.push({
+          licence: f.licence,
+          first_name: f.prenom,
+          last_name: f.nom,
+          club: f.club_nom || '',
+          email: f.email || ''
+        });
+      } else {
+        // Compare key fields
+        const diffs = [];
+        const trimOrEmpty = (v) => (v || '').trim();
+
+        if (trimOrEmpty(local.first_name).toUpperCase() !== trimOrEmpty(f.prenom).toUpperCase()) {
+          diffs.push({ field: 'Prénom', local: local.first_name, ffb: f.prenom });
+        }
+        if (trimOrEmpty(local.last_name).toUpperCase() !== trimOrEmpty(f.nom).toUpperCase()) {
+          diffs.push({ field: 'Nom', local: local.last_name, ffb: f.nom });
+        }
+        const localClub = trimOrEmpty(local.club).toUpperCase();
+        const ffbClub = trimOrEmpty(f.club_nom).toUpperCase();
+        if (ffbClub && localClub !== ffbClub) {
+          diffs.push({ field: 'Club', local: local.club || '', ffb: f.club_nom });
+        }
+        if (f.email && trimOrEmpty(local.email).toLowerCase() !== trimOrEmpty(f.email).toLowerCase()) {
+          diffs.push({ field: 'Email', local: local.email || '', ffb: f.email });
+        }
+        if (f.num_club && trimOrEmpty(local.ffb_club_numero) !== trimOrEmpty(f.num_club)) {
+          diffs.push({ field: 'N° Club FFB', local: local.ffb_club_numero || '', ffb: f.num_club });
+        }
+        if (f.categorie && trimOrEmpty(local.ffb_categorie) !== trimOrEmpty(f.categorie)) {
+          diffs.push({ field: 'Catégorie FFB', local: local.ffb_categorie || '', ffb: f.categorie });
+        }
+        if (f.discipline && trimOrEmpty(local.discipline) !== trimOrEmpty(f.discipline)) {
+          diffs.push({ field: 'Discipline', local: local.discipline || '', ffb: f.discipline });
+        }
+
+        if (diffs.length > 0) {
+          changed.push({
+            licence: local.licence,
+            first_name: local.first_name,
+            last_name: local.last_name,
+            ffb_last_sync: local.ffb_last_sync,
+            diffs
+          });
+        } else {
+          unchanged.push({ licence: local.licence, first_name: local.first_name, last_name: local.last_name });
+        }
+      }
+    }
+
+    // Players in local but not in FFB
+    const notInFfb = [];
+    for (const p of localRows) {
+      const key = p.licence.replace(/\s/g, '');
+      if (!ffbByLicence[key]) {
+        notInFfb.push({ licence: p.licence, first_name: p.first_name, last_name: p.last_name, club: p.club || '' });
+      }
+    }
+
+    res.json({
+      organization: org.short_name,
+      ffb_cdb_code: org.ffb_cdb_code,
+      summary: {
+        ffb_total: ffbRows.length,
+        local_total: localRows.length,
+        new_players: newPlayers.length,
+        changed: changed.length,
+        unchanged: unchanged.length,
+        not_in_ffb: notInFfb.length
+      },
+      new_players: newPlayers,
+      changed,
+      not_in_ffb: notInFfb
+    });
+  } catch (error) {
+    console.error('Error sync preview:', error);
+    res.status(500).json({ error: 'Erreur: ' + error.message });
+  }
+});
+
+// POST /api/super-admin/organizations/:id/sync-players — Apply sync from FFB licences
+router.post('/organizations/:id/sync-players', async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const org = await dbGet(`SELECT id, short_name, ffb_cdb_code FROM organizations WHERE id = $1`, [id]);
+    if (!org) return res.status(404).json({ error: 'Organisation non trouvée' });
+    if (!org.ffb_cdb_code) return res.status(400).json({ error: 'Code CDB FFB non configuré' });
+
+    const ffbRows = await dbAll(`
+      SELECT fl.*, fc.nom as club_name
+      FROM ffb_licences fl
+      LEFT JOIN ffb_clubs fc ON fl.num_club = fc.numero
+      WHERE fl.cdb_code = $1
+    `, [org.ffb_cdb_code]);
+
+    let created = 0, updated = 0, unchanged = 0, errors = 0;
+
+    for (const fl of ffbRows) {
+      try {
+        const existing = await dbGet(
+          `SELECT licence, first_name, last_name, club, email FROM players WHERE REPLACE(licence, ' ', '') = REPLACE($1, ' ', '') AND organization_id = $2`,
+          [fl.licence, id]
+        );
+
+        if (!existing) {
+          // Create new player
+          await dbRun(
+            `INSERT INTO players (licence, first_name, last_name, club, email, date_of_birth, sexe, ffb_categorie, discipline, nationalite, ffb_club_numero, organization_id, ffb_last_sync)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, CURRENT_TIMESTAMP)`,
+            [fl.licence, fl.prenom || '', fl.nom || '', fl.club_name || '', fl.email || null,
+             fl.date_de_naissance, fl.sexe, fl.categorie, fl.discipline, fl.nationalite, fl.num_club, id]
+          );
+          created++;
+        } else {
+          // Update existing: overwrite name/club/email from FFB + metadata
+          const result = await dbRun(
+            `UPDATE players SET
+              first_name = COALESCE(NULLIF($1, ''), first_name),
+              last_name = COALESCE(NULLIF($2, ''), last_name),
+              club = CASE WHEN $3 != '' THEN $3 ELSE club END,
+              email = CASE WHEN $4 IS NOT NULL AND $4 != '' THEN $4 ELSE email END,
+              date_of_birth = COALESCE($5, date_of_birth),
+              sexe = COALESCE($6, sexe),
+              ffb_categorie = COALESCE($7, ffb_categorie),
+              discipline = COALESCE($8, discipline),
+              nationalite = COALESCE($9, nationalite),
+              ffb_club_numero = COALESCE($10, ffb_club_numero),
+              ffb_last_sync = CURRENT_TIMESTAMP
+             WHERE REPLACE(licence, ' ', '') = REPLACE($11, ' ', '') AND organization_id = $12`,
+            [fl.prenom || '', fl.nom || '', fl.club_name || '', fl.email || '',
+             fl.date_de_naissance, fl.sexe, fl.categorie, fl.discipline, fl.nationalite, fl.num_club,
+             fl.licence, id]
+          );
+          if (result.changes > 0) updated++;
+          else unchanged++;
+        }
+      } catch (e) {
+        console.error(`Sync error for ${fl.licence}:`, e.message);
+        errors++;
+      }
+    }
+
+    logAdminAction({
+      req,
+      action: 'sync_players',
+      targetType: 'organization',
+      targetId: id,
+      details: `Sync FFB → ${org.short_name}: ${created} créés, ${updated} mis à jour, ${errors} erreurs`
+    });
+
+    res.json({ success: true, organization: org.short_name, created, updated, unchanged, errors });
+  } catch (error) {
+    console.error('Error syncing players:', error);
+    res.status(500).json({ error: 'Erreur: ' + error.message });
   }
 });
 

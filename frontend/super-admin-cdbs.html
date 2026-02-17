@@ -240,6 +240,18 @@
       <div id="seedResult" style="margin-top: 12px;"></div>
     </div>
 
+    <!-- Sync Players with FFB (visible when an org is selected) -->
+    <div class="card seed-section" id="syncSection">
+      <h3>Synchroniser les joueurs avec le fichier FFB — <span id="syncOrgName"></span></h3>
+      <p style="font-size: 12px; color: #888; margin: 0 0 12px 0;">Compare les joueurs existants avec les données FFB et affiche les différences avant application.</p>
+      <div id="syncPreview" style="margin-bottom: 12px;"></div>
+      <div style="display: flex; gap: 8px;">
+        <button class="btn-sm btn-primary btn-lg" onclick="previewSync()" id="btnSyncPreview">Analyser les différences</button>
+        <button class="btn-sm btn-success btn-lg" onclick="executeSync()" id="btnSyncApply" style="display: none;">Appliquer la synchronisation</button>
+      </div>
+      <div id="syncResult" style="margin-top: 12px;"></div>
+    </div>
+
     <!-- Welcome Email Template (always visible) -->
     <div class="card" id="emailSection">
       <h3>Template email de bienvenue</h3>
@@ -546,6 +558,13 @@
       document.getElementById('seedResult').innerHTML = '';
       document.getElementById('btnSeed').style.display = 'none';
 
+      // Show sync section
+      document.getElementById('syncSection').classList.add('visible');
+      document.getElementById('syncOrgName').textContent = shortName;
+      document.getElementById('syncPreview').innerHTML = '';
+      document.getElementById('syncResult').innerHTML = '';
+      document.getElementById('btnSyncApply').style.display = 'none';
+
       // Show org-specific email actions (send to admin + login URL)
       document.getElementById('sendToAdminWrapper').style.display = 'inline';
       const baseUrl = window.location.origin;
@@ -630,6 +649,177 @@
       } finally {
         btn.disabled = false;
         btn.textContent = 'Importer les joueurs';
+      }
+    }
+
+    // ==================== Sync Players with FFB ====================
+    async function previewSync() {
+      if (!currentOrgId) return;
+      const btn = document.getElementById('btnSyncPreview');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span>Analyse en cours...';
+
+      try {
+        const res = await authFetch(`${API_URL}/super-admin/organizations/${currentOrgId}/sync-preview`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Erreur');
+
+        const previewDiv = document.getElementById('syncPreview');
+        const s = data.summary;
+
+        let html = `<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin-bottom: 16px;">
+          <div style="background: #e3f2fd; padding: 10px; border-radius: 8px; text-align: center;">
+            <div style="font-size: 20px; font-weight: bold; color: #1565c0;">${s.ffb_total}</div>
+            <div style="font-size: 11px; color: #666;">Licenciés FFB</div>
+          </div>
+          <div style="background: #f3e5f5; padding: 10px; border-radius: 8px; text-align: center;">
+            <div style="font-size: 20px; font-weight: bold; color: #7b1fa2;">${s.local_total}</div>
+            <div style="font-size: 11px; color: #666;">Joueurs locaux</div>
+          </div>
+          <div style="background: #e8f5e9; padding: 10px; border-radius: 8px; text-align: center;">
+            <div style="font-size: 20px; font-weight: bold; color: #2e7d32;">${s.new_players}</div>
+            <div style="font-size: 11px; color: #666;">Nouveaux</div>
+          </div>
+          <div style="background: #fff3e0; padding: 10px; border-radius: 8px; text-align: center;">
+            <div style="font-size: 20px; font-weight: bold; color: #e65100;">${s.changed}</div>
+            <div style="font-size: 11px; color: #666;">Modifiés</div>
+          </div>
+          <div style="background: #f5f5f5; padding: 10px; border-radius: 8px; text-align: center;">
+            <div style="font-size: 20px; font-weight: bold; color: #666;">${s.unchanged}</div>
+            <div style="font-size: 11px; color: #666;">Inchangés</div>
+          </div>
+        </div>`;
+
+        // Changed players with field-level diffs
+        if (data.changed.length > 0) {
+          html += `<details open style="margin-bottom: 12px;">
+            <summary style="cursor: pointer; font-weight: 600; font-size: 13px; color: #e65100; margin-bottom: 8px;">
+              ${s.changed} joueur(s) avec des modifications
+            </summary>
+            <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+              <thead><tr style="background: #fff3e0;">
+                <th style="padding: 6px 8px; text-align: left;">Joueur</th>
+                <th style="padding: 6px 8px; text-align: left;">Champ</th>
+                <th style="padding: 6px 8px; text-align: left;">Valeur actuelle</th>
+                <th style="padding: 6px 8px; text-align: left;">Valeur FFB</th>
+              </tr></thead><tbody>`;
+
+          for (const p of data.changed) {
+            const rowspan = p.diffs.length;
+            p.diffs.forEach((d, i) => {
+              html += `<tr style="border-bottom: 1px solid #f0f0f0;">`;
+              if (i === 0) {
+                html += `<td style="padding: 6px 8px; vertical-align: top;" rowspan="${rowspan}"><strong>${p.last_name} ${p.first_name}</strong><br><span style="font-size: 10px; color: #888;">${p.licence}</span></td>`;
+              }
+              html += `<td style="padding: 6px 8px;">${d.field}</td>
+                <td style="padding: 6px 8px; color: #c62828; text-decoration: line-through;">${d.local || '<em>vide</em>'}</td>
+                <td style="padding: 6px 8px; color: #2e7d32; font-weight: 600;">${d.ffb}</td>
+              </tr>`;
+            });
+          }
+          html += `</tbody></table></details>`;
+        }
+
+        // New players
+        if (data.new_players.length > 0) {
+          html += `<details style="margin-bottom: 12px;">
+            <summary style="cursor: pointer; font-weight: 600; font-size: 13px; color: #2e7d32; margin-bottom: 8px;">
+              ${s.new_players} nouveau(x) joueur(s) à créer
+            </summary>
+            <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+              <thead><tr style="background: #e8f5e9;">
+                <th style="padding: 6px 8px; text-align: left;">Licence</th>
+                <th style="padding: 6px 8px; text-align: left;">Nom</th>
+                <th style="padding: 6px 8px; text-align: left;">Prénom</th>
+                <th style="padding: 6px 8px; text-align: left;">Club</th>
+              </tr></thead><tbody>`;
+          data.new_players.forEach(p => {
+            html += `<tr style="border-bottom: 1px solid #f0f0f0;">
+              <td style="padding: 6px 8px;">${p.licence}</td>
+              <td style="padding: 6px 8px;">${p.last_name}</td>
+              <td style="padding: 6px 8px;">${p.first_name}</td>
+              <td style="padding: 6px 8px;">${p.club || '-'}</td>
+            </tr>`;
+          });
+          html += `</tbody></table></details>`;
+        }
+
+        // Not in FFB (informational)
+        if (data.not_in_ffb.length > 0) {
+          html += `<details style="margin-bottom: 12px;">
+            <summary style="cursor: pointer; font-weight: 600; font-size: 13px; color: #888; margin-bottom: 8px;">
+              ${s.not_in_ffb} joueur(s) locaux absents du fichier FFB (non supprimés)
+            </summary>
+            <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+              <thead><tr style="background: #f5f5f5;">
+                <th style="padding: 6px 8px; text-align: left;">Licence</th>
+                <th style="padding: 6px 8px; text-align: left;">Nom</th>
+                <th style="padding: 6px 8px; text-align: left;">Prénom</th>
+                <th style="padding: 6px 8px; text-align: left;">Club</th>
+              </tr></thead><tbody>`;
+          data.not_in_ffb.forEach(p => {
+            html += `<tr style="border-bottom: 1px solid #f0f0f0;">
+              <td style="padding: 6px 8px;">${p.licence}</td>
+              <td style="padding: 6px 8px;">${p.last_name}</td>
+              <td style="padding: 6px 8px;">${p.first_name}</td>
+              <td style="padding: 6px 8px;">${p.club || '-'}</td>
+            </tr>`;
+          });
+          html += `</tbody></table></details>`;
+        }
+
+        // No changes needed
+        if (s.new_players === 0 && s.changed === 0) {
+          html += `<div style="background: #e8f5e9; padding: 12px; border-radius: 8px; color: #2e7d32; text-align: center;">
+            Tous les joueurs sont à jour avec le fichier FFB.
+          </div>`;
+        }
+
+        previewDiv.innerHTML = html;
+
+        // Show apply button only if there are changes
+        if (s.new_players > 0 || s.changed > 0) {
+          document.getElementById('btnSyncApply').style.display = 'inline-block';
+        }
+      } catch (error) {
+        showToast(error.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Analyser les différences';
+      }
+    }
+
+    async function executeSync() {
+      if (!currentOrgId) return;
+      if (!confirm('Appliquer la synchronisation FFB ? Les données des joueurs seront mises à jour.')) return;
+
+      const btn = document.getElementById('btnSyncApply');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span>Synchronisation...';
+
+      try {
+        const res = await authFetch(`${API_URL}/super-admin/organizations/${currentOrgId}/sync-players`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Erreur');
+
+        document.getElementById('syncResult').innerHTML = `
+          <div style="background: #d4edda; padding: 12px; border-radius: 8px; color: #155724;">
+            <strong>Synchronisation terminée</strong><br>
+            ${data.created} joueur(s) créé(s), ${data.updated} mis à jour, ${data.unchanged} inchangé(s)
+            ${data.errors > 0 ? `, <span style="color: #dc3545;">${data.errors} erreur(s)</span>` : ''}
+          </div>`;
+
+        showToast(`Sync ${data.organization}: ${data.created} créés, ${data.updated} mis à jour`);
+        document.getElementById('btnSyncApply').style.display = 'none';
+        loadOrganizations();
+      } catch (error) {
+        showToast(error.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Appliquer la synchronisation';
       }
     }
 
