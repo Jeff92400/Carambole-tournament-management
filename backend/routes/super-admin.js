@@ -619,12 +619,54 @@ router.post('/organizations', async (req, res) => {
       );
     }
 
+    // Auto-seed players from FFB licences if CDB code is set
+    let playerStats = { created: 0, updated: 0, errors: 0 };
+    if (ffb_cdb_code) {
+      try {
+        const ffbLicences = await dbAll(
+          `SELECT fl.*, fc.nom as club_name
+           FROM ffb_licences fl
+           LEFT JOIN ffb_clubs fc ON fl.num_club = fc.numero
+           WHERE fl.cdb_code = $1`,
+          [ffb_cdb_code]
+        );
+
+        for (const fl of ffbLicences) {
+          try {
+            const existing = await dbGet(
+              `SELECT licence FROM players WHERE REPLACE(licence, ' ', '') = REPLACE($1, ' ', '')`,
+              [fl.licence]
+            );
+            if (existing) {
+              await dbRun(
+                `UPDATE players SET organization_id = $1, ffb_club_numero = COALESCE($2, ffb_club_numero),
+                 ffb_last_sync = CURRENT_TIMESTAMP WHERE REPLACE(licence, ' ', '') = REPLACE($3, ' ', '')`,
+                [orgId, fl.num_club, fl.licence]
+              );
+              playerStats.updated++;
+            } else {
+              await dbRun(
+                `INSERT INTO players (licence, first_name, last_name, club, email, ffb_club_numero, organization_id, ffb_last_sync)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP)`,
+                [fl.licence, fl.prenom || '', fl.nom || '', fl.club_name || '', fl.email || null, fl.num_club, orgId]
+              );
+              playerStats.created++;
+            }
+          } catch (playerErr) {
+            playerStats.errors++;
+          }
+        }
+      } catch (seedErr) {
+        console.error('Error auto-seeding players:', seedErr);
+      }
+    }
+
     logAdminAction({
       req,
       action: ACTION_TYPES.USER_CREATED || 'user_created',
       targetType: 'organization',
       targetId: orgId,
-      details: `Organisation "${short_name}" créée avec admin "${admin_username}"`
+      details: `Organisation "${short_name}" créée avec admin "${admin_username}". Joueurs: ${playerStats.created} créés, ${playerStats.updated} mis à jour.`
     });
 
     res.json({
@@ -637,8 +679,9 @@ router.post('/organizations', async (req, res) => {
         ffb_cdb_code,
         ffb_ligue_numero
       },
+      players: playerStats,
       login_url: `/login.html?org=${slug}`,
-      message: `Organisation "${short_name}" créée avec succès`
+      message: `Organisation "${short_name}" créée avec succès${playerStats.created > 0 ? ` — ${playerStats.created} joueurs importés` : ''}`
     });
   } catch (error) {
     console.error('Error creating organization:', error);

@@ -62,6 +62,21 @@
       sessionStorage.removeItem('sessionExpiredMessage');
     }
 
+    // If ?org= is present, force a fresh login for that org
+    const urlParams = new URLSearchParams(window.location.search);
+    const orgSlug = urlParams.get('org');
+    if (orgSlug) {
+      // Clear any existing session so the admin logs in fresh
+      localStorage.removeItem('token');
+      localStorage.removeItem('userRole');
+      localStorage.removeItem('username');
+      localStorage.removeItem('organizationId');
+      localStorage.removeItem('isSuperAdmin');
+      localStorage.removeItem('ligueNumero');
+      localStorage.removeItem('userClub');
+      localStorage.removeItem('userClubId');
+    }
+
     // Check if already logged in
     const token = localStorage.getItem('token');
     if (token) {
