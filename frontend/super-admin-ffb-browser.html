@@ -362,7 +362,9 @@
     const API_URL = '/api';
     if (!requireAuth()) throw new Error('Not authenticated');
     if (localStorage.getItem('isSuperAdmin') !== 'true') {
-      window.location.href = 'dashboard.html';
+      localStorage.clear();
+      window.location.href = 'login.html';
+      throw new Error('Not super admin');
     }
     if (typeof initPublicBranding === 'function') initPublicBranding();
     document.getElementById('logoutBtn').addEventListener('click', (e) => { e.preventDefault(); logout(); });

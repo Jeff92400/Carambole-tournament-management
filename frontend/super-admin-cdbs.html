@@ -268,7 +268,9 @@
     if (!requireAuth()) throw new Error('Not authenticated');
     const token = localStorage.getItem('token');
     if (localStorage.getItem('isSuperAdmin') !== 'true') {
-      window.location.href = 'dashboard.html';
+      localStorage.clear();
+      window.location.href = 'login.html';
+      throw new Error('Not super admin');
     }
 
     // Initialize branding
