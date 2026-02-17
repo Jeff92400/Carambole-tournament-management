@@ -585,8 +585,11 @@ router.get('/users', authenticateToken, (req, res) => {
   if (req.user.role !== 'admin' && req.user.role !== 'lecteur' && !req.user.admin) {
     return res.status(403).json({ error: 'Access denied' });
   }
+  const orgId = req.user.organizationId || null;
   db.all(`SELECT u.id, u.username, u.email, u.role, u.is_active, u.receive_tournament_alerts, u.created_at, u.last_login, u.club_id, c.display_name as club_name
-    FROM users u LEFT JOIN clubs c ON u.club_id = c.id ORDER BY u.username`, [], (err, users) => {
+    FROM users u LEFT JOIN clubs c ON u.club_id = c.id
+    WHERE ($1::int IS NULL OR u.organization_id = $1)
+    ORDER BY u.username`, [orgId], (err, users) => {
     if (err) {
       return res.status(500).json({ error: 'Database error' });
     }

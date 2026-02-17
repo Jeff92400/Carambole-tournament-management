@@ -8,7 +8,8 @@ const router = express.Router();
 // Export all players to Excel
 router.get('/export-players', authenticateToken, async (req, res) => {
   try {
-    db.all('SELECT * FROM players ORDER BY last_name, first_name', [], async (err, players) => {
+    const orgId = req.user.organizationId || null;
+    db.all('SELECT * FROM players WHERE ($1::int IS NULL OR organization_id = $1) ORDER BY last_name, first_name', [orgId], async (err, players) => {
       if (err) {
         return res.status(500).json({ error: err.message });
       }

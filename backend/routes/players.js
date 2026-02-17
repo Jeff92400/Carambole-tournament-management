@@ -1176,12 +1176,14 @@ router.delete('/all', authenticateToken, (req, res) => {
 // Get player account info (for Player App)
 router.get('/:licence/account', authenticateToken, (req, res) => {
   const licence = req.params.licence.replace(/\s+/g, '');
+  const orgId = req.user.organizationId || null;
 
   db.get(
-    `SELECT id, email, is_admin, last_login, created_at, gdpr_consent_date, gdpr_consent_version
-     FROM player_accounts
-     WHERE REPLACE(licence, ' ', '') = $1`,
-    [licence],
+    `SELECT pa.id, pa.email, pa.is_admin, pa.last_login, pa.created_at, pa.gdpr_consent_date, pa.gdpr_consent_version
+     FROM player_accounts pa
+     WHERE REPLACE(pa.licence, ' ', '') = $1
+       AND ($2::int IS NULL OR pa.organization_id = $2)`,
+    [licence, orgId],
     (err, row) => {
       if (err) {
         return res.status(500).json({ error: err.message });

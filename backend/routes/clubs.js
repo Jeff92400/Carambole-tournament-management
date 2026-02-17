@@ -39,7 +39,8 @@ const upload = multer({
 
 // Get all clubs
 router.get('/', authenticateToken, (req, res) => {
-  db.all('SELECT * FROM clubs ORDER BY name', [], (err, rows) => {
+  const orgId = req.user.organizationId || null;
+  db.all('SELECT * FROM clubs WHERE ($1::int IS NULL OR organization_id = $1) ORDER BY name', [orgId], (err, rows) => {
     if (err) {
       return res.status(500).json({ error: err.message });
     }
