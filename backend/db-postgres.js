@@ -1356,6 +1356,119 @@ async function initializeDatabase() {
       ON CONFLICT (organization_id, key) DO NOTHING
     `);
 
+    // ============= SEED CDB DEMO AS ORGANIZATION #2 =============
+
+    // Create CDB Démo (idempotent)
+    await client.query(`
+      INSERT INTO organizations (id, name, short_name, slug)
+      VALUES (2, 'Comité Départemental de Billard - Démonstration', 'CDB Démo', 'demo')
+      ON CONFLICT (id) DO NOTHING
+    `);
+
+    // Create demo admin user if not exists
+    const demoAdminExists = await client.query(`SELECT id FROM users WHERE username = 'demo'`);
+    if (demoAdminExists.rows.length === 0) {
+      const bcryptDemo = require('bcrypt');
+      const demoHash = await bcryptDemo.hash('demo123', 10);
+      await client.query(
+        `INSERT INTO users (username, password_hash, email, role, organization_id, is_active)
+         VALUES ('demo', $1, 'demo@example.com', 'admin', 2, true)`,
+        [demoHash]
+      );
+      console.log('Demo admin created: demo/demo123');
+    }
+
+    // Create demo clubs for org #2 (idempotent)
+    const demoCLubs = [
+      ['ACADEMIE BILLARD CLICHY', 'Académie Billard Clichy', 'Clichy'],
+      ['BILLARD CLUB BOULOGNE', 'Billard Club Boulogne', 'Boulogne-Billancourt'],
+      ['CERCLE BILLARD NEUILLY', 'Cercle Billard Neuilly', 'Neuilly-sur-Seine'],
+      ['ASSOCIATION BILLARD LEVALLOIS', 'Association Billard Levallois', 'Levallois-Perret'],
+      ['BILLARD CLUB COLOMBES', 'Billard Club Colombes', 'Colombes'],
+      ['ENTENTE BILLARD NANTERRE', 'Entente Billard Nanterre', 'Nanterre'],
+      ['BILLARD CLUB RUEIL', 'Billard Club Rueil', 'Rueil-Malmaison'],
+      ['ACADEMIE CARAMBOLE ASNIERES', 'Académie Carambole Asnières', 'Asnières-sur-Seine']
+    ];
+    for (const [name, displayName, city] of demoCLubs) {
+      await client.query(`
+        INSERT INTO clubs (name, display_name, city, organization_id)
+        SELECT $1, $2, $3, 2 WHERE NOT EXISTS (SELECT 1 FROM clubs WHERE name = $1 AND organization_id = 2)
+      `, [name, displayName, city]);
+    }
+
+    // Copy categories from org #1 to org #2 (if not already copied)
+    const demoCatCount = await client.query(`SELECT COUNT(*) as count FROM categories WHERE organization_id = 2`);
+    if (parseInt(demoCatCount.rows[0].count) === 0) {
+      await client.query(`
+        INSERT INTO categories (game_type, level, display_name, is_active, organization_id)
+        SELECT game_type, level, display_name, is_active, 2
+        FROM categories WHERE organization_id = 1
+      `);
+      console.log('Demo categories copied from CDBHS');
+    }
+
+    // Copy game_parameters from org #1 to org #2 (if not already copied)
+    const demoParamCount = await client.query(`SELECT COUNT(*) as count FROM game_parameters WHERE organization_id = 2`);
+    if (parseInt(demoParamCount.rows[0].count) === 0) {
+      await client.query(`
+        INSERT INTO game_parameters (mode, categorie, distance, distance_type, reprises, moyenne_maxi, moyenne_mini, organization_id)
+        SELECT mode, categorie, distance, distance_type, reprises, moyenne_maxi, moyenne_mini, 2
+        FROM game_parameters WHERE organization_id = 1
+      `);
+      console.log('Demo game parameters copied from CDBHS');
+    }
+
+    // Create 80 demo players for org #2 (idempotent - skip if already exist)
+    const demoPlayerCount = await client.query(`SELECT COUNT(*) as count FROM players WHERE organization_id = 2 AND licence LIKE 'DEMO%'`);
+    if (parseInt(demoPlayerCount.rows[0].count) === 0) {
+      const firstNames = ['Jean','Pierre','Michel','Philippe','Alain','Bernard','Jacques','Daniel',
+        'Patrick','Serge','Christian','Claude','Marc','Laurent','Stephane','Thierry',
+        'Francois','Eric','Pascal','Olivier','Nicolas','David','Christophe','Didier',
+        'Bruno','Robert','Gilles','Andre','Gerard','Yves','Paul','Henri',
+        'Marie','Isabelle','Catherine','Nathalie','Sophie','Sandrine','Valerie','Christine'];
+      const lastNames = ['MARTIN','BERNARD','THOMAS','PETIT','ROBERT','RICHARD','DURAND','DUBOIS',
+        'MOREAU','LAURENT','SIMON','MICHEL','LEFEBVRE','LEROY','ROUX','DAVID',
+        'BERTRAND','MOREL','FOURNIER','GIRARD','BONNET','DUPONT','LAMBERT','FONTAINE',
+        'ROUSSEAU','VINCENT','MULLER','LEFEVRE','FAURE','ANDRE','MERCIER','BLANC'];
+      const rankings = ['N2','N3','R1','R2','R3','R4','D1','D2','D3'];
+      const clubNames = demoCLubs.map(c => c[0]);
+      const usedNames = new Set();
+
+      for (let i = 0; i < 80; i++) {
+        let fn, ln;
+        do {
+          fn = firstNames[Math.floor(Math.random() * firstNames.length)];
+          ln = lastNames[Math.floor(Math.random() * lastNames.length)];
+        } while (usedNames.has(`${fn} ${ln}`));
+        usedNames.add(`${fn} ${ln}`);
+
+        const licence = `DEMO${String(i + 1).padStart(4, '0')}`;
+        const club = clubNames[Math.floor(Math.random() * clubNames.length)];
+        const rk = () => rankings[Math.floor(Math.random() * rankings.length)];
+
+        await client.query(
+          `INSERT INTO players (licence, first_name, last_name, club, rank_libre, rank_cadre, rank_bande, rank_3bandes, email, organization_id)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 2)`,
+          [licence, fn, ln, club, rk(), rk(), rk(), rk(), `${fn.toLowerCase()}.${ln.toLowerCase()}@demo.com`]
+        );
+      }
+      console.log('80 demo players created for CDB Démo');
+    }
+
+    // Demo org settings (colors)
+    const demoSettings = [
+      ['organization_name', 'Comité Départemental de Billard - Démonstration'],
+      ['organization_short_name', 'CDB Démo'],
+      ['primary_color', '#e65100'],
+      ['secondary_color', '#ff9800']
+    ];
+    for (const [key, value] of demoSettings) {
+      await client.query(`
+        INSERT INTO organization_settings (organization_id, key, value)
+        VALUES (2, $1, $2) ON CONFLICT (organization_id, key) DO NOTHING
+      `, [key, value]);
+    }
+
     await client.query('COMMIT');
 
     // Initialize default admin (legacy)
