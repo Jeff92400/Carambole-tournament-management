@@ -109,7 +109,12 @@
         <h2 style="margin-bottom: 0;"><img id="app-header-icon" src="images/FFB.png" alt="" style="height: 48px; width: 48px; vertical-align: middle; margin-right: 8px; border-radius: 6px;" onerror="this.src='images/FrenchBillard-Icon-small.png';"><span id="app-org-name" data-page-title="Données FFB">Plateforme Gestion des Tournois CDB</span></h2>
       </div>
       <div class="nav-links">
-        <a href="dashboard.html" class="nav-tooltip" data-tooltip="Retour au CDB">CDB</a>
+        <div class="nav-dropdown">
+          <button class="nav-dropdown-btn nav-tooltip" data-tooltip="Aller vers un CDB">CDB</button>
+          <div class="nav-dropdown-content" id="cdbDropdown">
+            <a href="dashboard.html" style="color:#999;font-size:12px;">Chargement...</a>
+          </div>
+        </div>
         <a href="#" id="logoutBtn" class="nav-logout">Déconnexion</a>
       </div>
     </div>
@@ -618,9 +623,23 @@
       el.style.display = 'block';
     }
 
+    // Load CDB dropdown in navbar
+    async function loadCdbDropdown() {
+      try {
+        const res = await authFetch(`${API_URL}/super-admin/organizations`);
+        const orgs = await res.json();
+        const dropdown = document.getElementById('cdbDropdown');
+        if (!orgs || !orgs.length) { dropdown.innerHTML = '<a href="#" style="color:#999;">Aucun CDB</a>'; return; }
+        dropdown.innerHTML = orgs.map(o =>
+          `<a href="dashboard.html"><span>${o.short_name}${o.ffb_cdb_code ? ' (' + o.ffb_cdb_code + ')' : ''}</span></a>`
+        ).join('');
+      } catch(e) { console.error('CDB dropdown error:', e); }
+    }
+
     // ============= INIT =============
     loadStatus();
     loadHistory();
+    loadCdbDropdown();
   </script>
 </body>
 </html>
