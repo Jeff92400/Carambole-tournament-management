@@ -142,12 +142,12 @@
         <table class="orgs-table" id="orgsTable">
           <thead>
             <tr>
-              <th>ID</th>
+              <th>N°</th>
               <th>Nom</th>
-              <th>Slug</th>
               <th>Code FFB</th>
               <th>Joueurs</th>
               <th>Utilisateurs</th>
+              <th>Inscription</th>
               <th>Statut</th>
               <th>Actions</th>
             </tr>
@@ -326,14 +326,17 @@
           return;
         }
 
-        tbody.innerHTML = orgs.map(org => `
+        tbody.innerHTML = orgs.map((org, idx) => {
+          const enrollDate = org.created_at ? new Date(org.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-';
+          const enrollNum = String(idx + 1).padStart(3, '0');
+          return `
           <tr>
-            <td>${org.id}</td>
-            <td><strong>${org.short_name}</strong><br><span style="font-size: 11px; color: #888;">${org.name}</span></td>
-            <td><code>${org.slug}</code></td>
+            <td><strong>#${enrollNum}</strong></td>
+            <td><strong>${org.short_name}</strong><br><span style="font-size: 11px; color: #888;">${org.name}</span><br><code style="font-size: 10px; color: #aaa;">${org.slug}</code></td>
             <td>${org.ffb_cdb_code || '-'}</td>
             <td>${org.player_count || 0}</td>
             <td>${org.user_count || 0}</td>
+            <td style="font-size: 12px; white-space: nowrap;">${enrollDate}</td>
             <td><span class="badge ${org.is_active ? 'badge-active' : 'badge-inactive'}">${org.is_active ? 'Actif' : 'Inactif'}</span></td>
             <td>
               <button class="btn-sm btn-outline" onclick="selectOrg(${org.id}, '${org.short_name}', '${org.slug}')" title="Gérer">Gérer</button>
@@ -341,7 +344,7 @@
               ${org.id !== 1 ? `<button class="btn-sm btn-danger" onclick="deleteOrg(${org.id}, '${org.short_name.replace(/'/g, "\\'")}')" title="Supprimer" style="margin-left: 4px;">Suppr.</button>` : ''}
             </td>
           </tr>
-        `).join('');
+        `}).join('');
       } catch (error) {
         console.error('Error loading orgs:', error);
         showToast('Erreur de chargement', 'error');
