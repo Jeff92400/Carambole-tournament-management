@@ -7,9 +7,6 @@
   <link rel="icon" type="image/png" href="images/FFB.png">
   <link rel="stylesheet" href="css/styles.css">
   <script src="js/branding.js"></script>
-  <!-- Quill Rich Text Editor -->
-  <link href="https://cdn.quilljs.com/1.3.7/quill.snow.css" rel="stylesheet">
-  <script src="https://cdn.quilljs.com/1.3.7/quill.min.js"></script>
   <style>
     .sa-nav { display: flex; gap: 0; background: white; border-radius: 12px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); overflow: hidden; }
     .sa-nav a {
@@ -53,12 +50,6 @@
     .seed-preview table th { text-align: left; padding: 4px 6px; color: #666; }
     .seed-preview table td { padding: 4px 6px; border-top: 1px solid #c8e6c9; }
 
-    /* Welcome email section */
-    .template-variables { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
-    .var-btn { padding: 4px 10px; border-radius: 4px; border: 1px solid #ddd; background: #f8f9fa; cursor: pointer; font-size: 11px; }
-    .var-btn:hover { background: #e3f2fd; border-color: #90caf9; }
-    .ql-editor { min-height: 200px; }
-
     /* Action buttons */
     .btn-sm { padding: 4px 12px; font-size: 12px; border-radius: 4px; border: none; cursor: pointer; }
     .btn-primary { background: var(--color-primary, #1F4788); color: white; }
@@ -72,10 +63,6 @@
     .btn-warning { background: #ffc107; color: #333; }
     .btn-warning:hover { background: #e0a800; }
     .btn-lg { padding: 10px 24px; font-size: 14px; border-radius: 6px; }
-
-    /* Login URL box */
-    .login-url-box { display: flex; align-items: center; gap: 8px; background: #f0f4ff; padding: 8px 12px; border-radius: 6px; font-family: monospace; font-size: 13px; margin-top: 8px; }
-    .login-url-box button { padding: 4px 10px; font-size: 11px; border-radius: 4px; border: 1px solid #aaa; background: white; cursor: pointer; }
 
     /* Toast */
     .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); padding: 12px 24px; border-radius: 8px; color: white; font-size: 14px; z-index: 10000; box-shadow: 0 4px 12px rgba(0,0,0,0.3); display: none; }
@@ -131,7 +118,7 @@
         <span class="nav-icon">&#x1F465;</span>
         Utilisateurs
       </a>
-      <a href="#" onclick="return false;" style="opacity: 0.4; cursor: default;">
+      <a href="super-admin-settings.html">
         <span class="nav-icon">&#x2699;</span>
         Paramètres
       </a>
@@ -257,48 +244,6 @@
       <div id="syncResult" style="margin-top: 12px;"></div>
     </div>
 
-    <!-- Welcome Email Template (always visible) -->
-    <div class="card" id="emailSection">
-      <h3>Template email de bienvenue</h3>
-      <p style="font-size: 12px; color: #888; margin: 0 0 12px 0;">Ce template est utilisé pour accueillir les nouveaux administrateurs de CDB. Vous pouvez le modifier et envoyer un test à votre propre adresse avant de créer un CDB.</p>
-
-      <div style="margin-bottom: 8px;">
-        <label style="font-size: 12px; font-weight: 600; color: #555;">Objet</label>
-        <input type="text" id="welcomeSubject" style="width: 100%; padding: 8px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; box-sizing: border-box;">
-      </div>
-
-      <label style="font-size: 12px; font-weight: 600; color: #555;">Variables disponibles</label>
-      <div class="template-variables">
-        <button class="var-btn" onclick="insertVar('{admin_name}')">{admin_name}</button>
-        <button class="var-btn" onclick="insertVar('{organization_name}')">{organization_name}</button>
-        <button class="var-btn" onclick="insertVar('{organization_short_name}')">{organization_short_name}</button>
-        <button class="var-btn" onclick="insertVar('{login_url}')">{login_url}</button>
-        <button class="var-btn" onclick="insertVar('{username}')">{username}</button>
-        <button class="var-btn" onclick="insertVar('{player_count}')">{player_count}</button>
-      </div>
-
-      <div id="welcomeEditor" style="margin-bottom: 12px;"></div>
-
-      <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
-        <button class="btn-sm btn-outline btn-lg" onclick="saveWelcomeTemplate()">Enregistrer le template</button>
-        <input type="email" id="welcomeTestEmail" placeholder="Email de test" style="padding: 8px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; min-width: 220px;">
-        <button class="btn-sm btn-warning btn-lg" onclick="sendWelcomeTest()">Envoyer un test</button>
-        <span id="sendToAdminWrapper" style="display: none;">
-          <button class="btn-sm btn-success btn-lg" onclick="sendWelcome()">Envoyer au CDB admin</button>
-        </span>
-      </div>
-
-      <div id="emailResult" style="margin-top: 12px;"></div>
-
-      <!-- Login URL (shown after org creation) -->
-      <div id="loginUrlSection" style="margin-top: 16px; display: none;">
-        <label style="font-size: 12px; font-weight: 600; color: #555;">URL de connexion</label>
-        <div class="login-url-box">
-          <span id="loginUrlText">-</span>
-          <button onclick="copyLoginUrl()">Copier</button>
-        </div>
-      </div>
-    </div>
   </div>
 
   <!-- Toast notification -->
@@ -321,7 +266,6 @@
 
     // State
     let currentOrgId = null;
-    let quillEditor = null;
 
     // ==================== Toast ====================
     function showToast(message, type = 'success') {
@@ -552,7 +496,7 @@
       }
     }
 
-    // ==================== Select Org (show seed section + org-specific email actions) ====================
+    // ==================== Select Org (show seed + sync sections) ====================
     function selectOrg(orgId, shortName, slug) {
       currentOrgId = orgId;
 
@@ -569,15 +513,6 @@
       document.getElementById('syncPreview').innerHTML = '';
       document.getElementById('syncResult').innerHTML = '';
       document.getElementById('btnSyncApply').style.display = 'none';
-
-      // Show org-specific email actions (send to admin + login URL)
-      document.getElementById('sendToAdminWrapper').style.display = 'inline';
-      const baseUrl = window.location.origin;
-      const loginUrl = `${baseUrl}/login.html?org=${slug}`;
-      document.getElementById('loginUrlText').textContent = loginUrl;
-      document.getElementById('loginUrlSection').style.display = 'block';
-
-      document.getElementById('emailResult').innerHTML = '';
     }
 
     // ==================== Player Seeding ====================
@@ -828,119 +763,6 @@
       }
     }
 
-    // ==================== Welcome Email ====================
-    async function loadWelcomeTemplate() {
-      try {
-        const res = await authFetch(`${API_URL}/super-admin/email-templates/cdb_welcome`);
-        const data = await res.json();
-
-        document.getElementById('welcomeSubject').value = data.subject || '';
-        if (quillEditor) {
-          quillEditor.root.innerHTML = data.body || '';
-        }
-      } catch (error) {
-        console.error('Error loading welcome template:', error);
-      }
-    }
-
-    function insertVar(varName) {
-      if (!quillEditor) return;
-      const range = quillEditor.getSelection(true);
-      quillEditor.insertText(range.index, varName);
-    }
-
-    async function saveWelcomeTemplate() {
-      try {
-        const res = await authFetch(`${API_URL}/super-admin/email-templates/cdb_welcome`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            subject: document.getElementById('welcomeSubject').value,
-            body: quillEditor ? quillEditor.root.innerHTML : ''
-          })
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Erreur');
-        showToast('Template enregistré');
-      } catch (error) {
-        showToast(error.message, 'error');
-      }
-    }
-
-    async function sendWelcomeTest() {
-      const testEmail = document.getElementById('welcomeTestEmail').value.trim();
-      if (!testEmail || !testEmail.includes('@')) {
-        showToast('Veuillez saisir une adresse email de test valide', 'error');
-        document.getElementById('welcomeTestEmail').focus();
-        return;
-      }
-
-      try {
-        // Save template first
-        await saveWelcomeTemplate();
-
-        // Gather sample data from create form (if filled) for variable replacement
-        const sampleData = {
-          name: document.getElementById('orgName').value.trim() || undefined,
-          short_name: document.getElementById('orgShortName').value.trim() || undefined,
-          slug: document.getElementById('orgSlug').value.trim() || undefined,
-          admin_username: document.getElementById('adminUsername').value.trim() || undefined,
-          test_email: testEmail
-        };
-
-        // If an org is selected, use the org-specific endpoint (has real player count)
-        const url = currentOrgId
-          ? `${API_URL}/super-admin/organizations/${currentOrgId}/send-welcome-test`
-          : `${API_URL}/super-admin/email-templates/cdb_welcome/test`;
-
-        const res = await authFetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(sampleData)
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Erreur');
-
-        document.getElementById('emailResult').innerHTML = `
-          <div style="background: #fff3cd; padding: 10px; border-radius: 8px; color: #856404; font-size: 13px;">
-            ${data.message}
-          </div>`;
-        showToast(data.message);
-      } catch (error) {
-        showToast(error.message, 'error');
-      }
-    }
-
-    async function sendWelcome() {
-      if (!currentOrgId) return;
-      if (!confirm('Envoyer l\'email de bienvenue à l\'administrateur du CDB ?')) return;
-
-      try {
-        // Save template first
-        await saveWelcomeTemplate();
-
-        const res = await authFetch(`${API_URL}/super-admin/organizations/${currentOrgId}/send-welcome`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' }
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Erreur');
-
-        document.getElementById('emailResult').innerHTML = `
-          <div style="background: #d4edda; padding: 10px; border-radius: 8px; color: #155724; font-size: 13px;">
-            ${data.message}
-          </div>`;
-        showToast(data.message);
-      } catch (error) {
-        showToast(error.message, 'error');
-      }
-    }
-
-    function copyLoginUrl() {
-      const url = document.getElementById('loginUrlText').textContent;
-      navigator.clipboard.writeText(url).then(() => showToast('URL copiée')).catch(() => {});
-    }
-
     // ==================== Toggle Active ====================
     async function toggleActive(orgId) {
       try {
@@ -971,12 +793,11 @@
 
         showToast(data.message);
 
-        // Hide seed/email sections if this org was selected
+        // Hide seed/sync sections if this org was selected
         if (currentOrgId === orgId) {
           currentOrgId = null;
           document.getElementById('seedSection').classList.remove('visible');
-          document.getElementById('sendToAdminWrapper').style.display = 'none';
-          document.getElementById('loginUrlSection').style.display = 'none';
+          document.getElementById('syncSection').classList.remove('visible');
         }
 
         loadOrganizations();
@@ -987,21 +808,6 @@
 
     // ==================== Init ====================
     loadOrganizations();
-
-    // Initialize Quill editor for welcome email template
-    quillEditor = new Quill('#welcomeEditor', {
-      theme: 'snow',
-      modules: {
-        toolbar: [
-          [{ 'header': [1, 2, 3, false] }],
-          ['bold', 'italic', 'underline'],
-          [{ 'color': [] }, { 'background': [] }],
-          [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-          ['link'],
-          ['clean']
-        ]
-      }
-    });
 
     // Load CDB dropdown in navbar
     async function loadCdbDropdown() {
@@ -1016,8 +822,6 @@
       } catch(e) { console.error('CDB dropdown error:', e); }
     }
 
-    // Load welcome template on page load
-    loadWelcomeTemplate();
     loadCdbDropdown();
   </script>
 </body>

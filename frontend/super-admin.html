@@ -95,7 +95,7 @@
         <span class="nav-icon">&#x1F465;</span>
         Utilisateurs
       </a>
-      <a href="#platformSettings" onclick="document.getElementById('platformSettings').scrollIntoView({behavior:'smooth'}); return false;">
+      <a href="super-admin-settings.html">
         <span class="nav-icon">&#x2699;</span>
         Paramètres
       </a>
@@ -181,24 +181,6 @@
             <tr><td colspan="9" style="text-align: center; color: #999;">Chargement...</td></tr>
           </tbody>
         </table>
-      </div>
-
-      <!-- Platform Settings -->
-      <div id="platformSettings" style="margin-top: 24px;">
-        <div class="section-title">Paramètres Plateforme</div>
-        <div style="background: white; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
-          <div style="margin-bottom: 16px;">
-            <label style="font-weight: 600; font-size: 13px; display: block; margin-bottom: 6px;">Domaine email plateforme</label>
-            <p style="font-size: 12px; color: #888; margin: 0 0 8px;">
-              Domaine vérifié dans Resend pour l'envoi d'emails des nouveaux CDB. Les emails seront envoyés depuis <code>{slug}@{domaine}</code>.
-            </p>
-            <div style="display: flex; gap: 8px; align-items: center;">
-              <input type="text" id="platformEmailDomain" placeholder="ex: carambole-gestion.fr"
-                style="flex: 3; min-width: 300px; padding: 8px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px;">
-              <button onclick="savePlatformSettings()" class="btn" style="flex: 1; white-space: nowrap; padding: 8px 16px;">Enregistrer</button>
-            </div>
-          </div>
-        </div>
       </div>
 
     </div>
@@ -306,38 +288,6 @@
       }
     }
 
-    // ==================== Platform Settings ====================
-    async function loadPlatformSettings() {
-      try {
-        const res = await authFetch(`${API_URL}/super-admin/platform-settings`);
-        const data = await res.json();
-        document.getElementById('platformEmailDomain').value = data.platform_email_domain || '';
-      } catch (e) {
-        console.error('Error loading platform settings:', e);
-      }
-    }
-
-    async function savePlatformSettings() {
-      const domain = document.getElementById('platformEmailDomain').value.trim();
-      try {
-        const res = await authFetch(`${API_URL}/super-admin/platform-settings`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ platform_email_domain: domain })
-        });
-        const data = await res.json();
-        if (data.success) {
-          const toast = document.createElement('div');
-          toast.style.cssText = 'position:fixed;bottom:20px;right:20px;background:#28a745;color:white;padding:12px 24px;border-radius:8px;z-index:9999;font-weight:600;';
-          toast.textContent = 'Domaine email sauvegardé';
-          document.body.appendChild(toast);
-          setTimeout(() => toast.remove(), 3000);
-        }
-      } catch (e) {
-        console.error('Error saving platform settings:', e);
-      }
-    }
-
     // Load CDB dropdown in navbar
     async function loadCdbDropdown() {
       try {
@@ -358,7 +308,6 @@
 
     // Initialize
     loadDashboard();
-    loadPlatformSettings();
     loadCdbDropdown();
   </script>
 </body>

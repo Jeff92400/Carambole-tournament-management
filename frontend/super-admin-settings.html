@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Plateforme Gestion des Tournois CDB - Paramètres</title>
+  <link rel="icon" type="image/png" href="images/FFB.png">
+  <link rel="stylesheet" href="css/styles.css">
+  <script src="js/branding.js"></script>
+  <!-- Quill Rich Text Editor -->
+  <link href="https://cdn.quilljs.com/1.3.7/quill.snow.css" rel="stylesheet">
+  <script src="https://cdn.quilljs.com/1.3.7/quill.min.js"></script>
+  <style>
+    .sa-nav { display: flex; gap: 0; background: white; border-radius: 12px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); overflow: hidden; }
+    .sa-nav a {
+      flex: 1; text-align: center; padding: 12px 8px; text-decoration: none; font-size: 13px; font-weight: 600;
+      color: #666; border-bottom: 3px solid transparent; transition: all 0.2s;
+    }
+    .sa-nav a:hover { background: #f8f9fa; color: #333; }
+    .sa-nav a.active { color: var(--color-primary, #1F4788); border-bottom-color: var(--color-primary, #1F4788); background: #f0f4ff; }
+    .sa-nav a .nav-icon { display: block; font-size: 18px; margin-bottom: 2px; }
+
+    .section-title { font-size: 13px; color: #666; margin: 16px 0 8px 0; font-weight: bold; text-transform: uppercase; }
+    .card { background: white; border-radius: 12px; padding: 20px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+    .card h3 { margin: 0 0 12px 0; font-size: 15px; color: #333; }
+
+    /* Welcome email section */
+    .template-variables { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+    .var-btn { padding: 4px 10px; border-radius: 4px; border: 1px solid #ddd; background: #f8f9fa; cursor: pointer; font-size: 11px; }
+    .var-btn:hover { background: #e3f2fd; border-color: #90caf9; }
+    .ql-editor { min-height: 200px; }
+
+    /* Buttons */
+    .btn-sm { padding: 4px 12px; font-size: 12px; border-radius: 4px; border: none; cursor: pointer; }
+    .btn-outline { background: white; color: #333; border: 1px solid #ddd; }
+    .btn-outline:hover { background: #f5f5f5; }
+    .btn-warning { background: #ffc107; color: #333; }
+    .btn-warning:hover { background: #e0a800; }
+    .btn-lg { padding: 10px 24px; font-size: 14px; border-radius: 6px; }
+
+    /* Toast */
+    .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); padding: 12px 24px; border-radius: 8px; color: white; font-size: 14px; z-index: 10000; box-shadow: 0 4px 12px rgba(0,0,0,0.3); display: none; }
+    .toast.success { background: #28a745; }
+    .toast.error { background: #dc3545; }
+    .toast.visible { display: block; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="navbar">
+      <div>
+        <h2 style="margin-bottom: 0;"><img id="app-header-icon" src="images/FFB.png" alt="" style="height: 48px; width: 48px; vertical-align: middle; margin-right: 8px; border-radius: 6px;" onerror="this.src='images/FrenchBillard-Icon-small.png';"><span id="app-org-name" data-page-title="Super Admin">Plateforme Gestion des Tournois CDB</span></h2>
+      </div>
+      <div class="nav-links">
+        <div class="nav-dropdown">
+          <button class="nav-dropdown-btn nav-tooltip" data-tooltip="Aller vers un CDB">CDB</button>
+          <div class="nav-dropdown-content" id="cdbDropdown">
+            <a href="dashboard.html" style="color:#999;font-size:12px;">Chargement...</a>
+          </div>
+        </div>
+        <a href="#" id="logoutBtn" class="nav-logout">Déconnexion</a>
+      </div>
+    </div>
+
+    <!-- Super Admin Navigation -->
+    <nav class="sa-nav">
+      <a href="super-admin.html">
+        <span class="nav-icon">&#x1F4CA;</span>
+        Tableau de bord
+      </a>
+      <a href="super-admin-cdbs.html">
+        <span class="nav-icon">&#x1F3E2;</span>
+        CDBs
+      </a>
+      <a href="super-admin-ligues.html">
+        <span class="nav-icon">&#x1F3DB;</span>
+        Ligues
+      </a>
+      <a href="super-admin-ffb.html">
+        <span class="nav-icon">&#x1F4C1;</span>
+        Données FFB
+      </a>
+      <a href="super-admin-ffb-browser.html">
+        <span class="nav-icon">&#x1F50D;</span>
+        FFB Fichiers
+      </a>
+      <a href="super-admin-users.html">
+        <span class="nav-icon">&#x1F465;</span>
+        Utilisateurs
+      </a>
+      <a href="super-admin-settings.html" class="active">
+        <span class="nav-icon">&#x2699;</span>
+        Paramètres
+      </a>
+    </nav>
+
+    <div id="accessDenied" style="display: none; text-align: center; padding: 40px; color: #666;">
+      <h3>Accès refusé</h3>
+      <p>Cette page est réservée au Super Admin.</p>
+      <a href="dashboard.html" class="btn">Retour</a>
+    </div>
+
+    <div id="settingsContent" style="display: none;">
+
+      <!-- Platform Email Domain -->
+      <div class="card">
+        <h3>Domaine email plateforme</h3>
+        <p style="font-size: 12px; color: #888; margin: 0 0 12px;">
+          Domaine vérifié dans Resend pour l'envoi d'emails des nouveaux CDB. Les emails seront envoyés depuis <code>{slug}@{domaine}</code>.
+        </p>
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <input type="text" id="platformEmailDomain" placeholder="ex: carambole-gestion.fr"
+            style="flex: 3; min-width: 300px; padding: 8px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px;">
+          <button onclick="savePlatformSettings()" class="btn" style="white-space: nowrap; padding: 8px 16px;">Enregistrer</button>
+        </div>
+      </div>
+
+      <!-- Welcome Email Template -->
+      <div class="card">
+        <h3>Template email de bienvenue</h3>
+        <p style="font-size: 12px; color: #888; margin: 0 0 12px 0;">Ce template est utilisé pour accueillir les nouveaux administrateurs de CDB. Vous pouvez le modifier et envoyer un test à votre propre adresse avant de créer un CDB.</p>
+
+        <div style="margin-bottom: 8px;">
+          <label style="font-size: 12px; font-weight: 600; color: #555;">Objet</label>
+          <input type="text" id="welcomeSubject" style="width: 100%; padding: 8px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; box-sizing: border-box;">
+        </div>
+
+        <label style="font-size: 12px; font-weight: 600; color: #555;">Variables disponibles</label>
+        <div class="template-variables">
+          <button class="var-btn" onclick="insertVar('{admin_name}')">{admin_name}</button>
+          <button class="var-btn" onclick="insertVar('{organization_name}')">{organization_name}</button>
+          <button class="var-btn" onclick="insertVar('{organization_short_name}')">{organization_short_name}</button>
+          <button class="var-btn" onclick="insertVar('{login_url}')">{login_url}</button>
+          <button class="var-btn" onclick="insertVar('{username}')">{username}</button>
+          <button class="var-btn" onclick="insertVar('{player_count}')">{player_count}</button>
+        </div>
+
+        <div id="welcomeEditor" style="margin-bottom: 12px;"></div>
+
+        <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+          <button class="btn-sm btn-outline btn-lg" onclick="saveWelcomeTemplate()">Enregistrer le template</button>
+          <input type="email" id="welcomeTestEmail" placeholder="Email de test" style="padding: 8px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; min-width: 220px;">
+          <button class="btn-sm btn-warning btn-lg" onclick="sendWelcomeTest()">Envoyer un test</button>
+        </div>
+
+        <div id="emailResult" style="margin-top: 12px;"></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Toast notification -->
+  <div class="toast" id="toast"></div>
+
+  <script src="js/auth-utils.js"></script>
+  <script>
+    const API_URL = '/api';
+    if (!requireAuth()) throw new Error('Not authenticated');
+    const token = localStorage.getItem('token');
+    if (localStorage.getItem('isSuperAdmin') !== 'true') {
+      document.getElementById('accessDenied').style.display = 'block';
+      throw new Error('Not super admin');
+    }
+
+    document.getElementById('settingsContent').style.display = 'block';
+
+    document.getElementById('logoutBtn').addEventListener('click', (e) => { e.preventDefault(); logout(); });
+
+    let quillEditor = null;
+
+    // ==================== Toast ====================
+    function showToast(message, type = 'success') {
+      const toast = document.getElementById('toast');
+      toast.textContent = message;
+      toast.className = `toast ${type} visible`;
+      setTimeout(() => toast.classList.remove('visible'), 4000);
+    }
+
+    // ==================== Platform Email Domain ====================
+    async function loadPlatformSettings() {
+      try {
+        const res = await authFetch(`${API_URL}/super-admin/platform-settings`);
+        const data = await res.json();
+        document.getElementById('platformEmailDomain').value = data.platform_email_domain || '';
+      } catch (e) {
+        console.error('Error loading platform settings:', e);
+      }
+    }
+
+    async function savePlatformSettings() {
+      const domain = document.getElementById('platformEmailDomain').value.trim();
+      try {
+        const res = await authFetch(`${API_URL}/super-admin/platform-settings`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ platform_email_domain: domain })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast('Domaine email sauvegardé');
+        }
+      } catch (e) {
+        console.error('Error saving platform settings:', e);
+        showToast('Erreur lors de la sauvegarde', 'error');
+      }
+    }
+
+    // ==================== Welcome Email Template ====================
+    async function loadWelcomeTemplate() {
+      try {
+        const res = await authFetch(`${API_URL}/super-admin/email-templates/cdb_welcome`);
+        const data = await res.json();
+        document.getElementById('welcomeSubject').value = data.subject || '';
+        if (quillEditor) {
+          quillEditor.root.innerHTML = data.body || '';
+        }
+      } catch (error) {
+        console.error('Error loading welcome template:', error);
+      }
+    }
+
+    function insertVar(varName) {
+      if (!quillEditor) return;
+      const range = quillEditor.getSelection(true);
+      quillEditor.insertText(range.index, varName);
+    }
+
+    async function saveWelcomeTemplate() {
+      try {
+        const res = await authFetch(`${API_URL}/super-admin/email-templates/cdb_welcome`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            subject: document.getElementById('welcomeSubject').value,
+            body: quillEditor ? quillEditor.root.innerHTML : ''
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Erreur');
+        showToast('Template enregistré');
+      } catch (error) {
+        showToast(error.message, 'error');
+      }
+    }
+
+    async function sendWelcomeTest() {
+      const testEmail = document.getElementById('welcomeTestEmail').value.trim();
+      if (!testEmail || !testEmail.includes('@')) {
+        showToast('Veuillez saisir une adresse email de test valide', 'error');
+        document.getElementById('welcomeTestEmail').focus();
+        return;
+      }
+
+      try {
+        // Save template first
+        await saveWelcomeTemplate();
+
+        const res = await authFetch(`${API_URL}/super-admin/email-templates/cdb_welcome/test`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ test_email: testEmail })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Erreur');
+
+        document.getElementById('emailResult').innerHTML = `
+          <div style="background: #fff3cd; padding: 10px; border-radius: 8px; color: #856404; font-size: 13px;">
+            ${data.message}
+          </div>`;
+        showToast(data.message);
+      } catch (error) {
+        showToast(error.message, 'error');
+      }
+    }
+
+    // ==================== CDB Dropdown ====================
+    async function loadCdbDropdown() {
+      try {
+        const res = await authFetch(`${API_URL}/super-admin/organizations`);
+        const orgs = await res.json();
+        const dropdown = document.getElementById('cdbDropdown');
+        if (!orgs || !orgs.length) { dropdown.innerHTML = '<a href="#" style="color:#999;">Aucun CDB</a>'; return; }
+        dropdown.innerHTML = orgs.map(o =>
+          `<a href="dashboard.html"><span>${o.short_name}${o.ffb_cdb_code ? ' (' + o.ffb_cdb_code + ')' : ''}</span></a>`
+        ).join('');
+      } catch(e) { console.error('CDB dropdown error:', e); }
+    }
+
+    // ==================== Init ====================
+    quillEditor = new Quill('#welcomeEditor', {
+      theme: 'snow',
+      modules: {
+        toolbar: [
+          [{ 'header': [1, 2, 3, false] }],
+          ['bold', 'italic', 'underline'],
+          [{ 'color': [] }, { 'background': [] }],
+          [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+          ['link'],
+          ['clean']
+        ]
+      }
+    });
+
+    loadPlatformSettings();
+    loadWelcomeTemplate();
+    loadCdbDropdown();
+  </script>
+</body>
+</html>
