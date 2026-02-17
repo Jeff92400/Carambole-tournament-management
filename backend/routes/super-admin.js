@@ -760,7 +760,7 @@ router.delete('/organizations/:id', async (req, res) => {
     const tables = [
       'player_accounts',
       'player_contacts',
-      'activity_logs',
+      'admin_activity_logs',
       'player_invitations',
       'scheduled_emails',
       'email_campaigns',
@@ -801,9 +801,9 @@ router.delete('/organizations/:id', async (req, res) => {
     try {
       await logAdminAction({
         req,
-        action: ACTION_TYPES.DELETE,
-        target_type: 'organization',
-        target_id: id,
+        action: ACTION_TYPES.USER_DELETED || 'user_deleted',
+        targetType: 'organization',
+        targetId: id,
         details: `Organisation "${org.short_name}" (${org.name}) supprimée avec toutes ses données`
       });
     } catch (logErr) {
