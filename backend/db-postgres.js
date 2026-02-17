@@ -1474,6 +1474,19 @@ async function initializeDatabase() {
     }
 
     await client.query('COMMIT');
+    console.log('Main schema transaction committed successfully');
+
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('Error initializing database schema (ROLLBACK):', err);
+    client.release();
+    return; // Stop here — do not run post-commit seeds if schema failed
+  }
+
+  // ============= POST-COMMIT OPERATIONS =============
+  // These run outside the main transaction so errors here
+  // can NEVER trigger a ROLLBACK on committed schema/data.
+  try {
 
     // Initialize default admin (legacy)
     const adminResult = await client.query('SELECT COUNT(*) as count FROM admin');
@@ -2228,8 +2241,8 @@ Sportivement,
     }
 
   } catch (err) {
-    await client.query('ROLLBACK');
-    console.error('Error initializing database:', err);
+    // Post-commit error — NO ROLLBACK here (transaction already committed)
+    console.error('Error in post-commit initialization (schema is safe):', err);
   } finally {
     client.release();
   }
