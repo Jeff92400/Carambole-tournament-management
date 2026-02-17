@@ -62,7 +62,7 @@ router.post('/game-modes', authenticateToken, (req, res) => {
     function(err) {
       if (err) {
         console.error('Error creating game mode:', err);
-        if (err.message.includes('UNIQUE') || err.message.includes('unique')) {
+        if (err.message.includes('UNIQUE') || err.message.includes('unique') || err.message.includes('duplicate key')) {
           return res.status(400).json({ error: 'Ce code existe déjà' });
         }
         return res.status(500).json({ error: 'Erreur lors de la création du mode de jeu' });
@@ -160,7 +160,7 @@ router.put('/game-modes/:id', authenticateToken, async (req, res) => {
 
   } catch (err) {
     console.error('Error updating game mode:', err);
-    if (err.message && (err.message.includes('UNIQUE') || err.message.includes('unique'))) {
+    if (err.message && (err.message.includes('UNIQUE') || err.message.includes('unique') || err.message.includes('duplicate key'))) {
       return res.status(400).json({ error: 'Ce code existe déjà' });
     }
     res.status(500).json({ error: 'Erreur lors de la mise à jour: ' + err.message });
@@ -276,7 +276,7 @@ router.post('/ffb-rankings', authenticateToken, (req, res) => {
     function(err) {
       if (err) {
         console.error('Error creating FFB ranking:', err);
-        if (err.message.includes('UNIQUE') || err.message.includes('unique')) {
+        if (err.message.includes('UNIQUE') || err.message.includes('unique') || err.message.includes('duplicate key')) {
           return res.status(400).json({ error: 'Ce code existe déjà' });
         }
         return res.status(500).json({ error: 'Erreur lors de la création du classement' });
@@ -304,7 +304,7 @@ router.put('/ffb-rankings/:id', authenticateToken, (req, res) => {
     function(err) {
       if (err) {
         console.error('Error updating FFB ranking:', err);
-        if (err.message.includes('UNIQUE') || err.message.includes('unique')) {
+        if (err.message.includes('UNIQUE') || err.message.includes('unique') || err.message.includes('duplicate key')) {
           return res.status(400).json({ error: 'Ce code existe déjà' });
         }
         return res.status(500).json({ error: 'Erreur lors de la mise à jour du classement' });
@@ -433,7 +433,7 @@ router.post('/categories', authenticateToken, (req, res) => {
         function(err) {
           if (err) {
             console.error('Error creating category:', err);
-            if (err.message.includes('UNIQUE') || err.message.includes('unique')) {
+            if (err.message.includes('UNIQUE') || err.message.includes('unique') || err.message.includes('duplicate key')) {
               return res.status(400).json({ error: 'Cette catégorie existe déjà' });
             }
             return res.status(500).json({ error: 'Erreur lors de la création de la catégorie' });
@@ -770,7 +770,7 @@ router.post('/poule-configurations', authenticateToken, (req, res) => {
     function(err) {
       if (err) {
         console.error('Error creating poule configuration:', err);
-        if (err.message && (err.message.includes('UNIQUE') || err.message.includes('unique'))) {
+        if (err.message && (err.message.includes('UNIQUE') || err.message.includes('unique') || err.message.includes('duplicate key'))) {
           return res.status(400).json({ error: `Une configuration pour ${num_players} joueurs existe déjà` });
         }
         return res.status(500).json({ error: 'Erreur lors de la création de la configuration' });
@@ -816,7 +816,7 @@ router.put('/poule-configurations/:id', authenticateToken, (req, res) => {
     function(err) {
       if (err) {
         console.error('Error updating poule configuration:', err);
-        if (err.message && (err.message.includes('UNIQUE') || err.message.includes('unique'))) {
+        if (err.message && (err.message.includes('UNIQUE') || err.message.includes('unique') || err.message.includes('duplicate key'))) {
           return res.status(400).json({ error: `Une configuration pour ${num_players} joueurs existe déjà` });
         }
         return res.status(500).json({ error: 'Erreur lors de la mise à jour de la configuration' });
@@ -897,7 +897,7 @@ router.post('/scoring-rules', authenticateToken, (req, res) => {
     function(err) {
       if (err) {
         console.error('Error creating scoring rule:', err);
-        if (err.message && (err.message.includes('UNIQUE') || err.message.includes('unique'))) {
+        if (err.message && (err.message.includes('UNIQUE') || err.message.includes('unique') || err.message.includes('duplicate key'))) {
           return res.status(400).json({ error: 'Cette combinaison type/condition existe déjà' });
         }
         return res.status(500).json({ error: 'Erreur lors de la création de la règle' });
