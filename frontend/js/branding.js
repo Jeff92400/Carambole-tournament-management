@@ -4,17 +4,12 @@
 (function() {
   'use strict';
 
-  // Determine org slug from URL param or localStorage
+  // Determine org slug from URL param only (not localStorage — prevents color leaking between orgs)
   const urlParams = new URLSearchParams(window.location.search);
-  const orgSlug = urlParams.get('org') || localStorage.getItem('orgSlug') || '';
+  const orgSlug = urlParams.get('org') || '';
   const API_URL = '/api/settings/branding/colors' + (orgSlug ? '?org=' + encodeURIComponent(orgSlug) : '');
   const CACHE_KEY = 'branding_colors' + (orgSlug ? '_' + orgSlug : '');
   const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-
-  // Persist org slug if found in URL
-  if (urlParams.get('org')) {
-    localStorage.setItem('orgSlug', urlParams.get('org'));
-  }
 
   // Map API keys to CSS variable names
   const colorMapping = {
