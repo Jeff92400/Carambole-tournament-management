@@ -1858,8 +1858,8 @@ async function initializeDatabase() {
 
       for (const param of gameParams) {
         await client.query(
-          `INSERT INTO game_parameters (mode, categorie, coin, distance_normale, distance_reduite, reprises, moyenne_mini, moyenne_maxi)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT (mode, categorie) DO NOTHING`,
+          `INSERT INTO game_parameters (mode, categorie, coin, distance_normale, distance_reduite, reprises, moyenne_mini, moyenne_maxi, organization_id)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 1) ON CONFLICT (mode, categorie, organization_id) DO NOTHING`,
           [param.mode, param.categorie, param.coin, param.distance_normale, param.distance_reduite, param.reprises, param.moyenne_mini, param.moyenne_maxi]
         );
       }
@@ -1885,8 +1885,8 @@ Cordialement,
 Comite Departemental Billard Hauts-de-Seine`;
 
       await client.query(
-        `INSERT INTO email_templates (template_key, subject_template, body_template)
-         VALUES ($1, $2, $3) ON CONFLICT (template_key) DO NOTHING`,
+        `INSERT INTO email_templates (template_key, subject_template, body_template, organization_id)
+         VALUES ($1, $2, $3, 1) ON CONFLICT (template_key, organization_id) DO NOTHING`,
         ['convocation', 'Convocation {category} - {tournament} - {date}', defaultBodyTemplate]
       );
 
@@ -1899,8 +1899,8 @@ Cordialement,
 Comite Departemental Billard Hauts-de-Seine`;
 
       await client.query(
-        `INSERT INTO email_templates (template_key, subject_template, body_template)
-         VALUES ($1, $2, $3) ON CONFLICT (template_key) DO NOTHING`,
+        `INSERT INTO email_templates (template_key, subject_template, body_template, organization_id)
+         VALUES ($1, $2, $3, 1) ON CONFLICT (template_key, organization_id) DO NOTHING`,
         ['general', 'Information CDBHS', generalBodyTemplate]
       );
 
@@ -1917,8 +1917,8 @@ Cordialement,
 Comite Departemental Billard Hauts-de-Seine`;
 
       await client.query(
-        `INSERT INTO email_templates (template_key, subject_template, body_template)
-         VALUES ($1, $2, $3) ON CONFLICT (template_key) DO NOTHING`,
+        `INSERT INTO email_templates (template_key, subject_template, body_template, organization_id)
+         VALUES ($1, $2, $3, 1) ON CONFLICT (template_key, organization_id) DO NOTHING`,
         ['information', 'Information importante - CDBHS', infoBodyTemplate]
       );
 
@@ -1935,8 +1935,8 @@ Cordialement,
 Comite Departemental Billard Hauts-de-Seine`;
 
       await client.query(
-        `INSERT INTO email_templates (template_key, subject_template, body_template)
-         VALUES ($1, $2, $3) ON CONFLICT (template_key) DO NOTHING`,
+        `INSERT INTO email_templates (template_key, subject_template, body_template, organization_id)
+         VALUES ($1, $2, $3, 1) ON CONFLICT (template_key, organization_id) DO NOTHING`,
         ['rappel', 'Rappel - CDBHS', rappelBodyTemplate]
       );
 
@@ -1951,15 +1951,15 @@ Cordialement,
 Comité Départemental Billard Hauts-de-Seine`;
 
       await client.query(
-        `INSERT INTO email_templates (template_key, subject_template, body_template)
-         VALUES ($1, $2, $3) ON CONFLICT (template_key) DO NOTHING`,
+        `INSERT INTO email_templates (template_key, subject_template, body_template, organization_id)
+         VALUES ($1, $2, $3, 1) ON CONFLICT (template_key, organization_id) DO NOTHING`,
         ['results', 'Résultats {category} - {tournament}', resultsBodyTemplate]
       );
 
       // CC Email setting template (stores the default CC email address)
       await client.query(
-        `INSERT INTO email_templates (template_key, subject_template, body_template)
-         VALUES ($1, $2, $3) ON CONFLICT (template_key) DO NOTHING`,
+        `INSERT INTO email_templates (template_key, subject_template, body_template, organization_id)
+         VALUES ($1, $2, $3, 1) ON CONFLICT (template_key, organization_id) DO NOTHING`,
         ['results_cc_email', 'cdbhs92@gmail.com', '']
       );
 
@@ -1968,14 +1968,14 @@ Comité Départemental Billard Hauts-de-Seine`;
 
     // Ensure results and cc_email templates exist (added later, need to be inserted separately)
     await client.query(
-      `INSERT INTO email_templates (template_key, subject_template, body_template)
-       VALUES ('results', 'Résultats {category} - {tournament}', 'Bonjour {player_name},\n\nVeuillez trouver ci-joint les résultats du tournoi {tournament}.\n\n{message}\n\nCordialement,\nComité Départemental Billard Hauts-de-Seine')
-       ON CONFLICT (template_key) DO NOTHING`
+      `INSERT INTO email_templates (template_key, subject_template, body_template, organization_id)
+       VALUES ('results', 'Résultats {category} - {tournament}', 'Bonjour {player_name},\n\nVeuillez trouver ci-joint les résultats du tournoi {tournament}.\n\n{message}\n\nCordialement,\nComité Départemental Billard Hauts-de-Seine', 1)
+       ON CONFLICT (template_key, organization_id) DO NOTHING`
     );
     await client.query(
-      `INSERT INTO email_templates (template_key, subject_template, body_template)
-       VALUES ('results_cc_email', 'cdbhs92@gmail.com', '')
-       ON CONFLICT (template_key) DO NOTHING`
+      `INSERT INTO email_templates (template_key, subject_template, body_template, organization_id)
+       VALUES ('results_cc_email', 'cdbhs92@gmail.com', '', 1)
+       ON CONFLICT (template_key, organization_id) DO NOTHING`
     );
 
     // Club reminder template
@@ -2001,9 +2001,9 @@ Pour toute question, contactez-nous à l'adresse: cdbhs92@gmail.com
 Sportivement,
 Le CDBHS`;
     await client.query(
-      `INSERT INTO email_templates (template_key, subject_template, body_template)
-       VALUES ('club_reminder', 'Rappel Organisation - {category} {tournament}', $1)
-       ON CONFLICT (template_key) DO NOTHING`,
+      `INSERT INTO email_templates (template_key, subject_template, body_template, organization_id)
+       VALUES ('club_reminder', 'Rappel Organisation - {category} {tournament}', $1, 1)
+       ON CONFLICT (template_key, organization_id) DO NOTHING`,
       [clubReminderBody]
     );
 
@@ -2024,9 +2024,9 @@ En cas d'empêchement, merci de vous désinscrire via l'application ou de nous p
 Sportivement,
 {organization_name}`;
     await client.query(
-      `INSERT INTO email_templates (template_key, subject_template, body_template)
-       VALUES ('inscription_confirmation', 'Confirmation d''inscription - {tournament_name}', $1)
-       ON CONFLICT (template_key) DO NOTHING`,
+      `INSERT INTO email_templates (template_key, subject_template, body_template, organization_id)
+       VALUES ('inscription_confirmation', 'Confirmation d''inscription - {tournament_name}', $1, 1)
+       ON CONFLICT (template_key, organization_id) DO NOTHING`,
       [inscriptionConfirmationBody]
     );
 
@@ -2046,9 +2046,9 @@ Si cette désinscription est une erreur, veuillez contacter le comité via "Cont
 Sportivement,
 {organization_name}`;
     await client.query(
-      `INSERT INTO email_templates (template_key, subject_template, body_template)
-       VALUES ('inscription_cancellation', 'Confirmation de désinscription - {mode} {category}', $1)
-       ON CONFLICT (template_key) DO NOTHING`,
+      `INSERT INTO email_templates (template_key, subject_template, body_template, organization_id)
+       VALUES ('inscription_cancellation', 'Confirmation de désinscription - {mode} {category}', $1, 1)
+       ON CONFLICT (template_key, organization_id) DO NOTHING`,
       [inscriptionCancellationBody]
     );
 
