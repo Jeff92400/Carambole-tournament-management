@@ -41,10 +41,36 @@ async function initAppBranding() {
       }
       orgNameEl.innerHTML = html;
     }
+    // If SA is impersonating a CDB, show a floating "Retour Plateforme" button
+    if (localStorage.getItem('sa_token')) {
+      injectSAReturnButton();
+    }
   } catch (error) {
     console.log('[Branding] Error loading branding, using defaults:', error);
     updateFavicon(DEFAULT_LOGO_PATH);
   }
+}
+
+/**
+ * Inject a floating "Retour Plateforme" button for SA impersonation mode
+ */
+function injectSAReturnButton() {
+  if (document.getElementById('sa-return-btn')) return; // already injected
+  const btn = document.createElement('div');
+  btn.id = 'sa-return-btn';
+  btn.innerHTML = `
+    <button onclick="returnToSuperAdmin()" style="
+      position: fixed; bottom: 20px; right: 20px; z-index: 10000;
+      background: linear-gradient(135deg, #dc3545, #c82333);
+      color: white; border: none; padding: 10px 18px;
+      border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 13px;
+      box-shadow: 0 4px 12px rgba(220,53,69,0.4);
+      display: flex; align-items: center; gap: 6px;
+    ">
+      <span style="font-size: 16px;">&#x2190;</span> Retour Plateforme
+    </button>
+  `;
+  document.body.appendChild(btn);
 }
 
 /**

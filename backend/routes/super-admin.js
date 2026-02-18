@@ -1,9 +1,10 @@
 const express = require('express');
 const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
 const multer = require('multer');
 const db = require('../db-loader');
 const appSettings = require('../utils/app-settings');
-const { authenticateToken, requireSuperAdmin } = require('./auth');
+const { authenticateToken, requireSuperAdmin, JWT_SECRET } = require('./auth');
 const { logAdminAction, ACTION_TYPES } = require('../utils/admin-logger');
 const { Resend } = require('resend');
 
@@ -578,6 +579,42 @@ router.get('/organizations', async (req, res) => {
   } catch (error) {
     console.error('Error listing organizations:', error);
     res.status(500).json({ error: 'Erreur lors du chargement des organisations' });
+  }
+});
+
+// POST /api/super-admin/impersonate/:orgId — Generate a CDB-scoped token for the SA user
+router.post('/impersonate/:orgId', async (req, res) => {
+  const orgId = parseInt(req.params.orgId);
+
+  try {
+    // Verify the org exists
+    const org = await dbGet('SELECT id, slug, short_name FROM organizations WHERE id = $1', [orgId]);
+    if (!org) {
+      return res.status(404).json({ error: 'Organisation non trouvée' });
+    }
+
+    // Generate a new JWT with the SA user's identity but scoped to the target org
+    const tokenPayload = {
+      userId: req.user.userId,
+      username: req.user.username,
+      role: 'admin', // SA acts as admin within the CDB
+      isSuperAdmin: true,
+      organizationId: orgId
+    };
+
+    const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '24h' });
+
+    res.json({
+      token,
+      organization: {
+        id: org.id,
+        slug: org.slug,
+        short_name: org.short_name
+      }
+    });
+  } catch (error) {
+    console.error('Impersonate error:', error);
+    res.status(500).json({ error: 'Erreur lors de l\'impersonation' });
   }
 });
 

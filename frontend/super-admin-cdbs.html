@@ -328,7 +328,7 @@
             <td>${welcomeBadge}</td>
             <td><span class="badge ${org.is_active ? 'badge-active' : 'badge-inactive'}">${org.is_active ? 'Actif' : 'Inactif'}</span></td>
             <td style="white-space: nowrap;">
-              <button class="btn-sm btn-primary" onclick="goToDashboard('${org.slug}')" title="Voir le dashboard">Dashboard</button>
+              <button class="btn-sm btn-primary" onclick="goToDashboard(${org.id}, '${org.slug}')" title="Voir le dashboard">Dashboard</button>
               <button class="btn-sm btn-outline" onclick="selectOrg(${org.id}, '${org.short_name}', '${org.slug}', {clubs: ${org.club_count || 0}, players: ${org.player_count || 0}, admin: '${(org.admin_username || '-').replace(/'/g, "\\'")}', welcomeSent: ${welcomeSent ? 'true' : 'false'}})" title="Gérer">Gérer</button>
               <button class="btn-sm ${org.is_active ? 'btn-danger' : 'btn-success'}" onclick="toggleActive(${org.id})" title="${org.is_active ? 'Désactiver' : 'Activer'}">${org.is_active ? 'Désact.' : 'Activer'}</button>
               ${org.id !== 1 ? `<button class="btn-sm btn-danger" onclick="deleteOrg(${org.id}, '${org.short_name.replace(/'/g, "\\'")}')" title="Supprimer" style="margin-left: 4px;">Suppr.</button>` : ''}
@@ -636,9 +636,33 @@
       }
     }
 
-    // ==================== Navigate to CDB Login ====================
-    function goToDashboard(slug) {
-      window.open(`login.html?org=${slug}`, '_blank');
+    // ==================== Navigate to CDB Dashboard (impersonation) ====================
+    async function goToDashboard(orgId, slug) {
+      try {
+        // Save the current SA token so we can come back
+        const saToken = localStorage.getItem('token');
+        localStorage.setItem('sa_token', saToken);
+
+        // Get an impersonation token scoped to this CDB
+        const res = await authFetch(`${API_URL}/super-admin/impersonate/${orgId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Erreur');
+
+        // Set the CDB-scoped token and update localStorage
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('userRole', 'admin');
+        localStorage.setItem('organizationId', orgId);
+        localStorage.setItem('isSuperAdmin', 'true');
+
+        // Navigate to the CDB dashboard
+        window.location.href = 'dashboard.html';
+      } catch (error) {
+        console.error('Impersonation error:', error);
+        showToast('Erreur: ' + error.message, 'error');
+      }
     }
 
     // ==================== Sync Players with FFB ====================

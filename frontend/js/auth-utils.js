@@ -69,6 +69,7 @@ function handleSessionExpired() {
   localStorage.removeItem('userClubId');
   localStorage.removeItem('organizationId');
   localStorage.removeItem('orgSlug');
+  localStorage.removeItem('sa_token');
 
   // Store message for login page to display
   sessionStorage.setItem('sessionExpiredMessage', 'Votre session a expiré. Veuillez vous reconnecter.');
@@ -119,7 +120,28 @@ function logout() {
   localStorage.removeItem('isSuperAdmin');
   localStorage.removeItem('organizationId');
   localStorage.removeItem('orgSlug');
+  localStorage.removeItem('sa_token');
   window.location.href = '/login.html';
+}
+
+/**
+ * Return to Super Admin from an impersonated CDB session.
+ * Restores the SA token and navigates to SA pages.
+ */
+function returnToSuperAdmin() {
+  const saToken = localStorage.getItem('sa_token');
+  if (!saToken) {
+    // No SA token stored — just navigate (SA pages will verify access)
+    window.location.href = 'super-admin.html';
+    return;
+  }
+  // Restore SA token
+  localStorage.setItem('token', saToken);
+  localStorage.removeItem('sa_token');
+  localStorage.removeItem('organizationId');
+  localStorage.setItem('userRole', 'admin');
+  localStorage.setItem('isSuperAdmin', 'true');
+  window.location.href = 'super-admin-cdbs.html';
 }
 
 // ============================================
