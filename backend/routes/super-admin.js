@@ -814,6 +814,8 @@ router.post('/organizations', async (req, res) => {
 
         for (const fl of ffbLicences) {
           try {
+            const rd = fl.raw_data ? (typeof fl.raw_data === 'string' ? JSON.parse(fl.raw_data) : fl.raw_data) : {};
+            const phone = rd.Tel_port || rd.Tel_fixe || null;
             const existing = await dbGet(
               `SELECT licence FROM players WHERE REPLACE(licence, ' ', '') = REPLACE($1, ' ', '')`,
               [fl.licence]
@@ -821,15 +823,16 @@ router.post('/organizations', async (req, res) => {
             if (existing) {
               await dbRun(
                 `UPDATE players SET organization_id = $1, ffb_club_numero = COALESCE($2, ffb_club_numero),
-                 ffb_last_sync = CURRENT_TIMESTAMP WHERE REPLACE(licence, ' ', '') = REPLACE($3, ' ', '')`,
-                [orgId, fl.num_club, fl.licence]
+                 telephone = COALESCE($3, telephone),
+                 ffb_last_sync = CURRENT_TIMESTAMP WHERE REPLACE(licence, ' ', '') = REPLACE($4, ' ', '')`,
+                [orgId, fl.num_club, phone, fl.licence]
               );
               playerStats.updated++;
             } else {
               await dbRun(
-                `INSERT INTO players (licence, first_name, last_name, club, email, ffb_club_numero, organization_id, ffb_last_sync)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP)`,
-                [fl.licence, fl.prenom || '', fl.nom || '', fl.club_name || '', fl.email || null, fl.num_club, orgId]
+                `INSERT INTO players (licence, first_name, last_name, club, email, telephone, ffb_club_numero, organization_id, ffb_last_sync)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CURRENT_TIMESTAMP)`,
+                [fl.licence, fl.prenom || '', fl.nom || '', fl.club_name || '', fl.email || null, phone, fl.num_club, orgId]
               );
               playerStats.created++;
             }
@@ -1105,6 +1108,9 @@ router.post('/organizations/:id/seed-players', async (req, res) => {
 
     for (const fl of ffbLicences) {
       try {
+        const rd = fl.raw_data ? (typeof fl.raw_data === 'string' ? JSON.parse(fl.raw_data) : fl.raw_data) : {};
+        const phone = rd.Tel_port || rd.Tel_fixe || null;
+
         // Check if player already exists (by licence)
         const existing = await dbGet(
           `SELECT licence FROM players WHERE REPLACE(licence, ' ', '') = REPLACE($1, ' ', '')`,
@@ -1122,18 +1128,19 @@ router.post('/organizations/:id/seed-players', async (req, res) => {
               discipline = COALESCE($5, discipline),
               nationalite = COALESCE($6, nationalite),
               ffb_club_numero = COALESCE($7, ffb_club_numero),
+              telephone = COALESCE($8, telephone),
               ffb_last_sync = CURRENT_TIMESTAMP
-             WHERE REPLACE(licence, ' ', '') = REPLACE($8, ' ', '')`,
-            [id, fl.date_de_naissance, fl.sexe, fl.categorie, fl.discipline, fl.nationalite, fl.num_club, fl.licence]
+             WHERE REPLACE(licence, ' ', '') = REPLACE($9, ' ', '')`,
+            [id, fl.date_de_naissance, fl.sexe, fl.categorie, fl.discipline, fl.nationalite, fl.num_club, phone, fl.licence]
           );
           updated++;
         } else {
           // Create new player
           const clubName = fl.club_name || '';
           await dbRun(
-            `INSERT INTO players (licence, first_name, last_name, club, date_of_birth, sexe, ffb_categorie, discipline, nationalite, ffb_club_numero, email, organization_id, ffb_last_sync)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, CURRENT_TIMESTAMP)`,
-            [fl.licence, fl.prenom || '', fl.nom || '', clubName, fl.date_de_naissance, fl.sexe, fl.categorie, fl.discipline, fl.nationalite, fl.num_club, fl.email || null, id]
+            `INSERT INTO players (licence, first_name, last_name, club, date_of_birth, sexe, ffb_categorie, discipline, nationalite, ffb_club_numero, email, telephone, organization_id, ffb_last_sync)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, CURRENT_TIMESTAMP)`,
+            [fl.licence, fl.prenom || '', fl.nom || '', clubName, fl.date_de_naissance, fl.sexe, fl.categorie, fl.discipline, fl.nationalite, fl.num_club, fl.email || null, phone, id]
           );
           created++;
         }
