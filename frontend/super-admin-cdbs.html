@@ -247,10 +247,17 @@
         </div>
       </div>
       <div style="background: #f5f5f5; padding: 12px; border-radius: 8px; margin-bottom: 12px;">
-        <label style="font-size: 11px; color: #666; text-transform: uppercase; font-weight: 600; display: block; margin-bottom: 4px;">URL de connexion du CDB</label>
+        <label style="font-size: 11px; color: #666; text-transform: uppercase; font-weight: 600; display: block; margin-bottom: 4px;">URL de connexion du CDB (Gestion)</label>
         <div style="display: flex; gap: 8px; align-items: center;">
           <input type="text" id="summaryLoginUrl" readonly style="flex: 1; padding: 8px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; background: white; font-family: monospace;" />
-          <button class="btn-sm btn-outline" onclick="copyLoginUrl()" title="Copier l'URL">Copier</button>
+          <button class="btn-sm btn-outline" onclick="copyUrl('summaryLoginUrl')" title="Copier l'URL">Copier</button>
+        </div>
+      </div>
+      <div style="background: #e8f5e9; padding: 12px; border-radius: 8px; margin-bottom: 12px;">
+        <label style="font-size: 11px; color: #666; text-transform: uppercase; font-weight: 600; display: block; margin-bottom: 4px;">URL Espace Joueur (Player App)</label>
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <input type="text" id="summaryPlayerAppUrl" readonly style="flex: 1; padding: 8px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; background: white; font-family: monospace;" />
+          <button class="btn-sm btn-outline" onclick="copyUrl('summaryPlayerAppUrl')" title="Copier l'URL">Copier</button>
         </div>
       </div>
       <div style="display: flex; gap: 8px; align-items: center;">
@@ -609,9 +616,11 @@
       // Show summary section
       const baseUrl = window.location.origin;
       const loginUrl = `${baseUrl}/login.html?org=${slug}`;
+      const playerAppUrl = `https://cdbhs-player-app-production.up.railway.app/?org=${slug}`;
       document.getElementById('orgSummarySection').classList.add('visible');
       document.getElementById('summaryOrgName').textContent = shortName;
       document.getElementById('summaryLoginUrl').value = loginUrl;
+      document.getElementById('summaryPlayerAppUrl').value = playerAppUrl;
       document.getElementById('summaryClubs').textContent = stats?.clubs || '-';
       document.getElementById('summaryPlayers').textContent = stats?.players || '-';
       document.getElementById('summaryAdmin').textContent = stats?.admin || '-';
@@ -636,8 +645,8 @@
     }
 
     // ==================== Login URL + Welcome Email ====================
-    function copyLoginUrl() {
-      const input = document.getElementById('summaryLoginUrl');
+    function copyUrl(inputId) {
+      const input = document.getElementById(inputId);
       input.select();
       navigator.clipboard.writeText(input.value);
       showToast('URL copiée !');

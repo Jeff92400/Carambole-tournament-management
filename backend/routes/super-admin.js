@@ -686,7 +686,8 @@ router.post('/organizations', async (req, res) => {
       ['email_noreply', platformDomain ? `noreply@${platformDomain}` : (admin_email || '')],
       ['email_sender_name', short_name],
       ['summary_email', admin_email || ''],
-      ['enable_csv_imports', '0']
+      ['enable_csv_imports', '0'],
+      ['player_app_url', `https://cdbhs-player-app-production.up.railway.app/?org=${slug}`]
     ];
 
     for (const [key, value] of defaultOrgSettings) {
@@ -878,6 +879,7 @@ router.post('/organizations', async (req, res) => {
       clubs: clubStats,
       players: playerStats,
       login_url: `/login.html?org=${slug}`,
+      player_app_url: `https://cdbhs-player-app-production.up.railway.app/?org=${slug}`,
       message: `Organisation "${short_name}" créée avec succès${clubStats.created > 0 ? ` — ${clubStats.created} clubs` : ''}${playerStats.created > 0 ? `, ${playerStats.created} joueurs importés` : ''}`
     });
   } catch (error) {
@@ -1618,6 +1620,7 @@ router.post('/organizations/:id/send-welcome', async (req, res) => {
 
     const baseUrl = process.env.BASE_URL || `https://${req.get('host')}`;
     const loginUrl = `${baseUrl}/login.html?org=${org.slug}`;
+    const playerAppUrl = await appSettings.getOrgSetting(parseInt(id), 'player_app_url') || `https://cdbhs-player-app-production.up.railway.app/?org=${org.slug}`;
 
     // Replace variables
     const variables = {
@@ -1625,6 +1628,7 @@ router.post('/organizations/:id/send-welcome', async (req, res) => {
       organization_name: org.name,
       organization_short_name: org.short_name,
       login_url: loginUrl,
+      player_app_url: playerAppUrl,
       username: orgAdmin.username,
       player_count: String(parseInt(playerCount?.count || 0))
     };
