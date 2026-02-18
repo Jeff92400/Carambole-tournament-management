@@ -1005,6 +1005,29 @@ async function initializeDatabase() {
       CREATE INDEX IF NOT EXISTS idx_admin_logs_user ON admin_activity_logs(user_id)
     `);
 
+    // Player App activity logs table (shared with Player App)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS activity_logs (
+        id SERIAL PRIMARY KEY,
+        licence VARCHAR(50),
+        user_email VARCHAR(255),
+        user_name VARCHAR(255),
+        action_type VARCHAR(50) NOT NULL,
+        action_status VARCHAR(20) DEFAULT 'success',
+        target_type VARCHAR(50),
+        target_id INTEGER,
+        target_name VARCHAR(255),
+        details JSONB,
+        ip_address VARCHAR(45),
+        user_agent TEXT,
+        app_source VARCHAR(20) DEFAULT 'player_app',
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_activity_logs_licence ON activity_logs(licence)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_activity_logs_action ON activity_logs(action_type)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_activity_logs_created ON activity_logs(created_at DESC)`);
+
     // Player invitations table - tracks invitations sent to players to join the Player App
     await client.query(`
       CREATE TABLE IF NOT EXISTS player_invitations (
@@ -1266,6 +1289,7 @@ async function initializeDatabase() {
     await client.query(`ALTER TABLE scheduled_emails ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)`);
     await client.query(`ALTER TABLE player_invitations ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)`);
     await client.query(`ALTER TABLE admin_activity_logs ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)`);
+    await client.query(`ALTER TABLE activity_logs ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)`);
     await client.query(`ALTER TABLE organization_logo ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)`);
     await client.query(`ALTER TABLE categories ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)`);
     await client.query(`ALTER TABLE scoring_rules ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)`);
@@ -1286,6 +1310,7 @@ async function initializeDatabase() {
     await client.query(`CREATE INDEX IF NOT EXISTS idx_scheduled_emails_org ON scheduled_emails(organization_id)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_player_invitations_org ON player_invitations(organization_id)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_categories_org ON categories(organization_id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_activity_logs_org ON activity_logs(organization_id)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_scoring_rules_org ON scoring_rules(organization_id)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_game_parameters_org ON game_parameters(organization_id)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_email_templates_org ON email_templates(organization_id)`);
@@ -1316,6 +1341,7 @@ async function initializeDatabase() {
     await client.query(`UPDATE scheduled_emails SET organization_id = 1 WHERE organization_id IS NULL`);
     await client.query(`UPDATE player_invitations SET organization_id = 1 WHERE organization_id IS NULL`);
     await client.query(`UPDATE admin_activity_logs SET organization_id = 1 WHERE organization_id IS NULL`);
+    await client.query(`UPDATE activity_logs SET organization_id = 1 WHERE organization_id IS NULL`);
     await client.query(`UPDATE organization_logo SET organization_id = 1 WHERE organization_id IS NULL`);
     await client.query(`UPDATE categories SET organization_id = 1 WHERE organization_id IS NULL`);
     await client.query(`UPDATE scoring_rules SET organization_id = 1 WHERE organization_id IS NULL`);

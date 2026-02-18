@@ -48,7 +48,7 @@ git push origin main
 
 ## Versioning
 
-**Current Version:** V 2.0.173 02/26
+**Current Version:** V 2.0.174 02/26
 
 Version is displayed at the bottom of the login screen (`frontend/login.html`).
 
@@ -503,44 +503,155 @@ All routes in `backend/routes/super-admin.js` under `/api/super-admin/`:
 
 ## Modes de Qualification pour les Finales
 
-> **STATUS: WAITING FOR ADDITIONAL INFORMATION** — A second CDB has described a different qualification model ("Journées qualificatives"). We are waiting for detailed specifications from them before building this feature. Do NOT implement until specs are received.
+> **STATUS: READY TO IMPLEMENT (V2)** — Specs revised after call with CDB 93+94 representative on Feb 18, 2026. Key correction: scoring is POSITION-BASED, not cumulative match points. Functional description V2 sent to CDB 93 & 94 for validation (`~/Documents/Mode-Journees-Qualificatives-Description.html`). Technical plan at `~/.claude/plans/structured-hugging-blossom.md`. **Do NOT implement until user gives explicit GO.**
 
-The app needs to support multiple qualification modes per CDB. This is controlled at the organization level.
+The app supports multiple qualification modes per CDB. Controlled by per-org setting `qualification_mode`.
 
-### Mode 1: "3 Tournois dans la saison" (current — CDBHS / CDB92)
+### Mode 1: "3 Tournois Qualificatifs" (current — CDB92)
 
 The current and fully implemented model:
-- **3 seasonal tournaments** (T1, T2, T3) per category, each on a separate date
-- **Rankings accumulate** match points across T1 + T2 + T3
-- **Finale qualification:** Top-ranked players after T3 are invited to the Finale Départementale
+- **3 seasonal tournaments** (TQ1, TQ2, TQ3) per category, each on a separate date
+- **Rankings accumulate** match points across TQ1 + TQ2 + TQ3
+- **Finale qualification:** Top-ranked players after TQ3 are invited to the Finale Départementale
 - **Finale:** Separate event, single poule (round-robin), does NOT count in seasonal ranking
 
-### Mode 2: "Journées qualificatives" (planned — awaiting specs)
+### Mode 2: "Journées Qualificatives" (CDB 93 & 94)
 
-Described by another CDB:
-- **Each competition day is self-contained:** poules in the morning (3 players/poule, 2 matches each) → bracket in the afternoon (2 semi-finals → 1 finale + 1 petite finale)
-- **Consolation matches** for non-qualifiers (minimum 3 matches per player per day)
-- **No seasonal ranking accumulation** — qualification is based on successive elimination across journées
-- **Different results model:** poule results + bracket results + consolation results per day
+**Competition day flow:** Poules (morning) → Top bracket semi-finals/finale/petite finale → Classification matches (afternoon)
+- **Poules:** 3 players preferred, 2 allowed. Serpentine distribution
+  - TQ1: serpentine based on `players.moyenne_generale` (FFB average, imported at season start)
+  - TQ2-3: serpentine based on ongoing season ranking (position-based points)
+- **Top bracket (configurable size, default 4):** SF1: 1st vs 4th, SF2: 2nd vs 3rd → Finale + Petite Finale → Places 1-4
+- **Classification matches:** Non-qualified players paired bottom-up. R1 mandatory, R2 optional. → Places 5 to N
+- **< 6 players:** Single round-robin poule, no bracket
+- **Position-based scoring:** Each finishing position maps to a configurable number of points via `position_points` lookup table
+- **Mixed categories bonus:** When categories merged (e.g., R3+R4), lower-ranked player gets +1 point PER MATCH (regular TQs only, not finale)
+- **Season ranking:** Best `best_of_count` (default 2) POSITION-BASED SCORES out of `journees_count` (default 3) TQs
+- **Tiered average bonus on season ranking:**
+  - Uses `game_parameters.moyenne_mini` and `moyenne_maxi` (already exist)
+  - Middle = (mini + maxi) / 2
+  - Average < mini → 0, mini to middle → +1, middle to maxi → +2, > maxi → +3
+  - Average calculated from the 2 best tournament results
+- **Finale de District:** Single round-robin poule (all qualified players play each other), NO bracket/classification. Same as CDB92 finale format. No mixed-category bonus
+- **Vocabulary:** Both modes use "Tournoi Qualificatif" (TQ1, TQ2, TQ3). Finale = "Finale de District" in Mode 2
 
-### Dependency Inventory (18 areas, 15+ files)
+### Player File Changes
 
-Building Mode 2 requires a **parallel competition engine**, not a refactoring of Mode 1. Key areas affected:
+- **New column `players.moyenne_generale`** (REAL, nullable): stores FFB average for serpentine seeding at season start
+- Source: imported from player CSV/FFB file, or entered manually by admin
+- Used by serpentine when no season ranking exists yet (TQ1)
+- FFB standard files do NOT contain this field — CDB must provide it separately
 
-| Area | Files | What changes |
-|------|-------|-------------|
-| **DB Schema** | `db-postgres.js` | `tournaments.tournament_number` (1-4 mapping), `rankings` table T1/T2/T3 columns |
-| **Ranking calc** | `tournaments.js`, `rankings.js` | `CASE WHEN tournament_number = 1/2/3` hardcoded aggregation |
-| **Cumulative points** | `inscriptions.js`, `email.js` | `tournament_number <= 3` filters |
-| **Relance system** | `emailing.js` | `['t1','t2','t3','finale']` validation, per-round templates |
-| **Poule generation** | `email.js`, `generate-poules.html` | Finale = single poule, T3 prerequisite check |
-| **Qualification rules** | `rankings.js` | Top 4-6 players after T3 |
-| **Frontend displays** | `rankings.html`, `dashboard.html`, `emailing.html`, `tournaments-list.html`, `tournament-results.html` | Hardcoded T1/T2/T3 columns and Finale tabs |
-| **Statistics** | `statistics.js` | T1→T3 progression tracking |
-| **Email templates** | `emailing.js`, `emailing.html` | Separate default templates per round |
-| **Calendar** | `calendar.js` | Tournament type label mapping |
+### Still TBD (waiting for CDB 93+94)
 
-**Approach:** Build Mode 2 as a separate branch. Mode 1 stays untouched. Per-org setting (`qualification_mode`) determines which engine runs.
+1. **Position-to-points lookup table** — What points does 1st, 2nd, 3rd... get?
+2. **Bracket qualification formula from poules** — "match points + something" — what is the something?
+3. **Serpentine seeding** — Exact field name for moyenne in player file?
+
+### Configurable Settings (per organization)
+
+| Setting Key | Default | Description |
+|-------------|---------|-------------|
+| `qualification_mode` | `standard` | `standard` = 3 Tournois, `journees` = Journées Qualificatives |
+| `journees_count` | `3` | Number of qualification tournaments per season |
+| `best_of_count` | `2` | Best N position-based scores for season ranking |
+| `bracket_size` | `4` | Players in top bracket (regular TQs) |
+| `allow_poule_of_2` | `false` | Allow 2-player poules (play twice) |
+| `single_poule_threshold` | `6` | Below this → single round-robin, no bracket |
+| `classement_round_2` | `true` | Enable 2nd round of classification matches |
+| `mixed_category_bonus` | `false` | Enable +1 point/match for lower-ranked player in merged categories |
+| `average_bonus_tiers` | `true` | Tiered average bonus (0/1/2/3 based on min/middle/max) |
+| `qualification_threshold` | `9` | (existing) Player count threshold for finale qualification |
+| `qualification_small` | `4` | (existing) Qualified count if players < threshold |
+| `qualification_large` | `6` | (existing) Qualified count if players >= threshold |
+
+### New Database Tables
+
+**`position_points`** — Maps finishing position → season points (configurable per org)
+```sql
+CREATE TABLE position_points (
+  id SERIAL PRIMARY KEY, position INTEGER NOT NULL, points INTEGER NOT NULL,
+  organization_id INTEGER REFERENCES organizations(id),
+  UNIQUE(position, organization_id)
+);
+```
+
+**`bracket_matches`** — Individual match results for bracket + classification phases
+```sql
+CREATE TABLE bracket_matches (
+  id SERIAL PRIMARY KEY, tournament_id INTEGER NOT NULL REFERENCES tournaments(id),
+  phase TEXT NOT NULL, match_order INTEGER NOT NULL, match_label TEXT,
+  player1_licence TEXT NOT NULL, player1_name TEXT, player2_licence TEXT, player2_name TEXT,
+  player1_points INTEGER DEFAULT 0, player1_reprises INTEGER DEFAULT 0,
+  player2_points INTEGER DEFAULT 0, player2_reprises INTEGER DEFAULT 0,
+  winner_licence TEXT, resulting_place INTEGER, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+**Altered tables:**
+- `players` → ADD `moyenne_generale REAL` (FFB average for serpentine seeding)
+- `tournament_results` → ADD `position_points INTEGER DEFAULT 0` (position-based season points)
+
+### New Route: `backend/routes/bracket.js`
+
+- `GET /api/bracket/:tournamentId/setup` — Computes qualifiers, generates bracket
+- `POST /api/bracket/:tournamentId/results` — Saves bracket match results
+- `GET /api/bracket/:tournamentId/classement` — Generates classification pairings
+- `POST /api/bracket/:tournamentId/classement` — Saves classification results
+- `POST /api/bracket/:tournamentId/finalize` — Computes final positions, assigns position_points
+
+### Implementation Phases
+
+**Phase 1 — Infrastructure & Settings**
+1. Add `moyenne_generale` to `players`, `position_points` column to `tournament_results`
+2. Create `position_points` and `bracket_matches` tables
+3. Add all settings to `organization_settings` defaults
+4. UI: mode settings section + position-to-points editor in `settings-admin.html`
+5. Import `moyenne_generale` from player file during FFB seeding
+
+**Phase 2 — Poules of 2 & Serpentine Evolution**
+1. Poule distribution: support 2-player poules in `inscriptions.js`
+2. Serpentine: use `moyenne_generale` for TQ1, ongoing ranking for TQ2-3
+3. No impact on Mode 1
+
+**Phase 3 — Bracket & Classification Engine** (new `bracket.js`)
+1. Generic algorithmic engine for any N players
+2. Bracket qualification from poule results
+3. Classification pairing (bottom-up, optional R2)
+4. Position-to-points assignment + mixed-category bonus
+5. Frontend: results entry form
+
+**Phase 4 — Season Ranking & Finale**
+1. `recalculateRankings()` branches by `qualification_mode`
+2. Mode journées: best N position scores + tiered average bonus (0/1/2/3)
+3. Frontend: rankings with kept/dropped scores
+4. Finale de District: single round-robin poule (reuses existing finale logic from CDB92)
+5. Email labels: "Tournoi Qualificatif 1/2/3" + "Finale de District"
+
+### Files Impacted
+
+| File | Type | Change |
+|------|------|--------|
+| `backend/db-postgres.js` | MODIFY | New tables, new columns, migrations |
+| `backend/routes/bracket.js` | NEW | Bracket + classification engine |
+| `backend/routes/tournaments.js` | MODIFY | `recalculateRankings()` → branch by mode, tiered bonus |
+| `backend/routes/inscriptions.js` | MODIFY | Poule distribution (2-player), serpentine evolution |
+| `backend/routes/settings.js` | MODIFY | New settings endpoints |
+| `backend/routes/super-admin.js` | MODIFY | Default settings, moyenne_generale seeding |
+| `backend/routes/emailing.js` | MODIFY | Labels "TQ1/TQ2/TQ3" + "Finale District" |
+| `frontend/settings-admin.html` | MODIFY | Mode settings + position-points editor |
+| `frontend/rankings.html` | MODIFY | Position-points columns, kept/dropped indication |
+| `frontend/tournament-results.html` | MODIFY | Bracket + classification entry form |
+
+### What Does NOT Change
+
+- **Mode "3 Tournois" (CDB92)** — zero impact, works exactly as before
+- **Existing tables** — `tournaments`, `tournament_results`, `rankings` keep their structure
+- **Inscriptions** — same workflow (CSV, player_app, manual)
+- **Convocations** — same serpentine + email system
+- **Player App** — no changes
+- **Multi-CDB isolation** — organization_id scoping unchanged
+- **~75% of codebase** — reused as-is
 
 ## See Also
 
