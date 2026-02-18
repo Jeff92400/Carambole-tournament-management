@@ -644,16 +644,22 @@ router.post('/organizations', async (req, res) => {
     const existingUser = await dbGet(`SELECT id, organization_id FROM users WHERE username = $1`, [admin_username]);
     if (existingUser) {
       // Clean up orphaned user: NULL org_id OR org no longer exists (deleted CDB)
+      let shouldDelete = false;
       if (existingUser.organization_id === null) {
-        await dbRun(`DELETE FROM users WHERE id = $1`, [existingUser.id]);
+        shouldDelete = true;
       } else {
         const orgStillExists = await dbGet(`SELECT id FROM organizations WHERE id = $1`, [existingUser.organization_id]);
         if (!orgStillExists) {
-          // Org was deleted but user survived — clean up the orphan
-          await dbRun(`DELETE FROM users WHERE id = $1`, [existingUser.id]);
+          shouldDelete = true;
         } else {
           return res.status(409).json({ error: 'Ce nom d\'utilisateur existe déjà' });
         }
+      }
+      if (shouldDelete) {
+        // Delete dependent records first (FK constraints)
+        await dbRun(`DELETE FROM admin_activity_logs WHERE user_id = $1`, [existingUser.id]);
+        await dbRun(`DELETE FROM password_reset_codes WHERE email IN (SELECT email FROM users WHERE id = $1 AND email IS NOT NULL)`, [existingUser.id]);
+        await dbRun(`DELETE FROM users WHERE id = $1`, [existingUser.id]);
       }
     }
 
@@ -955,10 +961,12 @@ router.delete('/organizations/:id', async (req, res) => {
 
     // 3a. Explicitly delete users for this org (may have FK deps that block dynamic delete)
     try {
-      // Clean up any password reset codes for these users first
+      // Clean up admin_activity_logs referencing these users (FK constraint)
+      await dbRun(`DELETE FROM admin_activity_logs WHERE user_id IN (SELECT id FROM users WHERE organization_id = $1)`, [id]);
+      // Clean up any password reset codes for these users
       await dbRun(`DELETE FROM password_reset_codes WHERE email IN (SELECT email FROM users WHERE organization_id = $1 AND email IS NOT NULL)`, [id]);
     } catch (err) {
-      console.log(`  password_reset_codes cleanup: skip (${err.message.substring(0, 50)})`);
+      console.log(`  User deps cleanup: skip (${err.message.substring(0, 50)})`);
     }
     await dbRun(`DELETE FROM users WHERE organization_id = $1`, [id]);
     console.log(`[Delete org ${id}] Users deleted`);
