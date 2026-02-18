@@ -139,7 +139,8 @@ router.get('/resolve/:name', authenticateToken, (req, res) => {
 
 // Get club by ID
 router.get('/:id', authenticateToken, (req, res) => {
-  db.get('SELECT * FROM clubs WHERE id = ?', [req.params.id], (err, row) => {
+  const orgId = req.user.organizationId || null;
+  db.get('SELECT * FROM clubs WHERE id = $1 AND ($2::int IS NULL OR organization_id = $2)', [req.params.id, orgId], (err, row) => {
     if (err) {
       return res.status(500).json({ error: err.message });
     }
@@ -197,7 +198,8 @@ router.put('/:id', authenticateToken, upload.single('logo'), (req, res) => {
   const clubId = req.params.id;
 
   // Get current club data
-  db.get('SELECT * FROM clubs WHERE id = ?', [clubId], (err, club) => {
+  const orgId = req.user.organizationId || null;
+  db.get('SELECT * FROM clubs WHERE id = $1 AND ($2::int IS NULL OR organization_id = $2)', [clubId, orgId], (err, club) => {
     if (err) {
       return res.status(500).json({ error: err.message });
     }
@@ -221,8 +223,8 @@ router.put('/:id', authenticateToken, upload.single('logo'), (req, res) => {
     const newCalendarCode = calendar_code !== undefined ? (calendar_code || null) : club.calendar_code;
 
     db.run(
-      'UPDATE clubs SET name = ?, display_name = ?, logo_filename = ?, street = ?, city = ?, zip_code = ?, phone = ?, email = ?, president = ?, president_email = ?, responsable_sportif_name = ?, responsable_sportif_email = ?, responsable_sportif_licence = ?, calendar_code = ? WHERE id = ?',
-      [newName, newDisplayName, newLogoFilename, newStreet, newCity, newZipCode, newPhone, newEmail, newPresident, newPresidentEmail, newResponsableName, newResponsableEmail, newResponsableLicence, newCalendarCode, clubId],
+      'UPDATE clubs SET name = $1, display_name = $2, logo_filename = $3, street = $4, city = $5, zip_code = $6, phone = $7, email = $8, president = $9, president_email = $10, responsable_sportif_name = $11, responsable_sportif_email = $12, responsable_sportif_licence = $13, calendar_code = $14 WHERE id = $15 AND ($16::int IS NULL OR organization_id = $16)',
+      [newName, newDisplayName, newLogoFilename, newStreet, newCity, newZipCode, newPhone, newEmail, newPresident, newPresidentEmail, newResponsableName, newResponsableEmail, newResponsableLicence, newCalendarCode, clubId, orgId],
       function(err) {
         if (err) {
           if (err.message.includes('UNIQUE')) {
@@ -266,7 +268,8 @@ router.delete('/:id', authenticateToken, (req, res) => {
   const clubId = req.params.id;
 
   // Get club data to delete logo file
-  db.get('SELECT * FROM clubs WHERE id = ?', [clubId], (err, club) => {
+  const orgId = req.user.organizationId || null;
+  db.get('SELECT * FROM clubs WHERE id = $1 AND ($2::int IS NULL OR organization_id = $2)', [clubId, orgId], (err, club) => {
     if (err) {
       return res.status(500).json({ error: err.message });
     }
@@ -274,7 +277,7 @@ router.delete('/:id', authenticateToken, (req, res) => {
       return res.status(404).json({ error: 'Club not found' });
     }
 
-    db.run('DELETE FROM clubs WHERE id = ?', [clubId], function(err) {
+    db.run('DELETE FROM clubs WHERE id = $1 AND ($2::int IS NULL OR organization_id = $2)', [clubId, orgId], function(err) {
       if (err) {
         return res.status(500).json({ error: err.message });
       }

@@ -2928,6 +2928,7 @@ router.post('/contact', async (req, res) => {
  */
 router.get('/poules/upcoming', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
+  const orgId = req.user.organizationId || null;
 
   try {
     // Get tournaments with saved poules in the next 7 days
@@ -2946,9 +2947,10 @@ router.get('/poules/upcoming', authenticateToken, async (req, res) => {
         JOIN tournoi_ext t ON cp.tournoi_id = t.tournoi_id
         WHERE t.debut >= CURRENT_DATE
           AND t.debut <= CURRENT_DATE + INTERVAL '7 days'
+          AND ($1::int IS NULL OR t.organization_id = $1)
         GROUP BY cp.tournoi_id, t.nom, t.mode, t.categorie, t.debut, t.lieu
         ORDER BY t.debut ASC
-      `, [], (err, rows) => {
+      `, [orgId], (err, rows) => {
         if (err) reject(err);
         else resolve(rows || []);
       });
@@ -2967,6 +2969,7 @@ router.get('/poules/upcoming', authenticateToken, async (req, res) => {
  */
 router.get('/poules/categories', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
+  const orgId = req.user.organizationId || null;
 
   try {
     const categories = await new Promise((resolve, reject) => {
@@ -2976,8 +2979,9 @@ router.get('/poules/categories', authenticateToken, async (req, res) => {
         JOIN tournoi_ext t ON cp.tournoi_id = t.tournoi_id
         WHERE t.debut >= CURRENT_DATE - INTERVAL '1 day'
           AND t.convocation_sent_at IS NOT NULL
+          AND ($1::int IS NULL OR t.organization_id = $1)
         ORDER BY t.mode, t.categorie
-      `, [], (err, rows) => {
+      `, [orgId], (err, rows) => {
         if (err) reject(err);
         else resolve(rows || []);
       });
@@ -2997,8 +3001,10 @@ router.get('/poules/categories', authenticateToken, async (req, res) => {
 router.get('/poules/by-category', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
   const { mode, categorie } = req.query;
+  const orgId = req.user.organizationId || null;
 
   try {
+    const params = [orgId];
     let sql = `
       SELECT DISTINCT
         cp.tournoi_id,
@@ -3013,8 +3019,8 @@ router.get('/poules/by-category', authenticateToken, async (req, res) => {
       JOIN tournoi_ext t ON cp.tournoi_id = t.tournoi_id
       WHERE t.debut >= CURRENT_DATE - INTERVAL '1 day'
         AND t.convocation_sent_at IS NOT NULL
+        AND ($1::int IS NULL OR t.organization_id = $1)
     `;
-    const params = [];
 
     if (mode) {
       params.push(mode);

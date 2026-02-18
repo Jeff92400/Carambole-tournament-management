@@ -1451,8 +1451,8 @@ router.post('/generate-poules', authenticateToken, async (req, res) => {
               WHERE REPLACE(tr.licence, ' ', '') = REPLACE(r.licence, ' ', '')
               AND t.category_id = r.category_id AND t.season = r.season
               AND t.tournament_number <= 3), 0) as cumulated_reprises
-          FROM rankings r WHERE r.category_id = $1 AND r.season = $2
-        `, [category.id, season]);
+          FROM rankings r WHERE r.category_id = $1 AND r.season = $2 AND ($3::int IS NULL OR r.organization_id = $3)
+        `, [category.id, season, req.user.organizationId || null]);
 
         rankingResult.rows.forEach(row => {
           const moyenne = row.cumulated_reprises > 0
@@ -2282,8 +2282,8 @@ router.post('/create-test-finale', authenticateToken, async (req, res) => {
     // Get the LIBRE R2 category ID
     const category = await new Promise((resolve, reject) => {
       db.get(`
-        SELECT id FROM categories WHERE UPPER(game_type) = 'LIBRE' AND UPPER(level) = 'R2' LIMIT 1
-      `, [], (err, row) => {
+        SELECT id FROM categories WHERE UPPER(game_type) = 'LIBRE' AND UPPER(level) = 'R2' AND ($1::int IS NULL OR organization_id = $1) LIMIT 1
+      `, [orgId], (err, row) => {
         if (err) reject(err);
         else resolve(row);
       });
@@ -2783,12 +2783,14 @@ router.post('/relances/:tournoi_id', authenticateToken, async (req, res) => {
 router.get('/relances', authenticateToken, async (req, res) => {
   try {
     const relances = await new Promise((resolve, reject) => {
+      const orgId = req.user.organizationId || null;
       db.all(`
         SELECT r.*, t.nom, t.mode, t.categorie, t.debut
         FROM tournament_relances r
         JOIN tournoi_ext t ON r.tournoi_id = t.tournoi_id
+        WHERE ($1::int IS NULL OR t.organization_id = $1)
         ORDER BY r.relance_sent_at DESC
-      `, [], (err, rows) => {
+      `, [orgId], (err, rows) => {
         if (err) reject(err);
         else resolve(rows || []);
       });

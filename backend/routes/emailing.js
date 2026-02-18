@@ -2921,8 +2921,9 @@ router.get('/finalists/:finaleId', authenticateToken, async (req, res) => {
       db.get(
         `SELECT * FROM categories
          WHERE UPPER(REPLACE(game_type, ' ', '')) = $1
-           AND (UPPER(level) = $2 OR UPPER(level) LIKE $3)`,
-        [mode, categoryLevel, categoryLevel + '%'],
+           AND (UPPER(level) = $2 OR UPPER(level) LIKE $3)
+           AND ($4::int IS NULL OR organization_id = $4)`,
+        [mode, categoryLevel, categoryLevel + '%', orgId],
         (err, row) => {
           if (err) reject(err);
           else resolve(row);
@@ -3055,8 +3056,8 @@ router.post('/send-finale-convocation', authenticateToken, async (req, res) => {
 
     const category = await new Promise((resolve, reject) => {
       db.get(
-        `SELECT * FROM categories WHERE UPPER(REPLACE(game_type, ' ', '')) = $1 AND (UPPER(level) = $2 OR UPPER(level) LIKE $3)`,
-        [mode, categoryLevel, categoryLevel + '%'],
+        `SELECT * FROM categories WHERE UPPER(REPLACE(game_type, ' ', '')) = $1 AND (UPPER(level) = $2 OR UPPER(level) LIKE $3) AND ($4::int IS NULL OR organization_id = $4)`,
+        [mode, categoryLevel, categoryLevel + '%', orgId],
         (err, row) => {
           if (err) reject(err);
           else resolve(row);
@@ -3866,8 +3867,8 @@ router.get('/next-tournament', authenticateToken, async (req, res) => {
     const categoryUpper = category.toUpperCase();
     const categoryRow = await new Promise((resolve, reject) => {
       db.get(
-        `SELECT * FROM categories WHERE UPPER(game_type) = $1 AND (UPPER(level) = $2 OR UPPER(level) LIKE $3)`,
-        [mode.toUpperCase(), categoryUpper, categoryUpper + '%'],
+        `SELECT * FROM categories WHERE UPPER(game_type) = $1 AND (UPPER(level) = $2 OR UPPER(level) LIKE $3) AND ($4::int IS NULL OR organization_id = $4)`,
+        [mode.toUpperCase(), categoryUpper, categoryUpper + '%', orgId],
         (err, row) => {
           if (err) reject(err);
           else resolve(row);
@@ -3994,8 +3995,8 @@ router.get('/t1-participants', authenticateToken, async (req, res) => {
     const categoryUpper = category.toUpperCase();
     const categoryRow = await new Promise((resolve, reject) => {
       db.get(
-        `SELECT * FROM categories WHERE UPPER(game_type) = $1 AND (UPPER(level) = $2 OR UPPER(level) LIKE $3)`,
-        [mode.toUpperCase(), categoryUpper, categoryUpper + '%'],
+        `SELECT * FROM categories WHERE UPPER(game_type) = $1 AND (UPPER(level) = $2 OR UPPER(level) LIKE $3) AND ($4::int IS NULL OR organization_id = $4)`,
+        [mode.toUpperCase(), categoryUpper, categoryUpper + '%', orgId],
         (err, row) => {
           if (err) reject(err);
           else resolve(row);
@@ -4180,8 +4181,8 @@ router.get('/ranking-for-relance', authenticateToken, async (req, res) => {
     const categoryUpper = category.toUpperCase();
     const categoryRow = await new Promise((resolve, reject) => {
       db.get(
-        `SELECT * FROM categories WHERE UPPER(game_type) = $1 AND (UPPER(level) = $2 OR UPPER(level) LIKE $3)`,
-        [mode.toUpperCase(), categoryUpper, categoryUpper + '%'],
+        `SELECT * FROM categories WHERE UPPER(game_type) = $1 AND (UPPER(level) = $2 OR UPPER(level) LIKE $3) AND ($4::int IS NULL OR organization_id = $4)`,
+        [mode.toUpperCase(), categoryUpper, categoryUpper + '%', orgId],
         (err, row) => {
           if (err) reject(err);
           else resolve(row);
@@ -4348,8 +4349,8 @@ router.get('/t1-players', authenticateToken, async (req, res) => {
     const categoryUpper = category.toUpperCase();
     const categoryRow = await new Promise((resolve, reject) => {
       db.get(
-        `SELECT * FROM categories WHERE UPPER(game_type) = $1 AND (UPPER(level) = $2 OR UPPER(level) LIKE $3)`,
-        [mode.toUpperCase(), categoryUpper, categoryUpper + '%'],
+        `SELECT * FROM categories WHERE UPPER(game_type) = $1 AND (UPPER(level) = $2 OR UPPER(level) LIKE $3) AND ($4::int IS NULL OR organization_id = $4)`,
+        [mode.toUpperCase(), categoryUpper, categoryUpper + '%', orgId],
         (err, row) => {
           if (err) reject(err);
           else resolve(row);
@@ -4526,8 +4527,8 @@ router.get('/finale-qualified', authenticateToken, async (req, res) => {
     const categoryUpper = category.toUpperCase();
     const categoryRow = await new Promise((resolve, reject) => {
       db.get(
-        `SELECT * FROM categories WHERE UPPER(game_type) = $1 AND (UPPER(level) = $2 OR UPPER(level) LIKE $3)`,
-        [mode.toUpperCase(), categoryUpper, categoryUpper + '%'],
+        `SELECT * FROM categories WHERE UPPER(game_type) = $1 AND (UPPER(level) = $2 OR UPPER(level) LIKE $3) AND ($4::int IS NULL OR organization_id = $4)`,
+        [mode.toUpperCase(), categoryUpper, categoryUpper + '%', orgId],
         (err, row) => {
           if (err) reject(err);
           else resolve(row);
@@ -4750,8 +4751,8 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
       const categoryUpper = category.toUpperCase();
       const categoryRow = await new Promise((resolve, reject) => {
         db.get(
-          `SELECT * FROM categories WHERE UPPER(game_type) = $1 AND (UPPER(level) = $2 OR UPPER(level) LIKE $3)`,
-          [mode.toUpperCase(), categoryUpper, categoryUpper + '%'],
+          `SELECT * FROM categories WHERE UPPER(game_type) = $1 AND (UPPER(level) = $2 OR UPPER(level) LIKE $3) AND ($4::int IS NULL OR organization_id = $4)`,
+          [mode.toUpperCase(), categoryUpper, categoryUpper + '%', orgId],
           (err, row) => {
             if (err) reject(err);
             else resolve(row);
@@ -4824,8 +4825,8 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
       const categoryUpper = category.toUpperCase();
       const categoryRow = await new Promise((resolve, reject) => {
         db.get(
-          `SELECT * FROM categories WHERE UPPER(game_type) = $1 AND (UPPER(level) = $2 OR UPPER(level) LIKE $3)`,
-          [mode.toUpperCase(), categoryUpper, categoryUpper + '%'],
+          `SELECT * FROM categories WHERE UPPER(game_type) = $1 AND (UPPER(level) = $2 OR UPPER(level) LIKE $3) AND ($4::int IS NULL OR organization_id = $4)`,
+          [mode.toUpperCase(), categoryUpper, categoryUpper + '%', orgId],
           (err, row) => {
             if (err) reject(err);
             else resolve(row);
@@ -4889,8 +4890,8 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
       const categoryUpper = category.toUpperCase();
       const categoryRow = await new Promise((resolve, reject) => {
         db.get(
-          `SELECT * FROM categories WHERE UPPER(game_type) = $1 AND (UPPER(level) = $2 OR UPPER(level) LIKE $3)`,
-          [mode.toUpperCase(), categoryUpper, categoryUpper + '%'],
+          `SELECT * FROM categories WHERE UPPER(game_type) = $1 AND (UPPER(level) = $2 OR UPPER(level) LIKE $3) AND ($4::int IS NULL OR organization_id = $4)`,
+          [mode.toUpperCase(), categoryUpper, categoryUpper + '%', orgId],
           (err, row) => {
             if (err) reject(err);
             else resolve(row);

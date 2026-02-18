@@ -109,9 +109,10 @@ router.get('/seasons', authenticateToken, async (req, res) => {
   // Get current season before callback
   const currentSeason = await getCurrentSeason();
 
+  const orgId = req.user.organizationId || null;
   db.all(
-    `SELECT DISTINCT season FROM tournaments ORDER BY season DESC`,
-    [],
+    `SELECT DISTINCT season FROM tournaments WHERE ($1::int IS NULL OR organization_id = $1) ORDER BY season DESC`,
+    [orgId],
     (err, rows) => {
       if (err) {
         console.error('Error fetching seasons:', err);
@@ -162,6 +163,7 @@ router.get('/clubs/wins', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
   const { season } = req.query;
   const targetSeason = season || await getCurrentSeason();
+  const orgId = req.user.organizationId || null;
 
   const query = `
     SELECT
@@ -175,11 +177,12 @@ router.get('/clubs/wins', authenticateToken, async (req, res) => {
     WHERE t.season = $1
       AND tr.position = 1
       AND p.club IS NOT NULL AND p.club != ''
+      AND ($2::int IS NULL OR t.organization_id = $2)
     GROUP BY p.club, c.game_type
     ORDER BY c.game_type, wins DESC
   `;
 
-  db.all(query, [targetSeason], (err, rows) => {
+  db.all(query, [targetSeason, orgId], (err, rows) => {
     if (err) {
       console.error('Error fetching club wins:', err);
       return res.status(500).json({ error: err.message });
@@ -206,6 +209,7 @@ router.get('/clubs/podiums', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
   const { season } = req.query;
   const targetSeason = season || await getCurrentSeason();
+  const orgId = req.user.organizationId || null;
 
   const query = `
     SELECT
@@ -223,11 +227,12 @@ router.get('/clubs/podiums', authenticateToken, async (req, res) => {
                                 = UPPER(REPLACE(REPLACE(REPLACE(ca.alias, ' ', ''), '.', ''), '-', ''))
     WHERE t.season = $1
       AND tr.position IN (1, 2, 3)
+      AND ($2::int IS NULL OR t.organization_id = $2)
     GROUP BY COALESCE(ca.canonical_name, p.club, 'Non renseigné'), c.game_type
     ORDER BY c.game_type, podiums DESC
   `;
 
-  db.all(query, [targetSeason], (err, rows) => {
+  db.all(query, [targetSeason, orgId], (err, rows) => {
     if (err) {
       console.error('Error fetching club podiums:', err);
       return res.status(500).json({ error: err.message });
@@ -257,6 +262,7 @@ router.get('/clubs/participations', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
   const { season } = req.query;
   const targetSeason = season || await getCurrentSeason();
+  const orgId = req.user.organizationId || null;
 
   const query = `
     SELECT
@@ -270,12 +276,13 @@ router.get('/clubs/participations', authenticateToken, async (req, res) => {
                                 = UPPER(REPLACE(REPLACE(REPLACE(ca.alias, ' ', ''), '.', ''), '-', ''))
     WHERE t.season = $1
       AND p.club IS NOT NULL AND p.club != ''
+      AND ($2::int IS NULL OR t.organization_id = $2)
     GROUP BY COALESCE(ca.canonical_name, p.club)
     ORDER BY total_participations DESC
     LIMIT 10
   `;
 
-  db.all(query, [targetSeason], (err, rows) => {
+  db.all(query, [targetSeason, orgId], (err, rows) => {
     if (err) {
       console.error('Error fetching club participations:', err);
       return res.status(500).json({ error: err.message });
@@ -287,6 +294,7 @@ router.get('/clubs/participations', authenticateToken, async (req, res) => {
 // Get active players breakdown by club (from players table)
 router.get('/clubs/active-players', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
+  const orgId = req.user.organizationId || null;
 
   const query = `
     SELECT
@@ -297,11 +305,12 @@ router.get('/clubs/active-players', authenticateToken, async (req, res) => {
                                 = UPPER(REPLACE(REPLACE(REPLACE(ca.alias, ' ', ''), '.', ''), '-', ''))
     WHERE p.is_active = 1
       AND p.club IS NOT NULL AND p.club != ''
+      AND ($1::int IS NULL OR p.organization_id = $1)
     GROUP BY COALESCE(ca.canonical_name, p.club, 'Non renseigné')
     ORDER BY player_count DESC
   `;
 
-  db.all(query, [], (err, rows) => {
+  db.all(query, [orgId], (err, rows) => {
     if (err) {
       console.error('Error fetching active players by club:', err);
       return res.status(500).json({ error: err.message });
@@ -315,6 +324,7 @@ router.get('/clubs/competing-players', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
   const { season } = req.query;
   const targetSeason = season || await getCurrentSeason();
+  const orgId = req.user.organizationId || null;
 
   const query = `
     SELECT
@@ -327,11 +337,12 @@ router.get('/clubs/competing-players', authenticateToken, async (req, res) => {
                                 = UPPER(REPLACE(REPLACE(REPLACE(ca.alias, ' ', ''), '.', ''), '-', ''))
     WHERE t.season = $1
       AND p.club IS NOT NULL AND p.club != ''
+      AND ($2::int IS NULL OR t.organization_id = $2)
     GROUP BY COALESCE(ca.canonical_name, p.club, 'Non renseigné')
     ORDER BY player_count DESC
   `;
 
-  db.all(query, [targetSeason], (err, rows) => {
+  db.all(query, [targetSeason, orgId], (err, rows) => {
     if (err) {
       console.error('Error fetching competing players by club:', err);
       return res.status(500).json({ error: err.message });
@@ -345,6 +356,7 @@ router.get('/clubs/moyenne', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
   const { season } = req.query;
   const targetSeason = season || await getCurrentSeason();
+  const orgId = req.user.organizationId || null;
 
   const query = `
     SELECT
@@ -359,12 +371,13 @@ router.get('/clubs/moyenne', authenticateToken, async (req, res) => {
     WHERE t.season = $1
       AND p.club IS NOT NULL AND p.club != ''
       AND tr.moyenne > 0
+      AND ($2::int IS NULL OR t.organization_id = $2)
     GROUP BY p.club, c.game_type
     HAVING COUNT(*) >= 3
     ORDER BY c.game_type, avg_moyenne DESC
   `;
 
-  db.all(query, [targetSeason], (err, rows) => {
+  db.all(query, [targetSeason, orgId], (err, rows) => {
     if (err) {
       console.error('Error fetching club moyenne:', err);
       return res.status(500).json({ error: err.message });
@@ -395,6 +408,7 @@ router.get('/players/active', authenticateToken, async (req, res) => {
   const { season, limit } = req.query;
   const targetSeason = season || await getCurrentSeason();
   const resultLimit = parseInt(limit) || 10;
+  const orgId = req.user.organizationId || null;
 
   const query = `
     SELECT
@@ -408,12 +422,13 @@ router.get('/players/active', authenticateToken, async (req, res) => {
     JOIN categories c ON t.category_id = c.id
     LEFT JOIN players p ON REPLACE(tr.licence, ' ', '') = REPLACE(p.licence, ' ', '')
     WHERE t.season = $1
+      AND ($3::int IS NULL OR t.organization_id = $3)
     GROUP BY tr.licence, COALESCE(p.first_name || ' ' || p.last_name, tr.player_name), p.club
     ORDER BY competitions DESC
     LIMIT $2
   `;
 
-  db.all(query, [targetSeason, resultLimit], (err, rows) => {
+  db.all(query, [targetSeason, resultLimit, orgId], (err, rows) => {
     if (err) {
       console.error('Error fetching active players:', err);
       return res.status(500).json({ error: err.message });
@@ -441,12 +456,14 @@ router.get('/players/wins', authenticateToken, async (req, res) => {
       JOIN categories c ON t.category_id = c.id
       LEFT JOIN players p ON REPLACE(tr.licence, ' ', '') = REPLACE(p.licence, ' ', '')
       WHERE t.season = $1 AND CAST(tr.position AS INTEGER) = 1 AND c.id = $2
+        AND ($3::int IS NULL OR t.organization_id = $3)
       GROUP BY tr.licence, COALESCE(p.first_name || ' ' || p.last_name, tr.player_name), p.club, c.display_name
       ORDER BY wins DESC
       LIMIT 10
     `;
 
-    db.all(query, [targetSeason, category_id], (err, rows) => {
+    const orgId = req.user.organizationId || null;
+    db.all(query, [targetSeason, category_id, orgId], (err, rows) => {
       if (err) {
         console.error('Error fetching player wins:', err);
         return res.status(500).json({ error: err.message });
@@ -480,12 +497,14 @@ router.get('/players/moyenne', authenticateToken, async (req, res) => {
       JOIN categories c ON t.category_id = c.id
       LEFT JOIN players p ON REPLACE(tr.licence, ' ', '') = REPLACE(p.licence, ' ', '')
       WHERE t.season = $1 AND tr.moyenne > 0 AND c.id = $2
+        AND ($3::int IS NULL OR t.organization_id = $3)
       GROUP BY tr.licence, COALESCE(p.first_name || ' ' || p.last_name, tr.player_name), p.club, c.display_name
       ORDER BY avg_moyenne DESC
       LIMIT 10
     `;
 
-    db.all(query, [targetSeason, category_id], (err, rows) => {
+    const orgId = req.user.organizationId || null;
+    db.all(query, [targetSeason, category_id, orgId], (err, rows) => {
       if (err) {
         console.error('Error fetching player moyenne:', err);
         return res.status(500).json({ error: err.message });
@@ -527,12 +546,14 @@ router.get('/players/serie', authenticateToken, async (req, res) => {
       JOIN categories c ON t.category_id = c.id
       LEFT JOIN players p ON REPLACE(tr.licence, ' ', '') = REPLACE(p.licence, ' ', '')
       WHERE t.season = $1 AND tr.serie > 0 AND c.id = $2
+        AND ($3::int IS NULL OR t.organization_id = $3)
       GROUP BY tr.licence, COALESCE(p.first_name || ' ' || p.last_name, tr.player_name), p.club, c.display_name, t.tournament_number
       ORDER BY best_serie DESC
       LIMIT 10
     `;
 
-    db.all(query, [targetSeason, category_id], (err, rows) => {
+    const orgId = req.user.organizationId || null;
+    db.all(query, [targetSeason, category_id, orgId], (err, rows) => {
       if (err) {
         console.error('Error fetching player serie:', err);
         return res.status(500).json({ error: err.message });
@@ -568,6 +589,7 @@ router.get('/players/consistent', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
   const { season } = req.query;
   const targetSeason = season || await getCurrentSeason();
+  const orgId = req.user.organizationId || null;
 
   const query = `
     SELECT
@@ -583,12 +605,13 @@ router.get('/players/consistent', authenticateToken, async (req, res) => {
     JOIN categories c ON t.category_id = c.id
     LEFT JOIN players p ON REPLACE(tr.licence, ' ', '') = REPLACE(p.licence, ' ', '')
     WHERE t.season = $1
+      AND ($2::int IS NULL OR t.organization_id = $2)
     GROUP BY tr.licence, COALESCE(p.first_name || ' ' || p.last_name, tr.player_name), p.club, c.id, c.display_name, c.game_type
     HAVING COUNT(DISTINCT t.tournament_number) = 3
     ORDER BY avg_position ASC
   `;
 
-  db.all(query, [targetSeason], (err, rows) => {
+  db.all(query, [targetSeason, orgId], (err, rows) => {
     if (err) {
       console.error('Error fetching consistent players:', err);
       return res.status(500).json({ error: err.message });
@@ -602,6 +625,7 @@ router.get('/players/progression', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
   const { season } = req.query;
   const targetSeason = season || await getCurrentSeason();
+  const orgId = req.user.organizationId || null;
 
   const query = `
     WITH player_tournaments AS (
@@ -619,6 +643,7 @@ router.get('/players/progression', authenticateToken, async (req, res) => {
       JOIN categories c ON t.category_id = c.id
       LEFT JOIN players p ON REPLACE(tr.licence, ' ', '') = REPLACE(p.licence, ' ', '')
       WHERE t.season = $1
+        AND ($2::int IS NULL OR t.organization_id = $2)
     ),
     progression AS (
       SELECT
@@ -643,7 +668,7 @@ router.get('/players/progression', authenticateToken, async (req, res) => {
     LIMIT 10
   `;
 
-  db.all(query, [targetSeason], (err, rows) => {
+  db.all(query, [targetSeason, orgId], (err, rows) => {
     if (err) {
       console.error('Error fetching player progression:', err);
       return res.status(500).json({ error: err.message });
@@ -659,6 +684,7 @@ router.get('/general/participation', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
   const { season } = req.query;
   const targetSeason = season || await getCurrentSeason();
+  const orgId = req.user.organizationId || null;
 
   // Get season date range
   const [startYear] = targetSeason.split('-');
@@ -681,6 +707,7 @@ router.get('/general/participation', authenticateToken, async (req, res) => {
     FROM inscriptions i
     JOIN tournoi_ext te ON i.tournoi_id = te.tournoi_id
     WHERE te.debut >= $1 AND te.debut <= $2
+      AND ($3::int IS NULL OR te.organization_id = $3)
     GROUP BY CASE
         WHEN UPPER(te.mode) LIKE '%3%BANDE%' THEN '3 Bandes'
         WHEN UPPER(te.mode) LIKE '%BANDE%' AND UPPER(te.mode) NOT LIKE '%3%' THEN 'Bande'
@@ -691,7 +718,7 @@ router.get('/general/participation', authenticateToken, async (req, res) => {
     ORDER BY game_type
   `;
 
-  db.all(query, [seasonStart, seasonEnd], (err, rows) => {
+  db.all(query, [seasonStart, seasonEnd, orgId], (err, rows) => {
     if (err) {
       console.error('Error fetching participation stats:', err);
       return res.status(500).json({ error: err.message });
@@ -716,6 +743,7 @@ router.get('/general/categories', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
   const { season } = req.query;
   const targetSeason = season || await getCurrentSeason();
+  const orgId = req.user.organizationId || null;
 
   const query = `
     SELECT
@@ -729,11 +757,12 @@ router.get('/general/categories', authenticateToken, async (req, res) => {
     JOIN tournaments t ON tr.tournament_id = t.id
     JOIN categories c ON t.category_id = c.id
     WHERE t.season = $1
+      AND ($2::int IS NULL OR t.organization_id = $2)
     GROUP BY c.id, c.display_name, c.game_type, c.level
     ORDER BY c.game_type, unique_players DESC
   `;
 
-  db.all(query, [targetSeason], (err, rows) => {
+  db.all(query, [targetSeason, orgId], (err, rows) => {
     if (err) {
       console.error('Error fetching category stats:', err);
       return res.status(500).json({ error: err.message });
@@ -747,6 +776,7 @@ router.get('/general/locations', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
   const { season } = req.query;
   const targetSeason = season || await getCurrentSeason();
+  const orgId = req.user.organizationId || null;
 
   const query = `
     SELECT
@@ -756,11 +786,12 @@ router.get('/general/locations', authenticateToken, async (req, res) => {
     FROM tournaments t
     LEFT JOIN tournament_results tr ON t.id = tr.tournament_id
     WHERE t.season = $1 AND t.location IS NOT NULL AND t.location != ''
+      AND ($2::int IS NULL OR t.organization_id = $2)
     GROUP BY t.location
     ORDER BY tournaments_hosted DESC
   `;
 
-  db.all(query, [targetSeason], (err, rows) => {
+  db.all(query, [targetSeason, orgId], (err, rows) => {
     if (err) {
       console.error('Error fetching location stats:', err);
       return res.status(500).json({ error: err.message });
@@ -774,18 +805,19 @@ router.get('/summary', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
   const { season } = req.query;
   const targetSeason = season || await getCurrentSeason();
+  const orgId = req.user.organizationId || null;
 
   const queries = {
     totalTournaments: `
-      SELECT COUNT(DISTINCT id) as count FROM tournaments WHERE season = $1
+      SELECT COUNT(DISTINCT id) as count FROM tournaments WHERE season = $1 AND ($2::int IS NULL OR organization_id = $2)
     `,
     totalPlayers: `
       SELECT COUNT(DISTINCT licence) as count FROM tournament_results tr
-      JOIN tournaments t ON tr.tournament_id = t.id WHERE t.season = $1
+      JOIN tournaments t ON tr.tournament_id = t.id WHERE t.season = $1 AND ($2::int IS NULL OR t.organization_id = $2)
     `,
     totalParticipations: `
       SELECT COUNT(*) as count FROM tournament_results tr
-      JOIN tournaments t ON tr.tournament_id = t.id WHERE t.season = $1
+      JOIN tournaments t ON tr.tournament_id = t.id WHERE t.season = $1 AND ($2::int IS NULL OR t.organization_id = $2)
     `
   };
 
@@ -794,7 +826,7 @@ router.get('/summary', authenticateToken, async (req, res) => {
 
     for (const [key, query] of Object.entries(queries)) {
       const row = await new Promise((resolve, reject) => {
-        db.get(query, [targetSeason], (err, row) => {
+        db.get(query, [targetSeason, orgId], (err, row) => {
           if (err) reject(err);
           else resolve(row);
         });
@@ -814,6 +846,7 @@ router.get('/players/new', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
   const { season } = req.query;
   const targetSeason = season || await getCurrentSeason();
+  const orgId = req.user.organizationId || null;
 
   const query = `
     WITH first_appearance AS (
@@ -822,6 +855,7 @@ router.get('/players/new', authenticateToken, async (req, res) => {
         MIN(t.season) as first_season
       FROM tournament_results tr
       JOIN tournaments t ON tr.tournament_id = t.id
+      WHERE ($2::int IS NULL OR t.organization_id = $2)
       GROUP BY tr.licence
     )
     SELECT
@@ -834,12 +868,13 @@ router.get('/players/new', authenticateToken, async (req, res) => {
     JOIN first_appearance fa ON tr.licence = fa.licence
     LEFT JOIN players p ON REPLACE(tr.licence, ' ', '') = REPLACE(p.licence, ' ', '')
     WHERE t.season = $1 AND fa.first_season = $1
+      AND ($2::int IS NULL OR t.organization_id = $2)
     GROUP BY tr.licence, COALESCE(p.first_name || ' ' || p.last_name, tr.player_name), p.club
     ORDER BY tournaments_played DESC
     LIMIT 20
   `;
 
-  db.all(query, [targetSeason], (err, rows) => {
+  db.all(query, [targetSeason, orgId], (err, rows) => {
     if (err) {
       console.error('Error fetching new players:', err);
       return res.status(500).json({ error: err.message });
@@ -851,6 +886,7 @@ router.get('/players/new', authenticateToken, async (req, res) => {
 // Get veteran players (most seasons played)
 router.get('/players/veterans', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
+  const orgId = req.user.organizationId || null;
 
   const query = `
     SELECT
@@ -863,12 +899,13 @@ router.get('/players/veterans', authenticateToken, async (req, res) => {
     FROM tournament_results tr
     JOIN tournaments t ON tr.tournament_id = t.id
     LEFT JOIN players p ON REPLACE(tr.licence, ' ', '') = REPLACE(p.licence, ' ', '')
+    WHERE ($1::int IS NULL OR t.organization_id = $1)
     GROUP BY tr.licence, p.first_name, p.last_name, p.club
     ORDER BY seasons_played DESC
     LIMIT 20
   `;
 
-  db.all(query, [], (err, rows) => {
+  db.all(query, [orgId], (err, rows) => {
     if (err) {
       console.error('Error fetching veteran players:', err);
       return res.status(500).json({ error: err.message });
@@ -881,6 +918,7 @@ router.get('/players/veterans', authenticateToken, async (req, res) => {
 // Based on players table ranks (not tournament results) - counts non-NC ranks
 router.get('/players/multi-category', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
+  const orgId = req.user.organizationId || null;
 
   // Count non-NC ranks for each active player from players table
   const query = `
@@ -893,6 +931,7 @@ router.get('/players/multi-category', authenticateToken, async (req, res) => {
          CASE WHEN rank_cadre IS NOT NULL AND UPPER(rank_cadre) != 'NC' THEN 1 ELSE 0 END) as num_categories
       FROM players
       WHERE is_active = 1
+        AND ($1::int IS NULL OR organization_id = $1)
     )
     SELECT
       COUNT(*) FILTER (WHERE num_categories = 4) as cat_4,
@@ -904,7 +943,7 @@ router.get('/players/multi-category', authenticateToken, async (req, res) => {
     FROM player_categories
   `;
 
-  db.get(query, [], (err, row) => {
+  db.get(query, [orgId], (err, row) => {
     if (err) {
       console.error('Error fetching multi-category stats:', err);
       return res.status(500).json({ error: err.message });
@@ -918,6 +957,7 @@ router.get('/players/multi-category/list', authenticateToken, async (req, res) =
   const db = require('../db-loader');
   const { categories } = req.query;
   const numCategories = parseInt(categories) || 4;
+  const orgId = req.user.organizationId || null;
 
   // List players with specific number of non-NC ranks
   const query = `
@@ -936,6 +976,7 @@ router.get('/players/multi-category/list', authenticateToken, async (req, res) =
          CASE WHEN rank_cadre IS NOT NULL AND UPPER(rank_cadre) != 'NC' THEN 1 ELSE 0 END) as num_categories
       FROM players
       WHERE is_active = 1
+        AND ($2::int IS NULL OR organization_id = $2)
     )
     SELECT
       licence,
@@ -953,7 +994,7 @@ router.get('/players/multi-category/list', authenticateToken, async (req, res) =
     ORDER BY player_name
   `;
 
-  db.all(query, [numCategories], (err, rows) => {
+  db.all(query, [numCategories, orgId], (err, rows) => {
     if (err) {
       console.error('Error fetching multi-category players list:', err);
       return res.status(500).json({ error: err.message });
@@ -967,6 +1008,7 @@ router.get('/debug/game-types', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
   const { season } = req.query;
   const targetSeason = season || await getCurrentSeason();
+  const orgId = req.user.organizationId || null;
 
   const query = `
     SELECT DISTINCT c.game_type, COUNT(*) as count
@@ -974,11 +1016,12 @@ router.get('/debug/game-types', authenticateToken, async (req, res) => {
     JOIN tournaments t ON tr.tournament_id = t.id
     JOIN categories c ON t.category_id = c.id
     WHERE t.season = $1
+      AND ($2::int IS NULL OR t.organization_id = $2)
     GROUP BY c.game_type
     ORDER BY c.game_type
   `;
 
-  db.all(query, [targetSeason], (err, rows) => {
+  db.all(query, [targetSeason, orgId], (err, rows) => {
     if (err) {
       return res.status(500).json({ error: err.message });
     }
@@ -1006,10 +1049,12 @@ router.get('/players/debug/:licence', authenticateToken, async (req, res) => {
     JOIN categories c ON t.category_id = c.id
     WHERE REPLACE(tr.licence, ' ', '') = REPLACE($1, ' ', '')
       AND t.season = $2
+      AND ($3::int IS NULL OR t.organization_id = $3)
     ORDER BY c.game_type, t.tournament_number
   `;
 
-  db.all(query, [licence, targetSeason], (err, rows) => {
+  const orgId = req.user.organizationId || null;
+  db.all(query, [licence, targetSeason, orgId], (err, rows) => {
     if (err) {
       console.error('Error fetching player debug:', err);
       return res.status(500).json({ error: err.message });
