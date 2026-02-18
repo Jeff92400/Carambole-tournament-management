@@ -1324,6 +1324,15 @@ async function initializeDatabase() {
     await client.query(`UPDATE player_accounts SET organization_id = 1 WHERE organization_id IS NULL`);
     await client.query(`UPDATE player_contacts SET organization_id = 1 WHERE organization_id IS NULL`);
 
+    // Calendar and inscription_email_logs org-scoping
+    await client.query(`ALTER TABLE calendar ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_calendar_org ON calendar(organization_id)`);
+    await client.query(`UPDATE calendar SET organization_id = 1 WHERE organization_id IS NULL`);
+
+    await client.query(`ALTER TABLE inscription_email_logs ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_inscription_email_logs_org ON inscription_email_logs(organization_id)`);
+    await client.query(`UPDATE inscription_email_logs SET organization_id = 1 WHERE organization_id IS NULL`);
+
     // Update unique constraints to include organization_id (Phase C)
     await client.query(`ALTER TABLE categories DROP CONSTRAINT IF EXISTS categories_game_type_level_key`);
     await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS categories_game_type_level_org_key ON categories(game_type, level, organization_id)`);

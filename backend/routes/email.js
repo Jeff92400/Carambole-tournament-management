@@ -2416,10 +2416,11 @@ router.post('/generate-summary-pdf', authenticateToken, async (req, res) => {
 router.get('/inscription-logs', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
   const { type, status, from, to, player } = req.query;
+  const orgId = req.user.organizationId || null;
 
-  let query = 'SELECT * FROM inscription_email_logs WHERE 1=1';
-  const params = [];
-  let paramIndex = 1;
+  let query = 'SELECT * FROM inscription_email_logs WHERE ($1::int IS NULL OR organization_id = $1)';
+  const params = [orgId];
+  let paramIndex = 2;
 
   if (type) {
     query += ` AND email_type = $${paramIndex++}`;
@@ -2467,10 +2468,11 @@ router.delete('/inscription-logs/:id', authenticateToken, async (req, res) => {
 
   const db = require('../db-loader');
   const { id } = req.params;
+  const orgId = req.user.organizationId || null;
 
   try {
     await new Promise((resolve, reject) => {
-      db.run('DELETE FROM inscription_email_logs WHERE id = $1', [id], function(err) {
+      db.run('DELETE FROM inscription_email_logs WHERE id = $1 AND ($2::int IS NULL OR organization_id = $2)', [id, orgId], function(err) {
         if (err) reject(err);
         else resolve();
       });
@@ -2662,10 +2664,11 @@ router.post('/inscription-confirmation', async (req, res) => {
     });
 
     // Log email to database
+    const logOrgId = req.user?.organizationId || req.body.organization_id || null;
     db.run(
-      `INSERT INTO inscription_email_logs (email_type, player_email, player_name, tournament_name, mode, category, tournament_date, location, status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'sent')`,
-      ['inscription', player_email, player_name, tournament_name, mode || '', category || '', dateStr, location || ''],
+      `INSERT INTO inscription_email_logs (email_type, player_email, player_name, tournament_name, mode, category, tournament_date, location, status, organization_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'sent', $9)`,
+      ['inscription', player_email, player_name, tournament_name, mode || '', category || '', dateStr, location || '', logOrgId],
       (err) => { if (err) console.error('Error logging inscription email:', err); }
     );
 
@@ -2679,10 +2682,11 @@ router.post('/inscription-confirmation', async (req, res) => {
     const errDateStr = tournament_date
       ? new Date(tournament_date).toLocaleDateString('fr-FR')
       : '';
+    const logOrgIdErr = req.user?.organizationId || req.body.organization_id || null;
     dbErr.run(
-      `INSERT INTO inscription_email_logs (email_type, player_email, player_name, tournament_name, mode, category, tournament_date, location, status, error_message)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'failed', $9)`,
-      ['inscription', player_email, player_name, tournament_name, mode || '', category || '', errDateStr, location || '', error.message],
+      `INSERT INTO inscription_email_logs (email_type, player_email, player_name, tournament_name, mode, category, tournament_date, location, status, error_message, organization_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'failed', $9, $10)`,
+      ['inscription', player_email, player_name, tournament_name, mode || '', category || '', errDateStr, location || '', error.message, logOrgIdErr],
       () => {}
     );
     res.status(500).json({ error: error.message });
@@ -2790,10 +2794,11 @@ router.post('/inscription-cancellation', async (req, res) => {
     });
 
     // Log email to database
+    const cancelLogOrgId = req.user?.organizationId || req.body.organization_id || null;
     db.run(
-      `INSERT INTO inscription_email_logs (email_type, player_email, player_name, tournament_name, mode, category, tournament_date, location, status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'sent')`,
-      ['desinscription', player_email, player_name, tournament_name, mode || '', category || '', dateStr, location || ''],
+      `INSERT INTO inscription_email_logs (email_type, player_email, player_name, tournament_name, mode, category, tournament_date, location, status, organization_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'sent', $9)`,
+      ['desinscription', player_email, player_name, tournament_name, mode || '', category || '', dateStr, location || '', cancelLogOrgId],
       (err) => { if (err) console.error('Error logging desinscription email:', err); }
     );
 
@@ -2807,10 +2812,11 @@ router.post('/inscription-cancellation', async (req, res) => {
     const errDateStr = tournament_date
       ? new Date(tournament_date).toLocaleDateString('fr-FR')
       : '';
+    const cancelLogOrgIdErr = req.user?.organizationId || req.body.organization_id || null;
     dbErr.run(
-      `INSERT INTO inscription_email_logs (email_type, player_email, player_name, tournament_name, mode, category, tournament_date, location, status, error_message)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'failed', $9)`,
-      ['desinscription', player_email, player_name, tournament_name, mode || '', category || '', errDateStr, location || '', error.message],
+      `INSERT INTO inscription_email_logs (email_type, player_email, player_name, tournament_name, mode, category, tournament_date, location, status, error_message, organization_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'failed', $9, $10)`,
+      ['desinscription', player_email, player_name, tournament_name, mode || '', category || '', errDateStr, location || '', error.message, cancelLogOrgIdErr],
       () => {}
     );
     res.status(500).json({ error: error.message });

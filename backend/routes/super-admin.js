@@ -842,6 +842,17 @@ router.post('/organizations', async (req, res) => {
       }
     }
 
+    // Sync player_contacts so Composer page shows the seeded players
+    if (playerStats.created > 0 || playerStats.updated > 0) {
+      try {
+        const { syncContacts } = require('./emailing');
+        await syncContacts();
+        console.log(`[CDB Creation] player_contacts synced after seeding ${playerStats.created + playerStats.updated} players`);
+      } catch (syncErr) {
+        console.error('Error syncing contacts after CDB creation:', syncErr.message);
+      }
+    }
+
     logAdminAction({
       req,
       action: ACTION_TYPES.USER_CREATED || 'user_created',
@@ -1129,6 +1140,17 @@ router.post('/organizations/:id/seed-players', async (req, res) => {
       } catch (playerErr) {
         console.error(`Error seeding player ${fl.licence}:`, playerErr.message);
         errors++;
+      }
+    }
+
+    // Sync player_contacts so Composer page shows the seeded players
+    if (created > 0 || updated > 0) {
+      try {
+        const { syncContacts } = require('./emailing');
+        await syncContacts();
+        console.log(`[Seed Players] player_contacts synced after seeding ${created + updated} players for ${org.short_name}`);
+      } catch (syncErr) {
+        console.error('Error syncing contacts after player seeding:', syncErr.message);
       }
     }
 
