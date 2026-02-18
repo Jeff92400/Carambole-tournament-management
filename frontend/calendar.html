@@ -96,7 +96,7 @@
 
     <!-- No calendar message -->
     <div class="card" id="noCalendarContainer" style="display: none;">
-      <h3>Calendrier CDBHS 2025-2026</h3>
+      <h3 class="calendar-title">Calendrier</h3>
       <div class="download-section">
         <p style="color: #666; font-size: 18px;">Aucun calendrier n'a encore été téléversé.</p>
         <p style="font-size: 14px; color: #888;" class="viewer-message">Contactez l'administrateur pour téléverser le calendrier.</p>
@@ -106,7 +106,7 @@
     <!-- PDF viewer card -->
     <div class="card" id="calendarContainer" style="display: none;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-        <h3>Calendrier CDBHS 2025-2026</h3>
+        <h3 class="calendar-title">Calendrier</h3>
         <button class="btn-download" id="downloadBtnPdf" style="padding: 10px 20px;">
           📥 Télécharger
         </button>
@@ -116,7 +116,7 @@
 
     <!-- Excel download card -->
     <div class="card" id="downloadContainer" style="display: none;">
-      <h3>Calendrier CDBHS 2025-2026</h3>
+      <h3 class="calendar-title">Calendrier</h3>
       <div class="download-section">
         <p>Le calendrier de la saison est disponible au format Excel.</p>
         <p style="font-size: 14px; color: #888;">Cliquez sur le bouton ci-dessous pour télécharger et ouvrir le fichier dans Excel.</p>
@@ -158,6 +158,21 @@
 
     const viewUrl = `${API_URL}/calendar/view`;
     const downloadUrl = `${API_URL}/calendar/download`;
+
+    // Set dynamic calendar title with org name and season
+    (async function setCalendarTitle() {
+      try {
+        const res = await fetch(`${API_URL}/settings/branding/colors`);
+        const data = await res.json();
+        const orgName = data.organization_short_name || 'CDB';
+        const now = new Date();
+        const year = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
+        const season = `${year}-${year + 1}`;
+        document.querySelectorAll('.calendar-title').forEach(el => {
+          el.textContent = `Calendrier ${orgName} ${season}`;
+        });
+      } catch (e) { /* keep fallback "Calendrier" */ }
+    })();
 
     // Load current calendar info
     async function loadCalendarInfo() {
@@ -307,7 +322,7 @@
 
         const contentDisposition = response.headers.get('Content-Disposition');
         const filenameMatch = contentDisposition && contentDisposition.match(/filename="(.+)"/);
-        const filename = filenameMatch ? filenameMatch[1] : 'Calendrier_CDBHS_2025-2026.xlsx';
+        const filename = filenameMatch ? filenameMatch[1] : 'Calendrier.xlsx';
 
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
