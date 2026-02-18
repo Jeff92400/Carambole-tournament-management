@@ -60,6 +60,10 @@ async function authFetch(url, options = {}) {
  * Handle session expiration - redirect to login with message
  */
 function handleSessionExpired() {
+  // Check if this was a SA session before clearing
+  const wasSuperAdmin = localStorage.getItem('isSuperAdmin') === 'true';
+  const hadSaToken = !!localStorage.getItem('sa_token');
+
   // Clear stored credentials
   localStorage.removeItem('token');
   localStorage.removeItem('username');
@@ -74,8 +78,12 @@ function handleSessionExpired() {
   // Store message for login page to display
   sessionStorage.setItem('sessionExpiredMessage', 'Votre session a expiré. Veuillez vous reconnecter.');
 
-  // Redirect to login
-  window.location.href = '/login.html';
+  // SA users get the neutral SA login screen
+  if (wasSuperAdmin || hadSaToken) {
+    window.location.href = '/login.html?sa=1';
+  } else {
+    window.location.href = '/login.html';
+  }
 }
 
 /**
@@ -111,6 +119,10 @@ function getCurrentUser() {
  * Logout user and redirect to login
  */
 function logout() {
+  // Check if this is a SA session before clearing
+  const wasSuperAdmin = localStorage.getItem('isSuperAdmin') === 'true';
+  const hadSaToken = !!localStorage.getItem('sa_token');
+
   localStorage.removeItem('token');
   localStorage.removeItem('username');
   localStorage.removeItem('role');
@@ -121,7 +133,13 @@ function logout() {
   localStorage.removeItem('organizationId');
   localStorage.removeItem('orgSlug');
   localStorage.removeItem('sa_token');
-  window.location.href = '/login.html';
+
+  // SA users get the neutral SA login screen
+  if (wasSuperAdmin || hadSaToken) {
+    window.location.href = '/login.html?sa=1';
+  } else {
+    window.location.href = '/login.html';
+  }
 }
 
 /**
