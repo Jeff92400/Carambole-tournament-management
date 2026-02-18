@@ -447,9 +447,10 @@ async function syncContacts() {
   // First, sync all players (normalize licence by removing spaces)
   await new Promise((resolve, reject) => {
     db.run(`
-      INSERT INTO player_contacts (licence, first_name, last_name, club, rank_libre, rank_cadre, rank_bande, rank_3bandes, statut)
+      INSERT INTO player_contacts (licence, first_name, last_name, club, rank_libre, rank_cadre, rank_bande, rank_3bandes, statut, email)
       SELECT REPLACE(p.licence, ' ', ''), p.first_name, p.last_name, p.club, p.rank_libre, p.rank_cadre, p.rank_bande, p.rank_3bandes,
-             CASE WHEN p.is_active = 1 THEN 'Actif' ELSE 'Inactif' END
+             CASE WHEN p.is_active = 1 THEN 'Actif' ELSE 'Inactif' END,
+             p.email
       FROM players p
       ON CONFLICT (licence) DO UPDATE SET
         first_name = EXCLUDED.first_name,
@@ -460,6 +461,7 @@ async function syncContacts() {
         rank_bande = EXCLUDED.rank_bande,
         rank_3bandes = EXCLUDED.rank_3bandes,
         statut = EXCLUDED.statut,
+        email = COALESCE(player_contacts.email, EXCLUDED.email),
         updated_at = CURRENT_TIMESTAMP
     `, [], (err) => {
       if (err) reject(err);
