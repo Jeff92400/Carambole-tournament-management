@@ -710,3 +710,14 @@ CREATE TABLE bracket_matches (
   - `backend/routes/email.js` - buildUniversalVariables, all email endpoints
   - `backend/routes/emailing.js` - replaceVar calls in send-results, relances, etc.
   - `frontend/emailing.html` - 8+ template editor variable lists
+
+- **Player historical analytics (multi-season stats):** All tournament data (`tournament_results`, `rankings`) is retained permanently across seasons and scoped by `organization_id`. Season averages are computed on-the-fly (`SUM(points)/SUM(reprises)` from `tournament_results`) — not stored as a snapshot. This means we can build rich player analytics over time:
+  - Average (moyenne) progression per mode across seasons
+  - Participation trends (tournaments played per season, regularity)
+  - Ranking evolution (position in category year over year)
+  - Best serie progression
+  - Cross-CDB stats at Ligue or FFB level (all orgs share the same database)
+
+  **Data volume at scale (90 CDBs + 16 Ligues):** Under 1M rows after 10 years across all tables — no performance or storage concern for PostgreSQL. Queries are indexed by `season` and `organization_id`.
+
+  **No schema changes needed** — the data model already supports this. Implementation is purely queries + UI (likely in Player App stats tab).
