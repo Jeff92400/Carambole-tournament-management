@@ -636,9 +636,10 @@ router.post('/users', authenticateToken, requireAdmin, (req, res) => {
           return res.status(500).json({ error: 'Error hashing password' });
         }
 
+        const orgId = req.user.organizationId || null;
         db.run(
-          'INSERT INTO users (username, password_hash, role, email, club_id) VALUES ($1, $2, $3, $4, $5) RETURNING id',
-          [username, hash, userRole, userEmail, userClubId],
+          'INSERT INTO users (username, password_hash, role, email, club_id, organization_id) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
+          [username, hash, userRole, userEmail, userClubId, orgId],
           function(err) {
             if (err) {
               return res.status(500).json({ error: 'Error creating user' });
@@ -680,13 +681,14 @@ router.post('/users', authenticateToken, requireAdmin, (req, res) => {
 router.put('/users/:id', authenticateToken, requireAdmin, (req, res) => {
   const userId = req.params.id;
   const { username, password, role, is_active, email, receive_tournament_alerts } = req.body;
+  const orgId = req.user.organizationId || null;
 
   // Prevent admin from deactivating themselves
   if (req.user.userId == userId && is_active === 0) {
     return res.status(400).json({ error: 'Cannot deactivate your own account' });
   }
 
-  db.get('SELECT * FROM users WHERE id = $1', [userId], (err, user) => {
+  db.get('SELECT * FROM users WHERE id = $1 AND ($2::int IS NULL OR organization_id = $2)', [userId, orgId], (err, user) => {
     if (err) {
       return res.status(500).json({ error: 'Database error' });
     }
@@ -795,6 +797,7 @@ router.put('/users/:id', authenticateToken, requireAdmin, (req, res) => {
 // Delete user (admin only)
 router.delete('/users/:id', authenticateToken, requireAdmin, (req, res) => {
   const userId = req.params.id;
+  const orgId = req.user.organizationId || null;
 
   // Prevent admin from deleting themselves
   if (req.user.userId == userId) {
@@ -802,12 +805,12 @@ router.delete('/users/:id', authenticateToken, requireAdmin, (req, res) => {
   }
 
   // Get user info before deleting (for logging)
-  db.get('SELECT username FROM users WHERE id = $1', [userId], (err, user) => {
+  db.get('SELECT username FROM users WHERE id = $1 AND ($2::int IS NULL OR organization_id = $2)', [userId, orgId], (err, user) => {
     if (err) {
       return res.status(500).json({ error: 'Error finding user' });
     }
 
-    db.run('DELETE FROM users WHERE id = $1', [userId], function(err) {
+    db.run('DELETE FROM users WHERE id = $1 AND ($2::int IS NULL OR organization_id = $2)', [userId, orgId], function(err) {
       if (err) {
         return res.status(500).json({ error: 'Error deleting user' });
       }

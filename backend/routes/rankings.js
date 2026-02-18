@@ -35,13 +35,16 @@ router.get('/', authenticateToken, (req, res) => {
     return res.status(400).json({ error: 'Category ID and season required' });
   }
 
+  const orgId = req.user.organizationId || null;
+
   // First, check which tournaments have been played for this category/season
   const tournamentsPlayedQuery = `
     SELECT tournament_number FROM tournaments
-    WHERE category_id = ? AND season = ? AND tournament_number <= 3
+    WHERE category_id = $1 AND season = $2 AND tournament_number <= 3
+      AND ($3::int IS NULL OR organization_id = $3)
   `;
 
-  db.all(tournamentsPlayedQuery, [categoryId, season], (err, tournamentRows) => {
+  db.all(tournamentsPlayedQuery, [categoryId, season, orgId], (err, tournamentRows) => {
     if (err) {
       return res.status(500).json({ error: err.message });
     }
@@ -103,13 +106,14 @@ router.get('/', authenticateToken, (req, res) => {
         LEFT JOIN players p ON REPLACE(r.licence, ' ', '') = REPLACE(p.licence, ' ', '')
         LEFT JOIN player_contacts pc ON REPLACE(r.licence, ' ', '') = REPLACE(pc.licence, ' ', '')
         JOIN categories c ON r.category_id = c.id
-        WHERE r.category_id = ? AND r.season = ?
+        WHERE r.category_id = $1 AND r.season = $2
+          AND ($3::int IS NULL OR r.organization_id = $3)
         ORDER BY r.licence, r.rank_position
       ) sub
       ORDER BY rank_position
     `;
 
-    db.all(query, [categoryId, season], (err, rows) => {
+    db.all(query, [categoryId, season, orgId], (err, rows) => {
       if (err) {
         return res.status(500).json({ error: err.message });
       }
@@ -139,7 +143,6 @@ router.get('/', authenticateToken, (req, res) => {
       }
 
       if (seenTypes.size > 0) {
-        const orgId = req.user.organizationId || null;
         const typesArr = [...seenTypes];
         const placeholders = typesArr.map((_, i) => `$${i + 1}`).join(',');
         const orgParam = typesArr.length + 1;
@@ -164,7 +167,8 @@ router.get('/', authenticateToken, (req, res) => {
 
 // Get all seasons
 router.get('/seasons', authenticateToken, (req, res) => {
-  db.all('SELECT DISTINCT season FROM tournaments ORDER BY season DESC', [], (err, rows) => {
+  const orgId = req.user.organizationId || null;
+  db.all('SELECT DISTINCT season FROM tournaments WHERE ($1::int IS NULL OR organization_id = $1) ORDER BY season DESC', [orgId], (err, rows) => {
     if (err) {
       return res.status(500).json({ error: err.message });
     }
@@ -180,14 +184,17 @@ router.get('/export', authenticateToken, async (req, res) => {
     return res.status(400).json({ error: 'Category ID and season required' });
   }
 
+  const orgId = req.user.organizationId || null;
+
   // First, check which tournaments have been played
   const tournamentsPlayedQuery = `
     SELECT tournament_number FROM tournaments
-    WHERE category_id = ? AND season = ? AND tournament_number <= 3
+    WHERE category_id = $1 AND season = $2 AND tournament_number <= 3
+      AND ($3::int IS NULL OR organization_id = $3)
   `;
 
   const tournamentRows = await new Promise((resolve, reject) => {
-    db.all(tournamentsPlayedQuery, [categoryId, season], (err, rows) => {
+    db.all(tournamentsPlayedQuery, [categoryId, season, orgId], (err, rows) => {
       if (err) reject(err);
       else resolve(rows || []);
     });
@@ -244,13 +251,14 @@ router.get('/export', authenticateToken, async (req, res) => {
       FROM rankings r
       LEFT JOIN players p ON REPLACE(r.licence, ' ', '') = REPLACE(p.licence, ' ', '')
       JOIN categories c ON r.category_id = c.id
-      WHERE r.category_id = ? AND r.season = ?
+      WHERE r.category_id = $1 AND r.season = $2
+        AND ($3::int IS NULL OR r.organization_id = $3)
       ORDER BY r.licence, r.rank_position
     ) sub
     ORDER BY rank_position
   `;
 
-  db.all(query, [categoryId, season], async (err, rows) => {
+  db.all(query, [categoryId, season, orgId], async (err, rows) => {
     if (err) {
       return res.status(500).json({ error: err.message });
     }
@@ -285,7 +293,6 @@ router.get('/export', authenticateToken, async (req, res) => {
 
       let bonusColumns = [];
       if (seenTypes.size > 0) {
-        const orgId = req.user.organizationId || null;
         const typesArr = [...seenTypes];
         const placeholders = typesArr.map((_, i) => `$${i + 1}`).join(',');
         const orgParam = typesArr.length + 1;

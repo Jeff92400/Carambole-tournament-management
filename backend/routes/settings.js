@@ -1041,10 +1041,11 @@ router.delete('/category-mappings/:id', authenticateToken, requireAdmin, (req, r
 // Get all categories (for dropdown)
 router.get('/categories', authenticateToken, (req, res) => {
   const db = getDb();
+  const orgId = req.user.organizationId || null;
 
   db.all(
-    `SELECT * FROM categories ORDER BY game_type, level`,
-    [],
+    `SELECT * FROM categories WHERE ($1::int IS NULL OR organization_id = $1) ORDER BY game_type, level`,
+    [orgId],
     (err, rows) => {
       if (err) {
         console.error('Error fetching categories:', err);

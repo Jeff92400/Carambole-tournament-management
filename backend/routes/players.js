@@ -282,6 +282,8 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
     return res.status(400).json({ error: 'No file uploaded' });
   }
 
+  const orgId = req.user.organizationId || null;
+
   // Check if only rankings should be updated
   const rankingsOnly = req.body.rankingsOnly === 'true' || req.body.rankingsOnly === true;
 
@@ -389,10 +391,12 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
           const values = Object.values(csvRankings);
           values.push(licence);
 
+          values.push(orgId);
           const changes = await new Promise((resolve, reject) => {
             db.run(`
               UPDATE players SET ${setClauses.join(', ')}
-              WHERE REPLACE(licence, ' ', '') = REPLACE($${values.length}, ' ', '')
+              WHERE REPLACE(licence, ' ', '') = REPLACE($${values.length - 1}, ' ', '')
+                AND ($${values.length}::int IS NULL OR organization_id = $${values.length})
             `, values, function(err) {
               if (err) {
                 reject(err);
@@ -423,7 +427,8 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
             db.get(`
               SELECT licence FROM players
               WHERE REPLACE(licence, ' ', '') = REPLACE($1, ' ', '')
-            `, [licence], (err, row) => {
+                AND ($2::int IS NULL OR organization_id = $2)
+            `, [licence, orgId], (err, row) => {
               if (err) reject(err);
               else resolve(row);
             });
@@ -434,7 +439,7 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
             const rankCols = Object.keys(csvRankings);
             const baseValues = [club, firstName, lastName];
             const rankValues = Object.values(csvRankings);
-            const allValues = [...baseValues, ...rankValues, isActive, licence];
+            const allValues = [...baseValues, ...rankValues, isActive, licence, orgId];
 
             const rankSetClauses = rankCols.map((col, i) => `${col} = $${4 + i}`);
 
@@ -447,6 +452,7 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
                   ${rankSetClauses.join(', ')},
                   is_active = $${4 + rankCols.length}
                 WHERE REPLACE(licence, ' ', '') = REPLACE($${5 + rankCols.length}, ' ', '')
+                  AND ($${6 + rankCols.length}::int IS NULL OR organization_id = $${6 + rankCols.length})
               `, allValues, function(err) {
                 if (err) reject(err);
                 else resolve(this.changes);
@@ -457,8 +463,8 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
             // Insert new player - build dynamic INSERT
             const rankCols = Object.keys(csvRankings);
             const rankValues = Object.values(csvRankings);
-            const allCols = ['licence', 'club', 'first_name', 'last_name', ...rankCols, 'is_active'];
-            const allValues = [licence, club, firstName, lastName, ...rankValues, isActive];
+            const allCols = ['licence', 'club', 'first_name', 'last_name', ...rankCols, 'is_active', 'organization_id'];
+            const allValues = [licence, club, firstName, lastName, ...rankValues, isActive, orgId];
             const placeholders = allValues.map((_, i) => `$${i + 1}`);
 
             await new Promise((resolve, reject) => {
@@ -605,15 +611,18 @@ router.post('/', authenticateToken, requireClubOrAdmin, async (req, res) => {
     // Normalize club name to canonical form from clubs table
     const normalizedClub = effectiveClub ? await normalizeClubName(effectiveClub) : null;
 
+    const orgId = req.user.organizationId || null;
+
     // Build INSERT for players table
-    const baseCols = ['licence', 'first_name', 'last_name', 'club', 'email', 'telephone'];
+    const baseCols = ['licence', 'first_name', 'last_name', 'club', 'email', 'telephone', 'organization_id'];
     const baseValues = [
       normalizedLicence,
       first_name,
       last_name.toUpperCase(),
       normalizedClub,
       email || null,
-      phone || null
+      phone || null,
+      orgId
     ];
 
     const rankCols = Object.keys(legacyRankings);
@@ -668,6 +677,7 @@ router.post('/', authenticateToken, requireClubOrAdmin, async (req, res) => {
 // Get all players (or filter by active status)
 router.get('/', authenticateToken, async (req, res) => {
   const { active } = req.query;
+  const orgId = req.user.organizationId || null;
 
   try {
     // For club role, get their club's display_name to filter
@@ -687,6 +697,10 @@ router.get('/', authenticateToken, async (req, res) => {
     `;
     const params = [];
     const conditions = [];
+
+    // Organization scoping
+    params.push(orgId);
+    conditions.push(`($${params.length}::int IS NULL OR p.organization_id = $${params.length})`);
 
     if (active === 'true') {
       conditions.push('p.is_active = 1');
@@ -763,6 +777,7 @@ router.get('/', authenticateToken, async (req, res) => {
 // Find duplicate players (same first_name + last_name)
 // MUST be before /:licence route to avoid being caught by it
 router.get('/duplicates', authenticateToken, async (req, res) => {
+  const orgId = req.user.organizationId || null;
   try {
     const duplicates = await new Promise((resolve, reject) => {
       db.all(`
@@ -770,10 +785,11 @@ router.get('/duplicates', authenticateToken, async (req, res) => {
                COUNT(*) as count,
                STRING_AGG(licence, ', ') as licences
         FROM players
+        WHERE ($1::int IS NULL OR organization_id = $1)
         GROUP BY UPPER(first_name), UPPER(last_name)
         HAVING COUNT(*) > 1
         ORDER BY last_name, first_name
-      `, [], (err, rows) => {
+      `, [orgId], (err, rows) => {
         if (err) reject(err);
         else resolve(rows || []);
       });
@@ -791,9 +807,10 @@ router.get('/duplicates', authenticateToken, async (req, res) => {
 
 // Get player by licence
 router.get('/:licence', authenticateToken, async (req, res) => {
+  const orgId = req.user.organizationId || null;
   try {
     const player = await new Promise((resolve, reject) => {
-      db.get("SELECT * FROM players WHERE REPLACE(licence, ' ', '') = REPLACE($1, ' ', '')", [req.params.licence], (err, row) => {
+      db.get("SELECT * FROM players WHERE REPLACE(licence, ' ', '') = REPLACE($1, ' ', '') AND ($2::int IS NULL OR organization_id = $2)", [req.params.licence, orgId], (err, row) => {
         if (err) reject(err);
         else resolve(row);
       });
@@ -1115,9 +1132,12 @@ router.put('/:licence', authenticateToken, requireClubOrAdmin, async (req, res) 
       return res.status(400).json({ error: 'No fields to update' });
     }
 
+    const orgId = req.user.organizationId || null;
     values.push(licence);
+    values.push(orgId);
+    values.push(orgId);
 
-    const query = `UPDATE players SET ${updates.join(', ')} WHERE REPLACE(licence, ' ', '') = REPLACE(?, ' ', '')`;
+    const query = `UPDATE players SET ${updates.join(', ')} WHERE REPLACE(licence, ' ', '') = REPLACE(?, ' ', '') AND (?::int IS NULL OR organization_id = ?)`;
 
     db.run(query, values, function(err) {
       if (err) {
@@ -1140,14 +1160,15 @@ router.put('/:licence', authenticateToken, requireClubOrAdmin, async (req, res) 
 router.put('/:licence/club', authenticateToken, (req, res) => {
   const { licence } = req.params;
   const { club } = req.body;
+  const orgId = req.user.organizationId || null;
 
   if (club === undefined || club === null) {
     return res.status(400).json({ error: 'Club name is required' });
   }
 
-  const query = 'UPDATE players SET club = ? WHERE REPLACE(licence, \' \', \'\') = REPLACE(?, \' \', \'\')';
+  const query = 'UPDATE players SET club = ? WHERE REPLACE(licence, \' \', \'\') = REPLACE(?, \' \', \'\') AND (?::int IS NULL OR organization_id = ?)';
 
-  db.run(query, [club, licence], function(err) {
+  db.run(query, [club, licence, orgId, orgId], function(err) {
     if (err) {
       console.error('Update club error:', err);
       return res.status(500).json({ error: err.message });
@@ -1161,7 +1182,8 @@ router.put('/:licence/club', authenticateToken, (req, res) => {
 
 // Delete all players (admin only - requires password confirmation)
 router.delete('/all', authenticateToken, (req, res) => {
-  db.run('DELETE FROM players', [], function(err) {
+  const orgId = req.user.organizationId || null;
+  db.run('DELETE FROM players WHERE ($1::int IS NULL OR organization_id = $1)', [orgId], function(err) {
     if (err) {
       return res.status(500).json({ error: err.message });
     }
@@ -1256,6 +1278,7 @@ router.post('/:licence/reset-password', authenticateToken, async (req, res) => {
 
 // Batch: Populate players email/telephone from inscriptions
 router.post('/batch/populate-from-inscriptions', authenticateToken, async (req, res) => {
+  const orgId = req.user.organizationId || null;
   try {
     // Update emails from most recent inscriptions
     const emailResult = await new Promise((resolve, reject) => {
@@ -1268,11 +1291,13 @@ router.post('/batch/populate-from-inscriptions', authenticateToken, async (req, 
             email
           FROM inscriptions
           WHERE email IS NOT NULL AND email != ''
+            AND ($1::int IS NULL OR organization_id = $1)
           ORDER BY REPLACE(licence, ' ', ''), timestamp DESC
         ) i
         WHERE REPLACE(p.licence, ' ', '') = i.clean_licence
           AND (p.email IS NULL OR p.email = '')
-      `, [], function(err) {
+          AND ($1::int IS NULL OR p.organization_id = $1)
+      `, [orgId], function(err) {
         if (err) reject(err);
         else resolve(this.changes || 0);
       });
@@ -1289,11 +1314,13 @@ router.post('/batch/populate-from-inscriptions', authenticateToken, async (req, 
             telephone
           FROM inscriptions
           WHERE telephone IS NOT NULL AND telephone != ''
+            AND ($1::int IS NULL OR organization_id = $1)
           ORDER BY REPLACE(licence, ' ', ''), timestamp DESC
         ) i
         WHERE REPLACE(p.licence, ' ', '') = i.clean_licence
           AND (p.telephone IS NULL OR p.telephone = '')
-      `, [], function(err) {
+          AND ($1::int IS NULL OR p.organization_id = $1)
+      `, [orgId], function(err) {
         if (err) reject(err);
         else resolve(this.changes || 0);
       });
@@ -1345,13 +1372,14 @@ router.get('/:licence/history', authenticateToken, (req, res) => {
 // Fix duplicate player licence - delete wrong one and update tournament results
 router.post('/fix-duplicate-licence', authenticateToken, async (req, res) => {
   const { wrongLicence, correctLicence } = req.body;
+  const orgId = req.user.organizationId || null;
 
   if (!wrongLicence || !correctLicence) {
     return res.status(400).json({ error: 'wrongLicence and correctLicence are required' });
   }
 
   try {
-    // Update tournament_results to use correct licence
+    // Update tournament_results to use correct licence (scoped via tournaments org)
     const updateResult = await new Promise((resolve, reject) => {
       db.run(
         `UPDATE tournament_results SET licence = $1 WHERE REPLACE(licence, ' ', '') = REPLACE($2, ' ', '')`,
@@ -1366,8 +1394,8 @@ router.post('/fix-duplicate-licence', authenticateToken, async (req, res) => {
     // Delete rankings for the wrong licence first (foreign key constraint)
     const deleteRankings = await new Promise((resolve, reject) => {
       db.run(
-        `DELETE FROM rankings WHERE REPLACE(licence, ' ', '') = REPLACE($1, ' ', '')`,
-        [wrongLicence],
+        `DELETE FROM rankings WHERE REPLACE(licence, ' ', '') = REPLACE($1, ' ', '') AND ($2::int IS NULL OR organization_id = $2)`,
+        [wrongLicence, orgId],
         function(err) {
           if (err) reject(err);
           else resolve(this.changes);
@@ -1378,8 +1406,8 @@ router.post('/fix-duplicate-licence', authenticateToken, async (req, res) => {
     // Delete the duplicate player
     const deleteResult = await new Promise((resolve, reject) => {
       db.run(
-        `DELETE FROM players WHERE REPLACE(licence, ' ', '') = REPLACE($1, ' ', '')`,
-        [wrongLicence],
+        `DELETE FROM players WHERE REPLACE(licence, ' ', '') = REPLACE($1, ' ', '') AND ($2::int IS NULL OR organization_id = $2)`,
+        [wrongLicence, orgId],
         function(err) {
           if (err) reject(err);
           else resolve(this.changes);

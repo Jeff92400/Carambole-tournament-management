@@ -33,6 +33,7 @@ router.get('/', authenticateToken, requireViewer, async (req, res) => {
       limit = 100,
       offset = 0
     } = req.query;
+    const orgId = req.user.organizationId || null;
 
     let query = `
       SELECT
@@ -51,10 +52,10 @@ router.get('/', authenticateToken, requireViewer, async (req, res) => {
         app_source,
         created_at
       FROM activity_logs
-      WHERE 1=1
+      WHERE ($1::int IS NULL OR organization_id = $1)
     `;
-    const params = [];
-    let paramIndex = 1;
+    const params = [orgId];
+    let paramIndex = 2;
 
     if (startDate) {
       query += ` AND created_at >= $${paramIndex}`;
@@ -145,11 +146,13 @@ router.get('/', authenticateToken, requireViewer, async (req, res) => {
  */
 router.get('/action-types', authenticateToken, requireViewer, async (req, res) => {
   try {
+    const orgId = req.user.organizationId || null;
     const result = await db.query(`
       SELECT DISTINCT action_type
       FROM activity_logs
+      WHERE ($1::int IS NULL OR organization_id = $1)
       ORDER BY action_type
-    `);
+    `, [orgId]);
 
     res.json(result.rows.map(r => r.action_type));
   } catch (error) {
@@ -168,6 +171,7 @@ router.get('/action-types', authenticateToken, requireViewer, async (req, res) =
 router.get('/stats', authenticateToken, requireViewer, async (req, res) => {
   try {
     const { days = 7, since } = req.query;
+    const orgId = req.user.organizationId || null;
 
     // Build date filter: use 'since' date if provided, otherwise use 'days'
     let dateFilter;
@@ -176,6 +180,8 @@ router.get('/stats', authenticateToken, requireViewer, async (req, res) => {
     } else {
       dateFilter = `created_at >= NOW() - INTERVAL '${parseInt(days)} days'`;
     }
+
+    const orgFilter = `($1::int IS NULL OR organization_id = $1)`;
 
     // Actions per day (excluding test accounts)
     const dailyStats = await db.query(`
@@ -186,9 +192,10 @@ router.get('/stats', authenticateToken, requireViewer, async (req, res) => {
       FROM activity_logs
       WHERE ${dateFilter}
         AND (licence IS NULL OR UPPER(licence) NOT LIKE 'TEST%')
+        AND ${orgFilter}
       GROUP BY DATE(created_at), action_type
       ORDER BY date DESC, action_type
-    `);
+    `, [orgId]);
 
     // Total counts by action type (excluding test accounts)
     const totals = await db.query(`
@@ -198,9 +205,10 @@ router.get('/stats', authenticateToken, requireViewer, async (req, res) => {
       FROM activity_logs
       WHERE ${dateFilter}
         AND (licence IS NULL OR UPPER(licence) NOT LIKE 'TEST%')
+        AND ${orgFilter}
       GROUP BY action_type
       ORDER BY count DESC
-    `);
+    `, [orgId]);
 
     // Recent active users (join with players to get real names)
     // Group by normalized licence to avoid duplicates
@@ -216,10 +224,11 @@ router.get('/stats', authenticateToken, requireViewer, async (req, res) => {
       WHERE ${dateFilter.replace('created_at', 'a.created_at')}
         AND a.licence IS NOT NULL
         AND UPPER(a.licence) NOT LIKE 'TEST%'
+        AND ($1::int IS NULL OR a.organization_id = $1)
       GROUP BY REPLACE(a.licence, ' ', ''), p.last_name, p.first_name
       ORDER BY action_count DESC
       LIMIT 10
-    `);
+    `, [orgId]);
 
     // Total Player App users - count from players table (excluding test accounts)
     const totalUsers = await db.query(`
@@ -228,7 +237,8 @@ router.get('/stats', authenticateToken, requireViewer, async (req, res) => {
       WHERE player_app_user = TRUE
         AND (player_app_role IS NULL OR player_app_role != 'test')
         AND UPPER(licence) NOT LIKE 'TEST%'
-    `);
+        AND ${orgFilter}
+    `, [orgId]);
 
     res.json({
       daily: dailyStats.rows,
@@ -255,10 +265,11 @@ router.get('/stats', authenticateToken, requireViewer, async (req, res) => {
 router.delete('/', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { startDate, endDate } = req.body || {};
+    const orgId = req.user.organizationId || null;
 
-    let query = 'DELETE FROM activity_logs WHERE 1=1';
-    const params = [];
-    let paramIndex = 1;
+    let query = 'DELETE FROM activity_logs WHERE ($1::int IS NULL OR organization_id = $1)';
+    const params = [orgId];
+    let paramIndex = 2;
 
     if (startDate) {
       query += ` AND created_at >= $${paramIndex}`;

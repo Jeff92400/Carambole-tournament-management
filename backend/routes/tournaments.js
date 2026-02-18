@@ -114,7 +114,8 @@ try {
 // Get all categories
 // Use INITCAP to normalize game_type display (e.g., "LIBRE" -> "Libre")
 router.get('/categories', authenticateToken, (req, res) => {
-  db.all('SELECT id, INITCAP(game_type) as game_type, level, display_name FROM categories ORDER BY INITCAP(game_type), level', [], (err, rows) => {
+  const orgId = req.user.organizationId || null;
+  db.all('SELECT id, INITCAP(game_type) as game_type, level, display_name FROM categories WHERE ($1::int IS NULL OR organization_id = $1) ORDER BY INITCAP(game_type), level', [orgId], (err, rows) => {
     if (err) {
       return res.status(500).json({ error: err.message });
     }
