@@ -643,11 +643,17 @@ router.post('/organizations', async (req, res) => {
 
     const existingUser = await dbGet(`SELECT id, organization_id FROM users WHERE username = $1`, [admin_username]);
     if (existingUser) {
-      // Clean up orphaned user from a failed previous creation (NULL org_id)
+      // Clean up orphaned user: NULL org_id OR org no longer exists (deleted CDB)
       if (existingUser.organization_id === null) {
         await dbRun(`DELETE FROM users WHERE id = $1`, [existingUser.id]);
       } else {
-        return res.status(409).json({ error: 'Ce nom d\'utilisateur existe déjà' });
+        const orgStillExists = await dbGet(`SELECT id FROM organizations WHERE id = $1`, [existingUser.organization_id]);
+        if (!orgStillExists) {
+          // Org was deleted but user survived — clean up the orphan
+          await dbRun(`DELETE FROM users WHERE id = $1`, [existingUser.id]);
+        } else {
+          return res.status(409).json({ error: 'Ce nom d\'utilisateur existe déjà' });
+        }
       }
     }
 
@@ -946,6 +952,16 @@ router.delete('/organizations/:id', async (req, res) => {
 
     // 3. Delete dependent tables without organization_id FIRST (FK ordering)
     await dbRun(`DELETE FROM club_ffb_mapping WHERE club_id IN (SELECT id FROM clubs WHERE organization_id = $1)`, [id]);
+
+    // 3a. Explicitly delete users for this org (may have FK deps that block dynamic delete)
+    try {
+      // Clean up any password reset codes for these users first
+      await dbRun(`DELETE FROM password_reset_codes WHERE email IN (SELECT email FROM users WHERE organization_id = $1 AND email IS NOT NULL)`, [id]);
+    } catch (err) {
+      console.log(`  password_reset_codes cleanup: skip (${err.message.substring(0, 50)})`);
+    }
+    await dbRun(`DELETE FROM users WHERE organization_id = $1`, [id]);
+    console.log(`[Delete org ${id}] Users deleted`);
 
     // 3b. Delete org data from all tables that have organization_id
     const orgTables = await dbAll(`
