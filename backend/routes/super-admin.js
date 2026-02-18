@@ -120,7 +120,7 @@ router.get('/ffb-cdbs', async (req, res) => {
         (SELECT COUNT(*) FROM ffb_clubs fc WHERE fc.cdb_code = c.code) as club_count
       FROM ffb_cdbs c
       LEFT JOIN ffb_ligues l ON c.ligue_numero = l.numero
-      WHERE c.code NOT IN (SELECT ffb_cdb_code FROM organizations WHERE ffb_cdb_code IS NOT NULL)
+      WHERE c.code NOT IN (SELECT unnest(string_to_array(ffb_cdb_code, ',')) FROM organizations WHERE ffb_cdb_code IS NOT NULL)
       ORDER BY l.nom, c.code
     `);
     res.json(cdbs);
@@ -147,7 +147,7 @@ router.get('/ffb-licences/search', async (req, res) => {
         fc.nom as club_nom
       FROM ffb_licences fl
       LEFT JOIN ffb_clubs fc ON fl.num_club = fc.numero
-      WHERE fl.cdb_code = $1
+      WHERE fl.cdb_code = ANY(string_to_array($1, ','))
         AND (UPPER(fl.nom) LIKE $2 OR UPPER(fl.prenom) LIKE $2 OR fl.licence LIKE $2)
       ORDER BY fl.nom, fl.prenom
       LIMIT 20
@@ -746,7 +746,7 @@ router.post('/organizations', async (req, res) => {
     if (ffb_cdb_code) {
       try {
         const ffbClubs = await dbAll(
-          `SELECT numero, nom, sigle, code_postal, ville, email, tel, raw_data FROM ffb_clubs WHERE cdb_code = $1`,
+          `SELECT numero, nom, sigle, code_postal, ville, email, tel, raw_data FROM ffb_clubs WHERE cdb_code = ANY(string_to_array($1, ','))`,
           [ffb_cdb_code]
         );
 
@@ -808,7 +808,7 @@ router.post('/organizations', async (req, res) => {
           `SELECT fl.*, fc.nom as club_name
            FROM ffb_licences fl
            LEFT JOIN ffb_clubs fc ON fl.num_club = fc.numero
-           WHERE fl.cdb_code = $1`,
+           WHERE fl.cdb_code = ANY(string_to_array($1, ','))`,
           [ffb_cdb_code]
         );
 
@@ -1046,7 +1046,7 @@ router.get('/organizations/:id/seed-preview', async (req, res) => {
 
     // Count FFB licences for this CDB code
     const countRow = await dbGet(
-      `SELECT COUNT(*) as count FROM ffb_licences WHERE cdb_code = $1`,
+      `SELECT COUNT(*) as count FROM ffb_licences WHERE cdb_code = ANY(string_to_array($1, ','))`,
       [org.ffb_cdb_code]
     );
     const totalFfb = parseInt(countRow?.count || 0);
@@ -1060,7 +1060,7 @@ router.get('/organizations/:id/seed-preview', async (req, res) => {
 
     // Get a preview of first 10 licences
     const preview = await dbAll(
-      `SELECT licence, prenom, nom, categorie, discipline FROM ffb_licences WHERE cdb_code = $1 ORDER BY nom, prenom LIMIT 10`,
+      `SELECT licence, prenom, nom, categorie, discipline FROM ffb_licences WHERE cdb_code = ANY(string_to_array($1, ',')) ORDER BY nom, prenom LIMIT 10`,
       [org.ffb_cdb_code]
     );
 
@@ -1091,7 +1091,7 @@ router.post('/organizations/:id/seed-players', async (req, res) => {
       `SELECT fl.*, fc.nom as club_name
        FROM ffb_licences fl
        LEFT JOIN ffb_clubs fc ON fl.num_club = fc.numero
-       WHERE fl.cdb_code = $1`,
+       WHERE fl.cdb_code = ANY(string_to_array($1, ','))`,
       [org.ffb_cdb_code]
     );
 
@@ -1196,7 +1196,7 @@ router.get('/organizations/:id/sync-preview', async (req, res) => {
              fc.nom as club_nom
       FROM ffb_licences fl
       LEFT JOIN ffb_clubs fc ON fl.num_club = fc.numero
-      WHERE fl.cdb_code = $1
+      WHERE fl.cdb_code = ANY(string_to_array($1, ','))
       ORDER BY fl.nom, fl.prenom
     `, [org.ffb_cdb_code]);
 
@@ -1322,7 +1322,7 @@ router.post('/organizations/:id/sync-players', async (req, res) => {
       SELECT fl.*, fc.nom as club_name
       FROM ffb_licences fl
       LEFT JOIN ffb_clubs fc ON fl.num_club = fc.numero
-      WHERE fl.cdb_code = $1
+      WHERE fl.cdb_code = ANY(string_to_array($1, ','))
     `, [org.ffb_cdb_code]);
 
     let created = 0, updated = 0, unchanged = 0, errors = 0;

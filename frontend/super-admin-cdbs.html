@@ -164,6 +164,12 @@
           </select>
         </div>
         <div class="form-group">
+          <label>CDB secondaire (optionnel)</label>
+          <select id="ffbCdbSelect2" onchange="onFfbCdb2Selected()" style="width: 100%; padding: 8px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; box-sizing: border-box;">
+            <option value="">-- Aucun --</option>
+          </select>
+        </div>
+        <div class="form-group">
           <label>Nom complet</label>
           <input type="text" id="orgName" placeholder="Auto-rempli depuis FFB">
         </div>
@@ -381,36 +387,66 @@
     function onLigueSelected() {
       const ligueNum = document.getElementById('ffbLigueSelect').value;
       const select = document.getElementById('ffbCdbSelect');
+      const select2 = document.getElementById('ffbCdbSelect2');
       if (!ligueNum) {
         select.innerHTML = '<option value="">-- Sélectionner d\'abord une Ligue --</option>';
+        select2.innerHTML = '<option value="">-- Aucun --</option>';
         return;
       }
       const filtered = ffbCdbs.filter(c => c.ligue_numero === ligueNum);
-      select.innerHTML = '<option value="">-- Sélectionner un CDB --</option>' +
-        filtered.map(c => `<option value="${c.code}">Dept. ${c.code} (${c.licence_count} licenciés, ${c.club_count} clubs)</option>`).join('');
+      const options = filtered.map(c => `<option value="${c.code}">Dept. ${c.code} (${c.licence_count} licenciés, ${c.club_count} clubs)</option>`).join('');
+      select.innerHTML = '<option value="">-- Sélectionner un CDB --</option>' + options;
+      select2.innerHTML = '<option value="">-- Aucun --</option>' + options;
     }
 
-    function onFfbCdbSelected() {
-      const code = document.getElementById('ffbCdbSelect').value;
-      const cdb = ffbCdbs.find(c => c.code === code);
+    function updateFormFromCdbSelections() {
+      const code1 = document.getElementById('ffbCdbSelect').value;
+      const code2 = document.getElementById('ffbCdbSelect2').value;
+      const cdb1 = ffbCdbs.find(c => c.code === code1);
+
       // Reset admin selection when CDB changes
       clearAdminSelection();
-      if (cdb) {
-        document.getElementById('orgName').value = `Comité Départemental de Billard ${cdb.code}`;
-        document.getElementById('orgFfbCode').value = cdb.code;
-        document.getElementById('orgLigue').value = cdb.ligue_numero || '';
-        const shortName = 'CDB' + cdb.code;
-        document.getElementById('orgShortName').value = shortName;
-        autoSlug();
-        document.getElementById('adminUsername').value = 'admin' + cdb.code;
-      } else {
+
+      if (!cdb1) {
         document.getElementById('orgName').value = '';
         document.getElementById('orgFfbCode').value = '';
         document.getElementById('orgLigue').value = '';
         document.getElementById('orgShortName').value = '';
         document.getElementById('orgSlug').value = '';
         document.getElementById('adminUsername').value = '';
+        return;
       }
+
+      if (code2 && code2 !== code1) {
+        // Dual CDB
+        document.getElementById('orgName').value = `Comité Départemental de Billard ${code1} & ${code2}`;
+        document.getElementById('orgFfbCode').value = `${code1},${code2}`;
+        document.getElementById('orgShortName').value = `CDB${code1}${code2}`;
+        document.getElementById('adminUsername').value = `admin${code1}${code2}`;
+      } else {
+        // Single CDB
+        document.getElementById('orgName').value = `Comité Départemental de Billard ${code1}`;
+        document.getElementById('orgFfbCode').value = code1;
+        document.getElementById('orgShortName').value = `CDB${code1}`;
+        document.getElementById('adminUsername').value = `admin${code1}`;
+      }
+      document.getElementById('orgLigue').value = cdb1.ligue_numero || '';
+      autoSlug();
+    }
+
+    function onFfbCdbSelected() {
+      updateFormFromCdbSelections();
+    }
+
+    function onFfbCdb2Selected() {
+      const code1 = document.getElementById('ffbCdbSelect').value;
+      const code2 = document.getElementById('ffbCdbSelect2').value;
+      if (code2 && code2 === code1) {
+        showToast('Le CDB secondaire doit être différent du premier', 'error');
+        document.getElementById('ffbCdbSelect2').value = '';
+        return;
+      }
+      updateFormFromCdbSelections();
     }
 
     // ==================== Admin Search ====================
