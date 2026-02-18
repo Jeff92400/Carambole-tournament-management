@@ -48,7 +48,7 @@ git push origin main
 
 ## Versioning
 
-**Current Version:** V 2.0.174 02/26
+**Current Version:** V 2.0.175 02/26
 
 Version is displayed at the bottom of the login screen (`frontend/login.html`).
 
@@ -658,7 +658,7 @@ CREATE TABLE bracket_matches (
 - `backend/CLAUDE.md` - Detailed backend documentation
 - `frontend/CLAUDE.md` - Detailed frontend documentation
 
-## TODO / Future Work
+## Future Work / Roadmap
 
 - **CRITICAL - Mode/game_type refactoring:** Remove ALL hardcoded mode values ('LIBRE', 'BANDE', '3BANDES', 'CADRE') and replace with dynamic lookups from `game_modes` table. This is causing recurring bugs due to inconsistent values ('3 BANDES' vs '3BANDES'). Files with hardcoded modes:
   - `backend/routes/players.js` (lines 171-174, 322-325) - CSV column mappings
@@ -670,7 +670,7 @@ CREATE TABLE bracket_matches (
 
   **Solution:** Always load `game_modes` table with `rank_column` field and use it for all mode-to-rank mappings. The `game_modes.code` should be the canonical format used everywhere.
 
-- **Email address consolidation:** Replace all hardcoded `cdbhs92@gmail.com` references across email flows with the `summary_email` setting from Organization settings (`app_settings` table). Files to update include: `backend/routes/emailing.js`, `backend/routes/email.js`, `backend/routes/inscriptions.js`, `frontend/emailing.html`, `frontend/generate-poules.html`, and others. The notification email should always be loaded dynamically from the database.
+- **~~Email address consolidation~~** *(DONE Feb 2026)*: All hardcoded `cdbhs92@gmail.com` fallbacks removed from backend routes and frontend. Email is now loaded dynamically from `organization_settings` via `appSettings.getOrgSetting()`. Only the org #1 database seed (`db-postgres.js`, `settings.js`) still references it — correct by design.
 
 - **EMAIL TEMPLATE VARIABLES REFACTORING (REMINDER: June 26, 2026):** Centralize all email template variables into a single source of truth. Currently variables are scattered across multiple locations causing maintenance issues and inconsistencies.
 

@@ -695,7 +695,7 @@
             </div>
             <div id="selectedCount" style="margin-top: 10px; font-size: 14px; color: #666;">
               <strong><span id="checkedCount">0</span></strong> joueur(s) sélectionné(s) pour l'envoi
-              <br><span style="color: #17a2b8;">📋 Récapitulatif envoyé à : <strong id="summaryEmailDisplay">cdbhs92@gmail.com</strong></span>
+              <br><span style="color: #17a2b8;">📋 Récapitulatif envoyé à : <strong id="summaryEmailDisplay">...</strong></span>
             </div>
           </div>
 
@@ -875,7 +875,7 @@
         });
         if (response.ok) {
           const data = await response.json();
-          const email = data.value || 'cdbhs92@gmail.com';
+          const email = data.value || '';
           document.getElementById('summaryEmailDisplay').textContent = email;
         }
       } catch (error) {
@@ -3915,7 +3915,7 @@
               startTime: loc.startTime || '14H00',
               numPlayers: loc.players,
               numTables: loc.tables,
-              ccEmail: 'cdbhs92@gmail.com'
+              ccEmail: document.getElementById('summaryEmailDisplay').textContent || ''
             })
           });
 

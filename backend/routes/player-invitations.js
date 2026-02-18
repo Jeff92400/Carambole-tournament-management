@@ -536,7 +536,7 @@ router.post('/send', authenticateToken, async (req, res) => {
     const primaryColor = emailSettings.primary_color || '#1F4788';
     const orgName = emailSettings.organization_name || 'Comité Départemental Billard Hauts-de-Seine';
     const orgShortName = emailSettings.organization_short_name || 'CDBHS';
-    const replyToEmail = emailSettings.summary_email || 'cdbhs92@gmail.com';
+    const replyToEmail = emailSettings.summary_email || '';
     const playerAppUrl = emailSettings.player_app_url || 'https://cdbhs-player-app-production.up.railway.app';
     const baseUrl = process.env.BASE_URL || 'https://cdbhs-tournament-management-production.up.railway.app';
 
@@ -839,7 +839,7 @@ router.post('/resend/:id', authenticateToken, async (req, res) => {
     const senderName = emailSettings.email_sender_name || 'CDBHS';
     const senderEmail = emailSettings.email_communication || 'communication@cdbhs.net';
     const primaryColor = emailSettings.primary_color || '#1F4788';
-    const replyToEmail = emailSettings.summary_email || 'cdbhs92@gmail.com';
+    const replyToEmail = emailSettings.summary_email || '';
     const playerAppUrl = emailSettings.player_app_url || 'https://cdbhs-player-app-production.up.railway.app';
     const baseUrl = process.env.BASE_URL || 'https://cdbhs-tournament-management-production.up.railway.app';
 
@@ -1006,7 +1006,7 @@ router.post('/resend-batch', authenticateToken, async (req, res) => {
     const senderName = emailSettings.email_sender_name || 'CDBHS';
     const senderEmail = emailSettings.email_communication || 'communication@cdbhs.net';
     const primaryColor = emailSettings.primary_color || '#1F4788';
-    const replyToEmail = emailSettings.summary_email || 'cdbhs92@gmail.com';
+    const replyToEmail = emailSettings.summary_email || '';
     const playerAppUrl = emailSettings.player_app_url || 'https://cdbhs-player-app-production.up.railway.app';
     const baseUrl = process.env.BASE_URL || 'https://cdbhs-tournament-management-production.up.railway.app';
     const logoUrl = `${baseUrl}/logo.png?v=${Date.now()}`;

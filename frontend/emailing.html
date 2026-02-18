@@ -787,7 +787,7 @@
               </label>
               <p style="margin: 5px 0 0 28px; font-size: 12px; color: #666;">Un seul email avec la liste des destinataires et le contenu envoyé</p>
               <div id="oneShotCcEmailInput" style="margin-top: 10px;">
-                <input type="email" id="oneShotCcEmail" value="cdbhs92@gmail.com" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                <input type="email" id="oneShotCcEmail" value="" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
               </div>
             </div>
 
@@ -962,7 +962,7 @@
                 <input type="checkbox" id="relanceCcCheck" checked style="width: 18px; height: 18px;">
                 <strong>Récapitulatif</strong>
               </label>
-              <input type="email" id="relanceCcEmail" value="cdbhs92@gmail.com" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; margin-top: 10px;">
+              <input type="email" id="relanceCcEmail" value="" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; margin-top: 10px;">
             </div>
 
             <!-- Test Mode -->
@@ -1111,7 +1111,7 @@
               </label>
               <p style="margin: 5px 0 0 28px; font-size: 12px; color: #666;">Un seul email avec la liste des destinataires et les résultats</p>
               <div id="ccEmailInput" style="margin-top: 10px;">
-                <input type="email" id="ccEmail" value="cdbhs92@gmail.com" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                <input type="email" id="ccEmail" value="" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
                 <button type="button" id="saveCcEmailBtn" style="margin-top: 5px; padding: 5px 10px; font-size: 12px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer;">Sauvegarder par défaut</button>
               </div>
             </div>
@@ -1231,7 +1231,7 @@
                 <strong>📋 Récapitulatif</strong> - Envoyer un email de synthèse
               </label>
               <div id="finaleCcEmailInput" style="margin-top: 10px;">
-                <input type="email" id="finaleCcEmail" value="cdbhs92@gmail.com" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                <input type="email" id="finaleCcEmail" value="" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
               </div>
             </div>
 
@@ -2962,7 +2962,7 @@ RAPPELS IMPORTANTS:
 - Résultats FFB: Les résultats devront être saisis sur le site de la FFB à l'issue de la compétition
 - Rafraîchissements: Merci de prévoir des rafraîchissements pour les joueurs
 
-Pour toute question, contactez-nous à l'adresse: cdbhs92@gmail.com
+Pour toute question, contactez-nous à l'adresse: {organization_email}
 
 Sportivement,
 Le CDBHS`
@@ -6278,7 +6278,7 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
           });
           if (settingsResponse.ok) {
             const data = await settingsResponse.json();
-            document.getElementById('finaleCcEmail').value = data.value || 'cdbhs92@gmail.com';
+            document.getElementById('finaleCcEmail').value = data.value || '';
           }
         } catch (e) { /* ignore */ }
 
@@ -6493,7 +6493,7 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
         });
         if (response.ok) {
           const data = await response.json();
-          const email = data.value || 'cdbhs92@gmail.com';
+          const email = data.value || '';
           document.getElementById('summaryEmailSetting').value = email;
           // Also update the default value in the CC field
           document.getElementById('ccEmail').value = email;

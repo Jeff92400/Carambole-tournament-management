@@ -1366,7 +1366,7 @@ async function processTemplatedScheduledEmail(db, resend, scheduled, delay) {
   const primaryColor = emailSettings.primary_color || '#1F4788';
   const senderName = emailSettings.email_sender_name || 'CDBHS';
   const senderEmail = emailSettings.email_communication || 'communication@cdbhs.net';
-  const replyToEmail = emailSettings.summary_email || 'cdbhs92@gmail.com';
+  const replyToEmail = emailSettings.summary_email || '';
   const orgName = emailSettings.organization_name || 'Comité Départemental Billard Hauts-de-Seine';
   const orgShortName = emailSettings.organization_short_name || 'CDBHS';
   const playerAppUrl = emailSettings.player_app_url || 'https://cdbhs-player-app-production.up.railway.app';
@@ -1639,7 +1639,7 @@ async function checkTournamentAlerts() {
     const senderName = emailSettings.email_sender_name || 'CDBHS';
     const senderEmail = emailSettings.email_convocations || 'convocations@cdbhs.net';
     const orgShortName = emailSettings.organization_short_name || 'CDBHS';
-    const replyToEmail = emailSettings.summary_email || 'cdbhs92@gmail.com';
+    const replyToEmail = emailSettings.summary_email || '';
 
     for (const user of usersToNotify) {
       try {
@@ -1845,7 +1845,7 @@ async function processScheduledEmails() {
           const senderEmail = emailSettings.email_communication || 'communication@cdbhs.net';
           const orgName = emailSettings.organization_name || 'Comite Departemental Billard Hauts-de-Seine';
           const orgShortName = emailSettings.organization_short_name || 'CDBHS';
-          const replyToEmail = emailSettings.summary_email || 'cdbhs92@gmail.com';
+          const replyToEmail = emailSettings.summary_email || '';
 
           await resend.emails.send({
             from: `${senderName} <${senderEmail}>`,

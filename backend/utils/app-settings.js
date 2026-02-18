@@ -13,7 +13,7 @@ const CACHE_TTL = 5 * 60 * 1000; // 5 minutes cache TTL
 // Default values (fallbacks if database is unavailable)
 const defaults = {
   // Legacy settings
-  summary_email: 'cdbhs92@gmail.com',
+  summary_email: '',
   email_scheduler_hour: '6',
 
   // Organization settings

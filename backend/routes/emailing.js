@@ -1518,7 +1518,7 @@ router.post('/send-finale-results', authenticateToken, async (req, res) => {
     const senderEmail = emailSettings.email_communication || 'communication@cdbhs.net';
     const orgName = emailSettings.organization_name || 'Comité Départemental Billard Hauts-de-Seine';
     const orgShortName = emailSettings.organization_short_name || 'CDBHS';
-    const replyToEmail = emailSettings.summary_email || 'cdbhs92@gmail.com';
+    const replyToEmail = emailSettings.summary_email || '';
     const baseUrl = process.env.BASE_URL || 'https://cdbhs-tournament-management-production.up.railway.app';
 
     // Get tournament info

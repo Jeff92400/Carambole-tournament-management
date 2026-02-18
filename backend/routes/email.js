@@ -3646,7 +3646,7 @@ router.post('/enrollment-notification', async (req, res) => {
     // Load email settings for dynamic branding
     const emailSettings = await getEmailTemplateSettings(req.user?.organizationId);
     const contactEmail = await getContactEmail(req.user?.organizationId);
-    const summaryEmail = emailSettings.summary_email || 'cdbhs92@gmail.com';
+    const summaryEmail = emailSettings.summary_email || '';
     const primaryColor = emailSettings.primary_color || '#1F4788';
     const senderName = emailSettings.email_sender_name || 'CDBHS';
     const emailFrom = emailSettings.email_noreply || 'noreply@cdbhs.net';

@@ -488,7 +488,7 @@ router.post('/forgot', async (req, res) => {
       const senderName = emailSettings.email_sender_name || 'CDBHS';
       const orgName = emailSettings.organization_name || 'Comite Departemental de Billard des Hauts-de-Seine';
       const orgShortName = emailSettings.organization_short_name || 'CDBHS';
-      const replyToEmail = emailSettings.summary_email || 'cdbhs92@gmail.com';
+      const replyToEmail = emailSettings.summary_email || '';
 
       if (resend) {
         await resend.emails.send({
