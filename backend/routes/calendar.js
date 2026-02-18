@@ -17,9 +17,9 @@ const FALLBACK_CLUB_MAPPING = {
 };
 
 // Load club codes from database
-async function loadClubMapping() {
+async function loadClubMapping(orgId) {
   return new Promise((resolve) => {
-    db.all(`SELECT calendar_code, display_name FROM clubs WHERE calendar_code IS NOT NULL AND calendar_code != ''`, [], (err, rows) => {
+    db.all(`SELECT calendar_code, display_name FROM clubs WHERE calendar_code IS NOT NULL AND calendar_code != '' AND ($1::int IS NULL OR organization_id = $1)`, [orgId || null], (err, rows) => {
       if (err || !rows || rows.length === 0) {
         console.log('[Calendar] Using fallback club mapping');
         resolve(FALLBACK_CLUB_MAPPING);
@@ -251,7 +251,8 @@ router.get('/info', authenticateToken, (req, res) => {
 // Get current club codes mapping (for display in UI)
 router.get('/club-codes', authenticateToken, async (req, res) => {
   try {
-    const mapping = await loadClubMapping();
+    const orgId = req.user.organizationId || null;
+    const mapping = await loadClubMapping(orgId);
     // Convert to array format for easier display
     const codes = Object.entries(mapping)
       .filter(([code]) => code !== '?')
@@ -288,7 +289,8 @@ router.post('/import-season/preview', authenticateToken, requireAdmin, importUpl
     const seasonPrefix = season.replace('-', '').substring(2, 6); // "2627" from "2026-2027"
 
     // Load club mapping from database
-    const clubMapping = await loadClubMapping();
+    const orgId = req.user.organizationId || null;
+    const clubMapping = await loadClubMapping(orgId);
 
     const tournaments = await parseExcelCalendar(req.file.buffer, season, seasonPrefix, clubMapping);
 
@@ -316,7 +318,8 @@ router.post('/import-season/execute', authenticateToken, requireAdmin, importUpl
     const seasonPrefix = season.replace('-', '').substring(2, 6); // "2627" from "2026-2027"
 
     // Load club mapping from database
-    const clubMapping = await loadClubMapping();
+    const orgId = req.user.organizationId || null;
+    const clubMapping = await loadClubMapping(orgId);
 
     const tournaments = await parseExcelCalendar(req.file.buffer, season, seasonPrefix, clubMapping);
 
@@ -328,8 +331,8 @@ router.post('/import-season/execute', authenticateToken, requireAdmin, importUpl
       try {
         await new Promise((resolve, reject) => {
           db.run(`
-            INSERT INTO tournoi_ext (tournoi_id, nom, mode, categorie, taille, debut, fin, lieu)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            INSERT INTO tournoi_ext (tournoi_id, nom, mode, categorie, taille, debut, fin, lieu, organization_id)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             ON CONFLICT(tournoi_id) DO UPDATE SET
               nom = EXCLUDED.nom,
               mode = EXCLUDED.mode,
@@ -337,7 +340,8 @@ router.post('/import-season/execute', authenticateToken, requireAdmin, importUpl
               taille = EXCLUDED.taille,
               debut = EXCLUDED.debut,
               fin = EXCLUDED.fin,
-              lieu = EXCLUDED.lieu
+              lieu = EXCLUDED.lieu,
+              organization_id = EXCLUDED.organization_id
           `, [
             tournament.tournoi_id,
             tournament.nom,
@@ -346,7 +350,8 @@ router.post('/import-season/execute', authenticateToken, requireAdmin, importUpl
             tournament.taille,
             tournament.debut,
             tournament.fin,
-            tournament.lieu
+            tournament.lieu,
+            orgId
           ], function(err) {
             if (err) {
               reject(err);
@@ -381,12 +386,14 @@ router.post('/import-season/execute', authenticateToken, requireAdmin, importUpl
 router.get('/season-tournaments/:season', authenticateToken, (req, res) => {
   const season = req.params.season;
   const seasonPrefix = season.replace('-', '').substring(2, 6); // "2627" from "2026-2027"
+  const orgId = req.user.organizationId || null;
 
   db.all(`
     SELECT * FROM tournoi_ext
     WHERE CAST(tournoi_id AS TEXT) LIKE $1
+      AND ($2::int IS NULL OR organization_id = $2)
     ORDER BY debut, mode, categorie
-  `, [`${seasonPrefix}%`], (err, rows) => {
+  `, [`${seasonPrefix}%`, orgId], (err, rows) => {
     if (err) {
       console.error('Error fetching season tournaments:', err);
       return res.status(500).json({ error: err.message });
@@ -399,11 +406,13 @@ router.get('/season-tournaments/:season', authenticateToken, (req, res) => {
 router.delete('/season-tournaments/:season', authenticateToken, requireAdmin, (req, res) => {
   const season = req.params.season;
   const seasonPrefix = season.replace('-', '').substring(2, 6);
+  const orgId = req.user.organizationId || null;
 
   db.run(`
     DELETE FROM tournoi_ext
     WHERE CAST(tournoi_id AS TEXT) LIKE $1
-  `, [`${seasonPrefix}%`], function(err) {
+      AND ($2::int IS NULL OR organization_id = $2)
+  `, [`${seasonPrefix}%`, orgId], function(err) {
     if (err) {
       console.error('Error deleting season tournaments:', err);
       return res.status(500).json({ error: err.message });

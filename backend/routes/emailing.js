@@ -503,13 +503,16 @@ async function syncContacts() {
 router.get('/contacts', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
   const { activeOnly, club, mode, category, tournoiId, playerAppUsers } = req.query;
+  const orgId = req.user.organizationId || null;
 
   let query = `
     SELECT pc.* FROM player_contacts pc
+    JOIN players p ON REPLACE(pc.licence, ' ', '') = REPLACE(p.licence, ' ', '')
     WHERE pc.email_optin = 1 AND pc.email IS NOT NULL AND pc.email != '' AND pc.email LIKE '%@%'
+      AND ($1::int IS NULL OR p.organization_id = $1)
   `;
-  const params = [];
-  let paramIndex = 1;
+  const params = [orgId];
+  let paramIndex = 2;
 
   // Filter by active status
   if (activeOnly === 'true' || activeOnly === '1') {
@@ -596,10 +599,14 @@ router.get('/contacts', authenticateToken, async (req, res) => {
 // Get all player contacts (including those without email optin)
 router.get('/contacts/all', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
+  const orgId = req.user.organizationId || null;
 
   db.all(
-    `SELECT * FROM player_contacts ORDER BY last_name, first_name`,
-    [],
+    `SELECT pc.* FROM player_contacts pc
+     JOIN players p ON REPLACE(pc.licence, ' ', '') = REPLACE(p.licence, ' ', '')
+     WHERE ($1::int IS NULL OR p.organization_id = $1)
+     ORDER BY pc.last_name, pc.first_name`,
+    [orgId],
     (err, rows) => {
       if (err) {
         console.error('Error fetching all contacts:', err);
@@ -634,20 +641,26 @@ router.put('/contacts/:id', authenticateToken, async (req, res) => {
 // Sync contacts from players and inscriptions tables (manual trigger)
 router.post('/contacts/sync', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
+  const orgId = req.user.organizationId || null;
 
   try {
     await syncContacts();
 
-    // Get count of synced contacts
+    // Get count of synced contacts (scoped to org)
     const countResult = await new Promise((resolve, reject) => {
-      db.get('SELECT COUNT(*) as count FROM player_contacts', [], (err, row) => {
+      db.get(`SELECT COUNT(*) as count FROM player_contacts pc
+              JOIN players p ON REPLACE(pc.licence, ' ', '') = REPLACE(p.licence, ' ', '')
+              WHERE ($1::int IS NULL OR p.organization_id = $1)`, [orgId], (err, row) => {
         if (err) reject(err);
         else resolve(row);
       });
     });
 
     const withEmailCount = await new Promise((resolve, reject) => {
-      db.get("SELECT COUNT(*) as count FROM player_contacts WHERE email IS NOT NULL AND email != '' AND email LIKE '%@%'", [], (err, row) => {
+      db.get(`SELECT COUNT(*) as count FROM player_contacts pc
+              JOIN players p ON REPLACE(pc.licence, ' ', '') = REPLACE(p.licence, ' ', '')
+              WHERE pc.email IS NOT NULL AND pc.email != '' AND pc.email LIKE '%@%'
+              AND ($1::int IS NULL OR p.organization_id = $1)`, [orgId], (err, row) => {
         if (err) reject(err);
         else resolve(row);
       });
@@ -707,17 +720,18 @@ router.get('/tournois', authenticateToken, async (req, res) => {
 // Get distinct clubs for filter dropdown
 router.get('/clubs', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
+  const orgId = req.user.organizationId || null;
 
-  // Return canonical club names from club_aliases (no duplicates)
+  // Return club names from org-scoped clubs table
   db.all(
-    `SELECT DISTINCT canonical_name FROM club_aliases WHERE canonical_name IS NOT NULL ORDER BY canonical_name`,
-    [],
+    `SELECT DISTINCT display_name FROM clubs WHERE display_name IS NOT NULL AND ($1::int IS NULL OR organization_id = $1) ORDER BY display_name`,
+    [orgId],
     (err, rows) => {
       if (err) {
         console.error('Error fetching clubs:', err);
         return res.status(500).json({ error: err.message });
       }
-      res.json((rows || []).map(r => r.canonical_name));
+      res.json((rows || []).map(r => r.display_name));
     }
   );
 });
@@ -725,26 +739,17 @@ router.get('/clubs', authenticateToken, async (req, res) => {
 // Get clubs with their emails (for management)
 router.get('/clubs-with-emails', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
+  const orgId = req.user.organizationId || null;
 
   db.all(
-    `SELECT DISTINCT canonical_name, email FROM club_aliases WHERE canonical_name IS NOT NULL ORDER BY canonical_name`,
-    [],
+    `SELECT display_name as name, email FROM clubs WHERE display_name IS NOT NULL AND ($1::int IS NULL OR organization_id = $1) ORDER BY display_name`,
+    [orgId],
     (err, rows) => {
       if (err) {
         console.error('Error fetching clubs with emails:', err);
         return res.status(500).json({ error: err.message });
       }
-      // Group by canonical_name to get unique clubs with their email
-      const clubsMap = {};
-      (rows || []).forEach(r => {
-        if (!clubsMap[r.canonical_name]) {
-          clubsMap[r.canonical_name] = { name: r.canonical_name, email: r.email || '' };
-        } else if (r.email && !clubsMap[r.canonical_name].email) {
-          // If this alias has an email but the existing entry doesn't, use this one
-          clubsMap[r.canonical_name].email = r.email;
-        }
-      });
-      res.json(Object.values(clubsMap));
+      res.json((rows || []).map(r => ({ name: r.name, email: r.email || '' })));
     }
   );
 });
@@ -4395,8 +4400,9 @@ router.get('/t1-players', authenticateToken, async (req, res) => {
          LEFT JOIN player_contacts pc ON REPLACE(p.licence, ' ', '') = REPLACE(pc.licence, ' ', '')
          WHERE UPPER(p.${rankColumn}) = UPPER($1)
            AND UPPER(p.licence) NOT LIKE 'TEST%'
+           AND ($2::int IS NULL OR p.organization_id = $2)
          ORDER BY p.last_name, p.first_name`,
-        [categoryRow.level],
+        [categoryRow.level, orgId],
         (err, rows) => {
           if (err) reject(err);
           else resolve(rows || []);
