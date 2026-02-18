@@ -149,10 +149,13 @@
     checkCsvImportPageAccess();
   }
 
-  // Fetch and cache CSV import setting
+  // Fetch and cache CSV import setting (org-aware when authenticated)
   async function loadCsvImportSetting() {
     try {
-      const response = await fetch('/api/settings/branding/csv-imports');
+      const headers = {};
+      const token = localStorage.getItem('token');
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const response = await fetch('/api/settings/branding/csv-imports', { headers });
       if (response.ok) {
         const data = await response.json();
         const enabled = data.enable_csv_imports !== '0';

@@ -685,7 +685,8 @@ router.post('/organizations', async (req, res) => {
       ['email_convocations', platformDomain ? `${slug}@${platformDomain}` : (admin_email || '')],
       ['email_noreply', platformDomain ? `noreply@${platformDomain}` : (admin_email || '')],
       ['email_sender_name', short_name],
-      ['summary_email', admin_email || '']
+      ['summary_email', admin_email || ''],
+      ['enable_csv_imports', '0']
     ];
 
     for (const [key, value] of defaultOrgSettings) {

@@ -90,24 +90,42 @@ router.get('/branding/colors', async (req, res) => {
   );
 });
 
-// Public endpoint for CSV import feature toggle
+// Public endpoint for CSV import feature toggle (optionally org-aware via JWT)
 router.get('/branding/csv-imports', async (req, res) => {
-  const db = getDb();
-
-  db.get(
-    `SELECT value FROM app_settings WHERE key = $1`,
-    ['enable_csv_imports'],
-    (err, row) => {
-      if (err) {
-        console.error('Error fetching CSV import setting:', err);
-        return res.status(500).json({ error: err.message });
-      }
-
-      res.json({
-        enable_csv_imports: row?.value || '1' // Default to enabled
-      });
+  try {
+    // Try to extract org context from JWT if provided
+    let orgId = null;
+    const authHeader = req.headers['authorization'];
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      try {
+        const jwt = require('jsonwebtoken');
+        const decoded = jwt.verify(authHeader.split(' ')[1], process.env.JWT_SECRET);
+        orgId = decoded.organizationId || null;
+      } catch (e) { /* ignore invalid token — fall back to global */ }
     }
-  );
+
+    if (orgId) {
+      const value = await appSettings.getOrgSetting(orgId, 'enable_csv_imports');
+      return res.json({ enable_csv_imports: value || '1' });
+    }
+
+    // No org context — read global setting
+    const db = getDb();
+    db.get(
+      `SELECT value FROM app_settings WHERE key = $1`,
+      ['enable_csv_imports'],
+      (err, row) => {
+        if (err) {
+          console.error('Error fetching CSV import setting:', err);
+          return res.status(500).json({ error: err.message });
+        }
+        res.json({ enable_csv_imports: row?.value || '1' });
+      }
+    );
+  } catch (error) {
+    console.error('Error in csv-imports endpoint:', error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // ==================== AUTHENTICATED ENDPOINTS ====================
