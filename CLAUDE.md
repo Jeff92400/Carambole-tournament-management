@@ -670,7 +670,7 @@ CREATE TABLE bracket_matches (
 
   **Solution:** Always load `game_modes` table with `rank_column` field and use it for all mode-to-rank mappings. The `game_modes.code` should be the canonical format used everywhere.
 
-- **~~Email address consolidation~~** *(DONE Feb 2026)*: All hardcoded `cdbhs92@gmail.com` fallbacks removed from backend routes and frontend. Email is now loaded dynamically from `organization_settings` via `appSettings.getOrgSetting()`. Only the org #1 database seed (`db-postgres.js`, `settings.js`) still references it — correct by design.
+- **~~Email address consolidation~~** *(DONE Feb 2026)*: All hardcoded `cdbhs92@gmail.com` fallbacks removed from backend routes and frontend. Email is now loaded dynamically from `organization_settings` via `appSettings.getOrgSetting()`. Only the org #1 database seed (`db-postgres.js`, `settings.js`) still references it — correct by design. The `@cdbhs.net` sender address fallbacks remain in code but are dead code: new CDBs get their addresses auto-generated from the platform domain (`carambole-gestion.fr`) during creation in super-admin, and CDBHS values are in the database.
 
 - **EMAIL TEMPLATE VARIABLES REFACTORING (REMINDER: June 26, 2026):** Centralize all email template variables into a single source of truth. Currently variables are scattered across multiple locations causing maintenance issues and inconsistencies.
 
