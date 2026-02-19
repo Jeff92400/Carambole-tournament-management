@@ -189,15 +189,16 @@ async function initPublicBranding(orgSlug) {
     console.log('[Branding] Could not fetch branding for public page:', error);
   }
 
-  // Logo: use org-specific logo only for default org, otherwise FFB icon
-  // (organization_logo table is not yet org-scoped, so only the primary CDB has a custom logo)
-  const logoUrl = orgSlug ? DEFAULT_LOGO_PATH : '/logo.png?v=' + Date.now();
+  // Logo: use org-specific logo via download endpoint (supports ?org= for public pages)
+  const logoUrl = '/api/settings/organization-logo/download' + (orgSlug ? '?org=' + encodeURIComponent(orgSlug) : '') + (orgSlug ? '&' : '?') + 'v=' + Date.now();
   updateFavicon(logoUrl);
 
   if (headerIcon) {
     headerIcon.src = logoUrl;
     headerIcon.onerror = function() {
       this.src = DEFAULT_LOGO_PATH;
+      // Also reset favicon to default if org logo fails
+      updateFavicon(DEFAULT_LOGO_PATH);
     };
   }
 }

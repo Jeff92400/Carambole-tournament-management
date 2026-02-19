@@ -1130,8 +1130,20 @@ router.get('/organization-logo', authenticateToken, (req, res) => {
 router.get('/organization-logo/download', (req, res) => {
   const db = getDb();
 
-  // Try to extract org from JWT if present (authenticated pages)
+  // Determine org: from ?org= query param (public pages) or JWT (authenticated pages)
   let orgId = null;
+  const orgSlugParam = req.query.org;
+  if (orgSlugParam) {
+    // Resolve slug to org ID (sync via nested query)
+    db.get('SELECT id FROM organizations WHERE slug = $1', [orgSlugParam], (err, orgRow) => {
+      if (err || !orgRow) {
+        return res.status(404).json({ error: 'Organisation non trouvée' });
+      }
+      fetchLogo(orgRow.id);
+    });
+    return; // async path
+  }
+
   const authHeader = req.headers['authorization'];
   if (authHeader && authHeader.startsWith('Bearer ')) {
     try {
@@ -1142,11 +1154,13 @@ router.get('/organization-logo/download', (req, res) => {
       // Token invalid or expired — fall through to default
     }
   }
+  fetchLogo(orgId);
 
-  const query = orgId
+  function fetchLogo(resolvedOrgId) {
+  const query = resolvedOrgId
     ? 'SELECT * FROM organization_logo WHERE organization_id = $1 ORDER BY created_at DESC LIMIT 1'
     : 'SELECT * FROM organization_logo ORDER BY created_at DESC LIMIT 1';
-  const params = orgId ? [orgId] : [];
+  const params = resolvedOrgId ? [resolvedOrgId] : [];
 
   db.get(query, params, (err, row) => {
     if (err) {
@@ -1164,6 +1178,7 @@ router.get('/organization-logo/download', (req, res) => {
     const fileData = Buffer.isBuffer(row.file_data) ? row.file_data : Buffer.from(row.file_data);
     res.send(fileData);
   });
+  } // end fetchLogo
 });
 
 // Upload logo (admin only)
