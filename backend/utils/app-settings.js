@@ -47,6 +47,9 @@ const defaults = {
   // Player App
   player_app_url: 'https://cdbhs-player-app-production.up.railway.app',
 
+  // Poule configuration
+  allow_poule_of_2: 'false',
+
   // Privacy policy
   privacy_policy: ''
 };

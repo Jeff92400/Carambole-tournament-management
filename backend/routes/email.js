@@ -5,6 +5,7 @@ const { Resend } = require('resend');
 const PDFDocument = require('pdfkit');
 const { authenticateToken } = require('./auth');
 const appSettings = require('../utils/app-settings');
+const { getPouleConfigForOrg } = require('../utils/poule-config');
 const { logAdminAction, ACTION_TYPES } = require('../utils/admin-logger');
 
 const router = express.Router();
@@ -3372,55 +3373,10 @@ router.post('/poules/:tournoiId/regenerate', authenticateToken, async (req, res)
       }
     }
 
-    // Load poule configuration from DB (with hardcoded fallback)
-    const DEFAULT_POULE_CONFIG = {
-      3: [3], 4: [4], 5: [5],
-      6: [3, 3], 7: [3, 4], 8: [3, 5],
-      9: [3, 3, 3], 10: [3, 3, 4], 11: [3, 3, 5],
-      12: [3, 3, 3, 3], 13: [3, 3, 3, 4], 14: [3, 3, 3, 5],
-      15: [3, 3, 3, 3, 3], 16: [3, 3, 3, 3, 4], 17: [3, 3, 3, 3, 5],
-      18: [3, 3, 3, 3, 3, 3], 19: [3, 3, 3, 3, 3, 4], 20: [3, 3, 3, 3, 3, 5]
-    };
-
-    let POULE_CONFIG = { ...DEFAULT_POULE_CONFIG };
-    let minPouleSize = 3;
-    try {
-      const configRows = await new Promise((resolve, reject) => {
-        db.all('SELECT num_players, poule_sizes FROM poule_configurations ORDER BY num_players', [], (err, rows) => {
-          if (err) reject(err); else resolve(rows || []);
-        });
-      });
-      if (configRows.length > 0) {
-        POULE_CONFIG = {};
-        for (const row of configRows) {
-          const sizes = typeof row.poule_sizes === 'string' ? JSON.parse(row.poule_sizes) : row.poule_sizes;
-          POULE_CONFIG[row.num_players] = sizes;
-        }
-        const allSizes = configRows.flatMap(r => {
-          const s = typeof r.poule_sizes === 'string' ? JSON.parse(r.poule_sizes) : r.poule_sizes;
-          return s;
-        });
-        if (allSizes.length > 0) minPouleSize = Math.min(...allSizes);
-      }
-    } catch (configErr) {
-      console.warn('Could not load poule config from DB, using defaults:', configErr.message);
-    }
-
-    // Get poule sizes for player count
+    // Get computed poule configuration for player count
     const playerCount = activePlayers.length;
-    let pouleSizes;
-    if (playerCount < minPouleSize) {
-      pouleSizes = [];
-    } else if (POULE_CONFIG[playerCount]) {
-      pouleSizes = POULE_CONFIG[playerCount];
-    } else {
-      // Dynamic fallback for unconfigured player counts
-      const base = Math.floor(playerCount / 3);
-      const remainder = playerCount % 3;
-      pouleSizes = Array(base).fill(3);
-      if (remainder === 1) pouleSizes[pouleSizes.length - 1] = 4;
-      else if (remainder === 2) pouleSizes[pouleSizes.length - 1] = 5;
-    }
+    const pouleResult = await getPouleConfigForOrg(playerCount, orgId);
+    const pouleSizes = pouleResult.poules;
 
     // Create poules with sizes
     const numPoules = pouleSizes.length;

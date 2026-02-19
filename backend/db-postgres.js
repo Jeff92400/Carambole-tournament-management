@@ -931,7 +931,8 @@ async function initializeDatabase() {
       )
     `);
 
-    // Poule configurations table - configurable poule sizes per player count
+    // DEPRECATED: poule_configurations table kept for backward compatibility.
+    // Poule compositions are now auto-computed by backend/utils/poule-config.js
     await client.query(`
       CREATE TABLE IF NOT EXISTS poule_configurations (
         id SERIAL PRIMARY KEY,

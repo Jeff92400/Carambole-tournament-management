@@ -431,40 +431,36 @@
         </table>
       </div>
 
-      <!-- Tab: Poule Configuration -->
+      <!-- Tab: Poule Configuration (auto-computed) -->
       <div class="tab-content" id="tab-poule-config">
-        <div class="add-form">
-          <h4>Ajouter une Configuration</h4>
-          <form id="addPouleConfigForm" class="form-row">
-            <div class="form-group">
-              <label for="pcNumPlayers">Nb Joueurs *</label>
-              <input type="number" id="pcNumPlayers" required min="2" max="50" placeholder="ex: 8">
-            </div>
-            <div class="form-group">
-              <label for="pcPouleSizes">Composition *</label>
-              <input type="text" id="pcPouleSizes" required placeholder="ex: 3,3,4" title="Tailles des poules separees par des virgules">
-            </div>
-            <div class="form-group">
-              <label for="pcTables">Tables</label>
-              <input type="number" id="pcTables" min="0" placeholder="auto">
-            </div>
-            <div class="form-group" style="flex: 0 0 auto;">
-              <button type="submit" class="btn btn-primary">Ajouter</button>
-            </div>
-          </form>
+        <div style="margin-bottom: 16px; padding: 12px 16px; background: #e7f3ff; border-left: 4px solid var(--color-primary, #1F4788); border-radius: 4px;">
+          <strong>Configuration automatique</strong>
+          <p style="margin: 4px 0 0; color: #555; font-size: 13px;">
+            Les compositions de poules sont calculees automatiquement. Toutes les poules font 3 joueurs par defaut.
+            Les joueurs supplementaires sont repartis dans la derniere poule (4 ou 5), sauf si les poules de 2 sont autorisees.
+          </p>
         </div>
 
-        <table class="data-table" id="pouleConfigTable">
+        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px; padding: 10px 16px; background: #f8f9fa; border-radius: 8px; border: 1px solid #eee;">
+          <label style="font-weight: 500; font-size: 14px;">Autoriser les poules de 2 joueurs :</label>
+          <label style="position: relative; display: inline-block; width: 48px; height: 26px; cursor: pointer;">
+            <input type="checkbox" id="allowPouleOf2Toggle" onchange="toggleAllowPouleOf2()" style="opacity: 0; width: 0; height: 0;">
+            <span style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: #ccc; border-radius: 26px; transition: 0.3s;"></span>
+            <span id="toggleDot" style="position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; background: white; border-radius: 50%; transition: 0.3s;"></span>
+          </label>
+          <span id="pouleOf2Status" style="color: #666; font-size: 13px; font-weight: 500;">Non</span>
+        </div>
+
+        <table class="data-table">
           <thead>
             <tr>
               <th style="width: 100px;">Nb Joueurs</th>
               <th>Composition des Poules</th>
               <th style="width: 80px;">Tables</th>
-              <th style="width: 120px;">Actions</th>
             </tr>
           </thead>
-          <tbody id="pouleConfigBody">
-            <tr><td colspan="4" class="empty-state">Chargement...</td></tr>
+          <tbody id="pouleConfigPreviewBody">
+            <tr><td colspan="3" class="empty-state">Chargement...</td></tr>
           </tbody>
         </table>
       </div>
@@ -554,37 +550,6 @@
       <div class="modal-footer">
         <button type="button" class="btn" onclick="closeModal('editRankingModal')">Annuler</button>
         <button type="button" class="btn btn-primary" onclick="saveRanking()">Enregistrer</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Edit Poule Config Modal -->
-  <div id="editPouleConfigModal" class="modal-overlay" onclick="if(event.target === this) closeModal('editPouleConfigModal')">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h3>Modifier la Configuration</h3>
-        <button class="modal-close" onclick="closeModal('editPouleConfigModal')">&times;</button>
-      </div>
-      <div class="modal-body">
-        <form id="editPouleConfigForm">
-          <input type="hidden" id="editPcId">
-          <div class="form-group">
-            <label for="editPcNumPlayers">Nb Joueurs *</label>
-            <input type="number" id="editPcNumPlayers" required min="2" max="50">
-          </div>
-          <div class="form-group">
-            <label for="editPcPouleSizes">Composition * (ex: 3,3,4)</label>
-            <input type="text" id="editPcPouleSizes" required>
-          </div>
-          <div class="form-group">
-            <label for="editPcTables">Tables</label>
-            <input type="number" id="editPcTables" min="0">
-          </div>
-        </form>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn" onclick="closeModal('editPouleConfigModal')">Annuler</button>
-        <button type="button" class="btn btn-primary" onclick="savePouleConfig()">Enregistrer</button>
       </div>
     </div>
   </div>
@@ -1246,180 +1211,57 @@
       }
     });
 
-    // ==================== POULE CONFIGURATIONS ====================
+    // ==================== POULE CONFIGURATIONS (auto-computed) ====================
 
-    let pouleConfigData = [];
-
-    async function loadPouleConfigurations() {
+    async function loadPouleConfigPreview() {
       try {
-        const response = await fetch(`${API_URL}/reference-data/poule-configurations`, {
+        const response = await fetch(`${API_URL}/reference-data/poule-config-preview`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
+        if (!response.ok) return;
+        const data = await response.json();
 
-        if (response.ok) {
-          pouleConfigData = await response.json();
-          renderPouleConfigurations(pouleConfigData);
+        // Update toggle state
+        const toggle = document.getElementById('allowPouleOf2Toggle');
+        const dot = document.getElementById('toggleDot');
+        const slider = toggle.parentElement.querySelectorAll('span')[0];
+        toggle.checked = data.allow_poule_of_2;
+        document.getElementById('pouleOf2Status').textContent = data.allow_poule_of_2 ? 'Oui' : 'Non';
+        slider.style.background = data.allow_poule_of_2 ? 'var(--color-primary, #1F4788)' : '#ccc';
+        dot.style.left = data.allow_poule_of_2 ? '25px' : '3px';
+
+        // Render preview table
+        const tbody = document.getElementById('pouleConfigPreviewBody');
+        const entries = Object.entries(data.configurations);
+        if (entries.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="3" class="empty-state">Aucune configuration</td></tr>';
+          return;
         }
+        tbody.innerHTML = entries.map(([n, cfg]) => `
+          <tr>
+            <td style="text-align: center; font-weight: 600;">${n}</td>
+            <td>${cfg.description}</td>
+            <td style="text-align: center;">${cfg.tables}</td>
+          </tr>
+        `).join('');
       } catch (error) {
-        console.error('Error loading poule configurations:', error);
-        document.getElementById('pouleConfigBody').innerHTML =
-          '<tr><td colspan="4" class="empty-state">Erreur de chargement</td></tr>';
+        console.error('Error loading poule config preview:', error);
       }
     }
 
-    function formatPouleComposition(pouleSizes) {
-      if (!pouleSizes || pouleSizes.length === 0) return '-';
-      const numPoules = pouleSizes.length;
-      return `${numPoules} poule${numPoules > 1 ? 's' : ''} : ${pouleSizes.join(' + ')}`;
-    }
-
-    function renderPouleConfigurations(configs) {
-      const tbody = document.getElementById('pouleConfigBody');
-
-      if (configs.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" class="empty-state">Aucune configuration</td></tr>';
-        return;
-      }
-
-      tbody.innerHTML = configs.map(config => `
-        <tr>
-          <td style="text-align: center; font-weight: 600;">${config.num_players}</td>
-          <td>${formatPouleComposition(config.poule_sizes)}</td>
-          <td style="text-align: center;">${config.tables_needed}</td>
-          <td class="action-btns">
-            <button class="btn-icon btn-edit" onclick="editPouleConfig(${config.id})" title="Modifier">Modif</button>
-            <button class="btn-icon btn-delete" onclick="deletePouleConfig(${config.id}, ${config.num_players})" title="Supprimer">Suppr</button>
-          </td>
-        </tr>
-      `).join('');
-    }
-
-    // Add poule configuration
-    document.getElementById('addPouleConfigForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-
-      const numPlayers = parseInt(document.getElementById('pcNumPlayers').value);
-      const pouleSizesStr = document.getElementById('pcPouleSizes').value.trim();
-      const tablesInput = document.getElementById('pcTables').value;
-
-      // Parse composition
-      const pouleSizes = pouleSizesStr.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
-
-      if (pouleSizes.length === 0) {
-        showMessage('error', 'Composition invalide. Utilisez le format: 3,3,4');
-        return;
-      }
-
-      const data = {
-        num_players: numPlayers,
-        poule_sizes: pouleSizes,
-        tables_needed: tablesInput ? parseInt(tablesInput) : undefined
-      };
-
+    async function toggleAllowPouleOf2() {
+      const checked = document.getElementById('allowPouleOf2Toggle').checked;
       try {
-        const response = await fetch(`${API_URL}/reference-data/poule-configurations`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify(data)
-        });
-
-        const result = await response.json();
-
-        if (response.ok) {
-          showMessage('success', 'Configuration ajoutee');
-          document.getElementById('addPouleConfigForm').reset();
-          loadPouleConfigurations();
-        } else {
-          showMessage('error', result.error || 'Erreur lors de l\'ajout');
-        }
-      } catch (error) {
-        console.error('Error adding poule config:', error);
-        showMessage('error', 'Erreur de connexion');
-      }
-    });
-
-    // Edit poule configuration
-    function editPouleConfig(id) {
-      const config = pouleConfigData.find(c => c.id === id);
-      if (!config) return;
-
-      document.getElementById('editPcId').value = config.id;
-      document.getElementById('editPcNumPlayers').value = config.num_players;
-      document.getElementById('editPcPouleSizes').value = config.poule_sizes.join(',');
-      document.getElementById('editPcTables').value = config.tables_needed;
-
-      openModal('editPouleConfigModal');
-    }
-
-    // Save edited poule configuration
-    async function savePouleConfig() {
-      const id = document.getElementById('editPcId').value;
-      const numPlayers = parseInt(document.getElementById('editPcNumPlayers').value);
-      const pouleSizesStr = document.getElementById('editPcPouleSizes').value.trim();
-      const tablesInput = document.getElementById('editPcTables').value;
-
-      const pouleSizes = pouleSizesStr.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
-
-      if (pouleSizes.length === 0) {
-        showMessage('error', 'Composition invalide. Utilisez le format: 3,3,4');
-        return;
-      }
-
-      const data = {
-        num_players: numPlayers,
-        poule_sizes: pouleSizes,
-        tables_needed: tablesInput ? parseInt(tablesInput) : undefined
-      };
-
-      try {
-        const response = await fetch(`${API_URL}/reference-data/poule-configurations/${id}`, {
+        await fetch(`${API_URL}/settings/app-bulk`, {
           method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify(data)
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({ allow_poule_of_2: checked ? 'true' : 'false' })
         });
-
-        const result = await response.json();
-
-        if (response.ok) {
-          showMessage('success', 'Configuration mise a jour');
-          closeModal('editPouleConfigModal');
-          loadPouleConfigurations();
-        } else {
-          showMessage('error', result.error || 'Erreur lors de la mise a jour');
-        }
+        showMessage('success', checked ? 'Poules de 2 autorisees' : 'Poules de 2 desactivees');
+        loadPouleConfigPreview();
       } catch (error) {
-        console.error('Error updating poule config:', error);
-        showMessage('error', 'Erreur de connexion');
-      }
-    }
-
-    // Delete poule configuration
-    async function deletePouleConfig(id, numPlayers) {
-      if (!confirm(`Supprimer la configuration pour ${numPlayers} joueurs ?`)) return;
-
-      try {
-        const response = await fetch(`${API_URL}/reference-data/poule-configurations/${id}`, {
-          method: 'DELETE',
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-
-        const result = await response.json();
-
-        if (response.ok) {
-          showMessage('success', 'Configuration supprimee');
-          loadPouleConfigurations();
-        } else {
-          showMessage('error', result.error || 'Erreur lors de la suppression');
-        }
-      } catch (error) {
-        console.error('Error deleting poule config:', error);
-        showMessage('error', 'Erreur de connexion');
+        console.error('Error toggling allow_poule_of_2:', error);
+        showMessage('error', 'Erreur de sauvegarde');
       }
     }
 
@@ -1429,7 +1271,7 @@
     loadRankings();
     loadCategories();
     loadCategoryDropdowns();
-    loadPouleConfigurations();
+    loadPouleConfigPreview();
     handleHashNavigation(); // Handle initial hash on page load
   </script>
 </body>

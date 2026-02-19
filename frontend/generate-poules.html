@@ -1058,58 +1058,28 @@
     let currentGameParams = null;
     let isFinale = false;
 
-    // Default poule configuration (fallback if API unavailable)
-    const DEFAULT_POULE_CONFIG = {
-      3: { poules: [3], tables: 1 },
-      4: { poules: [4], tables: 2 },
-      5: { poules: [5], tables: 2 },
-      6: { poules: [3, 3], tables: 2 },
-      7: { poules: [3, 4], tables: 3 },
-      8: { poules: [3, 5], tables: 3 },
-      9: { poules: [3, 3, 3], tables: 3 },
-      10: { poules: [3, 3, 4], tables: 4 },
-      11: { poules: [3, 3, 5], tables: 4 },
-      12: { poules: [3, 3, 3, 3], tables: 4 },
-      13: { poules: [3, 3, 3, 4], tables: 5 },
-      14: { poules: [3, 3, 3, 5], tables: 5 },
-      15: { poules: [3, 3, 3, 3, 3], tables: 5 },
-      16: { poules: [3, 3, 3, 3, 4], tables: 6 },
-      17: { poules: [3, 3, 3, 3, 5], tables: 6 },
-      18: { poules: [3, 3, 3, 3, 3, 3], tables: 6 },
-      19: { poules: [3, 3, 3, 3, 3, 4], tables: 7 },
-      20: { poules: [3, 3, 3, 3, 3, 5], tables: 7 }
-    };
+    // Poule configuration (auto-computed from API)
+    let POULE_CONFIG = {};
+    let minPouleSize = 3;
+    let allowPouleOf2 = false;
 
-    // Active config (loaded from API, falls back to defaults)
-    let POULE_CONFIG = { ...DEFAULT_POULE_CONFIG };
-    let minPouleSize = 3; // Updated from DB config if 2-player poules exist
-
-    // Load poule configuration from API
+    // Load computed poule configuration from API
     async function loadPouleConfiguration() {
       try {
-        const response = await fetch(`${API_URL}/reference-data/poule-configurations`, {
+        const response = await fetch(`${API_URL}/reference-data/poule-config-preview`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (response.ok) {
-          const configs = await response.json();
-          if (configs.length > 0) {
-            POULE_CONFIG = {};
-            for (const config of configs) {
-              POULE_CONFIG[config.num_players] = {
-                poules: config.poule_sizes,
-                tables: config.tables_needed
-              };
-            }
-            // Detect minimum poule size from config
-            const allSizes = configs.flatMap(c => c.poule_sizes);
-            if (allSizes.length > 0) {
-              minPouleSize = Math.min(...allSizes);
-            }
-            console.log(`Poule config loaded from DB: ${configs.length} entries, min poule size: ${minPouleSize}`);
+          const data = await response.json();
+          allowPouleOf2 = data.allow_poule_of_2;
+          minPouleSize = data.min_players;
+          POULE_CONFIG = {};
+          for (const [n, cfg] of Object.entries(data.configurations)) {
+            POULE_CONFIG[parseInt(n)] = { poules: cfg.poules, tables: cfg.tables };
           }
         }
       } catch (error) {
-        console.warn('Could not load poule config from API, using defaults:', error.message);
+        console.warn('Could not load poule config from API:', error.message);
       }
     }
 
@@ -1121,49 +1091,29 @@
       if (numPlayers < minPouleSize) {
         return { poules: [], tables: 0, description: 'Pas assez de joueurs' };
       }
-
-      // Check configured values first
       if (POULE_CONFIG[numPlayers]) {
         const config = POULE_CONFIG[numPlayers];
         return { ...config, description: formatPouleDescription(config.poules) };
       }
-
-      // Dynamic fallback for unconfigured player counts
-      const base = Math.floor(numPlayers / 3);
+      // Dynamic fallback for player counts beyond preview range
+      const numP = Math.floor(numPlayers / 3);
       const remainder = numPlayers % 3;
-      const poules = Array(base).fill(3);
+      const poules = Array(numP).fill(3);
       if (remainder === 1) {
         poules[poules.length - 1] = 4;
       } else if (remainder === 2) {
-        poules[poules.length - 1] = 5;
+        if (allowPouleOf2) { poules.push(2); }
+        else { poules[poules.length - 1] = 5; }
       }
-      return {
-        poules,
-        tables: poules.length + 1,
-        description: formatPouleDescription(poules)
-      };
+      const tables = poules.reduce((t, s) => t + (s <= 3 ? 1 : Math.ceil(s / 2)), 0);
+      return { poules, tables, description: formatPouleDescription(poules) };
     }
 
-    // Format poule description: "5 poules de 3 et 1 poule de 4 (6 poules)"
+    // Format poule description
     function formatPouleDescription(poules) {
-      if (poules.length === 0) return '-';
-      if (poules.length === 1) return `1 poule de ${poules[0]}`;
-
-      // Count poules by size
-      const counts = {};
-      poules.forEach(size => {
-        counts[size] = (counts[size] || 0) + 1;
-      });
-
-      // Build description parts
-      const parts = [];
-      const sizes = Object.keys(counts).sort((a, b) => a - b);
-      sizes.forEach(size => {
-        const count = counts[size];
-        parts.push(`${count} poule${count > 1 ? 's' : ''} de ${size}`);
-      });
-
-      return `${parts.join(' et ')} (${poules.length} poules)`;
+      if (!poules || poules.length === 0) return '-';
+      if (poules.length === 1) return `1 poule : ${poules[0]}`;
+      return `${poules.length} poules : ${poules.join(' + ')}`;
     }
 
     // Serpentine distribution

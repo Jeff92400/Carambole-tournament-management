@@ -7,6 +7,7 @@ const { Resend } = require('resend');
 const db = require('../db-loader');
 const { authenticateToken } = require('./auth');
 const appSettings = require('../utils/app-settings');
+const { getPouleConfigForOrg } = require('../utils/poule-config');
 const { logAdminAction, ACTION_TYPES } = require('../utils/admin-logger');
 const { getColumnMapping } = require('./import-config');
 
@@ -3156,16 +3157,11 @@ router.get('/tournoi/:id/simulation', authenticateToken, async (req, res) => {
       }
     }
 
-    // Get minimum players needed from poule config (default: 3)
-    let minPlayersNeeded = 3;
-    try {
-      const minRow = await new Promise((resolve, reject) => {
-        db.get('SELECT MIN(num_players) as min_players FROM poule_configurations', [], (err, row) => {
-          if (err) reject(err); else resolve(row);
-        });
-      });
-      if (minRow && minRow.min_players) minPlayersNeeded = minRow.min_players;
-    } catch (e) { /* keep default */ }
+    // Determine minimum players from org setting
+    const allowPouleOf2 = orgId
+      ? (await appSettings.getOrgSetting(orgId, 'allow_poule_of_2')) === 'true'
+      : false;
+    const minPlayersNeeded = allowPouleOf2 ? 2 : 3;
 
     if (activeInscriptions.length < minPlayersNeeded) {
       return res.json({
@@ -3331,7 +3327,7 @@ router.get('/tournoi/:id/simulation', authenticateToken, async (req, res) => {
     });
 
     // Get poule configuration
-    const config = await getSimulationPouleConfig(playersWithRanks.length);
+    const config = await getPouleConfigForOrg(playersWithRanks.length, orgId);
 
     // Distribute players using serpentine algorithm
     const poules = distributeSimulationSerpentine(playersWithRanks, config.poules);
@@ -3370,92 +3366,6 @@ router.get('/tournoi/:id/simulation', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Failed to generate simulation' });
   }
 });
-
-// Default poule configuration for simulation (fallback if DB unavailable)
-const DEFAULT_SIMULATION_POULE_CONFIG = {
-  3: { poules: [3], tables: 1 },
-  4: { poules: [4], tables: 2 },
-  5: { poules: [5], tables: 2 },
-  6: { poules: [3, 3], tables: 2 },
-  7: { poules: [3, 4], tables: 3 },
-  8: { poules: [3, 5], tables: 3 },
-  9: { poules: [3, 3, 3], tables: 3 },
-  10: { poules: [3, 3, 4], tables: 4 },
-  11: { poules: [3, 3, 5], tables: 4 },
-  12: { poules: [3, 3, 3, 3], tables: 4 },
-  13: { poules: [3, 3, 3, 4], tables: 5 },
-  14: { poules: [3, 3, 3, 5], tables: 5 },
-  15: { poules: [3, 3, 3, 3, 3], tables: 5 },
-  16: { poules: [3, 3, 3, 3, 4], tables: 6 },
-  17: { poules: [3, 3, 3, 3, 5], tables: 6 },
-  18: { poules: [3, 3, 3, 3, 3, 3], tables: 6 },
-  19: { poules: [3, 3, 3, 3, 3, 4], tables: 7 },
-  20: { poules: [3, 3, 3, 3, 3, 5], tables: 7 }
-};
-
-async function getSimulationPouleConfig(numPlayers) {
-  // Load config from DB with fallback to defaults
-  let SIMULATION_POULE_CONFIG = { ...DEFAULT_SIMULATION_POULE_CONFIG };
-  let minPouleSize = 3;
-  try {
-    const configRows = await new Promise((resolve, reject) => {
-      db.all('SELECT num_players, poule_sizes, tables_needed FROM poule_configurations ORDER BY num_players', [], (err, rows) => {
-        if (err) reject(err); else resolve(rows || []);
-      });
-    });
-    if (configRows.length > 0) {
-      SIMULATION_POULE_CONFIG = {};
-      for (const row of configRows) {
-        const sizes = typeof row.poule_sizes === 'string' ? JSON.parse(row.poule_sizes) : row.poule_sizes;
-        SIMULATION_POULE_CONFIG[row.num_players] = { poules: sizes, tables: row.tables_needed };
-      }
-      const allSizes = configRows.flatMap(r => {
-        const s = typeof r.poule_sizes === 'string' ? JSON.parse(r.poule_sizes) : r.poule_sizes;
-        return s;
-      });
-      if (allSizes.length > 0) minPouleSize = Math.min(...allSizes);
-    }
-  } catch (configErr) {
-    console.warn('Could not load poule config from DB, using defaults:', configErr.message);
-  }
-
-  if (numPlayers < minPouleSize) {
-    return { poules: [], tables: 0, description: 'Pas assez de joueurs' };
-  }
-
-  if (SIMULATION_POULE_CONFIG[numPlayers]) {
-    const config = SIMULATION_POULE_CONFIG[numPlayers];
-    return { ...config, description: formatSimulationPouleDescription(config.poules) };
-  }
-
-  // Dynamic fallback for unconfigured player counts
-  const base = Math.floor(numPlayers / 3);
-  const remainder = numPlayers % 3;
-  const poules = Array(base).fill(3);
-  if (remainder === 1) {
-    poules[poules.length - 1] = 4;
-  } else if (remainder === 2) {
-    poules[poules.length - 1] = 5;
-  }
-  return {
-    poules,
-    tables: poules.length + 1,
-    description: formatSimulationPouleDescription(poules)
-  };
-}
-
-function formatSimulationPouleDescription(poules) {
-  if (poules.length === 0) return '-';
-  if (poules.length === 1) return `1 poule de ${poules[0]}`;
-  const counts = {};
-  poules.forEach(size => { counts[size] = (counts[size] || 0) + 1; });
-  const parts = [];
-  Object.keys(counts).sort((a, b) => a - b).forEach(size => {
-    const count = counts[size];
-    parts.push(`${count} poule${count > 1 ? 's' : ''} de ${size}`);
-  });
-  return `${parts.join(' et ')} (${poules.length} poules)`;
-}
 
 function distributeSimulationSerpentine(players, pouleSizes) {
   const numPoules = pouleSizes.length;
