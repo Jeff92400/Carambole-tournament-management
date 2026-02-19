@@ -1685,6 +1685,19 @@ async function initializeDatabase() {
     // Add classement column to player_ffb_classifications (per-discipline classification level)
     await client.query(`ALTER TABLE player_ffb_classifications ADD COLUMN IF NOT EXISTS classement TEXT DEFAULT NULL`);
 
+    // Backfill classement from player_rankings for existing rows where classement is NULL
+    await client.query(`
+      UPDATE player_ffb_classifications pfc
+      SET classement = pr.ranking
+      FROM player_rankings pr
+      WHERE REPLACE(pfc.licence, ' ', '') = REPLACE(pr.licence, ' ', '')
+        AND pfc.game_mode_id = pr.game_mode_id
+        AND pfc.classement IS NULL
+        AND pr.ranking IS NOT NULL
+        AND pr.ranking != ''
+        AND UPPER(pr.ranking) != 'NC'
+    `);
+
     // --- Journées Qualificatives (Phase 1) ---
     // Note: serpentine seeding uses player_ffb_classifications.moyenne_ffb (per discipline/season)
 
