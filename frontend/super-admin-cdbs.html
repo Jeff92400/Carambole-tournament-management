@@ -702,10 +702,8 @@
         localStorage.setItem('organizationId', orgId);
         localStorage.setItem('isSuperAdmin', 'true');
 
-        // Mark this session as having an explicitly chosen org (prevents stale org redirect)
-        sessionStorage.setItem('orgChosen', 'true');
-        // Navigate to the CDB dashboard
-        window.location.href = 'dashboard.html';
+        // Navigate to the CDB dashboard with ?org=slug (preserves context across pages)
+        window.location.href = `dashboard.html?org=${encodeURIComponent(slug)}`;
       } catch (error) {
         console.error('Impersonation error:', error);
         showToast('Erreur: ' + error.message, 'error');

@@ -139,8 +139,6 @@
           if (data.user.ffb_ligue_numero) {
             localStorage.setItem('ligueNumero', data.user.ffb_ligue_numero);
           }
-          // Mark this session as having an explicitly chosen org (prevents stale org redirect)
-          sessionStorage.setItem('orgChosen', 'true');
           // Redirect based on role and context
           if (isSaLogin && data.user.is_super_admin) {
             window.location.href = 'super-admin.html';

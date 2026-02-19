@@ -1,17 +1,18 @@
 // Authentication utility functions for Tournament Management App
 
-// SA stale org check: detect when SA has a leftover non-CDBHS session from a previous browser session
-// sessionStorage.orgChosen is set during login or SA impersonation and clears when the browser closes
+// SA stale org check: when SA visits a regular page without ?org= and has a non-CDBHS session, redirect to login
+// This catches stale impersonation sessions. Active impersonation uses ?org=slug in URLs.
 (function() {
+  const urlOrg = new URLSearchParams(window.location.search).get('org');
   const isSA = localStorage.getItem('isSuperAdmin') === 'true';
   const storedOrgId = localStorage.getItem('organizationId');
-  const orgExplicitlyChosen = sessionStorage.getItem('orgChosen');
   const currentPage = window.location.pathname.split('/').pop();
 
-  // Only redirect on regular pages (not SA pages, not login)
-  if (isSA && storedOrgId && storedOrgId !== '1' && !orgExplicitlyChosen
-      && !currentPage.startsWith('super-admin') && currentPage !== 'login.html') {
-    // Stale SA impersonation session — clear and redirect to login
+  // Skip SA pages and login page
+  if (currentPage.startsWith('super-admin') || currentPage === 'login.html' || currentPage === 'forgot-password.html') {
+    // no check needed
+  } else if (isSA && !urlOrg && storedOrgId && storedOrgId !== '1' && storedOrgId !== 'null') {
+    // SA on a regular page without ?org= but with non-CDBHS org → stale session
     localStorage.removeItem('token');
     localStorage.removeItem('sa_token');
     localStorage.removeItem('organizationId');
@@ -23,6 +24,19 @@
     window.location.href = '/login.html';
   }
 })();
+
+// Auto-propagate ?org= parameter to all internal nav links (preserves CDB context across pages)
+document.addEventListener('DOMContentLoaded', function() {
+  const urlOrg = new URLSearchParams(window.location.search).get('org');
+  if (!urlOrg) return;
+  document.querySelectorAll('a[href]').forEach(function(a) {
+    const href = a.getAttribute('href');
+    // Only modify internal links (not external, not anchors, not javascript:)
+    if (href && !href.startsWith('http') && !href.startsWith('#') && !href.startsWith('javascript') && !href.includes('org=')) {
+      a.href = href + (href.includes('?') ? '&' : '?') + 'org=' + encodeURIComponent(urlOrg);
+    }
+  });
+});
 
 // Intercept all fetch responses to handle 401 errors globally
 (function() {
