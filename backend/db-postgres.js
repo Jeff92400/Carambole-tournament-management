@@ -354,6 +354,10 @@ async function initializeDatabase() {
     await client.query(`ALTER TABLE tournament_results ADD COLUMN IF NOT EXISTS bonus_detail TEXT`);
     await client.query(`ALTER TABLE rankings ADD COLUMN IF NOT EXISTS bonus_detail TEXT`);
 
+    // Journées Qualificatives ranking columns
+    await client.query(`ALTER TABLE rankings ADD COLUMN IF NOT EXISTS position_points_detail TEXT`); // JSON: {"1": 10, "2": 8, "3": 6}
+    await client.query(`ALTER TABLE rankings ADD COLUMN IF NOT EXISTS average_bonus INTEGER DEFAULT 0`); // Tiered bonus 0-3
+
     // Clubs table
     await client.query(`
       CREATE TABLE IF NOT EXISTS clubs (
@@ -1676,6 +1680,48 @@ async function initializeDatabase() {
     `);
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_ffb_class_licence ON player_ffb_classifications(licence)
+    `);
+
+    // --- Journées Qualificatives (Phase 1) ---
+    // Note: serpentine seeding uses player_ffb_classifications.moyenne_ffb (per discipline/season)
+
+    // New column on tournament_results for position-based season points
+    await client.query(`ALTER TABLE tournament_results ADD COLUMN IF NOT EXISTS position_points INTEGER DEFAULT 0`);
+
+    // Position-to-points lookup (configurable per org)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS position_points (
+        id SERIAL PRIMARY KEY,
+        position INTEGER NOT NULL,
+        points INTEGER NOT NULL,
+        organization_id INTEGER REFERENCES organizations(id),
+        UNIQUE(position, organization_id)
+      )
+    `);
+
+    // Bracket match results (SF, F, PF, classification rounds)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS bracket_matches (
+        id SERIAL PRIMARY KEY,
+        tournament_id INTEGER NOT NULL REFERENCES tournaments(id),
+        phase TEXT NOT NULL,
+        match_order INTEGER NOT NULL,
+        match_label TEXT,
+        player1_licence TEXT NOT NULL,
+        player1_name TEXT,
+        player2_licence TEXT,
+        player2_name TEXT,
+        player1_points INTEGER DEFAULT 0,
+        player1_reprises INTEGER DEFAULT 0,
+        player2_points INTEGER DEFAULT 0,
+        player2_reprises INTEGER DEFAULT 0,
+        winner_licence TEXT,
+        resulting_place INTEGER,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_bracket_matches_tournament ON bracket_matches(tournament_id)
     `);
 
     // Migrate existing player rankings from hardcoded columns to player_rankings table

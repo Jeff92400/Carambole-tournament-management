@@ -373,9 +373,23 @@
         // Dynamic bonus columns from API
         const bonusColumns = data.bonusColumns || [];
         const hasBonusCols = bonusColumns.length > 0;
+        const isJournees = data.qualificationMode === 'journees';
 
-        // Update header row dynamically based on bonus columns
-        if (hasBonusCols) {
+        // Update header row dynamically based on mode and bonus columns
+        if (isJournees) {
+          document.getElementById('rankingsHeaderRow').innerHTML = `
+            <th>Position</th>
+            <th>Licence</th>
+            <th>Joueur</th>
+            <th>Club</th>
+            <th>TQ1</th>
+            <th>TQ2</th>
+            <th>TQ3</th>
+            <th>Bonus Moy.</th>
+            <th>Total</th>
+            <th>Moyenne</th>
+            <th>Meilleure Série</th>`;
+        } else if (hasBonusCols) {
           document.getElementById('rankingsHeaderRow').innerHTML = `
             <th>Position</th>
             <th>Licence</th>
@@ -405,21 +419,59 @@
             ? (rank.cumulated_points / rank.cumulated_reprises).toFixed(3)
             : '0.000';
 
-          // Build dynamic bonus columns HTML from bonus_detail JSON
-          let bonusCellsHTML = '';
-          let pureMatchPoints = rank.total_match_points;
-          if (hasBonusCols) {
-            const bonusDetail = (() => { try { return JSON.parse(rank.bonus_detail || '{}'); } catch(e) { return {}; } })();
-            const totalBonus = Object.values(bonusDetail).reduce((s, v) => s + (v || 0), 0);
-            pureMatchPoints = rank.total_match_points - totalBonus;
+          if (isJournees) {
+            // Journées mode: position points per TQ + average bonus
+            const ppDetail = (() => { try { return JSON.parse(rank.position_points_detail || '{}'); } catch(e) { return {}; } })();
+            const avgBonus = rank.average_bonus || 0;
 
-            bonusColumns.forEach(col => {
-              const val = bonusDetail[col.ruleType] || 0;
-              bonusCellsHTML += `<td style="text-align: center; color: ${val > 0 ? '#28a745' : '#999'};">${val > 0 ? '+' + val : '0'}</td>`;
-            });
-          }
+            // Determine which scores are "kept" (best N) — dropped ones are styled differently
+            const scores = Object.entries(ppDetail).map(([tn, pts]) => ({ tn: parseInt(tn), pts }));
+            scores.sort((a, b) => b.pts - a.pts);
+            const keptSet = new Set(scores.slice(0, 2).map(s => s.tn)); // best 2
 
-          row.innerHTML = `
+            const formatPP = (tn) => {
+              const pts = ppDetail[tn];
+              if (!tournamentsPlayed[`t${tn}`]) return '<span style="color: #ccc;">-</span>';
+              if (pts === undefined || pts === null) return '<span style="color: #999; font-size: 18px; font-weight: bold;">*</span>';
+              const isKept = keptSet.has(tn);
+              return isKept
+                ? `<strong>${pts}</strong>`
+                : `<span style="color: #999; text-decoration: line-through;">${pts}</span>`;
+            };
+
+            row.innerHTML = `
+              <td style="text-align: center; font-weight: bold;">${rank.rank_position}</td>
+              <td>${rank.licence}</td>
+              <td>
+                <a href="player-history.html?licence=${rank.licence}" class="player-link">
+                  ${rank.first_name} ${rank.last_name}
+                </a>
+              </td>
+              <td></td>
+              <td style="text-align: center;">${formatPP(1)}</td>
+              <td style="text-align: center;">${formatPP(2)}</td>
+              <td style="text-align: center;">${formatPP(3)}</td>
+              <td style="text-align: center; color: ${avgBonus > 0 ? '#28a745' : '#999'};">${avgBonus > 0 ? '+' + avgBonus : '0'}</td>
+              <td style="text-align: center; font-weight: bold;">${rank.total_match_points}</td>
+              <td style="text-align: center;">${moyenne}</td>
+              <td style="text-align: center; font-weight: bold;">${rank.best_serie || 0}</td>
+            `;
+          } else {
+            // Standard mode: match points per tournament + bonus columns
+            let bonusCellsHTML = '';
+            let pureMatchPoints = rank.total_match_points;
+            if (hasBonusCols) {
+              const bonusDetail = (() => { try { return JSON.parse(rank.bonus_detail || '{}'); } catch(e) { return {}; } })();
+              const totalBonus = Object.values(bonusDetail).reduce((s, v) => s + (v || 0), 0);
+              pureMatchPoints = rank.total_match_points - totalBonus;
+
+              bonusColumns.forEach(col => {
+                const val = bonusDetail[col.ruleType] || 0;
+                bonusCellsHTML += `<td style="text-align: center; color: ${val > 0 ? '#28a745' : '#999'};">${val > 0 ? '+' + val : '0'}</td>`;
+              });
+            }
+
+            row.innerHTML = `
               <td style="text-align: center; font-weight: bold;">${rank.rank_position}</td>
               <td>${rank.licence}</td>
               <td>
@@ -439,6 +491,7 @@
               <td style="text-align: center;">${moyenne}</td>
               <td style="text-align: center; font-weight: bold;">${rank.best_serie || 0}</td>
             `;
+          }
 
             // Set club logo HTML separately
             const clubCell = row.cells[3];

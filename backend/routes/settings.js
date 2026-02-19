@@ -1471,4 +1471,72 @@ router.post('/snapshot-season-stats', authenticateToken, requireAdmin, async (re
   }
 });
 
+// ==================== QUALIFICATION MODE - POSITION POINTS ====================
+
+// GET position-to-points lookup table for the org
+router.get('/position-points', authenticateToken, async (req, res) => {
+  try {
+    const db = getDb();
+    const orgId = req.user.organizationId || null;
+
+    const rows = await new Promise((resolve, reject) => {
+      db.all(
+        'SELECT id, position, points FROM position_points WHERE ($1::int IS NULL OR organization_id = $1) ORDER BY position ASC',
+        [orgId],
+        (err, rows) => err ? reject(err) : resolve(rows || [])
+      );
+    });
+
+    res.json(rows);
+  } catch (error) {
+    console.error('Error fetching position points:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// PUT (replace all) position-to-points lookup table for the org
+router.put('/position-points', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const db = getDb();
+    const orgId = req.user.organizationId || null;
+    const { entries } = req.body; // [{ position: 1, points: 10 }, { position: 2, points: 8 }, ...]
+
+    if (!Array.isArray(entries)) {
+      return res.status(400).json({ error: 'entries must be an array of { position, points }' });
+    }
+
+    // Validate entries
+    for (const entry of entries) {
+      if (typeof entry.position !== 'number' || typeof entry.points !== 'number') {
+        return res.status(400).json({ error: 'Each entry must have numeric position and points' });
+      }
+    }
+
+    // Delete existing entries for this org
+    await new Promise((resolve, reject) => {
+      db.run(
+        'DELETE FROM position_points WHERE ($1::int IS NULL OR organization_id = $1)',
+        [orgId],
+        (err) => err ? reject(err) : resolve()
+      );
+    });
+
+    // Insert new entries
+    for (const entry of entries) {
+      await new Promise((resolve, reject) => {
+        db.run(
+          'INSERT INTO position_points (position, points, organization_id) VALUES ($1, $2, $3)',
+          [entry.position, entry.points, orgId],
+          (err) => err ? reject(err) : resolve()
+        );
+      });
+    }
+
+    res.json({ success: true, message: `${entries.length} position-points entries saved` });
+  } catch (error) {
+    console.error('Error saving position points:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;

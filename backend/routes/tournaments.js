@@ -7,6 +7,7 @@ const db = require('../db-loader');
 const { authenticateToken } = require('./auth');
 const { logAdminAction, ACTION_TYPES } = require('../utils/admin-logger');
 const { getColumnMapping } = require('./import-config');
+const appSettings = require('../utils/app-settings');
 
 /**
  * Default column mapping for tournament results imports
@@ -757,8 +758,229 @@ function computeBonusPoints(tournamentId, categoryId, orgId, callback) {
   );
 }
 
-// Recalculate rankings for a category and season
+// Recalculate rankings for a category and season (dispatcher)
 function recalculateRankings(categoryId, season, callback) {
+  // Resolve orgId from tournament data, then check qualification mode
+  db.get(
+    'SELECT DISTINCT organization_id FROM tournaments WHERE category_id = ? AND season = ? AND organization_id IS NOT NULL LIMIT 1',
+    [categoryId, season],
+    (err, row) => {
+      const orgId = row ? row.organization_id : null;
+      if (orgId) {
+        appSettings.getOrgSetting(orgId, 'qualification_mode').then(mode => {
+          if (mode === 'journees') {
+            recalculateRankingsJournees(categoryId, season, callback, orgId);
+          } else {
+            recalculateRankingsStandard(categoryId, season, callback);
+          }
+        }).catch(() => {
+          recalculateRankingsStandard(categoryId, season, callback);
+        });
+      } else {
+        recalculateRankingsStandard(categoryId, season, callback);
+      }
+    }
+  );
+}
+
+// Helper: promisified db calls for async functions
+function dbAllAsync(query, params = []) {
+  return new Promise((resolve, reject) => {
+    db.all(query, params, (err, rows) => err ? reject(err) : resolve(rows || []));
+  });
+}
+function dbGetAsync(query, params = []) {
+  return new Promise((resolve, reject) => {
+    db.get(query, params, (err, row) => err ? reject(err) : resolve(row));
+  });
+}
+function dbRunAsync(query, params = []) {
+  return new Promise((resolve, reject) => {
+    db.run(query, params, function(err) { err ? reject(err) : resolve(this); });
+  });
+}
+
+// ==================== JOURNÉES QUALIFICATIVES RANKING ====================
+async function recalculateRankingsJournees(categoryId, season, callback, orgId) {
+  try {
+    console.log(`[RANKING-J] Starting journées recalculation for category ${categoryId}, season ${season}, org ${orgId}`);
+
+    // Get org settings
+    const bestOfCount = parseInt(await appSettings.getOrgSetting(orgId, 'best_of_count')) || 2;
+    const journeesCount = parseInt(await appSettings.getOrgSetting(orgId, 'journees_count')) || 3;
+
+    // Get all tournaments for this category/season (excluding finale = tournament_number 4)
+    const tournaments = await dbAllAsync(
+      `SELECT id, tournament_number FROM tournaments
+       WHERE category_id = ? AND season = ? AND tournament_number <= ?
+       AND (? IS NULL OR organization_id = ?)
+       ORDER BY tournament_number`,
+      [categoryId, season, journeesCount, orgId, orgId]
+    );
+
+    if (tournaments.length === 0) {
+      console.log(`[RANKING-J] No tournaments found, skipping`);
+      return callback(null);
+    }
+
+    // Get all player results with position_points, grouped by tournament
+    const results = await dbAllAsync(
+      `SELECT
+         REPLACE(tr.licence, ' ', '') as licence,
+         tr.player_name,
+         t.tournament_number,
+         tr.position_points,
+         tr.points,
+         tr.reprises,
+         tr.match_points,
+         tr.serie
+       FROM tournament_results tr
+       JOIN tournaments t ON tr.tournament_id = t.id
+       WHERE t.category_id = ? AND t.season = ? AND t.tournament_number <= ?
+       AND (? IS NULL OR t.organization_id = ?)`,
+      [categoryId, season, journeesCount, orgId, orgId]
+    );
+
+    if (results.length === 0) {
+      console.log(`[RANKING-J] No results found`);
+      return callback(null);
+    }
+
+    // Group results by player
+    const playerData = {};
+    for (const r of results) {
+      if (!playerData[r.licence]) {
+        playerData[r.licence] = { playerName: r.player_name, tournaments: {} };
+      }
+      playerData[r.licence].tournaments[r.tournament_number] = {
+        positionPoints: r.position_points || 0,
+        points: r.points || 0,
+        reprises: r.reprises || 0,
+        matchPoints: r.match_points || 0,
+        serie: r.serie || 0,
+      };
+    }
+
+    // Get game_parameters for this category (for moyenne bonus tiers)
+    const category = await dbGetAsync('SELECT game_type, name FROM categories WHERE id = ?', [categoryId]);
+    let moyenneMini = 0, moyenneMaxi = 999;
+    if (category) {
+      const gp = await dbGetAsync(
+        'SELECT moyenne_mini, moyenne_maxi FROM game_parameters WHERE UPPER(mode) = UPPER(?) AND UPPER(categorie) = UPPER(?)',
+        [category.game_type, category.name]
+      );
+      if (gp) {
+        moyenneMini = parseFloat(gp.moyenne_mini) || 0;
+        moyenneMaxi = parseFloat(gp.moyenne_maxi) || 999;
+      }
+    }
+    const moyenneMiddle = (moyenneMini + moyenneMaxi) / 2;
+
+    // Compute season ranking for each player
+    const rankings = [];
+    for (const [licence, data] of Object.entries(playerData)) {
+      const tournamentNumbers = Object.keys(data.tournaments).map(Number).sort();
+      const positionScores = tournamentNumbers.map(tn => ({
+        tournamentNumber: tn,
+        positionPoints: data.tournaments[tn].positionPoints,
+      }));
+
+      // Sort by position points DESC to pick best N
+      const sortedScores = [...positionScores].sort((a, b) => b.positionPoints - a.positionPoints);
+      const keptScores = sortedScores.slice(0, bestOfCount);
+      const totalPositionPoints = keptScores.reduce((sum, s) => sum + s.positionPoints, 0);
+
+      // Build detail JSON: { "1": 10, "2": 8 } (tournament_number: points)
+      const ppDetail = {};
+      for (const s of positionScores) {
+        ppDetail[s.tournamentNumber] = s.positionPoints;
+      }
+
+      // Compute average from the best N tournaments' points/reprises
+      const keptTournamentNumbers = new Set(keptScores.map(s => s.tournamentNumber));
+      let totalPoints = 0, totalReprises = 0, bestSerie = 0;
+      for (const tn of tournamentNumbers) {
+        const t = data.tournaments[tn];
+        if (keptTournamentNumbers.has(tn)) {
+          totalPoints += t.points;
+          totalReprises += t.reprises;
+        }
+        if (t.serie > bestSerie) bestSerie = t.serie;
+      }
+      const avgMoyenne = totalReprises > 0 ? totalPoints / totalReprises : 0;
+
+      // Tiered average bonus
+      let averageBonus = 0;
+      if (avgMoyenne >= moyenneMaxi) {
+        averageBonus = 3;
+      } else if (avgMoyenne >= moyenneMiddle) {
+        averageBonus = 2;
+      } else if (avgMoyenne >= moyenneMini) {
+        averageBonus = 1;
+      }
+
+      const totalScore = totalPositionPoints + averageBonus;
+
+      // Per-tournament points for T1/T2/T3 columns (reuse existing ranking columns)
+      const t1 = data.tournaments[1]?.positionPoints || null;
+      const t2 = data.tournaments[2]?.positionPoints || null;
+      const t3 = data.tournaments[3]?.positionPoints || null;
+
+      rankings.push({
+        licence,
+        playerName: data.playerName,
+        totalScore,
+        totalPositionPoints,
+        averageBonus,
+        avgMoyenne,
+        bestSerie,
+        t1, t2, t3,
+        ppDetail: JSON.stringify(ppDetail),
+        totalPoints,
+        totalReprises,
+      });
+    }
+
+    // Sort by total score DESC, then average DESC, then best serie DESC
+    rankings.sort((a, b) => b.totalScore - a.totalScore || b.avgMoyenne - a.avgMoyenne || b.bestSerie - a.bestSerie);
+
+    // Delete existing rankings
+    await dbRunAsync('DELETE FROM rankings WHERE category_id = ? AND season = ?', [categoryId, season]);
+
+    // Insert new rankings
+    for (let i = 0; i < rankings.length; i++) {
+      const r = rankings[i];
+      await dbRunAsync(
+        `INSERT INTO rankings (
+          category_id, season, licence, total_match_points, avg_moyenne, best_serie,
+          rank_position, tournament_1_points, tournament_2_points, tournament_3_points,
+          total_bonus_points, organization_id, position_points_detail, average_bonus
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          categoryId, season, r.licence,
+          r.totalScore,        // reuse total_match_points for total score
+          r.avgMoyenne,
+          r.bestSerie,
+          i + 1,               // rank_position
+          r.t1, r.t2, r.t3,
+          r.averageBonus,      // reuse total_bonus_points for average bonus
+          orgId,
+          r.ppDetail,
+          r.averageBonus,
+        ]
+      );
+    }
+
+    console.log(`[RANKING-J] Completed: ${rankings.length} players ranked`);
+    callback(null);
+  } catch (error) {
+    console.error(`[RANKING-J] Error:`, error);
+    callback(error);
+  }
+}
+
+// ==================== STANDARD RANKING (3 Tournois) ====================
+function recalculateRankingsStandard(categoryId, season, callback) {
   console.log(`[RANKING] Starting recalculation for category ${categoryId}, season ${season}`);
 
   // Get all tournament results for this category and season

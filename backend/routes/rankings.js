@@ -4,6 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const db = require('../db-loader');
 const { authenticateToken } = require('./auth');
+const appSettings = require('../utils/app-settings');
 
 const router = express.Router();
 
@@ -79,6 +80,8 @@ router.get('/', authenticateToken, (req, res) => {
           r.tournament_1_points,
           r.tournament_2_points,
           r.tournament_3_points,
+          COALESCE(r.position_points_detail, '{}') as position_points_detail,
+          COALESCE(r.average_bonus, 0) as average_bonus,
           c.game_type,
           c.level,
           c.display_name,
@@ -113,10 +116,19 @@ router.get('/', authenticateToken, (req, res) => {
       ORDER BY rank_position
     `;
 
-    db.all(query, [categoryId, season, orgId], (err, rows) => {
+    db.all(query, [categoryId, season, orgId], async (err, rows) => {
       if (err) {
         return res.status(500).json({ error: err.message });
       }
+
+      // Determine qualification mode for this org
+      let qualificationMode = 'standard';
+      try {
+        if (orgId) {
+          const mode = await appSettings.getOrgSetting(orgId, 'qualification_mode');
+          if (mode) qualificationMode = mode;
+        }
+      } catch (e) { /* default to standard */ }
 
       // Extract bonus column metadata from rankings' bonus_detail
       const seenTypes = new Set();
@@ -153,13 +165,13 @@ router.get('/', authenticateToken, (req, res) => {
             const labelMap = {};
             (labelRows || []).forEach(r => { labelMap[r.rule_type] = r.column_label; });
             res.json({
-              rankings: rows, tournamentsPlayed,
+              rankings: rows, tournamentsPlayed, qualificationMode,
               bonusColumns: [...seenTypes].map(rt => ({ ruleType: rt, label: labelMap[rt] || rt }))
             });
           }
         );
       } else {
-        res.json({ rankings: rows, tournamentsPlayed, bonusColumns: [] });
+        res.json({ rankings: rows, tournamentsPlayed, qualificationMode, bonusColumns: [] });
       }
     });
   });

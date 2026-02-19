@@ -2972,10 +2972,49 @@ router.get('/tournoi/:id/simulation', authenticateToken, async (req, res) => {
 
     console.log(`Simulation: mode=${rawMode}->${gameType}, categorie=${rawLevel}->${categoryLevel}, season=${currentSeason}, category found=${!!simCategory}`);
 
-    // Get CDBHS rankings for sorting
-    let cdbhsRankings = [];
-    if (simCategory) {
-      cdbhsRankings = await new Promise((resolve, reject) => {
+    // Check qualification mode for this org
+    const qualMode = orgId ? (await appSettings.getOrgSetting(orgId, 'qualification_mode') || 'standard') : 'standard';
+
+    // Detect tournament number from name (T1/TQ1 = 1, T2/TQ2 = 2, etc.)
+    const tournamentName = (tournament.nom || '').toUpperCase();
+    const tnMatch = tournamentName.match(/(?:TQ?|TOURNOI\s*(?:QUALIFICATIF\s*)?)(\d)/);
+    const tournamentNumber = tnMatch ? parseInt(tnMatch[1]) : 1;
+
+    // For journées mode TQ1: sort by moyenne_ffb instead of seasonal ranking
+    const useFFBAverage = qualMode === 'journees' && tournamentNumber === 1;
+
+    let cdbhsRankMap = {};
+
+    if (useFFBAverage && simCategory) {
+      // Journées TQ1: sort by player_ffb_classifications.moyenne_ffb DESC
+      const gameModeRow = await new Promise((resolve, reject) => {
+        db.get('SELECT id FROM game_modes WHERE UPPER(code) = $1', [gameType], (err, row) => {
+          if (err) reject(err); else resolve(row);
+        });
+      });
+
+      if (gameModeRow) {
+        const ffbClassifications = await new Promise((resolve, reject) => {
+          db.all(
+            `SELECT pfc.licence, pfc.moyenne_ffb
+             FROM player_ffb_classifications pfc
+             WHERE pfc.game_mode_id = $1 AND pfc.season = $2
+             ORDER BY pfc.moyenne_ffb DESC`,
+            [gameModeRow.id, currentSeason],
+            (err, rows) => { if (err) reject(err); else resolve(rows || []); }
+          );
+        });
+
+        // Assign rank positions based on moyenne_ffb ordering
+        ffbClassifications.forEach((r, idx) => {
+          const licNorm = r.licence?.replace(/\s/g, '');
+          if (licNorm) cdbhsRankMap[licNorm] = idx + 1;
+        });
+        console.log(`Simulation (journées TQ1): using moyenne_ffb for ${ffbClassifications.length} players, game_mode_id=${gameModeRow.id}`);
+      }
+    } else if (simCategory) {
+      // Standard mode OR journées TQ2+: sort by seasonal ranking position
+      const cdbhsRankings = await new Promise((resolve, reject) => {
         db.all(
           `SELECT r.licence, r.rank_position, p.first_name, p.last_name, p.club
            FROM rankings r
@@ -2989,17 +3028,14 @@ router.get('/tournoi/:id/simulation', authenticateToken, async (req, res) => {
           }
         );
       });
+      cdbhsRankings.forEach(r => {
+        const licNorm = r.licence?.replace(/\s/g, '');
+        if (licNorm) cdbhsRankMap[licNorm] = r.rank_position;
+      });
       console.log(`Simulation: category_id=${simCategory.id}, found ${cdbhsRankings.length} rankings`);
     } else {
       console.log(`Simulation: No category found for ${gameType} ${categoryLevel}`);
     }
-
-    // Create a map of licence -> CDBHS rank position
-    const cdbhsRankMap = {};
-    cdbhsRankings.forEach(r => {
-      const licNorm = r.licence?.replace(/\s/g, '');
-      if (licNorm) cdbhsRankMap[licNorm] = r.rank_position;
-    });
 
     // Separate ranked and new players
     const rankedPlayers = [];
@@ -3021,7 +3057,7 @@ router.get('/tournoi/:id/simulation', authenticateToken, async (req, res) => {
         rankedPlayers.push({
           ...playerData,
           rank: cdbhsPosition,
-          rank_display: `#${cdbhsPosition}`,
+          rank_display: useFFBAverage ? `Moy: ${cdbhsPosition}` : `#${cdbhsPosition}`,
           isNew: false
         });
       } else {
@@ -3034,7 +3070,7 @@ router.get('/tournoi/:id/simulation', authenticateToken, async (req, res) => {
       }
     });
 
-    // Sort ranked players by CDBHS position (ascending - #1 first)
+    // Sort ranked players by position (ascending - #1 first)
     rankedPlayers.sort((a, b) => a.rank - b.rank);
 
     // Sort new players by inscription timestamp (earliest first)

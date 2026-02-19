@@ -905,6 +905,56 @@
       </div>
     </div>
 
+    <!-- Qualification Mode Section - Admin Only -->
+    <div class="card admin-only" id="qualificationModeSection">
+      <h3>Mode de qualification</h3>
+      <p style="margin-bottom: 20px; color: #666;">Choisissez le mode de qualification pour les finales de votre comité.</p>
+
+      <div style="display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 20px;">
+        <div style="flex: 1; min-width: 250px;">
+          <label style="display: block; margin-bottom: 8px; font-weight: 500;">Mode :</label>
+          <select id="qualificationMode" onchange="toggleJourneesSettings()" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+            <option value="standard">3 Tournois Qualificatifs (standard)</option>
+            <option value="journees">Journées Qualificatives</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Journées-specific settings (hidden when standard) -->
+      <div id="journeesSettings" style="display: none;">
+        <div style="display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 20px;">
+          <div style="flex: 1; min-width: 180px;">
+            <label style="display: block; margin-bottom: 8px; font-weight: 500;">Nombre de journées :</label>
+            <input type="number" id="journeesCount" value="3" min="1" max="10" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+          </div>
+          <div style="flex: 1; min-width: 180px;">
+            <label style="display: block; margin-bottom: 8px; font-weight: 500;">Meilleurs résultats retenus :</label>
+            <input type="number" id="bestOfCount" value="2" min="1" max="10" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+          </div>
+          <div style="flex: 1; min-width: 180px;">
+            <label style="display: block; margin-bottom: 8px; font-weight: 500;">Taille du tableau (bracket) :</label>
+            <input type="number" id="bracketSize" value="4" min="2" max="8" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+          </div>
+        </div>
+
+        <div style="margin-bottom: 20px; padding: 15px; background: #e7f3ff; border-left: 4px solid var(--color-primary, #1F4788); border-radius: 4px;">
+          <strong>Points par position</strong>
+          <p style="margin: 5px 0 10px 0; color: #666; font-size: 13px;">Configurez les points attribués en fonction du classement final de chaque journée.</p>
+          <div id="positionPointsEditor" style="display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end;">
+            <!-- Dynamically populated -->
+          </div>
+          <div style="margin-top: 10px;">
+            <button onclick="addPositionRow()" class="btn" style="background: #6c757d; padding: 8px 15px; font-size: 13px;">+ Ajouter une position</button>
+          </div>
+        </div>
+      </div>
+
+      <button onclick="saveQualificationSettings()" class="btn" style="background: #28a745; padding: 12px 25px;">
+        Enregistrer
+      </button>
+      <div id="qualificationMessage" style="display: none; margin-top: 15px; padding: 10px; border-radius: 4px;"></div>
+    </div>
+
     <!-- Activity Logs Section - Admin Only -->
     <div class="card admin-only">
       <h3>📋 Logs d'activité</h3>
@@ -3444,6 +3494,122 @@
     }
 
     // ============= END ACTIVITY LOGS QUICK STATS =============
+
+    // ============= QUALIFICATION MODE SETTINGS =============
+
+    function toggleJourneesSettings() {
+      const mode = document.getElementById('qualificationMode').value;
+      document.getElementById('journeesSettings').style.display = mode === 'journees' ? 'block' : 'none';
+    }
+
+    function addPositionRow(position, points) {
+      const editor = document.getElementById('positionPointsEditor');
+      const row = document.createElement('div');
+      row.style.cssText = 'display: flex; gap: 8px; align-items: center;';
+      const pos = position || (editor.querySelectorAll('.pp-row').length + 1);
+      const pts = points !== undefined ? points : '';
+      row.className = 'pp-row';
+      row.innerHTML = `
+        <span style="font-weight: 500; min-width: 30px;">${pos}${pos === 1 ? 'er' : 'e'}</span>
+        <input type="number" class="pp-points" data-position="${pos}" value="${pts}" min="0" placeholder="pts"
+          style="width: 70px; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
+        <button onclick="this.parentElement.remove()" style="background: none; border: none; color: #dc3545; cursor: pointer; font-size: 16px; padding: 4px;">✕</button>
+      `;
+      editor.appendChild(row);
+    }
+
+    async function loadQualificationSettings() {
+      try {
+        const response = await fetch(`${API_URL}/settings/app-all`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          const settings = await response.json();
+          document.getElementById('qualificationMode').value = settings.qualification_mode || 'standard';
+          document.getElementById('journeesCount').value = settings.journees_count || '3';
+          document.getElementById('bestOfCount').value = settings.best_of_count || '2';
+          document.getElementById('bracketSize').value = settings.bracket_size || '4';
+          toggleJourneesSettings();
+        }
+
+        // Load position points
+        const ppResponse = await fetch(`${API_URL}/settings/position-points`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (ppResponse.ok) {
+          const entries = await ppResponse.json();
+          const editor = document.getElementById('positionPointsEditor');
+          editor.innerHTML = '';
+          if (entries.length > 0) {
+            entries.forEach(e => addPositionRow(e.position, e.points));
+          } else {
+            // Default 15 positions if empty
+            [10, 8, 6, 5, 4, 3, 3, 2, 2, 1, 1, 1, 1, 1, 1].forEach((pts, i) => addPositionRow(i + 1, pts));
+          }
+        }
+      } catch (error) {
+        console.error('Error loading qualification settings:', error);
+      }
+    }
+
+    async function saveQualificationSettings() {
+      const msgDiv = document.getElementById('qualificationMessage');
+      try {
+        // Save scalar settings
+        const response = await fetch(`${API_URL}/settings/app-bulk`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            qualification_mode: document.getElementById('qualificationMode').value,
+            journees_count: document.getElementById('journeesCount').value,
+            best_of_count: document.getElementById('bestOfCount').value,
+            bracket_size: document.getElementById('bracketSize').value
+          })
+        });
+
+        if (!response.ok) throw new Error('Erreur lors de la sauvegarde des paramètres');
+
+        // Save position points
+        const ppRows = document.querySelectorAll('.pp-row');
+        const entries = [];
+        ppRows.forEach((row, i) => {
+          const input = row.querySelector('.pp-points');
+          const pts = parseInt(input.value);
+          if (!isNaN(pts)) {
+            entries.push({ position: i + 1, points: pts });
+          }
+        });
+
+        const ppResponse = await fetch(`${API_URL}/settings/position-points`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ entries })
+        });
+
+        if (!ppResponse.ok) throw new Error('Erreur lors de la sauvegarde des points par position');
+
+        msgDiv.textContent = 'Paramètres de qualification enregistrés';
+        msgDiv.style.background = '#d4edda';
+        msgDiv.style.color = '#155724';
+      } catch (error) {
+        console.error('Error saving qualification settings:', error);
+        msgDiv.textContent = error.message;
+        msgDiv.style.background = '#f8d7da';
+        msgDiv.style.color = '#721c24';
+      }
+      msgDiv.style.display = 'block';
+      setTimeout(() => { msgDiv.style.display = 'none'; }, 3000);
+    }
+
+    loadQualificationSettings();
+
+    // ============= END QUALIFICATION MODE SETTINGS =============
 
     // ============= HASH-BASED CARD NAVIGATION =============
 
