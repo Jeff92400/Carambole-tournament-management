@@ -27,9 +27,9 @@
     <div id="successMessage" class="success" style="display: none;"></div>
 
     <div class="card">
-      <h3>Importer les résultats d'un tournoi</h3>
-      <p style="color: #666; margin-bottom: 20px;">
-        Sélectionnez la catégorie, le numéro du tournoi (1, 2 ou 3) et la saison, puis importez le fichier CSV des résultats.
+      <h3 id="importCardTitle">Enregistrer les resultats d'une competition</h3>
+      <p id="importCardDescription" style="color: #666; margin-bottom: 20px;">
+        Selectionnez la categorie, le numero du tournoi et la saison, puis importez le fichier CSV des resultats.
       </p>
 
       <form id="importForm">
@@ -73,6 +73,7 @@
           <input type="text" id="season" placeholder="Ex: 2024-2025" readonly style="background: #f0f0f0;">
         </div>
 
+        <!-- Single file upload zone (standard mode) -->
         <div class="file-upload" id="fileUpload">
           <p>📁 Cliquez pour sélectionner un fichier CSV</p>
           <p style="font-size: 12px; color: #999; margin-top: 10px;">ou glissez-déposez le fichier ici</p>
@@ -80,13 +81,55 @@
           <div id="fileName" class="file-name" style="display: none;"></div>
         </div>
 
-        <button type="submit" class="btn" id="importBtn">Importer le tournoi</button>
+        <!-- Multi-file upload zone (journees mode, hidden by default) -->
+        <div id="journeesUpload" style="display: none;">
+          <div class="file-upload" id="multiFileUpload" style="min-height: 120px; cursor: pointer;">
+            <p>📁 Cliquez ou glissez-deposez les fichiers CSV de chaque phase</p>
+            <p style="font-size: 12px; color: #999; margin-top: 10px;">POULES, Demi-finales, Petite finale, Finale, Classements...</p>
+            <input type="file" id="multiFileInput" accept=".csv" multiple style="display: none;">
+          </div>
+
+          <div id="phaseChecklist" style="margin-top: 15px; display: none;">
+            <h4 style="margin-bottom: 10px; color: #1F4788;">Phases detectees :</h4>
+            <div id="phaseList"></div>
+          </div>
+        </div>
+
+        <button type="submit" class="btn" id="importBtn">Enregistrer la competition</button>
       </form>
     </div>
 
     <div class="card" id="resultsCard" style="display: none;">
       <h3>Résultats de l'import</h3>
       <div id="importResults"></div>
+    </div>
+
+    <!-- Mixed-category bonus card (journees mode only) -->
+    <div class="card" id="categoryBonusCard" style="display: none;">
+      <h3>Bonus categories mixtes</h3>
+      <div style="margin-bottom: 15px; padding: 12px; background: #e7f3ff; border-left: 4px solid var(--color-primary, #1F4788); border-radius: 4px;">
+        <strong>Information :</strong> Ajoutez +1 point par match joue contre un adversaire d'une categorie superieure.
+      </div>
+      <div style="overflow-x: auto;">
+        <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+          <thead>
+            <tr style="background: var(--color-primary, #1F4788); color: white;">
+              <th style="padding: 10px; text-align: left;">Joueur</th>
+              <th style="padding: 10px; text-align: center;">Licence</th>
+              <th style="padding: 10px; text-align: center;">Classement FFB</th>
+              <th style="padding: 10px; text-align: center;">Position</th>
+              <th style="padding: 10px; text-align: center;">Bonus (+1/match)</th>
+            </tr>
+          </thead>
+          <tbody id="categoryBonusBody">
+          </tbody>
+        </table>
+      </div>
+      <div style="display: flex; gap: 10px; margin-top: 20px;">
+        <button id="saveBonusBtn" class="btn" style="flex: 1; background: #28a745;">Enregistrer les bonus</button>
+        <button id="skipBonusBtn" class="btn" style="flex: 1; background: #6c757d;">Passer</button>
+      </div>
+      <div id="bonusMessage" style="display: none; margin-top: 15px; padding: 10px; border-radius: 4px;"></div>
     </div>
 
     <!-- Modal for unknown players -->
@@ -386,7 +429,7 @@
     document.getElementById('cancelBtn').addEventListener('click', () => {
       hideModal();
       document.getElementById('importBtn').disabled = false;
-      document.getElementById('importBtn').textContent = 'Importer le tournoi';
+      document.getElementById('importBtn').textContent = 'Enregistrer la competition';
     });
 
     // Show existing tournament warning modal
@@ -423,7 +466,7 @@
     document.getElementById('cancelOverwriteBtn').addEventListener('click', () => {
       hideExistingTournamentModal();
       document.getElementById('importBtn').disabled = false;
-      document.getElementById('importBtn').textContent = 'Importer le tournoi';
+      document.getElementById('importBtn').textContent = 'Enregistrer la competition';
     });
 
     // Check if tournament exists
@@ -515,7 +558,7 @@
         errorDiv.style.display = 'block';
       } finally {
         importBtn.disabled = false;
-        importBtn.textContent = 'Importer le tournoi';
+        importBtn.textContent = 'Enregistrer la competition';
       }
     }
 
@@ -556,11 +599,11 @@
         errorDiv.textContent = error.message || 'Erreur de connexion au serveur';
         errorDiv.style.display = 'block';
         importBtn.disabled = false;
-        importBtn.textContent = 'Importer le tournoi';
+        importBtn.textContent = 'Enregistrer la competition';
       }
     }
 
-    // Form submission - check for existing tournament first, then validate, then import
+    // Form submission - branch based on qualification mode
     document.getElementById('importForm').addEventListener('submit', async (e) => {
       e.preventDefault();
 
@@ -576,8 +619,27 @@
       const tournamentDate = document.getElementById('tournamentDate').value;
       const season = document.getElementById('season').value;
 
-      if (!categoryId || !tournamentNumber || !tournamentDate || !season || !fileInput.files[0]) {
+      if (!categoryId || !tournamentNumber || !tournamentDate || !season) {
         errorDiv.textContent = 'Veuillez remplir tous les champs';
+        errorDiv.style.display = 'block';
+        return;
+      }
+
+      // Branch based on qualification mode
+      if (window.qualificationMode === 'journees') {
+        await handleJourneesSubmit(categoryId, tournamentNumber, tournamentDate, season);
+      } else {
+        await handleStandardSubmit(categoryId, tournamentNumber, tournamentDate, season);
+      }
+    });
+
+    // Handle standard mode submit (single file)
+    async function handleStandardSubmit(categoryId, tournamentNumber, tournamentDate, season) {
+      const errorDiv = document.getElementById('errorMessage');
+      const importBtn = document.getElementById('importBtn');
+
+      if (!fileInput.files[0]) {
+        errorDiv.textContent = 'Veuillez sélectionner un fichier CSV';
         errorDiv.style.display = 'block';
         return;
       }
@@ -595,28 +657,475 @@
       importBtn.textContent = 'Vérification...';
 
       try {
-        // First check if tournament already exists
         const existsResult = await checkTournamentExists(categoryId, tournamentNumber, season);
 
         if (existsResult.exists) {
-          // Show warning modal
           showExistingTournamentModal(existsResult.tournament);
         } else {
-          // No existing tournament, proceed with validation
           await proceedWithValidation();
         }
-
       } catch (error) {
         errorDiv.textContent = error.message || 'Erreur de connexion au serveur';
         errorDiv.style.display = 'block';
         importBtn.disabled = false;
-        importBtn.textContent = 'Importer le tournoi';
+        importBtn.textContent = 'Enregistrer la competition';
       }
-    });
+    }
+
+    // ========== JOURNEES MODE FUNCTIONS ==========
+
+    // Qualification mode state
+    window.qualificationMode = 'standard';
+    let selectedFiles = [];
+    let lastImportedTournamentId = null;
+
+    // Load qualification mode from org settings
+    async function loadQualificationMode() {
+      try {
+        const response = await fetch(`${API_URL}/settings/app-all`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          const settings = await response.json();
+          if (settings.qualification_mode === 'journees') {
+            window.qualificationMode = 'journees';
+            switchToJourneesMode();
+          }
+        }
+      } catch (error) {
+        console.error('Error loading qualification mode:', error);
+      }
+    }
+
+    // Switch UI to journees mode
+    function switchToJourneesMode() {
+      document.getElementById('fileUpload').style.display = 'none';
+      document.getElementById('fileInput').removeAttribute('required');
+      document.getElementById('journeesUpload').style.display = 'block';
+
+      document.getElementById('importCardTitle').textContent = "Enregistrer les résultats d'une journée qualificative";
+      document.getElementById('importCardDescription').textContent =
+        "Sélectionnez la catégorie, le numéro du tournoi et la saison, puis importez les fichiers CSV de chaque phase (POULES, Classements, Finale...).";
+
+      setupMultiFileHandlers();
+    }
+
+    // Setup multi-file drag & drop handlers
+    function setupMultiFileHandlers() {
+      const multiUpload = document.getElementById('multiFileUpload');
+      const multiInput = document.getElementById('multiFileInput');
+
+      multiUpload.addEventListener('click', () => multiInput.click());
+
+      multiUpload.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        multiUpload.style.background = '#f0f0f0';
+      });
+
+      multiUpload.addEventListener('dragleave', () => {
+        multiUpload.style.background = '';
+      });
+
+      multiUpload.addEventListener('drop', (e) => {
+        e.preventDefault();
+        multiUpload.style.background = '';
+        if (e.dataTransfer.files.length > 0) {
+          handleMultiFiles(e.dataTransfer.files);
+        }
+      });
+
+      multiInput.addEventListener('change', () => {
+        if (multiInput.files.length > 0) {
+          handleMultiFiles(multiInput.files);
+        }
+      });
+    }
+
+    // Handle multiple file selection
+    function handleMultiFiles(fileList) {
+      for (const file of fileList) {
+        if (!selectedFiles.find(f => f.name === file.name)) {
+          selectedFiles.push(file);
+        }
+      }
+      updatePhaseChecklist();
+    }
+
+    // Detect phase from filename (mirrors backend)
+    function detectPhaseFromFilename(filename) {
+      const lower = filename.toLowerCase();
+
+      const match = lower.match(/classement[_ ]phase[_ ](.+?)\.csv$/i);
+      if (match) {
+        return match[1].trim();
+      }
+
+      if (lower.includes('poule')) return 'POULES';
+      if (lower.includes('petite') && lower.includes('finale')) return 'Petite finale';
+      if (lower.includes('demi')) return 'Demi-finales';
+      if (lower.includes('finale')) return 'Finale';
+      if (lower.includes('classement')) return 'CLASSEMENTS';
+
+      return filename.replace('.csv', '');
+    }
+
+    // Update the phase checklist display
+    function updatePhaseChecklist() {
+      const checklist = document.getElementById('phaseChecklist');
+      const list = document.getElementById('phaseList');
+
+      if (selectedFiles.length === 0) {
+        checklist.style.display = 'none';
+        return;
+      }
+
+      checklist.style.display = 'block';
+      list.innerHTML = selectedFiles.map((file, index) => {
+        const phase = detectPhaseFromFilename(file.name);
+        const isPoules = phase.toLowerCase().includes('poule');
+        return `
+          <div style="display: flex; align-items: center; gap: 10px; padding: 8px 12px; margin-bottom: 6px; background: ${isPoules ? '#d4edda' : '#f8f9fa'}; border-radius: 6px; border-left: 3px solid ${isPoules ? '#28a745' : 'var(--color-primary, #1F4788)'};">
+            <span style="color: #28a745; font-weight: bold;">✓</span>
+            <span style="flex: 1; font-weight: ${isPoules ? 'bold' : 'normal'};">${phase}</span>
+            <span style="color: #999; font-size: 12px;">${file.name}</span>
+            <button type="button" onclick="removeFile(${index})" style="background: none; border: none; color: #dc3545; cursor: pointer; font-size: 16px; padding: 0 4px;" title="Retirer ce fichier">✕</button>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // Remove a file from the selection
+    function removeFile(index) {
+      selectedFiles.splice(index, 1);
+      updatePhaseChecklist();
+    }
+
+    // Handle journees mode form submission
+    async function handleJourneesSubmit(categoryId, tournamentNumber, tournamentDate, season) {
+      const errorDiv = document.getElementById('errorMessage');
+      const importBtn = document.getElementById('importBtn');
+
+      if (selectedFiles.length === 0) {
+        errorDiv.textContent = 'Veuillez ajouter au moins un fichier CSV';
+        errorDiv.style.display = 'block';
+        return;
+      }
+
+      const hasPoules = selectedFiles.some(f => detectPhaseFromFilename(f.name).toLowerCase().includes('poule'));
+      if (!hasPoules) {
+        errorDiv.textContent = 'Le fichier POULES est obligatoire. Veuillez ajouter le fichier CSV de la phase POULES.';
+        errorDiv.style.display = 'block';
+        return;
+      }
+
+      importBtn.disabled = true;
+      importBtn.textContent = 'Vérification...';
+
+      try {
+        const existsResult = await checkTournamentExists(categoryId, tournamentNumber, season);
+
+        if (existsResult.exists) {
+          showExistingTournamentModal(existsResult.tournament);
+          // Override confirm button for journees mode
+          document.getElementById('confirmOverwriteBtn').onclick = async () => {
+            hideExistingTournamentModal();
+            await proceedWithJourneesValidation(categoryId, tournamentNumber, tournamentDate, season);
+          };
+        } else {
+          await proceedWithJourneesValidation(categoryId, tournamentNumber, tournamentDate, season);
+        }
+      } catch (error) {
+        errorDiv.textContent = error.message || 'Erreur de connexion au serveur';
+        errorDiv.style.display = 'block';
+        importBtn.disabled = false;
+        importBtn.textContent = 'Enregistrer la competition';
+      }
+    }
+
+    // Validate journees files (check unknown players across all files)
+    async function proceedWithJourneesValidation(categoryId, tournamentNumber, tournamentDate, season) {
+      const errorDiv = document.getElementById('errorMessage');
+      const importBtn = document.getElementById('importBtn');
+
+      importBtn.textContent = 'Validation en cours...';
+
+      try {
+        const valFormData = new FormData();
+        selectedFiles.forEach(file => valFormData.append('files', file));
+        valFormData.append('categoryId', categoryId);
+
+        const validateResponse = await fetch(`${API_URL}/tournaments/validate-journee`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` },
+          body: valFormData
+        });
+
+        const validateData = await validateResponse.json();
+
+        if (!validateResponse.ok) {
+          throw new Error(validateData.error || 'Erreur lors de la validation');
+        }
+
+        if (validateData.status === 'validation_required' && validateData.unknownPlayers && validateData.unknownPlayers.length > 0) {
+          importBtn.textContent = 'En attente de création des joueurs...';
+          showUnknownPlayersModal(validateData.unknownPlayers);
+
+          // Override create players button for journees mode
+          document.getElementById('createPlayersBtn').onclick = async () => {
+            const playersToCreate = unknownPlayers.map((player, index) => {
+              const clubSelect = document.getElementById(`club_${index}`);
+              if (!clubSelect.value) {
+                throw new Error(`Veuillez sélectionner un club pour ${player.fullName}`);
+              }
+              return {
+                licence: player.licence,
+                firstName: player.firstName,
+                lastName: player.lastName,
+                club: clubSelect.value
+              };
+            });
+
+            try {
+              const createResponse = await fetch(`${API_URL}/tournaments/create-players`, {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${token}`,
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ players: playersToCreate })
+              });
+
+              if (!createResponse.ok) {
+                throw new Error('Erreur lors de la création des joueurs');
+              }
+
+              hideModal();
+              await performJourneesImport(categoryId, tournamentNumber, tournamentDate, season);
+            } catch (error) {
+              alert(error.message || 'Erreur lors de la création des joueurs');
+            }
+          };
+        } else {
+          await performJourneesImport(categoryId, tournamentNumber, tournamentDate, season);
+        }
+      } catch (error) {
+        errorDiv.textContent = error.message || 'Erreur de connexion au serveur';
+        errorDiv.style.display = 'block';
+        importBtn.disabled = false;
+        importBtn.textContent = 'Enregistrer la competition';
+      }
+    }
+
+    // Perform the actual journees import
+    async function performJourneesImport(categoryId, tournamentNumber, tournamentDate, season) {
+      const errorDiv = document.getElementById('errorMessage');
+      const successDiv = document.getElementById('successMessage');
+      const importBtn = document.getElementById('importBtn');
+
+      importBtn.textContent = 'Import en cours...';
+
+      try {
+        const formData = new FormData();
+        selectedFiles.forEach(file => formData.append('files', file));
+        formData.append('categoryId', categoryId);
+        formData.append('tournamentNumber', tournamentNumber);
+        formData.append('tournamentDate', tournamentDate);
+        formData.append('season', season);
+
+        const response = await fetch(`${API_URL}/tournaments/import-journee`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` },
+          body: formData
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          successDiv.textContent = `Import réussi ! ${data.imported} résultats importés. Les classements ont été recalculés.`;
+          successDiv.style.display = 'block';
+
+          lastImportedTournamentId = data.tournamentId;
+
+          const resultsCard = document.getElementById('resultsCard');
+          const resultsDiv = document.getElementById('importResults');
+
+          let positionsHtml = '';
+          if (data.positions && data.positions.length > 0) {
+            positionsHtml = `
+              <h4 style="margin-top: 20px; margin-bottom: 10px;">Classement final :</h4>
+              <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+                <thead>
+                  <tr style="background: var(--color-primary, #1F4788); color: white;">
+                    <th style="padding: 8px; text-align: center;">Pos.</th>
+                    <th style="padding: 8px; text-align: left;">Joueur</th>
+                    <th style="padding: 8px; text-align: center;">Pts Position</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${data.positions.map(p => `
+                    <tr style="border-bottom: 1px solid #eee;">
+                      <td style="padding: 8px; text-align: center; font-weight: bold;">${p.position}</td>
+                      <td style="padding: 8px;">${p.playerName || p.licence}</td>
+                      <td style="padding: 8px; text-align: center;">${p.positionPoints || 0}</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            `;
+          }
+
+          let phasesHtml = '';
+          if (data.phases && data.phases.length > 0) {
+            phasesHtml = `
+              <div style="margin-top: 15px;">
+                <strong>Phases importées :</strong> ${data.phases.join(', ')}
+              </div>
+            `;
+          }
+
+          resultsDiv.innerHTML = `
+            <div class="stats-grid">
+              <div class="stat-card">
+                <h4>Résultats importés</h4>
+                <div class="stat-value">${data.imported}</div>
+              </div>
+              <div class="stat-card">
+                <h4>Phases traitées</h4>
+                <div class="stat-value">${data.phasesCount || (data.phases ? data.phases.length : 0)}</div>
+              </div>
+            </div>
+            ${phasesHtml}
+            ${positionsHtml}
+            <p style="margin-top: 20px;">
+              <a href="rankings.html?categoryId=${categoryId}" class="btn btn-small">Voir les classements mis à jour</a>
+            </p>
+          `;
+
+          if (data.errors && data.errors.length > 0) {
+            resultsDiv.innerHTML += `
+              <div class="error" style="margin-top: 20px;">
+                <strong>Erreurs rencontrées :</strong>
+                <ul style="margin-top: 10px;">
+                  ${data.errors.slice(0, 10).map(err => `<li>${err.licence || err.record}: ${err.error}</li>`).join('')}
+                </ul>
+              </div>
+            `;
+          }
+
+          resultsCard.style.display = 'block';
+
+          // Reset files
+          selectedFiles = [];
+          updatePhaseChecklist();
+          document.getElementById('importForm').reset();
+
+          // Check if mixed-category bonus is enabled
+          if (data.mixedCategoryBonus && data.tournamentId) {
+            setTimeout(() => showCategoryBonusStep(data.tournamentId, categoryId), 500);
+          } else if (data.tournamentId && data.imported > 0) {
+            setTimeout(() => showSendResultsPopup(data.tournamentId, categoryId), 500);
+          }
+        } else {
+          errorDiv.textContent = data.error || "Erreur lors de l'import";
+          errorDiv.style.display = 'block';
+        }
+      } catch (error) {
+        errorDiv.textContent = 'Erreur de connexion au serveur';
+        errorDiv.style.display = 'block';
+      } finally {
+        importBtn.disabled = false;
+        importBtn.textContent = 'Enregistrer la competition';
+      }
+    }
+
+    // Show mixed-category bonus entry step
+    async function showCategoryBonusStep(tournamentId, categoryId) {
+      const bonusCard = document.getElementById('categoryBonusCard');
+      const bonusBody = document.getElementById('categoryBonusBody');
+      const bonusMsg = document.getElementById('bonusMessage');
+
+      try {
+        const response = await fetch(`${API_URL}/tournaments/${tournamentId}/category-bonus`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (!response.ok) throw new Error('Erreur chargement bonus');
+
+        const data = await response.json();
+        const players = data.players || [];
+
+        bonusBody.innerHTML = players.map(p => `
+          <tr style="border-bottom: 1px solid #eee;">
+            <td style="padding: 10px;">${p.player_name || ''}</td>
+            <td style="padding: 10px; text-align: center;">${p.licence || ''}</td>
+            <td style="padding: 10px; text-align: center;">${p.ffb_ranking || 'NC'}</td>
+            <td style="padding: 10px; text-align: center;">${p.position || '-'}</td>
+            <td style="padding: 10px; text-align: center;">
+              <input type="number" min="0" max="${p.match_points || 10}" value="0"
+                data-licence="${p.licence}"
+                style="width: 60px; padding: 4px; text-align: center; border: 1px solid #ddd; border-radius: 4px;">
+            </td>
+          </tr>
+        `).join('');
+
+        bonusCard.style.display = 'block';
+        bonusCard.scrollIntoView({ behavior: 'smooth' });
+
+        // Save bonus button
+        document.getElementById('saveBonusBtn').onclick = async () => {
+          const bonuses = [];
+          bonusBody.querySelectorAll('input[data-licence]').forEach(input => {
+            const bonus = parseInt(input.value) || 0;
+            if (bonus > 0) {
+              bonuses.push({ licence: input.dataset.licence, bonus_points: bonus });
+            }
+          });
+
+          try {
+            const saveResponse = await fetch(`${API_URL}/tournaments/${tournamentId}/category-bonus`, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ bonuses })
+            });
+
+            if (saveResponse.ok) {
+              bonusMsg.textContent = 'Bonus enregistrés et classements recalculés.';
+              bonusMsg.style.display = 'block';
+              bonusMsg.style.background = '#d4edda';
+              bonusMsg.style.color = '#155724';
+
+              setTimeout(() => {
+                showSendResultsPopup(tournamentId, categoryId);
+              }, 1000);
+            } else {
+              throw new Error('Erreur sauvegarde');
+            }
+          } catch (err) {
+            bonusMsg.textContent = 'Erreur lors de la sauvegarde des bonus.';
+            bonusMsg.style.display = 'block';
+            bonusMsg.style.background = '#f8d7da';
+            bonusMsg.style.color = '#721c24';
+          }
+        };
+
+        // Skip bonus button
+        document.getElementById('skipBonusBtn').onclick = () => {
+          bonusCard.style.display = 'none';
+          showSendResultsPopup(tournamentId, categoryId);
+        };
+      } catch (error) {
+        console.error('Error loading bonus data:', error);
+        showSendResultsPopup(tournamentId, categoryId);
+      }
+    }
 
     // Initialize
     loadCategories();
     loadClubs();
+    loadQualificationMode();
 
     // Set today's date as default value
     const today = new Date().toISOString().split('T')[0];

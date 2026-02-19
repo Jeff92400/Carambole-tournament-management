@@ -63,6 +63,252 @@ function getMappedValue(record, mapping, fieldName, defaultValue = null) {
 
 const router = express.Router();
 
+// ==================== Promisified DB helpers ====================
+
+function dbAllAsync(query, params = []) {
+  return new Promise((resolve, reject) => {
+    db.all(query, params, (err, rows) => err ? reject(err) : resolve(rows || []));
+  });
+}
+
+function dbGetAsync(query, params = []) {
+  return new Promise((resolve, reject) => {
+    db.get(query, params, (err, row) => err ? reject(err) : resolve(row));
+  });
+}
+
+function dbRunAsync(query, params = []) {
+  return new Promise((resolve, reject) => {
+    db.run(query, params, function(err) { err ? reject(err) : resolve(this); });
+  });
+}
+
+// ==================== Reusable CSV parsing ====================
+
+/**
+ * Fix and parse a CSV file into raw record arrays.
+ * Handles FFB format quirks (outer quotes, double-double-quotes).
+ */
+async function readCSVRecords(filePath) {
+  let fileContent = fs.readFileSync(filePath, 'utf-8');
+
+  const lines = fileContent.split('\n');
+  const fixedLines = lines.map(line => {
+    line = line.trim();
+    if (!line) return line;
+    if (line.startsWith('"') && line.endsWith('"')) {
+      line = line.slice(1, -1);
+    }
+    line = line.replace(/""/g, '"');
+    return line;
+  });
+
+  fileContent = fixedLines.join('\n');
+  const records = [];
+
+  const parser = parse(fileContent, {
+    delimiter: ';',
+    skip_empty_lines: true,
+    quote: '"',
+    escape: '"',
+    relax_column_count: true
+  });
+
+  for await (const record of parser) {
+    records.push(record);
+  }
+
+  return records;
+}
+
+/**
+ * Parse raw CSV records into structured objects using column mapping.
+ * Skips header rows. Returns array of { classement, licence, playerName, matchPoints, moyenne, reprises, serie, points }.
+ */
+function parseRecordsWithMapping(records, columnMapping) {
+  const parsed = [];
+  for (const record of records) {
+    if (record[0]?.includes('Classt') || record[0]?.includes('Licence')) continue;
+
+    const licence = getMappedValue(record, columnMapping, 'licence', '')?.replace(/ /g, '');
+    const playerName = getMappedValue(record, columnMapping, 'joueur', '');
+    if (!licence || !playerName) continue;
+
+    parsed.push({
+      classement: getMappedValue(record, columnMapping, 'classement', 0),
+      licence,
+      playerName,
+      matchPoints: getMappedValue(record, columnMapping, 'pts_match', 0),
+      moyenne: getMappedValue(record, columnMapping, 'moyenne', 0),
+      reprises: getMappedValue(record, columnMapping, 'reprises', 0),
+      serie: getMappedValue(record, columnMapping, 'serie', 0),
+      points: getMappedValue(record, columnMapping, 'points', 0),
+    });
+  }
+  return parsed;
+}
+
+// ==================== Journées Qualificatives helpers ====================
+
+/**
+ * Detect phase name from FFB filename.
+ * Pattern: classement_phase_POULES.csv, classement_phase_Finale.csv, etc.
+ */
+function detectPhaseFromFilename(filename) {
+  const match = filename.match(/classement_phase_(.+)\.csv$/i);
+  if (match) return match[1].replace(/_/g, ' ').trim();
+
+  const lower = filename.toLowerCase();
+  if (lower.includes('poule')) return 'POULES';
+  if (lower.includes('petite')) return 'Petite finale';
+  if (lower.includes('finale') && !lower.includes('demi')) return 'Finale';
+  if (lower.includes('demi')) return 'Demi-finales';
+  if (lower.includes('classement')) return 'CLASSEMENTS';
+
+  return filename.replace(/\.csv$/i, '');
+}
+
+/**
+ * Normalize a phase key for comparison (lowercase, no accents, underscores).
+ */
+function normalizePhaseKey(phaseName) {
+  return phaseName
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[-_\s]+/g, '_')
+    .trim();
+}
+
+/**
+ * Find a phase key in phaseData by keyword, optionally excluding certain keywords.
+ */
+function findPhaseKey(phaseData, keyword, excludeKeywords = []) {
+  for (const key of Object.keys(phaseData)) {
+    const lower = normalizePhaseKey(key);
+    if (lower.includes(keyword) && !excludeKeywords.some(ex => lower.includes(ex))) {
+      return key;
+    }
+  }
+  return null;
+}
+
+/**
+ * Determine final positions (1 to N) from all phase CSVs.
+ * phaseData: { phaseName: [parsedRecords], ... }
+ * Returns: { licence: position, ... }
+ */
+function computeJourneePositions(phaseData) {
+  const positions = {}; // licence -> position
+
+  // Find the POULES phase
+  const poulesKey = findPhaseKey(phaseData, 'poule');
+  const poulesRecords = poulesKey ? phaseData[poulesKey] : [];
+  const playerCount = poulesRecords.length;
+
+  // Case 1: < 6 players — POULES classement IS the final position
+  if (playerCount < 6) {
+    for (const record of poulesRecords) {
+      positions[record.licence] = record.classement;
+    }
+    return positions;
+  }
+
+  // Case 2: 6+ players — extract positions from bracket/classification phases
+
+  // Finale: classt 1 = 1st place, classt 2 = 2nd place
+  const finaleKey = findPhaseKey(phaseData, 'finale', ['demi', 'petite']);
+  if (finaleKey) {
+    for (const record of phaseData[finaleKey]) {
+      if (record.classement === 1) positions[record.licence] = 1;
+      if (record.classement === 2) positions[record.licence] = 2;
+    }
+  }
+
+  // Petite finale: classt 1 = 3rd, classt 2 = 4th
+  const petiteFinaleKey = findPhaseKey(phaseData, 'petite');
+  if (petiteFinaleKey) {
+    for (const record of phaseData[petiteFinaleKey]) {
+      if (record.classement === 1) positions[record.licence] = 3;
+      if (record.classement === 2) positions[record.licence] = 4;
+    }
+  }
+
+  // Classification phases: parse position numbers from phase name
+  // Examples: "G9-10 - P7-8" -> positions 7,8 ; "G7-8 - P5-6" -> positions 5,6
+  for (const [phaseName, records] of Object.entries(phaseData)) {
+    const normalized = normalizePhaseKey(phaseName);
+    // Skip known phases
+    if (normalized.includes('finale') || normalized.includes('demi') ||
+        normalized.includes('petite') || normalized === 'poules' ||
+        normalized === 'classements') continue;
+
+    // Try to extract position range: look for P followed by digits (e.g., P5-6, P7-8)
+    const posMatch = phaseName.match(/P(\d+)\s*[-–]\s*(\d+)/i);
+    if (posMatch) {
+      const pos1 = parseInt(posMatch[1]);
+      const pos2 = parseInt(posMatch[2]);
+      const betterPos = Math.min(pos1, pos2);
+      const worsePos = Math.max(pos1, pos2);
+
+      for (const record of records) {
+        if (!positions[record.licence]) {
+          if (record.classement === 1) positions[record.licence] = betterPos;
+          if (record.classement === 2) positions[record.licence] = worsePos;
+        }
+      }
+      continue;
+    }
+
+    // Fallback: try any digit pair in the name (e.g., "G9-10")
+    const digitMatch = phaseName.match(/(\d+)\s*[-–]\s*(\d+)/);
+    if (digitMatch) {
+      const pos1 = parseInt(digitMatch[1]);
+      const pos2 = parseInt(digitMatch[2]);
+      const betterPos = Math.min(pos1, pos2);
+      const worsePos = Math.max(pos1, pos2);
+
+      for (const record of records) {
+        if (!positions[record.licence]) {
+          if (record.classement === 1) positions[record.licence] = betterPos;
+          if (record.classement === 2) positions[record.licence] = worsePos;
+        }
+      }
+    }
+  }
+
+  // Fallback: players not assigned from bracket/classification get sequential positions
+  const assignedLicences = new Set(Object.keys(positions));
+  const highestAssigned = Object.values(positions).length > 0
+    ? Math.max(...Object.values(positions))
+    : 0;
+
+  const unassigned = poulesRecords
+    .filter(r => !assignedLicences.has(r.licence))
+    .sort((a, b) => a.classement - b.classement);
+
+  let nextPosition = highestAssigned + 1;
+  for (const record of unassigned) {
+    positions[record.licence] = nextPosition++;
+  }
+
+  return positions;
+}
+
+/**
+ * Look up position_points for an org and return a mapping { position: points }.
+ */
+async function getPositionPointsLookup(orgId) {
+  const rows = await dbAllAsync(
+    'SELECT position, points FROM position_points WHERE ($1::int IS NULL OR organization_id = $1) ORDER BY position ASC',
+    [orgId]
+  );
+  const lookup = {};
+  for (const row of rows) {
+    lookup[row.position] = row.points;
+  }
+  return lookup;
+}
+
 // Get organization logo as buffer from database (for Excel exports)
 async function getOrganizationLogoBuffer() {
   return new Promise((resolve) => {
@@ -580,6 +826,382 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
     if (req.file && fs.existsSync(req.file.path)) {
       fs.unlinkSync(req.file.path);
     }
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== Journées Qualificatives Import ====================
+
+/**
+ * POST /validate-journee
+ * Accept multiple CSV files, parse all, check for unknown players across ALL files.
+ */
+router.post('/validate-journee', authenticateToken, upload.array('files', 10), async (req, res) => {
+  if (!req.files || req.files.length === 0) {
+    return res.status(400).json({ error: 'No files uploaded' });
+  }
+
+  try {
+    let columnMapping;
+    try {
+      const profileConfig = await getColumnMapping('tournaments');
+      columnMapping = profileConfig?.mappings || DEFAULT_TOURNAMENT_MAPPING;
+    } catch (err) {
+      columnMapping = DEFAULT_TOURNAMENT_MAPPING;
+    }
+
+    const unknownPlayers = [];
+    const checkedLicences = new Set();
+
+    for (const file of req.files) {
+      const records = await readCSVRecords(file.path);
+      const parsed = parseRecordsWithMapping(records, columnMapping);
+
+      for (const player of parsed) {
+        if (checkedLicences.has(player.licence)) continue;
+        checkedLicences.add(player.licence);
+
+        const existsQuery = `
+          SELECT licence, first_name, last_name
+          FROM players
+          WHERE REPLACE(licence, ' ', '') = ?
+             OR (UPPER(first_name || ' ' || last_name) = UPPER(?)
+                 OR UPPER(last_name || ' ' || first_name) = UPPER(?))
+        `;
+
+        const existing = await dbGetAsync(existsQuery, [player.licence, player.playerName, player.playerName]);
+
+        if (!existing) {
+          const nameParts = player.playerName.split(' ');
+          const lastName = nameParts[0] || '';
+          const firstName = nameParts.slice(1).join(' ') || '';
+
+          unknownPlayers.push({
+            licence: player.licence,
+            firstName,
+            lastName,
+            fullName: player.playerName
+          });
+        }
+      }
+    }
+
+    // Clean up all uploaded files
+    for (const file of req.files) {
+      if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
+    }
+
+    if (unknownPlayers.length > 0) {
+      return res.json({ status: 'validation_required', unknownPlayers });
+    } else {
+      return res.json({ status: 'ready', message: 'All players exist, ready to import' });
+    }
+
+  } catch (error) {
+    for (const file of req.files) {
+      if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
+    }
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /import-journee
+ * Import multiple CSV files for a Journée Qualificative.
+ * Uses POULES file for base stats, bracket/classification files for final positions.
+ */
+router.post('/import-journee', authenticateToken, upload.array('files', 10), async (req, res) => {
+  if (!req.files || req.files.length === 0) {
+    return res.status(400).json({ error: 'No files uploaded' });
+  }
+
+  const { categoryId, tournamentNumber, season, tournamentDate } = req.body;
+
+  if (!categoryId || !tournamentNumber || !season) {
+    for (const file of req.files) {
+      if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
+    }
+    return res.status(400).json({ error: 'Category, tournament number, and season required' });
+  }
+
+  try {
+    // Load column mapping
+    let columnMapping;
+    try {
+      const profileConfig = await getColumnMapping('tournaments');
+      columnMapping = profileConfig?.mappings || DEFAULT_TOURNAMENT_MAPPING;
+    } catch (err) {
+      columnMapping = DEFAULT_TOURNAMENT_MAPPING;
+    }
+
+    const orgId = req.user.organizationId || null;
+
+    // Phase 1: Parse all files and detect phases
+    const phaseData = {};
+    const detectedPhases = [];
+
+    for (const file of req.files) {
+      const phaseName = detectPhaseFromFilename(file.originalname);
+      const records = await readCSVRecords(file.path);
+      const parsed = parseRecordsWithMapping(records, columnMapping);
+      phaseData[phaseName] = parsed;
+      detectedPhases.push({ phase: phaseName, playerCount: parsed.length, filename: file.originalname });
+    }
+
+    // Find POULES file — required
+    const poulesKey = findPhaseKey(phaseData, 'poule');
+    if (!poulesKey) {
+      for (const file of req.files) {
+        if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
+      }
+      return res.status(400).json({ error: 'Le fichier POULES est obligatoire' });
+    }
+
+    const poulesRecords = phaseData[poulesKey];
+
+    // Phase 2: Create or update tournament
+    await dbRunAsync(
+      `INSERT INTO tournaments (category_id, tournament_number, season, tournament_date, organization_id)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT(category_id, tournament_number, season) DO UPDATE SET
+         tournament_date = $4,
+         import_date = CURRENT_TIMESTAMP`,
+      [categoryId, tournamentNumber, season, tournamentDate, orgId]
+    );
+
+    const tournamentRow = await dbGetAsync(
+      'SELECT id FROM tournaments WHERE category_id = $1 AND tournament_number = $2 AND season = $3',
+      [categoryId, tournamentNumber, season]
+    );
+    const tournamentId = tournamentRow.id;
+
+    // Phase 3: Delete existing results
+    await dbRunAsync('DELETE FROM tournament_results WHERE tournament_id = $1', [tournamentId]);
+
+    // Phase 4: Ensure all players exist
+    for (const record of poulesRecords) {
+      const nameParts = record.playerName.split(' ');
+      const lastName = nameParts[0] || '';
+      const firstName = nameParts.slice(1).join(' ') || '';
+
+      await dbRunAsync(
+        `INSERT INTO players (licence, first_name, last_name, club, is_active, organization_id)
+         VALUES ($1, $2, $3, $4, 1, $5)
+         ON CONFLICT (licence) DO NOTHING`,
+        [record.licence, firstName, lastName, 'Club inconnu', orgId]
+      );
+    }
+
+    // Phase 5: Compute final positions from all phase files
+    const finalPositions = computeJourneePositions(phaseData);
+
+    // Phase 6: Look up position_points
+    const posPointsLookup = await getPositionPointsLookup(orgId);
+
+    // Phase 7: Insert tournament_results from POULES file with final positions
+    let imported = 0;
+    const errors = [];
+
+    for (const record of poulesRecords) {
+      const position = finalPositions[record.licence] || 0;
+      const positionPoints = posPointsLookup[position] || 0;
+
+      try {
+        await dbRunAsync(
+          `INSERT INTO tournament_results (tournament_id, licence, player_name, position, match_points, moyenne, serie, points, reprises, position_points)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+          [tournamentId, record.licence, record.playerName, position, record.matchPoints, record.moyenne, record.serie, record.points, record.reprises, positionPoints]
+        );
+        imported++;
+      } catch (err) {
+        errors.push({ licence: record.licence, error: err.message });
+      }
+    }
+
+    // Phase 8: Compute bonus points + recalculate rankings
+    await new Promise((resolve) => {
+      computeBonusPoints(tournamentId, categoryId, orgId, () => {
+        recalculateRankings(categoryId, season, () => {
+          resolve();
+        });
+      });
+    });
+
+    // Clean up uploaded files
+    for (const file of req.files) {
+      if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
+    }
+
+    // Log action
+    logAdminAction({
+      req,
+      action: ACTION_TYPES.IMPORT_TOURNAMENT,
+      details: `Import journée qualificative ${tournamentNumber}, saison ${season}, ${imported} joueurs, ${detectedPhases.length} phases`,
+      targetType: 'tournament',
+      targetId: tournamentId,
+      targetName: `TQ${tournamentNumber} - ${season}`
+    });
+
+    // Build positions array for frontend display
+    const positionsArray = [];
+    for (const record of poulesRecords) {
+      const pos = finalPositions[record.licence] || 0;
+      positionsArray.push({
+        licence: record.licence,
+        playerName: record.playerName,
+        position: pos,
+        positionPoints: posPointsLookup[pos] || 0
+      });
+    }
+    positionsArray.sort((a, b) => (a.position || 999) - (b.position || 999));
+
+    // Check if mixed-category bonus is enabled for this org
+    const mixedCategoryBonus = (await appSettings.getOrgSetting(orgId, 'mixed_category_bonus')) === 'true';
+
+    res.json({
+      message: 'Journée qualificative importée avec succès',
+      tournamentId,
+      imported,
+      phases: detectedPhases.map(p => p.phase || p),
+      phasesCount: detectedPhases.length,
+      positions: positionsArray,
+      mixedCategoryBonus,
+      errors: errors.length > 0 ? errors : undefined
+    });
+
+  } catch (error) {
+    for (const file of req.files) {
+      if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
+    }
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== Mixed-category bonus ====================
+
+/**
+ * GET /tournaments/:tournamentId/category-bonus
+ * Returns players for this tournament with match count and FFB ranking for bonus entry.
+ */
+router.get('/:tournamentId/category-bonus', authenticateToken, async (req, res) => {
+  try {
+    const tournamentId = parseInt(req.params.tournamentId);
+    const orgId = req.user.organizationId || null;
+
+    // Verify tournament belongs to org
+    const tournament = await dbGetAsync(
+      'SELECT id FROM tournaments WHERE id = $1 AND ($2::int IS NULL OR organization_id = $2)',
+      [tournamentId, orgId]
+    );
+    if (!tournament) {
+      return res.status(404).json({ error: 'Tournament not found' });
+    }
+
+    const players = await dbAllAsync(`
+      SELECT tr.licence, tr.player_name, tr.position, tr.match_points,
+             tr.bonus_points, tr.bonus_detail,
+             p.rank_libre, p.rank_cadre, p.rank_bande, p.rank_3bandes,
+             c.game_type, c.level
+      FROM tournament_results tr
+      LEFT JOIN players p ON REPLACE(p.licence, ' ', '') = REPLACE(tr.licence, ' ', '')
+      LEFT JOIN tournaments t ON t.id = tr.tournament_id
+      LEFT JOIN categories c ON c.id = t.category_id
+      WHERE tr.tournament_id = $1
+      ORDER BY tr.position ASC
+    `, [tournamentId]);
+
+    // Determine each player's FFB ranking for the tournament's game mode
+    const result = players.map(p => {
+      let playerRank = '';
+      const gameType = (p.game_type || '').toUpperCase();
+      if (gameType.includes('LIBRE')) playerRank = p.rank_libre || '';
+      else if (gameType.includes('CADRE')) playerRank = p.rank_cadre || '';
+      else if (gameType.includes('BANDE') && !gameType.includes('3')) playerRank = p.rank_bande || '';
+      else if (gameType.includes('3')) playerRank = p.rank_3bandes || '';
+
+      // Parse nb matchs from match_points or use a default
+      // In POULES CSV, "Nbre matchs" is col 3 — not currently imported
+      // Use position as proxy: all players play the same number of matches in round-robin
+      return {
+        licence: p.licence,
+        playerName: p.player_name,
+        position: p.position,
+        matchPoints: p.match_points,
+        ffbRanking: playerRank,
+        categoryLevel: p.level || '',
+        bonusPoints: p.bonus_points || 0,
+        bonusDetail: p.bonus_detail ? JSON.parse(p.bonus_detail) : {},
+      };
+    });
+
+    res.json(result);
+
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /tournaments/:tournamentId/category-bonus
+ * Save mixed-category bonus points for players.
+ * Body: { bonuses: [{ licence, bonus_points }] }
+ */
+router.post('/:tournamentId/category-bonus', authenticateToken, async (req, res) => {
+  try {
+    const tournamentId = parseInt(req.params.tournamentId);
+    const orgId = req.user.organizationId || null;
+    const { bonuses } = req.body;
+
+    if (!bonuses || !Array.isArray(bonuses)) {
+      return res.status(400).json({ error: 'bonuses array required' });
+    }
+
+    // Verify tournament belongs to org
+    const tournament = await dbGetAsync(
+      'SELECT id, category_id, season FROM tournaments WHERE id = $1 AND ($2::int IS NULL OR organization_id = $2)',
+      [tournamentId, orgId]
+    );
+    if (!tournament) {
+      return res.status(404).json({ error: 'Tournament not found' });
+    }
+
+    // Update each player's bonus
+    for (const { licence, bonus_points } of bonuses) {
+      if (!licence || bonus_points === undefined) continue;
+
+      // Get existing bonus_detail
+      const existing = await dbGetAsync(
+        'SELECT bonus_points, bonus_detail FROM tournament_results WHERE tournament_id = $1 AND REPLACE(licence, \' \', \'\') = $2',
+        [tournamentId, licence.replace(/ /g, '')]
+      );
+
+      if (!existing) continue;
+
+      // Merge MIXED_CATEGORY into existing bonus_detail
+      let detail = {};
+      try { detail = existing.bonus_detail ? JSON.parse(existing.bonus_detail) : {}; } catch (e) { /* */ }
+      detail.MIXED_CATEGORY = parseInt(bonus_points) || 0;
+
+      // Recalculate total bonus = sum of all detail values
+      const totalBonus = Object.values(detail).reduce((sum, v) => sum + (parseInt(v) || 0), 0);
+
+      await dbRunAsync(
+        `UPDATE tournament_results SET bonus_points = $1, bonus_detail = $2
+         WHERE tournament_id = $3 AND REPLACE(licence, ' ', '') = $4`,
+        [totalBonus, JSON.stringify(detail), tournamentId, licence.replace(/ /g, '')]
+      );
+    }
+
+    // Recalculate rankings after bonus update
+    await new Promise((resolve) => {
+      recalculateRankings(tournament.category_id, tournament.season, () => {
+        resolve();
+      });
+    });
+
+    res.json({ message: 'Bonus catégories mixtes enregistrés', updated: bonuses.length });
+
+  } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
