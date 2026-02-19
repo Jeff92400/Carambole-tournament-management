@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Classifications FFB</title>
+  <link rel="icon" type="image/png" href="images/FrenchBillard-Icon-small.png">
+  <link rel="stylesheet" href="css/styles.css">
+  <script src="js/branding.js"></script>
+  <style>
+    .entry-card { margin-bottom: 20px; }
+    .player-info {
+      display: flex; align-items: center; gap: 12px;
+      padding: 10px 14px; background: #e8f5e9; border-radius: 8px;
+      margin-bottom: 15px;
+    }
+    .player-info .name { font-weight: 600; font-size: 15px; color: #2e7d32; }
+    .player-info .club { color: #666; font-size: 13px; }
+    .discipline-row {
+      display: flex; align-items: center; gap: 10px; padding: 10px 0;
+      border-bottom: 1px solid #eee; flex-wrap: wrap;
+    }
+    .discipline-row select, .discipline-row input {
+      padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;
+    }
+    .discipline-row select { min-width: 130px; }
+    .discipline-row input[type="number"] { width: 100px; text-align: center; }
+    .range-hint { font-size: 11px; color: #888; min-width: 100px; }
+    .range-warn { color: #e65100; font-weight: 600; }
+    .remove-row-btn {
+      background: none; border: none; color: #dc3545; cursor: pointer;
+      font-size: 18px; padding: 4px 8px; border-radius: 4px;
+    }
+    .remove-row-btn:hover { background: #ffebee; }
+    .toast {
+      position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
+      background: #2e7d32; color: white; padding: 12px 24px; border-radius: 8px;
+      font-size: 14px; z-index: 1000; box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      opacity: 0; transition: opacity 0.3s;
+    }
+    .toast.show { opacity: 1; }
+    .overview-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .overview-table th {
+      background: var(--color-primary, #1F4788); color: white;
+      padding: 8px 10px; text-align: left; font-size: 12px;
+    }
+    .overview-table td { padding: 8px 10px; border-bottom: 1px solid #eee; }
+    .overview-table tr:hover { background: #f5f7ff; }
+    .badge-classement {
+      display: inline-block; padding: 2px 8px; border-radius: 10px;
+      font-size: 11px; font-weight: 600; background: #e3f2fd; color: #1565c0;
+    }
+    .badge-nc { background: #f5f5f5; color: #999; }
+    .edit-link { color: var(--color-primary, #1F4788); cursor: pointer; text-decoration: underline; font-size: 12px; }
+    .edit-link:hover { opacity: 0.7; }
+    .stat-row { display: flex; gap: 15px; margin-bottom: 15px; flex-wrap: wrap; }
+    .stat-box {
+      background: #f8f9fa; border-radius: 8px; padding: 12px 16px;
+      flex: 1; min-width: 120px; text-align: center;
+      border: 1px solid #eee;
+    }
+    .stat-box .val { font-size: 24px; font-weight: 700; color: var(--color-primary, #1F4788); }
+    .stat-box .lbl { font-size: 11px; color: #888; margin-top: 2px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Navbar -->
+    <div class="navbar">
+      <h2><img id="app-header-icon" src="images/FrenchBillard-Icon-small.png" alt="" style="height: 48px; width: 48px; vertical-align: middle; margin-right: 8px;" onerror="this.src='images/FrenchBillard-Icon-small.png';"><span id="app-org-name" data-page-title="Classifications FFB">CDB</span></h2>
+      <div class="nav-links">
+        <a href="dashboard.html">Accueil</a>
+        <a href="rankings.html" class="nav-tooltip" data-tooltip="Classement par catégorie de jeu au fur et à mesure des tournois">Classements</a>
+        <a href="generate-poules.html" class="nav-tooltip" data-tooltip="Compétitions à jouer / Convocations">Compétitions</a>
+        <a href="inscriptions-viewer.html" class="nav-tooltip" data-tooltip="Liste des inscriptions">Inscriptions</a>
+        <a href="calendar.html" class="nav-tooltip" data-tooltip="Calendrier de la saison">Calendrier</a>
+        <a href="emailing.html" class="nav-tooltip" data-tooltip="Annonces, relances, résultats, convocation">Com joueurs</a>
+        <a href="settings.html" class="active">Paramètres</a>
+        <a href="#" id="logoutBtn" class="nav-logout">Déconnexion</a>
+      </div>
+    </div>
+
+    <div id="errorMessage" class="error" style="display: none;"></div>
+    <div id="successMessage" class="success" style="display: none;"></div>
+
+    <!-- Entry Form -->
+    <div class="card entry-card">
+      <h3 style="margin-top: 0;">Saisie des Classifications FFB</h3>
+      <p style="color: #666; font-size: 13px; margin-bottom: 15px;">
+        Saisissez le classement et la moyenne FFB officielle (au 01/09) pour chaque discipline du joueur.
+      </p>
+
+      <!-- Licence input -->
+      <div style="margin-bottom: 12px;">
+        <label style="display: block; margin-bottom: 4px; font-weight: 600; font-size: 13px;">N° Licence</label>
+        <div style="display: flex; gap: 10px; align-items: center;">
+          <input type="text" id="licenceInput" placeholder="Ex: 1234567" style="width: 200px; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
+          <span id="licenceStatus" style="font-size: 13px; color: #666;">Saisissez un numéro de licence</span>
+        </div>
+      </div>
+
+      <!-- Player info (hidden until found) -->
+      <div id="playerInfo" style="display: none;">
+        <div class="player-info">
+          <span class="name" id="playerName"></span>
+          <span class="club" id="playerClub"></span>
+        </div>
+      </div>
+
+      <!-- Discipline rows -->
+      <div id="disciplinesContainer"></div>
+
+      <button id="addDisciplineBtn" class="btn" style="margin-top: 10px; display: none; font-size: 13px; padding: 6px 14px;">
+        + Ajouter une discipline
+      </button>
+
+      <div style="margin-top: 15px; display: none;" id="saveSection">
+        <button id="saveBtn" class="btn" style="background: #28a745; color: white; padding: 8px 24px; font-size: 14px;">
+          Enregistrer
+        </button>
+        <button id="clearBtn" class="btn" style="background: #999; color: white; padding: 8px 16px; font-size: 14px; margin-left: 8px;">
+          Annuler
+        </button>
+      </div>
+    </div>
+
+    <!-- Overview table -->
+    <div class="card">
+      <h3 style="margin-top: 0;">Vue d'ensemble <span id="seasonLabel" style="font-weight: 400; font-size: 14px; color: #888;"></span></h3>
+
+      <div class="stat-row" id="statsRow" style="display: none;">
+        <div class="stat-box"><div class="val" id="statPlayers">0</div><div class="lbl">Joueurs classifiés</div></div>
+        <div class="stat-box"><div class="val" id="statEntries">0</div><div class="lbl">Classifications saisies</div></div>
+      </div>
+
+      <div class="table-container">
+        <table class="overview-table">
+          <thead>
+            <tr>
+              <th>Licence</th>
+              <th>Joueur</th>
+              <th>Club</th>
+              <th>Discipline</th>
+              <th>Classement</th>
+              <th>Moyenne FFB</th>
+              <th>Modifié le</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="overviewTableBody">
+            <tr><td colspan="8" style="text-align: center; color: #888; padding: 20px;">Chargement...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div id="toast" class="toast"></div>
+
+  <script src="js/auth-utils.js"></script>
+  <script src="js/app-branding.js"></script>
+  <script src="js/reference-data.js"></script>
+  <script>
+    const API_URL = '/api';
+
+    if (!requireAuth()) {
+      throw new Error('Not authenticated');
+    }
+    const token = localStorage.getItem('token');
+
+    // Check admin role
+    let userRole = 'viewer';
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      userRole = payload.role || (payload.admin ? 'admin' : 'viewer');
+    } catch (e) { console.error('Error decoding token:', e); }
+
+    const isAdmin = userRole === 'admin';
+    const isLecteur = userRole === 'lecteur';
+    const canEdit = isAdmin;
+
+    if (!isAdmin && !isLecteur) {
+      document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');
+    }
+
+    // Logout
+    document.getElementById('logoutBtn').addEventListener('click', (e) => {
+      e.preventDefault();
+      localStorage.removeItem('token');
+      window.location.href = 'login.html';
+    });
+
+    // State
+    let currentPlayer = null;
+    let gameModes = [];
+    let ffbRankings = [];
+    let categoriesByMode = {};
+    let disciplineRowCount = 0;
+
+    // Init
+    async function init() {
+      initAppBranding();
+
+      // Load reference data in parallel
+      const [modesResp, rankingsResp, catsResp] = await Promise.all([
+        fetch(`${API_URL}/reference-data/game-modes`, { headers: { 'Authorization': `Bearer ${token}` } }),
+        fetch(`${API_URL}/reference-data/ffb-rankings`, { headers: { 'Authorization': `Bearer ${token}` } }),
+        fetch(`${API_URL}/settings/game-parameters/categories-by-mode`, { headers: { 'Authorization': `Bearer ${token}` } })
+      ]);
+
+      gameModes = (await modesResp.json()).filter(m => m.is_active);
+      ffbRankings = await rankingsResp.json();
+      categoriesByMode = await catsResp.json();
+
+      // Setup events
+      document.getElementById('licenceInput').addEventListener('blur', onLicenceBlur);
+      document.getElementById('licenceInput').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); }
+      });
+      document.getElementById('addDisciplineBtn').addEventListener('click', addDisciplineRow);
+      document.getElementById('saveBtn').addEventListener('click', saveClassifications);
+      document.getElementById('clearBtn').addEventListener('click', clearForm);
+
+      // Load overview table
+      loadOverview();
+    }
+
+    // === Licence lookup ===
+    async function onLicenceBlur() {
+      const licence = document.getElementById('licenceInput').value.trim();
+      const statusEl = document.getElementById('licenceStatus');
+
+      if (!licence) {
+        statusEl.textContent = 'Saisissez un numéro de licence';
+        statusEl.style.color = '#666';
+        clearPlayerDisplay();
+        return;
+      }
+
+      try {
+        const resp = await fetch(`${API_URL}/players/${encodeURIComponent(licence)}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (resp.ok) {
+          const player = await resp.json();
+          const name = [player.first_name, player.last_name].filter(Boolean).join(' ');
+          statusEl.innerHTML = `<span style="color: #28a745;">&#10003; ${name}</span>`;
+          currentPlayer = player;
+
+          document.getElementById('playerName').textContent = name;
+          document.getElementById('playerClub').textContent = player.club || '';
+          document.getElementById('playerInfo').style.display = 'block';
+          document.getElementById('addDisciplineBtn').style.display = 'inline-block';
+          document.getElementById('saveSection').style.display = 'block';
+
+          // Load existing classifications
+          await loadExistingClassifications(licence);
+        } else {
+          statusEl.innerHTML = '<span style="color: #dc3545;">Licence inconnue</span>';
+          clearPlayerDisplay();
+        }
+      } catch (err) {
+        console.error('Licence lookup error:', err);
+        statusEl.innerHTML = '<span style="color: #dc3545;">Erreur de recherche</span>';
+        clearPlayerDisplay();
+      }
+    }
+
+    function clearPlayerDisplay() {
+      currentPlayer = null;
+      document.getElementById('playerInfo').style.display = 'none';
+      document.getElementById('addDisciplineBtn').style.display = 'none';
+      document.getElementById('saveSection').style.display = 'none';
+      document.getElementById('disciplinesContainer').innerHTML = '';
+      disciplineRowCount = 0;
+    }
+
+    function clearForm() {
+      document.getElementById('licenceInput').value = '';
+      document.getElementById('licenceStatus').textContent = 'Saisissez un numéro de licence';
+      document.getElementById('licenceStatus').style.color = '#666';
+      clearPlayerDisplay();
+      document.getElementById('licenceInput').focus();
+    }
+
+    // === Load existing classifications ===
+    async function loadExistingClassifications(licence) {
+      const container = document.getElementById('disciplinesContainer');
+      container.innerHTML = '';
+      disciplineRowCount = 0;
+
+      try {
+        const resp = await fetch(`${API_URL}/players/${encodeURIComponent(licence)}/ffb-classifications`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!resp.ok) return;
+
+        const data = await resp.json();
+
+        // Pre-fill rows for existing classifications
+        if (data.classifications && data.classifications.length > 0) {
+          for (const c of data.classifications) {
+            addDisciplineRow(c.game_mode_id, c.classement, c.moyenne_ffb);
+          }
+        } else {
+          // No existing data — add one empty row to get started
+          addDisciplineRow();
+        }
+      } catch (err) {
+        console.error('Load classifications error:', err);
+        addDisciplineRow();
+      }
+    }
+
+    // === Dynamic discipline rows ===
+    function getUsedModeIds() {
+      const selects = document.querySelectorAll('.discipline-select');
+      const used = new Set();
+      selects.forEach(s => { if (s.value) used.add(parseInt(s.value)); });
+      return used;
+    }
+
+    function addDisciplineRow(modeId, classement, moyenne) {
+      const container = document.getElementById('disciplinesContainer');
+      const rowId = disciplineRowCount++;
+      const usedIds = getUsedModeIds();
+
+      const row = document.createElement('div');
+      row.className = 'discipline-row';
+      row.id = `disc-row-${rowId}`;
+
+      // Discipline dropdown
+      const modeSelect = document.createElement('select');
+      modeSelect.className = 'discipline-select';
+      modeSelect.dataset.rowId = rowId;
+      modeSelect.innerHTML = '<option value="">-- Discipline --</option>';
+      for (const m of gameModes) {
+        if (!modeId && usedIds.has(m.id)) continue; // Hide already-used modes for new rows
+        const sel = (modeId === m.id) ? ' selected' : '';
+        modeSelect.innerHTML += `<option value="${m.id}"${sel}>${m.display_name}</option>`;
+      }
+      modeSelect.addEventListener('change', () => onModeChange(rowId));
+
+      // Classement dropdown
+      const clsSelect = document.createElement('select');
+      clsSelect.className = 'classement-select';
+      clsSelect.id = `cls-${rowId}`;
+      clsSelect.innerHTML = '<option value="">NC</option>';
+      clsSelect.addEventListener('change', () => onClassementChange(rowId));
+
+      // Moyenne input
+      const moyInput = document.createElement('input');
+      moyInput.type = 'number';
+      moyInput.step = '0.001';
+      moyInput.min = '0';
+      moyInput.placeholder = '0.000';
+      moyInput.className = 'moyenne-input';
+      moyInput.id = `moy-${rowId}`;
+      if (moyenne) moyInput.value = parseFloat(moyenne).toFixed(3);
+      moyInput.addEventListener('input', () => validateMoyenne(rowId));
+
+      // Range hint
+      const hint = document.createElement('span');
+      hint.className = 'range-hint';
+      hint.id = `hint-${rowId}`;
+
+      // Remove button
+      const removeBtn = document.createElement('button');
+      removeBtn.className = 'remove-row-btn';
+      removeBtn.innerHTML = '&times;';
+      removeBtn.title = 'Supprimer';
+      removeBtn.addEventListener('click', () => {
+        row.remove();
+        refreshModeDropdowns();
+      });
+
+      row.appendChild(modeSelect);
+      row.appendChild(clsSelect);
+      row.appendChild(moyInput);
+      row.appendChild(hint);
+      if (canEdit) row.appendChild(removeBtn);
+
+      container.appendChild(row);
+
+      // If pre-filled, populate classement dropdown and set value
+      if (modeId) {
+        populateClassementDropdown(rowId, modeId, classement);
+      }
+    }
+
+    function onModeChange(rowId) {
+      const row = document.getElementById(`disc-row-${rowId}`);
+      if (!row) return;
+      const modeSelect = row.querySelector('.discipline-select');
+      const modeId = parseInt(modeSelect.value);
+
+      populateClassementDropdown(rowId, modeId, null);
+      refreshModeDropdowns();
+    }
+
+    function populateClassementDropdown(rowId, modeId, selectedCls) {
+      const clsSelect = document.getElementById(`cls-${rowId}`);
+      if (!clsSelect) return;
+
+      clsSelect.innerHTML = '<option value="">NC</option>';
+
+      // Find the mode code
+      const mode = gameModes.find(m => m.id === modeId);
+      if (!mode) return;
+
+      const modeKey = mode.code.toUpperCase().replace(/\s+/g, '');
+      const availableCategories = categoriesByMode[modeKey] || [];
+      const availableCodes = new Set(availableCategories.map(c => c.categorie.toUpperCase()));
+
+      // Add only FFB rankings that have game_parameters for this mode
+      for (const r of ffbRankings) {
+        if (r.code === 'NC') continue;
+        // If game_parameters exist for this mode, filter to matching categories
+        // If no game_parameters at all for this mode, show all rankings
+        if (availableCategories.length > 0 && !availableCodes.has(r.code.toUpperCase())) continue;
+        const sel = (selectedCls && selectedCls.toUpperCase() === r.code.toUpperCase()) ? ' selected' : '';
+        clsSelect.innerHTML += `<option value="${r.code}"${sel}>${r.code}${r.display_name ? ' - ' + r.display_name : ''}</option>`;
+      }
+
+      updateRangeHint(rowId);
+    }
+
+    function onClassementChange(rowId) {
+      updateRangeHint(rowId);
+      validateMoyenne(rowId);
+    }
+
+    function updateRangeHint(rowId) {
+      const hint = document.getElementById(`hint-${rowId}`);
+      const row = document.getElementById(`disc-row-${rowId}`);
+      if (!hint || !row) return;
+
+      const modeSelect = row.querySelector('.discipline-select');
+      const clsSelect = document.getElementById(`cls-${rowId}`);
+      if (!modeSelect.value || !clsSelect.value) {
+        hint.textContent = '';
+        return;
+      }
+
+      const mode = gameModes.find(m => m.id === parseInt(modeSelect.value));
+      if (!mode) { hint.textContent = ''; return; }
+
+      const modeKey = mode.code.toUpperCase().replace(/\s+/g, '');
+      const cats = categoriesByMode[modeKey] || [];
+      const match = cats.find(c => c.categorie.toUpperCase() === clsSelect.value.toUpperCase());
+
+      if (match) {
+        hint.textContent = `Plage : ${match.moyenne_mini.toFixed(3)} – ${match.moyenne_maxi.toFixed(3)}`;
+        hint.className = 'range-hint';
+      } else {
+        hint.textContent = '';
+      }
+    }
+
+    function validateMoyenne(rowId) {
+      const row = document.getElementById(`disc-row-${rowId}`);
+      if (!row) return;
+
+      const moyInput = document.getElementById(`moy-${rowId}`);
+      const clsSelect = document.getElementById(`cls-${rowId}`);
+      const modeSelect = row.querySelector('.discipline-select');
+      const hint = document.getElementById(`hint-${rowId}`);
+      if (!moyInput || !clsSelect || !modeSelect) return;
+
+      const val = parseFloat(moyInput.value);
+      if (isNaN(val) || !modeSelect.value || !clsSelect.value) {
+        moyInput.style.borderColor = '#ddd';
+        return;
+      }
+
+      const mode = gameModes.find(m => m.id === parseInt(modeSelect.value));
+      if (!mode) return;
+
+      const modeKey = mode.code.toUpperCase().replace(/\s+/g, '');
+      const cats = categoriesByMode[modeKey] || [];
+      const match = cats.find(c => c.categorie.toUpperCase() === clsSelect.value.toUpperCase());
+
+      if (match && (val < match.moyenne_mini || val > match.moyenne_maxi)) {
+        moyInput.style.borderColor = '#e65100';
+        if (hint) {
+          hint.textContent = `Plage : ${match.moyenne_mini.toFixed(3)} – ${match.moyenne_maxi.toFixed(3)}`;
+          hint.className = 'range-hint range-warn';
+        }
+      } else {
+        moyInput.style.borderColor = '#ddd';
+        if (hint) hint.className = 'range-hint';
+      }
+    }
+
+    function refreshModeDropdowns() {
+      const usedIds = getUsedModeIds();
+      document.querySelectorAll('.discipline-select').forEach(select => {
+        const currentVal = parseInt(select.value);
+        const options = select.querySelectorAll('option');
+        options.forEach(opt => {
+          if (!opt.value) return; // skip placeholder
+          const id = parseInt(opt.value);
+          // Show if it's the current selection or not used elsewhere
+          opt.style.display = (id === currentVal || !usedIds.has(id)) ? '' : 'none';
+        });
+      });
+    }
+
+    // === Save ===
+    async function saveClassifications() {
+      if (!currentPlayer) return;
+
+      const rows = document.querySelectorAll('.discipline-row');
+      const classifications = [];
+
+      for (const row of rows) {
+        const modeSelect = row.querySelector('.discipline-select');
+        const clsSelect = row.querySelector('.classement-select');
+        const moyInput = row.querySelector('.moyenne-input');
+
+        if (!modeSelect.value) continue;
+
+        const modeId = parseInt(modeSelect.value);
+        const cls = clsSelect.value || null;
+        const moy = parseFloat(moyInput.value) || 0;
+
+        if (!cls && moy === 0) continue; // skip empty rows
+
+        classifications.push({
+          game_mode_id: modeId,
+          classement: cls,
+          moyenne_ffb: moy
+        });
+      }
+
+      if (classifications.length === 0) {
+        showToast('Aucune classification à enregistrer', '#e65100');
+        return;
+      }
+
+      try {
+        const licence = document.getElementById('licenceInput').value.trim();
+        const resp = await fetch(`${API_URL}/players/${encodeURIComponent(licence)}/ffb-classifications`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ classifications })
+        });
+
+        if (resp.ok) {
+          const name = [currentPlayer.first_name, currentPlayer.last_name].filter(Boolean).join(' ');
+          showToast(`Classifications enregistrées pour ${name}`);
+          clearForm();
+          loadOverview();
+        } else {
+          const err = await resp.json();
+          showToast(`Erreur : ${err.error || 'Échec de l\'enregistrement'}`, '#dc3545');
+        }
+      } catch (err) {
+        console.error('Save error:', err);
+        showToast('Erreur réseau', '#dc3545');
+      }
+    }
+
+    // === Overview table ===
+    async function loadOverview() {
+      try {
+        const resp = await fetch(`${API_URL}/players/ffb-classifications-overview`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!resp.ok) return;
+
+        const data = await resp.json();
+        document.getElementById('seasonLabel').textContent = `(${data.season})`;
+
+        const tbody = document.getElementById('overviewTableBody');
+        const rows = data.classifications || [];
+
+        // Stats
+        const uniquePlayers = new Set(rows.map(r => r.licence));
+        document.getElementById('statPlayers').textContent = uniquePlayers.size;
+        document.getElementById('statEntries').textContent = rows.length;
+        document.getElementById('statsRow').style.display = rows.length > 0 ? 'flex' : 'none';
+
+        if (rows.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: #888; padding: 20px;">Aucune classification saisie pour cette saison</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = rows.map(row => {
+          const clsBadge = row.classement
+            ? `<span class="badge-classement">${row.classement}</span>`
+            : `<span class="badge-classement badge-nc">NC</span>`;
+          const date = row.updated_at ? new Date(row.updated_at).toLocaleDateString('fr-FR') : '-';
+          return `<tr>
+            <td>${row.licence}</td>
+            <td>${row.first_name || ''} ${row.last_name || ''}</td>
+            <td>${row.club || '-'}</td>
+            <td>${row.display_name || row.code}</td>
+            <td>${clsBadge}</td>
+            <td>${row.moyenne_ffb ? parseFloat(row.moyenne_ffb).toFixed(3) : '-'}</td>
+            <td>${date}</td>
+            <td><span class="edit-link" onclick="editPlayer('${row.licence}')">Modifier</span></td>
+          </tr>`;
+        }).join('');
+      } catch (err) {
+        console.error('Load overview error:', err);
+      }
+    }
+
+    function editPlayer(licence) {
+      document.getElementById('licenceInput').value = licence;
+      document.getElementById('licenceInput').dispatchEvent(new Event('blur'));
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    // === Toast ===
+    function showToast(msg, color) {
+      const toast = document.getElementById('toast');
+      toast.textContent = msg;
+      toast.style.background = color || '#2e7d32';
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 3000);
+    }
+
+    // === Format date helper ===
+    function formatDate(dateStr) {
+      if (!dateStr) return '-';
+      return new Date(dateStr).toLocaleDateString('fr-FR');
+    }
+
+    // Start
+    init();
+  </script>
+</body>
+</html>

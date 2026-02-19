@@ -211,6 +211,35 @@ router.get('/game-parameters', authenticateToken, async (req, res) => {
   }
 });
 
+// Get available categories per mode from game_parameters (for classement dropdown filtering)
+router.get('/game-parameters/categories-by-mode', authenticateToken, (req, res) => {
+  const db = getDb();
+  const orgId = req.user.organizationId || null;
+
+  db.all(
+    `SELECT mode, categorie, moyenne_mini, moyenne_maxi
+     FROM game_parameters
+     WHERE ($1::int IS NULL OR organization_id = $1)
+     ORDER BY mode, categorie`,
+    [orgId],
+    (err, rows) => {
+      if (err) return res.status(500).json({ error: err.message });
+
+      const byMode = {};
+      for (const row of (rows || [])) {
+        const modeKey = row.mode.toUpperCase().replace(/\s+/g, '');
+        if (!byMode[modeKey]) byMode[modeKey] = [];
+        byMode[modeKey].push({
+          categorie: row.categorie,
+          moyenne_mini: parseFloat(row.moyenne_mini),
+          moyenne_maxi: parseFloat(row.moyenne_maxi)
+        });
+      }
+      res.json(byMode);
+    }
+  );
+});
+
 // Get game parameters for a specific mode/category
 router.get('/game-parameters/:mode/:categorie', authenticateToken, (req, res) => {
   const db = getDb();

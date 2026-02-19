@@ -1682,6 +1682,9 @@ async function initializeDatabase() {
       CREATE INDEX IF NOT EXISTS idx_ffb_class_licence ON player_ffb_classifications(licence)
     `);
 
+    // Add classement column to player_ffb_classifications (per-discipline classification level)
+    await client.query(`ALTER TABLE player_ffb_classifications ADD COLUMN IF NOT EXISTS classement TEXT DEFAULT NULL`);
+
     // --- Journées Qualificatives (Phase 1) ---
     // Note: serpentine seeding uses player_ffb_classifications.moyenne_ffb (per discipline/season)
 

@@ -1005,6 +1005,22 @@
 
         let html = '';
 
+        // Load FFB rankings for classement dropdown
+        let ffbRankingsList = [];
+        try {
+          const rkResp = await fetch(`${API_URL}/reference-data/ffb-rankings`, { headers: { 'Authorization': `Bearer ${token}` } });
+          ffbRankingsList = (await rkResp.json()).filter(r => r.code !== 'NC');
+        } catch (e) { console.error('Error loading FFB rankings:', e); }
+
+        function buildClsOptions(selectedCode) {
+          let opts = `<option value=""${!selectedCode ? ' selected' : ''}>NC</option>`;
+          for (const r of ffbRankingsList) {
+            const sel = (selectedCode && selectedCode.toUpperCase() === r.code.toUpperCase()) ? ' selected' : '';
+            opts += `<option value="${r.code}"${sel}>${r.code}</option>`;
+          }
+          return opts;
+        }
+
         // Disciplines with FFB data entered
         for (const c of data.classifications) {
           const moySaison = c.moyenne_saison !== null ? c.moyenne_saison.toFixed(3) : '-';
@@ -1013,8 +1029,14 @@
             : '<span style="color: #999;">-</span>';
 
           html += `
-            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 8px; align-items: center; padding: 8px 0; border-bottom: 1px solid #eee;">
+            <div style="display: grid; grid-template-columns: 1fr 0.8fr 0.8fr 0.8fr 0.8fr; gap: 8px; align-items: center; padding: 8px 0; border-bottom: 1px solid #eee;">
               <div style="font-weight: 600; font-size: 13px;">${c.display_name}</div>
+              <div>
+                <label style="font-size: 10px; color: #999; display: block;">Classement</label>
+                <select data-ffb-classement-id="${c.game_mode_id}" style="padding: 4px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;">
+                  ${buildClsOptions(c.classement)}
+                </select>
+              </div>
               <div>
                 <label style="font-size: 10px; color: #999; display: block;">Moy. FFB</label>
                 <input type="number" step="0.001" min="0" value="${c.moyenne_ffb}" data-ffb-mode-id="${c.game_mode_id}"
@@ -1037,8 +1059,14 @@
           const moySaison = m.moyenne_saison !== null ? m.moyenne_saison.toFixed(3) : '-';
 
           html += `
-            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 8px; align-items: center; padding: 8px 0; border-bottom: 1px solid #eee;">
+            <div style="display: grid; grid-template-columns: 1fr 0.8fr 0.8fr 0.8fr 0.8fr; gap: 8px; align-items: center; padding: 8px 0; border-bottom: 1px solid #eee;">
               <div style="font-weight: 600; font-size: 13px;">${m.display_name}</div>
+              <div>
+                <label style="font-size: 10px; color: #999; display: block;">Classement</label>
+                <select data-ffb-classement-id="${m.id}" style="padding: 4px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;">
+                  ${buildClsOptions(null)}
+                </select>
+              </div>
               <div>
                 <label style="font-size: 10px; color: #999; display: block;">Moy. FFB</label>
                 <input type="number" step="0.001" min="0" placeholder="0.000" data-ffb-mode-id="${m.id}"
@@ -1072,11 +1100,15 @@
       const inputs = document.querySelectorAll('#edit_ffb_classifications_container input[data-ffb-mode-id]');
       const classifications = [];
       inputs.forEach(input => {
-        const value = parseFloat(input.value);
-        if (!isNaN(value)) {
+        const gameModeId = parseInt(input.dataset.ffbModeId);
+        const value = parseFloat(input.value) || 0;
+        const clsSelect = document.querySelector(`select[data-ffb-classement-id="${gameModeId}"]`);
+        const classement = clsSelect ? clsSelect.value : null;
+        if (value > 0 || classement) {
           classifications.push({
-            game_mode_id: parseInt(input.dataset.ffbModeId),
-            moyenne_ffb: value
+            game_mode_id: gameModeId,
+            moyenne_ffb: value,
+            classement: classement || null
           });
         }
       });
