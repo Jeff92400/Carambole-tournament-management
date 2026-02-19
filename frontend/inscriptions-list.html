@@ -89,6 +89,9 @@
           <button class="btn admin-only" onclick="openCreateModal()" style="background: #1F4788;">
             ➕ Ajouter
           </button>
+          <button class="btn admin-only" onclick="openImportExcelModal()" style="background: #28a745;">
+            📤 Importer Excel
+          </button>
           <button class="btn btn-success admin-only csv-import-btn" onclick="window.location.href='import-inscriptions.html'" style="background: #28a745;">
             📤 Importer fichier CSV
           </button>
@@ -296,6 +299,37 @@
         <div style="display: flex; gap: 10px;">
           <button type="button" onclick="confirmDelete()" class="btn" style="flex: 1; background: #dc3545;">Supprimer</button>
           <button type="button" onclick="closeDeleteModal()" class="btn" style="flex: 1; background: #999;">Annuler</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Import Excel Modal -->
+    <div id="importExcelModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
+      <div style="background: white; padding: 30px; border-radius: 12px; max-width: 550px; max-height: 80vh; overflow-y: auto; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
+        <h3 style="margin-top: 0; color: var(--color-primary, #1F4788);">Importer des inscriptions depuis Excel</h3>
+
+        <p style="color: #666; margin-bottom: 15px;">
+          Colonnes attendues : <strong>tournoi_id</strong>, <strong>licence</strong>, email, telephone, commentaire, convoque (0/1), forfait (0/1)
+        </p>
+
+        <div style="margin-bottom: 15px;">
+          <a href="#" id="downloadTemplateLink" style="color: var(--color-primary, #1F4788); font-weight: bold;">
+            Telecharger le modele Excel
+          </a>
+        </div>
+
+        <div class="file-upload" id="excelFileUpload" style="margin-bottom: 15px;">
+          <p>Cliquez pour selectionner un fichier Excel (.xlsx)</p>
+          <p style="font-size: 12px; color: #999; margin-top: 10px;">ou glissez-deposez le fichier ici</p>
+          <input type="file" id="excelFileInput" accept=".xlsx,.xls" style="display: none;">
+          <div id="excelFileName" class="file-name" style="display: none;"></div>
+        </div>
+
+        <div id="importExcelResult" style="display: none; margin-bottom: 15px; padding: 15px; border-radius: 8px; background: #f8f9fa;"></div>
+
+        <div style="display: flex; gap: 10px; margin-top: 20px;">
+          <button type="button" id="importExcelBtn" class="btn" style="flex: 1; background: var(--color-primary, #1F4788);" onclick="submitExcelImport()">Importer</button>
+          <button type="button" onclick="closeImportExcelModal()" class="btn" style="flex: 1; background: #999;">Fermer</button>
         </div>
       </div>
     </div>
@@ -1219,6 +1253,126 @@
           selectedValue: 'ionos'
         })
       ]);
+    }
+
+    // ========== EXCEL IMPORT FUNCTIONS ==========
+
+    function openImportExcelModal() {
+      document.getElementById('excelFileInput').value = '';
+      document.getElementById('excelFileName').style.display = 'none';
+      document.getElementById('importExcelResult').style.display = 'none';
+      document.getElementById('importExcelBtn').disabled = false;
+      document.getElementById('importExcelBtn').textContent = 'Importer';
+      document.getElementById('importExcelModal').style.display = 'flex';
+    }
+
+    function closeImportExcelModal() {
+      document.getElementById('importExcelModal').style.display = 'none';
+    }
+
+    // Template download
+    document.getElementById('downloadTemplateLink').addEventListener('click', async (e) => {
+      e.preventDefault();
+      try {
+        const response = await fetch(`${API_URL}/inscriptions/import-excel/template`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!response.ok) throw new Error('Erreur lors du telechargement');
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'modele_import_inscriptions.xlsx';
+        a.click();
+        URL.revokeObjectURL(url);
+      } catch (error) {
+        alert('Erreur: ' + error.message);
+      }
+    });
+
+    // Excel file upload handlers
+    (function() {
+      const uploadEl = document.getElementById('excelFileUpload');
+      const inputEl = document.getElementById('excelFileInput');
+      const fileNameEl = document.getElementById('excelFileName');
+
+      uploadEl.addEventListener('click', () => inputEl.click());
+      uploadEl.addEventListener('dragover', (e) => { e.preventDefault(); uploadEl.style.background = '#f0f0f0'; });
+      uploadEl.addEventListener('dragleave', () => { uploadEl.style.background = ''; });
+      uploadEl.addEventListener('drop', (e) => {
+        e.preventDefault();
+        uploadEl.style.background = '';
+        if (e.dataTransfer.files.length > 0) {
+          inputEl.files = e.dataTransfer.files;
+          fileNameEl.textContent = e.dataTransfer.files[0].name;
+          fileNameEl.style.display = 'block';
+        }
+      });
+      inputEl.addEventListener('change', () => {
+        if (inputEl.files.length > 0) {
+          fileNameEl.textContent = inputEl.files[0].name;
+          fileNameEl.style.display = 'block';
+        }
+      });
+    })();
+
+    // Submit Excel import
+    async function submitExcelImport() {
+      const fileInput = document.getElementById('excelFileInput');
+      if (!fileInput.files || fileInput.files.length === 0) {
+        alert('Veuillez selectionner un fichier Excel');
+        return;
+      }
+
+      const btn = document.getElementById('importExcelBtn');
+      btn.disabled = true;
+      btn.textContent = 'Import en cours...';
+
+      const formData = new FormData();
+      formData.append('file', fileInput.files[0]);
+
+      try {
+        const response = await fetch(`${API_URL}/inscriptions/import-excel`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` },
+          body: formData
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.error || "Erreur lors de l'import");
+        }
+
+        const resultDiv = document.getElementById('importExcelResult');
+        let html = `
+          <p style="margin: 0 0 8px;"><strong>Resultat de l'import :</strong></p>
+          <p style="margin: 0 0 4px; color: #28a745;">Importees : ${result.imported}</p>
+          <p style="margin: 0 0 4px; color: #e65100;">Doublons ignores : ${result.skippedDuplicates}</p>
+          <p style="margin: 0 0 4px;">Total lignes traitees : ${result.totalRows}</p>
+        `;
+
+        if (result.errors && result.errors.length > 0) {
+          html += `<p style="margin: 8px 0 4px; color: #dc3545;"><strong>Erreurs (${result.errors.length}) :</strong></p>`;
+          html += `<div style="max-height: 150px; overflow-y: auto; font-size: 12px; background: #fff; padding: 8px; border-radius: 4px;">`;
+          result.errors.forEach(err => {
+            html += `<p style="margin: 2px 0; color: #dc3545;">Ligne ${err.row}: ${err.error}${err.licence ? ' (licence: ' + err.licence + ')' : ''}</p>`;
+          });
+          html += `</div>`;
+        }
+
+        resultDiv.innerHTML = html;
+        resultDiv.style.display = 'block';
+
+        if (result.imported > 0) {
+          await loadInscriptions();
+        }
+      } catch (error) {
+        alert('Erreur: ' + error.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Importer';
+      }
     }
 
     // Initialize

@@ -109,6 +109,20 @@ const upload = multer({
   }
 });
 
+// Configure multer for Excel file uploads (memory storage, no temp files)
+const excelUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const ext = file.originalname.toLowerCase().slice(file.originalname.lastIndexOf('.'));
+    if (['.xlsx', '.xls'].includes(ext)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Seuls les fichiers Excel (.xlsx, .xls) sont acceptes'), false);
+    }
+  }
+});
+
 // Helper function to parse date in DD/MM/YYYY format
 function parseDate(dateStr) {
   if (!dateStr || dateStr === 'NULL' || dateStr === '') return null;
@@ -1184,6 +1198,238 @@ router.post('/create', authenticateToken, async (req, res) => {
 
   } catch (error) {
     console.error('Error creating inscription:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== Excel Import for Inscriptions ====================
+
+/**
+ * GET /import-excel/template
+ * Download an Excel template for bulk inscription import.
+ */
+router.get('/import-excel/template', authenticateToken, async (req, res) => {
+  if (req.user?.role !== 'admin') {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  try {
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Inscriptions');
+
+    worksheet.columns = [
+      { header: 'tournoi_id', key: 'tournoi_id', width: 15 },
+      { header: 'licence', key: 'licence', width: 15 },
+      { header: 'email', key: 'email', width: 30 },
+      { header: 'telephone', key: 'telephone', width: 18 },
+      { header: 'commentaire', key: 'commentaire', width: 30 },
+      { header: 'convoque', key: 'convoque', width: 12 },
+      { header: 'forfait', key: 'forfait', width: 12 }
+    ];
+
+    // Style header row
+    const headerRow = worksheet.getRow(1);
+    headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1F4788' } };
+
+    // Example row
+    worksheet.addRow({
+      tournoi_id: 101,
+      licence: '123456A',
+      email: 'joueur@exemple.com',
+      telephone: '0612345678',
+      commentaire: '',
+      convoque: 0,
+      forfait: 0
+    });
+
+    // Notes row
+    worksheet.addRow({
+      tournoi_id: '(obligatoire)',
+      licence: '(obligatoire)',
+      email: '(optionnel)',
+      telephone: '(optionnel)',
+      commentaire: '(optionnel)',
+      convoque: '0 ou 1',
+      forfait: '0 ou 1'
+    });
+    const notesRow = worksheet.getRow(3);
+    notesRow.font = { italic: true, color: { argb: 'FF999999' } };
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename="modele_import_inscriptions.xlsx"');
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (error) {
+    console.error('Error generating template:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /import-excel
+ * Import inscriptions from an Excel file (admin only).
+ * Expected columns: tournoi_id, licence, email, telephone, commentaire, convoque, forfait
+ */
+router.post('/import-excel', authenticateToken, excelUpload.single('file'), async (req, res) => {
+  if (req.user?.role !== 'admin') {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  if (!req.file) {
+    return res.status(400).json({ error: 'Aucun fichier fourni' });
+  }
+
+  const orgId = req.user.organizationId || null;
+
+  try {
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(req.file.buffer);
+
+    const worksheet = workbook.worksheets[0];
+    if (!worksheet) {
+      return res.status(400).json({ error: 'Aucune feuille trouvee dans le fichier Excel' });
+    }
+
+    // Read headers from row 1 (case-insensitive mapping)
+    const headerRow = worksheet.getRow(1);
+    const colMap = {};
+    headerRow.eachCell((cell, colNumber) => {
+      const header = (cell.value || '').toString().trim().toLowerCase().replace(/\s+/g, '_');
+      colMap[header] = colNumber;
+    });
+
+    // Validate required columns
+    if (!colMap['tournoi_id'] || !colMap['licence']) {
+      return res.status(400).json({
+        error: 'Colonnes obligatoires manquantes. Le fichier doit contenir au minimum : tournoi_id, licence'
+      });
+    }
+
+    // Pre-fetch valid tournoi_ids for this org
+    const tournoiRows = await new Promise((resolve, reject) => {
+      db.all(
+        'SELECT tournoi_id FROM tournoi_ext WHERE ($1::int IS NULL OR organization_id = $1)',
+        [orgId],
+        (err, rows) => err ? reject(err) : resolve(rows || [])
+      );
+    });
+    const validTournois = new Set(tournoiRows.map(t => t.tournoi_id));
+
+    // Pre-fetch valid licences for this org (normalized)
+    const playerRows = await new Promise((resolve, reject) => {
+      db.all(
+        `SELECT REPLACE(UPPER(licence), ' ', '') as normalized_licence
+         FROM players
+         WHERE ($1::int IS NULL OR organization_id = $1)
+         AND UPPER(licence) NOT LIKE 'TEST%'`,
+        [orgId],
+        (err, rows) => err ? reject(err) : resolve(rows || [])
+      );
+    });
+    const validLicences = new Set(playerRows.map(p => p.normalized_licence));
+
+    // Get current max inscription_id for this org
+    const maxIdResult = await new Promise((resolve, reject) => {
+      db.get(
+        'SELECT COALESCE(MAX(inscription_id), 0) as max_id FROM inscriptions WHERE ($1::int IS NULL OR organization_id = $1)',
+        [orgId],
+        (err, row) => err ? reject(err) : resolve(row)
+      );
+    });
+    let nextId = (maxIdResult?.max_id || 0) + 1;
+
+    // Process data rows (row 2 onwards)
+    let imported = 0;
+    let skippedDuplicates = 0;
+    const errors = [];
+    const totalRows = worksheet.rowCount;
+
+    for (let rowNum = 2; rowNum <= totalRows; rowNum++) {
+      const row = worksheet.getRow(rowNum);
+
+      const tournoiIdRaw = colMap['tournoi_id'] ? row.getCell(colMap['tournoi_id']).value : null;
+      const licenceRaw = colMap['licence'] ? row.getCell(colMap['licence']).value : null;
+
+      // Skip empty rows
+      if (!tournoiIdRaw && !licenceRaw) continue;
+
+      const tournoiId = parseInt(tournoiIdRaw);
+      const licence = (licenceRaw || '').toString().replace(/\s+/g, '').trim();
+      const email = colMap['email'] ? (row.getCell(colMap['email']).value || '').toString().trim() : null;
+      const telephone = colMap['telephone'] ? (row.getCell(colMap['telephone']).value || '').toString().trim() : null;
+      const commentaire = colMap['commentaire'] ? (row.getCell(colMap['commentaire']).value || '').toString().trim() : null;
+      const convoque = colMap['convoque'] ? (parseInt(row.getCell(colMap['convoque']).value) || 0) : 0;
+      const forfait = colMap['forfait'] ? (parseInt(row.getCell(colMap['forfait']).value) || 0) : 0;
+
+      // Validate required fields
+      if (!tournoiId || isNaN(tournoiId)) {
+        errors.push({ row: rowNum, licence, error: 'tournoi_id manquant ou invalide' });
+        continue;
+      }
+      if (!licence) {
+        errors.push({ row: rowNum, tournoiId, error: 'Licence manquante' });
+        continue;
+      }
+
+      // Validate tournoi exists in this org
+      if (!validTournois.has(tournoiId)) {
+        errors.push({ row: rowNum, licence, tournoiId, error: `Tournoi ${tournoiId} inconnu` });
+        continue;
+      }
+
+      // Validate licence exists in players table
+      const normalizedLicence = licence.toUpperCase().replace(/\s+/g, '');
+      if (!validLicences.has(normalizedLicence)) {
+        errors.push({ row: rowNum, licence, tournoiId, error: `Licence ${licence} inconnue` });
+        continue;
+      }
+
+      // Insert (catch unique constraint for duplicates)
+      try {
+        await new Promise((resolve, reject) => {
+          db.run(
+            `INSERT INTO inscriptions
+              (inscription_id, tournoi_id, licence, email, telephone, convoque, forfait, commentaire, timestamp, source, organization_id)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), 'manual', $9)`,
+            [nextId, tournoiId, licence, email || null, telephone || null, convoque, forfait, commentaire || null, orgId],
+            function(err) {
+              if (err) reject(err);
+              else resolve();
+            }
+          );
+        });
+        nextId++;
+        imported++;
+      } catch (insertErr) {
+        if (insertErr.message && (insertErr.message.includes('unique') || insertErr.message.includes('UNIQUE') || insertErr.message.includes('duplicate'))) {
+          skippedDuplicates++;
+        } else {
+          errors.push({ row: rowNum, licence, tournoiId, error: insertErr.message });
+        }
+      }
+    }
+
+    logAdminAction({
+      req,
+      action: ACTION_TYPES.IMPORT_INSCRIPTIONS,
+      details: `Import Excel: ${imported} importees, ${skippedDuplicates} doublons ignores, ${errors.length} erreurs`,
+      targetType: 'inscription',
+      targetId: null,
+      targetName: req.file.originalname
+    });
+
+    res.json({
+      success: true,
+      message: 'Import termine',
+      imported,
+      skippedDuplicates,
+      totalRows: totalRows - 1,
+      errors: errors.length > 0 ? errors : undefined
+    });
+
+  } catch (error) {
+    console.error('Error importing Excel inscriptions:', error);
     res.status(500).json({ error: error.message });
   }
 });
