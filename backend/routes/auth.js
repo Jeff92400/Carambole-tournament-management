@@ -116,7 +116,7 @@ setInterval(cleanupExpiredResetCodes, 60 * 60 * 1000);
 
 // Login with username and password
 router.post('/login', (req, res) => {
-  const { username, password } = req.body;
+  const { username, password, orgSlug } = req.body;
 
   if (!username || !password) {
     return res.status(400).json({ error: 'Nom d\'utilisateur et mot de passe requis' });
@@ -152,13 +152,31 @@ router.post('/login', (req, res) => {
       // Update last login
       db.run('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = $1', [user.id], () => {});
 
+      // Determine target org: SA can log into any CDB via orgSlug
+      let targetOrgId = user.organization_id || null;
+      if (user.is_super_admin && orgSlug) {
+        try {
+          const orgRow = await new Promise((resolve, reject) => {
+            db.get('SELECT id FROM organizations WHERE slug = $1 AND is_active = true', [orgSlug], (err, row) => {
+              if (err) reject(err);
+              else resolve(row);
+            });
+          });
+          if (orgRow) {
+            targetOrgId = orgRow.id;
+          }
+        } catch (e) {
+          console.error('Error resolving orgSlug:', e);
+        }
+      }
+
       const tokenPayload = {
         userId: user.id,
         username: user.username,
         role: user.role,
         clubId: user.club_id || null,
         isSuperAdmin: user.is_super_admin || false,
-        organizationId: user.organization_id || null,
+        organizationId: targetOrgId,
         ligueNumero: user.ffb_ligue_numero || null
       };
 
@@ -168,7 +186,7 @@ router.post('/login', (req, res) => {
       logAdminAction({
         req: { ...req, user: { userId: user.id, username: user.username, role: user.role } },
         action: ACTION_TYPES.LOGIN_SUCCESS,
-        details: `Connexion réussie pour ${user.username}`
+        details: `Connexion réussie pour ${user.username}` + (orgSlug ? ` (org: ${orgSlug})` : '')
       });
 
       // If club role, fetch club name for frontend
@@ -197,7 +215,7 @@ router.post('/login', (req, res) => {
           club_id: user.club_id || null,
           club_name: clubName,
           is_super_admin: user.is_super_admin || false,
-          organization_id: user.organization_id || null,
+          organization_id: targetOrgId,
           ffb_ligue_numero: user.ffb_ligue_numero || null
         }
       });
