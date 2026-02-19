@@ -805,6 +805,35 @@ router.get('/duplicates', authenticateToken, async (req, res) => {
   }
 });
 
+// GET /api/players/ffb-classifications-overview
+// Returns all FFB classifications for current season (org-scoped)
+// MUST be before /:licence to avoid Express matching 'ffb-classifications-overview' as a licence
+router.get('/ffb-classifications-overview', authenticateToken, async (req, res) => {
+  try {
+    const orgId = req.user.organizationId || null;
+    const currentSeason = await appSettings.getCurrentSeason();
+
+    const rows = await dbAllP(
+      `SELECT pfc.licence, p.first_name, p.last_name, p.club,
+              pfc.game_mode_id, gm.code, gm.display_name,
+              pfc.classement, pfc.moyenne_ffb, pfc.updated_at
+       FROM player_ffb_classifications pfc
+       JOIN players p ON REPLACE(pfc.licence, ' ', '') = REPLACE(p.licence, ' ', '')
+       JOIN game_modes gm ON pfc.game_mode_id = gm.id
+       WHERE pfc.season = $1
+         AND ($2::int IS NULL OR p.organization_id = $2)
+         AND UPPER(pfc.licence) NOT LIKE 'TEST%'
+       ORDER BY p.last_name, p.first_name, gm.display_order`,
+      [currentSeason, orgId]
+    );
+
+    res.json({ season: currentSeason, classifications: rows });
+  } catch (err) {
+    console.error('Get all FFB classifications error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Get player by licence
 router.get('/:licence', authenticateToken, async (req, res) => {
   const orgId = req.user.organizationId || null;
@@ -862,34 +891,6 @@ function dbGetP(sql, params) {
     db.get(sql, params, (err, row) => err ? reject(err) : resolve(row || null));
   });
 }
-
-// GET /api/players/ffb-classifications-overview
-// Returns all FFB classifications for current season (org-scoped)
-router.get('/ffb-classifications-overview', authenticateToken, async (req, res) => {
-  try {
-    const orgId = req.user.organizationId || null;
-    const currentSeason = await appSettings.getCurrentSeason();
-
-    const rows = await dbAllP(
-      `SELECT pfc.licence, p.first_name, p.last_name, p.club,
-              pfc.game_mode_id, gm.code, gm.display_name,
-              pfc.classement, pfc.moyenne_ffb, pfc.updated_at
-       FROM player_ffb_classifications pfc
-       JOIN players p ON REPLACE(pfc.licence, ' ', '') = REPLACE(p.licence, ' ', '')
-       JOIN game_modes gm ON pfc.game_mode_id = gm.id
-       WHERE pfc.season = $1
-         AND ($2::int IS NULL OR p.organization_id = $2)
-         AND UPPER(pfc.licence) NOT LIKE 'TEST%'
-       ORDER BY p.last_name, p.first_name, gm.display_order`,
-      [currentSeason, orgId]
-    );
-
-    res.json({ season: currentSeason, classifications: rows });
-  } catch (err) {
-    console.error('Get all FFB classifications error:', err);
-    res.status(500).json({ error: err.message });
-  }
-});
 
 // GET /api/players/:licence/ffb-classifications
 // Returns FFB classification averages + computed season averages + progression
