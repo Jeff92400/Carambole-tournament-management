@@ -1,5 +1,29 @@
 // Authentication utility functions for Tournament Management App
 
+// SA stale org check: detect when SA has a leftover non-CDBHS session from a previous browser session
+// sessionStorage.orgChosen is set during login or SA impersonation and clears when the browser closes
+(function() {
+  const isSA = localStorage.getItem('isSuperAdmin') === 'true';
+  const storedOrgId = localStorage.getItem('organizationId');
+  const orgExplicitlyChosen = sessionStorage.getItem('orgChosen');
+  const currentPage = window.location.pathname.split('/').pop();
+
+  // Only redirect on regular pages (not SA pages, not login)
+  if (isSA && storedOrgId && storedOrgId !== '1' && !orgExplicitlyChosen
+      && !currentPage.startsWith('super-admin') && currentPage !== 'login.html') {
+    // Stale SA impersonation session — clear and redirect to login
+    localStorage.removeItem('token');
+    localStorage.removeItem('sa_token');
+    localStorage.removeItem('organizationId');
+    localStorage.removeItem('userRole');
+    localStorage.removeItem('username');
+    localStorage.removeItem('userClub');
+    localStorage.removeItem('userClubId');
+    localStorage.removeItem('isSuperAdmin');
+    window.location.href = '/login.html';
+  }
+})();
+
 // Intercept all fetch responses to handle 401 errors globally
 (function() {
   const originalFetch = window.fetch;
