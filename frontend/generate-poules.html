@@ -1100,7 +1100,8 @@
       const remainder = numPlayers % 3;
       const poules = Array(numP).fill(3);
       if (remainder === 1) {
-        poules[poules.length - 1] = 4;
+        if (allowPouleOf2) { poules[poules.length - 1] = 2; poules.push(2); }
+        else { poules[poules.length - 1] = 4; }
       } else if (remainder === 2) {
         if (allowPouleOf2) { poules.push(2); }
         else { poules[poules.length - 1] = 5; }

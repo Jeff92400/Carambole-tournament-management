@@ -62,8 +62,14 @@ function computePouleConfiguration(numPlayers, allowPouleOf2 = false) {
   const poules = Array(numPoules).fill(3);
 
   if (remainder === 1) {
-    // One poule becomes 4 (e.g. 7 → [3, 4])
-    poules[poules.length - 1] = 4;
+    if (allowPouleOf2) {
+      // Replace last poule of 3 with two poules of 2 (e.g. 4 → [2, 2], 7 → [3, 2, 2])
+      poules[poules.length - 1] = 2;
+      poules.push(2);
+    } else {
+      // One poule becomes 4 (e.g. 7 → [3, 4])
+      poules[poules.length - 1] = 4;
+    }
   } else if (remainder === 2) {
     if (allowPouleOf2) {
       // Add an extra poule of 2 (e.g. 8 → [3, 3, 2])
