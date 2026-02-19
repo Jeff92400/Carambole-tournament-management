@@ -612,8 +612,9 @@
             const tc = discTextColors[modeKey] || '#333';
             const cls = d.classement || 'NC';
             const moy = d.moyenne_ffb ? parseFloat(d.moyenne_ffb).toFixed(3) : '-';
-            return `<span style="display: inline-block; background: ${bg}; color: ${tc}; padding: 3px 8px; border-radius: 6px; font-size: 12px; margin: 2px 3px 2px 0; white-space: nowrap;">
-              <strong>${d.display_name || d.code}</strong> ${cls} · ${moy}
+            const shortName = (d.code || d.display_name || '').replace('3BANDES', '3B').replace('3 Bandes', '3B').replace('LIBRE', 'LB').replace('Libre', 'LB').replace('BANDE', 'BD').replace('Bande', 'BD').replace('CADRE', 'CA').replace(/Cadre\s*\S*/i, 'CA');
+            return `<span style="display: inline-block; background: ${bg}; color: ${tc}; padding: 2px 6px; border-radius: 6px; font-size: 11px; margin: 1px 2px 1px 0; white-space: nowrap;">
+              <strong>${shortName}</strong> ${cls}·${moy}
             </span>`;
           }).join('');
 
@@ -621,7 +622,7 @@
             <td>${player.licence}</td>
             <td>${player.first_name || ''} ${player.last_name || ''}</td>
             <td>${player.club || '-'}</td>
-            <td>${badges}</td>
+            <td style="white-space: nowrap;">${badges}</td>
             <td><span class="edit-link" onclick="editPlayer('${player.licence}')">Modifier</span></td>
           </tr>`;
         }).join('');
