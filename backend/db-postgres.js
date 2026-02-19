@@ -1386,6 +1386,13 @@ async function initializeDatabase() {
       `, [key]);
     }
 
+    // Seed player_app_url for CDBHS (org #1) with explicit ?org=cdbhs slug
+    await client.query(`
+      INSERT INTO organization_settings (organization_id, key, value)
+      VALUES (1, 'player_app_url', 'https://cdbhs-player-app-production.up.railway.app/?org=cdbhs')
+      ON CONFLICT (organization_id, key) DO UPDATE SET value = EXCLUDED.value
+    `);
+
     // Seed default welcome email template for CDB onboarding
     await client.query(`
       INSERT INTO organization_settings (organization_id, key, value)
