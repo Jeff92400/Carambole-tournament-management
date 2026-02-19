@@ -981,9 +981,16 @@ router.get('/:licence/ffb-classifications', authenticateToken, async (req, res) 
 // Save/update FFB classification averages
 router.put('/:licence/ffb-classifications', authenticateToken, async (req, res) => {
   try {
-    const licence = req.params.licence;
+    const rawLicence = req.params.licence;
     const { classifications } = req.body;
     const currentSeason = await appSettings.getCurrentSeason();
+
+    // Look up canonical licence from players table to avoid ON CONFLICT mismatches
+    const playerRow = await dbGetP(
+      `SELECT licence FROM players WHERE REPLACE(licence, ' ', '') = REPLACE($1, ' ', '')`,
+      [rawLicence]
+    );
+    const licence = playerRow ? playerRow.licence : rawLicence;
 
     if (!Array.isArray(classifications) || classifications.length === 0) {
       return res.status(400).json({ error: 'classifications array is required' });
