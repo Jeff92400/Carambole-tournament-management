@@ -506,27 +506,37 @@ router.get('/clubs', async (req, res) => {
     const licenceNumbers = new Set();
     const clubRoles = clubs.map(c => {
       const rd = c.raw_data ? (typeof c.raw_data === 'string' ? JSON.parse(c.raw_data) : c.raw_data) : {};
-      // Find president licence — key contains "sident" (handles encoding issues)
+      // Find president and resp. carambole from raw_data
+      // Supports two FFB CSV formats:
+      //   Format A (header-fixed): "Président", "Président_nom", "Président_email"
+      //   Format B (explicit cols): "Licence_president", "Email_president", "Licence_resp_car", "Email_resp_car"
       let presLicence = '', presName = '', presEmail = '';
       let respLicence = '', respName = '', respEmail = '';
       for (const [key, val] of Object.entries(rd)) {
+        if (!val) continue;
         const k = key.toLowerCase();
-        if (k.includes('sident') && !k.includes('_nom') && !k.includes('_email') && val) {
+        // President licence: "Licence_president" or key with "sident" but no _nom/_email suffix
+        if (k === 'licence_president' || (k.includes('sident') && !k.includes('_nom') && !k.includes('_email') && !k.startsWith('email'))) {
           presLicence = val;
         }
-        if (k.includes('sident') && k.includes('_nom') && val) {
+        // President name: "Président_nom" (header-fixed format only)
+        if (k.includes('sident') && k.includes('_nom')) {
           presName = val;
         }
-        if (k.includes('sident') && k.includes('_email') && val) {
+        // President email: "Email_president" or "Président_email"
+        if (k === 'email_president' || (k.includes('sident') && k.includes('_email'))) {
           presEmail = val;
         }
-        if (k.includes('responsable') && k.includes('carambole') && !k.includes('_nom') && !k.includes('_email') && val) {
+        // Resp carambole licence: "Licence_resp_car" or key with "responsable"+"carambole"
+        if (k === 'licence_resp_car' || (k.includes('responsable') && k.includes('carambole') && !k.includes('_nom') && !k.includes('_email') && !k.startsWith('email'))) {
           respLicence = val;
         }
-        if (k.includes('responsable') && k.includes('carambole') && k.includes('_nom') && val) {
+        // Resp carambole name: "Responsable carambole_nom" (header-fixed format only)
+        if (k.includes('responsable') && k.includes('carambole') && k.includes('_nom')) {
           respName = val;
         }
-        if (k.includes('responsable') && k.includes('carambole') && k.includes('_email') && val) {
+        // Resp carambole email: "Email_resp_car" or "Responsable carambole_email"
+        if (k === 'email_resp_car' || (k.includes('responsable') && k.includes('carambole') && k.includes('_email'))) {
           respEmail = val;
         }
       }

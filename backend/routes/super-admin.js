@@ -757,16 +757,20 @@ router.post('/organizations', async (req, res) => {
         const licenceNumbers = new Set();
         for (const fc of ffbClubs) {
           const rd = fc.raw_data ? (typeof fc.raw_data === 'string' ? JSON.parse(fc.raw_data) : fc.raw_data) : {};
+          // Supports two FFB CSV formats:
+          //   Format A (header-fixed): "Président", "Président_nom", "Président_email"
+          //   Format B (explicit cols): "Licence_president", "Email_president", "Licence_resp_car", "Email_resp_car"
           let presLicence = '', presName = '', presEmail = '';
           let respLicence = '', respName = '', respEmail = '';
           for (const [key, val] of Object.entries(rd)) {
+            if (!val) continue;
             const k = key.toLowerCase();
-            if (k.includes('sident') && !k.includes('_nom') && !k.includes('_email') && val) presLicence = val;
-            if (k.includes('sident') && k.includes('_nom') && val) presName = val;
-            if (k.includes('sident') && k.includes('_email') && val) presEmail = val;
-            if (k.includes('responsable') && k.includes('carambole') && !k.includes('_nom') && !k.includes('_email') && val) respLicence = val;
-            if (k.includes('responsable') && k.includes('carambole') && k.includes('_nom') && val) respName = val;
-            if (k.includes('responsable') && k.includes('carambole') && k.includes('_email') && val) respEmail = val;
+            if (k === 'licence_president' || (k.includes('sident') && !k.includes('_nom') && !k.includes('_email') && !k.startsWith('email'))) presLicence = val;
+            if (k.includes('sident') && k.includes('_nom')) presName = val;
+            if (k === 'email_president' || (k.includes('sident') && k.includes('_email'))) presEmail = val;
+            if (k === 'licence_resp_car' || (k.includes('responsable') && k.includes('carambole') && !k.includes('_nom') && !k.includes('_email') && !k.startsWith('email'))) respLicence = val;
+            if (k.includes('responsable') && k.includes('carambole') && k.includes('_nom')) respName = val;
+            if (k === 'email_resp_car' || (k.includes('responsable') && k.includes('carambole') && k.includes('_email'))) respEmail = val;
           }
           if (presLicence) licenceNumbers.add(presLicence);
           if (respLicence) licenceNumbers.add(respLicence);
