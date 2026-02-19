@@ -701,6 +701,7 @@
         localStorage.setItem('userRole', 'admin');
         localStorage.setItem('organizationId', orgId);
         localStorage.setItem('isSuperAdmin', 'true');
+        sessionStorage.setItem('activeOrgSession', 'true');
 
         // Navigate to the CDB dashboard (token already contains the correct org)
         window.location.href = 'dashboard.html';

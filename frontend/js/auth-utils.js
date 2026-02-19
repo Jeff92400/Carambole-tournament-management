@@ -17,8 +17,10 @@
     // ?org= present on a regular page → redirect to login for that org
     // (login.html handles session clearing and org-specific branding)
     window.location.href = '/login.html?org=' + encodeURIComponent(urlOrg);
-  } else if (isSA && storedOrgId && storedOrgId !== '1' && storedOrgId !== 'null') {
-    // SA on a regular page without ?org= but with non-CDBHS org → stale session
+  } else if (isSA && storedOrgId && storedOrgId !== '1' && storedOrgId !== 'null' && !sessionStorage.getItem('activeOrgSession')) {
+    // SA on a regular page without ?org=, non-CDBHS org, AND no active session marker
+    // → stale session from a previous browser session → redirect to login
+    // (sessionStorage is tab-scoped and cleared on browser close, so active sessions are preserved)
     localStorage.removeItem('token');
     localStorage.removeItem('sa_token');
     localStorage.removeItem('organizationId');
@@ -108,6 +110,7 @@ function handleSessionExpired() {
   localStorage.removeItem('organizationId');
   localStorage.removeItem('orgSlug');
   localStorage.removeItem('sa_token');
+  sessionStorage.removeItem('activeOrgSession');
 
   // Store message for login page to display
   sessionStorage.setItem('sessionExpiredMessage', 'Votre session a expiré. Veuillez vous reconnecter.');
@@ -167,6 +170,7 @@ function logout() {
   localStorage.removeItem('organizationId');
   localStorage.removeItem('orgSlug');
   localStorage.removeItem('sa_token');
+  sessionStorage.removeItem('activeOrgSession');
 
   // SA users get the neutral SA login screen
   if (wasSuperAdmin || hadSaToken) {

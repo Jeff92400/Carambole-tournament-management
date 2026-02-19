@@ -139,6 +139,8 @@
           if (data.user.ffb_ligue_numero) {
             localStorage.setItem('ligueNumero', data.user.ffb_ligue_numero);
           }
+          // Mark active session in this tab (prevents stale org redirect in auth-utils.js)
+          sessionStorage.setItem('activeOrgSession', 'true');
           // Redirect based on role and context
           if (isSaLogin && data.user.is_super_admin) {
             window.location.href = 'super-admin.html';
