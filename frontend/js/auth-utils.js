@@ -14,9 +14,13 @@
   if (currentPage.startsWith('super-admin') || currentPage === 'login.html' || currentPage === 'forgot-password.html') {
     // no check needed
   } else if (urlOrg) {
-    // ?org= present on a regular page → redirect to login for that org
-    // (login.html handles session clearing and org-specific branding)
-    window.location.href = '/login.html?org=' + encodeURIComponent(urlOrg);
+    // ?org= present on a regular page — check if already in the right org
+    const storedSlug = localStorage.getItem('orgSlug');
+    if (storedSlug !== urlOrg) {
+      // Different org requested → redirect to login for that org
+      window.location.href = '/login.html?org=' + encodeURIComponent(urlOrg);
+    }
+    // else: already in the right org, no redirect needed
   } else if (isSA && storedOrgId && storedOrgId !== '1' && storedOrgId !== 'null' && !sessionStorage.getItem('activeOrgSession')) {
     // SA on a regular page without ?org=, non-CDBHS org, AND no active session marker
     // → stale session from a previous browser session → redirect to login

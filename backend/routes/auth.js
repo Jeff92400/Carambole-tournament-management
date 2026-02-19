@@ -154,6 +154,7 @@ router.post('/login', (req, res) => {
 
       // Determine target org: SA can log into any CDB via orgSlug
       let targetOrgId = user.organization_id || null;
+      let resolvedOrgSlug = orgSlug || null;
       if (user.is_super_admin && orgSlug) {
         try {
           const orgRow = await new Promise((resolve, reject) => {
@@ -167,6 +168,20 @@ router.post('/login', (req, res) => {
           }
         } catch (e) {
           console.error('Error resolving orgSlug:', e);
+        }
+      }
+      // Resolve slug for response (needed for frontend org context tracking)
+      if (!resolvedOrgSlug && targetOrgId) {
+        try {
+          const slugRow = await new Promise((resolve, reject) => {
+            db.get('SELECT slug FROM organizations WHERE id = $1', [targetOrgId], (err, row) => {
+              if (err) reject(err);
+              else resolve(row);
+            });
+          });
+          if (slugRow) resolvedOrgSlug = slugRow.slug;
+        } catch (e) {
+          console.error('Error resolving org slug:', e);
         }
       }
 
@@ -216,6 +231,7 @@ router.post('/login', (req, res) => {
           club_name: clubName,
           is_super_admin: user.is_super_admin || false,
           organization_id: targetOrgId,
+          org_slug: resolvedOrgSlug,
           ffb_ligue_numero: user.ffb_ligue_numero || null
         }
       });
