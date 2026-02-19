@@ -702,8 +702,8 @@
         localStorage.setItem('organizationId', orgId);
         localStorage.setItem('isSuperAdmin', 'true');
 
-        // Navigate to the CDB dashboard with ?org=slug (preserves context across pages)
-        window.location.href = `dashboard.html?org=${encodeURIComponent(slug)}`;
+        // Navigate to the CDB dashboard (token already contains the correct org)
+        window.location.href = 'dashboard.html';
       } catch (error) {
         console.error('Impersonation error:', error);
         showToast('Erreur: ' + error.message, 'error');

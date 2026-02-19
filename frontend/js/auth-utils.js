@@ -1,17 +1,23 @@
 // Authentication utility functions for Tournament Management App
 
-// SA stale org check: when SA visits a regular page without ?org= and has a non-CDBHS session, redirect to login
-// This catches stale impersonation sessions. Active impersonation uses ?org=slug in URLs.
+// Multi-CDB session guard for regular pages (non-SA, non-login).
+// Two cases:
+// 1. ?org=slug in URL on a regular page → redirect to login.html?org=slug to force correct session
+// 2. SA with stale non-CDBHS session (no ?org=) → redirect to login to reset
 (function() {
   const urlOrg = new URLSearchParams(window.location.search).get('org');
   const isSA = localStorage.getItem('isSuperAdmin') === 'true';
   const storedOrgId = localStorage.getItem('organizationId');
   const currentPage = window.location.pathname.split('/').pop();
 
-  // Skip SA pages and login page
+  // Skip SA pages and login/forgot pages
   if (currentPage.startsWith('super-admin') || currentPage === 'login.html' || currentPage === 'forgot-password.html') {
     // no check needed
-  } else if (isSA && !urlOrg && storedOrgId && storedOrgId !== '1' && storedOrgId !== 'null') {
+  } else if (urlOrg) {
+    // ?org= present on a regular page → redirect to login for that org
+    // (login.html handles session clearing and org-specific branding)
+    window.location.href = '/login.html?org=' + encodeURIComponent(urlOrg);
+  } else if (isSA && storedOrgId && storedOrgId !== '1' && storedOrgId !== 'null') {
     // SA on a regular page without ?org= but with non-CDBHS org → stale session
     localStorage.removeItem('token');
     localStorage.removeItem('sa_token');
@@ -25,18 +31,8 @@
   }
 })();
 
-// Auto-propagate ?org= parameter to all internal nav links (preserves CDB context across pages)
-document.addEventListener('DOMContentLoaded', function() {
-  const urlOrg = new URLSearchParams(window.location.search).get('org');
-  if (!urlOrg) return;
-  document.querySelectorAll('a[href]').forEach(function(a) {
-    const href = a.getAttribute('href');
-    // Only modify internal links (not external, not anchors, not javascript:)
-    if (href && !href.startsWith('http') && !href.startsWith('#') && !href.startsWith('javascript') && !href.includes('org=')) {
-      a.href = href + (href.includes('?') ? '&' : '?') + 'org=' + encodeURIComponent(urlOrg);
-    }
-  });
-});
+// Note: ?org= in URLs on regular pages is handled by the session guard above
+// which redirects to login.html?org=slug. No need to auto-propagate ?org= to nav links.
 
 // Intercept all fetch responses to handle 401 errors globally
 (function() {
