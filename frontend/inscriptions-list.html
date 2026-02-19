@@ -170,7 +170,7 @@
           <div style="margin-bottom: 15px;">
             <label style="display: block; margin-bottom: 5px; font-weight: bold;">Licence *</label>
             <input type="text" id="create_licence" required placeholder="Ex: 123456A" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-            <small style="color: #666;">Le joueur doit exister dans le fichier joueurs</small>
+            <small id="create_licence_status" style="color: #666;">Le joueur doit exister dans le fichier joueurs</small>
           </div>
 
           <div style="margin-bottom: 15px;">
@@ -1183,12 +1183,47 @@
       document.getElementById('create_licence').value = '';
       document.getElementById('create_email').value = '';
       document.getElementById('create_telephone').value = '';
+      document.getElementById('create_licence_status').textContent = 'Le joueur doit exister dans le fichier joueurs';
+      document.getElementById('create_licence_status').style.color = '#666';
       document.getElementById('create_convoque').value = '0';
       document.getElementById('create_forfait').value = '0';
       document.getElementById('create_commentaire').value = '';
 
       document.getElementById('createInscriptionModal').style.display = 'flex';
     }
+
+    // Auto-fill email & telephone from player file when licence is entered
+    document.getElementById('create_licence').addEventListener('blur', async () => {
+      const licence = document.getElementById('create_licence').value.trim();
+      const statusEl = document.getElementById('create_licence_status');
+      if (!licence) {
+        statusEl.textContent = 'Le joueur doit exister dans le fichier joueurs';
+        statusEl.style.color = '#666';
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API_URL}/players/${encodeURIComponent(licence)}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (response.ok) {
+          const player = await response.json();
+          const name = [player.first_name, player.last_name].filter(Boolean).join(' ');
+          statusEl.innerHTML = `<span style="color: #28a745;">✓ ${name}</span>`;
+
+          // Auto-fill email and telephone (only if currently empty)
+          const emailInput = document.getElementById('create_email');
+          const phoneInput = document.getElementById('create_telephone');
+          if (!emailInput.value && player.email) emailInput.value = player.email;
+          if (!phoneInput.value && player.telephone) phoneInput.value = player.telephone;
+        } else {
+          statusEl.innerHTML = '<span style="color: #dc3545;">Licence inconnue</span>';
+        }
+      } catch (error) {
+        console.error('Error looking up player:', error);
+      }
+    });
 
     // Close create modal
     function closeCreateModal() {
