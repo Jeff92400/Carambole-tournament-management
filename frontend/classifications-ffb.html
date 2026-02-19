@@ -140,10 +140,7 @@
               <th>Licence</th>
               <th>Joueur</th>
               <th>Club</th>
-              <th>Discipline</th>
-              <th>Classement</th>
-              <th>Moyenne FFB</th>
-              <th>Modifié le</th>
+              <th>Classifications</th>
               <th></th>
             </tr>
           </thead>
@@ -580,31 +577,52 @@
         const tbody = document.getElementById('overviewTableBody');
         const rows = data.classifications || [];
 
+        // Group by player
+        const byPlayer = new Map();
+        for (const row of rows) {
+          if (!byPlayer.has(row.licence)) {
+            byPlayer.set(row.licence, {
+              licence: row.licence,
+              first_name: row.first_name,
+              last_name: row.last_name,
+              club: row.club,
+              disciplines: []
+            });
+          }
+          byPlayer.get(row.licence).disciplines.push(row);
+        }
+
         // Stats
-        const uniquePlayers = new Set(rows.map(r => r.licence));
-        document.getElementById('statPlayers').textContent = uniquePlayers.size;
+        document.getElementById('statPlayers').textContent = byPlayer.size;
         document.getElementById('statEntries').textContent = rows.length;
         document.getElementById('statsRow').style.display = rows.length > 0 ? 'flex' : 'none';
 
-        if (rows.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: #888; padding: 20px;">Aucune classification saisie pour cette saison</td></tr>';
+        if (byPlayer.size === 0) {
+          tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #888; padding: 20px;">Aucune classification saisie pour cette saison</td></tr>';
           return;
         }
 
-        tbody.innerHTML = rows.map(row => {
-          const clsBadge = row.classement
-            ? `<span class="badge-classement">${row.classement}</span>`
-            : `<span class="badge-classement badge-nc">NC</span>`;
-          const date = row.updated_at ? new Date(row.updated_at).toLocaleDateString('fr-FR') : '-';
+        const discColors = { 'LIBRE': '#C9DEFF', 'BANDE': '#D4EDCF', '3BANDES': '#E2D4F0', 'CADRE': '#CFEBF0' };
+        const discTextColors = { 'LIBRE': '#1F4788', 'BANDE': '#2D6A2E', '3BANDES': '#5A3D82', 'CADRE': '#276B7D' };
+
+        tbody.innerHTML = Array.from(byPlayer.values()).map(player => {
+          const badges = player.disciplines.map(d => {
+            const modeKey = (d.code || '').toUpperCase().replace(/\s+/g, '');
+            const bg = discColors[modeKey] || '#f0f0f0';
+            const tc = discTextColors[modeKey] || '#333';
+            const cls = d.classement || 'NC';
+            const moy = d.moyenne_ffb ? parseFloat(d.moyenne_ffb).toFixed(3) : '-';
+            return `<span style="display: inline-block; background: ${bg}; color: ${tc}; padding: 3px 8px; border-radius: 6px; font-size: 12px; margin: 2px 3px 2px 0; white-space: nowrap;">
+              <strong>${d.display_name || d.code}</strong> ${cls} · ${moy}
+            </span>`;
+          }).join('');
+
           return `<tr>
-            <td>${row.licence}</td>
-            <td>${row.first_name || ''} ${row.last_name || ''}</td>
-            <td>${row.club || '-'}</td>
-            <td>${row.display_name || row.code}</td>
-            <td>${clsBadge}</td>
-            <td>${row.moyenne_ffb ? parseFloat(row.moyenne_ffb).toFixed(3) : '-'}</td>
-            <td>${date}</td>
-            <td><span class="edit-link" onclick="editPlayer('${row.licence}')">Modifier</span></td>
+            <td>${player.licence}</td>
+            <td>${player.first_name || ''} ${player.last_name || ''}</td>
+            <td>${player.club || '-'}</td>
+            <td>${badges}</td>
+            <td><span class="edit-link" onclick="editPlayer('${player.licence}')">Modifier</span></td>
           </tr>`;
         }).join('');
       } catch (err) {
