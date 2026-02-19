@@ -482,6 +482,8 @@ Separate version from the CDB app (`V 2.0.x`). Displayed bottom-right on all SA 
 - **Platform email domain:** Configurable domain (e.g., `carambole-gestion.fr`) for new CDB email addresses (`{slug}@{domain}`)
 - **Welcome email template:** Quill editor for CDB admin welcome email with variable replacement
 - **CDB navbar dropdown:** All SA pages have a CDB dropdown in the navbar to navigate to a specific CDB's dashboard
+- **Player App SA login:** SA can log into any CDB's Player App using their username+password. The login impersonates the CDB admin's player profile (licence, name, club, rankings) for realistic testing. See Player App CLAUDE.md "Super Admin Login" section for details.
+- **CDB creation seeds Player App URL:** `player_app_url` is auto-seeded in `organization_settings` during CDB creation (e.g., `https://cdbhs-player-app-production.up.railway.app/?org={slug}`). Available as `{player_app_url}` variable in the welcome email template.
 
 ### Super Admin API Routes
 
