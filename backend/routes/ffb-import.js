@@ -507,8 +507,8 @@ router.get('/clubs', async (req, res) => {
     const clubRoles = clubs.map(c => {
       const rd = c.raw_data ? (typeof c.raw_data === 'string' ? JSON.parse(c.raw_data) : c.raw_data) : {};
       // Find president licence — key contains "sident" (handles encoding issues)
-      let presLicence = '', presName = '';
-      let respLicence = '', respName = '';
+      let presLicence = '', presName = '', presEmail = '';
+      let respLicence = '', respName = '', respEmail = '';
       for (const [key, val] of Object.entries(rd)) {
         const k = key.toLowerCase();
         if (k.includes('sident') && !k.includes('_nom') && !k.includes('_email') && val) {
@@ -517,16 +517,22 @@ router.get('/clubs', async (req, res) => {
         if (k.includes('sident') && k.includes('_nom') && val) {
           presName = val;
         }
+        if (k.includes('sident') && k.includes('_email') && val) {
+          presEmail = val;
+        }
         if (k.includes('responsable') && k.includes('carambole') && !k.includes('_nom') && !k.includes('_email') && val) {
           respLicence = val;
         }
         if (k.includes('responsable') && k.includes('carambole') && k.includes('_nom') && val) {
           respName = val;
         }
+        if (k.includes('responsable') && k.includes('carambole') && k.includes('_email') && val) {
+          respEmail = val;
+        }
       }
       if (presLicence) licenceNumbers.add(presLicence);
       if (respLicence) licenceNumbers.add(respLicence);
-      return { presLicence, presName, respLicence, respName };
+      return { presLicence, presName, presEmail, respLicence, respName, respEmail };
     });
 
     // Batch lookup licence numbers → names
@@ -547,7 +553,9 @@ router.get('/clubs', async (req, res) => {
     clubs.forEach((c, i) => {
       const roles = clubRoles[i];
       c.president_name = roles.presName || licenceMap[roles.presLicence] || '';
+      c.president_email = roles.presEmail || '';
       c.resp_carambole_name = roles.respName || licenceMap[roles.respLicence] || '';
+      c.resp_carambole_email = roles.respEmail || '';
       // Debug: log first club's role resolution for troubleshooting
       if (debugFirst && (roles.presLicence || roles.presName)) {
         console.log('[FFB clubs debug]', c.nom, '=> pres:', { licence: roles.presLicence, name: roles.presName, resolved: c.president_name },

@@ -244,14 +244,16 @@
                 <th>CDB</th>
                 <th>Ligue</th>
                 <th>Président</th>
+                <th>Email Prés.</th>
                 <th>Resp. Carambole</th>
+                <th>Email Resp.</th>
                 <th>Tél</th>
                 <th>Email</th>
                 <th>Licenciés</th>
               </tr>
             </thead>
             <tbody id="clubsBody">
-              <tr><td colspan="12" style="text-align: center; color: #999;">Sélectionnez un filtre ou recherchez...</td></tr>
+              <tr><td colspan="14" style="text-align: center; color: #999;">Sélectionnez un filtre ou recherchez...</td></tr>
             </tbody>
           </table>
         </div>
@@ -463,7 +465,7 @@
         const tbody = document.getElementById('clubsBody');
 
         if (clubs.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="12" style="text-align: center; color: #999;">Aucun club trouvé</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="14" style="text-align: center; color: #999;">Aucun club trouvé</td></tr>';
           return;
         }
 
@@ -477,7 +479,9 @@
             <td>${c.cdb_code || '-'}</td>
             <td class="text-muted">${c.ligue_nom || '-'}</td>
             <td>${c.president_name || '-'}</td>
+            <td class="text-truncate" title="${c.president_email || ''}">${c.president_email ? `<a href="mailto:${c.president_email}">${c.president_email}</a>` : '-'}</td>
             <td class="text-truncate" title="${c.resp_carambole_name || ''}">${c.resp_carambole_name || '-'}</td>
+            <td class="text-truncate" title="${c.resp_carambole_email || ''}">${c.resp_carambole_email ? `<a href="mailto:${c.resp_carambole_email}">${c.resp_carambole_email}</a>` : '-'}</td>
             <td>${c.tel || '-'}</td>
             <td class="text-truncate" title="${c.email || ''}">${c.email || '-'}</td>
             <td>${c.licence_count || 0}</td>

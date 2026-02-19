@@ -752,23 +752,52 @@ router.post('/organizations', async (req, res) => {
           [ffb_cdb_code]
         );
 
+        // Collect all role licence numbers for batch name resolution
+        const clubRolesData = [];
+        const licenceNumbers = new Set();
         for (const fc of ffbClubs) {
+          const rd = fc.raw_data ? (typeof fc.raw_data === 'string' ? JSON.parse(fc.raw_data) : fc.raw_data) : {};
+          let presLicence = '', presName = '', presEmail = '';
+          let respLicence = '', respName = '', respEmail = '';
+          for (const [key, val] of Object.entries(rd)) {
+            const k = key.toLowerCase();
+            if (k.includes('sident') && !k.includes('_nom') && !k.includes('_email') && val) presLicence = val;
+            if (k.includes('sident') && k.includes('_nom') && val) presName = val;
+            if (k.includes('sident') && k.includes('_email') && val) presEmail = val;
+            if (k.includes('responsable') && k.includes('carambole') && !k.includes('_nom') && !k.includes('_email') && val) respLicence = val;
+            if (k.includes('responsable') && k.includes('carambole') && k.includes('_nom') && val) respName = val;
+            if (k.includes('responsable') && k.includes('carambole') && k.includes('_email') && val) respEmail = val;
+          }
+          if (presLicence) licenceNumbers.add(presLicence);
+          if (respLicence) licenceNumbers.add(respLicence);
+          clubRolesData.push({ presLicence, presName, presEmail, respLicence, respName, respEmail });
+        }
+
+        // Batch lookup licence numbers → names from ffb_licences
+        let licenceMap = {};
+        if (licenceNumbers.size > 0) {
+          const placeholders = [...licenceNumbers].map((_, i) => `$${i + 1}`).join(',');
+          const rows = await dbAll(
+            `SELECT licence, nom, prenom FROM ffb_licences WHERE licence IN (${placeholders})`,
+            [...licenceNumbers]
+          );
+          for (const r of rows) {
+            licenceMap[r.licence] = `${r.prenom || ''} ${r.nom || ''}`.trim();
+          }
+        }
+
+        for (let idx = 0; idx < ffbClubs.length; idx++) {
+          const fc = ffbClubs[idx];
           try {
             const clubName = (fc.nom || '').toUpperCase().trim();
             if (!clubName) { clubStats.skipped++; continue; }
 
-            // Extract president/resp from raw_data
-            const rd = fc.raw_data ? (typeof fc.raw_data === 'string' ? JSON.parse(fc.raw_data) : fc.raw_data) : {};
-            let presName = '', presEmail = '';
-            let respName = '', respEmail = '', respLicence = '';
-            for (const [key, val] of Object.entries(rd)) {
-              const k = key.toLowerCase();
-              if (k.includes('sident') && k.includes('_nom') && val) presName = val;
-              if (k.includes('sident') && k.includes('_email') && val) presEmail = val;
-              if (k.includes('responsable') && k.includes('carambole') && k.includes('_nom') && val) respName = val;
-              if (k.includes('responsable') && k.includes('carambole') && k.includes('_email') && val) respEmail = val;
-              if (k.includes('responsable') && k.includes('carambole') && !k.includes('_nom') && !k.includes('_email') && val) respLicence = val;
-            }
+            const roles = clubRolesData[idx];
+            const presName = roles.presName || licenceMap[roles.presLicence] || null;
+            const presEmail = roles.presEmail || null;
+            const respName = roles.respName || licenceMap[roles.respLicence] || null;
+            const respEmail = roles.respEmail || null;
+            const respLicence = roles.respLicence || null;
 
             await dbRun(
               `INSERT INTO clubs (name, display_name, city, zip_code, phone, email, president, president_email, responsable_sportif_name, responsable_sportif_email, responsable_sportif_licence, organization_id)
@@ -776,7 +805,7 @@ router.post('/organizations', async (req, res) => {
                ON CONFLICT (name) DO UPDATE SET organization_id = $12, display_name = $2, city = $3, zip_code = $4, phone = $5, email = $6,
                president = $7, president_email = $8, responsable_sportif_name = $9, responsable_sportif_email = $10, responsable_sportif_licence = $11`,
               [clubName, fc.nom || clubName, fc.ville || null, fc.code_postal || null, fc.tel || null, fc.email || null,
-               presName || null, presEmail || null, respName || null, respEmail || null, respLicence || null, orgId]
+               presName, presEmail, respName, respEmail, respLicence, orgId]
             );
 
             // Create club_ffb_mapping linking club to FFB club numero
