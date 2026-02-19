@@ -36,7 +36,7 @@
     </div>
 
     <div style="text-align: center; margin-top: 30px; color: #999; font-size: 12px;">
-      V 2.0.176 02/26
+      V 2.0.177 02/26
     </div>
     <div style="text-align: center; margin-top: 6px; color: #bbb; font-size: 10px;">
       JR ©
@@ -71,11 +71,14 @@
       sessionStorage.removeItem('sessionExpiredMessage');
     }
 
-    // If ?org= is present, force a fresh login for that org
+    // Force fresh login when org context has changed
     const urlParams = new URLSearchParams(window.location.search);
     const orgSlug = urlParams.get('org');
-    if (orgSlug) {
-      // Clear any existing session so the admin logs in fresh
+    const storedOrgId = localStorage.getItem('organizationId');
+    // Clear session when:
+    // 1. ?org= is present (switching to a specific CDB)
+    // 2. No ?org= but session is for a non-default org (returning to default CDBHS)
+    if (orgSlug || (storedOrgId && storedOrgId !== '1' && storedOrgId !== 'null' && storedOrgId !== 'undefined')) {
       localStorage.removeItem('token');
       localStorage.removeItem('userRole');
       localStorage.removeItem('username');
