@@ -312,11 +312,15 @@
           Colonnes attendues : <strong>tournoi_id</strong>, <strong>licence</strong>, email, telephone, commentaire, convoque (0/1), forfait (0/1)
         </p>
 
-        <div style="margin-bottom: 15px;">
+        <div style="margin-bottom: 15px; display: flex; gap: 15px; align-items: center;">
           <a href="#" id="downloadTemplateLink" style="color: var(--color-primary, #1F4788); font-weight: bold;">
             Telecharger le modele Excel
           </a>
+          <a href="#" id="toggleTournoiRef" style="color: #666; font-size: 13px;">
+            Voir les IDs des tournois
+          </a>
         </div>
+        <div id="tournoiRefTable" style="display: none; margin-bottom: 15px; max-height: 150px; overflow-y: auto; border: 1px solid #eee; border-radius: 6px; font-size: 12px;"></div>
 
         <div class="file-upload" id="excelFileUpload" style="margin-bottom: 15px;">
           <p>Cliquez pour selectionner un fichier Excel (.xlsx)</p>
@@ -547,12 +551,12 @@
         return dateB - dateA;
       });
 
-      // Add tournaments as options
+      // Add tournaments as options (show tournoi_id for Excel import reference)
       filteredTournois.forEach(t => {
         const option = document.createElement('option');
         option.value = t.tournoi_id;
         const date = t.debut ? new Date(t.debut).toLocaleDateString('fr-FR') : '';
-        option.textContent = `${t.nom} ${date ? `(${date})` : ''}`;
+        option.textContent = `[${t.tournoi_id}] ${t.nom} ${date ? `(${date})` : ''}`;
         select.appendChild(option);
       });
     }
@@ -1168,7 +1172,7 @@
           const option = document.createElement('option');
           option.value = t.tournoi_id;
           const date = t.debut ? new Date(t.debut).toLocaleDateString('fr-FR') : '';
-          option.textContent = `${t.nom} ${date ? `(${date})` : ''}`;
+          option.textContent = `[${t.tournoi_id}] ${t.nom} ${date ? `(${date})` : ''}`;
           optgroup.appendChild(option);
         });
 
@@ -1287,6 +1291,29 @@
         URL.revokeObjectURL(url);
       } catch (error) {
         alert('Erreur: ' + error.message);
+      }
+    });
+
+    // Toggle tournoi reference table in import modal
+    document.getElementById('toggleTournoiRef').addEventListener('click', (e) => {
+      e.preventDefault();
+      const refDiv = document.getElementById('tournoiRefTable');
+      if (refDiv.style.display === 'none') {
+        // Build table from allTournois
+        const sorted = [...allTournois].sort((a, b) => b.tournoi_id - a.tournoi_id);
+        let html = '<table style="width: 100%; border-collapse: collapse;">';
+        html += '<tr style="background: #f0f0f0; position: sticky; top: 0;"><th style="padding: 6px 8px; text-align: left;">ID</th><th style="padding: 6px 8px; text-align: left;">Tournoi</th><th style="padding: 6px 8px; text-align: left;">Date</th></tr>';
+        sorted.forEach(t => {
+          const date = t.debut ? new Date(t.debut).toLocaleDateString('fr-FR') : '-';
+          html += `<tr style="border-bottom: 1px solid #eee;"><td style="padding: 4px 8px; font-weight: bold;">${t.tournoi_id}</td><td style="padding: 4px 8px;">${t.nom}</td><td style="padding: 4px 8px;">${date}</td></tr>`;
+        });
+        html += '</table>';
+        refDiv.innerHTML = html;
+        refDiv.style.display = 'block';
+        e.target.textContent = 'Masquer les IDs';
+      } else {
+        refDiv.style.display = 'none';
+        e.target.textContent = 'Voir les IDs des tournois';
       }
     });
 
