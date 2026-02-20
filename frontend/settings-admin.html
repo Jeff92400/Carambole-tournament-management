@@ -884,30 +884,10 @@
       </div>
 
       <div id="tournamentTypesMessage" style="display: none; margin-top: 15px; padding: 10px; border-radius: 4px;"></div>
-    </div>
 
-    <!-- Politique de Confidentialité Section - Admin Only -->
-    <div class="card admin-only" id="privacyPolicySection">
-      <h3>📋 Politique de Confidentialité</h3>
-      <p style="margin-bottom: 20px; color: #666;">
-        Gérez le texte complet de la politique de confidentialité affiché dans l'Espace Joueur.
-      </p>
-
-      <div style="display: flex; align-items: center; gap: 20px; flex-wrap: wrap;">
-        <div style="flex: 1;">
-          <p style="margin: 0; color: #666;">
-            <strong>Dernière modification :</strong> <span id="privacyPolicyLastUpdate">Non configurée</span>
-          </p>
-        </div>
-        <a href="privacy-policy-editor.html" class="btn" style="background: #1F4788; padding: 12px 25px; text-decoration: none;">
-          Modifier la politique →
-        </a>
-      </div>
-    </div>
-
-    <!-- Qualification Mode Section - Admin Only -->
-    <div class="card admin-only" id="qualificationModeSection">
-      <h3>Mode de qualification</h3>
+      <!-- Qualification Mode (inside tournament types card) -->
+      <hr style="margin: 30px 0; border: none; border-top: 1px solid #ddd;">
+      <h3>🏅 Mode de qualification</h3>
       <p style="margin-bottom: 20px; color: #666;">Choisissez le mode de qualification pour les finales de votre comité.</p>
 
       <div style="display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 20px;">
@@ -954,6 +934,26 @@
       </button>
       <div id="qualificationMessage" style="display: none; margin-top: 15px; padding: 10px; border-radius: 4px;"></div>
     </div>
+
+    <!-- Politique de Confidentialité Section - Admin Only -->
+    <div class="card admin-only" id="privacyPolicySection">
+      <h3>📋 Politique de Confidentialité</h3>
+      <p style="margin-bottom: 20px; color: #666;">
+        Gérez le texte complet de la politique de confidentialité affiché dans l'Espace Joueur.
+      </p>
+
+      <div style="display: flex; align-items: center; gap: 20px; flex-wrap: wrap;">
+        <div style="flex: 1;">
+          <p style="margin: 0; color: #666;">
+            <strong>Dernière modification :</strong> <span id="privacyPolicyLastUpdate">Non configurée</span>
+          </p>
+        </div>
+        <a href="privacy-policy-editor.html" class="btn" style="background: #1F4788; padding: 12px 25px; text-decoration: none;">
+          Modifier la politique →
+        </a>
+      </div>
+    </div>
+
 
     <!-- Activity Logs Section - Admin Only -->
     <div class="card admin-only">
