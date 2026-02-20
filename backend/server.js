@@ -1522,12 +1522,6 @@ async function checkTournamentAlerts() {
 
   const resend = new Resend(process.env.RESEND_API_KEY);
 
-  // Get dynamic settings for email branding
-  const emailSettings = await appSettings.getSettingsBatch([
-    'primary_color', 'email_convocations', 'email_sender_name',
-    'organization_short_name', 'summary_email'
-  ]);
-
   try {
     console.log('[Tournament Alerts] Checking for upcoming tournaments...');
 
@@ -1582,31 +1576,10 @@ async function checkTournamentAlerts() {
     const today = new Date();
     const twoWeeksFromNow = new Date(today.getTime() + 14 * 24 * 60 * 60 * 1000);
 
-    // Get upcoming tournaments that need relances
-    const tournamentsNeeding = await new Promise((resolve, reject) => {
-      db.all(`
-        SELECT t.*
-        FROM tournoi_ext t
-        LEFT JOIN tournament_relances r ON t.tournoi_id = r.tournoi_id
-        WHERE t.debut >= $1 AND t.debut <= $2 AND r.tournoi_id IS NULL
-        ORDER BY t.debut ASC
-      `, [today.toISOString().split('T')[0], twoWeeksFromNow.toISOString().split('T')[0]], (err, rows) => {
-        if (err) reject(err);
-        else resolve(rows || []);
-      });
-    });
-
-    if (tournamentsNeeding.length === 0) {
-      console.log('[Tournament Alerts] No tournaments needing relances in the next 2 weeks');
-      return;
-    }
-
-    console.log(`[Tournament Alerts] Found ${tournamentsNeeding.length} tournament(s) needing relances`);
-
-    // Get users opted-in for alerts with valid email
+    // Get users opted-in for alerts with valid email (include their org)
     const usersToNotify = await new Promise((resolve, reject) => {
       db.all(`
-        SELECT id, username, email FROM users
+        SELECT id, username, email, organization_id FROM users
         WHERE receive_tournament_alerts = true AND email IS NOT NULL AND email != '' AND is_active = 1
       `, [], (err, rows) => {
         if (err) reject(err);
@@ -1619,69 +1592,115 @@ async function checkTournamentAlerts() {
       return;
     }
 
-    console.log(`[Tournament Alerts] Notifying ${usersToNotify.length} user(s)`);
-
-    // Build tournament list HTML
-    const tournamentListHtml = tournamentsNeeding.map(t => {
-      const dateObj = new Date(t.debut);
-      const dateStr = dateObj.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-      const daysLeft = Math.ceil((dateObj - new Date()) / (1000 * 60 * 60 * 24));
-      const lieuStr = t.lieu ? ` - <span style="color: #17a2b8;">${t.lieu}</span>` : '';
-
-      return `
-        <div style="background: #fff3cd; padding: 15px; border-radius: 8px; margin-bottom: 10px; border-left: 4px solid #ffc107;">
-          <strong style="color: #333;">${t.nom}</strong><br>
-          <span style="color: #666;">${t.mode} ${t.categorie} - ${dateStr}${lieuStr}</span><br>
-          <span style="color: ${daysLeft <= 7 ? '#dc3545' : '#856404'}; font-weight: bold;">
-            Dans ${daysLeft} jour${daysLeft > 1 ? 's' : ''}
-          </span>
-        </div>
-      `;
-    }).join('');
+    // Group users by org
+    const usersByOrg = {};
+    for (const user of usersToNotify) {
+      const orgId = user.organization_id || 'none';
+      if (!usersByOrg[orgId]) usersByOrg[orgId] = [];
+      usersByOrg[orgId].push(user);
+    }
 
     const baseUrl = process.env.BASE_URL || 'https://cdbhs-tournament-management-production.up.railway.app';
+    let totalSent = 0;
 
-    // Send email to each opted-in user
-    const primaryColor = emailSettings.primary_color || '#1F4788';
-    const senderName = emailSettings.email_sender_name || 'CDBHS';
-    const senderEmail = emailSettings.email_convocations || 'convocations@cdbhs.net';
-    const orgShortName = emailSettings.organization_short_name || 'CDBHS';
-    const replyToEmail = emailSettings.summary_email || '';
+    // Process each org independently
+    for (const [orgId, orgUsers] of Object.entries(usersByOrg)) {
+      const orgIdNum = orgId === 'none' ? null : parseInt(orgId);
 
-    for (const user of usersToNotify) {
-      try {
-        await resend.emails.send({
-          from: `${senderName} <${senderEmail}>`,
-          to: user.email,
-          replyTo: replyToEmail,
-          subject: `⚠️ ${tournamentsNeeding.length} tournoi(s) à relancer - ${orgShortName}`,
-          html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-              <div style="background: ${primaryColor}; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0;">
-                <h1 style="margin: 0; font-size: 24px;">Rappel Tournois ${orgShortName}</h1>
-              </div>
-              <div style="background: #f8f9fa; padding: 20px; border-radius: 0 0 8px 8px;">
-                <p>Bonjour ${user.username},</p>
-                <p>Les tournois suivants approchent et les <strong>relances n'ont pas encore été envoyées</strong> :</p>
-                ${tournamentListHtml}
-                <p style="margin-top: 20px;">
-                  <a href="${baseUrl}/dashboard.html" style="background: #28a745; color: white; padding: 12px 25px; text-decoration: none; border-radius: 6px; display: inline-block;">
-                    Accéder au tableau de bord
-                  </a>
-                </p>
-                <hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;">
-                <p style="color: #666; font-size: 12px;">
-                  Vous recevez cet email car vous avez activé les alertes de tournois dans vos paramètres.
-                  <br>Pour vous désabonner, modifiez vos paramètres sur ${baseUrl}/settings.html
-                </p>
-              </div>
-            </div>
-          `
+      // Get org-specific branding
+      const emailSettings = orgIdNum
+        ? await appSettings.getOrgSettingsBatch(orgIdNum, [
+            'primary_color', 'email_convocations', 'email_sender_name',
+            'organization_short_name', 'summary_email'
+          ])
+        : await appSettings.getSettingsBatch([
+            'primary_color', 'email_convocations', 'email_sender_name',
+            'organization_short_name', 'summary_email'
+          ]);
+
+      // Get upcoming tournaments for this org only
+      const tournamentsNeeding = await new Promise((resolve, reject) => {
+        db.all(`
+          SELECT t.*
+          FROM tournoi_ext t
+          LEFT JOIN tournament_relances r ON t.tournoi_id = r.tournoi_id
+          WHERE t.debut >= $1 AND t.debut <= $2 AND r.tournoi_id IS NULL
+            AND ($3::int IS NULL OR t.organization_id = $3)
+          ORDER BY t.debut ASC
+        `, [today.toISOString().split('T')[0], twoWeeksFromNow.toISOString().split('T')[0], orgIdNum], (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows || []);
         });
+      });
 
-        console.log(`[Tournament Alerts] Email sent to ${user.email}`);
-      } catch (error) {
-        console.error(`[Tournament Alerts] Error sending to ${user.email}:`, error.message);
+      if (tournamentsNeeding.length === 0) {
+        console.log(`[Tournament Alerts] No tournaments needing relances for org ${orgId}`);
+        continue;
+      }
+
+      console.log(`[Tournament Alerts] Org ${orgId}: ${tournamentsNeeding.length} tournament(s), ${orgUsers.length} user(s)`);
+
+      // Build tournament list HTML
+      const tournamentListHtml = tournamentsNeeding.map(t => {
+        const dateObj = new Date(t.debut);
+        const dateStr = dateObj.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+        const daysLeft = Math.ceil((dateObj - new Date()) / (1000 * 60 * 60 * 24));
+        const lieuStr = t.lieu ? ` - <span style="color: #17a2b8;">${t.lieu}</span>` : '';
+
+        return `
+          <div style="background: #fff3cd; padding: 15px; border-radius: 8px; margin-bottom: 10px; border-left: 4px solid #ffc107;">
+            <strong style="color: #333;">${t.nom}</strong><br>
+            <span style="color: #666;">${t.mode} ${t.categorie} - ${dateStr}${lieuStr}</span><br>
+            <span style="color: ${daysLeft <= 7 ? '#dc3545' : '#856404'}; font-weight: bold;">
+              Dans ${daysLeft} jour${daysLeft > 1 ? 's' : ''}
+            </span>
+          </div>
+        `;
+      }).join('');
+
+      const primaryColor = emailSettings.primary_color || '#1F4788';
+      const senderName = emailSettings.email_sender_name || 'CDBHS';
+      const senderEmail = emailSettings.email_convocations || 'convocations@cdbhs.net';
+      const orgShortName = emailSettings.organization_short_name || 'CDBHS';
+      const replyToEmail = emailSettings.summary_email || '';
+
+      for (const user of orgUsers) {
+        try {
+          await resend.emails.send({
+            from: `${senderName} <${senderEmail}>`,
+            to: user.email,
+            replyTo: replyToEmail,
+            subject: `⚠️ ${tournamentsNeeding.length} tournoi(s) à relancer - ${orgShortName}`,
+            html: `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+                <div style="background: ${primaryColor}; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0;">
+                  <h1 style="margin: 0; font-size: 24px;">Rappel Tournois ${orgShortName}</h1>
+                </div>
+                <div style="background: #f8f9fa; padding: 20px; border-radius: 0 0 8px 8px;">
+                  <p>Bonjour ${user.username},</p>
+                  <p>Les tournois suivants approchent et les <strong>relances n'ont pas encore été envoyées</strong> :</p>
+                  ${tournamentListHtml}
+                  <p style="margin-top: 20px;">
+                    <a href="${baseUrl}/dashboard.html" style="background: #28a745; color: white; padding: 12px 25px; text-decoration: none; border-radius: 6px; display: inline-block;">
+                      Accéder au tableau de bord
+                    </a>
+                  </p>
+                  <hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;">
+                  <p style="color: #666; font-size: 12px;">
+                    Vous recevez cet email car vous avez activé les alertes de tournois dans vos paramètres.
+                    <br>Pour vous désabonner, modifiez vos paramètres sur ${baseUrl}/settings.html
+                  </a>
+                  </p>
+                </div>
+              </div>
+            `
+          });
+
+          console.log(`[Tournament Alerts] Email sent to ${user.email} (org ${orgId})`);
+          totalSent++;
+        } catch (error) {
+          console.error(`[Tournament Alerts] Error sending to ${user.email}:`, error.message);
+        }
       }
     }
 
@@ -1691,10 +1710,10 @@ async function checkTournamentAlerts() {
         UPDATE email_campaigns
         SET subject = $1, body = $2, recipients_count = $3, sent_count = $3, status = 'completed'
         WHERE campaign_type = 'tournament_alert' AND status = 'pending'
-      `, [`Rappel Tournois - ${tournamentsNeeding.length} tournoi(s)`, 'Auto-generated tournament alert', usersToNotify.length], () => resolve());
+      `, [`Rappel Tournois - multi-org`, 'Auto-generated tournament alert', totalSent], () => resolve());
     });
 
-    console.log('[Tournament Alerts] Completed');
+    console.log(`[Tournament Alerts] Completed - ${totalSent} email(s) sent`);
 
   } catch (error) {
     console.error('[Tournament Alerts] Error:', error.message);
