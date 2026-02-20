@@ -202,7 +202,7 @@ Vous pouvez utiliser le format Markdown :
         }
       } catch (e) {
         console.error('Error parsing token:', e);
-        window.location.href = 'login.html';
+        handleSessionExpired();
       }
     }
     checkAdminRole();

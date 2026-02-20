@@ -524,8 +524,7 @@
         // If token error, redirect to login
         if (error.message.includes('token') || error.message.includes('Access')) {
           setTimeout(() => {
-            localStorage.removeItem('token');
-            window.location.href = 'login.html';
+            handleSessionExpired();
           }, 2000);
         }
       }

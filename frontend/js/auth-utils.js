@@ -23,7 +23,7 @@
     // else: already in the right org, no redirect needed
   } else if (isSA && storedOrgId && storedOrgId !== '1' && storedOrgId !== 'null' && !sessionStorage.getItem('activeOrgSession')) {
     // SA on a regular page without ?org=, non-CDBHS org, AND no active session marker
-    // → stale session from a previous browser session → redirect to login
+    // → stale session from a previous browser session → redirect to SA login
     // (sessionStorage is tab-scoped and cleared on browser close, so active sessions are preserved)
     localStorage.removeItem('token');
     localStorage.removeItem('sa_token');
@@ -33,12 +33,23 @@
     localStorage.removeItem('userClub');
     localStorage.removeItem('userClubId');
     localStorage.removeItem('isSuperAdmin');
-    window.location.href = '/login.html';
+    window.location.href = '/login.html?sa=1';
   }
 })();
 
 // Note: ?org= in URLs on regular pages is handled by the session guard above
 // which redirects to login.html?org=slug. No need to auto-propagate ?org= to nav links.
+
+// Global logout handler — intercepts all #logoutBtn clicks (capture phase)
+// so individual page handlers don't redirect to bare 'login.html' losing org context.
+document.addEventListener('click', function(e) {
+  const logoutBtn = e.target.closest('#logoutBtn');
+  if (logoutBtn) {
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    logout();
+  }
+}, true);
 
 // Intercept all fetch responses to handle 401 errors globally
 (function() {
@@ -103,6 +114,8 @@ function handleSessionExpired() {
   // Check if this was a SA session before clearing
   const wasSuperAdmin = localStorage.getItem('isSuperAdmin') === 'true';
   const hadSaToken = !!localStorage.getItem('sa_token');
+  // Preserve org context before clearing
+  const orgSlug = localStorage.getItem('orgSlug');
 
   // Clear stored credentials
   localStorage.removeItem('token');
@@ -122,6 +135,9 @@ function handleSessionExpired() {
   // SA users get the neutral SA login screen
   if (wasSuperAdmin || hadSaToken) {
     window.location.href = '/login.html?sa=1';
+  } else if (orgSlug) {
+    // Preserve org context so login page shows correct CDB branding
+    window.location.href = '/login.html?org=' + encodeURIComponent(orgSlug);
   } else {
     window.location.href = '/login.html';
   }
@@ -136,7 +152,20 @@ function requireAuth() {
   const token = localStorage.getItem('token');
   if (!token) {
     console.log('[Auth] No token found, redirecting to login');
-    window.location.href = '/login.html';
+    // SA pages → always redirect to SA login
+    const currentPage = window.location.pathname.split('/').pop();
+    const isOnSAPage = currentPage && currentPage.startsWith('super-admin');
+    const wasSuperAdmin = localStorage.getItem('isSuperAdmin') === 'true';
+    if (isOnSAPage || wasSuperAdmin) {
+      window.location.href = '/login.html?sa=1';
+      return false;
+    }
+    // Regular pages → preserve org context so login page shows correct CDB branding
+    const urlOrg = new URLSearchParams(window.location.search).get('org');
+    const storedSlug = localStorage.getItem('orgSlug');
+    const orgParam = urlOrg || storedSlug;
+    const loginUrl = orgParam ? '/login.html?org=' + encodeURIComponent(orgParam) : '/login.html';
+    window.location.href = loginUrl;
     return false;
   }
   return true;
@@ -163,6 +192,8 @@ function logout() {
   // Check if this is a SA session before clearing
   const wasSuperAdmin = localStorage.getItem('isSuperAdmin') === 'true';
   const hadSaToken = !!localStorage.getItem('sa_token');
+  // Preserve org context before clearing
+  const orgSlug = localStorage.getItem('orgSlug');
 
   localStorage.removeItem('token');
   localStorage.removeItem('username');
@@ -179,6 +210,9 @@ function logout() {
   // SA users get the neutral SA login screen
   if (wasSuperAdmin || hadSaToken) {
     window.location.href = '/login.html?sa=1';
+  } else if (orgSlug) {
+    // Preserve org context so login page shows correct CDB branding
+    window.location.href = '/login.html?org=' + encodeURIComponent(orgSlug);
   } else {
     window.location.href = '/login.html';
   }
