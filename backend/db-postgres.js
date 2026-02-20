@@ -1346,7 +1346,15 @@ async function initializeDatabase() {
     await client.query(`UPDATE scheduled_emails SET organization_id = 1 WHERE organization_id IS NULL`);
     await client.query(`UPDATE player_invitations SET organization_id = 1 WHERE organization_id IS NULL`);
     await client.query(`UPDATE admin_activity_logs SET organization_id = 1 WHERE organization_id IS NULL`);
-    await client.query(`UPDATE activity_logs SET organization_id = 1 WHERE organization_id IS NULL`);
+    // Assign activity_logs org from player's org (not blindly to org 1)
+    await client.query(`
+      UPDATE activity_logs al
+      SET organization_id = p.organization_id
+      FROM players p
+      WHERE REPLACE(al.licence, ' ', '') = REPLACE(p.licence, ' ', '')
+        AND p.organization_id IS NOT NULL
+        AND (al.organization_id IS NULL OR al.organization_id != p.organization_id)
+    `);
     await client.query(`UPDATE organization_logo SET organization_id = 1 WHERE organization_id IS NULL`);
     await client.query(`UPDATE categories SET organization_id = 1 WHERE organization_id IS NULL`);
     await client.query(`UPDATE scoring_rules SET organization_id = 1 WHERE organization_id IS NULL`);
