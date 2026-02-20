@@ -44,7 +44,7 @@ router.get('/branding/colors', async (req, res) => {
   if (orgSlug) {
     try {
       const org = await new Promise((resolve, reject) => {
-        db.get('SELECT id FROM organizations WHERE slug = $1 AND is_active = TRUE', [orgSlug], (err, row) => {
+        db.get('SELECT id, short_name, name FROM organizations WHERE slug = $1 AND is_active = TRUE', [orgSlug], (err, row) => {
           if (err) reject(err);
           else resolve(row);
         });
@@ -52,6 +52,11 @@ router.get('/branding/colors', async (req, res) => {
 
       if (org) {
         const settings = await appSettings.getOrgSettingsBatch(org.id, colorKeys);
+        // Always use organizations.short_name as the authoritative source
+        // (organization_settings may have stale/incorrect fallback values)
+        if (org.short_name) {
+          settings.organization_short_name = org.short_name;
+        }
         return res.json(settings);
       }
     } catch (e) {

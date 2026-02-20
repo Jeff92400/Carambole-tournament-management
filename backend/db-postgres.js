@@ -1433,7 +1433,7 @@ async function initializeDatabase() {
     }
 
     // Ensure all orgs have their short_name correctly set in organization_settings
-    // (fixes CDBs where organization_short_name was missing or inherited from global CDBHS default)
+    // Always sync from organizations table (authoritative source)
     await client.query(`
       INSERT INTO organization_settings (organization_id, key, value)
       SELECT o.id, 'organization_short_name', o.short_name
@@ -1441,7 +1441,7 @@ async function initializeDatabase() {
       WHERE o.short_name IS NOT NULL
       ON CONFLICT (organization_id, key) DO UPDATE
         SET value = EXCLUDED.value
-        WHERE organization_settings.value = 'CDBHS' AND EXCLUDED.value != 'CDBHS'
+        WHERE organization_settings.value != EXCLUDED.value
     `);
     await client.query(`
       INSERT INTO organization_settings (organization_id, key, value)
@@ -1450,7 +1450,7 @@ async function initializeDatabase() {
       WHERE o.name IS NOT NULL
       ON CONFLICT (organization_id, key) DO UPDATE
         SET value = EXCLUDED.value
-        WHERE organization_settings.value LIKE '%Hauts-de-Seine%' AND EXCLUDED.value NOT LIKE '%Hauts-de-Seine%'
+        WHERE organization_settings.value != EXCLUDED.value
     `);
 
     // Seed player_app_url for CDBHS (org #1) with explicit ?org=cdbhs slug
