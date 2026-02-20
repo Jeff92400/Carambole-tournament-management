@@ -78,7 +78,7 @@ npm start       # Start server on port 3000
 
 - **Backend:** Node.js 18+, Express.js, PostgreSQL (Railway)
 - **Frontend:** Vanilla HTML/CSS/JS (no build process)
-- **Email:** Resend API
+- **Email:** Resend API (free plan — single verified domain `cdbhs.net`)
 - **Auth:** JWT + bcrypt
 - **Deployment:** Railway with Nixpacks
 
@@ -152,6 +152,30 @@ Required:
 Optional:
 - `PORT` - Server port (default 3000)
 - `ALLOWED_ORIGINS` - CORS origins
+
+## Resend Email Configuration
+
+**Plan:** Free (1 custom domain, 100 emails/day, 3,000 emails/month)
+**Verified domain:** `cdbhs.net` — all CDB sender addresses must use this domain.
+
+### How It Works
+- All CDBs share the same `RESEND_API_KEY` (single Railway env var)
+- Each CDB has per-org sender addresses in `organization_settings` (`email_communication`, `email_convocations`, `email_noreply`)
+- Sender **name** is org-specific (e.g., "CDB9493"), sender **address** must be `*@cdbhs.net`
+- `platform_email_domain` in Super Admin → Paramètres must be set to `cdbhs.net`
+- New CDBs auto-get `{slug}@cdbhs.net` addresses during creation
+
+### Multi-Domain Upgrade
+To give each CDB a branded sender domain (e.g., `cdb9493@ffbcarambole-gestion.fr`):
+1. Upgrade Resend to **Pro plan ($20/month)** — supports multiple custom domains
+2. Add the new domain in Resend → Domains → "+ Add domain"
+3. Configure DNS records (DKIM CNAME + SPF) at the domain registrar
+4. Wait for verification, then update the CDB's email settings
+
+### Troubleshooting
+- Resend API returns 200 (success) even if the sender domain is unverified — emails are silently dropped
+- If emails aren't arriving: check that the sender address uses a **verified** domain in Resend
+- Check verified domains at: https://resend.com/domains
 
 ## Development Notes
 
