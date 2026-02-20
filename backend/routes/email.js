@@ -7,6 +7,7 @@ const { authenticateToken } = require('./auth');
 const appSettings = require('../utils/app-settings');
 const { getPouleConfigForOrg } = require('../utils/poule-config');
 const { logAdminAction, ACTION_TYPES } = require('../utils/admin-logger');
+const { getFinaleTournamentNumber } = require('./settings');
 
 const router = express.Router();
 
@@ -80,9 +81,9 @@ function buildUniversalVariables(data = {}, emailSettings = {}, contactEmail = '
   // Tournament number label (T1, T2, T3, or Finale)
   let tournamentLabel = '';
   if (data.tournament_number) {
-    tournamentLabel = data.tournament_number === 4 || data.tournament_number === '4'
-      ? 'Finale'
-      : `T${data.tournament_number}`;
+    const tn = Number(data.tournament_number);
+    const isFinale = data.is_finale || (data.finale_number != null && tn === Number(data.finale_number));
+    tournamentLabel = isFinale ? 'Finale' : `T${data.tournament_number}`;
   }
 
   return {
@@ -287,8 +288,10 @@ const getResend = () => {
 };
 
 // Fetch ranking data for players in a category/season
-async function getRankingDataForCategory(categoryId, season) {
+async function getRankingDataForCategory(categoryId, season, orgId) {
   const db = require('../db-loader');
+  const rankingNumbers = await getRankingTournamentNumbers(orgId || null);
+  const rankingNumbersSQL = rankingNumbers.join(',');
 
   return new Promise((resolve) => {
     const query = `
@@ -300,13 +303,13 @@ async function getRankingDataForCategory(categoryId, season) {
                   WHERE REPLACE(tr.licence, ' ', '') = REPLACE(r.licence, ' ', '')
                   AND t.category_id = r.category_id
                   AND t.season = r.season
-                  AND t.tournament_number <= 3), 0) as cumulated_points,
+                  AND t.tournament_number IN (${rankingNumbersSQL})), 0) as cumulated_points,
         COALESCE((SELECT SUM(tr.reprises) FROM tournament_results tr
                   JOIN tournaments t ON tr.tournament_id = t.id
                   WHERE REPLACE(tr.licence, ' ', '') = REPLACE(r.licence, ' ', '')
                   AND t.category_id = r.category_id
                   AND t.season = r.season
-                  AND t.tournament_number <= 3), 0) as cumulated_reprises
+                  AND t.tournament_number IN (${rankingNumbersSQL})), 0) as cumulated_reprises
       FROM rankings r
       WHERE r.category_id = $1 AND r.season = $2
     `;
@@ -357,13 +360,13 @@ async function getRankingDataByCategoryName(categoryDisplayName, season, orgId =
                 resolve({});
               } else {
                 console.log(`[Ranking] Found category by partial match: ${cat2.id}`);
-                getRankingDataForCategory(cat2.id, season).then(resolve);
+                getRankingDataForCategory(cat2.id, season, orgId).then(resolve);
               }
             }
           );
         } else {
           console.log(`[Ranking] Found category by exact match: ${cat.id}`);
-          getRankingDataForCategory(cat.id, season).then(resolve);
+          getRankingDataForCategory(cat.id, season, orgId).then(resolve);
         }
       }
     );
@@ -1233,7 +1236,7 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
     console.log('Using mock ranking data for testing');
   } else if (category.id) {
     // Fetch real ranking data by category ID
-    rankingData = await getRankingDataForCategory(category.id, season);
+    rankingData = await getRankingDataForCategory(category.id, season, orgId);
     console.log(`Fetched ranking data for ${Object.keys(rankingData).length} players by category ID`);
   } else if (category.display_name) {
     // Fallback: try to find category by name and fetch ranking data
@@ -2380,7 +2383,7 @@ router.post('/generate-summary-pdf', authenticateToken, async (req, res) => {
     if (mockRankingData) {
       rankingData = mockRankingData;
     } else if (category.id) {
-      rankingData = await getRankingDataForCategory(category.id, season);
+      rankingData = await getRankingDataForCategory(category.id, season, req.user?.organizationId || null);
     }
 
     // Get branding settings
@@ -2619,11 +2622,13 @@ router.post('/inscription-confirmation', async (req, res) => {
       : 'Date à définir';
 
     // Build universal variables (all common variables available)
+    const finaleNumber = await getFinaleTournamentNumber(orgId);
     const variables = buildUniversalVariables({
       player_name,
       player_email,
       tournament_name,
       tournament_number,
+      finale_number: finaleNumber,
       mode,
       category,
       tournament_date: dateStr,
@@ -2749,11 +2754,13 @@ router.post('/inscription-cancellation', async (req, res) => {
       : 'Date à définir';
 
     // Build universal variables (all common variables available)
+    const finaleNumber2 = await getFinaleTournamentNumber(orgId);
     const variables = buildUniversalVariables({
       player_name,
       player_email,
       tournament_name,
       tournament_number,
+      finale_number: finaleNumber2,
       mode,
       category,
       tournament_date: dateStr,

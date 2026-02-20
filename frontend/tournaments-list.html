@@ -291,7 +291,7 @@
       } else {
         filtered.forEach(tournament => {
           const row = document.createElement('tr');
-          const tournamentLabel = tournament.tournament_number === 4 ? 'Finale Départementale' : `Tournoi ${tournament.tournament_number}`;
+          const tournamentLabel = tournament.type_display_name || (tournament.is_finale ? 'Finale Départementale' : `Tournoi ${tournament.tournament_number}`);
 
           const editBtn = userRole === 'admin'
             ? `<button onclick="editTournament(${tournament.id}, '${(tournament.location || '').replace(/'/g, "\\'")}', '${(tournament.location_2 || '').replace(/'/g, "\\'")}', ${tournament.results_email_sent ? 'true' : 'false'})" title="Modifier" style="background: #ffc107; color: black; border: none; padding: 4px 6px; cursor: pointer; border-radius: 3px; font-size: 12px;">✏️</button>`

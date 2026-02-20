@@ -1376,6 +1376,39 @@ async function initializeDatabase() {
     await client.query(`ALTER TABLE email_templates DROP CONSTRAINT IF EXISTS email_templates_template_key_key`);
     await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS email_templates_template_key_org_key ON email_templates(template_key, organization_id)`);
 
+    // ============= TOURNAMENT TYPES ORG-SCOPING =============
+    // Add organization_id and is_finale columns
+    await client.query(`ALTER TABLE tournament_types ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)`);
+    await client.query(`ALTER TABLE tournament_types ADD COLUMN IF NOT EXISTS is_finale BOOLEAN DEFAULT FALSE`);
+    // Set is_finale for existing FINALE rows
+    await client.query(`UPDATE tournament_types SET is_finale = TRUE WHERE UPPER(code) = 'FINALE' AND is_finale = FALSE`);
+    // Assign existing rows to org #1
+    await client.query(`UPDATE tournament_types SET organization_id = 1 WHERE organization_id IS NULL`);
+    // Update unique constraint: tournament_number must be unique per org (not globally)
+    await client.query(`ALTER TABLE tournament_types DROP CONSTRAINT IF EXISTS tournament_types_tournament_number_key`);
+    await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS tournament_types_number_org_key ON tournament_types(tournament_number, organization_id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_tournament_types_org ON tournament_types(organization_id)`);
+    // Seed default tournament types for all active orgs that don't have any yet
+    const ttOrgs = await client.query(`SELECT id FROM organizations WHERE is_active = true`);
+    for (const org of ttOrgs.rows) {
+      const ttCheck = await client.query(`SELECT COUNT(*) as count FROM tournament_types WHERE organization_id = $1`, [org.id]);
+      if (parseInt(ttCheck.rows[0].count) === 0) {
+        const ttDefaults = [
+          [1, 'T1', 'Tournoi 1', true, false],
+          [2, 'T2', 'Tournoi 2', true, false],
+          [3, 'T3', 'Tournoi 3', true, false],
+          [4, 'FINALE', 'Finale Départementale', false, true]
+        ];
+        for (const [num, code, name, ranking, finale] of ttDefaults) {
+          await client.query(
+            `INSERT INTO tournament_types (tournament_number, code, display_name, include_in_ranking, is_finale, organization_id)
+             VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING`,
+            [num, code, name, ranking, finale, org.id]
+          );
+        }
+      }
+    }
+
     // Migrate CDB-specific settings from app_settings to organization_settings for org #1
     const orgSettingsKeys = [
       'organization_name', 'organization_short_name',

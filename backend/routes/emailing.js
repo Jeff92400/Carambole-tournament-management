@@ -6,6 +6,7 @@ const fs = require('fs');
 const { authenticateToken } = require('./auth');
 const appSettings = require('../utils/app-settings');
 const { logAdminAction, ACTION_TYPES } = require('../utils/admin-logger');
+const { getRankingTournamentNumbers, getFinaleTournamentNumber, getTournamentLabel } = require('./settings');
 
 const router = express.Router();
 
@@ -1582,8 +1583,9 @@ router.post('/send-finale-results', authenticateToken, async (req, res) => {
     const tableHtml = buildResultsTableHtml(results, primaryColor);
 
     // Tournament info
-    const isFinale = tournament.tournament_number === 4;
-    const tournamentLabel = isFinale ? 'Finale Départementale' : `Tournoi ${tournament.tournament_number}`;
+    const finaleNumber = await getFinaleTournamentNumber(orgId);
+    const isFinale = tournament.tournament_number === finaleNumber;
+    const tournamentLabel = await getTournamentLabel(tournament.tournament_number, orgId) || (isFinale ? 'Finale Départementale' : `Tournoi ${tournament.tournament_number}`);
     const tournamentDate = tournament.tournament_date
       ? new Date(tournament.tournament_date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
       : '';
@@ -2506,7 +2508,8 @@ router.post('/send-results', authenticateToken, async (req, res) => {
         // Rule: < 9 players → 4 qualified, >= 9 players → 6 qualified
         const qualifiedCount = rankings.length < 9 ? 4 : 6;
         const isQualified = playerRanking && playerRanking.rank_position <= qualifiedCount;
-        const isFinalTournament = tournament.tournament_number === 3;
+        const lastRankingNumber = Math.max(...(await getRankingTournamentNumbers(orgId)));
+        const isFinalTournament = tournament.tournament_number === lastRankingNumber;
 
         let qualificationMessage;
         if (isFinalTournament) {
@@ -2530,8 +2533,8 @@ router.post('/send-results', authenticateToken, async (req, res) => {
         }
 
         // Replace template variables (handles both plain and HTML-encoded from Quill)
-        // Tournament label: T1, T2, T3 or "Finale" for tournament_number = 4
-        const tournamentNumberLabel = tournament.tournament_number === 4 ? 'Finale' : `T${tournament.tournament_number}`;
+        const finaleNum = await getFinaleTournamentNumber(orgId);
+        const tournamentNumberLabel = tournament.tournament_number === finaleNum ? 'Finale' : `T${tournament.tournament_number}`;
 
         let personalizedIntro = introText;
         personalizedIntro = replaceVar(personalizedIntro, 'first_name', participant.first_name || participant.player_name.split(' ')[0] || '');
@@ -2833,7 +2836,7 @@ router.get('/finale-winners', authenticateToken, async (req, res) => {
 
   try {
     // Get all finale winners for the season
-    // tournament_number = 4 means finale, position = 1 means winner
+    const finaleNum = await getFinaleTournamentNumber(orgId);
     const winners = await new Promise((resolve, reject) => {
       db.all(
         `SELECT
@@ -2857,7 +2860,7 @@ router.get('/finale-winners', authenticateToken, async (req, res) => {
          JOIN categories c ON t.category_id = c.id
          JOIN tournament_results tr ON tr.tournament_id = t.id
          LEFT JOIN player_contacts pc ON REPLACE(tr.licence, ' ', '') = REPLACE(pc.licence, ' ', '')
-         WHERE t.tournament_number = 4
+         WHERE t.tournament_number = ${finaleNum}
            AND t.season = $1
            AND tr.position = 1
            AND UPPER(tr.licence) NOT LIKE 'TEST%'

@@ -12,6 +12,7 @@ const bcrypt = require('bcrypt');
 // Get database connection
 const db = require('../db-loader');
 const appSettings = require('../utils/app-settings');
+const { getRankingTournamentNumbers } = require('../routes/settings');
 
 // Demo configuration
 const DEMO_ADMIN = {
@@ -305,6 +306,11 @@ async function seedDemoData() {
     let resultsCreated = 0;
     let rankingsCreated = 0;
 
+    // Get ranking tournament numbers dynamically
+    const rankingNumbers = await getRankingTournamentNumbers(null);
+    // For demo, simulate played tournaments (all but the last qualifying round)
+    const playedNumbers = rankingNumbers.slice(0, -1);
+
     // Map game_type to rank column for filtering eligible players
     const gameTypeToRankCol = {
       'LIBRE': 'rank_libre',
@@ -331,8 +337,8 @@ async function seedDemoData() {
 
       if (eligiblePlayers.length < 4) continue; // Skip if not enough players
 
-      // Create T1 and T2 (played tournaments)
-      for (const tNum of [1, 2]) {
+      // Create played qualifying tournaments (all but last)
+      for (const tNum of playedNumbers) {
         // Check if tournament already exists
         const existingTournament = await dbGet(
           `SELECT id FROM tournaments WHERE category_id = $1 AND tournament_number = $2 AND season = $3`,
@@ -408,12 +414,10 @@ async function seedDemoData() {
             ELSE 0
           END as avg_moyenne,
           MAX(tr.serie) as best_serie,
-          MAX(CASE WHEN t.tournament_number = 1 THEN tr.match_points ELSE NULL END) as t1_points,
-          MAX(CASE WHEN t.tournament_number = 2 THEN tr.match_points ELSE NULL END) as t2_points,
-          MAX(CASE WHEN t.tournament_number = 3 THEN tr.match_points ELSE NULL END) as t3_points
+          ${rankingNumbers.map((num, i) => `MAX(CASE WHEN t.tournament_number = ${num} THEN tr.match_points ELSE NULL END) as t${i + 1}_points`).join(',\n          ')}
         FROM tournament_results tr
         JOIN tournaments t ON tr.tournament_id = t.id
-        WHERE t.category_id = $1 AND t.season = $2 AND t.tournament_number <= 3
+        WHERE t.category_id = $1 AND t.season = $2 AND t.tournament_number IN (${rankingNumbers.join(',')})
         GROUP BY REPLACE(tr.licence, ' ', '')
         ORDER BY total_match_points DESC, avg_moyenne DESC, best_serie DESC`,
         [cat.id, season]

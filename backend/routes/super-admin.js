@@ -743,6 +743,14 @@ router.post('/organizations', async (req, res) => {
       );
     }
 
+    // Seed default tournament types
+    try {
+      const { initTournamentTypes } = require('./settings');
+      await initTournamentTypes(orgId);
+    } catch (ttErr) {
+      console.error('Error seeding tournament types:', ttErr);
+    }
+
     // Auto-seed clubs from FFB clubs if CDB code is set
     let clubStats = { created: 0, skipped: 0, errors: 0 };
     if (ffb_cdb_code) {

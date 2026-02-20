@@ -502,8 +502,8 @@
 
         if (tournamentsResponse.ok) {
           const allTournaments = await tournamentsResponse.json();
-          // Filter out finals (tournament_number = 4) for tournament count
-          const tournaments = allTournaments.filter(t => t.tournament_number !== 4);
+          // Filter out finals for tournament count
+          const tournaments = allTournaments.filter(t => !t.is_finale);
           document.getElementById('tournamentCount').textContent = tournaments.length;
 
           // Calculate cumulative participants (sum of all player_count from tournaments, excluding finals)

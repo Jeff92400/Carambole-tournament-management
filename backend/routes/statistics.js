@@ -1,6 +1,7 @@
 const express = require('express');
 const { authenticateToken } = require('./auth');
 const appSettings = require('../utils/app-settings');
+const { getRankingTournamentNumbers } = require('./settings');
 
 const router = express.Router();
 
@@ -584,12 +585,13 @@ router.get('/players/serie', authenticateToken, async (req, res) => {
   }
 });
 
-// Get most consistent players (played all 3 tournaments in a category)
+// Get most consistent players (played all qualifying tournaments in a category)
 router.get('/players/consistent', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
   const { season } = req.query;
   const targetSeason = season || await getCurrentSeason();
   const orgId = req.user.organizationId || null;
+  const rankingNumbers = await getRankingTournamentNumbers(orgId);
 
   const query = `
     SELECT
@@ -606,8 +608,9 @@ router.get('/players/consistent', authenticateToken, async (req, res) => {
     LEFT JOIN players p ON REPLACE(tr.licence, ' ', '') = REPLACE(p.licence, ' ', '')
     WHERE t.season = $1
       AND ($2::int IS NULL OR t.organization_id = $2)
+      AND t.tournament_number IN (${rankingNumbers.join(',')})
     GROUP BY tr.licence, COALESCE(p.first_name || ' ' || p.last_name, tr.player_name), p.club, c.id, c.display_name, c.game_type
-    HAVING COUNT(DISTINCT t.tournament_number) = 3
+    HAVING COUNT(DISTINCT t.tournament_number) = ${rankingNumbers.length}
     ORDER BY avg_position ASC
   `;
 
@@ -626,6 +629,9 @@ router.get('/players/progression', authenticateToken, async (req, res) => {
   const { season } = req.query;
   const targetSeason = season || await getCurrentSeason();
   const orgId = req.user.organizationId || null;
+
+  const firstRanking = rankingNumbers[0];
+  const lastRanking = rankingNumbers[rankingNumbers.length - 1];
 
   const query = `
     WITH player_tournaments AS (
@@ -659,8 +665,8 @@ router.get('/players/progression', authenticateToken, async (req, res) => {
       FROM player_tournaments pt1
       JOIN player_tournaments pt3 ON pt1.licence = pt3.licence
         AND pt1.category = pt3.category
-        AND pt1.tournament_number = 1
-        AND pt3.tournament_number = 3
+        AND pt1.tournament_number = ${firstRanking}
+        AND pt3.tournament_number = ${lastRanking}
     )
     SELECT * FROM progression
     WHERE position_improvement > 0

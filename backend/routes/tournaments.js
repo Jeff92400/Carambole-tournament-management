@@ -8,6 +8,7 @@ const { authenticateToken } = require('./auth');
 const { logAdminAction, ACTION_TYPES } = require('../utils/admin-logger');
 const { getColumnMapping } = require('./import-config');
 const appSettings = require('../utils/app-settings');
+const { getRankingTournamentNumbers, getFinaleTournamentNumber, getTournamentLabel } = require('./settings');
 
 /**
  * Default column mapping for tournament results imports
@@ -1395,13 +1396,13 @@ function recalculateRankings(categoryId, season, callback) {
           if (mode === 'journees') {
             recalculateRankingsJournees(categoryId, season, callback, orgId);
           } else {
-            recalculateRankingsStandard(categoryId, season, callback);
+            recalculateRankingsStandard(categoryId, season, callback, orgId);
           }
         }).catch(() => {
-          recalculateRankingsStandard(categoryId, season, callback);
+          recalculateRankingsStandard(categoryId, season, callback, orgId);
         });
       } else {
-        recalculateRankingsStandard(categoryId, season, callback);
+        recalculateRankingsStandard(categoryId, season, callback, null);
       }
     }
   );
@@ -1604,11 +1605,20 @@ async function recalculateRankingsJournees(categoryId, season, callback, orgId) 
 }
 
 // ==================== STANDARD RANKING (3 Tournois) ====================
-function recalculateRankingsStandard(categoryId, season, callback) {
+async function recalculateRankingsStandard(categoryId, season, callback, orgId) {
   console.log(`[RANKING] Starting recalculation for category ${categoryId}, season ${season}`);
 
+  // Get ranking tournament numbers dynamically (excludes finale)
+  const rankingNumbers = await getRankingTournamentNumbers(orgId);
+  const rankingNumbersSQL = rankingNumbers.join(',');
+
+  // Build CASE WHEN clauses dynamically for per-tournament point columns
+  const caseClauses = rankingNumbers.map((num, i) =>
+    `MAX(CASE WHEN t.tournament_number = ${num} THEN tr.match_points + COALESCE(tr.bonus_points, 0) ELSE NULL END) as t${i + 1}_points`
+  ).join(',\n      ');
+
   // Get all tournament results for this category and season
-  // Exclude finale (tournament_number = 4) from ranking calculation
+  // Exclude finale from ranking calculation
   // Ranking order: 1) match points DESC, 2) cumulative moyenne DESC, 3) best serie DESC
   const query = `
     SELECT
@@ -1623,13 +1633,11 @@ function recalculateRankingsStandard(categoryId, season, callback) {
         ELSE 0
       END as avg_moyenne,
       MAX(tr.serie) as best_serie,
-      MAX(CASE WHEN t.tournament_number = 1 THEN tr.match_points + COALESCE(tr.bonus_points, 0) ELSE NULL END) as t1_points,
-      MAX(CASE WHEN t.tournament_number = 2 THEN tr.match_points + COALESCE(tr.bonus_points, 0) ELSE NULL END) as t2_points,
-      MAX(CASE WHEN t.tournament_number = 3 THEN tr.match_points + COALESCE(tr.bonus_points, 0) ELSE NULL END) as t3_points,
+      ${caseClauses},
       MAX(t.organization_id) as org_id
     FROM tournament_results tr
     JOIN tournaments t ON tr.tournament_id = t.id
-    WHERE t.category_id = ? AND t.season = ? AND t.tournament_number <= 3
+    WHERE t.category_id = ? AND t.season = ? AND t.tournament_number IN (${rankingNumbersSQL})
     GROUP BY REPLACE(tr.licence, ' ', '')
     ORDER BY total_match_points DESC, avg_moyenne DESC, best_serie DESC
   `;
@@ -1724,7 +1732,7 @@ function recalculateRankingsStandard(categoryId, season, callback) {
                       `SELECT REPLACE(tr.licence, ' ', '') as licence, tr.bonus_detail
                        FROM tournament_results tr
                        JOIN tournaments t ON tr.tournament_id = t.id
-                       WHERE t.category_id = ? AND t.season = ? AND t.tournament_number <= 3
+                       WHERE t.category_id = ? AND t.season = ? AND t.tournament_number IN (${rankingNumbersSQL})
                        AND tr.bonus_detail IS NOT NULL`,
                       [categoryId, season],
                       (err, detailRows) => {
@@ -1776,9 +1784,10 @@ function recalculateRankingsStandard(categoryId, season, callback) {
 }
 
 // Recompute bonus points for all tournaments in a category/season
-function recomputeAllBonuses(categoryId, season, orgId, callback) {
+async function recomputeAllBonuses(categoryId, season, orgId, callback) {
+  const rankingNumbers = await getRankingTournamentNumbers(orgId);
   db.all(
-    'SELECT id FROM tournaments WHERE category_id = ? AND season = ? AND tournament_number <= 3',
+    `SELECT id FROM tournaments WHERE category_id = ? AND season = ? AND tournament_number IN (${rankingNumbers.join(',')})`,
     [categoryId, season],
     (err, tournaments) => {
       if (err || !tournaments || tournaments.length === 0) {
@@ -1845,10 +1854,14 @@ router.get('/', authenticateToken, (req, res) => {
       c.game_type,
       c.level,
       c.display_name,
-      COUNT(tr.id) as player_count
+      COUNT(tr.id) as player_count,
+      COALESCE(tt.is_finale, FALSE) as is_finale,
+      tt.display_name as type_display_name
     FROM tournaments t
     JOIN categories c ON t.category_id = c.id
     LEFT JOIN tournament_results tr ON tr.tournament_id = t.id
+    LEFT JOIN tournament_types tt ON t.tournament_number = tt.tournament_number
+      AND ($1::int IS NULL OR tt.organization_id = $1)
     WHERE ($1::int IS NULL OR t.organization_id = $1)
   `;
 
@@ -1858,7 +1871,7 @@ router.get('/', authenticateToken, (req, res) => {
     params.push(season);
   }
 
-  query += ' GROUP BY t.id, t.tournament_number, t.season, t.tournament_date, t.import_date, t.location, t.location_2, t.results_email_sent, t.results_email_sent_at, c.id, c.game_type, c.level, c.display_name ORDER BY t.import_date DESC';
+  query += ' GROUP BY t.id, t.tournament_number, t.season, t.tournament_date, t.import_date, t.location, t.location_2, t.results_email_sent, t.results_email_sent_at, c.id, c.game_type, c.level, c.display_name, tt.is_finale, tt.display_name ORDER BY t.import_date DESC';
 
   db.all(query, params, (err, rows) => {
     if (err) {
@@ -1893,9 +1906,13 @@ router.get('/:id/results', authenticateToken, (req, res) => {
 
   // Get tournament info
   db.get(
-    `SELECT t.*, c.display_name, c.game_type, c.level
+    `SELECT t.*, c.display_name, c.game_type, c.level,
+            COALESCE(tt.is_finale, FALSE) as is_finale,
+            tt.display_name as type_display_name
      FROM tournaments t
      JOIN categories c ON t.category_id = c.id
+     LEFT JOIN tournament_types tt ON t.tournament_number = tt.tournament_number
+       AND (t.organization_id IS NULL OR tt.organization_id = t.organization_id)
      WHERE t.id = ?`,
     [tournamentId],
     (err, tournament) => {
@@ -2106,14 +2123,16 @@ router.get('/:id/export', authenticateToken, async (req, res) => {
             const tournamentDate = tournament.tournament_date
               ? new Date(tournament.tournament_date).toLocaleDateString('fr-FR', { year: 'numeric', month: 'long', day: 'numeric' })
               : '';
-            const tournamentLabel = tournament.tournament_number === 4 ? 'Finale Départementale' : `Tournoi ${tournament.tournament_number}`;
+            const finaleNumber = await getFinaleTournamentNumber(tournament.organization_id);
+            const isFinale = tournament.tournament_number === finaleNumber;
+            const tournamentLabel = await getTournamentLabel(tournament.tournament_number, tournament.organization_id) || (isFinale ? 'Finale Départementale' : `Tournoi ${tournament.tournament_number}`);
             worksheet.getCell('A2').value = `${tournamentLabel} • Saison ${tournament.season}${tournamentDate ? ' • ' + tournamentDate : ''}`;
             worksheet.getCell('A2').font = { size: 11, italic: true, color: { argb: 'FF666666' } };
             worksheet.getCell('A2').alignment = { horizontal: 'center', vertical: 'middle' };
             worksheet.getRow(2).height = 20;
 
             // Add podium section for finale
-            if (tournament.tournament_number === 4 && results.length >= 3) {
+            if (isFinale && results.length >= 3) {
               // Podium section in Row 3
               worksheet.mergeCells(`A3:${lastCol}3`);
               worksheet.getCell('A3').value = '🏆 PODIUM DE LA FINALE 🏆';
@@ -2154,7 +2173,7 @@ router.get('/:id/export', authenticateToken, async (req, res) => {
             }
 
             // Headers - Row 4 for regular, Row 8 for finale
-            const headerRow = tournament.tournament_number === 4 ? 8 : 4;
+            const headerRow = isFinale ? 8 : 4;
             const headerValues = [
               'Position',
               'Licence',
@@ -2338,7 +2357,7 @@ router.get('/:id/export', authenticateToken, async (req, res) => {
               : '';
 
             // Determine tournament label (T1, T2, T3, or Finale)
-            const filenameTournamentLabel = tournament.tournament_number === 4 ? 'Finale' : `T${tournament.tournament_number}`;
+            const filenameTournamentLabel = isFinale ? 'Finale' : `T${tournament.tournament_number}`;
 
             // Create filename: "T1, Bande R2, 15_10_2025.xlsx"
             const filename = `${filenameTournamentLabel}, ${tournament.display_name}, ${dateStr}.xlsx`;

@@ -56,10 +56,6 @@
           <label for="tournamentNumber">Numéro du tournoi *</label>
           <select id="tournamentNumber" required>
             <option value="">-- Sélectionner --</option>
-            <option value="1">Tournoi 1</option>
-            <option value="2">Tournoi 2</option>
-            <option value="3">Tournoi 3</option>
-            <option value="4">Finale Départementale</option>
           </select>
         </div>
 
@@ -1219,10 +1215,30 @@
       }
     }
 
+    // Load tournament rounds dynamically
+    async function loadTournamentRounds() {
+      try {
+        const response = await fetch(`${API_URL}/reference-data/tournament-rounds`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          const rounds = await response.json();
+          const select = document.getElementById('tournamentNumber');
+          select.innerHTML = '<option value="">-- Sélectionner --</option>';
+          rounds.forEach(r => {
+            select.innerHTML += `<option value="${r.tournament_number}">${r.display_name}</option>`;
+          });
+        }
+      } catch (error) {
+        console.error('Error loading tournament rounds:', error);
+      }
+    }
+
     // Initialize
     loadCategories();
     loadClubs();
     loadQualificationMode();
+    loadTournamentRounds();
 
     // Set today's date as default value
     const today = new Date().toISOString().split('T')[0];

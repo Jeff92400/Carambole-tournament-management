@@ -606,44 +606,128 @@ const initAppSettings = async () => {
   });
 };
 
-// Initialize tournament_types table
-const initTournamentTypes = async () => {
+// Initialize tournament_types table and seed defaults for an org
+const initTournamentTypes = async (orgId) => {
   const db = getDb();
-  return new Promise((resolve) => {
+
+  // Create table if not exists (with new schema)
+  await new Promise((resolve) => {
     db.run(`
       CREATE TABLE IF NOT EXISTS tournament_types (
         id SERIAL PRIMARY KEY,
-        tournament_number INTEGER NOT NULL UNIQUE,
+        tournament_number INTEGER NOT NULL,
         code TEXT NOT NULL,
         display_name TEXT NOT NULL,
-        include_in_ranking BOOLEAN DEFAULT TRUE
+        include_in_ranking BOOLEAN DEFAULT TRUE,
+        is_finale BOOLEAN DEFAULT FALSE,
+        organization_id INTEGER REFERENCES organizations(id)
       )
-    `, [], async (err) => {
+    `, [], (err) => {
       if (err) console.error('Error creating tournament_types table:', err);
-
-      // Default tournament types
-      const defaultTypes = [
-        [1, 'T1', 'Tournoi 1', true],
-        [2, 'T2', 'Tournoi 2', true],
-        [3, 'T3', 'Tournoi 3', true],
-        [4, 'FINALE', 'Finale Départementale', false]
-      ];
-
-      for (const [num, code, displayName, includeInRanking] of defaultTypes) {
-        await new Promise((res) => {
-          db.run(
-            `INSERT INTO tournament_types (tournament_number, code, display_name, include_in_ranking)
-             VALUES ($1, $2, $3, $4) ON CONFLICT (tournament_number) DO NOTHING`,
-            [num, code, displayName, includeInRanking],
-            () => res()
-          );
-        });
-      }
-
       resolve();
     });
   });
+
+  // Seed defaults for this org if none exist
+  if (!orgId) return;
+
+  const existing = await new Promise((resolve) => {
+    db.get('SELECT COUNT(*) as count FROM tournament_types WHERE organization_id = $1', [orgId], (err, row) => {
+      resolve(row ? parseInt(row.count) : 0);
+    });
+  });
+
+  if (existing > 0) return;
+
+  const defaultTypes = [
+    [1, 'T1', 'Tournoi 1', true, false],
+    [2, 'T2', 'Tournoi 2', true, false],
+    [3, 'T3', 'Tournoi 3', true, false],
+    [4, 'FINALE', 'Finale Départementale', false, true]
+  ];
+
+  for (const [num, code, displayName, includeInRanking, isFinale] of defaultTypes) {
+    await new Promise((res) => {
+      db.run(
+        `INSERT INTO tournament_types (tournament_number, code, display_name, include_in_ranking, is_finale, organization_id)
+         VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING`,
+        [num, code, displayName, includeInRanking, isFinale, orgId],
+        () => res()
+      );
+    });
+  }
 };
+
+// ============= TOURNAMENT TYPE HELPERS (cached, exported) =============
+
+const _ttCache = {};
+const TT_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Get tournament numbers that count in rankings for an org.
+ * Replaces all hardcoded `tournament_number <= 3` checks.
+ * @returns {Promise<number[]>} e.g. [1, 2, 3]
+ */
+async function getRankingTournamentNumbers(orgId) {
+  const cacheKey = `ranking_${orgId || 'global'}`;
+  if (_ttCache[cacheKey] && Date.now() - _ttCache[cacheKey].ts < TT_CACHE_TTL) {
+    return _ttCache[cacheKey].data;
+  }
+  const db = getDb();
+  const rows = await new Promise((resolve) => {
+    db.all(
+      `SELECT tournament_number FROM tournament_types WHERE include_in_ranking = TRUE AND ($1::int IS NULL OR organization_id = $1) ORDER BY tournament_number`,
+      [orgId], (err, rows) => resolve(rows || [])
+    );
+  });
+  const numbers = rows.map(r => r.tournament_number);
+  _ttCache[cacheKey] = { data: numbers, ts: Date.now() };
+  return numbers;
+}
+
+/**
+ * Get the finale tournament number for an org.
+ * Replaces all hardcoded `tournament_number === 4` checks.
+ * @returns {Promise<number|null>} e.g. 4
+ */
+async function getFinaleTournamentNumber(orgId) {
+  const cacheKey = `finale_${orgId || 'global'}`;
+  if (_ttCache[cacheKey] && Date.now() - _ttCache[cacheKey].ts < TT_CACHE_TTL) {
+    return _ttCache[cacheKey].data;
+  }
+  const db = getDb();
+  const row = await new Promise((resolve) => {
+    db.get(
+      `SELECT tournament_number FROM tournament_types WHERE is_finale = TRUE AND ($1::int IS NULL OR organization_id = $1) LIMIT 1`,
+      [orgId], (err, row) => resolve(row)
+    );
+  });
+  const num = row ? row.tournament_number : null;
+  _ttCache[cacheKey] = { data: num, ts: Date.now() };
+  return num;
+}
+
+/**
+ * Get display label for a tournament number.
+ * @returns {Promise<string>} e.g. "Finale Départementale"
+ */
+async function getTournamentLabel(tournamentNumber, orgId) {
+  const db = getDb();
+  const row = await new Promise((resolve) => {
+    db.get(
+      `SELECT display_name FROM tournament_types WHERE tournament_number = $1 AND ($2::int IS NULL OR organization_id = $2)`,
+      [tournamentNumber, orgId], (err, row) => resolve(row)
+    );
+  });
+  return row ? row.display_name : `Tournoi ${tournamentNumber}`;
+}
+
+/**
+ * Clear tournament type cache (call on CRUD operations).
+ */
+function clearTournamentTypeCache() {
+  Object.keys(_ttCache).forEach(k => delete _ttCache[k]);
+}
 
 // Get a setting by key (org-aware: returns org-specific if user has organizationId)
 router.get('/app/:key', authenticateToken, async (req, res) => {
@@ -784,15 +868,16 @@ router.put('/app-bulk', authenticateToken, requireAdmin, async (req, res) => {
 
 // ============= TOURNAMENT TYPES =============
 
-// Get all tournament types
+// Get all tournament types (org-scoped)
 router.get('/tournament-types', authenticateToken, async (req, res) => {
   const db = getDb();
+  const orgId = req.user.organizationId || null;
 
-  await initTournamentTypes();
+  await initTournamentTypes(orgId);
 
   db.all(
-    'SELECT * FROM tournament_types ORDER BY tournament_number',
-    [],
+    'SELECT * FROM tournament_types WHERE ($1::int IS NULL OR organization_id = $1) ORDER BY tournament_number',
+    [orgId],
     (err, rows) => {
       if (err) {
         console.error('Error fetching tournament types:', err);
@@ -803,17 +888,17 @@ router.get('/tournament-types', authenticateToken, async (req, res) => {
   );
 });
 
-// Update a tournament type (admin only)
+// Update a tournament type (admin only, org-scoped)
 router.put('/tournament-types/:id', authenticateToken, requireAdmin, async (req, res) => {
   const db = getDb();
   const { id } = req.params;
-  const { code, display_name, include_in_ranking } = req.body;
-
-  await initTournamentTypes();
+  const { code, display_name, include_in_ranking, is_finale } = req.body;
+  const orgId = req.user.organizationId || null;
 
   db.run(
-    `UPDATE tournament_types SET code = $1, display_name = $2, include_in_ranking = $3 WHERE id = $4`,
-    [code, display_name, include_in_ranking, id],
+    `UPDATE tournament_types SET code = $1, display_name = $2, include_in_ranking = $3, is_finale = $4
+     WHERE id = $5 AND ($6::int IS NULL OR organization_id = $6)`,
+    [code, display_name, include_in_ranking, is_finale || false, id, orgId],
     function(err) {
       if (err) {
         console.error('Error updating tournament type:', err);
@@ -822,9 +907,75 @@ router.put('/tournament-types/:id', authenticateToken, requireAdmin, async (req,
       if (this.changes === 0) {
         return res.status(404).json({ error: 'Tournament type not found' });
       }
+      clearTournamentTypeCache();
       res.json({ success: true, message: 'Tournament type updated' });
     }
   );
+});
+
+// Create a new tournament type (admin only)
+router.post('/tournament-types', authenticateToken, requireAdmin, async (req, res) => {
+  const db = getDb();
+  const { tournament_number, code, display_name, include_in_ranking, is_finale } = req.body;
+  const orgId = req.user.organizationId;
+
+  if (!orgId) return res.status(400).json({ error: 'Organization required' });
+  if (!tournament_number || !code || !display_name) {
+    return res.status(400).json({ error: 'tournament_number, code et display_name sont requis' });
+  }
+
+  db.run(
+    `INSERT INTO tournament_types (tournament_number, code, display_name, include_in_ranking, is_finale, organization_id)
+     VALUES ($1, $2, $3, $4, $5, $6)`,
+    [tournament_number, code, display_name, include_in_ranking ?? true, is_finale ?? false, orgId],
+    function(err) {
+      if (err) {
+        if (err.message?.includes('unique') || err.message?.includes('duplicate')) {
+          return res.status(409).json({ error: 'Ce numéro de tournoi existe déjà' });
+        }
+        console.error('Error creating tournament type:', err);
+        return res.status(500).json({ error: err.message });
+      }
+      clearTournamentTypeCache();
+      res.json({ success: true, id: this.lastID });
+    }
+  );
+});
+
+// Delete a tournament type (admin only, blocked if referenced)
+router.delete('/tournament-types/:id', authenticateToken, requireAdmin, async (req, res) => {
+  const db = getDb();
+  const { id } = req.params;
+  const orgId = req.user.organizationId || null;
+
+  // Look up the type
+  const type = await new Promise((resolve) => {
+    db.get('SELECT tournament_number, display_name FROM tournament_types WHERE id = $1 AND ($2::int IS NULL OR organization_id = $2)',
+      [id, orgId], (err, row) => resolve(row));
+  });
+
+  if (!type) return res.status(404).json({ error: 'Type de tournoi introuvable' });
+
+  // Check if any tournaments reference this number
+  const usage = await new Promise((resolve) => {
+    db.get('SELECT COUNT(*) as count FROM tournaments WHERE tournament_number = $1 AND ($2::int IS NULL OR organization_id = $2)',
+      [type.tournament_number, orgId], (err, row) => resolve(row ? parseInt(row.count) : 0));
+  });
+
+  if (usage > 0) {
+    return res.status(409).json({ error: `Impossible de supprimer : ${usage} compétition(s) utilisent le type "${type.display_name}"` });
+  }
+
+  db.run('DELETE FROM tournament_types WHERE id = $1 AND ($2::int IS NULL OR organization_id = $2)',
+    [id, orgId], function(err) {
+      if (err) {
+        console.error('Error deleting tournament type:', err);
+        return res.status(500).json({ error: err.message });
+      }
+      if (this.changes === 0) return res.status(404).json({ error: 'Type de tournoi introuvable' });
+      clearTournamentTypeCache();
+      res.json({ success: true });
+    });
 });
 
 // ============= EMAIL TEMPLATES =============
@@ -1388,13 +1539,14 @@ router.post('/snapshot-season-stats', authenticateToken, requireAdmin, async (re
           [season]
         );
 
+        const snapshotFinaleNum = await getFinaleTournamentNumber(req.user?.organizationId || null);
         const playerResults = {};
         resultsRows.forEach(r => {
           const lic = r.licence?.replace(/\s/g, '');
           if (!playerResults[lic]) playerResults[lic] = [];
           playerResults[lic].push({
             position: r.position,
-            isFinale: r.tournament_number === 4
+            isFinale: r.tournament_number === snapshotFinaleNum
           });
         });
 
@@ -1569,3 +1721,8 @@ router.put('/position-points', authenticateToken, requireAdmin, async (req, res)
 });
 
 module.exports = router;
+module.exports.getRankingTournamentNumbers = getRankingTournamentNumbers;
+module.exports.getFinaleTournamentNumber = getFinaleTournamentNumber;
+module.exports.getTournamentLabel = getTournamentLabel;
+module.exports.clearTournamentTypeCache = clearTournamentTypeCache;
+module.exports.initTournamentTypes = initTournamentTypes;

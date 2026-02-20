@@ -625,13 +625,30 @@ router.get('/inscription-statuses', authenticateToken, (req, res) => {
 // ==================== TOURNAMENT ROUNDS ====================
 
 router.get('/tournament-rounds', authenticateToken, (req, res) => {
-  const rounds = [
-    { code: 'T1', display_name: 'Tournoi 1', order: 1 },
-    { code: 'T2', display_name: 'Tournoi 2', order: 2 },
-    { code: 'T3', display_name: 'Tournoi 3', order: 3 },
-    { code: 'F', display_name: 'Finale', order: 4, icon: '🏆' }
-  ];
-  res.json(rounds);
+  const db = require('../db-loader');
+  const orgId = req.user?.organizationId || null;
+
+  db.all(
+    `SELECT tournament_number, code, display_name, include_in_ranking, is_finale
+     FROM tournament_types
+     WHERE ($1::int IS NULL OR organization_id = $1)
+     ORDER BY tournament_number`,
+    [orgId],
+    (err, rows) => {
+      if (err) return res.status(500).json({ error: err.message });
+
+      const rounds = (rows || []).map(r => ({
+        code: r.code,
+        display_name: r.display_name,
+        order: r.tournament_number,
+        tournament_number: r.tournament_number,
+        include_in_ranking: r.include_in_ranking,
+        is_finale: r.is_finale
+      }));
+
+      res.json(rounds);
+    }
+  );
 });
 
 // ==================== USER ROLES ====================

@@ -10,6 +10,7 @@ const appSettings = require('../utils/app-settings');
 const { getPouleConfigForOrg } = require('../utils/poule-config');
 const { logAdminAction, ACTION_TYPES } = require('../utils/admin-logger');
 const { getColumnMapping } = require('./import-config');
+const { getRankingTournamentNumbers } = require('./settings');
 
 /**
  * Default column mapping for inscriptions imports (named columns)
@@ -1686,18 +1687,20 @@ router.post('/generate-poules', authenticateToken, async (req, res) => {
       rankingData = req.body.mockRankingData;
     } else {
       try {
+        const rankingNumbers = await getRankingTournamentNumbers(req.user.organizationId || null);
+        const rankingNumbersSQL = rankingNumbers.join(',');
         const rankingResult = await db.query(`
           SELECT r.licence, r.rank_position,
             COALESCE((SELECT SUM(tr.points) FROM tournament_results tr
               JOIN tournaments t ON tr.tournament_id = t.id
               WHERE REPLACE(tr.licence, ' ', '') = REPLACE(r.licence, ' ', '')
               AND t.category_id = r.category_id AND t.season = r.season
-              AND t.tournament_number <= 3), 0) as cumulated_points,
+              AND t.tournament_number IN (${rankingNumbersSQL})), 0) as cumulated_points,
             COALESCE((SELECT SUM(tr.reprises) FROM tournament_results tr
               JOIN tournaments t ON tr.tournament_id = t.id
               WHERE REPLACE(tr.licence, ' ', '') = REPLACE(r.licence, ' ', '')
               AND t.category_id = r.category_id AND t.season = r.season
-              AND t.tournament_number <= 3), 0) as cumulated_reprises
+              AND t.tournament_number IN (${rankingNumbersSQL})), 0) as cumulated_reprises
           FROM rankings r WHERE r.category_id = $1 AND r.season = $2 AND ($3::int IS NULL OR r.organization_id = $3)
         `, [category.id, season, req.user.organizationId || null]);
 

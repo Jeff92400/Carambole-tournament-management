@@ -5,6 +5,7 @@ const fs = require('fs');
 const db = require('../db-loader');
 const { authenticateToken } = require('./auth');
 const appSettings = require('../utils/app-settings');
+const { getRankingTournamentNumbers } = require('./settings');
 
 const router = express.Router();
 
@@ -29,7 +30,7 @@ async function getOrganizationLogoBuffer() {
 }
 
 // Get rankings by category and season
-router.get('/', authenticateToken, (req, res) => {
+router.get('/', authenticateToken, async (req, res) => {
   const { categoryId, season } = req.query;
 
   if (!categoryId || !season) {
@@ -37,11 +38,13 @@ router.get('/', authenticateToken, (req, res) => {
   }
 
   const orgId = req.user.organizationId || null;
+  const rankingNumbers = await getRankingTournamentNumbers(orgId);
+  const rankingNumbersSQL = rankingNumbers.join(',');
 
   // First, check which tournaments have been played for this category/season
   const tournamentsPlayedQuery = `
     SELECT tournament_number FROM tournaments
-    WHERE category_id = $1 AND season = $2 AND tournament_number <= 3
+    WHERE category_id = $1 AND season = $2 AND tournament_number IN (${rankingNumbersSQL})
       AND ($3::int IS NULL OR organization_id = $3)
   `;
 
@@ -50,11 +53,10 @@ router.get('/', authenticateToken, (req, res) => {
       return res.status(500).json({ error: err.message });
     }
 
-    const tournamentsPlayed = {
-      t1: tournamentRows.some(t => t.tournament_number === 1),
-      t2: tournamentRows.some(t => t.tournament_number === 2),
-      t3: tournamentRows.some(t => t.tournament_number === 3)
-    };
+    const tournamentsPlayed = {};
+    rankingNumbers.forEach(num => {
+      tournamentsPlayed[`t${num}`] = tournamentRows.some(t => t.tournament_number === num);
+    });
 
     // Use LEFT JOIN for players to include ranked players even if not in players table
     // Get player name from tournament_results as fallback
@@ -95,13 +97,13 @@ router.get('/', authenticateToken, (req, res) => {
                     WHERE REPLACE(tr.licence, ' ', '') = REPLACE(r.licence, ' ', '')
                     AND t.category_id = r.category_id
                     AND t.season = r.season
-                    AND t.tournament_number <= 3), 0) as cumulated_points,
+                    AND t.tournament_number IN (${rankingNumbersSQL})), 0) as cumulated_points,
           COALESCE((SELECT SUM(tr.reprises) FROM tournament_results tr
                     JOIN tournaments t ON tr.tournament_id = t.id
                     WHERE REPLACE(tr.licence, ' ', '') = REPLACE(r.licence, ' ', '')
                     AND t.category_id = r.category_id
                     AND t.season = r.season
-                    AND t.tournament_number <= 3), 0) as cumulated_reprises,
+                    AND t.tournament_number IN (${rankingNumbersSQL})), 0) as cumulated_reprises,
           CASE WHEN p.licence IS NULL THEN 1 ELSE 0 END as missing_from_players,
           pc.email as contact_email,
           pc.telephone as contact_telephone
@@ -197,11 +199,13 @@ router.get('/export', authenticateToken, async (req, res) => {
   }
 
   const orgId = req.user.organizationId || null;
+  const rankingNumbers = await getRankingTournamentNumbers(orgId);
+  const rankingNumbersSQL = rankingNumbers.join(',');
 
   // First, check which tournaments have been played
   const tournamentsPlayedQuery = `
     SELECT tournament_number FROM tournaments
-    WHERE category_id = $1 AND season = $2 AND tournament_number <= 3
+    WHERE category_id = $1 AND season = $2 AND tournament_number IN (${rankingNumbersSQL})
       AND ($3::int IS NULL OR organization_id = $3)
   `;
 
@@ -212,11 +216,10 @@ router.get('/export', authenticateToken, async (req, res) => {
     });
   });
 
-  const tournamentsPlayed = {
-    t1: tournamentRows.some(t => t.tournament_number === 1),
-    t2: tournamentRows.some(t => t.tournament_number === 2),
-    t3: tournamentRows.some(t => t.tournament_number === 3)
-  };
+  const tournamentsPlayed = {};
+  rankingNumbers.forEach(num => {
+    tournamentsPlayed[`t${num}`] = tournamentRows.some(t => t.tournament_number === num);
+  });
 
   // Use LEFT JOIN for players to include ranked players even if not in players table
   // Use subqueries for club_aliases and clubs to avoid duplicate rows from JOINs
@@ -253,13 +256,13 @@ router.get('/export', authenticateToken, async (req, res) => {
                   WHERE REPLACE(tr.licence, ' ', '') = REPLACE(r.licence, ' ', '')
                   AND t.category_id = r.category_id
                   AND t.season = r.season
-                  AND t.tournament_number <= 3), 0) as cumulated_points,
+                  AND t.tournament_number IN (${rankingNumbersSQL})), 0) as cumulated_points,
         COALESCE((SELECT SUM(tr.reprises) FROM tournament_results tr
                   JOIN tournaments t ON tr.tournament_id = t.id
                   WHERE REPLACE(tr.licence, ' ', '') = REPLACE(r.licence, ' ', '')
                   AND t.category_id = r.category_id
                   AND t.season = r.season
-                  AND t.tournament_number <= 3), 0) as cumulated_reprises
+                  AND t.tournament_number IN (${rankingNumbersSQL})), 0) as cumulated_reprises
       FROM rankings r
       LEFT JOIN players p ON REPLACE(r.licence, ' ', '') = REPLACE(p.licence, ' ', '')
       JOIN categories c ON r.category_id = c.id

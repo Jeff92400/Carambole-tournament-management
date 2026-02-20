@@ -400,10 +400,6 @@
           <label for="tournamentSelect" style="display: block; margin-bottom: 5px; font-weight: 500;">Compétition à préparer</label>
           <select id="tournamentSelect" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
             <option value="">-- Sélectionner --</option>
-            <option value="1">Tournoi 1</option>
-            <option value="2">Tournoi 2</option>
-            <option value="3">Tournoi 3</option>
-            <option value="Finale">🏆 Finale Départementale</option>
           </select>
         </div>
       </div>
@@ -1057,6 +1053,7 @@
     let clubs = [];
     let currentGameParams = null;
     let isFinale = false;
+    let tournamentTypes = [];
 
     // Poule configuration (auto-computed from API)
     let POULE_CONFIG = {};
@@ -1239,6 +1236,28 @@
       }
     }
 
+    // Load tournament rounds dynamically
+    async function loadTournamentRounds() {
+      try {
+        const response = await fetch(`${API_URL}/reference-data/tournament-rounds`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          tournamentTypes = await response.json();
+          const select = document.getElementById('tournamentSelect');
+          select.innerHTML = '<option value="">-- Sélectionner --</option>';
+          tournamentTypes.forEach(r => {
+            const prefix = r.is_finale ? '\u{1F3C6} ' : '';
+            const value = r.is_finale ? 'Finale' : String(r.tournament_number);
+            select.innerHTML += `<option value="${value}">${prefix}${r.display_name}</option>`;
+          });
+        }
+      } catch (error) {
+        console.error('Error loading tournament rounds:', error);
+      }
+    }
+
+    loadTournamentRounds();
     loadCategories();
 
     // Load upcoming competitions (tournaments + finals)
@@ -1678,7 +1697,8 @@
           const selectedTournoiId = window.selectedUpcomingTournament?.tournoiId;
 
           // Find matching tournament - prefer using stored tournoiId if available
-          const targetName = tournamentNum === '4' ? 'FINALE' : `TOURNOI ${tournamentNum}`;
+          const isFinaleSelection = tournamentNum === 'Finale' || (tournamentTypes.find(tt => String(tt.tournament_number) === tournamentNum)?.is_finale);
+          const targetName = isFinaleSelection ? 'FINALE' : `TOURNOI ${tournamentNum}`;
 
           if (selectedTournoiId) {
             // First try to find by exact tournoi_id in the API response
@@ -1703,7 +1723,7 @@
           if (!matchingTournoi) {
             matchingTournoi = externalTournois.find(t =>
               t.nom.toUpperCase().includes(targetName) ||
-              (tournamentNum === '4' && t.nom.toUpperCase().includes('FINALE'))
+              (isFinaleSelection && t.nom.toUpperCase().includes('FINALE'))
             );
           }
 
@@ -1847,7 +1867,7 @@
       currentTournament = tournamentNum;
 
       // Check if this is a finale
-      const isFinaleCompetition = isFinale || tournamentNum === 'Finale' || tournamentNum === '4';
+      const isFinaleCompetition = isFinale || tournamentNum === 'Finale' || (tournamentTypes.find(tt => String(tt.tournament_number) === tournamentNum)?.is_finale);
 
       // Determine which ranking to load based on tournament number
       const previousTournament = parseInt(tournamentNum) - 1;
@@ -2394,10 +2414,12 @@
 
       // Update summary
       document.getElementById('summaryCategory').textContent = currentCategory.display_name;
-      const isFinale = currentTournament === 'Finale' || currentTournament === '4' ||
+      const isFinale = currentTournament === 'Finale' ||
+                       (tournamentTypes.find(tt => String(tt.tournament_number) === currentTournament)?.is_finale) ||
                        (window.selectedUpcomingTournament && window.selectedUpcomingTournament.isFinale);
+      const tournamentTypeLabel = tournamentTypes.find(tt => String(tt.tournament_number) === currentTournament)?.display_name;
       document.getElementById('summaryTournament').textContent =
-        isFinale ? 'Finale Départementale' : `Tournoi ${currentTournament}`;
+        tournamentTypeLabel || (isFinale ? 'Finale Départementale' : `Tournoi ${currentTournament}`);
 
       // Store isFinale globally for later use
       window.currentCompetitionIsFinale = isFinale;
@@ -4700,8 +4722,10 @@
 
       // Fill summary elements
       document.getElementById('summaryCategory').textContent = currentCategory.display_name;
-      const isFinale = t.nom?.toLowerCase().includes('finale') || currentTournament === '4';
-      document.getElementById('summaryTournament').textContent = isFinale ? 'Finale Départementale' : `Tournoi ${currentTournament}`;
+      const isFinale = t.nom?.toLowerCase().includes('finale') ||
+                       (tournamentTypes.find(tt => String(tt.tournament_number) === currentTournament)?.is_finale);
+      const tournamentTypeLabel = tournamentTypes.find(tt => String(tt.tournament_number) === currentTournament)?.display_name;
+      document.getElementById('summaryTournament').textContent = tournamentTypeLabel || (isFinale ? 'Finale Départementale' : `Tournoi ${currentTournament}`);
       window.currentCompetitionIsFinale = isFinale;
 
       const dateStr = t.debut

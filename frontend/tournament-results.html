@@ -353,8 +353,8 @@
         console.log('Data received:', data);
 
         // Display tournament info
-        const isFinale = data.tournament.tournament_number === 4;
-        const tournamentLabel = isFinale ? 'Finale Départementale' : `Tournoi ${data.tournament.tournament_number}`;
+        const isFinale = data.tournament.is_finale;
+        const tournamentLabel = data.tournament.type_display_name || (isFinale ? 'Finale Départementale' : `Tournoi ${data.tournament.tournament_number}`);
         document.getElementById('tournamentTitle').textContent =
           `${data.tournament.display_name} - ${tournamentLabel}`;
         document.getElementById('tournamentSeason').textContent = data.tournament.season;
