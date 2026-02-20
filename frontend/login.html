@@ -36,7 +36,7 @@
     </div>
 
     <div style="text-align: center; margin-top: 30px; color: #999; font-size: 12px;">
-      V 2.0.196 02/26
+      V 2.0.197 02/26
     </div>
     <div style="text-align: center; margin-top: 6px; color: #bbb; font-size: 10px;">
       JR ©
@@ -97,7 +97,13 @@
         headers: { 'Authorization': `Bearer ${token}` }
       }).then(res => {
         if (res.ok) {
-          window.location.href = 'dashboard.html';
+          if (isSaLogin) {
+            window.location.href = 'super-admin.html';
+          } else if (localStorage.getItem('userRole') === 'ligue_admin') {
+            window.location.href = 'ligue-dashboard.html';
+          } else {
+            window.location.href = 'dashboard.html';
+          }
         } else {
           localStorage.removeItem('token');
           localStorage.removeItem('userRole');
