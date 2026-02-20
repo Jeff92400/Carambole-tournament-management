@@ -83,24 +83,26 @@
 
         <!-- Multi-file upload zone (journees mode, hidden by default) -->
         <div id="journeesUpload" style="display: none;">
-          <!-- Player count input -->
-          <div style="margin-bottom: 20px;">
-            <label style="display: block; margin-bottom: 8px; font-weight: 500;">Nombre de joueurs inscrits :</label>
-            <div style="display: flex; gap: 10px; align-items: center;">
-              <input type="number" id="playerCountInput" min="2" max="50" placeholder="ex: 12" style="width: 120px; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;" oninput="updatePhaseBlocs()">
-              <span id="phaseHint" style="color: #666; font-size: 13px;"></span>
-            </div>
+          <!-- Primary: folder selector -->
+          <div style="margin-bottom: 15px;">
+            <button type="button" id="folderSelectBtn" onclick="document.getElementById('folderInput').click()" class="btn" style="background: var(--color-primary, #1F4788); padding: 14px 28px; font-size: 15px; display: inline-flex; align-items: center; gap: 10px;">
+              📂 Sélectionner le dossier E2i
+            </button>
+            <span style="color: #999; font-size: 13px; margin-left: 10px;">Sélectionnez le dossier contenant tous les CSV exportés depuis E2i</span>
+            <input type="file" id="folderInput" webkitdirectory style="display: none;">
           </div>
 
-          <!-- Phase drop zones (generated dynamically) -->
-          <div id="phaseBlocsContainer" style="display: none;">
-            <h4 style="margin-bottom: 12px; color: var(--color-primary, #1F4788);">Fichiers CSV par phase :</h4>
-            <div id="phaseBlocs"></div>
+          <!-- Fallback: drag & drop -->
+          <div class="file-upload" id="multiFileUpload" style="min-height: 80px; cursor: pointer; border: 2px dashed #ccc; border-radius: 10px; padding: 20px; text-align: center; transition: all 0.2s ease;">
+            <p style="font-size: 13px; color: #999; margin: 0;">ou glissez-déposez les fichiers CSV ici</p>
+            <input type="file" id="multiFileInput" accept=".csv" multiple style="display: none;">
           </div>
 
-          <!-- Hidden inputs for backward compat -->
-          <input type="file" id="multiFileInput" accept=".csv" multiple style="display: none;">
-          <div id="phaseChecklist" style="display: none;"><div id="phaseList"></div></div>
+          <!-- Detected phases summary -->
+          <div id="phasesSummary" style="display: none; margin-top: 15px;">
+            <h4 style="margin-bottom: 10px; color: var(--color-primary, #1F4788);">Phases détectées :</h4>
+            <div id="phasesList"></div>
+          </div>
         </div>
 
         <button type="submit" class="btn" id="importBtn">Enregistrer la competition</button>
@@ -706,20 +708,14 @@
       }
     }
 
-    // Phase definitions for journées mode
-    const PHASES_SMALL = [
-      { key: 'POULES', label: 'Poule unique (tour complet)', icon: '🎯', required: true }
-    ];
-    const PHASES_BRACKET = [
-      { key: 'POULES', label: 'Poules', icon: '🎯', required: true },
-      { key: 'Demi-finales', label: 'Demi-finales', icon: '⚔️', required: true },
-      { key: 'Finale', label: 'Finale', icon: '🏆', required: true },
-      { key: 'Petite finale', label: 'Petite finale', icon: '🥉', required: true },
-      { key: 'CLASSEMENTS', label: 'Classements', icon: '📊', required: false }
-    ];
-
-    // Per-phase file mapping: { phaseKey: File }
-    window.phaseFiles = {};
+    // Phase icons for display
+    const PHASE_ICONS = {
+      'POULES': '🎯',
+      'CLASSEMENTS': '📊',
+      'Demi-finales': '⚔️',
+      'Finale': '🏆',
+      'Petite finale': '🥉'
+    };
 
     // Switch UI to journees mode
     function switchToJourneesMode() {
@@ -729,117 +725,162 @@
 
       document.getElementById('importCardTitle').textContent = "Enregistrer les résultats d'une journée qualificative";
       document.getElementById('importCardDescription').textContent =
-        "Sélectionnez la catégorie, le numéro du tournoi et la saison, indiquez le nombre de joueurs, puis importez le fichier CSV de chaque phase.";
+        "Sélectionnez la catégorie, le numéro du tournoi et la saison, puis glissez tous les fichiers CSV exportés depuis E2i.";
+
+      setupMultiFileHandlers();
     }
 
-    // Update phase blocs based on player count
-    function updatePhaseBlocs() {
-      const count = parseInt(document.getElementById('playerCountInput').value) || 0;
-      const container = document.getElementById('phaseBlocsContainer');
-      const hint = document.getElementById('phaseHint');
-      const singlePouleThreshold = parseInt(window.singlePouleThreshold || '6');
+    // Setup multi-file drag & drop handlers
+    function setupMultiFileHandlers() {
+      const multiUpload = document.getElementById('multiFileUpload');
+      const multiInput = document.getElementById('multiFileInput');
 
-      if (count < 2) {
-        container.style.display = 'none';
-        hint.textContent = '';
-        window.phaseFiles = {};
-        selectedFiles = [];
-        return;
-      }
+      multiUpload.addEventListener('click', () => multiInput.click());
 
-      container.style.display = 'block';
-      const phases = count < singlePouleThreshold ? PHASES_SMALL : PHASES_BRACKET;
-
-      if (count < singlePouleThreshold) {
-        hint.textContent = `< ${singlePouleThreshold} joueurs → poule unique, pas de tableau`;
-      } else {
-        hint.textContent = `≥ ${singlePouleThreshold} joueurs → poules + tableau final`;
-      }
-
-      // Reset files for phases that no longer exist
-      const validKeys = phases.map(p => p.key);
-      Object.keys(window.phaseFiles).forEach(k => {
-        if (!validKeys.includes(k)) delete window.phaseFiles[k];
+      multiUpload.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        multiUpload.style.borderColor = 'var(--color-primary, #1F4788)';
+        multiUpload.style.background = '#e7f3ff';
       });
-      rebuildSelectedFiles();
 
-      const blocsDiv = document.getElementById('phaseBlocs');
-      blocsDiv.innerHTML = phases.map(phase => {
-        const file = window.phaseFiles[phase.key];
-        const hasFile = !!file;
-        return `
-          <div id="phaseBloc-${phase.key}" style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; margin-bottom: 8px; background: ${hasFile ? '#d4edda' : '#f8f9fa'}; border: 2px ${hasFile ? 'solid #28a745' : 'dashed #ccc'}; border-radius: 8px; transition: all 0.2s ease; cursor: pointer;"
-               ondragover="event.preventDefault(); this.style.background='#e7f3ff'; this.style.borderColor='var(--color-primary, #1F4788)';"
-               ondragleave="this.style.background='${hasFile ? '#d4edda' : '#f8f9fa'}'; this.style.borderColor='${hasFile ? '#28a745' : '#ccc'}';"
-               ondrop="handlePhaseDrop(event, '${phase.key}')"
-               onclick="triggerPhaseFileInput('${phase.key}')">
-            <span style="font-size: 20px;">${phase.icon}</span>
-            <div style="flex: 1;">
-              <div style="font-weight: 600; font-size: 14px;">${phase.label}${phase.required ? ' *' : ''}</div>
-              ${hasFile
-                ? `<div style="color: #28a745; font-size: 12px; margin-top: 2px;">✓ ${file.name}</div>`
-                : `<div style="color: #999; font-size: 12px; margin-top: 2px;">Cliquez ou glissez un fichier CSV</div>`
-              }
-            </div>
-            ${hasFile
-              ? `<button type="button" onclick="event.stopPropagation(); removePhaseFile('${phase.key}')" style="background: none; border: none; color: #dc3545; cursor: pointer; font-size: 18px; padding: 4px;" title="Retirer">✕</button>`
-              : `<span style="color: #999; font-size: 20px;">📁</span>`
-            }
-          </div>
-        `;
-      }).join('');
-    }
+      multiUpload.addEventListener('dragleave', () => {
+        multiUpload.style.borderColor = '#ccc';
+        multiUpload.style.background = '';
+      });
 
-    // Handle drag & drop on a specific phase bloc
-    function handlePhaseDrop(event, phaseKey) {
-      event.preventDefault();
-      event.stopPropagation();
-      const files = event.dataTransfer.files;
-      if (files.length > 0) {
-        window.phaseFiles[phaseKey] = files[0];
-        rebuildSelectedFiles();
-        updatePhaseBlocs();
-      }
-    }
-
-    // Trigger file input for a specific phase
-    function triggerPhaseFileInput(phaseKey) {
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = '.csv';
-      input.onchange = () => {
-        if (input.files.length > 0) {
-          window.phaseFiles[phaseKey] = input.files[0];
-          rebuildSelectedFiles();
-          updatePhaseBlocs();
+      multiUpload.addEventListener('drop', (e) => {
+        e.preventDefault();
+        multiUpload.style.borderColor = '#ccc';
+        multiUpload.style.background = '';
+        if (e.dataTransfer.files.length > 0) {
+          handleMultiFiles(e.dataTransfer.files);
         }
-      };
-      input.click();
+      });
+
+      multiInput.addEventListener('change', () => {
+        if (multiInput.files.length > 0) {
+          handleMultiFiles(multiInput.files);
+        }
+      });
+
+      // Folder selector: filter to CSV files only
+      const folderInput = document.getElementById('folderInput');
+      folderInput.addEventListener('change', () => {
+        const csvFiles = Array.from(folderInput.files).filter(f => f.name.toLowerCase().endsWith('.csv'));
+        if (csvFiles.length > 0) {
+          selectedFiles = []; // Reset — folder replaces previous selection
+          handleMultiFiles(csvFiles);
+        } else {
+          alert('Aucun fichier CSV trouvé dans ce dossier.');
+        }
+      });
     }
 
-    // Remove file from a phase
-    function removePhaseFile(phaseKey) {
-      delete window.phaseFiles[phaseKey];
-      rebuildSelectedFiles();
-      updatePhaseBlocs();
+    // Handle multiple file selection — add all at once
+    function handleMultiFiles(fileList) {
+      for (const file of fileList) {
+        if (!selectedFiles.find(f => f.name === file.name)) {
+          selectedFiles.push(file);
+        }
+      }
+      updatePhasesSummary();
     }
 
-    // Rebuild selectedFiles array from phaseFiles map (for backend compatibility)
-    function rebuildSelectedFiles() {
-      selectedFiles = Object.values(window.phaseFiles);
-    }
-
-    // Detect phase from filename (mirrors backend) — kept for backend compatibility
+    // Detect phase from filename (mirrors backend)
     function detectPhaseFromFilename(filename) {
       const lower = filename.toLowerCase();
+
+      // E2i naming convention: classement_phase_XXXXX.csv
       const match = lower.match(/classement[_ ]phase[_ ](.+?)\.csv$/i);
-      if (match) return match[1].trim();
+      if (match) {
+        const raw = match[1].replace(/_/g, ' ').trim();
+        // Normalize known phases
+        if (raw.toLowerCase().includes('poule')) return 'POULES';
+        if (raw.toLowerCase().includes('petite') && raw.toLowerCase().includes('finale')) return 'Petite finale';
+        if (raw.toLowerCase().includes('demi')) return 'Demi-finales';
+        if (raw.toLowerCase() === 'finale') return 'Finale';
+        if (raw.toLowerCase().includes('classement')) return 'CLASSEMENTS';
+        // Classification matches like "G7-8 - P5-6"
+        return raw;
+      }
+
       if (lower.includes('poule')) return 'POULES';
       if (lower.includes('petite') && lower.includes('finale')) return 'Petite finale';
       if (lower.includes('demi')) return 'Demi-finales';
       if (lower.includes('finale')) return 'Finale';
       if (lower.includes('classement')) return 'CLASSEMENTS';
+
       return filename.replace('.csv', '');
+    }
+
+    // Get icon for a phase
+    function getPhaseIcon(phase) {
+      if (PHASE_ICONS[phase]) return PHASE_ICONS[phase];
+      // Classification matches (G7-8 - P5-6, etc.)
+      if (/^G\d/.test(phase)) return '🔄';
+      return '📄';
+    }
+
+    // Get phase category for sorting: lower = displayed first
+    function getPhaseSortOrder(phase) {
+      const lower = phase.toLowerCase();
+      if (lower.includes('poule')) return 0;
+      if (lower.includes('classement')) return 1;
+      if (/^g\d/i.test(phase)) return 2; // Classification matches
+      if (lower.includes('demi')) return 3;
+      if (lower.includes('petite')) return 4;
+      if (lower === 'finale') return 5;
+      return 2;
+    }
+
+    // Update phases summary display
+    function updatePhasesSummary() {
+      const summary = document.getElementById('phasesSummary');
+      const list = document.getElementById('phasesList');
+
+      if (selectedFiles.length === 0) {
+        summary.style.display = 'none';
+        return;
+      }
+
+      // Update drop zone to show file count
+      const uploadZone = document.getElementById('multiFileUpload');
+      uploadZone.style.borderColor = '#28a745';
+      uploadZone.style.borderStyle = 'solid';
+
+      // Sort files by phase order
+      const filesWithPhases = selectedFiles.map((file, index) => ({
+        file, index, phase: detectPhaseFromFilename(file.name)
+      }));
+      filesWithPhases.sort((a, b) => getPhaseSortOrder(a.phase) - getPhaseSortOrder(b.phase));
+
+      summary.style.display = 'block';
+      list.innerHTML = filesWithPhases.map(({ file, index, phase }) => {
+        const icon = getPhaseIcon(phase);
+        const isPoules = phase === 'POULES';
+        const isFinale = phase === 'Finale';
+        const bgColor = isPoules ? '#d4edda' : isFinale ? '#fff3cd' : '#f8f9fa';
+        const borderColor = isPoules ? '#28a745' : isFinale ? '#ffc107' : 'var(--color-primary, #1F4788)';
+        return `
+          <div style="display: flex; align-items: center; gap: 10px; padding: 10px 14px; margin-bottom: 6px; background: ${bgColor}; border-radius: 8px; border-left: 4px solid ${borderColor};">
+            <span style="font-size: 18px;">${icon}</span>
+            <span style="flex: 1; font-weight: ${isPoules || isFinale ? 'bold' : 'normal'}; font-size: 14px;">${phase}</span>
+            <span style="color: #999; font-size: 12px;">${file.name}</span>
+            <button type="button" onclick="removeFile(${index})" style="background: none; border: none; color: #dc3545; cursor: pointer; font-size: 16px; padding: 0 4px;" title="Retirer">✕</button>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // Remove a file from the selection
+    function removeFile(index) {
+      selectedFiles.splice(index, 1);
+      if (selectedFiles.length === 0) {
+        const uploadZone = document.getElementById('multiFileUpload');
+        uploadZone.style.borderColor = '#ccc';
+        uploadZone.style.borderStyle = 'dashed';
+      }
+      updatePhasesSummary();
     }
 
     // Handle journees mode form submission
@@ -853,7 +894,8 @@
         return;
       }
 
-      if (!window.phaseFiles['POULES']) {
+      const hasPoules = selectedFiles.some(f => detectPhaseFromFilename(f.name) === 'POULES');
+      if (!hasPoules) {
         errorDiv.textContent = 'Le fichier POULES est obligatoire. Veuillez ajouter le fichier CSV de la phase POULES.';
         errorDiv.style.display = 'block';
         return;
@@ -892,11 +934,7 @@
 
       try {
         const valFormData = new FormData();
-        for (const [phaseKey, file] of Object.entries(window.phaseFiles)) {
-          const phaseName = phaseKey.replace(/ /g, '_');
-          const renamedFile = new File([file], `classement_phase_${phaseName}.csv`, { type: file.type });
-          valFormData.append('files', renamedFile);
-        }
+        selectedFiles.forEach(file => valFormData.append('files', file));
         valFormData.append('categoryId', categoryId);
 
         const validateResponse = await fetch(`${API_URL}/tournaments/validate-journee`, {
@@ -971,12 +1009,7 @@
 
       try {
         const formData = new FormData();
-        // Append files with phase-aware names so backend can detect phases
-        for (const [phaseKey, file] of Object.entries(window.phaseFiles)) {
-          const phaseName = phaseKey.replace(/ /g, '_');
-          const renamedFile = new File([file], `classement_phase_${phaseName}.csv`, { type: file.type });
-          formData.append('files', renamedFile);
-        }
+        selectedFiles.forEach(file => formData.append('files', file));
         formData.append('categoryId', categoryId);
         formData.append('tournamentNumber', tournamentNumber);
         formData.append('tournamentDate', tournamentDate);
@@ -1066,10 +1099,13 @@
 
           // Reset files
           selectedFiles = [];
-          window.phaseFiles = {};
           document.getElementById('importForm').reset();
-          document.getElementById('phaseBlocsContainer').style.display = 'none';
-          document.getElementById('playerCountInput').value = '';
+          document.getElementById('phasesSummary').style.display = 'none';
+          const uploadZone = document.getElementById('multiFileUpload');
+          if (uploadZone) {
+            uploadZone.style.borderColor = '#ccc';
+            uploadZone.style.borderStyle = 'dashed';
+          }
 
           // Check if mixed-category bonus is enabled
           if (data.mixedCategoryBonus && data.tournamentId) {
