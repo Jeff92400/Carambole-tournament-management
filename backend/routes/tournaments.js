@@ -850,6 +850,7 @@ router.post('/validate-journee', authenticateToken, upload.array('files', 10), a
       columnMapping = DEFAULT_TOURNAMENT_MAPPING;
     }
 
+    const orgId = req.user.organizationId || null;
     const unknownPlayers = [];
     const checkedLicences = new Set();
 
@@ -864,12 +865,13 @@ router.post('/validate-journee', authenticateToken, upload.array('files', 10), a
         const existsQuery = `
           SELECT licence, first_name, last_name
           FROM players
-          WHERE REPLACE(licence, ' ', '') = ?
+          WHERE (REPLACE(licence, ' ', '') = ?
              OR (UPPER(first_name || ' ' || last_name) = UPPER(?)
-                 OR UPPER(last_name || ' ' || first_name) = UPPER(?))
+                 OR UPPER(last_name || ' ' || first_name) = UPPER(?)))
+            AND (?::int IS NULL OR organization_id = ?)
         `;
 
-        const existing = await dbGetAsync(existsQuery, [player.licence, player.playerName, player.playerName]);
+        const existing = await dbGetAsync(existsQuery, [player.licence, player.playerName, player.playerName, orgId, orgId]);
 
         if (!existing) {
           const nameParts = player.playerName.split(' ');

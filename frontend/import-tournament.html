@@ -353,6 +353,7 @@
     let categories = [];
     let unknownPlayers = [];
     let currentFormData = null;
+    let isSubmitting = false;
 
     // Load clubs for dropdown
     async function loadClubs() {
@@ -617,6 +618,9 @@
     document.getElementById('importForm').addEventListener('submit', async (e) => {
       e.preventDefault();
 
+      // Guard against double-submit
+      if (isSubmitting) return;
+
       const errorDiv = document.getElementById('errorMessage');
       const successDiv = document.getElementById('successMessage');
       const importBtn = document.getElementById('importBtn');
@@ -635,11 +639,16 @@
         return;
       }
 
-      // Branch based on qualification mode
-      if (window.qualificationMode === 'journees') {
-        await handleJourneesSubmit(categoryId, tournamentNumber, tournamentDate, season);
-      } else {
-        await handleStandardSubmit(categoryId, tournamentNumber, tournamentDate, season);
+      isSubmitting = true;
+      try {
+        // Branch based on qualification mode
+        if (window.qualificationMode === 'journees') {
+          await handleJourneesSubmit(categoryId, tournamentNumber, tournamentDate, season);
+        } else {
+          await handleStandardSubmit(categoryId, tournamentNumber, tournamentDate, season);
+        }
+      } finally {
+        isSubmitting = false;
       }
     });
 
