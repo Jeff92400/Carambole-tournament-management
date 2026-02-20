@@ -861,11 +861,32 @@
 
     <!-- Types de Tournoi Section - Admin Only -->
     <div class="card admin-only" id="tournamentTypesSection">
-      <h3>🎯 Types de Tournoi</h3>
-      <p style="margin-bottom: 20px; color: #666;">
-        Configurez les types de tournois disponibles et leurs libellés.
-      </p>
+      <h3>🎯 Types de Tournoi et Mode de qualification</h3>
 
+      <!-- Qualification Mode Toggle Cards (top) -->
+      <p style="margin-bottom: 15px; color: #666;">Choisissez le mode de qualification pour les finales de votre comité.</p>
+      <select id="qualificationMode" style="display: none;">
+        <option value="standard">Standard</option>
+        <option value="journees">Journées</option>
+      </select>
+      <div style="display: flex; gap: 15px; margin-bottom: 30px; flex-wrap: wrap;">
+        <div id="modeCard-standard" onclick="selectQualificationMode('standard')" style="flex: 1; min-width: 220px; padding: 20px; border: 2px solid #ddd; border-radius: 10px; cursor: pointer; transition: all 0.2s ease; background: white;">
+          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+            <span style="font-size: 24px;">🏆</span>
+            <strong style="font-size: 16px;">3 Tournois Qualificatifs</strong>
+          </div>
+          <p style="margin: 0; color: #666; font-size: 13px;">3 tournois (T1, T2, T3) avec cumul des points. Les meilleurs joueurs accèdent à la Finale Départementale.</p>
+        </div>
+        <div id="modeCard-journees" onclick="selectQualificationMode('journees')" style="flex: 1; min-width: 220px; padding: 20px; border: 2px solid #ddd; border-radius: 10px; cursor: pointer; transition: all 0.2s ease; background: white;">
+          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+            <span style="font-size: 24px;">📋</span>
+            <strong style="font-size: 16px;">Journées Qualificatives</strong>
+          </div>
+          <p style="margin: 0; color: #666; font-size: 13px;">Journées avec poules + tableau final. Classement par points de position (meilleurs N sur M journées).</p>
+        </div>
+      </div>
+
+      <!-- Tournament Types Table -->
       <div id="tournamentTypesTable" style="overflow-x: auto;">
         <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
           <thead>
@@ -885,23 +906,10 @@
 
       <div id="tournamentTypesMessage" style="display: none; margin-top: 15px; padding: 10px; border-radius: 4px;"></div>
 
-      <!-- Qualification Mode (inside tournament types card) -->
-      <hr style="margin: 30px 0; border: none; border-top: 1px solid #ddd;">
-      <h3>🏅 Mode de qualification</h3>
-      <p style="margin-bottom: 20px; color: #666;">Choisissez le mode de qualification pour les finales de votre comité.</p>
-
-      <div style="display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 20px;">
-        <div style="flex: 1; min-width: 250px;">
-          <label style="display: block; margin-bottom: 8px; font-weight: 500;">Mode :</label>
-          <select id="qualificationMode" onchange="toggleJourneesSettings()" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
-            <option value="standard">3 Tournois Qualificatifs (standard)</option>
-            <option value="journees">Journées Qualificatives</option>
-          </select>
-        </div>
-      </div>
-
       <!-- Journées-specific settings (hidden when standard) -->
       <div id="journeesSettings" style="display: none;">
+        <hr style="margin: 25px 0; border: none; border-top: 1px solid #ddd;">
+        <h4 style="margin-bottom: 15px;">Paramètres des Journées Qualificatives</h4>
         <div style="display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 20px;">
           <div style="flex: 1; min-width: 180px;">
             <label style="display: block; margin-bottom: 8px; font-weight: 500;">Nombre de journées :</label>
@@ -929,9 +937,11 @@
         </div>
       </div>
 
-      <button onclick="saveQualificationSettings()" class="btn" style="background: #28a745; padding: 12px 25px;">
-        Enregistrer
-      </button>
+      <div style="margin-top: 20px;">
+        <button onclick="saveQualificationSettings()" class="btn" style="background: #28a745; padding: 12px 25px;">
+          Enregistrer
+        </button>
+      </div>
       <div id="qualificationMessage" style="display: none; margin-top: 15px; padding: 10px; border-radius: 4px;"></div>
     </div>
 
@@ -3497,9 +3507,36 @@
 
     // ============= QUALIFICATION MODE SETTINGS =============
 
+    function selectQualificationMode(mode) {
+      document.getElementById('qualificationMode').value = mode;
+
+      // Update card visuals
+      const standardCard = document.getElementById('modeCard-standard');
+      const journeesCard = document.getElementById('modeCard-journees');
+      const primaryColor = getComputedStyle(document.documentElement).getPropertyValue('--color-primary').trim() || '#1F4788';
+
+      if (mode === 'journees') {
+        journeesCard.style.borderColor = primaryColor;
+        journeesCard.style.background = '#e7f3ff';
+        journeesCard.style.boxShadow = '0 2px 8px rgba(31, 71, 136, 0.15)';
+        standardCard.style.borderColor = '#ddd';
+        standardCard.style.background = 'white';
+        standardCard.style.boxShadow = 'none';
+        document.getElementById('journeesSettings').style.display = 'block';
+      } else {
+        standardCard.style.borderColor = primaryColor;
+        standardCard.style.background = '#e7f3ff';
+        standardCard.style.boxShadow = '0 2px 8px rgba(31, 71, 136, 0.15)';
+        journeesCard.style.borderColor = '#ddd';
+        journeesCard.style.background = 'white';
+        journeesCard.style.boxShadow = 'none';
+        document.getElementById('journeesSettings').style.display = 'none';
+      }
+    }
+
+    // Keep for backward compatibility
     function toggleJourneesSettings() {
-      const mode = document.getElementById('qualificationMode').value;
-      document.getElementById('journeesSettings').style.display = mode === 'journees' ? 'block' : 'none';
+      selectQualificationMode(document.getElementById('qualificationMode').value);
     }
 
     function addPositionRow(position, points) {
@@ -3525,11 +3562,10 @@
         });
         if (response.ok) {
           const settings = await response.json();
-          document.getElementById('qualificationMode').value = settings.qualification_mode || 'standard';
           document.getElementById('journeesCount').value = settings.journees_count || '3';
           document.getElementById('bestOfCount').value = settings.best_of_count || '2';
           document.getElementById('bracketSize').value = settings.bracket_size || '4';
-          toggleJourneesSettings();
+          selectQualificationMode(settings.qualification_mode || 'standard');
         }
 
         // Load position points
