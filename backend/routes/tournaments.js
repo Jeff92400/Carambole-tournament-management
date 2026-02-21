@@ -1438,10 +1438,10 @@ async function recalculateRankingsJournees(categoryId, season, callback, orgId) 
     // Get all tournaments for this category/season (excluding finale = tournament_number 4)
     const tournaments = await dbAllAsync(
       `SELECT id, tournament_number FROM tournaments
-       WHERE category_id = ? AND season = ? AND tournament_number <= ?
-       AND (? IS NULL OR organization_id = ?)
+       WHERE category_id = $1 AND season = $2 AND tournament_number <= $3
+       AND ($4::int IS NULL OR organization_id = $4)
        ORDER BY tournament_number`,
-      [categoryId, season, journeesCount, orgId, orgId]
+      [categoryId, season, journeesCount, orgId]
     );
 
     if (tournaments.length === 0) {
@@ -1462,9 +1462,9 @@ async function recalculateRankingsJournees(categoryId, season, callback, orgId) 
          tr.serie
        FROM tournament_results tr
        JOIN tournaments t ON tr.tournament_id = t.id
-       WHERE t.category_id = ? AND t.season = ? AND t.tournament_number <= ?
-       AND (? IS NULL OR t.organization_id = ?)`,
-      [categoryId, season, journeesCount, orgId, orgId]
+       WHERE t.category_id = $1 AND t.season = $2 AND t.tournament_number <= $3
+       AND ($4::int IS NULL OR t.organization_id = $4)`,
+      [categoryId, season, journeesCount, orgId]
     );
 
     if (results.length === 0) {
