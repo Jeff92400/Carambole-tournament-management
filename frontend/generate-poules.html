@@ -1334,8 +1334,8 @@
               ? new Date(t.debut).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })
               : 'Date non définie';
 
-            // Extract tournament number from name (e.g., "TOURNOI 2" -> "2") or "Finale" for finals
-            const tournamentMatch = t.nom.match(/TOURNOI\s*(\d+)/i);
+            // Extract tournament number from name (e.g., "TOURNOI 2" -> "2", "T1" -> "1", "TQ3" -> "3")
+            const tournamentMatch = t.nom.match(/(?:TOURNOI(?:\s+QUALIFICATIF)?\s*|\bTQ?\s*)(\d+)/i);
             const tournamentNum = tournamentMatch ? tournamentMatch[1] : (t.isFinale ? 'Finale' : '');
 
             const cardStyle = t.isFinale
