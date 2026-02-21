@@ -1803,6 +1803,40 @@ async function initializeDatabase() {
       CREATE INDEX IF NOT EXISTS idx_bracket_matches_tournament ON bracket_matches(tournament_id)
     `);
 
+    // Stage-level scoring configuration (which scoring mechanisms apply at each competition stage)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS stage_scoring_config (
+        id SERIAL PRIMARY KEY,
+        stage_code TEXT NOT NULL,
+        match_points INTEGER DEFAULT 0,
+        average_bonus INTEGER DEFAULT 0,
+        level_bonus INTEGER DEFAULT 0,
+        participation_bonus INTEGER DEFAULT 0,
+        ranking_points BOOLEAN DEFAULT FALSE,
+        organization_id INTEGER REFERENCES organizations(id),
+        UNIQUE(stage_code, organization_id)
+      )
+    `);
+
+    // Per-player scoring detail per competition stage (manual bonus entry)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS stage_player_scores (
+        id SERIAL PRIMARY KEY,
+        tournament_id INTEGER NOT NULL REFERENCES tournaments(id) ON DELETE CASCADE,
+        licence TEXT NOT NULL,
+        stage_code TEXT NOT NULL,
+        match_points INTEGER DEFAULT 0,
+        average_bonus INTEGER DEFAULT 0,
+        level_bonus INTEGER DEFAULT 0,
+        participation_bonus INTEGER DEFAULT 0,
+        UNIQUE(tournament_id, licence, stage_code)
+      )
+    `);
+
+    // Add scoring validation columns to tournaments (migration)
+    await client.query(`ALTER TABLE tournaments ADD COLUMN IF NOT EXISTS scoring_validated BOOLEAN DEFAULT FALSE`);
+    await client.query(`ALTER TABLE tournaments ADD COLUMN IF NOT EXISTS scoring_validated_at TIMESTAMP`);
+
     // Migrate existing player rankings from hardcoded columns to player_rankings table
     // This runs only once - checks if player_rankings is empty and players have rank data
     const playerRankingsCount = await client.query('SELECT COUNT(*) as count FROM player_rankings');

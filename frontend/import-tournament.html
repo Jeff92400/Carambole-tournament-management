@@ -1085,7 +1085,13 @@
             ${phasesHtml}
             ${positionsHtml}
             <p style="margin-top: 20px;">
-              <a href="rankings.html?categoryId=${categoryId}" class="btn btn-small">Voir les classements mis à jour</a>
+              ${data.hasManualBonuses ? `
+                <span style="display: block; margin-bottom: 10px; color: #856404; background: #fff3cd; padding: 10px; border-radius: 4px;">
+                  Utilisez le scoring détaillé pour finaliser les bonus et recalculer les classements.
+                </span>
+                <a href="tournament-scoring.html?id=${data.tournamentId}" class="btn btn-small" style="background: var(--color-primary, #1F4788); margin-right: 10px;">Scoring détaillé</a>
+              ` : ''}
+              <a href="rankings.html?categoryId=${categoryId}" class="btn btn-small">Voir les classements${data.hasManualBonuses ? '' : ' mis à jour'}</a>
             </p>
           `;
 

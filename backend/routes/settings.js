@@ -1725,6 +1725,105 @@ router.put('/position-points', authenticateToken, requireAdmin, async (req, res)
   }
 });
 
+// ==================== QUALIFICATION MODE - STAGE SCORING CONFIG ====================
+
+const STAGE_DEFINITIONS = [
+  // Phase-level stages (within a tournament day)
+  { code: 'POULES', displayName: 'Poules', group: 'phase', defaults: { match_points: 2, average_bonus: 0, level_bonus: 1, participation_bonus: 0, ranking_points: false } },
+  { code: 'SF', displayName: 'Demi-finales', group: 'phase', defaults: { match_points: 0, average_bonus: 0, level_bonus: 0, participation_bonus: 0, ranking_points: false } },
+  { code: 'F', displayName: 'Finale', group: 'phase', defaults: { match_points: 0, average_bonus: 0, level_bonus: 0, participation_bonus: 0, ranking_points: false } },
+  { code: 'PF', displayName: 'Petite Finale', group: 'phase', defaults: { match_points: 0, average_bonus: 0, level_bonus: 0, participation_bonus: 0, ranking_points: false } },
+  { code: 'C_R1', displayName: 'Classement R1', group: 'phase', defaults: { match_points: 0, average_bonus: 0, level_bonus: 0, participation_bonus: 0, ranking_points: false } },
+  { code: 'C_R2', displayName: 'Classement R2', group: 'phase', defaults: { match_points: 0, average_bonus: 0, level_bonus: 0, participation_bonus: 0, ranking_points: false } },
+  // Tournament-level stages
+  { code: 'TQ', displayName: 'Tournoi Qualificatif', group: 'tournament', defaults: { match_points: 0, average_bonus: 3, level_bonus: 0, participation_bonus: 0, ranking_points: true } },
+  { code: 'FINALE_DISTRICT', displayName: 'Finale de District', group: 'tournament', defaults: { match_points: 2, average_bonus: 0, level_bonus: 0, participation_bonus: 0, ranking_points: false } },
+];
+
+// GET stage scoring config — returns saved values merged with defaults
+router.get('/stage-scoring', authenticateToken, async (req, res) => {
+  try {
+    const db = getDb();
+    const orgId = req.user.organizationId || null;
+
+    const rows = await new Promise((resolve, reject) => {
+      db.all(
+        'SELECT stage_code, match_points, average_bonus, level_bonus, participation_bonus, ranking_points FROM stage_scoring_config WHERE ($1::int IS NULL OR organization_id = $1)',
+        [orgId],
+        (err, rows) => err ? reject(err) : resolve(rows || [])
+      );
+    });
+
+    // Build a map of saved values
+    const savedMap = {};
+    for (const row of rows) {
+      savedMap[row.stage_code] = row;
+    }
+
+    // Merge saved values with defaults
+    const result = STAGE_DEFINITIONS.map(def => {
+      const saved = savedMap[def.code];
+      return {
+        code: def.code,
+        displayName: def.displayName,
+        group: def.group,
+        match_points: saved ? saved.match_points : def.defaults.match_points,
+        average_bonus: saved ? saved.average_bonus : def.defaults.average_bonus,
+        level_bonus: saved ? saved.level_bonus : def.defaults.level_bonus,
+        participation_bonus: saved ? saved.participation_bonus : def.defaults.participation_bonus,
+        ranking_points: saved ? saved.ranking_points : def.defaults.ranking_points,
+      };
+    });
+
+    res.json(result);
+  } catch (error) {
+    console.error('Error fetching stage scoring config:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// PUT stage scoring config — UPSERT all stages
+router.put('/stage-scoring', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const db = getDb();
+    const orgId = req.user.organizationId || null;
+    const { stages } = req.body; // [{ code, match_points, average_bonus, level_bonus, participation_bonus, ranking_points }]
+
+    if (!Array.isArray(stages)) {
+      return res.status(400).json({ error: 'stages must be an array' });
+    }
+
+    const validCodes = STAGE_DEFINITIONS.map(d => d.code);
+    for (const stage of stages) {
+      if (!validCodes.includes(stage.code)) {
+        return res.status(400).json({ error: `Invalid stage code: ${stage.code}` });
+      }
+    }
+
+    for (const stage of stages) {
+      await new Promise((resolve, reject) => {
+        db.run(
+          `INSERT INTO stage_scoring_config (stage_code, match_points, average_bonus, level_bonus, participation_bonus, ranking_points, organization_id)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)
+           ON CONFLICT (stage_code, organization_id) DO UPDATE SET
+             match_points = EXCLUDED.match_points,
+             average_bonus = EXCLUDED.average_bonus,
+             level_bonus = EXCLUDED.level_bonus,
+             participation_bonus = EXCLUDED.participation_bonus,
+             ranking_points = EXCLUDED.ranking_points`,
+          [stage.code, stage.match_points || 0, stage.average_bonus || 0, stage.level_bonus || 0, stage.participation_bonus || 0, stage.ranking_points || false, orgId],
+          (err) => err ? reject(err) : resolve()
+        );
+      });
+    }
+
+    res.json({ success: true, message: `${stages.length} stage scoring entries saved` });
+  } catch (error) {
+    console.error('Error saving stage scoring config:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;
 module.exports.getRankingTournamentNumbers = getRankingTournamentNumbers;
 module.exports.getFinaleTournamentNumber = getFinaleTournamentNumber;

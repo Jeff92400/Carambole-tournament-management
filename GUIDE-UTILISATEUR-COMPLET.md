@@ -399,6 +399,37 @@ Import des résultats des tournois terminés pour mise à jour des classements.
 
 ---
 
+### COMPÉTITIONS > Scoring Détaillé (Mode Journées)
+
+#### Accès
+Après import d'une journée qualificative (si des bonus manuels sont configurés), un bouton **"Scoring détaillé"** apparaît dans les résultats d'import. Page directe : `tournament-scoring.html?id=XX`.
+
+#### Description
+Page intermédiaire entre l'import CSV et le calcul des classements. Permet à l'administrateur de saisir les bonus qui ne peuvent pas être calculés automatiquement par le système (bonus de niveau, bonus de participation).
+
+#### Fonctionnement par onglets
+Chaque phase de la journée qualificative a son propre onglet :
+- **Poules** : tous les joueurs, points de match pré-remplis depuis le CSV
+- **Demi-finales / Finale / Petite Finale / Classement** : uniquement les joueurs ayant participé à cette phase
+- **Résumé** : vue totale de tous les bonus par joueur, position finale et points de position
+
+#### Colonnes affichées
+Seules les colonnes activées dans la configuration des étapes (Paramètres > Types de Tournoi) sont affichées :
+- **Pts Match** : lecture seule, issus du CSV
+- **Bonus Moy.** : lecture seule, calculé automatiquement selon les seuils de moyenne
+- **Bonus Niveau** : modifiable, saisi manuellement par l'administrateur
+- **Bonus Particip.** : modifiable, saisi manuellement par l'administrateur
+
+#### Actions
+1. **Enregistrer brouillon** : sauvegarde les valeurs saisies sans recalculer les classements
+2. **Valider le scoring** : agrège tous les bonus, met à jour les résultats du tournoi et recalcule les classements de la saison
+3. **Modifier** : apparaît après validation pour permettre des corrections
+
+#### Réimport
+Si le même tournoi est réimporté, tous les scores détaillés sont automatiquement réinitialisés.
+
+---
+
 ### COMPÉTITIONS > Résultats Externes (Import)
 
 #### Accès

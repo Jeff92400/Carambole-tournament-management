@@ -978,8 +978,10 @@ router.post('/import-journee', authenticateToken, upload.array('files', 10), asy
     );
     const tournamentId = tournamentRow.id;
 
-    // Phase 3: Delete existing results
+    // Phase 3: Delete existing results + reset scoring state on re-import
     await dbRunAsync('DELETE FROM tournament_results WHERE tournament_id = $1', [tournamentId]);
+    await dbRunAsync('DELETE FROM stage_player_scores WHERE tournament_id = $1', [tournamentId]);
+    await dbRunAsync('UPDATE tournaments SET scoring_validated = FALSE, scoring_validated_at = NULL WHERE id = $1', [tournamentId]);
 
     // Phase 4: Ensure all players exist
     for (const record of poulesRecords) {
@@ -1022,13 +1024,31 @@ router.post('/import-journee', authenticateToken, upload.array('files', 10), asy
     }
 
     // Phase 8: Compute bonus points + recalculate rankings
-    await new Promise((resolve) => {
-      computeBonusPoints(tournamentId, categoryId, orgId, () => {
-        recalculateRankings(categoryId, season, () => {
+    // Check if stage scoring config has manual bonus columns (level_bonus or participation_bonus)
+    const stageScoringRows = await dbAllAsync(
+      'SELECT * FROM stage_scoring_config WHERE ($1::int IS NULL OR organization_id = $1)',
+      [orgId]
+    );
+    const hasManualBonuses = stageScoringRows.some(r => r.level_bonus > 0 || r.participation_bonus > 0);
+
+    if (hasManualBonuses) {
+      // Manual bonuses exist → run auto bonus rules but SKIP ranking recalculation
+      // Admin must use scoring-detail page to finalize and trigger rankings
+      await new Promise((resolve) => {
+        computeBonusPoints(tournamentId, categoryId, orgId, () => {
           resolve();
         });
       });
-    });
+    } else {
+      // No manual bonuses → full auto pipeline (no regression for standard mode)
+      await new Promise((resolve) => {
+        computeBonusPoints(tournamentId, categoryId, orgId, () => {
+          recalculateRankings(categoryId, season, () => {
+            resolve();
+          });
+        });
+      });
+    }
 
     // Clean up uploaded files
     for (const file of req.files) {
@@ -1069,6 +1089,7 @@ router.post('/import-journee', authenticateToken, upload.array('files', 10), asy
       phasesCount: detectedPhases.length,
       positions: positionsArray,
       mixedCategoryBonus,
+      hasManualBonuses,
       errors: errors.length > 0 ? errors : undefined
     });
 
@@ -2720,6 +2741,257 @@ router.post('/:id/recalculate-moyennes', authenticateToken, async (req, res) => 
 
   } catch (error) {
     console.error('Error recalculating moyennes:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== Scoring Detail ====================
+
+/**
+ * GET /tournaments/:id/scoring-detail
+ * Returns all data needed for the tournament scoring detail page:
+ * tournament info, stage config, players with computed average bonus,
+ * bracket matches, saved scores, game parameters, position points lookup.
+ */
+router.get('/:id/scoring-detail', authenticateToken, async (req, res) => {
+  try {
+    const tournamentId = parseInt(req.params.id);
+    const orgId = req.user.organizationId || null;
+
+    // 1. Tournament info
+    const tournament = await dbGetAsync(
+      `SELECT t.id, t.category_id, t.tournament_number, t.season, t.scoring_validated, t.scoring_validated_at,
+              c.display_name as category_name, c.game_type, c.level
+       FROM tournaments t
+       JOIN categories c ON c.id = t.category_id
+       WHERE t.id = $1 AND ($2::int IS NULL OR t.organization_id = $2)`,
+      [tournamentId, orgId]
+    );
+    if (!tournament) {
+      return res.status(404).json({ error: 'Tournoi non trouvé' });
+    }
+
+    // 2. Stage scoring config for this org
+    const stageConfig = await dbAllAsync(
+      `SELECT stage_code, match_points, average_bonus, level_bonus, participation_bonus, ranking_points
+       FROM stage_scoring_config
+       WHERE ($1::int IS NULL OR organization_id = $1)
+       ORDER BY id ASC`,
+      [orgId]
+    );
+
+    // Build display names for stages
+    const stageDisplayNames = {
+      'POULES': 'Poules',
+      'SF': 'Demi-finales',
+      'F': 'Finale',
+      'PF': 'Petite Finale',
+      'C_R1': 'Classement R1',
+      'C_R2': 'Classement R2'
+    };
+    const stageConfigWithNames = stageConfig.map(sc => ({
+      ...sc,
+      displayName: stageDisplayNames[sc.stage_code] || sc.stage_code
+    }));
+
+    // 3. Game parameters (moyenne_mini, moyenne_maxi) for the category
+    const gameParams = await dbGetAsync(
+      `SELECT gp.moyenne_mini, gp.moyenne_maxi
+       FROM game_parameters gp
+       WHERE UPPER(gp.mode) = UPPER($1) AND UPPER(gp.categorie) = UPPER($2)
+         AND ($3::int IS NULL OR gp.organization_id = $3)`,
+      [tournament.game_type, tournament.level, orgId]
+    );
+    const moyenneMini = gameParams ? parseFloat(gameParams.moyenne_mini) || 0 : 0;
+    const moyenneMaxi = gameParams ? parseFloat(gameParams.moyenne_maxi) || 0 : 0;
+    const moyenneMiddle = (moyenneMini + moyenneMaxi) / 2;
+
+    // 4. Players from tournament_results with computed average bonus
+    const players = await dbAllAsync(
+      `SELECT tr.licence, tr.player_name, tr.match_points, tr.moyenne, tr.position,
+              tr.position_points, tr.points, tr.reprises, tr.serie,
+              tr.bonus_points, tr.bonus_detail,
+              pfc.moyenne_ffb
+       FROM tournament_results tr
+       LEFT JOIN player_ffb_classifications pfc
+         ON pfc.licence = tr.licence
+         AND pfc.game_mode_id = (SELECT id FROM game_modes WHERE UPPER(code) = UPPER($2) LIMIT 1)
+         AND pfc.season = $3
+       WHERE tr.tournament_id = $1
+       ORDER BY tr.position ASC NULLS LAST, tr.match_points DESC`,
+      [tournamentId, tournament.game_type, tournament.season]
+    );
+
+    // Compute average bonus per player
+    const playersWithBonus = players.map(p => {
+      let computedAverageBonus = 0;
+      const avg = p.reprises > 0 ? p.points / p.reprises : 0;
+      if (moyenneMaxi > 0) {
+        if (avg >= moyenneMaxi) {
+          computedAverageBonus = 3;
+        } else if (avg >= moyenneMiddle) {
+          computedAverageBonus = 2;
+        } else if (avg >= moyenneMini) {
+          computedAverageBonus = 1;
+        }
+      }
+      return {
+        licence: p.licence,
+        player_name: p.player_name,
+        match_points: p.match_points || 0,
+        moyenne: p.moyenne,
+        position: p.position,
+        position_points: p.position_points || 0,
+        points: p.points || 0,
+        reprises: p.reprises || 0,
+        serie: p.serie || 0,
+        moyenne_ffb: p.moyenne_ffb,
+        computed_average_bonus: computedAverageBonus
+      };
+    });
+
+    // 5. Bracket matches for this tournament
+    const bracketMatches = await dbAllAsync(
+      `SELECT phase, match_order, match_label, player1_licence, player1_name,
+              player2_licence, player2_name, winner_licence, resulting_place
+       FROM bracket_matches
+       WHERE tournament_id = $1
+       ORDER BY phase, match_order`,
+      [tournamentId]
+    );
+
+    // 6. Saved stage_player_scores
+    const savedScores = await dbAllAsync(
+      `SELECT licence, stage_code, match_points, average_bonus, level_bonus, participation_bonus
+       FROM stage_player_scores
+       WHERE tournament_id = $1`,
+      [tournamentId]
+    );
+
+    // 7. Position points lookup
+    const positionPointsLookup = await getPositionPointsLookup(orgId);
+
+    res.json({
+      tournament: {
+        id: tournament.id,
+        category_name: tournament.category_name,
+        game_type: tournament.game_type,
+        level: tournament.level,
+        tournament_number: tournament.tournament_number,
+        season: tournament.season,
+        scoring_validated: tournament.scoring_validated || false,
+        scoring_validated_at: tournament.scoring_validated_at
+      },
+      stageConfig: stageConfigWithNames,
+      players: playersWithBonus,
+      bracketMatches,
+      savedScores,
+      gameParameters: { moyenne_mini: moyenneMini, moyenne_maxi: moyenneMaxi },
+      positionPointsLookup
+    });
+
+  } catch (error) {
+    console.error('Error loading scoring detail:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * PUT /tournaments/:id/scoring-detail
+ * Save (draft or validate) stage player scores.
+ * Body: { scores: [{ licence, stage_code, match_points, average_bonus, level_bonus, participation_bonus }], validate: boolean }
+ */
+router.put('/:id/scoring-detail', authenticateToken, async (req, res) => {
+  try {
+    const tournamentId = parseInt(req.params.id);
+    const orgId = req.user.organizationId || null;
+    const { scores, validate } = req.body;
+
+    // Verify tournament exists and belongs to org
+    const tournament = await dbGetAsync(
+      `SELECT t.id, t.category_id, t.season
+       FROM tournaments t
+       WHERE t.id = $1 AND ($2::int IS NULL OR t.organization_id = $2)`,
+      [tournamentId, orgId]
+    );
+    if (!tournament) {
+      return res.status(404).json({ error: 'Tournoi non trouvé' });
+    }
+
+    // UPSERT all scores
+    for (const score of scores) {
+      await dbRunAsync(
+        `INSERT INTO stage_player_scores (tournament_id, licence, stage_code, match_points, average_bonus, level_bonus, participation_bonus)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         ON CONFLICT (tournament_id, licence, stage_code)
+         DO UPDATE SET match_points = $4, average_bonus = $5, level_bonus = $6, participation_bonus = $7`,
+        [tournamentId, score.licence, score.stage_code,
+         parseInt(score.match_points) || 0,
+         parseInt(score.average_bonus) || 0,
+         parseInt(score.level_bonus) || 0,
+         parseInt(score.participation_bonus) || 0]
+      );
+    }
+
+    if (validate) {
+      // Aggregate bonuses per player across all stages
+      const aggregated = await dbAllAsync(
+        `SELECT licence,
+                SUM(average_bonus) as total_average_bonus,
+                SUM(level_bonus) as total_level_bonus,
+                SUM(participation_bonus) as total_participation_bonus
+         FROM stage_player_scores
+         WHERE tournament_id = $1
+         GROUP BY licence`,
+        [tournamentId]
+      );
+
+      // Update tournament_results with aggregated bonus data
+      for (const agg of aggregated) {
+        const totalBonus = (agg.total_average_bonus || 0) + (agg.total_level_bonus || 0) + (agg.total_participation_bonus || 0);
+        const bonusDetail = {};
+        if (agg.total_average_bonus > 0) bonusDetail['AVERAGE_BONUS'] = agg.total_average_bonus;
+        if (agg.total_level_bonus > 0) bonusDetail['LEVEL_BONUS'] = agg.total_level_bonus;
+        if (agg.total_participation_bonus > 0) bonusDetail['PARTICIPATION_BONUS'] = agg.total_participation_bonus;
+
+        await dbRunAsync(
+          `UPDATE tournament_results
+           SET bonus_points = $1, bonus_detail = $2
+           WHERE tournament_id = $3 AND licence = $4`,
+          [totalBonus, JSON.stringify(bonusDetail), tournamentId, agg.licence]
+        );
+      }
+
+      // Mark tournament as scoring validated
+      await dbRunAsync(
+        `UPDATE tournaments SET scoring_validated = TRUE, scoring_validated_at = CURRENT_TIMESTAMP WHERE id = $1`,
+        [tournamentId]
+      );
+
+      // Recalculate rankings
+      await new Promise((resolve, reject) => {
+        recalculateRankings(tournament.category_id, tournament.season, (err) => {
+          if (err) reject(err);
+          else resolve();
+        });
+      });
+
+      logAdminAction({
+        req,
+        action: ACTION_TYPES.IMPORT_TOURNAMENT,
+        details: `Scoring détaillé validé pour tournoi #${tournamentId}`,
+        targetType: 'tournament',
+        targetId: tournamentId,
+        targetName: `TQ${tournament.tournament_number || ''}`
+      });
+
+      res.json({ success: true, message: 'Scoring validé et classements recalculés', validated: true });
+    } else {
+      res.json({ success: true, message: 'Brouillon enregistré', validated: false });
+    }
+
+  } catch (error) {
+    console.error('Error saving scoring detail:', error);
     res.status(500).json({ error: error.message });
   }
 });

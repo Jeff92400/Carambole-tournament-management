@@ -48,7 +48,7 @@ git push origin main
 
 ## Versioning
 
-**Current Version:** V 2.0.201 02/26
+**Current Version:** V 2.0.203 02/26
 
 Version is displayed at the bottom of the login screen (`frontend/login.html`).
 
@@ -179,6 +179,7 @@ To give each CDB a branded sender domain (e.g., `cdb9493@ffbcarambole-gestion.fr
 
 ## Development Notes
 
+- **User Guide Maintenance:** The file `GUIDE-UTILISATEUR-COMPLET.md` is the complete French user guide. It MUST be updated whenever a **new feature** is implemented (new page, new setting, changed functionality). Add/update the relevant sections, update the glossary if new terms are introduced, and keep the same structure and writing style (French, formal, step-by-step). Include the guide update in the same commit as the feature. Bug fixes do NOT require guide updates.
 - All text is in **French**
 - Dates: Paris timezone, displayed as DD/MM/YYYY
 - Season format: `YYYY-YYYY+1` (e.g., "2024-2025"), configurable start month via `app_settings.season_start_month` (default: 9 = September)

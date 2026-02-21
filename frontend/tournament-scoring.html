@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Scoring Détaillé - Billard Ranking</title>
+  <link rel="icon" type="image/png" href="images/FrenchBillard-Icon-small.png">
+  <link rel="stylesheet" href="css/styles.css">
+  <script src="js/branding.js?v=203"></script>
+  <style>
+    .stage-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-bottom: 20px;
+      background: #f0f2f5;
+      border-radius: 8px;
+      padding: 4px;
+    }
+    .stage-tab {
+      padding: 8px 16px;
+      border: none;
+      background: transparent;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      color: #555;
+      transition: all 0.2s;
+    }
+    .stage-tab:hover { background: rgba(255,255,255,0.6); }
+    .stage-tab.active {
+      background: var(--color-primary, #1F4788);
+      color: white;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+    }
+    .stage-tab.resume-tab {
+      margin-left: auto;
+      font-weight: 600;
+    }
+
+    .scoring-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    .scoring-table th {
+      background: var(--color-primary, #1F4788);
+      color: white;
+      padding: 10px 8px;
+      text-align: center;
+      font-weight: 600;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+    .scoring-table th:first-child,
+    .scoring-table td:first-child {
+      text-align: left;
+      padding-left: 12px;
+    }
+    .scoring-table td {
+      padding: 8px;
+      text-align: center;
+      border-bottom: 1px solid #eee;
+    }
+    .scoring-table tr:nth-child(even) { background: #fafbfc; }
+    .scoring-table tr:hover { background: #f0f4ff; }
+
+    .scoring-table input[type="number"] {
+      width: 55px;
+      padding: 5px 4px;
+      text-align: center;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-size: 13px;
+    }
+    .scoring-table input[type="number"]:focus {
+      border-color: var(--color-primary, #1F4788);
+      outline: none;
+      box-shadow: 0 0 0 2px rgba(31,71,136,0.15);
+    }
+
+    .readonly-value {
+      display: inline-block;
+      padding: 5px 8px;
+      background: #e9ecef;
+      border-radius: 4px;
+      font-weight: 500;
+      min-width: 30px;
+    }
+
+    .info-card {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 15px;
+      align-items: center;
+      margin-bottom: 5px;
+    }
+    .info-card .info-item {
+      font-size: 14px;
+    }
+    .info-card .info-item strong {
+      color: var(--color-primary, #1F4788);
+    }
+
+    .validated-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 4px 10px;
+      background: #d4edda;
+      color: #155724;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .not-validated-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 4px 10px;
+      background: #fff3cd;
+      color: #856404;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .action-bar {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-top: 15px;
+    }
+
+    .resume-total { font-weight: 700; }
+    .resume-position {
+      display: inline-block;
+      width: 26px;
+      height: 26px;
+      line-height: 26px;
+      text-align: center;
+      border-radius: 50%;
+      font-weight: 700;
+      font-size: 12px;
+      color: white;
+    }
+    .resume-position.p1 { background: #FFD700; color: #333; }
+    .resume-position.p2 { background: #C0C0C0; color: #333; }
+    .resume-position.p3 { background: #CD7F32; }
+    .resume-position.p4 { background: #6c757d; }
+    .resume-position.pn { background: #adb5bd; }
+
+    @media (max-width: 768px) {
+      .scoring-table { font-size: 12px; }
+      .scoring-table input[type="number"] { width: 45px; }
+      .stage-tabs { gap: 2px; }
+      .stage-tab { padding: 6px 10px; font-size: 12px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="navbar">
+      <h2><img id="app-header-icon" src="images/FrenchBillard-Icon-small.png" alt="" style="height: 48px; width: 48px; vertical-align: middle; margin-right: 8px;" onerror="this.src='images/FrenchBillard-Icon-small.png';"><span id="app-org-name" data-page-title="Scoring Détaillé">CDB</span></h2>
+      <div class="nav-links">
+        <a href="dashboard.html">Accueil</a>
+        <a href="rankings.html" class="nav-tooltip" data-tooltip="Classement par catégorie">Classements</a>
+        <a href="generate-poules.html" class="not-club nav-tooltip" data-tooltip="Compétitions à jouer / Convocations">Compétitions</a>
+        <a href="settings.html" class="admin-only nav-tooltip" data-tooltip="Réservé aux administrateurs">Paramètres</a>
+        <a href="#" id="logoutBtn" class="nav-logout">Déconnexion</a>
+      </div>
+    </div>
+
+    <div id="errorMessage" class="error" style="display: none;"></div>
+
+    <div id="loadingSpinner" class="loading">
+      <div class="spinner"></div>
+      Chargement...
+    </div>
+
+    <div id="mainContent" style="display: none;">
+
+      <!-- Back link -->
+      <div style="margin-bottom: 15px;">
+        <a id="backLink" href="tournaments-list.html" class="btn" style="background: #6c757d; text-decoration: none; font-size: 13px; padding: 8px 16px;">
+          ← Retour aux tournois
+        </a>
+      </div>
+
+      <!-- Tournament info -->
+      <div class="card">
+        <h3 id="tournamentTitle" style="margin-bottom: 10px;">-</h3>
+        <div class="info-card">
+          <div class="info-item"><strong>Catégorie :</strong> <span id="infoCat">-</span></div>
+          <div class="info-item"><strong>Tournoi :</strong> <span id="infoTQ">-</span></div>
+          <div class="info-item"><strong>Saison :</strong> <span id="infoSeason">-</span></div>
+          <div class="info-item"><strong>Joueurs :</strong> <span id="infoPlayers">-</span></div>
+          <div class="info-item" id="validationStatus"></div>
+        </div>
+      </div>
+
+      <!-- Stage tabs -->
+      <div class="stage-tabs" id="stageTabs"></div>
+
+      <!-- Scoring table -->
+      <div class="card" id="scoringCard">
+        <div style="overflow-x: auto;">
+          <table class="scoring-table">
+            <thead id="scoringHead"></thead>
+            <tbody id="scoringBody"></tbody>
+          </table>
+        </div>
+        <div id="emptyStage" style="display: none; text-align: center; padding: 30px; color: #999;">
+          Aucun joueur pour cette phase.
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="card" id="actionsCard">
+        <div class="action-bar">
+          <button onclick="saveDraft()" class="btn" style="background: #6c757d; padding: 10px 20px;" id="btnDraft">
+            Enregistrer brouillon
+          </button>
+          <button onclick="validateScoring()" class="btn" style="background: #28a745; padding: 10px 20px;" id="btnValidate">
+            Valider le scoring
+          </button>
+          <button onclick="unlockScoring()" class="btn" style="background: #ffc107; color: #333; padding: 10px 20px; display: none;" id="btnUnlock">
+            Modifier
+          </button>
+        </div>
+        <div id="actionMessage" style="display: none; margin-top: 15px; padding: 10px; border-radius: 4px;"></div>
+      </div>
+
+    </div>
+  </div>
+
+  <script src="js/auth-utils.js?v=203"></script>
+  <script src="js/app-branding.js?v=203"></script>
+  <script>
+    const API_URL = '/api';
+
+    if (!requireAuth()) { throw new Error('Not authenticated'); }
+    const token = localStorage.getItem('token');
+
+    // ==================== STATE ====================
+
+    let tournamentId = null;
+    let scoringData = null;         // Full API response
+    let stageScores = {};           // stageScores[stageCode][licence] = { match_points, average_bonus, level_bonus, participation_bonus }
+    let activeTab = null;
+    let isLocked = false;           // true when scoring_validated and not unlocked
+
+    // ==================== INIT ====================
+
+    async function init() {
+      const params = new URLSearchParams(window.location.search);
+      tournamentId = parseInt(params.get('id'));
+
+      if (!tournamentId) {
+        showError('ID de tournoi manquant');
+        return;
+      }
+
+      try {
+        const response = await authFetch(`${API_URL}/tournaments/${tournamentId}/scoring-detail`);
+        if (!response.ok) {
+          const err = await response.json();
+          showError(err.error || 'Erreur lors du chargement');
+          return;
+        }
+
+        scoringData = await response.json();
+        initializeState();
+        renderInfo();
+        renderTabs();
+        updateLockState();
+
+        document.getElementById('loadingSpinner').style.display = 'none';
+        document.getElementById('mainContent').style.display = 'block';
+
+      } catch (error) {
+        console.error('Error:', error);
+        showError('Erreur de connexion au serveur');
+      }
+    }
+
+    function initializeState() {
+      stageScores = {};
+
+      // Initialize from saved scores if any
+      for (const sc of scoringData.savedScores) {
+        if (!stageScores[sc.stage_code]) stageScores[sc.stage_code] = {};
+        stageScores[sc.stage_code][sc.licence] = {
+          match_points: sc.match_points || 0,
+          average_bonus: sc.average_bonus || 0,
+          level_bonus: sc.level_bonus || 0,
+          participation_bonus: sc.participation_bonus || 0
+        };
+      }
+
+      // For stages without saved scores, initialize from computed data
+      for (const stage of scoringData.stageConfig) {
+        if (!stageScores[stage.stage_code]) stageScores[stage.stage_code] = {};
+        const players = getPlayersForStage(stage.stage_code);
+        for (const p of players) {
+          if (!stageScores[stage.stage_code][p.licence]) {
+            stageScores[stage.stage_code][p.licence] = {
+              match_points: stage.stage_code === 'POULES' ? (p.match_points || 0) : 0,
+              average_bonus: p.computed_average_bonus || 0,
+              level_bonus: 0,
+              participation_bonus: 0
+            };
+          }
+        }
+      }
+
+      isLocked = scoringData.tournament.scoring_validated === true;
+    }
+
+    // ==================== RENDERING ====================
+
+    function renderInfo() {
+      const t = scoringData.tournament;
+      document.getElementById('tournamentTitle').textContent = `Scoring Détaillé — ${t.category_name}`;
+      document.getElementById('infoCat').textContent = t.category_name;
+      document.getElementById('infoTQ').textContent = `TQ${t.tournament_number}`;
+      document.getElementById('infoSeason').textContent = t.season;
+      document.getElementById('infoPlayers').textContent = scoringData.players.length;
+
+      const statusEl = document.getElementById('validationStatus');
+      if (t.scoring_validated) {
+        const date = t.scoring_validated_at ? new Date(t.scoring_validated_at).toLocaleDateString('fr-FR') : '';
+        statusEl.innerHTML = `<span class="validated-badge">Validé ${date}</span>`;
+      } else {
+        statusEl.innerHTML = `<span class="not-validated-badge">Non validé</span>`;
+      }
+    }
+
+    function renderTabs() {
+      const tabsEl = document.getElementById('stageTabs');
+      const visibleStages = getVisibleStages();
+
+      let html = '';
+      for (const stage of visibleStages) {
+        html += `<button class="stage-tab" data-stage="${stage.stage_code}" onclick="switchTab('${stage.stage_code}')">${stage.displayName}</button>`;
+      }
+      // Resume tab always present
+      html += `<button class="stage-tab resume-tab" data-stage="RESUME" onclick="switchTab('RESUME')">Résumé</button>`;
+      tabsEl.innerHTML = html;
+
+      // Activate first tab
+      const firstStage = visibleStages.length > 0 ? visibleStages[0].stage_code : 'RESUME';
+      switchTab(firstStage);
+    }
+
+    function getVisibleStages() {
+      return scoringData.stageConfig.filter(sc => {
+        // Stage must have at least one scoring column enabled
+        if (!hasActiveColumns(sc)) return false;
+        // Stage must have players
+        const players = getPlayersForStage(sc.stage_code);
+        return players.length > 0;
+      });
+    }
+
+    function hasActiveColumns(config) {
+      return config.match_points > 0 || config.average_bonus > 0 ||
+             config.level_bonus > 0 || config.participation_bonus > 0;
+    }
+
+    function getPlayersForStage(stageCode) {
+      if (stageCode === 'POULES' || stageCode === 'RESUME') return scoringData.players;
+      // Extract unique licences from bracket_matches for this phase
+      const phaseMatches = scoringData.bracketMatches.filter(m => m.phase === stageCode);
+      const licenceSet = new Set();
+      phaseMatches.forEach(m => {
+        if (m.player1_licence) licenceSet.add(m.player1_licence);
+        if (m.player2_licence) licenceSet.add(m.player2_licence);
+      });
+      return scoringData.players.filter(p => licenceSet.has(p.licence));
+    }
+
+    function switchTab(stageCode) {
+      // Save current inputs before switching
+      if (activeTab && activeTab !== 'RESUME') {
+        captureInputs(activeTab);
+      }
+
+      activeTab = stageCode;
+
+      // Update tab active state
+      document.querySelectorAll('.stage-tab').forEach(tab => {
+        tab.classList.toggle('active', tab.dataset.stage === stageCode);
+      });
+
+      if (stageCode === 'RESUME') {
+        renderResume();
+      } else {
+        renderStageTable(stageCode);
+      }
+    }
+
+    function renderStageTable(stageCode) {
+      const config = scoringData.stageConfig.find(sc => sc.stage_code === stageCode);
+      if (!config) return;
+
+      const players = getPlayersForStage(stageCode);
+      const headEl = document.getElementById('scoringHead');
+      const bodyEl = document.getElementById('scoringBody');
+      const emptyEl = document.getElementById('emptyStage');
+
+      if (players.length === 0) {
+        headEl.innerHTML = '';
+        bodyEl.innerHTML = '';
+        emptyEl.style.display = 'block';
+        return;
+      }
+      emptyEl.style.display = 'none';
+
+      // Build header
+      let headerHtml = '<tr><th>Joueur</th>';
+      if (config.match_points > 0) headerHtml += '<th>Pts Match</th>';
+      if (config.average_bonus > 0) headerHtml += '<th>Bonus Moy.</th>';
+      if (config.level_bonus > 0) headerHtml += '<th>Bonus Niveau</th>';
+      if (config.participation_bonus > 0) headerHtml += '<th>Bonus Particip.</th>';
+      headerHtml += '</tr>';
+      headEl.innerHTML = headerHtml;
+
+      // Ensure stage state exists
+      if (!stageScores[stageCode]) stageScores[stageCode] = {};
+
+      // Build rows
+      let rowsHtml = '';
+      for (const p of players) {
+        const scores = stageScores[stageCode][p.licence] || {
+          match_points: stageCode === 'POULES' ? (p.match_points || 0) : 0,
+          average_bonus: p.computed_average_bonus || 0,
+          level_bonus: 0,
+          participation_bonus: 0
+        };
+
+        rowsHtml += `<tr data-licence="${p.licence}">`;
+        rowsHtml += `<td style="text-align: left; font-weight: 500;">${p.player_name}`;
+        if (p.moyenne_ffb) rowsHtml += ` <span style="color: #999; font-size: 11px;">(${p.moyenne_ffb})</span>`;
+        rowsHtml += `</td>`;
+
+        if (config.match_points > 0) {
+          rowsHtml += `<td><span class="readonly-value">${scores.match_points}</span></td>`;
+        }
+        if (config.average_bonus > 0) {
+          rowsHtml += `<td><span class="readonly-value">${scores.average_bonus}</span></td>`;
+        }
+        if (config.level_bonus > 0) {
+          if (isLocked) {
+            rowsHtml += `<td><span class="readonly-value">${scores.level_bonus}</span></td>`;
+          } else {
+            rowsHtml += `<td><input type="number" min="0" class="input-level-bonus" data-licence="${p.licence}" value="${scores.level_bonus}"></td>`;
+          }
+        }
+        if (config.participation_bonus > 0) {
+          if (isLocked) {
+            rowsHtml += `<td><span class="readonly-value">${scores.participation_bonus}</span></td>`;
+          } else {
+            rowsHtml += `<td><input type="number" min="0" class="input-participation-bonus" data-licence="${p.licence}" value="${scores.participation_bonus}"></td>`;
+          }
+        }
+
+        rowsHtml += '</tr>';
+      }
+      bodyEl.innerHTML = rowsHtml;
+    }
+
+    function renderResume() {
+      // Capture any current inputs first
+      if (activeTab !== 'RESUME') {
+        captureInputs(activeTab);
+      }
+
+      const headEl = document.getElementById('scoringHead');
+      const bodyEl = document.getElementById('scoringBody');
+      document.getElementById('emptyStage').style.display = 'none';
+
+      const visibleStages = getVisibleStages();
+      const bonusTypes = ['match_points', 'average_bonus', 'level_bonus', 'participation_bonus'];
+      const bonusLabels = {
+        match_points: 'Pts Match',
+        average_bonus: 'Bonus Moy.',
+        level_bonus: 'Bonus Niv.',
+        participation_bonus: 'Bonus Part.'
+      };
+
+      // Determine which bonus types have any non-zero config
+      const activeBonusTypes = bonusTypes.filter(bt =>
+        visibleStages.some(sc => sc[bt] > 0)
+      );
+
+      // Header
+      let headerHtml = '<tr><th>Pos.</th><th>Joueur</th>';
+      for (const bt of activeBonusTypes) {
+        headerHtml += `<th>${bonusLabels[bt]}</th>`;
+      }
+      headerHtml += '<th>Total Bonus</th><th>Pts Position</th></tr>';
+      headEl.innerHTML = headerHtml;
+
+      // Compute totals per player
+      const playerTotals = scoringData.players.map(p => {
+        const totals = { match_points: 0, average_bonus: 0, level_bonus: 0, participation_bonus: 0 };
+
+        for (const stage of visibleStages) {
+          const scores = (stageScores[stage.stage_code] || {})[p.licence];
+          if (scores) {
+            for (const bt of bonusTypes) {
+              if (stage[bt] > 0) {
+                totals[bt] += scores[bt] || 0;
+              }
+            }
+          }
+        }
+
+        const totalBonus = totals.average_bonus + totals.level_bonus + totals.participation_bonus;
+
+        return {
+          licence: p.licence,
+          player_name: p.player_name,
+          position: p.position,
+          position_points: p.position_points,
+          totals,
+          totalBonus
+        };
+      });
+
+      // Sort by position
+      playerTotals.sort((a, b) => (a.position || 999) - (b.position || 999));
+
+      // Rows
+      let rowsHtml = '';
+      for (const pt of playerTotals) {
+        const posClass = pt.position <= 4 ? `p${pt.position}` : 'pn';
+        rowsHtml += '<tr>';
+        rowsHtml += `<td>${pt.position ? `<span class="resume-position ${posClass}">${pt.position}</span>` : '-'}</td>`;
+        rowsHtml += `<td style="text-align: left; font-weight: 500;">${pt.player_name}</td>`;
+        for (const bt of activeBonusTypes) {
+          rowsHtml += `<td>${pt.totals[bt]}</td>`;
+        }
+        rowsHtml += `<td class="resume-total">${pt.totalBonus}</td>`;
+        rowsHtml += `<td><span class="readonly-value">${pt.position_points}</span></td>`;
+        rowsHtml += '</tr>';
+      }
+      bodyEl.innerHTML = rowsHtml;
+    }
+
+    // ==================== INPUT CAPTURE ====================
+
+    function captureInputs(stageCode) {
+      if (!stageCode || stageCode === 'RESUME') return;
+      if (!stageScores[stageCode]) stageScores[stageCode] = {};
+
+      document.querySelectorAll('.input-level-bonus').forEach(input => {
+        const licence = input.dataset.licence;
+        if (!stageScores[stageCode][licence]) stageScores[stageCode][licence] = {};
+        stageScores[stageCode][licence].level_bonus = parseInt(input.value) || 0;
+      });
+
+      document.querySelectorAll('.input-participation-bonus').forEach(input => {
+        const licence = input.dataset.licence;
+        if (!stageScores[stageCode][licence]) stageScores[stageCode][licence] = {};
+        stageScores[stageCode][licence].participation_bonus = parseInt(input.value) || 0;
+      });
+    }
+
+    // ==================== LOCK STATE ====================
+
+    function updateLockState() {
+      const draftBtn = document.getElementById('btnDraft');
+      const validateBtn = document.getElementById('btnValidate');
+      const unlockBtn = document.getElementById('btnUnlock');
+
+      if (isLocked) {
+        draftBtn.style.display = 'none';
+        validateBtn.style.display = 'none';
+        unlockBtn.style.display = '';
+      } else {
+        draftBtn.style.display = '';
+        validateBtn.style.display = '';
+        unlockBtn.style.display = 'none';
+      }
+    }
+
+    function unlockScoring() {
+      isLocked = false;
+      updateLockState();
+      // Re-render current tab with editable inputs
+      if (activeTab && activeTab !== 'RESUME') {
+        renderStageTable(activeTab);
+      }
+    }
+
+    // ==================== SAVE / VALIDATE ====================
+
+    function collectAllScores() {
+      // Capture current inputs
+      if (activeTab && activeTab !== 'RESUME') {
+        captureInputs(activeTab);
+      }
+
+      const allScores = [];
+      for (const stageCode of Object.keys(stageScores)) {
+        for (const licence of Object.keys(stageScores[stageCode])) {
+          const s = stageScores[stageCode][licence];
+          allScores.push({
+            licence,
+            stage_code: stageCode,
+            match_points: s.match_points || 0,
+            average_bonus: s.average_bonus || 0,
+            level_bonus: s.level_bonus || 0,
+            participation_bonus: s.participation_bonus || 0
+          });
+        }
+      }
+      return allScores;
+    }
+
+    async function saveDraft() {
+      const btn = document.getElementById('btnDraft');
+      btn.disabled = true;
+      btn.textContent = 'Enregistrement...';
+
+      try {
+        const scores = collectAllScores();
+        const response = await authFetch(`${API_URL}/tournaments/${tournamentId}/scoring-detail`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ scores, validate: false })
+        });
+
+        const data = await response.json();
+        if (response.ok) {
+          showActionMessage(data.message, 'success');
+        } else {
+          showActionMessage(data.error || 'Erreur', 'error');
+        }
+      } catch (error) {
+        showActionMessage('Erreur de connexion', 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Enregistrer brouillon';
+      }
+    }
+
+    async function validateScoring() {
+      if (!confirm('Valider le scoring et recalculer les classements ? Cette action mettra à jour les classements de la saison.')) return;
+
+      const btn = document.getElementById('btnValidate');
+      btn.disabled = true;
+      btn.textContent = 'Validation...';
+
+      try {
+        const scores = collectAllScores();
+        const response = await authFetch(`${API_URL}/tournaments/${tournamentId}/scoring-detail`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ scores, validate: true })
+        });
+
+        const data = await response.json();
+        if (response.ok) {
+          showActionMessage(data.message, 'success');
+          isLocked = true;
+          scoringData.tournament.scoring_validated = true;
+          scoringData.tournament.scoring_validated_at = new Date().toISOString();
+          renderInfo();
+          updateLockState();
+          if (activeTab && activeTab !== 'RESUME') {
+            renderStageTable(activeTab);
+          }
+        } else {
+          showActionMessage(data.error || 'Erreur', 'error');
+        }
+      } catch (error) {
+        showActionMessage('Erreur de connexion', 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Valider le scoring';
+      }
+    }
+
+    // ==================== HELPERS ====================
+
+    function showError(msg) {
+      document.getElementById('loadingSpinner').style.display = 'none';
+      document.getElementById('errorMessage').textContent = msg;
+      document.getElementById('errorMessage').style.display = 'block';
+    }
+
+    function showActionMessage(msg, type) {
+      const el = document.getElementById('actionMessage');
+      el.textContent = msg;
+      el.style.display = 'block';
+      el.style.background = type === 'success' ? '#d4edda' : '#f8d7da';
+      el.style.color = type === 'success' ? '#155724' : '#721c24';
+      setTimeout(() => { el.style.display = 'none'; }, 5000);
+    }
+
+    // ==================== BOOT ====================
+
+    init();
+  </script>
+</body>
+</html>
