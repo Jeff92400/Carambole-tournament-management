@@ -2840,8 +2840,8 @@ router.get('/:id/scoring-detail', authenticateToken, async (req, res) => {
     const vdlMap = {};
     for (const r of vdlRules) vdlMap[r.condition_key] = r.points;
 
-    const matchPointsLoss = vdlMap['LOSS'] ?? parseInt(await appSettings.getOrgSetting(orgId, 'scoring_match_points_loss')) || 0;
-    const matchPointsDraw = vdlMap['DRAW'] ?? parseInt(await appSettings.getOrgSetting(orgId, 'scoring_match_points_draw')) || 1;
+    const matchPointsLoss = vdlMap['LOSS'] ?? (parseInt(await appSettings.getOrgSetting(orgId, 'scoring_match_points_loss')) || 0);
+    const matchPointsDraw = vdlMap['DRAW'] ?? (parseInt(await appSettings.getOrgSetting(orgId, 'scoring_match_points_draw')) || 1);
     const matchPointsWinFromVDL = vdlMap['VICTORY'];
 
     // Compute average bonus per player
