@@ -2829,7 +2829,20 @@ router.get('/:id/scoring-detail', authenticateToken, async (req, res) => {
     const tier1 = parseInt(await appSettings.getOrgSetting(orgId, 'scoring_avg_tier_1')) || 1;
     const tier2 = parseInt(await appSettings.getOrgSetting(orgId, 'scoring_avg_tier_2')) || 2;
     const tier3 = parseInt(await appSettings.getOrgSetting(orgId, 'scoring_avg_tier_3')) || 3;
-    const matchPointsLoss = parseInt(await appSettings.getOrgSetting(orgId, 'scoring_match_points_loss')) || 0;
+
+    // Read V/D/N from scoring_rules BASE_VDL (source of truth) with legacy fallback
+    const vdlRules = await dbAllAsync(
+      `SELECT condition_key, points FROM scoring_rules
+       WHERE rule_type = 'BASE_VDL' AND ($1::int IS NULL OR organization_id = $1)
+       ORDER BY display_order`,
+      [orgId]
+    );
+    const vdlMap = {};
+    for (const r of vdlRules) vdlMap[r.condition_key] = r.points;
+
+    const matchPointsLoss = vdlMap['LOSS'] ?? parseInt(await appSettings.getOrgSetting(orgId, 'scoring_match_points_loss')) || 0;
+    const matchPointsDraw = vdlMap['DRAW'] ?? parseInt(await appSettings.getOrgSetting(orgId, 'scoring_match_points_draw')) || 1;
+    const matchPointsWinFromVDL = vdlMap['VICTORY'];
 
     // Compute average bonus per player
     const playersWithBonus = players.map(p => {
@@ -2897,7 +2910,8 @@ router.get('/:id/scoring-detail', authenticateToken, async (req, res) => {
       savedScores,
       gameParameters: { moyenne_mini: moyenneMini, moyenne_maxi: moyenneMaxi, moyenne_middle: moyenneMiddle },
       scoringRules: {
-        matchPointsWin: stageConfigWithNames.find(s => s.stage_code === 'POULES')?.match_points || 0,
+        matchPointsWin: matchPointsWinFromVDL ?? (stageConfigWithNames.find(s => s.stage_code === 'POULES')?.match_points || 0),
+        matchPointsDraw: matchPointsDraw,
         matchPointsLoss: matchPointsLoss,
         avgTier1: tier1,
         avgTier2: tier2,

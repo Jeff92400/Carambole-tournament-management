@@ -350,7 +350,7 @@
       const gp = scoringData.gameParameters;
       const bar = document.getElementById('scoringInfoBar');
 
-      const matchText = `Pts Match : Victoire = ${rules.matchPointsWin}, Défaite = ${rules.matchPointsLoss}`;
+      const matchText = `Pts Match : V = ${rules.matchPointsWin}, N = ${rules.matchPointsDraw ?? 1}, D = ${rules.matchPointsLoss}`;
       document.getElementById('infoMatchRule').textContent = matchText;
 
       let avgText = 'Bonus Moy. : ';

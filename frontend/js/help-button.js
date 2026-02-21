@@ -16,7 +16,6 @@
     'inscriptions-viewer.html': '#inscriptions-list',
     'settings.html': '#parametres',
     'settings-admin.html': '#param-organisation',
-    'settings-bareme.html': '#param-bareme',
     'settings-reference.html': '#param-reference',
     'classifications-ffb.html': '#param-classifications',
     'clubs.html': '#param-clubs',

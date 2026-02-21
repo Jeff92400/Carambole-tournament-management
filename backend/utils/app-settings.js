@@ -52,6 +52,7 @@ const defaults = {
 
   // Scoring rule details (journées mode)
   scoring_match_points_loss: '0',
+  scoring_match_points_draw: '1',
   scoring_avg_tier_1: '1',
   scoring_avg_tier_2: '2',
   scoring_avg_tier_3: '3',

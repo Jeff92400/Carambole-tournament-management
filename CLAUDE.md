@@ -48,7 +48,7 @@ git push origin main
 
 ## Versioning
 
-**Current Version:** V 2.0.208 02/26
+**Current Version:** V 2.0.209 02/26
 
 Version is displayed at the bottom of the login screen (`frontend/login.html`).
 
@@ -375,7 +375,8 @@ The scoring system uses a generic expression evaluator for bonus points. Rules a
 - Excel exports also use dynamic columns
 - **Backward compatibility:** Old results with `bonus_points` but no `bonus_detail` get legacy fallback `{"MOYENNE_BONUS": bonus_points}`
 
-### Frontend (settings-bareme.html)
+### Frontend (settings-admin.html — barème section)
+- Barème blocks integrated into settings-admin.html under the stage scoring grid
 - Structured expression builder with dropdowns (field, operator, value)
 - Rules displayed as readable French text
 - `/api/scoring-fields` endpoint provides metadata for dropdowns

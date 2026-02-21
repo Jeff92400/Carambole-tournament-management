@@ -899,10 +899,10 @@ Les paramètres Distance et Reprises peuvent être modifiés pour un tournoi sp�
 ### PARAMÈTRES > Barème de Points
 
 #### Accès
-Menu Paramètres > Barème
+Menu Paramètres > Types de tournois (section "Configuration du scoring par phase")
 
 #### Description
-Configuration des règles de calcul des points de match et des bonus.
+Configuration des règles de calcul des points de match et des bonus. Le barème est intégré à la page d'administration, sous la grille de scoring par phase.
 
 #### Barème de base (Victoire / Nul / Défaite)
 
@@ -1181,14 +1181,14 @@ Les inscriptions avec source "player_app" ont été faites par le joueur lui-mê
 
 ### Configurer le barème de points
 
-1. Menu Paramètres > Barème
-2. Vérifier le barème de base (Victoire / Nul / Défaite)
-3. (Optionnel) Ajouter un bloc de bonus :
-   - Saisir un nom de bloc et un libellé de colonne
-   - Cliquer sur "Ajouter le bloc"
-   - Ajouter des conditions avec le formulaire structuré
-4. Activer ou désactiver les blocs selon les besoins
-5. Les bonus sont appliqués automatiquement lors de l'import des résultats
+1. Menu Paramètres > Types de tournois
+2. Faire défiler jusqu'à la section "Configuration du scoring par phase"
+3. Sous la grille, les blocs de barème sont affichés (Victoire/Nul/Défaite, Bonus Moyenne, etc.)
+4. Cliquer sur "Modifier" pour ajuster les points d'une condition
+5. (Optionnel) Ajouter un bloc de bonus : saisir un nom de bloc et un libellé de colonne, cliquer sur "Ajouter le bloc"
+6. Ajouter des conditions avec le formulaire structuré
+7. Activer ou désactiver les blocs selon les besoins
+8. Les bonus sont appliqués automatiquement lors de l'import des résultats
 
 ---
 
