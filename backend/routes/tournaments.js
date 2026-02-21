@@ -1433,6 +1433,7 @@ async function recalculateRankingsJournees(categoryId, season, callback, orgId) 
     // Get org settings
     const bestOfCount = parseInt(await appSettings.getOrgSetting(orgId, 'best_of_count')) || 2;
     const journeesCount = parseInt(await appSettings.getOrgSetting(orgId, 'journees_count')) || 3;
+    const averageBonusEnabled = (await appSettings.getOrgSetting(orgId, 'average_bonus_tiers')) === 'true';
 
     // Get all tournaments for this category/season (excluding finale = tournament_number 4)
     const tournaments = await dbAllAsync(
@@ -1478,7 +1479,7 @@ async function recalculateRankingsJournees(categoryId, season, callback, orgId) 
         playerData[r.licence] = { playerName: r.player_name, tournaments: {} };
       }
       playerData[r.licence].tournaments[r.tournament_number] = {
-        positionPoints: r.position_points || 0,
+        positionPoints: r.position_points || r.match_points || 0,
         points: r.points || 0,
         reprises: r.reprises || 0,
         matchPoints: r.match_points || 0,
@@ -1534,14 +1535,16 @@ async function recalculateRankingsJournees(categoryId, season, callback, orgId) 
       }
       const avgMoyenne = totalReprises > 0 ? totalPoints / totalReprises : 0;
 
-      // Tiered average bonus
+      // Tiered average bonus (only if enabled in org settings)
       let averageBonus = 0;
-      if (avgMoyenne >= moyenneMaxi) {
-        averageBonus = 3;
-      } else if (avgMoyenne >= moyenneMiddle) {
-        averageBonus = 2;
-      } else if (avgMoyenne >= moyenneMini) {
-        averageBonus = 1;
+      if (averageBonusEnabled) {
+        if (avgMoyenne >= moyenneMaxi) {
+          averageBonus = 3;
+        } else if (avgMoyenne >= moyenneMiddle) {
+          averageBonus = 2;
+        } else if (avgMoyenne >= moyenneMini) {
+          averageBonus = 1;
+        }
       }
 
       const totalScore = totalPositionPoints + averageBonus;

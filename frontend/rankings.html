@@ -374,6 +374,7 @@
         const bonusColumns = data.bonusColumns || [];
         const hasBonusCols = bonusColumns.length > 0;
         const isJournees = data.qualificationMode === 'journees';
+        const showAvgBonus = isJournees && data.averageBonusTiers;
 
         // Update header row dynamically based on mode and bonus columns
         if (isJournees) {
@@ -385,7 +386,7 @@
             <th>TQ1</th>
             <th>TQ2</th>
             <th>TQ3</th>
-            <th>Bonus Moy.</th>
+            ${showAvgBonus ? '<th>Bonus Moy.</th>' : ''}
             <th>Total</th>
             <th>Moyenne</th>
             <th>Meilleure Série</th>`;
@@ -421,8 +422,14 @@
 
           if (isJournees) {
             // Journées mode: position points per TQ + average bonus
-            const ppDetail = (() => { try { return JSON.parse(rank.position_points_detail || '{}'); } catch(e) { return {}; } })();
+            let ppDetail = (() => { try { return JSON.parse(rank.position_points_detail || '{}'); } catch(e) { return {}; } })();
             const avgBonus = rank.average_bonus || 0;
+
+            // Fallback: if ppDetail is empty (rankings from before journées mode), use tournament_X_points
+            if (Object.keys(ppDetail).length === 0) {
+              const tPts = [rank.tournament_1_points, rank.tournament_2_points, rank.tournament_3_points];
+              tPts.forEach((pts, i) => { if (pts !== null && pts !== undefined) ppDetail[i + 1] = pts; });
+            }
 
             // Determine which scores are "kept" (best N) — dropped ones are styled differently
             const scores = Object.entries(ppDetail).map(([tn, pts]) => ({ tn: parseInt(tn), pts }));
@@ -451,7 +458,7 @@
               <td style="text-align: center;">${formatPP(1)}</td>
               <td style="text-align: center;">${formatPP(2)}</td>
               <td style="text-align: center;">${formatPP(3)}</td>
-              <td style="text-align: center; color: ${avgBonus > 0 ? '#28a745' : '#999'};">${avgBonus > 0 ? '+' + avgBonus : '0'}</td>
+              ${showAvgBonus ? `<td style="text-align: center; color: ${avgBonus > 0 ? '#28a745' : '#999'};">${avgBonus > 0 ? '+' + avgBonus : '0'}</td>` : ''}
               <td style="text-align: center; font-weight: bold;">${rank.total_match_points}</td>
               <td style="text-align: center;">${moyenne}</td>
               <td style="text-align: center; font-weight: bold;">${rank.best_serie || 0}</td>

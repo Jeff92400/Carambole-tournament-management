@@ -123,12 +123,16 @@ router.get('/', authenticateToken, async (req, res) => {
         return res.status(500).json({ error: err.message });
       }
 
-      // Determine qualification mode for this org
+      // Determine qualification mode and settings for this org
       let qualificationMode = 'standard';
+      let averageBonusTiers = false;
       try {
         if (orgId) {
           const mode = await appSettings.getOrgSetting(orgId, 'qualification_mode');
           if (mode) qualificationMode = mode;
+          if (qualificationMode === 'journees') {
+            averageBonusTiers = (await appSettings.getOrgSetting(orgId, 'average_bonus_tiers')) === 'true';
+          }
         }
       } catch (e) { /* default to standard */ }
 
@@ -167,13 +171,13 @@ router.get('/', authenticateToken, async (req, res) => {
             const labelMap = {};
             (labelRows || []).forEach(r => { labelMap[r.rule_type] = r.column_label; });
             res.json({
-              rankings: rows, tournamentsPlayed, qualificationMode,
+              rankings: rows, tournamentsPlayed, qualificationMode, averageBonusTiers,
               bonusColumns: [...seenTypes].map(rt => ({ ruleType: rt, label: labelMap[rt] || rt }))
             });
           }
         );
       } else {
-        res.json({ rankings: rows, tournamentsPlayed, qualificationMode, bonusColumns: [] });
+        res.json({ rankings: rows, tournamentsPlayed, qualificationMode, averageBonusTiers, bonusColumns: [] });
       }
     });
   });
