@@ -1,4 +1,4 @@
-// help-button.js — Floating help button linking to the user guide
+// help-button.js — Help link in navbar linking to the user guide
 (function () {
   const PAGE_ANCHORS = {
     'dashboard.html': '#dashboard',
@@ -40,40 +40,28 @@
   var page = window.location.pathname.split('/').pop() || '';
   var anchor = PAGE_ANCHORS[page] || '#presentation';
 
-  var btn = document.createElement('a');
-  btn.href = 'guide-utilisateur.html' + anchor;
-  btn.target = '_blank';
-  btn.title = 'Aide';
-  btn.textContent = '?';
-  btn.style.cssText = [
-    'position:fixed',
-    'bottom:20px',
-    'right:20px',
-    'z-index:10000',
-    'width:44px',
-    'height:44px',
-    'border-radius:50%',
-    'background:var(--color-primary, #1F4788)',
-    'color:#fff',
-    'font-size:22px',
-    'font-weight:bold',
-    'display:flex',
-    'align-items:center',
-    'justify-content:center',
-    'text-decoration:none',
-    'box-shadow:0 2px 8px rgba(0,0,0,0.25)',
-    'cursor:pointer',
-    'transition:transform 0.2s, box-shadow 0.2s'
-  ].join(';');
+  function injectHelpLink() {
+    var navLinks = document.querySelector('.nav-links');
+    if (!navLinks) return;
 
-  btn.addEventListener('mouseenter', function () {
-    btn.style.transform = 'scale(1.1)';
-    btn.style.boxShadow = '0 4px 12px rgba(0,0,0,0.35)';
-  });
-  btn.addEventListener('mouseleave', function () {
-    btn.style.transform = 'scale(1)';
-    btn.style.boxShadow = '0 2px 8px rgba(0,0,0,0.25)';
-  });
+    var logoutBtn = document.getElementById('logoutBtn');
+    if (!logoutBtn) return;
 
-  document.body.appendChild(btn);
+    var link = document.createElement('a');
+    link.href = 'guide-utilisateur.html' + anchor;
+    link.target = '_blank';
+    link.title = 'Guide utilisateur';
+    link.textContent = '?';
+    link.className = 'nav-tooltip';
+    link.setAttribute('data-tooltip', 'Guide utilisateur');
+    link.style.cssText = 'font-weight:bold;font-size:15px;';
+
+    navLinks.insertBefore(link, logoutBtn);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', injectHelpLink);
+  } else {
+    injectHelpLink();
+  }
 })();
