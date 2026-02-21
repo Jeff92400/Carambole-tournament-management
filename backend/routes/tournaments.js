@@ -1488,12 +1488,12 @@ async function recalculateRankingsJournees(categoryId, season, callback, orgId) 
     }
 
     // Get game_parameters for this category (for moyenne bonus tiers)
-    const category = await dbGetAsync('SELECT game_type, name FROM categories WHERE id = ?', [categoryId]);
+    const category = await dbGetAsync('SELECT game_type, level FROM categories WHERE id = ?', [categoryId]);
     let moyenneMini = 0, moyenneMaxi = 999;
     if (category) {
       const gp = await dbGetAsync(
         'SELECT moyenne_mini, moyenne_maxi FROM game_parameters WHERE UPPER(mode) = UPPER(?) AND UPPER(categorie) = UPPER(?)',
-        [category.game_type, category.name]
+        [category.game_type, category.level]
       );
       if (gp) {
         moyenneMini = parseFloat(gp.moyenne_mini) || 0;
