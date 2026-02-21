@@ -663,6 +663,16 @@ tbody tr:nth-child(even) {
 }
 
 @media (max-width: 768px) {
+  body {
+    padding: 10px;
+  }
+
+  .container {
+    padding: 16px;
+    margin: 10px auto;
+    border-radius: 10px;
+  }
+
   .navbar {
     flex-direction: column;
     gap: 12px;
@@ -700,11 +710,37 @@ tbody tr:nth-child(even) {
     grid-template-columns: 1fr;
   }
 
+  .stat-card .stat-value {
+    font-size: 24px;
+  }
+
   table {
     font-size: 12px;
   }
 
   th, td {
-    padding: 8px;
+    padding: 6px 4px;
+    white-space: nowrap;
+  }
+
+  .card {
+    padding: 16px;
+  }
+
+  h2 {
+    font-size: 18px;
+  }
+
+  h3 {
+    font-size: 16px;
+  }
+
+  .btn {
+    font-size: 13px;
+    padding: 8px 14px;
+  }
+
+  select, input[type="text"], input[type="email"], input[type="password"], input[type="date"], textarea {
+    font-size: 16px; /* prevents iOS zoom on focus */
   }
 }
