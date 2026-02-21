@@ -476,11 +476,15 @@
       document.getElementById('existingTournamentModal').style.display = 'none';
     }
 
-    // Confirm overwrite button (standard mode only — journees mode overrides via onclick)
+    // Confirm overwrite — single handler that dispatches by mode
+    // Uses pendingOverwriteAction (set by handleStandardSubmit or handleJourneesSubmit)
+    let pendingOverwriteAction = null;
     document.getElementById('confirmOverwriteBtn').addEventListener('click', async () => {
-      if (window.qualificationMode === 'journees') return;
       hideExistingTournamentModal();
-      await proceedWithValidation();
+      if (pendingOverwriteAction) {
+        await pendingOverwriteAction();
+        pendingOverwriteAction = null;
+      }
     });
 
     // Cancel overwrite button
@@ -690,6 +694,7 @@
         const existsResult = await checkTournamentExists(categoryId, tournamentNumber, season);
 
         if (existsResult.exists) {
+          pendingOverwriteAction = () => proceedWithValidation();
           showExistingTournamentModal(existsResult.tournament);
         } else {
           await proceedWithValidation();
@@ -928,12 +933,8 @@
         const existsResult = await checkTournamentExists(categoryId, tournamentNumber, season);
 
         if (existsResult.exists) {
+          pendingOverwriteAction = () => proceedWithJourneesValidation(categoryId, tournamentNumber, tournamentDate, season);
           showExistingTournamentModal(existsResult.tournament);
-          // Override confirm button for journees mode
-          document.getElementById('confirmOverwriteBtn').onclick = async () => {
-            hideExistingTournamentModal();
-            await proceedWithJourneesValidation(categoryId, tournamentNumber, tournamentDate, season);
-          };
         } else {
           await proceedWithJourneesValidation(categoryId, tournamentNumber, tournamentDate, season);
         }
