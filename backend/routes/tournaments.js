@@ -854,11 +854,20 @@ router.post('/validate-journee', authenticateToken, upload.array('files', 10), a
     const orgId = req.user.organizationId || null;
     const unknownPlayers = [];
     const checkedLicences = new Set();
+    const phaseData = {};
+    const detectedPhases = [];
 
+    // Parse all files: check unknown players AND build phaseData for preview
     for (const file of req.files) {
       const records = await readCSVRecords(file.path);
       const parsed = parseRecordsWithMapping(records, columnMapping);
 
+      // Build phaseData (needed for position computation)
+      const phaseName = detectPhaseFromFilename(file.originalname);
+      phaseData[phaseName] = parsed;
+      detectedPhases.push(phaseName);
+
+      // Check for unknown players
       for (const player of parsed) {
         if (checkedLicences.has(player.licence)) continue;
         checkedLicences.add(player.licence);
@@ -896,90 +905,28 @@ router.post('/validate-journee', authenticateToken, upload.array('files', 10), a
 
     if (unknownPlayers.length > 0) {
       return res.json({ status: 'validation_required', unknownPlayers });
-    } else {
-      return res.json({ status: 'ready', message: 'All players exist, ready to import' });
     }
 
-  } catch (error) {
-    for (const file of req.files) {
-      if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
-    }
-    res.status(500).json({ error: error.message });
-  }
-});
-
-/**
- * POST /preview-journee
- * Preview computed positions and points WITHOUT saving to database.
- * Returns the same positions data that import-journee would produce.
- */
-router.post('/preview-journee', authenticateToken, upload.array('files', 10), async (req, res) => {
-  if (!req.files || req.files.length === 0) {
-    return res.status(400).json({ error: 'No files uploaded' });
-  }
-
-  try {
-    // Load column mapping
-    let columnMapping;
-    try {
-      const profileConfig = await getColumnMapping('tournaments');
-      columnMapping = profileConfig?.mappings || DEFAULT_TOURNAMENT_MAPPING;
-    } catch (err) {
-      columnMapping = DEFAULT_TOURNAMENT_MAPPING;
-    }
-
-    const orgId = req.user.organizationId || null;
-
-    // Parse all files and detect phases
-    const phaseData = {};
-    const detectedPhases = [];
-
-    for (const file of req.files) {
-      const phaseName = detectPhaseFromFilename(file.originalname);
-      const records = await readCSVRecords(file.path);
-      const parsed = parseRecordsWithMapping(records, columnMapping);
-      phaseData[phaseName] = parsed;
-      detectedPhases.push({ phase: phaseName, playerCount: parsed.length, filename: file.originalname });
-    }
-
-    // Find POULES file — required
-    const poulesKey = findPhaseKey(phaseData, 'poule');
-    if (!poulesKey) {
-      for (const file of req.files) {
-        if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
-      }
-      return res.status(400).json({ error: 'Le fichier POULES est obligatoire' });
-    }
-
-    const poulesRecords = phaseData[poulesKey];
-
-    // Compute final positions (read-only)
+    // All players exist — compute positions preview (avoids a second file upload)
     const finalPositions = computeJourneePositions(phaseData);
-
-    // Look up position_points (read-only)
     const posPointsLookup = await getPositionPointsLookup(orgId);
 
-    // Build positions array for preview
-    const positionsArray = [];
-    for (const record of poulesRecords) {
-      const pos = finalPositions[record.licence] || 0;
-      positionsArray.push({
-        licence: record.licence,
-        playerName: record.playerName,
-        position: pos,
-        positionPoints: posPointsLookup[pos] || 0
-      });
-    }
-    positionsArray.sort((a, b) => (a.position || 999) - (b.position || 999));
+    // Find POULES for player names
+    const poulesKey = findPhaseKey(phaseData, 'poule');
+    const poulesRecords = poulesKey ? phaseData[poulesKey] : [];
 
-    // Clean up uploaded files
-    for (const file of req.files) {
-      if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
-    }
+    // Build positions array sorted by position
+    const positions = poulesRecords.map(record => ({
+      licence: record.licence,
+      playerName: record.playerName,
+      position: finalPositions[record.licence] || 0,
+      positionPoints: posPointsLookup[finalPositions[record.licence]] || 0
+    })).sort((a, b) => a.position - b.position);
 
-    res.json({
-      positions: positionsArray,
-      phases: detectedPhases.map(p => p.phase),
+    return res.json({
+      status: 'preview',
+      positions,
+      phases: detectedPhases,
       playerCount: poulesRecords.length
     });
 
