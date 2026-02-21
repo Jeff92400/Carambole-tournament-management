@@ -7,7 +7,7 @@ const { authenticateToken } = require('./auth');
 const appSettings = require('../utils/app-settings');
 const { getPouleConfigForOrg } = require('../utils/poule-config');
 const { logAdminAction, ACTION_TYPES } = require('../utils/admin-logger');
-const { getFinaleTournamentNumber } = require('./settings');
+const { getFinaleTournamentNumber, getRankingTournamentNumbers } = require('./settings');
 
 const router = express.Router();
 
