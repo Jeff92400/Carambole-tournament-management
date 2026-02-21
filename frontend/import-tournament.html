@@ -105,6 +105,19 @@
       </form>
     </div>
 
+    <!-- Preview card (journees mode — shown before final import) -->
+    <div class="card" id="previewCard" style="display: none;">
+      <h3>Aperçu du classement</h3>
+      <p style="color: #666; font-size: 13px; margin-bottom: 15px;">
+        Vérifiez les positions et points avant d'enregistrer la compétition.
+      </p>
+      <div id="previewContent"></div>
+      <div style="display: flex; gap: 10px; margin-top: 15px;">
+        <button class="btn" id="confirmImportBtn">Confirmer et enregistrer</button>
+        <button class="btn" id="cancelPreviewBtn" style="background: #6c757d;">Annuler</button>
+      </div>
+    </div>
+
     <div class="card" id="resultsCard" style="display: none;">
       <h3>Résultats de l'import</h3>
       <div id="importResults"></div>
@@ -478,6 +491,7 @@
 
     // Check if tournament exists
     async function checkTournamentExists(categoryId, tournamentNumber, season) {
+      if (!categoryId || !tournamentNumber || !season) return { exists: false };
       try {
         const response = await fetch(
           `${API_URL}/tournaments/check-exists?categoryId=${categoryId}&tournamentNumber=${tournamentNumber}&season=${encodeURIComponent(season)}`,
@@ -988,16 +1002,107 @@
               }
 
               hideModal();
-              await performJourneesImport(categoryId, tournamentNumber, tournamentDate, season);
+              await showJourneesPreview(categoryId, tournamentNumber, tournamentDate, season);
             } catch (error) {
               alert(error.message || 'Erreur lors de la création des joueurs');
             }
           };
         } else {
-          await performJourneesImport(categoryId, tournamentNumber, tournamentDate, season);
+          await showJourneesPreview(categoryId, tournamentNumber, tournamentDate, season);
         }
       } catch (error) {
         errorDiv.textContent = error.message || 'Erreur de connexion au serveur';
+        errorDiv.style.display = 'block';
+        importBtn.disabled = false;
+        importBtn.textContent = 'Enregistrer la competition';
+      }
+    }
+
+    // Show preview of computed positions before importing
+    async function showJourneesPreview(categoryId, tournamentNumber, tournamentDate, season) {
+      const errorDiv = document.getElementById('errorMessage');
+      const importBtn = document.getElementById('importBtn');
+
+      importBtn.textContent = 'Calcul des positions...';
+
+      try {
+        const previewFormData = new FormData();
+        selectedFiles.forEach(file => previewFormData.append('files', file));
+        previewFormData.append('categoryId', categoryId);
+
+        const response = await fetch(`${API_URL}/tournaments/preview-journee`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` },
+          body: previewFormData
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || 'Erreur lors du calcul des positions');
+        }
+
+        // Build preview content
+        const previewContent = document.getElementById('previewContent');
+
+        let phasesHtml = '';
+        if (data.phases && data.phases.length > 0) {
+          phasesHtml = `
+            <div style="margin-bottom: 15px;">
+              <strong>Phases détectées :</strong> ${data.phases.join(', ')}
+              &nbsp;—&nbsp;<strong>${data.playerCount}</strong> joueur${data.playerCount > 1 ? 's' : ''}
+            </div>
+          `;
+        }
+
+        let positionsHtml = '';
+        if (data.positions && data.positions.length > 0) {
+          positionsHtml = `
+            <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+              <thead>
+                <tr style="background: var(--color-primary, #1F4788); color: white;">
+                  <th style="padding: 8px; text-align: center;">Pos.</th>
+                  <th style="padding: 8px; text-align: left;">Joueur</th>
+                  <th style="padding: 8px; text-align: center;">Pts Position</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${data.positions.map(p => `
+                  <tr style="border-bottom: 1px solid #eee;">
+                    <td style="padding: 8px; text-align: center; font-weight: bold;">${p.position}</td>
+                    <td style="padding: 8px;">${p.playerName || p.licence}</td>
+                    <td style="padding: 8px; text-align: center;">${p.positionPoints || 0}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          `;
+        }
+
+        previewContent.innerHTML = phasesHtml + positionsHtml;
+
+        // Show preview card
+        document.getElementById('previewCard').style.display = 'block';
+        document.getElementById('previewCard').scrollIntoView({ behavior: 'smooth' });
+
+        importBtn.textContent = 'En attente de confirmation...';
+        importBtn.disabled = true;
+
+        // Confirm button → proceed with actual import
+        document.getElementById('confirmImportBtn').onclick = async () => {
+          document.getElementById('previewCard').style.display = 'none';
+          await performJourneesImport(categoryId, tournamentNumber, tournamentDate, season);
+        };
+
+        // Cancel button → dismiss preview, re-enable form
+        document.getElementById('cancelPreviewBtn').onclick = () => {
+          document.getElementById('previewCard').style.display = 'none';
+          importBtn.disabled = false;
+          importBtn.textContent = 'Enregistrer la competition';
+        };
+
+      } catch (error) {
+        errorDiv.textContent = error.message || 'Erreur lors du calcul des positions';
         errorDiv.style.display = 'block';
         importBtn.disabled = false;
         importBtn.textContent = 'Enregistrer la competition';
