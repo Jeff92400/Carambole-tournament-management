@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Com joueurs - CDBHS</title>
+  <title>Com joueurs - CDB Tournois</title>
   <link rel="icon" type="image/png" href="images/FrenchBillard-Icon-small.png">
   <link rel="stylesheet" href="css/styles.css">
   <script src="js/branding.js?v=197"></script>
@@ -2890,7 +2890,7 @@
       subject: 'Convocation {category} - {tournament} - {date}',
       body: `Bonjour {player_name},
 
-Le CDBHS a le plaisir de vous convier au tournoi suivant.
+{organization_short_name} a le plaisir de vous convier au tournoi suivant.
 
 Veuillez trouver en attachement votre convocation détaillée avec la composition de toutes les poules du tournoi.
 
@@ -2899,7 +2899,7 @@ En cas d'empêchement, merci d'informer dès que possible l'équipe en charge du
 Nous vous souhaitons une excellente compétition.
 
 Cordialement,
-Comité Départemental Billard Hauts-de-Seine`
+{organization_name}`
     };
 
     const DEFAULT_FINALE_CONVOCATION_TEMPLATE = {
@@ -2947,7 +2947,7 @@ Sportivement,
       subject: 'Rappel Organisation - {category} {tournament}',
       body: `Bonjour,
 
-Votre club {club_name} accueille prochainement une compétition du CDBHS.
+Votre club {club_name} accueille prochainement une compétition du {organization_short_name}.
 
 DÉTAILS DE LA COMPÉTITION:
 - Compétition: {category} - {tournament}
@@ -2965,7 +2965,7 @@ RAPPELS IMPORTANTS:
 Pour toute question, contactez-nous à l'adresse: {organization_email}
 
 Sportivement,
-Le CDBHS`
+{organization_short_name}`
     };
 
     const DEFAULT_INSCRIPTION_CONFIRMATION_TEMPLATE = {

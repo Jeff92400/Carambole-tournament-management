@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Import Inscriptions CDBHS</title>
+  <title>Import Inscriptions - CDB Tournois</title>
   <link rel="icon" type="image/png" href="images/FrenchBillard-Icon-small.png">
   <link rel="stylesheet" href="css/styles.css">
   <script src="js/branding.js?v=197"></script>
@@ -27,7 +27,7 @@
     <div id="successMessage" class="success" style="display: none;"></div>
 
     <div class="card">
-      <h3>Importer les Inscriptions CDBHS</h3>
+      <h3>Importer les Inscriptions</h3>
       <p style="color: #666; margin-bottom: 20px;">
         Importez le fichier CSV des inscriptions joueurs aux tournois.
         <br><small>Colonnes attendues: INSCRIPTION_ID, JOUEUR_ID, TOURNOI_ID, TIMESTAMP, EMAIL, TELEPHONE, LICENCE, CONVOQUE, FORFAIT, COMMENTAIRE</small>
@@ -250,7 +250,7 @@
 
     // Clear button
     document.getElementById('clearInscriptionBtn').addEventListener('click', async () => {
-      if (!confirm('Êtes-vous sûr de vouloir supprimer toutes les inscriptions CDBHS ?')) return;
+      if (!confirm('Êtes-vous sûr de vouloir supprimer toutes les inscriptions ?')) return;
 
       try {
         const response = await fetch(`${API_URL}/inscriptions/all`, {

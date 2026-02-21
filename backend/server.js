@@ -158,7 +158,30 @@ app.use(express.static(frontendPath));
 // Must allow cross-origin access for email clients (Outlook, Gmail, etc.)
 app.get('/logo.png', (req, res) => {
   const db = require('./db-loader');
-  db.get('SELECT file_data, content_type FROM organization_logo ORDER BY created_at DESC LIMIT 1', [], (err, row) => {
+  // Support ?org= query param for org-specific logo
+  const orgSlug = req.query.org;
+  if (orgSlug) {
+    db.get(
+      `SELECT ol.file_data, ol.content_type FROM organization_logo ol
+       JOIN organizations o ON ol.organization_id = o.id
+       WHERE o.slug = $1 AND o.is_active = TRUE
+       ORDER BY ol.created_at DESC LIMIT 1`,
+      [orgSlug],
+      (err, row) => {
+        if (err || !row) {
+          return res.status(404).send('Logo not found');
+        }
+        res.setHeader('Content-Type', row.content_type || 'image/png');
+        res.setHeader('Cache-Control', 'public, max-age=86400');
+        res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+        const fileData = Buffer.isBuffer(row.file_data) ? row.file_data : Buffer.from(row.file_data);
+        res.send(fileData);
+      }
+    );
+    return;
+  }
+  // Fallback: return org #1 logo (backward compatible for existing email links)
+  db.get('SELECT file_data, content_type FROM organization_logo WHERE organization_id = 1 ORDER BY created_at DESC LIMIT 1', [], (err, row) => {
     if (err || !row) {
       return res.status(404).send('Logo not found');
     }
@@ -1121,13 +1144,21 @@ async function processTemplatedScheduledEmail(db, resend, scheduled, delay) {
   const emailType = scheduled.email_type;
   console.log(`[Email Scheduler] Processing templated email ${scheduled.id} (${emailType})`);
 
-  // Get dynamic settings for qualification thresholds and email branding
-  const qualificationSettings = await appSettings.getQualificationSettings();
-  const emailSettings = await appSettings.getSettingsBatch([
+  // Get org-specific settings for qualification thresholds and email branding
+  const schedOrgId = scheduled.organization_id || null;
+  const settingsKeys = [
     'primary_color', 'email_communication', 'email_sender_name',
     'organization_name', 'organization_short_name', 'summary_email',
-    'player_app_url'
-  ]);
+    'player_app_url', 'qualification_threshold', 'qualification_small', 'qualification_large'
+  ];
+  const emailSettings = schedOrgId
+    ? await appSettings.getOrgSettingsBatch(schedOrgId, settingsKeys)
+    : await appSettings.getSettingsBatch(settingsKeys);
+  const qualificationSettings = {
+    threshold: parseInt(emailSettings.qualification_threshold) || 9,
+    small: parseInt(emailSettings.qualification_small) || 4,
+    large: parseInt(emailSettings.qualification_large) || 6
+  };
 
   let recipients = [];
   let templateVariables = {};
@@ -1143,8 +1174,8 @@ async function processTemplatedScheduledEmail(db, resend, scheduled, delay) {
 
     const categoryRow = await new Promise((resolve, reject) => {
       db.get(
-        `SELECT * FROM categories WHERE UPPER(game_type) = $1 AND (UPPER(level) = $2 OR UPPER(level) LIKE $3)`,
-        [mode, categoryLevel, categoryLevel + '%'],
+        `SELECT * FROM categories WHERE UPPER(game_type) = $1 AND (UPPER(level) = $2 OR UPPER(level) LIKE $3) AND ($4::int IS NULL OR organization_id = $4)`,
+        [mode, categoryLevel, categoryLevel + '%', schedOrgId],
         (err, row) => {
           if (err) reject(err);
           else resolve(row);
@@ -1165,8 +1196,9 @@ async function processTemplatedScheduledEmail(db, resend, scheduled, delay) {
            AND (UPPER(category) = $2 OR UPPER(category) LIKE $3)
            AND status = 'completed'
            AND (test_mode = false OR test_mode IS NULL)
+           AND ($4::int IS NULL OR organization_id = $4)
            ORDER BY sent_at DESC LIMIT 1`,
-          [mode, categoryLevel, categoryLevel + '%'],
+          [mode, categoryLevel, categoryLevel + '%', schedOrgId],
           (err, row) => {
             if (err) reject(err);
             else resolve(row);
@@ -1222,8 +1254,9 @@ async function processTemplatedScheduledEmail(db, resend, scheduled, delay) {
              WHERE UPPER(mode) = $1
              AND (UPPER(categorie) = $2 OR UPPER(categorie) LIKE $3)
              AND debut >= $4
+             AND ($5::int IS NULL OR organization_id = $5)
              ORDER BY debut ASC LIMIT 1`,
-            [mode, categoryLevel, categoryLevel + '%', new Date().toISOString().split('T')[0]],
+            [mode, categoryLevel, categoryLevel + '%', new Date().toISOString().split('T')[0], schedOrgId],
             (err, row) => {
               if (err) reject(err);
               else resolve(row);
@@ -1261,11 +1294,11 @@ async function processTemplatedScheduledEmail(db, resend, scheduled, delay) {
         deadline_date: deadlineDate
       };
     } else {
-      // For T2/T3 relances, get all contacts
+      // For T2/T3 relances, get contacts scoped to org
       recipients = await new Promise((resolve, reject) => {
         db.all(
-          `SELECT * FROM player_contacts WHERE email IS NOT NULL AND email LIKE '%@%'`,
-          [],
+          `SELECT * FROM player_contacts WHERE email IS NOT NULL AND email LIKE '%@%' AND ($1::int IS NULL OR organization_id = $1)`,
+          [schedOrgId],
           (err, rows) => {
             if (err) reject(err);
             else resolve(rows || []);
@@ -1325,11 +1358,11 @@ async function processTemplatedScheduledEmail(db, resend, scheduled, delay) {
 
     if (!finale) throw new Error('Finale not found');
 
-    // Get contacts for this mode/category
+    // Get contacts for this mode/category (org-scoped)
     recipients = await new Promise((resolve, reject) => {
       db.all(
-        `SELECT * FROM player_contacts WHERE email IS NOT NULL AND email LIKE '%@%'`,
-        [],
+        `SELECT * FROM player_contacts WHERE email IS NOT NULL AND email LIKE '%@%' AND ($1::int IS NULL OR organization_id = $1)`,
+        [schedOrgId],
         (err, rows) => {
           if (err) reject(err);
           else resolve(rows || []);
@@ -1566,10 +1599,11 @@ async function checkTournamentAlerts() {
     console.log('[Tournament Alerts] No alert sent today, proceeding...');
 
     // Insert a placeholder record FIRST to prevent duplicate sends on concurrent restarts
+    // Use org_id=1 as default (this is a lock record, not org-specific)
     await new Promise((resolve) => {
       db.run(`
-        INSERT INTO email_campaigns (subject, body, template_key, recipients_count, sent_count, failed_count, status, sent_at, campaign_type)
-        VALUES ('Tournament Alert - Pending', 'Pending', 'tournament_alert', 0, 0, 0, 'pending', CURRENT_TIMESTAMP, 'tournament_alert')
+        INSERT INTO email_campaigns (subject, body, template_key, recipients_count, sent_count, failed_count, status, sent_at, campaign_type, organization_id)
+        VALUES ('Tournament Alert - Pending', 'Pending', 'tournament_alert', 0, 0, 0, 'pending', CURRENT_TIMESTAMP, 'tournament_alert', 1)
       `, [], () => resolve());
     });
 

@@ -125,10 +125,11 @@ router.post('/', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Le mot de passe doit contenir au moins un caractere special' });
     }
 
-    // Check if player exists
+    // Check if player exists (org-scoped)
+    const orgId = req.user.organizationId || null;
     db.get(
-      `SELECT * FROM players WHERE REPLACE(licence, ' ', '') = REPLACE($1, ' ', '')`,
-      [licence],
+      `SELECT * FROM players WHERE REPLACE(licence, ' ', '') = REPLACE($1, ' ', '') AND ($2::int IS NULL OR organization_id = $2)`,
+      [licence, orgId],
       async (err, player) => {
         if (err) {
           console.error('Error checking player:', err);

@@ -191,8 +191,8 @@ router.get('/active', async (req, res) => {
       playerData = await new Promise((resolve, reject) => {
         db.get(
           `SELECT licence, club, rank_libre, rank_cadre, rank_bande, rank_3bandes
-           FROM players WHERE REPLACE(licence, ' ', '') = $1`,
-          [normalizedLicence],
+           FROM players WHERE REPLACE(licence, ' ', '') = $1 AND ($2::int IS NULL OR organization_id = $2)`,
+          [normalizedLicence, orgIdFilter],
           (err, row) => {
             if (err) reject(err);
             else resolve(row);
