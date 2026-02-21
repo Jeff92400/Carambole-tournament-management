@@ -476,8 +476,9 @@
       document.getElementById('existingTournamentModal').style.display = 'none';
     }
 
-    // Confirm overwrite button
+    // Confirm overwrite button (standard mode only — journees mode overrides via onclick)
     document.getElementById('confirmOverwriteBtn').addEventListener('click', async () => {
+      if (window.qualificationMode === 'journees') return;
       hideExistingTournamentModal();
       await proceedWithValidation();
     });
