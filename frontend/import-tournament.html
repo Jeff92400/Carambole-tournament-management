@@ -211,8 +211,6 @@
     }
     const token = localStorage.getItem('token');
 
-    console.log('[Import] Page loaded — preview v3');
-
     // Check user role - this page is admin only
     const userRole = localStorage.getItem('userRole');
     if (userRole !== 'admin') {
@@ -482,7 +480,6 @@
     // Uses pendingOverwriteAction (set by handleStandardSubmit or handleJourneesSubmit)
     let pendingOverwriteAction = null;
     document.getElementById('confirmOverwriteBtn').addEventListener('click', async () => {
-      console.log('[Import] Confirm overwrite clicked, pendingOverwriteAction:', !!pendingOverwriteAction);
       hideExistingTournamentModal();
       if (pendingOverwriteAction) {
         await pendingOverwriteAction();
@@ -951,7 +948,6 @@
 
     // Validate journees files (check unknown players across all files)
     async function proceedWithJourneesValidation(categoryId, tournamentNumber, tournamentDate, season) {
-      console.log('[Import] proceedWithJourneesValidation called, files:', selectedFiles.length);
       const errorDiv = document.getElementById('errorMessage');
       const importBtn = document.getElementById('importBtn');
 
@@ -1014,11 +1010,9 @@
             }
           };
         } else {
-          console.log('[Import] Validation passed, calling showJourneesPreview');
           await showJourneesPreview(categoryId, tournamentNumber, tournamentDate, season);
         }
       } catch (error) {
-        console.error('[Import] proceedWithJourneesValidation error:', error);
         errorDiv.textContent = error.message || 'Erreur de connexion au serveur';
         errorDiv.style.display = 'block';
         importBtn.disabled = false;
@@ -1028,7 +1022,6 @@
 
     // Show preview of computed positions before importing
     async function showJourneesPreview(categoryId, tournamentNumber, tournamentDate, season) {
-      console.log('[Import] showJourneesPreview called, files:', selectedFiles.length);
       const errorDiv = document.getElementById('errorMessage');
       const importBtn = document.getElementById('importBtn');
 
@@ -1093,7 +1086,6 @@
         // Show preview card
         document.getElementById('previewCard').style.display = 'block';
         document.getElementById('previewCard').scrollIntoView({ behavior: 'smooth' });
-        console.log('[Import] Preview card displayed');
 
         importBtn.textContent = 'En attente de confirmation...';
         importBtn.disabled = true;
