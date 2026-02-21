@@ -211,6 +211,8 @@
     }
     const token = localStorage.getItem('token');
 
+    console.log('[Import] Page loaded — preview v3');
+
     // Check user role - this page is admin only
     const userRole = localStorage.getItem('userRole');
     if (userRole !== 'admin') {
