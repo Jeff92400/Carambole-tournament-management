@@ -77,6 +77,14 @@ Page d'accueil de l'application (avant authentification)
 
 ---
 
+## BOUTON D'AIDE (?)
+
+Sur chaque page de l'application, un bouton rond **?** est affiché en bas à droite de l'écran. En cliquant dessus, ce guide utilisateur s'ouvre dans un nouvel onglet, directement à la section correspondant à la page sur laquelle vous vous trouvez.
+
+Par exemple : si vous êtes sur la page "Classements" et que vous cliquez sur **?**, le guide s'ouvrira directement à la section "Classements".
+
+---
+
 ## MENU : ACCUEIL (Dashboard)
 
 ### Accès
