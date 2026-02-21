@@ -60,7 +60,7 @@ function injectSAReturnButton() {
   btn.id = 'sa-return-btn';
   btn.innerHTML = `
     <button onclick="returnToSuperAdmin()" style="
-      position: fixed; bottom: 20px; right: 20px; z-index: 10000;
+      position: fixed; bottom: 20px; left: 20px; z-index: 10000;
       background: linear-gradient(135deg, #dc3545, #c82333);
       color: white; border: none; padding: 10px 18px;
       border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 13px;
