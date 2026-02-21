@@ -179,7 +179,7 @@ To give each CDB a branded sender domain (e.g., `cdb9493@ffbcarambole-gestion.fr
 
 ## Development Notes
 
-- **User Guide Maintenance:** The file `GUIDE-UTILISATEUR-COMPLET.md` is the complete French user guide. It MUST be updated whenever a **new feature** is implemented (new page, new setting, changed functionality). Add/update the relevant sections, update the glossary if new terms are introduced, and keep the same structure and writing style (French, formal, step-by-step). Include the guide update in the same commit as the feature. Bug fixes do NOT require guide updates.
+- **User Guide Maintenance:** The source of truth is `frontend/guide-utilisateur.html` (served in the app). It MUST be updated whenever a **new feature** is implemented (new page, new setting, changed functionality). Add/update the relevant sections, update the glossary if new terms are introduced, and keep the same structure and writing style (French, formal, step-by-step). Include the guide update in the same commit as the feature. Bug fixes do NOT require guide updates. **After every guide update, sync the two other copies:** copy `frontend/guide-utilisateur.html` → `GUIDE-UTILISATEUR-COMPLET.html` (root), and regenerate `GUIDE-UTILISATEUR-COMPLET.md` from the HTML content. Always include these synced files in the same commit.
 - All text is in **French**
 - Dates: Paris timezone, displayed as DD/MM/YYYY
 - Season format: `YYYY-YYYY+1` (e.g., "2024-2025"), configurable start month via `app_settings.season_start_month` (default: 9 = September)
