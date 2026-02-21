@@ -990,6 +990,84 @@
               </tbody>
             </table>
           </div>
+
+          <!-- Rule detail cards -->
+          <div id="ruleDetailCards" style="margin-top: 20px; display: flex; flex-direction: column; gap: 10px;">
+
+            <!-- Card 1: Points de Match -->
+            <details style="background: white; border: 1px solid #e0e0e0; border-radius: 6px; padding: 0;">
+              <summary style="padding: 10px 14px; cursor: pointer; font-weight: 600; font-size: 13px; color: #333; list-style: none; display: flex; align-items: center; gap: 8px;">
+                <span style="transition: transform 0.2s;">&#9654;</span> Points de Match
+              </summary>
+              <div style="padding: 10px 14px 14px; border-top: 1px solid #eee; font-size: 13px; color: #555;">
+                <p style="margin: 0 0 8px;">Points attribués à l'issue de chaque match.</p>
+                <div style="display: flex; gap: 20px; flex-wrap: wrap; align-items: center;">
+                  <span>Victoire = <strong id="ruleMatchWin">0</strong> pts</span>
+                  <span>Défaite =
+                    <input type="number" id="matchPointsLoss" min="0" value="0" style="width: 50px; padding: 4px; text-align: center; border: 1px solid #ddd; border-radius: 4px;">
+                  pts</span>
+                </div>
+              </div>
+            </details>
+
+            <!-- Card 2: Bonus Moyenne -->
+            <details style="background: white; border: 1px solid #e0e0e0; border-radius: 6px; padding: 0;">
+              <summary style="padding: 10px 14px; cursor: pointer; font-weight: 600; font-size: 13px; color: #333; list-style: none; display: flex; align-items: center; gap: 8px;">
+                <span style="transition: transform 0.2s;">&#9654;</span> Bonus Moyenne
+              </summary>
+              <div style="padding: 10px 14px 14px; border-top: 1px solid #eee; font-size: 13px; color: #555;">
+                <p style="margin: 0 0 8px;">Bonus basé sur la moyenne réalisée, comparée aux seuils des Paramètres de Jeu.</p>
+                <table style="border-collapse: collapse; font-size: 13px;">
+                  <tr>
+                    <td style="padding: 4px 10px;">Moy. &gt; Maxi</td>
+                    <td style="padding: 4px 4px;">→</td>
+                    <td style="padding: 4px 4px;"><input type="number" id="avgTier3" min="0" value="3" style="width: 50px; padding: 4px; text-align: center; border: 1px solid #ddd; border-radius: 4px;"> pts</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 4px 10px;">Moy. &ge; Intermédiaire</td>
+                    <td style="padding: 4px 4px;">→</td>
+                    <td style="padding: 4px 4px;"><input type="number" id="avgTier2" min="0" value="2" style="width: 50px; padding: 4px; text-align: center; border: 1px solid #ddd; border-radius: 4px;"> pts</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 4px 10px;">Moy. &ge; Mini</td>
+                    <td style="padding: 4px 4px;">→</td>
+                    <td style="padding: 4px 4px;"><input type="number" id="avgTier1" min="0" value="1" style="width: 50px; padding: 4px; text-align: center; border: 1px solid #ddd; border-radius: 4px;"> pts</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 4px 10px;">Moy. &lt; Mini</td>
+                    <td style="padding: 4px 4px;">→</td>
+                    <td style="padding: 4px 4px;">0 pts</td>
+                  </tr>
+                </table>
+                <p style="margin: 8px 0 0; font-size: 12px; color: #888;">Les seuils Mini/Maxi sont définis par catégorie dans les Paramètres de Jeu.</p>
+              </div>
+            </details>
+
+            <!-- Card 3: Bonus Niveau -->
+            <details style="background: white; border: 1px solid #e0e0e0; border-radius: 6px; padding: 0;">
+              <summary style="padding: 10px 14px; cursor: pointer; font-weight: 600; font-size: 13px; color: #333; list-style: none; display: flex; align-items: center; gap: 8px;">
+                <span style="transition: transform 0.2s;">&#9654;</span> Bonus Niveau
+              </summary>
+              <div style="padding: 10px 14px 14px; border-top: 1px solid #eee; font-size: 13px; color: #555;">
+                <p style="margin: 0 0 8px;">Points pour chaque match contre un adversaire de catégorie supérieure.</p>
+                <span>Valeur par match = <strong id="ruleLevelBonus">0</strong> pts</span>
+                <p style="margin: 8px 0 0; font-size: 12px; color: #888;">Saisie manuelle sur la page de scoring détaillé.</p>
+              </div>
+            </details>
+
+            <!-- Card 4: Bonus Participation -->
+            <details style="background: white; border: 1px solid #e0e0e0; border-radius: 6px; padding: 0;">
+              <summary style="padding: 10px 14px; cursor: pointer; font-weight: 600; font-size: 13px; color: #333; list-style: none; display: flex; align-items: center; gap: 8px;">
+                <span style="transition: transform 0.2s;">&#9654;</span> Bonus Participation
+              </summary>
+              <div style="padding: 10px 14px 14px; border-top: 1px solid #eee; font-size: 13px; color: #555;">
+                <p style="margin: 0 0 8px;">Bonus fixe attribué pour la participation au tournoi.</p>
+                <span>Valeur = <strong id="ruleParticipation">0</strong> pts</span>
+                <p style="margin: 8px 0 0; font-size: 12px; color: #888;">Appliqué automatiquement à chaque joueur participant.</p>
+              </div>
+            </details>
+
+          </div>
         </div>
 
       </div>
@@ -3746,7 +3824,14 @@
         if (ssResponse.ok) {
           const stages = await ssResponse.json();
           renderStageScoringTable(stages);
+          updateRuleDetailFromGrid(stages);
         }
+
+        // Load scoring rule detail settings
+        document.getElementById('matchPointsLoss').value = settings.scoring_match_points_loss || '0';
+        document.getElementById('avgTier1').value = settings.scoring_avg_tier_1 || '1';
+        document.getElementById('avgTier2').value = settings.scoring_avg_tier_2 || '2';
+        document.getElementById('avgTier3').value = settings.scoring_avg_tier_3 || '3';
       } catch (error) {
         console.error('Error loading qualification settings:', error);
       }
@@ -3783,6 +3868,31 @@
       }).join('');
     }
 
+    function updateRuleDetailFromGrid(stages) {
+      if (!stages) {
+        // Read from DOM
+        stages = [];
+        document.querySelectorAll('#stageScoringBody tr[data-stage]').forEach(row => {
+          stages.push({
+            code: row.dataset.stage,
+            match_points: parseInt(row.querySelector('.ss-match-points').value) || 0,
+            level_bonus: parseInt(row.querySelector('.ss-level-bonus').value) || 0,
+            participation_bonus: parseInt(row.querySelector('.ss-participation-bonus').value) || 0,
+          });
+        });
+      }
+      const poule = stages.find(s => (s.code || s.stage_code) === 'POULES');
+      const tq = stages.find(s => (s.code || s.stage_code) === 'TQ');
+      document.getElementById('ruleMatchWin').textContent = poule ? poule.match_points : 0;
+      document.getElementById('ruleLevelBonus').textContent = poule ? poule.level_bonus : 0;
+      document.getElementById('ruleParticipation').textContent = tq ? tq.participation_bonus : 0;
+    }
+
+    // Live-update rule details when grid inputs change
+    document.getElementById('stageScoringBody').addEventListener('input', function() {
+      updateRuleDetailFromGrid(null);
+    });
+
     async function saveQualificationSettings() {
       const msgDiv = document.getElementById('qualificationMessage');
       try {
@@ -3798,7 +3908,11 @@
             journees_count: document.getElementById('journeesCount').value,
             best_of_count: document.getElementById('bestOfCount').value,
             bracket_size: document.getElementById('bracketSize').value,
-            average_bonus_tiers: document.getElementById('averageBonusTiers').checked ? 'true' : 'false'
+            average_bonus_tiers: document.getElementById('averageBonusTiers').checked ? 'true' : 'false',
+            scoring_match_points_loss: document.getElementById('matchPointsLoss').value,
+            scoring_avg_tier_1: document.getElementById('avgTier1').value,
+            scoring_avg_tier_2: document.getElementById('avgTier2').value,
+            scoring_avg_tier_3: document.getElementById('avgTier3').value
           })
         });
 

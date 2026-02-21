@@ -1455,6 +1455,9 @@ async function recalculateRankingsJournees(categoryId, season, callback, orgId) 
     const bestOfCount = parseInt(await appSettings.getOrgSetting(orgId, 'best_of_count')) || 2;
     const journeesCount = parseInt(await appSettings.getOrgSetting(orgId, 'journees_count')) || 3;
     const averageBonusEnabled = (await appSettings.getOrgSetting(orgId, 'average_bonus_tiers')) === 'true';
+    const tier1 = parseInt(await appSettings.getOrgSetting(orgId, 'scoring_avg_tier_1')) || 1;
+    const tier2 = parseInt(await appSettings.getOrgSetting(orgId, 'scoring_avg_tier_2')) || 2;
+    const tier3 = parseInt(await appSettings.getOrgSetting(orgId, 'scoring_avg_tier_3')) || 3;
 
     // Get all tournaments for this category/season (excluding finale = tournament_number 4)
     const tournaments = await dbAllAsync(
@@ -1560,11 +1563,11 @@ async function recalculateRankingsJournees(categoryId, season, callback, orgId) 
       let averageBonus = 0;
       if (averageBonusEnabled) {
         if (avgMoyenne >= moyenneMaxi) {
-          averageBonus = 3;
+          averageBonus = tier3;
         } else if (avgMoyenne >= moyenneMiddle) {
-          averageBonus = 2;
+          averageBonus = tier2;
         } else if (avgMoyenne >= moyenneMini) {
-          averageBonus = 1;
+          averageBonus = tier1;
         }
       }
 
@@ -2822,17 +2825,23 @@ router.get('/:id/scoring-detail', authenticateToken, async (req, res) => {
       [tournamentId, tournament.game_type, tournament.season]
     );
 
+    // Load configurable tier values
+    const tier1 = parseInt(await appSettings.getOrgSetting(orgId, 'scoring_avg_tier_1')) || 1;
+    const tier2 = parseInt(await appSettings.getOrgSetting(orgId, 'scoring_avg_tier_2')) || 2;
+    const tier3 = parseInt(await appSettings.getOrgSetting(orgId, 'scoring_avg_tier_3')) || 3;
+    const matchPointsLoss = parseInt(await appSettings.getOrgSetting(orgId, 'scoring_match_points_loss')) || 0;
+
     // Compute average bonus per player
     const playersWithBonus = players.map(p => {
       let computedAverageBonus = 0;
       const avg = p.reprises > 0 ? p.points / p.reprises : 0;
       if (moyenneMaxi > 0) {
         if (avg >= moyenneMaxi) {
-          computedAverageBonus = 3;
+          computedAverageBonus = tier3;
         } else if (avg >= moyenneMiddle) {
-          computedAverageBonus = 2;
+          computedAverageBonus = tier2;
         } else if (avg >= moyenneMini) {
-          computedAverageBonus = 1;
+          computedAverageBonus = tier1;
         }
       }
       return {
@@ -2886,7 +2895,14 @@ router.get('/:id/scoring-detail', authenticateToken, async (req, res) => {
       players: playersWithBonus,
       bracketMatches,
       savedScores,
-      gameParameters: { moyenne_mini: moyenneMini, moyenne_maxi: moyenneMaxi },
+      gameParameters: { moyenne_mini: moyenneMini, moyenne_maxi: moyenneMaxi, moyenne_middle: moyenneMiddle },
+      scoringRules: {
+        matchPointsWin: stageConfigWithNames.find(s => s.stage_code === 'POULES')?.match_points || 0,
+        matchPointsLoss: matchPointsLoss,
+        avgTier1: tier1,
+        avgTier2: tier2,
+        avgTier3: tier3
+      },
       positionPointsLookup
     });
 
