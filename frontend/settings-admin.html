@@ -4264,7 +4264,7 @@
         return `<td style="padding: 8px 4px; border-bottom: 1px solid #eee; text-align: center;">
           <label style="display:flex; align-items:center; justify-content:center; gap:4px;">
             <input type="checkbox" class="${cssClass}-enabled" ${enabled ? 'checked' : ''} onchange="toggleGridCell(this)" style="cursor: pointer;">
-            <input type="number" class="${cssClass}" value="${value}" min="0" style="width: 45px; padding: 4px; text-align: center; border: 1px solid #ddd; border-radius: 4px; ${!enabled ? 'opacity: 0.4;' : ''}" ${!enabled ? 'disabled' : ''}>
+            <input type="number" class="${cssClass}" value="${enabled ? value : ''}" min="0" data-prev-value="${value}" style="width: 45px; padding: 4px; text-align: center; border: 1px solid #ddd; border-radius: 4px; ${!enabled ? 'display: none;' : ''}">
           </label>
         </td>`;
       }
@@ -4295,12 +4295,12 @@
         const prev = numInput.getAttribute('data-prev-value');
         numInput.value = prev && parseInt(prev) > 0 ? prev : 1;
         numInput.disabled = false;
-        numInput.style.opacity = '1';
+        numInput.style.display = '';
       } else {
         numInput.setAttribute('data-prev-value', numInput.value);
-        numInput.value = 0;
+        numInput.value = '';
         numInput.disabled = true;
-        numInput.style.opacity = '0.4';
+        numInput.style.display = 'none';
       }
     }
 
