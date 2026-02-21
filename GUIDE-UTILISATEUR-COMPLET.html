@@ -1,0 +1,1729 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Guide Utilisateur Complet - Gestion des Tournois de Billard Français</title>
+  <style>
+    :root {
+      --primary: #1F4788;
+      --primary-light: #2a5ba8;
+      --secondary: #667eea;
+      --accent: #ffc107;
+      --bg: #f8f9fa;
+      --bg-card: #ffffff;
+      --text: #333;
+      --text-light: #666;
+      --border: #e0e0e0;
+      --green: #28a745;
+      --green-bg: #d4edda;
+      --yellow-bg: #fff3cd;
+      --red-bg: #f8d7da;
+      --sidebar-width: 280px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+      color: var(--text);
+      background: var(--bg);
+      line-height: 1.7;
+      font-size: 15px;
+    }
+
+    /* Sidebar */
+    .sidebar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: var(--sidebar-width);
+      height: 100vh;
+      background: var(--primary);
+      color: white;
+      overflow-y: auto;
+      padding: 20px 0;
+      z-index: 100;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(255,255,255,0.3) transparent;
+    }
+
+    .sidebar::-webkit-scrollbar { width: 6px; }
+    .sidebar::-webkit-scrollbar-track { background: transparent; }
+    .sidebar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.3); border-radius: 3px; }
+
+    .sidebar-header {
+      padding: 10px 20px 25px;
+      border-bottom: 1px solid rgba(255,255,255,0.15);
+      margin-bottom: 15px;
+      text-align: center;
+    }
+
+    .sidebar-header img {
+      height: 50px;
+      width: 50px;
+      margin-bottom: 10px;
+    }
+
+    .sidebar-header h2 {
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      opacity: 0.95;
+    }
+
+    .sidebar nav a {
+      display: block;
+      color: rgba(255,255,255,0.8);
+      text-decoration: none;
+      padding: 8px 20px;
+      font-size: 13px;
+      transition: all 0.2s;
+      border-left: 3px solid transparent;
+    }
+
+    .sidebar nav a:hover,
+    .sidebar nav a.active {
+      background: rgba(255,255,255,0.1);
+      color: white;
+      border-left-color: var(--accent);
+    }
+
+    .sidebar nav a.section-title {
+      font-weight: 700;
+      text-transform: uppercase;
+      font-size: 11px;
+      letter-spacing: 1px;
+      color: rgba(255,255,255,0.5);
+      margin-top: 15px;
+      padding-bottom: 4px;
+      pointer-events: none;
+    }
+
+    .sidebar nav a.sub {
+      padding-left: 32px;
+      font-size: 12.5px;
+    }
+
+    /* Main content */
+    .main {
+      margin-left: var(--sidebar-width);
+      padding: 40px 50px 80px;
+      max-width: 960px;
+    }
+
+    /* Header banner */
+    .page-header {
+      background: linear-gradient(135deg, var(--primary), var(--secondary));
+      color: white;
+      padding: 40px 40px 35px;
+      border-radius: 12px;
+      margin-bottom: 40px;
+      box-shadow: 0 4px 20px rgba(31,71,136,0.25);
+    }
+
+    .page-header h1 {
+      font-size: 26px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .page-header p {
+      font-size: 14px;
+      opacity: 0.85;
+    }
+
+    /* Sections */
+    section {
+      margin-bottom: 45px;
+    }
+
+    h2 {
+      color: var(--primary);
+      font-size: 22px;
+      font-weight: 700;
+      margin: 45px 0 20px;
+      padding-bottom: 10px;
+      border-bottom: 2px solid var(--primary);
+    }
+
+    h3 {
+      color: var(--primary-light);
+      font-size: 18px;
+      font-weight: 600;
+      margin: 30px 0 12px;
+    }
+
+    h4 {
+      color: var(--text);
+      font-size: 15px;
+      font-weight: 600;
+      margin: 20px 0 10px;
+    }
+
+    p {
+      margin-bottom: 12px;
+    }
+
+    ul, ol {
+      margin: 10px 0 15px 24px;
+    }
+
+    li {
+      margin-bottom: 5px;
+    }
+
+    strong {
+      color: var(--primary);
+    }
+
+    /* Tables */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 15px 0 20px;
+      background: white;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    }
+
+    thead th {
+      background: var(--primary);
+      color: white;
+      padding: 10px 14px;
+      text-align: left;
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+    }
+
+    tbody td {
+      padding: 9px 14px;
+      border-bottom: 1px solid var(--border);
+      font-size: 13.5px;
+    }
+
+    tbody tr:last-child td {
+      border-bottom: none;
+    }
+
+    tbody tr:nth-child(even) {
+      background: #f9fafb;
+    }
+
+    /* Info cards */
+    .info-card {
+      background: white;
+      border-radius: 8px;
+      border-left: 4px solid var(--primary);
+      padding: 16px 20px;
+      margin: 15px 0;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    }
+
+    .info-card.accent {
+      border-left-color: var(--accent);
+    }
+
+    .info-card.green {
+      border-left-color: var(--green);
+      background: var(--green-bg);
+    }
+
+    .info-card.warning {
+      border-left-color: #dc3545;
+      background: var(--red-bg);
+    }
+
+    /* Step list */
+    .steps {
+      counter-reset: step;
+      list-style: none;
+      margin-left: 0;
+      padding-left: 0;
+    }
+
+    .steps > li {
+      counter-increment: step;
+      position: relative;
+      padding-left: 40px;
+      margin-bottom: 14px;
+    }
+
+    .steps > li::before {
+      content: counter(step);
+      position: absolute;
+      left: 0;
+      top: 1px;
+      width: 26px;
+      height: 26px;
+      background: var(--primary);
+      color: white;
+      border-radius: 50%;
+      font-size: 13px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* Tags / badges */
+    .badge {
+      display: inline-block;
+      padding: 2px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-right: 4px;
+    }
+    .badge-green { background: var(--green-bg); color: #155724; }
+    .badge-yellow { background: var(--yellow-bg); color: #856404; }
+    .badge-red { background: var(--red-bg); color: #721c24; }
+    .badge-blue { background: #d1ecf1; color: #0c5460; }
+
+    /* Code / variables */
+    code {
+      background: #eef1f6;
+      color: var(--primary);
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 13px;
+    }
+
+    /* Separator */
+    hr {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 35px 0;
+    }
+
+    /* Glossary */
+    .glossary-grid {
+      display: grid;
+      grid-template-columns: 180px 1fr;
+      gap: 0;
+    }
+
+    .glossary-grid dt {
+      font-weight: 600;
+      color: var(--primary);
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+      background: #f3f6fb;
+    }
+
+    .glossary-grid dd {
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    /* Version footer */
+    .version-footer {
+      text-align: center;
+      color: var(--text-light);
+      font-size: 12px;
+      margin-top: 60px;
+      padding-top: 20px;
+      border-top: 1px solid var(--border);
+    }
+
+    /* Print */
+    @media print {
+      .sidebar { display: none; }
+      .main { margin-left: 0; padding: 20px; max-width: 100%; }
+      .page-header { box-shadow: none; }
+      table { box-shadow: none; }
+      h2 { page-break-before: always; }
+      h2:first-of-type { page-break-before: auto; }
+    }
+
+    /* Responsive */
+    @media (max-width: 900px) {
+      .sidebar { display: none; }
+      .main { margin-left: 0; padding: 20px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Sidebar Navigation -->
+<aside class="sidebar">
+  <div class="sidebar-header">
+    <img src="frontend/images/FrenchBillard-Icon-small.png" alt="Billard Français" onerror="this.style.display='none'">
+    <h2>Guide Utilisateur<br>Gestion des Tournois</h2>
+  </div>
+  <nav>
+    <a href="#presentation" class="section-title">Accueil</a>
+    <a href="#presentation">Présentation Générale</a>
+    <a href="#multi-org" class="sub">Multi-organisation</a>
+    <a href="#modes-qualif" class="sub">Modes de qualification</a>
+    <a href="#connexion">Page de Connexion</a>
+
+    <a href="#nav-menus" class="section-title">Menus</a>
+    <a href="#dashboard">Accueil (Dashboard)</a>
+    <a href="#classements">Classements</a>
+    <a href="#classements-standard" class="sub">Mode Standard</a>
+    <a href="#classements-journees" class="sub">Mode Journées</a>
+    <a href="#historique-joueur" class="sub">Historique joueur</a>
+
+    <a href="#competitions" class="section-title">Compétitions</a>
+    <a href="#generer-poules">Générer les poules</a>
+    <a href="#forfaits">Gestion des forfaits</a>
+    <a href="#resultats">Résultats des tournois</a>
+    <a href="#resultats-externes">Résultats Externes</a>
+    <a href="#liste-tournois">Liste des tournois</a>
+
+    <a href="#calendrier" class="section-title">Calendrier</a>
+    <a href="#calendrier">Calendrier</a>
+
+    <a href="#communication" class="section-title">Communication</a>
+    <a href="#annonces">Annonces</a>
+    <a href="#composer-email">Composer un email</a>
+    <a href="#historique-emails">Historique emails</a>
+    <a href="#invitations">Invitations Espace Joueur</a>
+
+    <a href="#parametres" class="section-title">Paramètres</a>
+    <a href="#param-organisation">Organisation</a>
+    <a href="#param-utilisateurs">Utilisateurs</a>
+    <a href="#param-types-tournoi">Types de Tournoi</a>
+    <a href="#param-jeu">Paramètres de jeu</a>
+    <a href="#param-bareme">Barème de Points</a>
+    <a href="#param-classifications">Classifications FFB</a>
+    <a href="#param-clubs">Clubs</a>
+    <a href="#param-reference">Données de référence</a>
+    <a href="#param-confidentialite">Politique de Confidentialité</a>
+    <a href="#param-logs">Logs d'activité</a>
+
+    <a href="#inscriptions-list" class="section-title">Inscriptions</a>
+    <a href="#inscriptions-list">Liste des inscriptions</a>
+
+    <a href="#workflows" class="section-title">Flux de travail</a>
+    <a href="#workflow-tournoi">Préparer un tournoi</a>
+    <a href="#workflow-forfait">Gérer un forfait</a>
+    <a href="#workflow-invitations">Inviter les joueurs</a>
+    <a href="#workflow-bareme">Configurer le barème</a>
+    <a href="#workflow-journees">Passer en mode Journées</a>
+
+    <a href="#glossaire" class="section-title">Référence</a>
+    <a href="#glossaire">Glossaire</a>
+  </nav>
+</aside>
+
+<!-- Main Content -->
+<div class="main">
+
+  <div class="page-header">
+    <h1>Guide Utilisateur Complet</h1>
+    <p>Application de Gestion des Tournois de Billard Français &mdash; Version 2.0.200</p>
+  </div>
+
+  <!-- ======================== PRÉSENTATION GÉNÉRALE ======================== -->
+  <section id="presentation">
+    <h2>Présentation Générale</h2>
+
+    <h3>Qu'est-ce que cette application ?</h3>
+    <p>Cette application permet à un Comité Départemental de Billard (CDB) de gérer l'intégralité de ses compétitions de billard français (carambole). Elle couvre :</p>
+    <ul>
+      <li>La gestion des joueurs licenciés et leurs classifications FFB</li>
+      <li>Les inscriptions aux compétitions</li>
+      <li>La génération des poules et l'envoi des convocations</li>
+      <li>La gestion des forfaits</li>
+      <li>L'import des résultats et le calcul des classements</li>
+      <li>La communication avec les joueurs (emails, annonces)</li>
+      <li>La configuration du barème de points et des règles de bonus</li>
+      <li>Le suivi d'activité (logs)</li>
+    </ul>
+
+    <h3 id="multi-org">Multi-organisation</h3>
+    <p>L'application est conçue pour accueillir plusieurs comités (CDB) sur une même plateforme. Chaque CDB dispose de son propre environnement isolé : joueurs, compétitions, classements, paramètres et personnalisation visuelle (logo, couleurs) sont entièrement séparés.</p>
+
+    <h3>Lien avec l'Application Joueur (Espace Joueur)</h3>
+    <p>L'application fonctionne en tandem avec une <strong>Application Joueur</strong> destinée aux licenciés. Cette application permet aux joueurs de :</p>
+    <ul>
+      <li>S'inscrire eux-mêmes aux compétitions</li>
+      <li>Consulter leurs convocations et la composition des poules</li>
+      <li>Voir le calendrier des compétitions</li>
+      <li>Recevoir les annonces du comité</li>
+    </ul>
+    <div class="info-card accent">
+      <strong>Important :</strong> Les données sont partagées entre les deux applications. Quand un joueur s'inscrit via l'Application Joueur, son inscription apparaît automatiquement dans l'application de gestion.
+    </div>
+
+    <h3>Structure d'une saison</h3>
+    <ul>
+      <li>Une saison va de septembre à août (ex: "2025-2026")</li>
+      <li>4 modes de jeu : Libre, Cadre, Bande, 3 Bandes</li>
+      <li>Plusieurs niveaux par mode : N1, N2, N3 (national), R1, R2, R3, R4, R5 (régional), D1, D2, D3 (départemental)</li>
+      <li>Pour chaque catégorie (mode + niveau) : plusieurs tournois qualificatifs, puis une Finale Départementale</li>
+    </ul>
+
+    <h3 id="modes-qualif">Modes de qualification</h3>
+    <p>L'application supporte deux modes de qualification pour les finales, configurables par comité :</p>
+    <table>
+      <thead>
+        <tr><th>Mode</th><th>Description</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>3 Tournois Qualificatifs</strong> (standard)</td>
+          <td>3 tournois (T1, T2, T3) avec cumul des points de match. Les mieux classés accèdent à la Finale.</td>
+        </tr>
+        <tr>
+          <td><strong>Journées Qualificatives</strong></td>
+          <td>Journées avec poules + classement par points de position. Seuls les N meilleurs résultats sur M journées comptent.</td>
+        </tr>
+      </tbody>
+    </table>
+    <p>Le mode de qualification se configure dans <strong>Paramètres > Types de Tournoi</strong>.</p>
+  </section>
+
+  <hr>
+
+  <!-- ======================== PAGE DE CONNEXION ======================== -->
+  <section id="connexion">
+    <h2>Page de Connexion</h2>
+
+    <h3>Accès</h3>
+    <p>Page d'accueil de l'application (avant authentification)</p>
+
+    <h3>Éléments affichés</h3>
+    <ul>
+      <li>Logo de l'organisation</li>
+      <li>Champ "Nom d'utilisateur"</li>
+      <li>Champ "Mot de passe"</li>
+      <li>Bouton "Se connecter"</li>
+      <li>Lien "Mot de passe oublié ?"</li>
+      <li>Numéro de version de l'application</li>
+    </ul>
+
+    <h3>Actions utilisateur</h3>
+    <ol class="steps">
+      <li>Saisir le nom d'utilisateur</li>
+      <li>Saisir le mot de passe</li>
+      <li>Cliquer sur "Se connecter"</li>
+    </ol>
+
+    <h3>Mot de passe oublié</h3>
+    <ol class="steps">
+      <li>Cliquer sur "Mot de passe oublié ?"</li>
+      <li>Saisir l'adresse email associée au compte</li>
+      <li>Recevoir un code à 6 chiffres par email</li>
+      <li>Saisir le code et définir un nouveau mot de passe</li>
+    </ol>
+  </section>
+
+  <hr>
+
+  <!-- ======================== DASHBOARD ======================== -->
+  <section id="dashboard">
+    <h2>Menu : Accueil (Dashboard)</h2>
+
+    <h3>Accès</h3>
+    <p>Cliquer sur "Accueil" dans la barre de navigation (ou automatiquement après connexion)</p>
+
+    <h3>Description</h3>
+    <p>Page d'accueil présentant une vue d'ensemble de l'activité du comité.</p>
+
+    <h4>Statistiques générales</h4>
+    <ul>
+      <li><strong>Joueurs actifs</strong> : Nombre de licenciés dans la base</li>
+      <li><strong>Compétitions jouées</strong> : Nombre de compétitions terminées sur la saison</li>
+      <li><strong>Participants cumulés</strong> : Total des participations</li>
+    </ul>
+
+    <h4>Inscriptions saison</h4>
+    <ul>
+      <li><strong>Total</strong> : Nombre total d'inscriptions</li>
+      <li><strong>Convoqués</strong> : Joueurs ayant reçu leur convocation</li>
+      <li><strong>Forfaits</strong> : Nombre de forfaits déclarés</li>
+    </ul>
+
+    <h4>Compétitions saison</h4>
+    <ul>
+      <li><strong>Total</strong> : Nombre total de compétitions planifiées</li>
+      <li><strong>A venir</strong> : Compétitions pas encore jouées</li>
+      <li><strong>Passés</strong> : Compétitions terminées</li>
+    </ul>
+
+    <h4>Alertes</h4>
+    <p>Liste des actions urgentes à effectuer :</p>
+    <ul>
+      <li>Relances à envoyer (compétitions proches avec joueurs non relancés)</li>
+      <li>Résultats à envoyer après un tournoi terminé</li>
+    </ul>
+
+    <h4>Actions rapides</h4>
+    <p>Boutons d'accès direct aux fonctions les plus utilisées :</p>
+    <ul>
+      <li>Compétitions à jouer</li>
+      <li>Inscriptions Hors Classement</li>
+      <li>Enregistrer une compétition</li>
+      <li>Compétitions jouées</li>
+      <li>Voir les Classements</li>
+      <li>Vainqueurs Finales</li>
+    </ul>
+
+    <div class="info-card">
+      <strong>Lien avec l'Application Joueur :</strong> Le compteur "Inscriptions saison" inclut toutes les inscriptions, y compris celles faites par les joueurs via l'Application Joueur.
+    </div>
+  </section>
+
+  <hr>
+
+  <!-- ======================== CLASSEMENTS ======================== -->
+  <section id="classements">
+    <h2>Menu : Classements</h2>
+
+    <h3>Accès</h3>
+    <p>Cliquer sur "Classements" dans la barre de navigation</p>
+
+    <h3>Description</h3>
+    <p>Consultation et export des classements saison par catégorie.</p>
+
+    <h3>Filtres disponibles</h3>
+    <ul>
+      <li><strong>Saison</strong> : Sélectionner la saison (ex: 2025-2026)</li>
+      <li><strong>Mode de jeu</strong> : Libre, Cadre, Bande, 3 Bandes</li>
+      <li><strong>Classement FFB</strong> : N1, N2, N3, R1, R2, R3, R4, etc.</li>
+    </ul>
+
+    <h3 id="classements-standard">Mode Standard (3 Tournois Qualificatifs)</h3>
+
+    <h4>Informations affichées dans le tableau</h4>
+    <table>
+      <thead>
+        <tr><th>Colonne</th><th>Description</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Position</td><td>Rang du joueur dans le classement</td></tr>
+        <tr><td>Licence</td><td>Numéro de licence FFB</td></tr>
+        <tr><td>Joueur</td><td>Nom et prénom (cliquable &rarr; historique du joueur)</td></tr>
+        <tr><td>Club</td><td>Club du joueur (avec logo si disponible)</td></tr>
+        <tr><td>T1</td><td>Points de match du Tournoi 1</td></tr>
+        <tr><td>T2</td><td>Points de match du Tournoi 2</td></tr>
+        <tr><td>T3</td><td>Points de match du Tournoi 3</td></tr>
+        <tr><td>Pts Match</td><td>Somme des points de match</td></tr>
+        <tr><td>Bonus</td><td>Colonnes de bonus dynamiques (si configurées dans le barème)</td></tr>
+        <tr><td>Total</td><td>Total des points (match + bonus)</td></tr>
+        <tr><td>Total Points</td><td>Points cumulés (caramboles)</td></tr>
+        <tr><td>Total Reprises</td><td>Nombre total de reprises jouées</td></tr>
+        <tr><td>Moyenne</td><td>Moyenne générale (points/reprises)</td></tr>
+        <tr><td>Meilleure Série</td><td>Meilleure série réalisée sur la saison</td></tr>
+      </tbody>
+    </table>
+
+    <h3 id="classements-journees">Mode Journées Qualificatives</h3>
+    <p>En mode journées, l'affichage du classement est différent :</p>
+    <table>
+      <thead>
+        <tr><th>Colonne</th><th>Description</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Position</td><td>Rang du joueur</td></tr>
+        <tr><td>Licence</td><td>Numéro de licence FFB</td></tr>
+        <tr><td>Joueur</td><td>Nom et prénom</td></tr>
+        <tr><td>Club</td><td>Club du joueur</td></tr>
+        <tr><td>TQ1</td><td>Points du Tournoi Qualificatif 1</td></tr>
+        <tr><td>TQ2</td><td>Points du Tournoi Qualificatif 2</td></tr>
+        <tr><td>TQ3</td><td>Points du Tournoi Qualificatif 3</td></tr>
+        <tr><td>Bonus Moy.</td><td>Bonus moyenne (0 à 3 pts) &mdash; affiché uniquement si activé dans les paramètres</td></tr>
+        <tr><td>Total</td><td>Score total (meilleurs résultats + bonus)</td></tr>
+        <tr><td>Moyenne</td><td>Moyenne générale</td></tr>
+        <tr><td>Meilleure Série</td><td>Meilleure série</td></tr>
+      </tbody>
+    </table>
+
+    <div class="info-card accent">
+      <strong>Scores retenus / écartés :</strong> En mode journées, seuls les N meilleurs résultats sur M journées comptent. Les scores retenus sont affichés en <strong>gras</strong>, les scores écartés sont <s>barrés</s>.
+    </div>
+
+    <h3>Mise en évidence des qualifiés</h3>
+    <ul>
+      <li>Les joueurs qualifiés pour la finale sont affichés sur fond vert</li>
+      <li>Indication du nombre de qualifiés : "6 premiers qualifiés pour la finale (21 joueurs classés)"</li>
+    </ul>
+
+    <h3>Règle de qualification</h3>
+    <ul>
+      <li>Moins de 9 participants sur la saison &rarr; 4 qualifiés pour la finale</li>
+      <li>9 participants ou plus &rarr; 6 qualifiés pour la finale</li>
+    </ul>
+
+    <h3>Légende</h3>
+    <ul>
+      <li><code>*</code> indique que les points de position n'ont pas encore été attribués pour ce tournoi</li>
+      <li><code>-</code> indique que le tournoi n'a pas encore eu lieu</li>
+    </ul>
+
+    <h3 id="historique-joueur">Historique joueur</h3>
+    <p>Cliquer sur le nom d'un joueur dans le classement pour accéder à sa fiche historique. Cette page affiche :</p>
+    <ul>
+      <li>Informations du joueur (nom, licence, club, classements par discipline)</li>
+      <li>Historique de tous les tournois joués par saison</li>
+      <li>Résultats détaillés : points de match, moyenne, série, classement saison</li>
+    </ul>
+
+    <h3>Boutons d'action</h3>
+    <ul>
+      <li><strong>Exporter en Excel</strong> : Télécharge le classement au format Excel avec mise en forme</li>
+      <li><strong>Recalculer</strong> : Force le recalcul du classement (utile après modification de résultats ou changement de mode)</li>
+    </ul>
+
+    <div class="info-card">
+      <strong>Lien avec l'Application Joueur :</strong> Les joueurs peuvent consulter les classements dans l'Application Joueur (consultation seule).
+    </div>
+  </section>
+
+  <hr>
+
+  <!-- ======================== COMPÉTITIONS ======================== -->
+  <section id="competitions">
+    <h2>Menu : Compétitions</h2>
+
+    <h3>Accès</h3>
+    <p>Cliquer sur "Compétitions" dans la barre de navigation</p>
+
+    <h3>Sous-menus disponibles</h3>
+    <ul>
+      <li>Générer les poules / Convocations</li>
+      <li>Résultats des tournois</li>
+      <li>Résultats Externes (Import)</li>
+      <li>Liste des tournois</li>
+    </ul>
+  </section>
+
+  <hr>
+
+  <!-- Générer les poules -->
+  <section id="generer-poules">
+    <h2>Compétitions > Générer les poules / Convocations</h2>
+
+    <h3>Description</h3>
+    <p>Fonction principale pour préparer un tournoi : sélection des joueurs, génération des poules, envoi des convocations.</p>
+
+    <h4>Étape 1 : Sélection du tournoi</h4>
+    <p><strong>Filtres à renseigner :</strong></p>
+    <ul>
+      <li>Mode de jeu (Libre, Cadre, Bande, 3 Bandes)</li>
+      <li>Niveau (N1, N2, N3, R1, R2, R3, R4, etc.)</li>
+      <li>Saison</li>
+      <li>Tournoi (1, 2, 3 ou Finale)</li>
+    </ul>
+    <p><strong>Action :</strong> Cliquer sur "Charger les joueurs"</p>
+    <p><strong>Alternative :</strong> Cliquer directement sur une carte de compétition à venir affichée en haut de page.</p>
+    <p><strong>Informations affichées après chargement :</strong></p>
+    <ul>
+      <li>Nom de la compétition</li>
+      <li>Date et lieu (possibilité de double lieu pour les tournois répartis sur 2 salles)</li>
+      <li>Nombre de joueurs inscrits</li>
+    </ul>
+
+    <h4>Étape 2 : Sélection des joueurs</h4>
+    <p><strong>Pour chaque joueur :</strong></p>
+    <ul>
+      <li>Case à cocher pour la sélection</li>
+      <li>Position au classement</li>
+      <li>Nom et prénom</li>
+      <li>Club</li>
+      <li>Licence</li>
+      <li>Badge de statut (<span class="badge badge-green">Inscrit</span> <span class="badge badge-yellow">Forfait</span> <span class="badge badge-red">Désinscrit</span>)</li>
+    </ul>
+    <p><strong>Boutons d'action :</strong></p>
+    <ul>
+      <li><strong>Sélectionner les inscrits</strong> : Coche uniquement les joueurs ayant une inscription</li>
+      <li><strong>Tout sélectionner</strong> / <strong>Tout désélectionner</strong></li>
+      <li><strong>Ajouter un joueur</strong> : Permet d'ajouter manuellement un joueur non inscrit</li>
+      <li><strong>Gérer les forfaits</strong> : Ouvre la fenêtre de gestion des forfaits</li>
+    </ul>
+
+    <h4>Étape 3 : Prévisualisation des poules</h4>
+    <p>Les poules sont générées automatiquement avec répartition équilibrée. Pour chaque poule : liste des joueurs avec leur club et planning des matchs avec horaires.</p>
+    <p><strong>Paramètres de jeu :</strong></p>
+    <ul>
+      <li>Distance et Reprises affichés (modifiables si besoin avant envoi)</li>
+      <li>Bouton "Valider les paramètres" pour confirmer les valeurs de distance/reprises pour ce tournoi</li>
+    </ul>
+    <p><strong>Possibilités de modification :</strong></p>
+    <ul>
+      <li>Glisser-déposer un joueur d'une poule à l'autre</li>
+      <li>Boutons pour déplacer un joueur</li>
+    </ul>
+
+    <h4>Étape 4 : Envoi des convocations</h4>
+    <p><strong>Prévisualisation de l'email :</strong> aperçu de l'email tel qu'il sera reçu par les joueurs, avec logo, informations du tournoi, composition de la poule et planning des matchs.</p>
+
+    <div class="info-card">
+      <strong>Mode Test :</strong> Cocher "Mode Test - Envoyer uniquement à mon adresse", saisir une adresse email de test, puis cliquer sur "Envoyer le Test" pour vérifier le rendu avant l'envoi réel.
+    </div>
+
+    <p><strong>Ce qui se passe après l'envoi :</strong></p>
+    <ul>
+      <li>Chaque joueur reçoit un email personnalisé</li>
+      <li>Un PDF récapitulatif est joint à l'email</li>
+      <li>Les poules sont enregistrées en base de données</li>
+      <li>Le statut des joueurs passe à "Convoqué"</li>
+    </ul>
+
+    <div class="info-card">
+      <strong>Lien avec l'Application Joueur :</strong> Après l'envoi des convocations, les joueurs peuvent voir leur convocation, la composition complète de toutes les poules et le planning des matchs dans l'Application Joueur.
+    </div>
+  </section>
+
+  <hr>
+
+  <!-- Gestion des forfaits -->
+  <section id="forfaits">
+    <h2>Compétitions > Gestion des forfaits</h2>
+
+    <h3>Accès</h3>
+    <p>Bouton "Gérer les forfaits" sur la page Générer poules (après avoir chargé les joueurs)</p>
+
+    <h3>Description</h3>
+    <p>Permet de gérer les joueurs qui déclarent forfait après avoir reçu leur convocation.</p>
+
+    <h4>Processus complet de gestion d'un forfait</h4>
+    <ol class="steps">
+      <li><strong>Marquer le forfait :</strong> Cocher le(s) joueur(s) déclarant forfait, puis cliquer sur "Enregistrer les forfaits"</li>
+      <li><strong>Ajouter un remplaçant (optionnel) :</strong> Cliquer sur "Ajouter un remplaçant", rechercher et sélectionner un joueur, confirmer l'ajout</li>
+      <li><strong>Régénérer les poules :</strong> Cliquer sur "Prévisualiser les nouvelles poules" — les poules sont recalculées sans les forfaits</li>
+      <li><strong>Envoyer les nouvelles convocations :</strong> Cliquer sur "Envoyer les nouvelles convocations" — seuls les joueurs impactés reçoivent un nouvel email</li>
+    </ol>
+
+    <h4>Réintégrer un joueur (annuler un forfait)</h4>
+    <ol class="steps">
+      <li>Dans la section "Joueurs forfait"</li>
+      <li>Cliquer sur "Réintégrer" à côté du joueur</li>
+      <li>Le joueur revient dans la liste des convoqués avec le statut "Convoqué"</li>
+    </ol>
+  </section>
+
+  <hr>
+
+  <!-- Résultats des tournois -->
+  <section id="resultats">
+    <h2>Compétitions > Résultats des tournois</h2>
+
+    <h3>Accès</h3>
+    <p>Menu Compétitions > Résultats</p>
+
+    <h3>Description</h3>
+    <p>Import des résultats des tournois terminés pour mise à jour des classements.</p>
+
+    <h4>Processus d'import</h4>
+    <ol class="steps">
+      <li><strong>Sélectionner le tournoi :</strong> Choisir la catégorie (mode + niveau), le numéro de tournoi, la saison</li>
+      <li><strong>Préparer le fichier CSV :</strong> Format séparateur point-virgule (;). Colonnes attendues : Licence, Classement, Points, Reprises, Moyenne, Série</li>
+      <li><strong>Importer :</strong> Cliquer sur "Choisir un fichier", sélectionner le fichier CSV, cliquer sur "Importer"</li>
+      <li><strong>Vérification :</strong> Les résultats importés sont affichés et le classement saison est automatiquement recalculé</li>
+    </ol>
+
+    <h4>Données importées par joueur</h4>
+    <ul>
+      <li>Position finale dans le tournoi</li>
+      <li>Points de match (selon le barème configuré)</li>
+      <li>Total de points (caramboles)</li>
+      <li>Nombre de reprises</li>
+      <li>Moyenne générale</li>
+      <li>Meilleure série</li>
+    </ul>
+  </section>
+
+  <hr>
+
+  <!-- Résultats Externes -->
+  <section id="resultats-externes">
+    <h2>Compétitions > Résultats Externes (Import)</h2>
+
+    <h3>Accès</h3>
+    <p>Menu Compétitions > Import Données Externes</p>
+
+    <h3>Description</h3>
+    <p>Import de données externes au format CSV : inscriptions et tournois provenant d'un système tiers.</p>
+
+    <h4>Import des inscriptions</h4>
+    <ol class="steps">
+      <li>Glisser-déposer ou cliquer pour sélectionner un fichier CSV</li>
+      <li>Colonnes attendues : INSCRIPTION_ID, JOUEUR_ID, TOURNOI_ID, TIMESTAMP, EMAIL, TELEPHONE, LICENCE, CONVOQUE, FORFAIT, COMMENTAIRE</li>
+      <li>Cliquer sur "Importer"</li>
+      <li>Rapport détaillé affiché : nombre importé, mis à jour, ignoré (déjà inscrit via Player App), erreurs</li>
+    </ol>
+  </section>
+
+  <hr>
+
+  <!-- Liste des tournois -->
+  <section id="liste-tournois">
+    <h2>Compétitions > Liste des tournois</h2>
+
+    <h3>Accès</h3>
+    <p>Menu Compétitions > Liste des tournois</p>
+
+    <h3>Description</h3>
+    <p>Vue d'ensemble de tous les tournois internes (T1, T2, T3, Finale) avec leurs résultats.</p>
+
+    <h3>Filtres</h3>
+    <ul>
+      <li>Par saison</li>
+      <li>Par mode de jeu</li>
+      <li>Par niveau</li>
+    </ul>
+
+    <h3>Informations affichées</h3>
+    <ul>
+      <li>Catégorie</li>
+      <li>Numéro de tournoi</li>
+      <li>Date</li>
+      <li>Nombre de participants</li>
+      <li>Statut (Planifié, Terminé)</li>
+    </ul>
+  </section>
+
+  <hr>
+
+  <!-- ======================== CALENDRIER ======================== -->
+  <section id="calendrier">
+    <h2>Menu : Calendrier</h2>
+
+    <h3>Accès</h3>
+    <p>Cliquer sur "Calendrier" dans la barre de navigation</p>
+
+    <h3>Vue calendrier</h3>
+    <ul>
+      <li>Affichage par mois</li>
+      <li>Navigation mois précédent / mois suivant</li>
+      <li>Code couleur par mode de jeu</li>
+      <li>Clic sur une compétition pour voir les détails</li>
+    </ul>
+
+    <h3>Créer une compétition</h3>
+    <ol class="steps">
+      <li>Cliquer sur "Ajouter une compétition"</li>
+      <li>Renseigner : Mode de jeu, Niveau, Nom du tournoi, Date de début, Lieu (possibilité de renseigner un 2e lieu pour les tournois répartis sur 2 salles)</li>
+      <li>Cliquer sur "Enregistrer"</li>
+    </ol>
+
+    <h3>Annuler une compétition</h3>
+    <ol class="steps">
+      <li>Cliquer sur la compétition</li>
+      <li>Cliquer sur "Annuler"</li>
+      <li>Confirmer (les joueurs ne sont PAS notifiés automatiquement)</li>
+    </ol>
+
+    <div class="info-card">
+      <strong>Lien avec l'Application Joueur :</strong> Le calendrier est visible par les joueurs dans l'Application Joueur. Les joueurs peuvent s'inscrire directement aux compétitions à venir depuis leur application. Les inscriptions apparaissent automatiquement dans l'application de gestion.
+    </div>
+  </section>
+
+  <hr>
+
+  <!-- ======================== COMMUNICATION ======================== -->
+  <section id="communication">
+    <h2>Menu : Com Joueurs (Communication Joueurs)</h2>
+
+    <h3>Accès</h3>
+    <p>Cliquer sur "Com joueurs" dans la barre de navigation</p>
+
+    <h3>Sous-menus / Onglets disponibles</h3>
+    <ul>
+      <li>Annonces</li>
+      <li>Composer un email</li>
+      <li>Historique</li>
+      <li>Invitations Espace Joueur</li>
+    </ul>
+  </section>
+
+  <hr>
+
+  <!-- Annonces -->
+  <section id="annonces">
+    <h2>Com Joueurs > Annonces</h2>
+
+    <h3>Description</h3>
+    <p>Publication d'annonces visibles dans l'Application Joueur.</p>
+
+    <h4>Créer une annonce</h4>
+    <p><strong>Champs à remplir :</strong></p>
+    <ul>
+      <li><strong>Titre</strong> : Titre de l'annonce</li>
+      <li><strong>Message</strong> : Contenu de l'annonce</li>
+      <li><strong>Type</strong> :
+        <span class="badge badge-blue">INFO</span> Information générale,
+        <span class="badge badge-red">ALERTE</span> Message important,
+        <span class="badge badge-green">RESULTATS</span> Résultats de compétition,
+        <span class="badge badge-yellow">PERSO</span> Message personnel ciblé
+      </li>
+    </ul>
+
+    <p><strong>Options avancées :</strong></p>
+    <ul>
+      <li><strong>Date d'expiration</strong> : L'annonce disparaît automatiquement après cette date</li>
+      <li><strong>Mode Test</strong> : Envoie l'annonce uniquement à une licence spécifique pour test</li>
+      <li><strong>Destinataire</strong> : Tous les joueurs ou un joueur spécifique (saisir la licence)</li>
+    </ul>
+
+    <h4>Gérer les annonces existantes</h4>
+    <p><strong>Actions par annonce :</strong></p>
+    <ul>
+      <li><strong>Activer / Désactiver</strong> : Rend visible ou masque l'annonce</li>
+      <li><strong>Supprimer</strong> : Supprime définitivement l'annonce</li>
+    </ul>
+
+    <h4>Purger les annonces</h4>
+    <p>Section pliable permettant de supprimer en lot les annonces expirées, inactives, ou par période.</p>
+
+    <div class="info-card">
+      <strong>Lien avec l'Application Joueur :</strong> Les annonces actives et non expirées apparaissent dans l'Application Joueur. Les annonces PERSO n'apparaissent que pour le joueur ciblé.
+    </div>
+  </section>
+
+  <hr>
+
+  <!-- Composer un email -->
+  <section id="composer-email">
+    <h2>Com Joueurs > Composer un email</h2>
+
+    <h3>Description</h3>
+    <p>Envoi d'emails de masse à un groupe de joueurs.</p>
+
+    <h4>Étape 1 : Sélectionner les destinataires</h4>
+    <p><strong>Filtres disponibles :</strong></p>
+    <ul>
+      <li><strong>Actifs seulement</strong> : Exclut les joueurs inactifs</li>
+      <li><strong>Utilisateurs Espace Joueur</strong> : Uniquement ceux ayant créé un compte</li>
+      <li><strong>Par club</strong>, <strong>Par mode de jeu</strong>, <strong>Par classement FFB</strong></li>
+      <li><strong>Par tournoi</strong> : Joueurs inscrits à un tournoi spécifique</li>
+      <li><strong>Par classement saison</strong> : Joueurs présents dans un classement</li>
+    </ul>
+
+    <h4>Étape 2 : Composer le message</h4>
+    <p><strong>Champs :</strong> Objet + Corps du message (éditeur riche avec mise en forme)</p>
+
+    <p><strong>Variables disponibles :</strong></p>
+    <table>
+      <thead>
+        <tr><th>Variable</th><th>Description</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>{player_name}</code></td><td>Nom complet du joueur</td></tr>
+        <tr><td><code>{first_name}</code></td><td>Prénom</td></tr>
+        <tr><td><code>{last_name}</code></td><td>Nom</td></tr>
+        <tr><td><code>{club}</code></td><td>Club du joueur</td></tr>
+        <tr><td><code>{category}</code></td><td>Catégorie (si applicable)</td></tr>
+        <tr><td><code>{tournament}</code></td><td>Numéro du tournoi (T1, T2, T3, Finale)</td></tr>
+        <tr><td><code>{tournament_date}</code></td><td>Date du tournoi</td></tr>
+        <tr><td><code>{tournament_lieu}</code></td><td>Lieu du tournoi</td></tr>
+        <tr><td><code>{distance}</code></td><td>Distance de jeu</td></tr>
+        <tr><td><code>{reprises}</code></td><td>Nombre de reprises</td></tr>
+        <tr><td><code>{organization_name}</code></td><td>Nom complet de l'organisation</td></tr>
+        <tr><td><code>{organization_short_name}</code></td><td>Sigle de l'organisation</td></tr>
+        <tr><td><code>{organization_email}</code></td><td>Email de contact de l'organisation</td></tr>
+      </tbody>
+    </table>
+
+    <div class="info-card accent">
+      <strong>Modèles par défaut :</strong> Pour les relances (T1, T2, T3, Finale), il est possible d'enregistrer le message comme modèle par défaut. Ce modèle sera pré-rempli automatiquement lors des prochaines relances du même type.
+    </div>
+
+    <h4>Étape 3 : Mode test (recommandé)</h4>
+    <ol class="steps">
+      <li>Cocher "Mode Test"</li>
+      <li>Saisir une adresse email de test</li>
+      <li>Cliquer sur "Envoyer le test"</li>
+      <li>Vérifier le rendu de l'email reçu</li>
+    </ol>
+
+    <h4>Étape 4 : Envoi</h4>
+    <ol class="steps">
+      <li>Vérifier le nombre de destinataires</li>
+      <li>Cliquer sur "Envoyer"</li>
+      <li>Confirmer l'envoi</li>
+      <li>Message de confirmation avec le nombre d'emails envoyés</li>
+    </ol>
+  </section>
+
+  <hr>
+
+  <!-- Historique emails -->
+  <section id="historique-emails">
+    <h2>Com Joueurs > Historique</h2>
+
+    <h3>Description</h3>
+    <p>Historique des emails envoyés.</p>
+
+    <h3>Informations affichées</h3>
+    <ul>
+      <li>Date d'envoi</li>
+      <li>Objet de l'email</li>
+      <li>Nombre de destinataires</li>
+      <li>Statut (Envoyé, En cours, Erreur)</li>
+    </ul>
+  </section>
+
+  <hr>
+
+  <!-- Invitations -->
+  <section id="invitations">
+    <h2>Com Joueurs > Invitations Espace Joueur</h2>
+
+    <h3>Description</h3>
+    <p>Gestion des invitations envoyées aux joueurs pour créer leur compte sur l'Application Joueur.</p>
+
+    <h4>Onglet "Envoyer des invitations"</h4>
+    <p><strong>Objectif :</strong> Inviter des joueurs à rejoindre l'Application Joueur</p>
+    <ul>
+      <li>Filtres par club, par email, par statut</li>
+      <li>Liste des joueurs éligibles avec cases à cocher</li>
+      <li>Option mode test</li>
+    </ul>
+    <p>L'email d'invitation contient : présentation de l'Application Joueur, instructions pour créer un compte, guide PDF en pièce jointe (si configuré).</p>
+
+    <h4>Onglet "Suivi des invitations"</h4>
+    <table>
+      <thead>
+        <tr><th>Colonne</th><th>Description</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Nom</td><td>Nom et prénom + licence</td></tr>
+        <tr><td>Club</td><td>Club du joueur</td></tr>
+        <tr><td>Email</td><td>Adresse email</td></tr>
+        <tr><td>Date d'envoi</td><td>Date de l'invitation initiale</td></tr>
+        <tr><td>Envois</td><td>Nombre total d'envois (initial + rappels)</td></tr>
+        <tr><td>Statut</td><td><span class="badge badge-yellow">En attente</span> ou <span class="badge badge-green">Inscrit</span></td></tr>
+        <tr><td>Actions</td><td>Bouton "Renvoyer" (si En attente), "Supprimer"</td></tr>
+      </tbody>
+    </table>
+
+    <p><strong>Actions en lot :</strong> Cocher plusieurs joueurs "En attente" et cliquer sur "Renvoyer la sélection" pour envoyer un rappel à tous.</p>
+
+    <h4>Onglet "Paramètres"</h4>
+    <ul>
+      <li><strong>Template de l'email :</strong> Modifier le sujet et le corps du message d'invitation (éditeur riche)</li>
+      <li><strong>Variables disponibles :</strong> <code>{first_name}</code>, <code>{organization_name}</code>, <code>{organization_short_name}</code>, <code>{organization_email}</code></li>
+      <li><strong>Guide PDF :</strong> Télécharger un PDF joint automatiquement à chaque invitation</li>
+    </ul>
+
+    <div class="info-card">
+      <strong>Lien avec l'Application Joueur :</strong> Quand un joueur crée son compte sur l'Application Joueur, son statut passe automatiquement de "En attente" à "Inscrit". Le bouton "Synchroniser statuts" force cette vérification.
+    </div>
+  </section>
+
+  <hr>
+
+  <!-- ======================== PARAMÈTRES ======================== -->
+  <section id="parametres">
+    <h2>Menu : Paramètres</h2>
+
+    <h3>Accès</h3>
+    <p>Cliquer sur "Paramètres" dans la barre de navigation (visible uniquement pour les administrateurs)</p>
+
+    <h3>Sous-sections disponibles</h3>
+    <ul>
+      <li>Paramètres de l'organisation</li>
+      <li>Gestion des utilisateurs</li>
+      <li>Types de Tournoi et Mode de qualification</li>
+      <li>Paramètres de jeu (Distance, Reprises par catégorie)</li>
+      <li>Barème de points</li>
+      <li>Classifications FFB</li>
+      <li>Gestion des clubs</li>
+      <li>Données de référence</li>
+      <li>Politique de Confidentialité</li>
+      <li>Logs d'activité</li>
+    </ul>
+  </section>
+
+  <hr>
+
+  <!-- Paramètres > Organisation -->
+  <section id="param-organisation">
+    <h2>Paramètres > Organisation</h2>
+
+    <h3>Description</h3>
+    <p>Configuration des informations générales de l'organisation.</p>
+
+    <h4>Champs configurables</h4>
+    <table>
+      <thead>
+        <tr><th>Paramètre</th><th>Description</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Nom de l'organisation</td><td>Nom complet (ex: "Comité Départemental de Billard des Hauts-de-Seine")</td></tr>
+        <tr><td>Sigle</td><td>Nom court (ex: "CDB92")</td></tr>
+        <tr><td>Logo</td><td>Image affichée dans les emails et documents</td></tr>
+        <tr><td>Email de communication</td><td>Adresse d'expédition des emails</td></tr>
+        <tr><td>Email de notification</td><td>Adresse recevant les notifications système</td></tr>
+        <tr><td>Nom de l'expéditeur</td><td>Nom affiché comme expéditeur des emails</td></tr>
+      </tbody>
+    </table>
+
+    <h4>Personnalisation visuelle</h4>
+    <table>
+      <thead>
+        <tr><th>Paramètre</th><th>Description</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Couleur principale</td><td>Couleur des en-têtes, boutons, liens</td></tr>
+        <tr><td>Couleur secondaire</td><td>Couleur des dégradés, survols</td></tr>
+        <tr><td>Couleur d'accent</td><td>Couleur des alertes, badges</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <hr>
+
+  <!-- Paramètres > Utilisateurs -->
+  <section id="param-utilisateurs">
+    <h2>Paramètres > Utilisateurs</h2>
+
+    <h3>Rôles disponibles</h3>
+    <table>
+      <thead>
+        <tr><th>Rôle</th><th>Permissions</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Admin</td><td>Accès complet, peut créer d'autres utilisateurs</td></tr>
+        <tr><td>Éditeur</td><td>Peut gérer compétitions, inscriptions, communications</td></tr>
+        <tr><td>Lecteur</td><td>Consultation seule (accès en lecture à toutes les pages)</td></tr>
+      </tbody>
+    </table>
+
+    <h4>Créer un utilisateur</h4>
+    <ol class="steps">
+      <li>Cliquer sur "Ajouter un utilisateur"</li>
+      <li>Saisir : nom d'utilisateur, email, mot de passe temporaire</li>
+      <li>Sélectionner le rôle</li>
+      <li>Cliquer sur "Créer"</li>
+    </ol>
+
+    <h4>Actions sur un utilisateur existant</h4>
+    <ul>
+      <li><strong>Modifier le rôle</strong> : Changer les permissions</li>
+      <li><strong>Réinitialiser le mot de passe</strong> : Envoie un email de réinitialisation</li>
+      <li><strong>Désactiver</strong> : Bloque l'accès sans supprimer le compte</li>
+    </ul>
+  </section>
+
+  <hr>
+
+  <!-- Paramètres > Types de Tournoi -->
+  <section id="param-types-tournoi">
+    <h2>Paramètres > Types de Tournoi et Mode de Qualification</h2>
+
+    <h3>Description</h3>
+    <p>Configuration du mode de qualification pour les finales et gestion des types de tournoi.</p>
+
+    <h4>Choisir le mode de qualification</h4>
+    <p>Deux modes disponibles, sélectionnables par carte :</p>
+    <table>
+      <thead>
+        <tr><th>Mode</th><th>Description</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>3 Tournois Qualificatifs</strong></td>
+          <td>3 tournois (T1, T2, T3) avec cumul des points. Les meilleurs joueurs accèdent à la Finale Départementale.</td>
+        </tr>
+        <tr>
+          <td><strong>Journées Qualificatives</strong></td>
+          <td>Journées avec poules + tableau final. Classement par points de position (meilleurs N sur M journées).</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h4>Types de Tournoi</h4>
+    <p>Tableau listant les types de tournoi définis (T1, T2, T3, Finale, etc.) avec code, nom d'affichage, et options (compte pour le classement, est une finale). Il est possible d'ajouter de nouveaux types via le formulaire en bas du tableau.</p>
+
+    <h4>Paramètres Journées Qualificatives</h4>
+    <p>(Visible uniquement en mode journées)</p>
+    <table>
+      <thead>
+        <tr><th>Paramètre</th><th>Description</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Nombre de journées</td><td>Nombre de tournois qualificatifs par saison (défaut: 3)</td></tr>
+        <tr><td>Meilleurs résultats retenus</td><td>Nombre de meilleurs scores pris en compte (défaut: 2)</td></tr>
+        <tr><td>Taille du tableau (bracket)</td><td>Nombre de joueurs dans le tableau final (défaut: 4)</td></tr>
+        <tr><td>Bonus Moyenne au classement</td><td>Active le bonus de 0 à 3 points selon la moyenne du joueur par rapport aux seuils min/max de la catégorie</td></tr>
+      </tbody>
+    </table>
+
+    <h4>Points par position</h4>
+    <p>Tableau configurable qui définit le nombre de points attribués pour chaque position finale dans une journée :</p>
+    <ul>
+      <li>Position 1 &rarr; 10 points (par défaut)</li>
+      <li>Position 2 &rarr; 8 points</li>
+      <li>etc.</li>
+      <li>Possibilité d'ajouter ou modifier des positions</li>
+    </ul>
+  </section>
+
+  <hr>
+
+  <!-- Paramètres > Paramètres de jeu -->
+  <section id="param-jeu">
+    <h2>Paramètres > Paramètres de jeu</h2>
+
+    <h3>Description</h3>
+    <p>Configuration des paramètres de jeu (Distance, Reprises) par mode et catégorie pour la saison en cours.</p>
+
+    <h4>Paramètres par catégorie</h4>
+    <table>
+      <thead>
+        <tr><th>Paramètre</th><th>Description</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Distance</td><td>Nombre de points à atteindre</td></tr>
+        <tr><td>Reprises</td><td>Nombre maximum de reprises</td></tr>
+        <tr><td>Moyenne mini</td><td>Seuil minimum de moyenne pour la catégorie</td></tr>
+        <tr><td>Moyenne maxi</td><td>Seuil maximum de moyenne pour la catégorie</td></tr>
+      </tbody>
+    </table>
+
+    <p>Ces paramètres sont utilisés pour :</p>
+    <ul>
+      <li>Les convocations (distance et reprises affichés dans l'email)</li>
+      <li>Le calcul du bonus moyenne en mode journées (seuils mini/maxi)</li>
+      <li>La validation des classifications FFB</li>
+    </ul>
+
+    <div class="info-card accent">
+      <strong>Surcharge par tournoi :</strong> Les paramètres Distance et Reprises peuvent être modifiés pour un tournoi spécifique directement depuis la page "Générer les poules" (bouton "Valider les paramètres"). Ces surcharges n'affectent que le tournoi concerné.
+    </div>
+  </section>
+
+  <hr>
+
+  <!-- Paramètres > Barème -->
+  <section id="param-bareme">
+    <h2>Paramètres > Barème de Points</h2>
+
+    <h3>Accès</h3>
+    <p>Menu Paramètres > Barème</p>
+
+    <h3>Description</h3>
+    <p>Configuration des règles de calcul des points de match et des bonus.</p>
+
+    <h4>Barème de base (Victoire / Nul / Défaite)</h4>
+    <p>Définit les points attribués pour chaque résultat de match :</p>
+    <ul>
+      <li><strong>Victoire</strong> : 2 points (par défaut)</li>
+      <li><strong>Match nul</strong> : 1 point</li>
+      <li><strong>Défaite</strong> : 0 point</li>
+    </ul>
+    <p>Ces valeurs sont modifiables via le bouton "Modifier" de chaque ligne.</p>
+
+    <h4>Blocs de bonus</h4>
+    <p>Des blocs de bonus peuvent être ajoutés pour attribuer des points supplémentaires selon des conditions :</p>
+
+    <p><strong>Structure d'un bloc :</strong></p>
+    <ul>
+      <li><strong>Nom du bloc</strong> : Identifiant (ex: "Bonus Moyenne")</li>
+      <li><strong>Libellé colonne</strong> : Nom affiché dans les classements (ex: "Bonus Moy.")</li>
+      <li><strong>Statut</strong> : Actif ou Inactif (toggle)</li>
+    </ul>
+
+    <p><strong>Chaque condition dans un bloc :</strong></p>
+    <ul>
+      <li><strong>Champ</strong> : Moyenne du joueur, Nombre de joueurs, Points de match, Série</li>
+      <li><strong>Opérateur</strong> : >, >=, <, <=, =</li>
+      <li><strong>Valeur</strong> : Seuil max catégorie, Seuil min catégorie, ou valeur numérique</li>
+      <li><strong>Logique</strong> : Possibilité de combiner 2 conditions avec ET/OU</li>
+      <li><strong>Points</strong> : Nombre de points bonus attribués</li>
+    </ul>
+
+    <p><strong>Actions :</strong></p>
+    <ul>
+      <li>Ajouter un nouveau bloc de conditions</li>
+      <li>Modifier/supprimer des conditions individuelles</li>
+      <li>Activer/désactiver un bloc entier</li>
+      <li>Supprimer un bloc complet</li>
+    </ul>
+  </section>
+
+  <hr>
+
+  <!-- Paramètres > Classifications FFB -->
+  <section id="param-classifications">
+    <h2>Paramètres > Classifications FFB</h2>
+
+    <h3>Accès</h3>
+    <p>Menu Paramètres > Classifications FFB</p>
+
+    <h3>Description</h3>
+    <p>Gestion des classifications FFB par discipline pour chaque joueur. Permet d'attribuer un classement FFB (N1, R2, D3, etc.) et une moyenne FFB par mode de jeu.</p>
+
+    <h4>Recherche d'un joueur</h4>
+    <ol class="steps">
+      <li>Saisir le numéro de licence dans le champ de recherche</li>
+      <li>Le joueur est identifié automatiquement (nom, prénom, club)</li>
+    </ol>
+
+    <h4>Gestion des classifications par discipline</h4>
+    <p>Pour chaque joueur, il est possible de gérer les classifications par mode de jeu :</p>
+    <ul>
+      <li><strong>Mode de jeu</strong> : Libre, Cadre, Bande, 3 Bandes</li>
+      <li><strong>Classement</strong> : Dropdown avec les niveaux FFB disponibles (N1 à D3)</li>
+      <li><strong>Moyenne FFB</strong> : Valeur numérique avec 3 décimales</li>
+    </ul>
+
+    <div class="info-card accent">
+      <strong>Validation :</strong> Un indicateur de plage de moyenne s'affiche (ex: "Plage: 15.000 - 50.000") pour guider la saisie.
+    </div>
+
+    <p><strong>Actions :</strong></p>
+    <ul>
+      <li>Ajouter une discipline (bouton "+")</li>
+      <li>Supprimer une discipline</li>
+      <li>Enregistrer les classifications</li>
+    </ul>
+
+    <h4>Vue d'ensemble</h4>
+    <p>Un tableau récapitulatif affiche toutes les classifications enregistrées pour tous les joueurs, regroupées par discipline. Statistiques affichées : nombre total de joueurs classés et nombre de classifications saisies.</p>
+  </section>
+
+  <hr>
+
+  <!-- Paramètres > Clubs -->
+  <section id="param-clubs">
+    <h2>Paramètres > Clubs</h2>
+
+    <h3>Actions disponibles</h3>
+    <ul>
+      <li><strong>Ajouter un club</strong> : Nom, ville, logo</li>
+      <li><strong>Modifier un club</strong> : Mettre à jour les informations</li>
+      <li><strong>Télécharger un logo</strong> : Image affichée dans les classements et documents</li>
+      <li><strong>Supprimer un club</strong> : Retirer de la liste</li>
+    </ul>
+
+    <h4>Utilisation des logos</h4>
+    <p>Les logos des clubs apparaissent dans les classements (tableau et export Excel) et les convocations.</p>
+  </section>
+
+  <hr>
+
+  <!-- Paramètres > Données de référence -->
+  <section id="param-reference">
+    <h2>Paramètres > Données de référence</h2>
+
+    <h3>Description</h3>
+    <p>Gestion des données de base du système, organisée en onglets.</p>
+
+    <h4>Onglet "Modes de jeu"</h4>
+    <ul>
+      <li>Liste des disciplines : Libre, Cadre, Bande, 3 Bandes</li>
+      <li>Pour chaque mode : code, nom, couleur d'affichage, ordre</li>
+      <li>Possibilité d'ajouter, modifier, supprimer ou réordonner</li>
+    </ul>
+
+    <h4>Onglet "Classements FFB"</h4>
+    <ul>
+      <li>Liste des niveaux : N1, N2, N3, R1-R5, D1-D3</li>
+      <li>Pour chaque niveau : code, nom complet, palier (National/Régional/Départemental), niveau hiérarchique</li>
+    </ul>
+
+    <h4>Onglet "Catégories"</h4>
+    <ul>
+      <li>Combinaisons mode + niveau</li>
+      <li>Nom d'affichage personnalisable (ex: "Libre R2", "3 Bandes N3")</li>
+      <li>Statut : Actif / Inactif / N/A</li>
+      <li>Bouton "Synchroniser" : crée automatiquement les catégories manquantes</li>
+    </ul>
+
+    <h4>Onglet "Config. Poules"</h4>
+    <ul>
+      <li>Configuration automatique de la composition des poules</li>
+      <li>Option : Autoriser les poules de 2 joueurs</li>
+      <li>Tableau de prévisualisation : pour chaque nombre de joueurs, la répartition en poules est affichée</li>
+    </ul>
+  </section>
+
+  <hr>
+
+  <!-- Paramètres > Politique de Confidentialité -->
+  <section id="param-confidentialite">
+    <h2>Paramètres > Politique de Confidentialité</h2>
+
+    <h3>Description</h3>
+    <p>Éditeur de la politique de confidentialité affichée dans l'Application Joueur (conformité RGPD).</p>
+
+    <h3>Fonctionnalités</h3>
+    <ul>
+      <li>Éditeur de texte avec barre d'outils (titres, gras, italique, listes)</li>
+      <li>Prévisualisation en temps réel (onglet Aperçu)</li>
+      <li>Import depuis un fichier Word (.docx)</li>
+      <li>Export en document Word (.doc)</li>
+      <li>Sauvegarde en base de données</li>
+    </ul>
+  </section>
+
+  <hr>
+
+  <!-- Paramètres > Logs d'activité -->
+  <section id="param-logs">
+    <h2>Paramètres > Logs d'activité</h2>
+
+    <h3>Accès</h3>
+    <p>Menu Paramètres > Logs d'activité (lien direct)</p>
+
+    <h3>Description</h3>
+    <p>Historique des actions effectuées par les utilisateurs de l'application et de l'Espace Joueur.</p>
+
+    <h4>Statistiques rapides (7 derniers jours)</h4>
+    <ul>
+      <li>Connexions</li>
+      <li>Inscriptions</li>
+      <li>Désinscriptions</li>
+      <li>Nouveaux comptes</li>
+      <li>Utilisateurs actifs</li>
+    </ul>
+
+    <h4>Filtres disponibles</h4>
+    <ul>
+      <li><strong>Période</strong> : Date de début et de fin</li>
+      <li><strong>Type d'action</strong> : Connexion, inscription, désinscription, création de compte, etc.</li>
+      <li><strong>Nom du joueur</strong> : Recherche avec opérateurs (contient, commence par, est égal à, etc.)</li>
+      <li><strong>Licence</strong> : Recherche par numéro de licence</li>
+    </ul>
+
+    <h4>Tableau des logs</h4>
+    <table>
+      <thead>
+        <tr><th>Colonne</th><th>Description</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Date/Heure</td><td>Horodatage de l'action</td></tr>
+        <tr><td>Action</td><td>Type d'action effectuée</td></tr>
+        <tr><td>Statut</td><td>Succès ou échec</td></tr>
+        <tr><td>Joueur</td><td>Nom du joueur concerné</td></tr>
+        <tr><td>Email</td><td>Adresse email</td></tr>
+        <tr><td>Cible</td><td>Élément ciblé par l'action</td></tr>
+        <tr><td>Détails</td><td>Informations complémentaires</td></tr>
+        <tr><td>IP</td><td>Adresse IP de l'utilisateur</td></tr>
+      </tbody>
+    </table>
+
+    <h4>Actions</h4>
+    <ul>
+      <li><strong>Export Excel</strong> : Télécharge les logs filtrés au format Excel</li>
+      <li><strong>Rafraîchissement automatique</strong> : Toggle pour actualiser les logs toutes les 30 secondes</li>
+      <li><strong>Pagination</strong> : 50 logs par page</li>
+    </ul>
+  </section>
+
+  <hr>
+
+  <!-- ======================== LISTE DES INSCRIPTIONS ======================== -->
+  <section id="inscriptions-list">
+    <h2>Liste des Inscriptions</h2>
+
+    <h3>Accès</h3>
+    <p>Via le menu "Inscriptions" dans la barre de navigation</p>
+
+    <h3>Description</h3>
+    <p>Vue complète de toutes les inscriptions aux compétitions.</p>
+
+    <h3>Filtres disponibles</h3>
+    <ul>
+      <li><strong>Saison</strong>, <strong>Mode de jeu</strong>, <strong>Niveau</strong></li>
+      <li><strong>Statut</strong> : <span class="badge badge-green">Inscrit</span> <span class="badge badge-blue">Convoqué</span> <span class="badge badge-yellow">Forfait</span> <span class="badge badge-red">Désinscrit</span></li>
+      <li><strong>Recherche</strong> : Par nom ou licence</li>
+    </ul>
+
+    <h3>Tableau affiché</h3>
+    <table>
+      <thead>
+        <tr><th>Colonne</th><th>Description</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Joueur</td><td>Nom, prénom, licence</td></tr>
+        <tr><td>Club</td><td>Club du joueur</td></tr>
+        <tr><td>Email</td><td>Adresse email</td></tr>
+        <tr><td>Téléphone</td><td>Numéro de téléphone</td></tr>
+        <tr><td>Compétition</td><td>Mode + niveau + numéro tournoi</td></tr>
+        <tr><td>Source</td><td>player_app / manual / ionos</td></tr>
+        <tr><td>Statut</td><td>Inscrit / Convoqué / Forfait / Désinscrit</td></tr>
+        <tr><td>Actions</td><td>Modifier / Supprimer</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Sources d'inscription</h3>
+    <ul>
+      <li><strong>player_app</strong> : Le joueur s'est inscrit via l'Application Joueur</li>
+      <li><strong>manual</strong> : Un administrateur a ajouté l'inscription manuellement</li>
+      <li><strong>ionos</strong> : Import CSV (ancien système)</li>
+    </ul>
+
+    <h4>Ajouter une inscription manuellement</h4>
+    <ol class="steps">
+      <li>Cliquer sur "Ajouter"</li>
+      <li>Sélectionner le tournoi</li>
+      <li>Rechercher le joueur</li>
+      <li>Vérifier/compléter email et téléphone</li>
+      <li>Cliquer sur "Enregistrer"</li>
+    </ol>
+
+    <div class="info-card">
+      <strong>Lien avec l'Application Joueur :</strong> Les inscriptions avec source "player_app" ont été faites par le joueur lui-même. Ces inscriptions ne doivent généralement pas être modifiées manuellement.
+    </div>
+  </section>
+
+  <hr>
+
+  <!-- ======================== FLUX DE TRAVAIL ======================== -->
+  <section id="workflows">
+    <h2>Flux de Travail Types</h2>
+  </section>
+
+  <section id="workflow-tournoi">
+    <h3>Préparer un tournoi de A à Z</h3>
+    <ol class="steps">
+      <li><strong>Créer le tournoi</strong> (Menu Calendrier) &mdash; Définir mode, niveau, date, lieu</li>
+      <li><strong>Attendre les inscriptions</strong> &mdash; Les joueurs s'inscrivent via l'Application Joueur. Suivre dans la liste des inscriptions</li>
+      <li><strong>Générer les poules</strong> (Menu Compétitions) &mdash; Charger le tournoi, vérifier les joueurs, valider les paramètres de jeu, générer les poules</li>
+      <li><strong>Envoyer les convocations</strong> &mdash; Prévisualiser, tester si besoin, envoyer à tous les joueurs</li>
+      <li><strong>Gérer les forfaits</strong> (si nécessaire) &mdash; Marquer les forfaits, ajouter des remplaçants, renvoyer les convocations modifiées</li>
+      <li><strong>Après le tournoi</strong> &mdash; Importer les résultats (CSV), vérifier le classement mis à jour</li>
+    </ol>
+  </section>
+
+  <hr>
+
+  <section id="workflow-forfait">
+    <h3>Gérer un forfait de dernière minute</h3>
+    <ol class="steps">
+      <li>Menu Compétitions > Générer poules</li>
+      <li>Charger le tournoi concerné</li>
+      <li>Cliquer sur "Gérer les forfaits"</li>
+      <li>Cocher le joueur forfait et cliquer sur "Enregistrer les forfaits"</li>
+      <li>(Optionnel) Cliquer sur "Ajouter un remplaçant"</li>
+      <li>Cliquer sur "Prévisualiser les nouvelles poules"</li>
+      <li>Vérifier la nouvelle composition</li>
+      <li>Cliquer sur "Envoyer les nouvelles convocations"</li>
+    </ol>
+  </section>
+
+  <hr>
+
+  <section id="workflow-invitations">
+    <h3>Inviter les joueurs à l'Espace Joueur</h3>
+    <ol class="steps">
+      <li>Menu Com joueurs > Invitations Espace Joueur</li>
+      <li>Onglet "Paramètres" : Vérifier le template et télécharger le guide PDF</li>
+      <li>Onglet "Envoyer" : Filtrer et sélectionner les joueurs</li>
+      <li>Envoyer les invitations</li>
+      <li>Onglet "Suivi" : Suivre les inscriptions</li>
+      <li>Renvoyer des rappels aux "En attente" (individuellement ou en lot)</li>
+    </ol>
+  </section>
+
+  <hr>
+
+  <section id="workflow-bareme">
+    <h3>Configurer le barème de points</h3>
+    <ol class="steps">
+      <li>Menu Paramètres > Barème</li>
+      <li>Vérifier le barème de base (Victoire / Nul / Défaite)</li>
+      <li>(Optionnel) Ajouter un bloc de bonus : saisir un nom de bloc et un libellé de colonne, cliquer sur "Ajouter le bloc"</li>
+      <li>Ajouter des conditions avec le formulaire structuré</li>
+      <li>Activer ou désactiver les blocs selon les besoins</li>
+      <li>Les bonus sont appliqués automatiquement lors de l'import des résultats</li>
+    </ol>
+  </section>
+
+  <hr>
+
+  <section id="workflow-journees">
+    <h3>Passer en mode Journées Qualificatives</h3>
+    <ol class="steps">
+      <li>Menu Paramètres > Types de Tournoi</li>
+      <li>Cliquer sur la carte "Journées Qualificatives"</li>
+      <li>Configurer : nombre de journées, meilleurs résultats retenus, taille du bracket</li>
+      <li>(Optionnel) Activer le "Bonus Moyenne au classement"</li>
+      <li>Configurer les points par position (tableau en bas)</li>
+      <li>Cliquer sur "Enregistrer"</li>
+      <li>Le classement adopte automatiquement le format journées (TQ1/TQ2/TQ3, scores retenus/écartés)</li>
+    </ol>
+  </section>
+
+  <hr>
+
+  <!-- ======================== GLOSSAIRE ======================== -->
+  <section id="glossaire">
+    <h2>Glossaire</h2>
+
+    <table>
+      <thead>
+        <tr><th style="width: 200px;">Terme</th><th>Définition</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Application Joueur / Espace Joueur</td><td>Application permettant aux licenciés de s'inscrire et consulter leurs informations</td></tr>
+        <tr><td>Barème</td><td>Ensemble des règles définissant l'attribution des points de match et des bonus</td></tr>
+        <tr><td>Bonus Moyenne</td><td>Points supplémentaires attribués selon la moyenne du joueur par rapport aux seuils de la catégorie (0 à 3 pts, mode journées)</td></tr>
+        <tr><td>Catégorie</td><td>Combinaison d'un mode de jeu et d'un niveau (ex: "Libre R2", "3 Bandes N3")</td></tr>
+        <tr><td>CDB</td><td>Comité Départemental de Billard &mdash; chaque CDB dispose de son propre environnement isolé</td></tr>
+        <tr><td>Classification FFB</td><td>Classement attribué par la FFB à un joueur pour une discipline donnée (ex: R2 en 3 Bandes)</td></tr>
+        <tr><td>Convocation</td><td>Email envoyé au joueur avec toutes les informations du tournoi et sa poule</td></tr>
+        <tr><td>Distance</td><td>Nombre de points (caramboles) à atteindre pour gagner une manche</td></tr>
+        <tr><td>Forfait</td><td>Joueur qui ne peut pas participer après avoir été convoqué</td></tr>
+        <tr><td>Journée Qualificative</td><td>Mode de compétition avec poules puis tableau final, classement par points de position</td></tr>
+        <tr><td>Licence FFB</td><td>Numéro d'identification unique du joueur à la Fédération Française de Billard</td></tr>
+        <tr><td>Mode de jeu</td><td>Discipline de billard : Libre, Cadre, Bande, ou 3 Bandes</td></tr>
+        <tr><td>Moyenne</td><td>Ratio points/reprises mesurant le niveau de jeu d'un joueur</td></tr>
+        <tr><td>Niveau</td><td>Classification FFB : N1/N2/N3 (national), R1-R5 (régional), D1-D3 (départemental)</td></tr>
+        <tr><td>Points de match</td><td>Points attribués selon le résultat d'un match (Victoire/Nul/Défaite)</td></tr>
+        <tr><td>Points de position</td><td>Points attribués selon le classement final dans une journée qualificative</td></tr>
+        <tr><td>Poule</td><td>Groupe de joueurs s'affrontant lors d'un tournoi</td></tr>
+        <tr><td>Reprise</td><td>Unité de jeu au billard (tour de jeu)</td></tr>
+        <tr><td>Saison</td><td>Période allant de septembre à août (ex: 2025-2026)</td></tr>
+        <tr><td>Série</td><td>Nombre de points consécutifs marqués sans rater</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- Footer -->
+  <div class="version-footer">
+    <p>Document de référence pour l'Application de Gestion des Tournois &mdash; Version 2.0.200</p>
+    <p>JR &copy;</p>
+  </div>
+
+</div>
+
+<script>
+  // Highlight active sidebar link on scroll
+  const sections = document.querySelectorAll('section[id]');
+  const navLinks = document.querySelectorAll('.sidebar nav a:not(.section-title)');
+
+  function updateActiveLink() {
+    let current = '';
+    sections.forEach(section => {
+      const top = section.offsetTop - 100;
+      if (window.scrollY >= top) {
+        current = section.getAttribute('id');
+      }
+    });
+    navLinks.forEach(link => {
+      link.classList.remove('active');
+      if (link.getAttribute('href') === '#' + current) {
+        link.classList.add('active');
+      }
+    });
+  }
+
+  window.addEventListener('scroll', updateActiveLink);
+  updateActiveLink();
+
+  // Smooth scroll
+  navLinks.forEach(link => {
+    link.addEventListener('click', e => {
+      e.preventDefault();
+      const target = document.querySelector(link.getAttribute('href'));
+      if (target) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    });
+  });
+</script>
+
+</body>
+</html>
