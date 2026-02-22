@@ -79,16 +79,15 @@
 
         <!-- Multi-file upload zone (journees mode, hidden by default) -->
         <div id="journeesUpload" style="display: none;">
-          <!-- Primary: folder selector -->
+          <!-- Primary: multi-file CSV selector -->
           <div style="margin-bottom: 15px;">
-            <button type="button" id="folderSelectBtn" onclick="document.getElementById('folderInput').click()" class="btn" style="background: var(--color-primary, #1F4788); padding: 14px 28px; font-size: 15px; display: inline-flex; align-items: center; gap: 10px;">
-              📂 Sélectionner le dossier E2i
+            <button type="button" id="folderSelectBtn" onclick="document.getElementById('multiFileInput').click()" class="btn" style="background: var(--color-primary, #1F4788); padding: 14px 28px; font-size: 15px; display: inline-flex; align-items: center; gap: 10px;">
+              📂 Sélectionner les fichiers E2i
             </button>
-            <span style="color: #999; font-size: 13px; margin-left: 10px;">Sélectionnez le dossier contenant tous les CSV exportés depuis E2i</span>
-            <input type="file" id="folderInput" webkitdirectory style="display: none;">
+            <span style="color: #999; font-size: 13px; margin-left: 10px;">Sélectionnez tous les fichiers CSV exportés depuis E2i (Ctrl+A pour tout sélectionner)</span>
           </div>
 
-          <!-- Fallback: drag & drop -->
+          <!-- Drag & drop alternative -->
           <div class="file-upload" id="multiFileUpload" style="min-height: 80px; cursor: pointer; border: 2px dashed #ccc; border-radius: 10px; padding: 20px; text-align: center; transition: all 0.2s ease;">
             <p style="font-size: 13px; color: #999; margin: 0;">ou glissez-déposez les fichiers CSV ici</p>
             <input type="file" id="multiFileInput" accept=".csv" multiple style="display: none;">
@@ -784,19 +783,8 @@
 
       multiInput.addEventListener('change', () => {
         if (multiInput.files.length > 0) {
+          selectedFiles = []; // Reset — new selection replaces previous
           handleMultiFiles(multiInput.files);
-        }
-      });
-
-      // Folder selector: filter to CSV files only
-      const folderInput = document.getElementById('folderInput');
-      folderInput.addEventListener('change', () => {
-        const csvFiles = Array.from(folderInput.files).filter(f => f.name.toLowerCase().endsWith('.csv'));
-        if (csvFiles.length > 0) {
-          selectedFiles = []; // Reset — folder replaces previous selection
-          handleMultiFiles(csvFiles);
-        } else {
-          alert('Aucun fichier CSV trouvé dans ce dossier.');
         }
       });
     }
