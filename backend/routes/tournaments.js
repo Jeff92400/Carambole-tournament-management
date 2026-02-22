@@ -915,13 +915,34 @@ router.post('/validate-journee', authenticateToken, upload.array('files', 10), a
     const poulesKey = findPhaseKey(phaseData, 'poule');
     const poulesRecords = poulesKey ? phaseData[poulesKey] : [];
 
+    // Aggregate points and reprises across ALL phases per player
+    const playerStats = {}; // licence -> { totalPoints, totalReprises }
+    for (const [, records] of Object.entries(phaseData)) {
+      for (const record of records) {
+        if (!playerStats[record.licence]) {
+          playerStats[record.licence] = { totalPoints: 0, totalReprises: 0 };
+        }
+        playerStats[record.licence].totalPoints += parseFloat(record.points) || 0;
+        playerStats[record.licence].totalReprises += parseInt(record.reprises) || 0;
+      }
+    }
+
     // Build positions array sorted by position
-    const positions = poulesRecords.map(record => ({
-      licence: record.licence,
-      playerName: record.playerName,
-      position: finalPositions[record.licence] || 0,
-      positionPoints: posPointsLookup[finalPositions[record.licence]] || 0
-    })).sort((a, b) => a.position - b.position);
+    const positions = poulesRecords.map(record => {
+      const stats = playerStats[record.licence] || { totalPoints: 0, totalReprises: 0 };
+      const moyenne = stats.totalReprises > 0
+        ? Math.round((stats.totalPoints / stats.totalReprises) * 1000) / 1000
+        : 0;
+      return {
+        licence: record.licence,
+        playerName: record.playerName,
+        position: finalPositions[record.licence] || 0,
+        positionPoints: posPointsLookup[finalPositions[record.licence]] || 0,
+        totalPoints: stats.totalPoints,
+        totalReprises: stats.totalReprises,
+        moyenne
+      };
+    }).sort((a, b) => a.position - b.position);
 
     return res.json({
       status: 'preview',
@@ -1028,23 +1049,9 @@ router.post('/import-journee', authenticateToken, upload.array('files', 10), asy
       );
     }
 
-    // Phase 5: Compute final positions (or use edited positions from preview)
-    let finalPositions;
-    let posPointsLookup;
-
-    if (req.body.editedPositions) {
-      // Admin edited positions in the preview — use their values directly
-      const edited = JSON.parse(req.body.editedPositions);
-      finalPositions = {};
-      posPointsLookup = {};
-      for (const entry of edited) {
-        finalPositions[entry.licence] = entry.position;
-        posPointsLookup[entry.position] = entry.positionPoints;
-      }
-    } else {
-      finalPositions = computeJourneePositions(phaseData);
-      posPointsLookup = await getPositionPointsLookup(orgId);
-    }
+    // Phase 5: Compute final positions from all phase files
+    const finalPositions = computeJourneePositions(phaseData);
+    const posPointsLookup = await getPositionPointsLookup(orgId);
 
     // Phase 6: Filter to included players only (if specified from preview)
     const includedLicences = req.body.includedLicences
@@ -1055,7 +1062,30 @@ router.post('/import-journee', authenticateToken, upload.array('files', 10), asy
       ? poulesRecords.filter(r => includedLicences.includes(r.licence))
       : poulesRecords;
 
-    // Phase 7: Insert tournament_results with final positions
+    // Phase 6b: Parse bonus data from preview (if provided)
+    const editedBonuses = req.body.editedBonuses
+      ? JSON.parse(req.body.editedBonuses)
+      : null;
+    const bonusMap = {};
+    if (editedBonuses) {
+      for (const b of editedBonuses) {
+        bonusMap[b.licence] = b;
+      }
+    }
+
+    // Phase 6c: Aggregate points and reprises across ALL phases per player
+    const playerStats = {};
+    for (const [, records] of Object.entries(phaseData)) {
+      for (const record of records) {
+        if (!playerStats[record.licence]) {
+          playerStats[record.licence] = { totalPoints: 0, totalReprises: 0 };
+        }
+        playerStats[record.licence].totalPoints += parseFloat(record.points) || 0;
+        playerStats[record.licence].totalReprises += parseInt(record.reprises) || 0;
+      }
+    }
+
+    // Phase 7: Insert tournament_results with final positions and bonuses
     let imported = 0;
     const errors = [];
 
@@ -1063,11 +1093,28 @@ router.post('/import-journee', authenticateToken, upload.array('files', 10), asy
       const position = finalPositions[record.licence] || 0;
       const positionPoints = posPointsLookup[position] || 0;
 
+      // Use aggregated stats across all phases
+      const stats = playerStats[record.licence] || { totalPoints: 0, totalReprises: 0 };
+      const aggregatedMoyenne = stats.totalReprises > 0
+        ? Math.round((stats.totalPoints / stats.totalReprises) * 1000) / 1000
+        : 0;
+
+      // Bonus from preview edits
+      const bonus = bonusMap[record.licence] || {};
+      const bonusNiveau = parseInt(bonus.bonusNiveau) || 0;
+      const bonusNbJoueurs = parseInt(bonus.bonusNbJoueurs) || 0;
+      const bonusLibre = parseInt(bonus.bonusLibre) || 0;
+      const totalBonus = bonusNiveau + bonusNbJoueurs + bonusLibre;
+      const bonusDetail = {};
+      if (bonusNiveau) bonusDetail.NIVEAU = bonusNiveau;
+      if (bonusNbJoueurs) bonusDetail.NB_JOUEURS = bonusNbJoueurs;
+      if (bonusLibre) bonusDetail.LIBRE = bonusLibre;
+
       try {
         await dbRunAsync(
-          `INSERT INTO tournament_results (tournament_id, licence, player_name, position, match_points, moyenne, serie, points, reprises, position_points)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-          [tournamentId, record.licence, record.playerName, position, record.matchPoints, record.moyenne, record.serie, record.points, record.reprises, positionPoints]
+          `INSERT INTO tournament_results (tournament_id, licence, player_name, position, match_points, moyenne, serie, points, reprises, position_points, bonus_points, bonus_detail)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+          [tournamentId, record.licence, record.playerName, position, record.matchPoints, aggregatedMoyenne, record.serie, stats.totalPoints, stats.totalReprises, positionPoints, totalBonus, JSON.stringify(bonusDetail)]
         );
         imported++;
       } catch (err) {

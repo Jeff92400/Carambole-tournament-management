@@ -1028,15 +1028,11 @@
 
     // Store preview data for use during import
     let previewPositionsData = [];
-    let previewPosPointsLookup = {};
 
-    // Show editable preview of computed positions (data comes from validate-journee response)
+    // Show preview with computed positions + editable bonus columns
     function showJourneesPreview(data, categoryId, tournamentNumber, tournamentDate, season) {
       const importBtn = document.getElementById('importBtn');
       const previewContent = document.getElementById('previewContent');
-
-      // Store lookup for position → points recalculation
-      previewPosPointsLookup = data.posPointsLookup || {};
       previewPositionsData = data.positions || [];
 
       let phasesHtml = '';
@@ -1049,49 +1045,58 @@
         `;
       }
 
-      let positionsHtml = '';
+      let tableHtml = '';
       if (data.positions && data.positions.length > 0) {
-        positionsHtml = `
+        const inputStyle = 'width: 50px; text-align: center; padding: 4px; border: 1px solid #ccc; border-radius: 4px;';
+        tableHtml = `
           <div style="margin-bottom: 10px; display: flex; align-items: center; gap: 10px;">
             <label style="font-size: 13px; cursor: pointer;">
               <input type="checkbox" id="selectAllPlayers" checked onchange="toggleAllPlayers(this.checked)">
               Tout sélectionner / désélectionner
             </label>
           </div>
-          <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
-            <thead>
-              <tr style="background: var(--color-primary, #1F4788); color: white;">
-                <th style="padding: 8px; text-align: center; width: 40px;"></th>
-                <th style="padding: 8px; text-align: center; width: 70px;">Pos.</th>
-                <th style="padding: 8px; text-align: left;">Joueur</th>
-                <th style="padding: 8px; text-align: center; width: 100px;">Pts Position</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${data.positions.map((p, i) => `
-                <tr style="border-bottom: 1px solid #eee;" id="previewRow_${i}">
-                  <td style="padding: 8px; text-align: center;">
-                    <input type="checkbox" class="player-check" data-index="${i}" checked>
-                  </td>
-                  <td style="padding: 8px; text-align: center;">
-                    <input type="number" class="pos-input" data-index="${i}" value="${p.position}" min="1"
-                      style="width: 50px; text-align: center; padding: 4px; border: 1px solid #ccc; border-radius: 4px; font-weight: bold;"
-                      onchange="onPositionChange(${i}, this.value)">
-                  </td>
-                  <td style="padding: 8px;">${p.playerName || p.licence}</td>
-                  <td style="padding: 8px; text-align: center;">
-                    <input type="number" class="pts-input" data-index="${i}" value="${p.positionPoints || 0}" min="0"
-                      style="width: 60px; text-align: center; padding: 4px; border: 1px solid #ccc; border-radius: 4px; font-weight: bold;"
-                      id="previewPts_${i}">
-                  </td>
+          <div style="overflow-x: auto;">
+            <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+              <thead>
+                <tr style="background: var(--color-primary, #1F4788); color: white;">
+                  <th style="padding: 6px; text-align: center; width: 30px;"></th>
+                  <th style="padding: 6px; text-align: center; width: 40px;">Pos.</th>
+                  <th style="padding: 6px; text-align: left;">Joueur</th>
+                  <th style="padding: 6px; text-align: center; width: 70px;">Moyenne</th>
+                  <th style="padding: 6px; text-align: center; width: 70px;">Pts Pos.</th>
+                  <th style="padding: 6px; text-align: center; width: 70px;" title="Bonus de niveau">B. Niveau</th>
+                  <th style="padding: 6px; text-align: center; width: 70px;" title="Bonus nombre de joueurs">B. Joueurs</th>
+                  <th style="padding: 6px; text-align: center; width: 70px;" title="Bonus libre">B. Libre</th>
                 </tr>
-              `).join('')}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                ${data.positions.map((p, i) => `
+                  <tr style="border-bottom: 1px solid #eee;">
+                    <td style="padding: 6px; text-align: center;">
+                      <input type="checkbox" class="player-check" data-index="${i}" checked>
+                    </td>
+                    <td style="padding: 6px; text-align: center; font-weight: bold;">${p.position}</td>
+                    <td style="padding: 6px; font-size: 12px;">${p.playerName || p.licence}</td>
+                    <td style="padding: 6px; text-align: center;">${p.moyenne || '—'}</td>
+                    <td style="padding: 6px; text-align: center; font-weight: bold;">${p.positionPoints || 0}</td>
+                    <td style="padding: 6px; text-align: center;">
+                      <input type="number" class="bonus-niveau" data-index="${i}" value="0" min="0" style="${inputStyle}">
+                    </td>
+                    <td style="padding: 6px; text-align: center;">
+                      <input type="number" class="bonus-joueurs" data-index="${i}" value="0" min="0" style="${inputStyle}">
+                    </td>
+                    <td style="padding: 6px; text-align: center;">
+                      <input type="number" class="bonus-libre" data-index="${i}" value="0" min="0" style="${inputStyle}">
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
         `;
       }
 
-      previewContent.innerHTML = phasesHtml + positionsHtml;
+      previewContent.innerHTML = phasesHtml + tableHtml;
 
       // Show preview card
       document.getElementById('previewCard').style.display = 'block';
@@ -1114,45 +1119,34 @@
       };
     }
 
-    // Recalculate points when position is changed (auto-fills, but user can still override)
-    function onPositionChange(index, newPos) {
-      const pos = parseInt(newPos) || 0;
-      const pts = previewPosPointsLookup[pos] || 0;
-      document.getElementById(`previewPts_${index}`).value = pts;
-      if (previewPositionsData[index]) {
-        previewPositionsData[index].position = pos;
-        previewPositionsData[index].positionPoints = pts;
-      }
-    }
-
     // Toggle all player checkboxes
     function toggleAllPlayers(checked) {
       document.querySelectorAll('.player-check').forEach(cb => { cb.checked = checked; });
     }
 
-    // Collect edited positions and included licences from the preview table
+    // Collect included licences and bonus data from the preview table
     function collectPreviewEdits() {
-      const editedPositions = [];
       const includedLicences = [];
+      const editedBonuses = [];
 
       previewPositionsData.forEach((p, i) => {
         const checkbox = document.querySelector(`.player-check[data-index="${i}"]`);
         if (checkbox && checkbox.checked) {
-          const posInput = document.querySelector(`.pos-input[data-index="${i}"]`);
-          const ptsInput = document.querySelector(`.pts-input[data-index="${i}"]`);
-          const position = posInput ? parseInt(posInput.value) || 0 : p.position;
-          const positionPoints = ptsInput ? parseInt(ptsInput.value) || 0 : p.positionPoints;
+          const bonusNiveau = document.querySelector(`.bonus-niveau[data-index="${i}"]`);
+          const bonusJoueurs = document.querySelector(`.bonus-joueurs[data-index="${i}"]`);
+          const bonusLibre = document.querySelector(`.bonus-libre[data-index="${i}"]`);
 
           includedLicences.push(p.licence);
-          editedPositions.push({
+          editedBonuses.push({
             licence: p.licence,
-            position,
-            positionPoints
+            bonusNiveau: bonusNiveau ? parseInt(bonusNiveau.value) || 0 : 0,
+            bonusNbJoueurs: bonusJoueurs ? parseInt(bonusJoueurs.value) || 0 : 0,
+            bonusLibre: bonusLibre ? parseInt(bonusLibre.value) || 0 : 0
           });
         }
       });
 
-      return { editedPositions, includedLicences };
+      return { includedLicences, editedBonuses };
     }
 
     // Perform the actual journees import with edited positions
@@ -1164,7 +1158,7 @@
       importBtn.textContent = 'Import en cours...';
 
       try {
-        const { editedPositions, includedLicences } = collectPreviewEdits();
+        const { includedLicences, editedBonuses } = collectPreviewEdits();
 
         if (includedLicences.length === 0) {
           errorDiv.textContent = 'Aucun joueur sélectionné pour l\'import';
@@ -1180,8 +1174,8 @@
         formData.append('tournamentNumber', tournamentNumber);
         formData.append('tournamentDate', tournamentDate);
         formData.append('season', season);
-        formData.append('editedPositions', JSON.stringify(editedPositions));
         formData.append('includedLicences', JSON.stringify(includedLicences));
+        formData.append('editedBonuses', JSON.stringify(editedBonuses));
 
         const response = await fetch(`${API_URL}/tournaments/import-journee`, {
           method: 'POST',
