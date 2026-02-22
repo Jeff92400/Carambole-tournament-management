@@ -620,7 +620,8 @@
           ${canSeeAdminUI ? `
           <td style="text-align: center; white-space: nowrap;">
             ${showSimulation && !isCancelled ? `<button class="btn btn-small simulation-btn" data-tournoi-id="${tournoi.tournoi_id}" style="background: #17a2b8; padding: 5px 10px; font-size: 12px; margin-right: 5px;" title="Voir la simulation des poules">Simulation</button>` : ''}
-            ${canEdit ? `<button class="btn btn-small edit-tournoi-btn" style="background: #4CAF50; padding: 5px 10px; font-size: 12px;">Modifier</button>` : ''}
+            ${canEdit ? `<button class="btn btn-small edit-tournoi-btn" style="background: #4CAF50; padding: 5px 10px; font-size: 12px; margin-right: 5px;">Modifier</button>` : ''}
+            ${canEdit ? `<button class="btn btn-small delete-tournoi-btn" data-tournoi-id="${tournoi.tournoi_id}" data-tournoi-name="${(tournoi.nom || '').replace(/"/g, '&quot;')}" style="background: #dc3545; padding: 5px 10px; font-size: 12px;">Supprimer</button>` : ''}
           </td>
           ` : ''}
         `;
@@ -644,8 +645,39 @@
               openSimulationModal(tournoi.tournoi_id);
             };
           }
+          // Add click event to delete button
+          const delBtn = row.querySelector('.delete-tournoi-btn');
+          if (delBtn) {
+            delBtn.onclick = (e) => {
+              e.stopPropagation();
+              deleteTournoi(tournoi.tournoi_id, tournoi.nom);
+            };
+          }
         }
       });
+    }
+
+    async function deleteTournoi(tournoiId, name) {
+      if (!confirm(`Supprimer le tournoi "${name}" et toutes ses inscriptions ?\n\nCette action est irréversible.`)) return;
+
+      try {
+        const response = await fetch(`${API_URL}/inscriptions/tournoi/${tournoiId}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+
+        if (response.ok) {
+          document.getElementById('successMessage').textContent = data.message || 'Tournoi supprimé';
+          document.getElementById('successMessage').style.display = 'block';
+          setTimeout(() => { document.getElementById('successMessage').style.display = 'none'; }, 3000);
+          loadTournois();
+        } else {
+          alert(data.error || 'Erreur lors de la suppression');
+        }
+      } catch (error) {
+        alert('Erreur de connexion au serveur');
+      }
     }
 
     // Apply filters

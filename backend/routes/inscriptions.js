@@ -1451,6 +1451,45 @@ router.delete('/tournoi/all', authenticateToken, (req, res) => {
   });
 });
 
+// Delete a single tournoi_ext by ID (cascades to inscriptions, convocation_poules, etc.)
+router.delete('/tournoi/:tournoiId', authenticateToken, async (req, res) => {
+  if (req.user?.role !== 'admin') {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  const orgId = req.user.organizationId || null;
+  const { tournoiId } = req.params;
+
+  try {
+    // Verify the tournoi exists and belongs to this org
+    const tournoi = await new Promise((resolve, reject) => {
+      db.get(
+        'SELECT tournoi_id, nom FROM tournoi_ext WHERE tournoi_id = $1 AND ($2::int IS NULL OR organization_id = $2)',
+        [tournoiId, orgId],
+        (err, row) => { if (err) reject(err); else resolve(row); }
+      );
+    });
+
+    if (!tournoi) {
+      return res.status(404).json({ error: 'Tournoi non trouvé' });
+    }
+
+    // Delete (cascades to inscriptions, convocation_poules, etc.)
+    await new Promise((resolve, reject) => {
+      db.run(
+        'DELETE FROM tournoi_ext WHERE tournoi_id = $1 AND ($2::int IS NULL OR organization_id = $2)',
+        [tournoiId, orgId],
+        function(err) { if (err) reject(err); else resolve(this.changes); }
+      );
+    });
+
+    res.json({ success: true, message: `Tournoi "${tournoi.nom}" supprimé` });
+  } catch (error) {
+    console.error('Error deleting tournoi:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Delete all inscriptions
 router.delete('/all', authenticateToken, (req, res) => {
   const orgId = req.user.organizationId || null;
