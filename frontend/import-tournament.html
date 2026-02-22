@@ -322,7 +322,40 @@
       } else {
         categorySelect.value = '';
       }
+
+      lookupTournamentDate();
     });
+
+    // Tournament number change — also try to auto-fill date
+    document.getElementById('tournamentNumber').addEventListener('change', () => {
+      lookupTournamentDate();
+    });
+
+    // Auto-fill tournament date from tournoi_ext (planned tournaments)
+    async function lookupTournamentDate() {
+      const mode = document.getElementById('modeSelect').value;
+      const level = document.getElementById('levelSelect').value;
+      const tournamentNumber = document.getElementById('tournamentNumber').value;
+
+      if (!mode || !level || !tournamentNumber) return;
+
+      try {
+        const response = await fetch(
+          `${API_URL}/tournaments/lookup-date?mode=${encodeURIComponent(mode)}&categorie=${encodeURIComponent(level)}&tournamentNumber=${encodeURIComponent(tournamentNumber)}`,
+          { headers: { 'Authorization': `Bearer ${token}` } }
+        );
+        if (response.ok) {
+          const data = await response.json();
+          if (data.found && data.date) {
+            document.getElementById('tournamentDate').value = data.date;
+            // Trigger season auto-calculation
+            document.getElementById('tournamentDate').dispatchEvent(new Event('change'));
+          }
+        }
+      } catch (error) {
+        // Silently fail — date field remains editable for manual entry
+      }
+    }
 
     // File upload handling
     const fileUpload = document.getElementById('fileUpload');

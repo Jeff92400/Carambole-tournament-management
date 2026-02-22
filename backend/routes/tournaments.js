@@ -831,6 +831,46 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
   }
 });
 
+// ==================== Tournament Date Lookup ====================
+
+/**
+ * GET /lookup-date
+ * Look up the planned date from tournoi_ext for a given mode + categorie + tournament number.
+ */
+router.get('/lookup-date', authenticateToken, async (req, res) => {
+  const { mode, categorie, tournamentNumber } = req.query;
+  if (!mode || !categorie || !tournamentNumber) {
+    return res.status(400).json({ error: 'mode, categorie, and tournamentNumber are required' });
+  }
+
+  try {
+    const orgId = req.user.organizationId || null;
+    const nomPattern = `T${tournamentNumber} %`;
+
+    const row = await dbGetAsync(
+      `SELECT debut FROM tournoi_ext
+       WHERE UPPER(mode) = UPPER($1)
+         AND UPPER(categorie) = UPPER($2)
+         AND nom LIKE $3
+         AND ($4::int IS NULL OR organization_id = $4)
+         AND (status IS NULL OR status = 'active')
+       ORDER BY debut DESC
+       LIMIT 1`,
+      [mode, categorie, nomPattern, orgId]
+    );
+
+    if (row && row.debut) {
+      // Return date in YYYY-MM-DD format for the date input
+      const dateStr = new Date(row.debut).toISOString().split('T')[0];
+      return res.json({ found: true, date: dateStr });
+    }
+
+    res.json({ found: false });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ==================== Journées Qualificatives Import ====================
 
 /**
