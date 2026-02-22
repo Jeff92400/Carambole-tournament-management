@@ -1079,7 +1079,11 @@
                       onchange="onPositionChange(${i}, this.value)">
                   </td>
                   <td style="padding: 8px;">${p.playerName || p.licence}</td>
-                  <td style="padding: 8px; text-align: center; font-weight: bold;" id="previewPts_${i}">${p.positionPoints || 0}</td>
+                  <td style="padding: 8px; text-align: center;">
+                    <input type="number" class="pts-input" data-index="${i}" value="${p.positionPoints || 0}" min="0"
+                      style="width: 60px; text-align: center; padding: 4px; border: 1px solid #ccc; border-radius: 4px; font-weight: bold;"
+                      id="previewPts_${i}">
+                  </td>
                 </tr>
               `).join('')}
             </tbody>
@@ -1110,12 +1114,11 @@
       };
     }
 
-    // Recalculate points when position is changed
+    // Recalculate points when position is changed (auto-fills, but user can still override)
     function onPositionChange(index, newPos) {
       const pos = parseInt(newPos) || 0;
       const pts = previewPosPointsLookup[pos] || 0;
-      document.getElementById(`previewPts_${index}`).textContent = pts;
-      // Update stored data
+      document.getElementById(`previewPts_${index}`).value = pts;
       if (previewPositionsData[index]) {
         previewPositionsData[index].position = pos;
         previewPositionsData[index].positionPoints = pts;
@@ -1136,8 +1139,9 @@
         const checkbox = document.querySelector(`.player-check[data-index="${i}"]`);
         if (checkbox && checkbox.checked) {
           const posInput = document.querySelector(`.pos-input[data-index="${i}"]`);
+          const ptsInput = document.querySelector(`.pts-input[data-index="${i}"]`);
           const position = posInput ? parseInt(posInput.value) || 0 : p.position;
-          const positionPoints = previewPosPointsLookup[position] || 0;
+          const positionPoints = ptsInput ? parseInt(ptsInput.value) || 0 : p.positionPoints;
 
           includedLicences.push(p.licence);
           editedPositions.push({
