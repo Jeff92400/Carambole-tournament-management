@@ -3,9 +3,14 @@
   "version": "1.0.0",
   "scripts": {
     "build": "cd backend && npm install",
-    "start": "cd backend && node server.js"
+    "start": "cd backend && node server.js",
+    "screenshots": "node scripts/capture-screenshots.js",
+    "screenshots:update-guide": "node scripts/capture-screenshots.js --update-guide"
   },
   "engines": {
     "node": ">=18.0.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.50.0"
   }
 }
