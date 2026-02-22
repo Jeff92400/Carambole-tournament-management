@@ -927,7 +927,8 @@ router.post('/validate-journee', authenticateToken, upload.array('files', 10), a
       status: 'preview',
       positions,
       phases: detectedPhases,
-      playerCount: poulesRecords.length
+      playerCount: poulesRecords.length,
+      posPointsLookup
     });
 
   } catch (error) {
@@ -1027,17 +1028,38 @@ router.post('/import-journee', authenticateToken, upload.array('files', 10), asy
       );
     }
 
-    // Phase 5: Compute final positions from all phase files
-    const finalPositions = computeJourneePositions(phaseData);
+    // Phase 5: Compute final positions (or use edited positions from preview)
+    let finalPositions;
+    let posPointsLookup;
 
-    // Phase 6: Look up position_points
-    const posPointsLookup = await getPositionPointsLookup(orgId);
+    if (req.body.editedPositions) {
+      // Admin edited positions in the preview — use their values directly
+      const edited = JSON.parse(req.body.editedPositions);
+      finalPositions = {};
+      posPointsLookup = {};
+      for (const entry of edited) {
+        finalPositions[entry.licence] = entry.position;
+        posPointsLookup[entry.position] = entry.positionPoints;
+      }
+    } else {
+      finalPositions = computeJourneePositions(phaseData);
+      posPointsLookup = await getPositionPointsLookup(orgId);
+    }
 
-    // Phase 7: Insert tournament_results from POULES file with final positions
+    // Phase 6: Filter to included players only (if specified from preview)
+    const includedLicences = req.body.includedLicences
+      ? JSON.parse(req.body.includedLicences)
+      : null;
+
+    const recordsToImport = includedLicences
+      ? poulesRecords.filter(r => includedLicences.includes(r.licence))
+      : poulesRecords;
+
+    // Phase 7: Insert tournament_results with final positions
     let imported = 0;
     const errors = [];
 
-    for (const record of poulesRecords) {
+    for (const record of recordsToImport) {
       const position = finalPositions[record.licence] || 0;
       const positionPoints = posPointsLookup[position] || 0;
 
