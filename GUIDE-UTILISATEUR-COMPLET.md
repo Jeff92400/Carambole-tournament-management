@@ -417,7 +417,8 @@ En mode journées, l'import utilise plusieurs fichiers CSV (un par phase) et pro
 4. **Joueurs inconnus :** Si des joueurs ne sont pas reconnus, une fenêtre propose de les créer en sélectionnant leur club. Après création, la validation reprend automatiquement.
 5. **Tableau de prévisualisation :** Un tableau détaillé s'affiche avec toutes les statistiques et les bonus modifiables (voir ci-dessous)
 6. **Modifier les bonus si nécessaire :** Les modifications recalculent automatiquement les totaux, positions et points de position en temps réel
-7. **Cliquer sur "Confirmer et enregistrer" :** Si le tournoi existe déjà, une confirmation d'écrasement est demandée. Les résultats sont enregistrés et les classements recalculés.
+7. **Cliquer sur "Valider le classement" :** Un écran d'attribution des points position s'affiche, montrant le classement final (Position, Joueur, Pts Position) basé sur le barème configuré dans Paramètres > Barème. Cela permet de vérifier l'attribution avant l'enregistrement.
+8. **Cliquer sur "Enregistrer la journée" :** Si le tournoi existe déjà, une confirmation d'écrasement est demandée. Les résultats sont enregistrés et les classements recalculés. Le bouton "Retour à l'aperçu" permet de revenir au tableau de prévisualisation pour corriger les bonus si nécessaire.
 
 ##### Tableau de prévisualisation
 
