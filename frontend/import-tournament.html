@@ -1057,15 +1057,6 @@
     let previewPosPointsLookup = {};
     let previewMoyenneThresholds = null;
 
-    // Compute average bonus tier from thresholds
-    function computeAverageBonus(moyenne, thresholds) {
-      if (!thresholds || !moyenne || moyenne <= 0) return 0;
-      if (moyenne < thresholds.mini) return 0;
-      if (moyenne < thresholds.middle) return 1;
-      if (moyenne < thresholds.maxi) return 2;
-      return 3;
-    }
-
     // Show preview with computed positions + editable bonus columns + dynamic re-ranking
     function showJourneesPreview(data, categoryId, tournamentNumber, tournamentDate, season) {
       const importBtn = document.getElementById('importBtn');
@@ -1073,6 +1064,9 @@
       previewPositionsData = data.positions || [];
       previewPosPointsLookup = data.posPointsLookup || {};
       previewMoyenneThresholds = data.moyenneThresholds || null;
+      const tqStageConfig = data.tqStageConfig || { average_bonus: 0, level_bonus: 0, participation_bonus: 0 };
+      const scoringTiers = data.scoringTiers || { tier1: 1, tier2: 2, tier3: 3 };
+      const showBonusMoyenne = tqStageConfig.average_bonus > 0;
 
       let phasesHtml = '';
       if (data.phases && data.phases.length > 0) {
@@ -1084,17 +1078,17 @@
         `;
       }
 
-      // Thresholds info
+      // Thresholds info (only shown when B. Moy. column is active)
       let thresholdsHtml = '';
-      if (previewMoyenneThresholds) {
+      if (showBonusMoyenne && previewMoyenneThresholds) {
         const t = previewMoyenneThresholds;
         thresholdsHtml = `
           <div style="margin-bottom: 12px; font-size: 12px; color: #555; background: #f0f4ff; padding: 8px 12px; border-radius: 6px; border-left: 3px solid var(--color-primary, #1F4788);">
             <strong>Bonus Moyenne auto :</strong>
             &lt; ${t.mini.toFixed(3)} → 0 &nbsp;|&nbsp;
-            ${t.mini.toFixed(3)}–${t.middle.toFixed(3)} → +1 &nbsp;|&nbsp;
-            ${t.middle.toFixed(3)}–${t.maxi.toFixed(3)} → +2 &nbsp;|&nbsp;
-            ≥ ${t.maxi.toFixed(3)} → +3
+            ${t.mini.toFixed(3)}–${t.middle.toFixed(3)} → +${scoringTiers.tier1} &nbsp;|&nbsp;
+            ${t.middle.toFixed(3)}–${t.maxi.toFixed(3)} → +${scoringTiers.tier2} &nbsp;|&nbsp;
+            ≥ ${t.maxi.toFixed(3)} → +${scoringTiers.tier3}
           </div>
         `;
       }
@@ -1122,7 +1116,7 @@
                   <th style="${thStyle}">Repr.</th>
                   <th style="${thStyle}">Moy.</th>
                   <th style="${thStyle}" title="Points de match (toutes phases)">Pts M.</th>
-                  <th style="${thStyle}" title="Bonus moyenne (auto-calculé, modifiable)">B. Moy.</th>
+                  ${showBonusMoyenne ? `<th style="${thStyle}" title="Bonus moyenne (auto-calculé, modifiable)">B. Moy.</th>` : ''}
                   <th style="${thStyle}" title="Bonus de niveau">B. Niv.</th>
                   <th style="${thStyle}" title="Bonus nombre de joueurs">B. Jou.</th>
                   <th style="${thStyle}" title="Bonus libre">B. Lib.</th>
@@ -1133,7 +1127,7 @@
               </thead>
               <tbody>
                 ${data.positions.map((p, i) => {
-                  const autoBonus = computeAverageBonus(p.moyenne, previewMoyenneThresholds);
+                  const autoBonus = p.computed_average_bonus || 0;
                   const matchPts = p.matchPoints || 0;
                   const total = matchPts + autoBonus;
                   return `
@@ -1147,9 +1141,10 @@
                     <td style="padding: 4px; text-align: center; color: #666;">${p.totalReprises || 0}</td>
                     <td style="padding: 4px; text-align: center;">${p.moyenne ? p.moyenne.toFixed(3) : '—'}</td>
                     <td style="padding: 4px; text-align: center; font-weight: 600;">${matchPts}</td>
+                    ${showBonusMoyenne ? `
                     <td style="padding: 4px; text-align: center;">
-                      <input type="number" class="bonus-moyenne" data-index="${i}" value="${autoBonus}" min="0" max="9" style="${inputStyle}" oninput="recalculatePreview()">
-                    </td>
+                      <input type="number" class="bonus-moyenne" data-index="${i}" value="${autoBonus}" min="0" max="99" style="${inputStyle}" oninput="recalculatePreview()">
+                    </td>` : ''}
                     <td style="padding: 4px; text-align: center;">
                       <input type="number" class="bonus-niveau" data-index="${i}" value="0" min="0" max="99" style="${inputStyle}" oninput="recalculatePreview()">
                     </td>

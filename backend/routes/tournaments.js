@@ -976,20 +976,14 @@ router.post('/validate-journee', authenticateToken, upload.array('files', 10), a
     if (categoryId) {
       const category = await dbGetAsync('SELECT game_type, level FROM categories WHERE id = $1', [categoryId]);
       if (category) {
-        // Try org-scoped first, then fallback without org filter
+        // Org-scoped with fallback (nullable org pattern + space normalization)
         let gp = await dbGetAsync(
           `SELECT moyenne_mini, moyenne_maxi FROM game_parameters
-           WHERE UPPER(mode) = UPPER($1) AND UPPER(categorie) = UPPER($2)
-             AND organization_id = $3`,
+           WHERE UPPER(REPLACE(mode, ' ', '')) = UPPER(REPLACE($1, ' ', ''))
+             AND UPPER(categorie) = UPPER($2)
+             AND ($3::int IS NULL OR organization_id = $3)`,
           [category.game_type, category.level, orgId]
         );
-        if (!gp) {
-          gp = await dbGetAsync(
-            `SELECT moyenne_mini, moyenne_maxi FROM game_parameters
-             WHERE UPPER(mode) = UPPER($1) AND UPPER(categorie) = UPPER($2)`,
-            [category.game_type, category.level]
-          );
-        }
         if (gp) {
           const mini = parseFloat(gp.moyenne_mini) || 0;
           const maxi = parseFloat(gp.moyenne_maxi) || 0;
@@ -998,12 +992,39 @@ router.post('/validate-journee', authenticateToken, upload.array('files', 10), a
       }
     }
 
+    // Load TQ stage config for dynamic column visibility
+    const tqConfig = await dbGetAsync(
+      `SELECT average_bonus, level_bonus, participation_bonus
+       FROM stage_scoring_config
+       WHERE stage_code = 'TQ' AND ($1::int IS NULL OR organization_id = $1)`,
+      [orgId]
+    );
+    const tqStageConfig = {
+      average_bonus: tqConfig ? tqConfig.average_bonus : 3,
+      level_bonus: tqConfig ? tqConfig.level_bonus : 0,
+      participation_bonus: tqConfig ? tqConfig.participation_bonus : 0
+    };
+
+    // Load configurable tier values for average bonus
+    const tier1 = parseInt(await appSettings.getOrgSetting(orgId, 'scoring_avg_tier_1')) || 1;
+    const tier2 = parseInt(await appSettings.getOrgSetting(orgId, 'scoring_avg_tier_2')) || 2;
+    const tier3 = parseInt(await appSettings.getOrgSetting(orgId, 'scoring_avg_tier_3')) || 3;
+
     // Build positions array sorted by position
     const positions = poulesRecords.map(record => {
       const stats = playerStats[record.licence] || { totalPoints: 0, totalReprises: 0, totalMatchPoints: 0, matchCount: 0, phases: [] };
       const moyenne = stats.totalReprises > 0
         ? Math.round((stats.totalPoints / stats.totalReprises) * 1000) / 1000
         : 0;
+
+      // Compute average bonus using same logic as scoring-detail
+      let computedAverageBonus = 0;
+      if (moyenneThresholds && moyenneThresholds.maxi > 0) {
+        if (moyenne >= moyenneThresholds.maxi) computedAverageBonus = tier3;
+        else if (moyenne >= moyenneThresholds.middle) computedAverageBonus = tier2;
+        else if (moyenne >= moyenneThresholds.mini) computedAverageBonus = tier1;
+      }
+
       return {
         licence: record.licence,
         playerName: record.playerName,
@@ -1014,7 +1035,8 @@ router.post('/validate-journee', authenticateToken, upload.array('files', 10), a
         moyenne,
         matchCount: stats.matchCount,
         matchPoints: stats.totalMatchPoints,
-        playerPhases: stats.phases.join(' → ')
+        playerPhases: stats.phases.join(' → '),
+        computed_average_bonus: computedAverageBonus
       };
     }).sort((a, b) => a.position - b.position);
 
@@ -1024,7 +1046,9 @@ router.post('/validate-journee', authenticateToken, upload.array('files', 10), a
       phases: detectedPhases,
       playerCount: poulesRecords.length,
       posPointsLookup,
-      moyenneThresholds
+      moyenneThresholds,
+      tqStageConfig,
+      scoringTiers: { tier1, tier2, tier3 }
     });
 
   } catch (error) {
