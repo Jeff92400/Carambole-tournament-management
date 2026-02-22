@@ -1250,31 +1250,23 @@ router.post('/import-journee', authenticateToken, upload.array('files', 10), asy
     }
 
     // Phase 8: Compute bonus points + recalculate rankings
-    // Check if stage scoring config has manual bonus columns (level_bonus or participation_bonus)
+    // Always recalculate rankings after import (same as standard mode).
+    // If manual bonuses exist (level_bonus/participation_bonus), the scoring-detail
+    // page can re-recalculate after admin adjustments — but initial rankings
+    // must be available immediately so position points display correctly.
     const stageScoringRows = await dbAllAsync(
       'SELECT * FROM stage_scoring_config WHERE ($1::int IS NULL OR organization_id = $1)',
       [orgId]
     );
     const hasManualBonuses = stageScoringRows.some(r => r.level_bonus > 0 || r.participation_bonus > 0);
 
-    if (hasManualBonuses) {
-      // Manual bonuses exist → run auto bonus rules but SKIP ranking recalculation
-      // Admin must use scoring-detail page to finalize and trigger rankings
-      await new Promise((resolve) => {
-        computeBonusPoints(tournamentId, categoryId, orgId, () => {
+    await new Promise((resolve) => {
+      computeBonusPoints(tournamentId, categoryId, orgId, () => {
+        recalculateRankings(categoryId, season, () => {
           resolve();
         });
       });
-    } else {
-      // No manual bonuses → full auto pipeline (no regression for standard mode)
-      await new Promise((resolve) => {
-        computeBonusPoints(tournamentId, categoryId, orgId, () => {
-          recalculateRankings(categoryId, season, () => {
-            resolve();
-          });
-        });
-      });
-    }
+    });
 
     // Clean up uploaded files
     for (const file of req.files) {
