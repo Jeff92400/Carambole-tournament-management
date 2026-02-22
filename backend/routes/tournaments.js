@@ -955,23 +955,19 @@ router.post('/validate-journee', authenticateToken, upload.array('files', 10), a
     const poulesKey = findPhaseKey(phaseData, 'poule');
     const poulesRecords = poulesKey ? phaseData[poulesKey] : [];
 
-    // Aggregate points, reprises, and match count across ALL phases per player
-    const playerStats = {}; // licence -> { totalPoints, totalReprises, matchCount }
-    for (const [, records] of Object.entries(phaseData)) {
+    // Aggregate points, reprises, matchPoints, and match count across ALL phases per player
+    const playerStats = {}; // licence -> { totalPoints, totalReprises, totalMatchPoints, matchCount, phases }
+    for (const [phaseName, records] of Object.entries(phaseData)) {
       for (const record of records) {
         if (!playerStats[record.licence]) {
-          playerStats[record.licence] = { totalPoints: 0, totalReprises: 0, matchCount: 0 };
+          playerStats[record.licence] = { totalPoints: 0, totalReprises: 0, totalMatchPoints: 0, matchCount: 0, phases: [] };
         }
         playerStats[record.licence].totalPoints += parseFloat(record.points) || 0;
         playerStats[record.licence].totalReprises += parseInt(record.reprises) || 0;
+        playerStats[record.licence].totalMatchPoints += parseInt(record.matchPoints) || 0;
         playerStats[record.licence].matchCount += 1;
+        playerStats[record.licence].phases.push(phaseName);
       }
-    }
-
-    // Get matchPoints from POULES phase per player
-    const poulesMatchPoints = {};
-    for (const record of poulesRecords) {
-      poulesMatchPoints[record.licence] = parseInt(record.matchPoints) || 0;
     }
 
     // Query moyenneThresholds from game_parameters via category
@@ -980,12 +976,20 @@ router.post('/validate-journee', authenticateToken, upload.array('files', 10), a
     if (categoryId) {
       const category = await dbGetAsync('SELECT game_type, level FROM categories WHERE id = $1', [categoryId]);
       if (category) {
-        const gp = await dbGetAsync(
+        // Try org-scoped first, then fallback without org filter
+        let gp = await dbGetAsync(
           `SELECT moyenne_mini, moyenne_maxi FROM game_parameters
            WHERE UPPER(mode) = UPPER($1) AND UPPER(categorie) = UPPER($2)
-             AND ($3::int IS NULL OR organization_id = $3)`,
+             AND organization_id = $3`,
           [category.game_type, category.level, orgId]
         );
+        if (!gp) {
+          gp = await dbGetAsync(
+            `SELECT moyenne_mini, moyenne_maxi FROM game_parameters
+             WHERE UPPER(mode) = UPPER($1) AND UPPER(categorie) = UPPER($2)`,
+            [category.game_type, category.level]
+          );
+        }
         if (gp) {
           const mini = parseFloat(gp.moyenne_mini) || 0;
           const maxi = parseFloat(gp.moyenne_maxi) || 0;
@@ -996,7 +1000,7 @@ router.post('/validate-journee', authenticateToken, upload.array('files', 10), a
 
     // Build positions array sorted by position
     const positions = poulesRecords.map(record => {
-      const stats = playerStats[record.licence] || { totalPoints: 0, totalReprises: 0, matchCount: 0 };
+      const stats = playerStats[record.licence] || { totalPoints: 0, totalReprises: 0, totalMatchPoints: 0, matchCount: 0, phases: [] };
       const moyenne = stats.totalReprises > 0
         ? Math.round((stats.totalPoints / stats.totalReprises) * 1000) / 1000
         : 0;
@@ -1009,7 +1013,8 @@ router.post('/validate-journee', authenticateToken, upload.array('files', 10), a
         totalReprises: stats.totalReprises,
         moyenne,
         matchCount: stats.matchCount,
-        matchPoints: poulesMatchPoints[record.licence] || 0
+        matchPoints: stats.totalMatchPoints,
+        playerPhases: stats.phases.join(' → ')
       };
     }).sort((a, b) => a.position - b.position);
 
@@ -1143,27 +1148,28 @@ router.post('/import-journee', authenticateToken, upload.array('files', 10), asy
       }
     }
 
-    // Phase 6c: Aggregate points and reprises across ALL phases per player
+    // Phase 6c: Aggregate points, reprises, matchPoints across ALL phases per player
     const playerStats = {};
-    for (const [, records] of Object.entries(phaseData)) {
+    for (const [phaseName, records] of Object.entries(phaseData)) {
       for (const record of records) {
         if (!playerStats[record.licence]) {
-          playerStats[record.licence] = { totalPoints: 0, totalReprises: 0 };
+          playerStats[record.licence] = { totalPoints: 0, totalReprises: 0, totalMatchPoints: 0 };
         }
         playerStats[record.licence].totalPoints += parseFloat(record.points) || 0;
         playerStats[record.licence].totalReprises += parseInt(record.reprises) || 0;
+        playerStats[record.licence].totalMatchPoints += parseInt(record.matchPoints) || 0;
       }
     }
 
     // Phase 6d: Determine final positions
-    // If editedBonuses with bonusMoyenne provided → re-rank by total (matchPoints + all bonuses)
+    // If editedBonuses provided → re-rank by total (matchPoints + all bonuses)
     // Otherwise → use computeJourneePositions (E2i bracket-based positions)
     let finalPositions;
     if (editedBonuses) {
       // Re-rank by total: matchPoints + bonusMoyenne + bonusNiveau + bonusNbJoueurs + bonusLibre
       const playerTotals = recordsToImport.map(record => {
         const bonus = bonusMap[record.licence] || {};
-        const matchPts = parseInt(record.matchPoints) || 0;
+        const matchPts = (playerStats[record.licence] || {}).totalMatchPoints || 0;
         const bMoy = parseInt(bonus.bonusMoyenne) || 0;
         const bNiv = parseInt(bonus.bonusNiveau) || 0;
         const bJou = parseInt(bonus.bonusNbJoueurs) || 0;
@@ -1188,10 +1194,11 @@ router.post('/import-journee', authenticateToken, upload.array('files', 10), asy
       const positionPoints = posPointsLookup[position] || 0;
 
       // Use aggregated stats across all phases
-      const stats = playerStats[record.licence] || { totalPoints: 0, totalReprises: 0 };
+      const stats = playerStats[record.licence] || { totalPoints: 0, totalReprises: 0, totalMatchPoints: 0 };
       const aggregatedMoyenne = stats.totalReprises > 0
         ? Math.round((stats.totalPoints / stats.totalReprises) * 1000) / 1000
         : 0;
+      const aggregatedMatchPoints = stats.totalMatchPoints;
 
       // Bonus from preview edits
       const bonus = bonusMap[record.licence] || {};
@@ -1210,7 +1217,7 @@ router.post('/import-journee', authenticateToken, upload.array('files', 10), asy
         await dbRunAsync(
           `INSERT INTO tournament_results (tournament_id, licence, player_name, position, match_points, moyenne, serie, points, reprises, position_points, bonus_points, bonus_detail)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
-          [tournamentId, record.licence, record.playerName, position, record.matchPoints, aggregatedMoyenne, record.serie, stats.totalPoints, stats.totalReprises, positionPoints, totalBonus, JSON.stringify(bonusDetail)]
+          [tournamentId, record.licence, record.playerName, position, aggregatedMatchPoints, aggregatedMoyenne, record.serie, stats.totalPoints, stats.totalReprises, positionPoints, totalBonus, JSON.stringify(bonusDetail)]
         );
         imported++;
       } catch (err) {

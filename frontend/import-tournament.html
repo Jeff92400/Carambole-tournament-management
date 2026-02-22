@@ -1117,11 +1117,11 @@
                 <tr style="background: var(--color-primary, #1F4788); color: white;">
                   <th style="${thStyle} width: 28px;"></th>
                   <th style="${thStyle}">Joueur</th>
-                  <th style="${thStyle}" title="Nombre de matchs">Matchs</th>
+                  <th style="${thStyle}" title="Phases de participation">Phases</th>
                   <th style="${thStyle}">Points</th>
                   <th style="${thStyle}">Repr.</th>
                   <th style="${thStyle}">Moy.</th>
-                  <th style="${thStyle}" title="Points de match (poules)">Pts M.</th>
+                  <th style="${thStyle}" title="Points de match (toutes phases)">Pts M.</th>
                   <th style="${thStyle}" title="Bonus moyenne (auto-calculé, modifiable)">B. Moy.</th>
                   <th style="${thStyle}" title="Bonus de niveau">B. Niv.</th>
                   <th style="${thStyle}" title="Bonus nombre de joueurs">B. Jou.</th>
@@ -1142,7 +1142,7 @@
                       <input type="checkbox" class="player-check" data-index="${i}" checked onchange="recalculatePreview()">
                     </td>
                     <td style="padding: 4px; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px;" title="${p.playerName || p.licence}">${p.playerName || p.licence}</td>
-                    <td style="padding: 4px; text-align: center; color: #666;">${p.matchCount || '—'}</td>
+                    <td style="padding: 4px; text-align: left; color: #666; font-size: 10px; white-space: nowrap;" title="${p.playerPhases || ''}">${p.playerPhases || '—'}</td>
                     <td style="padding: 4px; text-align: center; color: #666;">${p.totalPoints || 0}</td>
                     <td style="padding: 4px; text-align: center; color: #666;">${p.totalReprises || 0}</td>
                     <td style="padding: 4px; text-align: center;">${p.moyenne ? p.moyenne.toFixed(3) : '—'}</td>

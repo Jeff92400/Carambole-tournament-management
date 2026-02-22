@@ -405,6 +405,58 @@ Import des résultats des tournois terminés pour mise à jour des classements.
 - Moyenne générale
 - Meilleure série
 
+#### Import en mode Journées Qualificatives
+
+En mode journées, l'import utilise plusieurs fichiers CSV (un par phase) et propose un tableau de prévisualisation interactif avant l'enregistrement.
+
+##### Processus d'import (mode journées)
+
+1. **Sélectionner les fichiers :** Glisser-déposer ou cliquer pour ajouter les fichiers CSV de chaque phase (POULES obligatoire, puis Finale, Petite Finale, classifications, etc.)
+2. **Choisir la catégorie et le numéro de tournoi :** La date se remplit automatiquement si un tournoi planifié correspond
+3. **Cliquer sur "Enregistrer la competition" :** Le système valide les fichiers et vérifie les joueurs inconnus
+4. **Joueurs inconnus :** Si des joueurs ne sont pas reconnus, une fenêtre propose de les créer en sélectionnant leur club. Après création, la validation reprend automatiquement.
+5. **Tableau de prévisualisation :** Un tableau détaillé s'affiche avec toutes les statistiques et les bonus modifiables (voir ci-dessous)
+6. **Modifier les bonus si nécessaire :** Les modifications recalculent automatiquement les totaux, positions et points de position en temps réel
+7. **Cliquer sur "Confirmer et enregistrer" :** Si le tournoi existe déjà, une confirmation d'écrasement est demandée. Les résultats sont enregistrés et les classements recalculés.
+
+##### Tableau de prévisualisation
+
+| Colonne | Description | Modifiable |
+|---------|-------------|------------|
+| ✓ | Case à cocher pour inclure/exclure le joueur de l'import | Oui |
+| Joueur | Nom du joueur | Non |
+| Phases | Détail des phases de participation (ex: POULES → Demi-finales → Finale) | Non |
+| Points | Total des caramboles sur toutes les phases | Non |
+| Repr. | Total des reprises sur toutes les phases | Non |
+| Moy. | Moyenne générale (Points / Reprises) | Non |
+| Pts M. | Points de match cumulés sur toutes les phases | Non |
+| B. Moy. | Bonus moyenne, calculé automatiquement selon les seuils de la catégorie (0, +1, +2 ou +3). Modifiable pour correction manuelle. | Oui |
+| B. Niv. | Bonus de niveau (défaut : 0) | Oui |
+| B. Jou. | Bonus nombre de joueurs (défaut : 0) | Oui |
+| B. Lib. | Bonus libre (défaut : 0) | Oui |
+| Total | Pts Match + tous les bonus. Recalculé en temps réel. | Non (calculé) |
+| Pos. | Position finale, triée par Total décroissant. Se met à jour dynamiquement. | Non (calculé) |
+| Pts P. | Points de position, issus du barème configuré. Se met à jour selon la position. | Non (calculé) |
+
+##### Bonus Moyenne automatique
+
+Le bonus moyenne est calculé automatiquement à partir des seuils configurés dans les paramètres de jeu de la catégorie :
+- Moyenne < seuil mini → **0 point**
+- Seuil mini ≤ moyenne < milieu → **+1 point**
+- Milieu ≤ moyenne < seuil maxi → **+2 points**
+- Moyenne ≥ seuil maxi → **+3 points**
+
+Les seuils sont affichés au-dessus du tableau pour référence. L'administrateur peut modifier manuellement la valeur si nécessaire.
+
+##### Reclassement dynamique
+
+Toute modification d'un bonus ou d'une case à cocher déclenche un recalcul immédiat :
+- Le **Total** de chaque joueur est recalculé
+- Les joueurs sont **re-triés** par Total décroissant (départage par Pts Match)
+- Les **positions** sont réattribuées (1, 2, 3...)
+- Les **points de position** sont mis à jour selon le barème
+- Les joueurs décochés sont grisés et exclus du classement
+
 ---
 
 ### COMPÉTITIONS > Scoring Détaillé (Mode Journées)

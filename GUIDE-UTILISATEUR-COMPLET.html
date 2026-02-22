@@ -450,6 +450,7 @@
     <a href="#generer-poules">Générer les poules</a>
     <a href="#forfaits">Gestion des forfaits</a>
     <a href="#resultats">Résultats des tournois</a>
+    <a href="#import-journees" class="sub">Import mode Journées</a>
     <a href="#resultats-externes">Résultats Externes</a>
     <a href="#liste-tournois">Liste des tournois</a>
 
@@ -1002,6 +1003,68 @@
       <li>Nombre de reprises</li>
       <li>Moyenne générale</li>
       <li>Meilleure série</li>
+    </ul>
+
+    <h4 id="import-journees">Import en mode Journées Qualificatives</h4>
+    <p>En mode journées, l'import utilise plusieurs fichiers CSV (un par phase) et propose un tableau de prévisualisation interactif avant l'enregistrement.</p>
+
+    <h5>Processus d'import (mode journées)</h5>
+    <ol class="steps">
+      <li><strong>Sélectionner les fichiers :</strong> Glisser-déposer ou cliquer pour ajouter les fichiers CSV de chaque phase (POULES obligatoire, puis Finale, Petite Finale, classifications, etc.)</li>
+      <li><strong>Choisir la catégorie et le numéro de tournoi :</strong> La date se remplit automatiquement si un tournoi planifié correspond</li>
+      <li><strong>Cliquer sur "Enregistrer la competition" :</strong> Le système valide les fichiers et vérifie les joueurs inconnus</li>
+      <li><strong>Joueurs inconnus :</strong> Si des joueurs ne sont pas reconnus, une fenêtre propose de les créer en sélectionnant leur club. Après création, la validation reprend automatiquement.</li>
+      <li><strong>Tableau de prévisualisation :</strong> Un tableau détaillé s'affiche avec toutes les statistiques et les bonus modifiables (voir ci-dessous)</li>
+      <li><strong>Modifier les bonus si nécessaire :</strong> Les modifications recalculent automatiquement les totaux, positions et points de position en temps réel</li>
+      <li><strong>Cliquer sur "Confirmer et enregistrer" :</strong> Si le tournoi existe déjà, une confirmation d'écrasement est demandée. Les résultats sont enregistrés et les classements recalculés.</li>
+    </ol>
+
+    <h5>Tableau de prévisualisation</h5>
+    <p>Le tableau affiche les colonnes suivantes pour chaque joueur :</p>
+    <table>
+      <thead>
+        <tr>
+          <th>Colonne</th>
+          <th>Description</th>
+          <th>Modifiable</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>✓</td><td>Case à cocher pour inclure/exclure le joueur de l'import</td><td>Oui</td></tr>
+        <tr><td>Joueur</td><td>Nom du joueur</td><td>Non</td></tr>
+        <tr><td>Phases</td><td>Détail des phases de participation du joueur (ex: POULES → Demi-finales → Finale)</td><td>Non</td></tr>
+        <tr><td>Points</td><td>Total des caramboles sur toutes les phases</td><td>Non</td></tr>
+        <tr><td>Repr.</td><td>Total des reprises sur toutes les phases</td><td>Non</td></tr>
+        <tr><td>Moy.</td><td>Moyenne générale (Points / Reprises)</td><td>Non</td></tr>
+        <tr><td>Pts M.</td><td>Points de match cumulés sur toutes les phases</td><td>Non</td></tr>
+        <tr><td>B. Moy.</td><td>Bonus moyenne, calculé automatiquement selon les seuils de la catégorie (0, +1, +2 ou +3). Modifiable pour correction manuelle.</td><td>Oui</td></tr>
+        <tr><td>B. Niv.</td><td>Bonus de niveau (défaut : 0)</td><td>Oui</td></tr>
+        <tr><td>B. Jou.</td><td>Bonus nombre de joueurs (défaut : 0)</td><td>Oui</td></tr>
+        <tr><td>B. Lib.</td><td>Bonus libre (défaut : 0)</td><td>Oui</td></tr>
+        <tr><td>Total</td><td>Pts Match + tous les bonus. Recalculé en temps réel.</td><td>Non (calculé)</td></tr>
+        <tr><td>Pos.</td><td>Position finale, triée par Total décroissant. Se met à jour dynamiquement.</td><td>Non (calculé)</td></tr>
+        <tr><td>Pts P.</td><td>Points de position, issus du barème configuré. Se met à jour selon la position.</td><td>Non (calculé)</td></tr>
+      </tbody>
+    </table>
+
+    <h5>Bonus Moyenne automatique</h5>
+    <p>Le bonus moyenne est calculé automatiquement à partir des seuils configurés dans les paramètres de jeu de la catégorie :</p>
+    <ul>
+      <li>Moyenne &lt; seuil mini → <strong>0 point</strong></li>
+      <li>Seuil mini ≤ moyenne &lt; milieu → <strong>+1 point</strong></li>
+      <li>Milieu ≤ moyenne &lt; seuil maxi → <strong>+2 points</strong></li>
+      <li>Moyenne ≥ seuil maxi → <strong>+3 points</strong></li>
+    </ul>
+    <p>Les seuils sont affichés au-dessus du tableau pour référence. L'administrateur peut modifier manuellement la valeur si nécessaire.</p>
+
+    <h5>Reclassement dynamique</h5>
+    <p>Toute modification d'un bonus ou d'une case à cocher déclenche un recalcul immédiat :</p>
+    <ul>
+      <li>Le <strong>Total</strong> de chaque joueur est recalculé</li>
+      <li>Les joueurs sont <strong>re-triés</strong> par Total décroissant (départage par Pts Match)</li>
+      <li>Les <strong>positions</strong> sont réattribuées (1, 2, 3...)</li>
+      <li>Les <strong>points de position</strong> sont mis à jour selon le barème</li>
+      <li>Les joueurs décochés sont grisés et exclus du classement</li>
     </ul>
   </section>
 
