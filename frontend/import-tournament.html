@@ -1222,7 +1222,7 @@
         const total = parseInt(row.querySelector('.cell-total').textContent) || 0;
         const idx = parseInt(row.dataset.index);
         const p = previewPositionsData[idx];
-        const playerName = p ? `${p.firstName || ''} ${p.lastName || ''}`.trim() : `Joueur ${idx + 1}`;
+        const playerName = p ? (p.playerName || p.licence) : `Joueur ${idx + 1}`;
 
         rankedPlayers.push({ position, playerName, total, licence: p ? p.licence : '' });
       }
