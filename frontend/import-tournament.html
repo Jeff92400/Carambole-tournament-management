@@ -945,7 +945,7 @@
       updatePhasesSummary();
     }
 
-    // Handle journees mode form submission
+    // Handle journees mode form submission — go straight to validation (overwrite check moved to after Confirmer)
     async function handleJourneesSubmit(categoryId, tournamentNumber, tournamentDate, season) {
       const errorDiv = document.getElementById('errorMessage');
       const importBtn = document.getElementById('importBtn');
@@ -967,14 +967,7 @@
       importBtn.textContent = 'Vérification...';
 
       try {
-        const existsResult = await checkTournamentExists(categoryId, tournamentNumber, season);
-
-        if (existsResult.exists) {
-          pendingOverwriteAction = () => proceedWithJourneesValidation(categoryId, tournamentNumber, tournamentDate, season);
-          showExistingTournamentModal(existsResult.tournament);
-        } else {
-          await proceedWithJourneesValidation(categoryId, tournamentNumber, tournamentDate, season);
-        }
+        await proceedWithJourneesValidation(categoryId, tournamentNumber, tournamentDate, season);
       } catch (error) {
         errorDiv.textContent = error.message || 'Erreur de connexion au serveur';
         errorDiv.style.display = 'block';
@@ -1061,12 +1054,25 @@
 
     // Store preview data for use during import
     let previewPositionsData = [];
+    let previewPosPointsLookup = {};
+    let previewMoyenneThresholds = null;
 
-    // Show preview with computed positions + editable bonus columns
+    // Compute average bonus tier from thresholds
+    function computeAverageBonus(moyenne, thresholds) {
+      if (!thresholds || !moyenne || moyenne <= 0) return 0;
+      if (moyenne < thresholds.mini) return 0;
+      if (moyenne < thresholds.middle) return 1;
+      if (moyenne < thresholds.maxi) return 2;
+      return 3;
+    }
+
+    // Show preview with computed positions + editable bonus columns + dynamic re-ranking
     function showJourneesPreview(data, categoryId, tournamentNumber, tournamentDate, season) {
       const importBtn = document.getElementById('importBtn');
       const previewContent = document.getElementById('previewContent');
       previewPositionsData = data.positions || [];
+      previewPosPointsLookup = data.posPointsLookup || {};
+      previewMoyenneThresholds = data.moyenneThresholds || null;
 
       let phasesHtml = '';
       if (data.phases && data.phases.length > 0) {
@@ -1078,9 +1084,26 @@
         `;
       }
 
+      // Thresholds info
+      let thresholdsHtml = '';
+      if (previewMoyenneThresholds) {
+        const t = previewMoyenneThresholds;
+        thresholdsHtml = `
+          <div style="margin-bottom: 12px; font-size: 12px; color: #555; background: #f0f4ff; padding: 8px 12px; border-radius: 6px; border-left: 3px solid var(--color-primary, #1F4788);">
+            <strong>Bonus Moyenne auto :</strong>
+            &lt; ${t.mini.toFixed(3)} → 0 &nbsp;|&nbsp;
+            ${t.mini.toFixed(3)}–${t.middle.toFixed(3)} → +1 &nbsp;|&nbsp;
+            ${t.middle.toFixed(3)}–${t.maxi.toFixed(3)} → +2 &nbsp;|&nbsp;
+            ≥ ${t.maxi.toFixed(3)} → +3
+          </div>
+        `;
+      }
+
       let tableHtml = '';
       if (data.positions && data.positions.length > 0) {
-        const inputStyle = 'width: 50px; text-align: center; padding: 4px; border: 1px solid #ccc; border-radius: 4px;';
+        const inputStyle = 'width: 44px; text-align: center; padding: 3px; border: 1px solid #ccc; border-radius: 4px; font-size: 12px;';
+        const thStyle = 'padding: 5px 3px; text-align: center; font-size: 11px; white-space: nowrap;';
+
         tableHtml = `
           <div style="margin-bottom: 10px; display: flex; align-items: center; gap: 10px;">
             <label style="font-size: 13px; cursor: pointer;">
@@ -1089,47 +1112,68 @@
             </label>
           </div>
           <div style="overflow-x: auto;">
-            <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+            <table id="journeesPreviewTable" style="width: 100%; border-collapse: collapse; font-size: 12px;">
               <thead>
                 <tr style="background: var(--color-primary, #1F4788); color: white;">
-                  <th style="padding: 6px; text-align: center; width: 30px;"></th>
-                  <th style="padding: 6px; text-align: center; width: 40px;">Pos.</th>
-                  <th style="padding: 6px; text-align: left;">Joueur</th>
-                  <th style="padding: 6px; text-align: center; width: 70px;">Moyenne</th>
-                  <th style="padding: 6px; text-align: center; width: 70px;">Pts Pos.</th>
-                  <th style="padding: 6px; text-align: center; width: 70px;" title="Bonus de niveau">B. Niveau</th>
-                  <th style="padding: 6px; text-align: center; width: 70px;" title="Bonus nombre de joueurs">B. Joueurs</th>
-                  <th style="padding: 6px; text-align: center; width: 70px;" title="Bonus libre">B. Libre</th>
+                  <th style="${thStyle} width: 28px;"></th>
+                  <th style="${thStyle}">Joueur</th>
+                  <th style="${thStyle}" title="Nombre de matchs">Matchs</th>
+                  <th style="${thStyle}">Points</th>
+                  <th style="${thStyle}">Repr.</th>
+                  <th style="${thStyle}">Moy.</th>
+                  <th style="${thStyle}" title="Points de match (poules)">Pts M.</th>
+                  <th style="${thStyle}" title="Bonus moyenne (auto-calculé, modifiable)">B. Moy.</th>
+                  <th style="${thStyle}" title="Bonus de niveau">B. Niv.</th>
+                  <th style="${thStyle}" title="Bonus nombre de joueurs">B. Jou.</th>
+                  <th style="${thStyle}" title="Bonus libre">B. Lib.</th>
+                  <th style="${thStyle} font-weight: bold;">Total</th>
+                  <th style="${thStyle} font-weight: bold;">Pos.</th>
+                  <th style="${thStyle} font-weight: bold;">Pts P.</th>
                 </tr>
               </thead>
               <tbody>
-                ${data.positions.map((p, i) => `
-                  <tr style="border-bottom: 1px solid #eee;">
-                    <td style="padding: 6px; text-align: center;">
-                      <input type="checkbox" class="player-check" data-index="${i}" checked>
+                ${data.positions.map((p, i) => {
+                  const autoBonus = computeAverageBonus(p.moyenne, previewMoyenneThresholds);
+                  const matchPts = p.matchPoints || 0;
+                  const total = matchPts + autoBonus;
+                  return `
+                  <tr data-index="${i}" data-licence="${p.licence}" data-match-points="${matchPts}" style="border-bottom: 1px solid #eee;">
+                    <td style="padding: 4px; text-align: center;">
+                      <input type="checkbox" class="player-check" data-index="${i}" checked onchange="recalculatePreview()">
                     </td>
-                    <td style="padding: 6px; text-align: center; font-weight: bold;">${p.position}</td>
-                    <td style="padding: 6px; font-size: 12px;">${p.playerName || p.licence}</td>
-                    <td style="padding: 6px; text-align: center;">${p.moyenne || '—'}</td>
-                    <td style="padding: 6px; text-align: center; font-weight: bold;">${p.positionPoints || 0}</td>
-                    <td style="padding: 6px; text-align: center;">
-                      <input type="number" class="bonus-niveau" data-index="${i}" value="0" min="0" style="${inputStyle}">
+                    <td style="padding: 4px; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px;" title="${p.playerName || p.licence}">${p.playerName || p.licence}</td>
+                    <td style="padding: 4px; text-align: center; color: #666;">${p.matchCount || '—'}</td>
+                    <td style="padding: 4px; text-align: center; color: #666;">${p.totalPoints || 0}</td>
+                    <td style="padding: 4px; text-align: center; color: #666;">${p.totalReprises || 0}</td>
+                    <td style="padding: 4px; text-align: center;">${p.moyenne ? p.moyenne.toFixed(3) : '—'}</td>
+                    <td style="padding: 4px; text-align: center; font-weight: 600;">${matchPts}</td>
+                    <td style="padding: 4px; text-align: center;">
+                      <input type="number" class="bonus-moyenne" data-index="${i}" value="${autoBonus}" min="0" max="9" style="${inputStyle}" oninput="recalculatePreview()">
                     </td>
-                    <td style="padding: 6px; text-align: center;">
-                      <input type="number" class="bonus-joueurs" data-index="${i}" value="0" min="0" style="${inputStyle}">
+                    <td style="padding: 4px; text-align: center;">
+                      <input type="number" class="bonus-niveau" data-index="${i}" value="0" min="0" max="99" style="${inputStyle}" oninput="recalculatePreview()">
                     </td>
-                    <td style="padding: 6px; text-align: center;">
-                      <input type="number" class="bonus-libre" data-index="${i}" value="0" min="0" style="${inputStyle}">
+                    <td style="padding: 4px; text-align: center;">
+                      <input type="number" class="bonus-joueurs" data-index="${i}" value="0" min="0" max="99" style="${inputStyle}" oninput="recalculatePreview()">
                     </td>
+                    <td style="padding: 4px; text-align: center;">
+                      <input type="number" class="bonus-libre" data-index="${i}" value="0" min="0" max="99" style="${inputStyle}" oninput="recalculatePreview()">
+                    </td>
+                    <td class="cell-total" style="padding: 4px; text-align: center; font-weight: bold;">${total}</td>
+                    <td class="cell-position" style="padding: 4px; text-align: center; font-weight: bold;">${p.position}</td>
+                    <td class="cell-pos-points" style="padding: 4px; text-align: center; font-weight: bold; color: var(--color-primary, #1F4788);">${p.positionPoints || 0}</td>
                   </tr>
-                `).join('')}
+                `}).join('')}
               </tbody>
             </table>
           </div>
         `;
       }
 
-      previewContent.innerHTML = phasesHtml + tableHtml;
+      previewContent.innerHTML = phasesHtml + thresholdsHtml + tableHtml;
+
+      // Run initial re-ranking to sort by total
+      recalculatePreview();
 
       // Show preview card
       document.getElementById('previewCard').style.display = 'block';
@@ -1152,9 +1196,63 @@
       };
     }
 
+    // Dynamic re-ranking: recalculate totals, sort positions, update position points
+    function recalculatePreview() {
+      const table = document.getElementById('journeesPreviewTable');
+      if (!table) return;
+
+      const rows = Array.from(table.querySelectorAll('tbody tr'));
+      const playerData = [];
+
+      // Collect data from each row
+      for (const row of rows) {
+        const idx = row.dataset.index;
+        const checkbox = row.querySelector('.player-check');
+        const included = checkbox && checkbox.checked;
+        const matchPoints = parseInt(row.dataset.matchPoints) || 0;
+        const bMoy = parseInt(row.querySelector('.bonus-moyenne')?.value) || 0;
+        const bNiv = parseInt(row.querySelector('.bonus-niveau')?.value) || 0;
+        const bJou = parseInt(row.querySelector('.bonus-joueurs')?.value) || 0;
+        const bLib = parseInt(row.querySelector('.bonus-libre')?.value) || 0;
+        const total = matchPoints + bMoy + bNiv + bJou + bLib;
+
+        playerData.push({ row, idx, included, matchPoints, total });
+
+        // Update total cell
+        row.querySelector('.cell-total').textContent = total;
+      }
+
+      // Sort included players by total desc, tie-break by matchPoints desc
+      const includedPlayers = playerData.filter(p => p.included);
+      includedPlayers.sort((a, b) => b.total - a.total || b.matchPoints - a.matchPoints);
+
+      // Assign positions and position points
+      includedPlayers.forEach((p, idx) => {
+        const position = idx + 1;
+        const posPoints = previewPosPointsLookup[position] || 0;
+        p.row.querySelector('.cell-position').textContent = position;
+        p.row.querySelector('.cell-pos-points').textContent = posPoints;
+        p.row.style.opacity = '1';
+      });
+
+      // Excluded players: clear position/points, dim row
+      const excludedPlayers = playerData.filter(p => !p.included);
+      for (const p of excludedPlayers) {
+        p.row.querySelector('.cell-position').textContent = '—';
+        p.row.querySelector('.cell-pos-points').textContent = '—';
+        p.row.style.opacity = '0.4';
+      }
+
+      // Re-order rows in DOM: included (sorted by position) then excluded
+      const tbody = table.querySelector('tbody');
+      for (const p of includedPlayers) tbody.appendChild(p.row);
+      for (const p of excludedPlayers) tbody.appendChild(p.row);
+    }
+
     // Toggle all player checkboxes
     function toggleAllPlayers(checked) {
       document.querySelectorAll('.player-check').forEach(cb => { cb.checked = checked; });
+      recalculatePreview();
     }
 
     // Collect included licences and bonus data from the preview table
@@ -1165,6 +1263,7 @@
       previewPositionsData.forEach((p, i) => {
         const checkbox = document.querySelector(`.player-check[data-index="${i}"]`);
         if (checkbox && checkbox.checked) {
+          const bonusMoyenne = document.querySelector(`.bonus-moyenne[data-index="${i}"]`);
           const bonusNiveau = document.querySelector(`.bonus-niveau[data-index="${i}"]`);
           const bonusJoueurs = document.querySelector(`.bonus-joueurs[data-index="${i}"]`);
           const bonusLibre = document.querySelector(`.bonus-libre[data-index="${i}"]`);
@@ -1172,6 +1271,7 @@
           includedLicences.push(p.licence);
           editedBonuses.push({
             licence: p.licence,
+            bonusMoyenne: bonusMoyenne ? parseInt(bonusMoyenne.value) || 0 : 0,
             bonusNiveau: bonusNiveau ? parseInt(bonusNiveau.value) || 0 : 0,
             bonusNbJoueurs: bonusJoueurs ? parseInt(bonusJoueurs.value) || 0 : 0,
             bonusLibre: bonusLibre ? parseInt(bonusLibre.value) || 0 : 0
@@ -1182,13 +1282,12 @@
       return { includedLicences, editedBonuses };
     }
 
-    // Perform the actual journees import with edited positions
+    // Perform the journees import — check for existing tournament FIRST, then import
     async function performJourneesImport(categoryId, tournamentNumber, tournamentDate, season) {
       const errorDiv = document.getElementById('errorMessage');
-      const successDiv = document.getElementById('successMessage');
       const importBtn = document.getElementById('importBtn');
 
-      importBtn.textContent = 'Import en cours...';
+      importBtn.textContent = 'Vérification...';
 
       try {
         const { includedLicences, editedBonuses } = collectPreviewEdits();
@@ -1201,6 +1300,32 @@
           return;
         }
 
+        // Check if tournament exists BEFORE importing (moved from handleJourneesSubmit)
+        const existsResult = await checkTournamentExists(categoryId, tournamentNumber, season);
+        if (existsResult.exists) {
+          pendingOverwriteAction = () => doJourneesImportPost(categoryId, tournamentNumber, tournamentDate, season, includedLicences, editedBonuses);
+          showExistingTournamentModal(existsResult.tournament);
+          return;
+        }
+
+        await doJourneesImportPost(categoryId, tournamentNumber, tournamentDate, season, includedLicences, editedBonuses);
+      } catch (error) {
+        errorDiv.textContent = error.message || 'Erreur de connexion au serveur';
+        errorDiv.style.display = 'block';
+        importBtn.disabled = false;
+        importBtn.textContent = 'Enregistrer la competition';
+      }
+    }
+
+    // Actual POST to import-journee endpoint
+    async function doJourneesImportPost(categoryId, tournamentNumber, tournamentDate, season, includedLicences, editedBonuses) {
+      const errorDiv = document.getElementById('errorMessage');
+      const successDiv = document.getElementById('successMessage');
+      const importBtn = document.getElementById('importBtn');
+
+      importBtn.textContent = 'Import en cours...';
+
+      try {
         const formData = new FormData();
         selectedFiles.forEach(file => formData.append('files', file));
         formData.append('categoryId', categoryId);

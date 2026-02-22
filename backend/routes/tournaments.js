@@ -955,21 +955,48 @@ router.post('/validate-journee', authenticateToken, upload.array('files', 10), a
     const poulesKey = findPhaseKey(phaseData, 'poule');
     const poulesRecords = poulesKey ? phaseData[poulesKey] : [];
 
-    // Aggregate points and reprises across ALL phases per player
-    const playerStats = {}; // licence -> { totalPoints, totalReprises }
+    // Aggregate points, reprises, and match count across ALL phases per player
+    const playerStats = {}; // licence -> { totalPoints, totalReprises, matchCount }
     for (const [, records] of Object.entries(phaseData)) {
       for (const record of records) {
         if (!playerStats[record.licence]) {
-          playerStats[record.licence] = { totalPoints: 0, totalReprises: 0 };
+          playerStats[record.licence] = { totalPoints: 0, totalReprises: 0, matchCount: 0 };
         }
         playerStats[record.licence].totalPoints += parseFloat(record.points) || 0;
         playerStats[record.licence].totalReprises += parseInt(record.reprises) || 0;
+        playerStats[record.licence].matchCount += 1;
+      }
+    }
+
+    // Get matchPoints from POULES phase per player
+    const poulesMatchPoints = {};
+    for (const record of poulesRecords) {
+      poulesMatchPoints[record.licence] = parseInt(record.matchPoints) || 0;
+    }
+
+    // Query moyenneThresholds from game_parameters via category
+    const categoryId = req.body.categoryId;
+    let moyenneThresholds = null;
+    if (categoryId) {
+      const category = await dbGetAsync('SELECT game_type, level FROM categories WHERE id = $1', [categoryId]);
+      if (category) {
+        const gp = await dbGetAsync(
+          `SELECT moyenne_mini, moyenne_maxi FROM game_parameters
+           WHERE UPPER(mode) = UPPER($1) AND UPPER(categorie) = UPPER($2)
+             AND ($3::int IS NULL OR organization_id = $3)`,
+          [category.game_type, category.level, orgId]
+        );
+        if (gp) {
+          const mini = parseFloat(gp.moyenne_mini) || 0;
+          const maxi = parseFloat(gp.moyenne_maxi) || 0;
+          moyenneThresholds = { mini, maxi, middle: (mini + maxi) / 2 };
+        }
       }
     }
 
     // Build positions array sorted by position
     const positions = poulesRecords.map(record => {
-      const stats = playerStats[record.licence] || { totalPoints: 0, totalReprises: 0 };
+      const stats = playerStats[record.licence] || { totalPoints: 0, totalReprises: 0, matchCount: 0 };
       const moyenne = stats.totalReprises > 0
         ? Math.round((stats.totalPoints / stats.totalReprises) * 1000) / 1000
         : 0;
@@ -980,7 +1007,9 @@ router.post('/validate-journee', authenticateToken, upload.array('files', 10), a
         positionPoints: posPointsLookup[finalPositions[record.licence]] || 0,
         totalPoints: stats.totalPoints,
         totalReprises: stats.totalReprises,
-        moyenne
+        moyenne,
+        matchCount: stats.matchCount,
+        matchPoints: poulesMatchPoints[record.licence] || 0
       };
     }).sort((a, b) => a.position - b.position);
 
@@ -989,7 +1018,8 @@ router.post('/validate-journee', authenticateToken, upload.array('files', 10), a
       positions,
       phases: detectedPhases,
       playerCount: poulesRecords.length,
-      posPointsLookup
+      posPointsLookup,
+      moyenneThresholds
     });
 
   } catch (error) {
@@ -1089,8 +1119,7 @@ router.post('/import-journee', authenticateToken, upload.array('files', 10), asy
       );
     }
 
-    // Phase 5: Compute final positions from all phase files
-    const finalPositions = computeJourneePositions(phaseData);
+    // Phase 5: Compute positions + lookup
     const posPointsLookup = await getPositionPointsLookup(orgId);
 
     // Phase 6: Filter to included players only (if specified from preview)
@@ -1107,6 +1136,7 @@ router.post('/import-journee', authenticateToken, upload.array('files', 10), asy
       ? JSON.parse(req.body.editedBonuses)
       : null;
     const bonusMap = {};
+    const hasBonusMoyenne = editedBonuses && editedBonuses.some(b => parseInt(b.bonusMoyenne) > 0 || parseInt(b.bonusNiveau) > 0 || parseInt(b.bonusNbJoueurs) > 0 || parseInt(b.bonusLibre) > 0);
     if (editedBonuses) {
       for (const b of editedBonuses) {
         bonusMap[b.licence] = b;
@@ -1125,6 +1155,30 @@ router.post('/import-journee', authenticateToken, upload.array('files', 10), asy
       }
     }
 
+    // Phase 6d: Determine final positions
+    // If editedBonuses with bonusMoyenne provided → re-rank by total (matchPoints + all bonuses)
+    // Otherwise → use computeJourneePositions (E2i bracket-based positions)
+    let finalPositions;
+    if (editedBonuses) {
+      // Re-rank by total: matchPoints + bonusMoyenne + bonusNiveau + bonusNbJoueurs + bonusLibre
+      const playerTotals = recordsToImport.map(record => {
+        const bonus = bonusMap[record.licence] || {};
+        const matchPts = parseInt(record.matchPoints) || 0;
+        const bMoy = parseInt(bonus.bonusMoyenne) || 0;
+        const bNiv = parseInt(bonus.bonusNiveau) || 0;
+        const bJou = parseInt(bonus.bonusNbJoueurs) || 0;
+        const bLib = parseInt(bonus.bonusLibre) || 0;
+        const total = matchPts + bMoy + bNiv + bJou + bLib;
+        return { licence: record.licence, total, matchPoints: matchPts };
+      });
+      // Sort by total descending, tie-break by matchPoints descending
+      playerTotals.sort((a, b) => b.total - a.total || b.matchPoints - a.matchPoints);
+      finalPositions = {};
+      playerTotals.forEach((p, idx) => { finalPositions[p.licence] = idx + 1; });
+    } else {
+      finalPositions = computeJourneePositions(phaseData);
+    }
+
     // Phase 7: Insert tournament_results with final positions and bonuses
     let imported = 0;
     const errors = [];
@@ -1141,11 +1195,13 @@ router.post('/import-journee', authenticateToken, upload.array('files', 10), asy
 
       // Bonus from preview edits
       const bonus = bonusMap[record.licence] || {};
+      const bonusMoyenne = parseInt(bonus.bonusMoyenne) || 0;
       const bonusNiveau = parseInt(bonus.bonusNiveau) || 0;
       const bonusNbJoueurs = parseInt(bonus.bonusNbJoueurs) || 0;
       const bonusLibre = parseInt(bonus.bonusLibre) || 0;
-      const totalBonus = bonusNiveau + bonusNbJoueurs + bonusLibre;
+      const totalBonus = bonusMoyenne + bonusNiveau + bonusNbJoueurs + bonusLibre;
       const bonusDetail = {};
+      if (bonusMoyenne) bonusDetail.MOYENNE = bonusMoyenne;
       if (bonusNiveau) bonusDetail.NIVEAU = bonusNiveau;
       if (bonusNbJoueurs) bonusDetail.NB_JOUEURS = bonusNbJoueurs;
       if (bonusLibre) bonusDetail.LIBRE = bonusLibre;
