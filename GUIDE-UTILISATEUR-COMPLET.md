@@ -568,6 +568,17 @@ Gestion du calendrier des compétitions (tournois externes définis dans le syst
 2. Cliquer sur "Annuler"
 3. Confirmer (les joueurs ne sont PAS notifiés automatiquement)
 
+### Supprimer une compétition
+
+Pour supprimer définitivement une compétition (et toutes ses inscriptions associées) :
+
+1. Aller dans **Compétitions > Liste des tournois externes**
+2. Repérer la compétition à supprimer dans la liste
+3. Cliquer sur le bouton rouge **"Supprimer"** sur la ligne correspondante
+4. Confirmer la suppression dans la boîte de dialogue
+
+> **Attention :** La suppression est irréversible. Toutes les inscriptions liées à cette compétition seront également supprimées. Cette action est réservée aux administrateurs.
+
 ### Lien avec l'Application Joueur
 - Le calendrier est visible par les joueurs dans l'Application Joueur
 - Les joueurs peuvent s'inscrire directement aux compétitions à venir depuis leur application
