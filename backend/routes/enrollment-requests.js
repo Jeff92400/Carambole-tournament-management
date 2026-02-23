@@ -38,33 +38,6 @@ async function getEmailSettings(req) {
   return settings;
 }
 
-/**
- * GET /api/enrollment-requests/debug-announcements/:licence
- * Debug endpoint to check announcements for a player (PUBLIC - no auth)
- */
-router.get('/debug-announcements/:licence', async (req, res) => {
-  try {
-    const { licence } = req.params;
-    const normalizedLicence = licence.replace(/\s+/g, '').toUpperCase();
-
-    const result = await db.query(`
-      SELECT id, title, message, type, is_active, expires_at, target_licence, created_at
-      FROM announcements
-      WHERE UPPER(REPLACE(COALESCE(target_licence, ''), ' ', '')) = $1
-      ORDER BY created_at DESC
-      LIMIT 10
-    `, [normalizedLicence]);
-
-    res.json({
-      licence: normalizedLicence,
-      count: result.rows.length,
-      announcements: result.rows
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
 // All routes below require authentication (viewers can read, admins can modify)
 router.use(authenticateToken);
 router.use(requireViewer);

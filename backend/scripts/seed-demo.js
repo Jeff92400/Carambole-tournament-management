@@ -131,7 +131,7 @@ async function seedDemoData() {
         `INSERT INTO users (username, password_hash, email, role, is_active) VALUES ($1, $2, $3, $4, 1)`,
         [DEMO_ADMIN.username, hashedPassword, DEMO_ADMIN.email, DEMO_ADMIN.role]
       );
-      console.log(`   Created admin: ${DEMO_ADMIN.username} / ${DEMO_ADMIN.password}`);
+      console.log(`   Created admin: ${DEMO_ADMIN.username}`);
     }
     console.log('');
 
@@ -449,7 +449,7 @@ async function seedDemoData() {
     console.log('='.repeat(60));
     console.log('');
     console.log('Summary:');
-    console.log(`  - Admin account: ${DEMO_ADMIN.username} / ${DEMO_ADMIN.password}`);
+    console.log(`  - Admin account: ${DEMO_ADMIN.username}`);
     console.log(`  - Clubs: ${DEMO_CLUBS.length}`);
     console.log(`  - Players: ${players.length} new`);
     console.log(`  - External tournaments (tournoi_ext): ${tournaments.length}`);

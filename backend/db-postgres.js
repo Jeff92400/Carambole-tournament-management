@@ -1494,7 +1494,7 @@ async function initializeDatabase() {
          VALUES ('demo', $1, 'demo@example.com', 'admin', 2, 1)`,
         [demoHash]
       );
-      console.log('Demo admin created: demo/demo123');
+      console.log('Demo admin created successfully');
     }
 
     // Create demo clubs for org #2 (idempotent)
@@ -1609,7 +1609,7 @@ async function initializeDatabase() {
       const defaultPassword = 'admin123';
       const hash = await bcrypt.hash(defaultPassword, 10);
       await client.query('INSERT INTO admin (password_hash) VALUES ($1)', [hash]);
-      console.log('Default admin password created: admin123');
+      console.log('Default admin password created');
       console.log('Please change it after first login!');
     }
 
@@ -1622,7 +1622,7 @@ async function initializeDatabase() {
         'INSERT INTO users (username, password_hash, role) VALUES ($1, $2, $3)',
         ['admin', hash, 'admin']
       );
-      console.log('Default admin user created: username=admin, password=admin123');
+      console.log('Default admin user created successfully');
       console.log('Please change it after first login!');
     }
 

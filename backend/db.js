@@ -278,7 +278,7 @@ function initializeDatabase() {
         bcrypt.hash(defaultPassword, 10, (err, hash) => {
           if (!err) {
             db.run('INSERT INTO admin (password_hash) VALUES (?)', [hash]);
-            console.log('Default admin password created: admin123');
+            console.log('Default admin password created');
             console.log('Please change it after first login!');
           }
         });
