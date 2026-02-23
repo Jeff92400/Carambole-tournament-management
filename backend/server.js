@@ -172,7 +172,7 @@ app.get('/logo.png', (req, res) => {
           return res.status(404).send('Logo not found');
         }
         res.setHeader('Content-Type', row.content_type || 'image/png');
-        res.setHeader('Cache-Control', 'public, max-age=86400');
+        res.setHeader('Cache-Control', 'public, max-age=3600');
         res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
         const fileData = Buffer.isBuffer(row.file_data) ? row.file_data : Buffer.from(row.file_data);
         res.send(fileData);
@@ -186,7 +186,7 @@ app.get('/logo.png', (req, res) => {
       return res.status(404).send('Logo not found');
     }
     res.setHeader('Content-Type', row.content_type || 'image/png');
-    res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.setHeader('Cache-Control', 'public, max-age=3600');
     // Override helmet's restrictive CORP header to allow email clients to load the image
     res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
     const fileData = Buffer.isBuffer(row.file_data) ? row.file_data : Buffer.from(row.file_data);

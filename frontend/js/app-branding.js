@@ -111,7 +111,8 @@ async function getOrganizationLogoUrl() {
       if (data.url) {
         // Add cache-busting timestamp
         const cacheBuster = data.lastModified ? new Date(data.lastModified).getTime() : Date.now();
-        return data.url + '?v=' + cacheBuster;
+        const separator = data.url.includes('?') ? '&' : '?';
+        return data.url + separator + 'v=' + cacheBuster;
       }
     }
   } catch (error) {

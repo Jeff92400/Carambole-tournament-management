@@ -1291,23 +1291,40 @@ router.get('/organization-logo', authenticateToken, (req, res) => {
   const db = getDb();
   const orgId = req.user?.organizationId || null;
 
-  db.get('SELECT id, filename, content_type, LENGTH(file_data) as size, created_at FROM organization_logo WHERE ($1::int IS NULL OR organization_id = $1) ORDER BY created_at DESC LIMIT 1', [orgId], (err, row) => {
+  if (!orgId) {
+    return res.json({ exists: false });
+  }
+
+  // Look up org slug for URL construction
+  db.get('SELECT slug FROM organizations WHERE id = $1', [orgId], (err, orgRow) => {
     if (err) {
-      console.error('Error checking logo:', err);
+      console.error('Error looking up org slug:', err);
       return res.status(500).json({ error: 'Erreur lors de la vérification du logo' });
     }
 
-    if (row) {
-      res.json({
-        exists: true,
-        filename: row.filename,
-        size: row.size,
-        lastModified: row.created_at,
-        url: '/api/settings/organization-logo/download'
-      });
-    } else {
-      res.json({ exists: false });
-    }
+    const orgSlug = orgRow?.slug;
+
+    db.get('SELECT id, filename, content_type, LENGTH(file_data) as size, created_at FROM organization_logo WHERE organization_id = $1 ORDER BY created_at DESC LIMIT 1', [orgId], (err, row) => {
+      if (err) {
+        console.error('Error checking logo:', err);
+        return res.status(500).json({ error: 'Erreur lors de la vérification du logo' });
+      }
+
+      if (row) {
+        const downloadUrl = orgSlug
+          ? '/api/settings/organization-logo/download?org=' + encodeURIComponent(orgSlug)
+          : '/api/settings/organization-logo/download';
+        res.json({
+          exists: true,
+          filename: row.filename,
+          size: row.size,
+          lastModified: row.created_at,
+          url: downloadUrl
+        });
+      } else {
+        res.json({ exists: false });
+      }
+    });
   });
 });
 
@@ -1342,10 +1359,11 @@ router.get('/organization-logo/download', (req, res) => {
   fetchLogo(orgId);
 
   function fetchLogo(resolvedOrgId) {
-  const query = resolvedOrgId
-    ? 'SELECT * FROM organization_logo WHERE organization_id = $1 ORDER BY created_at DESC LIMIT 1'
-    : 'SELECT * FROM organization_logo ORDER BY created_at DESC LIMIT 1';
-  const params = resolvedOrgId ? [resolvedOrgId] : [];
+  if (!resolvedOrgId) {
+    return res.status(404).json({ error: 'Logo non trouvé - organisation non spécifiée' });
+  }
+  const query = 'SELECT * FROM organization_logo WHERE organization_id = $1 ORDER BY created_at DESC LIMIT 1';
+  const params = [resolvedOrgId];
 
   db.get(query, params, (err, row) => {
     if (err) {
@@ -1358,7 +1376,7 @@ router.get('/organization-logo/download', (req, res) => {
     }
 
     res.setHeader('Content-Type', row.content_type);
-    res.setHeader('Cache-Control', 'public, max-age=86400'); // Cache for 1 day
+    res.setHeader('Cache-Control', 'public, max-age=3600'); // Cache for 1 hour
 
     const fileData = Buffer.isBuffer(row.file_data) ? row.file_data : Buffer.from(row.file_data);
     res.send(fileData);
