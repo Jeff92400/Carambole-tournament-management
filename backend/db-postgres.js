@@ -796,6 +796,14 @@ async function initializeDatabase() {
       CREATE INDEX IF NOT EXISTS idx_reset_codes_email ON password_reset_codes(email)
     `);
 
+    // Migration: add organization_id to password_reset_codes for multi-CDB isolation
+    await client.query(`
+      ALTER TABLE password_reset_codes ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_reset_codes_org_email ON password_reset_codes(organization_id, email)
+    `);
+
     // Inscription email logs table - history of inscription/désinscription emails
     await client.query(`
       CREATE TABLE IF NOT EXISTS inscription_email_logs (

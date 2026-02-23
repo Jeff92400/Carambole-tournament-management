@@ -32,7 +32,7 @@
     </form>
 
     <div style="text-align: center; margin-top: 20px;">
-      <a href="forgot-password.html" style="color: #1F4788; font-size: 14px;">Mot de passe oublié ?</a>
+      <a id="forgot-password-link" href="forgot-password.html" style="color: #1F4788; font-size: 14px;">Mot de passe oublié ?</a>
     </div>
 
     <div style="text-align: center; margin-top: 30px; color: #999; font-size: 12px;">
@@ -57,6 +57,14 @@
       document.title = 'Connexion - Super Admin';
     } else {
       initPublicBranding(initOrgSlug);
+    }
+
+    // Pass org context to forgot-password link
+    if (initOrgSlug) {
+      const forgotLink = document.getElementById('forgot-password-link');
+      if (forgotLink) {
+        forgotLink.href = 'forgot-password.html?org=' + encodeURIComponent(initOrgSlug);
+      }
     }
 
     // Show session expired message if present

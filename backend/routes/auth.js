@@ -25,21 +25,21 @@ function generateResetCode() {
 }
 
 // Store reset code in database
-function storeResetCode(email, code) {
+function storeResetCode(email, code, orgId) {
   return new Promise((resolve, reject) => {
     const normalizedEmail = email.toLowerCase();
-    // First, invalidate any existing codes for this email
+    // First, invalidate any existing codes for this email (scoped by org)
     db.run(
-      'UPDATE password_reset_codes SET used = $1 WHERE email = $2 AND used = $3',
-      [true, normalizedEmail, false],
+      'UPDATE password_reset_codes SET used = $1 WHERE email = $2 AND used = $3 AND ($4::int IS NULL OR organization_id = $4)',
+      [true, normalizedEmail, false, orgId || null],
       (err) => {
         if (err) {
           console.error('Error invalidating old reset codes:', err);
         }
-        // Insert new code
+        // Insert new code with org
         db.run(
-          'INSERT INTO password_reset_codes (email, code) VALUES ($1, $2)',
-          [normalizedEmail, code],
+          'INSERT INTO password_reset_codes (email, code, organization_id) VALUES ($1, $2, $3)',
+          [normalizedEmail, code, orgId || null],
           (err) => {
             if (err) {
               console.error('Error storing reset code:', err);
@@ -55,14 +55,14 @@ function storeResetCode(email, code) {
 }
 
 // Verify reset code from database
-function verifyResetCode(email, code) {
+function verifyResetCode(email, code, orgId) {
   return new Promise((resolve, reject) => {
     const normalizedEmail = email.toLowerCase();
     db.get(
       `SELECT * FROM password_reset_codes
-       WHERE email = $1 AND code = $2 AND used = $3
+       WHERE email = $1 AND code = $2 AND used = $3 AND ($4::int IS NULL OR organization_id = $4)
        ORDER BY created_at DESC LIMIT 1`,
-      [normalizedEmail, code, false],
+      [normalizedEmail, code, false, orgId || null],
       (err, row) => {
         if (err) {
           console.error('Error verifying reset code:', err);
@@ -349,14 +349,30 @@ router.post('/change-password', authenticateToken, (req, res) => {
 
 // Forgot password - send reset email
 router.post('/forgot-password', async (req, res) => {
-  const { email } = req.body;
+  const { email, orgSlug } = req.body;
 
   if (!email) {
     return res.status(400).json({ error: 'Email requis' });
   }
 
-  // Find user by email
-  db.get('SELECT * FROM users WHERE email = $1 AND is_active = 1', [email.toLowerCase().trim()], async (err, user) => {
+  // Resolve orgSlug to orgId
+  let orgId = null;
+  if (orgSlug) {
+    try {
+      const orgRow = await new Promise((resolve, reject) => {
+        db.get('SELECT id FROM organizations WHERE slug = $1 AND is_active = true', [orgSlug], (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        });
+      });
+      if (orgRow) orgId = orgRow.id;
+    } catch (e) {
+      console.error('Error resolving orgSlug for forgot-password:', e);
+    }
+  }
+
+  // Find user by email (scoped by org)
+  db.get('SELECT * FROM users WHERE email = $1 AND is_active = 1 AND ($2::int IS NULL OR organization_id = $2)', [email.toLowerCase().trim(), orgId], async (err, user) => {
     // Always return success to prevent email enumeration
     if (err || !user) {
       return res.json({ message: 'Si un compte existe avec cette adresse email, vous recevrez un lien de réinitialisation.' });
@@ -393,7 +409,7 @@ router.post('/forgot-password', async (req, res) => {
           const orgShortName = emailSettings.organization_short_name || 'CDBHS';
 
           const baseUrl = process.env.BASE_URL || 'https://cdbhs-tournament-management-production.up.railway.app';
-          const resetLink = `${baseUrl}/reset-password.html?token=${resetToken}`;
+          const resetLink = `${baseUrl}/reset-password.html?token=${resetToken}${orgSlug ? '&org=' + encodeURIComponent(orgSlug) : ''}`;
 
           await resend.emails.send({
             from: `${senderName} <${senderEmail}>`,
@@ -476,7 +492,7 @@ router.post('/reset-password-token', (req, res) => {
 
 // Forgot password - send 6-digit code via email
 router.post('/forgot', async (req, res) => {
-  const { email } = req.body;
+  const { email, orgSlug } = req.body;
 
   if (!email) {
     return res.status(400).json({ error: 'Email requis' });
@@ -484,14 +500,30 @@ router.post('/forgot', async (req, res) => {
 
   const normalizedEmail = email.toLowerCase().trim();
 
+  // Resolve orgSlug to orgId
+  let orgId = null;
+  if (orgSlug) {
+    try {
+      const orgRow = await new Promise((resolve, reject) => {
+        db.get('SELECT id FROM organizations WHERE slug = $1 AND is_active = true', [orgSlug], (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        });
+      });
+      if (orgRow) orgId = orgRow.id;
+    } catch (e) {
+      console.error('Error resolving orgSlug for forgot:', e);
+    }
+  }
+
   // Always return same response to prevent email enumeration
   const standardResponse = {
     success: true,
     message: 'Si un compte existe avec cette adresse, un code de reinitialisation a ete envoye'
   };
 
-  // Find user by email
-  db.get('SELECT * FROM users WHERE email = $1 AND is_active = 1', [normalizedEmail], async (err, user) => {
+  // Find user by email (scoped by org)
+  db.get('SELECT * FROM users WHERE email = $1 AND is_active = 1 AND ($2::int IS NULL OR organization_id = $2)', [normalizedEmail, orgId], async (err, user) => {
     if (err || !user) {
       return res.json(standardResponse);
     }
@@ -499,7 +531,7 @@ router.post('/forgot', async (req, res) => {
     // Generate 6-digit reset code
     const code = generateResetCode();
     try {
-      await storeResetCode(normalizedEmail, code);
+      await storeResetCode(normalizedEmail, code, orgId);
     } catch (storeErr) {
       console.error('Error storing reset code:', storeErr);
       return res.json(standardResponse);
@@ -563,7 +595,7 @@ router.post('/forgot', async (req, res) => {
 
 // Reset password with 6-digit code
 router.post('/reset-with-code', async (req, res) => {
-  const { email, code, password } = req.body;
+  const { email, code, password, orgSlug } = req.body;
 
   if (!email || !code || !password) {
     return res.status(400).json({ error: 'Email, code et nouveau mot de passe requis' });
@@ -571,10 +603,26 @@ router.post('/reset-with-code', async (req, res) => {
 
   const normalizedEmail = email.toLowerCase().trim();
 
-  // Verify code
+  // Resolve orgSlug to orgId
+  let orgId = null;
+  if (orgSlug) {
+    try {
+      const orgRow = await new Promise((resolve, reject) => {
+        db.get('SELECT id FROM organizations WHERE slug = $1 AND is_active = true', [orgSlug], (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        });
+      });
+      if (orgRow) orgId = orgRow.id;
+    } catch (e) {
+      console.error('Error resolving orgSlug for reset-with-code:', e);
+    }
+  }
+
+  // Verify code (scoped by org)
   let codeVerification;
   try {
-    codeVerification = await verifyResetCode(normalizedEmail, code);
+    codeVerification = await verifyResetCode(normalizedEmail, code, orgId);
   } catch (verifyErr) {
     console.error('Error verifying reset code:', verifyErr);
     return res.status(500).json({ error: 'Erreur lors de la verification du code' });
@@ -589,8 +637,8 @@ router.post('/reset-with-code', async (req, res) => {
     return res.status(400).json({ error: 'Le mot de passe doit contenir au moins 6 caracteres' });
   }
 
-  // Find user
-  db.get('SELECT * FROM users WHERE email = $1', [normalizedEmail], (err, user) => {
+  // Find user (scoped by org)
+  db.get('SELECT * FROM users WHERE email = $1 AND ($2::int IS NULL OR organization_id = $2)', [normalizedEmail, orgId], (err, user) => {
     if (err || !user) {
       return res.status(404).json({ error: 'Compte introuvable' });
     }
@@ -699,7 +747,8 @@ router.post('/users', authenticateToken, requireAdmin, (req, res) => {
     };
 
     if (userClubId) {
-      db.get('SELECT id FROM clubs WHERE id = $1', [userClubId], (err, club) => {
+      const orgId = req.user.organizationId || null;
+      db.get('SELECT id FROM clubs WHERE id = $1 AND ($2::int IS NULL OR organization_id = $2)', [userClubId, orgId], (err, club) => {
         if (err || !club) {
           return res.status(400).json({ error: 'Club non trouvé' });
         }
