@@ -1008,6 +1008,46 @@
 
       <div id="tournamentTypesMessage" style="display: none; margin-top: 15px; padding: 10px; border-radius: 4px;"></div>
 
+      <!-- Bonus Moyenne (common - both modes) -->
+      <hr style="margin: 25px 0; border: none; border-top: 1px solid #ddd;">
+      <h4 style="margin-bottom: 15px;">Bonus Moyenne</h4>
+      <div style="margin-bottom: 20px;">
+        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+          <input type="checkbox" id="bonusMoyenneEnabled" style="width: 20px; height: 20px; cursor: pointer;">
+          <span style="font-weight: 500;">Activer le bonus moyenne par tournoi</span>
+        </label>
+        <p style="margin: 5px 0 0 30px; color: #666; font-size: 13px;">
+          Ajoute des points bonus par tournoi selon la moyenne du joueur par rapport aux seuils min/max de la catégorie (Paramètres de jeu).
+        </p>
+        <div id="bonusMoyenneTypeSelector" style="display: none; margin: 12px 0 0 30px;">
+          <label style="display: flex; align-items: flex-start; gap: 8px; cursor: pointer; margin-bottom: 8px;">
+            <input type="radio" name="bonusMoyenneType" value="normal" checked style="margin-top: 3px;">
+            <span><strong>Normal</strong> — Au-dessus du max &rarr; +2 | Entre min et max &rarr; +1 | En dessous &rarr; 0</span>
+          </label>
+          <label style="display: flex; align-items: flex-start; gap: 8px; cursor: pointer;">
+            <input type="radio" name="bonusMoyenneType" value="tiered" style="margin-top: 3px;">
+            <span><strong>Par paliers</strong> — &lt; min &rarr; 0 | min&ndash;milieu &rarr; +1 | milieu&ndash;max &rarr; +2 | &ge; max &rarr; +3</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Barème des points (common - both modes) -->
+      <hr style="margin: 25px 0; border: none; border-top: 1px solid #ddd;">
+      <h4 style="margin-bottom: 15px;">Barème des points</h4>
+      <div id="scoringRuleBlocks" style="margin-top: 10px;">
+        <div style="text-align: center; padding: 20px; color: #666;">Chargement...</div>
+      </div>
+      <div style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+        <h4 style="margin: 0 0 10px; font-size: 14px; color: var(--color-primary, #1F4788);">
+          Ajouter un nouveau bloc de conditions
+        </h4>
+        <div class="add-block-form">
+          <input type="text" id="newBlockName" placeholder="Nom du bloc (ex: Bonus Participation)" maxlength="50">
+          <input type="text" id="newBlockLabel" placeholder="Libellé colonne (ex: Bonus Part.)" maxlength="30" style="max-width: 200px;">
+          <button class="btn-add-sm" onclick="addScoringBlock()">Ajouter le bloc</button>
+        </div>
+      </div>
+
       <!-- Journées-specific settings (hidden when standard) -->
       <div id="journeesSettings" style="display: none;">
         <hr style="margin: 25px 0; border: none; border-top: 1px solid #ddd;">
@@ -1026,10 +1066,10 @@
         <div style="margin-bottom: 20px;">
           <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
             <input type="checkbox" id="averageBonusTiers" style="width: 20px; height: 20px; cursor: pointer;">
-            <span style="font-weight: 500;">Bonus Moyenne au classement</span>
+            <span style="font-weight: 500;">Bonus Moyenne au classement saisonnier</span>
           </label>
           <p style="margin: 5px 0 0 30px; color: #666; font-size: 13px;">
-            Ajoute un bonus (0 à 3 pts) selon la moyenne du joueur par rapport aux seuils min/max de la catégorie.
+            Ajoute un bonus au classement saisonnier selon la moyenne des meilleurs tournois retenus (utilise le même type Normal/Par paliers que le bonus par tournoi ci-dessus).
           </p>
         </div>
 
@@ -1043,24 +1083,6 @@
             <button onclick="addPositionRow()" class="btn" style="background: #6c757d; padding: 8px 15px; font-size: 13px;">+ Ajouter une position</button>
           </div>
         </div>
-
-        <!-- Dynamic scoring rule blocks (barème) -->
-        <div id="scoringRuleBlocks" style="margin-top: 20px;">
-          <div style="text-align: center; padding: 20px; color: #666;">Chargement...</div>
-        </div>
-
-        <!-- Add new block form -->
-        <div style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
-          <h4 style="margin: 0 0 10px; font-size: 14px; color: var(--color-primary, #1F4788);">
-            Ajouter un nouveau bloc de conditions
-          </h4>
-          <div class="add-block-form">
-            <input type="text" id="newBlockName" placeholder="Nom du bloc (ex: Bonus Participation)" maxlength="50">
-            <input type="text" id="newBlockLabel" placeholder="Libellé colonne (ex: Bonus Part.)" maxlength="30" style="max-width: 200px;">
-            <button class="btn-add-sm" onclick="addScoringBlock()">Ajouter le bloc</button>
-          </div>
-        </div>
-
       </div>
 
       <div style="margin-top: 20px;">
@@ -4193,6 +4215,15 @@
           document.getElementById('journeesCount').value = settings.journees_count || '3';
           document.getElementById('bestOfCount').value = settings.best_of_count || '2';
           document.getElementById('averageBonusTiers').checked = settings.average_bonus_tiers === 'true';
+
+          // Bonus Moyenne (common)
+          const bonusEnabled = settings.bonus_moyenne_enabled === 'true';
+          document.getElementById('bonusMoyenneEnabled').checked = bonusEnabled;
+          document.getElementById('bonusMoyenneTypeSelector').style.display = bonusEnabled ? 'block' : 'none';
+          const bonusType = settings.bonus_moyenne_type || 'normal';
+          const radio = document.querySelector(`input[name="bonusMoyenneType"][value="${bonusType}"]`);
+          if (radio) radio.checked = true;
+
           selectQualificationMode(settings.qualification_mode || 'standard');
         }
 
@@ -4235,7 +4266,9 @@
             qualification_mode: document.getElementById('qualificationMode').value,
             journees_count: document.getElementById('journeesCount').value,
             best_of_count: document.getElementById('bestOfCount').value,
-            average_bonus_tiers: document.getElementById('averageBonusTiers').checked ? 'true' : 'false'
+            average_bonus_tiers: document.getElementById('averageBonusTiers').checked ? 'true' : 'false',
+            bonus_moyenne_enabled: document.getElementById('bonusMoyenneEnabled').checked ? 'true' : 'false',
+            bonus_moyenne_type: document.querySelector('input[name="bonusMoyenneType"]:checked').value
           })
         });
 
@@ -4298,6 +4331,11 @@
     }
 
     loadQualificationSettings();
+
+    // Bonus Moyenne toggle
+    document.getElementById('bonusMoyenneEnabled').addEventListener('change', function() {
+      document.getElementById('bonusMoyenneTypeSelector').style.display = this.checked ? 'block' : 'none';
+    });
 
     // ============= END QUALIFICATION MODE SETTINGS =============
 

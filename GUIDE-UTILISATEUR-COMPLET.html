@@ -743,7 +743,7 @@
         <tr><td>TQ1</td><td>Points du Tournoi Qualificatif 1</td></tr>
         <tr><td>TQ2</td><td>Points du Tournoi Qualificatif 2</td></tr>
         <tr><td>TQ3</td><td>Points du Tournoi Qualificatif 3</td></tr>
-        <tr><td>Bonus Moy.</td><td>Bonus moyenne (0 à 3 pts) &mdash; affiché uniquement si activé dans les paramètres</td></tr>
+        <tr><td>Bonus Moy.</td><td>Bonus moyenne au classement saisonnier &mdash; affiché uniquement si activé dans les paramètres (mode Journées)</td></tr>
         <tr><td>Total</td><td>Score total (meilleurs résultats + bonus)</td></tr>
         <tr><td>Moyenne</td><td>Moyenne générale</td></tr>
         <tr><td>Meilleure Série</td><td>Meilleure série</td></tr>
@@ -1486,6 +1486,26 @@
     <h4>Types de Tournoi</h4>
     <p>Tableau listant les types de tournoi définis (T1, T2, T3, Finale, etc.) avec code, nom d'affichage, et options (compte pour le classement, est une finale). Il est possible d'ajouter de nouveaux types via le formulaire en bas du tableau.</p>
 
+    <h4>Bonus Moyenne</h4>
+    <p>(Visible dans les deux modes : Standard et Journées)</p>
+    <p>Active un bonus de points par tournoi basé sur la moyenne du joueur par rapport aux seuils min/max de la catégorie (configurés dans Paramètres de jeu).</p>
+    <table>
+      <thead>
+        <tr><th>Type</th><th>Formule</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Normal</strong></td>
+          <td>Au-dessus du max &rarr; +2 | Entre min et max &rarr; +1 | En dessous du min &rarr; 0</td>
+        </tr>
+        <tr>
+          <td><strong>Par paliers</strong></td>
+          <td>&lt; min &rarr; 0 | min&ndash;milieu &rarr; +1 | milieu&ndash;max &rarr; +2 | &ge; max &rarr; +3</td>
+        </tr>
+      </tbody>
+    </table>
+    <p>Le bonus est calcul&eacute; automatiquement &agrave; chaque import de r&eacute;sultats et s'ajoute aux &eacute;ventuels bonus du bar&egrave;me (VDL, etc.).</p>
+
     <h4>Paramètres Journées Qualificatives</h4>
     <p>(Visible uniquement en mode journées)</p>
     <table>
@@ -1495,7 +1515,7 @@
       <tbody>
         <tr><td>Nombre de journées</td><td>Nombre de tournois qualificatifs par saison (défaut: 3)</td></tr>
         <tr><td>Meilleurs résultats retenus</td><td>Nombre de meilleurs scores pris en compte (défaut: 2)</td></tr>
-        <tr><td>Bonus Moyenne au classement</td><td>Ajoute un bonus (0 à 3 pts) selon la moyenne du joueur par rapport aux seuils min/max de la catégorie</td></tr>
+        <tr><td>Bonus Moyenne au classement saisonnier</td><td>Ajoute un bonus au classement saisonnier selon la moyenne des meilleurs tournois retenus (utilise le même type Normal/Par paliers que le bonus par tournoi)</td></tr>
       </tbody>
     </table>
 
@@ -1558,10 +1578,10 @@
     <h2>Paramètres > Barème de Points</h2>
 
     <h3>Accès</h3>
-    <p>Menu Paramètres > Types de tournois (section "Configuration du scoring par phase")</p>
+    <p>Menu Paramètres > Types de tournois (section "Barème des points")</p>
 
     <h3>Description</h3>
-    <p>Configuration des règles de calcul des points de match et des bonus. Le barème est intégré à la page d'administration, sous la grille de scoring par phase.</p>
+    <p>Configuration des règles de calcul des points de match et des bonus. Le barème est visible dans les deux modes (Standard et Journées), directement sous la section Bonus Moyenne.</p>
 
     <div class="screenshot-placeholder">
       <span class="screenshot-id">IMG-19</span>
@@ -1941,7 +1961,7 @@
       <li>Cliquer sur la carte "Journées Qualificatives"</li>
       <li>Configurer : nombre de journées, meilleurs résultats retenus</li>
       <li>Configurer les points par position (tableau en bas)</li>
-      <li>(Optionnel) Activer le "Bonus Moyenne au classement"</li>
+      <li>(Optionnel) Activer le "Bonus Moyenne au classement saisonnier"</li>
       <li>Cliquer sur "Enregistrer"</li>
       <li>Le classement adopte automatiquement le format journées (TQ1/TQ2/TQ3, scores retenus/écartés)</li>
     </ol>
@@ -1960,7 +1980,7 @@
       <tbody>
         <tr><td>Application Joueur / Espace Joueur</td><td>Application permettant aux licenciés de s'inscrire et consulter leurs informations</td></tr>
         <tr><td>Barème</td><td>Ensemble des règles définissant l'attribution des points de match et des bonus</td></tr>
-        <tr><td>Bonus Moyenne</td><td>Points supplémentaires attribués au classement saisonnier selon la moyenne du joueur par rapport aux seuils min/max de la catégorie (0 à 3 pts par paliers). Disponible en mode Journées Qualificatives.</td></tr>
+        <tr><td>Bonus Moyenne</td><td>Points bonus par tournoi selon la moyenne du joueur par rapport aux seuils min/max de la catégorie. Deux types : Normal (+0/+1/+2) ou Par paliers (+0/+1/+2/+3). Disponible dans les deux modes (Standard et Journées). En mode Journées, un bonus similaire peut être activé sur le classement saisonnier.</td></tr>
         <tr><td>Catégorie</td><td>Combinaison d'un mode de jeu et d'un niveau (ex: "Libre R2", "3 Bandes N3")</td></tr>
         <tr><td>CDB</td><td>Comité Départemental de Billard &mdash; chaque CDB dispose de son propre environnement isolé</td></tr>
         <tr><td>Classification FFB</td><td>Classement attribué par la FFB à un joueur pour une discipline donnée (ex: R2 en 3 Bandes)</td></tr>
