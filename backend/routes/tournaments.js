@@ -1026,11 +1026,11 @@ async function computeBonusMoyenne(tournamentId, categoryId, orgId, callback) {
             bonus = tier1;
           }
         } else {
-          // Normal: > maxi → +2, between min and max → +1, below → 0
+          // Normal: > maxi → tier2, between min and max → tier1, below → 0
           if (moyenne > moyenneMaxi) {
-            bonus = 2;
+            bonus = tier2;
           } else if (moyenne >= moyenneMini) {
-            bonus = 1;
+            bonus = tier1;
           }
         }
 
@@ -1351,11 +1351,11 @@ async function recalculateRankingsJournees(categoryId, season, callback, orgId) 
             averageBonus = tier1;
           }
         } else {
-          // Normal: > maxi → +2, between min and max → +1, below → 0
+          // Normal: > maxi → tier2, between min and max → tier1, below → 0
           if (avgMoyenne > moyenneMaxi) {
-            averageBonus = 2;
+            averageBonus = tier2;
           } else if (avgMoyenne >= moyenneMini) {
-            averageBonus = 1;
+            averageBonus = tier1;
           }
         }
       }
