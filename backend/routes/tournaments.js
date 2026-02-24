@@ -149,152 +149,6 @@ function parseRecordsWithMapping(records, columnMapping) {
   return parsed;
 }
 
-// ==================== Journées Qualificatives helpers ====================
-
-/**
- * Detect phase name from FFB filename.
- * Pattern: classement_phase_POULES.csv, classement_phase_Finale.csv, etc.
- */
-function detectPhaseFromFilename(filename) {
-  const match = filename.match(/classement_phase_(.+)\.csv$/i);
-  if (match) return match[1].replace(/_/g, ' ').trim();
-
-  const lower = filename.toLowerCase();
-  if (lower.includes('poule')) return 'POULES';
-  if (lower.includes('petite')) return 'Petite finale';
-  if (lower.includes('finale') && !lower.includes('demi')) return 'Finale';
-  if (lower.includes('demi')) return 'Demi-finales';
-  if (lower.includes('classement')) return 'CLASSEMENTS';
-
-  return filename.replace(/\.csv$/i, '');
-}
-
-/**
- * Normalize a phase key for comparison (lowercase, no accents, underscores).
- */
-function normalizePhaseKey(phaseName) {
-  return phaseName
-    .toLowerCase()
-    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-    .replace(/[-_\s]+/g, '_')
-    .trim();
-}
-
-/**
- * Find a phase key in phaseData by keyword, optionally excluding certain keywords.
- */
-function findPhaseKey(phaseData, keyword, excludeKeywords = []) {
-  for (const key of Object.keys(phaseData)) {
-    const lower = normalizePhaseKey(key);
-    if (lower.includes(keyword) && !excludeKeywords.some(ex => lower.includes(ex))) {
-      return key;
-    }
-  }
-  return null;
-}
-
-/**
- * Determine final positions (1 to N) from all phase CSVs.
- * phaseData: { phaseName: [parsedRecords], ... }
- * Returns: { licence: position, ... }
- */
-function computeJourneePositions(phaseData) {
-  const positions = {}; // licence -> position
-
-  // Find the POULES phase
-  const poulesKey = findPhaseKey(phaseData, 'poule');
-  const poulesRecords = poulesKey ? phaseData[poulesKey] : [];
-  const playerCount = poulesRecords.length;
-
-  // Case 1: < 6 players — POULES classement IS the final position
-  if (playerCount < 6) {
-    for (const record of poulesRecords) {
-      positions[record.licence] = record.classement;
-    }
-    return positions;
-  }
-
-  // Case 2: 6+ players — extract positions from bracket/classification phases
-
-  // Finale: classt 1 = 1st place, classt 2 = 2nd place
-  const finaleKey = findPhaseKey(phaseData, 'finale', ['demi', 'petite']);
-  if (finaleKey) {
-    for (const record of phaseData[finaleKey]) {
-      if (record.classement === 1) positions[record.licence] = 1;
-      if (record.classement === 2) positions[record.licence] = 2;
-    }
-  }
-
-  // Petite finale: classt 1 = 3rd, classt 2 = 4th
-  const petiteFinaleKey = findPhaseKey(phaseData, 'petite');
-  if (petiteFinaleKey) {
-    for (const record of phaseData[petiteFinaleKey]) {
-      if (record.classement === 1) positions[record.licence] = 3;
-      if (record.classement === 2) positions[record.licence] = 4;
-    }
-  }
-
-  // Classification phases: parse position numbers from phase name
-  // Examples: "G9-10 - P7-8" -> positions 7,8 ; "G7-8 - P5-6" -> positions 5,6
-  for (const [phaseName, records] of Object.entries(phaseData)) {
-    const normalized = normalizePhaseKey(phaseName);
-    // Skip known phases
-    if (normalized.includes('finale') || normalized.includes('demi') ||
-        normalized.includes('petite') || normalized === 'poules' ||
-        normalized === 'classements') continue;
-
-    // Try to extract position range: look for P followed by digits (e.g., P5-6, P7-8)
-    const posMatch = phaseName.match(/P(\d+)\s*[-–]\s*(\d+)/i);
-    if (posMatch) {
-      const pos1 = parseInt(posMatch[1]);
-      const pos2 = parseInt(posMatch[2]);
-      const betterPos = Math.min(pos1, pos2);
-      const worsePos = Math.max(pos1, pos2);
-
-      for (const record of records) {
-        if (!positions[record.licence]) {
-          if (record.classement === 1) positions[record.licence] = betterPos;
-          if (record.classement === 2) positions[record.licence] = worsePos;
-        }
-      }
-      continue;
-    }
-
-    // Fallback: try any digit pair in the name (e.g., "G9-10")
-    const digitMatch = phaseName.match(/(\d+)\s*[-–]\s*(\d+)/);
-    if (digitMatch) {
-      const pos1 = parseInt(digitMatch[1]);
-      const pos2 = parseInt(digitMatch[2]);
-      const betterPos = Math.min(pos1, pos2);
-      const worsePos = Math.max(pos1, pos2);
-
-      for (const record of records) {
-        if (!positions[record.licence]) {
-          if (record.classement === 1) positions[record.licence] = betterPos;
-          if (record.classement === 2) positions[record.licence] = worsePos;
-        }
-      }
-    }
-  }
-
-  // Fallback: players not assigned from bracket/classification get sequential positions
-  const assignedLicences = new Set(Object.keys(positions));
-  const highestAssigned = Object.values(positions).length > 0
-    ? Math.max(...Object.values(positions))
-    : 0;
-
-  const unassigned = poulesRecords
-    .filter(r => !assignedLicences.has(r.licence))
-    .sort((a, b) => a.classement - b.classement);
-
-  let nextPosition = highestAssigned + 1;
-  for (const record of unassigned) {
-    positions[record.licence] = nextPosition++;
-  }
-
-  return positions;
-}
-
 /**
  * Look up position_points for an org and return a mapping { position: points }.
  */
@@ -308,6 +162,33 @@ async function getPositionPointsLookup(orgId) {
     lookup[row.position] = row.points;
   }
   return lookup;
+}
+
+/**
+ * For journées orgs, assign position_points to tournament results based on the CSV 'classement' column.
+ * No-op for standard orgs.
+ */
+async function assignPositionPointsIfJournees(tournamentId, orgId) {
+  if (!orgId) return;
+  const qualMode = await appSettings.getOrgSetting(orgId, 'qualification_mode');
+  if (qualMode !== 'journees') return;
+
+  const lookup = await getPositionPointsLookup(orgId);
+  if (Object.keys(lookup).length === 0) return;
+
+  // Position is already set from the CSV 'classement' column during standard import
+  const results = await dbAllAsync(
+    'SELECT id, position FROM tournament_results WHERE tournament_id = $1',
+    [tournamentId]
+  );
+
+  for (const r of results) {
+    const pp = lookup[r.position] || 0;
+    await dbRunAsync(
+      'UPDATE tournament_results SET position_points = $1 WHERE id = $2',
+      [pp, r.id]
+    );
+  }
 }
 
 // Get organization logo as buffer from database (for Excel exports)
@@ -788,31 +669,41 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
                       return res.status(500).json({ error: 'Error finalizing import' });
                     }
 
-                    // Compute bonus points then recalculate rankings
                     const orgId = req.user.organizationId || null;
-                    computeBonusPoints(finalTournamentId, categoryId, orgId, () => {
-                    recalculateRankings(categoryId, season, () => {
-                      // Clean up uploaded file
-                      fs.unlinkSync(req.file.path);
 
-                      // Log tournament import
-                      logAdminAction({
-                        req,
-                        action: ACTION_TYPES.IMPORT_TOURNAMENT,
-                        details: `Import tournoi ${tournamentNumber}, saison ${season}, ${imported} joueurs`,
-                        targetType: 'tournament',
-                        targetId: finalTournamentId,
-                        targetName: `T${tournamentNumber} - ${season}`
-                      });
+                    // Assign position_points for journées orgs (no-op for standard)
+                    const afterPositionPoints = () => {
+                      computeBonusPoints(finalTournamentId, categoryId, orgId, () => {
+                        recalculateRankings(categoryId, season, () => {
+                          // Clean up uploaded file
+                          fs.unlinkSync(req.file.path);
 
-                      res.json({
-                        message: 'Tournament imported successfully',
-                        tournamentId: finalTournamentId,
-                        imported,
-                        errors: errors.length > 0 ? errors : undefined
+                          // Log tournament import
+                          logAdminAction({
+                            req,
+                            action: ACTION_TYPES.IMPORT_TOURNAMENT,
+                            details: `Import tournoi ${tournamentNumber}, saison ${season}, ${imported} joueurs`,
+                            targetType: 'tournament',
+                            targetId: finalTournamentId,
+                            targetName: `T${tournamentNumber} - ${season}`
+                          });
+
+                          res.json({
+                            message: 'Tournament imported successfully',
+                            tournamentId: finalTournamentId,
+                            imported,
+                            errors: errors.length > 0 ? errors : undefined
+                          });
+                        });
                       });
-                    });
-                    }); // close computeBonusPoints
+                    };
+
+                    assignPositionPointsIfJournees(finalTournamentId, orgId)
+                      .then(afterPositionPoints)
+                      .catch(ppErr => {
+                        console.error('Error assigning position points:', ppErr);
+                        afterPositionPoints(); // Continue anyway — non-blocking
+                      });
                   });
                 } // Close insertTournamentResults function
               });
@@ -867,454 +758,6 @@ router.get('/lookup-date', authenticateToken, async (req, res) => {
 
     res.json({ found: false });
   } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// ==================== Journées Qualificatives Import ====================
-
-/**
- * POST /validate-journee
- * Accept multiple CSV files, parse all, check for unknown players across ALL files.
- */
-router.post('/validate-journee', authenticateToken, upload.array('files', 10), async (req, res) => {
-  if (!req.files || req.files.length === 0) {
-    return res.status(400).json({ error: 'No files uploaded' });
-  }
-
-  try {
-    let columnMapping;
-    try {
-      const profileConfig = await getColumnMapping('tournaments');
-      columnMapping = profileConfig?.mappings || DEFAULT_TOURNAMENT_MAPPING;
-    } catch (err) {
-      columnMapping = DEFAULT_TOURNAMENT_MAPPING;
-    }
-
-    const orgId = req.user.organizationId || null;
-    const unknownPlayers = [];
-    const checkedLicences = new Set();
-    const phaseData = {};
-    const detectedPhases = [];
-
-    // Parse all files: check unknown players AND build phaseData for preview
-    for (const file of req.files) {
-      const records = await readCSVRecords(file.path);
-      const parsed = parseRecordsWithMapping(records, columnMapping);
-
-      // Build phaseData (needed for position computation)
-      const phaseName = detectPhaseFromFilename(file.originalname);
-      phaseData[phaseName] = parsed;
-      detectedPhases.push(phaseName);
-
-      // Check for unknown players
-      for (const player of parsed) {
-        if (checkedLicences.has(player.licence)) continue;
-        checkedLicences.add(player.licence);
-
-        const existsQuery = `
-          SELECT licence, first_name, last_name
-          FROM players
-          WHERE (REPLACE(licence, ' ', '') = ?
-             OR (UPPER(first_name || ' ' || last_name) = UPPER(?)
-                 OR UPPER(last_name || ' ' || first_name) = UPPER(?)))
-            AND (?::int IS NULL OR organization_id = ?)
-        `;
-
-        const existing = await dbGetAsync(existsQuery, [player.licence, player.playerName, player.playerName, orgId, orgId]);
-
-        if (!existing) {
-          const nameParts = player.playerName.split(' ');
-          const lastName = nameParts[0] || '';
-          const firstName = nameParts.slice(1).join(' ') || '';
-
-          unknownPlayers.push({
-            licence: player.licence,
-            firstName,
-            lastName,
-            fullName: player.playerName
-          });
-        }
-      }
-    }
-
-    // Clean up all uploaded files
-    for (const file of req.files) {
-      if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
-    }
-
-    if (unknownPlayers.length > 0) {
-      return res.json({ status: 'validation_required', unknownPlayers });
-    }
-
-    // All players exist — compute positions preview (avoids a second file upload)
-    const finalPositions = computeJourneePositions(phaseData);
-    const posPointsLookup = await getPositionPointsLookup(orgId);
-
-    // Find POULES for player names
-    const poulesKey = findPhaseKey(phaseData, 'poule');
-    const poulesRecords = poulesKey ? phaseData[poulesKey] : [];
-
-    // Aggregate points, reprises, matchPoints, and match count across ALL phases per player
-    const playerStats = {}; // licence -> { totalPoints, totalReprises, totalMatchPoints, matchCount, phases }
-    for (const [phaseName, records] of Object.entries(phaseData)) {
-      for (const record of records) {
-        if (!playerStats[record.licence]) {
-          playerStats[record.licence] = { totalPoints: 0, totalReprises: 0, totalMatchPoints: 0, matchCount: 0, phases: [] };
-        }
-        playerStats[record.licence].totalPoints += parseFloat(record.points) || 0;
-        playerStats[record.licence].totalReprises += parseInt(record.reprises) || 0;
-        playerStats[record.licence].totalMatchPoints += parseInt(record.matchPoints) || 0;
-        playerStats[record.licence].matchCount += 1;
-        playerStats[record.licence].phases.push(phaseName);
-      }
-    }
-
-    // Query moyenneThresholds from game_parameters via category
-    const categoryId = req.body.categoryId;
-    let moyenneThresholds = null;
-    if (categoryId) {
-      const category = await dbGetAsync('SELECT game_type, level FROM categories WHERE id = $1', [categoryId]);
-      if (category) {
-        // Org-scoped with fallback (nullable org pattern + space normalization)
-        let gp = await dbGetAsync(
-          `SELECT moyenne_mini, moyenne_maxi FROM game_parameters
-           WHERE UPPER(REPLACE(mode, ' ', '')) = UPPER(REPLACE($1, ' ', ''))
-             AND UPPER(categorie) = UPPER($2)
-             AND ($3::int IS NULL OR organization_id = $3)`,
-          [category.game_type, category.level, orgId]
-        );
-        if (gp) {
-          const mini = parseFloat(gp.moyenne_mini) || 0;
-          const maxi = parseFloat(gp.moyenne_maxi) || 0;
-          moyenneThresholds = { mini, maxi, middle: (mini + maxi) / 2 };
-        }
-      }
-    }
-
-    // Load TQ stage config for dynamic column visibility
-    const tqConfig = await dbGetAsync(
-      `SELECT average_bonus, level_bonus, participation_bonus
-       FROM stage_scoring_config
-       WHERE stage_code = 'TQ' AND ($1::int IS NULL OR organization_id = $1)`,
-      [orgId]
-    );
-    const tqStageConfig = {
-      average_bonus: tqConfig ? tqConfig.average_bonus : 3,
-      level_bonus: tqConfig ? tqConfig.level_bonus : 0,
-      participation_bonus: tqConfig ? tqConfig.participation_bonus : 0
-    };
-
-    // Load configurable tier values for average bonus
-    const tier1 = parseInt(await appSettings.getOrgSetting(orgId, 'scoring_avg_tier_1')) || 1;
-    const tier2 = parseInt(await appSettings.getOrgSetting(orgId, 'scoring_avg_tier_2')) || 2;
-    const tier3 = parseInt(await appSettings.getOrgSetting(orgId, 'scoring_avg_tier_3')) || 3;
-
-    // Build positions array sorted by position
-    const positions = poulesRecords.map(record => {
-      const stats = playerStats[record.licence] || { totalPoints: 0, totalReprises: 0, totalMatchPoints: 0, matchCount: 0, phases: [] };
-      const moyenne = stats.totalReprises > 0
-        ? Math.round((stats.totalPoints / stats.totalReprises) * 1000) / 1000
-        : 0;
-
-      // Compute average bonus using same logic as scoring-detail
-      let computedAverageBonus = 0;
-      if (moyenneThresholds && moyenneThresholds.maxi > 0) {
-        if (moyenne >= moyenneThresholds.maxi) computedAverageBonus = tier3;
-        else if (moyenne >= moyenneThresholds.middle) computedAverageBonus = tier2;
-        else if (moyenne >= moyenneThresholds.mini) computedAverageBonus = tier1;
-      }
-
-      return {
-        licence: record.licence,
-        playerName: record.playerName,
-        position: finalPositions[record.licence] || 0,
-        positionPoints: posPointsLookup[finalPositions[record.licence]] || 0,
-        totalPoints: stats.totalPoints,
-        totalReprises: stats.totalReprises,
-        moyenne,
-        matchCount: stats.matchCount,
-        matchPoints: stats.totalMatchPoints,
-        playerPhases: stats.phases.join(' → '),
-        computed_average_bonus: computedAverageBonus
-      };
-    }).sort((a, b) => a.position - b.position);
-
-    return res.json({
-      status: 'preview',
-      positions,
-      phases: detectedPhases,
-      playerCount: poulesRecords.length,
-      posPointsLookup,
-      moyenneThresholds,
-      tqStageConfig,
-      scoringTiers: { tier1, tier2, tier3 }
-    });
-
-  } catch (error) {
-    for (const file of req.files) {
-      if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
-    }
-    res.status(500).json({ error: error.message });
-  }
-});
-
-/**
- * POST /import-journee
- * Import multiple CSV files for a Journée Qualificative.
- * Uses POULES file for base stats, bracket/classification files for final positions.
- */
-router.post('/import-journee', authenticateToken, upload.array('files', 10), async (req, res) => {
-  if (!req.files || req.files.length === 0) {
-    return res.status(400).json({ error: 'No files uploaded' });
-  }
-
-  const { categoryId, tournamentNumber, season, tournamentDate } = req.body;
-
-  if (!categoryId || !tournamentNumber || !season) {
-    for (const file of req.files) {
-      if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
-    }
-    return res.status(400).json({ error: 'Category, tournament number, and season required' });
-  }
-
-  try {
-    // Load column mapping
-    let columnMapping;
-    try {
-      const profileConfig = await getColumnMapping('tournaments');
-      columnMapping = profileConfig?.mappings || DEFAULT_TOURNAMENT_MAPPING;
-    } catch (err) {
-      columnMapping = DEFAULT_TOURNAMENT_MAPPING;
-    }
-
-    const orgId = req.user.organizationId || null;
-
-    // Phase 1: Parse all files and detect phases
-    const phaseData = {};
-    const detectedPhases = [];
-
-    for (const file of req.files) {
-      const phaseName = detectPhaseFromFilename(file.originalname);
-      const records = await readCSVRecords(file.path);
-      const parsed = parseRecordsWithMapping(records, columnMapping);
-      phaseData[phaseName] = parsed;
-      detectedPhases.push({ phase: phaseName, playerCount: parsed.length, filename: file.originalname });
-    }
-
-    // Find POULES file — required
-    const poulesKey = findPhaseKey(phaseData, 'poule');
-    if (!poulesKey) {
-      for (const file of req.files) {
-        if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
-      }
-      return res.status(400).json({ error: 'Le fichier POULES est obligatoire' });
-    }
-
-    const poulesRecords = phaseData[poulesKey];
-
-    // Phase 2: Create or update tournament
-    await dbRunAsync(
-      `INSERT INTO tournaments (category_id, tournament_number, season, tournament_date, organization_id)
-       VALUES ($1, $2, $3, $4, $5)
-       ON CONFLICT(category_id, tournament_number, season) DO UPDATE SET
-         tournament_date = $4,
-         import_date = CURRENT_TIMESTAMP`,
-      [categoryId, tournamentNumber, season, tournamentDate, orgId]
-    );
-
-    const tournamentRow = await dbGetAsync(
-      'SELECT id FROM tournaments WHERE category_id = $1 AND tournament_number = $2 AND season = $3',
-      [categoryId, tournamentNumber, season]
-    );
-    const tournamentId = tournamentRow.id;
-
-    // Phase 3: Delete existing results + reset scoring state on re-import
-    await dbRunAsync('DELETE FROM tournament_results WHERE tournament_id = $1', [tournamentId]);
-    await dbRunAsync('DELETE FROM stage_player_scores WHERE tournament_id = $1', [tournamentId]);
-    await dbRunAsync('UPDATE tournaments SET scoring_validated = FALSE, scoring_validated_at = NULL WHERE id = $1', [tournamentId]);
-
-    // Phase 4: Ensure all players exist
-    for (const record of poulesRecords) {
-      const nameParts = record.playerName.split(' ');
-      const lastName = nameParts[0] || '';
-      const firstName = nameParts.slice(1).join(' ') || '';
-
-      await dbRunAsync(
-        `INSERT INTO players (licence, first_name, last_name, club, is_active, organization_id)
-         VALUES ($1, $2, $3, $4, 1, $5)
-         ON CONFLICT (licence) DO NOTHING`,
-        [record.licence, firstName, lastName, 'Club inconnu', orgId]
-      );
-    }
-
-    // Phase 5: Compute positions + lookup
-    const posPointsLookup = await getPositionPointsLookup(orgId);
-
-    // Phase 6: Filter to included players only (if specified from preview)
-    const includedLicences = req.body.includedLicences
-      ? JSON.parse(req.body.includedLicences)
-      : null;
-
-    const recordsToImport = includedLicences
-      ? poulesRecords.filter(r => includedLicences.includes(r.licence))
-      : poulesRecords;
-
-    // Phase 6b: Parse bonus data from preview (if provided)
-    const editedBonuses = req.body.editedBonuses
-      ? JSON.parse(req.body.editedBonuses)
-      : null;
-    const bonusMap = {};
-    const hasBonusMoyenne = editedBonuses && editedBonuses.some(b => parseInt(b.bonusMoyenne) > 0 || parseInt(b.bonusNiveau) > 0 || parseInt(b.bonusNbJoueurs) > 0 || parseInt(b.bonusLibre) > 0);
-    if (editedBonuses) {
-      for (const b of editedBonuses) {
-        bonusMap[b.licence] = b;
-      }
-    }
-
-    // Phase 6c: Aggregate points, reprises, matchPoints across ALL phases per player
-    const playerStats = {};
-    for (const [phaseName, records] of Object.entries(phaseData)) {
-      for (const record of records) {
-        if (!playerStats[record.licence]) {
-          playerStats[record.licence] = { totalPoints: 0, totalReprises: 0, totalMatchPoints: 0 };
-        }
-        playerStats[record.licence].totalPoints += parseFloat(record.points) || 0;
-        playerStats[record.licence].totalReprises += parseInt(record.reprises) || 0;
-        playerStats[record.licence].totalMatchPoints += parseInt(record.matchPoints) || 0;
-      }
-    }
-
-    // Phase 6d: Determine final positions
-    // If editedBonuses provided → re-rank by total (matchPoints + all bonuses)
-    // Otherwise → use computeJourneePositions (E2i bracket-based positions)
-    let finalPositions;
-    if (editedBonuses) {
-      // Re-rank by total: matchPoints + bonusMoyenne + bonusNiveau + bonusNbJoueurs + bonusLibre
-      const playerTotals = recordsToImport.map(record => {
-        const bonus = bonusMap[record.licence] || {};
-        const matchPts = (playerStats[record.licence] || {}).totalMatchPoints || 0;
-        const bMoy = parseInt(bonus.bonusMoyenne) || 0;
-        const bNiv = parseInt(bonus.bonusNiveau) || 0;
-        const bJou = parseInt(bonus.bonusNbJoueurs) || 0;
-        const bLib = parseInt(bonus.bonusLibre) || 0;
-        const total = matchPts + bMoy + bNiv + bJou + bLib;
-        return { licence: record.licence, total, matchPoints: matchPts };
-      });
-      // Sort by total descending, tie-break by matchPoints descending
-      playerTotals.sort((a, b) => b.total - a.total || b.matchPoints - a.matchPoints);
-      finalPositions = {};
-      playerTotals.forEach((p, idx) => { finalPositions[p.licence] = idx + 1; });
-    } else {
-      finalPositions = computeJourneePositions(phaseData);
-    }
-
-    // Phase 7: Insert tournament_results with final positions and bonuses
-    let imported = 0;
-    const errors = [];
-
-    for (const record of recordsToImport) {
-      const position = finalPositions[record.licence] || 0;
-      const positionPoints = posPointsLookup[position] || 0;
-
-      // Use aggregated stats across all phases
-      const stats = playerStats[record.licence] || { totalPoints: 0, totalReprises: 0, totalMatchPoints: 0 };
-      const aggregatedMoyenne = stats.totalReprises > 0
-        ? Math.round((stats.totalPoints / stats.totalReprises) * 1000) / 1000
-        : 0;
-      const aggregatedMatchPoints = stats.totalMatchPoints;
-
-      // Bonus from preview edits
-      const bonus = bonusMap[record.licence] || {};
-      const bonusMoyenne = parseInt(bonus.bonusMoyenne) || 0;
-      const bonusNiveau = parseInt(bonus.bonusNiveau) || 0;
-      const bonusNbJoueurs = parseInt(bonus.bonusNbJoueurs) || 0;
-      const bonusLibre = parseInt(bonus.bonusLibre) || 0;
-      const totalBonus = bonusMoyenne + bonusNiveau + bonusNbJoueurs + bonusLibre;
-      const bonusDetail = {};
-      if (bonusMoyenne) bonusDetail.MOYENNE = bonusMoyenne;
-      if (bonusNiveau) bonusDetail.NIVEAU = bonusNiveau;
-      if (bonusNbJoueurs) bonusDetail.NB_JOUEURS = bonusNbJoueurs;
-      if (bonusLibre) bonusDetail.LIBRE = bonusLibre;
-
-      try {
-        await dbRunAsync(
-          `INSERT INTO tournament_results (tournament_id, licence, player_name, position, match_points, moyenne, serie, points, reprises, position_points, bonus_points, bonus_detail)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
-          [tournamentId, record.licence, record.playerName, position, aggregatedMatchPoints, aggregatedMoyenne, record.serie, stats.totalPoints, stats.totalReprises, positionPoints, totalBonus, JSON.stringify(bonusDetail)]
-        );
-        imported++;
-      } catch (err) {
-        errors.push({ licence: record.licence, error: err.message });
-      }
-    }
-
-    // Phase 8: Compute bonus points + recalculate rankings
-    // Always recalculate rankings after import (same as standard mode).
-    // If manual bonuses exist (level_bonus/participation_bonus), the scoring-detail
-    // page can re-recalculate after admin adjustments — but initial rankings
-    // must be available immediately so position points display correctly.
-    const stageScoringRows = await dbAllAsync(
-      'SELECT * FROM stage_scoring_config WHERE ($1::int IS NULL OR organization_id = $1)',
-      [orgId]
-    );
-    const hasManualBonuses = stageScoringRows.some(r => r.level_bonus > 0 || r.participation_bonus > 0);
-
-    await new Promise((resolve) => {
-      computeBonusPoints(tournamentId, categoryId, orgId, () => {
-        recalculateRankings(categoryId, season, () => {
-          resolve();
-        });
-      });
-    });
-
-    // Clean up uploaded files
-    for (const file of req.files) {
-      if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
-    }
-
-    // Log action
-    logAdminAction({
-      req,
-      action: ACTION_TYPES.IMPORT_TOURNAMENT,
-      details: `Import journée qualificative ${tournamentNumber}, saison ${season}, ${imported} joueurs, ${detectedPhases.length} phases`,
-      targetType: 'tournament',
-      targetId: tournamentId,
-      targetName: `TQ${tournamentNumber} - ${season}`
-    });
-
-    // Build positions array for frontend display
-    const positionsArray = [];
-    for (const record of poulesRecords) {
-      const pos = finalPositions[record.licence] || 0;
-      positionsArray.push({
-        licence: record.licence,
-        playerName: record.playerName,
-        position: pos,
-        positionPoints: posPointsLookup[pos] || 0
-      });
-    }
-    positionsArray.sort((a, b) => (a.position || 999) - (b.position || 999));
-
-    // Check if mixed-category bonus is enabled for this org
-    const mixedCategoryBonus = (await appSettings.getOrgSetting(orgId, 'mixed_category_bonus')) === 'true';
-
-    res.json({
-      message: 'Journée qualificative importée avec succès',
-      tournamentId,
-      imported,
-      phases: detectedPhases.map(p => p.phase || p),
-      phasesCount: detectedPhases.length,
-      positions: positionsArray,
-      mixedCategoryBonus,
-      hasManualBonuses,
-      errors: errors.length > 0 ? errors : undefined
-    });
-
-  } catch (error) {
-    for (const file of req.files) {
-      if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
-    }
     res.status(500).json({ error: error.message });
   }
 });
@@ -1721,7 +1164,7 @@ async function recalculateRankingsJournees(categoryId, season, callback, orgId) 
         playerData[r.licence] = { playerName: r.player_name, tournaments: {} };
       }
       playerData[r.licence].tournaments[r.tournament_number] = {
-        positionPoints: r.position_points || r.match_points || 0,
+        positionPoints: r.position_points || 0,
         points: r.points || 0,
         reprises: r.reprises || 0,
         matchPoints: r.match_points || 0,

@@ -51,7 +51,7 @@ const enrollmentRequestsRoutes = require('./routes/enrollment-requests');
 const superAdminRoutes = require('./routes/super-admin');
 const ligueAdminRoutes = require('./routes/ligue-admin');
 const ffbImportRoutes = require('./routes/ffb-import');
-const bracketRoutes = require('./routes/bracket');
+
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -224,7 +224,7 @@ app.use('/api/enrollment-requests', apiLimiter, enrollmentRequestsRoutes);
 app.use('/api/super-admin', apiLimiter, superAdminRoutes);
 app.use('/api/ligue-admin', apiLimiter, ligueAdminRoutes);
 app.use('/api/ffb', apiLimiter, ffbImportRoutes);
-app.use('/api/bracket', apiLimiter, bracketRoutes);
+
 
 // App version endpoint (for automatic update detection)
 // INCREMENT THIS VERSION when deploying updates you want users to see

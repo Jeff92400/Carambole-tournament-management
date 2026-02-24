@@ -23,7 +23,7 @@
     'activity-logs.html': '#param-logs',
     'admin-activity-logs.html': '#param-logs',
     'privacy-policy-editor.html': '#param-confidentialite',
-    'tournament-bracket.html': '#competitions',
+
     'tournament-scoring.html': '#resultats',
     'statistiques.html': '#presentation',
     'ligue-dashboard.html': '#dashboard',

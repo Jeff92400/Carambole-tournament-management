@@ -1021,10 +1021,6 @@
             <label style="display: block; margin-bottom: 8px; font-weight: 500;">Meilleurs résultats retenus :</label>
             <input type="number" id="bestOfCount" value="2" min="1" max="10" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
           </div>
-          <div style="flex: 1; min-width: 180px;">
-            <label style="display: block; margin-bottom: 8px; font-weight: 500;">Taille du tableau (bracket) :</label>
-            <input type="number" id="bracketSize" value="4" min="2" max="8" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
-          </div>
         </div>
 
         <div style="margin-bottom: 20px;">
@@ -1043,46 +1039,6 @@
           </div>
           <div style="margin-top: 10px;">
             <button onclick="addPositionRow()" class="btn" style="background: #6c757d; padding: 8px 15px; font-size: 13px;">+ Ajouter une position</button>
-          </div>
-        </div>
-
-        <!-- Stage Scoring Configuration Matrix -->
-        <div style="margin-bottom: 20px; padding: 15px; background: #e7f3ff; border-left: 4px solid var(--color-primary, #1F4788); border-radius: 4px;">
-          <strong>Configuration du scoring par phase</strong>
-          <p style="margin: 5px 0 10px 0; color: #666; font-size: 13px;">Définissez quels mécanismes de scoring s'appliquent à chaque phase de la compétition.</p>
-          <div style="overflow-x: auto;">
-            <table id="stageScoringTable" style="width: 100%; border-collapse: collapse; font-size: 13px; background: white; border-radius: 6px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-              <thead>
-                <tr style="background: var(--color-primary, #1F4788); color: white;">
-                  <th style="padding: 10px 12px; text-align: left; font-weight: 500;">Phase</th>
-                  <th style="padding: 10px 8px; text-align: center; font-weight: 500; cursor: help;" title="Points par match gagné (0 = non comptabilisé)">Pts Match</th>
-                  <th style="padding: 10px 8px; text-align: center; font-weight: 500; cursor: help;" title="Bonus maximum lié à la moyenne (0 = désactivé)">Bonus Moy.</th>
-                  <th style="padding: 10px 8px; text-align: center; font-weight: 500; cursor: help;" title="Points par match contre un adversaire de catégorie supérieure (0 = désactivé)">Bonus Niv.</th>
-                  <th style="padding: 10px 8px; text-align: center; font-weight: 500; cursor: help;" title="Bonus basé sur le nombre de joueurs engagés (0 = désactivé)">Bonus Part.</th>
-                  <th style="padding: 10px 8px; text-align: center; font-weight: 500; cursor: help;" title="Cette phase attribue des points de classement/position">Pts Clt</th>
-                </tr>
-              </thead>
-              <tbody id="stageScoringBody">
-                <!-- Dynamically populated -->
-              </tbody>
-            </table>
-          </div>
-
-          <!-- Dynamic scoring rule blocks (barème) -->
-          <div id="scoringRuleBlocks" style="margin-top: 20px;">
-            <div style="text-align: center; padding: 20px; color: #666;">Chargement...</div>
-          </div>
-
-          <!-- Add new block form -->
-          <div style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
-            <h4 style="margin: 0 0 10px; font-size: 14px; color: var(--color-primary, #1F4788);">
-              Ajouter un nouveau bloc de conditions
-            </h4>
-            <div class="add-block-form">
-              <input type="text" id="newBlockName" placeholder="Nom du bloc (ex: Bonus Participation)" maxlength="50">
-              <input type="text" id="newBlockLabel" placeholder="Libellé colonne (ex: Bonus Part.)" maxlength="30" style="max-width: 200px;">
-              <button class="btn-add-sm" onclick="addScoringBlock()">Ajouter le bloc</button>
-            </div>
           </div>
         </div>
 
@@ -4217,7 +4173,6 @@
           const settings = await response.json();
           document.getElementById('journeesCount').value = settings.journees_count || '3';
           document.getElementById('bestOfCount').value = settings.best_of_count || '2';
-          document.getElementById('bracketSize').value = settings.bracket_size || '4';
           document.getElementById('averageBonusTiers').checked = settings.average_bonus_tiers === 'true';
           selectQualificationMode(settings.qualification_mode || 'standard');
         }
@@ -4238,52 +4193,9 @@
           }
         }
 
-        // Load stage scoring config
-        const ssResponse = await fetch(`${API_URL}/settings/stage-scoring`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (ssResponse.ok) {
-          const stages = await ssResponse.json();
-          renderStageScoringTable(stages);
-        }
-
-        // Load barème blocks
-        await loadScoringMetadata();
-        await loadScoringRules();
       } catch (error) {
         console.error('Error loading qualification settings:', error);
       }
-    }
-
-    function renderStageScoringTable(stages) {
-      const tbody = document.getElementById('stageScoringBody');
-      let lastGroup = null;
-
-      function gridCell(cssClass, value) {
-        const enabled = value > 0;
-        return `<td style="padding: 8px 4px; border-bottom: 1px solid #eee; text-align: center;">
-          <input type="checkbox" class="${cssClass}-enabled" ${enabled ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer;">
-        </td>`;
-      }
-
-      tbody.innerHTML = stages.map(stage => {
-        let separator = '';
-        if (lastGroup === 'phase' && stage.group === 'tournament') {
-          separator = `<tr><td colspan="6" style="padding: 6px 12px; background: #f0f0f0; font-size: 12px; font-weight: 600; color: #555; border-top: 2px solid #ccc;">Au niveau du tournoi</td></tr>`;
-        }
-        lastGroup = stage.group;
-        const rowBg = stage.group === 'tournament' ? 'background: #fafaf4;' : '';
-        return separator + `<tr data-stage="${stage.code}" style="${rowBg}">
-          <td style="padding: 8px 12px; border-bottom: 1px solid #eee; font-weight: 500;">${stage.displayName}</td>
-          ${gridCell('ss-match-points', stage.match_points)}
-          ${gridCell('ss-average-bonus', stage.average_bonus)}
-          ${gridCell('ss-level-bonus', stage.level_bonus)}
-          ${gridCell('ss-participation-bonus', stage.participation_bonus)}
-          <td style="padding: 8px 4px; border-bottom: 1px solid #eee; text-align: center;">
-            <input type="checkbox" class="ss-ranking-points" ${stage.ranking_points ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer;">
-          </td>
-        </tr>`;
-      }).join('');
     }
 
     async function saveQualificationSettings() {
@@ -4300,7 +4212,6 @@
             qualification_mode: document.getElementById('qualificationMode').value,
             journees_count: document.getElementById('journeesCount').value,
             best_of_count: document.getElementById('bestOfCount').value,
-            bracket_size: document.getElementById('bracketSize').value,
             average_bonus_tiers: document.getElementById('averageBonusTiers').checked ? 'true' : 'false'
           })
         });
@@ -4328,35 +4239,6 @@
         });
 
         if (!ppResponse.ok) throw new Error('Erreur lors de la sauvegarde des points par position');
-
-        // Save stage scoring config (respect checkbox-disabled cells)
-        const stageRows = document.querySelectorAll('#stageScoringBody tr[data-stage]');
-        const stages = [];
-        stageRows.forEach(row => {
-          const readVal = (cls) => {
-            const cb = row.querySelector(`.${cls}-enabled`);
-            return (cb && cb.checked) ? 1 : 0;
-          };
-          stages.push({
-            code: row.dataset.stage,
-            match_points: readVal('ss-match-points'),
-            average_bonus: readVal('ss-average-bonus'),
-            level_bonus: readVal('ss-level-bonus'),
-            participation_bonus: readVal('ss-participation-bonus'),
-            ranking_points: row.querySelector('.ss-ranking-points').checked
-          });
-        });
-
-        const ssResponse = await fetch(`${API_URL}/settings/stage-scoring`, {
-          method: 'PUT',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ stages })
-        });
-
-        if (!ssResponse.ok) throw new Error('Erreur lors de la sauvegarde du scoring par phase');
 
         msgDiv.textContent = 'Paramètres de qualification enregistrés';
         msgDiv.style.background = '#d4edda';
