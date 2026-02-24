@@ -201,6 +201,9 @@
         <button class="btn btn-success" id="exportExcelBtn">
           📊 Exporter en Excel
         </button>
+        <button class="btn admin-only" id="recomputeBtn" style="background: #6c757d; margin-left: 10px; display: none;">
+          Recalculer bonus & classements
+        </button>
       </div>
     </div>
   </div>
@@ -578,6 +581,35 @@
         alert('Erreur lors de l\'export Excel');
       }
     });
+
+    // Show recompute button for admins
+    const userRole = localStorage.getItem('userRole');
+    if (userRole === 'admin') {
+      const recomputeBtn = document.getElementById('recomputeBtn');
+      recomputeBtn.style.display = 'inline-block';
+      recomputeBtn.addEventListener('click', async () => {
+        recomputeBtn.disabled = true;
+        recomputeBtn.textContent = 'Recalcul en cours...';
+        try {
+          const response = await fetch(`${API_URL}/tournaments/${tournamentId}/recompute`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          const data = await response.json();
+          if (response.ok) {
+            alert(data.message || 'Recalcul terminé');
+            window.location.reload();
+          } else {
+            alert(data.error || 'Erreur lors du recalcul');
+          }
+        } catch (error) {
+          alert('Erreur de connexion');
+        } finally {
+          recomputeBtn.disabled = false;
+          recomputeBtn.textContent = 'Recalculer bonus & classements';
+        }
+      });
+    }
   </script>
   <script src="js/help-button.js?v=203"></script>
 </body>
