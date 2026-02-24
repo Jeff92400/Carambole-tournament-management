@@ -381,7 +381,7 @@
 
         // Show podium for finale
         if (isFinale && data.results.length >= 3) {
-          displayPodium(data.results.slice(0, 3));
+          displayPodium(data.results.slice(0, 3), hasPositionPoints);
         }
 
         // Set table title based on tournament type
@@ -396,8 +396,11 @@
         const bonusColumns = data.bonusColumns || [];
         const hasBonusCols = bonusColumns.length > 0;
 
-        // Update header row dynamically based on bonus columns
-        if (hasBonusCols) {
+        // Detect if any result has position_points (journées mode)
+        const hasPositionPoints = data.results.some(r => r.position_points > 0);
+
+        // Update header row dynamically based on bonus columns and position points
+        if (hasBonusCols || hasPositionPoints) {
           document.getElementById('resultsHeaderRow').innerHTML = `
             <th style="width: 80px;">Position</th>
             <th>Licence</th>
@@ -405,11 +408,12 @@
             <th>Club</th>
             <th style="text-align: center;">Pts Match</th>
             ${bonusColumns.map(col => `<th style="text-align: center;">${col.label}</th>`).join('')}
-            <th style="text-align: center;">Total</th>
+            ${hasBonusCols ? '<th style="text-align: center;">Total</th>' : ''}
             <th style="text-align: center;">Points</th>
             <th style="text-align: center;">Reprises</th>
             <th style="text-align: center;">Moyenne</th>
-            <th style="text-align: center;">Meilleure Série</th>`;
+            <th style="text-align: center;">Meilleure Série</th>
+            ${hasPositionPoints ? '<th style="text-align: center;">Pts Position</th>' : ''}`;
         }
 
         data.results.forEach((result, index) => {
@@ -444,6 +448,11 @@
             bonusCellsHTML += `<td style="text-align: center; font-weight: bold;">${total}</td>`;
           }
 
+          // Position points cell (only if journées mode)
+          const positionPointsHTML = hasPositionPoints
+            ? `<td style="text-align: center; font-weight: bold; color: #1F4788;">${result.position_points || 0}</td>`
+            : '';
+
           // Create cells individually to use innerHTML for club logo
           row.innerHTML = `
             <td style="text-align: center; font-weight: bold;">${index + 1}</td>
@@ -460,6 +469,7 @@
             <td style="text-align: center;">${result.reprises}</td>
             <td style="text-align: center;">${moyenne}</td>
             <td style="text-align: center;">${result.serie}</td>
+            ${positionPointsHTML}
           `;
 
           // Set club logo HTML separately
@@ -481,7 +491,7 @@
     }
 
     // Display podium for finale
-    function displayPodium(topThree) {
+    function displayPodium(topThree, hasPositionPoints) {
       const podiumCard = document.getElementById('podiumCard');
       const podiumContainer = document.getElementById('podiumContainer');
 
@@ -514,7 +524,7 @@
             <div class="podium-rank">${positions[index]}</div>
             <div class="podium-name">${playerName}</div>
             <div class="podium-stats">
-              <strong>${result.match_points}</strong> pts match${podiumTotalBonus > 0 ? ` <span style="color: #28a745;">(+${podiumTotalBonus} bonus)</span>` : ''}<br>
+              <strong>${result.match_points}</strong> pts match${podiumTotalBonus > 0 ? ` <span style="color: #28a745;">(+${podiumTotalBonus} bonus)</span>` : ''}${hasPositionPoints && result.position_points ? ` — <strong>${result.position_points}</strong> pts position` : ''}<br>
               Moy: <strong>${moyenne}</strong><br>
               Meilleure Série: <strong>${result.serie || 0}</strong><br>
               <div class="podium-club-container"></div>

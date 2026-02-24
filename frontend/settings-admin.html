@@ -1042,6 +1042,23 @@
           </div>
         </div>
 
+        <!-- Dynamic scoring rule blocks (barème) -->
+        <div id="scoringRuleBlocks" style="margin-top: 20px;">
+          <div style="text-align: center; padding: 20px; color: #666;">Chargement...</div>
+        </div>
+
+        <!-- Add new block form -->
+        <div style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+          <h4 style="margin: 0 0 10px; font-size: 14px; color: var(--color-primary, #1F4788);">
+            Ajouter un nouveau bloc de conditions
+          </h4>
+          <div class="add-block-form">
+            <input type="text" id="newBlockName" placeholder="Nom du bloc (ex: Bonus Participation)" maxlength="50">
+            <input type="text" id="newBlockLabel" placeholder="Libellé colonne (ex: Bonus Part.)" maxlength="30" style="max-width: 200px;">
+            <button class="btn-add-sm" onclick="addScoringBlock()">Ajouter le bloc</button>
+          </div>
+        </div>
+
       </div>
 
       <div style="margin-top: 20px;">
@@ -4192,6 +4209,10 @@
             [30, 28, 26, 24, 22, 20, 18, 16, 14, 12, 10, 9, 8, 7, 6, 5, 5, 4, 4, 3, 3, 2, 2, 2, 1, 1, 1, 1, 1, 1].forEach((pts, i) => addPositionRow(i + 1, pts));
           }
         }
+
+        // Load scoring rules (barème)
+        await loadScoringMetadata();
+        await loadScoringRules();
 
       } catch (error) {
         console.error('Error loading qualification settings:', error);

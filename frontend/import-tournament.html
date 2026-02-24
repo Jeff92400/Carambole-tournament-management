@@ -516,6 +516,7 @@
             </div>
             <p style="margin-top: 20px;">
               <a href="rankings.html?categoryId=${categoryId}" class="btn btn-small">Voir les classements mis à jour</a>
+              ${data.tournamentId ? `<a href="tournament-results.html?id=${data.tournamentId}" class="btn btn-small" style="background: #6c757d; margin-left: 10px;">Voir le détail du tournoi</a>` : ''}
             </p>
           `;
 
