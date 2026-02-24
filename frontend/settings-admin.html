@@ -1019,26 +1019,30 @@
         <p style="margin: 5px 0 0 30px; color: #666; font-size: 13px;">
           Ajoute des points bonus selon la moyenne du joueur par rapport aux seuils min/max de la catégorie (Paramètres de jeu).
         </p>
-        <div id="bonusMoyenneTypeSelector" style="display: none; margin: 12px 0 0 30px;">
-          <div style="margin-bottom: 12px;">
-            <label style="display: flex; align-items: flex-start; gap: 8px; cursor: pointer; margin-bottom: 8px;">
-              <input type="radio" name="bonusMoyenneType" value="normal" checked style="margin-top: 3px;" onchange="updateBonusMoyenneTiers()">
-              <span><strong>Normal</strong> — 2 paliers (entre min/max, au-dessus du max)</span>
+        <div id="bonusMoyenneTypeSelector" style="display: none; margin: 15px 0 0 0;">
+          <!-- Type cards side by side -->
+          <div style="display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 15px;">
+            <label id="bonusTypeCard-normal" onclick="document.querySelector('input[name=bonusMoyenneType][value=normal]').checked=true; updateBonusMoyenneTiers(); updateBonusTypeCards();"
+              style="flex: 1; min-width: 200px; padding: 14px 16px; border: 2px solid #ddd; border-radius: 8px; cursor: pointer; background: white; transition: all 0.2s ease;">
+              <input type="radio" name="bonusMoyenneType" value="normal" checked style="display: none;" onchange="updateBonusMoyenneTiers(); updateBonusTypeCards();">
+              <div style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">Normal</div>
+              <div style="color: #666; font-size: 12px;">2 paliers : entre min/max et au-dessus du max</div>
             </label>
-            <label style="display: flex; align-items: flex-start; gap: 8px; cursor: pointer;">
-              <input type="radio" name="bonusMoyenneType" value="tiered" style="margin-top: 3px;" onchange="updateBonusMoyenneTiers()">
-              <span><strong>Par paliers</strong> — 3 paliers (min&ndash;milieu, milieu&ndash;max, &ge; max)</span>
+            <label id="bonusTypeCard-tiered" onclick="document.querySelector('input[name=bonusMoyenneType][value=tiered]').checked=true; updateBonusMoyenneTiers(); updateBonusTypeCards();"
+              style="flex: 1; min-width: 200px; padding: 14px 16px; border: 2px solid #ddd; border-radius: 8px; cursor: pointer; background: white; transition: all 0.2s ease;">
+              <input type="radio" name="bonusMoyenneType" value="tiered" style="display: none;" onchange="updateBonusMoyenneTiers(); updateBonusTypeCards();">
+              <div style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">Par paliers</div>
+              <div style="color: #666; font-size: 12px;">3 paliers : min&ndash;milieu, milieu&ndash;max, &ge; max</div>
             </label>
           </div>
 
-          <!-- Editable tier points -->
-          <div id="bonusMoyenneTiers" style="margin-top: 10px; padding: 12px; background: #f8f9fa; border-radius: 6px; border: 1px solid #e0e0e0;">
-            <p style="margin: 0 0 10px; font-size: 13px; color: #666;">Points attribués par palier :</p>
-            <table style="border-collapse: collapse; font-size: 13px;">
+          <!-- Editable tier points — compact -->
+          <div id="bonusMoyenneTiers" style="max-width: 380px;">
+            <table style="width: 100%; border-collapse: collapse; font-size: 13px; border-radius: 6px; overflow: hidden; border: 1px solid #ddd;">
               <thead>
-                <tr style="background: #e7f3ff;">
-                  <th style="padding: 6px 12px; text-align: left; border: 1px solid #ddd;">Condition</th>
-                  <th style="padding: 6px 12px; text-align: center; border: 1px solid #ddd; width: 80px;">Points</th>
+                <tr style="background: var(--color-primary, #1F4788); color: white;">
+                  <th style="padding: 8px 14px; text-align: left; font-weight: 500;">Moyenne du joueur</th>
+                  <th style="padding: 8px 14px; text-align: center; font-weight: 500; width: 70px;">Pts</th>
                 </tr>
               </thead>
               <tbody id="bonusMoyenneTiersBody">
@@ -4248,6 +4252,7 @@
           window._bonusTier2 = parseInt(settings.scoring_avg_tier_2) || 2;
           window._bonusTier3 = parseInt(settings.scoring_avg_tier_3) || 3;
           updateBonusMoyenneTiers();
+          updateBonusTypeCards();
 
           selectQualificationMode(settings.qualification_mode || 'standard');
         }
@@ -4365,32 +4370,53 @@
       const t1 = window._bonusTier1 || 1;
       const t2 = window._bonusTier2 || 2;
       const t3 = window._bonusTier3 || 3;
+      const rowStyle = 'padding: 8px 14px; border-bottom: 1px solid #eee;';
+      const inputStyle = 'width: 48px; padding: 5px; text-align: center; border: 1px solid #ccc; border-radius: 4px; font-size: 13px;';
 
       if (type === 'tiered') {
         tbody.innerHTML = `
-          <tr><td style="padding: 6px 12px; border: 1px solid #ddd;">En dessous du min</td>
-              <td style="padding: 6px 12px; border: 1px solid #ddd; text-align: center; color: #999;">0</td></tr>
-          <tr><td style="padding: 6px 12px; border: 1px solid #ddd;">Entre min et milieu</td>
-              <td style="padding: 6px 12px; border: 1px solid #ddd; text-align: center;">
-                <input type="number" id="bonusTier1" value="${t1}" min="0" max="20" style="width: 50px; padding: 4px; text-align: center; border: 1px solid #ddd; border-radius: 4px;"></td></tr>
-          <tr><td style="padding: 6px 12px; border: 1px solid #ddd;">Entre milieu et max</td>
-              <td style="padding: 6px 12px; border: 1px solid #ddd; text-align: center;">
-                <input type="number" id="bonusTier2" value="${t2}" min="0" max="20" style="width: 50px; padding: 4px; text-align: center; border: 1px solid #ddd; border-radius: 4px;"></td></tr>
-          <tr><td style="padding: 6px 12px; border: 1px solid #ddd;">&ge; max</td>
-              <td style="padding: 6px 12px; border: 1px solid #ddd; text-align: center;">
-                <input type="number" id="bonusTier3" value="${t3}" min="0" max="20" style="width: 50px; padding: 4px; text-align: center; border: 1px solid #ddd; border-radius: 4px;"></td></tr>
+          <tr style="background: #fafafa;"><td style="${rowStyle} color: #999;">&lt; min</td>
+              <td style="${rowStyle} text-align: center; color: #999;">0</td></tr>
+          <tr><td style="${rowStyle}">min &ndash; milieu</td>
+              <td style="${rowStyle} text-align: center;">
+                <input type="number" id="bonusTier1" value="${t1}" min="0" max="20" style="${inputStyle}"></td></tr>
+          <tr style="background: #fafafa;"><td style="${rowStyle}">milieu &ndash; max</td>
+              <td style="${rowStyle} text-align: center;">
+                <input type="number" id="bonusTier2" value="${t2}" min="0" max="20" style="${inputStyle}"></td></tr>
+          <tr><td style="${rowStyle} border-bottom: none;">&ge; max</td>
+              <td style="${rowStyle} text-align: center; border-bottom: none;">
+                <input type="number" id="bonusTier3" value="${t3}" min="0" max="20" style="${inputStyle}"></td></tr>
         `;
       } else {
         tbody.innerHTML = `
-          <tr><td style="padding: 6px 12px; border: 1px solid #ddd;">En dessous du min</td>
-              <td style="padding: 6px 12px; border: 1px solid #ddd; text-align: center; color: #999;">0</td></tr>
-          <tr><td style="padding: 6px 12px; border: 1px solid #ddd;">Entre min et max</td>
-              <td style="padding: 6px 12px; border: 1px solid #ddd; text-align: center;">
-                <input type="number" id="bonusTier1" value="${t1}" min="0" max="20" style="width: 50px; padding: 4px; text-align: center; border: 1px solid #ddd; border-radius: 4px;"></td></tr>
-          <tr><td style="padding: 6px 12px; border: 1px solid #ddd;">Au-dessus du max</td>
-              <td style="padding: 6px 12px; border: 1px solid #ddd; text-align: center;">
-                <input type="number" id="bonusTier2" value="${t2}" min="0" max="20" style="width: 50px; padding: 4px; text-align: center; border: 1px solid #ddd; border-radius: 4px;"></td></tr>
+          <tr style="background: #fafafa;"><td style="${rowStyle} color: #999;">&lt; min</td>
+              <td style="${rowStyle} text-align: center; color: #999;">0</td></tr>
+          <tr><td style="${rowStyle}">min &ndash; max</td>
+              <td style="${rowStyle} text-align: center;">
+                <input type="number" id="bonusTier1" value="${t1}" min="0" max="20" style="${inputStyle}"></td></tr>
+          <tr style="background: #fafafa;"><td style="${rowStyle} border-bottom: none;">&gt; max</td>
+              <td style="${rowStyle} text-align: center; border-bottom: none;">
+                <input type="number" id="bonusTier2" value="${t2}" min="0" max="20" style="${inputStyle}"></td></tr>
         `;
+      }
+    }
+
+    // Highlight selected bonus type card
+    function updateBonusTypeCards() {
+      const type = document.querySelector('input[name="bonusMoyenneType"]:checked').value;
+      const primaryColor = getComputedStyle(document.documentElement).getPropertyValue('--color-primary').trim() || '#1F4788';
+      const normalCard = document.getElementById('bonusTypeCard-normal');
+      const tieredCard = document.getElementById('bonusTypeCard-tiered');
+      if (type === 'normal') {
+        normalCard.style.borderColor = primaryColor;
+        normalCard.style.background = '#e7f3ff';
+        tieredCard.style.borderColor = '#ddd';
+        tieredCard.style.background = 'white';
+      } else {
+        tieredCard.style.borderColor = primaryColor;
+        tieredCard.style.background = '#e7f3ff';
+        normalCard.style.borderColor = '#ddd';
+        normalCard.style.background = 'white';
       }
     }
 
