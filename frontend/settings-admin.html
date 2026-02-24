@@ -1023,14 +1023,6 @@
           </div>
         </div>
 
-        <div style="margin-bottom: 20px;">
-          <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
-            <input type="checkbox" id="averageBonusTiers" style="width: 20px; height: 20px; cursor: pointer;">
-            <span style="font-weight: 500;">Bonus Moyenne au classement</span>
-          </label>
-          <p style="margin: 5px 0 0 30px; color: #666; font-size: 13px;">Ajoute un bonus (0 à 3 pts) selon la moyenne du joueur par rapport aux seuils min/max de la catégorie.</p>
-        </div>
-
         <div style="margin-bottom: 20px; padding: 15px; background: #e7f3ff; border-left: 4px solid var(--color-primary, #1F4788); border-radius: 4px;">
           <strong>Points par position</strong>
           <p style="margin: 5px 0 10px 0; color: #666; font-size: 13px;">Configurez les points attribués en fonction du classement final de chaque journée.</p>
@@ -1059,6 +1051,27 @@
           </div>
         </div>
 
+      </div>
+
+      <!-- Bonus Moyenne — visible for all modes -->
+      <div style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+          <input type="checkbox" id="averageBonusTiers" style="width: 20px; height: 20px; cursor: pointer;">
+          <span style="font-weight: 500;">Bonus Moyenne</span>
+        </label>
+        <p style="margin: 5px 0 10px 30px; color: #666; font-size: 13px;">
+          Ajoute un bonus par tournoi selon la moyenne du joueur par rapport aux seuils min/max de la catégorie.
+        </p>
+        <div id="bonusMoyenneTypeSelector" style="display: none; margin-left: 30px;">
+          <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px; cursor: pointer;">
+            <input type="radio" name="bonusMoyenneType" value="normal" checked>
+            <span><strong>Normal</strong> — Au-dessus du max &rarr; +2 | Entre min et max &rarr; +1 | En dessous &rarr; 0</span>
+          </label>
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+            <input type="radio" name="bonusMoyenneType" value="tiered">
+            <span><strong>Par paliers</strong> — &lt; min &rarr; 0 | min–milieu &rarr; +1 | milieu–max &rarr; +2 | &ge; max &rarr; +3</span>
+          </label>
+        </div>
       </div>
 
       <div style="margin-top: 20px;">
@@ -4191,6 +4204,12 @@
           document.getElementById('journeesCount').value = settings.journees_count || '3';
           document.getElementById('bestOfCount').value = settings.best_of_count || '2';
           document.getElementById('averageBonusTiers').checked = settings.average_bonus_tiers === 'true';
+          // Load bonus moyenne type
+          const bonusType = settings.bonus_moyenne_type || 'normal';
+          const bonusRadio = document.querySelector(`input[name="bonusMoyenneType"][value="${bonusType}"]`);
+          if (bonusRadio) bonusRadio.checked = true;
+          document.getElementById('bonusMoyenneTypeSelector').style.display =
+            settings.average_bonus_tiers === 'true' ? 'block' : 'none';
           selectQualificationMode(settings.qualification_mode || 'standard');
         }
 
@@ -4233,7 +4252,8 @@
             qualification_mode: document.getElementById('qualificationMode').value,
             journees_count: document.getElementById('journeesCount').value,
             best_of_count: document.getElementById('bestOfCount').value,
-            average_bonus_tiers: document.getElementById('averageBonusTiers').checked ? 'true' : 'false'
+            average_bonus_tiers: document.getElementById('averageBonusTiers').checked ? 'true' : 'false',
+            bonus_moyenne_type: document.querySelector('input[name="bonusMoyenneType"]:checked')?.value || 'normal'
           })
         });
 
@@ -4261,9 +4281,22 @@
 
         if (!ppResponse.ok) throw new Error('Erreur lors de la sauvegarde des points par position');
 
-        msgDiv.textContent = 'Paramètres de qualification enregistrés';
+        // Recompute all bonuses with new settings
+        msgDiv.textContent = 'Paramètres enregistrés. Recalcul des bonus en cours...';
         msgDiv.style.background = '#d4edda';
         msgDiv.style.color = '#155724';
+        msgDiv.style.display = 'block';
+
+        try {
+          await fetch(`${API_URL}/tournaments/recompute-all-bonuses`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
+          });
+          msgDiv.textContent = 'Paramètres de qualification enregistrés et bonus recalculés';
+        } catch (recomputeErr) {
+          console.error('Error recomputing bonuses:', recomputeErr);
+          msgDiv.textContent = 'Paramètres enregistrés (erreur lors du recalcul des bonus)';
+        }
       } catch (error) {
         console.error('Error saving qualification settings:', error);
         msgDiv.textContent = error.message;
@@ -4273,6 +4306,10 @@
       msgDiv.style.display = 'block';
       setTimeout(() => { msgDiv.style.display = 'none'; }, 3000);
     }
+
+    document.getElementById('averageBonusTiers').addEventListener('change', function() {
+      document.getElementById('bonusMoyenneTypeSelector').style.display = this.checked ? 'block' : 'none';
+    });
 
     loadQualificationSettings();
 

@@ -954,21 +954,41 @@ function evaluateRule(rule, playerResult, tournamentContext, referenceValues) {
 
 // Compute bonus points for tournament results using the generic rule engine
 /**
- * Auto-compute tiered bonus moyenne per tournament when no explicit scoring rules exist.
- * Uses the same tiered logic as the season ranking: compare player's tournament moyenne
- * to game_parameters thresholds (moyenne_mini / moyenne_maxi).
- * Tiers: < mini → 0, mini–middle → tier1, middle–maxi → tier2, ≥ maxi → tier3
+ * Auto-compute bonus moyenne per tournament when no explicit scoring rules exist.
+ * Two modes controlled by org setting 'bonus_moyenne_type':
+ *   - 'normal':  > maxi → +2, mini ≤ moy ≤ maxi → +1, < mini → 0
+ *   - 'tiered':  < mini → 0, mini–middle → tier1, middle–maxi → tier2, ≥ maxi → tier3
+ * When average_bonus_tiers is disabled: clears all bonus_points/bonus_detail.
  */
-async function computeAutoTieredBonus(tournamentId, categoryId, orgId, callback) {
+async function computeAutoBonus(tournamentId, categoryId, orgId, callback) {
   try {
-    // Only applies when average_bonus_tiers is enabled for this org
     const avgBonusEnabled = orgId ? (await appSettings.getOrgSetting(orgId, 'average_bonus_tiers')) === 'true' : false;
-    if (!avgBonusEnabled) {
-      console.log('[BONUS] No scoring rules and average_bonus_tiers not enabled, skipping');
+
+    // Get all player results
+    const results = await dbAllAsync(
+      'SELECT id, licence, points, reprises FROM tournament_results WHERE tournament_id = $1',
+      [tournamentId]
+    );
+
+    if (!results || results.length === 0) {
       return callback(null);
     }
 
-    // Get tier point values from org settings
+    // When disabled: clear all bonus_points/bonus_detail
+    if (!avgBonusEnabled) {
+      console.log(`[BONUS] Bonus moyenne disabled, clearing bonus for tournament ${tournamentId}`);
+      for (const result of results) {
+        await dbRunAsync(
+          "UPDATE tournament_results SET bonus_points = 0, bonus_detail = '{}' WHERE id = $1",
+          [result.id]
+        );
+      }
+      return callback(null);
+    }
+
+    const bonusType = (await appSettings.getOrgSetting(orgId, 'bonus_moyenne_type')) || 'normal';
+
+    // Get tier point values from org settings (used by 'tiered' mode)
     const tier1 = parseInt(await appSettings.getOrgSetting(orgId, 'scoring_avg_tier_1')) || 1;
     const tier2 = parseInt(await appSettings.getOrgSetting(orgId, 'scoring_avg_tier_2')) || 2;
     const tier3 = parseInt(await appSettings.getOrgSetting(orgId, 'scoring_avg_tier_3')) || 3;
@@ -991,29 +1011,29 @@ async function computeAutoTieredBonus(tournamentId, categoryId, orgId, callback)
     const moyenneMaxi = parseFloat(catInfo.moyenne_maxi);
     const moyenneMiddle = (moyenneMini + moyenneMaxi) / 2;
 
-    console.log(`[BONUS] Auto tiered bonus: mini=${moyenneMini}, middle=${moyenneMiddle.toFixed(3)}, maxi=${moyenneMaxi} → tiers: +${tier1}/+${tier2}/+${tier3}`);
-
-    // Get all player results
-    const results = await dbAllAsync(
-      'SELECT id, licence, points, reprises FROM tournament_results WHERE tournament_id = $1',
-      [tournamentId]
-    );
-
-    if (!results || results.length === 0) {
-      return callback(null);
-    }
+    console.log(`[BONUS] Auto bonus (${bonusType}): mini=${moyenneMini}, middle=${moyenneMiddle.toFixed(3)}, maxi=${moyenneMaxi}`);
 
     let updateCount = 0;
     for (const result of results) {
       const moyenne = result.reprises > 0 ? result.points / result.reprises : 0;
 
       let bonus = 0;
-      if (moyenne >= moyenneMaxi) {
-        bonus = tier3;
-      } else if (moyenne >= moyenneMiddle) {
-        bonus = tier2;
-      } else if (moyenne >= moyenneMini) {
-        bonus = tier1;
+      if (bonusType === 'tiered') {
+        // Tiered: < mini → 0, mini–middle → tier1, middle–maxi → tier2, ≥ maxi → tier3
+        if (moyenne >= moyenneMaxi) {
+          bonus = tier3;
+        } else if (moyenne >= moyenneMiddle) {
+          bonus = tier2;
+        } else if (moyenne >= moyenneMini) {
+          bonus = tier1;
+        }
+      } else {
+        // Normal: > maxi → +2, between min and max → +1, below min → 0
+        if (moyenne > moyenneMaxi) {
+          bonus = 2;
+        } else if (moyenne >= moyenneMini) {
+          bonus = 1;
+        }
       }
 
       const detail = bonus > 0 ? JSON.stringify({ MOYENNE_BONUS: bonus }) : '{}';
@@ -1025,10 +1045,10 @@ async function computeAutoTieredBonus(tournamentId, categoryId, orgId, callback)
       if (bonus > 0) updateCount++;
     }
 
-    console.log(`[BONUS] Applied auto tiered bonus to ${updateCount}/${results.length} results for tournament ${tournamentId}`);
+    console.log(`[BONUS] Applied auto bonus (${bonusType}) to ${updateCount}/${results.length} results for tournament ${tournamentId}`);
     callback(null);
   } catch (error) {
-    console.error('[BONUS] Error computing auto tiered bonus:', error);
+    console.error('[BONUS] Error computing auto bonus:', error);
     callback(null); // Don't fail the import
   }
 }
@@ -1041,7 +1061,7 @@ function computeBonusPoints(tournamentId, categoryId, orgId, callback) {
     (err, rules) => {
       if (err || !rules || rules.length === 0) {
         // No explicit scoring rules → try auto tiered bonus if average_bonus_tiers is enabled
-        computeAutoTieredBonus(tournamentId, categoryId, orgId, callback);
+        computeAutoBonus(tournamentId, categoryId, orgId, callback);
         return;
       }
 
@@ -1197,6 +1217,7 @@ async function recalculateRankingsJournees(categoryId, season, callback, orgId) 
     const bestOfCount = parseInt(await appSettings.getOrgSetting(orgId, 'best_of_count')) || 2;
     const journeesCount = parseInt(await appSettings.getOrgSetting(orgId, 'journees_count')) || 3;
     const averageBonusEnabled = (await appSettings.getOrgSetting(orgId, 'average_bonus_tiers')) === 'true';
+    const bonusType = (await appSettings.getOrgSetting(orgId, 'bonus_moyenne_type')) || 'normal';
     const tier1 = parseInt(await appSettings.getOrgSetting(orgId, 'scoring_avg_tier_1')) || 1;
     const tier2 = parseInt(await appSettings.getOrgSetting(orgId, 'scoring_avg_tier_2')) || 2;
     const tier3 = parseInt(await appSettings.getOrgSetting(orgId, 'scoring_avg_tier_3')) || 3;
@@ -1301,15 +1322,25 @@ async function recalculateRankingsJournees(categoryId, season, callback, orgId) 
       }
       const avgMoyenne = totalReprises > 0 ? totalPoints / totalReprises : 0;
 
-      // Tiered average bonus (only if enabled in org settings)
+      // Average bonus (only if enabled in org settings)
       let averageBonus = 0;
       if (averageBonusEnabled) {
-        if (avgMoyenne >= moyenneMaxi) {
-          averageBonus = tier3;
-        } else if (avgMoyenne >= moyenneMiddle) {
-          averageBonus = tier2;
-        } else if (avgMoyenne >= moyenneMini) {
-          averageBonus = tier1;
+        if (bonusType === 'tiered') {
+          // Tiered: < mini → 0, mini–middle → tier1, middle–maxi → tier2, ≥ maxi → tier3
+          if (avgMoyenne >= moyenneMaxi) {
+            averageBonus = tier3;
+          } else if (avgMoyenne >= moyenneMiddle) {
+            averageBonus = tier2;
+          } else if (avgMoyenne >= moyenneMini) {
+            averageBonus = tier1;
+          }
+        } else {
+          // Normal: > maxi → +2, between min and max → +1, below min → 0
+          if (avgMoyenne > moyenneMaxi) {
+            averageBonus = 2;
+          } else if (avgMoyenne >= moyenneMini) {
+            averageBonus = 1;
+          }
         }
       }
 
@@ -2242,6 +2273,53 @@ router.post('/recalculate-all-rankings', authenticateToken, async (req, res) => 
       });
     });
   } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Recompute all bonuses + rankings for current season (triggered when bonus settings change)
+router.post('/recompute-all-bonuses', authenticateToken, async (req, res) => {
+  try {
+    if (req.user?.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const orgId = req.user.organizationId || null;
+    const season = await appSettings.getCurrentSeason();
+
+    // Get all categories for this org with tournaments in current season
+    const categories = await dbAllAsync(
+      `SELECT DISTINCT t.category_id, t.season
+       FROM tournaments t
+       WHERE t.season = $1 AND ($2::int IS NULL OR t.organization_id = $2)`,
+      [season, orgId]
+    );
+
+    let recomputed = 0;
+    const errors = [];
+
+    for (const cat of categories) {
+      await new Promise((resolve) => {
+        recomputeAllBonuses(cat.category_id, cat.season, orgId, () => {
+          recalculateRankings(cat.category_id, cat.season, (err) => {
+            if (err) {
+              errors.push({ categoryId: cat.category_id, error: err.message });
+            } else {
+              recomputed++;
+            }
+            resolve();
+          });
+        });
+      });
+    }
+
+    res.json({
+      message: `Bonus recalculés pour ${recomputed} catégories`,
+      recomputed,
+      errors: errors.length > 0 ? errors : undefined
+    });
+  } catch (error) {
+    console.error('[BONUS] Error in recompute-all-bonuses:', error);
     res.status(500).json({ error: error.message });
   }
 });
