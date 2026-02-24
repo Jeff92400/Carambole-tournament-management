@@ -3899,8 +3899,9 @@
         if (!response.ok) return;
         const rules = await response.json();
         if (Array.isArray(rules)) {
-          allScoringRules = rules;
-          renderScoringBlocks(rules);
+          // Filter out MOYENNE_BONUS — handled by the dedicated Bonus Moyenne section
+          allScoringRules = rules.filter(r => r.rule_type !== 'MOYENNE_BONUS');
+          renderScoringBlocks(allScoringRules);
         }
       } catch (error) {
         console.error('Error loading scoring rules:', error);
