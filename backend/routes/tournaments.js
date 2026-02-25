@@ -174,7 +174,11 @@ async function assignPositionPointsIfJournees(tournamentId, orgId) {
   if (qualMode !== 'journees') return;
 
   const lookup = await getPositionPointsLookup(orgId);
-  if (Object.keys(lookup).length === 0) return;
+  if (Object.keys(lookup).length === 0) {
+    console.warn(`[POS-PTS] No position_points configured for org ${orgId}, skipping assignment for tournament ${tournamentId}`);
+    return;
+  }
+  console.log(`[POS-PTS] Assigning position points for tournament ${tournamentId}, lookup: ${JSON.stringify(lookup)}`);
 
   // Position is already set from the CSV 'classement' column during standard import
   const results = await dbAllAsync(
@@ -984,46 +988,35 @@ async function computeBonusMoyenne(tournamentId, categoryId, orgId, callback) {
     const tier2 = parseInt(await appSettings.getOrgSetting(orgId, 'scoring_avg_tier_2')) || 2;
     const tier3 = parseInt(await appSettings.getOrgSetting(orgId, 'scoring_avg_tier_3')) || 3;
 
-    // Get game_parameters for this category
+    // Get game_parameters for this category (two separate queries — same pattern as recalculateRankingsJournees)
     let moyenneMini = null, moyenneMaxi = null, moyenneMiddle = null;
     if (enabled) {
-      // First get the category details for diagnostic logging
-      const catDetails = await dbGetAsync(
+      const category = await dbGetAsync(
         'SELECT id, game_type, level, organization_id FROM categories WHERE id = $1',
         [categoryId]
       );
-      console.log(`[BONUS-MOY] Category: id=${categoryId}, game_type=${catDetails?.game_type}, level=${catDetails?.level}, org_id=${catDetails?.organization_id}`);
+      console.log(`[BONUS-MOY] Category: id=${categoryId}, game_type=${category?.game_type}, level=${category?.level}, org_id=${category?.organization_id}`);
 
-      const catInfo = await dbGetAsync(
-        `SELECT gp.moyenne_mini, gp.moyenne_maxi
-         FROM categories c
-         LEFT JOIN game_parameters gp ON UPPER(gp.mode) = UPPER(c.game_type) AND UPPER(gp.categorie) = UPPER(c.level) AND gp.organization_id = c.organization_id
-         WHERE c.id = $1`,
-        [categoryId]
-      );
-
-      if (!catInfo || catInfo.moyenne_mini == null || catInfo.moyenne_maxi == null) {
-        console.log(`[BONUS-MOY] No game_parameters thresholds for category ${categoryId} (catInfo=${JSON.stringify(catInfo)}), skipping bonus moyenne`);
-        // Check if game_parameters exist but with different org_id
-        const gpCheck = await dbGetAsync(
-          `SELECT gp.id, gp.mode, gp.categorie, gp.organization_id, gp.moyenne_mini, gp.moyenne_maxi
-           FROM game_parameters gp
-           WHERE UPPER(gp.mode) = UPPER($1) AND UPPER(gp.categorie) = UPPER($2)
-           LIMIT 1`,
-          [catDetails?.game_type || '', catDetails?.level || '']
+      if (category) {
+        const gp = await dbGetAsync(
+          'SELECT moyenne_mini, moyenne_maxi FROM game_parameters WHERE UPPER(mode) = UPPER($1) AND UPPER(categorie) = UPPER($2) AND ($3::int IS NULL OR organization_id = $3)',
+          [category.game_type, category.level, category.organization_id || orgId]
         );
-        if (gpCheck) {
-          console.log(`[BONUS-MOY] Found game_parameters with DIFFERENT org_id: gp.org_id=${gpCheck.organization_id} vs cat.org_id=${catDetails?.organization_id}`);
+        console.log(`[BONUS-MOY] game_parameters query result: ${JSON.stringify(gp)}`);
+
+        if (gp && gp.moyenne_mini != null && gp.moyenne_maxi != null) {
+          moyenneMini = parseFloat(gp.moyenne_mini);
+          moyenneMaxi = parseFloat(gp.moyenne_maxi);
+          moyenneMiddle = (moyenneMini + moyenneMaxi) / 2;
+          console.log(`[BONUS-MOY] Thresholds: type=${bonusType}, mini=${moyenneMini}, middle=${moyenneMiddle.toFixed(3)}, maxi=${moyenneMaxi}, tiers=[${tier1},${tier2},${tier3}]`);
         } else {
-          console.log(`[BONUS-MOY] No game_parameters found at all for mode=${catDetails?.game_type}, categorie=${catDetails?.level}`);
+          console.log(`[BONUS-MOY] No game_parameters thresholds found for mode=${category.game_type}, categorie=${category.level}, org=${category.organization_id || orgId}`);
+          return callback(null);
         }
+      } else {
+        console.log(`[BONUS-MOY] Category ${categoryId} not found`);
         return callback(null);
       }
-
-      moyenneMini = parseFloat(catInfo.moyenne_mini);
-      moyenneMaxi = parseFloat(catInfo.moyenne_maxi);
-      moyenneMiddle = (moyenneMini + moyenneMaxi) / 2;
-      console.log(`[BONUS-MOY] Thresholds: type=${bonusType}, mini=${moyenneMini}, middle=${moyenneMiddle.toFixed(3)}, maxi=${moyenneMaxi}, tiers=[${tier1},${tier2},${tier3}]`);
     }
 
     let updateCount = 0;
@@ -1101,13 +1094,9 @@ function computeBonusPoints(tournamentId, categoryId, orgId, callback) {
 
       // 2. Get game_parameters for reference values
       db.get(
-        `SELECT c.display_name as category_name, c.game_type, c.level,
-                gp.moyenne_mini, gp.moyenne_maxi
-         FROM categories c
-         LEFT JOIN game_parameters gp ON UPPER(gp.mode) = UPPER(c.game_type) AND UPPER(gp.categorie) = UPPER(c.level) AND gp.organization_id = c.organization_id
-         WHERE c.id = ?`,
+        'SELECT display_name as category_name, game_type, level, organization_id FROM categories WHERE id = ?',
         [categoryId],
-        (err, catInfo) => {
+        async (err, catInfo) => {
           if (err) {
             console.warn('[BONUS] Could not load category info:', err);
             return computeBonusMoyenne(tournamentId, categoryId, orgId, callback);
@@ -1115,10 +1104,21 @@ function computeBonusPoints(tournamentId, categoryId, orgId, callback) {
 
           const referenceValues = {};
           if (catInfo) {
-            if (catInfo.moyenne_mini !== null && catInfo.moyenne_mini !== undefined)
-              referenceValues.MOYENNE_MINI = parseFloat(catInfo.moyenne_mini);
-            if (catInfo.moyenne_maxi !== null && catInfo.moyenne_maxi !== undefined)
-              referenceValues.MOYENNE_MAXI = parseFloat(catInfo.moyenne_maxi);
+            // Separate query for game_parameters (same pattern as recalculateRankingsJournees)
+            try {
+              const gp = await dbGetAsync(
+                'SELECT moyenne_mini, moyenne_maxi FROM game_parameters WHERE UPPER(mode) = UPPER($1) AND UPPER(categorie) = UPPER($2) AND ($3::int IS NULL OR organization_id = $3)',
+                [catInfo.game_type, catInfo.level, catInfo.organization_id || orgId]
+              );
+              if (gp) {
+                if (gp.moyenne_mini !== null && gp.moyenne_mini !== undefined)
+                  referenceValues.MOYENNE_MINI = parseFloat(gp.moyenne_mini);
+                if (gp.moyenne_maxi !== null && gp.moyenne_maxi !== undefined)
+                  referenceValues.MOYENNE_MAXI = parseFloat(gp.moyenne_maxi);
+              }
+            } catch (gpErr) {
+              console.warn('[BONUS] Error loading game_parameters:', gpErr);
+            }
           }
 
           console.log(`[BONUS] Category ${catInfo ? catInfo.category_name : categoryId}: refs=${JSON.stringify(referenceValues)}, ${rules.length} rules`);
@@ -1633,7 +1633,7 @@ async function recomputeAllBonuses(categoryId, season, orgId, callback) {
   db.all(
     `SELECT id FROM tournaments WHERE category_id = ? AND season = ? AND tournament_number IN (${rankingNumbers.join(',')})`,
     [categoryId, season],
-    (err, tournaments) => {
+    async (err, tournaments) => {
       if (err) {
         console.error(`[BONUS] Error querying tournaments for recompute:`, err);
         return callback(null);
@@ -1643,6 +1643,16 @@ async function recomputeAllBonuses(categoryId, season, orgId, callback) {
         return callback(null);
       }
       console.log(`[BONUS] Found ${tournaments.length} tournaments to recompute: [${tournaments.map(t => t.id).join(',')}]`);
+
+      // Re-assign position points for each tournament (fixes TQs imported before settings were configured)
+      for (const t of tournaments) {
+        try {
+          await assignPositionPointsIfJournees(t.id, orgId);
+        } catch (ppErr) {
+          console.error(`[BONUS] Error assigning position points for tournament ${t.id}:`, ppErr);
+        }
+      }
+
       let completed = 0;
       tournaments.forEach(t => {
         computeBonusPoints(t.id, categoryId, orgId, () => {
@@ -2362,15 +2372,15 @@ router.post('/recompute-all-bonuses', authenticateToken, async (req, res) => {
     for (const cat of categories) {
       // Check if game_parameters are configured for this category
       if (rulesNeedThresholds) {
-        const catInfo = await dbGetAsync(
-          `SELECT c.display_name as category_name, gp.moyenne_mini, gp.moyenne_maxi
-           FROM categories c
-           LEFT JOIN game_parameters gp ON UPPER(gp.mode) = UPPER(c.game_type) AND UPPER(gp.categorie) = UPPER(c.level) AND gp.organization_id = c.organization_id
-           WHERE c.id = $1`,
-          [cat.category_id]
-        );
-        if (catInfo && (catInfo.moyenne_mini == null || catInfo.moyenne_maxi == null)) {
-          warnings.push(`${catInfo.category_name} : paramètres de jeu (moyenne min/max) non configurés — le bonus moyenne ne peut pas être calculé`);
+        const catRow = await dbGetAsync('SELECT display_name, game_type, level, organization_id FROM categories WHERE id = $1', [cat.category_id]);
+        if (catRow) {
+          const gp = await dbGetAsync(
+            'SELECT moyenne_mini, moyenne_maxi FROM game_parameters WHERE UPPER(mode) = UPPER($1) AND UPPER(categorie) = UPPER($2) AND ($3::int IS NULL OR organization_id = $3)',
+            [catRow.game_type, catRow.level, catRow.organization_id || orgId]
+          );
+          if (!gp || gp.moyenne_mini == null || gp.moyenne_maxi == null) {
+            warnings.push(`${catRow.display_name} : paramètres de jeu (moyenne min/max) non configurés — le bonus moyenne ne peut pas être calculé`);
+          }
         }
       }
 
