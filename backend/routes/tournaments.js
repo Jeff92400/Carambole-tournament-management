@@ -678,6 +678,8 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
                     // Assign position_points for journées orgs (no-op for standard)
                     const afterPositionPoints = () => {
                       computeBonusPoints(finalTournamentId, categoryId, orgId, () => {
+                        // Safety net: explicitly apply bonus moyenne (async chain from computeBonusPoints may not execute reliably)
+                        computeBonusMoyenne(finalTournamentId, categoryId, orgId, () => {
                         recalculateRankings(categoryId, season, () => {
                           // Clean up uploaded file
                           fs.unlinkSync(req.file.path);
@@ -699,6 +701,7 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
                             errors: errors.length > 0 ? errors : undefined
                           });
                         });
+                        }); // end computeBonusMoyenne safety net
                       });
                     };
 
@@ -1092,11 +1095,15 @@ function computeBonusPoints(tournamentId, categoryId, orgId, callback) {
         return;
       }
 
-      // 2. Get game_parameters for reference values
+      // 2. Get game_parameters for reference values (using JOIN — same as original working code)
       db.get(
-        'SELECT display_name as category_name, game_type, level, organization_id FROM categories WHERE id = ?',
+        `SELECT c.display_name as category_name, c.game_type, c.level,
+                gp.moyenne_mini, gp.moyenne_maxi
+         FROM categories c
+         LEFT JOIN game_parameters gp ON UPPER(gp.mode) = UPPER(c.game_type) AND UPPER(gp.categorie) = UPPER(c.level) AND gp.organization_id = c.organization_id
+         WHERE c.id = ?`,
         [categoryId],
-        async (err, catInfo) => {
+        (err, catInfo) => {
           if (err) {
             console.warn('[BONUS] Could not load category info:', err);
             return computeBonusMoyenne(tournamentId, categoryId, orgId, callback);
@@ -1104,21 +1111,10 @@ function computeBonusPoints(tournamentId, categoryId, orgId, callback) {
 
           const referenceValues = {};
           if (catInfo) {
-            // Separate query for game_parameters (same pattern as recalculateRankingsJournees)
-            try {
-              const gp = await dbGetAsync(
-                'SELECT moyenne_mini, moyenne_maxi FROM game_parameters WHERE UPPER(mode) = UPPER($1) AND UPPER(categorie) = UPPER($2) AND ($3::int IS NULL OR organization_id = $3)',
-                [catInfo.game_type, catInfo.level, catInfo.organization_id || orgId]
-              );
-              if (gp) {
-                if (gp.moyenne_mini !== null && gp.moyenne_mini !== undefined)
-                  referenceValues.MOYENNE_MINI = parseFloat(gp.moyenne_mini);
-                if (gp.moyenne_maxi !== null && gp.moyenne_maxi !== undefined)
-                  referenceValues.MOYENNE_MAXI = parseFloat(gp.moyenne_maxi);
-              }
-            } catch (gpErr) {
-              console.warn('[BONUS] Error loading game_parameters:', gpErr);
-            }
+            if (catInfo.moyenne_mini !== null && catInfo.moyenne_mini !== undefined)
+              referenceValues.MOYENNE_MINI = parseFloat(catInfo.moyenne_mini);
+            if (catInfo.moyenne_maxi !== null && catInfo.moyenne_maxi !== undefined)
+              referenceValues.MOYENNE_MAXI = parseFloat(catInfo.moyenne_maxi);
           }
 
           console.log(`[BONUS] Category ${catInfo ? catInfo.category_name : categoryId}: refs=${JSON.stringify(referenceValues)}, ${rules.length} rules`);
@@ -1624,44 +1620,71 @@ async function recalculateRankingsStandard(categoryId, season, callback, orgId) 
 
 // Recompute bonus points for all tournaments in a category/season
 async function recomputeAllBonuses(categoryId, season, orgId, callback) {
-  const rankingNumbers = await getRankingTournamentNumbers(orgId);
-  if (!rankingNumbers || rankingNumbers.length === 0) {
-    console.log(`[BONUS] No ranking tournament numbers for org ${orgId}, skipping recompute`);
-    return callback(null);
-  }
-  console.log(`[BONUS] Recomputing bonuses for category ${categoryId}, season ${season}, org ${orgId}, tournamentNumbers=[${rankingNumbers.join(',')}]`);
-  db.all(
-    `SELECT id FROM tournaments WHERE category_id = ? AND season = ? AND tournament_number IN (${rankingNumbers.join(',')})`,
-    [categoryId, season],
-    async (err, tournaments) => {
-      if (err) {
-        console.error(`[BONUS] Error querying tournaments for recompute:`, err);
-        return callback(null);
-      }
-      if (!tournaments || tournaments.length === 0) {
-        console.log(`[BONUS] No tournaments found for category ${categoryId}, season ${season}`);
-        return callback(null);
-      }
-      console.log(`[BONUS] Found ${tournaments.length} tournaments to recompute: [${tournaments.map(t => t.id).join(',')}]`);
+  try {
+    const rankingNumbers = await getRankingTournamentNumbers(orgId);
+    if (!rankingNumbers || rankingNumbers.length === 0) {
+      console.log(`[BONUS] No ranking tournament numbers for org ${orgId}, skipping recompute`);
+      return callback(null);
+    }
+    console.log(`[BONUS] Recomputing bonuses for category ${categoryId}, season ${season}, org ${orgId}, tournamentNumbers=[${rankingNumbers.join(',')}]`);
 
-      // Re-assign position points for each tournament (fixes TQs imported before settings were configured)
-      for (const t of tournaments) {
-        try {
-          await assignPositionPointsIfJournees(t.id, orgId);
-        } catch (ppErr) {
-          console.error(`[BONUS] Error assigning position points for tournament ${t.id}:`, ppErr);
-        }
-      }
+    const tournaments = await dbAllAsync(
+      `SELECT id FROM tournaments WHERE category_id = $1 AND season = $2 AND tournament_number IN (${rankingNumbers.join(',')})`,
+      [categoryId, season]
+    );
 
-      let completed = 0;
-      tournaments.forEach(t => {
-        computeBonusPoints(t.id, categoryId, orgId, () => {
-          completed++;
-          if (completed === tournaments.length) callback(null);
-        });
+    if (!tournaments || tournaments.length === 0) {
+      console.log(`[BONUS] No tournaments found for category ${categoryId}, season ${season}`);
+      return callback(null);
+    }
+    console.log(`[BONUS] Found ${tournaments.length} tournaments to recompute: [${tournaments.map(t => t.id).join(',')}]`);
+
+    // Step 1: Re-assign position points for each tournament (fixes TQs imported before settings were configured)
+    for (const t of tournaments) {
+      try {
+        await assignPositionPointsIfJournees(t.id, orgId);
+      } catch (ppErr) {
+        console.error(`[BONUS] Error assigning position points for tournament ${t.id}:`, ppErr);
+      }
+    }
+
+    // Step 2: Compute barème bonus points (sequential, one tournament at a time)
+    for (const t of tournaments) {
+      await new Promise((resolve) => {
+        computeBonusPoints(t.id, categoryId, orgId, resolve);
       });
     }
-  );
+
+    // Step 3: Explicitly apply bonus moyenne as a separate pass (safety net — the callback chain
+    // from computeBonusPoints to computeBonusMoyenne may not execute reliably because
+    // computeBonusMoyenne is async but called from a callback context)
+    for (const t of tournaments) {
+      await new Promise((resolve) => {
+        computeBonusMoyenne(t.id, categoryId, orgId, resolve);
+      });
+    }
+
+    // Verify: check if MOYENNE_BONUS was written
+    for (const t of tournaments) {
+      const sample = await dbGetAsync(
+        'SELECT bonus_detail FROM tournament_results WHERE tournament_id = $1 AND bonus_detail IS NOT NULL LIMIT 1',
+        [t.id]
+      );
+      if (sample) {
+        try {
+          const detail = JSON.parse(sample.bonus_detail);
+          console.log(`[BONUS] Verification for tournament ${t.id}: bonus_detail=${JSON.stringify(detail)}`);
+        } catch (e) {}
+      } else {
+        console.log(`[BONUS] Verification for tournament ${t.id}: no bonus_detail found`);
+      }
+    }
+
+    callback(null);
+  } catch (error) {
+    console.error(`[BONUS] Error in recomputeAllBonuses:`, error);
+    callback(null);
+  }
 }
 
 // Recalculate rankings for a category/season (without reimporting)
@@ -2407,12 +2430,44 @@ router.post('/recompute-all-bonuses', authenticateToken, async (req, res) => {
       scoring_avg_tier_3: await appSettings.getOrgSetting(orgId, 'scoring_avg_tier_3'),
     };
 
+    // Post-recompute verification: check if MOYENNE_BONUS was written to tournament_results
+    const verification = [];
+    for (const cat of categories) {
+      const tournamentsForCat = await dbAllAsync(
+        `SELECT t.id, t.tournament_number,
+                COUNT(tr.id) as total_results,
+                COUNT(CASE WHEN tr.bonus_detail LIKE '%MOYENNE_BONUS%' THEN 1 END) as with_bonus
+         FROM tournaments t
+         LEFT JOIN tournament_results tr ON tr.tournament_id = t.id
+         WHERE t.category_id = $1 AND t.season = $2 AND ($3::int IS NULL OR t.organization_id = $3)
+         GROUP BY t.id, t.tournament_number
+         ORDER BY t.tournament_number`,
+        [cat.category_id, cat.season, orgId]
+      );
+      for (const t of tournamentsForCat) {
+        // Get a sample bonus_detail for debugging
+        const sample = await dbGetAsync(
+          'SELECT bonus_detail, points, reprises FROM tournament_results WHERE tournament_id = $1 AND bonus_detail IS NOT NULL LIMIT 1',
+          [t.id]
+        );
+        verification.push({
+          tournamentId: t.id,
+          tournamentNumber: t.tournament_number,
+          totalResults: t.total_results,
+          withMoyenneBonus: t.with_bonus,
+          sampleBonusDetail: sample?.bonus_detail || null,
+          sampleMoyenne: sample && sample.reprises > 0 ? (sample.points / sample.reprises).toFixed(3) : null,
+        });
+      }
+    }
+
     res.json({
       message: `Bonus recalculés pour ${recomputed} catégories`,
       recomputed,
       errors: errors.length > 0 ? errors : undefined,
       warnings: warnings.length > 0 ? warnings : undefined,
-      diagnostic: { orgId, season, settings: diagSettings, categoriesProcessed: categories.length }
+      diagnostic: { orgId, season, settings: diagSettings, categoriesProcessed: categories.length },
+      verification,
     });
   } catch (error) {
     console.error('[BONUS] Error in recompute-all-bonuses:', error);
@@ -2647,11 +2702,16 @@ router.post('/:id/recompute', authenticateToken, async (req, res) => {
     // Re-run position_points assignment (no-op for standard mode)
     await assignPositionPointsIfJournees(tournamentId, orgId);
 
-    // Re-run bonus computation
+    // Re-run bonus computation (barème rules)
     await new Promise((resolve, reject) => {
       computeBonusPoints(tournamentId, tournament.category_id, orgId, (err) => {
         if (err) reject(err); else resolve();
       });
+    });
+
+    // Safety net: explicitly apply bonus moyenne
+    await new Promise((resolve) => {
+      computeBonusMoyenne(tournamentId, tournament.category_id, orgId, resolve);
     });
 
     // Recalculate season rankings

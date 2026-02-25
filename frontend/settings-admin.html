@@ -4352,6 +4352,16 @@
           if (recomputeData.diagnostic) {
             console.log('[BONUS DIAGNOSTIC]', JSON.stringify(recomputeData.diagnostic, null, 2));
           }
+          if (recomputeData.verification) {
+            console.log('[BONUS VERIFICATION]', JSON.stringify(recomputeData.verification, null, 2));
+            // Show verification summary in message
+            const totalWithBonus = recomputeData.verification.reduce((sum, v) => sum + (v.withMoyenneBonus || 0), 0);
+            const totalResults = recomputeData.verification.reduce((sum, v) => sum + (v.totalResults || 0), 0);
+            if (totalResults > 0) {
+              msg += `\n\nBonus moyenne: ${totalWithBonus}/${totalResults} résultats`;
+            }
+            msgDiv.style.whiteSpace = 'pre-line';
+          }
           msgDiv.textContent = msg;
         } catch (recomputeErr) {
           console.error('Error recomputing bonuses:', recomputeErr);
