@@ -1931,7 +1931,49 @@ router.get('/:id/results', authenticateToken, async (req, res) => {
       bonusColumns = typesArr.map(rt => ({ ruleType: rt, label: labelMap[rt] || defaultLabels[rt] || rt }));
     }
 
-    res.json({ tournament, results, bonusColumns, _bonusDiag: bonusDiag });
+    // ── Build bonusMoyenneInfo for frontend info card ──
+    let bonusMoyenneInfo = null;
+    if (bonusDiag.enabled && bonusDiag.thresholds) {
+      const t = bonusDiag.thresholds;
+      bonusMoyenneInfo = {
+        enabled: true,
+        type: bonusDiag.bonusType || 'normal',
+        mini: t.mini,
+        middle: t.middle,
+        maxi: t.maxi,
+        tiers: bonusDiag.tiers || [1, 2, 3]
+      };
+    }
+
+    // ── Compute position_points on the fly (journées mode) ──
+    try {
+      const qualMode = orgId ? (await appSettings.getOrgSetting(orgId, 'qualification_mode')) : null;
+      if (qualMode === 'journees' && results && results.length > 0) {
+        const lookup = await getPositionPointsLookup(orgId);
+        if (Object.keys(lookup).length > 0) {
+          // Sort by match_points desc + moyenne desc to determine positions
+          const sorted = [...results].sort((a, b) => {
+            if (b.match_points !== a.match_points) return b.match_points - a.match_points;
+            const avgA = a.reprises > 0 ? a.points / a.reprises : 0;
+            const avgB = b.reprises > 0 ? b.points / b.reprises : 0;
+            return avgB - avgA;
+          });
+          for (let i = 0; i < sorted.length; i++) {
+            const pp = lookup[i + 1] || 0;
+            sorted[i].position_points = pp;
+            // Persist to DB (fire-and-forget)
+            dbRunAsync(
+              'UPDATE tournament_results SET position_points = $1 WHERE id = $2',
+              [pp, sorted[i].id]
+            ).catch(() => {});
+          }
+        }
+      }
+    } catch (ppErr) {
+      console.error('[RESULTS] Error computing position points:', ppErr);
+    }
+
+    res.json({ tournament, results, bonusColumns, bonusMoyenneInfo, _bonusDiag: bonusDiag });
   } catch (error) {
     console.error('[RESULTS] Error:', error);
     res.status(500).json({ error: error.message });

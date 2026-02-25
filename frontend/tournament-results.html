@@ -169,6 +169,9 @@
         </div>
       </div>
 
+      <!-- Bonus Moyenne Info -->
+      <div id="bonusMoyenneInfo" class="card" style="display: none; padding: 12px 20px; font-size: 13px; color: #555; background: #f0f7ff; border-left: 4px solid var(--color-primary, #1F4788);"></div>
+
       <!-- Podium for Finale -->
       <div class="card" id="podiumCard" style="display: none;">
         <h3 style="text-align: center; margin-bottom: 30px;">🏆 Podium de la Finale</h3>
@@ -373,6 +376,27 @@
         const rankingsBtn = document.getElementById('viewRankingsBtn');
         if (rankingsBtn && data.tournament.category_id) {
           rankingsBtn.href = `rankings.html?categoryId=${data.tournament.category_id}&season=${data.tournament.season}`;
+        }
+
+        // Display bonus moyenne info card if applicable
+        const bonusMoyenneInfoDiv = document.getElementById('bonusMoyenneInfo');
+        if (data.bonusMoyenneInfo && data.bonusMoyenneInfo.enabled && bonusMoyenneInfoDiv) {
+          const info = data.bonusMoyenneInfo;
+          let rulesHTML = '';
+          if (info.type === 'tiered') {
+            rulesHTML = `<strong>Par paliers :</strong> `
+              + `Moy. &lt; ${info.mini.toFixed(3)} → 0 | `
+              + `${info.mini.toFixed(3)} – ${info.middle.toFixed(3)} → +${info.tiers[0]} | `
+              + `${info.middle.toFixed(3)} – ${info.maxi.toFixed(3)} → +${info.tiers[1]} | `
+              + `≥ ${info.maxi.toFixed(3)} → +${info.tiers[2]}`;
+          } else {
+            rulesHTML = `<strong>Normal :</strong> `
+              + `Moy. &lt; ${info.mini.toFixed(3)} → 0 | `
+              + `${info.mini.toFixed(3)} – ${info.maxi.toFixed(3)} → +${info.tiers[0]} | `
+              + `&gt; ${info.maxi.toFixed(3)} → +${info.tiers[1]}`;
+          }
+          bonusMoyenneInfoDiv.innerHTML = `<strong>Bonus Moyenne :</strong> ${rulesHTML}`;
+          bonusMoyenneInfoDiv.style.display = 'block';
         }
 
         // Sort results by match points desc, then moyenne desc

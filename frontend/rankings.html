@@ -71,6 +71,9 @@
       Chargement des classements...
     </div>
 
+    <!-- Bonus Moyenne Info -->
+    <div id="bonusMoyenneInfo" class="card" style="display: none; padding: 12px 20px; font-size: 13px; color: #555; background: #f0f7ff; border-left: 4px solid var(--color-primary, #1F4788);"></div>
+
     <div class="card" id="rankingsCard" style="display: none;">
       <h3 id="rankingsTitle">Classement</h3>
       <p id="qualifiedLegend" style="display: none; font-size: 13px; color: #2e7d32; margin-top: -10px; margin-bottom: 10px;">
@@ -331,7 +334,31 @@
         if (!rankings || rankings.length === 0) {
           document.getElementById('loadingRankings').style.display = 'none';
           document.getElementById('noDataMessage').style.display = 'block';
+          document.getElementById('bonusMoyenneInfo').style.display = 'none';
           return;
+        }
+
+        // Display bonus moyenne info card if applicable
+        const bonusMoyenneInfoDiv = document.getElementById('bonusMoyenneInfo');
+        if (data.bonusMoyenneInfo && data.bonusMoyenneInfo.enabled && bonusMoyenneInfoDiv) {
+          const info = data.bonusMoyenneInfo;
+          let rulesHTML = '';
+          if (info.type === 'tiered') {
+            rulesHTML = `<strong>Par paliers :</strong> `
+              + `Moy. &lt; ${info.mini.toFixed(3)} → 0 | `
+              + `${info.mini.toFixed(3)} – ${info.middle.toFixed(3)} → +${info.tiers[0]} | `
+              + `${info.middle.toFixed(3)} – ${info.maxi.toFixed(3)} → +${info.tiers[1]} | `
+              + `≥ ${info.maxi.toFixed(3)} → +${info.tiers[2]}`;
+          } else {
+            rulesHTML = `<strong>Normal :</strong> `
+              + `Moy. &lt; ${info.mini.toFixed(3)} → 0 | `
+              + `${info.mini.toFixed(3)} – ${info.maxi.toFixed(3)} → +${info.tiers[0]} | `
+              + `&gt; ${info.maxi.toFixed(3)} → +${info.tiers[1]}`;
+          }
+          bonusMoyenneInfoDiv.innerHTML = `<strong>Bonus Moyenne :</strong> ${rulesHTML}`;
+          bonusMoyenneInfoDiv.style.display = 'block';
+        } else if (bonusMoyenneInfoDiv) {
+          bonusMoyenneInfoDiv.style.display = 'none';
         }
 
         // Determine which tournament we're after

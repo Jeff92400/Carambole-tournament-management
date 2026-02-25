@@ -136,6 +136,37 @@ router.get('/', authenticateToken, async (req, res) => {
         }
       } catch (e) { /* default to standard */ }
 
+      // Build bonusMoyenneInfo for the frontend info card
+      let bonusMoyenneInfo = null;
+      try {
+        if (orgId) {
+          const bonusEnabled = (await appSettings.getOrgSetting(orgId, 'bonus_moyenne_enabled')) === 'true';
+          if (bonusEnabled) {
+            const bonusType = (await appSettings.getOrgSetting(orgId, 'bonus_moyenne_type')) || 'normal';
+            const tier1 = parseInt(await appSettings.getOrgSetting(orgId, 'scoring_avg_tier_1')) || 1;
+            const tier2 = parseInt(await appSettings.getOrgSetting(orgId, 'scoring_avg_tier_2')) || 2;
+            const tier3 = parseInt(await appSettings.getOrgSetting(orgId, 'scoring_avg_tier_3')) || 3;
+            // Get game_parameters for this category
+            const cat = await new Promise((resolve, reject) => {
+              db.get('SELECT game_type, level, organization_id FROM categories WHERE id = $1', [categoryId], (err, row) => err ? reject(err) : resolve(row));
+            });
+            if (cat) {
+              const gp = await new Promise((resolve, reject) => {
+                db.get(
+                  "SELECT moyenne_mini, moyenne_maxi FROM game_parameters WHERE UPPER(REPLACE(mode, ' ', '')) = UPPER(REPLACE($1, ' ', '')) AND UPPER(categorie) = UPPER($2) AND ($3::int IS NULL OR organization_id = $3)",
+                  [cat.game_type, cat.level, cat.organization_id || orgId],
+                  (err, row) => err ? reject(err) : resolve(row)
+                );
+              });
+              const mini = gp ? parseFloat(gp.moyenne_mini) : 0;
+              const maxi = gp ? parseFloat(gp.moyenne_maxi) : 999;
+              const middle = (mini + maxi) / 2;
+              bonusMoyenneInfo = { enabled: true, type: bonusType, mini, middle, maxi, tiers: [tier1, tier2, tier3] };
+            }
+          }
+        }
+      } catch (e) { /* ignore — info card is optional */ }
+
       // Extract bonus column metadata from rankings' bonus_detail
       const seenTypes = new Set();
       let hasLegacyBonus = false;
@@ -171,13 +202,13 @@ router.get('/', authenticateToken, async (req, res) => {
             const labelMap = {};
             (labelRows || []).forEach(r => { labelMap[r.rule_type] = r.column_label; });
             res.json({
-              rankings: rows, tournamentsPlayed, qualificationMode, averageBonusTiers,
+              rankings: rows, tournamentsPlayed, qualificationMode, averageBonusTiers, bonusMoyenneInfo,
               bonusColumns: [...seenTypes].map(rt => ({ ruleType: rt, label: labelMap[rt] || rt }))
             });
           }
         );
       } else {
-        res.json({ rankings: rows, tournamentsPlayed, qualificationMode, averageBonusTiers, bonusColumns: [] });
+        res.json({ rankings: rows, tournamentsPlayed, qualificationMode, averageBonusTiers, bonusMoyenneInfo, bonusColumns: [] });
       }
     });
   });
