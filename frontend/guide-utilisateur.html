@@ -1011,14 +1011,14 @@
     <h5>Différence avec le mode standard</h5>
     <p>La seule différence concerne l'attribution automatique des <strong>points de position</strong> :</p>
     <ol class="steps">
-      <li><strong>Importer le fichier CSV :</strong> Même fichier CSV que pour le mode standard, contenant la colonne "Classement" qui indique la position finale de chaque joueur dans la journée.</li>
-      <li><strong>Attribution automatique :</strong> À l'enregistrement, le système lit la position de chaque joueur (colonne "Classement" du CSV) et lui attribue automatiquement les points de position correspondants, selon le barème configuré dans <strong>Paramètres &gt; Types de Tournoi &gt; Points par position</strong>.</li>
+      <li><strong>Importer le fichier CSV :</strong> Même fichier CSV que pour le mode standard.</li>
+      <li><strong>Attribution automatique :</strong> À l'enregistrement, le système classe les joueurs selon leurs points de match (puis moyenne en cas d'égalité) et attribue automatiquement les points de position correspondants, selon le barème configuré dans <strong>Paramètres &gt; Types de Tournoi &gt; Points par position</strong>. Tous les tournois de la catégorie sont recalculés à chaque import.</li>
       <li><strong>Recalcul des classements :</strong> Les classements de saison sont recalculés automatiquement après l'import, en retenant les N meilleurs scores de points de position sur M journées.</li>
       <li><strong>Consultation du détail :</strong> Après l'import, cliquer sur <strong>« Voir le détail du tournoi »</strong> pour consulter la page de résultats. En mode journées, une colonne <strong>« Pts Position »</strong> est affichée en plus des colonnes habituelles (points de match, caramboles, reprises, moyenne, série).</li>
     </ol>
 
     <div class="info-card accent">
-      <strong>Points de position :</strong> Le barème de points par position est configurable dans Paramètres &gt; Types de Tournoi. Par exemple : 1er &rarr; 10 pts, 2e &rarr; 8 pts, 3e &rarr; 6 pts, etc. Ce barème est appliqué automatiquement à chaque import de résultats en mode journées. La colonne « Pts Position » apparaît automatiquement sur la page de résultats du tournoi lorsque des points de position ont été attribués.
+      <strong>Points de position :</strong> Le barème de points par position est configurable dans Paramètres &gt; Types de Tournoi. Par exemple : 1er &rarr; 10 pts, 2e &rarr; 8 pts, 3e &rarr; 6 pts, etc. Ce barème est appliqué automatiquement à chaque import de résultats en mode journées. La position est calculée d'après les points de match (et la moyenne en cas d'égalité). La colonne « Pts Position » apparaît automatiquement sur la page de résultats du tournoi.
     </div>
   </section>
 
@@ -1505,6 +1505,7 @@
       </tbody>
     </table>
     <p>Le bonus est calcul&eacute; automatiquement &agrave; chaque import de r&eacute;sultats et s'ajoute aux &eacute;ventuels bonus du bar&egrave;me (VDL, etc.).</p>
+    <p>Un bandeau d'information affiche les seuils et règles du bonus moyenne en haut de la page de résultats du tournoi et de la page de classements.</p>
 
     <h4>Paramètres Journées Qualificatives</h4>
     <p>(Visible uniquement en mode journées)</p>

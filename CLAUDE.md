@@ -367,7 +367,22 @@ The scoring system uses a generic expression evaluator for bonus points. Rules a
 ### Backend Functions (tournaments.js)
 - `resolveField()`, `resolveValue()`, `evaluateOp()`, `evaluateRule()` — Generic evaluation engine
 - `computeBonusPoints()` — Evaluates all structured rules per player result
+- `computeBonusMoyenne()` — Computes MOYENNE_BONUS from game_parameters thresholds (Normal or Par paliers)
+- `assignPositionPointsIfJournees()` — Computes position from match results (match_points desc, moyenne desc) and assigns position_points from lookup table (journées mode only)
+- `recomputeAllBonuses()` — Recomputes ALL tournaments in a category: Step 1 position points, Step 2 barème, Step 3 bonus moyenne
 - Results stored as `bonus_points` (total) + `bonus_detail` (JSON breakdown per rule_type)
+- **Import flow:** After CSV import, calls `recomputeAllBonuses()` for the entire category (not just the imported tournament), then `recalculateRankings()`
+
+### Bonus Moyenne
+- Per-org toggle: `bonus_moyenne_enabled` + `bonus_moyenne_type` (normal/tiered) in `organization_settings`
+- **Normal:** < mini → 0, mini–maxi → +tier1, > maxi → +tier2
+- **Par paliers:** < mini → 0, mini–middle → +tier1, middle–maxi → +tier2, ≥ maxi → +tier3 (where middle = (mini+maxi)/2)
+- Tier values configurable: `scoring_avg_tier_1/2/3` (defaults: 1, 2, 3)
+- Thresholds from `game_parameters.moyenne_mini/moyenne_maxi` per mode+category
+- **CRITICAL:** `game_parameters.mode` stores values like `'3BANDES'` (no space) while `categories.game_type` stores `'3 Bandes'` (with space). ALL queries MUST use `UPPER(REPLACE(mode, ' ', ''))` pattern for matching.
+- Computed on-the-fly in results API (`GET /:id/results`) AND persisted via fire-and-forget
+- API responses include `bonusMoyenneInfo` object (type, mini, middle, maxi, tiers) for frontend info card
+- Info card displayed on tournament results and rankings pages showing bonus conditions
 
 ### Dynamic Bonus Columns
 - Tournament results and rankings API responses include `bonusColumns` metadata
