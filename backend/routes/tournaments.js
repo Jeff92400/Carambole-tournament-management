@@ -1265,11 +1265,16 @@ async function recalculateRankingsJournees(categoryId, season, callback, orgId) 
     // Get org settings
     const bestOfCount = parseInt(await appSettings.getOrgSetting(orgId, 'best_of_count')) || 2;
     const journeesCount = parseInt(await appSettings.getOrgSetting(orgId, 'journees_count')) || 3;
+    const bonusMoyenneEnabled = (await appSettings.getOrgSetting(orgId, 'bonus_moyenne_enabled')) === 'true';
     const averageBonusEnabled = (await appSettings.getOrgSetting(orgId, 'average_bonus_tiers')) === 'true';
     const bonusMoyenneType = (await appSettings.getOrgSetting(orgId, 'bonus_moyenne_type')) || 'normal';
     const tier1 = parseInt(await appSettings.getOrgSetting(orgId, 'scoring_avg_tier_1')) || 1;
     const tier2 = parseInt(await appSettings.getOrgSetting(orgId, 'scoring_avg_tier_2')) || 2;
     const tier3 = parseInt(await appSettings.getOrgSetting(orgId, 'scoring_avg_tier_3')) || 3;
+
+    // When bonus moyenne is already applied at tournament level (affects position → position_points),
+    // skip the season-level average bonus to avoid double-counting
+    const applySeasonBonus = averageBonusEnabled && !bonusMoyenneEnabled;
 
     // Get all tournaments for this category/season (excluding finale = tournament_number 4)
     const tournaments = await dbAllAsync(
@@ -1371,9 +1376,9 @@ async function recalculateRankingsJournees(categoryId, season, callback, orgId) 
       }
       const avgMoyenne = totalReprises > 0 ? totalPoints / totalReprises : 0;
 
-      // Average bonus (only if enabled in org settings) — uses bonus_moyenne_type
+      // Average bonus (only if enabled AND bonus moyenne not already applied at tournament level)
       let averageBonus = 0;
-      if (averageBonusEnabled) {
+      if (applySeasonBonus) {
         if (bonusMoyenneType === 'tiered') {
           // Par paliers: < mini → 0, mini–middle → tier1, middle–maxi → tier2, ≥ maxi → tier3
           if (avgMoyenne >= moyenneMaxi) {

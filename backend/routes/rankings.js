@@ -131,7 +131,11 @@ router.get('/', authenticateToken, async (req, res) => {
           const mode = await appSettings.getOrgSetting(orgId, 'qualification_mode');
           if (mode) qualificationMode = mode;
           if (qualificationMode === 'journees') {
-            averageBonusTiers = (await appSettings.getOrgSetting(orgId, 'average_bonus_tiers')) === 'true';
+            const avgBonusSetting = (await appSettings.getOrgSetting(orgId, 'average_bonus_tiers')) === 'true';
+            const bonusMoyenneEnabled = (await appSettings.getOrgSetting(orgId, 'bonus_moyenne_enabled')) === 'true';
+            // When bonus moyenne is applied at tournament level (baked into position_points),
+            // don't show season-level average bonus column — it would be double-counting
+            averageBonusTiers = avgBonusSetting && !bonusMoyenneEnabled;
           }
         }
       } catch (e) { /* default to standard */ }
