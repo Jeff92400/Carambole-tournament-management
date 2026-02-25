@@ -1825,12 +1825,75 @@ router.get('/:id/results', authenticateToken, (req, res) => {
          WHERE tr.tournament_id = ?
          ORDER BY tr.position ASC`,
         [tournamentId],
-        (err, results) => {
+        async (err, results) => {
           if (err) {
             return res.status(500).json({ error: err.message });
           }
 
-          // Extract bonus column metadata from results' bonus_detail
+          const orgId = req.user.organizationId || null;
+
+          // ── Compute bonus moyenne ON THE FLY (guaranteed, no reliance on background writes) ──
+          try {
+            const bonusEnabled = orgId ? ((await appSettings.getOrgSetting(orgId, 'bonus_moyenne_enabled')) === 'true') : false;
+            if (bonusEnabled && results && results.length > 0) {
+              const bonusType = (await appSettings.getOrgSetting(orgId, 'bonus_moyenne_type')) || 'normal';
+              const tier1 = parseInt(await appSettings.getOrgSetting(orgId, 'scoring_avg_tier_1')) || 1;
+              const tier2 = parseInt(await appSettings.getOrgSetting(orgId, 'scoring_avg_tier_2')) || 2;
+              const tier3 = parseInt(await appSettings.getOrgSetting(orgId, 'scoring_avg_tier_3')) || 3;
+
+              // Load game_parameters thresholds (same two-query pattern as recalculateRankingsJournees)
+              const cat = await dbGetAsync('SELECT game_type, level, organization_id FROM categories WHERE id = $1', [tournament.category_id]);
+              let gp = null;
+              if (cat) {
+                gp = await dbGetAsync(
+                  'SELECT moyenne_mini, moyenne_maxi FROM game_parameters WHERE UPPER(mode) = UPPER($1) AND UPPER(categorie) = UPPER($2) AND ($3::int IS NULL OR organization_id = $3)',
+                  [cat.game_type, cat.level, cat.organization_id || orgId]
+                );
+              }
+
+              if (gp && gp.moyenne_mini != null && gp.moyenne_maxi != null) {
+                const moyenneMini = parseFloat(gp.moyenne_mini);
+                const moyenneMaxi = parseFloat(gp.moyenne_maxi);
+                const moyenneMiddle = (moyenneMini + moyenneMaxi) / 2;
+
+                for (const r of results) {
+                  let detail = {};
+                  try { detail = JSON.parse(r.bonus_detail || '{}'); } catch (e) { detail = {}; }
+
+                  const moyenne = r.reprises > 0 ? r.points / r.reprises : 0;
+                  let bonus = 0;
+
+                  if (bonusType === 'tiered') {
+                    if (moyenne >= moyenneMaxi) bonus = tier3;
+                    else if (moyenne >= moyenneMiddle) bonus = tier2;
+                    else if (moyenne >= moyenneMini) bonus = tier1;
+                  } else {
+                    if (moyenne > moyenneMaxi) bonus = tier2;
+                    else if (moyenne >= moyenneMini) bonus = tier1;
+                  }
+
+                  if (bonus > 0) {
+                    detail.MOYENNE_BONUS = bonus;
+                  } else {
+                    delete detail.MOYENNE_BONUS;
+                  }
+
+                  r.bonus_detail = JSON.stringify(detail);
+                  r.bonus_points = Object.values(detail).reduce((a, b) => a + b, 0);
+
+                  // Persist to DB (fire-and-forget)
+                  dbRunAsync(
+                    'UPDATE tournament_results SET bonus_points = $1, bonus_detail = $2 WHERE id = $3',
+                    [r.bonus_points, r.bonus_detail, r.id]
+                  ).catch(() => {});
+                }
+              }
+            }
+          } catch (bonusErr) {
+            console.error('[RESULTS] Error computing bonus moyenne on the fly:', bonusErr);
+          }
+
+          // ── Extract bonus column metadata from results' bonus_detail ──
           const seenTypes = new Set();
           let hasLegacyBonus = false;
           (results || []).forEach(r => {
@@ -1840,11 +1903,9 @@ router.get('/:id/results', authenticateToken, (req, res) => {
                 Object.keys(detail).forEach(k => { if (detail[k] > 0) seenTypes.add(k); });
               } catch (e) {}
             }
-            // Backward compat: results with bonus_points but no bonus_detail (pre-rule-engine)
             if (!r.bonus_detail && r.bonus_points > 0) hasLegacyBonus = true;
           });
 
-          // Backfill legacy results: inject bonus_detail from bonus_points
           if (hasLegacyBonus && seenTypes.size === 0) {
             seenTypes.add('MOYENNE_BONUS');
             (results || []).forEach(r => {
@@ -1855,11 +1916,7 @@ router.get('/:id/results', authenticateToken, (req, res) => {
           }
 
           if (seenTypes.size > 0) {
-            // Default labels for auto-computed bonus types (when no scoring_rules entries exist)
             const defaultLabels = { MOYENNE_BONUS: 'Bonus Moy.' };
-
-            // Get column labels from scoring_rules
-            const orgId = req.user.organizationId || null;
             const typesArr = [...seenTypes];
             const placeholders = typesArr.map((_, i) => `$${i + 1}`).join(',');
             const orgParam = typesArr.length + 1;
@@ -1920,6 +1977,52 @@ router.get('/:id/export', authenticateToken, async (req, res) => {
           }
 
           try {
+            const orgId = req.user.organizationId || null;
+
+            // ── Compute bonus moyenne ON THE FLY for Excel export too ──
+            try {
+              const bonusEnabled = orgId ? ((await appSettings.getOrgSetting(orgId, 'bonus_moyenne_enabled')) === 'true') : false;
+              if (bonusEnabled && results && results.length > 0) {
+                const bonusType = (await appSettings.getOrgSetting(orgId, 'bonus_moyenne_type')) || 'normal';
+                const tier1 = parseInt(await appSettings.getOrgSetting(orgId, 'scoring_avg_tier_1')) || 1;
+                const tier2 = parseInt(await appSettings.getOrgSetting(orgId, 'scoring_avg_tier_2')) || 2;
+                const tier3 = parseInt(await appSettings.getOrgSetting(orgId, 'scoring_avg_tier_3')) || 3;
+                const cat = await dbGetAsync('SELECT game_type, level, organization_id FROM categories WHERE id = $1', [tournament.category_id]);
+                let gp = null;
+                if (cat) {
+                  gp = await dbGetAsync(
+                    'SELECT moyenne_mini, moyenne_maxi FROM game_parameters WHERE UPPER(mode) = UPPER($1) AND UPPER(categorie) = UPPER($2) AND ($3::int IS NULL OR organization_id = $3)',
+                    [cat.game_type, cat.level, cat.organization_id || orgId]
+                  );
+                }
+                if (gp && gp.moyenne_mini != null && gp.moyenne_maxi != null) {
+                  const moyenneMini = parseFloat(gp.moyenne_mini);
+                  const moyenneMaxi = parseFloat(gp.moyenne_maxi);
+                  const moyenneMiddle = (moyenneMini + moyenneMaxi) / 2;
+                  for (const r of results) {
+                    let detail = {};
+                    try { detail = JSON.parse(r.bonus_detail || '{}'); } catch (e) { detail = {}; }
+                    const moyenne = r.reprises > 0 ? r.points / r.reprises : 0;
+                    let bonus = 0;
+                    if (bonusType === 'tiered') {
+                      if (moyenne >= moyenneMaxi) bonus = tier3;
+                      else if (moyenne >= moyenneMiddle) bonus = tier2;
+                      else if (moyenne >= moyenneMini) bonus = tier1;
+                    } else {
+                      if (moyenne > moyenneMaxi) bonus = tier2;
+                      else if (moyenne >= moyenneMini) bonus = tier1;
+                    }
+                    if (bonus > 0) detail.MOYENNE_BONUS = bonus;
+                    else delete detail.MOYENNE_BONUS;
+                    r.bonus_detail = JSON.stringify(detail);
+                    r.bonus_points = Object.values(detail).reduce((a, b) => a + b, 0);
+                  }
+                }
+              }
+            } catch (bonusErr) {
+              console.error('[EXPORT] Error computing bonus moyenne on the fly:', bonusErr);
+            }
+
             // Parse bonus_detail to find dynamic bonus columns
             const seenTypes = new Set();
             let hasLegacyBonus = false;
