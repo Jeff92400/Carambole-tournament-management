@@ -539,10 +539,18 @@
           document.getElementById('importForm').reset();
 
           // Ask if user wants to send results email
+          // Only show immediately if no bonuses are configured —
+          // when bonuses are active, the admin should verify the full
+          // ranking (match points + bonuses) before sending to players
           if (data.tournamentId && data.imported > 0) {
-            setTimeout(() => {
-              showSendResultsPopup(data.tournamentId, categoryId);
-            }, 500);
+            if (data.hasBonuses) {
+              // Show info message instead of popup
+              showBonusInfoMessage(data.tournamentId, categoryId);
+            } else {
+              setTimeout(() => {
+                showSendResultsPopup(data.tournamentId, categoryId);
+              }, 500);
+            }
           }
         } else {
           errorDiv.textContent = data.error || 'Erreur lors de l\'import';
@@ -715,6 +723,28 @@
       localStorage.removeItem('userRole');
       window.location.href = 'login.html';
     });
+
+    // Show info message when bonuses are active (no immediate send)
+    function showBonusInfoMessage(tournamentId, categoryId) {
+      const resultsDiv = document.getElementById('importResults');
+      const infoHtml = `
+        <div style="margin-top: 20px; padding: 16px 20px; background: #fff3cd; border: 1px solid #ffc107; border-radius: 8px; color: #856404;">
+          <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+            <span style="font-size: 20px;">&#9432;</span>
+            <strong>Envoi des résultats</strong>
+          </div>
+          <p style="margin: 0 0 12px 0;">
+            Les classements incluent des bonus (moyenne, barème…). Vérifiez le classement mis à jour avant d'envoyer les résultats aux joueurs.
+          </p>
+          <p style="margin: 0;">
+            Vous pourrez envoyer les résultats depuis la page
+            <a href="tournaments-list.html" style="color: #856404; font-weight: bold;">Compétitions Jouées</a>
+            après vérification.
+          </p>
+        </div>
+      `;
+      resultsDiv.insertAdjacentHTML('beforeend', infoHtml);
+    }
 
     // Show send results popup
     function showSendResultsPopup(tournamentId, categoryId) {

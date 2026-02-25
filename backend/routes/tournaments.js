@@ -688,8 +688,8 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
                     // Recompute ALL bonuses for the category (position points + barème + bonus moyenne)
                     // This handles ALL tournaments, not just the newly imported one — ensures
                     // previously imported tournaments also get updated position_points and bonuses
-                    recomputeAllBonuses(categoryId, season, orgId, () => {
-                      recalculateRankings(categoryId, season, () => {
+                    recomputeAllBonuses(categoryId, season, orgId, async () => {
+                      recalculateRankings(categoryId, season, async () => {
                         // Clean up uploaded file
                         fs.unlinkSync(req.file.path);
 
@@ -703,10 +703,29 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
                           targetName: `T${tournamentNumber} - ${season}`
                         });
 
+                        // Check if org uses any bonus (moyenne or barème scoring rules)
+                        // so frontend knows whether to offer immediate result sending
+                        let hasBonuses = false;
+                        try {
+                          const bonusMoyenne = orgId ? (await appSettings.getOrgSetting(orgId, 'bonus_moyenne_enabled')) : '';
+                          if (bonusMoyenne === 'true') {
+                            hasBonuses = true;
+                          } else {
+                            const activeRules = await dbAllAsync(
+                              "SELECT 1 FROM scoring_rules WHERE is_active = true AND field_1 IS NOT NULL AND rule_type != 'MOYENNE_BONUS' AND points > 0 AND ($1::int IS NULL OR organization_id = $1) LIMIT 1",
+                              [orgId]
+                            );
+                            hasBonuses = activeRules && activeRules.length > 0;
+                          }
+                        } catch (e) {
+                          console.error('[IMPORT] Error checking bonus settings:', e);
+                        }
+
                         res.json({
                           message: 'Tournament imported successfully',
                           tournamentId: finalTournamentId,
                           imported,
+                          hasBonuses,
                           errors: errors.length > 0 ? errors : undefined
                         });
                       });
