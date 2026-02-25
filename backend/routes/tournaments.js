@@ -180,17 +180,27 @@ async function assignPositionPointsIfJournees(tournamentId, orgId) {
   }
   console.log(`[POS-PTS] Assigning position points for tournament ${tournamentId}, lookup: ${JSON.stringify(lookup)}`);
 
-  // Position is already set from the CSV 'classement' column during standard import
+  // Compute position from match results (match_points desc, then moyenne desc)
+  // This is more reliable than the CSV 'classement' column which may be 0 or missing
   const results = await dbAllAsync(
-    'SELECT id, position FROM tournament_results WHERE tournament_id = $1',
+    'SELECT id, match_points, points, reprises FROM tournament_results WHERE tournament_id = $1',
     [tournamentId]
   );
 
-  for (const r of results) {
-    const pp = lookup[r.position] || 0;
+  // Sort by match_points desc, then moyenne desc (same logic as frontend display)
+  results.sort((a, b) => {
+    if (b.match_points !== a.match_points) return b.match_points - a.match_points;
+    const avgA = a.reprises > 0 ? a.points / a.reprises : 0;
+    const avgB = b.reprises > 0 ? b.points / b.reprises : 0;
+    return avgB - avgA;
+  });
+
+  for (let i = 0; i < results.length; i++) {
+    const position = i + 1;
+    const pp = lookup[position] || 0;
     await dbRunAsync(
-      'UPDATE tournament_results SET position_points = $1 WHERE id = $2',
-      [pp, r.id]
+      'UPDATE tournament_results SET position_points = $1, position = $2 WHERE id = $3',
+      [pp, position, results[i].id]
     );
   }
 }
