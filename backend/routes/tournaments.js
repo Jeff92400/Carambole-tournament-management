@@ -675,42 +675,32 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
 
                     const orgId = req.user.organizationId || null;
 
-                    // Assign position_points for journées orgs (no-op for standard)
-                    const afterPositionPoints = () => {
-                      computeBonusPoints(finalTournamentId, categoryId, orgId, () => {
-                        // Safety net: explicitly apply bonus moyenne (async chain from computeBonusPoints may not execute reliably)
-                        computeBonusMoyenne(finalTournamentId, categoryId, orgId, () => {
-                        recalculateRankings(categoryId, season, () => {
-                          // Clean up uploaded file
-                          fs.unlinkSync(req.file.path);
+                    // Recompute ALL bonuses for the category (position points + barème + bonus moyenne)
+                    // This handles ALL tournaments, not just the newly imported one — ensures
+                    // previously imported tournaments also get updated position_points and bonuses
+                    recomputeAllBonuses(categoryId, season, orgId, () => {
+                      recalculateRankings(categoryId, season, () => {
+                        // Clean up uploaded file
+                        fs.unlinkSync(req.file.path);
 
-                          // Log tournament import
-                          logAdminAction({
-                            req,
-                            action: ACTION_TYPES.IMPORT_TOURNAMENT,
-                            details: `Import tournoi ${tournamentNumber}, saison ${season}, ${imported} joueurs`,
-                            targetType: 'tournament',
-                            targetId: finalTournamentId,
-                            targetName: `T${tournamentNumber} - ${season}`
-                          });
-
-                          res.json({
-                            message: 'Tournament imported successfully',
-                            tournamentId: finalTournamentId,
-                            imported,
-                            errors: errors.length > 0 ? errors : undefined
-                          });
+                        // Log tournament import
+                        logAdminAction({
+                          req,
+                          action: ACTION_TYPES.IMPORT_TOURNAMENT,
+                          details: `Import tournoi ${tournamentNumber}, saison ${season}, ${imported} joueurs`,
+                          targetType: 'tournament',
+                          targetId: finalTournamentId,
+                          targetName: `T${tournamentNumber} - ${season}`
                         });
-                        }); // end computeBonusMoyenne safety net
-                      });
-                    };
 
-                    assignPositionPointsIfJournees(finalTournamentId, orgId)
-                      .then(afterPositionPoints)
-                      .catch(ppErr => {
-                        console.error('Error assigning position points:', ppErr);
-                        afterPositionPoints(); // Continue anyway — non-blocking
+                        res.json({
+                          message: 'Tournament imported successfully',
+                          tournamentId: finalTournamentId,
+                          imported,
+                          errors: errors.length > 0 ? errors : undefined
+                        });
                       });
+                    });
                   });
                 } // Close insertTournamentResults function
               });
