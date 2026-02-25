@@ -991,8 +991,8 @@ async function computeBonusMoyenne(tournamentId, categoryId, orgId, callback) {
     const tier2 = parseInt(await appSettings.getOrgSetting(orgId, 'scoring_avg_tier_2')) || 2;
     const tier3 = parseInt(await appSettings.getOrgSetting(orgId, 'scoring_avg_tier_3')) || 3;
 
-    // Get game_parameters for this category (two separate queries — same pattern as recalculateRankingsJournees)
-    let moyenneMini = null, moyenneMaxi = null, moyenneMiddle = null;
+    // Get game_parameters for this category — use defaults (0/999) if not configured (same as recalculateRankingsJournees)
+    let moyenneMini = 0, moyenneMaxi = 999, moyenneMiddle = 499.5;
     if (enabled) {
       const category = await dbGetAsync(
         'SELECT id, game_type, level, organization_id FROM categories WHERE id = $1',
@@ -1007,15 +1007,10 @@ async function computeBonusMoyenne(tournamentId, categoryId, orgId, callback) {
         );
         console.log(`[BONUS-MOY] game_parameters query result: ${JSON.stringify(gp)}`);
 
-        if (gp && gp.moyenne_mini != null && gp.moyenne_maxi != null) {
-          moyenneMini = parseFloat(gp.moyenne_mini);
-          moyenneMaxi = parseFloat(gp.moyenne_maxi);
-          moyenneMiddle = (moyenneMini + moyenneMaxi) / 2;
-          console.log(`[BONUS-MOY] Thresholds: type=${bonusType}, mini=${moyenneMini}, middle=${moyenneMiddle.toFixed(3)}, maxi=${moyenneMaxi}, tiers=[${tier1},${tier2},${tier3}]`);
-        } else {
-          console.log(`[BONUS-MOY] No game_parameters thresholds found for mode=${category.game_type}, categorie=${category.level}, org=${category.organization_id || orgId}`);
-          return callback(null);
-        }
+        if (gp && gp.moyenne_mini != null) moyenneMini = parseFloat(gp.moyenne_mini);
+        if (gp && gp.moyenne_maxi != null) moyenneMaxi = parseFloat(gp.moyenne_maxi);
+        moyenneMiddle = (moyenneMini + moyenneMaxi) / 2;
+        console.log(`[BONUS-MOY] Thresholds: type=${bonusType}, mini=${moyenneMini}, middle=${moyenneMiddle.toFixed(3)}, maxi=${moyenneMaxi}, tiers=[${tier1},${tier2},${tier3}]`);
       } else {
         console.log(`[BONUS-MOY] Category ${categoryId} not found`);
         return callback(null);
@@ -1848,13 +1843,14 @@ router.get('/:id/results', authenticateToken, async (req, res) => {
             'SELECT moyenne_mini, moyenne_maxi FROM game_parameters WHERE UPPER(mode) = UPPER($1) AND UPPER(categorie) = UPPER($2) AND ($3::int IS NULL OR organization_id = $3)',
             [cat.game_type, cat.level, cat.organization_id || orgId]
           );
-          bonusDiag.gameParams = gp ? { mini: gp.moyenne_mini, maxi: gp.moyenne_maxi } : null;
+          bonusDiag.gameParams = gp ? { mini: gp.moyenne_mini, maxi: gp.moyenne_maxi } : 'defaults (0/999)';
 
-          if (gp && gp.moyenne_mini != null && gp.moyenne_maxi != null) {
-            const moyenneMini = parseFloat(gp.moyenne_mini);
-            const moyenneMaxi = parseFloat(gp.moyenne_maxi);
-            const moyenneMiddle = (moyenneMini + moyenneMaxi) / 2;
-            let applied = 0;
+          // Same defaults as recalculateRankingsJournees — compute even without game_parameters
+          const moyenneMini = (gp && gp.moyenne_mini != null) ? parseFloat(gp.moyenne_mini) : 0;
+          const moyenneMaxi = (gp && gp.moyenne_maxi != null) ? parseFloat(gp.moyenne_maxi) : 999;
+          const moyenneMiddle = (moyenneMini + moyenneMaxi) / 2;
+          bonusDiag.thresholds = { mini: moyenneMini, middle: moyenneMiddle, maxi: moyenneMaxi };
+          let applied = 0;
 
             for (const r of results) {
               let detail = {};
@@ -1890,7 +1886,6 @@ router.get('/:id/results', authenticateToken, async (req, res) => {
             }
             bonusDiag.applied = applied;
             bonusDiag.total = results.length;
-          }
         }
       }
     } catch (bonusErr) {
@@ -1997,28 +1992,26 @@ router.get('/:id/export', authenticateToken, async (req, res) => {
                     [cat.game_type, cat.level, cat.organization_id || orgId]
                   );
                 }
-                if (gp && gp.moyenne_mini != null && gp.moyenne_maxi != null) {
-                  const moyenneMini = parseFloat(gp.moyenne_mini);
-                  const moyenneMaxi = parseFloat(gp.moyenne_maxi);
-                  const moyenneMiddle = (moyenneMini + moyenneMaxi) / 2;
-                  for (const r of results) {
-                    let detail = {};
-                    try { detail = JSON.parse(r.bonus_detail || '{}'); } catch (e) { detail = {}; }
-                    const moyenne = r.reprises > 0 ? r.points / r.reprises : 0;
-                    let bonus = 0;
-                    if (bonusType === 'tiered') {
-                      if (moyenne >= moyenneMaxi) bonus = tier3;
-                      else if (moyenne >= moyenneMiddle) bonus = tier2;
-                      else if (moyenne >= moyenneMini) bonus = tier1;
-                    } else {
-                      if (moyenne > moyenneMaxi) bonus = tier2;
-                      else if (moyenne >= moyenneMini) bonus = tier1;
-                    }
-                    if (bonus > 0) detail.MOYENNE_BONUS = bonus;
-                    else delete detail.MOYENNE_BONUS;
-                    r.bonus_detail = JSON.stringify(detail);
-                    r.bonus_points = Object.values(detail).reduce((a, b) => a + b, 0);
+                const moyenneMini = (gp && gp.moyenne_mini != null) ? parseFloat(gp.moyenne_mini) : 0;
+                const moyenneMaxi = (gp && gp.moyenne_maxi != null) ? parseFloat(gp.moyenne_maxi) : 999;
+                const moyenneMiddle = (moyenneMini + moyenneMaxi) / 2;
+                for (const r of results) {
+                  let detail = {};
+                  try { detail = JSON.parse(r.bonus_detail || '{}'); } catch (e) { detail = {}; }
+                  const moyenne = r.reprises > 0 ? r.points / r.reprises : 0;
+                  let bonus = 0;
+                  if (bonusType === 'tiered') {
+                    if (moyenne >= moyenneMaxi) bonus = tier3;
+                    else if (moyenne >= moyenneMiddle) bonus = tier2;
+                    else if (moyenne >= moyenneMini) bonus = tier1;
+                  } else {
+                    if (moyenne > moyenneMaxi) bonus = tier2;
+                    else if (moyenne >= moyenneMini) bonus = tier1;
                   }
+                  if (bonus > 0) detail.MOYENNE_BONUS = bonus;
+                  else delete detail.MOYENNE_BONUS;
+                  r.bonus_detail = JSON.stringify(detail);
+                  r.bonus_points = Object.values(detail).reduce((a, b) => a + b, 0);
                 }
               }
             } catch (bonusErr) {
