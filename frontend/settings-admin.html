@@ -4348,6 +4348,10 @@
             msgDiv.style.background = '#fff3cd';
             msgDiv.style.color = '#856404';
           }
+          // Log diagnostic info to console for debugging
+          if (recomputeData.diagnostic) {
+            console.log('[BONUS DIAGNOSTIC]', JSON.stringify(recomputeData.diagnostic, null, 2));
+          }
           msgDiv.textContent = msg;
         } catch (recomputeErr) {
           console.error('Error recomputing bonuses:', recomputeErr);
@@ -4360,7 +4364,7 @@
         msgDiv.style.color = '#721c24';
       }
       msgDiv.style.display = 'block';
-      setTimeout(() => { msgDiv.style.display = 'none'; }, 3000);
+      setTimeout(() => { msgDiv.style.display = 'none'; }, 8000);
     }
 
     // Bonus Moyenne — render editable tier rows based on type

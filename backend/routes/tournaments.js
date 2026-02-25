@@ -963,7 +963,9 @@ function evaluateRule(rule, playerResult, tournamentContext, referenceValues) {
  */
 async function computeBonusMoyenne(tournamentId, categoryId, orgId, callback) {
   try {
-    const enabled = orgId ? (await appSettings.getOrgSetting(orgId, 'bonus_moyenne_enabled')) === 'true' : false;
+    const rawSetting = orgId ? (await appSettings.getOrgSetting(orgId, 'bonus_moyenne_enabled')) : '';
+    const enabled = rawSetting === 'true';
+    console.log(`[BONUS-MOY] computeBonusMoyenne called: tournamentId=${tournamentId}, categoryId=${categoryId}, orgId=${orgId}, setting='${rawSetting}', enabled=${enabled}`);
 
     // Get all player results with existing bonus_detail
     const results = await dbAllAsync(
@@ -972,6 +974,7 @@ async function computeBonusMoyenne(tournamentId, categoryId, orgId, callback) {
     );
 
     if (!results || results.length === 0) {
+      console.log(`[BONUS-MOY] No results for tournament ${tournamentId}, skipping`);
       return callback(null);
     }
 
@@ -984,6 +987,13 @@ async function computeBonusMoyenne(tournamentId, categoryId, orgId, callback) {
     // Get game_parameters for this category
     let moyenneMini = null, moyenneMaxi = null, moyenneMiddle = null;
     if (enabled) {
+      // First get the category details for diagnostic logging
+      const catDetails = await dbGetAsync(
+        'SELECT id, game_type, level, organization_id FROM categories WHERE id = $1',
+        [categoryId]
+      );
+      console.log(`[BONUS-MOY] Category: id=${categoryId}, game_type=${catDetails?.game_type}, level=${catDetails?.level}, org_id=${catDetails?.organization_id}`);
+
       const catInfo = await dbGetAsync(
         `SELECT gp.moyenne_mini, gp.moyenne_maxi
          FROM categories c
@@ -993,14 +1003,27 @@ async function computeBonusMoyenne(tournamentId, categoryId, orgId, callback) {
       );
 
       if (!catInfo || catInfo.moyenne_mini == null || catInfo.moyenne_maxi == null) {
-        console.log('[BONUS] No game_parameters thresholds for category, skipping bonus moyenne');
+        console.log(`[BONUS-MOY] No game_parameters thresholds for category ${categoryId} (catInfo=${JSON.stringify(catInfo)}), skipping bonus moyenne`);
+        // Check if game_parameters exist but with different org_id
+        const gpCheck = await dbGetAsync(
+          `SELECT gp.id, gp.mode, gp.categorie, gp.organization_id, gp.moyenne_mini, gp.moyenne_maxi
+           FROM game_parameters gp
+           WHERE UPPER(gp.mode) = UPPER($1) AND UPPER(gp.categorie) = UPPER($2)
+           LIMIT 1`,
+          [catDetails?.game_type || '', catDetails?.level || '']
+        );
+        if (gpCheck) {
+          console.log(`[BONUS-MOY] Found game_parameters with DIFFERENT org_id: gp.org_id=${gpCheck.organization_id} vs cat.org_id=${catDetails?.organization_id}`);
+        } else {
+          console.log(`[BONUS-MOY] No game_parameters found at all for mode=${catDetails?.game_type}, categorie=${catDetails?.level}`);
+        }
         return callback(null);
       }
 
       moyenneMini = parseFloat(catInfo.moyenne_mini);
       moyenneMaxi = parseFloat(catInfo.moyenne_maxi);
       moyenneMiddle = (moyenneMini + moyenneMaxi) / 2;
-      console.log(`[BONUS] Bonus moyenne (${bonusType}): mini=${moyenneMini}, middle=${moyenneMiddle.toFixed(3)}, maxi=${moyenneMaxi}`);
+      console.log(`[BONUS-MOY] Thresholds: type=${bonusType}, mini=${moyenneMini}, middle=${moyenneMiddle.toFixed(3)}, maxi=${moyenneMaxi}, tiers=[${tier1},${tier2},${tier3}]`);
     }
 
     let updateCount = 0;
@@ -1046,13 +1069,13 @@ async function computeBonusMoyenne(tournamentId, categoryId, orgId, callback) {
         'UPDATE tournament_results SET bonus_points = $1, bonus_detail = $2 WHERE id = $3',
         [totalBonus, JSON.stringify(detail), result.id]
       );
-      if (detail.MOYENNE_BONUS > 0) updateCount++;
+      if (detail.MOYENNE_BONUS && detail.MOYENNE_BONUS > 0) updateCount++;
     }
 
-    console.log(`[BONUS] Applied bonus moyenne to ${updateCount}/${results.length} results for tournament ${tournamentId}`);
+    console.log(`[BONUS-MOY] Applied bonus moyenne to ${updateCount}/${results.length} results for tournament ${tournamentId}`);
     callback(null);
   } catch (error) {
-    console.error('[BONUS] Error computing bonus moyenne:', error);
+    console.error('[BONUS-MOY] Error computing bonus moyenne:', error);
     callback(null); // Don't fail the import
   }
 }
@@ -1602,13 +1625,24 @@ async function recalculateRankingsStandard(categoryId, season, callback, orgId) 
 // Recompute bonus points for all tournaments in a category/season
 async function recomputeAllBonuses(categoryId, season, orgId, callback) {
   const rankingNumbers = await getRankingTournamentNumbers(orgId);
+  if (!rankingNumbers || rankingNumbers.length === 0) {
+    console.log(`[BONUS] No ranking tournament numbers for org ${orgId}, skipping recompute`);
+    return callback(null);
+  }
+  console.log(`[BONUS] Recomputing bonuses for category ${categoryId}, season ${season}, org ${orgId}, tournamentNumbers=[${rankingNumbers.join(',')}]`);
   db.all(
     `SELECT id FROM tournaments WHERE category_id = ? AND season = ? AND tournament_number IN (${rankingNumbers.join(',')})`,
     [categoryId, season],
     (err, tournaments) => {
-      if (err || !tournaments || tournaments.length === 0) {
+      if (err) {
+        console.error(`[BONUS] Error querying tournaments for recompute:`, err);
         return callback(null);
       }
+      if (!tournaments || tournaments.length === 0) {
+        console.log(`[BONUS] No tournaments found for category ${categoryId}, season ${season}`);
+        return callback(null);
+      }
+      console.log(`[BONUS] Found ${tournaments.length} tournaments to recompute: [${tournaments.map(t => t.id).join(',')}]`);
       let completed = 0;
       tournaments.forEach(t => {
         computeBonusPoints(t.id, categoryId, orgId, () => {
@@ -2354,14 +2388,104 @@ router.post('/recompute-all-bonuses', authenticateToken, async (req, res) => {
       });
     }
 
+    // Include diagnostic info
+    const diagSettings = {
+      bonus_moyenne_enabled: await appSettings.getOrgSetting(orgId, 'bonus_moyenne_enabled'),
+      bonus_moyenne_type: await appSettings.getOrgSetting(orgId, 'bonus_moyenne_type'),
+      scoring_avg_tier_1: await appSettings.getOrgSetting(orgId, 'scoring_avg_tier_1'),
+      scoring_avg_tier_2: await appSettings.getOrgSetting(orgId, 'scoring_avg_tier_2'),
+      scoring_avg_tier_3: await appSettings.getOrgSetting(orgId, 'scoring_avg_tier_3'),
+    };
+
     res.json({
       message: `Bonus recalculés pour ${recomputed} catégories`,
       recomputed,
       errors: errors.length > 0 ? errors : undefined,
-      warnings: warnings.length > 0 ? warnings : undefined
+      warnings: warnings.length > 0 ? warnings : undefined,
+      diagnostic: { orgId, season, settings: diagSettings, categoriesProcessed: categories.length }
     });
   } catch (error) {
     console.error('[BONUS] Error in recompute-all-bonuses:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Diagnostic endpoint: check bonus moyenne prerequisites
+router.get('/bonus-diagnostic', authenticateToken, async (req, res) => {
+  try {
+    const orgId = req.user.organizationId || null;
+    const season = await appSettings.getCurrentSeason();
+
+    // Check settings
+    const bonusMoyenneEnabled = await appSettings.getOrgSetting(orgId, 'bonus_moyenne_enabled');
+    const bonusMoyenneType = await appSettings.getOrgSetting(orgId, 'bonus_moyenne_type');
+    const avgBonusTiers = await appSettings.getOrgSetting(orgId, 'average_bonus_tiers');
+    const tier1 = await appSettings.getOrgSetting(orgId, 'scoring_avg_tier_1');
+    const tier2 = await appSettings.getOrgSetting(orgId, 'scoring_avg_tier_2');
+    const tier3 = await appSettings.getOrgSetting(orgId, 'scoring_avg_tier_3');
+
+    // Check categories with tournaments
+    const categories = await dbAllAsync(
+      `SELECT DISTINCT c.id, c.game_type, c.level, c.display_name, c.organization_id
+       FROM categories c
+       JOIN tournaments t ON t.category_id = c.id
+       WHERE t.season = $1 AND ($2::int IS NULL OR t.organization_id = $2)`,
+      [season, orgId]
+    );
+
+    // Check game_parameters matching for each category
+    const categoryDiag = [];
+    for (const cat of categories) {
+      const gpJoin = await dbGetAsync(
+        `SELECT gp.id, gp.mode, gp.categorie, gp.organization_id, gp.moyenne_mini, gp.moyenne_maxi
+         FROM categories c
+         LEFT JOIN game_parameters gp ON UPPER(gp.mode) = UPPER(c.game_type) AND UPPER(gp.categorie) = UPPER(c.level) AND gp.organization_id = c.organization_id
+         WHERE c.id = $1`,
+        [cat.id]
+      );
+      const gpDirect = await dbGetAsync(
+        `SELECT id, mode, categorie, organization_id, moyenne_mini, moyenne_maxi
+         FROM game_parameters
+         WHERE UPPER(mode) = UPPER($1) AND UPPER(categorie) = UPPER($2) AND organization_id = $3`,
+        [cat.game_type, cat.level, cat.organization_id]
+      );
+      // Check for sample tournament results
+      const sampleResults = await dbAllAsync(
+        `SELECT tr.id, tr.licence, tr.points, tr.reprises, tr.bonus_detail, tr.bonus_points,
+                CASE WHEN tr.reprises > 0 THEN ROUND(CAST(tr.points AS NUMERIC) / tr.reprises, 3) ELSE 0 END as computed_moyenne
+         FROM tournament_results tr
+         JOIN tournaments t ON tr.tournament_id = t.id
+         WHERE t.category_id = $1 AND t.season = $2
+         LIMIT 3`,
+        [cat.id, season]
+      );
+      categoryDiag.push({
+        category: { id: cat.id, game_type: cat.game_type, level: cat.level, display_name: cat.display_name, organization_id: cat.organization_id },
+        gpJoinResult: gpJoin ? { moyenne_mini: gpJoin.moyenne_mini, moyenne_maxi: gpJoin.moyenne_maxi, gp_org_id: gpJoin.organization_id } : null,
+        gpDirectQuery: gpDirect ? { id: gpDirect.id, mode: gpDirect.mode, categorie: gpDirect.categorie, org_id: gpDirect.organization_id, moyenne_mini: gpDirect.moyenne_mini, moyenne_maxi: gpDirect.moyenne_maxi } : null,
+        joinMatches: !!(gpJoin && gpJoin.moyenne_mini != null),
+        sampleResults: sampleResults.map(r => ({
+          licence: r.licence, points: r.points, reprises: r.reprises, moyenne: r.computed_moyenne,
+          bonus_detail: r.bonus_detail, bonus_points: r.bonus_points
+        }))
+      });
+    }
+
+    res.json({
+      orgId,
+      season,
+      settings: {
+        bonus_moyenne_enabled: bonusMoyenneEnabled,
+        bonus_moyenne_type: bonusMoyenneType,
+        average_bonus_tiers: avgBonusTiers,
+        scoring_avg_tier_1: tier1,
+        scoring_avg_tier_2: tier2,
+        scoring_avg_tier_3: tier3,
+        enabled_check: bonusMoyenneEnabled === 'true'
+      },
+      categories: categoryDiag
+    });
+  } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
