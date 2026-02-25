@@ -1783,162 +1783,164 @@ router.post('/mark-all-results-sent', authenticateToken, (req, res) => {
 });
 
 // Get tournament results by ID
-router.get('/:id/results', authenticateToken, (req, res) => {
-  const tournamentId = req.params.id;
-  console.log('Getting tournament results for ID:', tournamentId);
+router.get('/:id/results', authenticateToken, async (req, res) => {
+  try {
+    const tournamentId = req.params.id;
+    const orgId = req.user.organizationId || null;
 
-  // Get tournament info
-  db.get(
-    `SELECT t.*, c.display_name, c.game_type, c.level,
-            COALESCE(tt.is_finale, FALSE) as is_finale,
-            tt.display_name as type_display_name
-     FROM tournaments t
-     JOIN categories c ON t.category_id = c.id
-     LEFT JOIN tournament_types tt ON t.tournament_number = tt.tournament_number
-       AND (t.organization_id IS NULL OR tt.organization_id = t.organization_id)
-     WHERE t.id = ?`,
-    [tournamentId],
-    (err, tournament) => {
-      if (err) {
-        console.error('Error fetching tournament:', err);
-        return res.status(500).json({ error: err.message });
-      }
+    // Get tournament info
+    const tournament = await dbGetAsync(
+      `SELECT t.*, c.display_name, c.game_type, c.level,
+              COALESCE(tt.is_finale, FALSE) as is_finale,
+              tt.display_name as type_display_name
+       FROM tournaments t
+       JOIN categories c ON t.category_id = c.id
+       LEFT JOIN tournament_types tt ON t.tournament_number = tt.tournament_number
+         AND (t.organization_id IS NULL OR tt.organization_id = t.organization_id)
+       WHERE t.id = $1`,
+      [tournamentId]
+    );
 
-      if (!tournament) {
-        console.log('Tournament not found for ID:', tournamentId);
-        return res.status(404).json({ error: 'Tournament not found' });
-      }
+    if (!tournament) {
+      return res.status(404).json({ error: 'Tournament not found' });
+    }
 
-      console.log('Tournament found:', tournament);
+    // Get tournament results
+    const results = await dbAllAsync(
+      `SELECT tr.*, p.club as club_name,
+              COALESCE(pc.first_name, p.first_name) as first_name,
+              COALESCE(pc.last_name, p.last_name) as last_name,
+              c.logo_filename as club_logo,
+              pc.email
+       FROM tournament_results tr
+       LEFT JOIN players p ON REPLACE(tr.licence, ' ', '') = REPLACE(p.licence, ' ', '')
+       LEFT JOIN player_contacts pc ON REPLACE(tr.licence, ' ', '') = REPLACE(pc.licence, ' ', '')
+       LEFT JOIN clubs c ON REPLACE(REPLACE(REPLACE(UPPER(COALESCE(pc.club, p.club)), ' ', ''), '.', ''), '-', '') = REPLACE(REPLACE(REPLACE(UPPER(c.name), ' ', ''), '.', ''), '-', '')
+       WHERE tr.tournament_id = $1
+       ORDER BY tr.position ASC`,
+      [tournamentId]
+    );
 
-      // Get tournament results with club name, player first/last name, and email
-      db.all(
-        `SELECT tr.*, p.club as club_name,
-                COALESCE(pc.first_name, p.first_name) as first_name,
-                COALESCE(pc.last_name, p.last_name) as last_name,
-                c.logo_filename as club_logo,
-                pc.email
-         FROM tournament_results tr
-         LEFT JOIN players p ON REPLACE(tr.licence, ' ', '') = REPLACE(p.licence, ' ', '')
-         LEFT JOIN player_contacts pc ON REPLACE(tr.licence, ' ', '') = REPLACE(pc.licence, ' ', '')
-         LEFT JOIN clubs c ON REPLACE(REPLACE(REPLACE(UPPER(COALESCE(pc.club, p.club)), ' ', ''), '.', ''), '-', '') = REPLACE(REPLACE(REPLACE(UPPER(c.name), ' ', ''), '.', ''), '-', '')
-         WHERE tr.tournament_id = ?
-         ORDER BY tr.position ASC`,
-        [tournamentId],
-        async (err, results) => {
-          if (err) {
-            return res.status(500).json({ error: err.message });
-          }
+    // ── Compute bonus moyenne ON THE FLY ──
+    const bonusDiag = { orgId, enabled: false };
+    try {
+      const rawSetting = orgId ? (await appSettings.getOrgSetting(orgId, 'bonus_moyenne_enabled')) : '';
+      bonusDiag.rawSetting = rawSetting;
+      bonusDiag.enabled = rawSetting === 'true';
 
-          const orgId = req.user.organizationId || null;
+      if (bonusDiag.enabled && results && results.length > 0) {
+        const bonusType = (await appSettings.getOrgSetting(orgId, 'bonus_moyenne_type')) || 'normal';
+        const tier1 = parseInt(await appSettings.getOrgSetting(orgId, 'scoring_avg_tier_1')) || 1;
+        const tier2 = parseInt(await appSettings.getOrgSetting(orgId, 'scoring_avg_tier_2')) || 2;
+        const tier3 = parseInt(await appSettings.getOrgSetting(orgId, 'scoring_avg_tier_3')) || 3;
+        bonusDiag.bonusType = bonusType;
+        bonusDiag.tiers = [tier1, tier2, tier3];
 
-          // ── Compute bonus moyenne ON THE FLY (guaranteed, no reliance on background writes) ──
-          try {
-            const bonusEnabled = orgId ? ((await appSettings.getOrgSetting(orgId, 'bonus_moyenne_enabled')) === 'true') : false;
-            if (bonusEnabled && results && results.length > 0) {
-              const bonusType = (await appSettings.getOrgSetting(orgId, 'bonus_moyenne_type')) || 'normal';
-              const tier1 = parseInt(await appSettings.getOrgSetting(orgId, 'scoring_avg_tier_1')) || 1;
-              const tier2 = parseInt(await appSettings.getOrgSetting(orgId, 'scoring_avg_tier_2')) || 2;
-              const tier3 = parseInt(await appSettings.getOrgSetting(orgId, 'scoring_avg_tier_3')) || 3;
+        // Load game_parameters (same pattern as recalculateRankingsJournees which WORKS)
+        const cat = await dbGetAsync(
+          'SELECT game_type, level, organization_id FROM categories WHERE id = $1',
+          [tournament.category_id]
+        );
+        bonusDiag.category = cat ? { game_type: cat.game_type, level: cat.level, org: cat.organization_id } : null;
 
-              // Load game_parameters thresholds (same two-query pattern as recalculateRankingsJournees)
-              const cat = await dbGetAsync('SELECT game_type, level, organization_id FROM categories WHERE id = $1', [tournament.category_id]);
-              let gp = null;
-              if (cat) {
-                gp = await dbGetAsync(
-                  'SELECT moyenne_mini, moyenne_maxi FROM game_parameters WHERE UPPER(mode) = UPPER($1) AND UPPER(categorie) = UPPER($2) AND ($3::int IS NULL OR organization_id = $3)',
-                  [cat.game_type, cat.level, cat.organization_id || orgId]
-                );
+        if (cat) {
+          const gp = await dbGetAsync(
+            'SELECT moyenne_mini, moyenne_maxi FROM game_parameters WHERE UPPER(mode) = UPPER($1) AND UPPER(categorie) = UPPER($2) AND ($3::int IS NULL OR organization_id = $3)',
+            [cat.game_type, cat.level, cat.organization_id || orgId]
+          );
+          bonusDiag.gameParams = gp ? { mini: gp.moyenne_mini, maxi: gp.moyenne_maxi } : null;
+
+          if (gp && gp.moyenne_mini != null && gp.moyenne_maxi != null) {
+            const moyenneMini = parseFloat(gp.moyenne_mini);
+            const moyenneMaxi = parseFloat(gp.moyenne_maxi);
+            const moyenneMiddle = (moyenneMini + moyenneMaxi) / 2;
+            let applied = 0;
+
+            for (const r of results) {
+              let detail = {};
+              try { detail = JSON.parse(r.bonus_detail || '{}'); } catch (e) { detail = {}; }
+
+              const moyenne = r.reprises > 0 ? r.points / r.reprises : 0;
+              let bonus = 0;
+
+              if (bonusType === 'tiered') {
+                if (moyenne >= moyenneMaxi) bonus = tier3;
+                else if (moyenne >= moyenneMiddle) bonus = tier2;
+                else if (moyenne >= moyenneMini) bonus = tier1;
+              } else {
+                if (moyenne > moyenneMaxi) bonus = tier2;
+                else if (moyenne >= moyenneMini) bonus = tier1;
               }
 
-              if (gp && gp.moyenne_mini != null && gp.moyenne_maxi != null) {
-                const moyenneMini = parseFloat(gp.moyenne_mini);
-                const moyenneMaxi = parseFloat(gp.moyenne_maxi);
-                const moyenneMiddle = (moyenneMini + moyenneMaxi) / 2;
-
-                for (const r of results) {
-                  let detail = {};
-                  try { detail = JSON.parse(r.bonus_detail || '{}'); } catch (e) { detail = {}; }
-
-                  const moyenne = r.reprises > 0 ? r.points / r.reprises : 0;
-                  let bonus = 0;
-
-                  if (bonusType === 'tiered') {
-                    if (moyenne >= moyenneMaxi) bonus = tier3;
-                    else if (moyenne >= moyenneMiddle) bonus = tier2;
-                    else if (moyenne >= moyenneMini) bonus = tier1;
-                  } else {
-                    if (moyenne > moyenneMaxi) bonus = tier2;
-                    else if (moyenne >= moyenneMini) bonus = tier1;
-                  }
-
-                  if (bonus > 0) {
-                    detail.MOYENNE_BONUS = bonus;
-                  } else {
-                    delete detail.MOYENNE_BONUS;
-                  }
-
-                  r.bonus_detail = JSON.stringify(detail);
-                  r.bonus_points = Object.values(detail).reduce((a, b) => a + b, 0);
-
-                  // Persist to DB (fire-and-forget)
-                  dbRunAsync(
-                    'UPDATE tournament_results SET bonus_points = $1, bonus_detail = $2 WHERE id = $3',
-                    [r.bonus_points, r.bonus_detail, r.id]
-                  ).catch(() => {});
-                }
+              if (bonus > 0) {
+                detail.MOYENNE_BONUS = bonus;
+                applied++;
+              } else {
+                delete detail.MOYENNE_BONUS;
               }
+
+              r.bonus_detail = JSON.stringify(detail);
+              r.bonus_points = Object.values(detail).reduce((a, b) => a + b, 0);
+
+              // Persist to DB (fire-and-forget)
+              dbRunAsync(
+                'UPDATE tournament_results SET bonus_points = $1, bonus_detail = $2 WHERE id = $3',
+                [r.bonus_points, r.bonus_detail, r.id]
+              ).catch(() => {});
             }
-          } catch (bonusErr) {
-            console.error('[RESULTS] Error computing bonus moyenne on the fly:', bonusErr);
-          }
-
-          // ── Extract bonus column metadata from results' bonus_detail ──
-          const seenTypes = new Set();
-          let hasLegacyBonus = false;
-          (results || []).forEach(r => {
-            if (r.bonus_detail) {
-              try {
-                const detail = JSON.parse(r.bonus_detail);
-                Object.keys(detail).forEach(k => { if (detail[k] > 0) seenTypes.add(k); });
-              } catch (e) {}
-            }
-            if (!r.bonus_detail && r.bonus_points > 0) hasLegacyBonus = true;
-          });
-
-          if (hasLegacyBonus && seenTypes.size === 0) {
-            seenTypes.add('MOYENNE_BONUS');
-            (results || []).forEach(r => {
-              if (!r.bonus_detail && r.bonus_points > 0) {
-                r.bonus_detail = JSON.stringify({ MOYENNE_BONUS: r.bonus_points });
-              }
-            });
-          }
-
-          if (seenTypes.size > 0) {
-            const defaultLabels = { MOYENNE_BONUS: 'Bonus Moy.' };
-            const typesArr = [...seenTypes];
-            const placeholders = typesArr.map((_, i) => `$${i + 1}`).join(',');
-            const orgParam = typesArr.length + 1;
-            db.all(
-              `SELECT DISTINCT rule_type, column_label FROM scoring_rules WHERE rule_type IN (${placeholders}) AND column_label IS NOT NULL AND ($${orgParam}::int IS NULL OR organization_id = $${orgParam})`,
-              [...typesArr, orgId],
-              (err, labelRows) => {
-                const labelMap = {};
-                (labelRows || []).forEach(r => { labelMap[r.rule_type] = r.column_label; });
-                res.json({
-                  tournament, results,
-                  bonusColumns: [...seenTypes].map(rt => ({ ruleType: rt, label: labelMap[rt] || defaultLabels[rt] || rt }))
-                });
-              }
-            );
-          } else {
-            res.json({ tournament, results, bonusColumns: [] });
+            bonusDiag.applied = applied;
+            bonusDiag.total = results.length;
           }
         }
-      );
+      }
+    } catch (bonusErr) {
+      bonusDiag.error = bonusErr.message;
+      console.error('[RESULTS] Error computing bonus moyenne:', bonusErr);
     }
-  );
+
+    // ── Extract bonus column metadata ──
+    const seenTypes = new Set();
+    let hasLegacyBonus = false;
+    (results || []).forEach(r => {
+      if (r.bonus_detail) {
+        try {
+          const detail = JSON.parse(r.bonus_detail);
+          Object.keys(detail).forEach(k => { if (detail[k] > 0) seenTypes.add(k); });
+        } catch (e) {}
+      }
+      if (!r.bonus_detail && r.bonus_points > 0) hasLegacyBonus = true;
+    });
+
+    if (hasLegacyBonus && seenTypes.size === 0) {
+      seenTypes.add('MOYENNE_BONUS');
+      (results || []).forEach(r => {
+        if (!r.bonus_detail && r.bonus_points > 0) {
+          r.bonus_detail = JSON.stringify({ MOYENNE_BONUS: r.bonus_points });
+        }
+      });
+    }
+
+    // Get column labels
+    let bonusColumns = [];
+    if (seenTypes.size > 0) {
+      const defaultLabels = { MOYENNE_BONUS: 'Bonus Moy.' };
+      const typesArr = [...seenTypes];
+      const placeholders = typesArr.map((_, i) => `$${i + 1}`).join(',');
+      const orgParam = typesArr.length + 1;
+      const labelRows = await dbAllAsync(
+        `SELECT DISTINCT rule_type, column_label FROM scoring_rules WHERE rule_type IN (${placeholders}) AND column_label IS NOT NULL AND ($${orgParam}::int IS NULL OR organization_id = $${orgParam})`,
+        [...typesArr, orgId]
+      );
+      const labelMap = {};
+      (labelRows || []).forEach(r => { labelMap[r.rule_type] = r.column_label; });
+      bonusColumns = typesArr.map(rt => ({ ruleType: rt, label: labelMap[rt] || defaultLabels[rt] || rt }));
+    }
+
+    res.json({ tournament, results, bonusColumns, _bonusDiag: bonusDiag });
+  } catch (error) {
+    console.error('[RESULTS] Error:', error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // Export tournament results to Excel

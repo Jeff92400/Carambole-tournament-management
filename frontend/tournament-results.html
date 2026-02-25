@@ -354,6 +354,7 @@
 
         const data = await response.json();
         console.log('Data received:', data);
+        if (data._bonusDiag) console.log('[BONUS DIAG]', JSON.stringify(data._bonusDiag, null, 2));
 
         // Display tournament info
         const isFinale = data.tournament.is_finale;
