@@ -1002,7 +1002,7 @@ async function computeBonusMoyenne(tournamentId, categoryId, orgId, callback) {
 
       if (category) {
         const gp = await dbGetAsync(
-          'SELECT moyenne_mini, moyenne_maxi FROM game_parameters WHERE UPPER(mode) = UPPER($1) AND UPPER(categorie) = UPPER($2) AND ($3::int IS NULL OR organization_id = $3)',
+          'SELECT moyenne_mini, moyenne_maxi FROM game_parameters WHERE UPPER(REPLACE(mode, \' \', \'\')) = UPPER(REPLACE($1, \' \', \'\')) AND UPPER(categorie) = UPPER($2) AND ($3::int IS NULL OR organization_id = $3)',
           [category.game_type, category.level, category.organization_id || orgId]
         );
         console.log(`[BONUS-MOY] game_parameters query result: ${JSON.stringify(gp)}`);
@@ -1095,7 +1095,7 @@ function computeBonusPoints(tournamentId, categoryId, orgId, callback) {
         `SELECT c.display_name as category_name, c.game_type, c.level,
                 gp.moyenne_mini, gp.moyenne_maxi
          FROM categories c
-         LEFT JOIN game_parameters gp ON UPPER(gp.mode) = UPPER(c.game_type) AND UPPER(gp.categorie) = UPPER(c.level) AND gp.organization_id = c.organization_id
+         LEFT JOIN game_parameters gp ON UPPER(REPLACE(gp.mode, ' ', '')) = UPPER(REPLACE(c.game_type, ' ', '')) AND UPPER(gp.categorie) = UPPER(c.level) AND gp.organization_id = c.organization_id
          WHERE c.id = ?`,
         [categoryId],
         (err, catInfo) => {
@@ -1309,7 +1309,7 @@ async function recalculateRankingsJournees(categoryId, season, callback, orgId) 
     let moyenneMini = 0, moyenneMaxi = 999;
     if (category) {
       const gp = await dbGetAsync(
-        'SELECT moyenne_mini, moyenne_maxi FROM game_parameters WHERE UPPER(mode) = UPPER(?) AND UPPER(categorie) = UPPER(?) AND ($3::int IS NULL OR organization_id = $3)',
+        'SELECT moyenne_mini, moyenne_maxi FROM game_parameters WHERE UPPER(REPLACE(mode, \' \', \'\')) = UPPER(REPLACE(?, \' \', \'\')) AND UPPER(categorie) = UPPER(?) AND ($3::int IS NULL OR organization_id = $3)',
         [category.game_type, category.level, category.organization_id || orgId]
       );
       if (gp) {
@@ -1840,7 +1840,7 @@ router.get('/:id/results', authenticateToken, async (req, res) => {
 
         if (cat) {
           const gp = await dbGetAsync(
-            'SELECT moyenne_mini, moyenne_maxi FROM game_parameters WHERE UPPER(mode) = UPPER($1) AND UPPER(categorie) = UPPER($2) AND ($3::int IS NULL OR organization_id = $3)',
+            'SELECT moyenne_mini, moyenne_maxi FROM game_parameters WHERE UPPER(REPLACE(mode, \' \', \'\')) = UPPER(REPLACE($1, \' \', \'\')) AND UPPER(categorie) = UPPER($2) AND ($3::int IS NULL OR organization_id = $3)',
             [cat.game_type, cat.level, cat.organization_id || orgId]
           );
           bonusDiag.gameParams = gp ? { mini: gp.moyenne_mini, maxi: gp.moyenne_maxi } : 'defaults (0/999)';
@@ -1988,7 +1988,7 @@ router.get('/:id/export', authenticateToken, async (req, res) => {
                 let gp = null;
                 if (cat) {
                   gp = await dbGetAsync(
-                    'SELECT moyenne_mini, moyenne_maxi FROM game_parameters WHERE UPPER(mode) = UPPER($1) AND UPPER(categorie) = UPPER($2) AND ($3::int IS NULL OR organization_id = $3)',
+                    'SELECT moyenne_mini, moyenne_maxi FROM game_parameters WHERE UPPER(REPLACE(mode, \' \', \'\')) = UPPER(REPLACE($1, \' \', \'\')) AND UPPER(categorie) = UPPER($2) AND ($3::int IS NULL OR organization_id = $3)',
                     [cat.game_type, cat.level, cat.organization_id || orgId]
                   );
                 }
@@ -2496,7 +2496,7 @@ router.post('/recompute-all-bonuses', authenticateToken, async (req, res) => {
         const catRow = await dbGetAsync('SELECT display_name, game_type, level, organization_id FROM categories WHERE id = $1', [cat.category_id]);
         if (catRow) {
           const gp = await dbGetAsync(
-            'SELECT moyenne_mini, moyenne_maxi FROM game_parameters WHERE UPPER(mode) = UPPER($1) AND UPPER(categorie) = UPPER($2) AND ($3::int IS NULL OR organization_id = $3)',
+            'SELECT moyenne_mini, moyenne_maxi FROM game_parameters WHERE UPPER(REPLACE(mode, \' \', \'\')) = UPPER(REPLACE($1, \' \', \'\')) AND UPPER(categorie) = UPPER($2) AND ($3::int IS NULL OR organization_id = $3)',
             [catRow.game_type, catRow.level, catRow.organization_id || orgId]
           );
           if (!gp || gp.moyenne_mini == null || gp.moyenne_maxi == null) {
@@ -2602,14 +2602,14 @@ router.get('/bonus-diagnostic', authenticateToken, async (req, res) => {
       const gpJoin = await dbGetAsync(
         `SELECT gp.id, gp.mode, gp.categorie, gp.organization_id, gp.moyenne_mini, gp.moyenne_maxi
          FROM categories c
-         LEFT JOIN game_parameters gp ON UPPER(gp.mode) = UPPER(c.game_type) AND UPPER(gp.categorie) = UPPER(c.level) AND gp.organization_id = c.organization_id
+         LEFT JOIN game_parameters gp ON UPPER(REPLACE(gp.mode, ' ', '')) = UPPER(REPLACE(c.game_type, ' ', '')) AND UPPER(gp.categorie) = UPPER(c.level) AND gp.organization_id = c.organization_id
          WHERE c.id = $1`,
         [cat.id]
       );
       const gpDirect = await dbGetAsync(
         `SELECT id, mode, categorie, organization_id, moyenne_mini, moyenne_maxi
          FROM game_parameters
-         WHERE UPPER(mode) = UPPER($1) AND UPPER(categorie) = UPPER($2) AND organization_id = $3`,
+         WHERE UPPER(REPLACE(mode, ' ', '')) = UPPER(REPLACE($1, ' ', '')) AND UPPER(categorie) = UPPER($2) AND organization_id = $3`,
         [cat.game_type, cat.level, cat.organization_id]
       );
       // Check for sample tournament results
@@ -3003,7 +3003,7 @@ router.get('/:id/scoring-detail', authenticateToken, async (req, res) => {
     const gameParams = await dbGetAsync(
       `SELECT gp.moyenne_mini, gp.moyenne_maxi
        FROM game_parameters gp
-       WHERE UPPER(gp.mode) = UPPER($1) AND UPPER(gp.categorie) = UPPER($2)
+       WHERE UPPER(REPLACE(gp.mode, ' ', '')) = UPPER(REPLACE($1, ' ', ''))  AND UPPER(gp.categorie) = UPPER($2)
          AND ($3::int IS NULL OR gp.organization_id = $3)`,
       [tournament.game_type, tournament.level, orgId]
     );
