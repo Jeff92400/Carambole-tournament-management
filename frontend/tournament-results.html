@@ -471,7 +471,8 @@
 
             bonusColumns.forEach(col => {
               const val = bonusDetail[col.ruleType] || 0;
-              bonusCellsHTML += `<td style="text-align: center; color: ${val > 0 ? '#28a745' : '#999'};">${val > 0 ? '+' + val : '0'}</td>`;
+              const color = val > 0 ? (col.ruleType === 'MOYENNE_BONUS' ? '#1F4788' : '#28a745') : '#999';
+              bonusCellsHTML += `<td style="text-align: center; color: ${color}; font-weight: ${col.ruleType === 'MOYENNE_BONUS' && val > 0 ? 'bold' : 'normal'};">${val > 0 ? '+' + val : '0'}</td>`;
             });
             bonusCellsHTML += `<td style="text-align: center; font-weight: bold;">${total}</td>`;
           }
@@ -552,7 +553,7 @@
             <div class="podium-rank">${positions[index]}</div>
             <div class="podium-name">${playerName}</div>
             <div class="podium-stats">
-              <strong>${result.match_points}</strong> pts match${podiumTotalBonus > 0 ? ` <span style="color: #28a745;">(+${podiumTotalBonus} bonus)</span>` : ''}${hasPositionPoints && result.position_points ? ` — <strong>${result.position_points}</strong> pts position` : ''}<br>
+              <strong>${result.match_points}</strong> pts match${podiumTotalBonus > 0 ? ` <span style="color: #1F4788; font-weight: bold;">(+${podiumTotalBonus} bonus)</span>` : ''}${hasPositionPoints && result.position_points ? ` — <strong>${result.position_points}</strong> pts position` : ''}<br>
               Moy: <strong>${moyenne}</strong><br>
               Meilleure Série: <strong>${result.serie || 0}</strong><br>
               <div class="podium-club-container"></div>

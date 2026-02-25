@@ -485,7 +485,7 @@
               <td style="text-align: center;">${formatPP(1)}</td>
               <td style="text-align: center;">${formatPP(2)}</td>
               <td style="text-align: center;">${formatPP(3)}</td>
-              ${showAvgBonus ? `<td style="text-align: center; color: ${avgBonus > 0 ? '#28a745' : '#999'};">${avgBonus > 0 ? '+' + avgBonus : '0'}</td>` : ''}
+              ${showAvgBonus ? `<td style="text-align: center; color: ${avgBonus > 0 ? '#1F4788' : '#999'}; font-weight: ${avgBonus > 0 ? 'bold' : 'normal'};">${avgBonus > 0 ? '+' + avgBonus : '0'}</td>` : ''}
               <td style="text-align: center; font-weight: bold;">${rank.total_match_points}</td>
               <td style="text-align: center;">${moyenne}</td>
               <td style="text-align: center; font-weight: bold;">${rank.best_serie || 0}</td>
@@ -501,7 +501,8 @@
 
               bonusColumns.forEach(col => {
                 const val = bonusDetail[col.ruleType] || 0;
-                bonusCellsHTML += `<td style="text-align: center; color: ${val > 0 ? '#28a745' : '#999'};">${val > 0 ? '+' + val : '0'}</td>`;
+                const color = val > 0 ? (col.ruleType === 'MOYENNE_BONUS' ? '#1F4788' : '#28a745') : '#999';
+                bonusCellsHTML += `<td style="text-align: center; color: ${color}; font-weight: ${col.ruleType === 'MOYENNE_BONUS' && val > 0 ? 'bold' : 'normal'};">${val > 0 ? '+' + val : '0'}</td>`;
               });
             }
 
