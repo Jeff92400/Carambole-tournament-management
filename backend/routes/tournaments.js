@@ -1291,12 +1291,12 @@ async function recalculateRankingsJournees(categoryId, season, callback, orgId) 
     }
 
     // Get game_parameters for this category (for moyenne bonus tiers)
-    const category = await dbGetAsync('SELECT game_type, level FROM categories WHERE id = ?', [categoryId]);
+    const category = await dbGetAsync('SELECT game_type, level, organization_id FROM categories WHERE id = ?', [categoryId]);
     let moyenneMini = 0, moyenneMaxi = 999;
     if (category) {
       const gp = await dbGetAsync(
-        'SELECT moyenne_mini, moyenne_maxi FROM game_parameters WHERE UPPER(mode) = UPPER(?) AND UPPER(categorie) = UPPER(?)',
-        [category.game_type, category.level]
+        'SELECT moyenne_mini, moyenne_maxi FROM game_parameters WHERE UPPER(mode) = UPPER(?) AND UPPER(categorie) = UPPER(?) AND ($3::int IS NULL OR organization_id = $3)',
+        [category.game_type, category.level, category.organization_id || orgId]
       );
       if (gp) {
         moyenneMini = parseFloat(gp.moyenne_mini) || 0;
@@ -2315,12 +2315,13 @@ router.post('/recompute-all-bonuses', authenticateToken, async (req, res) => {
     const errors = [];
     const warnings = [];
 
-    // Check which categories have scoring rules that need game_parameters
+    // Check if bonus moyenne or scoring rules need game_parameters thresholds
+    const bonusMoyenneEnabled = (await appSettings.getOrgSetting(orgId, 'bonus_moyenne_enabled')) === 'true';
     const scoringRules = await dbAllAsync(
       "SELECT DISTINCT rule_type, value_1, value_2 FROM scoring_rules WHERE is_active = true AND field_1 IS NOT NULL AND ($1::int IS NULL OR organization_id = $1)",
       [orgId]
     );
-    const rulesNeedThresholds = scoringRules.some(r =>
+    const rulesNeedThresholds = bonusMoyenneEnabled || scoringRules.some(r =>
       ['MOYENNE_MAXI', 'MOYENNE_MINI'].includes(r.value_1) || ['MOYENNE_MAXI', 'MOYENNE_MINI'].includes(r.value_2)
     );
 
