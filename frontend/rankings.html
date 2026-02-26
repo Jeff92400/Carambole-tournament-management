@@ -81,6 +81,10 @@
         <span id="qualifiedText">Qualifiés pour la finale</span>
       </p>
       <p id="rankingsLegend" style="display: none; font-size: 12px; color: #666; font-style: italic; margin-top: 0; margin-bottom: 15px;">(*) Non-participation au tournoi concerné</p>
+      <div id="finaleSelectionBtnContainer" style="display: none; margin-bottom: 15px;">
+        <button id="finaleSelectionBtn" class="btn" style="background: #2e7d32; color: white;" disabled>Classement pour la Finale de District</button>
+        <button id="returnToSeasonBtn" class="btn" style="display: none; background: var(--color-primary, #1F4788); color: white;">Retour au classement saison</button>
+      </div>
       <div class="table-container">
         <table>
           <thead>
@@ -140,6 +144,10 @@
 
     // Club data for logos
     let CLUBS_DATA = [];
+
+    // Dual-view state for journées mode
+    let currentView = 'season';
+    let cachedRankingsData = null;
 
     // Normalize club name for matching
     function normalizeClubName(clubName) {
@@ -328,13 +336,13 @@
 
         const data = await response.json();
         const rankings = data.rankings || [];
-        const tournamentsPlayed = data.tournamentsPlayed || { t1: false, t2: false, t3: false };
-        console.log('Rankings loaded:', rankings.length, 'Tournaments played:', tournamentsPlayed);
+        console.log('Rankings loaded:', rankings.length, 'Tournaments played:', data.tournamentsPlayed);
 
         if (!rankings || rankings.length === 0) {
           document.getElementById('loadingRankings').style.display = 'none';
           document.getElementById('noDataMessage').style.display = 'block';
           document.getElementById('bonusMoyenneInfo').style.display = 'none';
+          document.getElementById('finaleSelectionBtnContainer').style.display = 'none';
           return;
         }
 
@@ -361,63 +369,249 @@
           bonusMoyenneInfoDiv.style.display = 'none';
         }
 
-        // Determine which tournament we're after
-        let tournamentSuffix = '';
-        if (tournamentsPlayed.t3) {
-          tournamentSuffix = ' - après 3ème tournoi';
-        } else if (tournamentsPlayed.t2) {
-          tournamentSuffix = ' - après 2ème tournoi';
-        } else if (tournamentsPlayed.t1) {
-          tournamentSuffix = ' - après 1er tournoi';
+        // Cache data and render default view
+        cachedRankingsData = data;
+        const isJournees = data.qualificationMode === 'journees';
+
+        // Setup finale button for journées mode
+        const btnContainer = document.getElementById('finaleSelectionBtnContainer');
+        if (isJournees) {
+          btnContainer.style.display = 'block';
+
+          // Check if all qualifying tournaments have been played
+          const jCount = data.journeesCount || 3;
+          const tp = data.tournamentsPlayed || {};
+          const allPlayed = Array.from({length: jCount}, (_, i) => tp[`t${i + 1}`]).every(Boolean);
+
+          const finaleBtn = document.getElementById('finaleSelectionBtn');
+          finaleBtn.disabled = !allPlayed;
+          finaleBtn.title = allPlayed ? '' : 'Tous les tournois qualificatifs doivent avoir été joués';
+          finaleBtn.style.opacity = allPlayed ? '1' : '0.5';
+          finaleBtn.style.cursor = allPlayed ? 'pointer' : 'not-allowed';
+        } else {
+          btnContainer.style.display = 'none';
         }
 
-        // Update title
-        document.getElementById('rankingsTitle').textContent = `Classement ${rankings[0].display_name} - ${currentSeason}${tournamentSuffix}`;
+        // Reset to season view and render
+        currentView = 'season';
+        document.getElementById('finaleSelectionBtn').style.display = '';
+        document.getElementById('returnToSeasonBtn').style.display = 'none';
+        renderRankings(data, 'season');
 
-        // Populate table
-        const tbody = document.getElementById('rankingsBody');
-        tbody.innerHTML = '';
+        document.getElementById('loadingRankings').style.display = 'none';
+        document.getElementById('rankingsCard').style.display = 'block';
+      } catch (error) {
+        console.error('Error loading rankings:', error);
+        document.getElementById('loadingRankings').style.display = 'none';
+        document.getElementById('errorMessage').textContent = `Erreur: ${error.message}`;
+        document.getElementById('errorMessage').style.display = 'block';
 
-        // Helper to format tournament points:
-        // - Tournament not played → "-"
-        // - Tournament played but player absent (null) → "*"
-        // - Tournament played and player participated → show points
-        const formatTournamentPoints = (points, tournamentPlayed) => {
-          if (!tournamentPlayed) {
-            return '<span style="color: #ccc;">-</span>';
+        // If token error, redirect to login
+        if (error.message.includes('token') || error.message.includes('Access')) {
+          setTimeout(() => {
+            handleSessionExpired();
+          }, 2000);
+        }
+      }
+    }
+
+    // Render rankings table (called with viewMode 'season' or 'finale')
+    function renderRankings(data, viewMode) {
+      const rankings = data.rankings || [];
+      const tournamentsPlayed = data.tournamentsPlayed || { t1: false, t2: false, t3: false };
+      const bonusColumns = data.bonusColumns || [];
+      const hasBonusCols = bonusColumns.length > 0;
+      const isJournees = data.qualificationMode === 'journees';
+      const showAvgBonus = isJournees && data.averageBonusTiers;
+      const bestOfCount = data.bestOfCount || 2;
+      const jCount = data.journeesCount || 3;
+      const qSettings = data.qualificationSettings || { threshold: 9, small: 4, large: 6 };
+
+      // Determine which tournament we're after
+      let tournamentSuffix = '';
+      if (tournamentsPlayed.t3) {
+        tournamentSuffix = ' - après 3ème tournoi';
+      } else if (tournamentsPlayed.t2) {
+        tournamentSuffix = ' - après 2ème tournoi';
+      } else if (tournamentsPlayed.t1) {
+        tournamentSuffix = ' - après 1er tournoi';
+      }
+
+      // Update title
+      const titleSuffix = (isJournees && viewMode === 'finale') ? ' (Finale de District)' : '';
+      document.getElementById('rankingsTitle').textContent = `Classement ${rankings[0].display_name} - ${currentSeason}${tournamentSuffix}${titleSuffix}`;
+
+      // Populate table
+      const tbody = document.getElementById('rankingsBody');
+      tbody.innerHTML = '';
+
+      // Helper to format tournament points
+      const formatTournamentPoints = (points, tournamentPlayed) => {
+        if (!tournamentPlayed) {
+          return '<span style="color: #ccc;">-</span>';
+        }
+        if (points === null || points === undefined) {
+          return '<span style="color: #999; font-size: 18px; font-weight: bold;">*</span>';
+        }
+        return points;
+      };
+
+      // Qualification count from settings
+      const totalPlayers = rankings.length;
+      const qualifiedCount = totalPlayers < qSettings.threshold ? qSettings.small : qSettings.large;
+
+      if (isJournees) {
+        // --- JOURNÉES MODE ---
+
+        // Pre-compute ppDetail for each player
+        const playersWithDetails = rankings.map(rank => {
+          let ppDetail = (() => { try { return JSON.parse(rank.position_points_detail || '{}'); } catch(e) { return {}; } })();
+          const avgBonus = rank.average_bonus || 0;
+
+          // Fallback: if ppDetail is empty, use tournament_X_points
+          if (Object.keys(ppDetail).length === 0) {
+            const tPts = [rank.tournament_1_points, rank.tournament_2_points, rank.tournament_3_points];
+            tPts.forEach((pts, i) => { if (pts !== null && pts !== undefined) ppDetail[i + 1] = pts; });
           }
-          if (points === null || points === undefined) {
-            return '<span style="color: #999; font-size: 18px; font-weight: bold;">*</span>';
-          }
-          return points;
-        };
 
-        // Calculate number of qualified players for the final
-        // Rule: < 9 players → 4 qualified, >= 9 players → 6 qualified
-        const totalPlayers = rankings.length;
-        const qualifiedCount = totalPlayers < 9 ? 4 : 6;
+          // Compute sum of ALL position points (for season view)
+          const sumTotal = Object.values(ppDetail).reduce((s, v) => s + (v || 0), 0);
 
-        // Dynamic bonus columns from API
-        const bonusColumns = data.bonusColumns || [];
-        const hasBonusCols = bonusColumns.length > 0;
-        const isJournees = data.qualificationMode === 'journees';
-        const showAvgBonus = isJournees && data.averageBonusTiers;
+          // Compute moyenne
+          const moyenne = rank.cumulated_reprises > 0
+            ? rank.cumulated_points / rank.cumulated_reprises
+            : 0;
 
-        // Update header row dynamically based on mode and bonus columns
-        if (isJournees) {
+          return { ...rank, ppDetail, avgBonus, sumTotal, allMoyenne: moyenne };
+        });
+
+        if (viewMode === 'season') {
+          // SEASON VIEW: sum of all position points, re-sorted client-side
+          playersWithDetails.sort((a, b) => {
+            if (b.sumTotal !== a.sumTotal) return b.sumTotal - a.sumTotal;
+            if (b.allMoyenne !== a.allMoyenne) return b.allMoyenne - a.allMoyenne;
+            return (b.best_serie || 0) - (a.best_serie || 0);
+          });
+
           document.getElementById('rankingsHeaderRow').innerHTML = `
             <th>Position</th>
             <th>Licence</th>
             <th>Joueur</th>
             <th>Club</th>
-            <th>TQ1</th>
-            <th>TQ2</th>
-            <th>TQ3</th>
+            ${Array.from({length: jCount}, (_, i) => `<th>TQ${i + 1}</th>`).join('')}
             ${showAvgBonus ? '<th>Bonus Moy.</th>' : ''}
             <th>Total</th>
             <th>Moyenne</th>
             <th>Meilleure Série</th>`;
-        } else if (hasBonusCols) {
+
+          playersWithDetails.forEach((player, index) => {
+            const row = document.createElement('tr');
+            const position = index + 1;
+            const moyenneStr = player.allMoyenne.toFixed(3);
+
+            const formatPP = (tn) => {
+              const pts = player.ppDetail[tn];
+              if (!tournamentsPlayed[`t${tn}`]) return '<span style="color: #ccc;">-</span>';
+              if (pts === undefined || pts === null) return '<span style="color: #999; font-size: 18px; font-weight: bold;">*</span>';
+              return pts;
+            };
+
+            row.innerHTML = `
+              <td style="text-align: center; font-weight: bold;">${position}</td>
+              <td>${player.licence}</td>
+              <td>
+                <a href="player-history.html?licence=${player.licence}" class="player-link">
+                  ${player.first_name} ${player.last_name}
+                </a>
+              </td>
+              <td></td>
+              ${Array.from({length: jCount}, (_, i) => `<td style="text-align: center;">${formatPP(i + 1)}</td>`).join('')}
+              ${showAvgBonus ? `<td style="text-align: center; color: ${player.avgBonus > 0 ? '#1F4788' : '#999'}; font-weight: ${player.avgBonus > 0 ? 'bold' : 'normal'};">${player.avgBonus > 0 ? '+' + player.avgBonus : '0'}</td>` : ''}
+              <td style="text-align: center; font-weight: bold;">${player.sumTotal}</td>
+              <td style="text-align: center;">${moyenneStr}</td>
+              <td style="text-align: center; font-weight: bold;">${player.best_serie || 0}</td>
+            `;
+
+            const clubCell = row.cells[3];
+            clubCell.innerHTML = getClubLogoHTML(player.club);
+            tbody.appendChild(row);
+          });
+
+          // Season view: no qualification display
+          document.getElementById('qualifiedLegend').style.display = 'none';
+
+        } else {
+          // FINALE VIEW: best-of ranking from DB, with kept/dropped and qualification
+          // Sort by rank_position (API order)
+          playersWithDetails.sort((a, b) => a.rank_position - b.rank_position);
+
+          document.getElementById('rankingsHeaderRow').innerHTML = `
+            <th>Position</th>
+            <th>Licence</th>
+            <th>Joueur</th>
+            <th>Club</th>
+            ${Array.from({length: jCount}, (_, i) => `<th>TQ${i + 1}</th>`).join('')}
+            ${showAvgBonus ? '<th>Bonus Moy.</th>' : ''}
+            <th>Total</th>
+            <th>Moyenne</th>
+            <th>Meilleure Série</th>`;
+
+          playersWithDetails.forEach(player => {
+            const row = document.createElement('tr');
+            const moyenneStr = player.allMoyenne.toFixed(3);
+
+            // Determine kept scores (best N)
+            const scores = Object.entries(player.ppDetail).map(([tn, pts]) => ({ tn: parseInt(tn), pts }));
+            scores.sort((a, b) => b.pts - a.pts);
+            const keptSet = new Set(scores.slice(0, bestOfCount).map(s => s.tn));
+
+            const formatPP = (tn) => {
+              const pts = player.ppDetail[tn];
+              if (!tournamentsPlayed[`t${tn}`]) return '<span style="color: #ccc;">-</span>';
+              if (pts === undefined || pts === null) return '<span style="color: #999; font-size: 18px; font-weight: bold;">*</span>';
+              const isKept = keptSet.has(tn);
+              return isKept
+                ? `<strong>${pts}</strong>`
+                : `<span style="color: #999; text-decoration: line-through;">${pts}</span>`;
+            };
+
+            // Green highlighting for qualified players
+            if (player.rank_position <= qualifiedCount) {
+              row.classList.add('qualified-for-final');
+            }
+
+            row.innerHTML = `
+              <td style="text-align: center; font-weight: bold;">${player.rank_position}</td>
+              <td>${player.licence}</td>
+              <td>
+                <a href="player-history.html?licence=${player.licence}" class="player-link">
+                  ${player.first_name} ${player.last_name}
+                </a>
+              </td>
+              <td></td>
+              ${Array.from({length: jCount}, (_, i) => `<td style="text-align: center;">${formatPP(i + 1)}</td>`).join('')}
+              ${showAvgBonus ? `<td style="text-align: center; color: ${player.avgBonus > 0 ? '#1F4788' : '#999'}; font-weight: ${player.avgBonus > 0 ? 'bold' : 'normal'};">${player.avgBonus > 0 ? '+' + player.avgBonus : '0'}</td>` : ''}
+              <td style="text-align: center; font-weight: bold;">${player.total_match_points}</td>
+              <td style="text-align: center;">${moyenneStr}</td>
+              <td style="text-align: center; font-weight: bold;">${player.best_serie || 0}</td>
+            `;
+
+            const clubCell = row.cells[3];
+            clubCell.innerHTML = getClubLogoHTML(player.club);
+            tbody.appendChild(row);
+          });
+
+          // Finale view: show qualification legend
+          document.getElementById('qualifiedText').textContent =
+            `${qualifiedCount} premiers qualifiés pour la Finale de District (${totalPlayers} joueur${totalPlayers > 1 ? 's' : ''} classé${totalPlayers > 1 ? 's' : ''})`;
+          document.getElementById('qualifiedLegend').style.display = 'block';
+        }
+
+      } else {
+        // --- STANDARD MODE (unchanged) ---
+
+        // Update header row dynamically based on bonus columns
+        if (hasBonusCols) {
           document.getElementById('rankingsHeaderRow').innerHTML = `
             <th>Position</th>
             <th>Licence</th>
@@ -447,122 +641,62 @@
             ? (rank.cumulated_points / rank.cumulated_reprises).toFixed(3)
             : '0.000';
 
-          if (isJournees) {
-            // Journées mode: position points per TQ + average bonus
-            let ppDetail = (() => { try { return JSON.parse(rank.position_points_detail || '{}'); } catch(e) { return {}; } })();
-            const avgBonus = rank.average_bonus || 0;
+          // Standard mode: match points per tournament + bonus columns
+          let bonusCellsHTML = '';
+          let pureMatchPoints = rank.total_match_points;
+          if (hasBonusCols) {
+            const bonusDetail = (() => { try { return JSON.parse(rank.bonus_detail || '{}'); } catch(e) { return {}; } })();
+            const totalBonus = Object.values(bonusDetail).reduce((s, v) => s + (v || 0), 0);
+            pureMatchPoints = rank.total_match_points - totalBonus;
 
-            // Fallback: if ppDetail is empty (rankings from before journées mode), use tournament_X_points
-            if (Object.keys(ppDetail).length === 0) {
-              const tPts = [rank.tournament_1_points, rank.tournament_2_points, rank.tournament_3_points];
-              tPts.forEach((pts, i) => { if (pts !== null && pts !== undefined) ppDetail[i + 1] = pts; });
-            }
-
-            // Determine which scores are "kept" (best N) — dropped ones are styled differently
-            const scores = Object.entries(ppDetail).map(([tn, pts]) => ({ tn: parseInt(tn), pts }));
-            scores.sort((a, b) => b.pts - a.pts);
-            const keptSet = new Set(scores.slice(0, 2).map(s => s.tn)); // best 2
-
-            const formatPP = (tn) => {
-              const pts = ppDetail[tn];
-              if (!tournamentsPlayed[`t${tn}`]) return '<span style="color: #ccc;">-</span>';
-              if (pts === undefined || pts === null) return '<span style="color: #999; font-size: 18px; font-weight: bold;">*</span>';
-              const isKept = keptSet.has(tn);
-              return isKept
-                ? `<strong>${pts}</strong>`
-                : `<span style="color: #999; text-decoration: line-through;">${pts}</span>`;
-            };
-
-            row.innerHTML = `
-              <td style="text-align: center; font-weight: bold;">${rank.rank_position}</td>
-              <td>${rank.licence}</td>
-              <td>
-                <a href="player-history.html?licence=${rank.licence}" class="player-link">
-                  ${rank.first_name} ${rank.last_name}
-                </a>
-              </td>
-              <td></td>
-              <td style="text-align: center;">${formatPP(1)}</td>
-              <td style="text-align: center;">${formatPP(2)}</td>
-              <td style="text-align: center;">${formatPP(3)}</td>
-              ${showAvgBonus ? `<td style="text-align: center; color: ${avgBonus > 0 ? '#1F4788' : '#999'}; font-weight: ${avgBonus > 0 ? 'bold' : 'normal'};">${avgBonus > 0 ? '+' + avgBonus : '0'}</td>` : ''}
-              <td style="text-align: center; font-weight: bold;">${rank.total_match_points}</td>
-              <td style="text-align: center;">${moyenne}</td>
-              <td style="text-align: center; font-weight: bold;">${rank.best_serie || 0}</td>
-            `;
-          } else {
-            // Standard mode: match points per tournament + bonus columns
-            let bonusCellsHTML = '';
-            let pureMatchPoints = rank.total_match_points;
-            if (hasBonusCols) {
-              const bonusDetail = (() => { try { return JSON.parse(rank.bonus_detail || '{}'); } catch(e) { return {}; } })();
-              const totalBonus = Object.values(bonusDetail).reduce((s, v) => s + (v || 0), 0);
-              pureMatchPoints = rank.total_match_points - totalBonus;
-
-              bonusColumns.forEach(col => {
-                const val = bonusDetail[col.ruleType] || 0;
-                const color = val > 0 ? (col.ruleType === 'MOYENNE_BONUS' ? '#1F4788' : '#28a745') : '#999';
-                bonusCellsHTML += `<td style="text-align: center; color: ${color}; font-weight: ${col.ruleType === 'MOYENNE_BONUS' && val > 0 ? 'bold' : 'normal'};">${val > 0 ? '+' + val : '0'}</td>`;
-              });
-            }
-
-            row.innerHTML = `
-              <td style="text-align: center; font-weight: bold;">${rank.rank_position}</td>
-              <td>${rank.licence}</td>
-              <td>
-                <a href="player-history.html?licence=${rank.licence}" class="player-link">
-                  ${rank.first_name} ${rank.last_name}
-                </a>
-              </td>
-              <td></td>
-              <td style="text-align: center;">${formatTournamentPoints(rank.tournament_1_points, tournamentsPlayed.t1)}</td>
-              <td style="text-align: center;">${formatTournamentPoints(rank.tournament_2_points, tournamentsPlayed.t2)}</td>
-              <td style="text-align: center;">${formatTournamentPoints(rank.tournament_3_points, tournamentsPlayed.t3)}</td>
-              <td style="text-align: center;">${pureMatchPoints}</td>
-              ${bonusCellsHTML}
-              <td style="text-align: center; font-weight: bold;">${rank.total_match_points}</td>
-              <td style="text-align: center;">${rank.cumulated_points}</td>
-              <td style="text-align: center;">${rank.cumulated_reprises}</td>
-              <td style="text-align: center;">${moyenne}</td>
-              <td style="text-align: center; font-weight: bold;">${rank.best_serie || 0}</td>
-            `;
+            bonusColumns.forEach(col => {
+              const val = bonusDetail[col.ruleType] || 0;
+              const color = val > 0 ? (col.ruleType === 'MOYENNE_BONUS' ? '#1F4788' : '#28a745') : '#999';
+              bonusCellsHTML += `<td style="text-align: center; color: ${color}; font-weight: ${col.ruleType === 'MOYENNE_BONUS' && val > 0 ? 'bold' : 'normal'};">${val > 0 ? '+' + val : '0'}</td>`;
+            });
           }
 
-            // Set club logo HTML separately
-            const clubCell = row.cells[3];
-            clubCell.innerHTML = getClubLogoHTML(rank.club);
+          row.innerHTML = `
+            <td style="text-align: center; font-weight: bold;">${rank.rank_position}</td>
+            <td>${rank.licence}</td>
+            <td>
+              <a href="player-history.html?licence=${rank.licence}" class="player-link">
+                ${rank.first_name} ${rank.last_name}
+              </a>
+            </td>
+            <td></td>
+            <td style="text-align: center;">${formatTournamentPoints(rank.tournament_1_points, tournamentsPlayed.t1)}</td>
+            <td style="text-align: center;">${formatTournamentPoints(rank.tournament_2_points, tournamentsPlayed.t2)}</td>
+            <td style="text-align: center;">${formatTournamentPoints(rank.tournament_3_points, tournamentsPlayed.t3)}</td>
+            <td style="text-align: center;">${pureMatchPoints}</td>
+            ${bonusCellsHTML}
+            <td style="text-align: center; font-weight: bold;">${rank.total_match_points}</td>
+            <td style="text-align: center;">${rank.cumulated_points}</td>
+            <td style="text-align: center;">${rank.cumulated_reprises}</td>
+            <td style="text-align: center;">${moyenne}</td>
+            <td style="text-align: center; font-weight: bold;">${rank.best_serie || 0}</td>
+          `;
 
-            tbody.appendChild(row);
-          });
+          // Set club logo HTML separately
+          const clubCell = row.cells[3];
+          clubCell.innerHTML = getClubLogoHTML(rank.club);
+
+          tbody.appendChild(row);
+        });
 
         // Show qualified legend with count
         document.getElementById('qualifiedText').textContent =
           `${qualifiedCount} premiers qualifiés pour la finale (${totalPlayers} joueur${totalPlayers > 1 ? 's' : ''} classé${totalPlayers > 1 ? 's' : ''})`;
         document.getElementById('qualifiedLegend').style.display = 'block';
-
-        // Show absent legend only if there are absent players from PLAYED tournaments
-        const hasAbsentPlayers = rankings.some(r =>
-          (tournamentsPlayed.t1 && r.tournament_1_points === null) ||
-          (tournamentsPlayed.t2 && r.tournament_2_points === null) ||
-          (tournamentsPlayed.t3 && r.tournament_3_points === null)
-        );
-        document.getElementById('rankingsLegend').style.display = hasAbsentPlayers ? 'block' : 'none';
-
-        document.getElementById('loadingRankings').style.display = 'none';
-        document.getElementById('rankingsCard').style.display = 'block';
-      } catch (error) {
-        console.error('Error loading rankings:', error);
-        document.getElementById('loadingRankings').style.display = 'none';
-        document.getElementById('errorMessage').textContent = `Erreur: ${error.message}`;
-        document.getElementById('errorMessage').style.display = 'block';
-
-        // If token error, redirect to login
-        if (error.message.includes('token') || error.message.includes('Access')) {
-          setTimeout(() => {
-            handleSessionExpired();
-          }, 2000);
-        }
       }
+
+      // Show absent legend only if there are absent players from PLAYED tournaments
+      const hasAbsentPlayers = rankings.some(r =>
+        (tournamentsPlayed.t1 && r.tournament_1_points === null) ||
+        (tournamentsPlayed.t2 && r.tournament_2_points === null) ||
+        (tournamentsPlayed.t3 && r.tournament_3_points === null)
+      );
+      document.getElementById('rankingsLegend').style.display = hasAbsentPlayers ? 'block' : 'none';
     }
 
     // Export to Excel
@@ -657,6 +791,23 @@
         btn.innerHTML = originalText;
         btn.disabled = false;
       }
+    });
+
+    // Finale de District toggle buttons
+    document.getElementById('finaleSelectionBtn').addEventListener('click', () => {
+      if (!cachedRankingsData) return;
+      currentView = 'finale';
+      document.getElementById('finaleSelectionBtn').style.display = 'none';
+      document.getElementById('returnToSeasonBtn').style.display = '';
+      renderRankings(cachedRankingsData, 'finale');
+    });
+
+    document.getElementById('returnToSeasonBtn').addEventListener('click', () => {
+      if (!cachedRankingsData) return;
+      currentView = 'season';
+      document.getElementById('returnToSeasonBtn').style.display = 'none';
+      document.getElementById('finaleSelectionBtn').style.display = '';
+      renderRankings(cachedRankingsData, 'season');
     });
 
     // Event listeners

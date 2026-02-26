@@ -140,6 +140,25 @@ router.get('/', authenticateToken, async (req, res) => {
         }
       } catch (e) { /* default to standard */ }
 
+      // Fetch journées settings for the frontend
+      let bestOfCount = 2;
+      let journeesCount = 3;
+      let qualificationSettings = { threshold: 9, small: 4, large: 6 };
+      try {
+        if (orgId) {
+          bestOfCount = parseInt(await appSettings.getOrgSetting(orgId, 'best_of_count')) || 2;
+          journeesCount = parseInt(await appSettings.getOrgSetting(orgId, 'journees_count')) || 3;
+          const qSettings = await appSettings.getOrgSettingsBatch(orgId, [
+            'qualification_threshold', 'qualification_small', 'qualification_large'
+          ]);
+          qualificationSettings = {
+            threshold: parseInt(qSettings.qualification_threshold, 10) || 9,
+            small: parseInt(qSettings.qualification_small, 10) || 4,
+            large: parseInt(qSettings.qualification_large, 10) || 6
+          };
+        }
+      } catch (e) { /* defaults above */ }
+
       // Build bonusMoyenneInfo for the frontend info card
       let bonusMoyenneInfo = null;
       try {
@@ -207,12 +226,13 @@ router.get('/', authenticateToken, async (req, res) => {
             (labelRows || []).forEach(r => { labelMap[r.rule_type] = r.column_label; });
             res.json({
               rankings: rows, tournamentsPlayed, qualificationMode, averageBonusTiers, bonusMoyenneInfo,
+              bestOfCount, journeesCount, qualificationSettings,
               bonusColumns: [...seenTypes].map(rt => ({ ruleType: rt, label: labelMap[rt] || rt }))
             });
           }
         );
       } else {
-        res.json({ rankings: rows, tournamentsPlayed, qualificationMode, averageBonusTiers, bonusMoyenneInfo, bonusColumns: [] });
+        res.json({ rankings: rows, tournamentsPlayed, qualificationMode, averageBonusTiers, bonusMoyenneInfo, bestOfCount, journeesCount, qualificationSettings, bonusColumns: [] });
       }
     });
   });
