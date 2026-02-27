@@ -7,6 +7,61 @@
   <link rel="icon" type="image/png" href="images/FrenchBillard-Icon-small.png">
   <link rel="stylesheet" href="css/styles.css">
   <script src="js/branding.js?v=197"></script>
+  <style>
+    .phase-upload-zone {
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .phase-zone-header {
+      background: var(--color-primary, #1F4788);
+      color: #fff;
+      padding: 6px 12px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .phase-zone-droparea {
+      border: 2px dashed #ccc;
+      border-radius: 0 0 6px 6px;
+      margin: 8px;
+      padding: 16px 12px;
+      text-align: center;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .phase-zone-droparea:hover,
+    .phase-zone-droparea.dragover {
+      background: #f0f4ff;
+      border-color: var(--color-primary, #1F4788);
+    }
+    .phase-zone-files {
+      padding: 0 8px 8px 8px;
+    }
+    .phase-zone-files:empty {
+      padding: 0;
+    }
+    .phase-file-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 10px;
+      background: #f8f9fa;
+      border-radius: 5px;
+      margin-bottom: 4px;
+      font-size: 12px;
+    }
+    .phase-file-item span {
+      flex: 1;
+    }
+    .phase-file-item button {
+      background: none;
+      border: none;
+      color: #dc3545;
+      cursor: pointer;
+      font-size: 14px;
+      padding: 0 2px;
+    }
+  </style>
 </head>
 <body>
   <div class="container">
@@ -27,58 +82,181 @@
     <div id="successMessage" class="success" style="display: none;"></div>
 
     <div class="card">
-      <h3 id="importCardTitle">Enregistrer les resultats d'une competition</h3>
-      <p id="importCardDescription" style="color: #666; margin-bottom: 20px;">
-        Selectionnez la categorie, le numero du tournoi et la saison, puis importez le fichier CSV des resultats.
-      </p>
+      <!-- Tab selector -->
+      <div id="importTabs" style="display: flex; gap: 0; margin-bottom: 20px; border-bottom: 2px solid #e0e0e0;">
+        <button class="import-tab active" data-tab="standard" onclick="switchImportTab('standard')" style="padding: 10px 20px; border: none; background: none; cursor: pointer; font-size: 14px; font-weight: 600; color: var(--color-primary, #1F4788); border-bottom: 2px solid var(--color-primary, #1F4788); margin-bottom: -2px;">
+          Import Résultats CSV
+        </button>
+        <button class="import-tab" data-tab="matches" onclick="switchImportTab('matches')" style="padding: 10px 20px; border: none; background: none; cursor: pointer; font-size: 14px; font-weight: 500; color: #999; border-bottom: 2px solid transparent; margin-bottom: -2px;">
+          Import Matchs E2i
+        </button>
+      </div>
 
-      <form id="importForm">
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+      <!-- ===== STANDARD IMPORT TAB ===== -->
+      <div id="tabStandard">
+        <h3 id="importCardTitle">Enregistrer les resultats d'une competition</h3>
+        <p id="importCardDescription" style="color: #666; margin-bottom: 20px;">
+          Selectionnez la categorie, le numero du tournoi et la saison, puis importez le fichier CSV des resultats.
+        </p>
+
+        <form id="importForm">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+            <div class="form-group">
+              <label for="modeSelect">Mode de jeu *</label>
+              <select id="modeSelect" required>
+                <option value="">-- Sélectionner --</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="levelSelect">Classement FFB *</label>
+              <select id="levelSelect" required>
+                <option value="">-- Sélectionner --</option>
+              </select>
+              <!-- Hidden select to store the resolved category ID -->
+              <select id="categorySelect" style="display: none;">
+                <option value="">-- Sélectionner une catégorie --</option>
+              </select>
+            </div>
+          </div>
+
           <div class="form-group">
-            <label for="modeSelect">Mode de jeu *</label>
-            <select id="modeSelect" required>
+            <label for="tournamentNumber">Numéro du tournoi *</label>
+            <select id="tournamentNumber" required>
               <option value="">-- Sélectionner --</option>
             </select>
           </div>
+
           <div class="form-group">
-            <label for="levelSelect">Classement FFB *</label>
-            <select id="levelSelect" required>
+            <label for="tournamentDate">Date du tournoi *</label>
+            <input type="date" id="tournamentDate" required>
+          </div>
+
+          <div class="form-group">
+            <label for="season">Saison (calculée automatiquement)</label>
+            <input type="text" id="season" placeholder="Ex: 2024-2025" readonly style="background: #f0f0f0;">
+          </div>
+
+          <!-- Single file upload zone (standard mode) -->
+          <div class="file-upload" id="fileUpload">
+            <p>📁 Cliquez pour sélectionner un fichier CSV</p>
+            <p style="font-size: 12px; color: #999; margin-top: 10px;">ou glissez-déposez le fichier ici</p>
+            <input type="file" id="fileInput" accept=".csv" required>
+            <div id="fileName" class="file-name" style="display: none;"></div>
+          </div>
+
+          <button type="submit" class="btn" id="importBtn">Enregistrer la competition</button>
+        </form>
+      </div>
+
+      <!-- ===== MATCHES E2i IMPORT TAB ===== -->
+      <div id="tabMatches" style="display: none;">
+        <h3>Import des matchs depuis E2i</h3>
+        <p style="color: #666; margin-bottom: 20px;">
+          Importez les fichiers CSV de matchs exportés depuis E2i/telemat.org. Déposez chaque fichier dans la zone correspondant à sa phase.
+        </p>
+
+        <form id="matchImportForm" onsubmit="return false;">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+            <div class="form-group">
+              <label for="matchModeSelect">Mode de jeu *</label>
+              <select id="matchModeSelect" required>
+                <option value="">-- Sélectionner --</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="matchLevelSelect">Classement FFB *</label>
+              <select id="matchLevelSelect" required>
+                <option value="">-- Sélectionner --</option>
+              </select>
+              <select id="matchCategorySelect" style="display: none;">
+                <option value="">--</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="matchTournamentNumber">Numéro du tournoi *</label>
+            <select id="matchTournamentNumber" required>
               <option value="">-- Sélectionner --</option>
             </select>
-            <!-- Hidden select to store the resolved category ID -->
-            <select id="categorySelect" style="display: none;">
-              <option value="">-- Sélectionner une catégorie --</option>
-            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="matchTournamentDate">Date du tournoi *</label>
+            <input type="date" id="matchTournamentDate" required>
+          </div>
+
+          <div class="form-group">
+            <label for="matchSeason">Saison (calculée automatiquement)</label>
+            <input type="text" id="matchSeason" placeholder="Ex: 2025-2026" readonly style="background: #f0f0f0;">
+          </div>
+
+          <!-- Phase-based upload zones -->
+          <div id="phaseUploadGrid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <!-- Zone 1: Poules (always visible) -->
+            <div class="phase-upload-zone" data-phase="POULE">
+              <div class="phase-zone-header">Poules</div>
+              <div class="phase-zone-droparea" id="zone-POULE">
+                <p style="margin: 0; font-size: 13px; color: #666;">Fichiers CSV des poules (A, B, C...)</p>
+                <p style="font-size: 11px; color: #999; margin: 6px 0 0 0;">Cliquez ou glissez-déposez</p>
+                <input type="file" accept=".csv" multiple style="display: none;">
+              </div>
+              <div class="phase-zone-files" id="files-POULE"></div>
+            </div>
+            <!-- Zone 2: Demi-finales (journées only) -->
+            <div class="phase-upload-zone phase-zone-bracket" data-phase="DEMI-FINALE" style="display: none;">
+              <div class="phase-zone-header">Demi-finales</div>
+              <div class="phase-zone-droparea" id="zone-DEMI-FINALE">
+                <p style="margin: 0; font-size: 13px; color: #666;">Fichier(s) CSV des demi-finales</p>
+                <p style="font-size: 11px; color: #999; margin: 6px 0 0 0;">Cliquez ou glissez-déposez</p>
+                <input type="file" accept=".csv" multiple style="display: none;">
+              </div>
+              <div class="phase-zone-files" id="files-DEMI-FINALE"></div>
+            </div>
+            <!-- Zone 3: Finale / Petite Finale (journées only) -->
+            <div class="phase-upload-zone phase-zone-bracket" data-phase="FINALE" style="display: none;">
+              <div class="phase-zone-header">Finale / Petite Finale</div>
+              <div class="phase-zone-droparea" id="zone-FINALE">
+                <p style="margin: 0; font-size: 13px; color: #666;">Fichiers CSV de la finale et petite finale</p>
+                <p style="font-size: 11px; color: #999; margin: 6px 0 0 0;">Cliquez ou glissez-déposez</p>
+                <input type="file" accept=".csv" multiple style="display: none;">
+              </div>
+              <div class="phase-zone-files" id="files-FINALE"></div>
+            </div>
+            <!-- Zone 4: Classement (journées only) -->
+            <div class="phase-upload-zone phase-zone-bracket" data-phase="CLASSEMENT" style="display: none;">
+              <div class="phase-zone-header">Classement</div>
+              <div class="phase-zone-droparea" id="zone-CLASSEMENT">
+                <p style="margin: 0; font-size: 13px; color: #666;">Fichiers CSV de classement (05-06, 07-08...)</p>
+                <p style="font-size: 11px; color: #999; margin: 6px 0 0 0;">Cliquez ou glissez-déposez</p>
+                <input type="file" accept=".csv" multiple style="display: none;">
+              </div>
+              <div class="phase-zone-files" id="files-CLASSEMENT"></div>
+            </div>
+          </div>
+
+          <div style="display: flex; gap: 10px; margin-top: 15px;">
+            <button type="button" class="btn" id="previewMatchesBtn" onclick="previewMatches()" style="background: #6c757d;">
+              Aperçu des résultats
+            </button>
+            <button type="button" class="btn" id="importMatchesBtn" onclick="importMatches()" style="display: none;">
+              Importer les matchs
+            </button>
+          </div>
+        </form>
+
+        <!-- Preview table -->
+        <div id="matchPreviewCard" style="display: none; margin-top: 20px;">
+          <h4 style="margin-bottom: 5px;">Aperçu des résultats calculés</h4>
+          <p id="matchPreviewInfo" style="color: #666; font-size: 13px; margin-bottom: 15px;"></p>
+          <div style="overflow-x: auto;">
+            <table id="matchPreviewTable" class="data-table" style="font-size: 12px; width: 100%;">
+              <thead id="matchPreviewHead"></thead>
+              <tbody id="matchPreviewBody"></tbody>
+            </table>
           </div>
         </div>
-
-        <div class="form-group">
-          <label for="tournamentNumber">Numéro du tournoi *</label>
-          <select id="tournamentNumber" required>
-            <option value="">-- Sélectionner --</option>
-          </select>
-        </div>
-
-        <div class="form-group">
-          <label for="tournamentDate">Date du tournoi *</label>
-          <input type="date" id="tournamentDate" required>
-        </div>
-
-        <div class="form-group">
-          <label for="season">Saison (calculée automatiquement)</label>
-          <input type="text" id="season" placeholder="Ex: 2024-2025" readonly style="background: #f0f0f0;">
-        </div>
-
-        <!-- Single file upload zone (standard mode) -->
-        <div class="file-upload" id="fileUpload">
-          <p>📁 Cliquez pour sélectionner un fichier CSV</p>
-          <p style="font-size: 12px; color: #999; margin-top: 10px;">ou glissez-déposez le fichier ici</p>
-          <input type="file" id="fileInput" accept=".csv" required>
-          <div id="fileName" class="file-name" style="display: none;"></div>
-        </div>
-
-        <button type="submit" class="btn" id="importBtn">Enregistrer la competition</button>
-      </form>
+      </div>
     </div>
 
     <div class="card" id="resultsCard" style="display: none;">
@@ -191,13 +369,12 @@
         if (response.ok) {
           categories = await response.json();
 
-          // Populate mode selector with unique game types
+          // Populate mode selector with unique game types (both tabs)
           const modes = [...new Set(categories.map(c => c.game_type))].sort();
-          const modeSelect = document.getElementById('modeSelect');
-          modeSelect.innerHTML = '<option value="">-- Sélectionner --</option>';
-          modes.forEach(mode => {
-            modeSelect.innerHTML += `<option value="${mode}">${mode}</option>`;
-          });
+          const modeOptions = '<option value="">-- Sélectionner --</option>' +
+            modes.map(mode => `<option value="${mode}">${mode}</option>`).join('');
+          document.getElementById('modeSelect').innerHTML = modeOptions;
+          document.getElementById('matchModeSelect').innerHTML = modeOptions;
 
           // Keep hidden categorySelect for compatibility
           const select = document.getElementById('categorySelect');
@@ -681,8 +858,326 @@
 
     // ========== END OF STANDARD IMPORT ==========
 
-    // REMOVED: journées-specific code (Phase icons, multi-file handlers, etc.)
-    // Journées mode now uses the same single-CSV import as standard mode.
+    // ========== IMPORT MATCHES E2i TAB ==========
+
+    // Tab switching
+    function switchImportTab(tab) {
+      document.getElementById('tabStandard').style.display = tab === 'standard' ? 'block' : 'none';
+      document.getElementById('tabMatches').style.display = tab === 'matches' ? 'block' : 'none';
+      document.querySelectorAll('.import-tab').forEach(t => {
+        const isActive = t.dataset.tab === tab;
+        t.style.color = isActive ? 'var(--color-primary, #1F4788)' : '#999';
+        t.style.fontWeight = isActive ? '600' : '500';
+        t.style.borderBottomColor = isActive ? 'var(--color-primary, #1F4788)' : 'transparent';
+      });
+      // Reset state
+      document.getElementById('errorMessage').style.display = 'none';
+      document.getElementById('successMessage').style.display = 'none';
+    }
+    // Expose globally
+    window.switchImportTab = switchImportTab;
+
+    // Match tab selectors — mirror the standard tab logic
+    document.getElementById('matchModeSelect').addEventListener('change', (e) => {
+      const selectedMode = e.target.value;
+      const levelSelect = document.getElementById('matchLevelSelect');
+      const categorySelect = document.getElementById('matchCategorySelect');
+      levelSelect.innerHTML = '<option value="">-- Sélectionner --</option>';
+      categorySelect.value = '';
+      if (selectedMode) {
+        const levels = categories.filter(c => c.game_type === selectedMode).map(c => c.level).filter((v, i, a) => a.indexOf(v) === i).sort();
+        levels.forEach(level => { levelSelect.innerHTML += `<option value="${level}">${level}</option>`; });
+      }
+    });
+
+    document.getElementById('matchLevelSelect').addEventListener('change', (e) => {
+      const selectedMode = document.getElementById('matchModeSelect').value;
+      const selectedLevel = e.target.value;
+      const categorySelect = document.getElementById('matchCategorySelect');
+      if (selectedMode && selectedLevel) {
+        const match = categories.find(c => c.game_type === selectedMode && c.level === selectedLevel);
+        if (match) categorySelect.value = match.id;
+      } else {
+        categorySelect.value = '';
+      }
+    });
+
+    document.getElementById('matchTournamentDate').addEventListener('change', (e) => {
+      if (e.target.value) {
+        document.getElementById('matchSeason').value = calculateSeason(e.target.value);
+      }
+    });
+
+    // Phase-based multi-file upload handling
+    const PHASE_KEYS = ['POULE', 'DEMI-FINALE', 'FINALE', 'CLASSEMENT'];
+    let matchFilesByPhase = { 'POULE': [], 'DEMI-FINALE': [], 'FINALE': [], 'CLASSEMENT': [] };
+
+    // Set up drag/drop/click listeners for each phase zone
+    PHASE_KEYS.forEach(phase => {
+      const droparea = document.getElementById('zone-' + phase);
+      const fileInput = droparea.querySelector('input[type="file"]');
+
+      droparea.addEventListener('click', (e) => { if (e.target !== fileInput) fileInput.click(); });
+      droparea.addEventListener('dragover', (e) => { e.preventDefault(); droparea.classList.add('dragover'); });
+      droparea.addEventListener('dragleave', () => { droparea.classList.remove('dragover'); });
+      droparea.addEventListener('drop', (e) => {
+        e.preventDefault();
+        droparea.classList.remove('dragover');
+        addMatchFilesToPhase(phase, e.dataTransfer.files);
+      });
+      fileInput.addEventListener('change', () => {
+        addMatchFilesToPhase(phase, fileInput.files);
+        fileInput.value = '';
+      });
+    });
+
+    function addMatchFilesToPhase(phase, fileList) {
+      const bucket = matchFilesByPhase[phase];
+      for (const f of fileList) {
+        if (!bucket.some(mf => mf.name === f.name && mf.size === f.size)) {
+          bucket.push(f);
+        }
+      }
+      renderPhaseFileList(phase);
+    }
+
+    function removeMatchFile(phase, index) {
+      matchFilesByPhase[phase].splice(index, 1);
+      renderPhaseFileList(phase);
+      // Hide preview if no files in any zone
+      if (getAllMatchFiles().length === 0) {
+        document.getElementById('matchPreviewCard').style.display = 'none';
+        document.getElementById('importMatchesBtn').style.display = 'none';
+      }
+    }
+    window.removeMatchFile = removeMatchFile;
+
+    function renderPhaseFileList(phase) {
+      const container = document.getElementById('files-' + phase);
+      const files = matchFilesByPhase[phase];
+      if (files.length === 0) {
+        container.innerHTML = '';
+        return;
+      }
+      container.innerHTML = files.map((f, i) => `
+        <div class="phase-file-item">
+          <span>📄 ${f.name} <span style="color: #999;">(${(f.size / 1024).toFixed(1)} Ko)</span></span>
+          <button onclick="removeMatchFile('${phase}', ${i})">✕</button>
+        </div>
+      `).join('');
+    }
+
+    function getAllMatchFiles() {
+      const all = [];
+      PHASE_KEYS.forEach(phase => {
+        matchFilesByPhase[phase].forEach(f => all.push(f));
+      });
+      return all;
+    }
+
+    // Preview matches
+    let lastPreviewData = null;
+
+    async function previewMatches() {
+      const errorDiv = document.getElementById('errorMessage');
+      const previewBtn = document.getElementById('previewMatchesBtn');
+      errorDiv.style.display = 'none';
+
+      const categoryId = document.getElementById('matchCategorySelect').value;
+      if (!categoryId) {
+        errorDiv.textContent = 'Veuillez sélectionner un mode de jeu et un classement FFB';
+        errorDiv.style.display = 'block';
+        return;
+      }
+      const allFiles = getAllMatchFiles();
+      if (allFiles.length === 0) {
+        errorDiv.textContent = 'Veuillez sélectionner au moins un fichier CSV';
+        errorDiv.style.display = 'block';
+        return;
+      }
+
+      previewBtn.disabled = true;
+      previewBtn.textContent = 'Analyse en cours...';
+
+      try {
+        const formData = new FormData();
+        allFiles.forEach(f => formData.append('files', f));
+        formData.append('categoryId', categoryId);
+
+        const response = await fetch(`${API_URL}/tournaments/import-matches/preview`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` },
+          body: formData
+        });
+
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Erreur lors de l\'analyse');
+
+        lastPreviewData = data;
+        renderMatchPreview(data);
+
+        // Show import button
+        document.getElementById('importMatchesBtn').style.display = 'inline-block';
+
+      } catch (error) {
+        errorDiv.textContent = error.message;
+        errorDiv.style.display = 'block';
+      } finally {
+        previewBtn.disabled = false;
+        previewBtn.textContent = 'Aperçu des résultats';
+      }
+    }
+    window.previewMatches = previewMatches;
+
+    function renderMatchPreview(data) {
+      const card = document.getElementById('matchPreviewCard');
+      const info = document.getElementById('matchPreviewInfo');
+      const thead = document.getElementById('matchPreviewHead');
+      const tbody = document.getElementById('matchPreviewBody');
+
+      info.textContent = `${data.matchCount} matchs analysés, ${data.playerCount} joueurs, ${data.poules.length} poule(s) : ${data.poules.join(', ')}`;
+
+      // Build header
+      const hasPosPoints = data.preview.some(p => p.position_points > 0);
+      const hasBonus = data.preview.some(p => p.bonus_moyenne > 0);
+
+      let headerCols = '<th>CLT</th><th>Licence</th><th>Nom</th><th>Prénom</th><th>Club</th><th>Clt poule</th>';
+      if (hasPosPoints) headerCols += '<th>Pts clt</th>';
+      if (hasBonus) headerCols += '<th>Bonus</th>';
+      if (hasPosPoints || hasBonus) headerCols += '<th>Total</th>';
+      headerCols += '<th>PM</th><th>Pts</th><th>R</th><th>MS</th><th>MGP</th><th>MPART</th><th>Pts Match</th>';
+      thead.innerHTML = `<tr>${headerCols}</tr>`;
+
+      // Build rows
+      tbody.innerHTML = data.preview.map(p => {
+        let row = `<td style="font-weight: bold;">${p.final_position}</td>`;
+        row += `<td>${p.licence}</td>`;
+        row += `<td>${p.last_name}</td>`;
+        row += `<td>${p.first_name}</td>`;
+        row += `<td>${p.club || (p.unknown ? '<span style="color: #dc3545;">Inconnu</span>' : '')}</td>`;
+        row += `<td>${p.poule_rank || '-'}</td>`;
+        if (hasPosPoints) row += `<td>${p.position_points}</td>`;
+        if (hasBonus) row += `<td>${p.bonus_moyenne}</td>`;
+        if (hasPosPoints || hasBonus) row += `<td style="font-weight: bold;">${p.total_points_clt}</td>`;
+        row += `<td>${p.parties_menees}</td>`;
+        row += `<td>${p.points}</td>`;
+        row += `<td>${p.reprises}</td>`;
+        row += `<td>${p.max_serie}</td>`;
+        row += `<td>${p.mgp.toFixed(3)}</td>`;
+        row += `<td>${p.mpart.toFixed(3)}</td>`;
+        row += `<td>${p.match_points}</td>`;
+        return `<tr>${row}</tr>`;
+      }).join('');
+
+      card.style.display = 'block';
+    }
+
+    // Import matches (after preview)
+    async function importMatches() {
+      const errorDiv = document.getElementById('errorMessage');
+      const successDiv = document.getElementById('successMessage');
+      const importBtn = document.getElementById('importMatchesBtn');
+      errorDiv.style.display = 'none';
+      successDiv.style.display = 'none';
+
+      const categoryId = document.getElementById('matchCategorySelect').value;
+      const tournamentNumber = document.getElementById('matchTournamentNumber').value;
+      const tournamentDate = document.getElementById('matchTournamentDate').value;
+      const season = document.getElementById('matchSeason').value;
+
+      if (!categoryId || !tournamentNumber || !tournamentDate || !season) {
+        errorDiv.textContent = 'Veuillez remplir tous les champs (mode, classement, tournoi, date)';
+        errorDiv.style.display = 'block';
+        return;
+      }
+
+      const allFiles = getAllMatchFiles();
+      if (allFiles.length === 0) {
+        errorDiv.textContent = 'Veuillez sélectionner au moins un fichier CSV';
+        errorDiv.style.display = 'block';
+        return;
+      }
+
+      // Check if tournament exists
+      const existsResult = await checkTournamentExists(categoryId, tournamentNumber, season);
+      if (existsResult.exists) {
+        if (!confirm(`Un tournoi existe déjà pour cette catégorie/numéro/saison (${existsResult.tournament.playerCount} joueurs). Voulez-vous le remplacer ?`)) {
+          return;
+        }
+      }
+
+      importBtn.disabled = true;
+      importBtn.textContent = 'Import en cours...';
+
+      try {
+        const formData = new FormData();
+        allFiles.forEach(f => formData.append('files', f));
+        formData.append('categoryId', categoryId);
+        formData.append('tournamentNumber', tournamentNumber);
+        formData.append('tournamentDate', tournamentDate);
+        formData.append('season', season);
+
+        const response = await fetch(`${API_URL}/tournaments/import-matches`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` },
+          body: formData
+        });
+
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Erreur lors de l\'import');
+
+        successDiv.textContent = `Import réussi ! ${data.matchCount} matchs importés, ${data.imported} joueurs classés. Les classements ont été recalculés.`;
+        successDiv.style.display = 'block';
+
+        // Show results card
+        const resultsCard = document.getElementById('resultsCard');
+        const resultsDiv = document.getElementById('importResults');
+        resultsDiv.innerHTML = `
+          <div class="stats-grid">
+            <div class="stat-card">
+              <h4>Matchs importés</h4>
+              <div class="stat-value">${data.matchCount}</div>
+            </div>
+            <div class="stat-card">
+              <h4>Joueurs classés</h4>
+              <div class="stat-value">${data.imported}</div>
+            </div>
+            <div class="stat-card">
+              <h4>Poules</h4>
+              <div class="stat-value">${data.poules ? data.poules.length : 0}</div>
+            </div>
+          </div>
+          <p style="margin-top: 20px;">
+            <a href="rankings.html?categoryId=${categoryId}" class="btn btn-small">Voir les classements mis à jour</a>
+            ${data.tournamentId ? `<a href="tournament-results.html?id=${data.tournamentId}" class="btn btn-small" style="background: #6c757d; margin-left: 10px;">Voir le détail du tournoi</a>` : ''}
+          </p>
+        `;
+
+        if (data.hasBonuses) {
+          showBonusInfoMessage(data.tournamentId, categoryId);
+        }
+
+        resultsCard.style.display = 'block';
+
+        // Reset match form
+        PHASE_KEYS.forEach(phase => {
+          matchFilesByPhase[phase] = [];
+          renderPhaseFileList(phase);
+        });
+        document.getElementById('matchPreviewCard').style.display = 'none';
+        document.getElementById('importMatchesBtn').style.display = 'none';
+
+      } catch (error) {
+        errorDiv.textContent = error.message;
+        errorDiv.style.display = 'block';
+      } finally {
+        importBtn.disabled = false;
+        importBtn.textContent = 'Importer les matchs';
+      }
+    }
+    window.importMatches = importMatches;
+
+    // ========== END OF MATCH IMPORT ==========
 
     // Load tournament rounds dynamically
     async function loadTournamentRounds() {
@@ -692,14 +1187,38 @@
         });
         if (response.ok) {
           const rounds = await response.json();
-          const select = document.getElementById('tournamentNumber');
-          select.innerHTML = '<option value="">-- Sélectionner --</option>';
-          rounds.forEach(r => {
-            select.innerHTML += `<option value="${r.tournament_number}">${r.display_name}</option>`;
-          });
+          const options = '<option value="">-- Sélectionner --</option>' +
+            rounds.map(r => `<option value="${r.tournament_number}">${r.display_name}</option>`).join('');
+          document.getElementById('tournamentNumber').innerHTML = options;
+          document.getElementById('matchTournamentNumber').innerHTML = options;
         }
       } catch (error) {
         console.error('Error loading tournament rounds:', error);
+      }
+    }
+
+    // Load qualification mode and show/hide bracket zones accordingly
+    async function loadQualificationMode() {
+      try {
+        const response = await fetch(`${API_URL}/settings/app/qualification_mode`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          const isJournees = data.value === 'journees';
+          document.querySelectorAll('.phase-zone-bracket').forEach(el => {
+            el.style.display = isJournees ? '' : 'none';
+          });
+          // In standard mode, make Poules zone full-width
+          const grid = document.getElementById('phaseUploadGrid');
+          if (!isJournees) {
+            grid.style.gridTemplateColumns = '1fr';
+          } else {
+            grid.style.gridTemplateColumns = '1fr 1fr';
+          }
+        }
+      } catch (error) {
+        console.error('Error loading qualification mode:', error);
       }
     }
 
@@ -707,14 +1226,17 @@
     loadCategories();
     loadClubs();
     loadTournamentRounds();
+    loadQualificationMode();
 
-    // Set today's date as default value
+    // Set today's date as default value (both tabs)
     const today = new Date().toISOString().split('T')[0];
     document.getElementById('tournamentDate').value = today;
+    document.getElementById('matchTournamentDate').value = today;
 
-    // Auto-calculate season for today's date
+    // Auto-calculate season for today's date (both tabs)
     const season = calculateSeason(today);
     document.getElementById('season').value = season;
+    document.getElementById('matchSeason').value = season;
 
     // Logout handler
     document.getElementById('logoutBtn').addEventListener('click', (e) => {

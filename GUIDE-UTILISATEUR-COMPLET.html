@@ -451,6 +451,7 @@
     <a href="#forfaits">Gestion des forfaits</a>
     <a href="#resultats">Résultats des tournois</a>
     <a href="#import-journees" class="sub">Import mode Journées</a>
+    <a href="#import-matchs-e2i" class="sub">Import Matchs E2i</a>
     <a href="#resultats-externes">Résultats Externes</a>
     <a href="#liste-tournois">Liste des tournois</a>
 
@@ -1019,6 +1020,42 @@
 
     <div class="info-card accent">
       <strong>Points de position :</strong> Le barème de points par position est configurable dans Paramètres &gt; Types de Tournoi. Par exemple : 1er &rarr; 10 pts, 2e &rarr; 8 pts, 3e &rarr; 6 pts, etc. Ce barème est appliqué automatiquement à chaque import de résultats en mode journées. La position est calculée d'après les points de match (et la moyenne en cas d'égalité). La colonne « Pts Position » apparaît automatiquement sur la page de résultats du tournoi.
+    </div>
+
+    <h4 id="import-matchs-e2i">Import des matchs E2i (CSV matchs individuels)</h4>
+    <p>L'onglet <strong>« Import Matchs E2i »</strong> permet d'importer directement les fichiers CSV de matchs individuels exportés depuis <strong>telemat.org / E2i</strong>. Cette méthode remplace l'utilisation d'Excel/Power Query pour calculer les résultats.</p>
+
+    <h5>Format attendu</h5>
+    <p>Les fichiers CSV sont au format E2i (séparateur point-virgule, 20 colonnes) :</p>
+    <p style="font-size: 12px; color: #666; font-family: monospace; background: #f5f5f5; padding: 8px; border-radius: 4px; overflow-x: auto;">
+      No Phase;Date match;Billard;Poule;Licence J1;Joueur 1;Pts J1;Rep J1;Ser J1;Pts Match J1;Moy J1;Licence J2;Joueur 2;Pts J2;Rep J2;Ser J2;Pts Match J2;Moy J2;NOMBD;Mode de jeu
+    </p>
+    <p>Chaque fichier correspond à une poule ou phase (POULE A, POULE B, DEMI-FINALE, Classement 07-08, etc.).</p>
+
+    <h5>Processus d'import</h5>
+    <ol class="steps">
+      <li><strong>Sélectionner l'onglet « Import Matchs E2i »</strong> sur la page d'import de compétition.</li>
+      <li><strong>Choisir la catégorie :</strong> Mode de jeu, classement FFB, numéro du tournoi, date.</li>
+      <li><strong>Ajouter les fichiers CSV :</strong> La page affiche des zones de dépôt séparées par phase : <strong>Poules</strong> (toujours visible), <strong>Demi-finales</strong>, <strong>Finale / Petite Finale</strong> et <strong>Classement</strong> (visibles en mode journées). Déposez chaque fichier CSV dans la zone correspondant à sa phase. Les fichiers sélectionnés apparaissent sous chaque zone.</li>
+      <li><strong>Aperçu :</strong> Cliquer sur « Aperçu des résultats » pour voir le tableau calculé avant import. Le tableau affiche pour chaque joueur : classement final (CLT), classement poule (Clt poule), parties menées (PM), points, reprises, meilleure série (MS), moyenne générale (MGP), meilleure partie (MPART), points de match, et si applicable les points de classement et bonus.</li>
+      <li><strong>Importer :</strong> Cliquer sur « Importer les matchs ». Les résultats sont enregistrés, les bonus calculés, et les classements de saison recalculés automatiquement.</li>
+    </ol>
+
+    <h5>Calculs effectués automatiquement</h5>
+    <ul>
+      <li><strong>Agrégation :</strong> Les matchs individuels sont agrégés par joueur (total points, reprises, meilleure série, moyenne, nombre de matchs joués).</li>
+      <li><strong>Classement par poule :</strong> Les joueurs sont classés au sein de chaque poule par points de match puis moyenne.</li>
+      <li><strong>Classement final :</strong> Si des phases de classement (DEMI-FINALE, FINALE, Classement 07-08) sont présentes, elles déterminent le classement final. Sinon, le classement est calculé par interclassement des positions de poule.</li>
+      <li><strong>Meilleure partie (MPART) :</strong> La meilleure moyenne sur un seul match est calculée pour chaque joueur.</li>
+      <li><strong>Points de position :</strong> En mode journées, les points de position sont attribués selon le barème configuré.</li>
+      <li><strong>Bonus et classements :</strong> Tous les bonus (barème, moyenne) et les classements de saison sont recalculés après l'import.</li>
+    </ul>
+
+    <h5>Détail des matchs</h5>
+    <p>Après l'import, la page de résultats du tournoi affiche une section repliable <strong>« Détail des matchs »</strong> qui liste tous les matchs individuels par poule, avec les scores de chaque joueur.</p>
+
+    <div class="info-card accent">
+      <strong>Dégradation du dernier joueur :</strong> En mode journées, une option dans <strong>Paramètres &gt; Types de Tournoi &gt; Points par position</strong> permet d'activer la dégradation du dernier joueur : le dernier classé reçoit les points de la position N+1 (par exemple, s'il y a 10 joueurs, le 10e reçoit les points du 11e).
     </div>
   </section>
 
@@ -1999,6 +2036,11 @@
         <tr><td>Reprise</td><td>Unité de jeu au billard (tour de jeu)</td></tr>
         <tr><td>Saison</td><td>Période allant de septembre à août (ex: 2025-2026)</td></tr>
         <tr><td>Série</td><td>Nombre de points consécutifs marqués sans rater</td></tr>
+        <tr><td>E2i / telemat.org</td><td>Système fédéral de saisie et gestion des compétitions FFB. Les fichiers CSV de matchs exportés depuis E2i peuvent être importés dans l'application.</td></tr>
+        <tr><td>MGP (Moyenne Générale Parties)</td><td>Moyenne générale du joueur calculée sur l'ensemble des matchs d'un tournoi (total points / total reprises)</td></tr>
+        <tr><td>MPART (Meilleure Partie)</td><td>Meilleure moyenne obtenue par un joueur sur un seul match dans un tournoi</td></tr>
+        <tr><td>PM (Parties Menées)</td><td>Nombre de matchs joués par un joueur dans un tournoi</td></tr>
+        <tr><td>Clt poule</td><td>Classement du joueur au sein de sa poule (1er, 2e, 3e...)</td></tr>
       </tbody>
     </table>
   </section>

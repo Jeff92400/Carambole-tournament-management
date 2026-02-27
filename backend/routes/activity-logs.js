@@ -230,14 +230,12 @@ router.get('/stats', authenticateToken, requireViewer, async (req, res) => {
       LIMIT 10
     `, [orgId]);
 
-    // Total Player App users - count from players table (excluding test accounts)
+    // Total Player App users - count from player_accounts (source of truth)
     const totalUsers = await db.query(`
       SELECT COUNT(*) as count
-      FROM players
-      WHERE player_app_user = TRUE
-        AND (player_app_role IS NULL OR player_app_role != 'test')
-        AND UPPER(licence) NOT LIKE 'TEST%'
-        AND ${orgFilter}
+      FROM player_accounts
+      WHERE UPPER(licence) NOT LIKE 'TEST%'
+        AND ($1::int IS NULL OR organization_id = $1)
     `, [orgId]);
 
     res.json({
