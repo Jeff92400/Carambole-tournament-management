@@ -711,8 +711,13 @@ Auto-generates all `tournoi_ext` entries for a season from the CDBHS Excel calen
 - Rows 7-19: Data rows — col B = mode, col C = category, col D = Pts/Rep, cols F+ = tournament markers (T1/T2/T3/FD)
 - Row 20+: Legend/footer (parser stops at "LEGENDE" or "COULEU")
 
-### Club Location via Cell Color (TODO — not yet implemented)
-The Excel file encodes the hosting club via **cell background color** — no club codes in the cell text. The legend area (rows 22-27) maps colors to clubs:
+### Club Location Resolution (TODO — not yet implemented)
+
+**Strategy: color first, letter fallback.**
+
+**1. Color-based detection (primary):** The Excel encodes the hosting club via cell background color. ExcelJS reads `cell.fill.fgColor.argb`. Requires a per-org **color-to-club mapping** (configurable in settings, since each CDB has different clubs/colors).
+
+CDBHS color mapping (from legend rows 22-27):
 - `FF974806` = Bois-Colombes
 - `FF00B0F0` = Châtillon
 - `FFFABF8F` = Clamart
@@ -720,13 +725,31 @@ The Excel file encodes the hosting club via **cell background color** — no clu
 - `FF0070C0` = Courbevoie
 - Finales (FD): white/no fill or `FFFF0000` (red) — location TBD
 
-**Implementation plan:** Read cell `fill.fgColor.argb`, match against a configurable color-to-club mapping table (per org, since each CDB has different clubs/colors). ExcelJS supports reading cell fills. This replaces the unused "T1/A" club code format.
+**2. Letter code fallback:** If a cell has no recognized color (or color mapping not configured), fall back to letter codes in the cell text: `T1/A` → club A, `T2/B` → club B. Uses `clubs.calendar_code` column.
+
+**Validation rules:**
+- If any tournament cell has an unrecognized color AND no letter code → **stop the process**, show which cells couldn't be resolved, and ask the user to fix the Excel or configure the mapping. Never generate tournaments with missing locations silently.
+- Finales (FD) are exempt — location TBD is acceptable for finales.
+
+**User flow (4-step wizard):**
+1. **Upload** — Select season + Excel file
+2. **Color validation** (new step) — Parse Excel, extract all unique colors from tournament cells, show proposed color→club mapping (colored squares + club names). Admin validates or corrects each mapping before proceeding. Previously saved mappings are pre-filled. If unknown colors are found, admin must assign them a club or the process stops.
+3. **Preview** — Full tournament table with dates, modes, categories, locations (now resolved)
+4. **Import** — Create/update `tournoi_ext` entries
+
+**Implementation plan:**
+- New table or `organization_settings` entries: `calendar_color_mapping` (JSON: `{"FF974806": "Bois-Colombes", ...}`)
+- Step 2 backend endpoint: `POST /calendar/import-season/detect-colors` — returns unique colors + count of cells per color + suggested club (from saved mapping)
+- Step 2 frontend: show colored squares with club dropdown, save mapping on confirm
+- Parser: read cell fill color → lookup in validated color mapping → if no match, try letter code → if no match, reject
+- Auto-detect option: parse the legend area of the Excel to suggest color mappings
 
 ### Current Status
 - Parser works for CDBHS format (52 tournaments extracted from 2025-2026 calendar)
-- Locations are "Non défini" — pending color-based club detection
+- Locations are "Non défini" — pending color + letter detection
 - `exceljs` dependency is in `package.json`
 - Modal instructions in `settings.html` still reference "T1/A" format — update when color detection is implemented
+- Target: ready and 100% accurate before 2026-27 season start
 
 ## Future Work / Roadmap
 
