@@ -465,6 +465,7 @@
     <a href="#invitations">Invitations Espace Joueur</a>
 
     <a href="#parametres" class="section-title">Paramètres</a>
+    <a href="#param-generer-saison">Générer les tournois de la saison</a>
     <a href="#param-organisation">Organisation</a>
     <a href="#param-utilisateurs">Utilisateurs</a>
     <a href="#param-types-tournoi">Types de Tournoi</a>
@@ -1393,6 +1394,7 @@
 
     <h3>Sous-sections disponibles</h3>
     <ul>
+      <li><strong>Générer les tournois de la saison</strong> (à partir du calendrier Excel)</li>
       <li>Paramètres de l'organisation</li>
       <li>Gestion des utilisateurs</li>
       <li>Types de Tournoi et Mode de qualification</li>
@@ -1404,6 +1406,54 @@
       <li>Politique de Confidentialité</li>
       <li>Logs d'activité</li>
     </ul>
+  </section>
+
+  <hr>
+
+  <!-- Paramètres > Générer les tournois de la saison -->
+  <section id="param-generer-saison">
+    <h2>Paramètres > Générer les tournois de la saison</h2>
+
+    <h3>Description</h3>
+    <p>Cette fonctionnalité permet de créer automatiquement toutes les compétitions d'une saison à partir du fichier calendrier Excel. Au lieu de saisir chaque compétition manuellement dans le calendrier, le système analyse le fichier Excel et génère l'ensemble des tournois en une seule opération.</p>
+
+    <h3>Accès</h3>
+    <p>Depuis la page <strong>Paramètres</strong>, cliquer sur le bouton vert <strong>"Générer tournois saison"</strong>.</p>
+
+    <h3>Prérequis</h3>
+    <ul>
+      <li>Disposer du fichier calendrier Excel de la saison (format <code>.xlsx</code>)</li>
+      <li>Le fichier doit contenir les lignes <strong>S</strong> (Samedi) et <strong>D</strong> (Dimanche) avec les dates de chaque journée</li>
+      <li>Les tournois sont identifiés par les marqueurs : <strong>T1</strong>, <strong>T2</strong>, <strong>T3</strong> (Tournois Qualificatifs) et <strong>FD</strong> (Finale Départementale)</li>
+      <li>Le club organisateur est identifié automatiquement par la <strong>couleur de fond</strong> de chaque cellule de tournoi</li>
+    </ul>
+
+    <h3>Étapes</h3>
+    <ol class="steps">
+      <li><strong>Sélectionner la saison</strong> &mdash; Choisir la saison cible dans le menu déroulant (ex: 2026-2027)</li>
+      <li><strong>Charger le fichier Excel</strong> &mdash; Sélectionner le fichier calendrier de la saison</li>
+      <li><strong>Cliquer sur "Prévisualiser"</strong> &mdash; Le système analyse le fichier et détecte automatiquement :
+        <ul>
+          <li>Les dates (à partir des lignes S/D)</li>
+          <li>Les tournois (T1, T2, T3, FD)</li>
+          <li>Le mode de jeu (Libre, Cadre, Bande, 3 Bandes)</li>
+          <li>La catégorie (N3, R1, R2, R3, R4...)</li>
+          <li>La taille (Distance/Reprises)</li>
+          <li>Le club organisateur (via la couleur de fond de la cellule)</li>
+        </ul>
+      </li>
+      <li><strong>Vérifier la reconnaissance des clubs</strong> &mdash; Le système affiche les couleurs détectées et le club associé à chacune. Vérifier que chaque couleur correspond bien au bon club. Corriger si nécessaire avant de poursuivre. Si une couleur n'est pas reconnue, le processus est interrompu.</li>
+      <li><strong>Contrôler la prévisualisation</strong> &mdash; Vérifier le tableau récapitulatif de tous les tournois détectés (date, nom, mode, catégorie, lieu, taille). Les finales sont mises en évidence.</li>
+      <li><strong>Cliquer sur "Importer les tournois"</strong> &mdash; Tous les tournois sont créés dans le calendrier. Si un tournoi avec le même identifiant existe déjà, il est mis à jour.</li>
+    </ol>
+
+    <div class="info-card">
+      <strong>Identification du club organisateur :</strong> Le système détecte le club à partir de la couleur de fond des cellules du fichier Excel. En alternative, le format <strong>T1/A</strong> (lettre du club après le slash) est également reconnu. Si ni la couleur ni la lettre ne correspondent à un club connu, le processus s'arrête et demande de corriger le fichier ou de configurer la correspondance.
+    </div>
+
+    <div class="info-card warning">
+      <strong>Important :</strong> Après la génération, il est recommandé de vérifier les compétitions créées dans le menu <strong>Calendrier</strong>. Les tournois peuvent être modifiés individuellement si nécessaire (changement de date, de lieu, etc.).
+    </div>
   </section>
 
   <hr>

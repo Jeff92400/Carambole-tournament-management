@@ -248,13 +248,14 @@
         <!-- Step 1: Upload -->
         <div id="importStep1">
           <div style="background: #e3f2fd; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
-            <h4 style="margin: 0 0 10px 0; color: #1565c0;">📋 Format attendu du fichier Excel</h4>
+            <h4 style="margin: 0 0 10px 0; color: #1565c0;">📋 Comment ça marche</h4>
             <p style="margin: 0; font-size: 13px; color: #1565c0;">
-              Utilisez le même format que le calendrier actuel. Dans chaque cellule, indiquez :<br>
-              • <strong>T1/A</strong>, <strong>T2/B</strong>, <strong>T3/C</strong> = Tournoi + Club<br>
-              • <strong>F/?</strong> = Finale (lieu inconnu)<br>
-              • <strong>L</strong> = LBIF (ignoré, juste pour le calendrier)<br><br>
-              <strong>Codes clubs :</strong> <span id="clubCodesDisplay">Chargement...</span>
+              Uploadez votre fichier calendrier Excel de la saison (format habituel). Le système détecte automatiquement :<br>
+              • Les <strong>dates</strong> (lignes S/D = Samedi/Dimanche)<br>
+              • Les <strong>tournois</strong> : T1, T2, T3 = Tournois Qualificatifs, FD = Finale Départementale<br>
+              • Le <strong>mode de jeu</strong>, la <strong>catégorie</strong> et la <strong>taille</strong> (Pts/Rep)<br>
+              • Le <strong>club organisateur</strong> via la couleur de fond des cellules<br><br>
+              <em>Les entrées <strong>L</strong> (LBIF) sont ignorées.</em>
             </p>
           </div>
 

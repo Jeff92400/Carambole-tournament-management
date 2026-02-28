@@ -677,6 +677,7 @@ Cliquer sur "Parametres" dans la barre de navigation (visible uniquement pour le
 
 ### Sous-sections disponibles
 
+- **Generer les tournois de la saison** (a partir du calendrier Excel)
 - Parametres de l'organisation
 - Gestion des utilisateurs
 - Types de Tournoi et Mode de qualification
@@ -687,6 +688,44 @@ Cliquer sur "Parametres" dans la barre de navigation (visible uniquement pour le
 - Donnees de reference
 - Politique de Confidentialite
 - Logs d'activite
+
+---
+
+## Parametres > Generer les tournois de la saison
+
+### Description
+
+Cette fonctionnalite permet de creer automatiquement toutes les competitions d'une saison a partir du fichier calendrier Excel. Au lieu de saisir chaque competition manuellement dans le calendrier, le systeme analyse le fichier Excel et genere l'ensemble des tournois en une seule operation.
+
+### Acces
+
+Depuis la page **Parametres**, cliquer sur le bouton vert **"Generer tournois saison"**.
+
+### Prerequis
+
+- Disposer du fichier calendrier Excel de la saison (format `.xlsx`)
+- Le fichier doit contenir les lignes **S** (Samedi) et **D** (Dimanche) avec les dates de chaque journee
+- Les tournois sont identifies par les marqueurs : **T1**, **T2**, **T3** (Tournois Qualificatifs) et **FD** (Finale Departementale)
+- Le club organisateur est identifie automatiquement par la **couleur de fond** de chaque cellule de tournoi
+
+### Etapes
+
+1. **Selectionner la saison** -- Choisir la saison cible dans le menu deroulant (ex: 2026-2027)
+2. **Charger le fichier Excel** -- Selectionner le fichier calendrier de la saison
+3. **Cliquer sur "Previsualiser"** -- Le systeme analyse le fichier et detecte automatiquement :
+   - Les dates (a partir des lignes S/D)
+   - Les tournois (T1, T2, T3, FD)
+   - Le mode de jeu (Libre, Cadre, Bande, 3 Bandes)
+   - La categorie (N3, R1, R2, R3, R4...)
+   - La taille (Distance/Reprises)
+   - Le club organisateur (via la couleur de fond de la cellule)
+4. **Verifier la reconnaissance des clubs** -- Le systeme affiche les couleurs detectees et le club associe a chacune. Verifier que chaque couleur correspond bien au bon club. Corriger si necessaire avant de poursuivre. Si une couleur n'est pas reconnue, le processus est interrompu.
+5. **Controler la previsualisation** -- Verifier le tableau recapitulatif de tous les tournois detectes (date, nom, mode, categorie, lieu, taille). Les finales sont mises en evidence.
+6. **Cliquer sur "Importer les tournois"** -- Tous les tournois sont crees dans le calendrier. Si un tournoi avec le meme identifiant existe deja, il est mis a jour.
+
+> **Identification du club organisateur :** Le systeme detecte le club a partir de la couleur de fond des cellules du fichier Excel. En alternative, le format **T1/A** (lettre du club apres le slash) est egalement reconnu. Si ni la couleur ni la lettre ne correspondent a un club connu, le processus s'arrete et demande de corriger le fichier ou de configurer la correspondance.
+
+> **Important :** Apres la generation, il est recommande de verifier les competitions creees dans le menu **Calendrier**. Les tournois peuvent etre modifies individuellement si necessaire (changement de date, de lieu, etc.).
 
 ---
 
