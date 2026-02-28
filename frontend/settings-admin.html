@@ -1097,14 +1097,10 @@
 
         <div style="margin-bottom: 20px; padding: 15px; background: #e7f3ff; border-left: 4px solid var(--color-primary, #1F4788); border-radius: 4px;">
           <strong>Points par position</strong>
-          <p style="margin: 5px 0 10px 0; color: #666; font-size: 13px;">Configurez les points attribués en fonction du classement final et du nombre de joueurs de chaque journée. Ajoutez une ligne par nombre de joueurs différent (ex: 8, 10, 12). Si aucune ligne spécifique n'est trouvée pour un nombre de joueurs, le barème le plus proche est utilisé.</p>
+          <p style="margin: 5px 0 10px 0; color: #666; font-size: 13px;">Configurez les points attribués en fonction du classement final. Si le tournoi a moins de joueurs que de positions, la règle de dégradation ci-dessous s'applique au dernier classé.</p>
 
           <div id="positionPointsMatrixEditor">
             <!-- Dynamically populated matrix table -->
-          </div>
-
-          <div style="margin-top: 10px;">
-            <button onclick="addPositionColumn()" class="btn" style="background: #6c757d; padding: 8px 15px; font-size: 13px;">+ Ajouter une position</button>
           </div>
 
           <div style="margin-top: 15px; padding-top: 12px; border-top: 1px solid #c5ddf5;">
