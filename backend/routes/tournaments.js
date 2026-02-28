@@ -3741,16 +3741,21 @@ function isClassificationPoule(pouleName) {
 }
 
 /**
- * Helper: sort players by match_points DESC then moyenne DESC.
+ * Helper: sort players by match_points DESC then moyenne DESC then best serie DESC.
+ * Supports custom key names for sorting by global vs local stats.
  */
 function sortByPerformance(players, mpKey = 'total_match_points', ptsKey = 'total_points', repKey = 'total_reprises') {
+  // Derive serie key from MP key prefix (e.g., '_globalMatchPoints' → '_globalSerie', or default 'max_serie')
+  const serieKey = mpKey.startsWith('_global') ? '_globalSerie' : 'max_serie';
   players.sort((a, b) => {
-    if (b[mpKey] !== a[mpKey]) return b[mpKey] - a[mpKey];
-    const avgA = a[repKey] > 0 ? a[ptsKey] / a[repKey] : 0;
-    const avgB = b[repKey] > 0 ? b[ptsKey] / b[repKey] : 0;
+    if ((b[mpKey] || 0) !== (a[mpKey] || 0)) return (b[mpKey] || 0) - (a[mpKey] || 0);
+    const avgA = (a[repKey] || 0) > 0 ? (a[ptsKey] || 0) / a[repKey] : 0;
+    const avgB = (b[repKey] || 0) > 0 ? (b[ptsKey] || 0) / b[repKey] : 0;
     if (avgB !== avgA) return avgB - avgA;
     // Tiebreaker: best serie
-    if ((b.max_serie || 0) !== (a.max_serie || 0)) return (b.max_serie || 0) - (a.max_serie || 0);
+    if ((b[serieKey] || b.max_serie || 0) !== (a[serieKey] || a.max_serie || 0)) {
+      return (b[serieKey] || b.max_serie || 0) - (a[serieKey] || a.max_serie || 0);
+    }
     return 0;
   });
 }
@@ -3875,7 +3880,8 @@ function computeMatchRankings(playerStats, allMatches) {
     }
 
     // Extract final positions using phase-aware algorithm
-    const classificationPositions = extractClassificationPositions(classificationPoules, regularPouleStats, matchesByPoule);
+    // Pass playerStats so classification can sort by total tournament match_points (not just classification-phase MP)
+    const classificationPositions = extractClassificationPositions(classificationPoules, regularPouleStats, matchesByPoule, playerStats);
 
     // Assign positions from classification results
     for (const cp of classificationPositions) {
@@ -3919,13 +3925,16 @@ function computeMatchRankings(playerStats, allMatches) {
  * Extract final classification from bracket/classification poules.
  * Uses phase numbers from raw matches to resolve conflicts when multiple rounds
  * cover the same position range (later phases override earlier ones).
+ * Within each position pair, sorts by TOTAL tournament match points (not just
+ * the classification-phase match points), matching CDB 93-94 behavior.
  *
  * @param {Object} classificationPoules - { pouleName: [{ licence, total_match_points, ... }] }
  * @param {Object} regularPoules - { pouleName: [{ licence, ... }] } (unused but kept for signature compat)
  * @param {Object} matchesByPoule - { pouleName: [rawMatch, ...] } for phase number extraction
+ * @param {Array} playerStats - Global per-player aggregated stats (for total tournament match_points)
  * @returns {Array} Sorted array of { licence, position }
  */
-function extractClassificationPositions(classificationPoules, regularPoules, matchesByPoule) {
+function extractClassificationPositions(classificationPoules, regularPoules, matchesByPoule, playerStats) {
   // Collect all position assignments with their phase number for priority resolution
   const allAssignments = []; // { licence, position, phase }
 
@@ -3994,8 +4003,24 @@ function extractClassificationPositions(classificationPoules, regularPoules, mat
 
     if (posStart === null) continue;
 
-    // Sort players within this classification poule by performance
-    sortByPerformance(players);
+    // Sort players within this classification poule by TOTAL tournament match points
+    // (not just this classification match's MP). The classification match determines
+    // which position pair you compete for; total tournament PM determines exact order.
+    if (playerStats && playerStats.length > 0) {
+      // Enrich each player with their global tournament stats for sorting
+      for (const p of players) {
+        const global = playerStats.find(ps => ps.licence === p.licence);
+        if (global) {
+          p._globalMatchPoints = global.total_match_points || 0;
+          p._globalPoints = global.total_points || 0;
+          p._globalReprises = global.total_reprises || 0;
+          p._globalSerie = global.max_serie || 0;
+        }
+      }
+      sortByPerformance(players, '_globalMatchPoints', '_globalPoints', '_globalReprises');
+    } else {
+      sortByPerformance(players);
+    }
 
     players.forEach((p, i) => {
       allAssignments.push({ licence: p.licence, position: posStart + i, phase: phaseNum });
