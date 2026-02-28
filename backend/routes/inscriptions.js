@@ -903,7 +903,7 @@ router.get('/tournoi/calendar', authenticateToken, (req, res) => {
     FROM tournoi_ext t
     LEFT JOIN inscriptions i ON t.tournoi_id = i.tournoi_id
     WHERE t.debut >= $1
-    AND LOWER(COALESCE(t.statut, '')) != 'annulé'
+    AND LOWER(COALESCE(t.status, '')) != 'cancelled'
     AND ($2::int IS NULL OR t.organization_id = $2)
     AND UPPER(COALESCE(t.nom, '')) NOT LIKE 'TEST%'
     GROUP BY t.tournoi_id
