@@ -3828,6 +3828,30 @@
     let ppMatrixData = {}; // { playerCount: { position: points, ... }, ... }
     let ppMaxPosition = 12;
 
+    // Sync DOM cell values back into ppMatrixData (preserves unsaved edits)
+    function syncMatrixFromDOM() {
+      const container = document.getElementById('positionPointsMatrixEditor');
+      const rows = container.querySelectorAll('tr[data-player-count]');
+      if (rows.length === 0) return;
+
+      const newData = {};
+      rows.forEach(row => {
+        let pc = parseInt(row.getAttribute('data-player-count'));
+        const pcInput = row.querySelector('.pp-pc-input');
+        if (pcInput) pc = parseInt(pcInput.value) || 0;
+
+        newData[pc] = {};
+        row.querySelectorAll('.pp-cell').forEach(cell => {
+          const pos = parseInt(cell.getAttribute('data-pos'));
+          const val = cell.value.trim();
+          if (val !== '' && !isNaN(parseInt(val))) {
+            newData[pc][pos] = parseInt(val);
+          }
+        });
+      });
+      ppMatrixData = newData;
+    }
+
     function renderPositionPointsMatrix() {
       const container = document.getElementById('positionPointsMatrixEditor');
       const playerCounts = Object.keys(ppMatrixData).map(Number).sort((a, b) => a - b);
@@ -3858,7 +3882,6 @@
       // Data rows (one per player count)
       html += '<tbody>';
       for (const pc of playerCounts) {
-        const label = pc === 0 ? 'Défaut' : pc;
         html += `<tr data-player-count="${pc}">`;
         html += `<td style="padding: 6px 10px; font-weight: 600; text-align: center; border: 1px solid #ddd; background: #f0f4f8;">`;
         if (pc === 0) {
@@ -3869,7 +3892,12 @@
         html += '</td>';
         for (let p = 1; p <= ppMaxPosition; p++) {
           const val = ppMatrixData[pc][p] !== undefined ? ppMatrixData[pc][p] : '';
-          html += `<td style="padding: 2px; border: 1px solid #ddd;"><input type="number" class="pp-cell" data-pc="${pc}" data-pos="${p}" value="${val}" min="0" placeholder="-" style="width: 100%; padding: 4px; border: none; text-align: center; font-size: 13px; background: transparent;"></td>`;
+          // For player-count rows (not default), disable cells beyond the player count
+          const isDisabled = (pc > 0 && p > pc);
+          const cellStyle = isDisabled
+            ? 'width: 100%; padding: 4px; border: none; text-align: center; font-size: 13px; background: #e9ecef; color: #aaa;'
+            : 'width: 100%; padding: 4px; border: none; text-align: center; font-size: 13px; background: transparent;';
+          html += `<td style="padding: 2px; border: 1px solid #ddd;${isDisabled ? ' background: #e9ecef;' : ''}"><input type="number" class="pp-cell" data-pc="${pc}" data-pos="${p}" value="${isDisabled ? '' : val}" min="0" placeholder="${isDisabled ? '' : '-'}" ${isDisabled ? 'disabled' : ''} style="${cellStyle}"></td>`;
         }
         html += `<td style="padding: 4px; border: 1px solid #ddd; text-align: center;"><button onclick="removePlayerCountRow(${pc})" style="background: none; border: none; color: #dc3545; cursor: pointer; font-size: 16px; padding: 2px 6px;" title="Supprimer cette ligne">✕</button></td>`;
         html += '</tr>';
@@ -3880,25 +3908,31 @@
     }
 
     function addPlayerCountRow() {
+      // Sync current edits from DOM before modifying ppMatrixData
+      syncMatrixFromDOM();
+
       // Find next unused player count
       const existingCounts = Object.keys(ppMatrixData).map(Number);
       let newCount = 6;
       while (existingCounts.includes(newCount)) newCount++;
 
+      // Copy values from the default row (or use decreasing fallback)
       ppMatrixData[newCount] = {};
-      // Pre-fill with decreasing points
-      for (let p = 1; p <= ppMaxPosition; p++) {
-        ppMatrixData[newCount][p] = Math.max(ppMaxPosition - p + 1, 0);
+      const defaultRow = ppMatrixData[0] || {};
+      for (let p = 1; p <= Math.min(newCount, ppMaxPosition); p++) {
+        ppMatrixData[newCount][p] = defaultRow[p] !== undefined ? defaultRow[p] : Math.max(ppMaxPosition - p + 1, 0);
       }
       renderPositionPointsMatrix();
     }
 
     function addPositionColumn() {
+      syncMatrixFromDOM();
       ppMaxPosition++;
       renderPositionPointsMatrix();
     }
 
     function removePlayerCountRow(pc) {
+      syncMatrixFromDOM();
       delete ppMatrixData[pc];
       renderPositionPointsMatrix();
     }
