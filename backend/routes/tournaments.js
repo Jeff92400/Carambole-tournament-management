@@ -4008,6 +4008,7 @@ function extractClassificationPositions(classificationPoules, regularPoules, mat
     // Sort players within this classification poule by TOTAL tournament match points
     // (not just this classification match's MP). The classification match determines
     // which position pair you compete for; total tournament PM determines exact order.
+    // Within-pair tiebreaker: PM → total points → serie (NOT moyenne — CDB 93-94 rule)
     if (playerStats && playerStats.length > 0) {
       // Enrich each player with their global tournament stats for sorting
       for (const p of players) {
@@ -4019,7 +4020,16 @@ function extractClassificationPositions(classificationPoules, regularPoules, mat
           p._globalSerie = global.max_serie || 0;
         }
       }
-      sortByPerformance(players, '_globalMatchPoints', '_globalPoints', '_globalReprises');
+      // Classification pair sort: PM desc → total points desc → serie desc
+      players.sort((a, b) => {
+        if ((b._globalMatchPoints || 0) !== (a._globalMatchPoints || 0))
+          return (b._globalMatchPoints || 0) - (a._globalMatchPoints || 0);
+        if ((b._globalPoints || 0) !== (a._globalPoints || 0))
+          return (b._globalPoints || 0) - (a._globalPoints || 0);
+        if ((b._globalSerie || 0) !== (a._globalSerie || 0))
+          return (b._globalSerie || 0) - (a._globalSerie || 0);
+        return 0;
+      });
     } else {
       sortByPerformance(players);
     }
