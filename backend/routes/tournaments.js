@@ -211,8 +211,8 @@ async function assignPositionPointsIfJournees(tournamentId, orgId) {
   const qualMode = await appSettings.getOrgSetting(orgId, 'qualification_mode');
   if (qualMode !== 'journees') return;
 
-  // Check if positions were set by bracket engine (import-matches with classification phases)
-  // tournament_matches records only exist when import-matches was used (not simple CSV import)
+  // Check if positions were set by bracket engine (import-matches or bracket.js)
+  // Detect data from either tournament_matches (E2i import) or bracket_matches (app bracket engine)
   let hasBracketData = false;
   try {
     const matchRow = await dbGetAsync(
@@ -221,6 +221,15 @@ async function assignPositionPointsIfJournees(tournamentId, orgId) {
     );
     hasBracketData = !!matchRow;
   } catch (e) { /* table may not exist yet */ }
+  if (!hasBracketData) {
+    try {
+      const bracketRow = await dbGetAsync(
+        'SELECT 1 FROM bracket_matches WHERE tournament_id = $1 AND winner_licence IS NOT NULL LIMIT 1',
+        [tournamentId]
+      );
+      hasBracketData = !!bracketRow;
+    } catch (e) { /* table may not exist yet */ }
+  }
 
   let results;
   if (hasBracketData) {
@@ -4159,5 +4168,10 @@ function cleanupFiles(files) {
     }
   }
 }
+
+// Export helper functions for bracket.js
+router.recomputeAllBonuses = recomputeAllBonuses;
+router.recalculateRankings = recalculateRankings;
+router.getPositionPointsLookup = getPositionPointsLookup;
 
 module.exports = router;
