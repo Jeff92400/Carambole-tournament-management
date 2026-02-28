@@ -1103,8 +1103,7 @@
             <!-- Dynamically populated matrix table -->
           </div>
 
-          <div style="margin-top: 10px; display: flex; gap: 10px; flex-wrap: wrap;">
-            <button onclick="addPlayerCountRow()" class="btn" style="background: #6c757d; padding: 8px 15px; font-size: 13px;">+ Ajouter un barème (nb joueurs)</button>
+          <div style="margin-top: 10px;">
             <button onclick="addPositionColumn()" class="btn" style="background: #6c757d; padding: 8px 15px; font-size: 13px;">+ Ajouter une position</button>
           </div>
 
@@ -3899,7 +3898,12 @@
             : 'width: 100%; padding: 4px; border: none; text-align: center; font-size: 13px; background: transparent;';
           html += `<td style="padding: 2px; border: 1px solid #ddd;${isDisabled ? ' background: #e9ecef;' : ''}"><input type="number" class="pp-cell" data-pc="${pc}" data-pos="${p}" value="${isDisabled ? '' : val}" min="0" placeholder="${isDisabled ? '' : '-'}" ${isDisabled ? 'disabled' : ''} style="${cellStyle}"></td>`;
         }
-        html += `<td style="padding: 4px; border: 1px solid #ddd; text-align: center;"><button onclick="removePlayerCountRow(${pc})" style="background: none; border: none; color: #dc3545; cursor: pointer; font-size: 16px; padding: 2px 6px;" title="Supprimer cette ligne">✕</button></td>`;
+        // Only show delete button for non-default rows
+        if (pc === 0) {
+          html += '<td style="padding: 4px; border: 1px solid #ddd;"></td>';
+        } else {
+          html += `<td style="padding: 4px; border: 1px solid #ddd; text-align: center;"><button onclick="removePlayerCountRow(${pc})" style="background: none; border: none; color: #dc3545; cursor: pointer; font-size: 16px; padding: 2px 6px;" title="Supprimer cette ligne">✕</button></td>`;
+        }
         html += '</tr>';
       }
       html += '</tbody></table></div>';
