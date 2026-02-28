@@ -14,14 +14,6 @@
     return day + '/' + month + '/' + year;
   }
 
-  function formatStatut(statut) {
-    if (!statut) return '<span style="color:#28a745;">Ouvert</span>';
-    var s = statut.toLowerCase();
-    if (s === 'annulé') return '<span style="color:#dc3545;">Annulé</span>';
-    if (s === 'clôturé' || s === 'cloture') return '<span style="color:#6c757d;">Clôturé</span>';
-    if (s === 'complet') return '<span style="color:#ffc107;">Complet</span>';
-    return '<span>' + statut + '</span>';
-  }
 
   function doFetch(url) {
     var fetchFn = window.authFetch || function (u) { return fetch(u, { headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') } }); };
@@ -190,7 +182,6 @@
     html += '<th style="padding:10px 12px;text-align:left;">Catégorie</th>';
     html += '<th style="padding:10px 12px;text-align:left;">Lieu</th>';
     html += '<th style="padding:10px 12px;text-align:center;">Inscrits</th>';
-    html += '<th style="padding:10px 12px;text-align:center;">Statut</th>';
     html += '</tr></thead><tbody>';
 
     for (var i = 0; i < rows.length; i++) {
@@ -203,7 +194,6 @@
       html += '<td style="padding:8px 12px;">' + (t.categorie || '') + '</td>';
       html += '<td style="padding:8px 12px;">' + (t.lieu || t.lieu_2 || '') + '</td>';
       html += '<td style="padding:8px 12px;text-align:center;font-weight:600;">' + (t.inscrit_count || 0) + '</td>';
-      html += '<td style="padding:8px 12px;text-align:center;">' + formatStatut(t.statut) + '</td>';
       html += '</tr>';
     }
 
