@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tableau de la Journée - Billard Ranking</title>
+  <link rel="icon" type="image/png" href="images/FrenchBillard-Icon-small.png">
+  <link rel="stylesheet" href="css/styles.css">
+  <script src="js/branding.js?v=236"></script>
+  <style>
+    .bracket-section { margin-bottom: 24px; }
+    .bracket-section h3 {
+      font-size: 15px; color: var(--color-primary, #1F4788); margin: 0 0 12px 0;
+      padding-bottom: 6px; border-bottom: 2px solid var(--color-primary, #1F4788);
+    }
+    .match-card {
+      background: #fff; border-radius: 10px; padding: 16px; margin-bottom: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08); border-left: 4px solid #ccc;
+    }
+    .match-card.completed { border-left-color: #28a745; }
+    .match-card.pending { border-left-color: #ffc107; }
+    .match-label {
+      font-size: 12px; text-transform: uppercase; color: #888; margin-bottom: 8px; font-weight: 600;
+    }
+    .match-players { display: flex; flex-direction: column; gap: 8px; }
+    .player-row {
+      display: flex; align-items: center; gap: 12px; padding: 8px 12px;
+      border-radius: 8px; background: #f8f9fa; transition: background 0.2s;
+    }
+    .player-row.winner { background: #d4edda; font-weight: 600; }
+    .player-row .seed { width: 28px; height: 28px; border-radius: 50%; display: flex;
+      align-items: center; justify-content: center; font-size: 12px; font-weight: bold;
+      background: var(--color-secondary, #667eea); color: #fff; flex-shrink: 0;
+    }
+    .player-row .name { flex: 1; font-size: 14px; }
+    .player-row .licence { font-size: 11px; color: #999; }
+    .player-row input {
+      width: 60px; padding: 4px 8px; border: 1px solid #ddd; border-radius: 6px;
+      text-align: center; font-size: 13px;
+    }
+    .player-row input:focus { border-color: var(--color-primary, #1F4788); outline: none; }
+    .match-actions { margin-top: 8px; text-align: right; }
+    .match-actions button {
+      padding: 5px 14px; border: none; border-radius: 6px; font-size: 12px; cursor: pointer;
+      background: var(--color-secondary, #667eea); color: #fff; transition: opacity 0.2s;
+    }
+    .match-actions button:hover { opacity: 0.85; }
+    .match-actions button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .qualified-list {
+      display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px;
+    }
+    .qualified-chip {
+      display: flex; align-items: center; gap: 6px; padding: 6px 12px;
+      background: #e8f4f8; border-radius: 20px; font-size: 13px;
+    }
+    .qualified-chip .seed {
+      width: 22px; height: 22px; border-radius: 50%; display: flex;
+      align-items: center; justify-content: center; font-size: 11px; font-weight: bold;
+      background: var(--color-primary, #1F4788); color: #fff;
+    }
+    .bye-notice {
+      padding: 10px 16px; background: #fff3cd; border-radius: 8px;
+      font-size: 13px; color: #856404; margin-bottom: 12px;
+    }
+    .action-bar {
+      display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap;
+    }
+    .action-bar .btn {
+      padding: 10px 20px; border: none; border-radius: 8px; font-size: 14px;
+      font-weight: 600; cursor: pointer; transition: all 0.2s;
+    }
+    .btn-generate {
+      background: linear-gradient(135deg, var(--color-secondary, #667eea), var(--color-secondary-dark, #5a6fd6));
+      color: #fff;
+    }
+    .btn-finalize {
+      background: linear-gradient(135deg, #28a745, #218838);
+      color: #fff;
+    }
+    .btn-back { background: #f0f0f0; color: #333; }
+    .status-bar {
+      padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 13px;
+    }
+    .status-info { background: #e8f4f8; color: #0c5460; }
+    .status-success { background: #d4edda; color: #155724; }
+    .status-warning { background: #fff3cd; color: #856404; }
+    .vs-divider {
+      text-align: center; font-size: 12px; color: #999; font-weight: bold; padding: 2px 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="navbar">
+      <h2><img id="app-header-icon" src="images/FrenchBillard-Icon-small.png" alt="" style="height: 48px; width: 48px; vertical-align: middle; margin-right: 8px;" onerror="this.src='images/FrenchBillard-Icon-small.png';"><span id="app-org-name" data-page-title="Phase finale">CDB</span></h2>
+      <div class="nav-links">
+        <a href="dashboard.html">Accueil</a>
+        <a href="rankings.html" class="nav-tooltip" data-tooltip="Classement par catégorie">Classements</a>
+        <a href="generate-poules.html" class="not-club nav-tooltip" data-tooltip="Compétitions / Convocations">Compétitions</a>
+        <a href="settings.html" class="admin-only nav-tooltip" data-tooltip="Paramètres">Paramètres</a>
+        <a href="#" id="logoutBtn" class="nav-logout">Déconnexion</a>
+      </div>
+    </div>
+
+    <div id="errorMessage" class="error" style="display: none;"></div>
+
+    <div id="loadingBracket" class="loading">
+      <div class="spinner"></div>
+      Chargement...
+    </div>
+
+    <div id="bracketContent" style="display: none;">
+      <div class="action-bar">
+        <button class="btn btn-back" onclick="history.back()">Retour</button>
+        <button id="generateBtn" class="btn btn-generate" style="display:none;">Générer le tableau</button>
+        <button id="finalizeBtn" class="btn btn-finalize" style="display:none;">Valider les positions</button>
+      </div>
+
+      <div id="statusBar" class="status-bar status-info" style="display:none;"></div>
+
+      <!-- Qualified players -->
+      <div id="qualifiedSection" class="bracket-section" style="display:none;">
+        <h3>Joueurs qualifiés pour le tableau</h3>
+        <div id="qualifiedList" class="qualified-list"></div>
+      </div>
+
+      <!-- Bye notice -->
+      <div id="byeNotice" class="bye-notice" style="display:none;"></div>
+
+      <!-- Semi-finals -->
+      <div id="sfSection" class="bracket-section" style="display:none;">
+        <h3>Demi-finales</h3>
+        <div id="sfMatches"></div>
+      </div>
+
+      <!-- Finale + Petite Finale -->
+      <div id="finalsSection" class="bracket-section" style="display:none;">
+        <h3>Finale / Petite Finale</h3>
+        <div id="finalsMatches"></div>
+      </div>
+
+      <!-- Classification -->
+      <div id="classificationSection" class="bracket-section" style="display:none;">
+        <h3>Matchs de classement</h3>
+        <div id="classificationMatches"></div>
+      </div>
+
+      <!-- Final positions -->
+      <div id="positionsSection" class="bracket-section" style="display:none;">
+        <h3>Classement final</h3>
+        <div id="positionsTable"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/auth-utils.js?v=236"></script>
+  <script src="js/app-branding.js?v=236"></script>
+  <script>
+    const API_URL = '/api';
+
+    if (!requireAuth()) throw new Error('Not authenticated');
+    const token = localStorage.getItem('token');
+    const userRole = localStorage.getItem('userRole');
+    const isAdmin = userRole === 'admin';
+
+    // Get tournament ID from URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const tournamentId = urlParams.get('id');
+
+    if (!tournamentId) {
+      document.getElementById('errorMessage').textContent = 'ID du tournoi manquant';
+      document.getElementById('errorMessage').style.display = 'block';
+      document.getElementById('loadingBracket').style.display = 'none';
+      throw new Error('Missing tournament ID');
+    }
+
+    document.getElementById('logoutBtn').addEventListener('click', (e) => {
+      e.preventDefault();
+      logout();
+    });
+
+    let bracketData = null;
+
+    async function loadBracket() {
+      try {
+        const response = await authFetch(`${API_URL}/bracket/${tournamentId}`);
+        if (!response.ok) throw new Error('Erreur ' + response.status);
+        bracketData = await response.json();
+
+        document.getElementById('loadingBracket').style.display = 'none';
+        document.getElementById('bracketContent').style.display = 'block';
+
+        if (bracketData.matches.length === 0) {
+          // No bracket generated yet — show generate button
+          showStatus(`${bracketData.results.length} joueurs — ${bracketData.mode === 'single_poule' ? 'poule unique (pas de tableau)' : 'prêt à générer le tableau'}`, 'info');
+          if (bracketData.mode !== 'single_poule' && isAdmin) {
+            document.getElementById('generateBtn').style.display = '';
+          }
+        } else {
+          renderBracket(bracketData);
+        }
+      } catch (error) {
+        console.error('Error loading bracket:', error);
+        document.getElementById('loadingBracket').style.display = 'none';
+        document.getElementById('errorMessage').textContent = error.message;
+        document.getElementById('errorMessage').style.display = 'block';
+      }
+    }
+
+    function showStatus(msg, type) {
+      const bar = document.getElementById('statusBar');
+      bar.textContent = msg;
+      bar.className = `status-bar status-${type}`;
+      bar.style.display = 'block';
+    }
+
+    function renderBracket(data) {
+      const { matches, results, settings } = data;
+      const sfMatches = matches.filter(m => m.phase === 'SF');
+      const finaleMatch = matches.find(m => m.phase === 'F');
+      const pfMatch = matches.find(m => m.phase === 'PF');
+      const cl1Matches = matches.filter(m => m.phase === 'CL1').sort((a, b) => a.match_order - b.match_order);
+      const cl2Matches = matches.filter(m => m.phase === 'CL2').sort((a, b) => a.match_order - b.match_order);
+
+      const allDone = matches.every(m => m.winner_licence || !m.player1_licence || !m.player2_licence);
+      const requiredDone = matches
+        .filter(m => ['SF', 'F', 'PF', 'CL1'].includes(m.phase) && m.player1_licence && m.player2_licence)
+        .every(m => m.winner_licence);
+
+      // Show qualified players
+      const qualified = results.slice(0, settings.bracketSize);
+      if (qualified.length > 0) {
+        document.getElementById('qualifiedSection').style.display = '';
+        document.getElementById('qualifiedList').innerHTML = qualified.map((r, i) =>
+          `<div class="qualified-chip"><span class="seed">${i + 1}</span> ${r.player_name} <span class="licence">(${r.licence})</span></div>`
+        ).join('');
+      }
+
+      // Semi-finals
+      if (sfMatches.length > 0) {
+        document.getElementById('sfSection').style.display = '';
+        document.getElementById('sfMatches').innerHTML = sfMatches.map(m => renderMatchCard(m)).join('');
+      }
+
+      // Finale + PF
+      if (finaleMatch || pfMatch) {
+        document.getElementById('finalsSection').style.display = '';
+        let html = '';
+        if (finaleMatch) html += renderMatchCard(finaleMatch);
+        if (pfMatch) html += renderMatchCard(pfMatch);
+        document.getElementById('finalsMatches').innerHTML = html;
+      }
+
+      // Classification
+      if (cl1Matches.length > 0 || cl2Matches.length > 0) {
+        document.getElementById('classificationSection').style.display = '';
+        let html = cl1Matches.map(m => renderMatchCard(m)).join('');
+        if (cl2Matches.length > 0) {
+          html += '<h4 style="margin: 16px 0 8px; color: #666; font-size: 13px;">Round 2</h4>';
+          html += cl2Matches.map(m => renderMatchCard(m)).join('');
+        }
+        document.getElementById('classificationMatches').innerHTML = html;
+      }
+
+      // Check bye player
+      const nq = results.length - settings.bracketSize;
+      if (nq % 2 === 1 && results.length > settings.bracketSize) {
+        const byePlayer = results[settings.bracketSize];
+        document.getElementById('byeNotice').style.display = '';
+        document.getElementById('byeNotice').textContent = `Exempt : ${byePlayer.player_name} (${byePlayer.licence}) — classé ${settings.bracketSize + 1}e directement`;
+      }
+
+      // Finalize button
+      if (requiredDone && isAdmin) {
+        document.getElementById('finalizeBtn').style.display = '';
+      }
+
+      // Status
+      const completedCount = matches.filter(m => m.winner_licence).length;
+      showStatus(`${completedCount}/${matches.length} matchs joués`, completedCount === matches.length ? 'success' : 'warning');
+    }
+
+    function renderMatchCard(match) {
+      const isDone = !!match.winner_licence;
+      const isPlayable = match.player1_licence && match.player2_licence && match.player1_licence !== '';
+      const statusClass = isDone ? 'completed' : (isPlayable ? 'pending' : '');
+
+      const p1Winner = match.winner_licence === match.player1_licence;
+      const p2Winner = match.winner_licence === match.player2_licence;
+
+      return `
+        <div class="match-card ${statusClass}" data-match-id="${match.id}">
+          <div class="match-label">${match.match_label || match.phase}</div>
+          <div class="match-players">
+            <div class="player-row ${p1Winner ? 'winner' : ''}">
+              <div class="name">${match.player1_name || '...'}</div>
+              <input type="number" min="0" value="${match.player1_points || ''}" placeholder="Pts"
+                     id="p1pts-${match.id}" ${!isPlayable || !isAdmin ? 'disabled' : ''}>
+              <input type="number" min="0" value="${match.player1_reprises || ''}" placeholder="Rep"
+                     id="p1rep-${match.id}" ${!isPlayable || !isAdmin ? 'disabled' : ''}>
+            </div>
+            <div class="vs-divider">VS</div>
+            <div class="player-row ${p2Winner ? 'winner' : ''}">
+              <div class="name">${match.player2_name || '...'}</div>
+              <input type="number" min="0" value="${match.player2_points || ''}" placeholder="Pts"
+                     id="p2pts-${match.id}" ${!isPlayable || !isAdmin ? 'disabled' : ''}>
+              <input type="number" min="0" value="${match.player2_reprises || ''}" placeholder="Rep"
+                     id="p2rep-${match.id}" ${!isPlayable || !isAdmin ? 'disabled' : ''}>
+            </div>
+          </div>
+          ${isPlayable && isAdmin ? `
+            <div class="match-actions">
+              <button onclick="saveMatch(${match.id})" ${isDone ? '' : ''}>
+                ${isDone ? 'Modifier' : 'Valider'}
+              </button>
+            </div>
+          ` : ''}
+        </div>
+      `;
+    }
+
+    async function saveMatch(matchId) {
+      const p1pts = parseInt(document.getElementById(`p1pts-${matchId}`).value) || 0;
+      const p1rep = parseInt(document.getElementById(`p1rep-${matchId}`).value) || 0;
+      const p2pts = parseInt(document.getElementById(`p2pts-${matchId}`).value) || 0;
+      const p2rep = parseInt(document.getElementById(`p2rep-${matchId}`).value) || 0;
+
+      try {
+        const response = await authFetch(`${API_URL}/bracket/${tournamentId}/match/${matchId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            player1_points: p1pts,
+            player1_reprises: p1rep,
+            player2_points: p2pts,
+            player2_reprises: p2rep,
+          }),
+        });
+
+        if (!response.ok) {
+          const err = await response.json();
+          alert(err.error || 'Erreur');
+          return;
+        }
+
+        // Reload to reflect changes (SF results may populate F/PF)
+        loadBracket();
+      } catch (error) {
+        console.error('Error saving match:', error);
+        alert('Erreur: ' + error.message);
+      }
+    }
+
+    // Generate bracket
+    document.getElementById('generateBtn').addEventListener('click', async () => {
+      if (!confirm('Générer le tableau à partir des résultats de poule ?')) return;
+
+      const btn = document.getElementById('generateBtn');
+      btn.disabled = true;
+      btn.textContent = 'Génération...';
+
+      try {
+        const response = await authFetch(`${API_URL}/bracket/${tournamentId}/generate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+        });
+
+        if (!response.ok) {
+          const err = await response.json();
+          alert(err.error || 'Erreur');
+          return;
+        }
+
+        loadBracket();
+      } catch (error) {
+        console.error('Error generating bracket:', error);
+        alert('Erreur: ' + error.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Générer le tableau';
+      }
+    });
+
+    // Finalize positions
+    document.getElementById('finalizeBtn').addEventListener('click', async () => {
+      if (!confirm('Valider les positions finales et recalculer les classements ?')) return;
+
+      const btn = document.getElementById('finalizeBtn');
+      btn.disabled = true;
+      btn.textContent = 'Validation...';
+
+      try {
+        const response = await authFetch(`${API_URL}/bracket/${tournamentId}/finalize`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+        });
+
+        if (!response.ok) {
+          const err = await response.json();
+          alert(err.error || 'Erreur');
+          return;
+        }
+
+        const result = await response.json();
+
+        // Show final positions
+        document.getElementById('positionsSection').style.display = '';
+        let posHtml = '<table class="data-table" style="width:100%;"><thead><tr><th>CLT</th><th>Licence</th></tr></thead><tbody>';
+        result.positions.forEach(p => {
+          posHtml += `<tr><td style="text-align:center;font-weight:bold;">${p.position}</td><td>${p.licence}</td></tr>`;
+        });
+        posHtml += '</tbody></table>';
+        document.getElementById('positionsTable').innerHTML = posHtml;
+
+        showStatus(`Positions validées pour ${result.totalPlayers} joueurs. Classements recalculés.`, 'success');
+        btn.style.display = 'none';
+      } catch (error) {
+        console.error('Error finalizing:', error);
+        alert('Erreur: ' + error.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Valider les positions';
+      }
+    });
+
+    // Init
+    loadBracket();
+  </script>
+  <script src="js/help-button.js?v=236"></script>
+  <script src="js/upcoming-tournaments.js?v=236"></script>
+</body>
+</html>

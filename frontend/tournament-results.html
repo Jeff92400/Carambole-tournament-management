@@ -146,6 +146,9 @@
         <a id="viewRankingsBtn" href="rankings.html" class="btn" style="background: #17a2b8; text-decoration: none;">
           📊 Voir le classement de la catégorie
         </a>
+        <a id="viewBracketBtn" href="#" class="btn" style="background: var(--color-primary, #1F4788); text-decoration: none; display: none; margin-left: 8px;">
+          Phase finale (Tableau)
+        </a>
       </div>
       <div class="card">
         <h3 id="tournamentTitle" style="margin-bottom: 15px;">-</h3>
@@ -439,6 +442,13 @@
 
         // Detect if any result has position_points (journées mode)
         const hasPositionPoints = data.results.some(r => r.position_points > 0);
+
+        // Show bracket button for journées mode tournaments
+        if (hasPositionPoints && data.tournament && data.tournament.id) {
+          const bracketBtn = document.getElementById('viewBracketBtn');
+          bracketBtn.href = `tournament-bracket.html?id=${data.tournament.id}`;
+          bracketBtn.style.display = '';
+        }
 
         // Detect if tournament has match-level data (E2i import)
         const hasMatchData = data.hasMatchData || false;
