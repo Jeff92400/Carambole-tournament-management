@@ -422,6 +422,9 @@
           bonusMoyenneInfoDiv.style.display = 'block';
         }
 
+        // Detect if any result has position_points (journées mode) — must be before sort
+        const hasPositionPoints = data.results.some(r => r.position_points > 0);
+
         // Sort results depending on mode
         if (hasPositionPoints) {
           // Journées mode: sort by classification position (Clt Finale) by default
@@ -450,9 +453,6 @@
         // Dynamic bonus columns from API
         const bonusColumns = data.bonusColumns || [];
         const hasBonusCols = bonusColumns.length > 0;
-
-        // Detect if any result has position_points (journées mode)
-        const hasPositionPoints = data.results.some(r => r.position_points > 0);
 
         // Show bracket button for journées mode tournaments
         if (hasPositionPoints && data.tournament && data.tournament.id) {
