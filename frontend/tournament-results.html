@@ -464,19 +464,19 @@
             <th>Joueur</th>
             <th>Club</th>`;
           if (hasPositionPoints) {
-            // Journées mode: CDB 93-94 format
+            // Journées mode: CDB 93-94 format — all columns always visible
             // CLT | Licence | Joueur | Club | Clt poule | Clt Finale | Pts clt | bonus | Pts Clt Total | PM | Pts | R | MS | MGP | MPART
-            if (hasPouleRank) headerHTML += '<th style="text-align: center;">Clt poule</th>';
+            headerHTML += '<th style="text-align: center;">Clt poule</th>';
             headerHTML += '<th style="text-align: center;">Clt Finale</th>';
             headerHTML += '<th style="text-align: center;">Pts clt</th>';
-            headerHTML += bonusColumns.map(col => `<th style="text-align: center;">${col.label}</th>`).join('');
-            if (hasBonusCols) headerHTML += '<th style="text-align: center;">Pts Clt Total</th>';
-            if (hasPM) headerHTML += '<th style="text-align: center;">PM</th>';
+            headerHTML += '<th style="text-align: center;">bonus</th>';
+            headerHTML += '<th style="text-align: center;">Pts Clt Total</th>';
+            headerHTML += '<th style="text-align: center;">PM</th>';
             headerHTML += '<th style="text-align: center;">Pts</th>';
             headerHTML += '<th style="text-align: center;">R</th>';
             headerHTML += '<th style="text-align: center;">MS</th>';
             headerHTML += '<th style="text-align: center;">MGP</th>';
-            if (hasMPART) headerHTML += '<th style="text-align: center;">MPART</th>';
+            headerHTML += '<th style="text-align: center;">MPART</th>';
           } else {
             // Standard mode (CDB92)
             if (hasPouleRank) headerHTML += '<th style="text-align: center;">Clt poule</th>';
@@ -535,7 +535,10 @@
 
           // Create cells — column order depends on mode
           if (hasPositionPoints) {
-            // Journées mode: CLT | Licence | Joueur | Club | Clt poule | Clt Finale | Pts clt | bonus | Pts Clt Total | PM | Pts | R | MS | MGP | MPART
+            // Journées mode: all columns always present (CDB 93-94 format)
+            const bonusVal = totalBonus;
+            const bonusColor = bonusVal > 0 ? '#1F4788' : '#999';
+            const mpart = result.meilleure_partie ? result.meilleure_partie.toFixed(3) : '-';
             row.innerHTML = `
               <td style="text-align: center; font-weight: bold;">${index + 1}</td>
               <td>${result.licence}</td>
@@ -545,17 +548,17 @@
                 </a>
               </td>
               <td></td>
-              ${pouleRankHTML}
+              <td style="text-align: center;">${result.poule_rank || '-'}</td>
               <td style="text-align: center;">${index + 1}</td>
               <td style="text-align: center; font-weight: bold; color: #1F4788;">${posPointsVal}</td>
-              ${bonusCellsHTML}
-              ${hasBonusCols ? `<td style="text-align: center; font-weight: bold; color: var(--color-primary, #1F4788);">${posPointsVal + totalBonus}</td>` : ''}
-              ${pmHTML}
+              <td style="text-align: center; color: ${bonusColor}; font-weight: ${bonusVal > 0 ? 'bold' : 'normal'};">${bonusVal > 0 ? '+' + bonusVal : '0'}</td>
+              <td style="text-align: center; font-weight: bold; color: var(--color-primary, #1F4788);">${posPointsVal + bonusVal}</td>
+              <td style="text-align: center;">${result.parties_menees || '-'}</td>
               <td style="text-align: center;">${result.points}</td>
               <td style="text-align: center;">${result.reprises}</td>
               <td style="text-align: center;">${result.serie}</td>
               <td style="text-align: center;">${moyenne}</td>
-              ${mpartHTML}
+              <td style="text-align: center;">${mpart}</td>
             `;
           } else {
             // Standard mode (CDB92)
