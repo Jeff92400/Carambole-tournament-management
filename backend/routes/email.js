@@ -120,6 +120,10 @@ function buildUniversalVariables(data = {}, emailSettings = {}, contactEmail = '
     t1_position: data.t1_position || '',
     deadline_date: data.deadline_date || '',
 
+    // Game parameter variables
+    distance: data.distance || '',
+    reprises: data.reprises || '',
+
     // Club reminder variables
     club_name: data.club_name || '',
     time: data.time || '',
@@ -2621,6 +2625,27 @@ router.post('/inscription-confirmation', async (req, res) => {
       ? new Date(tournament_date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
       : 'Date à définir';
 
+    // Look up game parameters (distance/reprises) for this mode+category
+    let emailDistance = '';
+    let emailReprises = '';
+    if (mode && category) {
+      try {
+        const gameParams = await new Promise((resolve) => {
+          db.get(
+            'SELECT distance_normale, reprises FROM game_parameters WHERE UPPER(REPLACE(mode, \' \', \'\')) = UPPER(REPLACE($1, \' \', \'\')) AND UPPER(categorie) = UPPER($2) AND ($3::int IS NULL OR organization_id = $3)',
+            [mode, category, orgId],
+            (err, row) => resolve(err ? null : row)
+          );
+        });
+        if (gameParams) {
+          emailDistance = gameParams.distance_normale || '';
+          emailReprises = gameParams.reprises || '';
+        }
+      } catch (e) {
+        console.log('Could not look up game parameters for inscription email:', e.message);
+      }
+    }
+
     // Build universal variables (all common variables available)
     const finaleNumber = await getFinaleTournamentNumber(orgId);
     const variables = buildUniversalVariables({
@@ -2632,7 +2657,9 @@ router.post('/inscription-confirmation', async (req, res) => {
       mode,
       category,
       tournament_date: dateStr,
-      location: location || 'Lieu à définir'
+      location: location || 'Lieu à définir',
+      distance: emailDistance,
+      reprises: emailReprises
     }, emailSettings, contactEmail);
 
     const subject = replaceTemplateVariables(template.subject, variables);
@@ -2753,6 +2780,27 @@ router.post('/inscription-cancellation', async (req, res) => {
       ? new Date(tournament_date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
       : 'Date à définir';
 
+    // Look up game parameters (distance/reprises) for this mode+category
+    let emailDistance2 = '';
+    let emailReprises2 = '';
+    if (mode && category) {
+      try {
+        const gameParams2 = await new Promise((resolve) => {
+          db.get(
+            'SELECT distance_normale, reprises FROM game_parameters WHERE UPPER(REPLACE(mode, \' \', \'\')) = UPPER(REPLACE($1, \' \', \'\')) AND UPPER(categorie) = UPPER($2) AND ($3::int IS NULL OR organization_id = $3)',
+            [mode, category, orgId],
+            (err, row) => resolve(err ? null : row)
+          );
+        });
+        if (gameParams2) {
+          emailDistance2 = gameParams2.distance_normale || '';
+          emailReprises2 = gameParams2.reprises || '';
+        }
+      } catch (e) {
+        console.log('Could not look up game parameters for cancellation email:', e.message);
+      }
+    }
+
     // Build universal variables (all common variables available)
     const finaleNumber2 = await getFinaleTournamentNumber(orgId);
     const variables = buildUniversalVariables({
@@ -2764,7 +2812,9 @@ router.post('/inscription-cancellation', async (req, res) => {
       mode,
       category,
       tournament_date: dateStr,
-      location: location || 'Non défini'
+      location: location || 'Non défini',
+      distance: emailDistance2,
+      reprises: emailReprises2
     }, emailSettings, contactEmail);
 
     const subject = replaceTemplateVariables(template.subject, variables);
