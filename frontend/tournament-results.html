@@ -175,11 +175,8 @@
       <div class="card">
         <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
           <h3 id="tableTitle" style="margin: 0;">Classement du Tournoi</h3>
-          <div id="sortToggleContainer" style="display: none;">
-            <button id="sortToggleBtn" class="btn" style="font-size: 12px; padding: 6px 14px; background: var(--color-secondary, #667eea); border: none; color: white; border-radius: 6px; cursor: pointer;">
-              Tri : Clt Finale ▼
-            </button>
-          </div>
+          <!-- Sort toggle removed — single sort order by Clt Finale -->
+          <div id="sortToggleContainer" style="display: none;"></div>
         </div>
         <div class="table-container">
           <table>
@@ -574,9 +571,9 @@
           });
         }
 
-        // ── Sort toggle for journées mode ──
-        let currentSort = 'position'; // 'position' (Clt Finale) or 'total' (Pts Clt Total)
-        if (hasPositionPoints) {
+        // ── Sort toggle removed — always sort by Clt Finale ──
+        let currentSort = 'position';
+        if (false) { // Sort toggle disabled
           const toggleContainer = document.getElementById('sortToggleContainer');
           const toggleBtn = document.getElementById('sortToggleBtn');
           toggleContainer.style.display = '';
