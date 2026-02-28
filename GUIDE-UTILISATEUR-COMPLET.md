@@ -92,6 +92,26 @@ Sur chaque page de l'application, un bouton rond **?** est affiche en bas a droi
 
 ---
 
+## Bouton "A venir"
+
+Sur chaque page de l'application, un lien **A venir** est affiche dans la barre de navigation (a gauche du bouton d'aide **?**). En cliquant dessus, une fenetre modale s'ouvre et affiche la liste de tous les tournois a venir (a partir de la date du jour).
+
+### Informations affichees
+
+Le tableau presente pour chaque tournoi :
+
+- **Date** : date de debut du tournoi
+- **Nom** : intitule du tournoi
+- **Mode** : discipline de jeu
+- **Categorie** : niveau de competition
+- **Lieu** : club ou salle accueillant le tournoi
+- **Inscrits** : nombre de joueurs inscrits (hors forfaits et desinscrits)
+- **Statut** : etat du tournoi (ouvert, cloture, etc.)
+
+> **Astuce :** ce bouton est accessible a tous les utilisateurs (administrateur, editeur, lecteur, club). Il permet de consulter rapidement le calendrier sans quitter la page en cours.
+
+---
+
 ## Menu : Accueil (Dashboard)
 
 ### Acces

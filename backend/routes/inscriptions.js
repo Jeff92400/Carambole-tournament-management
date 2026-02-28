@@ -889,6 +889,36 @@ router.get('/tournoi/upcoming', authenticateToken, (req, res) => {
   });
 });
 
+// Get all upcoming tournaments (from today onwards) for calendar modal
+router.get('/tournoi/calendar', authenticateToken, (req, res) => {
+  const orgId = req.user.organizationId || null;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const startDate = today.toISOString().split('T')[0];
+
+  const query = `
+    SELECT t.*,
+           COUNT(CASE WHEN i.inscription_id IS NOT NULL AND (i.forfait IS NULL OR i.forfait != 1) AND (i.statut IS NULL OR i.statut != 'désinscrit') THEN 1 END) as inscrit_count
+    FROM tournoi_ext t
+    LEFT JOIN inscriptions i ON t.tournoi_id = i.tournoi_id
+    WHERE t.debut >= $1
+    AND LOWER(COALESCE(t.statut, '')) != 'annulé'
+    AND ($2::int IS NULL OR t.organization_id = $2)
+    AND UPPER(COALESCE(t.nom, '')) NOT LIKE 'TEST%'
+    GROUP BY t.tournoi_id
+    ORDER BY t.debut ASC, t.mode, t.categorie
+  `;
+
+  db.all(query, [startDate, orgId], (err, rows) => {
+    if (err) {
+      console.error('Error fetching calendar tournaments:', err);
+      return res.status(500).json({ error: err.message });
+    }
+    res.json(rows || []);
+  });
+});
+
 // Get upcoming finals (within next 4 weeks)
 router.get('/finales/upcoming', authenticateToken, async (req, res) => {
   const orgId = req.user.organizationId || null;
