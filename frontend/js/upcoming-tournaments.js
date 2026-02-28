@@ -131,9 +131,9 @@
 
     var btn = document.createElement('a');
     btn.href = '#';
-    btn.textContent = 'A venir';
+    btn.textContent = 'Tournois à venir';
     btn.className = 'nav-tooltip';
-    btn.setAttribute('data-tooltip', 'Tournois à venir');
+    btn.setAttribute('data-tooltip', 'Voir tous les tournois à venir');
     btn.style.cssText = 'font-size:14px;cursor:pointer;';
     btn.addEventListener('click', function (e) {
       e.preventDefault();
@@ -141,6 +141,13 @@
     });
 
     navLinks.insertBefore(btn, insertBefore);
+
+    // Hide "Classements" nav link for admin — accessible via quick actions & tournament pages
+    var role = localStorage.getItem('userRole');
+    if (role === 'admin') {
+      var classementsLink = navLinks.querySelector('a[href="rankings.html"]');
+      if (classementsLink) classementsLink.style.display = 'none';
+    }
   }
 
   if (document.readyState === 'loading') {

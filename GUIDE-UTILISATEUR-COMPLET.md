@@ -92,9 +92,9 @@ Sur chaque page de l'application, un bouton rond **?** est affiche en bas a droi
 
 ---
 
-## Bouton "A venir"
+## Bouton "Tournois a venir"
 
-Sur chaque page de l'application, un lien **A venir** est affiche dans la barre de navigation (a gauche du bouton d'aide **?**). En cliquant dessus, une fenetre modale s'ouvre et affiche la liste de tous les tournois a venir (a partir de la date du jour).
+Sur chaque page de l'application, un lien **Tournois a venir** est affiche dans la barre de navigation (a gauche du bouton d'aide **?**). En cliquant dessus, une fenetre modale s'ouvre et affiche la liste de tous les tournois a venir (a partir de la date du jour).
 
 ### Informations affichees
 
