@@ -2181,6 +2181,85 @@ router.get('/:id/results', authenticateToken, async (req, res) => {
       hasMatchData = matchCount > 0;
     } catch (e) { /* table may not exist yet */ }
 
+    // ── Recompute match-level fields from tournament_matches if missing in results ──
+    // This handles the case where results were imported via standard CSV but match data exists
+    if (hasMatchData && results && results.length > 0) {
+      const needsRecompute = results.some(r => !r.poule_rank && !r.parties_menees && !r.meilleure_partie);
+      if (needsRecompute) {
+        try {
+          const matches = await dbAllAsync(
+            'SELECT * FROM tournament_matches WHERE tournament_id = $1',
+            [tournamentId]
+          );
+          if (matches && matches.length > 0) {
+            // Aggregate match data per player (same logic as aggregateMatchResults)
+            const playerMatchData = {};
+            for (const m of matches) {
+              for (const side of ['player1', 'player2']) {
+                const licence = m[`${side}_licence`];
+                if (!licence) continue;
+                const points = parseFloat(m[`${side}_points`]) || 0;
+                const reprises = parseFloat(m[`${side}_reprises`]) || 0;
+                const matchMoyenne = reprises > 0 ? points / reprises : 0;
+
+                if (!playerMatchData[licence]) {
+                  playerMatchData[licence] = { poule_name: m.poule_name, parties_menees: 0, best_single_moyenne: 0, total_match_points: 0 };
+                }
+                const pd = playerMatchData[licence];
+                pd.parties_menees++;
+                pd.total_match_points += (parseFloat(m[`${side}_match_points`]) || 0);
+                if (matchMoyenne > pd.best_single_moyenne) pd.best_single_moyenne = matchMoyenne;
+              }
+            }
+
+            // Compute poule_rank within regular poules
+            const poules = {};
+            for (const [licence, pd] of Object.entries(playerMatchData)) {
+              const poule = pd.poule_name || 'POULE A';
+              if (!poules[poule]) poules[poule] = [];
+              poules[poule].push({ licence, ...pd });
+            }
+            for (const [pouleName, players] of Object.entries(poules)) {
+              const upper = pouleName.toUpperCase();
+              const isClassification = upper.includes('CLASSEMENT') || upper.includes('DEMI-FINALE') ||
+                  upper.includes('FINALE') || upper.includes('PETITE FINALE') ||
+                  upper.includes('SEMI-FINAL') || upper.includes('BARRAGE') ||
+                  /^G\d+-\d+/.test(pouleName) || /^\d{2}-\d{2}$/.test(pouleName);
+              if (isClassification) continue;
+              players.sort((a, b) => b.total_match_points - a.total_match_points || b.best_single_moyenne - a.best_single_moyenne);
+              players.forEach((p, i) => { p.poule_rank = i + 1; });
+            }
+
+            // Flatten poule data into a licence-keyed map
+            const matchLookup = {};
+            for (const players of Object.values(poules)) {
+              for (const p of players) {
+                matchLookup[p.licence] = p;
+              }
+            }
+
+            // Merge into results and persist
+            for (const r of results) {
+              const md = matchLookup[r.licence.replace(/ /g, '')] || matchLookup[r.licence];
+              if (md) {
+                if (!r.poule_rank && md.poule_rank) r.poule_rank = md.poule_rank;
+                if (!r.parties_menees && md.parties_menees) r.parties_menees = md.parties_menees;
+                if (!r.meilleure_partie && md.best_single_moyenne) r.meilleure_partie = parseFloat(md.best_single_moyenne.toFixed(4));
+                // Fire-and-forget persist
+                dbRunAsync(
+                  'UPDATE tournament_results SET poule_rank = $1, parties_menees = $2, meilleure_partie = $3 WHERE id = $4',
+                  [r.poule_rank || 0, r.parties_menees || 0, r.meilleure_partie || 0, r.id]
+                ).catch(() => {});
+              }
+            }
+            console.log(`[RESULTS] Recomputed match-level fields for ${Object.keys(matchLookup).length} players from ${matches.length} matches`);
+          }
+        } catch (recomputeErr) {
+          console.error('[RESULTS] Error recomputing match-level fields:', recomputeErr);
+        }
+      }
+    }
+
     res.json({ tournament, results, bonusColumns, bonusMoyenneInfo, hasMatchData, matchCount, _bonusDiag: bonusDiag });
   } catch (error) {
     console.error('[RESULTS] Error:', error);

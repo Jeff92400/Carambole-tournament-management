@@ -539,6 +539,7 @@
             const bonusVal = totalBonus;
             const bonusColor = bonusVal > 0 ? '#1F4788' : '#999';
             const mpart = result.meilleure_partie ? result.meilleure_partie.toFixed(3) : '-';
+            const cltFinale = result.position || (index + 1);
             row.innerHTML = `
               <td style="text-align: center; font-weight: bold;">${index + 1}</td>
               <td>${result.licence}</td>
@@ -547,9 +548,9 @@
                   ${playerName}
                 </a>
               </td>
-              <td></td>
+              <td>${result.club_name || ''}</td>
               <td style="text-align: center;">${result.poule_rank || '-'}</td>
-              <td style="text-align: center;">${index + 1}</td>
+              <td style="text-align: center;">${cltFinale}</td>
               <td style="text-align: center; font-weight: bold; color: #1F4788;">${posPointsVal}</td>
               <td style="text-align: center; color: ${bonusColor}; font-weight: ${bonusVal > 0 ? 'bold' : 'normal'};">${bonusVal > 0 ? '+' + bonusVal : '0'}</td>
               <td style="text-align: center; font-weight: bold; color: var(--color-primary, #1F4788);">${posPointsVal + bonusVal}</td>
