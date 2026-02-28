@@ -1099,6 +1099,12 @@
           <strong>Points par position</strong>
           <p style="margin: 5px 0 10px 0; color: #666; font-size: 13px;">Configurez les points attribués en fonction du classement final. Si le tournoi a moins de joueurs que de positions, la règle de dégradation ci-dessous s'applique au dernier classé.</p>
 
+          <div style="margin-bottom: 12px; display: flex; align-items: center; gap: 10px;">
+            <label for="ppMaxPlayersInput" style="font-size: 13px; font-weight: 600; white-space: nowrap;">Nombre max de joueurs :</label>
+            <input type="number" id="ppMaxPlayersInput" min="2" max="30" value="15" style="width: 70px; padding: 6px 8px; border: 1px solid #ccc; border-radius: 4px; text-align: center; font-size: 14px; font-weight: 600;">
+            <button onclick="applyMaxPlayers()" class="btn" style="padding: 6px 14px; font-size: 13px;">Appliquer</button>
+          </div>
+
           <div id="positionPointsMatrixEditor">
             <!-- Dynamically populated matrix table -->
           </div>
@@ -3821,7 +3827,23 @@
 
     // Position points matrix state
     let ppMatrixData = {}; // { playerCount: { position: points, ... }, ... }
-    let ppMaxPosition = 12;
+    let ppMaxPosition = 15;
+
+    // Apply max players: resize the table to the chosen number of positions
+    function applyMaxPlayers() {
+      syncMatrixFromDOM();
+      const newMax = parseInt(document.getElementById('ppMaxPlayersInput').value) || 15;
+      if (newMax < 2 || newMax > 30) return;
+
+      // Trim positions beyond new max
+      for (const pc of Object.keys(ppMatrixData)) {
+        for (const pos of Object.keys(ppMatrixData[pc]).map(Number)) {
+          if (pos > newMax) delete ppMatrixData[pc][pos];
+        }
+      }
+      ppMaxPosition = newMax;
+      renderPositionPointsMatrix();
+    }
 
     // Sync DOM cell values back into ppMatrixData (preserves unsaved edits)
     function syncMatrixFromDOM() {
@@ -4409,7 +4431,7 @@
         if (ppResponse.ok) {
           const entries = await ppResponse.json();
           ppMatrixData = {};
-          ppMaxPosition = 12;
+          ppMaxPosition = 15;
 
           if (entries.length > 0) {
             // Group by player_count
@@ -4425,6 +4447,8 @@
             ppMatrixData[0] = {};
             defaultPoints.forEach((pts, i) => { ppMatrixData[0][i + 1] = pts; });
           }
+          // Set the max players input to match the loaded data
+          document.getElementById('ppMaxPlayersInput').value = ppMaxPosition;
           renderPositionPointsMatrix();
         }
 
