@@ -1,6 +1,9 @@
-// upcoming-tournaments.js — "A venir" nav button + modal showing upcoming tournaments
+// upcoming-tournaments.js — "Tournois à venir" nav button + modal with filters
 (function () {
   var modal = null;
+  var allRows = [];
+  var gameModes = [];
+  var categories = [];
 
   function formatDate(dateStr) {
     if (!dateStr) return '';
@@ -18,6 +21,11 @@
     if (s === 'clôturé' || s === 'cloture') return '<span style="color:#6c757d;">Clôturé</span>';
     if (s === 'complet') return '<span style="color:#ffc107;">Complet</span>';
     return '<span>' + statut + '</span>';
+  }
+
+  function doFetch(url) {
+    var fetchFn = window.authFetch || function (u) { return fetch(u, { headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') } }); };
+    return fetchFn(url);
   }
 
   function createModal() {
@@ -38,12 +46,36 @@
     closeBtn.onclick = closeModal;
     header.appendChild(closeBtn);
 
+    // Filters bar
+    var filters = document.createElement('div');
+    filters.id = 'upcoming-tournaments-filters';
+    filters.style.cssText = 'padding:12px 24px;border-bottom:1px solid #e0e0e0;display:flex;gap:12px;align-items:center;flex-shrink:0;flex-wrap:wrap;';
+
+    var selectStyle = 'padding:6px 10px;border:1px solid #ccc;border-radius:6px;font-size:13px;min-width:160px;';
+
+    // Mode select
+    var modeSelect = document.createElement('select');
+    modeSelect.id = 'upcoming-filter-mode';
+    modeSelect.style.cssText = selectStyle;
+    modeSelect.innerHTML = '<option value="">Tous les modes</option>';
+    modeSelect.onchange = applyFilters;
+    filters.appendChild(modeSelect);
+
+    // Categorie select
+    var catSelect = document.createElement('select');
+    catSelect.id = 'upcoming-filter-categorie';
+    catSelect.style.cssText = selectStyle;
+    catSelect.innerHTML = '<option value="">Toutes les catégories</option>';
+    catSelect.onchange = applyFilters;
+    filters.appendChild(catSelect);
+
     // Body
     var body = document.createElement('div');
     body.id = 'upcoming-tournaments-body';
     body.style.cssText = 'padding:16px 24px;overflow-y:auto;flex:1;';
 
     box.appendChild(header);
+    box.appendChild(filters);
     box.appendChild(body);
     overlay.appendChild(box);
     document.body.appendChild(overlay);
@@ -56,7 +88,7 @@
       if (e.key === 'Escape' && overlay.style.display === 'flex') closeModal();
     });
 
-    modal = { overlay: overlay, body: body };
+    modal = { overlay: overlay, body: body, modeSelect: modeSelect, catSelect: catSelect };
   }
 
   function openModal() {
@@ -71,18 +103,77 @@
   }
 
   function loadData() {
-    var fetchFn = window.authFetch || function (url) { return fetch(url, { headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') } }); };
-    fetchFn('/api/inscriptions/tournoi/calendar')
-      .then(function (r) {
-        if (!r.ok) throw new Error('Erreur ' + r.status);
-        return r.json();
-      })
-      .then(function (rows) {
-        renderTable(rows);
-      })
-      .catch(function (err) {
-        modal.body.innerHTML = '<p style="text-align:center;color:#dc3545;padding:30px 0;">Erreur lors du chargement des tournois.<br><small>' + err.message + '</small></p>';
+    Promise.all([
+      doFetch('/api/inscriptions/tournoi/calendar').then(function (r) { if (!r.ok) throw new Error('Erreur ' + r.status); return r.json(); }),
+      gameModes.length ? Promise.resolve(gameModes) : doFetch('/api/reference-data/game-modes?active_only=true').then(function (r) { return r.ok ? r.json() : []; }),
+      categories.length ? Promise.resolve(categories) : doFetch('/api/reference-data/categories').then(function (r) { return r.ok ? r.json() : []; })
+    ]).then(function (results) {
+      allRows = results[0] || [];
+      gameModes = results[1] || [];
+      categories = results[2] || [];
+      populateFilters();
+      applyFilters();
+    }).catch(function (err) {
+      modal.body.innerHTML = '<p style="text-align:center;color:#dc3545;padding:30px 0;">Erreur lors du chargement des tournois.<br><small>' + err.message + '</small></p>';
+    });
+  }
+
+  function populateFilters() {
+    // Populate mode select
+    var savedMode = modal.modeSelect.value;
+    modal.modeSelect.innerHTML = '<option value="">Tous les modes</option>' +
+      gameModes.map(function (m) { return '<option value="' + m.display_name + '">' + m.display_name + '</option>'; }).join('');
+    modal.modeSelect.value = savedMode;
+
+    // Populate categorie select — filter by selected mode if any
+    updateCategorieOptions();
+  }
+
+  function updateCategorieOptions() {
+    var selectedMode = modal.modeSelect.value;
+    var savedCat = modal.catSelect.value;
+
+    var filtered = categories;
+    if (selectedMode) {
+      filtered = categories.filter(function (c) {
+        return (c.game_type || '').toUpperCase() === selectedMode.toUpperCase() ||
+               (c.game_mode_name || '').toUpperCase() === selectedMode.toUpperCase();
       });
+    }
+
+    // Deduplicate by level
+    var seen = {};
+    var uniqueLevels = [];
+    filtered.forEach(function (c) {
+      var lev = c.level || c.display_name;
+      if (!seen[lev]) {
+        seen[lev] = true;
+        uniqueLevels.push({ level: lev, display_name: c.display_name });
+      }
+    });
+
+    modal.catSelect.innerHTML = '<option value="">Toutes les catégories</option>' +
+      uniqueLevels.map(function (c) { return '<option value="' + c.level + '">' + c.display_name + '</option>'; }).join('');
+
+    // Restore selection if still valid
+    if (savedCat) {
+      var stillExists = uniqueLevels.some(function (c) { return c.level === savedCat; });
+      modal.catSelect.value = stillExists ? savedCat : '';
+    }
+  }
+
+  function applyFilters() {
+    var selectedMode = modal.modeSelect.value;
+    updateCategorieOptions();
+    var selectedCat = modal.catSelect.value;
+
+    var filtered = allRows.filter(function (t) {
+      if (selectedMode && (t.mode || '').toUpperCase() !== selectedMode.toUpperCase()) return false;
+      if (selectedCat && (t.categorie || '').toUpperCase() !== selectedCat.toUpperCase()) return false;
+      return true;
+    });
+
+    renderTable(filtered);
   }
 
   function renderTable(rows) {
