@@ -3484,6 +3484,28 @@ router.put('/:id/scoring-detail', authenticateToken, async (req, res) => {
  * Default column mapping for E2i match CSV format (semicolon, 20 columns):
  * No Phase;Date match;Billard;Poule;Licence J1;Joueur 1;Pts J1;Rep J1;Ser J1;Pts Match J1;Moy J1;Licence J2;Joueur 2;Pts J2;Rep J2;Ser J2;Pts Match J2;Moy J2;NOMBD;Mode de jeu
  */
+/**
+ * Repair Excel-mangled poule names: "05-Jun" → "05-06", "07-Aug" → "07-08", etc.
+ * Excel auto-converts "05-06" to a date (May-June). This reverses that corruption.
+ */
+const MONTH_TO_NUM = {
+  'jan': '01', 'feb': '02', 'mar': '03', 'apr': '04', 'may': '05', 'jun': '06',
+  'jul': '07', 'aug': '08', 'sep': '09', 'oct': '10', 'nov': '11', 'dec': '12',
+  'janv': '01', 'févr': '02', 'mars': '03', 'avr': '04', 'mai': '05', 'juin': '06',
+  'juil': '07', 'août': '08', 'sept': '09', 'juil.': '07', 'août.': '08'
+};
+
+function repairExcelPouleName(name) {
+  if (!name) return name;
+  // Match patterns like "05-Jun", "07-Aug", "09-Oct" (Excel date mangling)
+  const match = name.match(/^(\d{1,2})-([A-Za-zéû.]+)$/);
+  if (match) {
+    const num = MONTH_TO_NUM[match[2].toLowerCase()];
+    if (num) return `${match[1].padStart(2, '0')}-${num}`;
+  }
+  return name;
+}
+
 const DEFAULT_MATCH_MAPPING = {
   phase_number: { column: 0, type: 'number' },
   match_date: { column: 1, type: 'string' },
@@ -3544,7 +3566,7 @@ async function parseMatchCSV(filePath) {
       phase_number: getMappedValue(record, DEFAULT_MATCH_MAPPING, 'phase_number', 1),
       match_date: matchDate,
       table_name: getMappedValue(record, DEFAULT_MATCH_MAPPING, 'table_name', ''),
-      poule_name: getMappedValue(record, DEFAULT_MATCH_MAPPING, 'poule_name', ''),
+      poule_name: repairExcelPouleName(getMappedValue(record, DEFAULT_MATCH_MAPPING, 'poule_name', '')),
       player1_licence: p1Licence,
       player1_name: getMappedValue(record, DEFAULT_MATCH_MAPPING, 'player1_name', ''),
       player1_points: getMappedValue(record, DEFAULT_MATCH_MAPPING, 'player1_points', 0),
@@ -3634,9 +3656,13 @@ function computeMatchRankings(playerStats) {
   const regularPoules = {};
   for (const [pouleName, players] of Object.entries(poules)) {
     const upper = pouleName.toUpperCase();
-    if (upper.includes('CLASSEMENT') || upper.includes('DEMI-FINALE') ||
+    // Detect classification/bracket phases: named phases + numeric "NN-NN" patterns (05-06, 07-08)
+    // + E2i "G7-8 - P5-6" format
+    const isClassification = upper.includes('CLASSEMENT') || upper.includes('DEMI-FINALE') ||
         upper.includes('FINALE') || upper.includes('PETITE FINALE') ||
-        upper.includes('SEMI-FINAL') || upper.includes('BARRAGE')) {
+        upper.includes('SEMI-FINAL') || upper.includes('BARRAGE') ||
+        /^G\d+-\d+/.test(pouleName) || /^\d{2}-\d{2}$/.test(pouleName);
+    if (isClassification) {
       classificationPoules[pouleName] = players;
     } else {
       regularPoules[pouleName] = players;
@@ -3726,7 +3752,38 @@ function extractClassificationPositions(classificationPoules, regularPoules) {
     const classementMatch = pouleName.match(/[Cc]lassement\s+(\d+)-(\d+)/);
     if (classementMatch) {
       const posStart = parseInt(classementMatch[1]);
-      // Sort within this classification match by match points then moyenne
+      players.sort((a, b) => {
+        if (b.total_match_points !== a.total_match_points) return b.total_match_points - a.total_match_points;
+        const avgA = a.total_reprises > 0 ? a.total_points / a.total_reprises : 0;
+        const avgB = b.total_reprises > 0 ? b.total_points / b.total_reprises : 0;
+        return avgB - avgA;
+      });
+      players.forEach((p, i) => {
+        results.push({ licence: p.licence, position: posStart + i });
+      });
+      continue;
+    }
+
+    // E2i format: "G7-8 - P5-6" → positions 5-6 (P = Places)
+    const e2iMatch = pouleName.match(/G\d+-\d+\s*-\s*P(\d+)-(\d+)/);
+    if (e2iMatch) {
+      const posStart = parseInt(e2iMatch[1]);
+      players.sort((a, b) => {
+        if (b.total_match_points !== a.total_match_points) return b.total_match_points - a.total_match_points;
+        const avgA = a.total_reprises > 0 ? a.total_points / a.total_reprises : 0;
+        const avgB = b.total_reprises > 0 ? b.total_points / b.total_reprises : 0;
+        return avgB - avgA;
+      });
+      players.forEach((p, i) => {
+        results.push({ licence: p.licence, position: posStart + i });
+      });
+      continue;
+    }
+
+    // Numeric "NN-NN" pattern (e.g., "05-06", "07-08") — positions from first number
+    const numericMatch = pouleName.match(/^(\d{2})-(\d{2})$/);
+    if (numericMatch) {
+      const posStart = parseInt(numericMatch[1]);
       players.sort((a, b) => {
         if (b.total_match_points !== a.total_match_points) return b.total_match_points - a.total_match_points;
         const avgA = a.total_reprises > 0 ? a.total_points / a.total_reprises : 0;
