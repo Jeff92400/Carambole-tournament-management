@@ -106,7 +106,6 @@ Le tableau presente pour chaque tournoi :
 - **Categorie** : niveau de competition
 - **Lieu** : club ou salle accueillant le tournoi
 - **Inscrits** : nombre de joueurs inscrits (hors forfaits et desinscrits)
-- **Statut** : etat du tournoi (ouvert, cloture, etc.)
 
 > **Astuce :** ce bouton est accessible a tous les utilisateurs (administrateur, editeur, lecteur, club). Il permet de consulter rapidement le calendrier sans quitter la page en cours.
 
