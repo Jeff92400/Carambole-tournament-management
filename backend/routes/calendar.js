@@ -430,6 +430,9 @@ router.delete('/season-tournaments/:season', authenticateToken, requireAdmin, (r
 });
 
 // Parse Excel calendar file
+// Supports two formats:
+// 1. CDBHS format: S/D rows with full Date objects, cells = "T1", "T2", "FD"
+// 2. Extended format: cells = "T1/A", "T2/B", "F/?" with club codes
 async function parseExcelCalendar(buffer, season, seasonPrefix, clubMapping) {
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(buffer);
@@ -442,181 +445,168 @@ async function parseExcelCalendar(buffer, season, seasonPrefix, clubMapping) {
   const tournaments = [];
   let tournamentCounter = 1;
 
-  // Find the header rows with dates
-  // Row structure (based on the calendar image):
-  // Row 1: Title
-  // Row 2: Empty or headers
-  // Row 3: Headers with months + "S" row (Samedi dates)
-  // Row 4: "D" row (Dimanche dates)
-  // Row 5+: Data rows with MODE | CATEGORY | Pts/Rep | tournament cells
-
-  // First, find the structure by scanning rows
+  // Step 1: Find S (Saturday) and D (Sunday) rows by scanning all columns
   let saturdayRow = null;
   let sundayRow = null;
-  let dataStartRow = null;
-  let dateColumns = {}; // colIndex -> { saturday: Date, sunday: Date }
+  let sdColumn = null; // Column where S/D labels are
 
-  // Scan first 10 rows to find structure
-  for (let rowNum = 1; rowNum <= 10; rowNum++) {
+  for (let rowNum = 1; rowNum <= 15; rowNum++) {
     const row = worksheet.getRow(rowNum);
-    const firstCellValue = getCellValue(row.getCell(1));
-    const fourthCellValue = getCellValue(row.getCell(4));
-
-    if (firstCellValue === 'S' || fourthCellValue === 'S') {
-      saturdayRow = rowNum;
-    } else if (firstCellValue === 'D' || fourthCellValue === 'D') {
-      sundayRow = rowNum;
-    } else if (firstCellValue && (
-      firstCellValue.toUpperCase().includes('LIBRE') ||
-      firstCellValue.toUpperCase().includes('CADRE') ||
-      firstCellValue.toUpperCase().includes('BANDE')
-    )) {
-      dataStartRow = rowNum;
-      break;
+    for (let colNum = 1; colNum <= 10; colNum++) {
+      const val = getCellValue(row.getCell(colNum));
+      if (!val) continue;
+      const trimmed = val.toString().trim();
+      if (trimmed === 'S' && !saturdayRow) {
+        saturdayRow = rowNum;
+        sdColumn = colNum;
+      } else if (trimmed === 'D' && saturdayRow && !sundayRow) {
+        sundayRow = rowNum;
+      }
     }
+    if (saturdayRow && sundayRow) break;
   }
 
   if (!saturdayRow || !sundayRow) {
-    throw new Error('Could not find date header rows (S/D) in Excel file');
+    throw new Error('Impossible de trouver les lignes de dates (S/D) dans le fichier Excel');
   }
 
-  // Parse the date columns
-  // The dates are in format: day numbers under month headers
-  // We need to find month headers and associate day numbers with full dates
-  const monthNames = {
-    'SEPTEMBRE': 8, 'OCTOBRE': 9, 'NOVEMBRE': 10, 'DECEMBRE': 11, 'DÉCEMBRE': 11,
-    'JANVIER': 0, 'FEVRIER': 1, 'FÉVRIER': 1, 'MARS': 2, 'AVRIL': 3, 'MAI': 4, 'JUIN': 5
-  };
-
-  // Find month headers in the row above saturday row or in saturday row itself
-  const headerRow = worksheet.getRow(saturdayRow - 1);
+  // Step 2: Build date mapping — columns after sdColumn contain dates
+  const dateColumns = {}; // colIndex -> { saturday: Date, sunday: Date }
   const satRow = worksheet.getRow(saturdayRow);
   const sunRow = worksheet.getRow(sundayRow);
+  const dateStartCol = sdColumn + 1;
 
-  let currentMonth = null;
-  let currentYear = null;
-  const startYear = parseInt('20' + seasonPrefix.substring(0, 2)); // 2026
-  const endYear = parseInt('20' + seasonPrefix.substring(2, 4));   // 2027
+  for (let colNum = dateStartCol; colNum <= 80; colNum++) {
+    const satCell = satRow.getCell(colNum);
+    const sunCell = sunRow.getCell(colNum);
 
-  // Scan columns to build date mapping
-  for (let colNum = 4; colNum <= 60; colNum++) {
-    // Check for month header
-    const headerValue = getCellValue(headerRow.getCell(colNum));
-    if (headerValue) {
-      const upperHeader = headerValue.toString().toUpperCase().trim();
-      for (const [monthName, monthIndex] of Object.entries(monthNames)) {
-        if (upperHeader.includes(monthName)) {
-          currentMonth = monthIndex;
-          // Year depends on month: Sept-Dec = startYear, Jan-June = endYear
-          currentYear = monthIndex >= 8 ? startYear : endYear;
-          break;
-        }
-      }
-    }
+    const satDate = extractDate(satCell);
+    const sunDate = extractDate(sunCell);
 
-    // Get Saturday and Sunday dates
-    const satValue = getCellValue(satRow.getCell(colNum));
-    const sunValue = getCellValue(sunRow.getCell(colNum));
-
-    if (currentMonth !== null && currentYear !== null) {
-      if (satValue && !isNaN(parseInt(satValue))) {
-        const day = parseInt(satValue);
-        dateColumns[colNum] = dateColumns[colNum] || {};
-        dateColumns[colNum].saturday = new Date(currentYear, currentMonth, day);
-      }
-      if (sunValue && !isNaN(parseInt(sunValue))) {
-        const day = parseInt(sunValue);
-        dateColumns[colNum] = dateColumns[colNum] || {};
-        dateColumns[colNum].sunday = new Date(currentYear, currentMonth, day);
-      }
+    if (satDate || sunDate) {
+      dateColumns[colNum] = {};
+      if (satDate) dateColumns[colNum].saturday = satDate;
+      if (sunDate) dateColumns[colNum].sunday = sunDate;
     }
   }
 
-  // Now parse the data rows
+  if (Object.keys(dateColumns).length === 0) {
+    throw new Error('Aucune date trouvée dans les lignes S/D');
+  }
+
+  // Step 3: Find data start row (first row after sundayRow with a mode name)
+  let dataStartRow = null;
+  for (let rowNum = sundayRow + 1; rowNum <= sundayRow + 5; rowNum++) {
+    const row = worksheet.getRow(rowNum);
+    for (let colNum = 1; colNum <= 3; colNum++) {
+      const val = getCellValue(row.getCell(colNum));
+      if (val && hasModeName(val.toString())) {
+        dataStartRow = rowNum;
+        break;
+      }
+    }
+    // Also check if col C has a category (mode may be on col B without col A having a mode)
+    if (!dataStartRow) {
+      const col3 = getCellValue(row.getCell(3));
+      if (col3 && CATEGORY_MAPPING[col3.toString().toUpperCase().trim()]) {
+        dataStartRow = rowNum;
+      }
+    }
+    if (dataStartRow) break;
+  }
+
+  if (!dataStartRow) {
+    dataStartRow = sundayRow + 1;
+  }
+
+  // Step 4: Parse data rows
   let currentMode = null;
 
-  for (let rowNum = dataStartRow || 5; rowNum <= worksheet.rowCount; rowNum++) {
+  for (let rowNum = dataStartRow; rowNum <= worksheet.rowCount; rowNum++) {
     const row = worksheet.getRow(rowNum);
-    const col1Value = getCellValue(row.getCell(1));
-    const col2Value = getCellValue(row.getCell(2));
-    const col3Value = getCellValue(row.getCell(3));
 
-    // Check if this row has a mode (LIBRE, CADRE, BANDE, 3 BANDES)
-    if (col1Value) {
-      const upperCol1 = col1Value.toString().toUpperCase().trim();
-      if (upperCol1.includes('LIBRE')) currentMode = 'LIBRE';
-      else if (upperCol1.includes('CADRE')) currentMode = 'CADRE';
-      else if (upperCol1 === 'BANDE') currentMode = 'BANDE';
-      else if (upperCol1.includes('3 BANDES') || upperCol1.includes('3BANDES')) currentMode = '3 BANDES';
+    // Check columns 1 and 2 for mode names
+    for (let colNum = 1; colNum <= 2; colNum++) {
+      const val = getCellValue(row.getCell(colNum));
+      if (val) {
+        const detected = detectMode(val.toString());
+        if (detected) currentMode = detected;
+      }
     }
 
-    // Get category from column 2
+    // Get category from column 3 (or column 2 if mode is in column 1)
     let category = null;
-    if (col2Value) {
-      const upperCol2 = col2Value.toString().toUpperCase().trim();
-      category = CATEGORY_MAPPING[upperCol2] || null;
-
-      // Try partial matching
-      if (!category) {
-        if (upperCol2.includes('NATIONALE 3')) category = 'N3';
-        else if (upperCol2.includes('REGIONALE 1')) category = 'R1';
-        else if (upperCol2.includes('REGIONALE 2')) category = 'R2';
-        else if (upperCol2.includes('REGIONALE 3')) category = 'R3';
-        else if (upperCol2.includes('REGIONALE 4')) category = 'R4';
+    const col3Value = getCellValue(row.getCell(3));
+    if (col3Value) {
+      category = resolveCategory(col3Value.toString());
+    }
+    // Fallback: check column 2 if column 3 is empty or has no category
+    if (!category) {
+      const col2Value = getCellValue(row.getCell(2));
+      if (col2Value) {
+        category = resolveCategory(col2Value.toString());
       }
     }
 
-    // Get Pts/Rep (taille) from column 3
+    // Get Pts/Rep (taille) from column 4
     let taille = null;
-    if (col3Value) {
-      const ptsRepMatch = col3Value.toString().match(/(\d+)/);
-      if (ptsRepMatch) {
-        taille = parseInt(ptsRepMatch[1]);
-      }
+    const col4Value = getCellValue(row.getCell(4));
+    if (col4Value) {
+      const ptsRepMatch = col4Value.toString().match(/(\d+)/);
+      if (ptsRepMatch) taille = parseInt(ptsRepMatch[1]);
     }
 
     if (!currentMode || !category) continue;
 
-    // Scan tournament cells
-    for (let colNum = 4; colNum <= 60; colNum++) {
+    // Stop if we hit the legend/footer area
+    const col2Check = getCellValue(row.getCell(2));
+    if (col2Check) {
+      const upper = col2Check.toString().toUpperCase().trim();
+      if (upper.includes('LEGENDE') || upper.includes('COULEU')) break;
+    }
+
+    // Scan tournament cells in date columns
+    for (const colNumStr of Object.keys(dateColumns)) {
+      const colNum = parseInt(colNumStr);
       const cellValue = getCellValue(row.getCell(colNum));
       if (!cellValue) continue;
 
       const upperValue = cellValue.toString().toUpperCase().trim();
 
-      // Skip LBIF entries (just calendar placeholders)
+      // Skip LBIF entries, previous-year references, and summary rows
       if (upperValue === 'L' || upperValue.startsWith('LBIF')) continue;
+      if (upperValue.match(/^F?\d{4}/)) continue; // e.g. "F2024", "2025"
 
-      // Skip previous year references
-      if (upperValue.includes('2024') || upperValue.includes('2025')) continue;
-
-      // Parse tournament type and club: "T1/A", "T2/C", "F/?", etc.
-      const match = upperValue.match(/^(T[123]|F)(?:\/([A-E?]))?$/i);
+      // Parse tournament type:
+      //   "T1", "T2", "T3" — standard tournaments
+      //   "T1/A", "T2/B" — with club code
+      //   "FD", "F", "F/?" — finale départementale
+      const match = upperValue.match(/^(T[123]|FD|F)(?:\/([A-Z?]))?$/i);
       if (!match) continue;
 
-      const tournamentType = match[1].toUpperCase();
+      let tournamentType = match[1].toUpperCase();
       const clubCode = match[2] ? match[2].toUpperCase() : null;
 
-      // Get the date (Saturday for T1/T2/T3, Sunday for Finals)
+      // Normalize FD → F
+      const isFinal = (tournamentType === 'F' || tournamentType === 'FD');
+      if (tournamentType === 'FD') tournamentType = 'F';
+
+      // Get the date — Saturday for TQ, Sunday for Finals (fallback to Saturday)
       const dateInfo = dateColumns[colNum];
       if (!dateInfo) continue;
 
-      const isFinal = tournamentType === 'F';
-      const tournamentDate = isFinal ? dateInfo.sunday : dateInfo.saturday;
+      const tournamentDate = isFinal
+        ? (dateInfo.sunday || dateInfo.saturday)
+        : (dateInfo.saturday || dateInfo.sunday);
       if (!tournamentDate) continue;
 
-      // Generate tournament ID: 2627XXX
+      // Generate tournament ID
       const tournoi_id = parseInt(seasonPrefix + String(tournamentCounter).padStart(3, '0'));
       tournamentCounter++;
 
-      // Get tournament name
       const nom = TOURNAMENT_NAME_MAPPING[tournamentType] || tournamentType;
-
-      // Get location from club mapping
       const lieu = clubCode ? (clubMapping[clubCode] || null) : null;
-
-      // Format date as YYYY-MM-DD
-      const debut = formatDate(tournamentDate);
+      const debut = formatDateStr(tournamentDate);
 
       tournaments.push({
         tournoi_id,
@@ -625,9 +615,8 @@ async function parseExcelCalendar(buffer, season, seasonPrefix, clubMapping) {
         categorie: category,
         taille,
         debut,
-        fin: debut, // Same day
+        fin: debut,
         lieu,
-        // Extra info for preview
         _type: tournamentType,
         _club_code: clubCode,
         _is_finale: isFinal
@@ -642,12 +631,73 @@ async function parseExcelCalendar(buffer, season, seasonPrefix, clubMapping) {
     return a.categorie.localeCompare(b.categorie);
   });
 
-  // Re-assign IDs after sorting to have sequential IDs
+  // Re-assign IDs after sorting for sequential numbering
   tournaments.forEach((t, index) => {
     t.tournoi_id = parseInt(seasonPrefix + String(index + 1).padStart(3, '0'));
   });
 
   return tournaments;
+}
+
+// Helper: Extract a Date from a cell (handles Date objects, date strings, and ExcelJS date values)
+function extractDate(cell) {
+  if (!cell || !cell.value) return null;
+  const val = cell.value;
+
+  // Direct Date object
+  if (val instanceof Date) return val;
+
+  // ExcelJS formula result that is a Date
+  if (typeof val === 'object') {
+    if (val.result instanceof Date) return val.result;
+    if (val.result && !isNaN(new Date(val.result).getTime())) return new Date(val.result);
+  }
+
+  // String that looks like a date
+  if (typeof val === 'string') {
+    const d = new Date(val);
+    if (!isNaN(d.getTime()) && val.match(/\d{4}/)) return d;
+  }
+
+  return null;
+}
+
+// Helper: Check if a string contains a game mode name
+function hasModeName(str) {
+  const upper = str.toUpperCase().trim();
+  return upper.includes('LIBRE') || upper.includes('CADRE') ||
+         upper === 'BANDE' || upper.includes('3 BANDES') || upper.includes('3BANDES');
+}
+
+// Helper: Detect game mode from a cell value string
+function detectMode(str) {
+  const upper = str.toUpperCase().trim();
+  if (upper.includes('3 BANDES') || upper.includes('3BANDES')) return '3 BANDES';
+  if (upper === 'BANDE') return 'BANDE';
+  if (upper.includes('CADRE')) return 'CADRE';
+  if (upper.includes('LIBRE')) return 'LIBRE';
+  return null;
+}
+
+// Helper: Resolve category from display name
+function resolveCategory(str) {
+  const upper = str.toUpperCase().trim();
+  const direct = CATEGORY_MAPPING[upper];
+  if (direct) return direct;
+
+  // Partial matching
+  if (upper.includes('NATIONALE 3')) return 'N3';
+  if (upper.includes('REGIONALE 1') || upper.includes('RÉGIONALE 1')) return 'R1';
+  if (upper.includes('REGIONALE 2') || upper.includes('RÉGIONALE 2')) return 'R2';
+  if (upper.includes('REGIONALE 3') || upper.includes('RÉGIONALE 3')) return 'R3';
+  if (upper.includes('REGIONALE 4') || upper.includes('RÉGIONALE 4')) return 'R4';
+  if (upper.includes('REGIONALE 5') || upper.includes('RÉGIONALE 5')) return 'R5';
+  if (upper.includes('DEPARTEMENTALE') || upper.includes('DÉPARTEMENTALE')) {
+    if (upper.includes('1')) return 'D1';
+    if (upper.includes('2')) return 'D2';
+    if (upper.includes('3')) return 'D3';
+  }
+  return null;
 }
 
 // Helper: Get cell value as string
@@ -666,7 +716,7 @@ function getCellValue(cell) {
 }
 
 // Helper: Format date as YYYY-MM-DD
-function formatDate(date) {
+function formatDateStr(date) {
   if (!date) return null;
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');

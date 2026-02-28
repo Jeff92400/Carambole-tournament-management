@@ -885,7 +885,13 @@ router.get('/scoring-fields', authenticateToken, (req, res) => {
     { code: 'MATCH_POINTS', label: 'Points match', type: 'integer', scope: 'player',
       description: 'Points de match du joueur (V/D/N)' },
     { code: 'SERIE', label: 'Meilleure série', type: 'integer', scope: 'player',
-      description: 'Meilleure série du joueur dans le tournoi' }
+      description: 'Meilleure série du joueur dans le tournoi' },
+    { code: 'POSITION', label: 'Position finale', type: 'integer', scope: 'player',
+      description: 'Classement final du joueur dans le tournoi' },
+    { code: 'PARTIES_MENEES', label: 'Parties menées', type: 'integer', scope: 'player',
+      description: 'Nombre de matchs joués par le joueur' },
+    { code: 'MPART', label: 'Meilleure partie', type: 'decimal', scope: 'player',
+      description: 'Meilleure moyenne sur un seul match' }
   ];
 
   const referenceValues = [

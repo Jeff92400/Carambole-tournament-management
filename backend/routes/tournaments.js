@@ -151,12 +151,47 @@ function parseRecordsWithMapping(records, columnMapping) {
 
 /**
  * Look up position_points for an org and return a mapping { position: points }.
+ * Supports player_count dimension: tries exact match, then closest >= match, then fallback to player_count=0.
  */
-async function getPositionPointsLookup(orgId) {
-  const rows = await dbAllAsync(
-    'SELECT position, points FROM position_points WHERE ($1::int IS NULL OR organization_id = $1) ORDER BY position ASC',
-    [orgId]
-  );
+async function getPositionPointsLookup(orgId, playerCount) {
+  let rows;
+
+  if (playerCount && playerCount > 0) {
+    // Try exact match on player_count first
+    rows = await dbAllAsync(
+      'SELECT position, points FROM position_points WHERE ($1::int IS NULL OR organization_id = $1) AND player_count = $2 ORDER BY position ASC',
+      [orgId, playerCount]
+    );
+
+    // Fallback: closest player_count that is >= actual count
+    if (!rows || rows.length === 0) {
+      rows = await dbAllAsync(
+        'SELECT position, points, player_count FROM position_points WHERE ($1::int IS NULL OR organization_id = $1) AND player_count >= $2 ORDER BY player_count ASC, position ASC LIMIT 30',
+        [orgId, playerCount]
+      );
+      if (rows && rows.length > 0) {
+        const targetCount = rows[0].player_count;
+        rows = rows.filter(r => r.player_count === targetCount);
+      }
+    }
+  }
+
+  // Final fallback: rows with player_count=0 (backward compat) or any rows for this org
+  if (!rows || rows.length === 0) {
+    rows = await dbAllAsync(
+      'SELECT position, points FROM position_points WHERE ($1::int IS NULL OR organization_id = $1) AND (player_count = 0 OR player_count IS NULL) ORDER BY position ASC',
+      [orgId]
+    );
+  }
+
+  // Last resort: all rows for the org (ignoring player_count)
+  if (!rows || rows.length === 0) {
+    rows = await dbAllAsync(
+      'SELECT position, points FROM position_points WHERE ($1::int IS NULL OR organization_id = $1) ORDER BY position ASC',
+      [orgId]
+    );
+  }
+
   const lookup = {};
   for (const row of rows) {
     lookup[row.position] = row.points;
@@ -165,7 +200,10 @@ async function getPositionPointsLookup(orgId) {
 }
 
 /**
- * For journées orgs, assign position_points to tournament results based on the CSV 'classement' column.
+ * For journées orgs, assign position_points to tournament results.
+ * If bracket-derived positions exist (import-matches with classification phases),
+ * preserves those positions and only applies the position_points lookup.
+ * Otherwise, computes positions from match_points sorting.
  * No-op for standard orgs.
  */
 async function assignPositionPointsIfJournees(tournamentId, orgId) {
@@ -173,35 +211,76 @@ async function assignPositionPointsIfJournees(tournamentId, orgId) {
   const qualMode = await appSettings.getOrgSetting(orgId, 'qualification_mode');
   if (qualMode !== 'journees') return;
 
-  const lookup = await getPositionPointsLookup(orgId);
+  // Check if positions were set by bracket engine (import-matches with classification phases)
+  // tournament_matches records only exist when import-matches was used (not simple CSV import)
+  let hasBracketData = false;
+  try {
+    const matchRow = await dbGetAsync(
+      'SELECT 1 FROM tournament_matches WHERE tournament_id = $1 LIMIT 1',
+      [tournamentId]
+    );
+    hasBracketData = !!matchRow;
+  } catch (e) { /* table may not exist yet */ }
+
+  let results;
+  if (hasBracketData) {
+    // Bracket-derived positions: USE existing position values, just apply position_points
+    results = await dbAllAsync(
+      'SELECT id, position FROM tournament_results WHERE tournament_id = $1 ORDER BY position ASC',
+      [tournamentId]
+    );
+    console.log(`[POS-PTS] Tournament ${tournamentId}: bracket data detected, preserving ${results.length} existing positions`);
+  } else {
+    // Simple import: compute position from match_points sort (existing logic)
+    results = await dbAllAsync(
+      'SELECT id, match_points, points, reprises FROM tournament_results WHERE tournament_id = $1',
+      [tournamentId]
+    );
+    // Sort by match_points desc, then moyenne desc (same logic as frontend display)
+    results.sort((a, b) => {
+      if (b.match_points !== a.match_points) return b.match_points - a.match_points;
+      const avgA = a.reprises > 0 ? a.points / a.reprises : 0;
+      const avgB = b.reprises > 0 ? b.points / b.reprises : 0;
+      return avgB - avgA;
+    });
+    // Assign positions from sort order
+    results.forEach((r, i) => { r.position = i + 1; });
+    console.log(`[POS-PTS] Tournament ${tournamentId}: no bracket data, computed positions from match_points sort for ${results.length} players`);
+  }
+
+  const nbPlayers = results.length;
+  const lookup = await getPositionPointsLookup(orgId, nbPlayers);
   if (Object.keys(lookup).length === 0) {
-    console.warn(`[POS-PTS] No position_points configured for org ${orgId}, skipping assignment for tournament ${tournamentId}`);
+    console.warn(`[POS-PTS] No position_points configured for org ${orgId} (players=${nbPlayers}), skipping assignment for tournament ${tournamentId}`);
     return;
   }
-  console.log(`[POS-PTS] Assigning position points for tournament ${tournamentId}, lookup: ${JSON.stringify(lookup)}`);
+  console.log(`[POS-PTS] Assigning position points for tournament ${tournamentId}, players=${nbPlayers}, lookup keys: [${Object.keys(lookup).join(',')}]`);
 
-  // Compute position from match results (match_points desc, then moyenne desc)
-  // This is more reliable than the CSV 'classement' column which may be 0 or missing
-  const results = await dbAllAsync(
-    'SELECT id, match_points, points, reprises FROM tournament_results WHERE tournament_id = $1',
-    [tournamentId]
-  );
-
-  // Sort by match_points desc, then moyenne desc (same logic as frontend display)
-  results.sort((a, b) => {
-    if (b.match_points !== a.match_points) return b.match_points - a.match_points;
-    const avgA = a.reprises > 0 ? a.points / a.reprises : 0;
-    const avgB = b.reprises > 0 ? b.points / b.reprises : 0;
-    return avgB - avgA;
-  });
+  // Check degradation setting: last player gets points of position N+1
+  const degradation = await appSettings.getOrgSetting(orgId, 'position_points_degradation');
 
   for (let i = 0; i < results.length; i++) {
-    const position = i + 1;
-    const pp = lookup[position] || 0;
-    await dbRunAsync(
-      'UPDATE tournament_results SET position_points = $1, position = $2 WHERE id = $3',
-      [pp, position, results[i].id]
-    );
+    const position = results[i].position;
+    let pp;
+    if (degradation === 'last_player' && position === nbPlayers && nbPlayers > 0) {
+      pp = lookup[position + 1] || 0;
+    } else {
+      pp = lookup[position] || 0;
+    }
+
+    if (hasBracketData) {
+      // Only update position_points, preserve existing position
+      await dbRunAsync(
+        'UPDATE tournament_results SET position_points = $1 WHERE id = $2',
+        [pp, results[i].id]
+      );
+    } else {
+      // Update both position and position_points
+      await dbRunAsync(
+        'UPDATE tournament_results SET position_points = $1, position = $2 WHERE id = $3',
+        [pp, position, results[i].id]
+      );
+    }
   }
 }
 
@@ -930,6 +1009,12 @@ function resolveField(fieldCode, playerResult, tournamentContext) {
       return playerResult.match_points || 0;
     case 'SERIE':
       return playerResult.serie || 0;
+    case 'POSITION':
+      return playerResult.position || 0;
+    case 'PARTIES_MENEES':
+      return playerResult.parties_menees || 0;
+    case 'MPART':
+      return playerResult.meilleure_partie || 0;
     default:
       console.warn(`[SCORING] Unknown field: ${fieldCode}`);
       return 0;
@@ -1152,7 +1237,7 @@ function computeBonusPoints(tournamentId, categoryId, orgId, callback) {
 
               // 4. Get all player results
               db.all(
-                'SELECT id, licence, points, reprises, match_points, serie FROM tournament_results WHERE tournament_id = ?',
+                'SELECT id, licence, points, reprises, match_points, serie, position, parties_menees, meilleure_partie FROM tournament_results WHERE tournament_id = ?',
                 [tournamentId],
                 (err, results) => {
                   if (err || !results || results.length === 0) {
@@ -1973,23 +2058,50 @@ router.get('/:id/results', authenticateToken, async (req, res) => {
     try {
       const qualMode = orgId ? (await appSettings.getOrgSetting(orgId, 'qualification_mode')) : null;
       if (qualMode === 'journees' && results && results.length > 0) {
-        const lookup = await getPositionPointsLookup(orgId);
+        const nbPlayers = results.length;
+        const lookup = await getPositionPointsLookup(orgId, nbPlayers);
         if (Object.keys(lookup).length > 0) {
-          // Sort by match_points desc + moyenne desc to determine positions
-          const sorted = [...results].sort((a, b) => {
-            if (b.match_points !== a.match_points) return b.match_points - a.match_points;
-            const avgA = a.reprises > 0 ? a.points / a.reprises : 0;
-            const avgB = b.reprises > 0 ? b.points / b.reprises : 0;
-            return avgB - avgA;
-          });
-          for (let i = 0; i < sorted.length; i++) {
-            const pp = lookup[i + 1] || 0;
-            sorted[i].position_points = pp;
-            // Persist to DB (fire-and-forget)
-            dbRunAsync(
-              'UPDATE tournament_results SET position_points = $1 WHERE id = $2',
-              [pp, sorted[i].id]
-            ).catch(() => {});
+          // Check if bracket data exists (positions already set by import-matches)
+          let hasBracket = false;
+          try {
+            const mRow = await dbGetAsync('SELECT 1 FROM tournament_matches WHERE tournament_id = $1 LIMIT 1', [tournamentId]);
+            hasBracket = !!mRow;
+          } catch (e) { /* table may not exist */ }
+
+          const degradation = await appSettings.getOrgSetting(orgId, 'position_points_degradation');
+
+          if (hasBracket) {
+            // Use existing positions from results (bracket-derived)
+            for (const r of results) {
+              const pos = r.position || 0;
+              let pp;
+              if (degradation === 'last_player' && pos === nbPlayers && nbPlayers > 0) {
+                pp = lookup[pos + 1] || 0;
+              } else {
+                pp = lookup[pos] || 0;
+              }
+              r.position_points = pp;
+              dbRunAsync('UPDATE tournament_results SET position_points = $1 WHERE id = $2', [pp, r.id]).catch(() => {});
+            }
+          } else {
+            // Sort by match_points desc + moyenne desc to determine positions
+            const sorted = [...results].sort((a, b) => {
+              if (b.match_points !== a.match_points) return b.match_points - a.match_points;
+              const avgA = a.reprises > 0 ? a.points / a.reprises : 0;
+              const avgB = b.reprises > 0 ? b.points / b.reprises : 0;
+              return avgB - avgA;
+            });
+            for (let i = 0; i < sorted.length; i++) {
+              const position = i + 1;
+              let pp;
+              if (degradation === 'last_player' && position === nbPlayers && nbPlayers > 0) {
+                pp = lookup[position + 1] || 0;
+              } else {
+                pp = lookup[position] || 0;
+              }
+              sorted[i].position_points = pp;
+              dbRunAsync('UPDATE tournament_results SET position_points = $1 WHERE id = $2', [pp, sorted[i].id]).catch(() => {});
+            }
           }
         }
       }
@@ -1997,7 +2109,19 @@ router.get('/:id/results', authenticateToken, async (req, res) => {
       console.error('[RESULTS] Error computing position points:', ppErr);
     }
 
-    res.json({ tournament, results, bonusColumns, bonusMoyenneInfo, _bonusDiag: bonusDiag });
+    // Check if tournament has individual match data
+    let hasMatchData = false;
+    let matchCount = 0;
+    try {
+      const matchRow = await dbGetAsync(
+        'SELECT COUNT(*) as cnt FROM tournament_matches WHERE tournament_id = $1',
+        [tournamentId]
+      );
+      matchCount = matchRow ? parseInt(matchRow.cnt) : 0;
+      hasMatchData = matchCount > 0;
+    } catch (e) { /* table may not exist yet */ }
+
+    res.json({ tournament, results, bonusColumns, bonusMoyenneInfo, hasMatchData, matchCount, _bonusDiag: bonusDiag });
   } catch (error) {
     console.error('[RESULTS] Error:', error);
     res.status(500).json({ error: error.message });
@@ -3158,8 +3282,8 @@ router.get('/:id/scoring-detail', authenticateToken, async (req, res) => {
       [tournamentId]
     );
 
-    // 7. Position points lookup
-    const positionPointsLookup = await getPositionPointsLookup(orgId);
+    // 7. Position points lookup (pass player count for 2D lookup)
+    const positionPointsLookup = await getPositionPointsLookup(orgId, playersWithBonus.length);
 
     res.json({
       tournament: {
@@ -3293,5 +3417,696 @@ router.put('/:id/scoring-detail', authenticateToken, async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+// ==================== CSV Matchs E2i Import ====================
+
+/**
+ * Default column mapping for E2i match CSV format (semicolon, 20 columns):
+ * No Phase;Date match;Billard;Poule;Licence J1;Joueur 1;Pts J1;Rep J1;Ser J1;Pts Match J1;Moy J1;Licence J2;Joueur 2;Pts J2;Rep J2;Ser J2;Pts Match J2;Moy J2;NOMBD;Mode de jeu
+ */
+const DEFAULT_MATCH_MAPPING = {
+  phase_number: { column: 0, type: 'number' },
+  match_date: { column: 1, type: 'string' },
+  table_name: { column: 2, type: 'string' },
+  poule_name: { column: 3, type: 'string' },
+  player1_licence: { column: 4, type: 'string' },
+  player1_name: { column: 5, type: 'string' },
+  player1_points: { column: 6, type: 'number' },
+  player1_reprises: { column: 7, type: 'number' },
+  player1_serie: { column: 8, type: 'number' },
+  player1_match_points: { column: 9, type: 'number' },
+  player1_moyenne: { column: 10, type: 'decimal' },
+  player2_licence: { column: 11, type: 'string' },
+  player2_name: { column: 12, type: 'string' },
+  player2_points: { column: 13, type: 'number' },
+  player2_reprises: { column: 14, type: 'number' },
+  player2_serie: { column: 15, type: 'number' },
+  player2_match_points: { column: 16, type: 'number' },
+  player2_moyenne: { column: 17, type: 'decimal' },
+  nombd: { column: 18, type: 'string' },
+  game_mode: { column: 19, type: 'string' }
+};
+
+/**
+ * Parse a single E2i match CSV file into match objects.
+ * @param {string} filePath - Path to the CSV file
+ * @returns {Array} Array of parsed match objects
+ */
+async function parseMatchCSV(filePath) {
+  const records = await readCSVRecords(filePath);
+  const matches = [];
+
+  for (const record of records) {
+    // Skip header rows
+    const first = (record[0] || '').trim();
+    if (first.includes('No Phase') || first.includes('Phase') && (record[3] || '').includes('Poule')) continue;
+    if (!record[4] && !record[11]) continue; // No licences = skip
+
+    const p1Licence = getMappedValue(record, DEFAULT_MATCH_MAPPING, 'player1_licence', '')?.replace(/ /g, '');
+    const p2Licence = getMappedValue(record, DEFAULT_MATCH_MAPPING, 'player2_licence', '')?.replace(/ /g, '');
+    if (!p1Licence || !p2Licence) continue;
+
+    // Parse date (format: DD/MM/YYYY or YYYY-MM-DD)
+    let matchDate = null;
+    const dateStr = getMappedValue(record, DEFAULT_MATCH_MAPPING, 'match_date', '');
+    if (dateStr) {
+      if (dateStr.includes('/')) {
+        const parts = dateStr.split('/');
+        if (parts.length === 3) {
+          matchDate = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+        }
+      } else {
+        matchDate = dateStr; // Already ISO format
+      }
+    }
+
+    matches.push({
+      phase_number: getMappedValue(record, DEFAULT_MATCH_MAPPING, 'phase_number', 1),
+      match_date: matchDate,
+      table_name: getMappedValue(record, DEFAULT_MATCH_MAPPING, 'table_name', ''),
+      poule_name: getMappedValue(record, DEFAULT_MATCH_MAPPING, 'poule_name', ''),
+      player1_licence: p1Licence,
+      player1_name: getMappedValue(record, DEFAULT_MATCH_MAPPING, 'player1_name', ''),
+      player1_points: getMappedValue(record, DEFAULT_MATCH_MAPPING, 'player1_points', 0),
+      player1_reprises: getMappedValue(record, DEFAULT_MATCH_MAPPING, 'player1_reprises', 0),
+      player1_serie: getMappedValue(record, DEFAULT_MATCH_MAPPING, 'player1_serie', 0),
+      player1_match_points: getMappedValue(record, DEFAULT_MATCH_MAPPING, 'player1_match_points', 0),
+      player1_moyenne: getMappedValue(record, DEFAULT_MATCH_MAPPING, 'player1_moyenne', 0),
+      player2_licence: p2Licence,
+      player2_name: getMappedValue(record, DEFAULT_MATCH_MAPPING, 'player2_name', ''),
+      player2_points: getMappedValue(record, DEFAULT_MATCH_MAPPING, 'player2_points', 0),
+      player2_reprises: getMappedValue(record, DEFAULT_MATCH_MAPPING, 'player2_reprises', 0),
+      player2_serie: getMappedValue(record, DEFAULT_MATCH_MAPPING, 'player2_serie', 0),
+      player2_match_points: getMappedValue(record, DEFAULT_MATCH_MAPPING, 'player2_match_points', 0),
+      player2_moyenne: getMappedValue(record, DEFAULT_MATCH_MAPPING, 'player2_moyenne', 0),
+      game_mode: getMappedValue(record, DEFAULT_MATCH_MAPPING, 'game_mode', '')
+    });
+  }
+
+  return matches;
+}
+
+/**
+ * Aggregate individual matches into per-player tournament results.
+ * Returns an array of player stats objects.
+ */
+function aggregateMatchResults(matches) {
+  const playerMap = {};
+
+  for (const match of matches) {
+    // Process both players in each match
+    for (const side of ['player1', 'player2']) {
+      const licence = match[`${side}_licence`];
+      const name = match[`${side}_name`];
+      const points = match[`${side}_points`] || 0;
+      const reprises = match[`${side}_reprises`] || 0;
+      const serie = match[`${side}_serie`] || 0;
+      const matchPts = match[`${side}_match_points`] || 0;
+      const moyenne = reprises > 0 ? points / reprises : 0;
+
+      if (!playerMap[licence]) {
+        playerMap[licence] = {
+          licence,
+          name,
+          poule_name: match.poule_name,
+          parties_menees: 0,
+          total_points: 0,
+          total_reprises: 0,
+          max_serie: 0,
+          total_match_points: 0,
+          best_single_moyenne: 0,   // MPART
+          match_moyennes: []         // For computing MPART
+        };
+      }
+
+      const player = playerMap[licence];
+      player.parties_menees++;
+      player.total_points += points;
+      player.total_reprises += reprises;
+      player.max_serie = Math.max(player.max_serie, serie);
+      player.total_match_points += matchPts;
+
+      // Track best single-match moyenne (MPART)
+      if (moyenne > player.best_single_moyenne) {
+        player.best_single_moyenne = moyenne;
+      }
+    }
+  }
+
+  return Object.values(playerMap);
+}
+
+/**
+ * Compute poule rankings and overall tournament ranking from aggregated player stats.
+ * Returns the array with poule_rank and final_position added.
+ */
+function computeMatchRankings(playerStats) {
+  // Group by poule
+  const poules = {};
+  for (const p of playerStats) {
+    const poule = p.poule_name || 'POULE A';
+    if (!poules[poule]) poules[poule] = [];
+    poules[poule].push(p);
+  }
+
+  // Identify classification/bracket poules vs regular poules
+  const classificationPoules = {};
+  const regularPoules = {};
+  for (const [pouleName, players] of Object.entries(poules)) {
+    const upper = pouleName.toUpperCase();
+    if (upper.includes('CLASSEMENT') || upper.includes('DEMI-FINALE') ||
+        upper.includes('FINALE') || upper.includes('PETITE FINALE') ||
+        upper.includes('SEMI-FINAL') || upper.includes('BARRAGE')) {
+      classificationPoules[pouleName] = players;
+    } else {
+      regularPoules[pouleName] = players;
+    }
+  }
+
+  // Rank within each regular poule
+  for (const [pouleName, players] of Object.entries(regularPoules)) {
+    players.sort((a, b) => {
+      if (b.total_match_points !== a.total_match_points) return b.total_match_points - a.total_match_points;
+      const avgA = a.total_reprises > 0 ? a.total_points / a.total_reprises : 0;
+      const avgB = b.total_reprises > 0 ? b.total_points / b.total_reprises : 0;
+      return avgB - avgA;
+    });
+    players.forEach((p, i) => { p.poule_rank = i + 1; });
+  }
+
+  // Build overall ranking:
+  // If classification poules exist (DEMI-FINALE, Classement 07-08, etc.), use them for final positions
+  // The classification poules from E2i encode the final ranking directly
+  if (Object.keys(classificationPoules).length > 0) {
+    // Extract final positions from classification/bracket match results
+    const classificationPositions = extractClassificationPositions(classificationPoules, regularPoules);
+
+    // Merge back: players already ranked by classification get their final position
+    let position = 1;
+    for (const cp of classificationPositions) {
+      const player = playerStats.find(p => p.licence === cp.licence);
+      if (player) {
+        player.final_position = position++;
+      }
+    }
+
+    // Players NOT in classification matches get positions after (ranked by poule performance)
+    const unranked = playerStats.filter(p => !p.final_position);
+    unranked.sort((a, b) => {
+      if (b.total_match_points !== a.total_match_points) return b.total_match_points - a.total_match_points;
+      const avgA = a.total_reprises > 0 ? a.total_points / a.total_reprises : 0;
+      const avgB = b.total_reprises > 0 ? b.total_points / b.total_reprises : 0;
+      return avgB - avgA;
+    });
+    for (const p of unranked) {
+      p.final_position = position++;
+    }
+  } else {
+    // No classification poules — rank by interleaving poule positions
+    // 1st of each poule, then 2nds, then 3rds...
+    // Within same poule rank: sort by MGP DESC
+    const pouleNames = Object.keys(regularPoules).sort();
+    const maxRank = Math.max(...playerStats.map(p => p.poule_rank || 0));
+
+    let position = 1;
+    for (let rank = 1; rank <= maxRank; rank++) {
+      const atThisRank = playerStats
+        .filter(p => p.poule_rank === rank)
+        .sort((a, b) => {
+          const avgA = a.total_reprises > 0 ? a.total_points / a.total_reprises : 0;
+          const avgB = b.total_reprises > 0 ? b.total_points / b.total_reprises : 0;
+          return avgB - avgA;
+        });
+      for (const p of atThisRank) {
+        p.final_position = position++;
+      }
+    }
+  }
+
+  return playerStats;
+}
+
+/**
+ * Extract final classification from bracket/classification poules.
+ * Returns players sorted by their classification position (best first).
+ */
+function extractClassificationPositions(classificationPoules, regularPoules) {
+  const results = [];
+
+  // Parse classification poule names for position ranges
+  // E.g., "Classement 07-08" means positions 7-8
+  // "DEMI-FINALE (J01-J04)" means semi-final between poule positions 1 and 4
+  // "FINALE" means the final for positions 1-2
+  // "PETITE FINALE" means match for positions 3-4
+
+  for (const [pouleName, players] of Object.entries(classificationPoules)) {
+    const upper = pouleName.toUpperCase();
+
+    // Check for "Classement XX-YY" pattern
+    const classementMatch = pouleName.match(/[Cc]lassement\s+(\d+)-(\d+)/);
+    if (classementMatch) {
+      const posStart = parseInt(classementMatch[1]);
+      // Sort within this classification match by match points then moyenne
+      players.sort((a, b) => {
+        if (b.total_match_points !== a.total_match_points) return b.total_match_points - a.total_match_points;
+        const avgA = a.total_reprises > 0 ? a.total_points / a.total_reprises : 0;
+        const avgB = b.total_reprises > 0 ? b.total_points / b.total_reprises : 0;
+        return avgB - avgA;
+      });
+      players.forEach((p, i) => {
+        results.push({ licence: p.licence, position: posStart + i });
+      });
+      continue;
+    }
+
+    // "FINALE" (not petite) = positions 1-2
+    if (upper === 'FINALE' || upper.startsWith('FINALE ')) {
+      players.sort((a, b) => {
+        if (b.total_match_points !== a.total_match_points) return b.total_match_points - a.total_match_points;
+        const avgA = a.total_reprises > 0 ? a.total_points / a.total_reprises : 0;
+        const avgB = b.total_reprises > 0 ? b.total_points / b.total_reprises : 0;
+        return avgB - avgA;
+      });
+      players.forEach((p, i) => {
+        results.push({ licence: p.licence, position: 1 + i });
+      });
+      continue;
+    }
+
+    // "PETITE FINALE" = positions 3-4
+    if (upper.includes('PETITE FINALE')) {
+      players.sort((a, b) => {
+        if (b.total_match_points !== a.total_match_points) return b.total_match_points - a.total_match_points;
+        const avgA = a.total_reprises > 0 ? a.total_points / a.total_reprises : 0;
+        const avgB = b.total_reprises > 0 ? b.total_points / b.total_reprises : 0;
+        return avgB - avgA;
+      });
+      players.forEach((p, i) => {
+        results.push({ licence: p.licence, position: 3 + i });
+      });
+      continue;
+    }
+
+    // "DEMI-FINALE" — semi-finals, losers go to petite finale
+    // Don't assign final positions from semis (handled by FINALE/PETITE FINALE)
+    if (upper.includes('DEMI-FINALE') || upper.includes('SEMI-FINAL')) {
+      // Skip — positions determined by FINALE and PETITE FINALE
+      continue;
+    }
+  }
+
+  // Sort by position
+  results.sort((a, b) => a.position - b.position);
+  return results;
+}
+
+/**
+ * POST /import-matches
+ * Import multiple E2i match CSV files for a tournament.
+ * Parses matches, aggregates per-player stats, computes rankings,
+ * stores in tournament_matches + tournament_results, then chains bonus/ranking pipeline.
+ */
+router.post('/import-matches', authenticateToken, upload.array('files', 20), async (req, res) => {
+  const files = req.files || [];
+  if (files.length === 0) {
+    return res.status(400).json({ error: 'Aucun fichier CSV uploadé' });
+  }
+
+  const { categoryId, tournamentNumber, season, tournamentDate } = req.body;
+  if (!categoryId || !tournamentNumber || !season) {
+    cleanupFiles(files);
+    return res.status(400).json({ error: 'Catégorie, numéro de tournoi et saison requis' });
+  }
+
+  const orgId = req.user.organizationId || null;
+
+  try {
+    // 1. Parse all CSV files into matches
+    let allMatches = [];
+    const fileInfo = [];
+    for (const file of files) {
+      const matches = await parseMatchCSV(file.path);
+      const poules = [...new Set(matches.map(m => m.poule_name))];
+      fileInfo.push({ filename: file.originalname, matchCount: matches.length, poules });
+      allMatches = allMatches.concat(matches);
+    }
+
+    if (allMatches.length === 0) {
+      cleanupFiles(files);
+      return res.status(400).json({ error: 'Aucun match trouvé dans les fichiers CSV' });
+    }
+
+    console.log(`[IMPORT-MATCHES] Parsed ${allMatches.length} matches from ${files.length} files for category ${categoryId}, T${tournamentNumber}, season ${season}`);
+
+    // 2. Create or get tournament
+    const upsertResult = await dbRunAsync(
+      `INSERT INTO tournaments (category_id, tournament_number, season, tournament_date, organization_id)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT(category_id, tournament_number, season) DO UPDATE SET
+         tournament_date = $4,
+         import_date = CURRENT_TIMESTAMP
+       RETURNING id`,
+      [categoryId, tournamentNumber, season, tournamentDate || null, orgId]
+    );
+
+    let tournamentId;
+    if (upsertResult && upsertResult.lastID) {
+      tournamentId = upsertResult.lastID;
+    }
+    // Fallback: query for the tournament
+    if (!tournamentId) {
+      const row = await dbGetAsync(
+        'SELECT id FROM tournaments WHERE category_id = $1 AND tournament_number = $2 AND season = $3',
+        [categoryId, tournamentNumber, season]
+      );
+      tournamentId = row ? row.id : null;
+    }
+
+    if (!tournamentId) {
+      cleanupFiles(files);
+      return res.status(500).json({ error: 'Impossible de créer/trouver le tournoi' });
+    }
+
+    // 3. Delete existing matches and results for this tournament
+    await dbRunAsync('DELETE FROM tournament_matches WHERE tournament_id = $1', [tournamentId]);
+    await dbRunAsync('DELETE FROM tournament_results WHERE tournament_id = $1', [tournamentId]);
+
+    // 4. Ensure all players exist
+    const allLicences = new Set();
+    for (const match of allMatches) {
+      allLicences.add(match.player1_licence);
+      allLicences.add(match.player2_licence);
+    }
+
+    for (const match of allMatches) {
+      for (const side of ['player1', 'player2']) {
+        const licence = match[`${side}_licence`];
+        const fullName = match[`${side}_name`] || '';
+        const nameParts = fullName.split(' ');
+        const lastName = nameParts[0] || '';
+        const firstName = nameParts.slice(1).join(' ') || '';
+
+        await dbRunAsync(
+          `INSERT INTO players (licence, first_name, last_name, club, is_active, organization_id)
+           VALUES ($1, $2, $3, 'Club inconnu', 1, $4)
+           ON CONFLICT (licence) DO NOTHING`,
+          [licence, firstName, lastName, orgId]
+        );
+      }
+    }
+
+    // 5. Insert all matches into tournament_matches
+    for (const match of allMatches) {
+      await dbRunAsync(
+        `INSERT INTO tournament_matches (
+          tournament_id, phase_number, match_date, table_name, poule_name,
+          player1_licence, player1_name, player1_points, player1_reprises, player1_serie, player1_match_points, player1_moyenne,
+          player2_licence, player2_name, player2_points, player2_reprises, player2_serie, player2_match_points, player2_moyenne,
+          game_mode, organization_id
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)`,
+        [
+          tournamentId, match.phase_number, match.match_date, match.table_name, match.poule_name,
+          match.player1_licence, match.player1_name, match.player1_points, match.player1_reprises, match.player1_serie, match.player1_match_points, match.player1_moyenne,
+          match.player2_licence, match.player2_name, match.player2_points, match.player2_reprises, match.player2_serie, match.player2_match_points, match.player2_moyenne,
+          match.game_mode, orgId
+        ]
+      );
+    }
+
+    // 6. Aggregate matches into per-player stats
+    const playerStats = aggregateMatchResults(allMatches);
+    const rankedStats = computeMatchRankings(playerStats);
+
+    // 7. Insert tournament_results
+    for (const player of rankedStats) {
+      const mgp = player.total_reprises > 0 ? player.total_points / player.total_reprises : 0;
+      await dbRunAsync(
+        `INSERT INTO tournament_results (
+          tournament_id, licence, player_name, position, match_points, moyenne,
+          serie, points, reprises, meilleure_partie, poule_rank, parties_menees
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+        [
+          tournamentId,
+          player.licence,
+          player.name,
+          player.final_position || 0,
+          player.total_match_points,
+          parseFloat(mgp.toFixed(4)),
+          player.max_serie,
+          player.total_points,
+          player.total_reprises,
+          parseFloat(player.best_single_moyenne.toFixed(4)),
+          player.poule_rank || 0,
+          player.parties_menees
+        ]
+      );
+    }
+
+    console.log(`[IMPORT-MATCHES] Inserted ${rankedStats.length} player results for tournament ${tournamentId}`);
+
+    // 8. Chain: position points → bonuses → rankings
+    await new Promise((resolve) => {
+      recomputeAllBonuses(categoryId, season, orgId, async () => {
+        recalculateRankings(categoryId, season, () => {
+          resolve();
+        });
+      });
+    });
+
+    // Cleanup uploaded files
+    cleanupFiles(files);
+
+    // Log action
+    logAdminAction({
+      req,
+      action: ACTION_TYPES.IMPORT_TOURNAMENT,
+      details: `Import CSV matchs E2i: T${tournamentNumber}, saison ${season}, ${allMatches.length} matchs, ${rankedStats.length} joueurs`,
+      targetType: 'tournament',
+      targetId: tournamentId,
+      targetName: `T${tournamentNumber} - ${season}`
+    });
+
+    // Check bonus configuration
+    let hasBonuses = false;
+    try {
+      const bonusMoyenne = orgId ? (await appSettings.getOrgSetting(orgId, 'bonus_moyenne_enabled')) : '';
+      if (bonusMoyenne === 'true') {
+        hasBonuses = true;
+      } else {
+        const activeRules = await dbAllAsync(
+          "SELECT 1 FROM scoring_rules WHERE is_active = true AND field_1 IS NOT NULL AND rule_type != 'MOYENNE_BONUS' AND points > 0 AND ($1::int IS NULL OR organization_id = $1) LIMIT 1",
+          [orgId]
+        );
+        hasBonuses = activeRules && activeRules.length > 0;
+      }
+    } catch (e) {
+      console.error('[IMPORT-MATCHES] Error checking bonus settings:', e);
+    }
+
+    res.json({
+      message: 'Import des matchs réussi',
+      tournamentId,
+      imported: rankedStats.length,
+      matchCount: allMatches.length,
+      fileInfo,
+      hasBonuses,
+      poules: [...new Set(allMatches.map(m => m.poule_name))]
+    });
+
+  } catch (error) {
+    console.error('[IMPORT-MATCHES] Error:', error);
+    cleanupFiles(files);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /import-matches/preview
+ * Preview the results of importing E2i match CSV files (without persisting).
+ */
+router.post('/import-matches/preview', authenticateToken, upload.array('files', 20), async (req, res) => {
+  const files = req.files || [];
+  if (files.length === 0) {
+    return res.status(400).json({ error: 'Aucun fichier CSV uploadé' });
+  }
+
+  try {
+    let allMatches = [];
+    const fileInfo = [];
+    for (const file of files) {
+      const matches = await parseMatchCSV(file.path);
+      const poules = [...new Set(matches.map(m => m.poule_name))];
+      fileInfo.push({ filename: file.originalname, matchCount: matches.length, poules });
+      allMatches = allMatches.concat(matches);
+    }
+
+    cleanupFiles(files);
+
+    if (allMatches.length === 0) {
+      return res.status(400).json({ error: 'Aucun match trouvé dans les fichiers CSV' });
+    }
+
+    // Aggregate and rank
+    const playerStats = aggregateMatchResults(allMatches);
+    const rankedStats = computeMatchRankings(playerStats);
+
+    // Enrich with player info from DB (club, first_name, last_name)
+    const orgId = req.user.organizationId || null;
+    for (const player of rankedStats) {
+      const dbPlayer = await dbGetAsync(
+        'SELECT first_name, last_name, club FROM players WHERE REPLACE(licence, \' \', \'\') = $1 AND ($2::int IS NULL OR organization_id = $2)',
+        [player.licence, orgId]
+      );
+      if (dbPlayer) {
+        player.first_name = dbPlayer.first_name;
+        player.last_name = dbPlayer.last_name;
+        player.club = dbPlayer.club;
+      } else {
+        // Parse name from CSV
+        const nameParts = (player.name || '').split(' ');
+        player.last_name = nameParts[0] || '';
+        player.first_name = nameParts.slice(1).join(' ') || '';
+        player.club = '';
+        player.unknown = true;
+      }
+    }
+
+    // Compute position points (preview only — not persisted)
+    const { categoryId } = req.body;
+    let positionPointsLookup = {};
+    if (orgId && categoryId) {
+      const qualMode = await appSettings.getOrgSetting(orgId, 'qualification_mode');
+      if (qualMode === 'journees') {
+        const nbPlayers = rankedStats.length;
+        positionPointsLookup = await getPositionPointsLookup(orgId, nbPlayers);
+
+        // Apply degradation if configured
+        const degradation = await appSettings.getOrgSetting(orgId, 'position_points_degradation');
+
+        for (const player of rankedStats) {
+          const pos = player.final_position;
+          if (degradation === 'last_player' && pos === nbPlayers && nbPlayers > 0) {
+            // Last player gets points of position N+1
+            player.position_points = positionPointsLookup[pos + 1] || 0;
+          } else {
+            player.position_points = positionPointsLookup[pos] || 0;
+          }
+        }
+      }
+    }
+
+    // Compute bonus preview (same as on-the-fly in results)
+    let bonusMoyenneInfo = null;
+    if (orgId && categoryId) {
+      const rawSetting = await appSettings.getOrgSetting(orgId, 'bonus_moyenne_enabled');
+      if (rawSetting === 'true') {
+        const bonusType = (await appSettings.getOrgSetting(orgId, 'bonus_moyenne_type')) || 'normal';
+        const tier1 = parseInt(await appSettings.getOrgSetting(orgId, 'scoring_avg_tier_1')) || 1;
+        const tier2 = parseInt(await appSettings.getOrgSetting(orgId, 'scoring_avg_tier_2')) || 2;
+        const tier3 = parseInt(await appSettings.getOrgSetting(orgId, 'scoring_avg_tier_3')) || 3;
+
+        const cat = await dbGetAsync('SELECT game_type, level, organization_id FROM categories WHERE id = $1', [categoryId]);
+        if (cat) {
+          const gp = await dbGetAsync(
+            'SELECT moyenne_mini, moyenne_maxi FROM game_parameters WHERE UPPER(REPLACE(mode, \' \', \'\')) = UPPER(REPLACE($1, \' \', \'\')) AND UPPER(categorie) = UPPER($2) AND ($3::int IS NULL OR organization_id = $3)',
+            [cat.game_type, cat.level, cat.organization_id || orgId]
+          );
+          const moyenneMini = (gp && gp.moyenne_mini != null) ? parseFloat(gp.moyenne_mini) : 0;
+          const moyenneMaxi = (gp && gp.moyenne_maxi != null) ? parseFloat(gp.moyenne_maxi) : 999;
+          const moyenneMiddle = (moyenneMini + moyenneMaxi) / 2;
+
+          bonusMoyenneInfo = { type: bonusType, mini: moyenneMini, middle: moyenneMiddle, maxi: moyenneMaxi, tiers: [tier1, tier2, tier3] };
+
+          for (const player of rankedStats) {
+            const mgp = player.total_reprises > 0 ? player.total_points / player.total_reprises : 0;
+            let bonus = 0;
+            if (bonusType === 'tiered') {
+              if (mgp >= moyenneMaxi) bonus = tier3;
+              else if (mgp >= moyenneMiddle) bonus = tier2;
+              else if (mgp >= moyenneMini) bonus = tier1;
+            } else {
+              if (mgp > moyenneMaxi) bonus = tier2;
+              else if (mgp >= moyenneMini) bonus = tier1;
+            }
+            player.bonus_moyenne = bonus;
+          }
+        }
+      }
+    }
+
+    // Sort by final_position for display
+    rankedStats.sort((a, b) => (a.final_position || 999) - (b.final_position || 999));
+
+    // Build preview table data
+    const preview = rankedStats.map(p => {
+      const mgp = p.total_reprises > 0 ? p.total_points / p.total_reprises : 0;
+      const posPoints = p.position_points || 0;
+      const bonus = p.bonus_moyenne || 0;
+      return {
+        final_position: p.final_position,
+        licence: p.licence,
+        last_name: p.last_name || '',
+        first_name: p.first_name || '',
+        club: p.club || '',
+        poule_name: p.poule_name,
+        poule_rank: p.poule_rank,
+        position_points: posPoints,
+        bonus_moyenne: bonus,
+        total_points_clt: posPoints + bonus,
+        parties_menees: p.parties_menees,
+        points: p.total_points,
+        reprises: p.total_reprises,
+        max_serie: p.max_serie,
+        mgp: parseFloat(mgp.toFixed(3)),
+        mpart: parseFloat(p.best_single_moyenne.toFixed(3)),
+        match_points: p.total_match_points,
+        unknown: p.unknown || false
+      };
+    });
+
+    res.json({
+      preview,
+      matchCount: allMatches.length,
+      playerCount: rankedStats.length,
+      fileInfo,
+      poules: [...new Set(allMatches.map(m => m.poule_name))],
+      bonusMoyenneInfo,
+      unknownPlayers: preview.filter(p => p.unknown)
+    });
+
+  } catch (error) {
+    console.error('[IMPORT-MATCHES-PREVIEW] Error:', error);
+    cleanupFiles(files);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /:id/matches
+ * Retrieve individual match records for a tournament.
+ */
+router.get('/:id/matches', authenticateToken, async (req, res) => {
+  try {
+    const tournamentId = req.params.id;
+    const matches = await dbAllAsync(
+      `SELECT * FROM tournament_matches WHERE tournament_id = $1 ORDER BY poule_name, phase_number, id`,
+      [tournamentId]
+    );
+    res.json(matches || []);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/** Helper to cleanup uploaded files */
+function cleanupFiles(files) {
+  for (const file of files) {
+    try {
+      if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
+    } catch (e) {
+      console.error('Error cleaning up file:', e);
+    }
+  }
+}
 
 module.exports = router;

@@ -200,6 +200,19 @@
         </div>
       </div>
 
+      <!-- Match details section (only shown for E2i imports) -->
+      <div id="matchDetailsSection" style="display: none; margin-top: 20px;">
+        <div class="card">
+          <h3 style="cursor: pointer;" onclick="toggleMatchDetails()">
+            <span id="matchDetailsToggle" style="display: inline-block; transition: transform 0.2s;">&#9654;</span>
+            Détail des matchs (<span id="matchDetailsCount">0</span> matchs)
+          </h3>
+          <div id="matchDetailsContent" style="display: none; margin-top: 15px;">
+            <div id="matchDetailsByPoule"></div>
+          </div>
+        </div>
+      </div>
+
       <div style="margin-top: 20px; text-align: center;">
         <button class="btn btn-success" id="exportExcelBtn">
           📊 Exporter en Excel
@@ -427,21 +440,32 @@
         // Detect if any result has position_points (journées mode)
         const hasPositionPoints = data.results.some(r => r.position_points > 0);
 
-        // Update header row dynamically based on bonus columns and position points
-        if (hasBonusCols || hasPositionPoints) {
-          document.getElementById('resultsHeaderRow').innerHTML = `
-            <th style="width: 80px;">Position</th>
+        // Detect if tournament has match-level data (E2i import)
+        const hasMatchData = data.hasMatchData || false;
+        const hasPouleRank = data.results.some(r => r.poule_rank > 0);
+        const hasMPART = data.results.some(r => r.meilleure_partie > 0);
+        const hasPM = data.results.some(r => r.parties_menees > 0);
+
+        // Always update header row dynamically (match data, bonus columns, or position points)
+        {
+          let headerHTML = `
+            <th style="width: 60px;">CLT</th>
             <th>Licence</th>
             <th>Joueur</th>
-            <th>Club</th>
-            <th style="text-align: center;">Pts Match</th>
-            ${bonusColumns.map(col => `<th style="text-align: center;">${col.label}</th>`).join('')}
-            ${hasBonusCols ? '<th style="text-align: center;">Total</th>' : ''}
-            <th style="text-align: center;">Points</th>
-            <th style="text-align: center;">Reprises</th>
-            <th style="text-align: center;">Moyenne</th>
-            <th style="text-align: center;">Meilleure Série</th>
-            ${hasPositionPoints ? '<th style="text-align: center;">Pts Position</th>' : ''}`;
+            <th>Club</th>`;
+          if (hasPouleRank) headerHTML += '<th style="text-align: center;">Clt poule</th>';
+          headerHTML += '<th style="text-align: center;">Pts Match</th>';
+          headerHTML += bonusColumns.map(col => `<th style="text-align: center;">${col.label}</th>`).join('');
+          if (hasBonusCols) headerHTML += '<th style="text-align: center;">Total</th>';
+          if (hasPositionPoints) headerHTML += '<th style="text-align: center;">Pts Clt</th>';
+          if (hasPositionPoints && hasBonusCols) headerHTML += '<th style="text-align: center;">Pts Clt Total</th>';
+          if (hasPM) headerHTML += '<th style="text-align: center;">PM</th>';
+          headerHTML += '<th style="text-align: center;">Points</th>';
+          headerHTML += '<th style="text-align: center;">Reprises</th>';
+          headerHTML += '<th style="text-align: center;">Moyenne</th>';
+          headerHTML += '<th style="text-align: center;">MS</th>';
+          if (hasMPART) headerHTML += '<th style="text-align: center;">MPART</th>';
+          document.getElementById('resultsHeaderRow').innerHTML = headerHTML;
         }
 
         data.results.forEach((result, index) => {
@@ -464,9 +488,10 @@
 
           // Build dynamic bonus columns HTML from bonus_detail JSON
           let bonusCellsHTML = '';
+          let totalBonus = 0;
           if (hasBonusCols) {
             const bonusDetail = (() => { try { return JSON.parse(result.bonus_detail || '{}'); } catch(e) { return {}; } })();
-            const totalBonus = Object.values(bonusDetail).reduce((s, v) => s + (v || 0), 0);
+            totalBonus = Object.values(bonusDetail).reduce((s, v) => s + (v || 0), 0);
             const total = result.match_points + totalBonus;
 
             bonusColumns.forEach(col => {
@@ -477,10 +502,19 @@
             bonusCellsHTML += `<td style="text-align: center; font-weight: bold;">${total}</td>`;
           }
 
-          // Position points cell (only if journées mode)
-          const positionPointsHTML = hasPositionPoints
-            ? `<td style="text-align: center; font-weight: bold; color: #1F4788;">${result.position_points || 0}</td>`
+          // Position points cells
+          const posPointsVal = result.position_points || 0;
+          const posPointsHTML = hasPositionPoints
+            ? `<td style="text-align: center; font-weight: bold; color: #1F4788;">${posPointsVal}</td>`
             : '';
+          const totalCltHTML = (hasPositionPoints && hasBonusCols)
+            ? `<td style="text-align: center; font-weight: bold; color: var(--color-primary, #1F4788);">${posPointsVal + totalBonus}</td>`
+            : '';
+
+          // Match-specific columns
+          const pouleRankHTML = hasPouleRank ? `<td style="text-align: center;">${result.poule_rank || '-'}</td>` : '';
+          const pmHTML = hasPM ? `<td style="text-align: center;">${result.parties_menees || '-'}</td>` : '';
+          const mpartHTML = hasMPART ? `<td style="text-align: center;">${result.meilleure_partie ? result.meilleure_partie.toFixed(3) : '-'}</td>` : '';
 
           // Create cells individually to use innerHTML for club logo
           row.innerHTML = `
@@ -492,21 +526,30 @@
               </a>
             </td>
             <td></td>
+            ${pouleRankHTML}
             <td style="text-align: center; font-weight: bold;">${result.match_points}</td>
             ${bonusCellsHTML}
+            ${posPointsHTML}
+            ${totalCltHTML}
+            ${pmHTML}
             <td style="text-align: center;">${result.points}</td>
             <td style="text-align: center;">${result.reprises}</td>
             <td style="text-align: center;">${moyenne}</td>
             <td style="text-align: center;">${result.serie}</td>
-            ${positionPointsHTML}
+            ${mpartHTML}
           `;
 
-          // Set club logo HTML separately
+          // Set club logo HTML separately (cell index shifts based on optional columns)
           const clubCell = row.cells[3];
           clubCell.innerHTML = getClubLogoHTML(result.club_name);
 
           tbody.appendChild(row);
         });
+
+        // Show match details section if match data exists
+        if (hasMatchData) {
+          loadMatchDetails(tournamentId);
+        }
 
         document.getElementById('loadingTournament').style.display = 'none';
         document.getElementById('tournamentContent').style.display = 'block';
@@ -568,6 +611,92 @@
 
         podiumContainer.appendChild(podiumPlace);
       });
+    }
+
+    // ===== Match Details (E2i imports) =====
+
+    function toggleMatchDetails() {
+      const content = document.getElementById('matchDetailsContent');
+      const toggle = document.getElementById('matchDetailsToggle');
+      if (content.style.display === 'none') {
+        content.style.display = 'block';
+        toggle.style.transform = 'rotate(90deg)';
+      } else {
+        content.style.display = 'none';
+        toggle.style.transform = 'rotate(0deg)';
+      }
+    }
+    window.toggleMatchDetails = toggleMatchDetails;
+
+    async function loadMatchDetails(tId) {
+      try {
+        const response = await fetch(`${API_URL}/tournaments/${tId}/matches`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!response.ok) return;
+        const matches = await response.json();
+        if (!matches || matches.length === 0) return;
+
+        document.getElementById('matchDetailsSection').style.display = 'block';
+        document.getElementById('matchDetailsCount').textContent = matches.length;
+
+        // Group by poule
+        const poules = {};
+        matches.forEach(m => {
+          const poule = m.poule_name || 'Poule';
+          if (!poules[poule]) poules[poule] = [];
+          poules[poule].push(m);
+        });
+
+        const container = document.getElementById('matchDetailsByPoule');
+        container.innerHTML = Object.entries(poules).map(([pouleName, pouleMatches]) => `
+          <div style="margin-bottom: 20px;">
+            <h4 style="color: var(--color-primary, #1F4788); margin-bottom: 10px; border-bottom: 1px solid #e0e0e0; padding-bottom: 5px;">${pouleName}</h4>
+            <table class="data-table" style="font-size: 12px; width: 100%;">
+              <thead>
+                <tr>
+                  <th>Joueur 1</th>
+                  <th style="text-align: center;">Pts</th>
+                  <th style="text-align: center;">Rep</th>
+                  <th style="text-align: center;">MS</th>
+                  <th style="text-align: center;">PM</th>
+                  <th style="text-align: center;">Moy</th>
+                  <th style="text-align: center; font-weight: bold;">vs</th>
+                  <th>Joueur 2</th>
+                  <th style="text-align: center;">Pts</th>
+                  <th style="text-align: center;">Rep</th>
+                  <th style="text-align: center;">MS</th>
+                  <th style="text-align: center;">PM</th>
+                  <th style="text-align: center;">Moy</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${pouleMatches.map(m => {
+                  const p1Won = m.player1_match_points > m.player2_match_points;
+                  const p2Won = m.player2_match_points > m.player1_match_points;
+                  return `<tr>
+                    <td style="${p1Won ? 'font-weight: bold; color: #28a745;' : ''}">${m.player1_name || m.player1_licence}</td>
+                    <td style="text-align: center;">${m.player1_points}</td>
+                    <td style="text-align: center;">${m.player1_reprises}</td>
+                    <td style="text-align: center;">${m.player1_serie}</td>
+                    <td style="text-align: center; font-weight: bold;">${m.player1_match_points}</td>
+                    <td style="text-align: center;">${m.player1_moyenne ? m.player1_moyenne.toFixed(3) : '-'}</td>
+                    <td style="text-align: center; color: #999;">vs</td>
+                    <td style="${p2Won ? 'font-weight: bold; color: #28a745;' : ''}">${m.player2_name || m.player2_licence}</td>
+                    <td style="text-align: center;">${m.player2_points}</td>
+                    <td style="text-align: center;">${m.player2_reprises}</td>
+                    <td style="text-align: center;">${m.player2_serie}</td>
+                    <td style="text-align: center; font-weight: bold;">${m.player2_match_points}</td>
+                    <td style="text-align: center;">${m.player2_moyenne ? m.player2_moyenne.toFixed(3) : '-'}</td>
+                  </tr>`;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>
+        `).join('');
+      } catch (error) {
+        console.error('Error loading match details:', error);
+      }
     }
 
     // Export to Excel

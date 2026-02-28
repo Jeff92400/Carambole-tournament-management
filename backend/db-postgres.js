@@ -1775,16 +1775,38 @@ async function initializeDatabase() {
     // New column on tournament_results for position-based season points
     await client.query(`ALTER TABLE tournament_results ADD COLUMN IF NOT EXISTS position_points INTEGER DEFAULT 0`);
 
-    // Position-to-points lookup (configurable per org)
+    // Position-to-points lookup (configurable per org, with player_count dimension)
     await client.query(`
       CREATE TABLE IF NOT EXISTS position_points (
         id SERIAL PRIMARY KEY,
         position INTEGER NOT NULL,
         points INTEGER NOT NULL,
+        player_count INTEGER NOT NULL DEFAULT 0,
         organization_id INTEGER REFERENCES organizations(id),
-        UNIQUE(position, organization_id)
+        UNIQUE(player_count, position, organization_id)
       )
     `);
+
+    // Migration: add player_count column if table was created before this change
+    await client.query(`ALTER TABLE position_points ADD COLUMN IF NOT EXISTS player_count INTEGER NOT NULL DEFAULT 0`);
+
+    // Migration: update unique constraint to include player_count
+    // Drop old constraint if it exists (position, organization_id) and create new one
+    try {
+      await client.query(`ALTER TABLE position_points DROP CONSTRAINT IF EXISTS position_points_position_organization_id_key`);
+    } catch (e) { /* constraint may not exist */ }
+    try {
+      await client.query(`
+        DO $$ BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM pg_constraint WHERE conname = 'position_points_unique_pc_pos_org'
+          ) THEN
+            ALTER TABLE position_points ADD CONSTRAINT position_points_unique_pc_pos_org
+              UNIQUE(player_count, position, organization_id);
+          END IF;
+        END $$;
+      `);
+    } catch (e) { /* constraint may already exist from CREATE TABLE */ }
 
     // Bracket match results (SF, F, PF, classification rounds)
     await client.query(`
@@ -1810,6 +1832,45 @@ async function initializeDatabase() {
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_bracket_matches_tournament ON bracket_matches(tournament_id)
     `);
+
+    // --- Import CSV Matchs E2i ---
+
+    // Tournament matches table — stores individual match results from E2i CSV imports
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS tournament_matches (
+        id SERIAL PRIMARY KEY,
+        tournament_id INTEGER NOT NULL REFERENCES tournaments(id) ON DELETE CASCADE,
+        phase_number INTEGER NOT NULL,
+        match_date DATE,
+        table_name TEXT,
+        poule_name TEXT NOT NULL,
+        player1_licence TEXT NOT NULL,
+        player1_name TEXT,
+        player1_points INTEGER DEFAULT 0,
+        player1_reprises INTEGER DEFAULT 0,
+        player1_serie INTEGER DEFAULT 0,
+        player1_match_points INTEGER DEFAULT 0,
+        player1_moyenne REAL DEFAULT 0,
+        player2_licence TEXT NOT NULL,
+        player2_name TEXT,
+        player2_points INTEGER DEFAULT 0,
+        player2_reprises INTEGER DEFAULT 0,
+        player2_serie INTEGER DEFAULT 0,
+        player2_match_points INTEGER DEFAULT 0,
+        player2_moyenne REAL DEFAULT 0,
+        game_mode TEXT,
+        organization_id INTEGER REFERENCES organizations(id),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_tournament_matches_tournament ON tournament_matches(tournament_id)
+    `);
+
+    // New columns on tournament_results for match-based imports
+    await client.query(`ALTER TABLE tournament_results ADD COLUMN IF NOT EXISTS meilleure_partie REAL`);
+    await client.query(`ALTER TABLE tournament_results ADD COLUMN IF NOT EXISTS poule_rank INTEGER`);
+    await client.query(`ALTER TABLE tournament_results ADD COLUMN IF NOT EXISTS parties_menees INTEGER`);
 
     // Stage-level scoring configuration (which scoring mechanisms apply at each competition stage)
     await client.query(`

@@ -701,6 +701,33 @@ CREATE TABLE bracket_matches (
 - `backend/CLAUDE.md` - Detailed backend documentation
 - `frontend/CLAUDE.md` - Detailed frontend documentation
 
+## Calendar Season Generation (`backend/routes/calendar.js`)
+
+Auto-generates all `tournoi_ext` entries for a season from the CDBHS Excel calendar file. 3-step wizard in `frontend/settings.html`: Upload → Preview → Import.
+
+### Excel Format (CDBHS)
+- Row 5: "S" label in col E, then Saturday dates (Date objects) in cols F+
+- Row 6: "D" label in col E, then Sunday dates in cols F+
+- Rows 7-19: Data rows — col B = mode, col C = category, col D = Pts/Rep, cols F+ = tournament markers (T1/T2/T3/FD)
+- Row 20+: Legend/footer (parser stops at "LEGENDE" or "COULEU")
+
+### Club Location via Cell Color (TODO — not yet implemented)
+The Excel file encodes the hosting club via **cell background color** — no club codes in the cell text. The legend area (rows 22-27) maps colors to clubs:
+- `FF974806` = Bois-Colombes
+- `FF00B0F0` = Châtillon
+- `FFFABF8F` = Clamart
+- `FF00B050` = Clichy
+- `FF0070C0` = Courbevoie
+- Finales (FD): white/no fill or `FFFF0000` (red) — location TBD
+
+**Implementation plan:** Read cell `fill.fgColor.argb`, match against a configurable color-to-club mapping table (per org, since each CDB has different clubs/colors). ExcelJS supports reading cell fills. This replaces the unused "T1/A" club code format.
+
+### Current Status
+- Parser works for CDBHS format (52 tournaments extracted from 2025-2026 calendar)
+- Locations are "Non défini" — pending color-based club detection
+- `exceljs` dependency is in `package.json`
+- Modal instructions in `settings.html` still reference "T1/A" format — update when color detection is implemented
+
 ## Future Work / Roadmap
 
 - **CRITICAL - Mode/game_type refactoring:** Remove ALL hardcoded mode values ('LIBRE', 'BANDE', '3BANDES', 'CADRE') and replace with dynamic lookups from `game_modes` table. This is causing recurring bugs due to inconsistent values ('3 BANDES' vs '3BANDES'). Files with hardcoded modes:

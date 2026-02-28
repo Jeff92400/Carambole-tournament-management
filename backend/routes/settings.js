@@ -1677,7 +1677,7 @@ router.post('/snapshot-season-stats', authenticateToken, requireAdmin, async (re
 
 // ==================== QUALIFICATION MODE - POSITION POINTS ====================
 
-// GET position-to-points lookup table for the org
+// GET position-to-points lookup table for the org (grouped by player_count)
 router.get('/position-points', authenticateToken, async (req, res) => {
   try {
     const db = getDb();
@@ -1685,7 +1685,7 @@ router.get('/position-points', authenticateToken, async (req, res) => {
 
     const rows = await new Promise((resolve, reject) => {
       db.all(
-        'SELECT id, position, points FROM position_points WHERE ($1::int IS NULL OR organization_id = $1) ORDER BY position ASC',
+        'SELECT id, position, points, player_count FROM position_points WHERE ($1::int IS NULL OR organization_id = $1) ORDER BY player_count ASC, position ASC',
         [orgId],
         (err, rows) => err ? reject(err) : resolve(rows || [])
       );
@@ -1699,14 +1699,15 @@ router.get('/position-points', authenticateToken, async (req, res) => {
 });
 
 // PUT (replace all) position-to-points lookup table for the org
+// Accepts entries with optional player_count: [{ player_count: 8, position: 1, points: 10 }, ...]
 router.put('/position-points', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const db = getDb();
     const orgId = req.user.organizationId || null;
-    const { entries } = req.body; // [{ position: 1, points: 10 }, { position: 2, points: 8 }, ...]
+    const { entries } = req.body; // [{ player_count: 0, position: 1, points: 10 }, ...]
 
     if (!Array.isArray(entries)) {
-      return res.status(400).json({ error: 'entries must be an array of { position, points }' });
+      return res.status(400).json({ error: 'entries must be an array of { position, points, player_count? }' });
     }
 
     // Validate entries
@@ -1725,12 +1726,13 @@ router.put('/position-points', authenticateToken, requireAdmin, async (req, res)
       );
     });
 
-    // Insert new entries
+    // Insert new entries (with player_count, defaults to 0)
     for (const entry of entries) {
+      const playerCount = (typeof entry.player_count === 'number') ? entry.player_count : 0;
       await new Promise((resolve, reject) => {
         db.run(
-          'INSERT INTO position_points (position, points, organization_id) VALUES ($1, $2, $3)',
-          [entry.position, entry.points, orgId],
+          'INSERT INTO position_points (position, points, player_count, organization_id) VALUES ($1, $2, $3, $4)',
+          [entry.position, entry.points, playerCount, orgId],
           (err) => err ? reject(err) : resolve()
         );
       });
