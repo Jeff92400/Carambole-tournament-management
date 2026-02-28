@@ -2192,7 +2192,7 @@ router.get('/:id/results', authenticateToken, async (req, res) => {
             [tournamentId]
           );
           if (matches && matches.length > 0) {
-            // Aggregate match data per player (same logic as aggregateMatchResults)
+            // Aggregate match data per player (global stats for parties_menees and MPART)
             const playerMatchData = {};
             for (const m of matches) {
               for (const side of ['player1', 'player2']) {
@@ -2203,56 +2203,67 @@ router.get('/:id/results', authenticateToken, async (req, res) => {
                 const matchMoyenne = reprises > 0 ? points / reprises : 0;
 
                 if (!playerMatchData[licence]) {
-                  playerMatchData[licence] = { poule_name: m.poule_name, parties_menees: 0, best_single_moyenne: 0, total_match_points: 0 };
+                  playerMatchData[licence] = { parties_menees: 0, best_single_moyenne: 0 };
                 }
                 const pd = playerMatchData[licence];
                 pd.parties_menees++;
-                pd.total_match_points += (parseFloat(m[`${side}_match_points`]) || 0);
                 if (matchMoyenne > pd.best_single_moyenne) pd.best_single_moyenne = matchMoyenne;
               }
             }
 
-            // Compute poule_rank within regular poules
-            const poules = {};
-            for (const [licence, pd] of Object.entries(playerMatchData)) {
-              const poule = pd.poule_name || 'POULE A';
-              if (!poules[poule]) poules[poule] = [];
-              poules[poule].push({ licence, ...pd });
-            }
-            for (const [pouleName, players] of Object.entries(poules)) {
-              const upper = pouleName.toUpperCase();
-              const isClassification = upper.includes('CLASSEMENT') || upper.includes('DEMI-FINALE') ||
-                  upper.includes('FINALE') || upper.includes('PETITE FINALE') ||
-                  upper.includes('SEMI-FINAL') || upper.includes('BARRAGE') ||
-                  /^G\d+-\d+/.test(pouleName) || /^\d{2}-\d{2}$/.test(pouleName);
-              if (isClassification) continue;
-              players.sort((a, b) => b.total_match_points - a.total_match_points || b.best_single_moyenne - a.best_single_moyenne);
-              players.forEach((p, i) => { p.poule_rank = i + 1; });
+            // Group matches by poule name and compute per-poule stats for REGULAR poules only
+            const matchesByPoule = {};
+            for (const m of matches) {
+              const poule = m.poule_name || 'POULE A';
+              if (!matchesByPoule[poule]) matchesByPoule[poule] = [];
+              matchesByPoule[poule].push(m);
             }
 
-            // Flatten poule data into a licence-keyed map
-            const matchLookup = {};
-            for (const players of Object.values(poules)) {
-              for (const p of players) {
-                matchLookup[p.licence] = p;
+            const pouleRankMap = {}; // licence → { poule_rank, poule_name }
+            for (const [pouleName, pouleMatches] of Object.entries(matchesByPoule)) {
+              if (isClassificationPoule(pouleName)) continue; // Skip classification phases
+              const playerMap = {};
+              for (const m of pouleMatches) {
+                for (const side of ['player1', 'player2']) {
+                  const licence = m[`${side}_licence`];
+                  if (!licence) continue;
+                  const matchPts = parseFloat(m[`${side}_match_points`]) || 0;
+                  const points = parseFloat(m[`${side}_points`]) || 0;
+                  const reprises = parseFloat(m[`${side}_reprises`]) || 0;
+                  const serie = parseFloat(m[`${side}_serie`]) || 0;
+                  if (!playerMap[licence]) {
+                    playerMap[licence] = { licence, total_match_points: 0, total_points: 0, total_reprises: 0, max_serie: 0 };
+                  }
+                  playerMap[licence].total_match_points += matchPts;
+                  playerMap[licence].total_points += points;
+                  playerMap[licence].total_reprises += reprises;
+                  playerMap[licence].max_serie = Math.max(playerMap[licence].max_serie, serie);
+                }
               }
+              const players = Object.values(playerMap);
+              sortByPerformance(players);
+              players.forEach((p, i) => {
+                pouleRankMap[p.licence] = { poule_rank: i + 1, poule_name: pouleName };
+              });
             }
 
             // Merge into results and persist
             for (const r of results) {
-              const md = matchLookup[r.licence.replace(/ /g, '')] || matchLookup[r.licence];
+              const licence = r.licence.replace(/ /g, '');
+              const md = playerMatchData[licence] || playerMatchData[r.licence];
+              const pr = pouleRankMap[licence] || pouleRankMap[r.licence];
+              if (pr && !r.poule_rank) r.poule_rank = pr.poule_rank;
               if (md) {
-                if (!r.poule_rank && md.poule_rank) r.poule_rank = md.poule_rank;
                 if (!r.parties_menees && md.parties_menees) r.parties_menees = md.parties_menees;
                 if (!r.meilleure_partie && md.best_single_moyenne) r.meilleure_partie = parseFloat(md.best_single_moyenne.toFixed(4));
-                // Fire-and-forget persist
-                dbRunAsync(
-                  'UPDATE tournament_results SET poule_rank = $1, parties_menees = $2, meilleure_partie = $3 WHERE id = $4',
-                  [r.poule_rank || 0, r.parties_menees || 0, r.meilleure_partie || 0, r.id]
-                ).catch(() => {});
               }
+              // Fire-and-forget persist
+              dbRunAsync(
+                'UPDATE tournament_results SET poule_rank = $1, parties_menees = $2, meilleure_partie = $3 WHERE id = $4',
+                [r.poule_rank || 0, r.parties_menees || 0, r.meilleure_partie || 0, r.id]
+              ).catch(() => {});
             }
-            console.log(`[RESULTS] Recomputed match-level fields for ${Object.keys(matchLookup).length} players from ${matches.length} matches`);
+            console.log(`[RESULTS] Recomputed match-level fields for ${Object.keys(pouleRankMap).length} players from ${matches.length} matches`);
           }
         } catch (recomputeErr) {
           console.error('[RESULTS] Error recomputing match-level fields:', recomputeErr);
@@ -3718,90 +3729,183 @@ function aggregateMatchResults(matches) {
 }
 
 /**
- * Compute poule rankings and overall tournament ranking from aggregated player stats.
- * Returns the array with poule_rank and final_position added.
+ * Helper: detect if a poule name represents a classification/bracket phase.
  */
-function computeMatchRankings(playerStats) {
-  // Group by poule
-  const poules = {};
-  for (const p of playerStats) {
-    const poule = p.poule_name || 'POULE A';
-    if (!poules[poule]) poules[poule] = [];
-    poules[poule].push(p);
+function isClassificationPoule(pouleName) {
+  const upper = pouleName.toUpperCase();
+  return upper.includes('CLASSEMENT') || upper.includes('DEMI-FINALE') || upper.includes('DEMI FINALE') ||
+      upper.includes('FINALE') || upper.includes('PETITE FINALE') ||
+      upper.includes('SEMI-FINAL') || upper.includes('BARRAGE') ||
+      upper.includes('PLACE ') ||
+      /^G\s*\d+-\d+/.test(pouleName) || /^\d{2}-\d{2}$/.test(pouleName);
+}
+
+/**
+ * Helper: sort players by match_points DESC then moyenne DESC.
+ */
+function sortByPerformance(players, mpKey = 'total_match_points', ptsKey = 'total_points', repKey = 'total_reprises') {
+  players.sort((a, b) => {
+    if (b[mpKey] !== a[mpKey]) return b[mpKey] - a[mpKey];
+    const avgA = a[repKey] > 0 ? a[ptsKey] / a[repKey] : 0;
+    const avgB = b[repKey] > 0 ? b[ptsKey] / b[repKey] : 0;
+    if (avgB !== avgA) return avgB - avgA;
+    // Tiebreaker: best serie
+    if ((b.max_serie || 0) !== (a.max_serie || 0)) return (b.max_serie || 0) - (a.max_serie || 0);
+    return 0;
+  });
+}
+
+/**
+ * Compute poule rankings and overall tournament ranking from aggregated player stats.
+ * Uses raw matches to properly separate regular poules from classification/bracket phases.
+ * @param {Array} playerStats - Aggregated per-player stats from aggregateMatchResults()
+ * @param {Array} allMatches - Raw parsed match objects (optional, for proper poule detection)
+ * @returns {Array} playerStats with poule_rank and final_position added
+ */
+function computeMatchRankings(playerStats, allMatches) {
+  // ── If no raw matches available, fall back to legacy grouping ──
+  if (!allMatches || allMatches.length === 0) {
+    // Legacy: group by playerStats.poule_name (old behavior for backward compat)
+    const poules = {};
+    for (const p of playerStats) {
+      const poule = p.poule_name || 'POULE A';
+      if (!poules[poule]) poules[poule] = [];
+      poules[poule].push(p);
+    }
+    for (const players of Object.values(poules)) {
+      sortByPerformance(players);
+      players.forEach((p, i) => { p.poule_rank = i + 1; });
+    }
+    const maxRank = Math.max(0, ...playerStats.map(p => p.poule_rank || 0));
+    let position = 1;
+    for (let rank = 1; rank <= maxRank; rank++) {
+      const atThisRank = playerStats.filter(p => p.poule_rank === rank);
+      sortByPerformance(atThisRank);
+      for (const p of atThisRank) { p.final_position = position++; }
+    }
+    return playerStats;
   }
 
-  // Identify classification/bracket poules vs regular poules
-  const classificationPoules = {};
-  const regularPoules = {};
-  for (const [pouleName, players] of Object.entries(poules)) {
-    const upper = pouleName.toUpperCase();
-    // Detect classification/bracket phases: named phases + numeric "NN-NN" patterns (05-06, 07-08)
-    // + E2i "G7-8 - P5-6" format
-    const isClassification = upper.includes('CLASSEMENT') || upper.includes('DEMI-FINALE') ||
-        upper.includes('FINALE') || upper.includes('PETITE FINALE') ||
-        upper.includes('SEMI-FINAL') || upper.includes('BARRAGE') ||
-        /^G\d+-\d+/.test(pouleName) || /^\d{2}-\d{2}$/.test(pouleName);
-    if (isClassification) {
-      classificationPoules[pouleName] = players;
+  // ── Step 1: Group RAW MATCHES by poule name ──
+  const matchesByPoule = {};
+  for (const match of allMatches) {
+    const poule = match.poule_name || 'POULE A';
+    if (!matchesByPoule[poule]) matchesByPoule[poule] = [];
+    matchesByPoule[poule].push(match);
+  }
+
+  // ── Step 2: Classify each poule as regular or classification ──
+  const regularPouleNames = [];
+  const classificationPouleNames = [];
+  for (const pouleName of Object.keys(matchesByPoule)) {
+    if (isClassificationPoule(pouleName)) {
+      classificationPouleNames.push(pouleName);
     } else {
-      regularPoules[pouleName] = players;
+      regularPouleNames.push(pouleName);
     }
   }
 
-  // Rank within each regular poule
-  for (const [pouleName, players] of Object.entries(regularPoules)) {
-    players.sort((a, b) => {
-      if (b.total_match_points !== a.total_match_points) return b.total_match_points - a.total_match_points;
-      const avgA = a.total_reprises > 0 ? a.total_points / a.total_reprises : 0;
-      const avgB = b.total_reprises > 0 ? b.total_points / b.total_reprises : 0;
-      return avgB - avgA;
-    });
+  // ── Step 3: Compute per-player stats WITHIN each regular poule only ──
+  // This ensures poule ranking uses only poule-phase match points (not bracket/classification)
+  const regularPouleStats = {}; // { pouleName: [{ licence, match_points, total_points, total_reprises, max_serie }] }
+  for (const pouleName of regularPouleNames) {
+    const matches = matchesByPoule[pouleName];
+    const playerMap = {};
+    for (const match of matches) {
+      for (const side of ['player1', 'player2']) {
+        const licence = match[`${side}_licence`];
+        if (!licence) continue;
+        const points = parseFloat(match[`${side}_points`]) || 0;
+        const reprises = parseFloat(match[`${side}_reprises`]) || 0;
+        const serie = parseFloat(match[`${side}_serie`]) || 0;
+        const matchPts = parseFloat(match[`${side}_match_points`]) || 0;
+        if (!playerMap[licence]) {
+          playerMap[licence] = { licence, total_match_points: 0, total_points: 0, total_reprises: 0, max_serie: 0 };
+        }
+        playerMap[licence].total_match_points += matchPts;
+        playerMap[licence].total_points += points;
+        playerMap[licence].total_reprises += reprises;
+        playerMap[licence].max_serie = Math.max(playerMap[licence].max_serie, serie);
+      }
+    }
+    regularPouleStats[pouleName] = Object.values(playerMap);
+  }
+
+  // ── Step 4: Rank within each regular poule ──
+  for (const players of Object.values(regularPouleStats)) {
+    sortByPerformance(players);
     players.forEach((p, i) => { p.poule_rank = i + 1; });
   }
 
-  // Build overall ranking:
-  // If classification poules exist (DEMI-FINALE, Classement 07-08, etc.), use them for final positions
-  // The classification poules from E2i encode the final ranking directly
-  if (Object.keys(classificationPoules).length > 0) {
-    // Extract final positions from classification/bracket match results
-    const classificationPositions = extractClassificationPositions(classificationPoules, regularPoules);
+  // ── Step 5: Set poule_rank on playerStats from regular poule ranking ──
+  for (const [pouleName, players] of Object.entries(regularPouleStats)) {
+    for (const rp of players) {
+      const ps = playerStats.find(p => p.licence === rp.licence);
+      if (ps) {
+        ps.poule_rank = rp.poule_rank;
+        ps.poule_name = pouleName; // Ensure player is associated with their regular poule
+      }
+    }
+  }
 
-    // Merge back: players already ranked by classification get their final position
-    let position = 1;
+  // ── Step 6: Build classification poule player data from raw classification matches ──
+  if (classificationPouleNames.length > 0) {
+    const classificationPoules = {};
+    for (const pouleName of classificationPouleNames) {
+      const matches = matchesByPoule[pouleName];
+      const playerMap = {};
+      for (const match of matches) {
+        for (const side of ['player1', 'player2']) {
+          const licence = match[`${side}_licence`];
+          if (!licence) continue;
+          const points = parseFloat(match[`${side}_points`]) || 0;
+          const reprises = parseFloat(match[`${side}_reprises`]) || 0;
+          const serie = parseFloat(match[`${side}_serie`]) || 0;
+          const matchPts = parseFloat(match[`${side}_match_points`]) || 0;
+          if (!playerMap[licence]) {
+            playerMap[licence] = { licence, total_match_points: 0, total_points: 0, total_reprises: 0, max_serie: 0 };
+          }
+          playerMap[licence].total_match_points += matchPts;
+          playerMap[licence].total_points += points;
+          playerMap[licence].total_reprises += reprises;
+          playerMap[licence].max_serie = Math.max(playerMap[licence].max_serie, serie);
+        }
+      }
+      classificationPoules[pouleName] = Object.values(playerMap);
+    }
+
+    // Extract final positions using phase-aware algorithm
+    const classificationPositions = extractClassificationPositions(classificationPoules, regularPouleStats, matchesByPoule);
+
+    // Assign positions from classification results
     for (const cp of classificationPositions) {
       const player = playerStats.find(p => p.licence === cp.licence);
       if (player) {
-        player.final_position = position++;
+        player.final_position = cp.position;
       }
     }
 
-    // Players NOT in classification matches get positions after (ranked by poule performance)
+    // Players NOT in any classification match get remaining positions
+    const assignedPositions = new Set(classificationPositions.map(cp => cp.position));
     const unranked = playerStats.filter(p => !p.final_position);
-    unranked.sort((a, b) => {
-      if (b.total_match_points !== a.total_match_points) return b.total_match_points - a.total_match_points;
-      const avgA = a.total_reprises > 0 ? a.total_points / a.total_reprises : 0;
-      const avgB = b.total_reprises > 0 ? b.total_points / b.total_reprises : 0;
-      return avgB - avgA;
-    });
+    sortByPerformance(unranked);
+    // Find next available position
+    let nextPos = 1;
     for (const p of unranked) {
-      p.final_position = position++;
+      while (assignedPositions.has(nextPos)) nextPos++;
+      p.final_position = nextPos;
+      assignedPositions.add(nextPos);
+      nextPos++;
     }
   } else {
     // No classification poules — rank by interleaving poule positions
     // 1st of each poule, then 2nds, then 3rds...
     // Within same poule rank: sort by MGP DESC
-    const pouleNames = Object.keys(regularPoules).sort();
-    const maxRank = Math.max(...playerStats.map(p => p.poule_rank || 0));
-
+    const maxRank = Math.max(0, ...playerStats.map(p => p.poule_rank || 0));
     let position = 1;
     for (let rank = 1; rank <= maxRank; rank++) {
-      const atThisRank = playerStats
-        .filter(p => p.poule_rank === rank)
-        .sort((a, b) => {
-          const avgA = a.total_reprises > 0 ? a.total_points / a.total_reprises : 0;
-          const avgB = b.total_reprises > 0 ? b.total_points / b.total_reprises : 0;
-          return avgB - avgA;
-        });
+      const atThisRank = playerStats.filter(p => p.poule_rank === rank);
+      sortByPerformance(atThisRank);
       for (const p of atThisRank) {
         p.final_position = position++;
       }
@@ -3813,107 +3917,116 @@ function computeMatchRankings(playerStats) {
 
 /**
  * Extract final classification from bracket/classification poules.
- * Returns players sorted by their classification position (best first).
+ * Uses phase numbers from raw matches to resolve conflicts when multiple rounds
+ * cover the same position range (later phases override earlier ones).
+ *
+ * @param {Object} classificationPoules - { pouleName: [{ licence, total_match_points, ... }] }
+ * @param {Object} regularPoules - { pouleName: [{ licence, ... }] } (unused but kept for signature compat)
+ * @param {Object} matchesByPoule - { pouleName: [rawMatch, ...] } for phase number extraction
+ * @returns {Array} Sorted array of { licence, position }
  */
-function extractClassificationPositions(classificationPoules, regularPoules) {
-  const results = [];
-
-  // Parse classification poule names for position ranges
-  // E.g., "Classement 07-08" means positions 7-8
-  // "DEMI-FINALE (J01-J04)" means semi-final between poule positions 1 and 4
-  // "FINALE" means the final for positions 1-2
-  // "PETITE FINALE" means match for positions 3-4
+function extractClassificationPositions(classificationPoules, regularPoules, matchesByPoule) {
+  // Collect all position assignments with their phase number for priority resolution
+  const allAssignments = []; // { licence, position, phase }
 
   for (const [pouleName, players] of Object.entries(classificationPoules)) {
     const upper = pouleName.toUpperCase();
 
-    // Check for "Classement XX-YY" pattern
-    const classementMatch = pouleName.match(/[Cc]lassement\s+(\d+)-(\d+)/);
-    if (classementMatch) {
-      const posStart = parseInt(classementMatch[1]);
-      players.sort((a, b) => {
-        if (b.total_match_points !== a.total_match_points) return b.total_match_points - a.total_match_points;
-        const avgA = a.total_reprises > 0 ? a.total_points / a.total_reprises : 0;
-        const avgB = b.total_reprises > 0 ? b.total_points / b.total_reprises : 0;
-        return avgB - avgA;
-      });
-      players.forEach((p, i) => {
-        results.push({ licence: p.licence, position: posStart + i });
-      });
+    // Determine phase number for this poule (max phase from its matches)
+    const pouleMatches = (matchesByPoule && matchesByPoule[pouleName]) || [];
+    const phaseNum = pouleMatches.length > 0
+      ? Math.max(...pouleMatches.map(m => m.phase_number || 0))
+      : 0;
+
+    // Skip DEMI-FINALE / DEMI FINALES — positions determined by FINALE and PETITE FINALE
+    if (upper.includes('DEMI-FINALE') || upper.includes('DEMI FINALE') || upper.includes('SEMI-FINAL')) {
       continue;
     }
 
-    // E2i format: "G7-8 - P5-6" → positions 5-6 (P = Places)
-    const e2iMatch = pouleName.match(/G\d+-\d+\s*-\s*P(\d+)-(\d+)/);
-    if (e2iMatch) {
-      const posStart = parseInt(e2iMatch[1]);
-      players.sort((a, b) => {
-        if (b.total_match_points !== a.total_match_points) return b.total_match_points - a.total_match_points;
-        const avgA = a.total_reprises > 0 ? a.total_points / a.total_reprises : 0;
-        const avgB = b.total_reprises > 0 ? b.total_points / b.total_reprises : 0;
-        return avgB - avgA;
-      });
-      players.forEach((p, i) => {
-        results.push({ licence: p.licence, position: posStart + i });
-      });
-      continue;
-    }
+    let posStart = null;
 
-    // Numeric "NN-NN" pattern (e.g., "05-06", "07-08") — positions from first number
-    const numericMatch = pouleName.match(/^(\d{2})-(\d{2})$/);
-    if (numericMatch) {
-      const posStart = parseInt(numericMatch[1]);
-      players.sort((a, b) => {
-        if (b.total_match_points !== a.total_match_points) return b.total_match_points - a.total_match_points;
-        const avgA = a.total_reprises > 0 ? a.total_points / a.total_reprises : 0;
-        const avgB = b.total_reprises > 0 ? b.total_points / b.total_reprises : 0;
-        return avgB - avgA;
-      });
-      players.forEach((p, i) => {
-        results.push({ licence: p.licence, position: posStart + i });
-      });
-      continue;
-    }
-
-    // "FINALE" (not petite) = positions 1-2
-    if (upper === 'FINALE' || upper.startsWith('FINALE ')) {
-      players.sort((a, b) => {
-        if (b.total_match_points !== a.total_match_points) return b.total_match_points - a.total_match_points;
-        const avgA = a.total_reprises > 0 ? a.total_points / a.total_reprises : 0;
-        const avgB = b.total_reprises > 0 ? b.total_points / b.total_reprises : 0;
-        return avgB - avgA;
-      });
-      players.forEach((p, i) => {
-        results.push({ licence: p.licence, position: 1 + i });
-      });
-      continue;
-    }
-
-    // "PETITE FINALE" = positions 3-4
+    // "PETITE FINALE" = positions 3-4 (check BEFORE finale to avoid false match)
     if (upper.includes('PETITE FINALE')) {
-      players.sort((a, b) => {
-        if (b.total_match_points !== a.total_match_points) return b.total_match_points - a.total_match_points;
-        const avgA = a.total_reprises > 0 ? a.total_points / a.total_reprises : 0;
-        const avgB = b.total_reprises > 0 ? b.total_points / b.total_reprises : 0;
-        return avgB - avgA;
-      });
-      players.forEach((p, i) => {
-        results.push({ licence: p.licence, position: 3 + i });
-      });
-      continue;
+      posStart = 3;
+    }
+    // "FINALE" (exact or with suffix like "(2)") = positions 1-2
+    // Must NOT match "PETITE FINALE" (already handled above) or "DEMI-FINALE" (skipped above)
+    else if (upper === 'FINALE' || /^FINALE\b/.test(upper)) {
+      posStart = 1;
+    }
+    // E2i format: "G7-8 - P5-6" → positions from P part
+    else if (/G\s*\d+-\d+\s*-\s*P\s*(\d+)-(\d+)/i.test(pouleName)) {
+      const match = pouleName.match(/G\s*\d+-\d+\s*-\s*P\s*(\d+)-(\d+)/i);
+      posStart = parseInt(match[1]);
+    }
+    // "Classement XX-YY" or "Classement 09-10"
+    else if (/[Cc]lassement\s+(\d+)\s*-\s*(\d+)/.test(pouleName)) {
+      const match = pouleName.match(/[Cc]lassement\s+(\d+)\s*-\s*(\d+)/);
+      posStart = parseInt(match[1]);
+    }
+    // "PLACE NN-NN" (e.g., "PLACE 05-06", "PLACE 07-08")
+    else if (/PLACE\s+(\d+)\s*-\s*(\d+)/i.test(pouleName)) {
+      const match = pouleName.match(/PLACE\s+(\d+)\s*-\s*(\d+)/i);
+      posStart = parseInt(match[1]);
+    }
+    // "CLASSEMENT (J05-J06) - Place 05" or "CLASSEMENT (Places 06-07)" — extract Place/Places NN(-NN)
+    else if (/Places?\s+(\d+)\s*-\s*(\d+)/i.test(pouleName)) {
+      const match = pouleName.match(/Places?\s+(\d+)\s*-\s*(\d+)/i);
+      posStart = parseInt(match[1]);
+    }
+    else if (/Place\s+(\d+)/i.test(pouleName)) {
+      // Single position: "CLASSEMENT (J07-J08) - Place 08" → position 8
+      // In this case, the winner gets posStart-1 and loser gets posStart (or just loser gets posStart)
+      // Actually for a 2-player match, winner = posStart - 1, loser = posStart? No...
+      // "Place 08" means determining who gets place 8 → loser = 8, winner goes to next round
+      // But we can't know without more context. Treat as single position for loser, skip winner.
+      // Actually let's treat it as posStart-1 and posStart range
+      const match = pouleName.match(/Place\s+(\d+)/i);
+      const pos = parseInt(match[1]);
+      // For single-position classification: winner gets pos-1, loser gets pos
+      posStart = pos - 1;
+    }
+    // Numeric "NN-NN" pattern (e.g., "05-06", "07-08") — intermediate round positions
+    else if (/^(\d{2})-(\d{2})$/.test(pouleName)) {
+      const match = pouleName.match(/^(\d{2})-(\d{2})$/);
+      posStart = parseInt(match[1]);
     }
 
-    // "DEMI-FINALE" — semi-finals, losers go to petite finale
-    // Don't assign final positions from semis (handled by FINALE/PETITE FINALE)
-    if (upper.includes('DEMI-FINALE') || upper.includes('SEMI-FINAL')) {
-      // Skip — positions determined by FINALE and PETITE FINALE
-      continue;
-    }
+    if (posStart === null) continue;
+
+    // Sort players within this classification poule by performance
+    sortByPerformance(players);
+
+    players.forEach((p, i) => {
+      allAssignments.push({ licence: p.licence, position: posStart + i, phase: phaseNum });
+    });
+  }
+
+  // ── Resolve conflicts: process from HIGHEST phase to LOWEST ──
+  // For each player, keep only the assignment from the highest (latest) phase.
+  // For each position, keep only the assignment from the highest phase.
+
+  // Sort by phase DESC so we process latest phases first
+  allAssignments.sort((a, b) => b.phase - a.phase);
+
+  const assignedPlayers = new Set();    // licences already assigned
+  const assignedPositions = new Map();  // position → { licence, phase }
+  const finalAssignments = [];
+
+  for (const a of allAssignments) {
+    // Skip if this player already has a position from a later phase
+    if (assignedPlayers.has(a.licence)) continue;
+    // Skip if this position already taken by a player from a later phase
+    if (assignedPositions.has(a.position)) continue;
+
+    finalAssignments.push({ licence: a.licence, position: a.position });
+    assignedPlayers.add(a.licence);
+    assignedPositions.set(a.position, a);
   }
 
   // Sort by position
-  results.sort((a, b) => a.position - b.position);
-  return results;
+  finalAssignments.sort((a, b) => a.position - b.position);
+  return finalAssignments;
 }
 
 /**
@@ -4031,7 +4144,7 @@ router.post('/import-matches', authenticateToken, upload.array('files', 20), asy
 
     // 6. Aggregate matches into per-player stats
     const playerStats = aggregateMatchResults(allMatches);
-    const rankedStats = computeMatchRankings(playerStats);
+    const rankedStats = computeMatchRankings(playerStats, allMatches);
 
     // 7. Insert tournament_results
     for (const player of rankedStats) {
@@ -4144,7 +4257,7 @@ router.post('/import-matches/preview', authenticateToken, upload.array('files', 
 
     // Aggregate and rank
     const playerStats = aggregateMatchResults(allMatches);
-    const rankedStats = computeMatchRankings(playerStats);
+    const rankedStats = computeMatchRankings(playerStats, allMatches);
 
     // Enrich with player info from DB (club, first_name, last_name)
     const orgId = req.user.organizationId || null;
