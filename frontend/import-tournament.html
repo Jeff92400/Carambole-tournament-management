@@ -83,11 +83,11 @@
 
     <div class="card">
       <!-- Tab selector -->
-      <div id="importTabs" style="display: flex; gap: 0; margin-bottom: 20px; border-bottom: 2px solid #e0e0e0;">
-        <button class="import-tab active" data-tab="standard" onclick="switchImportTab('standard')" style="padding: 10px 20px; border: none; background: none; cursor: pointer; font-size: 14px; font-weight: 600; color: var(--color-primary, #1F4788); border-bottom: 2px solid var(--color-primary, #1F4788); margin-bottom: -2px;">
-          Import Résultats CSV
+      <div id="importTabs" style="display: flex; gap: 0; margin-bottom: 20px; border-bottom: 3px solid #e0e0e0;">
+        <button class="import-tab active" data-tab="standard" onclick="switchImportTab('standard')" style="padding: 12px 24px; border: none; background: none; cursor: pointer; font-size: 15px; font-weight: 700; color: var(--color-primary, #1F4788); border-bottom: 3px solid var(--color-primary, #1F4788); margin-bottom: -3px;">
+          Import Classements E2i
         </button>
-        <button class="import-tab" data-tab="matches" onclick="switchImportTab('matches')" style="padding: 10px 20px; border: none; background: none; cursor: pointer; font-size: 14px; font-weight: 500; color: #999; border-bottom: 2px solid transparent; margin-bottom: -2px;">
+        <button class="import-tab" data-tab="matches" onclick="switchImportTab('matches')" style="padding: 12px 24px; border: none; background: none; cursor: pointer; font-size: 15px; font-weight: 600; color: #777; border-bottom: 3px solid transparent; margin-bottom: -3px;">
           Import Matchs E2i
         </button>
       </div>
@@ -376,14 +376,16 @@
           document.getElementById('modeSelect').innerHTML = modeOptions;
           document.getElementById('matchModeSelect').innerHTML = modeOptions;
 
-          // Keep hidden categorySelect for compatibility
-          const select = document.getElementById('categorySelect');
-          select.innerHTML = '<option value="">-- Sélectionner une catégorie --</option>';
-          categories.forEach(category => {
-            const option = document.createElement('option');
-            option.value = category.id;
-            option.textContent = category.display_name;
-            select.appendChild(option);
+          // Keep hidden categorySelect for compatibility (both tabs)
+          ['categorySelect', 'matchCategorySelect'].forEach(selectId => {
+            const select = document.getElementById(selectId);
+            select.innerHTML = '<option value="">-- Sélectionner une catégorie --</option>';
+            categories.forEach(category => {
+              const option = document.createElement('option');
+              option.value = category.id;
+              option.textContent = category.display_name;
+              select.appendChild(option);
+            });
           });
         }
       } catch (error) {
@@ -866,8 +868,8 @@
       document.getElementById('tabMatches').style.display = tab === 'matches' ? 'block' : 'none';
       document.querySelectorAll('.import-tab').forEach(t => {
         const isActive = t.dataset.tab === tab;
-        t.style.color = isActive ? 'var(--color-primary, #1F4788)' : '#999';
-        t.style.fontWeight = isActive ? '600' : '500';
+        t.style.color = isActive ? 'var(--color-primary, #1F4788)' : '#777';
+        t.style.fontWeight = isActive ? '700' : '600';
         t.style.borderBottomColor = isActive ? 'var(--color-primary, #1F4788)' : 'transparent';
       });
       // Reset state
@@ -900,7 +902,36 @@
       } else {
         categorySelect.value = '';
       }
+      lookupMatchTournamentDate();
     });
+
+    // Auto-fill match tab tournament number change
+    document.getElementById('matchTournamentNumber').addEventListener('change', () => {
+      lookupMatchTournamentDate();
+    });
+
+    // Auto-fill tournament date from tournoi_ext (matches tab)
+    async function lookupMatchTournamentDate() {
+      const mode = document.getElementById('matchModeSelect').value;
+      const level = document.getElementById('matchLevelSelect').value;
+      const tournamentNumber = document.getElementById('matchTournamentNumber').value;
+      if (!mode || !level || !tournamentNumber) return;
+      try {
+        const response = await fetch(
+          `${API_URL}/tournaments/lookup-date?mode=${encodeURIComponent(mode)}&categorie=${encodeURIComponent(level)}&tournamentNumber=${encodeURIComponent(tournamentNumber)}`,
+          { headers: { 'Authorization': `Bearer ${token}` } }
+        );
+        if (response.ok) {
+          const data = await response.json();
+          if (data.found && data.date) {
+            document.getElementById('matchTournamentDate').value = data.date;
+            document.getElementById('matchTournamentDate').dispatchEvent(new Event('change'));
+          }
+        }
+      } catch (error) {
+        // Silently fail — date field remains editable
+      }
+    }
 
     document.getElementById('matchTournamentDate').addEventListener('change', (e) => {
       if (e.target.value) {
