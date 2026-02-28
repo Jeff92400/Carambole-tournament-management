@@ -524,20 +524,10 @@ tbody tr:nth-child(even) {
   background: #fafafa;
 }
 
-.rank-1 {
-  background: #ffd700 !important;
-  font-weight: bold;
-}
-
-.rank-2 {
-  background: #c0c0c0 !important;
-  font-weight: bold;
-}
-
+.rank-1,
+.rank-2,
 .rank-3 {
-  background: #cd7f32 !important;
   font-weight: bold;
-  color: white;
 }
 
 /* Qualified for final - green highlight */
