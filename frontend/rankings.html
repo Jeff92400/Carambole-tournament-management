@@ -463,75 +463,117 @@
       if (isJournees) {
         // --- JOURNÉES MODE ---
 
-        // Pre-compute ppDetail for each player
+        // Pre-compute ppDetail for each player (supports new rich and old flat format)
         const playersWithDetails = rankings.map(rank => {
-          let ppDetail = (() => { try { return JSON.parse(rank.position_points_detail || '{}'); } catch(e) { return {}; } })();
-          const avgBonus = rank.average_bonus || 0;
+          let raw;
+          try { raw = JSON.parse(rank.position_points_detail || '{}'); } catch(e) { raw = {}; }
 
-          // Fallback: if ppDetail is empty, use tournament_X_points
-          if (Object.keys(ppDetail).length === 0) {
-            const tPts = [rank.tournament_1_points, rank.tournament_2_points, rank.tournament_3_points];
-            tPts.forEach((pts, i) => { if (pts !== null && pts !== undefined) ppDetail[i + 1] = pts; });
+          // Detect format: new rich has 'tournaments' key, old flat is {1: pts, 2: pts}
+          let ppDetail;
+          if (raw.tournaments) {
+            ppDetail = raw;
+          } else {
+            ppDetail = { tournaments: {}, kept: [], seasonPts: 0, seasonRep: 0, moyGen: null };
+            for (const [tn, pts] of Object.entries(raw)) {
+              ppDetail.tournaments[parseInt(tn)] = { score: pts || 0, pts_clt: pts || 0, bonus: 0, moy: 0, pts: 0, rep: 0, pm: 0, ms: 0 };
+            }
           }
 
-          // Compute sum of ALL position points (for season view)
-          const sumTotal = Object.values(ppDetail).reduce((s, v) => s + (v || 0), 0);
+          // Fallback: if tournaments is empty, use tournament_X_points
+          if (Object.keys(ppDetail.tournaments || {}).length === 0) {
+            ppDetail.tournaments = {};
+            [rank.tournament_1_points, rank.tournament_2_points, rank.tournament_3_points].forEach((pts, i) => {
+              if (pts !== null && pts !== undefined) {
+                ppDetail.tournaments[i + 1] = { score: pts, pts_clt: pts, bonus: 0, moy: 0, pts: 0, rep: 0, pm: 0, ms: 0 };
+              }
+            });
+          }
 
-          // Compute moyenne
-          const moyenne = rank.cumulated_reprises > 0
-            ? rank.cumulated_points / rank.cumulated_reprises
-            : 0;
+          // Ensure 'kept' uses integers
+          const keptSet = new Set((ppDetail.kept || []).map(Number));
+          const avgBonus = rank.average_bonus || 0;
 
-          return { ...rank, ppDetail, avgBonus, sumTotal, allMoyenne: moyenne };
+          // Sum of ALL scores (for season view)
+          const sumTotal = Object.values(ppDetail.tournaments).reduce((s, t) => s + (t.score || 0), 0);
+
+          // All-tournaments totals
+          let allPts = 0, allRep = 0;
+          for (const t of Object.values(ppDetail.tournaments)) { allPts += t.pts || 0; allRep += t.rep || 0; }
+          const allMoy = allRep > 0 ? allPts / allRep : 0;
+
+          // Kept-tournaments average (for finale view)
+          const keptMoy = (ppDetail.seasonRep || 0) > 0
+            ? ppDetail.seasonPts / ppDetail.seasonRep
+            : (rank.avg_moyenne || 0);
+
+          return { ...rank, ppDetail, avgBonus, sumTotal, keptSet, allMoy, keptMoy, allPts, allRep };
         });
+
+        // Detect which optional columns have data
+        const hasMoyGen = playersWithDetails.some(p => p.ppDetail.moyGen != null);
+        const hasPerTournMoy = playersWithDetails.some(p =>
+          Object.values(p.ppDetail.tournaments).some(t => (t.moy || 0) > 0)
+        );
+        const hasSeasonPtsRep = playersWithDetails.some(p =>
+          Object.values(p.ppDetail.tournaments).some(t => (t.pts || 0) > 0)
+        );
 
         if (viewMode === 'season') {
           // SEASON VIEW: sum of all position points, re-sorted client-side
           playersWithDetails.sort((a, b) => {
             if (b.sumTotal !== a.sumTotal) return b.sumTotal - a.sumTotal;
-            if (b.allMoyenne !== a.allMoyenne) return b.allMoyenne - a.allMoyenne;
+            if (b.allMoy !== a.allMoy) return b.allMoy - a.allMoy;
             return (b.best_serie || 0) - (a.best_serie || 0);
           });
 
-          document.getElementById('rankingsHeaderRow').innerHTML = `
+          let headerHTML = `
             <th>Position</th>
             <th>Licence</th>
             <th>Joueur</th>
             <th>Club</th>
-            ${Array.from({length: jCount}, (_, i) => `<th>TQ${i + 1}</th>`).join('')}
-            ${showAvgBonus ? '<th>Bonus Moy.</th>' : ''}
-            <th>Total</th>
-            <th>Moyenne</th>
-            <th>Meilleure Série</th>`;
+            ${Array.from({length: jCount}, (_, i) => `<th style="text-align:center;">J${i + 1}</th>`).join('')}
+            ${showAvgBonus ? '<th style="text-align:center;">Bonus Moy.</th>' : ''}
+            <th style="text-align:center;">Total</th>`;
+          if (hasMoyGen) headerHTML += '<th style="text-align:center;">Moy Gen</th>';
+          if (hasPerTournMoy) headerHTML += Array.from({length: jCount}, (_, i) => `<th style="text-align:center;">Moy J${i + 1}</th>`).join('');
+          headerHTML += '<th style="text-align:center;">Moy. saison</th>';
+          if (hasSeasonPtsRep) headerHTML += '<th style="text-align:center;">Pts</th><th style="text-align:center;">Rep</th>';
+          headerHTML += '<th style="text-align:center;">MS</th>';
+          document.getElementById('rankingsHeaderRow').innerHTML = headerHTML;
 
           playersWithDetails.forEach((player, index) => {
             const row = document.createElement('tr');
             const position = index + 1;
-            const moyenneStr = player.allMoyenne.toFixed(3);
 
             const formatPP = (tn) => {
-              const pts = player.ppDetail[tn];
+              const t = player.ppDetail.tournaments[tn];
               if (!tournamentsPlayed[`t${tn}`]) return '<span style="color: #ccc;">-</span>';
-              if (pts === undefined || pts === null) return '<span style="color: #999; font-size: 18px; font-weight: bold;">*</span>';
-              return pts;
+              if (!t) return '<span style="color: #999; font-size: 18px; font-weight: bold;">*</span>';
+              return t.score;
             };
 
-            row.innerHTML = `
+            const formatMoy = (tn) => {
+              const t = player.ppDetail.tournaments[tn];
+              if (!tournamentsPlayed[`t${tn}`]) return '<span style="color: #ccc;">-</span>';
+              if (!t || !t.moy) return '<span style="color: #999;">-</span>';
+              return t.moy.toFixed(3);
+            };
+
+            let cells = `
               <td style="text-align: center; font-weight: bold;">${position}</td>
               <td>${player.licence}</td>
-              <td>
-                <a href="player-history.html?licence=${player.licence}" class="player-link">
-                  ${player.first_name} ${player.last_name}
-                </a>
-              </td>
+              <td><a href="player-history.html?licence=${player.licence}" class="player-link">${player.first_name} ${player.last_name}</a></td>
               <td></td>
               ${Array.from({length: jCount}, (_, i) => `<td style="text-align: center;">${formatPP(i + 1)}</td>`).join('')}
               ${showAvgBonus ? `<td style="text-align: center; color: ${player.avgBonus > 0 ? '#1F4788' : '#999'}; font-weight: ${player.avgBonus > 0 ? 'bold' : 'normal'};">${player.avgBonus > 0 ? '+' + player.avgBonus : '0'}</td>` : ''}
-              <td style="text-align: center; font-weight: bold;">${player.sumTotal}</td>
-              <td style="text-align: center;">${moyenneStr}</td>
-              <td style="text-align: center; font-weight: bold;">${player.best_serie || 0}</td>
-            `;
+              <td style="text-align: center; font-weight: bold;">${player.sumTotal}</td>`;
+            if (hasMoyGen) cells += `<td style="text-align: center;">${player.ppDetail.moyGen != null ? Number(player.ppDetail.moyGen).toFixed(3) : '-'}</td>`;
+            if (hasPerTournMoy) cells += Array.from({length: jCount}, (_, i) => `<td style="text-align: center;">${formatMoy(i + 1)}</td>`).join('');
+            cells += `<td style="text-align: center;">${player.allMoy.toFixed(3)}</td>`;
+            if (hasSeasonPtsRep) cells += `<td style="text-align: center;">${player.allPts}</td><td style="text-align: center;">${player.allRep}</td>`;
+            cells += `<td style="text-align: center; font-weight: bold;">${player.best_serie || 0}</td>`;
 
+            row.innerHTML = cells;
             const clubCell = row.cells[3];
             clubCell.innerHTML = getClubLogoHTML(player.club);
             tbody.appendChild(row);
@@ -542,60 +584,65 @@
 
         } else {
           // FINALE VIEW: best-of ranking from DB, with kept/dropped and qualification
-          // Sort by rank_position (API order)
           playersWithDetails.sort((a, b) => a.rank_position - b.rank_position);
 
-          document.getElementById('rankingsHeaderRow').innerHTML = `
+          let headerHTML = `
             <th>Position</th>
             <th>Licence</th>
             <th>Joueur</th>
             <th>Club</th>
-            ${Array.from({length: jCount}, (_, i) => `<th>TQ${i + 1}</th>`).join('')}
-            ${showAvgBonus ? '<th>Bonus Moy.</th>' : ''}
-            <th>Total</th>
-            <th>Moyenne</th>
-            <th>Meilleure Série</th>`;
+            ${Array.from({length: jCount}, (_, i) => `<th style="text-align:center;">J${i + 1}</th>`).join('')}
+            ${showAvgBonus ? '<th style="text-align:center;">Bonus Moy.</th>' : ''}
+            <th style="text-align:center;">Total Top ${bestOfCount}</th>`;
+          if (hasMoyGen) headerHTML += '<th style="text-align:center;">Moy Gen (arr.)</th>';
+          if (hasPerTournMoy) headerHTML += Array.from({length: jCount}, (_, i) => `<th style="text-align:center;">Moy J${i + 1}</th>`).join('');
+          headerHTML += '<th style="text-align:center;">Moy.G saison</th>';
+          if (hasSeasonPtsRep) headerHTML += '<th style="text-align:center;">Pts</th><th style="text-align:center;">Rep</th>';
+          headerHTML += '<th style="text-align:center;">MS</th>';
+          document.getElementById('rankingsHeaderRow').innerHTML = headerHTML;
 
           playersWithDetails.forEach(player => {
             const row = document.createElement('tr');
-            const moyenneStr = player.allMoyenne.toFixed(3);
 
-            // Determine kept scores (best N)
-            const scores = Object.entries(player.ppDetail).map(([tn, pts]) => ({ tn: parseInt(tn), pts }));
-            scores.sort((a, b) => b.pts - a.pts);
-            const keptSet = new Set(scores.slice(0, bestOfCount).map(s => s.tn));
-
-            const formatPP = (tn) => {
-              const pts = player.ppDetail[tn];
-              if (!tournamentsPlayed[`t${tn}`]) return '<span style="color: #ccc;">-</span>';
-              if (pts === undefined || pts === null) return '<span style="color: #999; font-size: 18px; font-weight: bold;">*</span>';
-              const isKept = keptSet.has(tn);
-              return isKept
-                ? `<strong>${pts}</strong>`
-                : `<span style="color: #999; text-decoration: line-through;">${pts}</span>`;
-            };
-
-            // Green highlighting for qualified players
             if (player.rank_position <= qualifiedCount) {
               row.classList.add('qualified-for-final');
             }
 
-            row.innerHTML = `
+            const formatPP = (tn) => {
+              const t = player.ppDetail.tournaments[tn];
+              if (!tournamentsPlayed[`t${tn}`]) return '<span style="color: #ccc;">-</span>';
+              if (!t) return '<span style="color: #999; font-size: 18px; font-weight: bold;">*</span>';
+              const isKept = player.keptSet.has(tn);
+              return isKept
+                ? `<strong>${t.score}</strong>`
+                : `<span style="color: #999; text-decoration: line-through;">${t.score}</span>`;
+            };
+
+            const formatMoy = (tn) => {
+              const t = player.ppDetail.tournaments[tn];
+              if (!tournamentsPlayed[`t${tn}`]) return '<span style="color: #ccc;">-</span>';
+              if (!t || !t.moy) return '<span style="color: #999;">-</span>';
+              const isKept = player.keptSet.has(tn);
+              return isKept
+                ? `<strong>${t.moy.toFixed(3)}</strong>`
+                : `<span style="color: #999; text-decoration: line-through;">${t.moy.toFixed(3)}</span>`;
+            };
+
+            let cells = `
               <td style="text-align: center; font-weight: bold;">${player.rank_position}</td>
               <td>${player.licence}</td>
-              <td>
-                <a href="player-history.html?licence=${player.licence}" class="player-link">
-                  ${player.first_name} ${player.last_name}
-                </a>
-              </td>
+              <td><a href="player-history.html?licence=${player.licence}" class="player-link">${player.first_name} ${player.last_name}</a></td>
               <td></td>
               ${Array.from({length: jCount}, (_, i) => `<td style="text-align: center;">${formatPP(i + 1)}</td>`).join('')}
               ${showAvgBonus ? `<td style="text-align: center; color: ${player.avgBonus > 0 ? '#1F4788' : '#999'}; font-weight: ${player.avgBonus > 0 ? 'bold' : 'normal'};">${player.avgBonus > 0 ? '+' + player.avgBonus : '0'}</td>` : ''}
-              <td style="text-align: center; font-weight: bold;">${player.total_match_points}</td>
-              <td style="text-align: center;">${moyenneStr}</td>
-              <td style="text-align: center; font-weight: bold;">${player.best_serie || 0}</td>
-            `;
+              <td style="text-align: center; font-weight: bold;">${player.total_match_points}</td>`;
+            if (hasMoyGen) cells += `<td style="text-align: center;">${player.ppDetail.moyGen != null ? Number(player.ppDetail.moyGen).toFixed(3) : '-'}</td>`;
+            if (hasPerTournMoy) cells += Array.from({length: jCount}, (_, i) => `<td style="text-align: center;">${formatMoy(i + 1)}</td>`).join('');
+            cells += `<td style="text-align: center;">${player.keptMoy.toFixed(3)}</td>`;
+            if (hasSeasonPtsRep) cells += `<td style="text-align: center;">${player.ppDetail.seasonPts || player.cumulated_points || 0}</td><td style="text-align: center;">${player.ppDetail.seasonRep || player.cumulated_reprises || 0}</td>`;
+            cells += `<td style="text-align: center; font-weight: bold;">${player.best_serie || 0}</td>`;
 
+            row.innerHTML = cells;
             const clubCell = row.cells[3];
             clubCell.innerHTML = getClubLogoHTML(player.club);
             tbody.appendChild(row);

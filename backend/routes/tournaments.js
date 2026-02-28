@@ -1375,7 +1375,7 @@ async function recalculateRankingsJournees(categoryId, season, callback, orgId) 
       return callback(null);
     }
 
-    // Get all player results with position_points, grouped by tournament
+    // Get all player results with position_points + bonus, grouped by tournament
     const results = await dbAllAsync(
       `SELECT
          REPLACE(tr.licence, ' ', '') as licence,
@@ -1385,7 +1385,9 @@ async function recalculateRankingsJournees(categoryId, season, callback, orgId) 
          tr.points,
          tr.reprises,
          tr.match_points,
-         tr.serie
+         tr.serie,
+         tr.bonus_points,
+         tr.bonus_detail
        FROM tournament_results tr
        JOIN tournaments t ON tr.tournament_id = t.id
        WHERE t.category_id = $1 AND t.season = $2 AND t.tournament_number <= $3
@@ -1404,8 +1406,19 @@ async function recalculateRankingsJournees(categoryId, season, callback, orgId) 
       if (!playerData[r.licence]) {
         playerData[r.licence] = { playerName: r.player_name, tournaments: {} };
       }
+      // Extract MOYENNE_BONUS from bonus_detail JSON (per-tournament average bonus)
+      let moyenneBonus = 0;
+      if (r.bonus_detail) {
+        try {
+          const detail = JSON.parse(r.bonus_detail);
+          moyenneBonus = detail.MOYENNE_BONUS || 0;
+        } catch (e) { /* ignore parse errors */ }
+      }
+      const positionPts = r.position_points || 0;
       playerData[r.licence].tournaments[r.tournament_number] = {
-        positionPoints: r.position_points || 0,
+        positionPoints: positionPts,
+        bonus: moyenneBonus,
+        score: positionPts + moyenneBonus,
         points: r.points || 0,
         reprises: r.reprises || 0,
         matchPoints: r.match_points || 0,
@@ -1428,28 +1441,63 @@ async function recalculateRankingsJournees(categoryId, season, callback, orgId) 
     }
     const moyenneMiddle = (moyenneMini + moyenneMaxi) / 2;
 
+    // Fetch FFB moyenne for each player (for display in ranking)
+    let gameModeId = null;
+    if (category) {
+      const gm = await dbGetAsync(
+        'SELECT id FROM game_modes WHERE UPPER(REPLACE(display_name, \' \', \'\')) = UPPER(REPLACE($1, \' \', \'\'))',
+        [category.game_type]
+      );
+      if (gm) gameModeId = gm.id;
+    }
+    const ffbMoyennes = {};
+    if (gameModeId) {
+      const ffbRows = await dbAllAsync(
+        'SELECT REPLACE(licence, \' \', \'\') as licence, moyenne_ffb FROM player_ffb_classifications WHERE game_mode_id = $1 AND season = $2',
+        [gameModeId, season]
+      );
+      for (const row of ffbRows) {
+        ffbMoyennes[row.licence] = row.moyenne_ffb;
+      }
+    }
+
     // Compute season ranking for each player
     const rankings = [];
     for (const [licence, data] of Object.entries(playerData)) {
       const tournamentNumbers = Object.keys(data.tournaments).map(Number).sort();
       const positionScores = tournamentNumbers.map(tn => ({
         tournamentNumber: tn,
+        score: data.tournaments[tn].score,
         positionPoints: data.tournaments[tn].positionPoints,
+        bonus: data.tournaments[tn].bonus,
       }));
 
-      // Sort by position points DESC to pick best N
-      const sortedScores = [...positionScores].sort((a, b) => b.positionPoints - a.positionPoints);
+      // Sort by score DESC (position_points + bonus) to pick best N
+      const sortedScores = [...positionScores].sort((a, b) => b.score - a.score);
       const keptScores = sortedScores.slice(0, bestOfCount);
-      const totalPositionPoints = keptScores.reduce((sum, s) => sum + s.positionPoints, 0);
+      const totalPositionPoints = keptScores.reduce((sum, s) => sum + s.score, 0);
+      const keptTournamentNumbers = new Set(keptScores.map(s => s.tournamentNumber));
 
-      // Build detail JSON: { "1": 10, "2": 8 } (tournament_number: points)
-      const ppDetail = {};
-      for (const s of positionScores) {
-        ppDetail[s.tournamentNumber] = s.positionPoints;
+      // Build rich detail JSON for frontend display
+      const ppDetail = {
+        tournaments: {},
+        kept: keptScores.map(s => s.tournamentNumber),
+      };
+      for (const tn of tournamentNumbers) {
+        const t = data.tournaments[tn];
+        ppDetail.tournaments[tn] = {
+          score: t.score,
+          pts_clt: t.positionPoints,
+          bonus: t.bonus,
+          moy: t.reprises > 0 ? Math.round((t.points / t.reprises) * 1000) / 1000 : 0,
+          pts: t.points,
+          rep: t.reprises,
+          pm: t.matchPoints,
+          ms: t.serie,
+        };
       }
 
       // Compute average from the best N tournaments' points/reprises
-      const keptTournamentNumbers = new Set(keptScores.map(s => s.tournamentNumber));
       let totalPoints = 0, totalReprises = 0, bestSerie = 0;
       for (const tn of tournamentNumbers) {
         const t = data.tournaments[tn];
@@ -1460,6 +1508,9 @@ async function recalculateRankingsJournees(categoryId, season, callback, orgId) 
         if (t.serie > bestSerie) bestSerie = t.serie;
       }
       const avgMoyenne = totalReprises > 0 ? totalPoints / totalReprises : 0;
+      ppDetail.seasonPts = totalPoints;
+      ppDetail.seasonRep = totalReprises;
+      ppDetail.moyGen = ffbMoyennes[licence] || null;
 
       // Average bonus (only if enabled AND bonus moyenne not already applied at tournament level)
       let averageBonus = 0;
@@ -1485,10 +1536,10 @@ async function recalculateRankingsJournees(categoryId, season, callback, orgId) 
 
       const totalScore = totalPositionPoints + averageBonus;
 
-      // Per-tournament points for T1/T2/T3 columns (reuse existing ranking columns)
-      const t1 = data.tournaments[1]?.positionPoints || null;
-      const t2 = data.tournaments[2]?.positionPoints || null;
-      const t3 = data.tournaments[3]?.positionPoints || null;
+      // Per-tournament scores for T1/T2/T3 columns (position_points + bonus)
+      const t1 = data.tournaments[1]?.score ?? null;
+      const t2 = data.tournaments[2]?.score ?? null;
+      const t3 = data.tournaments[3]?.score ?? null;
 
       rankings.push({
         licence,
