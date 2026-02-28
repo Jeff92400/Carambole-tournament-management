@@ -182,7 +182,14 @@
       </div>
 
       <div class="card">
-        <h3 id="tableTitle">Classement du Tournoi</h3>
+        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+          <h3 id="tableTitle" style="margin: 0;">Classement du Tournoi</h3>
+          <div id="sortToggleContainer" style="display: none;">
+            <button id="sortToggleBtn" class="btn" style="font-size: 12px; padding: 6px 14px; background: var(--color-secondary, #667eea); border: none; color: white; border-radius: 6px; cursor: pointer;">
+              Tri : Clt Finale ▼
+            </button>
+          </div>
+        </div>
         <div class="table-container">
           <table>
             <thead>
@@ -415,13 +422,17 @@
           bonusMoyenneInfoDiv.style.display = 'block';
         }
 
-        // Sort results by match points desc, then moyenne desc
-        data.results.sort((a, b) => {
-          if (b.match_points !== a.match_points) {
-            return b.match_points - a.match_points;
-          }
-          return b.moyenne - a.moyenne;
-        });
+        // Sort results depending on mode
+        if (hasPositionPoints) {
+          // Journées mode: sort by classification position (Clt Finale) by default
+          data.results.sort((a, b) => (a.position || 999) - (b.position || 999));
+        } else {
+          // Standard mode: sort by match points desc, then moyenne desc
+          data.results.sort((a, b) => {
+            if (b.match_points !== a.match_points) return b.match_points - a.match_points;
+            return b.moyenne - a.moyenne;
+          });
+        }
 
         // Show podium for finale
         if (isFinale && data.results.length >= 3) {
@@ -464,8 +475,6 @@
             <th>Joueur</th>
             <th>Club</th>`;
           if (hasPositionPoints) {
-            // Journées mode: CDB 93-94 format — all columns always visible
-            // CLT | Licence | Joueur | Club | Clt poule | Clt Finale | Pts clt | bonus | Pts Clt Total | PM | Pts | R | MS | MGP | MPART
             headerHTML += '<th style="text-align: center;">Clt poule</th>';
             headerHTML += '<th style="text-align: center;">Clt Finale</th>';
             headerHTML += '<th style="text-align: center;">Pts clt</th>';
@@ -478,7 +487,6 @@
             headerHTML += '<th style="text-align: center;">MGP</th>';
             headerHTML += '<th style="text-align: center;">MPART</th>';
           } else {
-            // Standard mode (CDB92)
             if (hasPouleRank) headerHTML += '<th style="text-align: center;">Clt poule</th>';
             headerHTML += '<th style="text-align: center;">Pts Match</th>';
             headerHTML += bonusColumns.map(col => `<th style="text-align: center;">${col.label}</th>`).join('');
@@ -493,106 +501,117 @@
           document.getElementById('resultsHeaderRow').innerHTML = headerHTML;
         }
 
-        data.results.forEach((result, index) => {
-          const row = document.createElement('tr');
+        // ── Rendering context for sort toggle ──
+        const renderCtx = { results: data.results, bonusColumns, hasBonusCols, hasPositionPoints, hasPouleRank, hasMPART, hasPM };
 
-          // Highlight top 3
-          if (index === 0) row.classList.add('rank-1');
-          if (index === 1) row.classList.add('rank-2');
-          if (index === 2) row.classList.add('rank-3');
+        function renderResultRows(sortedResults) {
+          const tbody = document.getElementById('resultsBody');
+          tbody.innerHTML = '';
+          sortedResults.forEach((result, index) => {
+            const row = document.createElement('tr');
+            if (index === 0) row.classList.add('rank-1');
+            if (index === 1) row.classList.add('rank-2');
+            if (index === 2) row.classList.add('rank-3');
 
-          // Calculate moyenne as points / reprises
-          const moyenne = result.reprises > 0
-            ? (result.points / result.reprises).toFixed(3)
-            : '0.000';
+            const moyenne = result.reprises > 0 ? (result.points / result.reprises).toFixed(3) : '0.000';
+            const playerName = result.first_name && result.last_name
+              ? `${result.first_name} ${result.last_name}` : result.player_name;
 
-          // Format player name as "FirstName LastName" (consistent with global ranking)
-          const playerName = result.first_name && result.last_name
-            ? `${result.first_name} ${result.last_name}`
-            : result.player_name;
+            let bonusCellsHTML = '';
+            let totalBonus = 0;
+            const bonusDetail = (() => { try { return JSON.parse(result.bonus_detail || '{}'); } catch(e) { return {}; } })();
+            if (renderCtx.hasBonusCols) {
+              totalBonus = Object.values(bonusDetail).reduce((s, v) => s + (v || 0), 0);
+              renderCtx.bonusColumns.forEach(col => {
+                const val = bonusDetail[col.ruleType] || 0;
+                const color = val > 0 ? (col.ruleType === 'MOYENNE_BONUS' ? '#1F4788' : '#28a745') : '#999';
+                bonusCellsHTML += `<td style="text-align: center; color: ${color}; font-weight: ${col.ruleType === 'MOYENNE_BONUS' && val > 0 ? 'bold' : 'normal'};">${val > 0 ? '+' + val : '0'}</td>`;
+              });
+            }
 
-          // Build dynamic bonus columns HTML from bonus_detail JSON
-          let bonusCellsHTML = '';
-          let totalBonus = 0;
-          const bonusDetail = (() => { try { return JSON.parse(result.bonus_detail || '{}'); } catch(e) { return {}; } })();
-          if (hasBonusCols) {
-            totalBonus = Object.values(bonusDetail).reduce((s, v) => s + (v || 0), 0);
+            const posPointsVal = result.position_points || 0;
+            const pouleRankHTML = renderCtx.hasPouleRank ? `<td style="text-align: center;">${result.poule_rank || '-'}</td>` : '';
+            const pmHTML = renderCtx.hasPM ? `<td style="text-align: center;">${result.parties_menees || '-'}</td>` : '';
+            const mpartHTML = renderCtx.hasMPART ? `<td style="text-align: center;">${result.meilleure_partie ? result.meilleure_partie.toFixed(3) : '-'}</td>` : '';
 
-            bonusColumns.forEach(col => {
-              const val = bonusDetail[col.ruleType] || 0;
-              const color = val > 0 ? (col.ruleType === 'MOYENNE_BONUS' ? '#1F4788' : '#28a745') : '#999';
-              bonusCellsHTML += `<td style="text-align: center; color: ${color}; font-weight: ${col.ruleType === 'MOYENNE_BONUS' && val > 0 ? 'bold' : 'normal'};">${val > 0 ? '+' + val : '0'}</td>`;
-            });
-          }
+            if (renderCtx.hasPositionPoints) {
+              const bonusVal = totalBonus;
+              const bonusColor = bonusVal > 0 ? '#1F4788' : '#999';
+              const mpart = result.meilleure_partie ? result.meilleure_partie.toFixed(3) : '-';
+              const cltFinale = result.position || (index + 1);
+              row.innerHTML = `
+                <td style="text-align: center; font-weight: bold;">${index + 1}</td>
+                <td>${result.licence}</td>
+                <td><a href="player-history.html?licence=${result.licence}" class="player-link">${playerName}</a></td>
+                <td>${result.club_name || ''}</td>
+                <td style="text-align: center;">${result.poule_rank || '-'}</td>
+                <td style="text-align: center;">${cltFinale}</td>
+                <td style="text-align: center; font-weight: bold; color: #1F4788;">${posPointsVal}</td>
+                <td style="text-align: center; color: ${bonusColor}; font-weight: ${bonusVal > 0 ? 'bold' : 'normal'};">${bonusVal > 0 ? '+' + bonusVal : '0'}</td>
+                <td style="text-align: center; font-weight: bold; color: var(--color-primary, #1F4788);">${posPointsVal + bonusVal}</td>
+                <td style="text-align: center;">${result.parties_menees || '-'}</td>
+                <td style="text-align: center;">${result.points}</td>
+                <td style="text-align: center;">${result.reprises}</td>
+                <td style="text-align: center;">${result.serie}</td>
+                <td style="text-align: center;">${moyenne}</td>
+                <td style="text-align: center;">${mpart}</td>
+              `;
+            } else {
+              const total = result.match_points + totalBonus;
+              const totalHTML = renderCtx.hasBonusCols ? `<td style="text-align: center; font-weight: bold;">${total}</td>` : '';
+              row.innerHTML = `
+                <td style="text-align: center; font-weight: bold;">${index + 1}</td>
+                <td>${result.licence}</td>
+                <td><a href="player-history.html?licence=${result.licence}" class="player-link">${playerName}</a></td>
+                <td></td>
+                ${pouleRankHTML}
+                <td style="text-align: center; font-weight: bold;">${result.match_points}</td>
+                ${bonusCellsHTML}
+                ${totalHTML}
+                ${pmHTML}
+                <td style="text-align: center;">${result.points}</td>
+                <td style="text-align: center;">${result.reprises}</td>
+                <td style="text-align: center;">${moyenne}</td>
+                <td style="text-align: center;">${result.serie}</td>
+                ${mpartHTML}
+              `;
+            }
 
-          // Position points
-          const posPointsVal = result.position_points || 0;
+            const clubCell = row.cells[3];
+            clubCell.innerHTML = getClubLogoHTML(result.club_name);
+            tbody.appendChild(row);
+          });
+        }
 
-          // Match-specific columns
-          const pouleRankHTML = hasPouleRank ? `<td style="text-align: center;">${result.poule_rank || '-'}</td>` : '';
-          const pmHTML = hasPM ? `<td style="text-align: center;">${result.parties_menees || '-'}</td>` : '';
-          const mpartHTML = hasMPART ? `<td style="text-align: center;">${result.meilleure_partie ? result.meilleure_partie.toFixed(3) : '-'}</td>` : '';
+        // ── Sort toggle for journées mode ──
+        let currentSort = 'position'; // 'position' (Clt Finale) or 'total' (Pts Clt Total)
+        if (hasPositionPoints) {
+          const toggleContainer = document.getElementById('sortToggleContainer');
+          const toggleBtn = document.getElementById('sortToggleBtn');
+          toggleContainer.style.display = '';
+          toggleBtn.addEventListener('click', () => {
+            if (currentSort === 'position') {
+              currentSort = 'total';
+              toggleBtn.textContent = 'Tri : Pts Clt Total ▼';
+              const sorted = [...renderCtx.results].sort((a, b) => {
+                const bonusA = (() => { try { return Object.values(JSON.parse(a.bonus_detail || '{}')).reduce((s, v) => s + (v || 0), 0); } catch(e) { return 0; } })();
+                const bonusB = (() => { try { return Object.values(JSON.parse(b.bonus_detail || '{}')).reduce((s, v) => s + (v || 0), 0); } catch(e) { return 0; } })();
+                const totalA = (a.position_points || 0) + bonusA;
+                const totalB = (b.position_points || 0) + bonusB;
+                return totalB - totalA;
+              });
+              renderResultRows(sorted);
+            } else {
+              currentSort = 'position';
+              toggleBtn.textContent = 'Tri : Clt Finale ▼';
+              const sorted = [...renderCtx.results].sort((a, b) => (a.position || 999) - (b.position || 999));
+              renderResultRows(sorted);
+            }
+          });
+        }
 
-          // Create cells — column order depends on mode
-          if (hasPositionPoints) {
-            // Journées mode: all columns always present (CDB 93-94 format)
-            const bonusVal = totalBonus;
-            const bonusColor = bonusVal > 0 ? '#1F4788' : '#999';
-            const mpart = result.meilleure_partie ? result.meilleure_partie.toFixed(3) : '-';
-            const cltFinale = result.position || (index + 1);
-            row.innerHTML = `
-              <td style="text-align: center; font-weight: bold;">${index + 1}</td>
-              <td>${result.licence}</td>
-              <td>
-                <a href="player-history.html?licence=${result.licence}" class="player-link">
-                  ${playerName}
-                </a>
-              </td>
-              <td>${result.club_name || ''}</td>
-              <td style="text-align: center;">${result.poule_rank || '-'}</td>
-              <td style="text-align: center;">${cltFinale}</td>
-              <td style="text-align: center; font-weight: bold; color: #1F4788;">${posPointsVal}</td>
-              <td style="text-align: center; color: ${bonusColor}; font-weight: ${bonusVal > 0 ? 'bold' : 'normal'};">${bonusVal > 0 ? '+' + bonusVal : '0'}</td>
-              <td style="text-align: center; font-weight: bold; color: var(--color-primary, #1F4788);">${posPointsVal + bonusVal}</td>
-              <td style="text-align: center;">${result.parties_menees || '-'}</td>
-              <td style="text-align: center;">${result.points}</td>
-              <td style="text-align: center;">${result.reprises}</td>
-              <td style="text-align: center;">${result.serie}</td>
-              <td style="text-align: center;">${moyenne}</td>
-              <td style="text-align: center;">${mpart}</td>
-            `;
-          } else {
-            // Standard mode (CDB92)
-            const total = result.match_points + totalBonus;
-            const totalHTML = hasBonusCols ? `<td style="text-align: center; font-weight: bold;">${total}</td>` : '';
-            row.innerHTML = `
-              <td style="text-align: center; font-weight: bold;">${index + 1}</td>
-              <td>${result.licence}</td>
-              <td>
-                <a href="player-history.html?licence=${result.licence}" class="player-link">
-                  ${playerName}
-                </a>
-              </td>
-              <td></td>
-              ${pouleRankHTML}
-              <td style="text-align: center; font-weight: bold;">${result.match_points}</td>
-              ${bonusCellsHTML}
-              ${totalHTML}
-              ${pmHTML}
-              <td style="text-align: center;">${result.points}</td>
-              <td style="text-align: center;">${result.reprises}</td>
-              <td style="text-align: center;">${moyenne}</td>
-              <td style="text-align: center;">${result.serie}</td>
-              ${mpartHTML}
-            `;
-          }
-
-          // Set club logo HTML separately (cell index shifts based on optional columns)
-          const clubCell = row.cells[3];
-          clubCell.innerHTML = getClubLogoHTML(result.club_name);
-
-          tbody.appendChild(row);
-        });
+        // Initial render
+        renderResultRows(data.results);
 
         // Show match details section if match data exists
         if (hasMatchData) {
