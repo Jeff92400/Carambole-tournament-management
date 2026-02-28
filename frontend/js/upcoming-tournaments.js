@@ -206,8 +206,11 @@
     var navLinks = document.querySelector('.nav-links');
     if (!navLinks) return;
 
-    var helpLink = navLinks.querySelector('a[href*="guide-utilisateur"]');
-    var insertBefore = helpLink || document.getElementById('logoutBtn');
+    // Insert right after the "Inscriptions" link
+    var inscriptionsLink = navLinks.querySelector('a[href="inscriptions-viewer.html"]') ||
+                           navLinks.querySelector('a[href="inscriptions-list.html"]');
+    var insertBefore = inscriptionsLink ? inscriptionsLink.nextElementSibling :
+                       (navLinks.querySelector('a[href*="guide-utilisateur"]') || document.getElementById('logoutBtn'));
     if (!insertBefore) return;
 
     var btn = document.createElement('a');
