@@ -2202,12 +2202,14 @@ router.get('/:id/results', authenticateToken, async (req, res) => {
                 const reprises = parseFloat(m[`${side}_reprises`]) || 0;
                 const matchMoyenne = reprises > 0 ? points / reprises : 0;
 
+                const matchPts = parseFloat(m[`${side}_match_points`]) || 0;
                 if (!playerMatchData[licence]) {
                   playerMatchData[licence] = { parties_menees: 0, best_single_moyenne: 0 };
                 }
                 const pd = playerMatchData[licence];
                 pd.parties_menees++;
-                if (matchMoyenne > pd.best_single_moyenne) pd.best_single_moyenne = matchMoyenne;
+                // MPART: only from WON matches (match_points > 0)
+                if (matchPts > 0 && matchMoyenne > pd.best_single_moyenne) pd.best_single_moyenne = matchMoyenne;
               }
             }
 
@@ -3718,8 +3720,8 @@ function aggregateMatchResults(matches) {
       player.max_serie = Math.max(player.max_serie, serie);
       player.total_match_points += matchPts;
 
-      // Track best single-match moyenne (MPART)
-      if (moyenne > player.best_single_moyenne) {
+      // Track best single-match moyenne (MPART) — only from WON matches (match_points > 0)
+      if (matchPts > 0 && moyenne > player.best_single_moyenne) {
         player.best_single_moyenne = moyenne;
       }
     }

@@ -240,7 +240,7 @@
               Aperçu des résultats
             </button>
             <button type="button" class="btn" id="importMatchesBtn" onclick="importMatches()" style="display: none;">
-              Importer les matchs
+              Sauvegarder les résultats
             </button>
           </div>
         </form>
@@ -1203,7 +1203,7 @@
         errorDiv.style.display = 'block';
       } finally {
         importBtn.disabled = false;
-        importBtn.textContent = 'Importer les matchs';
+        importBtn.textContent = 'Sauvegarder les résultats';
       }
     }
     window.importMatches = importMatches;
