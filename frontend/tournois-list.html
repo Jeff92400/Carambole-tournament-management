@@ -979,7 +979,7 @@
 
       document.getElementById('create_debut').addEventListener('change', function() {
         const finInput = document.getElementById('create_fin');
-        if (!finInput.value || finInput.value === autoFilledFin.create) {
+        if (!finInput.value || finInput.value === autoFilledFin.create || finInput.value < this.value) {
           finInput.value = this.value;
           autoFilledFin.create = this.value;
         }
@@ -987,7 +987,7 @@
 
       document.getElementById('edit_debut').addEventListener('change', function() {
         const finInput = document.getElementById('edit_fin');
-        if (!finInput.value || finInput.value === autoFilledFin.edit) {
+        if (!finInput.value || finInput.value === autoFilledFin.edit || finInput.value < this.value) {
           finInput.value = this.value;
           autoFilledFin.edit = this.value;
         }
