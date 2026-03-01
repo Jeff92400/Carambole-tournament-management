@@ -193,13 +193,15 @@ router.get('/candidates', authenticateToken, async (req, res) => {
              pc.rank_libre, pc.rank_cadre, pc.rank_bande, pc.rank_3bandes,
              pi.id as invitation_id, pi.sent_at, pi.has_signed_up, pi.resend_count
       FROM player_contacts pc
+      INNER JOIN players p ON REPLACE(p.licence, ' ', '') = REPLACE(pc.licence, ' ', '')
+        AND ($1::int IS NULL OR p.organization_id = $1)
       LEFT JOIN player_invitations pi ON pc.id = pi.player_contact_id
+        AND ($1::int IS NULL OR pi.organization_id = $1)
       WHERE pc.email IS NOT NULL
         AND pc.email != ''
         AND pc.email LIKE '%@%'
         AND COALESCE(pc.email_optin, 1) = 1
         AND COALESCE(pc.statut, 'Actif') = 'Actif'
-        AND ($1::int IS NULL OR pc.organization_id = $1)
     `;
     const params = [orgId];
     let paramIndex = 2;
