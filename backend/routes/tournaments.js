@@ -1894,15 +1894,29 @@ async function recomputeAllBonuses(categoryId, season, orgId, callback) {
 }
 
 // Recalculate rankings for a category/season (without reimporting)
-router.post('/recalculate-rankings', authenticateToken, (req, res) => {
+router.post('/recalculate-rankings', authenticateToken, async (req, res) => {
   const { categoryId, season } = req.body;
 
   if (!categoryId || !season) {
     return res.status(400).json({ error: 'categoryId and season required' });
   }
 
-  // Recompute bonuses first (in case scoring rules changed), then recalculate rankings
   const orgId = req.user.organizationId || null;
+
+  // Step 0: Recompute positions from match data for all tournaments in this category/season
+  try {
+    const tournaments = await dbAllAsync(
+      'SELECT id FROM tournaments WHERE category_id = $1 AND season = $2 AND ($3::int IS NULL OR organization_id = $3)',
+      [categoryId, season, orgId]
+    );
+    for (const t of tournaments) {
+      await recomputePositionsFromMatches(t.id);
+    }
+  } catch (e) {
+    console.error('[RECALC] Error recomputing positions:', e);
+  }
+
+  // Recompute bonuses first (in case scoring rules changed), then recalculate rankings
   recomputeAllBonuses(categoryId, season, orgId, () => {
   recalculateRankings(categoryId, season, (err) => {
     if (err) {
