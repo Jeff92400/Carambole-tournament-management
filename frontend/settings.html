@@ -501,9 +501,9 @@
         playerAppUrl = 'http://localhost:3001';
       } else {
         try {
-          const resp = await authFetch(`${API_URL}/settings/branding/colors`);
-          const settings = await resp.json();
-          const baseUrl = settings.player_app_url || 'https://cdbhs-player-app-production.up.railway.app';
+          const resp = await authFetch(`${API_URL}/settings/app/player_app_url`);
+          const data = await resp.json();
+          const baseUrl = data.value || 'https://cdbhs-player-app-production.up.railway.app';
           playerAppUrl = baseUrl + (baseUrl.includes('?') ? '&admin' : '?admin');
         } catch (err) {
           playerAppUrl = 'https://cdbhs-player-app-production.up.railway.app?admin';
