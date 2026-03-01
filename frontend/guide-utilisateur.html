@@ -783,7 +783,7 @@
     </div>
 
     <div class="info-card accent">
-      <strong>Scores retenus / écartés :</strong> En mode journées, seuls les N meilleurs résultats sur M journées comptent. Les scores retenus sont affichés en <strong>gras</strong>, les scores écartés sont <s>barrés</s>.
+      <strong>Scores retenus / écartés :</strong> Lorsque le paramètre « Meilleurs résultats retenus » est configuré (dans Paramètres &gt; Types de Tournoi), seuls les N meilleurs résultats comptent pour le classement. Les scores retenus sont affichés en <strong>gras</strong>, les scores écartés sont <s>barrés</s>. Cette fonctionnalité est disponible dans les deux modes (Standard et Journées).
     </div>
 
     <h3>Mise en évidence des qualifiés</h3>
@@ -1616,6 +1616,19 @@
     <p>Le bonus est calcul&eacute; automatiquement &agrave; chaque import de r&eacute;sultats et s'ajoute aux &eacute;ventuels bonus du bar&egrave;me (VDL, etc.).</p>
     <p>Un bandeau d'information affiche les seuils et règles du bonus moyenne en haut de la page de résultats du tournoi et de la page de classements.</p>
 
+    <h4>Meilleurs résultats retenus</h4>
+    <p>(Visible dans les deux modes : Standard et Journées)</p>
+    <p>Permet de ne retenir que les N meilleurs résultats de tournoi pour le classement saisonnier. Par exemple, avec la valeur 2 et 3 tournois joués, seuls les 2 meilleurs scores comptent pour le total des points de match. La moyenne, la meilleure série, les points et reprises restent calculés sur tous les tournois.</p>
+    <table>
+      <thead>
+        <tr><th>Paramètre</th><th>Description</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Nombre de résultats retenus</td><td>Nombre de meilleurs scores pris en compte. Laisser à 0 pour que tous les tournois comptent.</td></tr>
+      </tbody>
+    </table>
+    <p>Les résultats retenus apparaissent en <strong>gras</strong> dans le classement et l'export Excel. Les résultats écartés sont affichés <s>barrés en gris</s>.</p>
+
     <h4>Paramètres Journées Qualificatives</h4>
     <p>(Visible uniquement en mode journées)</p>
     <table>
@@ -1624,7 +1637,6 @@
       </thead>
       <tbody>
         <tr><td>Nombre de journées</td><td>Nombre de tournois qualificatifs par saison (défaut: 3)</td></tr>
-        <tr><td>Meilleurs résultats retenus</td><td>Nombre de meilleurs scores pris en compte (défaut: 2)</td></tr>
         <tr><td>Bonus Moyenne au classement saisonnier</td><td>Ajoute un bonus au classement saisonnier selon la moyenne des meilleurs tournois retenus (utilise le même type Normal/Par paliers que le bonus par tournoi)</td></tr>
       </tbody>
     </table>
@@ -2069,7 +2081,7 @@
     <ol class="steps">
       <li>Menu Paramètres > Types de Tournoi</li>
       <li>Cliquer sur la carte "Journées Qualificatives"</li>
-      <li>Configurer : nombre de journées, meilleurs résultats retenus</li>
+      <li>Configurer : nombre de journées</li>
       <li>Configurer les points par position (tableau en bas)</li>
       <li>(Optionnel) Activer le "Bonus Moyenne au classement saisonnier"</li>
       <li>Cliquer sur "Enregistrer"</li>

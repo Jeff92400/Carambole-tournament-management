@@ -302,6 +302,7 @@ router.get('/export', authenticateToken, async (req, res) => {
         r.tournament_1_points,
         r.tournament_2_points,
         r.tournament_3_points,
+        COALESCE(r.position_points_detail, '{}') as position_points_detail,
         c.game_type,
         c.level,
         c.display_name,
@@ -508,6 +509,15 @@ router.get('/export', authenticateToken, async (req, res) => {
         const totalBonus = Object.values(bonusDetail).reduce((s, v) => s + (v || 0), 0);
         const pureMatchPoints = row.total_match_points - totalBonus;
 
+        // Parse kept tournaments for best-of styling
+        let keptSet = null;
+        if (row.position_points_detail && row.position_points_detail !== '{}') {
+          try {
+            const ppd = JSON.parse(row.position_points_detail);
+            if (ppd.kept && ppd.kept.length > 0) keptSet = new Set(ppd.kept.map(Number));
+          } catch(e) {}
+        }
+
         const rowValues = [
           row.rank_position,
           row.licence,
@@ -563,6 +573,29 @@ router.get('/export', authenticateToken, async (req, res) => {
         [2, 3, 4, 5].forEach(col => {
           excelRow.getCell(col).alignment = { horizontal: 'left', vertical: 'middle' };
         });
+
+        // Best-of styling: bold for kept, strikethrough for dropped tournament scores
+        if (keptSet) {
+          const tournamentCols = [7, 8, 9]; // T1, T2, T3 Excel columns
+          const tournamentNumbers = [1, 2, 3];
+          const isQualified = row.rank_position <= qualifiedCount;
+          tournamentCols.forEach((col, i) => {
+            const tn = tournamentNumbers[i];
+            const cell = excelRow.getCell(col);
+            const cellVal = [row.tournament_1_points, row.tournament_2_points, row.tournament_3_points][i];
+            if (cellVal !== null && cellVal !== undefined) {
+              if (keptSet.has(tn)) {
+                cell.font = { bold: true, size: 11 };
+              } else {
+                cell.font = { strike: true, color: { argb: 'FF999999' }, size: 11 };
+              }
+              // Preserve green background for qualified
+              if (isQualified) {
+                cell.font = { ...cell.font, color: keptSet.has(tn) ? undefined : { argb: 'FF999999' } };
+              }
+            }
+          });
+        }
 
         // Add row height
         excelRow.height = 22;

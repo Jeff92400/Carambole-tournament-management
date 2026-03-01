@@ -81,6 +81,9 @@
         <span id="qualifiedText">Qualifiés pour la finale</span>
       </p>
       <p id="rankingsLegend" style="display: none; font-size: 12px; color: #666; font-style: italic; margin-top: 0; margin-bottom: 15px;">(*) Non-participation au tournoi concerné</p>
+      <p id="bestOfLegend" style="display: none; font-size: 12px; color: #666; font-style: italic; margin-top: 0; margin-bottom: 15px;">
+        <strong>Gras</strong> = résultat retenu, <span style="text-decoration: line-through; color: #999;">barré</span> = résultat non retenu (meilleurs <span id="bestOfLegendCount"></span> résultats)
+      </p>
       <div id="finaleSelectionBtnContainer" style="display: none; margin-bottom: 15px;">
         <button id="finaleSelectionBtn" class="btn" style="background: #2e7d32; color: white;" disabled>Classement pour la Finale de District</button>
         <button id="returnToSeasonBtn" class="btn" style="display: none; background: var(--color-primary, #1F4788); color: white;">Retour au classement saison</button>
@@ -668,6 +671,27 @@
             ? (rank.cumulated_points / rank.cumulated_reprises).toFixed(3)
             : '0.000';
 
+          // Parse kept tournaments from position_points_detail (best-of-N)
+          let keptSet = null;
+          if (rank.position_points_detail && rank.position_points_detail !== '{}') {
+            try {
+              const ppd = JSON.parse(rank.position_points_detail);
+              if (ppd.kept && ppd.kept.length > 0) keptSet = new Set(ppd.kept.map(Number));
+            } catch(e) {}
+          }
+
+          // Format tournament points with kept/dropped styling
+          const formatTP = (points, played, tournamentNumber) => {
+            if (!played) return '<span style="color: #ccc;">-</span>';
+            if (points === null || points === undefined) return '<span style="color: #999; font-size: 18px; font-weight: bold;">*</span>';
+            if (keptSet) {
+              return keptSet.has(tournamentNumber)
+                ? `<strong>${points}</strong>`
+                : `<span style="color: #999; text-decoration: line-through;">${points}</span>`;
+            }
+            return points;
+          };
+
           // Standard mode: match points per tournament + bonus columns
           let bonusCellsHTML = '';
           let pureMatchPoints = rank.total_match_points;
@@ -692,9 +716,9 @@
               </a>
             </td>
             <td></td>
-            <td style="text-align: center;">${formatTournamentPoints(rank.tournament_1_points, tournamentsPlayed.t1)}</td>
-            <td style="text-align: center;">${formatTournamentPoints(rank.tournament_2_points, tournamentsPlayed.t2)}</td>
-            <td style="text-align: center;">${formatTournamentPoints(rank.tournament_3_points, tournamentsPlayed.t3)}</td>
+            <td style="text-align: center;">${formatTP(rank.tournament_1_points, tournamentsPlayed.t1, 1)}</td>
+            <td style="text-align: center;">${formatTP(rank.tournament_2_points, tournamentsPlayed.t2, 2)}</td>
+            <td style="text-align: center;">${formatTP(rank.tournament_3_points, tournamentsPlayed.t3, 3)}</td>
             <td style="text-align: center;">${pureMatchPoints}</td>
             ${bonusCellsHTML}
             <td style="text-align: center; font-weight: bold;">${rank.total_match_points}</td>
@@ -724,6 +748,13 @@
         (tournamentsPlayed.t3 && r.tournament_3_points === null)
       );
       document.getElementById('rankingsLegend').style.display = hasAbsentPlayers ? 'block' : 'none';
+
+      // Show best-of legend when best_of_count is active in standard mode
+      const hasBestOf = !isJournees && bestOfCount > 0 && rankings.some(r => r.position_points_detail && r.position_points_detail !== '{}');
+      document.getElementById('bestOfLegend').style.display = hasBestOf ? 'block' : 'none';
+      if (hasBestOf) {
+        document.getElementById('bestOfLegendCount').textContent = bestOfCount;
+      }
     }
 
     // Export to Excel

@@ -1070,6 +1070,19 @@
         </div>
       </div>
 
+      <!-- Best-of-count setting (visible for both modes) -->
+      <hr style="margin: 25px 0; border: none; border-top: 1px solid #ddd;">
+      <h4 style="margin-bottom: 15px;">Meilleurs résultats retenus</h4>
+      <div style="display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 10px;">
+        <div style="flex: 1; min-width: 180px; max-width: 300px;">
+          <label style="display: block; margin-bottom: 8px; font-weight: 500;">Nombre de résultats retenus :</label>
+          <input type="number" id="bestOfCount" value="0" min="0" max="10" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+        </div>
+      </div>
+      <p style="margin: 0 0 15px 0; color: #666; font-size: 13px;">
+        Laisser vide ou 0 = tous les tournois comptent. Exemple : 2 = seuls les 2 meilleurs résultats sont retenus pour le classement.
+      </p>
+
       <!-- Journées-specific settings (hidden when standard) -->
       <div id="journeesSettings" style="display: none;">
         <hr style="margin: 25px 0; border: none; border-top: 1px solid #ddd;">
@@ -1078,10 +1091,6 @@
           <div style="flex: 1; min-width: 180px;">
             <label style="display: block; margin-bottom: 8px; font-weight: 500;">Nombre de journées :</label>
             <input type="number" id="journeesCount" value="3" min="1" max="10" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
-          </div>
-          <div style="flex: 1; min-width: 180px;">
-            <label style="display: block; margin-bottom: 8px; font-weight: 500;">Meilleurs résultats retenus :</label>
-            <input type="number" id="bestOfCount" value="2" min="1" max="10" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
           </div>
         </div>
 

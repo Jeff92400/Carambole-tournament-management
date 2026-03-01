@@ -1641,6 +1641,9 @@ async function recalculateRankingsStandard(categoryId, season, callback, orgId) 
     ORDER BY total_match_points DESC, avg_moyenne DESC, best_serie DESC
   `;
 
+  // Read best_of_count setting before querying
+  const bestOfCount = parseInt(await appSettings.getOrgSetting(orgId, 'best_of_count')) || 0;
+
   db.all(query, [categoryId, season], (err, results) => {
     if (err) {
       console.error(`[RANKING] Error calculating rankings for category ${categoryId}:`, err);
@@ -1652,6 +1655,44 @@ async function recalculateRankingsStandard(categoryId, season, callback, orgId) 
     if (results.length === 0) {
       console.log(`[RANKING] No players found, skipping ranking update`);
       return callback(null);
+    }
+
+    // Best-of post-processing: keep only best N tournament match point scores
+    if (bestOfCount > 0 && bestOfCount < rankingNumbers.length && results.length > 0) {
+      console.log(`[RANKING] Applying best ${bestOfCount} of ${rankingNumbers.length} tournaments`);
+      results.forEach(r => {
+        // Collect per-tournament scores
+        const scores = rankingNumbers.map((num, i) => ({
+          tournamentNumber: num,
+          points: r[`t${i + 1}_points`] || 0,
+          isNull: r[`t${i + 1}_points`] === null
+        })).filter(s => !s.isNull);
+
+        // Sort DESC, keep best N
+        scores.sort((a, b) => b.points - a.points);
+        const kept = scores.slice(0, bestOfCount);
+        const keptNumbers = new Set(kept.map(s => s.tournamentNumber));
+
+        // Recalculate total from kept scores only
+        r.total_match_points = kept.reduce((sum, s) => sum + s.points, 0);
+
+        // Build position_points_detail JSON for frontend kept/dropped display
+        const ppDetail = { kept: [...keptNumbers], tournaments: {} };
+        rankingNumbers.forEach((num, i) => {
+          const val = r[`t${i + 1}_points`];
+          if (val !== null) {
+            ppDetail.tournaments[num] = { pm: val };
+          }
+        });
+        r.position_points_detail = JSON.stringify(ppDetail);
+      });
+
+      // Re-sort by recalculated total, then moyenne, then best serie
+      results.sort((a, b) =>
+        b.total_match_points - a.total_match_points ||
+        b.avg_moyenne - a.avg_moyenne ||
+        b.best_serie - a.best_serie
+      );
     }
 
     // Log top 3 for verification
@@ -1670,8 +1711,8 @@ async function recalculateRankingsStandard(categoryId, season, callback, orgId) 
       const stmt = db.prepare(`
         INSERT INTO rankings (
           category_id, season, licence, total_match_points, avg_moyenne, best_serie,
-          rank_position, tournament_1_points, tournament_2_points, tournament_3_points, total_bonus_points, organization_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          rank_position, tournament_1_points, tournament_2_points, tournament_3_points, total_bonus_points, organization_id, position_points_detail
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
       let insertCount = 0;
@@ -1692,6 +1733,7 @@ async function recalculateRankingsStandard(categoryId, season, callback, orgId) 
           result.t3_points,
           result.total_bonus_points || 0,
           result.org_id || null,
+          result.position_points_detail || null,
           (err) => {
             insertCount++;
 
