@@ -1130,6 +1130,40 @@ async function computeBonusMoyenne(tournamentId, categoryId, orgId, callback) {
       }
     }
 
+    // When bracket/match data exists, compute moyenne from POULE matches only
+    // (classification/bracket matches are excluded — CDB rule)
+    let pouleOnlyMoyennes = null; // { licence: moyenne }
+    try {
+      const matchCount = await dbGetAsync(
+        'SELECT COUNT(*) as cnt FROM tournament_matches WHERE tournament_id = $1', [tournamentId]
+      );
+      if (matchCount && matchCount.cnt > 0) {
+        const allMatches = await dbAllAsync(
+          'SELECT poule_name, player1_licence, player1_points, player1_reprises, player2_licence, player2_points, player2_reprises FROM tournament_matches WHERE tournament_id = $1',
+          [tournamentId]
+        );
+        // Aggregate points/reprises from regular poule matches only
+        const pouleStats = {}; // { licence: { points, reprises } }
+        for (const m of allMatches) {
+          if (isClassificationPoule(m.poule_name)) continue; // Skip bracket/classification
+          for (const side of ['player1', 'player2']) {
+            const licence = m[`${side}_licence`];
+            if (!licence) continue;
+            const pts = parseFloat(m[`${side}_points`]) || 0;
+            const rep = parseFloat(m[`${side}_reprises`]) || 0;
+            if (!pouleStats[licence]) pouleStats[licence] = { points: 0, reprises: 0 };
+            pouleStats[licence].points += pts;
+            pouleStats[licence].reprises += rep;
+          }
+        }
+        pouleOnlyMoyennes = {};
+        for (const [licence, stats] of Object.entries(pouleStats)) {
+          pouleOnlyMoyennes[licence.replace(/ /g, '')] = stats.reprises > 0 ? stats.points / stats.reprises : 0;
+        }
+        console.log(`[BONUS-MOY] Using poule-only moyennes for ${Object.keys(pouleOnlyMoyennes).length} players (tournament ${tournamentId})`);
+      }
+    } catch (e) { /* tournament_matches may not exist */ }
+
     let updateCount = 0;
     for (const result of results) {
       // Parse existing bonus_detail (from barème rules)
@@ -1140,7 +1174,11 @@ async function computeBonusMoyenne(tournamentId, categoryId, orgId, callback) {
         // Remove MOYENNE_BONUS but keep other bonuses
         delete detail.MOYENNE_BONUS;
       } else {
-        const moyenne = result.reprises > 0 ? result.points / result.reprises : 0;
+        // Use poule-only moyenne when available, otherwise fall back to total
+        const licenceNorm = (result.licence || '').replace(/ /g, '');
+        const moyenne = pouleOnlyMoyennes && pouleOnlyMoyennes[licenceNorm] !== undefined
+          ? pouleOnlyMoyennes[licenceNorm]
+          : (result.reprises > 0 ? result.points / result.reprises : 0);
         let bonus = 0;
 
         if (bonusType === 'tiered') {
@@ -4462,8 +4500,18 @@ router.post('/import-matches/preview', authenticateToken, upload.array('files', 
 
           bonusMoyenneInfo = { type: bonusType, mini: moyenneMini, middle: moyenneMiddle, maxi: moyenneMaxi, tiers: [tier1, tier2, tier3] };
 
+          // Compute poule-only moyennes for bonus (exclude bracket/classification)
+          const pouleOnlyMatches = allMatches.filter(m => !isClassificationPoule(m.poule_name));
+          const pouleOnlyStats = aggregateMatchResults(pouleOnlyMatches);
+          const pouleOnlyMap = {};
+          for (const ps of pouleOnlyStats) {
+            pouleOnlyMap[ps.licence] = ps.total_reprises > 0 ? ps.total_points / ps.total_reprises : 0;
+          }
+
           for (const player of rankedStats) {
-            const mgp = player.total_reprises > 0 ? player.total_points / player.total_reprises : 0;
+            const mgp = pouleOnlyMap[player.licence] !== undefined
+              ? pouleOnlyMap[player.licence]
+              : (player.total_reprises > 0 ? player.total_points / player.total_reprises : 0);
             let bonus = 0;
             if (bonusType === 'tiered') {
               if (mgp >= moyenneMaxi) bonus = tier3;
