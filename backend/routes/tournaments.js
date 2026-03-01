@@ -3161,6 +3161,48 @@ router.post('/:id/mark-results-unsent', authenticateToken, (req, res) => {
   );
 });
 
+// Recompute positions from stored tournament_matches, then re-apply position_points + bonuses.
+// Called by /recompute endpoint to fix positions when the classification algorithm is updated.
+async function recomputePositionsFromMatches(tournamentId) {
+  // Read all tournament_matches for this tournament
+  const matches = await dbAllAsync(
+    `SELECT phase_number, poule_name,
+       player1_licence, player1_name, player1_points, player1_reprises, player1_serie, player1_match_points, player1_moyenne,
+       player2_licence, player2_name, player2_points, player2_reprises, player2_serie, player2_match_points, player2_moyenne
+     FROM tournament_matches WHERE tournament_id = $1 ORDER BY phase_number, id`,
+    [tournamentId]
+  );
+  if (!matches || matches.length === 0) return false;
+
+  // Convert to the same format as parseMatchCSV output
+  const allMatches = matches.map(m => ({
+    phase_number: m.phase_number,
+    poule_name: m.poule_name,
+    player1_licence: m.player1_licence, player1_name: m.player1_name,
+    player1_points: m.player1_points, player1_reprises: m.player1_reprises,
+    player1_serie: m.player1_serie, player1_match_points: m.player1_match_points,
+    player2_licence: m.player2_licence, player2_name: m.player2_name,
+    player2_points: m.player2_points, player2_reprises: m.player2_reprises,
+    player2_serie: m.player2_serie, player2_match_points: m.player2_match_points,
+  }));
+
+  // Re-run the same aggregation + ranking as the import flow
+  const playerStats = aggregateMatchResults(allMatches);
+  const rankedStats = computeMatchRankings(playerStats, allMatches);
+
+  // Update positions in tournament_results
+  for (const player of rankedStats) {
+    if (player.final_position) {
+      await dbRunAsync(
+        'UPDATE tournament_results SET position = $1 WHERE tournament_id = $2 AND REPLACE(licence, \' \', \'\') = REPLACE($3, \' \', \'\')',
+        [player.final_position, tournamentId, player.licence]
+      );
+    }
+  }
+  console.log(`[RECOMPUTE-POS] Recomputed ${rankedStats.length} positions for tournament ${tournamentId} from ${allMatches.length} matches`);
+  return true;
+}
+
 // Recompute position_points + bonus + rankings for an existing tournament (admin only)
 // Useful after configuration changes (e.g., position points table updated, bonus rules added)
 router.post('/:id/recompute', authenticateToken, async (req, res) => {
@@ -3180,6 +3222,9 @@ router.post('/:id/recompute', authenticateToken, async (req, res) => {
     if (!tournament) {
       return res.status(404).json({ error: 'Tournoi non trouvé' });
     }
+
+    // Recompute positions from bracket/match data if available
+    await recomputePositionsFromMatches(tournamentId);
 
     // Re-run position_points assignment (no-op for standard mode)
     await assignPositionPointsIfJournees(tournamentId, orgId);
@@ -3969,8 +4014,8 @@ function computeMatchRankings(playerStats, allMatches) {
  * Extract final classification from bracket/classification poules.
  * Uses phase numbers from raw matches to resolve conflicts when multiple rounds
  * cover the same position range (later phases override earlier ones).
- * Within each position pair, sorts by TOTAL tournament match points (not just
- * the classification-phase match points), matching CDB 93-94 behavior.
+ * Within each position pair, sorts by the CLASSIFICATION MATCH result (winner first).
+ * Tiebreaker for draws: global tournament PM → points → serie.
  *
  * @param {Object} classificationPoules - { pouleName: [{ licence, total_match_points, ... }] }
  * @param {Object} regularPoules - { pouleName: [{ licence, ... }] } (unused but kept for signature compat)
@@ -4007,10 +4052,12 @@ function extractClassificationPositions(classificationPoules, regularPoules, mat
     else if (upper === 'FINALE' || /^FINALE\b/.test(upper)) {
       posStart = 1;
     }
-    // E2i format: "G7-8 - P5-6" → positions from P part
+    // E2i format: "G7-8 - P5-6" → cascading classification match
+    // Winner of G-range plays loser of P-range. Resulting positions = max(P-range), max(P-range)+1
+    // e.g. "G 9-10 - P 7-8" → positions 8-9; "G 7-8 - P5-6" → positions 6-7
     else if (/G\s*\d+-\d+\s*-\s*P\s*(\d+)-(\d+)/i.test(pouleName)) {
       const match = pouleName.match(/G\s*\d+-\d+\s*-\s*P\s*(\d+)-(\d+)/i);
-      posStart = parseInt(match[1]);
+      posStart = parseInt(match[2]); // Use max of P-range (e.g. 8 from "P 7-8")
     }
     // "Classement XX-YY" or "Classement 09-10"
     else if (/[Cc]lassement\s+(\d+)\s*-\s*(\d+)/.test(pouleName)) {
@@ -4028,16 +4075,10 @@ function extractClassificationPositions(classificationPoules, regularPoules, mat
       posStart = parseInt(match[1]);
     }
     else if (/Place\s+(\d+)/i.test(pouleName)) {
-      // Single position: "CLASSEMENT (J07-J08) - Place 08" → position 8
-      // In this case, the winner gets posStart-1 and loser gets posStart (or just loser gets posStart)
-      // Actually for a 2-player match, winner = posStart - 1, loser = posStart? No...
-      // "Place 08" means determining who gets place 8 → loser = 8, winner goes to next round
-      // But we can't know without more context. Treat as single position for loser, skip winner.
-      // Actually let's treat it as posStart-1 and posStart range
+      // Single position: "Place 05" → determines positions pos and pos+1
+      // Winner gets pos, loser gets pos+1. Conflict resolution handles overlaps.
       const match = pouleName.match(/Place\s+(\d+)/i);
-      const pos = parseInt(match[1]);
-      // For single-position classification: winner gets pos-1, loser gets pos
-      posStart = pos - 1;
+      posStart = parseInt(match[1]);
     }
     // Numeric "NN-NN" pattern (e.g., "05-06", "07-08") — intermediate round positions
     else if (/^(\d{2})-(\d{2})$/.test(pouleName)) {
@@ -4047,12 +4088,11 @@ function extractClassificationPositions(classificationPoules, regularPoules, mat
 
     if (posStart === null) continue;
 
-    // Sort players within this classification poule by TOTAL tournament match points
-    // (not just this classification match's MP). The classification match determines
-    // which position pair you compete for; total tournament PM determines exact order.
-    // Within-pair tiebreaker: PM → total points → serie (NOT moyenne — CDB 93-94 rule)
+    // Sort players by THIS classification match result (winner first).
+    // The match result (match_points in the classification phase) determines who gets
+    // the higher position, NOT the global tournament stats.
+    // Tiebreaker for draws: fall back to global tournament PM → points → serie.
     if (playerStats && playerStats.length > 0) {
-      // Enrich each player with their global tournament stats for sorting
       for (const p of players) {
         const global = playerStats.find(ps => ps.licence === p.licence);
         if (global) {
@@ -4062,8 +4102,11 @@ function extractClassificationPositions(classificationPoules, regularPoules, mat
           p._globalSerie = global.max_serie || 0;
         }
       }
-      // Classification pair sort: PM desc → total points desc → serie desc
       players.sort((a, b) => {
+        // Primary: classification match result (who won THIS match)
+        if ((b.total_match_points || 0) !== (a.total_match_points || 0))
+          return (b.total_match_points || 0) - (a.total_match_points || 0);
+        // Tiebreaker: global tournament stats
         if ((b._globalMatchPoints || 0) !== (a._globalMatchPoints || 0))
           return (b._globalMatchPoints || 0) - (a._globalMatchPoints || 0);
         if ((b._globalPoints || 0) !== (a._globalPoints || 0))
