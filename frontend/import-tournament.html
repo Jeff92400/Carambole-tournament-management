@@ -1247,6 +1247,19 @@
           } else {
             grid.style.gridTemplateColumns = '1fr 1fr';
           }
+
+          // Show only the relevant import tab for the CDB's mode
+          const tabStandard = document.querySelector('.import-tab[data-tab="standard"]');
+          const tabMatches = document.querySelector('.import-tab[data-tab="matches"]');
+          if (isJournees) {
+            tabStandard.style.display = 'none';
+            tabMatches.style.display = '';
+            switchImportTab('matches');
+          } else {
+            tabMatches.style.display = 'none';
+            tabStandard.style.display = '';
+            switchImportTab('standard');
+          }
         }
       } catch (error) {
         console.error('Error loading qualification mode:', error);
