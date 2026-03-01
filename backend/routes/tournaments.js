@@ -3877,7 +3877,7 @@ function isClassificationPoule(pouleName) {
   return upper.includes('CLASSEMENT') || upper.includes('DEMI-FINALE') || upper.includes('DEMI FINALE') ||
       upper.includes('FINALE') || upper.includes('PETITE FINALE') ||
       upper.includes('SEMI-FINAL') || upper.includes('BARRAGE') ||
-      upper.includes('PLACE ') ||
+      /\bPLACES?\b/.test(upper) ||
       /^G\s*\d+-\d+/.test(pouleName) || /^\d{2}-\d{2}$/.test(pouleName);
 }
 
