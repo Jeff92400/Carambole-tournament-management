@@ -206,11 +206,13 @@
     var navLinks = document.querySelector('.nav-links');
     if (!navLinks) return;
 
-    // Insert right after the "Inscriptions" link
-    var inscriptionsLink = navLinks.querySelector('a[href="inscriptions-viewer.html"]') ||
-                           navLinks.querySelector('a[href="inscriptions-list.html"]');
-    var insertBefore = inscriptionsLink ? inscriptionsLink.nextElementSibling :
-                       (navLinks.querySelector('a[href*="guide-utilisateur"]') || document.getElementById('logoutBtn'));
+    // Insert right before "Calendrier" to keep consistent order:
+    // Accueil | Compétitions | Inscriptions | Tournois à venir | Calendrier | Com joueurs | Paramètres | ? | Déconnexion
+    var calendarLink = navLinks.querySelector('a[href="calendar.html"]');
+    var insertBefore = calendarLink ||
+                       navLinks.querySelector('a[href="emailing.html"]') ||
+                       navLinks.querySelector('a[href="settings.html"]') ||
+                       document.getElementById('logoutBtn');
     if (!insertBefore) return;
 
     var btn = document.createElement('a');
