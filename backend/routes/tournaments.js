@@ -1123,7 +1123,7 @@ async function computeBonusMoyenne(tournamentId, categoryId, orgId, callback) {
 
         if (gp && gp.moyenne_mini != null) moyenneMini = parseFloat(gp.moyenne_mini);
         if (gp && gp.moyenne_maxi != null) moyenneMaxi = parseFloat(gp.moyenne_maxi);
-        moyenneMiddle = (moyenneMini + moyenneMaxi) / 2;
+        moyenneMiddle = Math.round((moyenneMini + moyenneMaxi) / 2 * 100) / 100;
         console.log(`[BONUS-MOY] Thresholds: type=${bonusType}, mini=${moyenneMini}, middle=${moyenneMiddle.toFixed(3)}, maxi=${moyenneMaxi}, tiers=[${tier1},${tier2},${tier3}]`);
       } else {
         console.log(`[BONUS-MOY] Category ${categoryId} not found`);
@@ -1491,7 +1491,7 @@ async function recalculateRankingsJournees(categoryId, season, callback, orgId) 
         moyenneMaxi = parseFloat(gp.moyenne_maxi) || 999;
       }
     }
-    const moyenneMiddle = (moyenneMini + moyenneMaxi) / 2;
+    const moyenneMiddle = Math.round((moyenneMini + moyenneMaxi) / 2 * 100) / 100;
 
     // Fetch FFB moyenne for each player (for display in ranking)
     let gameModeId = null;
@@ -2121,7 +2121,7 @@ router.get('/:id/results', authenticateToken, async (req, res) => {
           // Same defaults as recalculateRankingsJournees — compute even without game_parameters
           const moyenneMini = (gp && gp.moyenne_mini != null) ? parseFloat(gp.moyenne_mini) : 0;
           const moyenneMaxi = (gp && gp.moyenne_maxi != null) ? parseFloat(gp.moyenne_maxi) : 999;
-          const moyenneMiddle = (moyenneMini + moyenneMaxi) / 2;
+          const moyenneMiddle = Math.round((moyenneMini + moyenneMaxi) / 2 * 100) / 100;
           bonusDiag.thresholds = { mini: moyenneMini, middle: moyenneMiddle, maxi: moyenneMaxi };
           let applied = 0;
 
@@ -2478,7 +2478,7 @@ router.get('/:id/export', authenticateToken, async (req, res) => {
                 }
                 const moyenneMini = (gp && gp.moyenne_mini != null) ? parseFloat(gp.moyenne_mini) : 0;
                 const moyenneMaxi = (gp && gp.moyenne_maxi != null) ? parseFloat(gp.moyenne_maxi) : 999;
-                const moyenneMiddle = (moyenneMini + moyenneMaxi) / 2;
+                const moyenneMiddle = Math.round((moyenneMini + moyenneMaxi) / 2 * 100) / 100;
                 for (const r of results) {
                   let detail = {};
                   try { detail = JSON.parse(r.bonus_detail || '{}'); } catch (e) { detail = {}; }
@@ -3539,7 +3539,7 @@ router.get('/:id/scoring-detail', authenticateToken, async (req, res) => {
     );
     const moyenneMini = gameParams ? parseFloat(gameParams.moyenne_mini) || 0 : 0;
     const moyenneMaxi = gameParams ? parseFloat(gameParams.moyenne_maxi) || 0 : 0;
-    const moyenneMiddle = (moyenneMini + moyenneMaxi) / 2;
+    const moyenneMiddle = Math.round((moyenneMini + moyenneMaxi) / 2 * 100) / 100;
 
     // 4. Players from tournament_results with computed average bonus
     const players = await dbAllAsync(
@@ -4741,7 +4741,7 @@ router.post('/import-matches/preview', authenticateToken, upload.array('files', 
           );
           const moyenneMini = (gp && gp.moyenne_mini != null) ? parseFloat(gp.moyenne_mini) : 0;
           const moyenneMaxi = (gp && gp.moyenne_maxi != null) ? parseFloat(gp.moyenne_maxi) : 999;
-          const moyenneMiddle = (moyenneMini + moyenneMaxi) / 2;
+          const moyenneMiddle = Math.round((moyenneMini + moyenneMaxi) / 2 * 100) / 100;
 
           bonusMoyenneInfo = { type: bonusType, mini: moyenneMini, middle: moyenneMiddle, maxi: moyenneMaxi, tiers: [tier1, tier2, tier3] };
 
