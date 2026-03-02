@@ -3894,7 +3894,8 @@ function aggregateMatchResults(matches) {
           max_serie: 0,
           total_match_points: 0,
           best_single_moyenne: 0,   // MPART
-          match_moyennes: []         // For computing MPART
+          match_moyennes: [],        // For computing MPART
+          max_phase: match.phase_number || 1
         };
       }
 
@@ -3904,6 +3905,7 @@ function aggregateMatchResults(matches) {
       player.total_reprises += reprises;
       player.max_serie = Math.max(player.max_serie, serie);
       player.total_match_points += matchPts;
+      player.max_phase = Math.max(player.max_phase, match.phase_number || 1);
 
       // Track best single-match moyenne (MPART) — only from WON matches (match_points > 0)
       if (matchPts > 0 && moyenne > player.best_single_moyenne) {
@@ -3945,6 +3947,51 @@ function sortByPerformance(players, mpKey = 'total_match_points', ptsKey = 'tota
     }
     return 0;
   });
+}
+
+/**
+ * Head-to-head tiebreaker within a group of players sharing the same max_phase.
+ * If player A beat player B in a direct match within that phase, A must be ranked above B.
+ * Uses bubble-pass approach on consecutive pairs.
+ * @param {Array} players - Sorted array of player stats (will be mutated)
+ * @param {Array} allMatches - Raw match objects for direct-match lookup
+ */
+function applyHeadToHead(players, allMatches) {
+  if (!allMatches || allMatches.length === 0) return;
+
+  // Multiple passes to propagate swaps (bubble sort style)
+  let swapped = true;
+  let passes = 0;
+  const maxPasses = players.length; // At most N passes needed
+  while (swapped && passes < maxPasses) {
+    swapped = false;
+    passes++;
+    for (let i = 0; i < players.length - 1; i++) {
+      const a = players[i], b = players[i + 1];
+      if ((a.max_phase || 1) !== (b.max_phase || 1)) continue; // different phases, skip
+
+      // Find direct match between a and b in their shared max phase
+      const sharedPhase = a.max_phase || 1;
+      const directMatch = allMatches.find(m =>
+        (m.phase_number || 1) === sharedPhase &&
+        ((m.player1_licence === a.licence && m.player2_licence === b.licence) ||
+         (m.player1_licence === b.licence && m.player2_licence === a.licence))
+      );
+      if (!directMatch) continue;
+
+      // Determine winner by match points
+      const aIsP1 = directMatch.player1_licence === a.licence;
+      const aMP = aIsP1 ? (directMatch.player1_match_points || 0) : (directMatch.player2_match_points || 0);
+      const bMP = aIsP1 ? (directMatch.player2_match_points || 0) : (directMatch.player1_match_points || 0);
+
+      // If b beat a, swap them
+      if (bMP > aMP) {
+        players[i] = b;
+        players[i + 1] = a;
+        swapped = true;
+      }
+    }
+  }
 }
 
 /**
@@ -4079,9 +4126,28 @@ function computeMatchRankings(playerStats, allMatches) {
     }
 
     // Players NOT in any classification match get remaining positions
+    // Phase-aware ordering: higher max_phase = better rank (E2I rule)
     const assignedPositions = new Set(classificationPositions.map(cp => cp.position));
     const unranked = playerStats.filter(p => !p.final_position);
-    sortByPerformance(unranked);
+
+    // Primary: max_phase DESC (higher phase = better rank)
+    // Secondary: poule_rank ASC within same phase, then performance fallback
+    unranked.sort((a, b) => {
+      if ((b.max_phase || 1) !== (a.max_phase || 1)) return (b.max_phase || 1) - (a.max_phase || 1);
+      // Same phase: sort by poule rank first
+      if (a.poule_rank && b.poule_rank && a.poule_rank !== b.poule_rank) return a.poule_rank - b.poule_rank;
+      // Fallback to global performance (match_points → moyenne → serie)
+      if ((b.total_match_points || 0) !== (a.total_match_points || 0))
+        return (b.total_match_points || 0) - (a.total_match_points || 0);
+      const avgA = (a.total_reprises || 0) > 0 ? (a.total_points || 0) / a.total_reprises : 0;
+      const avgB = (b.total_reprises || 0) > 0 ? (b.total_points || 0) / b.total_reprises : 0;
+      if (avgB !== avgA) return avgB - avgA;
+      return (b.max_serie || 0) - (a.max_serie || 0);
+    });
+
+    // Head-to-head tiebreaker within same max_phase
+    applyHeadToHead(unranked, allMatches);
+
     // Find next available position
     let nextPos = 1;
     for (const p of unranked) {
@@ -4094,11 +4160,22 @@ function computeMatchRankings(playerStats, allMatches) {
     // No classification poules — rank by interleaving poule positions
     // 1st of each poule, then 2nds, then 3rds...
     // Within same poule rank: sort by MGP DESC
+    // Safeguard: if multiple phases exist, higher-phase players rank first within same poule_rank
     const maxRank = Math.max(0, ...playerStats.map(p => p.poule_rank || 0));
     let position = 1;
     for (let rank = 1; rank <= maxRank; rank++) {
       const atThisRank = playerStats.filter(p => p.poule_rank === rank);
-      sortByPerformance(atThisRank);
+      // Sort by max_phase DESC first, then by performance within same phase
+      atThisRank.sort((a, b) => {
+        if ((b.max_phase || 1) !== (a.max_phase || 1)) return (b.max_phase || 1) - (a.max_phase || 1);
+        // Same phase: fall through to performance
+        if ((b.total_match_points || 0) !== (a.total_match_points || 0))
+          return (b.total_match_points || 0) - (a.total_match_points || 0);
+        const avgA = (a.total_reprises || 0) > 0 ? (a.total_points || 0) / a.total_reprises : 0;
+        const avgB = (b.total_reprises || 0) > 0 ? (b.total_points || 0) / b.total_reprises : 0;
+        if (avgB !== avgA) return avgB - avgA;
+        return (b.max_serie || 0) - (a.max_serie || 0);
+      });
       for (const p of atThisRank) {
         p.final_position = position++;
       }

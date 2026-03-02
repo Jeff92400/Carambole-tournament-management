@@ -1,6 +1,6 @@
 # Guide Utilisateur Complet
 
-**Application de Gestion des Tournois de Billard Français — Version 2.0.200**
+**Application de Gestion des Tournois de Billard Français — Version 2.0.256**
 
 ---
 
@@ -423,7 +423,7 @@ La seule différence concerne l'attribution automatique des **points de position
 3. **Recalcul des classements :** Les classements de saison sont recalculés automatiquement après l'import, en retenant les N meilleurs scores de points de position sur M journées.
 4. **Consultation du détail :** Après l'import, cliquer sur **« Voir le détail du tournoi »** pour consulter la page de résultats. En mode journées, une colonne **« Pts Position »** est affichée en plus des colonnes habituelles (points de match, caramboles, reprises, moyenne, série).
 
-> **Points de position :** Le barème de points par position est configurable dans Paramètres > Types de Tournoi. Par exemple : 1er -> 10 pts, 2e -> 8 pts, 3e -> 6 pts, etc. Ce barème est appliqué automatiquement à chaque import de résultats en mode journées. La position est calculée d'après les points de match (et la moyenne en cas d'égalité). La colonne « Pts Position » apparaît automatiquement sur la page de résultats du tournoi.
+> **Points de position :** Le barème de points par position est configurable dans Paramètres > Types de Tournoi. Par exemple : 1er -> 10 pts, 2e -> 8 pts, 3e -> 6 pts, etc. Ce barème est appliqué automatiquement à chaque import de résultats en mode journées. La position finale est déterminée par le **numéro de phase le plus élevé** atteint par le joueur (un joueur ayant atteint la phase 2 est toujours classé devant un joueur resté en phase 1), puis par les points de match et la moyenne en cas d'égalité de phase. La colonne « Pts Position » apparaît automatiquement sur la page de résultats du tournoi.
 
 #### Import des matchs E2i (CSV matchs individuels)
 
@@ -449,7 +449,7 @@ Chaque fichier correspond à une poule ou phase (POULE A, POULE B, DEMI-FINALE, 
 
 - **Agrégation :** Les matchs individuels sont agrégés par joueur (total points, reprises, meilleure série, moyenne, nombre de matchs joués).
 - **Classement par poule :** Les joueurs sont classés au sein de chaque poule par points de match puis moyenne.
-- **Classement final :** Si des phases de classement (DEMI-FINALE, FINALE, Classement 07-08) sont présentes, elles déterminent le classement final. Sinon, le classement est calculé par interclassement des positions de poule.
+- **Classement final :** Si des phases de classement (DEMI-FINALE, FINALE, Classement 07-08) sont présentes, elles déterminent le classement final. Pour les joueurs sans match de classement, le **numéro de phase** (première colonne du CSV E2i) est le critère principal : un joueur ayant atteint une phase supérieure est toujours classé devant un joueur resté dans une phase inférieure, quel que soit son score. En cas d'égalité de phase, la confrontation directe puis la performance globale départagent. Si aucune phase de classement n'est présente, le classement est calculé par interclassement des positions de poule.
 - **Meilleure partie (MPART) :** La meilleure moyenne sur un seul match est calculée pour chaque joueur.
 - **Points de position :** En mode journées, les points de position sont attribués selon le barème configuré.
 - **Bonus et classements :** Tous les bonus (barème, moyenne) et les classements de saison sont recalculés après l'import.
@@ -578,11 +578,7 @@ Publication d'annonces visibles dans l'Application Joueur.
 
 - **Titre** : Titre de l'annonce
 - **Message** : Contenu de l'annonce
-- **Type** :
-  - INFO : Information générale
-  - ALERTE : Message important
-  - RESULTATS : Résultats de compétition
-  - PERSO : Message personnel ciblé
+- **Type** : INFO (Information générale), ALERTE (Message important), RESULTATS (Résultats de compétition), PERSO (Message personnel ciblé)
 
 **Options avancées :**
 
@@ -814,7 +810,7 @@ Configuration des informations générales de l'organisation.
 ### Rôles disponibles
 
 | Rôle | Permissions |
-|------|-------------|
+|------|------------|
 | Admin | Accès complet, peut créer d'autres utilisateurs |
 | Éditeur | Peut gérer compétitions, inscriptions, communications |
 | Lecteur | Consultation seule (accès en lecture à toutes les pages) |
@@ -1285,7 +1281,7 @@ Vue complète de toutes les inscriptions aux compétitions.
 > **Instructions :** Pour chaque capture ci-dessous, prenez une copie d'écran de la page indiquée et enregistrez-la dans le dossier `screenshots/` avec le nom de fichier spécifié. Puis décommentez la balise `<img>` correspondante dans le HTML pour remplacer le placeholder.
 
 | ID | Fichier | Page / État à capturer | Détails |
-|----|---------|------------------------|---------|
+|----|---------|----------------------|---------|
 | IMG-01 | `01-login.png` | Page de connexion | Afficher la page de login avec le logo, les champs vides et le bouton "Se connecter". Version visible en bas. |
 | IMG-02 | `02-dashboard.png` | Dashboard | Se connecter et capturer le tableau de bord complet : cartes de statistiques, section alertes, et boutons d'actions rapides. |
 | IMG-03 | `03-classements.png` | Classements (mode standard) | Menu Classements. Sélectionner une catégorie ayant des résultats. Montrer les filtres + le tableau avec les joueurs qualifiés en vert. |
@@ -1310,12 +1306,12 @@ Vue complète de toutes les inscriptions aux compétitions.
 | IMG-22 | `22-logs-activite.png` | Paramètres > Logs d'activité | Statistiques rapides + filtres + quelques lignes de log dans le tableau. |
 | IMG-23 | `23-inscriptions-liste.png` | Liste des inscriptions | Menu Inscriptions. Filtrer pour afficher des résultats. Montrer les badges de statut colorés. |
 
-> **Astuce :** Pour des captures de bonne qualité, utilisez la résolution de votre écran standard (pas de zoom). Largeur recommandée : 1200-1400px. Format PNG recommandé.
+**Astuce :** Pour des captures de bonne qualité, utilisez la résolution de votre écran standard (pas de zoom). Largeur recommandée : 1200-1400px. Format PNG recommandé.
 
 > **Activation des images :** Une fois les captures placées dans le dossier `screenshots/`, ouvrez ce fichier HTML et pour chaque placeholder, décommentez la ligne `<img src="screenshots/XX-nom.png">`. Le placeholder gris sera alors remplacé par la vraie capture.
 
 ---
 
-*Document de référence pour l'Application de Gestion des Tournois — Version 2.0.200*
+*Document de référence pour l'Application de Gestion des Tournois — Version 2.0.256*
 
 *JR (c)*

@@ -1042,7 +1042,7 @@
     </ol>
 
     <div class="info-card accent">
-      <strong>Points de position :</strong> Le barème de points par position est configurable dans Paramètres &gt; Types de Tournoi. Par exemple : 1er &rarr; 10 pts, 2e &rarr; 8 pts, 3e &rarr; 6 pts, etc. Ce barème est appliqué automatiquement à chaque import de résultats en mode journées. La position est calculée d'après les points de match (et la moyenne en cas d'égalité). La colonne « Pts Position » apparaît automatiquement sur la page de résultats du tournoi.
+      <strong>Points de position :</strong> Le barème de points par position est configurable dans Paramètres &gt; Types de Tournoi. Par exemple : 1er &rarr; 10 pts, 2e &rarr; 8 pts, 3e &rarr; 6 pts, etc. Ce barème est appliqué automatiquement à chaque import de résultats en mode journées. La position finale est déterminée par le <strong>numéro de phase le plus élevé</strong> atteint par le joueur (un joueur ayant atteint la phase 2 est toujours classé devant un joueur resté en phase 1), puis par les points de match et la moyenne en cas d'égalité de phase. La colonne « Pts Position » apparaît automatiquement sur la page de résultats du tournoi.
     </div>
 
     <h4 id="import-matchs-e2i">Import des matchs E2i (CSV matchs individuels)</h4>
@@ -1068,7 +1068,7 @@
     <ul>
       <li><strong>Agrégation :</strong> Les matchs individuels sont agrégés par joueur (total points, reprises, meilleure série, moyenne, nombre de matchs joués).</li>
       <li><strong>Classement par poule :</strong> Les joueurs sont classés au sein de chaque poule par points de match puis moyenne.</li>
-      <li><strong>Classement final :</strong> Si des phases de classement (DEMI-FINALE, FINALE, Classement 07-08) sont présentes, elles déterminent le classement final. Sinon, le classement est calculé par interclassement des positions de poule.</li>
+      <li><strong>Classement final :</strong> Si des phases de classement (DEMI-FINALE, FINALE, Classement 07-08) sont présentes, elles déterminent le classement final. Pour les joueurs sans match de classement, le <strong>numéro de phase</strong> (première colonne du CSV E2i) est le critère principal : un joueur ayant atteint une phase supérieure est toujours classé devant un joueur resté dans une phase inférieure, quel que soit son score. En cas d'égalité de phase, la confrontation directe puis la performance globale départagent. Si aucune phase de classement n'est présente, le classement est calculé par interclassement des positions de poule.</li>
       <li><strong>Meilleure partie (MPART) :</strong> La meilleure moyenne sur un seul match est calculée pour chaque joueur.</li>
       <li><strong>Points de position :</strong> En mode journées, les points de position sont attribués selon le barème configuré.</li>
       <li><strong>Bonus et classements :</strong> Tous les bonus (barème, moyenne) et les classements de saison sont recalculés après l'import.</li>
