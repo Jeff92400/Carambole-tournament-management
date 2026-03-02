@@ -4332,6 +4332,13 @@ function extractClassificationPositions(classificationPoules, regularPoules, mat
     if (upper.includes('PETITE FINALE')) {
       posStart = 3;
     }
+    // "FINALE N-M" (e.g., "Finale 1-2", "Finale 3-4") — extract N as posStart
+    // E2I names petite finale as "Finale 3-4" (not "Petite finale"), so parse the number
+    // Must check BEFORE generic FINALE to avoid "Finale 3-4" getting posStart=1
+    else if (/^FINALE\s+(\d+)\s*-\s*(\d+)/.test(upper)) {
+      const m = upper.match(/^FINALE\s+(\d+)\s*-\s*(\d+)/);
+      posStart = parseInt(m[1]);
+    }
     // "FINALE" (exact or with suffix like "(2)") = positions 1-2
     // Must NOT match "PETITE FINALE" (already handled above) or "DEMI-FINALE" (skipped above)
     else if (upper === 'FINALE' || /^FINALE\b/.test(upper)) {
@@ -4551,6 +4558,10 @@ router.post('/import-matches', authenticateToken, upload.array('files', 20), asy
 
     // 6. Aggregate matches into per-player stats
     const playerStats = aggregateMatchResults(allMatches);
+    console.log(`[IMPORT-MATCHES] Total matches parsed: ${allMatches.length}`);
+    for (const p of playerStats) {
+      console.log(`[IMPORT-MATCHES] Player ${p.licence} (${p.name}): PM=${p.total_match_points}, Pts=${p.total_points}, Rep=${p.total_reprises}, MS=${p.max_serie}, Matches=${p.parties_menees}, MaxPhase=${p.max_phase}`);
+    }
     const rankedStats = computeMatchRankings(playerStats, allMatches);
 
     // 7. Insert tournament_results
