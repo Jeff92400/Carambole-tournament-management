@@ -1380,6 +1380,15 @@ async function initializeDatabase() {
     await client.query(`UPDATE scoring_rules SET organization_id = 1 WHERE organization_id IS NULL`);
     await client.query(`UPDATE game_parameters SET organization_id = 1 WHERE organization_id IS NULL`);
     await client.query(`UPDATE email_templates SET organization_id = 1 WHERE organization_id IS NULL`);
+    // Backfill player_accounts org from players table (by licence match)
+    await client.query(`
+      UPDATE player_accounts pa
+      SET organization_id = p.organization_id
+      FROM players p
+      WHERE REPLACE(pa.licence, ' ', '') = REPLACE(p.licence, ' ', '')
+        AND p.organization_id IS NOT NULL
+        AND (pa.organization_id IS NULL OR pa.organization_id != p.organization_id)
+    `);
     await client.query(`UPDATE player_accounts SET organization_id = 1 WHERE organization_id IS NULL`);
     await client.query(`UPDATE player_contacts SET organization_id = 1 WHERE organization_id IS NULL`);
 
