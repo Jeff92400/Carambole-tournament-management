@@ -216,15 +216,15 @@
       </div>
       <div class="stat-card approved">
         <div class="stat-value" id="approvedCount">-</div>
-        <div class="stat-label">Approuvees</div>
+        <div class="stat-label">Approuvées</div>
       </div>
       <div class="stat-card rejected">
         <div class="stat-value" id="rejectedCount">-</div>
-        <div class="stat-label">Refusees</div>
+        <div class="stat-label">Refusées</div>
       </div>
       <div class="stat-card deleted">
         <div class="stat-value" id="deletedCount">-</div>
-        <div class="stat-label">Supprimees</div>
+        <div class="stat-label">Supprimées</div>
       </div>
     </div>
 
@@ -236,10 +236,10 @@
       <select id="statusFilter" onchange="loadRequests()">
         <option value="">Tous les statuts</option>
         <option value="pending" selected>En attente</option>
-        <option value="approved">Approuvees</option>
-        <option value="rejected">Refusees</option>
-        <option value="convoked">Convoquees</option>
-        <option value="deleted">Supprimees</option>
+        <option value="approved">Approuvées</option>
+        <option value="rejected">Refusées</option>
+        <option value="convoked">Convoquées</option>
+        <option value="deleted">Supprimées</option>
       </select>
       <button onclick="loadRequests()" class="btn btn-primary" style="padding: 10px 20px;">
         Actualiser
@@ -398,10 +398,10 @@
       const statusClass = request.status;
       const statusLabel = {
         'pending': 'En attente',
-        'approved': 'Approuvee',
-        'rejected': 'Refusee',
-        'convoked': 'Convoquee',
-        'deleted': 'Supprimee'
+        'approved': 'Approuvée',
+        'rejected': 'Refusée',
+        'convoked': 'Convoquée',
+        'deleted': 'Supprimée'
       }[request.status] || request.status;
 
       let actions = '';

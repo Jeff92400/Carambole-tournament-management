@@ -6916,7 +6916,7 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
               </div>
               <div class="announcement-message">${escapeHtmlAnn(a.message)}</div>
               <div class="announcement-meta">
-                <span>Creee le ${formatDateAnn(a.created_at)}</span>
+                <span>Créée le ${formatDateAnn(a.created_at)}</span>
                 ${a.created_by ? `<span>Par ${a.created_by}</span>` : ''}
                 ${a.expires_at ? `<span>Expire le ${formatDateAnn(a.expires_at)}</span>` : '<span>Pas d\'expiration</span>'}
               </div>
@@ -7335,7 +7335,7 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
 
         if (!response.ok) throw new Error('Failed to delete announcement');
 
-        showSuccess('Annonce supprimee');
+        showSuccess('Annonce supprimée');
         loadAnnouncements();
       } catch (error) {
         showError(error.message);
