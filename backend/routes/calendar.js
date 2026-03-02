@@ -201,13 +201,24 @@ router.head('/public', (req, res) => {
   });
 });
 
-router.get('/public', (req, res) => {
+router.get('/public', async (req, res) => {
   // CORS headers for cross-origin access from Player App
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Expose-Headers', 'Content-Type, Content-Disposition');
   res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
 
-  db.get('SELECT * FROM calendar ORDER BY created_at DESC LIMIT 1', [], (err, row) => {
+  // Resolve org from query param for public access
+  let orgId = null;
+  if (req.query.org) {
+    try {
+      const orgResult = await new Promise((resolve, reject) => {
+        db.get('SELECT id FROM organizations WHERE slug = $1 AND is_active = TRUE', [req.query.org], (err, row) => err ? reject(err) : resolve(row));
+      });
+      orgId = orgResult?.id || null;
+    } catch (e) { /* ignore */ }
+  }
+
+  db.get('SELECT * FROM calendar WHERE ($1::int IS NULL OR organization_id = $1) ORDER BY created_at DESC LIMIT 1', [orgId], (err, row) => {
     if (err) {
       console.error('Error fetching calendar:', err);
       return res.status(500).json({ error: 'Database error' });

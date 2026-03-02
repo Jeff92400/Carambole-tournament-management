@@ -978,8 +978,8 @@ router.get('/finales/upcoming', authenticateToken, async (req, res) => {
         // Find matching category
         const category = await new Promise((resolve, reject) => {
           db.get(
-            `SELECT * FROM categories WHERE UPPER(game_type) = $1 AND (UPPER(level) = $2 OR UPPER(level) LIKE $3)`,
-            [gameType, categoryLevel, `${categoryLevel}%`],
+            `SELECT * FROM categories WHERE UPPER(game_type) = $1 AND (UPPER(level) = $2 OR UPPER(level) LIKE $3) AND ($4::int IS NULL OR organization_id = $4)`,
+            [gameType, categoryLevel, `${categoryLevel}%`, orgId],
             (err, row) => {
               if (err) {
                 console.error(`Category query error:`, err);
@@ -1000,8 +1000,8 @@ router.get('/finales/upcoming', authenticateToken, async (req, res) => {
         // Get rankings for this category to determine finalists
         const rankings = await new Promise((resolve, reject) => {
           db.all(
-            `SELECT r.licence FROM rankings r WHERE r.category_id = $1 AND r.season = $2 ORDER BY r.rank_position ASC`,
-            [category.id, season],
+            `SELECT r.licence FROM rankings r WHERE r.category_id = $1 AND r.season = $2 AND ($3::int IS NULL OR r.organization_id = $3) ORDER BY r.rank_position ASC`,
+            [category.id, season, orgId],
             (err, rows) => {
               if (err) {
                 console.error(`Rankings query error:`, err);
@@ -2633,9 +2633,11 @@ router.post('/create-test-finale', authenticateToken, async (req, res) => {
         FROM players p
         INNER JOIN rankings r ON REPLACE(p.licence, ' ', '') = REPLACE(r.licence, ' ', '')
         WHERE r.category_id = $1 AND r.season = '2025-2026'
+        AND ($2::int IS NULL OR p.organization_id = $2)
+        AND ($2::int IS NULL OR r.organization_id = $2)
         ORDER BY r.rank_position ASC
         LIMIT 6
-      `, [categoryId], (err, rows) => {
+      `, [categoryId, orgId], (err, rows) => {
         if (err) reject(err);
         else resolve(rows || []);
       });
@@ -2648,8 +2650,9 @@ router.post('/create-test-finale', authenticateToken, async (req, res) => {
           SELECT p.licence, p.first_name, p.last_name, p.club
           FROM players p
           WHERE p.is_active = 1
+          AND ($1::int IS NULL OR p.organization_id = $1)
           LIMIT 6
-        `, [], (err, rows) => {
+        `, [orgId], (err, rows) => {
           if (err) reject(err);
           else resolve(rows || []);
         });
@@ -2908,8 +2911,8 @@ router.get('/upcoming-relances', authenticateToken, async (req, res) => {
         // Find matching category
         const category = await new Promise((resolve, reject) => {
           db.get(
-            `SELECT * FROM categories WHERE UPPER(game_type) = $1 AND (UPPER(level) = $2 OR UPPER(level) LIKE $3)`,
-            [gameType, categoryLevel, `${categoryLevel}%`],
+            `SELECT * FROM categories WHERE UPPER(game_type) = $1 AND (UPPER(level) = $2 OR UPPER(level) LIKE $3) AND ($4::int IS NULL OR organization_id = $4)`,
+            [gameType, categoryLevel, `${categoryLevel}%`, orgId],
             (err, row) => {
               if (err) reject(err);
               else resolve(row);
@@ -2924,8 +2927,8 @@ router.get('/upcoming-relances', authenticateToken, async (req, res) => {
         // Get rankings for this category
         const rankings = await new Promise((resolve, reject) => {
           db.all(
-            `SELECT r.licence FROM rankings r WHERE r.category_id = $1 AND r.season = $2 ORDER BY r.rank_position ASC`,
-            [category.id, season],
+            `SELECT r.licence FROM rankings r WHERE r.category_id = $1 AND r.season = $2 AND ($3::int IS NULL OR r.organization_id = $3) ORDER BY r.rank_position ASC`,
+            [category.id, season, orgId],
             (err, rows) => {
               if (err) reject(err);
               else resolve(rows || []);
@@ -3193,8 +3196,8 @@ router.get('/tournoi/:id/simulation', authenticateToken, async (req, res) => {
 
       const category = await new Promise((resolve, reject) => {
         db.get(
-          `SELECT * FROM categories WHERE UPPER(game_type) = $1 AND (UPPER(level) = $2 OR UPPER(level) LIKE $3)`,
-          [gameType, categoryLevel, `${categoryLevel}%`],
+          `SELECT * FROM categories WHERE UPPER(game_type) = $1 AND (UPPER(level) = $2 OR UPPER(level) LIKE $3) AND ($4::int IS NULL OR organization_id = $4)`,
+          [gameType, categoryLevel, `${categoryLevel}%`, orgId],
           (err, row) => {
             if (err) reject(err);
             else resolve(row);
@@ -3206,8 +3209,8 @@ router.get('/tournoi/:id/simulation', authenticateToken, async (req, res) => {
         // Get rankings for this category to determine finalists
         const rankings = await new Promise((resolve, reject) => {
           db.all(
-            `SELECT r.licence FROM rankings r WHERE r.category_id = $1 AND r.season = $2 ORDER BY r.rank_position ASC`,
-            [category.id, season],
+            `SELECT r.licence FROM rankings r WHERE r.category_id = $1 AND r.season = $2 AND ($3::int IS NULL OR r.organization_id = $3) ORDER BY r.rank_position ASC`,
+            [category.id, season, orgId],
             (err, rows) => {
               if (err) reject(err);
               else resolve(rows || []);

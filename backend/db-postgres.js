@@ -1302,6 +1302,7 @@ async function initializeDatabase() {
     await client.query(`ALTER TABLE scheduled_emails ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)`);
     await client.query(`ALTER TABLE player_invitations ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)`);
     await client.query(`ALTER TABLE admin_activity_logs ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)`);
+    await client.query(`ALTER TABLE enrollment_requests ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)`);
     await client.query(`ALTER TABLE activity_logs ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)`);
     await client.query(`ALTER TABLE organization_logo ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)`);
     await client.query(`ALTER TABLE categories ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)`);
@@ -1323,6 +1324,7 @@ async function initializeDatabase() {
     await client.query(`CREATE INDEX IF NOT EXISTS idx_scheduled_emails_org ON scheduled_emails(organization_id)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_player_invitations_org ON player_invitations(organization_id)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_categories_org ON categories(organization_id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_enrollment_requests_org ON enrollment_requests(organization_id)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_activity_logs_org ON activity_logs(organization_id)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_scoring_rules_org ON scoring_rules(organization_id)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_game_parameters_org ON game_parameters(organization_id)`);
@@ -1354,6 +1356,16 @@ async function initializeDatabase() {
     await client.query(`UPDATE scheduled_emails SET organization_id = 1 WHERE organization_id IS NULL`);
     await client.query(`UPDATE player_invitations SET organization_id = 1 WHERE organization_id IS NULL`);
     await client.query(`UPDATE admin_activity_logs SET organization_id = 1 WHERE organization_id IS NULL`);
+    // Assign enrollment_requests org from player's org
+    await client.query(`
+      UPDATE enrollment_requests er
+      SET organization_id = p.organization_id
+      FROM players p
+      WHERE REPLACE(er.licence, ' ', '') = REPLACE(p.licence, ' ', '')
+        AND p.organization_id IS NOT NULL
+        AND (er.organization_id IS NULL OR er.organization_id != p.organization_id)
+    `);
+    await client.query(`UPDATE enrollment_requests SET organization_id = 1 WHERE organization_id IS NULL`);
     // Assign activity_logs org from player's org (not blindly to org 1)
     await client.query(`
       UPDATE activity_logs al

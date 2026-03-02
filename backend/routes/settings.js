@@ -366,13 +366,14 @@ router.delete('/game-parameters/:id', authenticateToken, requireAdmin, (req, res
 router.get('/tournament-overrides/:tournoiId', authenticateToken, async (req, res) => {
   const db = getDb();
   const { tournoiId } = req.params;
+  const orgId = req.user.organizationId || null;
 
   try {
-    // First, get the tournament to know its mode/categorie
+    // First, get the tournament to know its mode/categorie (org-scoped)
     const tournament = await new Promise((resolve, reject) => {
       db.get(
-        'SELECT tournoi_id, mode, categorie FROM tournoi_ext WHERE tournoi_id = $1',
-        [tournoiId],
+        'SELECT tournoi_id, mode, categorie FROM tournoi_ext WHERE tournoi_id = $1 AND ($2::int IS NULL OR organization_id = $2)',
+        [tournoiId, orgId],
         (err, row) => err ? reject(err) : resolve(row)
       );
     });
@@ -382,7 +383,6 @@ router.get('/tournament-overrides/:tournoiId', authenticateToken, async (req, re
     }
 
     // Get default game parameters for this mode/categorie (normalize spaces)
-    const orgId = req.user.organizationId || null;
     const defaults = await new Promise((resolve, reject) => {
       db.get(
         'SELECT * FROM game_parameters WHERE UPPER(REPLACE(mode, \' \', \'\')) = UPPER(REPLACE($1, \' \', \'\')) AND UPPER(categorie) = UPPER($2) AND ($3::int IS NULL OR organization_id = $3)',
@@ -441,6 +441,7 @@ router.get('/tournament-overrides/:tournoiId', authenticateToken, async (req, re
 router.put('/tournament-overrides/:tournoiId', authenticateToken, async (req, res) => {
   const db = getDb();
   const { tournoiId } = req.params;
+  const orgId = req.user.organizationId || null;
   const { distance, distance_type, reprises } = req.body;
   const username = req.user?.username || 'unknown';
 
@@ -449,11 +450,11 @@ router.put('/tournament-overrides/:tournoiId', authenticateToken, async (req, re
   }
 
   try {
-    // Verify tournament exists
+    // Verify tournament exists and belongs to this org
     const tournament = await new Promise((resolve, reject) => {
       db.get(
-        'SELECT tournoi_id FROM tournoi_ext WHERE tournoi_id = $1',
-        [tournoiId],
+        'SELECT tournoi_id FROM tournoi_ext WHERE tournoi_id = $1 AND ($2::int IS NULL OR organization_id = $2)',
+        [tournoiId, orgId],
         (err, row) => err ? reject(err) : resolve(row)
       );
     });

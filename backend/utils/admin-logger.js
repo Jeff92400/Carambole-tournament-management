@@ -22,6 +22,7 @@ function logAdminAction({ req, action, details, targetType, targetId, targetName
     const userId = req.user?.userId || null;
     const username = req.user?.username || 'unknown';
     const userRole = req.user?.role || 'unknown';
+    const organizationId = req.user?.organizationId || null;
     const ipAddress = req.ip || req.connection?.remoteAddress || null;
     const userAgent = req.headers?.['user-agent'] || null;
 
@@ -29,9 +30,9 @@ function logAdminAction({ req, action, details, targetType, targetId, targetName
 
     db.run(
       `INSERT INTO admin_activity_logs
-       (user_id, username, user_role, action_type, action_details, target_type, target_id, target_name, ip_address, user_agent)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-      [userId, username, userRole, action, details, targetType, targetId?.toString(), targetName, ipAddress, userAgent],
+       (user_id, username, user_role, action_type, action_details, target_type, target_id, target_name, ip_address, user_agent, organization_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+      [userId, username, userRole, action, details, targetType, targetId?.toString(), targetName, ipAddress, userAgent, organizationId],
       (err) => {
         if (err) {
           console.error('[AdminLog] Failed to insert log:', err.message);

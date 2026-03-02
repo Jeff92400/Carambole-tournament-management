@@ -1607,7 +1607,7 @@ async function recalculateRankingsJournees(categoryId, season, callback, orgId) 
     rankings.sort((a, b) => b.totalScore - a.totalScore || b.avgMoyenne - a.avgMoyenne || b.bestSerie - a.bestSerie);
 
     // Delete existing rankings
-    await dbRunAsync('DELETE FROM rankings WHERE category_id = ? AND season = ?', [categoryId, season]);
+    await dbRunAsync('DELETE FROM rankings WHERE category_id = ? AND season = ? AND ($3::int IS NULL OR organization_id = $3)', [categoryId, season, orgId]);
 
     // Insert new rankings
     for (let i = 0; i < rankings.length; i++) {
@@ -1675,6 +1675,7 @@ async function recalculateRankingsStandard(categoryId, season, callback, orgId) 
     FROM tournament_results tr
     JOIN tournaments t ON tr.tournament_id = t.id
     WHERE t.category_id = ? AND t.season = ? AND t.tournament_number IN (${rankingNumbersSQL})
+    AND ($3::int IS NULL OR t.organization_id = $3)
     GROUP BY REPLACE(tr.licence, ' ', '')
     ORDER BY total_match_points DESC, avg_moyenne DESC, best_serie DESC
   `;
@@ -1682,7 +1683,7 @@ async function recalculateRankingsStandard(categoryId, season, callback, orgId) 
   // Read best_of_count setting before querying
   const bestOfCount = parseInt(await appSettings.getOrgSetting(orgId, 'best_of_count')) || 0;
 
-  db.all(query, [categoryId, season], (err, results) => {
+  db.all(query, [categoryId, season, orgId], (err, results) => {
     if (err) {
       console.error(`[RANKING] Error calculating rankings for category ${categoryId}:`, err);
       return callback(err);
@@ -1737,7 +1738,7 @@ async function recalculateRankingsStandard(categoryId, season, callback, orgId) 
     console.log(`[RANKING] Top 3: ${results.slice(0, 3).map(r => `${r.licence}(${r.total_match_points}pts)`).join(', ')}`);
 
     // Delete existing rankings
-    db.run('DELETE FROM rankings WHERE category_id = ? AND season = ?', [categoryId, season], function(err) {
+    db.run('DELETE FROM rankings WHERE category_id = ? AND season = ? AND ($3::int IS NULL OR organization_id = $3)', [categoryId, season, orgId], function(err) {
       if (err) {
         console.error(`[RANKING] Error deleting old rankings:`, err);
         return callback(err);
@@ -1797,8 +1798,8 @@ async function recalculateRankingsStandard(categoryId, season, callback, orgId) 
                 }
 
                 // Verify count in database
-                db.get('SELECT COUNT(*) as count FROM rankings WHERE category_id = ? AND season = ?',
-                  [categoryId, season], (err, row) => {
+                db.get('SELECT COUNT(*) as count FROM rankings WHERE category_id = ? AND season = ? AND ($3::int IS NULL OR organization_id = $3)',
+                  [categoryId, season, orgId], (err, row) => {
                     if (!err && row) {
                       console.log(`[RANKING] Verification: ${row.count} entries in rankings table`);
                       if (row.count !== results.length) {
@@ -1812,8 +1813,9 @@ async function recalculateRankingsStandard(categoryId, season, callback, orgId) 
                        FROM tournament_results tr
                        JOIN tournaments t ON tr.tournament_id = t.id
                        WHERE t.category_id = ? AND t.season = ? AND t.tournament_number IN (${rankingNumbersSQL})
+                       AND ($3::int IS NULL OR t.organization_id = $3)
                        AND tr.bonus_detail IS NOT NULL`,
-                      [categoryId, season],
+                      [categoryId, season, orgId],
                       (err, detailRows) => {
                         if (!err && detailRows && detailRows.length > 0) {
                           const playerDetails = {};
@@ -1835,8 +1837,8 @@ async function recalculateRankingsStandard(categoryId, season, callback, orgId) 
                           }
                           entries.forEach(([licence, detail]) => {
                             db.run(
-                              'UPDATE rankings SET bonus_detail = ? WHERE category_id = ? AND season = ? AND licence = ?',
-                              [JSON.stringify(detail), categoryId, season, licence],
+                              'UPDATE rankings SET bonus_detail = ? WHERE category_id = ? AND season = ? AND licence = ? AND ($5::int IS NULL OR organization_id = $5)',
+                              [JSON.stringify(detail), categoryId, season, licence, orgId],
                               () => {
                                 detailUpdates++;
                                 if (detailUpdates === entries.length) {
@@ -1873,8 +1875,8 @@ async function recomputeAllBonuses(categoryId, season, orgId, callback) {
     console.log(`[BONUS] Recomputing bonuses for category ${categoryId}, season ${season}, org ${orgId}, tournamentNumbers=[${rankingNumbers.join(',')}]`);
 
     const tournaments = await dbAllAsync(
-      `SELECT id FROM tournaments WHERE category_id = $1 AND season = $2 AND tournament_number IN (${rankingNumbers.join(',')})`,
-      [categoryId, season]
+      `SELECT id FROM tournaments WHERE category_id = $1 AND season = $2 AND tournament_number IN (${rankingNumbers.join(',')}) AND ($3::int IS NULL OR organization_id = $3)`,
+      [categoryId, season, orgId]
     );
 
     if (!tournaments || tournaments.length === 0) {
@@ -1962,8 +1964,8 @@ router.post('/recalculate-rankings', authenticateToken, async (req, res) => {
     }
 
     // Get count of ranked players to return to frontend
-    db.get('SELECT COUNT(*) as count FROM rankings WHERE category_id = ? AND season = ?',
-      [categoryId, season], (countErr, row) => {
+    db.get('SELECT COUNT(*) as count FROM rankings WHERE category_id = ? AND season = ? AND ($3::int IS NULL OR organization_id = $3)',
+      [categoryId, season, orgId], (countErr, row) => {
         const playersRanked = row ? row.count : 0;
         res.json({
           message: 'Rankings recalculated successfully',
@@ -2853,13 +2855,15 @@ router.delete('/:id', authenticateToken, (req, res) => {
 router.post('/recalculate-all-rankings', authenticateToken, async (req, res) => {
   try {
     // Get all unique category/season combinations
+    const orgId = req.user.organizationId || null;
     const query = `
       SELECT DISTINCT t.category_id, t.season
       FROM tournaments t
+      WHERE ($1::int IS NULL OR t.organization_id = $1)
       ORDER BY t.season DESC, t.category_id
     `;
 
-    db.all(query, [], async (err, combinations) => {
+    db.all(query, [orgId], async (err, combinations) => {
       if (err) {
         return res.status(500).json({ error: err.message });
       }
@@ -2867,7 +2871,6 @@ router.post('/recalculate-all-rankings', authenticateToken, async (req, res) => 
       let recalculated = 0;
       let errors = [];
 
-      const orgId = req.user.organizationId || null;
       for (const combo of combinations) {
         await new Promise((resolve) => {
           recomputeAllBonuses(combo.category_id, combo.season, orgId, () => {

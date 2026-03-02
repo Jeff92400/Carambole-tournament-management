@@ -316,9 +316,10 @@ async function getRankingDataForCategory(categoryId, season, orgId) {
                   AND t.tournament_number IN (${rankingNumbersSQL})), 0) as cumulated_reprises
       FROM rankings r
       WHERE r.category_id = $1 AND r.season = $2
+        AND ($3::int IS NULL OR r.organization_id = $3)
     `;
 
-    db.all(query, [categoryId, season], (err, rows) => {
+    db.all(query, [categoryId, season, orgId], (err, rows) => {
       if (err) {
         console.error('Error fetching ranking data:', err);
         resolve({});
@@ -3121,9 +3122,10 @@ router.post('/fix-corrupted-names', authenticateToken, async (req, res) => {
   }
 
   const db = require('../db-loader');
+  const orgId = req.user.organizationId || null;
 
   try {
-    // Fix corrupted names by joining with players table
+    // Fix corrupted names by joining with players table, scoped to org via tournoi_ext
     const result = await new Promise((resolve, reject) => {
       db.run(`
         UPDATE convocation_poules
@@ -3131,12 +3133,18 @@ router.post('/fix-corrupted-names', authenticateToken, async (req, res) => {
           SELECT CONCAT(p.first_name, ' ', p.last_name)
           FROM players p
           WHERE REPLACE(p.licence, ' ', '') = REPLACE(convocation_poules.licence, ' ', '')
+            AND ($1::int IS NULL OR p.organization_id = $1)
         )
-        WHERE player_name = 'undefined undefined'
+        WHERE (player_name = 'undefined undefined'
           OR player_name IS NULL
           OR player_name = ''
-          OR player_name LIKE '%undefined%'
-      `, [], function(err) {
+          OR player_name LIKE '%undefined%')
+          AND EXISTS (
+            SELECT 1 FROM tournoi_ext te
+            WHERE te.tournoi_id = convocation_poules.tournoi_id
+              AND ($1::int IS NULL OR te.organization_id = $1)
+          )
+      `, [orgId], function(err) {
         if (err) reject(err);
         else resolve({ changes: this.changes });
       });
@@ -3158,6 +3166,7 @@ router.post('/fix-corrupted-names', authenticateToken, async (req, res) => {
 router.get('/poules/:tournoiId', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
   const { tournoiId } = req.params;
+  const orgId = req.user.organizationId || null;
 
   try {
     // Get tournament info
@@ -3166,7 +3175,8 @@ router.get('/poules/:tournoiId', authenticateToken, async (req, res) => {
         SELECT tournoi_id, nom, mode, categorie, debut, lieu
         FROM tournoi_ext
         WHERE tournoi_id = $1
-      `, [tournoiId], (err, row) => {
+          AND ($2::int IS NULL OR organization_id = $2)
+      `, [tournoiId, orgId], (err, row) => {
         if (err) reject(err);
         else resolve(row);
       });
@@ -3249,13 +3259,16 @@ router.post('/poules/:tournoiId/regenerate', authenticateToken, async (req, res)
   const { forfaitLicences, replacementPlayer, locations, previewOnly } = req.body;
 
   try {
+    const orgId = req.user.organizationId || null;
+
     // Get tournament info
     const tournament = await new Promise((resolve, reject) => {
       db.get(`
         SELECT tournoi_id, nom, mode, categorie, debut, lieu
         FROM tournoi_ext
         WHERE tournoi_id = $1
-      `, [tournoiId], (err, row) => {
+          AND ($2::int IS NULL OR organization_id = $2)
+      `, [tournoiId, orgId], (err, row) => {
         if (err) reject(err);
         else resolve(row);
       });
@@ -3270,8 +3283,6 @@ router.post('/poules/:tournoiId/regenerate', authenticateToken, async (req, res)
     const normalizedMode = (tournament.mode || '').replace(/\s+/g, '').toUpperCase();
     const normalizedCategorie = (tournament.categorie || '').toUpperCase();
     console.log('Looking for category:', { mode: tournament.mode, normalizedMode, categorie: normalizedCategorie });
-
-    const orgId = req.user.organizationId || null;
     const category = await new Promise((resolve, reject) => {
       db.get(`
         SELECT id, game_type, level FROM categories
@@ -3301,9 +3312,11 @@ router.post('/poules/:tournoiId/regenerate', authenticateToken, async (req, res)
                  COALESCE(p.last_name, '') as last_name
           FROM rankings r
           LEFT JOIN players p ON REPLACE(r.licence, ' ', '') = REPLACE(p.licence, ' ', '')
+            AND ($3::int IS NULL OR p.organization_id = $3)
           WHERE r.category_id = $1 AND r.season = $2
+            AND ($3::int IS NULL OR r.organization_id = $3)
           ORDER BY r.rank_position
-        `, [category.id, season], (err, rows) => {
+        `, [category.id, season, orgId], (err, rows) => {
           if (err) reject(err);
           else resolve(rows || []);
         });

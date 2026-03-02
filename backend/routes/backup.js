@@ -82,6 +82,7 @@ router.get('/export-players', authenticateToken, async (req, res) => {
 // Export all tournaments and results to Excel
 router.get('/export-tournaments', authenticateToken, async (req, res) => {
   try {
+    const orgId = req.user.organizationId || null;
     const query = `
       SELECT
         t.id,
@@ -93,10 +94,11 @@ router.get('/export-tournaments', authenticateToken, async (req, res) => {
         c.display_name as category
       FROM tournaments t
       JOIN categories c ON t.category_id = c.id
+      WHERE ($1::int IS NULL OR t.organization_id = $1)
       ORDER BY t.season DESC, c.game_type, c.level, t.tournament_number
     `;
 
-    db.all(query, [], async (err, tournaments) => {
+    db.all(query, [orgId], async (err, tournaments) => {
       if (err) {
         return res.status(500).json({ error: err.message });
       }
@@ -140,8 +142,9 @@ router.get('/export-tournaments', authenticateToken, async (req, res) => {
         FROM tournament_results tr
         JOIN tournaments t ON tr.tournament_id = t.id
         JOIN categories c ON t.category_id = c.id
+        WHERE ($1::int IS NULL OR t.organization_id = $1)
         ORDER BY t.season DESC, c.display_name, t.tournament_number, tr.match_points DESC
-      `, [], async (err, results) => {
+      `, [orgId], async (err, results) => {
         if (err) {
           return res.status(500).json({ error: err.message });
         }
@@ -188,6 +191,7 @@ router.get('/export-tournaments', authenticateToken, async (req, res) => {
 // Export all rankings to Excel
 router.get('/export-rankings', authenticateToken, async (req, res) => {
   try {
+    const orgId = req.user.organizationId || null;
     const query = `
       SELECT
         r.season,
@@ -205,11 +209,12 @@ router.get('/export-rankings', authenticateToken, async (req, res) => {
         r.tournament_3_points
       FROM rankings r
       JOIN categories c ON r.category_id = c.id
-      JOIN players p ON r.licence = p.licence
+      JOIN players p ON r.licence = p.licence AND p.organization_id = r.organization_id
+      WHERE ($1::int IS NULL OR r.organization_id = $1)
       ORDER BY r.season DESC, c.display_name, r.rank_position
     `;
 
-    db.all(query, [], async (err, rankings) => {
+    db.all(query, [orgId], async (err, rankings) => {
       if (err) {
         return res.status(500).json({ error: err.message });
       }
@@ -262,11 +267,12 @@ router.get('/export-rankings', authenticateToken, async (req, res) => {
 // Export complete database backup
 router.get('/export-all', authenticateToken, async (req, res) => {
   try {
+    const orgId = req.user.organizationId || null;
     const workbook = new ExcelJS.Workbook();
 
     // Export Players
     await new Promise((resolve, reject) => {
-      db.all('SELECT * FROM players ORDER BY last_name, first_name', [], (err, players) => {
+      db.all('SELECT * FROM players WHERE ($1::int IS NULL OR organization_id = $1) ORDER BY last_name, first_name', [orgId], (err, players) => {
         if (err) return reject(err);
 
         const sheet = workbook.addWorksheet('Joueurs');
@@ -299,8 +305,9 @@ router.get('/export-all', authenticateToken, async (req, res) => {
         SELECT t.*, c.display_name as category
         FROM tournaments t
         JOIN categories c ON t.category_id = c.id
+        WHERE ($1::int IS NULL OR t.organization_id = $1)
         ORDER BY t.season DESC, t.tournament_number
-      `, [], (err, tournaments) => {
+      `, [orgId], (err, tournaments) => {
         if (err) return reject(err);
 
         const sheet = workbook.addWorksheet('Tournois');
@@ -327,8 +334,9 @@ router.get('/export-all', authenticateToken, async (req, res) => {
         FROM tournament_results tr
         JOIN tournaments t ON tr.tournament_id = t.id
         JOIN categories c ON t.category_id = c.id
+        WHERE ($1::int IS NULL OR t.organization_id = $1)
         ORDER BY t.season DESC, tr.match_points DESC
-      `, [], (err, results) => {
+      `, [orgId], (err, results) => {
         if (err) return reject(err);
 
         const sheet = workbook.addWorksheet('Résultats');
@@ -357,9 +365,10 @@ router.get('/export-all', authenticateToken, async (req, res) => {
         SELECT r.*, c.display_name as category, p.first_name, p.last_name, p.club
         FROM rankings r
         JOIN categories c ON r.category_id = c.id
-        JOIN players p ON r.licence = p.licence
+        JOIN players p ON r.licence = p.licence AND p.organization_id = r.organization_id
+        WHERE ($1::int IS NULL OR r.organization_id = $1)
         ORDER BY r.season DESC, r.rank_position
-      `, [], (err, rankings) => {
+      `, [orgId], (err, rankings) => {
         if (err) return reject(err);
 
         const sheet = workbook.addWorksheet('Classements');

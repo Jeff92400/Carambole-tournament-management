@@ -235,6 +235,7 @@ async function sendRejectionEmail(request, reason, req) {
  */
 router.get('/', async (req, res) => {
   try {
+    const orgId = req.user.organizationId || null;
     const { status, season, limit = 100, offset = 0 } = req.query;
 
     // Calculate season date range (season format: "2024-2025")
@@ -250,10 +251,10 @@ router.get('/', async (req, res) => {
       SELECT er.*, gm.display_name as game_mode_display
       FROM enrollment_requests er
       LEFT JOIN game_modes gm ON er.game_mode_id = gm.id
-      WHERE 1=1
+      WHERE ($1::int IS NULL OR er.organization_id = $1)
     `;
-    const params = [];
-    let paramIndex = 1;
+    const params = [orgId];
+    let paramIndex = 2;
 
     if (seasonStart && seasonEnd) {
       sql += ` AND er.created_at >= $${paramIndex++} AND er.created_at <= $${paramIndex++}`;
@@ -283,10 +284,10 @@ router.get('/', async (req, res) => {
     let countSql = `
       SELECT status, COUNT(*) as count
       FROM enrollment_requests
-      WHERE 1=1
+      WHERE ($1::int IS NULL OR organization_id = $1)
     `;
-    const countParams = [];
-    let countParamIndex = 1;
+    const countParams = [orgId];
+    let countParamIndex = 2;
 
     if (seasonStart && seasonEnd) {
       countSql += ` AND created_at >= $${countParamIndex++} AND created_at <= $${countParamIndex++}`;
@@ -323,6 +324,7 @@ router.get('/', async (req, res) => {
 router.delete('/purge', requireAdmin, async (req, res) => {
   console.log('[PURGE] Purge endpoint called');
   try {
+    const orgId = req.user.organizationId || null;
     const { season } = req.query;
     console.log(`[PURGE] Season: ${season}`);
 
@@ -342,7 +344,8 @@ router.delete('/purge', requireAdmin, async (req, res) => {
       FROM enrollment_requests
       WHERE status = 'deleted'
         AND created_at >= $1 AND created_at <= $2
-    `, [seasonStart, seasonEnd]);
+        AND ($3::int IS NULL OR organization_id = $3)
+    `, [seasonStart, seasonEnd, orgId]);
 
     const countToPurge = parseInt(countResult.rows[0]?.count || 0);
     console.log(`[PURGE] Count to purge: ${countToPurge}`);
@@ -356,7 +359,8 @@ router.delete('/purge', requireAdmin, async (req, res) => {
       DELETE FROM enrollment_requests
       WHERE status = 'deleted'
         AND created_at >= $1 AND created_at <= $2
-    `, [seasonStart, seasonEnd]);
+        AND ($3::int IS NULL OR organization_id = $3)
+    `, [seasonStart, seasonEnd, orgId]);
 
     // Log admin action (non-blocking)
     try {
@@ -399,11 +403,12 @@ router.all('/test-route', (req, res) => {
 router.put('/:id/approve', requireViewerWrite, async (req, res) => {
   try {
     const { id } = req.params;
+    const orgId = req.user.organizationId || null;
 
-    // Get the request
+    // Get the request (verify it belongs to this org)
     const requestResult = await db.query(
-      'SELECT * FROM enrollment_requests WHERE id = $1',
-      [id]
+      'SELECT * FROM enrollment_requests WHERE id = $1 AND ($2::int IS NULL OR organization_id = $2)',
+      [id, orgId]
     );
 
     if (requestResult.rows.length === 0) {
@@ -433,6 +438,7 @@ router.put('/:id/approve', requireViewerWrite, async (req, res) => {
              OR UPPER(nom) LIKE $7)
         AND UPPER(nom) NOT LIKE '%FINALE%'
         AND (status IS NULL OR status != 'cancelled')
+        AND ($8::int IS NULL OR organization_id = $8)
       ORDER BY debut ASC
       LIMIT 1
     `, [
@@ -442,7 +448,8 @@ router.put('/:id/approve', requireViewerWrite, async (req, res) => {
       seasonEnd,
       '%T' + tournamentNum + '%',
       '%TOURNOI ' + tournamentNum + '%',
-      '%TOUR ' + tournamentNum + '%'
+      '%TOUR ' + tournamentNum + '%',
+      orgId
     ]);
 
     let tournamentId = null;
@@ -496,7 +503,8 @@ router.put('/:id/approve', requireViewerWrite, async (req, res) => {
         const playerExists = await db.query(`
           SELECT licence FROM players
           WHERE REPLACE(UPPER(licence), ' ', '') = REPLACE(UPPER($1), ' ', '')
-        `, [request.licence]);
+            AND ($2::int IS NULL OR organization_id = $2)
+        `, [request.licence, orgId]);
 
         if (playerExists.rows.length > 0) {
           const actualLicence = playerExists.rows[0].licence;
@@ -507,22 +515,23 @@ router.put('/:id/approve', requireViewerWrite, async (req, res) => {
             WHERE REPLACE(UPPER(licence), ' ', '') = REPLACE(UPPER($1), ' ', '')
               AND category_id = $2
               AND season = $3
-          `, [request.licence, categoryId, currentSeason]);
+              AND ($4::int IS NULL OR organization_id = $4)
+          `, [request.licence, categoryId, currentSeason, orgId]);
 
           if (existingRanking.rows.length === 0) {
             // Get current max rank position for this category/season
             const maxRankResult = await db.query(`
               SELECT COALESCE(MAX(rank_position), 0) as max_rank
               FROM rankings
-              WHERE category_id = $1 AND season = $2
-            `, [categoryId, currentSeason]);
+              WHERE category_id = $1 AND season = $2 AND ($3::int IS NULL OR organization_id = $3)
+            `, [categoryId, currentSeason, orgId]);
             const newRankPosition = maxRankResult.rows[0].max_rank + 1;
 
             // Insert ranking with 0 points (player starts at bottom)
             await db.query(`
-              INSERT INTO rankings (category_id, season, licence, total_match_points, avg_moyenne, best_serie, rank_position, tournament_1_points, tournament_2_points, tournament_3_points)
-              VALUES ($1, $2, $3, 0, 0, 0, $4, NULL, NULL, NULL)
-            `, [categoryId, currentSeason, actualLicence, newRankPosition]);
+              INSERT INTO rankings (category_id, season, licence, total_match_points, avg_moyenne, best_serie, rank_position, tournament_1_points, tournament_2_points, tournament_3_points, organization_id)
+              VALUES ($1, $2, $3, 0, 0, 0, $4, NULL, NULL, NULL, $5)
+            `, [categoryId, currentSeason, actualLicence, newRankPosition, orgId]);
 
             console.log(`Added ${request.player_name} to rankings for category ${categoryId} (${request.game_mode_name} ${request.requested_ranking}) at position ${newRankPosition}`);
           }
@@ -572,8 +581,8 @@ router.put('/:id/approve', requireViewerWrite, async (req, res) => {
       SET status = 'approved',
           processed_at = NOW(),
           processed_by = $1
-      WHERE id = $2
-    `, [req.user.username || req.user.email || 'admin', id]);
+      WHERE id = $2 AND ($3::int IS NULL OR organization_id = $3)
+    `, [req.user.username || req.user.email || 'admin', id, orgId]);
 
     // Log admin action
     logAdminAction({
@@ -594,15 +603,16 @@ router.put('/:id/approve', requireViewerWrite, async (req, res) => {
     let announcementError = null;
     try {
       const annResult = await db.query(
-        `INSERT INTO announcements (title, message, type, is_active, created_by, target_licence)
-         VALUES ($1, $2, $3, TRUE, $4, $5)
+        `INSERT INTO announcements (title, message, type, is_active, created_by, target_licence, organization_id)
+         VALUES ($1, $2, $3, TRUE, $4, $5, $6)
          RETURNING id`,
         [
           'Demande acceptée',
           `Votre demande d'inscription en ${request.game_mode_name} ${request.requested_ranking} (Tournoi ${request.tournament_number}) a été acceptée.`,
           'info',
           req.user.username || 'admin',
-          normalizedLicence
+          normalizedLicence,
+          orgId
         ]
       );
       announcementCreated = true;
@@ -646,11 +656,12 @@ router.put('/:id/reject', requireViewerWrite, async (req, res) => {
   try {
     const { id } = req.params;
     const { reason } = req.body;
+    const orgId = req.user.organizationId || null;
 
-    // Get the request
+    // Get the request (verify it belongs to this org)
     const requestResult = await db.query(
-      'SELECT * FROM enrollment_requests WHERE id = $1',
-      [id]
+      'SELECT * FROM enrollment_requests WHERE id = $1 AND ($2::int IS NULL OR organization_id = $2)',
+      [id, orgId]
     );
 
     if (requestResult.rows.length === 0) {
@@ -670,8 +681,8 @@ router.put('/:id/reject', requireViewerWrite, async (req, res) => {
           rejection_reason = $1,
           processed_at = NOW(),
           processed_by = $2
-      WHERE id = $3
-    `, [reason || null, req.user.username || req.user.email || 'admin', id]);
+      WHERE id = $3 AND ($4::int IS NULL OR organization_id = $4)
+    `, [reason || null, req.user.username || req.user.email || 'admin', id, orgId]);
 
     // Log admin action
     logAdminAction({
@@ -693,14 +704,15 @@ router.put('/:id/reject', requireViewerWrite, async (req, res) => {
 
     try {
       await db.query(
-        `INSERT INTO announcements (title, message, type, is_active, created_by, target_licence)
-         VALUES ($1, $2, $3, TRUE, $4, $5)`,
+        `INSERT INTO announcements (title, message, type, is_active, created_by, target_licence, organization_id)
+         VALUES ($1, $2, $3, TRUE, $4, $5, $6)`,
         [
           'Demande refusée',
           rejectionMessage,
           'warning',
           req.user.username || 'admin',
-          normalizedLicence
+          normalizedLicence,
+          orgId
         ]
       );
       console.log(`[REJECTION] Announcement created successfully for ${normalizedLicence}`);
@@ -731,12 +743,13 @@ router.put('/:id/reject', requireViewerWrite, async (req, res) => {
 router.delete('/:id', requireViewerWrite, async (req, res) => {
   try {
     const { id } = req.params;
+    const orgId = req.user.organizationId || null;
     console.log(`[DELETE] Starting delete for enrollment request ${id}`);
 
-    // Get the request for logging
+    // Get the request for logging (verify it belongs to this org)
     const requestResult = await db.query(
-      'SELECT * FROM enrollment_requests WHERE id = $1',
-      [id]
+      'SELECT * FROM enrollment_requests WHERE id = $1 AND ($2::int IS NULL OR organization_id = $2)',
+      [id, orgId]
     );
 
     if (requestResult.rows.length === 0) {
@@ -770,6 +783,7 @@ router.delete('/:id', requireViewerWrite, async (req, res) => {
                OR UPPER(nom) LIKE $7)
           AND UPPER(nom) NOT LIKE '%FINALE%'
           AND (status IS NULL OR status != 'cancelled')
+          AND ($8::int IS NULL OR organization_id = $8)
         ORDER BY debut ASC
         LIMIT 1
       `, [
@@ -779,7 +793,8 @@ router.delete('/:id', requireViewerWrite, async (req, res) => {
         seasonEnd,
         '%T' + tournamentNum + '%',
         '%TOURNOI ' + tournamentNum + '%',
-        '%TOUR ' + tournamentNum + '%'
+        '%TOUR ' + tournamentNum + '%',
+        orgId
       ]);
 
       if (tournamentResult.rows.length > 0) {
@@ -801,13 +816,12 @@ router.delete('/:id', requireViewerWrite, async (req, res) => {
 
       // Delete the ranking record if it exists
       console.log(`[DELETE] Looking for category: game_type=${request.game_mode_name}, level=${request.requested_ranking}`);
-      const orgId2 = req.user.organizationId || null;
       const categoryResult = await db.query(`
         SELECT id FROM categories
         WHERE UPPER(game_type) = UPPER($1)
           AND UPPER(level) = UPPER($2)
           AND ($3::int IS NULL OR organization_id = $3)
-      `, [request.game_mode_name, request.requested_ranking, orgId2]);
+      `, [request.game_mode_name, request.requested_ranking, orgId]);
 
       if (categoryResult.rows.length > 0) {
         const categoryId = categoryResult.rows[0].id;
@@ -820,7 +834,8 @@ router.delete('/:id', requireViewerWrite, async (req, res) => {
             AND category_id = $2
             AND season = $3
             AND total_match_points = 0
-        `, [request.licence, categoryId, currentSeason]);
+            AND ($4::int IS NULL OR organization_id = $4)
+        `, [request.licence, categoryId, currentSeason, orgId]);
 
         console.log(`[DELETE] Deleted ranking for ${request.player_name} in category ${categoryId}`);
       } else {
@@ -845,8 +860,8 @@ router.delete('/:id', requireViewerWrite, async (req, res) => {
       SET status = 'deleted',
           processed_at = NOW(),
           processed_by = $1
-      WHERE id = $2
-    `, [req.user.username || req.user.email || 'admin', id]);
+      WHERE id = $2 AND ($3::int IS NULL OR organization_id = $3)
+    `, [req.user.username || req.user.email || 'admin', id, orgId]);
 
     // Log admin action
     logAdminAction({

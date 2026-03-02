@@ -25,6 +25,7 @@ function requireAdminOrLecteur(req, res, next) {
  * Get admin activity logs with optional filters
  */
 router.get('/', authenticateToken, requireAdminOrLecteur, (req, res) => {
+  const orgId = req.user.organizationId || null;
   const {
     startDate,
     endDate,
@@ -48,10 +49,10 @@ router.get('/', authenticateToken, requireAdminOrLecteur, (req, res) => {
       ip_address,
       created_at
     FROM admin_activity_logs
-    WHERE 1=1
+    WHERE ($1::int IS NULL OR organization_id = $1)
   `;
-  const params = [];
-  let paramIndex = 1;
+  const params = [orgId];
+  let paramIndex = 2;
 
   if (startDate) {
     query += ` AND created_at >= $${paramIndex}`;
@@ -117,6 +118,7 @@ router.get('/', authenticateToken, requireAdminOrLecteur, (req, res) => {
  * Get quick statistics for dashboard
  */
 router.get('/stats', authenticateToken, requireAdminOrLecteur, (req, res) => {
+  const orgId = req.user.organizationId || null;
   // Last 7 days stats
   db.get(`
     SELECT
@@ -125,7 +127,8 @@ router.get('/stats', authenticateToken, requireAdminOrLecteur, (req, res) => {
       COUNT(*) FILTER (WHERE action_type LIKE 'SEND%' AND created_at >= NOW() - INTERVAL '7 days') as emails,
       COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days') as total_actions
     FROM admin_activity_logs
-  `, [], (err, stats) => {
+    WHERE ($1::int IS NULL OR organization_id = $1)
+  `, [orgId], (err, stats) => {
     if (err) {
       console.error('Error fetching admin logs stats:', err);
       return res.status(500).json({ error: 'Erreur lors de la récupération des statistiques' });
@@ -136,9 +139,10 @@ router.get('/stats', authenticateToken, requireAdminOrLecteur, (req, res) => {
       SELECT DISTINCT username, user_role, MAX(created_at) as last_activity
       FROM admin_activity_logs
       WHERE created_at >= NOW() - INTERVAL '7 days'
+        AND ($1::int IS NULL OR organization_id = $1)
       GROUP BY username, user_role
       ORDER BY last_activity DESC
-    `, [], (err, activeUsers) => {
+    `, [orgId], (err, activeUsers) => {
       if (err) {
         console.error('Error fetching active users:', err);
         return res.status(500).json({ error: 'Erreur lors de la récupération des statistiques' });
@@ -160,12 +164,14 @@ router.get('/stats', authenticateToken, requireAdminOrLecteur, (req, res) => {
  * Get list of distinct action types for filtering
  */
 router.get('/action-types', authenticateToken, requireAdminOrLecteur, (req, res) => {
+  const orgId = req.user.organizationId || null;
   db.all(`
     SELECT DISTINCT action_type, COUNT(*) as count
     FROM admin_activity_logs
+    WHERE ($1::int IS NULL OR organization_id = $1)
     GROUP BY action_type
     ORDER BY count DESC
-  `, [], (err, actionTypes) => {
+  `, [orgId], (err, actionTypes) => {
     if (err) {
       console.error('Error fetching action types:', err);
       return res.status(500).json({ error: 'Erreur lors de la récupération des types d\'actions' });
@@ -180,6 +186,7 @@ router.get('/action-types', authenticateToken, requireAdminOrLecteur, (req, res)
  * Clear logs between two dates (admin only)
  */
 router.delete('/', authenticateToken, requireAdmin, (req, res) => {
+  const orgId = req.user.organizationId || null;
   const { startDate, endDate } = req.body;
 
   if (!startDate || !endDate) {
@@ -187,8 +194,8 @@ router.delete('/', authenticateToken, requireAdmin, (req, res) => {
   }
 
   db.run(
-    'DELETE FROM admin_activity_logs WHERE created_at >= $1 AND created_at <= $2',
-    [startDate, endDate + ' 23:59:59'],
+    'DELETE FROM admin_activity_logs WHERE created_at >= $1 AND created_at <= $2 AND ($3::int IS NULL OR organization_id = $3)',
+    [startDate, endDate + ' 23:59:59', orgId],
     function(err) {
       if (err) {
         console.error('Error deleting admin logs:', err);

@@ -296,6 +296,17 @@ router.get('/:licence/calendar.ics', async (req, res) => {
   const { licence } = req.params;
   const normalizedLicence = (licence || '').replace(/\s+/g, '');
 
+  // Resolve org from query param for public access
+  let orgId = null;
+  if (req.query.org) {
+    try {
+      const orgResult = await new Promise((resolve, reject) => {
+        db.get('SELECT id FROM organizations WHERE slug = $1 AND is_active = TRUE', [req.query.org], (err, row) => err ? reject(err) : resolve(row));
+      });
+      orgId = orgResult?.id || null;
+    } catch (e) { /* ignore */ }
+  }
+
   try {
     // Load game modes with rank_column mapping
     const gameModes = await loadGameModes();
@@ -310,7 +321,8 @@ router.get('/:licence/calendar.ics', async (req, res) => {
         SELECT licence, first_name, last_name${rankColumnsSQL}
         FROM players
         WHERE REPLACE(licence, ' ', '') = $1
-      `, [normalizedLicence], (err, row) => {
+          AND ($2::int IS NULL OR organization_id = $2)
+      `, [normalizedLicence, orgId], (err, row) => {
         if (err) reject(err);
         else resolve(row);
       });
@@ -355,6 +367,9 @@ router.get('/:licence/calendar.ics', async (req, res) => {
     eligibleCategories.forEach(cat => {
       queryParams.push(cat.mode, cat.categorie);
     });
+    // Add org filter as last parameter
+    const orgParamIndex = queryParams.length + 1;
+    queryParams.push(orgId);
 
     const tournaments = await new Promise((resolve, reject) => {
       db.all(`
@@ -362,6 +377,7 @@ router.get('/:licence/calendar.ics', async (req, res) => {
         FROM tournoi_ext
         WHERE debut >= $1 AND debut <= $2
           AND (${categoryConditions})
+          AND ($${orgParamIndex}::int IS NULL OR organization_id = $${orgParamIndex})
         ORDER BY debut ASC
       `, queryParams, (err, rows) => {
         if (err) reject(err);
@@ -477,14 +493,26 @@ function escapeIcsText(text) {
 router.get('/tournament/:id/calendar.ics', async (req, res) => {
   const { id } = req.params;
 
+  // Resolve org from query param for public access
+  let orgId = null;
+  if (req.query.org) {
+    try {
+      const orgResult = await new Promise((resolve, reject) => {
+        db.get('SELECT id FROM organizations WHERE slug = $1 AND is_active = TRUE', [req.query.org], (err, row) => err ? reject(err) : resolve(row));
+      });
+      orgId = orgResult?.id || null;
+    } catch (e) { /* ignore */ }
+  }
+
   try {
-    // Get tournament info
+    // Get tournament info (org-scoped)
     const tournament = await new Promise((resolve, reject) => {
       db.get(`
         SELECT tournoi_id, nom, mode, categorie, debut, lieu
         FROM tournoi_ext
         WHERE tournoi_id = $1
-      `, [id], (err, row) => {
+          AND ($2::int IS NULL OR organization_id = $2)
+      `, [id, orgId], (err, row) => {
         if (err) reject(err);
         else resolve(row);
       });

@@ -74,24 +74,27 @@ router.post('/fix/club-alias', async (req, res) => {
 });
 
 // FIX: Update position field for all tournament results based on match_points ranking
-router.post('/fix/positions', async (req, res) => {
+router.post('/fix/positions', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
+  const orgId = req.user.organizationId || null;
 
-  // Update position based on match_points ranking within each tournament
+  // Update position based on match_points ranking within each tournament (scoped to org)
   const updateQuery = `
     UPDATE tournament_results
     SET position = sub.rank
     FROM (
-      SELECT id,
-             ROW_NUMBER() OVER (PARTITION BY tournament_id ORDER BY match_points DESC, moyenne DESC) as rank
-      FROM tournament_results
+      SELECT tr.id,
+             ROW_NUMBER() OVER (PARTITION BY tr.tournament_id ORDER BY tr.match_points DESC, tr.moyenne DESC) as rank
+      FROM tournament_results tr
+      JOIN tournaments t ON tr.tournament_id = t.id
+      WHERE ($1::int IS NULL OR t.organization_id = $1)
     ) sub
     WHERE tournament_results.id = sub.id
   `;
 
   try {
     await new Promise((resolve, reject) => {
-      db.run(updateQuery, [], function(err) {
+      db.run(updateQuery, [orgId], function(err) {
         if (err) reject(err);
         else resolve(this.changes);
       });

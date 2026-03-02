@@ -629,16 +629,26 @@ router.put('/contacts/:id', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
   const { id } = req.params;
   const { email, telephone, statut, comments, email_optin } = req.body;
+  const orgId = req.user.organizationId || null;
 
+  // Verify the contact belongs to the admin's org via JOIN to players
   db.run(
     `UPDATE player_contacts
      SET email = $1, telephone = $2, statut = $3, comments = $4, email_optin = $5, updated_at = CURRENT_TIMESTAMP
-     WHERE id = $6`,
-    [email, telephone, statut, comments, email_optin, id],
+     WHERE id = $6
+       AND EXISTS (
+         SELECT 1 FROM players p
+         WHERE REPLACE(player_contacts.licence, ' ', '') = REPLACE(p.licence, ' ', '')
+           AND ($7::int IS NULL OR p.organization_id = $7)
+       )`,
+    [email, telephone, statut, comments, email_optin, id, orgId],
     function(err) {
       if (err) {
         console.error('Error updating contact:', err);
         return res.status(500).json({ error: err.message });
+      }
+      if (this.changes === 0) {
+        return res.status(404).json({ error: 'Contact non trouvé ou accès non autorisé.' });
       }
       res.json({ success: true, changes: this.changes });
     }
@@ -998,13 +1008,18 @@ router.post('/send', authenticateToken, async (req, res) => {
 
   try {
     // Get recipients (or use placeholder for test mode without selection)
+    // Filter by org to prevent cross-org data access
     let recipients = [];
     if (recipientIds && recipientIds.length > 0) {
+      const orgParam = recipientIds.length + 1;
       const placeholders = recipientIds.map((_, i) => `$${i + 1}`).join(',');
       recipients = await new Promise((resolve, reject) => {
         db.all(
-          `SELECT * FROM player_contacts WHERE id IN (${placeholders})`,
-          recipientIds,
+          `SELECT pc.* FROM player_contacts pc
+           JOIN players p ON REPLACE(pc.licence, ' ', '') = REPLACE(p.licence, ' ', '')
+           WHERE pc.id IN (${placeholders})
+             AND ($${orgParam}::int IS NULL OR p.organization_id = $${orgParam})`,
+          [...recipientIds, orgId],
           (err, rows) => {
             if (err) reject(err);
             else resolve(rows || []);
@@ -2060,13 +2075,18 @@ router.post('/process-scheduled', async (req, res) => {
       }
 
       const recipientIds = JSON.parse(scheduled.recipient_ids);
+      const scheduledOrgId = scheduled.organization_id || null;
 
-      // Get recipients
+      // Get recipients (filtered by scheduled email's org to prevent cross-org access)
+      const orgParam = recipientIds.length + 1;
       const placeholders = recipientIds.map((_, i) => `$${i + 1}`).join(',');
       const recipients = await new Promise((resolve, reject) => {
         db.all(
-          `SELECT * FROM player_contacts WHERE id IN (${placeholders})`,
-          recipientIds,
+          `SELECT pc.* FROM player_contacts pc
+           JOIN players p ON REPLACE(pc.licence, ' ', '') = REPLACE(p.licence, ' ', '')
+           WHERE pc.id IN (${placeholders})
+             AND ($${orgParam}::int IS NULL OR p.organization_id = $${orgParam})`,
+          [...recipientIds, scheduledOrgId],
           (err, rows) => {
             if (err) reject(err);
             else resolve(rows || []);

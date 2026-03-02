@@ -26,12 +26,12 @@ async function getClubNameForFilter(clubId) {
 /**
  * Check if a player belongs to a specific club
  */
-async function playerBelongsToClub(licence, clubName) {
+async function playerBelongsToClub(licence, clubName, orgId) {
   if (!clubName) return false;
   return new Promise((resolve, reject) => {
     db.get(
-      `SELECT licence FROM players WHERE REPLACE(licence, ' ', '') = REPLACE($1, ' ', '') AND UPPER(club) = UPPER($2)`,
-      [licence, clubName],
+      `SELECT licence FROM players WHERE REPLACE(licence, ' ', '') = REPLACE($1, ' ', '') AND UPPER(club) = UPPER($2) AND ($3::int IS NULL OR organization_id = $3)`,
+      [licence, clubName, orgId || null],
       (err, row) => {
         if (err) reject(err);
         else resolve(!!row);
@@ -556,9 +556,10 @@ router.post('/', authenticateToken, requireClubOrAdmin, async (req, res) => {
   const normalizedLicence = licence.replace(/\s+/g, '').toUpperCase();
 
   try {
-    // Check if licence already exists
+    // Check if licence already exists (scoped to this org — same licence can exist in different CDBs)
+    const orgId = req.user.organizationId || null;
     const existing = await new Promise((resolve, reject) => {
-      db.get('SELECT licence FROM players WHERE REPLACE(licence, \' \', \'\') = $1', [normalizedLicence], (err, row) => {
+      db.get('SELECT licence FROM players WHERE REPLACE(licence, \' \', \'\') = $1 AND ($2::int IS NULL OR organization_id = $2)', [normalizedLicence, orgId], (err, row) => {
         if (err) reject(err);
         else resolve(row);
       });
@@ -610,8 +611,6 @@ router.post('/', authenticateToken, requireClubOrAdmin, async (req, res) => {
 
     // Normalize club name to canonical form from clubs table
     const normalizedClub = effectiveClub ? await normalizeClubName(effectiveClub) : null;
-
-    const orgId = req.user.organizationId || null;
 
     // Build INSERT for players table
     const baseCols = ['licence', 'first_name', 'last_name', 'club', 'email', 'telephone', 'organization_id'];
@@ -1072,7 +1071,7 @@ router.put('/:licence', authenticateToken, requireClubOrAdmin, async (req, res) 
     // Club role: verify the player belongs to their club
     if (req.user.role === 'club' && req.user.clubId) {
       const clubName = await getClubNameForFilter(req.user.clubId);
-      const belongs = await playerBelongsToClub(licence, clubName);
+      const belongs = await playerBelongsToClub(licence, clubName, req.user.organizationId);
       if (!belongs) {
         return res.status(403).json({ error: 'Vous ne pouvez modifier que les joueurs de votre club' });
       }
