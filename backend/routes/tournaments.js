@@ -4201,11 +4201,118 @@ function computeMatchRankings(playerStats, allMatches) {
  * @param {Array} playerStats - Global per-player aggregated stats (for total tournament match_points)
  * @returns {Array} Sorted array of { licence, position }
  */
+/**
+ * Resolve cascading G-P classification system.
+ * E2I format: initial pair matches (05-06, 07-08, 09-10) + cascading G-P rounds (G7-8 - P5-6).
+ * Rule: initial winners always rank above initial losers. Cascading matches refine order within each group.
+ * @returns {Array} [{ licence, position }]
+ */
+function resolveCascadingClassification(numericPairNames, gpNames, classificationPoules, matchesByPoule, playerStats) {
+  // 1. Parse initial pair matches to determine winners and losers
+  const pairs = [];
+  for (const pouleName of numericPairNames) {
+    const pMatch = pouleName.match(/^(\d{2})-(\d{2})$/);
+    if (!pMatch) continue;
+    const posStart = parseInt(pMatch[1]);
+    const players = classificationPoules[pouleName] || [];
+    if (players.length < 2) continue;
+
+    // Sort by match points (winner first), tiebreak by global stats
+    const sorted = [...players].sort((a, b) => {
+      if ((b.total_match_points || 0) !== (a.total_match_points || 0))
+        return (b.total_match_points || 0) - (a.total_match_points || 0);
+      const gA = playerStats?.find(p => p.licence === a.licence);
+      const gB = playerStats?.find(p => p.licence === b.licence);
+      if (gA && gB) {
+        if ((gB.total_match_points || 0) !== (gA.total_match_points || 0))
+          return (gB.total_match_points || 0) - (gA.total_match_points || 0);
+        const avgA = (gA.total_reprises || 0) > 0 ? (gA.total_points || 0) / gA.total_reprises : 0;
+        const avgB = (gB.total_reprises || 0) > 0 ? (gB.total_points || 0) / gB.total_reprises : 0;
+        if (avgB !== avgA) return avgB - avgA;
+      }
+      return 0;
+    });
+    pairs.push({ posStart, winner: sorted[0].licence, loser: sorted[1].licence });
+  }
+  pairs.sort((a, b) => a.posStart - b.posStart);
+  if (pairs.length === 0) return [];
+
+  // 2. Build winners and losers arrays (ordered by initial pair position, best pair first)
+  const winners = pairs.map(p => p.winner);
+  const losers = pairs.map(p => p.loser);
+
+  // 3. Apply cascading G-P match results to refine ordering
+  for (const gpName of gpNames) {
+    const players = classificationPoules[gpName] || [];
+    if (players.length < 2) continue;
+    const sorted = [...players].sort((a, b) =>
+      (b.total_match_points || 0) - (a.total_match_points || 0)
+    );
+    const gpWinner = sorted[0].licence;
+    const gpLoser = sorted[1].licence;
+
+    // Case 1: Both in winners group — cascading winner moves above cascading loser
+    const wIdxW = winners.indexOf(gpWinner);
+    const wIdxL = winners.indexOf(gpLoser);
+    if (wIdxW >= 0 && wIdxL >= 0 && wIdxW > wIdxL) {
+      winners.splice(wIdxW, 1);
+      winners.splice(wIdxL, 0, gpWinner);
+    }
+    // Case 2: Both in losers group — cascading winner moves above cascading loser
+    const lIdxW = losers.indexOf(gpWinner);
+    const lIdxL = losers.indexOf(gpLoser);
+    if (lIdxW >= 0 && lIdxL >= 0 && lIdxW > lIdxL) {
+      losers.splice(lIdxW, 1);
+      losers.splice(lIdxL, 0, gpWinner);
+    }
+    // Case 3: Loser beat winner in boundary match — promote loser to top of losers group
+    if (losers.indexOf(gpWinner) >= 0 && winners.indexOf(gpLoser) >= 0) {
+      const idx = losers.indexOf(gpWinner);
+      if (idx > 0) { losers.splice(idx, 1); losers.unshift(gpWinner); }
+    }
+  }
+
+  // 4. Assign positions: all winners first, then all losers
+  const firstPos = pairs[0].posStart;
+  const result = [];
+  for (let i = 0; i < winners.length; i++) {
+    result.push({ licence: winners[i], position: firstPos + i });
+  }
+  for (let i = 0; i < losers.length; i++) {
+    result.push({ licence: losers[i], position: firstPos + winners.length + i });
+  }
+  console.log(`[CASCADING] Resolved ${pairs.length} pairs + ${gpNames.length} G-P matches → ${result.map(r => r.position + ':' + r.licence).join(', ')}`);
+  return result;
+}
+
 function extractClassificationPositions(classificationPoules, regularPoules, matchesByPoule, playerStats) {
   // Collect all position assignments with their phase number for priority resolution
   const allAssignments = []; // { licence, position, phase }
 
+  // ── Detect cascading G-P classification system ──
+  // Triggered when pure numeric pairs (05-06) coexist with G-P cascading (G7-8 - P5-6).
+  // NOT triggered when "Classement NN-NN" format is used (those work with phase conflict resolution).
+  const gpPouleNames = [];
+  const numericPairNames = [];
+  const handledByCascading = new Set();
+  for (const pouleName of Object.keys(classificationPoules)) {
+    if (/G\s*\d+-\d+\s*-\s*P\s*(\d+)-(\d+)/i.test(pouleName)) gpPouleNames.push(pouleName);
+    else if (/^(\d{2})-(\d{2})$/.test(pouleName)) numericPairNames.push(pouleName);
+  }
+  if (gpPouleNames.length > 0 && numericPairNames.length > 0) {
+    const cascadingResults = resolveCascadingClassification(
+      numericPairNames, gpPouleNames, classificationPoules, matchesByPoule, playerStats
+    );
+    for (const cr of cascadingResults) {
+      allAssignments.push({ licence: cr.licence, position: cr.position, phase: 999 });
+    }
+    // Mark these poules as handled so main loop skips them
+    for (const name of gpPouleNames) handledByCascading.add(name);
+    for (const name of numericPairNames) handledByCascading.add(name);
+  }
+
   for (const [pouleName, players] of Object.entries(classificationPoules)) {
+    if (handledByCascading.has(pouleName)) continue;
     const upper = pouleName.toUpperCase();
 
     // Determine phase number for this poule (max phase from its matches)
