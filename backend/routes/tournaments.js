@@ -1180,9 +1180,10 @@ async function computeBonusMoyenne(tournamentId, categoryId, orgId, callback) {
       } else {
         // Use poule-only moyenne when available, otherwise fall back to total
         const licenceNorm = (result.licence || '').replace(/ /g, '');
-        const moyenne = pouleOnlyMoyennes && pouleOnlyMoyennes[licenceNorm] !== undefined
+        const moyenneRaw = pouleOnlyMoyennes && pouleOnlyMoyennes[licenceNorm] !== undefined
           ? pouleOnlyMoyennes[licenceNorm]
           : (result.reprises > 0 ? result.points / result.reprises : 0);
+        const moyenne = Math.round(moyenneRaw * 100) / 100;
         let bonus = 0;
 
         if (bonusType === 'tiered') {
@@ -1559,6 +1560,7 @@ async function recalculateRankingsJournees(categoryId, season, callback, orgId) 
         if (t.serie > bestSerie) bestSerie = t.serie;
       }
       const avgMoyenne = totalReprises > 0 ? totalPoints / totalReprises : 0;
+      const avgMoyenneRounded = Math.round(avgMoyenne * 100) / 100;
       ppDetail.seasonPts = totalPoints;
       ppDetail.seasonRep = totalReprises;
       ppDetail.moyGen = ffbMoyennes[licence] || null;
@@ -1568,18 +1570,18 @@ async function recalculateRankingsJournees(categoryId, season, callback, orgId) 
       if (applySeasonBonus) {
         if (bonusMoyenneType === 'tiered') {
           // Par paliers: < mini → 0, mini–middle → tier1, middle–maxi → tier2, ≥ maxi → tier3
-          if (avgMoyenne >= moyenneMaxi) {
+          if (avgMoyenneRounded >= moyenneMaxi) {
             averageBonus = tier3;
-          } else if (avgMoyenne >= moyenneMiddle) {
+          } else if (avgMoyenneRounded >= moyenneMiddle) {
             averageBonus = tier2;
-          } else if (avgMoyenne >= moyenneMini) {
+          } else if (avgMoyenneRounded >= moyenneMini) {
             averageBonus = tier1;
           }
         } else {
           // Normal: > maxi → tier2, between min and max → tier1, below → 0
-          if (avgMoyenne > moyenneMaxi) {
+          if (avgMoyenneRounded > moyenneMaxi) {
             averageBonus = tier2;
-          } else if (avgMoyenne >= moyenneMini) {
+          } else if (avgMoyenneRounded >= moyenneMini) {
             averageBonus = tier1;
           }
         }
@@ -2162,9 +2164,10 @@ router.get('/:id/results', authenticateToken, async (req, res) => {
 
               // Use poule-only moyenne when available (scope=poule), otherwise full-day
               const licenceNorm = (r.licence || '').replace(/ /g, '');
-              const moyenne = pouleOnlyMoyennes && pouleOnlyMoyennes[licenceNorm] !== undefined
+              const moyenneRaw = pouleOnlyMoyennes && pouleOnlyMoyennes[licenceNorm] !== undefined
                 ? pouleOnlyMoyennes[licenceNorm]
                 : (r.reprises > 0 ? r.points / r.reprises : 0);
+              const moyenne = Math.round(moyenneRaw * 100) / 100;
               let bonus = 0;
 
               if (bonusType === 'tiered') {
@@ -2479,7 +2482,7 @@ router.get('/:id/export', authenticateToken, async (req, res) => {
                 for (const r of results) {
                   let detail = {};
                   try { detail = JSON.parse(r.bonus_detail || '{}'); } catch (e) { detail = {}; }
-                  const moyenne = r.reprises > 0 ? r.points / r.reprises : 0;
+                  const moyenne = Math.round((r.reprises > 0 ? r.points / r.reprises : 0) * 100) / 100;
                   let bonus = 0;
                   if (bonusType === 'tiered') {
                     if (moyenne >= moyenneMaxi) bonus = tier3;
@@ -4607,6 +4610,7 @@ router.post('/import-matches/preview', authenticateToken, upload.array('files', 
       const rawSetting = await appSettings.getOrgSetting(orgId, 'bonus_moyenne_enabled');
       if (rawSetting === 'true') {
         const bonusType = (await appSettings.getOrgSetting(orgId, 'bonus_moyenne_type')) || 'normal';
+        const bonusScope = (await appSettings.getOrgSetting(orgId, 'bonus_moyenne_scope')) || 'poule';
         const tier1 = parseInt(await appSettings.getOrgSetting(orgId, 'scoring_avg_tier_1')) || 1;
         const tier2 = parseInt(await appSettings.getOrgSetting(orgId, 'scoring_avg_tier_2')) || 2;
         const tier3 = parseInt(await appSettings.getOrgSetting(orgId, 'scoring_avg_tier_3')) || 3;
@@ -4623,18 +4627,23 @@ router.post('/import-matches/preview', authenticateToken, upload.array('files', 
 
           bonusMoyenneInfo = { type: bonusType, mini: moyenneMini, middle: moyenneMiddle, maxi: moyenneMaxi, tiers: [tier1, tier2, tier3] };
 
-          // Compute poule-only moyennes for bonus (exclude bracket/classification)
-          const pouleOnlyMatches = allMatches.filter(m => !isClassificationPoule(m.poule_name));
-          const pouleOnlyStats = aggregateMatchResults(pouleOnlyMatches);
-          const pouleOnlyMap = {};
-          for (const ps of pouleOnlyStats) {
-            pouleOnlyMap[ps.licence] = ps.total_reprises > 0 ? ps.total_points / ps.total_reprises : 0;
+          // Compute poule-only moyennes when scope is 'poule' (exclude bracket/classification)
+          // When scope is 'journee', use full-day moyenne (all matches)
+          let pouleOnlyMap = null;
+          if (bonusScope === 'poule') {
+            const pouleOnlyMatches = allMatches.filter(m => !isClassificationPoule(m.poule_name));
+            const pouleOnlyStats = aggregateMatchResults(pouleOnlyMatches);
+            pouleOnlyMap = {};
+            for (const ps of pouleOnlyStats) {
+              pouleOnlyMap[ps.licence] = ps.total_reprises > 0 ? ps.total_points / ps.total_reprises : 0;
+            }
           }
 
           for (const player of rankedStats) {
-            const mgp = pouleOnlyMap[player.licence] !== undefined
+            const mgpRaw = (pouleOnlyMap && pouleOnlyMap[player.licence] !== undefined)
               ? pouleOnlyMap[player.licence]
               : (player.total_reprises > 0 ? player.total_points / player.total_reprises : 0);
+            const mgp = Math.round(mgpRaw * 100) / 100;
             let bonus = 0;
             if (bonusType === 'tiered') {
               if (mgp >= moyenneMaxi) bonus = tier3;
