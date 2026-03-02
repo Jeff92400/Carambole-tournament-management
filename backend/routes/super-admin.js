@@ -1737,7 +1737,13 @@ router.put('/organizations/:id/welcome-status', async (req, res) => {
 router.get('/platform-settings', async (req, res) => {
   try {
     const platformDomain = await appSettings.getSetting('platform_email_domain');
-    res.json({ platform_email_domain: platformDomain || '' });
+    const saEmail1 = await appSettings.getSetting('sa_player_app_email_1');
+    const saEmail2 = await appSettings.getSetting('sa_player_app_email_2');
+    res.json({
+      platform_email_domain: platformDomain || '',
+      sa_player_app_email_1: saEmail1 || '',
+      sa_player_app_email_2: saEmail2 || ''
+    });
   } catch (error) {
     console.error('Error fetching platform settings:', error);
     res.status(500).json({ error: 'Erreur' });
@@ -1746,19 +1752,25 @@ router.get('/platform-settings', async (req, res) => {
 
 // PUT /api/super-admin/platform-settings — Update global platform settings
 router.put('/platform-settings', async (req, res) => {
-  const { platform_email_domain } = req.body;
+  const { platform_email_domain, sa_player_app_email_1, sa_player_app_email_2 } = req.body;
   try {
     const db = require('../db-loader');
-    await new Promise((resolve, reject) => {
+    const upsert = (key, value) => new Promise((resolve, reject) => {
       db.run(
-        `INSERT INTO app_settings (key, value, updated_at) VALUES ('platform_email_domain', $1, CURRENT_TIMESTAMP)
+        `INSERT INTO app_settings (key, value, updated_at) VALUES ($1, $2, CURRENT_TIMESTAMP)
          ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = CURRENT_TIMESTAMP`,
-        [platform_email_domain || ''],
+        [key, value || ''],
         (err) => err ? reject(err) : resolve()
       );
     });
+
+    // Only update settings that were sent in the request
+    if (platform_email_domain !== undefined) await upsert('platform_email_domain', platform_email_domain);
+    if (sa_player_app_email_1 !== undefined) await upsert('sa_player_app_email_1', sa_player_app_email_1);
+    if (sa_player_app_email_2 !== undefined) await upsert('sa_player_app_email_2', sa_player_app_email_2);
+
     appSettings.clearCache();
-    res.json({ success: true, message: 'Domaine email plateforme mis à jour' });
+    res.json({ success: true, message: 'Paramètres plateforme mis à jour' });
   } catch (error) {
     console.error('Error updating platform settings:', error);
     res.status(500).json({ error: 'Erreur' });
