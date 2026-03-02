@@ -1098,8 +1098,9 @@ async function computeBonusMoyenne(tournamentId, categoryId, orgId, callback) {
       return callback(null);
     }
 
-    // Load bonus type and tier values
+    // Load bonus type, scope, and tier values
     const bonusType = enabled ? ((await appSettings.getOrgSetting(orgId, 'bonus_moyenne_type')) || 'normal') : null;
+    const bonusScope = enabled ? ((await appSettings.getOrgSetting(orgId, 'bonus_moyenne_scope')) || 'poule') : 'poule';
     const tier1 = parseInt(await appSettings.getOrgSetting(orgId, 'scoring_avg_tier_1')) || 1;
     const tier2 = parseInt(await appSettings.getOrgSetting(orgId, 'scoring_avg_tier_2')) || 2;
     const tier3 = parseInt(await appSettings.getOrgSetting(orgId, 'scoring_avg_tier_3')) || 3;
@@ -1130,10 +1131,10 @@ async function computeBonusMoyenne(tournamentId, categoryId, orgId, callback) {
       }
     }
 
-    // When bracket/match data exists, compute moyenne from POULE matches only
-    // (classification/bracket matches are excluded — CDB rule)
+    // When scope is 'poule' and bracket/match data exists, compute moyenne from POULE matches only
+    // (classification/bracket matches are excluded). When scope is 'journee', skip — uses full-day moyenne.
     let pouleOnlyMoyennes = null; // { licence: moyenne }
-    try {
+    if (bonusScope === 'poule') try {
       const matchCount = await dbGetAsync(
         'SELECT COUNT(*) as cnt FROM tournament_matches WHERE tournament_id = $1', [tournamentId]
       );
@@ -1163,6 +1164,9 @@ async function computeBonusMoyenne(tournamentId, categoryId, orgId, callback) {
         console.log(`[BONUS-MOY] Using poule-only moyennes for ${Object.keys(pouleOnlyMoyennes).length} players (tournament ${tournamentId})`);
       }
     } catch (e) { /* tournament_matches may not exist */ }
+    if (bonusScope === 'journee') {
+      console.log(`[BONUS-MOY] Using full-day (journée) moyennes for tournament ${tournamentId} (scope=${bonusScope})`);
+    }
 
     let updateCount = 0;
     for (const result of results) {
@@ -2090,10 +2094,12 @@ router.get('/:id/results', authenticateToken, async (req, res) => {
 
       if (bonusDiag.enabled && results && results.length > 0) {
         const bonusType = (await appSettings.getOrgSetting(orgId, 'bonus_moyenne_type')) || 'normal';
+        const bonusScope = (await appSettings.getOrgSetting(orgId, 'bonus_moyenne_scope')) || 'poule';
         const tier1 = parseInt(await appSettings.getOrgSetting(orgId, 'scoring_avg_tier_1')) || 1;
         const tier2 = parseInt(await appSettings.getOrgSetting(orgId, 'scoring_avg_tier_2')) || 2;
         const tier3 = parseInt(await appSettings.getOrgSetting(orgId, 'scoring_avg_tier_3')) || 3;
         bonusDiag.bonusType = bonusType;
+        bonusDiag.bonusScope = bonusScope;
         bonusDiag.tiers = [tier1, tier2, tier3];
 
         // Load game_parameters (same pattern as recalculateRankingsJournees which WORKS)
@@ -2117,11 +2123,48 @@ router.get('/:id/results', authenticateToken, async (req, res) => {
           bonusDiag.thresholds = { mini: moyenneMini, middle: moyenneMiddle, maxi: moyenneMaxi };
           let applied = 0;
 
+          // When scope is 'poule', compute poule-only moyennes (exclude bracket/classification)
+          let pouleOnlyMoyennes = null;
+          if (bonusScope === 'poule') {
+            try {
+              const matchCount = await dbGetAsync(
+                'SELECT COUNT(*) as cnt FROM tournament_matches WHERE tournament_id = $1', [tournamentId]
+              );
+              if (matchCount && matchCount.cnt > 0) {
+                const allMatches = await dbAllAsync(
+                  'SELECT poule_name, player1_licence, player1_points, player1_reprises, player2_licence, player2_points, player2_reprises FROM tournament_matches WHERE tournament_id = $1',
+                  [tournamentId]
+                );
+                const pouleStats = {};
+                for (const m of allMatches) {
+                  if (isClassificationPoule(m.poule_name)) continue;
+                  for (const side of ['player1', 'player2']) {
+                    const licence = m[`${side}_licence`];
+                    if (!licence) continue;
+                    const pts = parseFloat(m[`${side}_points`]) || 0;
+                    const rep = parseFloat(m[`${side}_reprises`]) || 0;
+                    if (!pouleStats[licence]) pouleStats[licence] = { points: 0, reprises: 0 };
+                    pouleStats[licence].points += pts;
+                    pouleStats[licence].reprises += rep;
+                  }
+                }
+                pouleOnlyMoyennes = {};
+                for (const [licence, stats] of Object.entries(pouleStats)) {
+                  pouleOnlyMoyennes[licence.replace(/ /g, '')] = stats.reprises > 0 ? stats.points / stats.reprises : 0;
+                }
+              }
+            } catch (e) { /* tournament_matches may not exist */ }
+          }
+
             for (const r of results) {
               let detail = {};
               try { detail = JSON.parse(r.bonus_detail || '{}'); } catch (e) { detail = {}; }
 
-              const moyenne = r.reprises > 0 ? r.points / r.reprises : 0;
+              // Use poule-only moyenne when available (scope=poule), otherwise full-day
+              const licenceNorm = (r.licence || '').replace(/ /g, '');
+              const moyenne = pouleOnlyMoyennes && pouleOnlyMoyennes[licenceNorm] !== undefined
+                ? pouleOnlyMoyennes[licenceNorm]
+                : (r.reprises > 0 ? r.points / r.reprises : 0);
               let bonus = 0;
 
               if (bonusType === 'tiered') {

@@ -866,6 +866,13 @@ Active un bonus de points par tournoi basé sur la moyenne du joueur par rapport
 | **Normal** | Au-dessus du max -> +2 | Entre min et max -> +1 | En dessous du min -> 0 |
 | **Par paliers** | < min -> 0 | min-milieu -> +1 | milieu-max -> +2 | >= max -> +3 |
 
+**Périmètre de calcul :** un second sélecteur permet de choisir la base de calcul de la moyenne utilisée pour le bonus :
+
+| Option | Description |
+|--------|-------------|
+| **Poules uniquement** | Seuls les matchs de poule sont pris en compte (les phases finales et matchs de classement sont exclus). C'est l'option par défaut. |
+| **Journée complète** | Tous les matchs de la journée sont pris en compte (poules + phases finales + classement). |
+
 Le bonus est calculé automatiquement à chaque import de résultats et s'ajoute aux éventuels bonus du barème (VDL, etc.).
 
 Un bandeau d'information affiche les seuils et règles du bonus moyenne en haut de la page de résultats du tournoi et de la page de classements.
@@ -1247,7 +1254,7 @@ Vue complète de toutes les inscriptions aux compétitions.
 |-------|------------|
 | Application Joueur / Espace Joueur | Application permettant aux licenciés de s'inscrire et consulter leurs informations |
 | Barème | Ensemble des règles définissant l'attribution des points de match et des bonus |
-| Bonus Moyenne | Points bonus par tournoi selon la moyenne du joueur par rapport aux seuils min/max de la catégorie. Deux types : Normal (+0/+1/+2) ou Par paliers (+0/+1/+2/+3). Disponible dans les deux modes (Standard et Journées). En mode Journées, un bonus similaire peut être activé sur le classement saisonnier. |
+| Bonus Moyenne | Points bonus par tournoi selon la moyenne du joueur par rapport aux seuils min/max de la catégorie. Deux types : Normal (+0/+1/+2) ou Par paliers (+0/+1/+2/+3). Deux périmètres : Poules uniquement (par défaut) ou Journée complète (inclut phases finales et classement). Disponible dans les deux modes (Standard et Journées). En mode Journées, un bonus similaire peut être activé sur le classement saisonnier. |
 | Catégorie | Combinaison d'un mode de jeu et d'un niveau (ex: "Libre R2", "3 Bandes N3") |
 | CDB | Comité Départemental de Billard — chaque CDB dispose de son propre environnement isolé |
 | Classification FFB | Classement attribué par la FFB à un joueur pour une discipline donnée (ex: R2 en 3 Bandes) |

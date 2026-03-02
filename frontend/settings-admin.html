@@ -1036,6 +1036,25 @@
             </label>
           </div>
 
+          <!-- Scope: poule vs journée complète -->
+          <div style="margin-bottom: 15px;">
+            <div style="font-weight: 500; font-size: 13px; margin-bottom: 8px; color: #555;">Périmètre de calcul de la moyenne</div>
+            <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+              <label id="bonusScopeCard-poule" onclick="document.querySelector('input[name=bonusMoyenneScope][value=poule]').checked=true; updateBonusScopeCards();"
+                style="flex: 1; min-width: 200px; padding: 14px 16px; border: 2px solid #ddd; border-radius: 8px; cursor: pointer; background: white; transition: all 0.2s ease;">
+                <input type="radio" name="bonusMoyenneScope" value="poule" checked style="display: none;" onchange="updateBonusScopeCards();">
+                <div style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">Poules uniquement</div>
+                <div style="color: #666; font-size: 12px;">Seuls les matchs de poule (exclut phases finales et classement)</div>
+              </label>
+              <label id="bonusScopeCard-journee" onclick="document.querySelector('input[name=bonusMoyenneScope][value=journee]').checked=true; updateBonusScopeCards();"
+                style="flex: 1; min-width: 200px; padding: 14px 16px; border: 2px solid #ddd; border-radius: 8px; cursor: pointer; background: white; transition: all 0.2s ease;">
+                <input type="radio" name="bonusMoyenneScope" value="journee" style="display: none;" onchange="updateBonusScopeCards();">
+                <div style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">Journée complète</div>
+                <div style="color: #666; font-size: 12px;">Tous les matchs de la journée (poules + phases finales + classement)</div>
+              </label>
+            </div>
+          </div>
+
           <!-- Editable tier points — compact -->
           <div id="bonusMoyenneTiers" style="max-width: 380px;">
             <table style="width: 100%; border-collapse: collapse; font-size: 13px; border-radius: 6px; overflow: hidden; border: 1px solid #ddd;">
@@ -4417,12 +4436,18 @@
           const radio = document.querySelector(`input[name="bonusMoyenneType"][value="${bonusType}"]`);
           if (radio) radio.checked = true;
 
+          // Load scope setting
+          const bonusScope = settings.bonus_moyenne_scope || 'poule';
+          const scopeRadio = document.querySelector(`input[name="bonusMoyenneScope"][value="${bonusScope}"]`);
+          if (scopeRadio) scopeRadio.checked = true;
+
           // Load tier point values
           window._bonusTier1 = parseInt(settings.scoring_avg_tier_1) || 1;
           window._bonusTier2 = parseInt(settings.scoring_avg_tier_2) || 2;
           window._bonusTier3 = parseInt(settings.scoring_avg_tier_3) || 3;
           updateBonusMoyenneTiers();
           updateBonusTypeCards();
+          updateBonusScopeCards();
 
           selectQualificationMode(settings.qualification_mode || 'standard');
 
@@ -4487,6 +4512,7 @@
             average_bonus_tiers: document.getElementById('averageBonusTiers').checked ? 'true' : 'false',
             bonus_moyenne_enabled: document.getElementById('bonusMoyenneEnabled').checked ? 'true' : 'false',
             bonus_moyenne_type: document.querySelector('input[name="bonusMoyenneType"]:checked').value,
+            bonus_moyenne_scope: document.querySelector('input[name="bonusMoyenneScope"]:checked').value,
             scoring_avg_tier_1: document.getElementById('bonusTier1') ? document.getElementById('bonusTier1').value : '1',
             scoring_avg_tier_2: document.getElementById('bonusTier2') ? document.getElementById('bonusTier2').value : '2',
             scoring_avg_tier_3: document.getElementById('bonusTier3') ? document.getElementById('bonusTier3').value : '3',
@@ -4612,6 +4638,25 @@
         tieredCard.style.background = '#e7f3ff';
         normalCard.style.borderColor = '#ddd';
         normalCard.style.background = 'white';
+      }
+    }
+
+    // Highlight selected bonus scope card
+    function updateBonusScopeCards() {
+      const scope = document.querySelector('input[name="bonusMoyenneScope"]:checked').value;
+      const primaryColor = getComputedStyle(document.documentElement).getPropertyValue('--color-primary').trim() || '#1F4788';
+      const pouleCard = document.getElementById('bonusScopeCard-poule');
+      const journeeCard = document.getElementById('bonusScopeCard-journee');
+      if (scope === 'poule') {
+        pouleCard.style.borderColor = primaryColor;
+        pouleCard.style.background = '#e7f3ff';
+        journeeCard.style.borderColor = '#ddd';
+        journeeCard.style.background = 'white';
+      } else {
+        journeeCard.style.borderColor = primaryColor;
+        journeeCard.style.background = '#e7f3ff';
+        pouleCard.style.borderColor = '#ddd';
+        pouleCard.style.background = 'white';
       }
     }
 
