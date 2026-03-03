@@ -178,12 +178,11 @@ async function getBrandingSettings() {
 /**
  * Get qualification settings bundle
  */
-async function getQualificationSettings() {
-  const settings = await getSettingsBatch([
-    'qualification_threshold',
-    'qualification_small',
-    'qualification_large'
-  ]);
+async function getQualificationSettings(orgId) {
+  const keys = ['qualification_threshold', 'qualification_small', 'qualification_large'];
+  const settings = orgId
+    ? await getOrgSettingsBatch(orgId, keys)
+    : await getSettingsBatch(keys);
 
   // Convert to numbers for easier use
   return {

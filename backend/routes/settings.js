@@ -498,8 +498,21 @@ router.put('/tournament-overrides/:tournoiId', authenticateToken, async (req, re
 router.delete('/tournament-overrides/:tournoiId', authenticateToken, async (req, res) => {
   const db = getDb();
   const { tournoiId } = req.params;
+  const orgId = req.user?.organizationId || null;
 
   try {
+    // Verify org ownership before deleting
+    const tournament = await new Promise((resolve, reject) => {
+      db.get(
+        'SELECT tournoi_id FROM tournoi_ext WHERE tournoi_id = $1 AND ($2::int IS NULL OR organization_id = $2)',
+        [tournoiId, orgId],
+        (err, row) => { if (err) reject(err); else resolve(row); }
+      );
+    });
+    if (!tournament) {
+      return res.status(404).json({ error: 'Tournoi non trouvé' });
+    }
+
     const result = await new Promise((resolve, reject) => {
       db.run(
         'DELETE FROM tournament_parameter_overrides WHERE tournoi_id = $1',
@@ -779,7 +792,26 @@ router.put('/app/:key', authenticateToken, requireAdmin, async (req, res) => {
       return res.json({ success: true, message: 'Setting updated' });
     }
 
-    // Fallback: global app_settings
+    // Fallback: global app_settings — block org-specific keys
+    const orgSpecificKeys = [
+      'qualification_mode', 'bonus_moyenne_enabled', 'bonus_moyenne_type',
+      'bonus_moyenne_scope', 'position_points_degradation',
+      'journees_count', 'best_of_count', 'average_bonus_tiers',
+      'scoring_avg_tier_1', 'scoring_avg_tier_2', 'scoring_avg_tier_3',
+      'qualification_threshold', 'qualification_small', 'qualification_large',
+      'allow_poule_of_2',
+      'organization_name', 'organization_short_name',
+      'primary_color', 'secondary_color', 'accent_color',
+      'background_color', 'background_secondary_color', 'header_logo_size',
+      'email_communication', 'email_convocations', 'email_noreply',
+      'email_sender_name', 'summary_email',
+      'enable_csv_imports', 'external_inscription_enabled', 'external_inscription_url',
+      'player_app_url', 'reglement_url', 'privacy_policy',
+      'season_start_month', 'season_cutoff_month'
+    ];
+    if (orgSpecificKeys.includes(key)) {
+      return res.status(400).json({ error: 'This setting requires an organization context' });
+    }
     const db = getDb();
     await initAppSettings();
     db.run(
@@ -849,7 +881,27 @@ router.put('/app-bulk', authenticateToken, requireAdmin, async (req, res) => {
     }
 
     // Fallback: global app_settings — but NEVER write org-specific settings globally
-    const orgSpecificKeys = ['qualification_mode', 'bonus_moyenne_enabled', 'bonus_moyenne_type', 'bonus_moyenne_scope', 'position_points_degradation'];
+    const orgSpecificKeys = [
+      // Qualification & scoring
+      'qualification_mode', 'bonus_moyenne_enabled', 'bonus_moyenne_type',
+      'bonus_moyenne_scope', 'position_points_degradation',
+      'journees_count', 'best_of_count', 'average_bonus_tiers',
+      'scoring_avg_tier_1', 'scoring_avg_tier_2', 'scoring_avg_tier_3',
+      'qualification_threshold', 'qualification_small', 'qualification_large',
+      'allow_poule_of_2',
+      // Branding & identity
+      'organization_name', 'organization_short_name',
+      'primary_color', 'secondary_color', 'accent_color',
+      'background_color', 'background_secondary_color', 'header_logo_size',
+      // Email
+      'email_communication', 'email_convocations', 'email_noreply',
+      'email_sender_name', 'summary_email',
+      // Features & URLs
+      'enable_csv_imports', 'external_inscription_enabled', 'external_inscription_url',
+      'player_app_url', 'reglement_url', 'privacy_policy',
+      // Season
+      'season_start_month', 'season_cutoff_month'
+    ];
     const db = getDb();
     await initAppSettings();
     for (const [key, value] of Object.entries(settings)) {
@@ -1137,16 +1189,18 @@ router.get('/email-template/:key/default', authenticateToken, (req, res) => {
 
 // ============= CATEGORY MAPPINGS =============
 
-// Get all category mappings
+// Get all category mappings (org-scoped via categories)
 router.get('/category-mappings', authenticateToken, (req, res) => {
   const db = getDb();
+  const orgId = req.user?.organizationId || null;
 
   db.all(
     `SELECT cm.*, c.level, c.display_name
      FROM category_mapping cm
      LEFT JOIN categories c ON cm.category_id = c.id
+     WHERE ($1::int IS NULL OR c.organization_id = $1)
      ORDER BY cm.game_type, cm.ionos_categorie`,
-    [],
+    [orgId],
     (err, rows) => {
       if (err) {
         console.error('Error fetching category mappings:', err);
@@ -1157,16 +1211,18 @@ router.get('/category-mappings', authenticateToken, (req, res) => {
   );
 });
 
-// Get category mappings grouped by game_type and category
+// Get category mappings grouped by game_type and category (org-scoped)
 router.get('/category-mappings/grouped', authenticateToken, (req, res) => {
   const db = getDb();
+  const orgId = req.user?.organizationId || null;
 
   db.all(
     `SELECT cm.*, c.level, c.display_name
      FROM category_mapping cm
      LEFT JOIN categories c ON cm.category_id = c.id
+     WHERE ($1::int IS NULL OR c.organization_id = $1)
      ORDER BY cm.game_type, c.level, cm.ionos_categorie`,
-    [],
+    [orgId],
     (err, rows) => {
       if (err) {
         console.error('Error fetching category mappings:', err);
@@ -1197,13 +1253,23 @@ router.get('/category-mappings/grouped', authenticateToken, (req, res) => {
   );
 });
 
-// Add a new category mapping (admin only)
-router.post('/category-mappings', authenticateToken, requireAdmin, (req, res) => {
+// Add a new category mapping (admin only, org-scoped via category ownership)
+router.post('/category-mappings', authenticateToken, requireAdmin, async (req, res) => {
   const db = getDb();
   const { ionos_categorie, game_type, category_id } = req.body;
+  const orgId = req.user?.organizationId || null;
 
   if (!ionos_categorie || !game_type || !category_id) {
     return res.status(400).json({ error: 'ionos_categorie, game_type, and category_id are required' });
+  }
+
+  // Verify category belongs to this org
+  const cat = await new Promise((resolve, reject) => {
+    db.get('SELECT id FROM categories WHERE id = $1 AND ($2::int IS NULL OR organization_id = $2)', [category_id, orgId],
+      (err, row) => { if (err) reject(err); else resolve(row); });
+  });
+  if (!cat) {
+    return res.status(404).json({ error: 'Catégorie non trouvée' });
   }
 
   db.run(
@@ -1223,14 +1289,16 @@ router.post('/category-mappings', authenticateToken, requireAdmin, (req, res) =>
   );
 });
 
-// Delete a category mapping (admin only)
+// Delete a category mapping (admin only, org-scoped via category ownership)
 router.delete('/category-mappings/:id', authenticateToken, requireAdmin, (req, res) => {
   const db = getDb();
   const { id } = req.params;
+  const orgId = req.user?.organizationId || null;
 
   db.run(
-    'DELETE FROM category_mapping WHERE id = $1',
-    [id],
+    `DELETE FROM category_mapping WHERE id = $1
+     AND category_id IN (SELECT id FROM categories WHERE $2::int IS NULL OR organization_id = $2)`,
+    [id, orgId],
     function(err) {
       if (err) {
         console.error('Error deleting category mapping:', err);
@@ -1262,10 +1330,11 @@ router.get('/categories', authenticateToken, (req, res) => {
   );
 });
 
-// Lookup category by IONOS values (used during matching)
+// Lookup category by IONOS values (used during matching, org-scoped)
 router.get('/category-mappings/lookup', authenticateToken, (req, res) => {
   const db = getDb();
   const { ionos_categorie, game_type } = req.query;
+  const orgId = req.user?.organizationId || null;
 
   if (!ionos_categorie || !game_type) {
     return res.status(400).json({ error: 'ionos_categorie and game_type are required' });
@@ -1275,8 +1344,9 @@ router.get('/category-mappings/lookup', authenticateToken, (req, res) => {
     `SELECT cm.*, c.level, c.display_name
      FROM category_mapping cm
      JOIN categories c ON cm.category_id = c.id
-     WHERE UPPER(cm.ionos_categorie) = UPPER($1) AND UPPER(cm.game_type) = UPPER($2)`,
-    [ionos_categorie.trim(), game_type.trim()],
+     WHERE UPPER(cm.ionos_categorie) = UPPER($1) AND UPPER(cm.game_type) = UPPER($2)
+       AND ($3::int IS NULL OR c.organization_id = $3)`,
+    [ionos_categorie.trim(), game_type.trim(), orgId],
     (err, row) => {
       if (err) {
         console.error('Error looking up category mapping:', err);

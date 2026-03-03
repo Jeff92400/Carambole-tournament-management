@@ -925,7 +925,7 @@ router.get('/finales/upcoming', authenticateToken, async (req, res) => {
 
   try {
     // Get qualification settings for determining finalist counts
-    const qualificationSettings = await appSettings.getQualificationSettings();
+    const qualificationSettings = await appSettings.getQualificationSettings(orgId);
 
     // Get today's date
     const today = new Date();
@@ -2866,7 +2866,7 @@ router.get('/upcoming-relances', authenticateToken, async (req, res) => {
 
   try {
     // Get qualification settings for determining finalist counts
-    const qualificationSettings = await appSettings.getQualificationSettings();
+    const qualificationSettings = await appSettings.getQualificationSettings(orgId);
 
     const today = new Date();
     const oneWeekFromNow = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
@@ -3138,7 +3138,7 @@ router.get('/tournoi/:id/simulation', authenticateToken, async (req, res) => {
 
   try {
     // Get qualification settings for determining finalist counts
-    const qualificationSettings = await appSettings.getQualificationSettings();
+    const qualificationSettings = await appSettings.getQualificationSettings(orgId);
 
     // Get tournament details
     const tournament = await new Promise((resolve, reject) => {

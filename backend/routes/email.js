@@ -2126,7 +2126,8 @@ router.delete('/convocation-files/purge', authenticateToken, async (req, res) =>
 
   try {
     // Get season cutoff month from settings (default September = 8)
-    const seasonCutoffMonth = parseInt(await appSettings.getSetting('season_cutoff_month') || '8');
+    const orgId = req.user?.organizationId || null;
+    const seasonCutoffMonth = parseInt(await appSettings.getOrgSetting(orgId, 'season_cutoff_month') || '8');
 
     // Check if viewer/editor is allowed to purge (only 2 months before season start)
     if (userRole !== 'admin') {

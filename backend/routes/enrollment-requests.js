@@ -26,9 +26,10 @@ const getResend = () => {
   return new Resend(process.env.RESEND_API_KEY);
 };
 
-// Get email settings from database (org-aware via req)
-async function getEmailSettings(req) {
-  const getter = req && req.getOrgSetting ? req.getOrgSetting.bind(req) : (k) => appSettings.getSetting(k);
+// Get email settings from database (org-aware via req or orgId)
+async function getEmailSettings(reqOrOrgId) {
+  const orgId = typeof reqOrOrgId === 'number' ? reqOrOrgId : reqOrOrgId?.user?.organizationId;
+  const getter = orgId ? (k) => appSettings.getOrgSetting(orgId, k) : (k) => appSettings.getSetting(k);
   const settings = {};
   settings.primary_color = await getter('primary_color') || '#1F4788';
   settings.sender_name = await getter('email_sender_name') || 'CDBHS';
@@ -53,7 +54,7 @@ async function sendApprovalEmail(request, req) {
   }
 
   try {
-    const settings = await getEmailSettings();
+    const settings = await getEmailSettings(req);
     console.log(`[APPROVAL EMAIL] Using sender: ${settings.sender_name} <${settings.email_from}>`);
 
     const emailHtml = `
@@ -146,7 +147,7 @@ async function sendRejectionEmail(request, reason, req) {
   }
 
   try {
-    const settings = await getEmailSettings();
+    const settings = await getEmailSettings(req);
     console.log(`[REJECTION EMAIL] Using sender: ${settings.sender_name} <${settings.email_from}>`);
 
     const emailHtml = `
