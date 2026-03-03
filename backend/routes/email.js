@@ -435,7 +435,7 @@ async function generatePlayerConvocationPDF(player, tournamentInfo, allPoules, l
       const primaryColor = brandingSettings.primary_color || '#1F4788';
       const secondaryColor = brandingSettings.secondary_color || '#667EEA';
       const accentColor = brandingSettings.accent_color || '#FFC107';
-      const orgName = brandingSettings.organization_name || 'Comite Departemental Billard';
+      const orgName = brandingSettings.organization_name || 'Comité Départemental de Billard';
       const redColor = '#DC3545';
       const greenColor = '#28A745';
       const lightGray = '#F8F9FA';
@@ -452,7 +452,7 @@ async function generatePlayerConvocationPDF(player, tournamentInfo, allPoules, l
       // Helper to get location for a poule
       const getLocationForPoule = (poule) => {
         const locNum = poule.locationNum || '1';
-        return locations.find(l => l.locationNum === locNum) || locations[0] || { name: 'A definir', startTime: '14:00' };
+        return locations.find(l => l.locationNum === locNum) || locations[0] || { name: 'À définir', startTime: '14:00' };
       };
 
       const pageWidth = doc.page.width - 80;
@@ -460,7 +460,7 @@ async function generatePlayerConvocationPDF(player, tournamentInfo, allPoules, l
 
       // Header - CONVOCATION
       const isFinale = tournamentInfo.tournamentNum === '4' || tournamentInfo.tournamentNum === 'Finale' || tournamentInfo.isFinale;
-      const tournamentLabel = isFinale ? 'FINALE DEPARTEMENTALE' : `TOURNOI N°${tournamentInfo.tournamentNum}`;
+      const tournamentLabel = isFinale ? 'FINALE DÉPARTEMENTALE' : `TOURNOI N°${tournamentInfo.tournamentNum}`;
       const headerColor = isFinale ? '#D4AF37' : primaryColor; // Gold for finals
       const headerTextColor = isFinale ? primaryColor : 'white';
       doc.rect(40, y, pageWidth, 45).fill(headerColor);
@@ -488,7 +488,7 @@ async function generatePlayerConvocationPDF(player, tournamentInfo, allPoules, l
       // Date - prominent in red
       const dateStr = tournamentInfo.date
         ? new Date(tournamentInfo.date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).toUpperCase()
-        : 'DATE A DEFINIR';
+        : 'DATE À DÉFINIR';
       doc.fillColor(redColor).fontSize(16).font('Helvetica-Bold')
          .text(dateStr, 40, y, { width: pageWidth, align: 'center' });
       y += 30;
@@ -544,7 +544,7 @@ async function generatePlayerConvocationPDF(player, tournamentInfo, allPoules, l
 
         const isPlayerPoule = poule.number === playerPouleNumber;
         const loc = getLocationForPoule(poule);
-        const locName = loc?.name || 'A definir';
+        const locName = loc?.name || 'À définir';
         const locStreet = loc?.street || '';
         const locZipCode = loc?.zip_code || '';
         const locCity = loc?.city || '';
@@ -580,7 +580,7 @@ async function generatePlayerConvocationPDF(player, tournamentInfo, allPoules, l
         doc.fillColor('white').fontSize(8).font('Helvetica-Bold');
         doc.text('#', 45, y + 5, { width: 20 });
         doc.text('Licence', 65, y + 5, { width: 60 });
-        doc.text('Prenom', 130, y + 5, { width: 80 });
+        doc.text('Prénom', 130, y + 5, { width: 80 });
         doc.text('Nom', 215, y + 5, { width: 100 });
         doc.text('Club', 320, y + 5, { width: 120 });
         doc.text('Moy.', 445, y + 5, { width: 40, align: 'center' });
@@ -738,6 +738,43 @@ async function generatePlayerConvocationPDF(player, tournamentInfo, allPoules, l
         y += 15;
       }
 
+      // Qualification day summary (journées mode only, not finales)
+      if (tournamentInfo.qualificationMode === 'journees' && !isFinale) {
+        const summaryHeight = allPoules.length > 1 ? 110 : 50;
+        if (y + summaryHeight > doc.page.height - 60) {
+          doc.addPage();
+          y = 40;
+        }
+
+        doc.rect(40, y, pageWidth, 22).fill('#E8E8E8');
+        doc.fillColor('#333333').fontSize(10).font('Helvetica-Bold')
+           .text('DÉROULEMENT DE LA JOURNÉE', 50, y + 5, { width: pageWidth - 20 });
+        y += 26;
+
+        if (allPoules.length > 1) {
+          doc.fillColor('#333333').fontSize(9).font('Helvetica')
+             .text("Les poules établies ci-dessus détermineront la suite de la journée de qualification avec :", 50, y, { width: pageWidth - 20 });
+          y += 16;
+          const phases = [
+            'Demi-finales',
+            'Finale',
+            'Petite Finale',
+            'Classement au-delà de la 4e place',
+            'Classement final'
+          ];
+          phases.forEach(phase => {
+            doc.fillColor('#333333').fontSize(9).font('Helvetica')
+               .text(`•  ${phase}`, 65, y, { width: pageWidth - 40 });
+            y += 13;
+          });
+        } else {
+          doc.fillColor('#333333').fontSize(9).font('Helvetica')
+             .text("Les matchs de cette poule détermineront directement le classement qualificatif de la journée.", 50, y, { width: pageWidth - 20 });
+          y += 16;
+        }
+        y += 10;
+      }
+
       // Note at the bottom (only for regular tournaments, not finales)
       if (y + 60 > doc.page.height - 40) {
         doc.addPage();
@@ -746,7 +783,7 @@ async function generatePlayerConvocationPDF(player, tournamentInfo, allPoules, l
 
       if (!isFinale) {
         doc.fillColor('#666666').fontSize(9).font('Helvetica-Oblique')
-           .text("Les joueurs d'un meme club jouent ensemble au 1er tour", 40, y, { width: pageWidth, align: 'center' });
+           .text("Les joueurs d'un même club jouent ensemble au 1er tour", 40, y, { width: pageWidth, align: 'center' });
         y += 25;
       }
 
@@ -789,14 +826,14 @@ async function generateSummaryConvocationPDF(tournamentInfo, allPoules, location
       const primaryColor = brandingSettings.primary_color || '#1F4788';
       const secondaryColor = brandingSettings.secondary_color || '#667EEA';
       const accentColor = brandingSettings.accent_color || '#FFC107';
-      const orgName = brandingSettings.organization_name || 'Comite Departemental Billard';
+      const orgName = brandingSettings.organization_name || 'Comité Départemental de Billard';
       const redColor = '#DC3545';
       const lightGray = '#F8F9FA';
 
       // Helper to get location for a poule
       const getLocationForPoule = (poule) => {
         const locNum = poule.locationNum || '1';
-        return locations.find(l => l.locationNum === locNum) || locations[0] || { name: 'A definir', startTime: '14:00' };
+        return locations.find(l => l.locationNum === locNum) || locations[0] || { name: 'À définir', startTime: '14:00' };
       };
 
       const pageWidth = doc.page.width - 80;
@@ -804,7 +841,7 @@ async function generateSummaryConvocationPDF(tournamentInfo, allPoules, location
 
       // Header - CONVOCATION
       const isFinale = tournamentInfo.tournamentNum === '4' || tournamentInfo.tournamentNum === 'Finale' || tournamentInfo.isFinale;
-      const tournamentLabel = isFinale ? 'FINALE DEPARTEMENTALE' : `TOURNOI N°${tournamentInfo.tournamentNum}`;
+      const tournamentLabel = isFinale ? 'FINALE DÉPARTEMENTALE' : `TOURNOI N°${tournamentInfo.tournamentNum}`;
       const headerColor = isFinale ? '#D4AF37' : primaryColor; // Gold for finals
       const headerTextColor = isFinale ? primaryColor : 'white';
       doc.rect(40, y, pageWidth, 45).fill(headerColor);
@@ -832,7 +869,7 @@ async function generateSummaryConvocationPDF(tournamentInfo, allPoules, location
       // Date - prominent in red
       const dateStr = tournamentInfo.date
         ? new Date(tournamentInfo.date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).toUpperCase()
-        : 'DATE A DEFINIR';
+        : 'DATE À DÉFINIR';
       doc.fillColor(redColor).fontSize(16).font('Helvetica-Bold')
          .text(dateStr, 40, y, { width: pageWidth, align: 'center' });
       y += 30;
@@ -882,7 +919,7 @@ async function generateSummaryConvocationPDF(tournamentInfo, allPoules, location
         }
 
         const loc = getLocationForPoule(poule);
-        const locName = loc?.name || 'A definir';
+        const locName = loc?.name || 'À définir';
         const locStreet = loc?.street || '';
         const locZipCode = loc?.zip_code || '';
         const locCity = loc?.city || '';
@@ -910,7 +947,7 @@ async function generateSummaryConvocationPDF(tournamentInfo, allPoules, location
         doc.fillColor('white').fontSize(8).font('Helvetica-Bold');
         doc.text('#', 45, y + 5, { width: 20 });
         doc.text('Licence', 65, y + 5, { width: 60 });
-        doc.text('Prenom', 130, y + 5, { width: 80 });
+        doc.text('Prénom', 130, y + 5, { width: 80 });
         doc.text('Nom', 215, y + 5, { width: 100 });
         doc.text('Club', 320, y + 5, { width: 120 });
         doc.text('Moy.', 445, y + 5, { width: 40, align: 'center' });
@@ -1067,6 +1104,43 @@ async function generateSummaryConvocationPDF(tournamentInfo, allPoules, location
         y += 15;
       }
 
+      // Qualification day summary (journées mode only, not finales)
+      if (tournamentInfo.qualificationMode === 'journees' && !isFinale) {
+        const summaryHeight = allPoules.length > 1 ? 110 : 50;
+        if (y + summaryHeight > doc.page.height - 60) {
+          doc.addPage();
+          y = 40;
+        }
+
+        doc.rect(40, y, pageWidth, 22).fill('#E8E8E8');
+        doc.fillColor('#333333').fontSize(10).font('Helvetica-Bold')
+           .text('DÉROULEMENT DE LA JOURNÉE', 50, y + 5, { width: pageWidth - 20 });
+        y += 26;
+
+        if (allPoules.length > 1) {
+          doc.fillColor('#333333').fontSize(9).font('Helvetica')
+             .text("Les poules établies ci-dessus détermineront la suite de la journée de qualification avec :", 50, y, { width: pageWidth - 20 });
+          y += 16;
+          const phases = [
+            'Demi-finales',
+            'Finale',
+            'Petite Finale',
+            'Classement au-delà de la 4e place',
+            'Classement final'
+          ];
+          phases.forEach(phase => {
+            doc.fillColor('#333333').fontSize(9).font('Helvetica')
+               .text(`•  ${phase}`, 65, y, { width: pageWidth - 40 });
+            y += 13;
+          });
+        } else {
+          doc.fillColor('#333333').fontSize(9).font('Helvetica')
+             .text("Les matchs de cette poule détermineront directement le classement qualificatif de la journée.", 50, y, { width: pageWidth - 20 });
+          y += 16;
+        }
+        y += 10;
+      }
+
       // Note at the bottom (only for regular tournaments, not finales)
       if (y + 60 > doc.page.height - 40) {
         doc.addPage();
@@ -1075,7 +1149,7 @@ async function generateSummaryConvocationPDF(tournamentInfo, allPoules, location
 
       if (!isFinale) {
         doc.fillColor('#666666').fontSize(9).font('Helvetica-Oblique')
-           .text("Les joueurs d'un meme club jouent ensemble au 1er tour", 40, y, { width: pageWidth, align: 'center' });
+           .text("Les joueurs d'un même club jouent ensemble au 1er tour", 40, y, { width: pageWidth, align: 'center' });
         y += 25;
       }
 
@@ -1098,13 +1172,13 @@ const DEFAULT_EMAIL_TEMPLATE = {
 
 Le {organization_short_name} a le plaisir de vous convier au tournoi suivant.
 
-Veuillez trouver en attachement votre convocation detaillee avec la composition de toutes les poules du tournoi.
+Veuillez trouver en attachement votre convocation détaillée avec la composition de toutes les poules du tournoi.
 
-En cas d'empechement, merci d'informer des que possible l'equipe en charge du sportif a l'adresse ci-dessous.
+En cas d'empêchement, merci d'informer dès que possible l'équipe en charge du sportif à l'adresse ci-dessous.
 
-Vous aurez noté un changement significatif quant au processus d'invitation et sommes a votre ecoute si vous avez des remarques ou des suggestions.
+Vous aurez noté un changement significatif quant au processus d'invitation et sommes à votre écoute si vous avez des remarques ou des suggestions.
 
-Nous vous souhaitons une excellente competition.
+Nous vous souhaitons une excellente compétition.
 
 Cordialement,
 {organization_name}`
@@ -1117,7 +1191,7 @@ const DEFAULT_FINALE_EMAIL_TEMPLATE = {
 
 Suite aux trois tournois de la saison, nous avons le plaisir de vous informer que vous êtes qualifié(e) pour la Finale Départementale.
 
-Veuillez trouver en attachement votre convocation detaillee avec la liste des finalistes.
+Veuillez trouver en attachement votre convocation détaillée avec la liste des finalistes.
 
 En cas d'empêchement, merci de nous prévenir dès que possible à l'adresse ci-dessous.
 
@@ -1233,6 +1307,9 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
   const templateType = isFinale ? 'convocation-finale' : 'convocation';
   const emailTemplate = await getEmailTemplate(templateType, orgId);
 
+  // Fetch qualification mode for this org (standard or journees)
+  const qualificationMode = orgId ? (await appSettings.getOrgSetting(orgId, 'qualification_mode') || 'standard') : 'standard';
+
   // Fetch ranking data for this category/season (or use mock data for testing)
   let rankingData = {};
   if (mockRankingData) {
@@ -1256,10 +1333,10 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
     skipped: []
   };
 
-  const tournamentLabel = (isFinale || tournament === 'Finale' || tournament === '4') ? 'Finale Departementale' : `Tournoi ${tournament}`;
+  const tournamentLabel = (isFinale || tournament === 'Finale' || tournament === '4') ? 'Finale Départementale' : `Tournoi ${tournament}`;
   const dateStr = tournamentDate
     ? new Date(tournamentDate).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
-    : 'Date a definir';
+    : 'Date à définir';
 
   // Create campaign record for history tracking
   const db = require('../db-loader');
@@ -1345,7 +1422,8 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
           season,
           tournamentNum: tournament,
           date: tournamentDate,
-          isFinale: isFinale
+          isFinale: isFinale,
+          qualificationMode
         },
         poules,
         locations,
@@ -1384,7 +1462,7 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
         tournament: tournamentLabel,
         date: dateStr,
         time: playerLocation?.startTime?.replace(':', 'H') || '14H00',
-        location: playerLocation?.name || 'A definir',
+        location: playerLocation?.name || 'À définir',
         poule: playerPoule.pouleNumber,
         organization_name: emailSettings.organization_name || 'Comité Départemental de Billard',
         organization_short_name: emailSettings.organization_short_name || 'CDB',
@@ -1417,11 +1495,11 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
               ${specialNoteHtml}
 
               <div style="margin-bottom: 20px; padding: 15px; background: white; border-radius: 4px; border-left: 4px solid ${primaryColor};">
-                <p style="margin: 5px 0;"><strong>Categorie :</strong> ${category.display_name}</p>
-                <p style="margin: 5px 0;"><strong>Competition :</strong> ${tournamentLabel}</p>
+                <p style="margin: 5px 0;"><strong>Catégorie :</strong> ${category.display_name}</p>
+                <p style="margin: 5px 0;"><strong>Compétition :</strong> ${tournamentLabel}</p>
                 <p style="margin: 5px 0;"><strong>Date :</strong> ${dateStr}</p>
                 <p style="margin: 5px 0;"><strong>Heure :</strong> ${playerLocation?.startTime?.replace(':', 'H') || '14H00'}</p>
-                <p style="margin: 5px 0;"><strong>Lieu :</strong> ${playerLocation?.name || 'A definir'}</p>
+                <p style="margin: 5px 0;"><strong>Lieu :</strong> ${playerLocation?.name || 'À définir'}</p>
                 ${fullAddress ? `<p style="margin: 5px 0; color: #666;">📍 ${fullAddress}</p>` : ''}
                 ${playerLocation?.phone ? `<p style="margin: 5px 0; color: #666;">📞 ${playerLocation.phone}</p>` : ''}
                 <p style="margin: 5px 0;"><strong>Votre poule :</strong> ${playerPoule.pouleNumber}</p>
@@ -1775,17 +1853,19 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
   if (!isTestMode && results.sent.length > 0) {
     try {
       // Build tournament info for PDF generation
+      const archiveQualMode = req.user?.organizationId ? (await appSettings.getOrgSetting(req.user.organizationId, 'qualification_mode') || 'standard') : 'standard';
       const tournamentInfo = {
         categoryName: category.display_name,
         tournamentNum: tournament,
         season: season,
         date: tournamentDate,
-        isFinale: isFinale || tournament === 'Finale' || tournament === '4'
+        isFinale: isFinale || tournament === 'Finale' || tournament === '4',
+        qualificationMode: archiveQualMode
       };
 
       // Get branding settings
       const brandingSettings = await appSettings.getOrgSettingsBatch(req.user?.organizationId, [
-        'primary_color', 'secondary_color', 'accent_color'
+        'primary_color', 'secondary_color', 'accent_color', 'organization_name'
       ]);
 
       // Generate summary PDF for archival
@@ -2374,13 +2454,17 @@ router.post('/generate-summary-pdf', authenticateToken, async (req, res) => {
     // Determine if this is a finale
     const isFinaleCompetition = isFinale || tournament === 'Finale' || tournament === '4';
 
+    // Fetch qualification mode for this org
+    const summaryQualMode = req.user?.organizationId ? (await appSettings.getOrgSetting(req.user.organizationId, 'qualification_mode') || 'standard') : 'standard';
+
     // Build tournament info
     const tournamentInfo = {
       categoryName: category.display_name,
       tournamentNum: tournament,
       season: season,
       date: tournamentDate,
-      isFinale: isFinaleCompetition
+      isFinale: isFinaleCompetition,
+      qualificationMode: summaryQualMode
     };
 
     // Get ranking data
@@ -2393,7 +2477,7 @@ router.post('/generate-summary-pdf', authenticateToken, async (req, res) => {
 
     // Get branding settings
     const brandingSettings = await appSettings.getOrgSettingsBatch(req.user?.organizationId, [
-      'primary_color', 'secondary_color', 'accent_color'
+      'primary_color', 'secondary_color', 'accent_color', 'organization_name'
     ]);
 
     // Generate PDF

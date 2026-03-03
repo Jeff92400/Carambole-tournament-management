@@ -2179,7 +2179,7 @@ async function sendTournamentChangeNotifications(tournoiId, oldTournament, newDa
 
     // Load org-aware email settings
     const emailSettings = await appSettings.getOrgSettingsBatch(orgId, [
-      'email_convocations', 'email_sender_name', 'summary_email'
+      'email_convocations', 'email_sender_name', 'summary_email', 'organization_name'
     ]);
     const senderName = emailSettings.email_sender_name || 'CDB';
     const senderEmail = emailSettings.email_convocations || 'noreply@cdbhs.net';
@@ -2289,7 +2289,7 @@ async function sendTournamentChangeNotifications(tournoiId, oldTournament, newDa
 
             <p style="margin-top: 30px;">
               Sportivement,<br>
-              <strong>Comité Départemental Billard Hauts-de-Seine</strong>
+              <strong>${emailSettings.organization_name || senderName}</strong>
             </p>
           </div>
 
