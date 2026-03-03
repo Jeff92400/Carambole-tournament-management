@@ -1081,13 +1081,14 @@ router.get('/tournoi/:id/inscriptions', authenticateToken, (req, res) => {
   const query = `
     SELECT
       i.*,
-      COALESCE(i.email, p.email) as email,
+      COALESCE(i.email, p.email, pc.email) as email,
       p.first_name,
       p.last_name,
       p.club
     FROM inscriptions i
     LEFT JOIN players p ON REPLACE(i.licence, ' ', '') = REPLACE(p.licence, ' ', '')
       AND ($2::int IS NULL OR p.organization_id = $2)
+    LEFT JOIN player_contacts pc ON REPLACE(i.licence, ' ', '') = REPLACE(pc.licence, ' ', '')
     WHERE i.tournoi_id = $1
     AND ($2::int IS NULL OR i.organization_id = $2)
     ORDER BY i.timestamp ASC
@@ -1125,7 +1126,7 @@ router.get('/', authenticateToken, async (req, res) => {
   let query = `
     SELECT
       i.*,
-      COALESCE(i.email, p.email) as email,
+      COALESCE(i.email, p.email, pc.email) as email,
       t.nom as tournoi_nom,
       t.mode,
       t.categorie,
@@ -1135,6 +1136,7 @@ router.get('/', authenticateToken, async (req, res) => {
     FROM inscriptions i
     LEFT JOIN tournoi_ext t ON i.tournoi_id = t.tournoi_id
     LEFT JOIN players p ON REPLACE(i.licence, ' ', '') = REPLACE(p.licence, ' ', '')
+    LEFT JOIN player_contacts pc ON REPLACE(i.licence, ' ', '') = REPLACE(pc.licence, ' ', '')
   `;
 
   const params = [];
