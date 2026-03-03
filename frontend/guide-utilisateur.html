@@ -1097,7 +1097,7 @@
       <span class="screenshot-icon">&#128247;</span>
       <span class="screenshot-label">Import Matchs E2i — Mode Journées</span>
       <span class="screenshot-desc">Capture de l'onglet Import Matchs E2i avec les 4 zones de dépôt par phase (Poules, Demi-finales, Finale/Petite Finale, Classement)</span>
-      <img src="screenshots/11b-import-matchs-e2i.png" alt="Import matchs E2i — mode journées">
+      <img src="images/guide/img-11b-import-matchs-e2i.jpg" alt="Import matchs E2i — mode journées">
     </div>
 
     <h4 id="import-matchs-e2i">Format attendu</h4>
@@ -1139,41 +1139,26 @@
       <strong>Dégradation du dernier joueur :</strong> En mode journées, une option dans <strong>Paramètres &gt; Types de Tournoi &gt; Points par position</strong> permet d'activer la dégradation du dernier joueur : le dernier classé reçoit les points de la position N+1 (par exemple, s'il y a 10 joueurs, le 10e reçoit les points du 11e).
     </div>
 
-    <!-- ---- Phase Finale (Bracket) ---- -->
-    <h3 id="phase-finale-bracket">Phase Finale (Tableau) &mdash; Mode Journées uniquement</h3>
-
-    <p>En mode journées, après l'import des résultats de poules, une page dédiée permet de gérer la <strong>phase finale</strong> de la journée : demi-finales, finale, petite finale et matchs de classement.</p>
-
-    <div class="screenshot-placeholder">
-      <span class="screenshot-id">IMG-11C</span>
-      <span class="screenshot-icon">&#128247;</span>
-      <span class="screenshot-label">Phase finale — Tableau et matchs de classement</span>
-      <span class="screenshot-desc">Capture de la page Phase Finale avec les joueurs qualifiés, les demi-finales, finale/petite finale, et les matchs de classement</span>
-      <img src="screenshots/11c-phase-finale-bracket.png" alt="Phase finale — Bracket">
+    <!-- ---- Résumé Import Matchs E2i ---- -->
+    <div class="info-card accent">
+      <strong>En résumé :</strong> Avec l'Import Matchs E2i, le processus est simple : remplissez les 4 zones de dépôt avec vos fichiers CSV (poules, demi-finales, finale, classement), cliquez sur « Aperçu des résultats », vérifiez, puis sauvegardez. Le système calcule automatiquement le classement complet de la journée. C'est tout !
     </div>
 
-    <h4>Accès</h4>
-    <p>Depuis la page de résultats d'un tournoi en mode journées, ou directement via l'URL <code>tournament-bracket.html?id=X</code>.</p>
+    <!-- ---- Phase Finale manuelle (Bracket) ---- -->
+    <h3 id="phase-finale-bracket">Phase Finale manuelle (Tableau) &mdash; Alternative sans fichiers CSV</h3>
+
+    <p>Si vous ne disposez pas des fichiers CSV des phases finales (demi-finales, finale, classement), une page dédiée permet de <strong>saisir manuellement</strong> les résultats de la phase finale match par match. Accessible depuis l'écran de résultats d'un tournoi en mode journées, ou via l'URL <code>tournament-bracket.html?id=X</code>.</p>
+
+    <div class="info-card">
+      <strong>Note :</strong> Si vous utilisez l'Import Matchs E2i avec les 4 fichiers CSV, cette page n'est <strong>pas nécessaire</strong> — tout est calculé automatiquement lors de l'import.
+    </div>
 
     <h4>Fonctionnement</h4>
     <ol class="steps">
-      <li><strong>Génération du tableau :</strong> Cliquer sur « Générer le tableau ». Le système identifie les 4 meilleurs joueurs des poules (qualification par PM &rarr; Moyenne &rarr; MS) et génère automatiquement les matchs :
-        <ul>
-          <li><strong>Demi-finale 1 :</strong> 1er qualifié vs 4ème qualifié</li>
-          <li><strong>Demi-finale 2 :</strong> 2ème qualifié vs 3ème qualifié</li>
-          <li><strong>Matchs de classement (CL1) :</strong> Les joueurs non qualifiés sont appariés par paires du bas vers le haut</li>
-        </ul>
-      </li>
-      <li><strong>Saisie des résultats :</strong> Pour chaque match, saisir les points et reprises de chaque joueur, puis cliquer sur « Valider ». Lorsque les deux demi-finales sont complètes, la <strong>Finale</strong> et la <strong>Petite Finale</strong> sont générées automatiquement.</li>
-      <li><strong>Classement Tour 2 (optionnel) :</strong> Après le tour 1 de classement, un tour 2 de matchs croisés est généré si activé dans les paramètres.</li>
-      <li><strong>Validation finale :</strong> Lorsque tous les matchs sont joués, cliquer sur « Valider les positions ». Le système attribue les positions finales (1-N), les points de position, et recalcule le classement saison.</li>
+      <li><strong>Génération du tableau :</strong> Le système identifie les meilleurs joueurs des poules et génère les matchs (demi-finales + matchs de classement).</li>
+      <li><strong>Saisie des résultats :</strong> Pour chaque match, saisir les points et reprises, puis valider. La Finale et la Petite Finale sont générées après les demi-finales.</li>
+      <li><strong>Validation finale :</strong> Cliquer sur « Valider les positions » pour attribuer les positions, les points de position, et recalculer le classement saison.</li>
     </ol>
-
-    <h4>Cas particulier : poule unique</h4>
-    <p>Si le nombre de joueurs est inférieur au seuil configuré (par défaut 6), le tournoi se déroule en <strong>poule unique</strong> (tous contre tous). Pas de tableau ni de matchs de classement. Le classement final est directement issu de la poule.</p>
-
-    <h4>Joueur exempt (bye)</h4>
-    <p>Si le nombre de joueurs non qualifiés est impair, le joueur le mieux classé est <strong>exempt</strong> au tour 1 : il est classé directement à la position suivant les qualifiés (5ème par défaut).</p>
 
     <!-- ---- Écran de résultats ---- -->
     <h3 id="ecran-resultats">Écran de résultats d'un tournoi</h3>
