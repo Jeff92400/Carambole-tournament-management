@@ -1078,6 +1078,25 @@ router.get('/tournoi/:id', authenticateToken, (req, res) => {
 // Get inscriptions for a specific tournament
 // TEMPORARY DEBUG - remove after investigation
 router.get('/tournoi/:id/debug-emails', (req, res) => {
+  const tournoiId = req.params.id;
+
+  // If id is "find-org", list tournaments per org with inscription counts
+  if (tournoiId === 'find-org') {
+    const query = `
+      SELECT i.organization_id, te.categorie, te.tournoi_id, COUNT(*) as inscription_count
+      FROM inscriptions i
+      JOIN tournoi_ext te ON te.tournoi_id = i.tournoi_id
+      WHERE i.organization_id IS NOT NULL
+      GROUP BY i.organization_id, te.categorie, te.tournoi_id
+      ORDER BY i.organization_id, inscription_count DESC
+      LIMIT 30
+    `;
+    return db.all(query, [], (err, rows) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json(rows);
+    });
+  }
+
   const query = `
     SELECT
       i.licence,
@@ -1091,9 +1110,9 @@ router.get('/tournoi/:id/debug-emails', (req, res) => {
     LEFT JOIN player_contacts pc ON REPLACE(i.licence, ' ', '') = REPLACE(pc.licence, ' ', '')
     WHERE i.tournoi_id = $1
     ORDER BY i.timestamp ASC
-    LIMIT 5
+    LIMIT 15
   `;
-  db.all(query, [req.params.id], (err, rows) => {
+  db.all(query, [tournoiId], (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json(rows);
   });
