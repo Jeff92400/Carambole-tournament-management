@@ -1081,11 +1081,13 @@ router.get('/tournoi/:id/inscriptions', authenticateToken, (req, res) => {
   const query = `
     SELECT
       i.*,
+      COALESCE(i.email, p.email) as email,
       p.first_name,
       p.last_name,
       p.club
     FROM inscriptions i
     LEFT JOIN players p ON REPLACE(i.licence, ' ', '') = REPLACE(p.licence, ' ', '')
+      AND ($2::int IS NULL OR p.organization_id = $2)
     WHERE i.tournoi_id = $1
     AND ($2::int IS NULL OR i.organization_id = $2)
     ORDER BY i.timestamp ASC
@@ -1123,6 +1125,7 @@ router.get('/', authenticateToken, async (req, res) => {
   let query = `
     SELECT
       i.*,
+      COALESCE(i.email, p.email) as email,
       t.nom as tournoi_nom,
       t.mode,
       t.categorie,
