@@ -410,8 +410,9 @@
           bonusMoyenneInfoDiv.style.display = 'block';
         }
 
-        // Detect if any result has position_points (journées mode) — must be before sort
-        const hasPositionPoints = data.results.some(r => r.position_points > 0);
+        // Use explicit qualification mode from API (not inferred from data)
+        const isJournees = data.qualificationMode === 'journees';
+        const hasPositionPoints = isJournees && data.results.some(r => r.position_points > 0);
 
         // Sort results depending on mode
         if (hasPositionPoints) {

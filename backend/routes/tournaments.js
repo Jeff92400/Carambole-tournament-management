@@ -2415,7 +2415,9 @@ router.get('/:id/results', authenticateToken, async (req, res) => {
       }
     }
 
-    res.json({ tournament, results, bonusColumns, bonusMoyenneInfo, hasMatchData, matchCount, _bonusDiag: bonusDiag });
+    // Include qualification mode so frontend can choose columns explicitly
+    const qualificationMode = orgId ? (await appSettings.getOrgSetting(orgId, 'qualification_mode')) || 'standard' : 'standard';
+    res.json({ tournament, results, bonusColumns, bonusMoyenneInfo, hasMatchData, matchCount, qualificationMode, _bonusDiag: bonusDiag });
   } catch (error) {
     console.error('[RESULTS] Error:', error);
     res.status(500).json({ error: error.message });
