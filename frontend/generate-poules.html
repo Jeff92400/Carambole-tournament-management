@@ -1934,17 +1934,11 @@
             headers: { 'Authorization': `Bearer ${token}` }
           });
 
+          // Fetch player emails for email convocations
+          fetchPlayerEmails(matchingTournoi.tournoi_id);
+
           if (inscriptionsResponse.ok) {
             const inscriptions = await inscriptionsResponse.json();
-
-            // Populate playerEmails from the already-loaded inscriptions (synchronous)
-            playerEmails = {};
-            inscriptions.forEach(i => {
-              const cleanLicence = i.licence?.replace(/\s/g, '');
-              if (cleanLicence && i.email) {
-                playerEmails[cleanLicence] = i.email;
-              }
-            });
 
             // For FINALE: Don't show "new players" section - only finalists matter
             if (isFinaleCompetition) {
@@ -1979,7 +1973,6 @@
                   first_name: i.first_name || 'Inconnu',
                   last_name: i.last_name || 'Inconnu',
                   club: i.club || '',
-                  email: i.email || null,
                   timestamp: i.timestamp,
                   isNew: true,
                   forfait: i.forfait,
@@ -1997,7 +1990,6 @@
                   p.forfait = inscription.forfait === 1;
                   p.desinscrit = inscription.statut === 'désinscrit';
                   p.inscription_id = inscription.inscription_id;
-                  if (inscription.email) p.email = inscription.email;
                   // Auto-select inscribed players (not forfait and not désinscrit)
                   if (!p.forfait && !p.desinscrit) {
                     p.selected = true;
