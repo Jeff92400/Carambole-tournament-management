@@ -542,9 +542,9 @@ router.post('/send', authenticateToken, async (req, res) => {
     const playerAppUrl = emailSettings.player_app_url || 'https://cdbhs-player-app-production.up.railway.app';
     const baseUrl = process.env.BASE_URL || 'https://cdbhs-tournament-management-production.up.railway.app';
 
-    // Logo URL - always include, onerror will hide if not found
-    // Add cache-busting timestamp to ensure email clients get latest logo
-    const logoUrl = `${baseUrl}/logo.png?v=${Date.now()}`;
+    // Logo URL - org-specific, onerror will hide if not found
+    const orgSlug = await appSettings.getOrgSlug(orgId);
+    const logoUrl = appSettings.buildLogoUrl(baseUrl, orgSlug);
     console.log('[Player Invitations] Using logo URL:', logoUrl);
 
     let sentCount = 0;
@@ -845,9 +845,9 @@ router.post('/resend/:id', authenticateToken, async (req, res) => {
     const playerAppUrl = emailSettings.player_app_url || 'https://cdbhs-player-app-production.up.railway.app';
     const baseUrl = process.env.BASE_URL || 'https://cdbhs-tournament-management-production.up.railway.app';
 
-    // Logo URL - always include, onerror will hide if not found
-    // Add cache-busting timestamp to ensure email clients get latest logo
-    const logoUrl = `${baseUrl}/logo.png?v=${Date.now()}`;
+    // Logo URL - org-specific, onerror will hide if not found
+    const orgSlug = await appSettings.getOrgSlug(orgId);
+    const logoUrl = appSettings.buildLogoUrl(baseUrl, orgSlug);
     const logoHtml = `<img src="${logoUrl}" alt="${orgShortName}" style="height: 60px; max-width: 80%; width: auto; margin-bottom: 10px;" onerror="this.style.display='none'">`;
 
     const emailBody = templateBody
@@ -1011,7 +1011,8 @@ router.post('/resend-batch', authenticateToken, async (req, res) => {
     const replyToEmail = emailSettings.summary_email || '';
     const playerAppUrl = emailSettings.player_app_url || 'https://cdbhs-player-app-production.up.railway.app';
     const baseUrl = process.env.BASE_URL || 'https://cdbhs-tournament-management-production.up.railway.app';
-    const logoUrl = `${baseUrl}/logo.png?v=${Date.now()}`;
+    const orgSlug = await appSettings.getOrgSlug(orgId);
+    const logoUrl = appSettings.buildLogoUrl(baseUrl, orgSlug);
     const logoHtml = `<img src="${logoUrl}" alt="${orgShortName}" style="height: 60px; max-width: 80%; width: auto; margin-bottom: 10px;" onerror="this.style.display='none'">`;
 
     // Get PDF attachment

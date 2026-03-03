@@ -1358,6 +1358,8 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
   const primaryColor = emailSettings.primary_color || '#1F4788';
   const orgShortName = emailSettings.organization_short_name || 'CDBHS';
   const baseUrl = process.env.BASE_URL || 'https://cdbhs-tournament-management-production.up.railway.app';
+  const orgSlug = await appSettings.getOrgSlug(orgId);
+  const logoUrl = appSettings.buildLogoUrl(baseUrl, orgSlug);
 
   // Process each player
   for (const player of players) {
@@ -1468,7 +1470,7 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
             <div style="background: ${primaryColor}; color: white; padding: 20px; text-align: center;">
-              <img src="${baseUrl}/logo.png?v=${Date.now()}" alt="${orgShortName}" style="height: 60px; max-width: 80%; width: auto; margin-bottom: 10px;" onerror="this.style.display='none'">
+              <img src="${logoUrl}" alt="${orgShortName}" style="height: 60px; max-width: 80%; width: auto; margin-bottom: 10px;" onerror="this.style.display='none'">
               <h1 style="margin: 0; font-size: 24px;">${orgShortName}</h1>
               <p style="margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">CONVOCATION</p>
             </div>
@@ -1487,11 +1489,11 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
                 <p style="margin: 5px 0;"><strong>Votre poule :</strong> ${playerPoule.pouleNumber}</p>
               </div>
 
-              ${isFinale ? generateFinaleMatchScheduleHtml(playerPoule.players.length, playerPoule.players, primaryColor) : ''}
-
               <div style="line-height: 1.6;">
                 ${emailBodyHtml}
               </div>
+
+              ${isFinale ? generateFinaleMatchScheduleHtml(playerPoule.players.length, playerPoule.players, primaryColor) : ''}
 
               <p style="margin-top: 20px; padding: 10px; background: #fff3cd; border-left: 4px solid #ffc107; font-size: 13px;">
                 📧 <strong>Contact :</strong> Pour toute question ou en cas d'empêchement, contactez-nous à
@@ -1587,7 +1589,7 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
       const summaryHtml = `
         <div style="font-family: Arial, sans-serif; max-width: 700px; margin: 0 auto;">
           <div style="background: ${primaryColor}; color: white; padding: 20px; text-align: center;">
-            <img src="${baseUrl}/logo.png?v=${Date.now()}" alt="${orgShortName}" style="height: 60px; max-width: 80%; width: auto; margin-bottom: 10px;" onerror="this.style.display='none'">
+            <img src="${logoUrl}" alt="${orgShortName}" style="height: 60px; max-width: 80%; width: auto; margin-bottom: 10px;" onerror="this.style.display='none'">
             <h1 style="margin: 0; font-size: 24px;">📋 Récapitulatif Convocations</h1>
             <p style="margin: 10px 0 0 0; opacity: 0.9;">${category.display_name}</p>
           </div>
@@ -2234,6 +2236,8 @@ router.post('/send-club-reminder', authenticateToken, async (req, res) => {
     const orgName = emailSettings.organization_name || orgShortName;
     const primaryColor = emailSettings.primary_color || '#1F4788';
     const baseUrl = process.env.BASE_URL || 'https://cdbhs-tournament-management-production.up.railway.app';
+    const clubReminderOrgSlug = await appSettings.getOrgSlug(req.user?.organizationId);
+    const logoUrl = appSettings.buildLogoUrl(baseUrl, clubReminderOrgSlug);
 
     // Check if we already sent a reminder for this tournament + club combination
     if (tournoiId && clubName) {
@@ -2373,7 +2377,7 @@ Le {organization_short_name}`;
     const emailBody = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <div style="background: ${primaryColor}; color: white; padding: 20px; text-align: center;">
-          <img src="${baseUrl}/logo.png?v=${Date.now()}" alt="" style="height: 60px; max-width: 80%; width: auto; margin-bottom: 10px;" onerror="this.style.display='none'">
+          <img src="${logoUrl}" alt="" style="height: 60px; max-width: 80%; width: auto; margin-bottom: 10px;" onerror="this.style.display='none'">
           <h1 style="margin: 0; font-size: 24px;">${orgShortName}</h1>
         </div>
         <div style="padding: 20px; background: #f8f9fa; line-height: 1.6;">
@@ -2663,6 +2667,8 @@ router.post('/inscription-confirmation', async (req, res) => {
     const baseUrl = process.env.BASE_URL || 'https://cdbhs-tournament-management-production.up.railway.app';
     const primaryColor = emailSettings.primary_color || '#1F4788';
     const orgShortName = emailSettings.organization_short_name || 'CDB';
+    const confirmOrgSlug = await appSettings.getOrgSlug(req.user?.organizationId);
+    const logoUrl = appSettings.buildLogoUrl(baseUrl, confirmOrgSlug);
 
     // Load template from database (with fallback to default)
     const db = require('../db-loader');
@@ -2741,7 +2747,7 @@ router.post('/inscription-confirmation', async (req, res) => {
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <div style="background: ${primaryColor}; color: white; padding: 20px; text-align: center;">
-            <img src="${baseUrl}/logo.png?v=${Date.now()}" alt="${orgShortName}" style="height: 60px; max-width: 80%; width: auto; margin-bottom: 10px;" onerror="this.style.display='none'">
+            <img src="${logoUrl}" alt="${orgShortName}" style="height: 60px; max-width: 80%; width: auto; margin-bottom: 10px;" onerror="this.style.display='none'">
             <h1 style="margin: 0; font-size: 24px;">${orgShortName}</h1>
             <p style="margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">INSCRIPTION CONFIRMÉE</p>
           </div>
@@ -2818,6 +2824,8 @@ router.post('/inscription-cancellation', async (req, res) => {
     const baseUrl = process.env.BASE_URL || 'https://cdbhs-tournament-management-production.up.railway.app';
     const primaryColor = emailSettings.primary_color || '#1F4788';
     const orgShortName = emailSettings.organization_short_name || 'CDB';
+    const cancelOrgSlug = await appSettings.getOrgSlug(req.user?.organizationId);
+    const logoUrl = appSettings.buildLogoUrl(baseUrl, cancelOrgSlug);
 
     // Load template from database (with fallback to default)
     const db = require('../db-loader');
@@ -2896,7 +2904,7 @@ router.post('/inscription-cancellation', async (req, res) => {
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <div style="background: ${primaryColor}; color: white; padding: 20px; text-align: center;">
-            <img src="${baseUrl}/logo.png?v=${Date.now()}" alt="${orgShortName}" style="height: 60px; max-width: 80%; width: auto; margin-bottom: 10px;" onerror="this.style.display='none'">
+            <img src="${logoUrl}" alt="${orgShortName}" style="height: 60px; max-width: 80%; width: auto; margin-bottom: 10px;" onerror="this.style.display='none'">
             <h1 style="margin: 0; font-size: 24px;">${orgShortName}</h1>
             <p style="margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">DÉSINSCRIPTION CONFIRMÉE</p>
           </div>

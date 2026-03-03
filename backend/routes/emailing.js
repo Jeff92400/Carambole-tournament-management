@@ -1079,6 +1079,8 @@ router.post('/send', authenticateToken, async (req, res) => {
     const contactEmail = await getContactEmail(req.user?.organizationId);
     const contactPhraseHtml = buildContactPhraseHtml(contactEmail, primaryColor);
     const baseUrl = process.env.BASE_URL || 'https://cdbhs-tournament-management-production.up.railway.app';
+    const orgSlug = await appSettings.getOrgSlug(req.user?.organizationId);
+    const logoUrl = appSettings.buildLogoUrl(baseUrl, orgSlug);
 
     // Send emails
     for (const recipient of recipientsToEmail) {
@@ -1118,7 +1120,7 @@ router.post('/send', authenticateToken, async (req, res) => {
           html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
               <div style="background: ${primaryColor}; color: white; padding: 20px; text-align: center;">
-                <img src="${baseUrl}/logo.png?v=${Date.now()}" alt="Logo" style="height: 60px; max-width: 80%; width: auto; margin-bottom: 10px;" onerror="this.style.display='none'">
+                <img src="${logoUrl}" alt="Logo" style="height: 60px; max-width: 80%; width: auto; margin-bottom: 10px;" onerror="this.style.display='none'">
                 <h1 style="margin: 0; font-size: 24px;">${await req.getOrgSetting('organization_name') || 'Comité Départemental de Billard'}</h1>
               </div>
               <div style="padding: 20px; background: #f8f9fa; line-height: 1.6;">
@@ -1538,6 +1540,8 @@ router.post('/send-finale-results', authenticateToken, async (req, res) => {
     const orgShortName = emailSettings.organization_short_name || 'CDBHS';
     const replyToEmail = emailSettings.summary_email || '';
     const baseUrl = process.env.BASE_URL || 'https://cdbhs-tournament-management-production.up.railway.app';
+    const orgSlug = await appSettings.getOrgSlug(req.user?.organizationId);
+    const logoUrl = appSettings.buildLogoUrl(baseUrl, orgSlug);
 
     // Get tournament info
     const tournament = await new Promise((resolve, reject) => {
@@ -1668,7 +1672,7 @@ router.post('/send-finale-results', authenticateToken, async (req, res) => {
       <div style="font-family: Arial, sans-serif; max-width: 700px; margin: 0 auto; background: #ffffff;">
         <!-- Header -->
         <div style="background: ${primaryColor}; color: white; padding: 25px; text-align: center;">
-          <img src="${baseUrl}/logo.png?v=${Date.now()}" alt="${orgShortName}" style="height: 60px; max-width: 80%; width: auto; margin-bottom: 15px;" onerror="this.style.display='none'">
+          <img src="${logoUrl}" alt="${orgShortName}" style="height: 60px; max-width: 80%; width: auto; margin-bottom: 15px;" onerror="this.style.display='none'">
           <h1 style="margin: 0; font-size: 24px;">${orgName}</h1>
         </div>
 
@@ -1775,7 +1779,7 @@ router.post('/send-finale-results', authenticateToken, async (req, res) => {
         const summaryHtml = `
           <div style="font-family: Arial, sans-serif; max-width: 700px; margin: 0 auto;">
             <div style="background: ${primaryColor}; color: white; padding: 20px; text-align: center;">
-              <img src="${baseUrl}/logo.png?v=${Date.now()}" alt="Logo" style="height: 60px; max-width: 80%; width: auto; margin-bottom: 10px;" onerror="this.style.display='none'">
+              <img src="${logoUrl}" alt="Logo" style="height: 60px; max-width: 80%; width: auto; margin-bottom: 10px;" onerror="this.style.display='none'">
               <h1 style="margin: 0; font-size: 24px;">${orgName}</h1>
               <p style="margin: 10px 0 0 0; opacity: 0.9;">📋 Récapitulatif Envoi Résultats Finale - ${tournament.display_name}</p>
             </div>
@@ -2326,6 +2330,8 @@ router.post('/send-results', authenticateToken, async (req, res) => {
 
   try {
     const baseUrl = process.env.BASE_URL || 'https://cdbhs-tournament-management-production.up.railway.app';
+    const orgSlug = await appSettings.getOrgSlug(req.user?.organizationId);
+    const logoUrl = appSettings.buildLogoUrl(baseUrl, orgSlug);
 
     // Get dynamic sender info
     const senderName = await req.getOrgSetting('email_sender_name') || 'CDBHS';
@@ -2587,7 +2593,7 @@ router.post('/send-results', authenticateToken, async (req, res) => {
         const emailHtml = `
           <div style="font-family: Arial, sans-serif; max-width: 700px; margin: 0 auto;">
             <div style="background: ${primaryColor}; color: white; padding: 20px; text-align: center;">
-              <img src="${baseUrl}/logo.png?v=${Date.now()}" alt="Logo" style="height: 60px; max-width: 80%; width: auto; margin-bottom: 10px;" onerror="this.style.display='none'">
+              <img src="${logoUrl}" alt="Logo" style="height: 60px; max-width: 80%; width: auto; margin-bottom: 10px;" onerror="this.style.display='none'">
               <h1 style="margin: 0; font-size: 24px;">${await req.getOrgSetting('organization_name') || 'Comité Départemental de Billard'}</h1>
               <p style="margin: 10px 0 0 0; opacity: 0.9;">Résultats - ${tournament.display_name}</p>
               <p style="margin: 5px 0 0 0; opacity: 0.8; font-size: 14px;">${tournamentDate}${tournament.location ? ' - ' + tournament.location : ''}</p>
@@ -2692,7 +2698,7 @@ router.post('/send-results', authenticateToken, async (req, res) => {
         const summaryHtml = `
           <div style="font-family: Arial, sans-serif; max-width: 700px; margin: 0 auto;">
             <div style="background: ${primaryColor}; color: white; padding: 20px; text-align: center;">
-              <img src="${baseUrl}/logo.png?v=${Date.now()}" alt="Logo" style="height: 60px; max-width: 80%; width: auto; margin-bottom: 10px;" onerror="this.style.display='none'">
+              <img src="${logoUrl}" alt="Logo" style="height: 60px; max-width: 80%; width: auto; margin-bottom: 10px;" onerror="this.style.display='none'">
               <h1 style="margin: 0; font-size: 24px;">${await req.getOrgSetting('organization_name') || 'Comité Départemental de Billard'}</h1>
               <p style="margin: 10px 0 0 0; opacity: 0.9;">📋 Récapitulatif Envoi Résultats - ${tournament.display_name}</p>
             </div>
@@ -3223,11 +3229,13 @@ router.post('/send-finale-convocation', authenticateToken, async (req, res) => {
 
         // Base URL for ICS calendar link
         const baseUrl = process.env.BASE_URL || 'https://cdbhs-tournament-management-production.up.railway.app';
+        const orgSlug = await appSettings.getOrgSlug(req.user?.organizationId);
+        const logoUrl = appSettings.buildLogoUrl(baseUrl, orgSlug);
 
         const emailHtml = `
           <div style="font-family: Arial, sans-serif; max-width: 700px; margin: 0 auto;">
             <div style="background: ${primaryColor}; color: white; padding: 20px; text-align: center;">
-              <img src="${baseUrl}/logo.png?v=${Date.now()}" alt="Logo" style="height: 60px; max-width: 80%; width: auto; margin-bottom: 10px;" onerror="this.style.display='none'">
+              <img src="${logoUrl}" alt="Logo" style="height: 60px; max-width: 80%; width: auto; margin-bottom: 10px;" onerror="this.style.display='none'">
               <h1 style="margin: 0; font-size: 24px;">🏆 Convocation Finale Départementale</h1>
               <p style="margin: 10px 0 0 0; opacity: 0.9;">${category.display_name}</p>
             </div>
@@ -3336,7 +3344,7 @@ router.post('/send-finale-convocation', authenticateToken, async (req, res) => {
         const summaryHtml = `
           <div style="font-family: Arial, sans-serif; max-width: 700px; margin: 0 auto;">
             <div style="background: ${primaryColor}; color: white; padding: 20px; text-align: center;">
-              <img src="${baseUrl}/logo.png?v=${Date.now()}" alt="Logo" style="height: 60px; max-width: 80%; width: auto; margin-bottom: 10px;" onerror="this.style.display='none'">
+              <img src="${logoUrl}" alt="Logo" style="height: 60px; max-width: 80%; width: auto; margin-bottom: 10px;" onerror="this.style.display='none'">
               <h1 style="margin: 0; font-size: 24px;">${await req.getOrgSetting('organization_name') || 'Comité Départemental de Billard'}</h1>
               <p style="margin: 10px 0 0 0; opacity: 0.9;">📋 Récapitulatif Convocations Finale - ${category.display_name}</p>
             </div>
@@ -4754,6 +4762,8 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
 
   try {
     const baseUrl = process.env.BASE_URL || 'https://cdbhs-tournament-management-production.up.railway.app';
+    const orgSlug = await appSettings.getOrgSlug(req.user?.organizationId);
+    const logoUrl = appSettings.buildLogoUrl(baseUrl, orgSlug);
 
     // Get dynamic sender info
     const senderName = await req.getOrgSetting('email_sender_name') || 'CDBHS';
@@ -5261,7 +5271,7 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
         const emailHtml = `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
             <div style="background: ${primaryColor}; color: white; padding: 20px; text-align: center;">
-              <img src="${baseUrl}/logo.png?v=${Date.now()}" alt="Logo" style="height: 60px; max-width: 80%; width: auto; margin-bottom: 10px;" onerror="this.style.display='none'">
+              <img src="${logoUrl}" alt="Logo" style="height: 60px; max-width: 80%; width: auto; margin-bottom: 10px;" onerror="this.style.display='none'">
               <h1 style="margin: 0; font-size: 24px;">${await req.getOrgSetting('organization_name') || 'Comité Départemental de Billard'}</h1>
             </div>
             <div style="padding: 20px; background: #f8f9fa; line-height: 1.6;">

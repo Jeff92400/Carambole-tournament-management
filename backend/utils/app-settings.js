@@ -383,6 +383,35 @@ function clearAllCaches() {
   orgSettingsCache.clear();
 }
 
+// ==================== EMAIL LOGO HELPERS ====================
+
+/**
+ * Get organization slug from ID
+ * @param {number} orgId - Organization ID
+ * @returns {Promise<string>} Organization slug (empty string if not found)
+ */
+async function getOrgSlug(orgId) {
+  if (!orgId) return '';
+  const db = require('../db-loader');
+  return new Promise((resolve) => {
+    db.get('SELECT slug FROM organizations WHERE id = $1', [orgId], (err, row) => {
+      resolve(row?.slug || '');
+    });
+  });
+}
+
+/**
+ * Build org-specific logo URL for emails
+ * @param {string} baseUrl - Application base URL
+ * @param {string} orgSlug - Organization slug (empty = default org)
+ * @returns {string} Logo URL with org parameter if applicable
+ */
+function buildLogoUrl(baseUrl, orgSlug) {
+  return orgSlug
+    ? `${baseUrl}/logo.png?org=${encodeURIComponent(orgSlug)}&v=${Date.now()}`
+    : `${baseUrl}/logo.png?v=${Date.now()}`;
+}
+
 module.exports = {
   getSettings,
   getSetting,
@@ -402,5 +431,8 @@ module.exports = {
   getSeasonDateRange,
   isDateInSeason,
   getCurrentSeasonSync,
+  // Email logo helpers
+  getOrgSlug,
+  buildLogoUrl,
   defaults
 };

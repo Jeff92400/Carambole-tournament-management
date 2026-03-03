@@ -552,6 +552,9 @@ async function processTemplatedScheduledEmail(db, resend, scheduled, delay) {
   const orgName = emailSettings.organization_name || 'Comité Départemental Billard Hauts-de-Seine';
   const orgShortName = emailSettings.organization_short_name || 'CDBHS';
   const playerAppUrl = emailSettings.player_app_url || 'https://cdbhs-player-app-production.up.railway.app';
+  const baseUrl = process.env.BASE_URL || 'https://cdbhs-tournament-management-production.up.railway.app';
+  const templatedOrgSlug = await appSettings.getOrgSlug(schedOrgId);
+  const logoUrl = appSettings.buildLogoUrl(baseUrl, templatedOrgSlug);
 
   for (const recipient of recipients) {
     try {
@@ -639,7 +642,7 @@ async function processTemplatedScheduledEmail(db, resend, scheduled, delay) {
         subject: emailSubject,
         html: `<div style="font-family: Arial; max-width: 600px; margin: 0 auto;">
           <div style="background: ${primaryColor}; color: white; padding: 20px; text-align: center;">
-            <img src="${baseUrl}/logo.png?v=${Date.now()}" alt="${orgShortName}" style="height: 60px; max-width: 80%; width: auto; margin-bottom: 10px;" onerror="this.style.display='none'">
+            <img src="${logoUrl}" alt="${orgShortName}" style="height: 60px; max-width: 80%; width: auto; margin-bottom: 10px;" onerror="this.style.display='none'">
             <h1 style="margin: 0; font-size: 24px;">${orgName}</h1>
           </div>
           <div style="padding: 20px; background: #f8f9fa;">
@@ -1023,6 +1026,9 @@ async function processScheduledEmails() {
       });
 
       let sentCount = 0;
+      const customBaseUrl = process.env.BASE_URL || 'https://cdbhs-tournament-management-production.up.railway.app';
+      const customOrgSlug = await appSettings.getOrgSlug(scheduled.organization_id);
+      const customLogoUrl = appSettings.buildLogoUrl(customBaseUrl, customOrgSlug);
 
       for (const recipient of recipients) {
         if (!recipient.email || !recipient.email.includes('@')) continue;
@@ -1045,7 +1051,7 @@ async function processScheduledEmails() {
           const primaryColor = emailSettings.primary_color || '#1F4788';
           const senderName = emailSettings.email_sender_name || 'CDBHS';
           const senderEmail = emailSettings.email_communication || 'communication@cdbhs.net';
-          const orgName = emailSettings.organization_name || 'Comite Departemental Billard Hauts-de-Seine';
+          const orgName = emailSettings.organization_name || 'Comité Départemental de Billard des Hauts-de-Seine';
           const orgShortName = emailSettings.organization_short_name || 'CDBHS';
           const replyToEmail = emailSettings.summary_email || '';
 
@@ -1056,7 +1062,7 @@ async function processScheduledEmails() {
             subject: emailSubject,
             html: `<div style="font-family: Arial; max-width: 600px; margin: 0 auto;">
               <div style="background: ${primaryColor}; color: white; padding: 20px; text-align: center;">
-                <img src="${baseUrl}/logo.png?v=${Date.now()}" alt="${orgShortName}" style="height: 60px; max-width: 80%; width: auto; margin-bottom: 10px;" onerror="this.style.display='none'">
+                <img src="${customLogoUrl}" alt="${orgShortName}" style="height: 60px; max-width: 80%; width: auto; margin-bottom: 10px;" onerror="this.style.display='none'">
                 <h1 style="margin: 0; font-size: 24px;">${orgName}</h1>
               </div>
               <div style="padding: 20px; background: #f8f9fa;">${imageHtml}${emailBody.replace(/\n/g, '<br>')}</div>
