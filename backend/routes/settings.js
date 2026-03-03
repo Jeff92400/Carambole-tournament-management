@@ -848,10 +848,12 @@ router.put('/app-bulk', authenticateToken, requireAdmin, async (req, res) => {
       return res.json({ success: true, message: 'Settings updated' });
     }
 
-    // Fallback: global app_settings
+    // Fallback: global app_settings — but NEVER write org-specific settings globally
+    const orgSpecificKeys = ['qualification_mode', 'bonus_moyenne_enabled', 'bonus_moyenne_type', 'bonus_moyenne_scope', 'position_points_degradation'];
     const db = getDb();
     await initAppSettings();
     for (const [key, value] of Object.entries(settings)) {
+      if (orgSpecificKeys.includes(key)) continue; // Skip org-specific settings without orgId
       await new Promise((resolve, reject) => {
         db.run(
           `INSERT INTO app_settings (key, value, updated_at) VALUES ($1, $2, CURRENT_TIMESTAMP)

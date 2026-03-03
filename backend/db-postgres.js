@@ -2549,6 +2549,41 @@ Sportivement,
       console.log(`Direct-normalized ${directContactsResult.rowCount} club names in player_contacts table`);
     }
 
+    // Clean up org-specific settings that may have leaked into global app_settings
+    try {
+      const orgSpecificKeys = ['qualification_mode', 'bonus_moyenne_enabled', 'bonus_moyenne_type', 'bonus_moyenne_scope', 'position_points_degradation'];
+      const delResult = await client.query(
+        `DELETE FROM app_settings WHERE key = ANY($1::text[])`,
+        [orgSpecificKeys]
+      );
+      if (delResult.rowCount > 0) {
+        console.log(`Cleaned ${delResult.rowCount} org-specific settings from global app_settings table`);
+      }
+    } catch (cleanupErr) {
+      console.error('Error cleaning global app_settings:', cleanupErr);
+    }
+
+    // Reset stale position_points for standard-mode orgs
+    try {
+      const resetResult = await client.query(`
+        UPDATE tournament_results SET position_points = 0
+        WHERE position_points > 0
+          AND tournament_id IN (
+            SELECT t.id FROM tournaments t
+            WHERE t.organization_id IS NOT NULL
+              AND t.organization_id NOT IN (
+                SELECT os.organization_id FROM organization_settings os
+                WHERE os.key = 'qualification_mode' AND os.value = 'journees'
+              )
+          )
+      `);
+      if (resetResult.rowCount > 0) {
+        console.log(`Reset ${resetResult.rowCount} stale position_points for standard-mode orgs`);
+      }
+    } catch (resetErr) {
+      console.error('Error resetting stale position_points:', resetErr);
+    }
+
   } catch (err) {
     // Post-commit error — NO ROLLBACK here (transaction already committed)
     console.error('Error in post-commit initialization (schema is safe):', err);
