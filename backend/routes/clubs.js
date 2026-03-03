@@ -7,14 +7,27 @@ const { authenticateToken } = require('./auth');
 
 const router = express.Router();
 
-// Configure multer for logo uploads
+// Configure multer for logo uploads (org-aware subfolders)
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    const uploadDir = path.join(__dirname, '../../frontend/images/clubs');
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
+    const orgId = req.user ? req.user.organizationId : null;
+    if (orgId) {
+      db.get('SELECT slug FROM organizations WHERE id = $1', [orgId], (err, row) => {
+        const orgSlug = row ? row.slug : 'default';
+        req._orgSlug = orgSlug;
+        const uploadDir = path.join(__dirname, '../../frontend/images/clubs', orgSlug);
+        if (!fs.existsSync(uploadDir)) {
+          fs.mkdirSync(uploadDir, { recursive: true });
+        }
+        cb(null, uploadDir);
+      });
+    } else {
+      const uploadDir = path.join(__dirname, '../../frontend/images/clubs');
+      if (!fs.existsSync(uploadDir)) {
+        fs.mkdirSync(uploadDir, { recursive: true });
+      }
+      cb(null, uploadDir);
     }
-    cb(null, uploadDir);
   },
   filename: function (req, file, cb) {
     // Generate filename: remove spaces and special chars
@@ -154,7 +167,9 @@ router.get('/:id', authenticateToken, (req, res) => {
 // Add new club
 router.post('/', authenticateToken, upload.single('logo'), (req, res) => {
   const { name, display_name, street, city, zip_code, phone, email, president, president_email, responsable_sportif_name, responsable_sportif_email, responsable_sportif_licence, calendar_code } = req.body;
-  const logo_filename = req.file ? req.file.filename : null;
+  const logo_filename = req.file
+    ? (req._orgSlug ? `${req._orgSlug}/${req.file.filename}` : req.file.filename)
+    : null;
 
   if (!name || !display_name) {
     return res.status(400).json({ error: 'Name and display name are required' });
@@ -207,7 +222,9 @@ router.put('/:id', authenticateToken, upload.single('logo'), (req, res) => {
       return res.status(404).json({ error: 'Club not found' });
     }
 
-    const newLogoFilename = req.file ? req.file.filename : club.logo_filename;
+    const newLogoFilename = req.file
+      ? (req._orgSlug ? `${req._orgSlug}/${req.file.filename}` : req.file.filename)
+      : club.logo_filename;
     const newName = name || club.name;
     const newDisplayName = display_name || club.display_name;
     const newStreet = street !== undefined ? street : club.street;

@@ -2379,11 +2379,11 @@ Sportivement,
     const clubResult = await client.query('SELECT COUNT(*) as count FROM clubs');
     if (clubResult.rows[0].count == 0) {
       const defaultClubs = [
-        { name: 'A DE BILLARD COURBEVOIE LA DEFENSE', display_name: 'A DE BILLARD COURBEVOIE LA DEFENSE', logo_filename: 'A_DE_BILLARD_COURBEVOIE_LA_DEFENSE.png' },
-        { name: 'BILLARD BOIS COLOMBES', display_name: 'BILLARD BOIS COLOMBES', logo_filename: 'BILLARD_BOIS_COLOMBES.png' },
-        { name: 'BILLARD CLUB CLICHOIS', display_name: 'BILLARD CLUB CLICHOIS', logo_filename: 'BILLARD_CLUB_CLICHOIS.png' },
-        { name: 'BILLARD CLUB LA GARENNE CLAMART', display_name: 'BILLARD CLUB LA GARENNE CLAMART', logo_filename: 'BILLARD_CLUB_LA_GARENNE_CLAMART.png' },
-        { name: 'S C M C BILLARD CLUB', display_name: 'S C M C BILLARD CLUB', logo_filename: 'S_C_M_C_BILLARD_CLUB.png' }
+        { name: 'A DE BILLARD COURBEVOIE LA DEFENSE', display_name: 'A DE BILLARD COURBEVOIE LA DEFENSE', logo_filename: 'cdbhs/A_DE_BILLARD_COURBEVOIE_LA_DEFENSE.png' },
+        { name: 'BILLARD BOIS COLOMBES', display_name: 'BILLARD BOIS COLOMBES', logo_filename: 'cdbhs/BILLARD_BOIS_COLOMBES.png' },
+        { name: 'BILLARD CLUB CLICHOIS', display_name: 'BILLARD CLUB CLICHOIS', logo_filename: 'cdbhs/BILLARD_CLUB_CLICHOIS.png' },
+        { name: 'BILLARD CLUB LA GARENNE CLAMART', display_name: 'BILLARD CLUB LA GARENNE CLAMART', logo_filename: 'cdbhs/BILLARD_CLUB_LA_GARENNE_CLAMART.png' },
+        { name: 'S C M C BILLARD CLUB', display_name: 'S C M C BILLARD CLUB', logo_filename: 'cdbhs/S_C_M_C_BILLARD_CLUB.png' }
       ];
 
       for (const club of defaultClubs) {
@@ -2561,6 +2561,24 @@ Sportivement,
       }
     } catch (cleanupErr) {
       console.error('Error cleaning global app_settings:', cleanupErr);
+    }
+
+    // Migration: Prepend org slug subfolder to club logo_filename (for multi-CDB logo isolation)
+    // Idempotent: skips rows that already contain a '/' (already migrated)
+    try {
+      const logoMigrationResult = await client.query(`
+        UPDATE clubs c
+        SET logo_filename = o.slug || '/' || c.logo_filename
+        FROM organizations o
+        WHERE c.organization_id = o.id
+          AND c.logo_filename IS NOT NULL
+          AND c.logo_filename NOT LIKE '%/%'
+      `);
+      if (logoMigrationResult.rowCount > 0) {
+        console.log(`Migrated ${logoMigrationResult.rowCount} club logo filenames to org subfolders`);
+      }
+    } catch (logoMigErr) {
+      console.error('Error migrating club logo filenames:', logoMigErr);
     }
 
     // Reset stale position_points for standard-mode orgs
