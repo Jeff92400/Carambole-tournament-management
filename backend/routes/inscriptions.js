@@ -1081,7 +1081,7 @@ router.get('/tournoi/:id/inscriptions', authenticateToken, (req, res) => {
   const query = `
     SELECT
       i.*,
-      COALESCE(i.email, p.email, pc.email) as email,
+      COALESCE(NULLIF(TRIM(i.email), ''), NULLIF(TRIM(p.email), ''), NULLIF(TRIM(pc.email), '')) as email,
       p.first_name,
       p.last_name,
       p.club
@@ -1126,7 +1126,7 @@ router.get('/', authenticateToken, async (req, res) => {
   let query = `
     SELECT
       i.*,
-      COALESCE(i.email, p.email, pc.email) as email,
+      COALESCE(NULLIF(TRIM(i.email), ''), NULLIF(TRIM(p.email), ''), NULLIF(TRIM(pc.email), '')) as email,
       t.nom as tournoi_nom,
       t.mode,
       t.categorie,
