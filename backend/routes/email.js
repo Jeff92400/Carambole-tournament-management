@@ -2159,7 +2159,6 @@ router.delete('/convocation-files/purge', authenticateToken, async (req, res) =>
     }
 
     // Build delete query (org-scoped via tournoi_ext JOIN)
-    const orgId = req.user?.organizationId || null;
     let query = `DELETE FROM convocation_files WHERE id IN (
       SELECT cf.id FROM convocation_files cf
       LEFT JOIN tournoi_ext t ON cf.tournoi_ext_id = t.tournoi_id
