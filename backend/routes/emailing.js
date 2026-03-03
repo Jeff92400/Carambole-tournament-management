@@ -5202,6 +5202,7 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
         // Smart inscription method - check if player has app account
         const playerAppUrlRaw = await appSettings.getOrgSetting(orgId, 'player_app_url');
         const orgSlug = await appSettings.getOrgSlug(orgId);
+        console.log(`[Relance] orgId=${orgId}, orgSlug="${orgSlug}", playerAppUrlRaw="${playerAppUrlRaw}"`);
         // Always force the correct org slug (the stored URL may belong to another org)
         const playerAppUrlObj = new URL(playerAppUrlRaw);
         if (orgSlug) playerAppUrlObj.searchParams.set('org', orgSlug);
@@ -5209,6 +5210,7 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
         const tournamentsUrlObj = new URL(playerAppUrl);
         tournamentsUrlObj.searchParams.set('page', 'tournaments');
         const playerAppTournamentsUrl = tournamentsUrlObj.toString();
+        console.log(`[Relance] Final playerAppTournamentsUrl="${playerAppTournamentsUrl}"`);
         const extInscriptionEnabled = await appSettings.getOrgSetting(orgId, 'external_inscription_enabled');
         const extInscriptionUrl = await appSettings.getOrgSetting(orgId, 'external_inscription_url');
         const hasExternalInscription = extInscriptionEnabled === 'true' && extInscriptionUrl;
