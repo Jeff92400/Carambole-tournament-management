@@ -432,7 +432,7 @@
 
         // Set table title based on tournament type
         document.getElementById('tableTitle').textContent =
-          isFinale ? 'Classement de la Finale Départementale' : 'Classement du Tournoi';
+          isFinale ? 'Classement de la Finale Départementale' : `Classement du ${tournamentLabel}`;
 
         // Display results
         const tbody = document.getElementById('resultsBody');
