@@ -1076,6 +1076,29 @@ router.get('/tournoi/:id', authenticateToken, (req, res) => {
 });
 
 // Get inscriptions for a specific tournament
+// TEMPORARY DEBUG - remove after investigation
+router.get('/tournoi/:id/debug-emails', (req, res) => {
+  const query = `
+    SELECT
+      i.licence,
+      i.email as inscription_email,
+      p.email as player_email,
+      pc.email as contact_email,
+      p.organization_id as player_org_id,
+      i.organization_id as inscription_org_id
+    FROM inscriptions i
+    LEFT JOIN players p ON REPLACE(i.licence, ' ', '') = REPLACE(p.licence, ' ', '')
+    LEFT JOIN player_contacts pc ON REPLACE(i.licence, ' ', '') = REPLACE(pc.licence, ' ', '')
+    WHERE i.tournoi_id = $1
+    ORDER BY i.timestamp ASC
+    LIMIT 5
+  `;
+  db.all(query, [req.params.id], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
+});
+
 router.get('/tournoi/:id/inscriptions', authenticateToken, (req, res) => {
   const orgId = req.user.organizationId || null;
   const query = `
