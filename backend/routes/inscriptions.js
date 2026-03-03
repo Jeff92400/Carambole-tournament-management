@@ -1083,13 +1083,13 @@ router.get('/tournoi/:id/debug-emails', (req, res) => {
   // If id is "find-org", list tournaments per org with inscription counts
   if (tournoiId === 'find-org') {
     const query = `
-      SELECT i.organization_id, te.categorie, te.tournoi_id, COUNT(*) as inscription_count
+      SELECT i.organization_id, te.categorie, te.tournoi_id, COUNT(*) as inscription_count,
+        SUM(CASE WHEN i.email IS NOT NULL AND TRIM(i.email) != '' THEN 1 ELSE 0 END) as with_email
       FROM inscriptions i
       JOIN tournoi_ext te ON te.tournoi_id = i.tournoi_id
-      WHERE i.organization_id IS NOT NULL AND i.organization_id != 1
       GROUP BY i.organization_id, te.categorie, te.tournoi_id
-      ORDER BY i.organization_id, inscription_count DESC
-      LIMIT 30
+      ORDER BY i.organization_id DESC NULLS LAST, inscription_count DESC
+      LIMIT 50
     `;
     return db.all(query, [], (err, rows) => {
       if (err) return res.status(500).json({ error: err.message });
