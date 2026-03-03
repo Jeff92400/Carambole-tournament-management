@@ -5200,15 +5200,15 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
         emailIntro = replaceVar(emailIntro, 'organization_email', organizationEmail);
 
         // Smart inscription method - check if player has app account
-        let playerAppUrl = await appSettings.getOrgSetting(orgId, 'player_app_url');
-        // Ensure the Player App URL includes the org slug for multi-CDB
+        const playerAppUrlRaw = await appSettings.getOrgSetting(orgId, 'player_app_url');
         const orgSlug = await appSettings.getOrgSlug(orgId);
-        if (orgSlug && !playerAppUrl.includes('?org=')) {
-          const separator = playerAppUrl.includes('?') ? '&' : '?';
-          playerAppUrl = `${playerAppUrl.replace(/\/$/, '')}${separator}org=${encodeURIComponent(orgSlug)}`;
-        }
-        // Build the tournaments page link with proper query param handling
-        const playerAppTournamentsUrl = playerAppUrl.includes('?') ? `${playerAppUrl}&page=tournaments` : `${playerAppUrl}?page=tournaments`;
+        // Always force the correct org slug (the stored URL may belong to another org)
+        const playerAppUrlObj = new URL(playerAppUrlRaw);
+        if (orgSlug) playerAppUrlObj.searchParams.set('org', orgSlug);
+        const playerAppUrl = playerAppUrlObj.toString();
+        const tournamentsUrlObj = new URL(playerAppUrl);
+        tournamentsUrlObj.searchParams.set('page', 'tournaments');
+        const playerAppTournamentsUrl = tournamentsUrlObj.toString();
         const extInscriptionEnabled = await appSettings.getOrgSetting(orgId, 'external_inscription_enabled');
         const extInscriptionUrl = await appSettings.getOrgSetting(orgId, 'external_inscription_url');
         const hasExternalInscription = extInscriptionEnabled === 'true' && extInscriptionUrl;
