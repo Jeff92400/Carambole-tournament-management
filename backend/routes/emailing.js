@@ -5215,6 +5215,7 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
         let inscriptionMethodHtml;
 
         // Build the "sans compte" HTML based on external inscription setting
+        const notificationEmail = await appSettings.getOrgSetting(orgId, 'summary_email') || organizationEmail;
         const buildSansCompteHtml = () => {
           if (hasExternalInscription) {
             const urlLabel = extInscriptionUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
@@ -5222,8 +5223,13 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
               <p style="margin: 0;">Confirmez votre inscription sur <a href="${extInscriptionUrl}" target="_blank" style="color: ${primaryColor}; font-weight: bold;">${urlLabel}</a> ou en répondant à cet email.</p>
             </div>`;
           } else {
-            return `<div style="margin: 0; padding: 15px; background: #fff; border-left: 4px solid ${primaryColor};">
-              <p style="margin: 0;">Répondez à cet email pour confirmer votre participation.</p>
+            return `<div style="text-align: center; margin: 20px 0;">
+              <a href="${playerAppTournamentsUrl}" target="_blank" style="display: inline-block; background: ${primaryColor}; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
+                📱 S'inscrire via l'Espace Joueur
+              </a>
+            </div>
+            <div style="margin: 0; padding: 15px; background: #fff; border-left: 4px solid ${primaryColor};">
+              <p style="margin: 0;">ou confirmez votre participation en écrivant à <a href="mailto:${notificationEmail}" style="color: ${primaryColor}; font-weight: bold;">${notificationEmail}</a></p>
             </div>`;
           }
         };
