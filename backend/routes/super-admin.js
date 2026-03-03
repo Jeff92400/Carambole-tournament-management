@@ -687,7 +687,9 @@ router.post('/organizations', async (req, res) => {
       ['email_sender_name', short_name],
       ['summary_email', admin_email || ''],
       ['enable_csv_imports', '0'],
-      ['player_app_url', `https://cdbhs-player-app-production.up.railway.app/?org=${slug}`]
+      ['player_app_url', `https://cdbhs-player-app-production.up.railway.app/?org=${slug}`],
+      ['external_inscription_enabled', 'false'],
+      ['external_inscription_url', '']
     ];
 
     for (const [key, value] of defaultOrgSettings) {

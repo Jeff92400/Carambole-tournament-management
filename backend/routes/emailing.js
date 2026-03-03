@@ -5201,7 +5201,24 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
 
         // Smart inscription method - check if player has app account
         const playerAppUrl = await appSettings.getOrgSetting(orgId, 'player_app_url');
+        const extInscriptionEnabled = await appSettings.getOrgSetting(orgId, 'external_inscription_enabled');
+        const extInscriptionUrl = await appSettings.getOrgSetting(orgId, 'external_inscription_url');
+        const hasExternalInscription = extInscriptionEnabled === 'true' && extInscriptionUrl;
         let inscriptionMethodHtml;
+
+        // Build the "sans compte" HTML based on external inscription setting
+        const buildSansCompteHtml = () => {
+          if (hasExternalInscription) {
+            const urlLabel = extInscriptionUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
+            return `<div style="margin: 0; padding: 15px; background: #fff; border-left: 4px solid ${primaryColor};">
+              <p style="margin: 0;">Confirmez votre inscription sur <a href="${extInscriptionUrl}" target="_blank" style="color: ${primaryColor}; font-weight: bold;">${urlLabel}</a> ou en répondant à cet email.</p>
+            </div>`;
+          } else {
+            return `<div style="margin: 0; padding: 15px; background: #fff; border-left: 4px solid ${primaryColor};">
+              <p style="margin: 0;">Répondez à cet email pour confirmer votre participation.</p>
+            </div>`;
+          }
+        };
 
         if (testMode) {
           // In test mode, show both versions for preview
@@ -5218,18 +5235,16 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
               </div>
               <div style="background: #ffebee; padding: 10px; border-radius: 8px;">
                 <p style="margin: 0 0 8px 0; font-size: 12px; color: #c62828; font-weight: bold;">❌ Version joueur SANS compte Espace Joueur :</p>
-                <div style="margin: 0; padding: 15px; background: #fff; border-left: 4px solid ${primaryColor};">
-                  <p style="margin: 0;">Confirmez votre inscription sur <a href="https://cdbhs.net" target="_blank" style="color: ${primaryColor}; font-weight: bold;">cdbhs.net</a> ou en répondant à cet email.</p>
-                </div>
+                ${buildSansCompteHtml()}
               </div>
             </div>`;
         } else {
-          // Check if player has an account
+          // Check if player has an account (org-scoped)
           const participantLicence = participant.licence || '';
           const hasAppAccount = await new Promise((resolve, reject) => {
             db.get(
-              `SELECT 1 FROM player_accounts WHERE REPLACE(licence, ' ', '') = REPLACE($1, ' ', '')`,
-              [participantLicence],
+              `SELECT 1 FROM player_accounts WHERE REPLACE(licence, ' ', '') = REPLACE($1, ' ', '') AND ($2::int IS NULL OR organization_id = $2)`,
+              [participantLicence, orgId],
               (err, row) => {
                 if (err) reject(err);
                 else resolve(!!row);
@@ -5244,9 +5259,7 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
               </a>
             </div>`;
           } else {
-            inscriptionMethodHtml = `<div style="margin: 15px 0; padding: 15px; background: #fff; border-left: 4px solid ${primaryColor};">
-              <p style="margin: 0;">Confirmez votre inscription sur <a href="https://cdbhs.net" target="_blank" style="color: ${primaryColor}; font-weight: bold;">cdbhs.net</a> ou en répondant à cet email.</p>
-            </div>`;
+            inscriptionMethodHtml = buildSansCompteHtml();
           }
         }
 

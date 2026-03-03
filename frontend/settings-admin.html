@@ -640,6 +640,21 @@
         </small>
       </div>
 
+      <!-- External Inscription Toggle -->
+      <div style="margin-top: 25px; padding-top: 20px; border-top: 1px solid #eee;">
+        <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
+          <input type="checkbox" id="enableExternalInscription" style="width: 20px; height: 20px; cursor: pointer;" onchange="document.getElementById('externalInscriptionUrlGroup').style.display = this.checked ? 'block' : 'none';">
+          <span style="font-weight: 500;">Activer le lien d'inscription externe</span>
+        </label>
+        <small style="color: #666; margin-left: 32px; display: block; margin-top: 4px;">
+          Affiche un lien vers un site externe dans les emails de relance pour les joueurs sans compte Espace Joueur. Si désactivé, les joueurs sont invités à répondre par email.
+        </small>
+        <div id="externalInscriptionUrlGroup" style="display: none; margin-top: 12px; margin-left: 32px;">
+          <label style="display: block; margin-bottom: 6px; font-weight: 500; font-size: 14px;">URL du site d'inscription :</label>
+          <input type="url" id="externalInscriptionUrl" placeholder="ex: https://moncomite.fr" style="width: 100%; max-width: 400px; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+        </div>
+      </div>
+
       <!-- Logo Upload -->
       <div style="margin-top: 25px; padding-top: 20px; border-top: 1px solid #eee;">
         <label style="display: block; margin-bottom: 8px; font-weight: 500;">Logo de l'organisation (pour les emails) :</label>
@@ -2992,6 +3007,12 @@
           const csvEnabled = settings.enable_csv_imports !== '0';
           document.getElementById('enableCsvImports').checked = csvEnabled;
 
+          // Load external inscription toggle
+          const extEnabled = settings.external_inscription_enabled === 'true';
+          document.getElementById('enableExternalInscription').checked = extEnabled;
+          document.getElementById('externalInscriptionUrlGroup').style.display = extEnabled ? 'block' : 'none';
+          document.getElementById('externalInscriptionUrl').value = settings.external_inscription_url || '';
+
           // Load header logo size
           const logoSize = parseInt(settings.header_logo_size) || 48;
           document.getElementById('headerLogoSize').value = logoSize;
@@ -3114,7 +3135,9 @@
             organization_short_name: document.getElementById('organizationShortName').value.trim(),
             summary_email: email,
             header_logo_size: document.getElementById('headerLogoSize').value,
-            enable_csv_imports: document.getElementById('enableCsvImports').checked ? '1' : '0'
+            enable_csv_imports: document.getElementById('enableCsvImports').checked ? '1' : '0',
+            external_inscription_enabled: document.getElementById('enableExternalInscription').checked ? 'true' : 'false',
+            external_inscription_url: document.getElementById('externalInscriptionUrl').value.trim()
           })
         });
 

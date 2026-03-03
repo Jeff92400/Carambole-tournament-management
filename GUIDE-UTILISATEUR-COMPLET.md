@@ -917,6 +917,15 @@ Configuration des informations générales de l'organisation.
 | Email de notification | Adresse recevant les notifications système |
 | Nom de l'expéditeur | Nom affiché comme expéditeur des emails |
 
+#### Inscription externe (emails de relance)
+
+Configure le comportement des emails de relance pour les joueurs qui n'ont pas de compte Espace Joueur :
+
+| Paramètre | Description |
+|-----------|-------------|
+| Activer le lien d'inscription externe | Si activé, les emails de relance incluent un lien vers un site externe (ex: site du comité) pour les joueurs sans compte Espace Joueur. Si désactivé, les joueurs sont simplement invités à répondre par email. |
+| URL du site d'inscription | Adresse du site externe vers lequel rediriger les joueurs (ex: https://moncomite.fr). Visible uniquement si le lien externe est activé. |
+
 #### Personnalisation visuelle
 
 | Paramètre | Description |

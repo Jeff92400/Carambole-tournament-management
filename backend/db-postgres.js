@@ -1489,6 +1489,18 @@ async function initializeDatabase() {
       ON CONFLICT (organization_id, key) DO UPDATE SET value = EXCLUDED.value
     `);
 
+    // Seed external inscription settings for CDBHS (org #1)
+    await client.query(`
+      INSERT INTO organization_settings (organization_id, key, value)
+      VALUES (1, 'external_inscription_enabled', 'true')
+      ON CONFLICT (organization_id, key) DO NOTHING
+    `);
+    await client.query(`
+      INSERT INTO organization_settings (organization_id, key, value)
+      VALUES (1, 'external_inscription_url', 'https://cdbhs.net')
+      ON CONFLICT (organization_id, key) DO NOTHING
+    `);
+
     // Seed default welcome email template for CDB onboarding
     await client.query(`
       INSERT INTO organization_settings (organization_id, key, value)

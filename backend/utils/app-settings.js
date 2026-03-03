@@ -57,6 +57,10 @@ const defaults = {
   scoring_avg_tier_2: '2',
   scoring_avg_tier_3: '3',
 
+  // External inscription (for relance emails)
+  external_inscription_enabled: 'false',
+  external_inscription_url: '',
+
   // Privacy policy
   privacy_policy: ''
 };
