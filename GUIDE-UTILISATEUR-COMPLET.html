@@ -451,8 +451,12 @@
     <a href="#generer-poules">Générer les poules</a>
     <a href="#forfaits">Gestion des forfaits</a>
     <a href="#resultats">Résultats des tournois</a>
-    <a href="#import-journees" class="sub">Import mode Journées</a>
+    <a href="#resultats-2-modes" class="sub">Les 2 modes de qualification</a>
+    <a href="#import-standard" class="sub">Import — Mode Standard</a>
+    <a href="#import-journees" class="sub">Import — Mode Journées</a>
     <a href="#import-matchs-e2i" class="sub">Import Matchs E2i</a>
+    <a href="#phase-finale-bracket" class="sub">Phase Finale (Tableau)</a>
+    <a href="#ecran-resultats" class="sub">Écran de résultats</a>
     <a href="#resultats-externes">Résultats Externes</a>
     <a href="#liste-tournois">Liste des tournois</a>
 
@@ -754,23 +758,26 @@
     </table>
 
     <h3 id="classements-journees">Mode Journées Qualificatives</h3>
-    <p>En mode journées, l'affichage du classement est différent :</p>
+    <p>En mode journées, l'affichage du classement est basé sur les <strong>points de position</strong> (et non les points de match). Le tableau affiche les colonnes suivantes :</p>
     <table>
       <thead>
         <tr><th>Colonne</th><th>Description</th></tr>
       </thead>
       <tbody>
-        <tr><td>Position</td><td>Rang du joueur</td></tr>
-        <tr><td>Licence</td><td>Numéro de licence FFB</td></tr>
-        <tr><td>Joueur</td><td>Nom et prénom</td></tr>
+        <tr><td>Clt</td><td>Rang du joueur dans le classement saison</td></tr>
+        <tr><td>N°Licence</td><td>Numéro de licence FFB</td></tr>
+        <tr><td>Nom</td><td>Nom de famille</td></tr>
+        <tr><td>Prénom</td><td>Prénom (cliquable &rarr; historique du joueur)</td></tr>
         <tr><td>Club</td><td>Club du joueur</td></tr>
-        <tr><td>TQ1</td><td>Points du Tournoi Qualificatif 1</td></tr>
-        <tr><td>TQ2</td><td>Points du Tournoi Qualificatif 2</td></tr>
-        <tr><td>TQ3</td><td>Points du Tournoi Qualificatif 3</td></tr>
-        <tr><td>Bonus Moy.</td><td>Bonus moyenne au classement saisonnier &mdash; affiché uniquement si activé dans les paramètres (mode Journées)</td></tr>
-        <tr><td>Total</td><td>Score total (meilleurs résultats + bonus)</td></tr>
-        <tr><td>Moyenne</td><td>Moyenne générale</td></tr>
-        <tr><td>Meilleure Série</td><td>Meilleure série</td></tr>
+        <tr><td>J1, J2, J3</td><td>Score de chaque journée (Pts clt + Bonus). Scores retenus en <strong>gras</strong>, scores écartés <s>barrés</s>. « * » si les points n'ont pas encore été attribués, « - » si le tournoi n'a pas eu lieu.</td></tr>
+        <tr><td>Bonus Moy.</td><td>Bonus moyenne saison (0 à +3 selon la moyenne des tournois retenus). Affiché uniquement si activé dans les paramètres.</td></tr>
+        <tr><td>Total Top N</td><td>Somme des N meilleurs scores de journées + bonus moyenne saison</td></tr>
+        <tr><td>Moy. Gen. (arr.)</td><td>Moyenne générale arrondie en début de saison (si disponible)</td></tr>
+        <tr><td>Moy. J1, J2, J3</td><td>Moyenne du joueur pour chaque journée (si disponible)</td></tr>
+        <tr><td>Moy.G saison</td><td>Moyenne générale saison calculée sur les tournois retenus uniquement</td></tr>
+        <tr><td>Pts</td><td>Total des caramboles (tournois retenus)</td></tr>
+        <tr><td>Rep</td><td>Total des reprises (tournois retenus)</td></tr>
+        <tr><td>MS</td><td>Meilleure série de la saison</td></tr>
       </tbody>
     </table>
 
@@ -778,7 +785,7 @@
       <span class="screenshot-id">IMG-04</span>
       <span class="screenshot-icon">&#128247;</span>
       <span class="screenshot-label">Classements — Mode Journées</span>
-      <span class="screenshot-desc">Capture du classement en mode journées avec colonnes TQ1/TQ2/TQ3, scores retenus en gras et scores écartés barrés</span>
+      <span class="screenshot-desc">Capture du classement en mode journées avec colonnes J1/J2/J3, scores retenus en gras et scores écartés barrés, Total Top 2, moyennes par journée</span>
       <img src="screenshots/04-classements-journees.png" alt="Classements mode journées">
     </div>
 
@@ -786,16 +793,19 @@
       <strong>Scores retenus / écartés :</strong> Lorsque le paramètre « Meilleurs résultats retenus » est configuré (dans Paramètres &gt; Types de Tournoi), seuls les N meilleurs résultats comptent pour le classement. Les scores retenus sont affichés en <strong>gras</strong>, les scores écartés sont <s>barrés</s>. Cette fonctionnalité est disponible dans les deux modes (Standard et Journées).
     </div>
 
+    <h4>Classement pour la Finale de District</h4>
+    <p>En mode journées, lorsque tous les tournois qualificatifs de la saison ont été joués, un bouton <strong>« Classement pour la Finale de District »</strong> apparaît. Il permet de voir le classement final avec mise en évidence des joueurs qualifiés. Un bouton <strong>« Retour au classement saison »</strong> permet de revenir à la vue par défaut.</p>
+
     <h3>Mise en évidence des qualifiés</h3>
     <ul>
       <li>Les joueurs qualifiés pour la finale sont affichés sur fond vert</li>
-      <li>Indication du nombre de qualifiés : "6 premiers qualifiés pour la finale (21 joueurs classés)"</li>
+      <li>Indication du nombre de qualifiés : « 6 premiers qualifiés pour la finale (21 joueurs classés) »</li>
     </ul>
 
     <h3>Règle de qualification</h3>
     <ul>
-      <li>Moins de 9 participants sur la saison &rarr; 4 qualifiés pour la finale</li>
-      <li>9 participants ou plus &rarr; 6 qualifiés pour la finale</li>
+      <li>Le nombre de qualifiés est configurable dans Paramètres &gt; Qualification</li>
+      <li>Par défaut : moins de 9 participants sur la saison &rarr; 4 qualifiés, 9 ou plus &rarr; 6 qualifiés</li>
     </ul>
 
     <h3>Légende</h3>
@@ -1001,22 +1011,66 @@
     <p>Menu Compétitions > Résultats</p>
 
     <h3>Description</h3>
-    <p>Import des résultats des tournois terminés pour mise à jour des classements.</p>
+    <p>Import des résultats des tournois terminés pour mise à jour des classements. La page d'import comporte <strong>2 onglets</strong> : « Import Classements E2i » (import d'un fichier CSV récapitulatif) et « Import Matchs E2i » (import des fichiers de matchs individuels par phase).</p>
+
+    <!-- ---- Les 2 modes ---- -->
+    <h3 id="resultats-2-modes">Les 2 modes de qualification</h3>
+    <p>Le fonctionnement de l'import et de l'affichage des résultats dépend du <strong>mode de qualification</strong> configuré pour votre organisation (dans Paramètres > Mode de qualification) :</p>
+
+    <table>
+      <thead>
+        <tr><th></th><th>Mode Standard</th><th>Mode Journées Qualificatives</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Principe</strong></td>
+          <td>Les points de match sont cumulés sur les 3 tournois (T1+T2+T3). Le classement saison est basé sur le total des points de match.</td>
+          <td>Chaque tournoi donne un <strong>classement par position</strong> (1er, 2ème, ...) converti en <strong>points de classement</strong> via un barème. Le classement saison retient les N meilleurs scores sur M journées.</td>
+        </tr>
+        <tr>
+          <td><strong>Import recommandé</strong></td>
+          <td><strong>Onglet 1 — Import Classements E2i</strong><br>Un seul fichier CSV récapitulatif par tournoi.</td>
+          <td><strong>Onglet 2 — Import Matchs E2i</strong><br>Fichiers CSV de matchs individuels par phase (poules, demi-finales, finale, classements). Permet la détection automatique des phases et le calcul du classement final.</td>
+        </tr>
+        <tr>
+          <td><strong>Classement final du tournoi</strong></td>
+          <td>Trié par points de match (desc), puis moyenne, puis meilleure série.</td>
+          <td>Positions 1-4 déterminées par le tableau (SF &rarr; Finale/Petite Finale). Positions 5-N par les matchs de classement. Trié par position finale.</td>
+        </tr>
+        <tr>
+          <td><strong>Écran de résultats</strong></td>
+          <td>Colonnes : CLT, Licence, Joueur, Club, Pts Match, bonus (dynamiques), Total, Points, Reprises, Moyenne, MS.</td>
+          <td>Colonnes : CLT, Licence, Joueur, Club, Clt poule, Clt Finale, Pts clt, Bonus, Pts Clt Total, PM, Pts, R, MS, MGP, MPART.</td>
+        </tr>
+        <tr>
+          <td><strong>Classement saison</strong></td>
+          <td>Total des points de match cumulés sur T1+T2+T3 (+bonus si configuré).</td>
+          <td>Somme des N meilleurs scores de position (+bonus moyenne saison). Scores retenus en <strong>gras</strong>, écartés <s>barrés</s>.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="info-card">
+      <strong>Quel onglet utiliser ?</strong> L'onglet 1 (Import Classements) fonctionne pour les deux modes. L'onglet 2 (Import Matchs E2i) est plus précis et recommandé en mode journées car il détecte automatiquement les phases (poules, demi-finales, finales, classements) et calcule les positions finales en conséquence. En mode standard, l'onglet 2 fonctionne aussi (agrégation des matchs par joueur).
+    </div>
+
+    <!-- ---- Import Standard ---- -->
+    <h3 id="import-standard">Onglet 1 — Import Classements E2i (mode Standard)</h3>
 
     <div class="screenshot-placeholder">
       <span class="screenshot-id">IMG-11</span>
       <span class="screenshot-icon">&#128247;</span>
-      <span class="screenshot-label">Import des résultats</span>
-      <span class="screenshot-desc">Capture de la page d'import CSV avec la sélection du tournoi, la zone de dépôt du fichier et le tableau des résultats importés</span>
-      <img src="screenshots/11-resultats-import.png" alt="Import des résultats">
+      <span class="screenshot-label">Import Classements E2i — Mode Standard</span>
+      <span class="screenshot-desc">Capture de la page d'import CSV (onglet 1) avec la sélection de catégorie, la zone de dépôt du fichier et le tableau des résultats importés</span>
+      <img src="screenshots/11-resultats-import.png" alt="Import des résultats — mode standard">
     </div>
 
     <h4>Processus d'import</h4>
     <ol class="steps">
-      <li><strong>Sélectionner le tournoi :</strong> Choisir la catégorie (mode + niveau), le numéro de tournoi, la saison</li>
-      <li><strong>Préparer le fichier CSV :</strong> Format séparateur point-virgule (;). Colonnes attendues : Licence, Classement, Points, Reprises, Moyenne, Série</li>
-      <li><strong>Importer :</strong> Cliquer sur "Choisir un fichier", sélectionner le fichier CSV, cliquer sur "Importer"</li>
-      <li><strong>Vérification :</strong> Les résultats importés sont affichés et le classement saison est automatiquement recalculé. Un lien <strong>« Voir le détail du tournoi »</strong> permet d'accéder directement à la page de résultats du tournoi importé (points de match, moyenne, série, et points de position le cas échéant).</li>
+      <li><strong>Sélectionner le tournoi :</strong> Choisir le mode de jeu, le classement FFB (la catégorie se déduit automatiquement), le numéro de tournoi (T1, T2, T3, Finale) et la date.</li>
+      <li><strong>Préparer le fichier CSV :</strong> Format séparateur point-virgule (;). Colonnes attendues : Licence, Classement, Points, Reprises, Moyenne, Série.</li>
+      <li><strong>Importer :</strong> Glisser-déposer ou cliquer dans la zone de dépôt pour sélectionner le fichier CSV, puis cliquer sur « Enregistrer la compétition ».</li>
+      <li><strong>Vérification :</strong> Les résultats importés sont affichés et le classement saison est automatiquement recalculé. Un lien <strong>« Voir le détail du tournoi »</strong> permet d'accéder directement à la page de résultats.</li>
     </ol>
 
     <h4>Données importées par joueur</h4>
@@ -1029,57 +1083,175 @@
       <li>Meilleure série</li>
     </ul>
 
-    <h4 id="import-journees">Import en mode Journées Qualificatives</h4>
-    <p>En mode journées, l'import des résultats utilise le <strong>même fichier CSV unique</strong> que le mode standard. Il n'y a pas de procédure d'import spécifique : le processus est identique à celui décrit ci-dessus.</p>
-
-    <h5>Différence avec le mode standard</h5>
-    <p>La seule différence concerne l'attribution automatique des <strong>points de position</strong> :</p>
-    <ol class="steps">
-      <li><strong>Importer le fichier CSV :</strong> Même fichier CSV que pour le mode standard.</li>
-      <li><strong>Attribution automatique :</strong> À l'enregistrement, le système classe les joueurs selon leurs points de match (puis moyenne en cas d'égalité) et attribue automatiquement les points de position correspondants, selon le barème configuré dans <strong>Paramètres &gt; Types de Tournoi &gt; Points par position</strong>. Tous les tournois de la catégorie sont recalculés à chaque import.</li>
-      <li><strong>Recalcul des classements :</strong> Les classements de saison sont recalculés automatiquement après l'import, en retenant les N meilleurs scores de points de position sur M journées.</li>
-      <li><strong>Consultation du détail :</strong> Après l'import, cliquer sur <strong>« Voir le détail du tournoi »</strong> pour consulter la page de résultats. En mode journées, une colonne <strong>« Pts Position »</strong> est affichée en plus des colonnes habituelles (points de match, caramboles, reprises, moyenne, série).</li>
-    </ol>
-
     <div class="info-card accent">
-      <strong>Points de position :</strong> Le barème de points par position est configurable dans Paramètres &gt; Types de Tournoi. Par exemple : 1er &rarr; 10 pts, 2e &rarr; 8 pts, 3e &rarr; 6 pts, etc. Ce barème est appliqué automatiquement à chaque import de résultats en mode journées. La position finale est déterminée par le <strong>numéro de phase le plus élevé</strong> atteint par le joueur (un joueur ayant atteint la phase 2 est toujours classé devant un joueur resté en phase 1), puis par les points de match et la moyenne en cas d'égalité de phase. La colonne « Pts Position » apparaît automatiquement sur la page de résultats du tournoi.
+      <strong>Mode Journées avec l'onglet 1 :</strong> Si votre organisation est en mode journées, l'import via l'onglet 1 fonctionne aussi. Le système classe les joueurs par points de match (puis moyenne en cas d'égalité) et attribue automatiquement les <strong>points de position</strong> selon le barème configuré dans <strong>Paramètres &gt; Types de Tournoi &gt; Points par position</strong>. Cependant, cette méthode ne distingue pas les phases (poules vs classements vs tableau) &mdash; pour un classement plus précis en mode journées, utilisez l'onglet 2 (Import Matchs E2i).
     </div>
 
-    <h4 id="import-matchs-e2i">Import des matchs E2i (CSV matchs individuels)</h4>
-    <p>L'onglet <strong>« Import Matchs E2i »</strong> permet d'importer directement les fichiers CSV de matchs individuels exportés depuis <strong>telemat.org / E2i</strong>. Cette méthode remplace l'utilisation d'Excel/Power Query pour calculer les résultats.</p>
+    <!-- ---- Import Journées / Matchs E2i ---- -->
+    <h3 id="import-journees">Onglet 2 — Import Matchs E2i (recommandé en mode Journées)</h3>
 
-    <h5>Format attendu</h5>
+    <p>L'onglet <strong>« Import Matchs E2i »</strong> permet d'importer directement les fichiers CSV de matchs individuels exportés depuis <strong>telemat.org / E2i</strong>. Cette méthode est recommandée en mode journées car elle détecte automatiquement les phases de la journée et calcule le classement final en conséquence.</p>
+
+    <div class="screenshot-placeholder">
+      <span class="screenshot-id">IMG-11B</span>
+      <span class="screenshot-icon">&#128247;</span>
+      <span class="screenshot-label">Import Matchs E2i — Mode Journées</span>
+      <span class="screenshot-desc">Capture de l'onglet Import Matchs E2i avec les 4 zones de dépôt par phase (Poules, Demi-finales, Finale/Petite Finale, Classement)</span>
+      <img src="screenshots/11b-import-matchs-e2i.png" alt="Import matchs E2i — mode journées">
+    </div>
+
+    <h4 id="import-matchs-e2i">Format attendu</h4>
     <p>Les fichiers CSV sont au format E2i (séparateur point-virgule, 20 colonnes) :</p>
     <p style="font-size: 12px; color: #666; font-family: monospace; background: #f5f5f5; padding: 8px; border-radius: 4px; overflow-x: auto;">
       No Phase;Date match;Billard;Poule;Licence J1;Joueur 1;Pts J1;Rep J1;Ser J1;Pts Match J1;Moy J1;Licence J2;Joueur 2;Pts J2;Rep J2;Ser J2;Pts Match J2;Moy J2;NOMBD;Mode de jeu
     </p>
     <p>Chaque fichier correspond à une poule ou phase (POULE A, POULE B, DEMI-FINALE, Classement 07-08, etc.).</p>
 
-    <h5>Processus d'import</h5>
+    <h4>Processus d'import</h4>
     <ol class="steps">
       <li><strong>Sélectionner l'onglet « Import Matchs E2i »</strong> sur la page d'import de compétition.</li>
       <li><strong>Choisir la catégorie :</strong> Mode de jeu, classement FFB, numéro du tournoi, date.</li>
-      <li><strong>Ajouter les fichiers CSV :</strong> La page affiche des zones de dépôt séparées par phase : <strong>Poules</strong> (toujours visible), <strong>Demi-finales</strong>, <strong>Finale / Petite Finale</strong> et <strong>Classement</strong> (visibles en mode journées). Déposez chaque fichier CSV dans la zone correspondant à sa phase. Les fichiers sélectionnés apparaissent sous chaque zone.</li>
-      <li><strong>Aperçu :</strong> Cliquer sur « Aperçu des résultats » pour voir le tableau calculé avant import. Le tableau affiche pour chaque joueur : classement final (CLT), classement poule (Clt poule), parties menées (PM), points, reprises, meilleure série (MS), moyenne générale (MGP), meilleure partie (MPART), points de match, et si applicable les points de classement et bonus.</li>
+      <li><strong>Ajouter les fichiers CSV par phase :</strong> La page affiche des zones de dépôt séparées :
+        <ul>
+          <li><strong>Poules</strong> &mdash; toujours visible, fichiers des matchs de poule (POULE A, POULE B, etc.)</li>
+          <li><strong>Demi-finales</strong> &mdash; visible en mode journées</li>
+          <li><strong>Finale / Petite Finale</strong> &mdash; visible en mode journées</li>
+          <li><strong>Classement</strong> &mdash; visible en mode journées, fichiers de type « Classement 05-06 », « Classement 07-08 »</li>
+        </ul>
+        Déposez chaque fichier CSV dans la zone correspondant à sa phase.
+      </li>
+      <li><strong>Aperçu :</strong> Cliquer sur « Aperçu des résultats » pour vérifier le tableau calculé avant import. Le tableau affiche pour chaque joueur : CLT, Clt poule, PM, Pts, Reprises, MS, MGP, MPART, et en mode journées les Pts clt et bonus.</li>
       <li><strong>Sauvegarder :</strong> Cliquer sur « Sauvegarder les résultats ». Les résultats sont enregistrés, les bonus calculés, et les classements de saison recalculés automatiquement.</li>
     </ol>
 
-    <h5>Calculs effectués automatiquement</h5>
+    <h4>Calculs effectués automatiquement</h4>
     <ul>
-      <li><strong>Agrégation :</strong> Les matchs individuels sont agrégés par joueur (total points, reprises, meilleure série, moyenne, nombre de matchs joués).</li>
-      <li><strong>Classement par poule :</strong> Les joueurs sont classés au sein de chaque poule par points de match puis moyenne.</li>
-      <li><strong>Classement final :</strong> Si des phases de classement (DEMI-FINALE, FINALE, Classement 07-08) sont présentes, elles déterminent le classement final. Pour les joueurs sans match de classement, le <strong>numéro de phase</strong> (première colonne du CSV E2i) est le critère principal : un joueur ayant atteint une phase supérieure est toujours classé devant un joueur resté dans une phase inférieure, quel que soit son score. En cas d'égalité de phase, la confrontation directe puis la performance globale départagent. Si aucune phase de classement n'est présente, le classement est calculé par interclassement des positions de poule.</li>
-      <li><strong>Meilleure partie (MPART) :</strong> La meilleure moyenne sur un seul match est calculée pour chaque joueur.</li>
-      <li><strong>Points de position :</strong> En mode journées, les points de position sont attribués selon le barème configuré.</li>
-      <li><strong>Bonus et classements :</strong> Tous les bonus (barème, moyenne) et les classements de saison sont recalculés après l'import.</li>
+      <li><strong>Agrégation :</strong> Les matchs individuels sont agrégés par joueur (total points, reprises, meilleure série, moyenne, nombre de matchs).</li>
+      <li><strong>Classement par poule :</strong> Les joueurs sont classés au sein de chaque poule par PM (desc) &rarr; Moyenne (desc) &rarr; MS (desc).</li>
+      <li><strong>Classement final :</strong> Si des phases de classement (DEMI-FINALE, FINALE, Classement 07-08) sont présentes, elles déterminent le classement final. Positions 1-4 par le tableau (SF &rarr; F/PF), positions 5-N par les matchs de classement. Pour les joueurs sans match de classement, le <strong>numéro de phase</strong> (première colonne du CSV E2i) est le critère principal : un joueur ayant atteint une phase supérieure est toujours classé devant un joueur d'une phase inférieure. En cas d'égalité de phase : confrontation directe, puis classement de poule, puis performance globale. Si aucune phase de classement n'est présente, le classement est calculé par interclassement des positions de poule.</li>
+      <li><strong>MPART (Meilleure Partie) :</strong> La meilleure moyenne sur un seul match, calculée sur les matchs gagnés.</li>
+      <li><strong>Points de position (mode journées) :</strong> Attribués automatiquement selon le barème configuré (Paramètres &gt; Types de Tournoi &gt; Points par position).</li>
+      <li><strong>Bonus moyenne (mode journées) :</strong> Bonus de 0 à +3 points selon la moyenne du joueur par rapport aux seuils de sa catégorie (mini, milieu, maxi).</li>
+      <li><strong>Recalcul global :</strong> Tous les bonus et les classements de saison sont recalculés après chaque import.</li>
     </ul>
-
-    <h5>Détail des matchs</h5>
-    <p>Après l'import, la page de résultats du tournoi affiche une section repliable <strong>« Détail des matchs »</strong> qui liste tous les matchs individuels par poule, avec les scores de chaque joueur.</p>
 
     <div class="info-card accent">
       <strong>Dégradation du dernier joueur :</strong> En mode journées, une option dans <strong>Paramètres &gt; Types de Tournoi &gt; Points par position</strong> permet d'activer la dégradation du dernier joueur : le dernier classé reçoit les points de la position N+1 (par exemple, s'il y a 10 joueurs, le 10e reçoit les points du 11e).
     </div>
+
+    <!-- ---- Phase Finale (Bracket) ---- -->
+    <h3 id="phase-finale-bracket">Phase Finale (Tableau) &mdash; Mode Journées uniquement</h3>
+
+    <p>En mode journées, après l'import des résultats de poules, une page dédiée permet de gérer la <strong>phase finale</strong> de la journée : demi-finales, finale, petite finale et matchs de classement.</p>
+
+    <div class="screenshot-placeholder">
+      <span class="screenshot-id">IMG-11C</span>
+      <span class="screenshot-icon">&#128247;</span>
+      <span class="screenshot-label">Phase finale — Tableau et matchs de classement</span>
+      <span class="screenshot-desc">Capture de la page Phase Finale avec les joueurs qualifiés, les demi-finales, finale/petite finale, et les matchs de classement</span>
+      <img src="screenshots/11c-phase-finale-bracket.png" alt="Phase finale — Bracket">
+    </div>
+
+    <h4>Accès</h4>
+    <p>Depuis la page de résultats d'un tournoi en mode journées, ou directement via l'URL <code>tournament-bracket.html?id=X</code>.</p>
+
+    <h4>Fonctionnement</h4>
+    <ol class="steps">
+      <li><strong>Génération du tableau :</strong> Cliquer sur « Générer le tableau ». Le système identifie les 4 meilleurs joueurs des poules (qualification par PM &rarr; Moyenne &rarr; MS) et génère automatiquement les matchs :
+        <ul>
+          <li><strong>Demi-finale 1 :</strong> 1er qualifié vs 4ème qualifié</li>
+          <li><strong>Demi-finale 2 :</strong> 2ème qualifié vs 3ème qualifié</li>
+          <li><strong>Matchs de classement (CL1) :</strong> Les joueurs non qualifiés sont appariés par paires du bas vers le haut</li>
+        </ul>
+      </li>
+      <li><strong>Saisie des résultats :</strong> Pour chaque match, saisir les points et reprises de chaque joueur, puis cliquer sur « Valider ». Lorsque les deux demi-finales sont complètes, la <strong>Finale</strong> et la <strong>Petite Finale</strong> sont générées automatiquement.</li>
+      <li><strong>Classement Tour 2 (optionnel) :</strong> Après le tour 1 de classement, un tour 2 de matchs croisés est généré si activé dans les paramètres.</li>
+      <li><strong>Validation finale :</strong> Lorsque tous les matchs sont joués, cliquer sur « Valider les positions ». Le système attribue les positions finales (1-N), les points de position, et recalcule le classement saison.</li>
+    </ol>
+
+    <h4>Cas particulier : poule unique</h4>
+    <p>Si le nombre de joueurs est inférieur au seuil configuré (par défaut 6), le tournoi se déroule en <strong>poule unique</strong> (tous contre tous). Pas de tableau ni de matchs de classement. Le classement final est directement issu de la poule.</p>
+
+    <h4>Joueur exempt (bye)</h4>
+    <p>Si le nombre de joueurs non qualifiés est impair, le joueur le mieux classé est <strong>exempt</strong> au tour 1 : il est classé directement à la position suivant les qualifiés (5ème par défaut).</p>
+
+    <!-- ---- Écran de résultats ---- -->
+    <h3 id="ecran-resultats">Écran de résultats d'un tournoi</h3>
+
+    <p>La page de résultats d'un tournoi s'affiche en cliquant sur l'icône <strong>œil</strong> dans la liste des tournois, ou via le lien « Voir le détail » après un import. Le titre indique le numéro du tournoi (ex. « Classement du Tournoi 2 » ou « Classement de la Finale Départementale »).</p>
+
+    <h4>En-tête</h4>
+    <p>L'en-tête affiche : la <strong>saison</strong>, la <strong>date</strong>, le <strong>lieu</strong> et le nombre de <strong>participants</strong>. Si le bonus moyenne est activé, un bandeau d'information résume les paliers du bonus (mini, milieu, maxi et points attribués).</p>
+
+    <h4>Mode Standard — Colonnes du tableau</h4>
+    <div class="screenshot-placeholder">
+      <span class="screenshot-id">IMG-11D</span>
+      <span class="screenshot-icon">&#128247;</span>
+      <span class="screenshot-label">Résultats d'un tournoi — Mode Standard</span>
+      <span class="screenshot-desc">Capture de l'écran de résultats en mode standard avec les colonnes CLT, Licence, Joueur, Club, Pts Match, Bonus, Total, Points, Reprises, Moyenne, MS</span>
+      <img src="screenshots/11d-resultats-standard.png" alt="Résultats tournoi — mode standard">
+    </div>
+    <table>
+      <thead>
+        <tr><th>Colonne</th><th>Description</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>CLT</td><td>Classement final dans le tournoi</td></tr>
+        <tr><td>Licence</td><td>Numéro de licence FFB</td></tr>
+        <tr><td>Joueur</td><td>Nom et prénom (cliquable &rarr; historique du joueur)</td></tr>
+        <tr><td>Club</td><td>Club du joueur (avec logo si disponible)</td></tr>
+        <tr><td>Clt poule</td><td>Classement dans la poule (si import E2i matchs)</td></tr>
+        <tr><td>Pts Match</td><td>Total des points de match</td></tr>
+        <tr><td>Bonus</td><td>Colonnes de bonus dynamiques (si configurées dans le barème)</td></tr>
+        <tr><td>Total</td><td>Total points de match + bonus</td></tr>
+        <tr><td>PM</td><td>Parties menées (si disponible)</td></tr>
+        <tr><td>Points</td><td>Total des caramboles</td></tr>
+        <tr><td>Reprises</td><td>Total des reprises jouées</td></tr>
+        <tr><td>Moyenne</td><td>Moyenne générale (points/reprises)</td></tr>
+        <tr><td>MS</td><td>Meilleure série</td></tr>
+      </tbody>
+    </table>
+
+    <h4>Mode Journées — Colonnes du tableau</h4>
+    <div class="screenshot-placeholder">
+      <span class="screenshot-id">IMG-11E</span>
+      <span class="screenshot-icon">&#128247;</span>
+      <span class="screenshot-label">Résultats d'un tournoi — Mode Journées</span>
+      <span class="screenshot-desc">Capture de l'écran de résultats en mode journées avec les colonnes CLT, Licence, Joueur, Club, Clt poule, Clt Finale, Pts clt, bonus, Pts Clt Total, PM, Pts, R, MS, MGP, MPART</span>
+      <img src="screenshots/11e-resultats-journees.png" alt="Résultats tournoi — mode journées">
+    </div>
+    <table>
+      <thead>
+        <tr><th>Colonne</th><th>Description</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>CLT</td><td>Position finale dans le tournoi (déterminée par le tableau + matchs de classement)</td></tr>
+        <tr><td>Licence</td><td>Numéro de licence FFB</td></tr>
+        <tr><td>Joueur</td><td>Nom et prénom (cliquable &rarr; historique du joueur)</td></tr>
+        <tr><td>Club</td><td>Club du joueur (avec logo si disponible)</td></tr>
+        <tr><td>Clt poule</td><td>Classement dans la poule de qualification (matin)</td></tr>
+        <tr><td>Clt Finale</td><td>Position finale issue du tableau et des matchs de classement (après-midi)</td></tr>
+        <tr><td>Pts clt</td><td>Points de classement attribués selon le barème de position (ex. 1er = 34 pts)</td></tr>
+        <tr><td>Bonus</td><td>Bonus moyenne (0 à +3 selon la moyenne par rapport aux seuils de la catégorie)</td></tr>
+        <tr><td>Pts Clt Total</td><td>Score total du tournoi = Pts clt + Bonus</td></tr>
+        <tr><td>PM</td><td>Points de match cumulés (toutes phases)</td></tr>
+        <tr><td>Pts</td><td>Total des caramboles</td></tr>
+        <tr><td>R</td><td>Total des reprises</td></tr>
+        <tr><td>MS</td><td>Meilleure série</td></tr>
+        <tr><td>MGP</td><td>Moyenne Générale du Parcours (points/reprises sur l'ensemble du tournoi)</td></tr>
+        <tr><td>MPART</td><td>Meilleure Partie (meilleure moyenne sur un seul match gagné)</td></tr>
+      </tbody>
+    </table>
+
+    <h4>Détail des matchs (Import E2i uniquement)</h4>
+    <p>Lorsque les résultats proviennent d'un import E2i (onglet 2), une section repliable <strong>« Détail des matchs »</strong> apparaît sous le tableau. Elle liste tous les matchs individuels par poule, avec les scores détaillés de chaque joueur. Le gagnant est affiché en vert et en gras.</p>
+
+    <h4>Boutons d'action</h4>
+    <ul>
+      <li><strong>Voir le classement de la catégorie :</strong> Lien direct vers le classement saison de la catégorie</li>
+      <li><strong>Exporter en Excel :</strong> Télécharge les résultats au format Excel</li>
+      <li><strong>Recalculer bonus &amp; classements :</strong> Force le recalcul de tous les bonus et du classement saison (utile après modification de paramètres)</li>
+    </ul>
   </section>
 
   <hr>
@@ -1113,22 +1285,46 @@
     <p>Menu Compétitions > Liste des tournois</p>
 
     <h3>Description</h3>
-    <p>Vue d'ensemble de tous les tournois internes (T1, T2, T3, Finale) avec leurs résultats.</p>
+    <p>Vue d'ensemble de tous les tournois internes (T1, T2, T3, Finale) avec leurs résultats. Cette page est identique quel que soit le mode de qualification (Standard ou Journées).</p>
 
     <h3>Filtres</h3>
     <ul>
-      <li>Par saison</li>
-      <li>Par mode de jeu</li>
-      <li>Par niveau</li>
+      <li><strong>Recherche</strong> : Recherche libre par nom de catégorie</li>
+      <li><strong>Mode de jeu</strong> : Libre, Cadre, Bande, 3 Bandes</li>
+      <li><strong>Classement FFB</strong> : N1, N2, R1, R2, etc.</li>
+      <li><strong>Saison</strong> : Saisons disponibles</li>
+      <li><strong>Numéro de tournoi</strong> : 1, 2, 3, Finale</li>
     </ul>
 
     <h3>Informations affichées</h3>
+    <table>
+      <thead>
+        <tr><th>Colonne</th><th>Description</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Catégorie</td><td>Nom de la catégorie (ex. Bande R1)</td></tr>
+        <tr><td>Tournoi</td><td>Numéro ou nom du tournoi (T1, T2, T3, Finale Départementale)</td></tr>
+        <tr><td>Saison</td><td>Saison du tournoi (ex. 2025-2026)</td></tr>
+        <tr><td>Participants</td><td>Nombre de joueurs ayant participé</td></tr>
+        <tr><td>Date</td><td>Date du tournoi</td></tr>
+        <tr><td>Lieu</td><td>Lieu du tournoi (et lieu secondaire si tournoi réparti sur 2 sites)</td></tr>
+        <tr><td>Actions</td><td>Voir les résultats, modifier, statut d'envoi email, supprimer</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Actions disponibles</h3>
     <ul>
-      <li>Catégorie</li>
-      <li>Numéro de tournoi</li>
-      <li>Date</li>
-      <li>Nombre de participants</li>
-      <li>Statut (Planifié, Terminé)</li>
+      <li><strong>Voir les résultats</strong> (icône œil) : Ouvre la page de résultats détaillés du tournoi</li>
+      <li><strong>Modifier</strong> (icône crayon, admin) : Permet de modifier le lieu et le statut d'envoi des résultats</li>
+      <li><strong>Statut email</strong> (icône email, admin) : Indique si les résultats ont été envoyés par email. Cliquer pour basculer le statut ou accéder à l'envoi des résultats.</li>
+      <li><strong>Supprimer</strong> (icône poubelle, admin) : Supprime le tournoi et recalcule les classements</li>
+    </ul>
+
+    <h3>Boutons en haut de page</h3>
+    <ul>
+      <li><strong>Exporter Excel :</strong> Exporte la liste complète des tournois au format Excel</li>
+      <li><strong>Tout marquer envoyé :</strong> Marque tous les tournois comme « résultats envoyés » en un clic</li>
+      <li><strong>Importer un Tournoi :</strong> Lien vers la page d'import de résultats (admin uniquement)</li>
     </ul>
   </section>
 
@@ -2221,8 +2417,32 @@
         <tr>
           <td>IMG-11</td>
           <td><code>11-resultats-import.png</code></td>
-          <td>Import des résultats</td>
-          <td>Menu Compétitions > Résultats. Montrer la sélection du tournoi et/ou le tableau après import.</td>
+          <td>Import Classements E2i (onglet 1)</td>
+          <td>Menu Compétitions > Résultats > onglet « Import Classements E2i ». Montrer la sélection de catégorie et la zone de dépôt du fichier CSV.</td>
+        </tr>
+        <tr>
+          <td>IMG-11B</td>
+          <td><code>11b-import-matchs-e2i.png</code></td>
+          <td>Import Matchs E2i (onglet 2)</td>
+          <td>Onglet « Import Matchs E2i » avec les 4 zones de dépôt par phase (Poules, Demi-finales, Finale/Petite Finale, Classement).</td>
+        </tr>
+        <tr>
+          <td>IMG-11C</td>
+          <td><code>11c-phase-finale-bracket.png</code></td>
+          <td>Phase Finale (Tableau)</td>
+          <td>Page tournament-bracket.html après génération : joueurs qualifiés, demi-finales, finale/petite finale, matchs de classement.</td>
+        </tr>
+        <tr>
+          <td>IMG-11D</td>
+          <td><code>11d-resultats-standard.png</code></td>
+          <td>Résultats d'un tournoi — Mode Standard</td>
+          <td>Page de résultats d'un tournoi en mode standard : colonnes CLT, Licence, Joueur, Club, Pts Match, Bonus, Total, Points, Reprises, Moyenne, MS.</td>
+        </tr>
+        <tr>
+          <td>IMG-11E</td>
+          <td><code>11e-resultats-journees.png</code></td>
+          <td>Résultats d'un tournoi — Mode Journées</td>
+          <td>Page de résultats d'un tournoi en mode journées : colonnes CLT, Clt poule, Clt Finale, Pts clt, bonus, Pts Clt Total, PM, Pts, R, MS, MGP, MPART.</td>
         </tr>
         <tr>
           <td>IMG-12</td>
