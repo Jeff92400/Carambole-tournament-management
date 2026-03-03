@@ -408,6 +408,50 @@ function generateMatchSchedule(pouleSize) {
   return [];
 }
 
+// Build and sort finale matches: same-club matches are placed first
+function buildFinaleMatches(pouleSize, poule) {
+  let matches = [];
+  let tableInfo = '';
+
+  if (pouleSize === 3) {
+    tableInfo = '(1 table)';
+    matches = [
+      { p1: 1, p2: 2 },
+      { p1: 1, p2: 3 },
+      { p1: 2, p2: 3 }
+    ];
+  } else if (pouleSize === 4) {
+    tableInfo = '(2 tables)';
+    matches = [
+      { p1: 2, p2: 3 },
+      { p1: 1, p2: 4 },
+      { p1: 3, p2: 4 },
+      { p1: 1, p2: 2 },
+      { p1: 1, p2: 3 },
+      { p1: 2, p2: 4 }
+    ];
+  } else if (pouleSize === 6) {
+    tableInfo = '(3 tables)';
+    matches = [
+      { p1: 1, p2: 6 }, { p1: 2, p2: 5 }, { p1: 3, p2: 4 },
+      { p1: 2, p2: 3 }, { p1: 4, p2: 6 }, { p1: 1, p2: 5 },
+      { p1: 1, p2: 4 }, { p1: 3, p2: 5 }, { p1: 2, p2: 6 },
+      { p1: 5, p2: 6 }, { p1: 1, p2: 3 }, { p1: 2, p2: 4 },
+      { p1: 4, p2: 5 }, { p1: 1, p2: 2 }, { p1: 3, p2: 6 }
+    ];
+  }
+
+  // Sort: same-club matches first (stable sort preserves relative order)
+  const isSameClub = (m) => {
+    const c1 = (poule.players[m.p1 - 1]?.club || '').toUpperCase().trim();
+    const c2 = (poule.players[m.p2 - 1]?.club || '').toUpperCase().trim();
+    return c1 && c2 && c1 === c2;
+  };
+  matches.sort((a, b) => (isSameClub(a) ? 0 : 1) - (isSameClub(b) ? 0 : 1));
+
+  return { matches, tableInfo };
+}
+
 // Generate PDF convocation for a specific player - includes ALL poules
 async function generatePlayerConvocationPDF(player, tournamentInfo, allPoules, locations, gameParams, selectedDistance, rankingData = {}, brandingSettings = {}) {
   // Fetch logo before entering Promise to avoid async issues
@@ -618,46 +662,10 @@ async function generatePlayerConvocationPDF(player, tournamentInfo, allPoules, l
         if (isFinale && (pouleSize === 3 || pouleSize === 4 || pouleSize === 6)) {
           y += 8;
 
-          // Define finale matches based on player count
-          let finaleMatches = [];
-          let tableInfo = '';
+          const { matches: finaleMatches, tableInfo } = buildFinaleMatches(pouleSize, poule);
 
-          if (pouleSize === 3) {
-            tableInfo = '(1 table)';
-            finaleMatches = [
-              { p1: 1, p2: 2 },
-              { p1: 1, p2: 3 },
-              { p1: 2, p2: 3 }
-            ];
-          } else if (pouleSize === 4) {
-            tableInfo = '(2 tables)';
-            finaleMatches = [
-              { p1: 2, p2: 3 },
-              { p1: 1, p2: 4 },
-              { p1: 3, p2: 4 },
-              { p1: 1, p2: 2 },
-              { p1: 1, p2: 3 },
-              { p1: 2, p2: 4 }
-            ];
-          } else if (pouleSize === 6) {
-            tableInfo = '(3 tables)';
-            // 6 players: round-robin across 3 tables in rounds
-            finaleMatches = [
-              // Round 1
-              { p1: 1, p2: 6, table: 1 }, { p1: 2, p2: 5, table: 2 }, { p1: 3, p2: 4, table: 3 },
-              // Round 2
-              { p1: 2, p2: 3, table: 1 }, { p1: 4, p2: 6, table: 2 }, { p1: 1, p2: 5, table: 3 },
-              // Round 3
-              { p1: 1, p2: 4, table: 1 }, { p1: 3, p2: 5, table: 2 }, { p1: 2, p2: 6, table: 3 },
-              // Round 4
-              { p1: 5, p2: 6, table: 1 }, { p1: 1, p2: 3, table: 2 }, { p1: 2, p2: 4, table: 3 },
-              // Round 5
-              { p1: 4, p2: 5, table: 1 }, { p1: 1, p2: 2, table: 2 }, { p1: 3, p2: 6, table: 3 }
-            ];
-          }
-
-          // Calculate height needed
-          const matchScheduleHeight = 25 + (finaleMatches.length * 14);
+          // Calculate height needed (matches + same-club note)
+          const matchScheduleHeight = 25 + (finaleMatches.length * 14) + 20;
           if (y + matchScheduleHeight > doc.page.height - 60) {
             doc.addPage();
             y = 40;
@@ -669,7 +677,7 @@ async function generatePlayerConvocationPDF(player, tournamentInfo, allPoules, l
              .text(`PROGRAMME DES MATCHS ${tableInfo} - Tous contre tous`, 50, y + 5, { width: pageWidth - 20 });
           y += 22;
 
-          // Match rows
+          // Match rows (sequential numbering — same-club reorder breaks round structure)
           finaleMatches.forEach((match, idx) => {
             const bgColor = idx % 2 === 0 ? '#FFFFFF' : '#F5F5F5';
             doc.rect(40, y, pageWidth, 14).fill(bgColor);
@@ -680,12 +688,17 @@ async function generatePlayerConvocationPDF(player, tournamentInfo, allPoules, l
             const p2Name = p2 ? `${p2.first_name || ''} ${(p2.last_name || '').toUpperCase()}`.trim() : `Joueur ${match.p2}`;
 
             doc.fillColor('#666666').fontSize(8).font('Helvetica');
-            const matchLabel = match.table ? `T${match.table}:` : `${idx + 1}:`;
-            doc.text(matchLabel, 50, y + 3, { width: 25 });
+            doc.text(`${idx + 1}:`, 50, y + 3, { width: 25 });
             doc.font('Helvetica').fillColor('#333333')
                .text(`${p1Name}  vs  ${p2Name}`, 80, y + 3, { width: 400 });
             y += 14;
           });
+
+          // Same-club priority note
+          y += 5;
+          doc.fillColor('#666666').fontSize(8).font('Helvetica-Oblique')
+             .text("Les joueurs d'un même club jouent en priorité entre eux en début de finale.", 40, y, { width: pageWidth, align: 'center' });
+          y += 12;
 
         } else if (pouleSize === 4 || pouleSize === 5) {
           // Regular tournament: knockout-style matches
@@ -984,46 +997,10 @@ async function generateSummaryConvocationPDF(tournamentInfo, allPoules, location
         if (isFinale && (pouleSize === 3 || pouleSize === 4 || pouleSize === 6)) {
           y += 8;
 
-          // Define finale matches based on player count
-          let finaleMatches = [];
-          let tableInfo = '';
+          const { matches: finaleMatches, tableInfo } = buildFinaleMatches(pouleSize, poule);
 
-          if (pouleSize === 3) {
-            tableInfo = '(1 table)';
-            finaleMatches = [
-              { p1: 1, p2: 2 },
-              { p1: 1, p2: 3 },
-              { p1: 2, p2: 3 }
-            ];
-          } else if (pouleSize === 4) {
-            tableInfo = '(2 tables)';
-            finaleMatches = [
-              { p1: 2, p2: 3 },
-              { p1: 1, p2: 4 },
-              { p1: 3, p2: 4 },
-              { p1: 1, p2: 2 },
-              { p1: 1, p2: 3 },
-              { p1: 2, p2: 4 }
-            ];
-          } else if (pouleSize === 6) {
-            tableInfo = '(3 tables)';
-            // 6 players: round-robin across 3 tables in rounds
-            finaleMatches = [
-              // Round 1
-              { p1: 1, p2: 6, table: 1 }, { p1: 2, p2: 5, table: 2 }, { p1: 3, p2: 4, table: 3 },
-              // Round 2
-              { p1: 2, p2: 3, table: 1 }, { p1: 4, p2: 6, table: 2 }, { p1: 1, p2: 5, table: 3 },
-              // Round 3
-              { p1: 1, p2: 4, table: 1 }, { p1: 3, p2: 5, table: 2 }, { p1: 2, p2: 6, table: 3 },
-              // Round 4
-              { p1: 5, p2: 6, table: 1 }, { p1: 1, p2: 3, table: 2 }, { p1: 2, p2: 4, table: 3 },
-              // Round 5
-              { p1: 4, p2: 5, table: 1 }, { p1: 1, p2: 2, table: 2 }, { p1: 3, p2: 6, table: 3 }
-            ];
-          }
-
-          // Calculate height needed
-          const matchScheduleHeight = 25 + (finaleMatches.length * 14);
+          // Calculate height needed (matches + same-club note)
+          const matchScheduleHeight = 25 + (finaleMatches.length * 14) + 20;
           if (y + matchScheduleHeight > doc.page.height - 60) {
             doc.addPage();
             y = 40;
@@ -1035,7 +1012,7 @@ async function generateSummaryConvocationPDF(tournamentInfo, allPoules, location
              .text(`PROGRAMME DES MATCHS ${tableInfo} - Tous contre tous`, 50, y + 5, { width: pageWidth - 20 });
           y += 22;
 
-          // Match rows
+          // Match rows (sequential numbering — same-club reorder breaks round structure)
           finaleMatches.forEach((match, idx) => {
             const bgColor = idx % 2 === 0 ? '#FFFFFF' : '#F5F5F5';
             doc.rect(40, y, pageWidth, 14).fill(bgColor);
@@ -1046,12 +1023,17 @@ async function generateSummaryConvocationPDF(tournamentInfo, allPoules, location
             const p2Name = p2 ? `${p2.first_name || ''} ${(p2.last_name || '').toUpperCase()}`.trim() : `Joueur ${match.p2}`;
 
             doc.fillColor('#666666').fontSize(8).font('Helvetica');
-            const matchLabel = match.table ? `T${match.table}:` : `${idx + 1}:`;
-            doc.text(matchLabel, 50, y + 3, { width: 25 });
+            doc.text(`${idx + 1}:`, 50, y + 3, { width: 25 });
             doc.font('Helvetica').fillColor('#333333')
                .text(`${p1Name}  vs  ${p2Name}`, 80, y + 3, { width: 400 });
             y += 14;
           });
+
+          // Same-club priority note
+          y += 5;
+          doc.fillColor('#666666').fontSize(8).font('Helvetica-Oblique')
+             .text("Les joueurs d'un même club jouent en priorité entre eux en début de finale.", 40, y, { width: pageWidth, align: 'center' });
+          y += 12;
 
         } else if (pouleSize === 4 || pouleSize === 5) {
           // Regular tournament: knockout-style matches
