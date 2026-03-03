@@ -1081,7 +1081,7 @@ router.get('/tournoi/:id/inscriptions', authenticateToken, (req, res) => {
   const query = `
     SELECT
       i.*,
-      COALESCE(NULLIF(TRIM(i.email), ''), NULLIF(TRIM(p.email), ''), NULLIF(TRIM(pc.email), '')) as email,
+      COALESCE(NULLIF(TRIM(i.email), ''), NULLIF(TRIM(p.email), ''), NULLIF(TRIM(pc.email), '')) as resolved_email,
       p.first_name,
       p.last_name,
       p.club
@@ -1098,7 +1098,12 @@ router.get('/tournoi/:id/inscriptions', authenticateToken, (req, res) => {
     if (err) {
       return res.status(500).json({ error: err.message });
     }
-    res.json(rows);
+    // Merge resolved_email back into email field for frontend compatibility
+    const result = (rows || []).map(row => ({
+      ...row,
+      email: row.resolved_email || row.email || null
+    }));
+    res.json(result);
   });
 });
 
@@ -1126,7 +1131,7 @@ router.get('/', authenticateToken, async (req, res) => {
   let query = `
     SELECT
       i.*,
-      COALESCE(NULLIF(TRIM(i.email), ''), NULLIF(TRIM(p.email), ''), NULLIF(TRIM(pc.email), '')) as email,
+      COALESCE(NULLIF(TRIM(i.email), ''), NULLIF(TRIM(p.email), ''), NULLIF(TRIM(pc.email), '')) as resolved_email,
       t.nom as tournoi_nom,
       t.mode,
       t.categorie,
@@ -1175,7 +1180,12 @@ router.get('/', authenticateToken, async (req, res) => {
     if (err) {
       return res.status(500).json({ error: err.message });
     }
-    res.json(rows);
+    // Merge resolved_email back into email field for frontend compatibility
+    const result = (rows || []).map(row => ({
+      ...row,
+      email: row.resolved_email || row.email || null
+    }));
+    res.json(result);
   });
 });
 
