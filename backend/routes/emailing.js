@@ -5200,7 +5200,15 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
         emailIntro = replaceVar(emailIntro, 'organization_email', organizationEmail);
 
         // Smart inscription method - check if player has app account
-        const playerAppUrl = await appSettings.getOrgSetting(orgId, 'player_app_url');
+        let playerAppUrl = await appSettings.getOrgSetting(orgId, 'player_app_url');
+        // Ensure the Player App URL includes the org slug for multi-CDB
+        const orgSlug = await appSettings.getOrgSlug(orgId);
+        if (orgSlug && !playerAppUrl.includes('?org=')) {
+          const separator = playerAppUrl.includes('?') ? '&' : '?';
+          playerAppUrl = `${playerAppUrl.replace(/\/$/, '')}${separator}org=${encodeURIComponent(orgSlug)}`;
+        }
+        // Build the tournaments page link with proper query param handling
+        const playerAppTournamentsUrl = playerAppUrl.includes('?') ? `${playerAppUrl}&page=tournaments` : `${playerAppUrl}?page=tournaments`;
         const extInscriptionEnabled = await appSettings.getOrgSetting(orgId, 'external_inscription_enabled');
         const extInscriptionUrl = await appSettings.getOrgSetting(orgId, 'external_inscription_url');
         const hasExternalInscription = extInscriptionEnabled === 'true' && extInscriptionUrl;
@@ -5228,7 +5236,7 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
               <div style="background: #e8f5e9; padding: 10px; border-radius: 8px; margin-bottom: 15px;">
                 <p style="margin: 0 0 8px 0; font-size: 12px; color: #2e7d32; font-weight: bold;">✅ Version joueur AVEC compte Espace Joueur :</p>
                 <div style="text-align: center;">
-                  <a href="${playerAppUrl}/?page=tournaments" target="_blank" style="display: inline-block; background: ${primaryColor}; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
+                  <a href="${playerAppTournamentsUrl}" target="_blank" style="display: inline-block; background: ${primaryColor}; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
                     📱 S'inscrire via l'Espace Joueur
                   </a>
                 </div>
@@ -5254,7 +5262,7 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
 
           if (hasAppAccount) {
             inscriptionMethodHtml = `<div style="text-align: center; margin: 20px 0;">
-              <a href="${playerAppUrl}/?page=tournaments" target="_blank" style="display: inline-block; background: ${primaryColor}; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
+              <a href="${playerAppTournamentsUrl}" target="_blank" style="display: inline-block; background: ${primaryColor}; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
                 📱 S'inscrire via l'Espace Joueur
               </a>
             </div>`;
