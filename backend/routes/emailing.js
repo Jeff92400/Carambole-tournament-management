@@ -5229,7 +5229,7 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
               </a>
             </div>
             <div style="margin: 0; padding: 15px; background: #fff; border-left: 4px solid ${primaryColor};">
-              <p style="margin: 0;">ou confirmez votre participation en écrivant à <a href="mailto:${notificationEmail}" style="color: ${primaryColor}; font-weight: bold;">${notificationEmail}</a></p>
+              <p style="margin: 0;">ou confirmez votre participation en écrivant à ${notificationEmail}</p>
             </div>`;
           }
         };
