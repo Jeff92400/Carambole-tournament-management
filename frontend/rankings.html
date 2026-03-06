@@ -6,6 +6,11 @@
   <title>Classements - Billard Ranking</title>
   <link rel="icon" type="image/png" href="images/FrenchBillard-Icon-small.png">
   <link rel="stylesheet" href="css/styles.css">
+  <style>
+    .tournament-link { color: inherit; text-decoration: none; }
+    .tournament-link:hover { text-decoration: underline; color: var(--color-primary, #1F4788); }
+    th .tournament-link { font-weight: bold; }
+  </style>
   <script src="js/branding.js?v=197"></script>
 </head>
 <body>
@@ -431,6 +436,7 @@
     function renderRankings(data, viewMode) {
       const rankings = data.rankings || [];
       const tournamentsPlayed = data.tournamentsPlayed || { t1: false, t2: false, t3: false };
+      const tournamentIds = data.tournamentIds || {};
       const bonusColumns = data.bonusColumns || [];
       const hasBonusCols = bonusColumns.length > 0;
       const isJournees = data.qualificationMode === 'journees';
@@ -438,6 +444,20 @@
       const bestOfCount = (data.bestOfCount !== undefined && data.bestOfCount !== null) ? data.bestOfCount : 0; // 0 = all tournaments count (standard mode)
       const jCount = data.journeesCount || 3;
       const qSettings = data.qualificationSettings || { threshold: 9, small: 4, large: 6 };
+
+      // Helper: wrap text in a link to tournament-results if tournament has been played
+      const tournamentHeaderLink = (label, tournamentNumber) => {
+        const tid = tournamentIds[`t${tournamentNumber}`];
+        return tid
+          ? `<a href="tournament-results.html?id=${tid}" class="tournament-link">${label}</a>`
+          : label;
+      };
+      const tournamentCellLink = (html, tournamentNumber) => {
+        const tid = tournamentIds[`t${tournamentNumber}`];
+        return tid
+          ? `<a href="tournament-results.html?id=${tid}" class="tournament-link">${html}</a>`
+          : html;
+      };
 
       // Determine which tournament we're after
       let tournamentSuffix = '';
@@ -538,11 +558,11 @@
             <th>Nom</th>
             <th>Prénom</th>
             <th>Club</th>
-            ${Array.from({length: jCount}, (_, i) => `<th style="text-align:center;">J${i + 1}</th>`).join('')}
+            ${Array.from({length: jCount}, (_, i) => `<th style="text-align:center;">${tournamentHeaderLink('J' + (i + 1), i + 1)}</th>`).join('')}
             ${showAvgBonus ? '<th style="text-align:center;">Bonus Moy.</th>' : ''}
             <th style="text-align:center;">Total Top ${bestOfCount}</th>`;
           if (hasMoyGen) h += '<th style="text-align:center;">Moy. Gen. (arr.)</th>';
-          if (hasPerTournMoy) h += Array.from({length: jCount}, (_, i) => `<th style="text-align:center;">Moy. J${i + 1}</th>`).join('');
+          if (hasPerTournMoy) h += Array.from({length: jCount}, (_, i) => `<th style="text-align:center;">${tournamentHeaderLink('Moy. J' + (i + 1), i + 1)}</th>`).join('');
           h += '<th style="text-align:center;">Moy.G saison</th>';
           if (hasSeasonPtsRep) h += '<th style="text-align:center;">Pts</th><th style="text-align:center;">Rep</th>';
           h += '<th style="text-align:center;">MS</th>';
@@ -555,9 +575,10 @@
           if (!tournamentsPlayed[`t${tn}`]) return '<span style="color: #ccc;">-</span>';
           if (!t) return '<span style="color: #999; font-size: 18px; font-weight: bold;">*</span>';
           const isKept = player.keptSet.has(tn);
-          return isKept
+          const inner = isKept
             ? `<strong>${t.score}</strong>`
             : `<span style="color: #999; text-decoration: line-through;">${t.score}</span>`;
+          return tournamentCellLink(inner, tn);
         };
 
         const formatMoy = (player, tn) => {
@@ -565,9 +586,10 @@
           if (!tournamentsPlayed[`t${tn}`]) return '<span style="color: #ccc;">-</span>';
           if (!t || !t.moy) return '<span style="color: #999;">-</span>';
           const isKept = player.keptSet.has(tn);
-          return isKept
+          const inner = isKept
             ? `<strong>${t.moy.toFixed(3)}</strong>`
             : `<span style="color: #999; text-decoration: line-through;">${t.moy.toFixed(3)}</span>`;
+          return tournamentCellLink(inner, tn);
         };
 
         // Compute kept total (sum of kept scores only)
@@ -649,24 +671,22 @@
       } else {
         // --- STANDARD MODE (unchanged) ---
 
-        // Update header row dynamically based on bonus columns
-        if (hasBonusCols) {
-          document.getElementById('rankingsHeaderRow').innerHTML = `
+        // Always update header row to include tournament links + bonus columns
+        document.getElementById('rankingsHeaderRow').innerHTML = `
             <th>Position</th>
             <th>Licence</th>
             <th>Joueur</th>
             <th>Club</th>
-            <th>T1</th>
-            <th>T2</th>
-            <th>T3</th>
+            <th>${tournamentHeaderLink('T1', 1)}</th>
+            <th>${tournamentHeaderLink('T2', 2)}</th>
+            <th>${tournamentHeaderLink('T3', 3)}</th>
             <th>Pts Match</th>
-            ${bonusColumns.map(col => `<th style="text-align: center;">${col.label}</th>`).join('')}
+            ${hasBonusCols ? bonusColumns.map(col => `<th style="text-align: center;">${col.label}</th>`).join('') : ''}
             <th>Total</th>
             <th>Total Points</th>
             <th>Total Reprises</th>
             <th>Moyenne</th>
             <th>Meilleure Série</th>`;
-        }
 
         rankings.forEach(rank => {
           const row = document.createElement('tr');
@@ -689,16 +709,19 @@
             } catch(e) {}
           }
 
-          // Format tournament points with kept/dropped styling
+          // Format tournament points with kept/dropped styling + link
           const formatTP = (points, played, tournamentNumber) => {
             if (!played) return '<span style="color: #ccc;">-</span>';
             if (points === null || points === undefined) return '<span style="color: #999; font-size: 18px; font-weight: bold;">*</span>';
+            let inner;
             if (keptSet) {
-              return keptSet.has(tournamentNumber)
+              inner = keptSet.has(tournamentNumber)
                 ? `<strong>${points}</strong>`
                 : `<span style="color: #999; text-decoration: line-through;">${points}</span>`;
+            } else {
+              inner = `${points}`;
             }
-            return points;
+            return tournamentCellLink(inner, tournamentNumber);
           };
 
           // Standard mode: match points per tournament + bonus columns

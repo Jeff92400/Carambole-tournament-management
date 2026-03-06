@@ -43,7 +43,7 @@ router.get('/', authenticateToken, async (req, res) => {
 
   // First, check which tournaments have been played for this category/season
   const tournamentsPlayedQuery = `
-    SELECT tournament_number FROM tournaments
+    SELECT tournament_number, id FROM tournaments
     WHERE category_id = $1 AND season = $2 AND tournament_number IN (${rankingNumbersSQL})
       AND ($3::int IS NULL OR organization_id = $3)
   `;
@@ -54,8 +54,11 @@ router.get('/', authenticateToken, async (req, res) => {
     }
 
     const tournamentsPlayed = {};
+    const tournamentIds = {};
     rankingNumbers.forEach(num => {
       tournamentsPlayed[`t${num}`] = tournamentRows.some(t => t.tournament_number === num);
+      const match = tournamentRows.find(t => t.tournament_number === num);
+      if (match) tournamentIds[`t${num}`] = match.id;
     });
 
     // Use LEFT JOIN for players to include ranked players even if not in players table
@@ -229,14 +232,14 @@ router.get('/', authenticateToken, async (req, res) => {
             const labelMap = {};
             (labelRows || []).forEach(r => { labelMap[r.rule_type] = r.column_label; });
             res.json({
-              rankings: rows, tournamentsPlayed, qualificationMode, averageBonusTiers, bonusMoyenneInfo,
+              rankings: rows, tournamentsPlayed, tournamentIds, qualificationMode, averageBonusTiers, bonusMoyenneInfo,
               bestOfCount, journeesCount, qualificationSettings,
               bonusColumns: [...seenTypes].map(rt => ({ ruleType: rt, label: labelMap[rt] || rt }))
             });
           }
         );
       } else {
-        res.json({ rankings: rows, tournamentsPlayed, qualificationMode, averageBonusTiers, bonusMoyenneInfo, bestOfCount, journeesCount, qualificationSettings, bonusColumns: [] });
+        res.json({ rankings: rows, tournamentsPlayed, tournamentIds, qualificationMode, averageBonusTiers, bonusMoyenneInfo, bestOfCount, journeesCount, qualificationSettings, bonusColumns: [] });
       }
     });
   });
