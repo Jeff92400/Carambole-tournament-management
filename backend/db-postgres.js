@@ -525,19 +525,19 @@ async function initializeDatabase() {
     const dbgTournaments = await client.query(`
       SELECT t.id, t.tournament_number, t.location, c.game_type, c.level, c.organization_id as cat_org
       FROM tournaments t JOIN categories c ON c.id = t.category_id
-      WHERE t.organization_id = 3 AND t.location IS NULL LIMIT 5
+      WHERE t.organization_id = 6 AND t.location IS NULL LIMIT 5
     `);
     console.log('[BACKFILL-DEBUG] Sample tournaments (org3, NULL location):', JSON.stringify(dbgTournaments.rows));
 
     const dbgTournoiExt = await client.query(`
       SELECT tournoi_id, nom, mode, categorie, lieu, tournament_number
-      FROM tournoi_ext WHERE organization_id = 3 AND lieu IS NOT NULL LIMIT 5
+      FROM tournoi_ext WHERE organization_id = 6 AND lieu IS NOT NULL LIMIT 5
     `);
     console.log('[BACKFILL-DEBUG] Sample tournoi_ext (org3, non-NULL lieu):', JSON.stringify(dbgTournoiExt.rows));
 
     const dbgTournoiExtTN = await client.query(`
       SELECT tournoi_id, nom, tournament_number, organization_id FROM tournoi_ext
-      WHERE organization_id = 3 LIMIT 5
+      WHERE organization_id = 6 LIMIT 5
     `);
     console.log('[BACKFILL-DEBUG] Sample tournoi_ext tournament_numbers:', JSON.stringify(dbgTournoiExtTN.rows));
 
@@ -564,9 +564,9 @@ async function initializeDatabase() {
           AND (UPPER(te.categorie) = UPPER(c.level)
                OR UPPER(c.level) = ANY(string_to_array(UPPER(te.categorie), '-')))
           AND te.tournament_number = t2.tournament_number
-          AND te.organization_id = 3
+          AND te.organization_id = 6
           AND te.lieu IS NOT NULL
-        WHERE t2.organization_id = 3
+        WHERE t2.organization_id = 6
           AND t2.location IS NULL
         ORDER BY t2.id, te.debut DESC
       ) sub
