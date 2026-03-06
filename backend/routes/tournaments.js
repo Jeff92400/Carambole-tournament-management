@@ -559,7 +559,7 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
     return res.status(400).json({ error: 'No file uploaded' });
   }
 
-  const { categoryId, tournamentNumber, season, tournamentDate } = req.body;
+  const { categoryId, tournamentNumber, season, tournamentDate, location, location_2 } = req.body;
 
   if (!categoryId || !tournamentNumber || !season) {
     fs.unlinkSync(req.file.path);
@@ -619,13 +619,15 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
 
       // Create or get tournament
       db.run(
-        `INSERT INTO tournaments (category_id, tournament_number, season, tournament_date, organization_id)
-         VALUES (?, ?, ?, ?, ?)
+        `INSERT INTO tournaments (category_id, tournament_number, season, tournament_date, organization_id, location, location_2)
+         VALUES (?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(category_id, tournament_number, season) DO UPDATE SET
            tournament_date = ?,
+           location = COALESCE(EXCLUDED.location, tournaments.location),
+           location_2 = COALESCE(EXCLUDED.location_2, tournaments.location_2),
            import_date = CURRENT_TIMESTAMP
          RETURNING id`,
-        [categoryId, tournamentNumber, season, tournamentDate, orgId, tournamentDate],
+        [categoryId, tournamentNumber, season, tournamentDate, orgId, location || null, location_2 || null, tournamentDate],
         function(err) {
           if (err) {
             fs.unlinkSync(req.file.path);
@@ -853,7 +855,7 @@ router.get('/lookup-date', authenticateToken, async (req, res) => {
     const nomPattern = `T${tournamentNumber} %`;
 
     const row = await dbGetAsync(
-      `SELECT debut FROM tournoi_ext
+      `SELECT debut, lieu, lieu_2 FROM tournoi_ext
        WHERE UPPER(mode) = UPPER($1)
          AND UPPER(categorie) = UPPER($2)
          AND nom LIKE $3
@@ -867,7 +869,7 @@ router.get('/lookup-date', authenticateToken, async (req, res) => {
     if (row && row.debut) {
       // Return date in YYYY-MM-DD format for the date input
       const dateStr = new Date(row.debut).toISOString().split('T')[0];
-      return res.json({ found: true, date: dateStr });
+      return res.json({ found: true, date: dateStr, lieu: row.lieu || '', lieu_2: row.lieu_2 || '' });
     }
 
     res.json({ found: false });
@@ -4457,7 +4459,7 @@ router.post('/import-matches', authenticateToken, upload.array('files', 20), asy
     return res.status(400).json({ error: 'Aucun fichier CSV uploadé' });
   }
 
-  const { categoryId, tournamentNumber, season, tournamentDate } = req.body;
+  const { categoryId, tournamentNumber, season, tournamentDate, location, location_2 } = req.body;
   if (!categoryId || !tournamentNumber || !season) {
     cleanupFiles(files);
     return res.status(400).json({ error: 'Catégorie, numéro de tournoi et saison requis' });
@@ -4485,13 +4487,15 @@ router.post('/import-matches', authenticateToken, upload.array('files', 20), asy
 
     // 2. Create or get tournament
     const upsertResult = await dbRunAsync(
-      `INSERT INTO tournaments (category_id, tournament_number, season, tournament_date, organization_id)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO tournaments (category_id, tournament_number, season, tournament_date, organization_id, location, location_2)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        ON CONFLICT(category_id, tournament_number, season) DO UPDATE SET
          tournament_date = $4,
+         location = COALESCE(EXCLUDED.location, tournaments.location),
+         location_2 = COALESCE(EXCLUDED.location_2, tournaments.location_2),
          import_date = CURRENT_TIMESTAMP
        RETURNING id`,
-      [categoryId, tournamentNumber, season, tournamentDate || null, orgId]
+      [categoryId, tournamentNumber, season, tournamentDate || null, orgId, location || null, location_2 || null]
     );
 
     let tournamentId;

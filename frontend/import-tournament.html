@@ -145,6 +145,17 @@
             <input type="text" id="season" placeholder="Ex: 2024-2025" readonly style="background: #f0f0f0;">
           </div>
 
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+            <div class="form-group">
+              <label for="tournamentLocation">Lieu</label>
+              <input type="text" id="tournamentLocation" placeholder="Rempli automatiquement">
+            </div>
+            <div class="form-group">
+              <label for="tournamentLocation2">Lieu 2</label>
+              <input type="text" id="tournamentLocation2" placeholder="Laisser vide si un seul lieu">
+            </div>
+          </div>
+
           <!-- Single file upload zone (standard mode) -->
           <div class="file-upload" id="fileUpload">
             <p>📁 Cliquez pour sélectionner un fichier CSV</p>
@@ -198,6 +209,17 @@
           <div class="form-group">
             <label for="matchSeason">Saison (calculée automatiquement)</label>
             <input type="text" id="matchSeason" placeholder="Ex: 2025-2026" readonly style="background: #f0f0f0;">
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+            <div class="form-group">
+              <label for="matchTournamentLocation">Lieu</label>
+              <input type="text" id="matchTournamentLocation" placeholder="Rempli automatiquement">
+            </div>
+            <div class="form-group">
+              <label for="matchTournamentLocation2">Lieu 2</label>
+              <input type="text" id="matchTournamentLocation2" placeholder="Laisser vide si un seul lieu">
+            </div>
           </div>
 
           <!-- Phase-based upload zones -->
@@ -470,6 +492,9 @@
             document.getElementById('tournamentDate').value = data.date;
             // Trigger season auto-calculation
             document.getElementById('tournamentDate').dispatchEvent(new Event('change'));
+            // Auto-fill location from tournoi_ext
+            if (data.lieu) document.getElementById('tournamentLocation').value = data.lieu;
+            if (data.lieu_2) document.getElementById('tournamentLocation2').value = data.lieu_2;
           }
         }
       } catch (error) {
@@ -844,6 +869,8 @@
       formData.append('tournamentNumber', tournamentNumber);
       formData.append('tournamentDate', tournamentDate);
       formData.append('season', season);
+      formData.append('location', document.getElementById('tournamentLocation').value);
+      formData.append('location_2', document.getElementById('tournamentLocation2').value);
 
       currentFormData = formData;
 
@@ -935,6 +962,9 @@
           if (data.found && data.date) {
             document.getElementById('matchTournamentDate').value = data.date;
             document.getElementById('matchTournamentDate').dispatchEvent(new Event('change'));
+            // Auto-fill location from tournoi_ext
+            if (data.lieu) document.getElementById('matchTournamentLocation').value = data.lieu;
+            if (data.lieu_2) document.getElementById('matchTournamentLocation2').value = data.lieu_2;
           }
         }
       } catch (error) {
@@ -1156,6 +1186,8 @@
         formData.append('tournamentNumber', tournamentNumber);
         formData.append('tournamentDate', tournamentDate);
         formData.append('season', season);
+        formData.append('location', document.getElementById('matchTournamentLocation').value);
+        formData.append('location_2', document.getElementById('matchTournamentLocation2').value);
 
         const response = await fetch(`${API_URL}/tournaments/import-matches`, {
           method: 'POST',
