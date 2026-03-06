@@ -545,22 +545,23 @@ async function initializeDatabase() {
     // Uses REPLACE for mode comparison to handle "3 BANDES" vs "3BANDES" differences.
     const backfillResult = await client.query(`
       UPDATE tournaments t
-      SET location = te.lieu, location_2 = te.lieu_2
-      FROM categories c,
-      LATERAL (
-        SELECT lieu, lieu_2 FROM tournoi_ext te2
-        WHERE UPPER(REPLACE(te2.mode, ' ', '')) = UPPER(REPLACE(c.game_type, ' ', ''))
-          AND (UPPER(te2.categorie) = UPPER(c.level)
-               OR UPPER(c.level) = ANY(string_to_array(UPPER(te2.categorie), '-')))
-          AND te2.tournament_number = t.tournament_number
-          AND te2.organization_id = 3
-          AND te2.lieu IS NOT NULL
-        ORDER BY te2.debut DESC
-        LIMIT 1
-      ) te
-      WHERE c.id = t.category_id
-        AND t.organization_id = 3
-        AND t.location IS NULL
+      SET location = sub.lieu, location_2 = sub.lieu_2
+      FROM (
+        SELECT DISTINCT ON (t2.id) t2.id AS tournament_id, te.lieu, te.lieu_2
+        FROM tournaments t2
+        JOIN categories c ON c.id = t2.category_id
+        JOIN tournoi_ext te
+          ON UPPER(REPLACE(te.mode, ' ', '')) = UPPER(REPLACE(c.game_type, ' ', ''))
+          AND (UPPER(te.categorie) = UPPER(c.level)
+               OR UPPER(c.level) = ANY(string_to_array(UPPER(te.categorie), '-')))
+          AND te.tournament_number = t2.tournament_number
+          AND te.organization_id = 3
+          AND te.lieu IS NOT NULL
+        WHERE t2.organization_id = 3
+          AND t2.location IS NULL
+        ORDER BY t2.id, te.debut DESC
+      ) sub
+      WHERE t.id = sub.tournament_id
     `);
     if (backfillResult.rowCount > 0) {
       console.log(`[MIGRATION] Backfilled location for ${backfillResult.rowCount} CDB9394 tournaments`);
