@@ -171,9 +171,11 @@
     // Set dynamic calendar title with org name and season
     (async function setCalendarTitle() {
       try {
-        const res = await fetch(`${API_URL}/settings/branding/colors`);
+        const res = await fetch(`${API_URL}/settings/app/organization_short_name`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
         const data = await res.json();
-        const orgName = data.organization_short_name || 'CDB';
+        const orgName = data.value || 'CDB';
         const now = new Date();
         const year = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
         const season = `${year}-${year + 1}`;
