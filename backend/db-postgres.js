@@ -521,6 +521,26 @@ async function initializeDatabase() {
     `);
 
     // Backfill tournaments.location from tournoi_ext.lieu for CDB9394 (org_id=3) — March 2026
+    // Debug: log data state before backfill
+    const dbgTournaments = await client.query(`
+      SELECT t.id, t.tournament_number, t.location, c.game_type, c.level, c.organization_id as cat_org
+      FROM tournaments t JOIN categories c ON c.id = t.category_id
+      WHERE t.organization_id = 3 AND t.location IS NULL LIMIT 5
+    `);
+    console.log('[BACKFILL-DEBUG] Sample tournaments (org3, NULL location):', JSON.stringify(dbgTournaments.rows));
+
+    const dbgTournoiExt = await client.query(`
+      SELECT tournoi_id, nom, mode, categorie, lieu, tournament_number
+      FROM tournoi_ext WHERE organization_id = 3 AND lieu IS NOT NULL LIMIT 5
+    `);
+    console.log('[BACKFILL-DEBUG] Sample tournoi_ext (org3, non-NULL lieu):', JSON.stringify(dbgTournoiExt.rows));
+
+    const dbgTournoiExtTN = await client.query(`
+      SELECT tournoi_id, nom, tournament_number FROM tournoi_ext
+      WHERE organization_id = 3 LIMIT 5
+    `);
+    console.log('[BACKFILL-DEBUG] Sample tournoi_ext tournament_numbers:', JSON.stringify(dbgTournoiExtTN.rows));
+
     // Only fills NULL locations. Starts from tournament's own category to avoid org_id mismatch.
     // Uses REPLACE for mode comparison to handle "3 BANDES" vs "3BANDES" differences.
     const backfillResult = await client.query(`
