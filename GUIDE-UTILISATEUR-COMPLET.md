@@ -842,21 +842,29 @@ L'email d'invitation contient : présentation de l'Application Joueur, instructi
 
 ### Accès
 
-Cliquer sur "Paramètres" dans la barre de navigation (visible uniquement pour les administrateurs)
+Survoler "Paramètres ▼" dans la barre de navigation (visible uniquement pour les administrateurs). Un menu déroulant apparaît avec 5 onglets :
+
+- **Organisation** — Identité, couleurs, emails, saison, politique de confidentialité
+- **Utilisateurs** — Mon compte, mot de passe, gestion des utilisateurs
+- **Compétitions** — Paramètres des épreuves, types de tournoi, classements, délais
+- **Espace Joueur** — Comptes joueurs, paramètres de l'application, planification des emails
+- **Maintenance** — Outils de maintenance, logs d'activité
+
+Cliquer directement sur "Paramètres" ouvre la page d'accueil des paramètres (avec la génération de la saison et les raccourcis). Les liens du menu déroulant mènent directement à l'onglet correspondant dans la page d'administration.
 
 ### Sous-sections disponibles
 
-- **Générer les tournois de la saison** (à partir du calendrier Excel)
-- Paramètres de l'organisation
-- Gestion des utilisateurs
-- Types de Tournoi et Mode de qualification
-- Paramètres de jeu (Distance, Reprises par catégorie)
-- Barème de points
+- **Générer les tournois de la saison** (à partir du calendrier Excel) — page Paramètres
+- Paramètres de l'organisation — onglet Organisation
+- Gestion des utilisateurs — onglet Utilisateurs
+- Types de Tournoi et Mode de qualification — onglet Compétitions
+- Paramètres de jeu (Distance, Reprises par catégorie) — onglet Compétitions
+- Barème de points — onglet Compétitions
 - Classifications FFB
 - Gestion des clubs
 - Données de référence
-- Politique de Confidentialité
-- Logs d'activité
+- Politique de Confidentialité — onglet Organisation
+- Logs d'activité — onglet Maintenance
 
 ---
 
