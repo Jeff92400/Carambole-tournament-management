@@ -520,6 +520,31 @@ async function initializeDatabase() {
       WHERE tournament_number IS NULL
     `);
 
+    // Backfill tournaments.location from tournoi_ext.lieu for CDB9394 (org_id=3) — March 2026
+    // Only fills NULL locations, matches via category (mode+level) + tournament_number
+    await client.query(`
+      UPDATE tournaments t
+      SET location = sub.lieu, location_2 = sub.lieu_2
+      FROM (
+        SELECT DISTINCT ON (c.id, te.tournament_number)
+          c.id AS category_id, te.tournament_number, te.lieu, te.lieu_2, te.organization_id
+        FROM tournoi_ext te
+        JOIN categories c
+          ON UPPER(c.game_type) = UPPER(te.mode)
+          AND (UPPER(c.level) = UPPER(te.categorie)
+               OR UPPER(c.level) = ANY(string_to_array(UPPER(te.categorie), '-')))
+          AND c.organization_id = te.organization_id
+        WHERE te.organization_id = 3
+          AND te.lieu IS NOT NULL
+          AND te.tournament_number IS NOT NULL
+        ORDER BY c.id, te.tournament_number, te.debut DESC
+      ) sub
+      WHERE t.category_id = sub.category_id
+        AND t.tournament_number = sub.tournament_number
+        AND t.organization_id = 3
+        AND t.location IS NULL
+    `);
+
     // Tournament parameter overrides table (migration - February 2026)
     // Allows per-tournament customization of Distance and Reprises values
     await client.query(`
