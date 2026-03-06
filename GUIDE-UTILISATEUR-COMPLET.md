@@ -419,7 +419,7 @@ Le fonctionnement de l'import et de l'affichage des résultats dépend du **mode
 
 #### Processus d'import
 
-1. **Sélectionner le tournoi :** Choisir le mode de jeu, le classement FFB (la catégorie se déduit automatiquement), le numéro de tournoi (T1, T2, T3, Finale) et la date.
+1. **Sélectionner le tournoi :** Choisir le mode de jeu, le classement FFB (la catégorie se déduit automatiquement), le numéro de tournoi (T1, T2, T3, Finale) et la date. Les champs **Lieu** et **Lieu 2** sont remplis automatiquement à partir du calendrier des tournois planifiés. Vous pouvez les modifier avant l'import si nécessaire.
 2. **Préparer le fichier CSV :** Format séparateur point-virgule (;). Colonnes attendues : Licence, Classement, Points, Reprises, Moyenne, Série.
 3. **Importer :** Glisser-déposer ou cliquer dans la zone de dépôt pour sélectionner le fichier CSV, puis cliquer sur « Enregistrer la compétition ».
 4. **Vérification :** Les résultats importés sont affichés et le classement saison est automatiquement recalculé. Un lien **« Voir le détail du tournoi »** permet d'accéder directement à la page de résultats.
@@ -452,7 +452,7 @@ Chaque fichier correspond à une poule ou phase (POULE A, POULE B, DEMI-FINALE, 
 #### Processus d'import
 
 1. **Sélectionner l'onglet « Import Matchs E2i »** sur la page d'import de compétition.
-2. **Choisir la catégorie :** Mode de jeu, classement FFB, numéro du tournoi, date.
+2. **Choisir la catégorie :** Mode de jeu, classement FFB, numéro du tournoi, date. Les champs **Lieu** et **Lieu 2** sont remplis automatiquement à partir du calendrier. Modifiables si besoin.
 3. **Ajouter les fichiers CSV par phase :** La page affiche des zones de dépôt séparées :
    - **Poules** — toujours visible, fichiers des matchs de poule (POULE A, POULE B, etc.)
    - **Demi-finales** — visible en mode journées
