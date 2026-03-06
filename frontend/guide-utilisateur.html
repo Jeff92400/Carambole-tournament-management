@@ -744,9 +744,9 @@
         <tr><td>Licence</td><td>Numéro de licence FFB</td></tr>
         <tr><td>Joueur</td><td>Nom et prénom (cliquable &rarr; historique du joueur)</td></tr>
         <tr><td>Club</td><td>Club du joueur (avec logo si disponible)</td></tr>
-        <tr><td>T1</td><td>Points de match du Tournoi 1</td></tr>
-        <tr><td>T2</td><td>Points de match du Tournoi 2</td></tr>
-        <tr><td>T3</td><td>Points de match du Tournoi 3</td></tr>
+        <tr><td>T1</td><td>Points de match du Tournoi 1 (cliquable &rarr; résultats du tournoi)</td></tr>
+        <tr><td>T2</td><td>Points de match du Tournoi 2 (cliquable &rarr; résultats du tournoi)</td></tr>
+        <tr><td>T3</td><td>Points de match du Tournoi 3 (cliquable &rarr; résultats du tournoi)</td></tr>
         <tr><td>Pts Match</td><td>Somme des points de match</td></tr>
         <tr><td>Bonus</td><td>Colonnes de bonus dynamiques (si configurées dans le barème)</td></tr>
         <tr><td>Total</td><td>Total des points (match + bonus)</td></tr>
@@ -769,7 +769,7 @@
         <tr><td>Nom</td><td>Nom de famille</td></tr>
         <tr><td>Prénom</td><td>Prénom (cliquable &rarr; historique du joueur)</td></tr>
         <tr><td>Club</td><td>Club du joueur</td></tr>
-        <tr><td>J1, J2, J3</td><td>Score de chaque journée (Pts clt + Bonus). Scores retenus en <strong>gras</strong>, scores écartés <s>barrés</s>. « * » si les points n'ont pas encore été attribués, « - » si le tournoi n'a pas eu lieu.</td></tr>
+        <tr><td>J1, J2, J3</td><td>Score de chaque journée (Pts clt + Bonus). Scores retenus en <strong>gras</strong>, scores écartés <s>barrés</s>. « * » si les points n'ont pas encore été attribués, « - » si le tournoi n'a pas eu lieu. En-têtes et scores cliquables &rarr; résultats du tournoi.</td></tr>
         <tr><td>Bonus Moy.</td><td>Bonus moyenne saison (0 à +3 selon la moyenne des tournois retenus). Affiché uniquement si activé dans les paramètres.</td></tr>
         <tr><td>Total Top N</td><td>Somme des N meilleurs scores de journées + bonus moyenne saison</td></tr>
         <tr><td>Moy. Gen. (arr.)</td><td>Moyenne générale arrondie en début de saison (si disponible)</td></tr>
@@ -813,6 +813,10 @@
       <li><code>*</code> indique que les points de position n'ont pas encore été attribués pour ce tournoi</li>
       <li><code>-</code> indique que le tournoi n'a pas encore eu lieu</li>
     </ul>
+
+    <div class="info-card">
+      <strong>Navigation vers les résultats :</strong> Les en-têtes de colonnes T1/T2/T3 (ou J1/J2/J3) ainsi que les scores individuels sont cliquables lorsque le tournoi a été joué. En cliquant, vous accédez directement à la page de résultats détaillés du tournoi concerné.
+    </div>
 
     <h3 id="historique-joueur">Historique joueur</h3>
     <div class="screenshot-placeholder">

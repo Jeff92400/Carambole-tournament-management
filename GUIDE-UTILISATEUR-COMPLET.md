@@ -191,9 +191,9 @@ Consultation et export des classements saison par catégorie.
 | Licence | Numéro de licence FFB |
 | Joueur | Nom et prénom (cliquable → historique du joueur) |
 | Club | Club du joueur (avec logo si disponible) |
-| T1 | Points de match du Tournoi 1 |
-| T2 | Points de match du Tournoi 2 |
-| T3 | Points de match du Tournoi 3 |
+| T1 | Points de match du Tournoi 1 (cliquable → résultats du tournoi) |
+| T2 | Points de match du Tournoi 2 (cliquable → résultats du tournoi) |
+| T3 | Points de match du Tournoi 3 (cliquable → résultats du tournoi) |
 | Pts Match | Somme des points de match |
 | Bonus | Colonnes de bonus dynamiques (si configurées dans le barème) |
 | Total | Total des points (match + bonus) |
@@ -213,7 +213,7 @@ En mode journées, l'affichage du classement est basé sur les **points de posit
 | Nom | Nom de famille |
 | Prénom | Prénom (cliquable → historique du joueur) |
 | Club | Club du joueur |
-| J1, J2, J3 | Score de chaque journée (Pts clt + Bonus). Scores retenus en **gras**, scores écartés ~~barrés~~. « * » si les points n'ont pas encore été attribués, « - » si le tournoi n'a pas eu lieu. |
+| J1, J2, J3 | Score de chaque journée (Pts clt + Bonus). Scores retenus en **gras**, scores écartés ~~barrés~~. « * » si les points n'ont pas encore été attribués, « - » si le tournoi n'a pas eu lieu. En-têtes et scores cliquables → résultats du tournoi. |
 | Bonus Moy. | Bonus moyenne saison (0 à +3 selon la moyenne des tournois retenus). Affiché uniquement si activé dans les paramètres. |
 | Total Top N | Somme des N meilleurs scores de journées + bonus moyenne saison |
 | Moy. Gen. (arr.) | Moyenne générale arrondie en début de saison (si disponible) |
@@ -245,6 +245,8 @@ En mode journées, lorsque tous les tournois qualificatifs de la saison ont ét�
 
 - `*` indique que les points de position n'ont pas encore été attribués pour ce tournoi
 - `-` indique que le tournoi n'a pas encore eu lieu
+
+> **Navigation vers les résultats :** Les en-têtes de colonnes T1/T2/T3 (ou J1/J2/J3) ainsi que les scores individuels sont cliquables lorsque le tournoi a été joué. En cliquant, vous accédez directement à la page de résultats détaillés du tournoi concerné.
 
 ### Historique joueur
 

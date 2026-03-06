@@ -102,6 +102,7 @@
         <button id="finaleSelectionBtn" class="btn" style="background: #2e7d32; color: white;" disabled>Classement pour la Finale de District</button>
         <button id="returnToSeasonBtn" class="btn" style="display: none; background: var(--color-primary, #1F4788); color: white;">Retour au classement saison</button>
       </div>
+      <p id="tournamentLinkHint" style="display: none; font-size: 12px; color: #888; font-style: italic; margin-top: 0; margin-bottom: 8px;">Cliquez sur les en-têtes ou scores des tournois pour voir les résultats détaillés.</p>
       <div class="table-container">
         <table>
           <thead>
@@ -787,6 +788,10 @@
       if (hasBestOf) {
         document.getElementById('bestOfLegendCount').textContent = bestOfCount;
       }
+
+      // Show tournament link hint if any tournament has been played
+      const hasAnyPlayed = Object.values(tournamentIds).length > 0;
+      document.getElementById('tournamentLinkHint').style.display = hasAnyPlayed ? 'block' : 'none';
     }
 
     // Export to Excel
