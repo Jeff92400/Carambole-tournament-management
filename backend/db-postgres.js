@@ -520,36 +520,7 @@ async function initializeDatabase() {
       WHERE tournament_number IS NULL
     `);
 
-    // Backfill tournaments.location from tournoi_ext.lieu for CDB9394 (org_id=3) — March 2026
-    // Debug: log data state before backfill
-    const dbgTournaments = await client.query(`
-      SELECT t.id, t.tournament_number, t.location, c.game_type, c.level, c.organization_id as cat_org
-      FROM tournaments t JOIN categories c ON c.id = t.category_id
-      WHERE t.organization_id = 6 AND t.location IS NULL LIMIT 5
-    `);
-    console.log('[BACKFILL-DEBUG] Sample tournaments (org3, NULL location):', JSON.stringify(dbgTournaments.rows));
-
-    const dbgTournoiExt = await client.query(`
-      SELECT tournoi_id, nom, mode, categorie, lieu, tournament_number
-      FROM tournoi_ext WHERE organization_id = 6 AND lieu IS NOT NULL LIMIT 5
-    `);
-    console.log('[BACKFILL-DEBUG] Sample tournoi_ext (org3, non-NULL lieu):', JSON.stringify(dbgTournoiExt.rows));
-
-    const dbgTournoiExtTN = await client.query(`
-      SELECT tournoi_id, nom, tournament_number, organization_id FROM tournoi_ext
-      WHERE organization_id = 6 LIMIT 5
-    `);
-    console.log('[BACKFILL-DEBUG] Sample tournoi_ext tournament_numbers:', JSON.stringify(dbgTournoiExtTN.rows));
-
-    // Check what org_ids exist in tournoi_ext and tournaments
-    const dbgOrgs = await client.query(`
-      SELECT 'tournoi_ext' as tbl, organization_id, COUNT(*) as cnt FROM tournoi_ext GROUP BY organization_id
-      UNION ALL
-      SELECT 'tournaments' as tbl, organization_id, COUNT(*) as cnt FROM tournaments GROUP BY organization_id
-      ORDER BY tbl, organization_id
-    `);
-    console.log('[BACKFILL-DEBUG] Org distribution:', JSON.stringify(dbgOrgs.rows));
-
+    // Backfill tournaments.location from tournoi_ext.lieu for CDB9394 (org_id=6) — March 2026
     // Only fills NULL locations. Starts from tournament's own category to avoid org_id mismatch.
     // Uses REPLACE for mode comparison to handle "3 BANDES" vs "3BANDES" differences.
     const backfillResult = await client.query(`
