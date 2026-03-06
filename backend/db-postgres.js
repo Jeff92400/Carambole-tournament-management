@@ -392,6 +392,11 @@ async function initializeDatabase() {
     await client.query(`ALTER TABLE clubs ADD COLUMN IF NOT EXISTS responsable_sportif_licence VARCHAR(50)`);
     await client.query(`ALTER TABLE clubs ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)`);
 
+    // Add club logo binary storage columns (migration - March 2026)
+    // Stores logo in database so it persists across Railway deployments
+    await client.query(`ALTER TABLE clubs ADD COLUMN IF NOT EXISTS logo_data BYTEA`);
+    await client.query(`ALTER TABLE clubs ADD COLUMN IF NOT EXISTS logo_content_type TEXT`);
+
     // Initialize default calendar codes for existing clubs
     const defaultCalendarCodes = [
       { name_pattern: '%COURBEVOIE%', code: 'A' },
@@ -406,6 +411,35 @@ async function initializeDatabase() {
         UPDATE clubs SET calendar_code = $1
         WHERE (name ILIKE $2 OR display_name ILIKE $2) AND calendar_code IS NULL
       `, [mapping.code, mapping.name_pattern]);
+    }
+
+    // Migrate existing club logos from filesystem to database (one-time, idempotent)
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const clubsWithLogos = await client.query(
+        `SELECT id, logo_filename FROM clubs WHERE logo_filename IS NOT NULL AND logo_data IS NULL`
+      );
+      if (clubsWithLogos.rows.length > 0) {
+        const frontendPath = fs.existsSync(path.join(__dirname, 'frontend'))
+          ? path.join(__dirname, 'frontend')
+          : path.join(__dirname, '../frontend');
+        for (const club of clubsWithLogos.rows) {
+          const filePath = path.join(frontendPath, 'images', 'clubs', club.logo_filename);
+          if (fs.existsSync(filePath)) {
+            const fileData = fs.readFileSync(filePath);
+            const ext = path.extname(club.logo_filename).toLowerCase();
+            const contentType = ext === '.png' ? 'image/png' : ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg' : ext === '.gif' ? 'image/gif' : 'image/png';
+            await client.query(
+              `UPDATE clubs SET logo_data = $1, logo_content_type = $2 WHERE id = $3`,
+              [fileData, contentType, club.id]
+            );
+            console.log(`[MIGRATION] Club logo migrated to DB: ${club.logo_filename}`);
+          }
+        }
+      }
+    } catch (migrationErr) {
+      console.error('[MIGRATION] Club logo migration error (non-fatal):', migrationErr.message);
     }
 
     // Club aliases table - maps variant names to canonical club names

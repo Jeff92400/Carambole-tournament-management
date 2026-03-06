@@ -140,6 +140,7 @@ const frontendPath = fs.existsSync(path.join(__dirname, 'frontend'))
 
 // Allow cross-origin access for club images (used by Player App)
 // Safari requires explicit CORS headers
+// Also serves logos from database when file doesn't exist on filesystem (Railway ephemeral storage)
 app.use('/images/clubs', (req, res, next) => {
   res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -150,7 +151,30 @@ app.use('/images/clubs', (req, res, next) => {
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
-  next();
+
+  // Check if file exists on filesystem — if yes, let express.static handle it
+  const filePath = path.join(frontendPath, 'images', 'clubs', req.path);
+  if (fs.existsSync(filePath)) {
+    return next();
+  }
+
+  // File not on filesystem — try serving from database (logo_data column)
+  const logoFilename = req.path.replace(/^\//, ''); // Remove leading /
+  if (!logoFilename) {
+    return next();
+  }
+  db.get(
+    'SELECT logo_data, logo_content_type FROM clubs WHERE logo_filename = $1 AND logo_data IS NOT NULL LIMIT 1',
+    [logoFilename],
+    (err, row) => {
+      if (err || !row || !row.logo_data) {
+        return next(); // Fall through to express.static (will 404)
+      }
+      res.set('Content-Type', row.logo_content_type || 'image/png');
+      res.set('Cache-Control', 'public, max-age=86400');
+      res.send(row.logo_data);
+    }
+  );
 });
 
 app.use(express.static(frontendPath));
