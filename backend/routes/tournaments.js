@@ -854,10 +854,12 @@ router.get('/lookup-date', authenticateToken, async (req, res) => {
     const orgId = req.user.organizationId || null;
     const nomPattern = `T${tournamentNumber} %`;
 
+    // categorie can be combined (e.g. "R3-R4") — match exact or as hyphen-delimited segment
     const row = await dbGetAsync(
       `SELECT debut, lieu, lieu_2 FROM tournoi_ext
        WHERE UPPER(mode) = UPPER($1)
-         AND UPPER(categorie) = UPPER($2)
+         AND (UPPER(categorie) = UPPER($2)
+              OR UPPER($2) = ANY(string_to_array(UPPER(categorie), '-')))
          AND nom LIKE $3
          AND ($4::int IS NULL OR organization_id = $4)
          AND (status IS NULL OR status = 'active')
