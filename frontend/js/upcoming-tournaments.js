@@ -211,7 +211,7 @@
     var calendarLink = navLinks.querySelector('a[href="calendar.html"]');
     var insertBefore = calendarLink ||
                        navLinks.querySelector('a[href="emailing.html"]') ||
-                       navLinks.querySelector('a[href="settings.html"]') ||
+                       navLinks.querySelector('.nav-dropdown') ||
                        document.getElementById('logoutBtn');
     if (!insertBefore) return;
 
