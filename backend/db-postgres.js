@@ -521,29 +521,30 @@ async function initializeDatabase() {
     `);
 
     // Backfill tournaments.location from tournoi_ext.lieu for CDB9394 (org_id=3) — March 2026
-    // Only fills NULL locations, matches via category (mode+level) + tournament_number
-    await client.query(`
+    // Only fills NULL locations. Starts from tournament's own category to avoid org_id mismatch.
+    // Uses REPLACE for mode comparison to handle "3 BANDES" vs "3BANDES" differences.
+    const backfillResult = await client.query(`
       UPDATE tournaments t
-      SET location = sub.lieu, location_2 = sub.lieu_2
-      FROM (
-        SELECT DISTINCT ON (c.id, te.tournament_number)
-          c.id AS category_id, te.tournament_number, te.lieu, te.lieu_2, te.organization_id
-        FROM tournoi_ext te
-        JOIN categories c
-          ON UPPER(c.game_type) = UPPER(te.mode)
-          AND (UPPER(c.level) = UPPER(te.categorie)
-               OR UPPER(c.level) = ANY(string_to_array(UPPER(te.categorie), '-')))
-          AND c.organization_id = te.organization_id
-        WHERE te.organization_id = 3
-          AND te.lieu IS NOT NULL
-          AND te.tournament_number IS NOT NULL
-        ORDER BY c.id, te.tournament_number, te.debut DESC
-      ) sub
-      WHERE t.category_id = sub.category_id
-        AND t.tournament_number = sub.tournament_number
+      SET location = te.lieu, location_2 = te.lieu_2
+      FROM categories c,
+      LATERAL (
+        SELECT lieu, lieu_2 FROM tournoi_ext te2
+        WHERE UPPER(REPLACE(te2.mode, ' ', '')) = UPPER(REPLACE(c.game_type, ' ', ''))
+          AND (UPPER(te2.categorie) = UPPER(c.level)
+               OR UPPER(c.level) = ANY(string_to_array(UPPER(te2.categorie), '-')))
+          AND te2.tournament_number = t.tournament_number
+          AND te2.organization_id = 3
+          AND te2.lieu IS NOT NULL
+        ORDER BY te2.debut DESC
+        LIMIT 1
+      ) te
+      WHERE c.id = t.category_id
         AND t.organization_id = 3
         AND t.location IS NULL
     `);
+    if (backfillResult.rowCount > 0) {
+      console.log(`[MIGRATION] Backfilled location for ${backfillResult.rowCount} CDB9394 tournaments`);
+    }
 
     // Tournament parameter overrides table (migration - February 2026)
     // Allows per-tournament customization of Distance and Reprises values
