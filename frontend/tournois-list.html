@@ -154,6 +154,7 @@
               <tr>
                 <th>ID</th>
                 <th>Nom</th>
+                <th>Tournoi</th>
                 <th>Mode</th>
                 <th>Categorie</th>
                 <th>Date debut</th>
@@ -371,6 +372,7 @@
 
     let allTournois = [];
     let gameModesList = [];
+    let tournamentRoundsMap = {}; // tournament_number → display_name
     let categories = [];
 
     // Load game modes from reference data API
@@ -411,6 +413,7 @@
         });
         if (response.ok) {
           const rounds = await response.json();
+          rounds.forEach(r => { tournamentRoundsMap[r.tournament_number] = r.display_name; });
           const options = '<option value="">-- Sélectionner --</option>' +
             rounds.map(r => `<option value="${r.tournament_number}">${r.display_name}</option>`).join('');
           document.getElementById('create_tournament_number').innerHTML = options;
@@ -621,7 +624,7 @@
       tbody.innerHTML = '';
 
       if (tournois.length === 0) {
-        const colspan = canSeeAdminUI ? 9 : 8;
+        const colspan = canSeeAdminUI ? 10 : 9;
         tbody.innerHTML = `<tr><td colspan="${colspan}" style="text-align: center; padding: 20px;">Aucun tournoi trouve</td></tr>`;
         return;
       }
@@ -652,6 +655,7 @@
         row.innerHTML = `
           <td>${tournoi.tournoi_id}</td>
           <td><strong>${isCancelled ? '<s>' : ''}${tournoi.nom || '-'}${isCancelled ? '</s>' : ''}</strong>${cancelledBadge}</td>
+          <td>${tournoi.tournament_number ? (tournamentRoundsMap[tournoi.tournament_number] || 'T' + tournoi.tournament_number) : '-'}</td>
           <td><span class="badge ${getModeBadgeClass(tournoi.mode)}">${tournoi.mode || '-'}</span></td>
           <td>${tournoi.categorie || '-'}</td>
           <td class="${getDateClass(tournoi.debut)}">${formatDate(tournoi.debut)}</td>
