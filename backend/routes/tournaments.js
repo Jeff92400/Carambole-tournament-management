@@ -1686,8 +1686,8 @@ async function recalculateRankingsStandard(categoryId, season, callback, orgId) 
     ORDER BY total_match_points DESC, avg_moyenne DESC, best_serie DESC
   `;
 
-  // Read best_of_count setting before querying
-  const bestOfCount = parseInt(await appSettings.getOrgSetting(orgId, 'best_of_count')) || 0;
+  // Standard mode: ALL tournaments count — best_of_count is only for journées mode
+  const bestOfCount = 0;
 
   db.all(query, [categoryId, season, orgId], (err, results) => {
     if (err) {

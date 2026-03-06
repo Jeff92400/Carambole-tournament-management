@@ -146,8 +146,10 @@ router.get('/', authenticateToken, async (req, res) => {
       let qualificationSettings = { threshold: 9, small: 4, large: 6 };
       try {
         if (orgId) {
-          const bocVal = parseInt(await appSettings.getOrgSetting(orgId, 'best_of_count'), 10);
-          bestOfCount = isNaN(bocVal) ? 0 : bocVal; // 0 = all tournaments count
+          if (qualificationMode === 'journees') {
+            const bocVal = parseInt(await appSettings.getOrgSetting(orgId, 'best_of_count'), 10);
+            bestOfCount = isNaN(bocVal) ? 2 : bocVal; // default 2 for journées
+          }
           journeesCount = parseInt(await appSettings.getOrgSetting(orgId, 'journees_count')) || 3;
           const qSettings = await appSettings.getOrgSettingsBatch(orgId, [
             'qualification_threshold', 'qualification_small', 'qualification_large'
