@@ -1324,21 +1324,41 @@
       });
     });
 
+    // Resolve a hash to a tab name — supports both tab names and section IDs
+    const VALID_TABS = ['organisation', 'utilisateurs', 'competitions', 'espace-joueur', 'maintenance'];
+    function resolveTabFromHash(hash) {
+      if (VALID_TABS.includes(hash)) return hash;
+      // Check if hash is a section ID — find its parent tab
+      const section = document.getElementById(hash);
+      if (section && section.dataset.settingsTab) return section.dataset.settingsTab;
+      return null;
+    }
+
     // Init tabs only for admin users; non-admins see just My Settings (no tabs)
     (function initSettingsTab() {
       const role = localStorage.getItem('userRole');
-      if (role !== 'admin') return; // Non-admin: all admin-only sections already hidden, My Settings grid stays visible
+      if (role !== 'admin') return;
       const hash = window.location.hash.replace('#', '');
-      const validTabs = ['organisation', 'utilisateurs', 'competitions', 'espace-joueur', 'maintenance'];
-      const tab = validTabs.includes(hash) ? hash : 'organisation';
+      const tab = resolveTabFromHash(hash) || 'organisation';
       switchSettingsTab(tab);
+      // Scroll to the specific section if hash is a section ID
+      if (hash && !VALID_TABS.includes(hash)) {
+        const el = document.getElementById(hash);
+        if (el) setTimeout(() => el.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
+      }
     })();
 
     // Handle hash changes (e.g., from navbar dropdown clicks on the same page)
     window.addEventListener('hashchange', () => {
       const hash = window.location.hash.replace('#', '');
-      const validTabs = ['organisation', 'utilisateurs', 'competitions', 'espace-joueur', 'maintenance'];
-      if (validTabs.includes(hash)) switchSettingsTab(hash);
+      const tab = resolveTabFromHash(hash);
+      if (tab) {
+        switchSettingsTab(tab);
+        if (!VALID_TABS.includes(hash)) {
+          const el = document.getElementById(hash);
+          if (el) setTimeout(() => el.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
+        }
+      }
     });
 
     // ============= MY SETTINGS =============
