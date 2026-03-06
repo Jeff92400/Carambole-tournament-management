@@ -426,7 +426,7 @@
       const hasBonusCols = bonusColumns.length > 0;
       const isJournees = data.qualificationMode === 'journees';
       const showAvgBonus = isJournees && data.averageBonusTiers;
-      const bestOfCount = data.bestOfCount || 2;
+      const bestOfCount = (data.bestOfCount !== undefined && data.bestOfCount !== null) ? data.bestOfCount : 0; // 0 = all tournaments count (standard mode)
       const jCount = data.journeesCount || 3;
       const qSettings = data.qualificationSettings || { threshold: 9, small: 4, large: 6 };
 

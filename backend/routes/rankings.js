@@ -141,12 +141,13 @@ router.get('/', authenticateToken, async (req, res) => {
       } catch (e) { /* default to standard */ }
 
       // Fetch journées settings for the frontend
-      let bestOfCount = 2;
+      let bestOfCount = 0; // 0 = all tournaments count (standard mode default)
       let journeesCount = 3;
       let qualificationSettings = { threshold: 9, small: 4, large: 6 };
       try {
         if (orgId) {
-          bestOfCount = parseInt(await appSettings.getOrgSetting(orgId, 'best_of_count')) || 2;
+          const bocVal = parseInt(await appSettings.getOrgSetting(orgId, 'best_of_count'), 10);
+          bestOfCount = isNaN(bocVal) ? 0 : bocVal; // 0 = all tournaments count
           journeesCount = parseInt(await appSettings.getOrgSetting(orgId, 'journees_count')) || 3;
           const qSettings = await appSettings.getOrgSettingsBatch(orgId, [
             'qualification_threshold', 'qualification_small', 'qualification_large'
@@ -158,6 +159,7 @@ router.get('/', authenticateToken, async (req, res) => {
           };
         }
       } catch (e) { /* defaults above */ }
+      console.log(`[RANKINGS API] org=${orgId}, qualificationMode=${qualificationMode}, bestOfCount=${bestOfCount}`);
 
       // Build bonusMoyenneInfo for the frontend info card
       let bonusMoyenneInfo = null;

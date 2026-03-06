@@ -786,47 +786,13 @@ router.put('/app/:key', authenticateToken, requireAdmin, async (req, res) => {
 
   try {
     const orgId = req.user?.organizationId;
-    if (orgId) {
-      // Write to organization_settings
-      await appSettings.setOrgSetting(orgId, key, value);
-      return res.json({ success: true, message: 'Setting updated' });
+    if (!orgId) {
+      console.error('[SETTINGS] app/:key save rejected: no organizationId on user', req.user?.username);
+      return res.status(403).json({ error: 'Organisation requise pour modifier les paramètres' });
     }
 
-    // Fallback: global app_settings — block org-specific keys
-    const orgSpecificKeys = [
-      'qualification_mode', 'bonus_moyenne_enabled', 'bonus_moyenne_type',
-      'bonus_moyenne_scope', 'position_points_degradation',
-      'journees_count', 'best_of_count', 'average_bonus_tiers',
-      'scoring_avg_tier_1', 'scoring_avg_tier_2', 'scoring_avg_tier_3',
-      'qualification_threshold', 'qualification_small', 'qualification_large',
-      'allow_poule_of_2',
-      'organization_name', 'organization_short_name',
-      'primary_color', 'secondary_color', 'accent_color',
-      'background_color', 'background_secondary_color', 'header_logo_size',
-      'email_communication', 'email_convocations', 'email_noreply',
-      'email_sender_name', 'summary_email',
-      'enable_csv_imports', 'external_inscription_enabled', 'external_inscription_url',
-      'player_app_url', 'reglement_url', 'privacy_policy',
-      'season_start_month', 'season_cutoff_month'
-    ];
-    if (orgSpecificKeys.includes(key)) {
-      return res.status(400).json({ error: 'This setting requires an organization context' });
-    }
-    const db = getDb();
-    await initAppSettings();
-    db.run(
-      `INSERT INTO app_settings (key, value, updated_at) VALUES ($1, $2, CURRENT_TIMESTAMP)
-       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = CURRENT_TIMESTAMP`,
-      [key, value],
-      function(err) {
-        if (err) {
-          console.error('Error updating setting:', err);
-          return res.status(500).json({ error: err.message });
-        }
-        appSettings.clearCache();
-        res.json({ success: true, message: 'Setting updated' });
-      }
-    );
+    await appSettings.setOrgSetting(orgId, key, value);
+    res.json({ success: true, message: 'Setting updated' });
   } catch (error) {
     console.error('Error updating setting:', error);
     res.status(500).json({ error: error.message });
@@ -873,52 +839,15 @@ router.put('/app-bulk', authenticateToken, requireAdmin, async (req, res) => {
 
   try {
     const orgId = req.user?.organizationId;
-    if (orgId) {
-      for (const [key, value] of Object.entries(settings)) {
-        await appSettings.setOrgSetting(orgId, key, value);
-      }
-      return res.json({ success: true, message: 'Settings updated' });
+    if (!orgId) {
+      console.error('[SETTINGS] app-bulk save rejected: no organizationId on user', req.user?.username);
+      return res.status(403).json({ error: 'Organisation requise pour modifier les paramètres' });
     }
 
-    // Fallback: global app_settings — but NEVER write org-specific settings globally
-    const orgSpecificKeys = [
-      // Qualification & scoring
-      'qualification_mode', 'bonus_moyenne_enabled', 'bonus_moyenne_type',
-      'bonus_moyenne_scope', 'position_points_degradation',
-      'journees_count', 'best_of_count', 'average_bonus_tiers',
-      'scoring_avg_tier_1', 'scoring_avg_tier_2', 'scoring_avg_tier_3',
-      'qualification_threshold', 'qualification_small', 'qualification_large',
-      'allow_poule_of_2',
-      // Branding & identity
-      'organization_name', 'organization_short_name',
-      'primary_color', 'secondary_color', 'accent_color',
-      'background_color', 'background_secondary_color', 'header_logo_size',
-      // Email
-      'email_communication', 'email_convocations', 'email_noreply',
-      'email_sender_name', 'summary_email',
-      // Features & URLs
-      'enable_csv_imports', 'external_inscription_enabled', 'external_inscription_url',
-      'player_app_url', 'reglement_url', 'privacy_policy',
-      // Season
-      'season_start_month', 'season_cutoff_month'
-    ];
-    const db = getDb();
-    await initAppSettings();
     for (const [key, value] of Object.entries(settings)) {
-      if (orgSpecificKeys.includes(key)) continue; // Skip org-specific settings without orgId
-      await new Promise((resolve, reject) => {
-        db.run(
-          `INSERT INTO app_settings (key, value, updated_at) VALUES ($1, $2, CURRENT_TIMESTAMP)
-           ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = CURRENT_TIMESTAMP`,
-          [key, value],
-          (err) => {
-            if (err) reject(err);
-            else resolve();
-          }
-        );
-      });
+      await appSettings.setOrgSetting(orgId, key, value);
+
     }
-    appSettings.clearCache();
     res.json({ success: true, message: 'Settings updated' });
   } catch (err) {
     console.error('Error updating settings:', err);

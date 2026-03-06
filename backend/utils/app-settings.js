@@ -53,6 +53,13 @@ const defaults = {
   // Poule configuration
   allow_poule_of_2: 'false',
 
+  // Qualification mode (org-specific, should NOT inherit from global)
+  qualification_mode: 'standard',
+  best_of_count: '0',
+  journees_count: '3',
+  bracket_size: '4',
+  average_bonus_tiers: 'false',
+
   // Scoring rule details (journées mode)
   scoring_match_points_loss: '0',
   scoring_match_points_draw: '1',
@@ -280,9 +287,22 @@ function getCurrentSeasonSync(startMonth, date = new Date()) {
 // Per-org cache: Map<orgId, { settings, timestamp }>
 const orgSettingsCache = new Map();
 
+// Settings that must NEVER inherit from global app_settings — they are org-specific only.
+// If an org doesn't have these in organization_settings, use hardcoded defaults instead.
+const ORG_ONLY_KEYS = new Set([
+  'qualification_mode',
+  'best_of_count',
+  'journees_count',
+  'bracket_size',
+  'average_bonus_tiers',
+  'bonus_moyenne_enabled',
+  'bonus_moyenne_type',
+]);
+
 /**
  * Load organization-specific settings, merged with global app_settings and defaults
  * Fallback chain: organization_settings → app_settings → hardcoded defaults
+ * EXCEPT for ORG_ONLY_KEYS which skip the app_settings fallback to prevent cross-org leaks
  */
 async function loadOrgSettings(orgId) {
   const db = require('../db-loader');
@@ -303,6 +323,17 @@ async function loadOrgSettings(orgId) {
 
         // Start with defaults → global app_settings → org overrides
         const settings = { ...globalSettings };
+
+        // Remove org-only keys from global inheritance — use defaults instead
+        for (const key of ORG_ONLY_KEYS) {
+          if (defaults[key] !== undefined) {
+            settings[key] = defaults[key];
+          } else {
+            delete settings[key];
+          }
+        }
+
+        // Apply org-specific overrides (these take priority over everything)
         (orgRows || []).forEach(row => {
           if (row.value !== null && row.value !== undefined) {
             settings[row.key] = row.value;
