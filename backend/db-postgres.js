@@ -536,10 +536,19 @@ async function initializeDatabase() {
     console.log('[BACKFILL-DEBUG] Sample tournoi_ext (org3, non-NULL lieu):', JSON.stringify(dbgTournoiExt.rows));
 
     const dbgTournoiExtTN = await client.query(`
-      SELECT tournoi_id, nom, tournament_number FROM tournoi_ext
+      SELECT tournoi_id, nom, tournament_number, organization_id FROM tournoi_ext
       WHERE organization_id = 3 LIMIT 5
     `);
     console.log('[BACKFILL-DEBUG] Sample tournoi_ext tournament_numbers:', JSON.stringify(dbgTournoiExtTN.rows));
+
+    // Check what org_ids exist in tournoi_ext and tournaments
+    const dbgOrgs = await client.query(`
+      SELECT 'tournoi_ext' as tbl, organization_id, COUNT(*) as cnt FROM tournoi_ext GROUP BY organization_id
+      UNION ALL
+      SELECT 'tournaments' as tbl, organization_id, COUNT(*) as cnt FROM tournaments GROUP BY organization_id
+      ORDER BY tbl, organization_id
+    `);
+    console.log('[BACKFILL-DEBUG] Org distribution:', JSON.stringify(dbgOrgs.rows));
 
     // Only fills NULL locations. Starts from tournament's own category to avoid org_id mismatch.
     // Uses REPLACE for mode comparison to handle "3 BANDES" vs "3BANDES" differences.
