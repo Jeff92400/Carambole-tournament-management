@@ -48,7 +48,7 @@ git push origin main
 
 ## Versioning
 
-**Current Version:** V 2.0.269 03/26
+**Current Version:** V 2.0.271 03/26
 
 Version is displayed at the bottom of the login screen (`frontend/login.html`).
 
@@ -191,6 +191,7 @@ To give each CDB a branded sender domain (e.g., `cdb9493@ffbcarambole-gestion.fr
 - **No hardcoding reference data:** NEVER hardcode values like game modes, FFB rankings, clubs, or categories. Always load them dynamically from the reference tables (`game_modes`, `ffb_rankings`, `clubs`, `categories`) via the API (`/api/reference-data/*`). See "Dynamic Selectors" section below.
 - **Helmet security headers:** The helmet middleware sets restrictive headers by default. For public endpoints that need to be accessed by external services (email clients, embeds, etc.), you must override specific headers. Common issue: `Cross-Origin-Resource-Policy: same-origin` blocks email clients from loading images. Fix by adding `res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');` to the endpoint.
 - **Safari CORS is extremely strict:** Safari's Intelligent Tracking Prevention (ITP) blocks cross-origin resources even with proper CORS headers. If images/resources work in Chrome but not Safari, the solution is to **proxy them through the consuming app's backend** rather than loading cross-origin. Example: Player App proxies club logos via `/api/player/club-logo/:filename` instead of loading directly from Tournament App. This is a recurring issue - always test in Safari!
+- **Club logos: dual storage (filesystem + database).** Logos are uploaded to `frontend/images/clubs/{orgSlug}/filename.png` (filesystem) AND stored as `BYTEA` in `clubs.logo_data` + `clubs.logo_content_type` columns. The `/images/clubs/*` middleware in `server.js` checks the filesystem first; if the file is missing (e.g., after a Railway deployment), it serves from the database. This ensures logos survive Railway's ephemeral filesystem. **Important:** All `SELECT` queries on `clubs` must explicitly list columns and exclude `logo_data` to avoid bloating JSON responses.
 - **Case-insensitive mode/game_type queries:** ALWAYS use `UPPER()` for case-insensitive comparisons when querying `mode_mapping`, `game_parameters`, or any table that stores game modes/types. Frontend may pass "Libre" (INITCAP) while tables store "LIBRE" (uppercase). Example: `WHERE UPPER(game_type) = UPPER($1)` instead of `WHERE game_type = $1`. This applies to all mode, game_type, and categorie comparisons across `inscriptions.js`, `emailing.js`, and other routes.
 
 ## Inscription Sources
