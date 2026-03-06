@@ -59,6 +59,8 @@ const defaults = {
   journees_count: '3',
   bracket_size: '4',
   average_bonus_tiers: 'false',
+  bonus_moyenne_enabled: 'false',
+  bonus_moyenne_type: 'normal',
 
   // Scoring rule details (journées mode)
   scoring_match_points_loss: '0',

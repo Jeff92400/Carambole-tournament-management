@@ -689,7 +689,15 @@ router.post('/organizations', async (req, res) => {
       ['enable_csv_imports', '0'],
       ['player_app_url', `https://cdbhs-player-app-production.up.railway.app/?org=${slug}`],
       ['external_inscription_enabled', 'false'],
-      ['external_inscription_url', '']
+      ['external_inscription_url', ''],
+      // Qualification & scoring defaults (org-isolated — never inherited from other CDBs)
+      ['qualification_mode', 'standard'],
+      ['best_of_count', '0'],
+      ['journees_count', '3'],
+      ['bracket_size', '4'],
+      ['average_bonus_tiers', 'false'],
+      ['bonus_moyenne_enabled', 'false'],
+      ['bonus_moyenne_type', 'normal'],
     ];
 
     for (const [key, value] of defaultOrgSettings) {

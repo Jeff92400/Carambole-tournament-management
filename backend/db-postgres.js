@@ -1535,6 +1535,24 @@ async function initializeDatabase() {
       ON CONFLICT (organization_id, key) DO NOTHING
     `);
 
+    // Backfill qualification & scoring defaults for ALL existing orgs (idempotent, DO NOTHING on conflict)
+    const qualificationDefaults = [
+      ['qualification_mode', 'standard'],
+      ['best_of_count', '0'],
+      ['journees_count', '3'],
+      ['bracket_size', '4'],
+      ['average_bonus_tiers', 'false'],
+      ['bonus_moyenne_enabled', 'false'],
+      ['bonus_moyenne_type', 'normal'],
+    ];
+    for (const [key, value] of qualificationDefaults) {
+      await client.query(`
+        INSERT INTO organization_settings (organization_id, key, value)
+        SELECT id, $1, $2 FROM organizations
+        ON CONFLICT (organization_id, key) DO NOTHING
+      `, [key, value]);
+    }
+
     // Seed default welcome email template for CDB onboarding
     await client.query(`
       INSERT INTO organization_settings (organization_id, key, value)
