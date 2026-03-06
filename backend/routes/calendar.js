@@ -60,6 +60,10 @@ const TOURNAMENT_NAME_MAPPING = {
   'F': 'Finale Départementale'
 };
 
+const TOURNAMENT_NUMBER_MAPPING = {
+  'T1': 1, 'T2': 2, 'T3': 3, 'F': 4
+};
+
 const router = express.Router();
 
 // Configure multer for memory storage (we'll save to database)
@@ -346,8 +350,8 @@ router.post('/import-season/execute', authenticateToken, requireAdmin, importUpl
       try {
         await new Promise((resolve, reject) => {
           db.run(`
-            INSERT INTO tournoi_ext (tournoi_id, nom, mode, categorie, taille, debut, fin, lieu, organization_id)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            INSERT INTO tournoi_ext (tournoi_id, nom, mode, categorie, taille, debut, fin, lieu, tournament_number, organization_id)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
             ON CONFLICT(tournoi_id) DO UPDATE SET
               nom = EXCLUDED.nom,
               mode = EXCLUDED.mode,
@@ -356,6 +360,7 @@ router.post('/import-season/execute', authenticateToken, requireAdmin, importUpl
               debut = EXCLUDED.debut,
               fin = EXCLUDED.fin,
               lieu = EXCLUDED.lieu,
+              tournament_number = EXCLUDED.tournament_number,
               organization_id = EXCLUDED.organization_id
           `, [
             tournament.tournoi_id,
@@ -366,6 +371,7 @@ router.post('/import-season/execute', authenticateToken, requireAdmin, importUpl
             tournament.debut,
             tournament.fin,
             tournament.lieu,
+            tournament.tournament_number,
             orgId
           ], function(err) {
             if (err) {
@@ -628,6 +634,7 @@ async function parseExcelCalendar(buffer, season, seasonPrefix, clubMapping) {
         debut,
         fin: debut,
         lieu,
+        tournament_number: TOURNAMENT_NUMBER_MAPPING[tournamentType] || null,
         _type: tournamentType,
         _club_code: clubCode,
         _is_finale: isFinal

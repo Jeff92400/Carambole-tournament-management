@@ -196,6 +196,13 @@
               </select>
             </div>
 
+            <div style="grid-column: 1 / -1;">
+              <label style="display: block; margin-bottom: 5px; font-weight: bold;">Numéro du tournoi</label>
+              <select id="edit_tournament_number" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                <option value="">-- Sélectionner --</option>
+              </select>
+            </div>
+
             <div>
               <label style="display: block; margin-bottom: 5px; font-weight: bold;">Date debut</label>
               <input type="date" id="edit_debut" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
@@ -271,6 +278,13 @@
             <div>
               <label style="display: block; margin-bottom: 5px; font-weight: bold;">Classement FFB *</label>
               <select id="create_categorie" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                <option value="">-- Sélectionner --</option>
+              </select>
+            </div>
+
+            <div style="grid-column: 1 / -1;">
+              <label style="display: block; margin-bottom: 5px; font-weight: bold;">Numéro du tournoi</label>
+              <select id="create_tournament_number" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
                 <option value="">-- Sélectionner --</option>
               </select>
             </div>
@@ -386,6 +400,24 @@
         }
       } catch (error) {
         console.error('Error loading game modes:', error);
+      }
+    }
+
+    // Load tournament rounds for create/edit dropdowns
+    async function loadTournamentRounds() {
+      try {
+        const response = await fetch(`${API_URL}/reference-data/tournament-rounds`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          const rounds = await response.json();
+          const options = '<option value="">-- Sélectionner --</option>' +
+            rounds.map(r => `<option value="${r.tournament_number}">${r.display_name}</option>`).join('');
+          document.getElementById('create_tournament_number').innerHTML = options;
+          document.getElementById('edit_tournament_number').innerHTML = options;
+        }
+      } catch (error) {
+        console.error('Error loading tournament rounds:', error);
       }
     }
 
@@ -819,6 +851,7 @@
       document.getElementById('edit_fin').value = tournoi.fin ? tournoi.fin.split('T')[0] : '';
       document.getElementById('edit_lieu').value = tournoi.lieu || '';
       document.getElementById('edit_lieu_2').value = tournoi.lieu_2 || '';
+      document.getElementById('edit_tournament_number').value = tournoi.tournament_number || '';
       document.getElementById('edit_taille').value = tournoi.taille || '';
       document.getElementById('edit_taille_cadre').value = tournoi.taille_cadre || '';
 
@@ -879,6 +912,7 @@
         nom: document.getElementById('edit_nom').value,
         mode: document.getElementById('edit_mode').value,
         categorie: document.getElementById('edit_categorie').value,
+        tournament_number: parseInt(document.getElementById('edit_tournament_number').value) || null,
         debut: document.getElementById('edit_debut').value || null,
         fin: document.getElementById('edit_fin').value || null,
         lieu: document.getElementById('edit_lieu').value || null,
@@ -947,6 +981,7 @@
         nom: document.getElementById('create_nom').value,
         mode: document.getElementById('create_mode').value,
         categorie: document.getElementById('create_categorie').value,
+        tournament_number: parseInt(document.getElementById('create_tournament_number').value) || null,
         debut: document.getElementById('create_debut').value || null,
         fin: document.getElementById('create_fin').value || null,
         lieu: document.getElementById('create_lieu').value || null,
@@ -1169,6 +1204,7 @@
     initReferenceData();
     loadGameModes(); // Load game modes for dropdowns
     loadCategories(); // Load categories for modal dropdowns
+    loadTournamentRounds(); // Load tournament rounds for create/edit dropdowns
     loadTournois();
   </script>
 

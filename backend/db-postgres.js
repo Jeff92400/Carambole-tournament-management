@@ -505,6 +505,21 @@ async function initializeDatabase() {
     // Add lieu_2 column to tournoi_ext for split tournaments (migration - February 2026)
     await client.query(`ALTER TABLE tournoi_ext ADD COLUMN IF NOT EXISTS lieu_2 TEXT`);
 
+    // Add tournament_number column to tournoi_ext (migration - March 2026)
+    // Direct integer matching tournament_types.tournament_number — replaces fragile nom parsing
+    await client.query(`ALTER TABLE tournoi_ext ADD COLUMN IF NOT EXISTS tournament_number INTEGER`);
+    // Backfill existing entries from nom patterns (one-time, only fills NULLs)
+    await client.query(`
+      UPDATE tournoi_ext SET tournament_number = CASE
+        WHEN UPPER(nom) LIKE 'T1 %' OR UPPER(nom) = 'T1' OR UPPER(nom) LIKE 'TOURNOI 1%' OR UPPER(nom) LIKE 'TQ1%' THEN 1
+        WHEN UPPER(nom) LIKE 'T2 %' OR UPPER(nom) = 'T2' OR UPPER(nom) LIKE 'TOURNOI 2%' OR UPPER(nom) LIKE 'TQ2%' THEN 2
+        WHEN UPPER(nom) LIKE 'T3 %' OR UPPER(nom) = 'T3' OR UPPER(nom) LIKE 'TOURNOI 3%' OR UPPER(nom) LIKE 'TQ3%' THEN 3
+        WHEN UPPER(nom) LIKE '%FINALE%' OR UPPER(nom) LIKE 'FD%' THEN 4
+        ELSE NULL
+      END
+      WHERE tournament_number IS NULL
+    `);
+
     // Tournament parameter overrides table (migration - February 2026)
     // Allows per-tournament customization of Distance and Reprises values
     await client.query(`
