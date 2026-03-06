@@ -48,7 +48,7 @@ git push origin main
 
 ## Versioning
 
-**Current Version:** V 2.0.271 03/26
+**Current Version:** V 2.0.272 03/26
 
 Version is displayed at the bottom of the login screen (`frontend/login.html`).
 
@@ -512,7 +512,7 @@ The super admin (`is_super_admin = true` on user) has a dedicated set of pages f
 
 ### Super Admin Versioning
 
-**Current SA Version:** SA 1.0.1
+**Current SA Version:** SA 1.0.3
 
 Separate version from the CDB app (`V 2.0.x`). Displayed bottom-right on all SA pages. Increment on each SA-level deployment.
 

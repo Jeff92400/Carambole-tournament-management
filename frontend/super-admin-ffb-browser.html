@@ -15,6 +15,7 @@
     .sa-nav a:hover { background: #f8f9fa; color: #333; }
     .sa-nav a.active { color: var(--color-primary, #1F4788); border-bottom-color: var(--color-primary, #1F4788); background: #f0f4ff; }
     .sa-nav a .nav-icon { display: block; font-size: 18px; margin-bottom: 2px; }
+    .sa-nav a.sa-help { flex: 0; min-width: 44px; color: #999; font-size: 18px; }
 
     .card { background: white; border-radius: 12px; padding: 16px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
 
@@ -143,6 +144,9 @@
       <a href="super-admin-settings.html">
         <span class="nav-icon">&#x2699;</span>
         Paramètres
+      </a>
+      <a href="guide-super-admin.html" class="sa-help" title="Guide Super Admin">
+        <span class="nav-icon">?</span>
       </a>
     </nav>
 
@@ -757,6 +761,6 @@
     // Load ligues tab by default
     loadLigues();
   </script>
-  <div style="position: fixed; bottom: 8px; right: 12px; font-size: 10px; color: #bbb; z-index: 9999;">SA 1.0.2</div>
+  <div style="position: fixed; bottom: 8px; right: 12px; font-size: 10px; color: #bbb; z-index: 9999;">SA 1.0.3</div>
 </body>
 </html>
