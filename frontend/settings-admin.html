@@ -3036,7 +3036,8 @@
         if (response.ok) {
           const info = await response.json();
           if (info.exists) {
-            document.getElementById('logoPreviewImg').src = info.url + '?t=' + Date.now();
+            const separator = info.url.includes('?') ? '&' : '?';
+            document.getElementById('logoPreviewImg').src = info.url + separator + 't=' + Date.now();
             document.getElementById('logoPreview').style.display = 'block';
           } else {
             document.getElementById('logoPreview').style.display = 'none';
