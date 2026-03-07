@@ -65,6 +65,14 @@
     .logo-zone .remove-btn { color: #dc3545; font-size: 11px; cursor: pointer; margin-top: 6px; }
     .toast { position: fixed; bottom: 20px; right: 20px; padding: 10px 20px; border-radius: 8px; color: white; font-size: 13px; z-index: 2000; opacity: 0; transition: opacity 0.3s; }
     .toast.visible { opacity: 1; }
+    .mode-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 13px; }
+    .mode-bar-label { min-width: 80px; font-weight: 600; color: #333; }
+    .mode-bar-track { flex: 1; background: #eee; border-radius: 6px; height: 22px; overflow: hidden; }
+    .mode-bar-fill { height: 100%; border-radius: 6px; display: flex; align-items: center; padding-left: 8px; color: white; font-size: 11px; font-weight: bold; min-width: 30px; transition: width 0.4s ease; }
+    .mode-bar-count { min-width: 50px; text-align: right; color: #666; font-size: 12px; }
+    .forfait-green { color: #155724; }
+    .forfait-orange { color: #856404; }
+    .forfait-red { color: #721c24; }
   </style>
 </head>
 <body>
@@ -110,25 +118,50 @@
         </div>
       </div>
 
-      <!-- CDB List -->
-      <div class="section-title">CDBs de la ligue <span id="cdbCount" style="font-weight: normal; color: #999;"></span></div>
+      <!-- Prochains Tournois (cross-CDB) -->
+      <div class="section-title">Prochains tournois</div>
       <div class="card" style="overflow-x: auto;">
         <table class="data-table">
           <thead>
             <tr>
-              <th>#</th>
+              <th>Date</th>
               <th>CDB</th>
-              <th>Code FFB</th>
-              <th>Joueurs</th>
-              <th>Clubs</th>
-              <th>Tournois</th>
-              <th>Statut</th>
+              <th>Mode</th>
+              <th>Catégorie</th>
+              <th>Lieu</th>
+              <th>Inscrits</th>
             </tr>
           </thead>
-          <tbody id="cdbsBody">
-            <tr><td colspan="7" style="text-align: center; color: #999;">Chargement...</td></tr>
+          <tbody id="upcomingBody">
+            <tr><td colspan="6" style="text-align: center; color: #999;">Chargement...</td></tr>
           </tbody>
         </table>
+      </div>
+
+      <!-- Activité par CDB (season stats) -->
+      <div class="section-title">Activité par CDB <span id="seasonLabel" style="font-weight: normal; color: #999;"></span></div>
+      <div class="card" style="overflow-x: auto;">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>CDB</th>
+              <th>Tournois</th>
+              <th>Inscriptions</th>
+              <th>Taux convocation</th>
+              <th>Taux forfait</th>
+              <th>Moy. inscrits/tournoi</th>
+            </tr>
+          </thead>
+          <tbody id="seasonStatsBody">
+            <tr><td colspan="6" style="text-align: center; color: #999;">Chargement...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Répartition par Mode -->
+      <div class="section-title">Répartition par mode</div>
+      <div class="card" id="modeDistributionCard">
+        <div style="text-align: center; color: #999; font-size: 13px; padding: 10px;">Chargement...</div>
       </div>
 
       <!-- Top Players -->
@@ -230,11 +263,33 @@
     let newLogoFile = null;
     let logoRemoved = false;
 
+    const MODE_COLORS = {
+      'LIBRE': '#667eea',
+      'BANDE': '#f5a623',
+      '3BANDES': '#e74c3c',
+      '3 BANDES': '#e74c3c',
+      'CADRE': '#2ecc71'
+    };
+    const DEFAULT_MODE_COLOR = '#999';
+
     function getRankTier(ranking) {
       if (!ranking) return '';
       if (ranking.startsWith('N')) return 'N';
       if (ranking.startsWith('R')) return 'R';
       return 'D';
+    }
+
+    function formatDate(dateStr) {
+      if (!dateStr) return '-';
+      const d = new Date(dateStr);
+      return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    }
+
+    function getForfaitClass(rate) {
+      if (rate == null) return '';
+      if (rate < 10) return 'forfait-green';
+      if (rate <= 20) return 'forfait-orange';
+      return 'forfait-red';
     }
 
     function showToast(message, type = 'success') {
@@ -280,30 +335,6 @@
         document.getElementById('kpiPlayers').textContent = data.stats.players.toLocaleString('fr-FR');
         document.getElementById('kpiClubs').textContent = data.stats.clubs.toLocaleString('fr-FR');
         document.getElementById('kpiTournaments').textContent = data.stats.tournaments.toLocaleString('fr-FR');
-
-        // CDB table
-        const cdbs = data.cdbs;
-        document.getElementById('cdbCount').textContent = `(${cdbs.length})`;
-        const tbody = document.getElementById('cdbsBody');
-
-        if (!cdbs.length) {
-          tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#999;">Aucun CDB dans cette ligue</td></tr>';
-        } else {
-          tbody.innerHTML = cdbs.map((cdb, idx) => {
-            const statusBadge = cdb.is_active
-              ? '<span class="badge badge-active">Actif</span>'
-              : '<span class="badge badge-inactive">Inactif</span>';
-            return `<tr>
-              <td><strong>${idx + 1}</strong></td>
-              <td><strong>${cdb.short_name}</strong><br><span style="font-size:11px;color:#888;">${cdb.name}</span></td>
-              <td>${cdb.ffb_cdb_code || '-'}</td>
-              <td>${parseInt(cdb.player_count).toLocaleString('fr-FR')}</td>
-              <td>${parseInt(cdb.club_count)}</td>
-              <td>${parseInt(cdb.tournament_count)}</td>
-              <td>${statusBadge}</td>
-            </tr>`;
-          }).join('');
-        }
       } catch (error) {
         console.error('Error loading ligue dashboard:', error);
       }
@@ -322,6 +353,96 @@
         bar.style.display = 'flex';
       } else {
         bar.style.display = 'none';
+      }
+    }
+
+    // ==================== Upcoming Tournaments ====================
+    async function loadUpcomingTournaments() {
+      const tbody = document.getElementById('upcomingBody');
+      try {
+        const response = await authFetch(`${API_URL}/ligue-admin/upcoming-tournaments`);
+        const tournaments = await response.json();
+
+        if (!tournaments.length) {
+          tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#999;">Aucun tournoi à venir</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = tournaments.map(t => `<tr>
+          <td>${formatDate(t.debut)}</td>
+          <td><strong>${t.cdb_name || '-'}</strong></td>
+          <td>${t.mode || '-'}</td>
+          <td>${t.categorie || '-'}</td>
+          <td>${t.lieu || '-'}</td>
+          <td style="text-align: center;">${parseInt(t.inscription_count) || 0}</td>
+        </tr>`).join('');
+      } catch (error) {
+        console.error('Error loading upcoming tournaments:', error);
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#c00;">Erreur de chargement</td></tr>';
+      }
+    }
+
+    // ==================== Season Stats ====================
+    async function loadSeasonStats() {
+      const tbody = document.getElementById('seasonStatsBody');
+      try {
+        const response = await authFetch(`${API_URL}/ligue-admin/season-stats`);
+        const data = await response.json();
+
+        document.getElementById('seasonLabel').textContent = `(${data.season})`;
+
+        if (!data.stats.length) {
+          tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#999;">Aucune donnée pour cette saison</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = data.stats.map(s => {
+          const forfaitRate = parseFloat(s.forfait_rate) || 0;
+          const forfaitClass = getForfaitClass(forfaitRate);
+          return `<tr>
+            <td><strong>${s.short_name}</strong></td>
+            <td style="text-align: center;">${parseInt(s.tournament_count) || 0}</td>
+            <td style="text-align: center;">${parseInt(s.inscription_count) || 0}</td>
+            <td style="text-align: center;">${s.convocation_rate != null ? s.convocation_rate + '%' : '-'}</td>
+            <td style="text-align: center;"><strong class="${forfaitClass}">${s.forfait_rate != null ? s.forfait_rate + '%' : '-'}</strong></td>
+            <td style="text-align: center;">${s.avg_per_tournament != null ? s.avg_per_tournament : '-'}</td>
+          </tr>`;
+        }).join('');
+      } catch (error) {
+        console.error('Error loading season stats:', error);
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#c00;">Erreur de chargement</td></tr>';
+      }
+    }
+
+    // ==================== Mode Distribution ====================
+    async function loadModeDistribution() {
+      const container = document.getElementById('modeDistributionCard');
+      try {
+        const response = await authFetch(`${API_URL}/ligue-admin/mode-distribution`);
+        const distribution = await response.json();
+
+        if (!distribution.length) {
+          container.innerHTML = '<div style="text-align:center;color:#999;font-size:13px;padding:10px;">Aucune donnée</div>';
+          return;
+        }
+
+        const total = distribution.reduce((sum, d) => sum + parseInt(d.count), 0);
+
+        container.innerHTML = distribution.map(d => {
+          const count = parseInt(d.count);
+          const pct = Math.round((count / total) * 100);
+          const color = MODE_COLORS[d.mode?.toUpperCase()] || DEFAULT_MODE_COLOR;
+          return `<div class="mode-bar">
+            <span class="mode-bar-label">${d.mode || 'Autre'}</span>
+            <div class="mode-bar-track">
+              <div class="mode-bar-fill" style="width: ${Math.max(pct, 5)}%; background: ${color};">${pct}%</div>
+            </div>
+            <span class="mode-bar-count">${count} tournoi${count > 1 ? 's' : ''}</span>
+          </div>`;
+        }).join('');
+      } catch (error) {
+        console.error('Error loading mode distribution:', error);
+        container.innerHTML = '<div style="text-align:center;color:#c00;font-size:13px;padding:10px;">Erreur de chargement</div>';
       }
     }
 
@@ -489,11 +610,12 @@
       }
     }
 
-    // Initialize
+    // Initialize — load all sections in parallel
     loadDashboard();
+    loadUpcomingTournaments();
+    loadSeasonStats();
+    loadModeDistribution();
     loadGameModes().then(() => loadTopPlayers());
   </script>
-  <script src="js/help-button.js?v=203"></script>
-  <script src="js/upcoming-tournaments.js?v=236"></script>
 </body>
 </html>

@@ -2,6 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const db = require('../db-loader');
 const { authenticateToken, requireLigueAdmin } = require('./auth');
+const appSettings = require('../utils/app-settings');
 
 const router = express.Router();
 const logoUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } });
@@ -249,6 +250,94 @@ router.delete('/ligue-logo', async (req, res) => {
   } catch (error) {
     console.error('Error deleting ligue logo:', error);
     res.status(500).json({ error: 'Erreur lors de la suppression du logo' });
+  }
+});
+
+// GET /api/ligue-admin/upcoming-tournaments — Cross-CDB upcoming tournaments
+router.get('/upcoming-tournaments', async (req, res) => {
+  try {
+    const ligueNumero = req.user.ligueNumero;
+    if (!ligueNumero) {
+      return res.status(400).json({ error: 'Aucune ligue associée à ce compte' });
+    }
+
+    const tournaments = await dbAll(`
+      SELECT te.tournoi_id, te.debut, te.nom, te.mode, te.categorie, te.lieu,
+             o.short_name as cdb_name,
+             COUNT(i.inscription_id) as inscription_count
+      FROM tournoi_ext te
+      JOIN organizations o ON te.organization_id = o.id
+      LEFT JOIN inscriptions i ON i.tournoi_id = te.tournoi_id AND i.forfait != 1
+      WHERE o.ffb_ligue_numero = $1 AND te.debut >= CURRENT_DATE
+      GROUP BY te.tournoi_id, te.debut, te.nom, te.mode, te.categorie, te.lieu, o.short_name
+      ORDER BY te.debut ASC
+      LIMIT 50
+    `, [ligueNumero]);
+
+    res.json(tournaments);
+  } catch (error) {
+    console.error('Ligue upcoming tournaments error:', error);
+    res.status(500).json({ error: 'Erreur lors du chargement des prochains tournois' });
+  }
+});
+
+// GET /api/ligue-admin/season-stats — Season activity stats per CDB
+router.get('/season-stats', async (req, res) => {
+  try {
+    const ligueNumero = req.user.ligueNumero;
+    if (!ligueNumero) {
+      return res.status(400).json({ error: 'Aucune ligue associée à ce compte' });
+    }
+
+    const season = req.query.season || await appSettings.getCurrentSeason();
+    const { start, end } = await appSettings.getSeasonDateRange(season);
+
+    const stats = await dbAll(`
+      SELECT o.short_name,
+        COUNT(DISTINCT te.tournoi_id) as tournament_count,
+        COUNT(i.inscription_id) as inscription_count,
+        ROUND(100.0 * SUM(CASE WHEN i.convoque = 1 THEN 1 ELSE 0 END) / NULLIF(COUNT(i.inscription_id), 0), 1) as convocation_rate,
+        ROUND(100.0 * SUM(CASE WHEN i.forfait = 1 THEN 1 ELSE 0 END) / NULLIF(COUNT(i.inscription_id), 0), 1) as forfait_rate,
+        ROUND(1.0 * COUNT(i.inscription_id) / NULLIF(COUNT(DISTINCT te.tournoi_id), 0), 1) as avg_per_tournament
+      FROM organizations o
+      LEFT JOIN tournoi_ext te ON te.organization_id = o.id AND te.debut BETWEEN $2 AND $3
+      LEFT JOIN inscriptions i ON i.tournoi_id = te.tournoi_id
+      WHERE o.ffb_ligue_numero = $1
+      GROUP BY o.id, o.short_name
+      ORDER BY o.short_name
+    `, [ligueNumero, start, end]);
+
+    res.json({ season, stats });
+  } catch (error) {
+    console.error('Ligue season stats error:', error);
+    res.status(500).json({ error: 'Erreur lors du chargement des statistiques' });
+  }
+});
+
+// GET /api/ligue-admin/mode-distribution — Tournament mode distribution for the season
+router.get('/mode-distribution', async (req, res) => {
+  try {
+    const ligueNumero = req.user.ligueNumero;
+    if (!ligueNumero) {
+      return res.status(400).json({ error: 'Aucune ligue associée à ce compte' });
+    }
+
+    const season = req.query.season || await appSettings.getCurrentSeason();
+    const { start, end } = await appSettings.getSeasonDateRange(season);
+
+    const distribution = await dbAll(`
+      SELECT te.mode, COUNT(*) as count
+      FROM tournoi_ext te
+      JOIN organizations o ON te.organization_id = o.id
+      WHERE o.ffb_ligue_numero = $1 AND te.debut BETWEEN $2 AND $3
+      GROUP BY te.mode
+      ORDER BY count DESC
+    `, [ligueNumero, start, end]);
+
+    res.json(distribution);
+  } catch (error) {
+    console.error('Ligue mode distribution error:', error);
+    res.status(500).json({ error: 'Erreur lors du chargement de la répartition' });
   }
 });
 
