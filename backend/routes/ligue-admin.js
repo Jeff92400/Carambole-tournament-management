@@ -116,7 +116,7 @@ router.get('/cdb-comparison', async (req, res) => {
   }
 });
 
-// GET /api/ligue-admin/top-players — Top players across CDBs in the ligue, by game mode
+// GET /api/ligue-admin/top-players — #1 ranked player per category per CDB in the ligue
 router.get('/top-players', async (req, res) => {
   try {
     const ligueNumero = req.user.ligueNumero;
@@ -124,56 +124,28 @@ router.get('/top-players', async (req, res) => {
       return res.status(400).json({ error: 'Aucune ligue associée à ce compte' });
     }
 
-    const mode = req.query.mode || 'LIBRE';
-    const limit = Math.min(parseInt(req.query.limit) || 20, 50);
     const season = req.query.season || await appSettings.getCurrentSeason();
 
-    // Resolve game_mode_id from mode code
-    const gameMode = await dbGet(
-      `SELECT id FROM game_modes WHERE UPPER(code) = UPPER($1)`,
-      [mode]
-    );
-    if (!gameMode) {
-      return res.status(400).json({ error: 'Mode invalide' });
-    }
-
-    // Get top players from player_ffb_classifications (per-discipline classement)
     const players = await dbAll(`
-      SELECT p.first_name, p.last_name, p.licence, pfc.classement as ranking,
-             o.short_name as cdb_name, o.ffb_cdb_code,
-             COALESCE(fr.level_order, 99) as level_order
-      FROM player_ffb_classifications pfc
-      JOIN players p ON pfc.licence = p.licence
-      JOIN organizations o ON p.organization_id = o.id
-      LEFT JOIN ffb_rankings fr ON pfc.classement = fr.code
+      SELECT p.first_name, p.last_name, p.licence,
+             c.display_name as category, c.game_type,
+             o.short_name as cdb_name,
+             r.total_match_points, r.avg_moyenne
+      FROM rankings r
+      JOIN players p ON r.licence = p.licence
+      JOIN categories c ON r.category_id = c.id
+      JOIN organizations o ON r.organization_id = o.id
       WHERE o.ffb_ligue_numero = $1
-        AND pfc.game_mode_id = $2
-        AND pfc.season = $3
+        AND r.season = $2
+        AND r.rank_position = 1
         AND UPPER(p.licence) NOT LIKE 'TEST%'
-        AND pfc.classement IS NOT NULL
-        AND pfc.classement != ''
-        AND UPPER(pfc.classement) != 'NC'
-      ORDER BY COALESCE(fr.level_order, 99) ASC, p.last_name ASC
-      LIMIT $4
-    `, [ligueNumero, gameMode.id, season, limit]);
+      ORDER BY c.game_type, c.display_name, o.short_name
+    `, [ligueNumero, season]);
 
-    res.json(players);
+    res.json({ season, players });
   } catch (error) {
     console.error('Ligue top players error:', error);
     res.status(500).json({ error: 'Erreur lors du chargement des meilleurs joueurs' });
-  }
-});
-
-// GET /api/ligue-admin/game-modes — Available game modes for tabs
-router.get('/game-modes', async (req, res) => {
-  try {
-    const modes = await dbAll(
-      `SELECT code, display_name, color, display_order FROM game_modes WHERE is_active = true ORDER BY display_order`
-    );
-    res.json(modes);
-  } catch (error) {
-    console.error('Error fetching game modes:', error);
-    res.status(500).json({ error: 'Erreur' });
   }
 });
 
