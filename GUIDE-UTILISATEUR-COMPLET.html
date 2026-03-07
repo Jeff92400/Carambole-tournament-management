@@ -662,9 +662,10 @@
 
     <h4>Inscriptions saison</h4>
     <ul>
-      <li><strong>Total</strong> : Nombre total d'inscriptions</li>
+      <li><strong>Total</strong> : Nombre total d'inscriptions actives (hors indisponibles et désinscrits)</li>
       <li><strong>Convoqués</strong> : Joueurs ayant reçu leur convocation</li>
       <li><strong>Forfaits</strong> : Nombre de forfaits déclarés</li>
+      <li><strong>Indisponibles</strong> : Joueurs ayant déclaré leur indisponibilité via l'Application Joueur</li>
     </ul>
 
     <h4>Compétitions saison</h4>
@@ -912,7 +913,7 @@
       <li>Nom et prénom</li>
       <li>Club</li>
       <li>Licence</li>
-      <li>Badge de statut (<span class="badge badge-green">Inscrit</span> <span class="badge badge-yellow">Forfait</span> <span class="badge badge-red">Désinscrit</span>)</li>
+      <li>Badge de statut (<span class="badge badge-green">Inscrit</span> <span class="badge badge-yellow">Forfait</span> <span class="badge" style="background: #e0e0e0; color: #616161;">Indisponible</span> <span class="badge badge-red">Désinscrit</span>)</li>
     </ul>
     <p><strong>Boutons d'action :</strong></p>
     <ul>
@@ -2188,7 +2189,7 @@
     <h3>Filtres disponibles</h3>
     <ul>
       <li><strong>Saison</strong>, <strong>Mode de jeu</strong>, <strong>Niveau</strong></li>
-      <li><strong>Statut</strong> : <span class="badge badge-green">Inscrit</span> <span class="badge badge-blue">Convoqué</span> <span class="badge badge-yellow">Forfait</span> <span class="badge badge-red">Désinscrit</span></li>
+      <li><strong>Statut</strong> : <span class="badge badge-green">Inscrit</span> <span class="badge badge-blue">Convoqué</span> <span class="badge badge-yellow">Forfait</span> <span class="badge" style="background: #e0e0e0; color: #616161;">Indisponible</span> <span class="badge badge-red">Désinscrit</span></li>
       <li><strong>Recherche</strong> : Par nom ou licence</li>
     </ul>
 
@@ -2204,7 +2205,7 @@
         <tr><td>Téléphone</td><td>Numéro de téléphone</td></tr>
         <tr><td>Compétition</td><td>Mode + niveau + numéro tournoi</td></tr>
         <tr><td>Source</td><td>player_app / manual / ionos</td></tr>
-        <tr><td>Statut</td><td>Inscrit / Convoqué / Forfait / Désinscrit</td></tr>
+        <tr><td>Statut</td><td>Inscrit / Convoqué / Forfait / Indisponible / Désinscrit</td></tr>
         <tr><td>Actions</td><td>Modifier / Supprimer</td></tr>
       </tbody>
     </table>
@@ -2228,6 +2229,16 @@
     <div class="info-card">
       <strong>Lien avec l'Application Joueur :</strong> Les inscriptions avec source "player_app" ont été faites par le joueur lui-même. Ces inscriptions ne doivent généralement pas être modifiées manuellement.
     </div>
+
+    <h4>Statut « Indisponible »</h4>
+    <p>Les joueurs peuvent déclarer leur indisponibilité pour une compétition via l'Application Joueur, soit directement depuis la carte de la compétition, soit via le bouton « Indiquer mon indisponibilité » dans les emails de relance.</p>
+    <ul>
+      <li>Une inscription est créée avec le statut <span class="badge" style="background: #e0e0e0; color: #616161;">Indisponible</span></li>
+      <li>L'administrateur reçoit un <strong>email de notification</strong> à l'adresse configurée dans Paramètres > Email de notification</li>
+      <li>Le joueur indisponible est <strong>automatiquement exclu</strong> des prochaines relances</li>
+      <li>Le joueur peut changer d'avis et s'inscrire tant que les inscriptions sont ouvertes — le statut passe alors à « Inscrit »</li>
+      <li>Les inscriptions « Indisponible » ne sont <strong>pas comptabilisées</strong> dans le total des inscriptions actives</li>
+    </ul>
   </section>
 
   <hr>

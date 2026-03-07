@@ -129,9 +129,10 @@ Page d'accueil présentant une vue d'ensemble de l'activité du comité.
 
 #### Inscriptions saison
 
-- **Total** : Nombre total d'inscriptions
+- **Total** : Nombre total d'inscriptions actives (hors indisponibles et désinscrits)
 - **Convoqués** : Joueurs ayant reçu leur convocation
 - **Forfaits** : Nombre de forfaits déclarés
+- **Indisponibles** : Joueurs ayant déclaré leur indisponibilité via l'Application Joueur
 
 #### Compétitions saison
 
@@ -320,7 +321,7 @@ Fonction principale pour préparer un tournoi : sélection des joueurs, généra
 - Nom et prénom
 - Club
 - Licence
-- Badge de statut (Inscrit / Forfait / Désinscrit)
+- Badge de statut (Inscrit / Forfait / Indisponible / Désinscrit)
 
 **Boutons d'action :**
 
@@ -1289,7 +1290,7 @@ Vue complète de toutes les inscriptions aux compétitions.
 ### Filtres disponibles
 
 - **Saison**, **Mode de jeu**, **Niveau**
-- **Statut** : Inscrit / Convoqué / Forfait / Désinscrit
+- **Statut** : Inscrit / Convoqué / Forfait / Indisponible / Désinscrit
 - **Recherche** : Par nom ou licence
 
 ### Tableau affiché
@@ -1302,7 +1303,7 @@ Vue complète de toutes les inscriptions aux compétitions.
 | Téléphone | Numéro de téléphone |
 | Compétition | Mode + niveau + numéro tournoi |
 | Source | player_app / manual / ionos |
-| Statut | Inscrit / Convoqué / Forfait / Désinscrit |
+| Statut | Inscrit / Convoqué / Forfait / Indisponible / Désinscrit |
 | Actions | Modifier / Supprimer |
 
 ### Sources d'inscription
@@ -1320,6 +1321,16 @@ Vue complète de toutes les inscriptions aux compétitions.
 5. Cliquer sur "Enregistrer"
 
 **Lien avec l'Application Joueur :** Les inscriptions avec source "player_app" ont été faites par le joueur lui-même. Ces inscriptions ne doivent généralement pas être modifiées manuellement.
+
+#### Statut « Indisponible »
+
+Les joueurs peuvent déclarer leur indisponibilité pour une compétition via l'Application Joueur, soit directement depuis la carte de la compétition, soit via le bouton « Indiquer mon indisponibilité » dans les emails de relance.
+
+- Une inscription est créée avec le statut **Indisponible**
+- L'administrateur reçoit un **email de notification** à l'adresse configurée dans Paramètres > Email de notification
+- Le joueur indisponible est **automatiquement exclu** des prochaines relances
+- Le joueur peut changer d'avis et s'inscrire tant que les inscriptions sont ouvertes — le statut passe alors à « Inscrit »
+- Les inscriptions « Indisponible » ne sont **pas comptabilisées** dans le total des inscriptions actives
 
 ---
 
