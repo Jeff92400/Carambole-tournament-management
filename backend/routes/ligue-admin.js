@@ -126,36 +126,36 @@ router.get('/top-players', async (req, res) => {
 
     const mode = req.query.mode || 'LIBRE';
     const limit = Math.min(parseInt(req.query.limit) || 20, 50);
+    const season = req.query.season || await appSettings.getCurrentSeason();
 
-    // Map mode to rank column
-    const rankColumns = {
-      'LIBRE': 'rank_libre',
-      'BANDE': 'rank_bande',
-      '3BANDES': 'rank_3bandes',
-      'CADRE': 'rank_cadre'
-    };
-
-    const rankCol = rankColumns[mode.toUpperCase()];
-    if (!rankCol) {
-      return res.status(400).json({ error: 'Mode invalide. Valeurs: LIBRE, BANDE, 3BANDES, CADRE' });
+    // Resolve game_mode_id from mode code
+    const gameMode = await dbGet(
+      `SELECT id FROM game_modes WHERE UPPER(code) = UPPER($1)`,
+      [mode]
+    );
+    if (!gameMode) {
+      return res.status(400).json({ error: 'Mode invalide' });
     }
 
-    // Get top players sorted by ranking level (N1 best → NC worst)
+    // Get top players from player_ffb_classifications (per-discipline classement)
     const players = await dbAll(`
-      SELECT p.first_name, p.last_name, p.licence, p.${rankCol} as ranking,
+      SELECT p.first_name, p.last_name, p.licence, pfc.classement as ranking,
              o.short_name as cdb_name, o.ffb_cdb_code,
              COALESCE(fr.level_order, 99) as level_order
-      FROM players p
+      FROM player_ffb_classifications pfc
+      JOIN players p ON pfc.licence = p.licence
       JOIN organizations o ON p.organization_id = o.id
-      LEFT JOIN ffb_rankings fr ON p.${rankCol} = fr.code
+      LEFT JOIN ffb_rankings fr ON pfc.classement = fr.code
       WHERE o.ffb_ligue_numero = $1
+        AND pfc.game_mode_id = $2
+        AND pfc.season = $3
         AND UPPER(p.licence) NOT LIKE 'TEST%'
-        AND p.${rankCol} IS NOT NULL
-        AND p.${rankCol} != ''
-        AND p.${rankCol} != 'NC'
+        AND pfc.classement IS NOT NULL
+        AND pfc.classement != ''
+        AND UPPER(pfc.classement) != 'NC'
       ORDER BY COALESCE(fr.level_order, 99) ASC, p.last_name ASC
-      LIMIT $2
-    `, [ligueNumero, limit]);
+      LIMIT $4
+    `, [ligueNumero, gameMode.id, season, limit]);
 
     res.json(players);
   } catch (error) {
@@ -297,8 +297,7 @@ router.get('/season-stats', async (req, res) => {
         COUNT(DISTINCT te.tournoi_id) as tournament_count,
         COUNT(i.inscription_id) as inscription_count,
         ROUND(100.0 * SUM(CASE WHEN i.convoque = 1 THEN 1 ELSE 0 END) / NULLIF(COUNT(i.inscription_id), 0), 1) as convocation_rate,
-        ROUND(100.0 * SUM(CASE WHEN i.forfait = 1 THEN 1 ELSE 0 END) / NULLIF(COUNT(i.inscription_id), 0), 1) as forfait_rate,
-        ROUND(1.0 * COUNT(i.inscription_id) / NULLIF(COUNT(DISTINCT te.tournoi_id), 0), 1) as avg_per_tournament
+        ROUND(100.0 * SUM(CASE WHEN i.forfait = 1 THEN 1 ELSE 0 END) / NULLIF(COUNT(i.inscription_id), 0), 1) as forfait_rate
       FROM organizations o
       LEFT JOIN tournoi_ext te ON te.organization_id = o.id AND te.debut BETWEEN $2 AND $3
       LEFT JOIN inscriptions i ON i.tournoi_id = te.tournoi_id

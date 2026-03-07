@@ -155,7 +155,6 @@
               <th>Inscriptions</th>
               <th>Taux convocation</th>
               <th>Taux forfait</th>
-              <th>Moy. inscrits/tournoi</th>
             </tr>
           </thead>
           <tbody id="seasonStatsBody">
@@ -426,7 +425,7 @@
         document.getElementById('seasonLabel').textContent = `(${data.season})`;
 
         if (!data.stats.length) {
-          tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#999;">Aucune donnée pour cette saison</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#999;">Aucune donnée pour cette saison</td></tr>';
           return;
         }
 
@@ -439,12 +438,11 @@
             <td style="text-align: center;">${parseInt(s.inscription_count) || 0}</td>
             <td style="text-align: center;">${s.convocation_rate != null ? s.convocation_rate + '%' : '-'}</td>
             <td style="text-align: center;"><strong class="${forfaitClass}">${s.forfait_rate != null ? s.forfait_rate + '%' : '-'}</strong></td>
-            <td style="text-align: center;">${s.avg_per_tournament != null ? s.avg_per_tournament : '-'}</td>
           </tr>`;
         }).join('');
       } catch (error) {
         console.error('Error loading season stats:', error);
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#c00;">Erreur de chargement</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#c00;">Erreur de chargement</td></tr>';
       }
     }
 
