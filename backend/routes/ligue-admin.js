@@ -1,8 +1,10 @@
 const express = require('express');
+const multer = require('multer');
 const db = require('../db-loader');
 const { authenticateToken, requireLigueAdmin } = require('./auth');
 
 const router = express.Router();
+const logoUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } });
 
 // All routes require ligue admin or super admin
 router.use(authenticateToken, requireLigueAdmin);
@@ -26,6 +28,15 @@ function dbGet(sql, params = []) {
   });
 }
 
+function dbRun(sql, params = []) {
+  return new Promise((resolve, reject) => {
+    db.run(sql, params, function(err) {
+      if (err) reject(err);
+      else resolve({ changes: this.changes, lastID: this.lastID });
+    });
+  });
+}
+
 // GET /api/ligue-admin/dashboard — Ligue overview with stats + CDB list
 router.get('/dashboard', async (req, res) => {
   try {
@@ -36,7 +47,9 @@ router.get('/dashboard', async (req, res) => {
 
     // Ligue info
     const ligue = await dbGet(
-      `SELECT numero, nom FROM ffb_ligues WHERE numero = $1`,
+      `SELECT numero, nom, email, telephone, website, address,
+              CASE WHEN logo_data IS NOT NULL THEN true ELSE false END as has_logo
+       FROM ffb_ligues WHERE numero = $1`,
       [ligueNumero]
     );
 
@@ -187,6 +200,55 @@ router.get('/ligue-logo', async (req, res) => {
   } catch (error) {
     console.error('Error serving ligue logo:', error);
     res.status(500).json({ error: 'Erreur' });
+  }
+});
+
+// PUT /api/ligue-admin/ligue-info — Update own ligue contact info
+router.put('/ligue-info', logoUpload.single('logo'), async (req, res) => {
+  try {
+    const ligueNumero = req.user.ligueNumero;
+    if (!ligueNumero) {
+      return res.status(400).json({ error: 'Aucune ligue associée à ce compte' });
+    }
+
+    const { email, telephone, website, address } = req.body;
+
+    await dbRun(
+      `UPDATE ffb_ligues SET email = $1, telephone = $2, website = $3, address = $4, updated_at = CURRENT_TIMESTAMP WHERE numero = $5`,
+      [email || null, telephone || null, website || null, address || null, ligueNumero]
+    );
+
+    if (req.file) {
+      await dbRun(
+        `UPDATE ffb_ligues SET logo_data = $1, logo_content_type = $2, logo_filename = $3, updated_at = CURRENT_TIMESTAMP WHERE numero = $4`,
+        [req.file.buffer, req.file.mimetype, req.file.originalname, ligueNumero]
+      );
+    }
+
+    res.json({ success: true, message: 'Informations mises à jour' });
+  } catch (error) {
+    console.error('Error updating ligue info:', error);
+    res.status(500).json({ error: 'Erreur lors de la mise à jour' });
+  }
+});
+
+// DELETE /api/ligue-admin/ligue-logo — Remove own ligue logo
+router.delete('/ligue-logo', async (req, res) => {
+  try {
+    const ligueNumero = req.user.ligueNumero;
+    if (!ligueNumero) {
+      return res.status(400).json({ error: 'Aucune ligue associée à ce compte' });
+    }
+
+    await dbRun(
+      `UPDATE ffb_ligues SET logo_data = NULL, logo_content_type = NULL, logo_filename = NULL, updated_at = CURRENT_TIMESTAMP WHERE numero = $1`,
+      [ligueNumero]
+    );
+
+    res.json({ success: true, message: 'Logo supprimé' });
+  } catch (error) {
+    console.error('Error deleting ligue logo:', error);
+    res.status(500).json({ error: 'Erreur lors de la suppression du logo' });
   }
 });
 

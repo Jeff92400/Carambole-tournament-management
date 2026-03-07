@@ -43,6 +43,28 @@
     .rank-N { background: #fff3cd; color: #856404; }
     .rank-R { background: #d1ecf1; color: #0c5460; }
     .rank-D { background: #e2e3e5; color: #383d41; }
+    .ligue-info-card { display: flex; flex-wrap: wrap; gap: 12px 24px; font-size: 13px; color: #555; }
+    .ligue-info-card span { display: flex; align-items: center; gap: 4px; }
+    .ligue-info-card a { color: var(--color-primary, #1F4788); text-decoration: none; }
+    .ligue-info-card a:hover { text-decoration: underline; }
+    .edit-ligue-btn { background: none; border: 1px solid #ddd; border-radius: 6px; padding: 4px 10px; font-size: 12px; color: #666; cursor: pointer; }
+    .edit-ligue-btn:hover { background: #f5f5f5; color: #333; }
+    .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center; }
+    .modal-overlay.visible { display: flex; }
+    .modal { background: white; border-radius: 12px; padding: 24px; width: 90%; max-width: 500px; max-height: 90vh; overflow-y: auto; }
+    .modal h3 { display: flex; justify-content: space-between; align-items: center; margin: 0 0 16px 0; }
+    .modal .close-btn { background: none; border: none; font-size: 24px; cursor: pointer; color: #999; }
+    .modal .form-group { margin-bottom: 12px; }
+    .modal .form-group label { display: block; font-size: 12px; font-weight: 600; color: #555; margin-bottom: 4px; }
+    .modal .form-group input, .modal .form-group textarea { width: 100%; padding: 8px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; box-sizing: border-box; }
+    .modal .form-group textarea { min-height: 60px; resize: vertical; }
+    .logo-zone { border: 2px dashed #ddd; border-radius: 8px; padding: 12px; text-align: center; cursor: pointer; position: relative; min-height: 60px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    .logo-zone:hover { border-color: #aaa; }
+    .logo-zone img { max-height: 80px; max-width: 100%; object-fit: contain; }
+    .logo-zone .placeholder { color: #aaa; font-size: 12px; }
+    .logo-zone .remove-btn { color: #dc3545; font-size: 11px; cursor: pointer; margin-top: 6px; }
+    .toast { position: fixed; bottom: 20px; right: 20px; padding: 10px 20px; border-radius: 8px; color: white; font-size: 13px; z-index: 2000; opacity: 0; transition: opacity 0.3s; }
+    .toast.visible { opacity: 1; }
   </style>
 </head>
 <body>
@@ -52,6 +74,7 @@
         <h2 style="margin-bottom: 0;"><img id="ligueLogo" src="images/FFB.png" alt="" style="height: 48px; width: 48px; vertical-align: middle; margin-right: 8px; border-radius: 6px;" onerror="this.src='images/FrenchBillard-Icon-small.png';"><span id="ligueTitle">Tableau de bord Ligue</span></h2>
       </div>
       <div class="nav-links">
+        <button class="edit-ligue-btn" onclick="openEditModal()" title="Modifier les informations de la ligue">&#9998; Modifier</button>
         <a href="#" id="logoutBtn" class="nav-logout">Deconnexion</a>
       </div>
     </div>
@@ -63,6 +86,9 @@
     </div>
 
     <div id="dashboardContent" style="display: none;">
+      <!-- Ligue Contact Info -->
+      <div id="ligueInfoBar" class="ligue-info-card" style="display: none; margin-bottom: 10px;"></div>
+
       <!-- Stats Overview -->
       <div class="section-title" id="overviewTitle">Vue d'ensemble</div>
       <div class="compact-stats">
@@ -129,6 +155,51 @@
     </div>
   </div>
 
+  <!-- Edit Modal -->
+  <div class="modal-overlay" id="editModal">
+    <div class="modal">
+      <h3>
+        <span id="modalTitle">Modifier la ligue</span>
+        <button class="close-btn" onclick="closeModal()">&times;</button>
+      </h3>
+
+      <div class="form-group">
+        <label>Logo de la ligue</label>
+        <div class="logo-zone" id="logoZone" onclick="document.getElementById('logoInput').click()">
+          <div class="placeholder" id="logoPlaceholder">Cliquez pour ajouter un logo (PNG, JPG)</div>
+          <img id="logoModalPreview" style="display: none;">
+          <span class="remove-btn" id="logoRemoveBtn" style="display: none;" onclick="event.stopPropagation(); removeLogo();">Supprimer le logo</span>
+        </div>
+        <input type="file" id="logoInput" accept="image/*" style="display: none;" onchange="onLogoSelected(this)">
+      </div>
+
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" id="editEmail" placeholder="contact@ligue.fr">
+      </div>
+      <div class="form-group">
+        <label>Téléphone</label>
+        <input type="tel" id="editTelephone" placeholder="01 23 45 67 89">
+      </div>
+      <div class="form-group">
+        <label>Site web</label>
+        <input type="url" id="editWebsite" placeholder="https://www.ligue.fr">
+      </div>
+      <div class="form-group">
+        <label>Adresse</label>
+        <textarea id="editAddress" placeholder="Adresse postale de la ligue"></textarea>
+      </div>
+
+      <div style="display: flex; gap: 8px; margin-top: 16px;">
+        <button class="btn-sm btn-primary btn-lg" onclick="saveLigueInfo()" id="btnSave">Enregistrer</button>
+        <button class="btn-sm btn-outline btn-lg" onclick="closeModal()">Annuler</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+
   <script src="js/auth-utils.js?v=197"></script>
   <script>
     const API_URL = '/api';
@@ -155,18 +226,34 @@
     });
 
     let currentMode = 'LIBRE';
-
-    function formatDateShort(dateStr) {
-      if (!dateStr) return '-';
-      const d = new Date(dateStr);
-      return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-    }
+    let ligueData = null;
+    let newLogoFile = null;
+    let logoRemoved = false;
 
     function getRankTier(ranking) {
       if (!ranking) return '';
       if (ranking.startsWith('N')) return 'N';
       if (ranking.startsWith('R')) return 'R';
       return 'D';
+    }
+
+    function showToast(message, type = 'success') {
+      const toast = document.getElementById('toast');
+      toast.textContent = message;
+      toast.style.background = type === 'error' ? '#dc3545' : '#28a745';
+      toast.classList.add('visible');
+      setTimeout(() => toast.classList.remove('visible'), 3000);
+    }
+
+    // Load ligue logo via authenticated fetch → blob URL
+    async function loadLigueLogo() {
+      try {
+        const r = await authFetch(`${API_URL}/ligue-admin/ligue-logo`);
+        if (r.ok) {
+          const blob = await r.blob();
+          document.getElementById('ligueLogo').src = URL.createObjectURL(blob);
+        }
+      } catch (e) { /* no logo */ }
     }
 
     // Load dashboard data
@@ -179,17 +266,15 @@
           return;
         }
         const data = await response.json();
+        ligueData = data.ligue;
 
         // Title + logo
         if (data.ligue) {
           document.getElementById('ligueTitle').textContent = `Ligue ${data.ligue.nom}`;
           document.getElementById('overviewTitle').textContent = `Vue d'ensemble — Ligue ${data.ligue.nom}`;
-          // Try to load ligue logo
-          const logoImg = document.getElementById('ligueLogo');
-          const logoUrl = `${API_URL}/ligue-admin/ligue-logo`;
-          fetch(logoUrl, { headers: { 'Authorization': `Bearer ${token}` } })
-            .then(r => { if (r.ok) return r.blob(); })
-            .then(blob => { if (blob) logoImg.src = URL.createObjectURL(blob); });
+          document.getElementById('modalTitle').textContent = data.ligue.nom || 'Modifier la ligue';
+          loadLigueLogo();
+          renderLigueInfo(data.ligue);
         }
 
         // Stats
@@ -223,6 +308,142 @@
         }
       } catch (error) {
         console.error('Error loading ligue dashboard:', error);
+      }
+    }
+
+    // Render ligue contact info bar
+    function renderLigueInfo(ligue) {
+      const bar = document.getElementById('ligueInfoBar');
+      const parts = [];
+      if (ligue.email) parts.push(`<span>&#9993; <a href="mailto:${ligue.email}">${ligue.email}</a></span>`);
+      if (ligue.telephone) parts.push(`<span>&#9742; ${ligue.telephone}</span>`);
+      if (ligue.website) parts.push(`<span>&#127760; <a href="${ligue.website}" target="_blank">${ligue.website.replace(/^https?:\/\//, '')}</a></span>`);
+      if (ligue.address) parts.push(`<span>&#128205; ${ligue.address}</span>`);
+      if (parts.length) {
+        bar.innerHTML = parts.join('');
+        bar.style.display = 'flex';
+      } else {
+        bar.style.display = 'none';
+      }
+    }
+
+    // ==================== Edit Modal ====================
+    async function openEditModal() {
+      if (!ligueData) return;
+      newLogoFile = null;
+      logoRemoved = false;
+
+      document.getElementById('editEmail').value = ligueData.email || '';
+      document.getElementById('editTelephone').value = ligueData.telephone || '';
+      document.getElementById('editWebsite').value = ligueData.website || '';
+      document.getElementById('editAddress').value = ligueData.address || '';
+
+      // Logo preview
+      const preview = document.getElementById('logoModalPreview');
+      const placeholder = document.getElementById('logoPlaceholder');
+      const removeBtn = document.getElementById('logoRemoveBtn');
+
+      if (ligueData.has_logo) {
+        try {
+          const r = await authFetch(`${API_URL}/ligue-admin/ligue-logo`);
+          if (r.ok) {
+            const blob = await r.blob();
+            preview.src = URL.createObjectURL(blob);
+            preview.style.display = 'block';
+            placeholder.style.display = 'none';
+            removeBtn.style.display = 'inline-block';
+          } else {
+            preview.style.display = 'none';
+            placeholder.style.display = 'block';
+            removeBtn.style.display = 'none';
+          }
+        } catch (e) {
+          preview.style.display = 'none';
+          placeholder.style.display = 'block';
+          removeBtn.style.display = 'none';
+        }
+      } else {
+        preview.style.display = 'none';
+        placeholder.style.display = 'block';
+        removeBtn.style.display = 'none';
+      }
+
+      document.getElementById('logoInput').value = '';
+      document.getElementById('editModal').classList.add('visible');
+    }
+
+    function closeModal() {
+      document.getElementById('editModal').classList.remove('visible');
+      newLogoFile = null;
+      logoRemoved = false;
+    }
+
+    function onLogoSelected(input) {
+      if (!input.files || !input.files[0]) return;
+      newLogoFile = input.files[0];
+      logoRemoved = false;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const preview = document.getElementById('logoModalPreview');
+        preview.src = e.target.result;
+        preview.style.display = 'block';
+        document.getElementById('logoPlaceholder').style.display = 'none';
+        document.getElementById('logoRemoveBtn').style.display = 'inline-block';
+      };
+      reader.readAsDataURL(newLogoFile);
+    }
+
+    async function removeLogo() {
+      if (ligueData && ligueData.has_logo && !newLogoFile) {
+        logoRemoved = true;
+      }
+      newLogoFile = null;
+      document.getElementById('logoModalPreview').style.display = 'none';
+      document.getElementById('logoPlaceholder').style.display = 'block';
+      document.getElementById('logoRemoveBtn').style.display = 'none';
+    }
+
+    async function saveLigueInfo() {
+      const btn = document.getElementById('btnSave');
+      btn.disabled = true;
+      btn.textContent = 'Enregistrement...';
+
+      try {
+        // Delete logo if removed
+        if (logoRemoved) {
+          await authFetch(`${API_URL}/ligue-admin/ligue-logo`, { method: 'DELETE' });
+        }
+
+        // Save info (+ optional new logo)
+        const formData = new FormData();
+        formData.append('email', document.getElementById('editEmail').value);
+        formData.append('telephone', document.getElementById('editTelephone').value);
+        formData.append('website', document.getElementById('editWebsite').value);
+        formData.append('address', document.getElementById('editAddress').value);
+        if (newLogoFile) {
+          formData.append('logo', newLogoFile);
+        }
+
+        const res = await fetch(`${API_URL}/ligue-admin/ligue-info`, {
+          method: 'PUT',
+          headers: { 'Authorization': `Bearer ${token}` },
+          body: formData
+        });
+        const data = await res.json();
+
+        if (res.ok) {
+          showToast(data.message || 'Informations mises à jour');
+          closeModal();
+          loadDashboard();
+        } else {
+          showToast(data.error || 'Erreur', 'error');
+        }
+      } catch (error) {
+        console.error('Error saving ligue info:', error);
+        showToast('Erreur lors de la sauvegarde', 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Enregistrer';
       }
     }
 
@@ -264,7 +485,7 @@
         const players = await response.json();
 
         if (!players.length) {
-          tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#999;">Aucun joueur classe dans ce mode</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#999;">Aucun joueur classé dans ce mode</td></tr>';
           return;
         }
 
