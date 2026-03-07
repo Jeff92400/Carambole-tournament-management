@@ -2956,6 +2956,83 @@ router.post('/inscription-cancellation', async (req, res) => {
   }
 });
 
+// Send unavailability notification to CDB admin (called by Player App)
+router.post('/unavailability-notification', async (req, res) => {
+  const { player_name, player_licence, tournament_name, mode, category, tournament_date, api_key, organization_id } = req.body;
+
+  // Verify API key (shared secret between apps)
+  if (api_key !== process.env.PLAYER_APP_API_KEY) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const resend = getResend();
+  if (!resend) {
+    return res.status(500).json({ error: 'Email not configured' });
+  }
+
+  if (!player_name || !tournament_name) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  try {
+    const orgId = organization_id || null;
+    const emailSettings = await getEmailTemplateSettings(orgId);
+    const summaryEmail = await getSummaryEmail(orgId);
+
+    if (!summaryEmail) {
+      console.log('No summary_email configured for org', orgId, '— skipping unavailability notification');
+      return res.json({ success: true, message: 'No summary email configured, notification skipped' });
+    }
+
+    const baseUrl = process.env.BASE_URL || 'https://cdbhs-tournament-management-production.up.railway.app';
+    const primaryColor = emailSettings.primary_color || '#1F4788';
+    const orgShortName = emailSettings.organization_short_name || 'CDB';
+    const notifOrgSlug = await appSettings.getOrgSlug(orgId);
+    const logoUrl = appSettings.buildLogoUrl(baseUrl, notifOrgSlug);
+
+    // Format date for display
+    const dateStr = tournament_date
+      ? new Date(tournament_date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+      : 'Date à définir';
+
+    const subject = `${orgShortName} — Indisponibilité déclarée : ${player_name}`;
+
+    await resend.emails.send({
+      from: buildFromAddress(emailSettings, 'noreply'),
+      to: [summaryEmail],
+      subject: subject,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <div style="background: ${primaryColor}; color: white; padding: 20px; text-align: center;">
+            <img src="${logoUrl}" alt="${orgShortName}" style="height: 60px; max-width: 80%; width: auto; margin-bottom: 10px;" onerror="this.style.display='none'">
+            <h1 style="margin: 0; font-size: 24px;">${orgShortName}</h1>
+            <p style="margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">INDISPONIBILITÉ DÉCLARÉE</p>
+          </div>
+          <div style="padding: 20px; background: #f8f9fa;">
+            <p style="margin: 0 0 15px 0;">Le joueur suivant a déclaré son indisponibilité via l'Espace Joueur :</p>
+            <div style="margin-bottom: 20px; padding: 15px; background: white; border-radius: 4px; border-left: 4px solid #9e9e9e;">
+              <p style="margin: 5px 0;"><strong>Joueur :</strong> ${player_name}</p>
+              ${player_licence ? `<p style="margin: 5px 0;"><strong>Licence :</strong> ${player_licence}</p>` : ''}
+              <p style="margin: 5px 0;"><strong>Tournoi :</strong> ${tournament_name}</p>
+              ${mode ? `<p style="margin: 5px 0;"><strong>Mode :</strong> ${mode}</p>` : ''}
+              ${category ? `<p style="margin: 5px 0;"><strong>Catégorie :</strong> ${category}</p>` : ''}
+              <p style="margin: 5px 0;"><strong>Date :</strong> ${dateStr}</p>
+            </div>
+          </div>
+          ${buildEmailFooter(emailSettings)}
+        </div>
+      `
+    });
+
+    console.log(`Unavailability notification sent to ${summaryEmail} for player ${player_name}`);
+    res.json({ success: true, message: 'Notification sent' });
+
+  } catch (error) {
+    console.error('Error sending unavailability notification:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Send contact message from Player App (called by Player App)
 router.post('/contact', async (req, res) => {
   const { player_email, player_name, player_licence, player_club, subject, message, api_key, attachments } = req.body;
