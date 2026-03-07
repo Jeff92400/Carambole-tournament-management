@@ -188,7 +188,8 @@
           const logoImg = document.getElementById('ligueLogo');
           const logoUrl = `${API_URL}/ligue-admin/ligue-logo`;
           fetch(logoUrl, { headers: { 'Authorization': `Bearer ${token}` } })
-            .then(r => { if (r.ok) logoImg.src = logoUrl + '?t=' + Date.now(); });
+            .then(r => { if (r.ok) return r.blob(); })
+            .then(blob => { if (blob) logoImg.src = URL.createObjectURL(blob); });
         }
 
         // Stats
