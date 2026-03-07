@@ -617,7 +617,8 @@ router.get('/inscription-sources', authenticateToken, (req, res) => {
 router.get('/inscription-statuses', authenticateToken, (req, res) => {
   const statuses = [
     { code: 'inscrit', display_name: 'Inscrit' },
-    { code: 'désinscrit', display_name: 'Désinscrit' }
+    { code: 'désinscrit', display_name: 'Désinscrit' },
+    { code: 'indisponible', display_name: 'Indisponible' }
   ];
   res.json(statuses);
 });

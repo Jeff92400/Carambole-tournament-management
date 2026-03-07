@@ -1498,7 +1498,7 @@ router.post('/snapshot-season-stats', authenticateToken, requireAdmin, async (re
            FROM inscriptions i
            JOIN tournoi_ext t ON i.tournoi_id = t.tournoi_id
            WHERE t.debut >= $1 AND t.debut <= $2
-             AND (i.statut IS NULL OR i.statut != 'désinscrit')
+             AND (i.statut IS NULL OR i.statut NOT IN ('désinscrit', 'indisponible'))
              AND (i.forfait IS NULL OR i.forfait = 0)
            GROUP BY REPLACE(i.licence, ' ', '')`,
           [seasonStart, seasonEnd]
@@ -1520,7 +1520,7 @@ router.post('/snapshot-season-stats', authenticateToken, requireAdmin, async (re
            FROM inscriptions i
            JOIN tournoi_ext t ON i.tournoi_id = t.tournoi_id
            WHERE t.debut >= $1 AND t.debut <= $2
-             AND (i.statut IS NULL OR i.statut != 'désinscrit')
+             AND (i.statut IS NULL OR i.statut NOT IN ('désinscrit', 'indisponible'))
              AND (i.forfait IS NULL OR i.forfait = 0)
              AND REPLACE(i.licence, ' ', '') IN (
                SELECT REPLACE(p.licence, ' ', '') FROM players p

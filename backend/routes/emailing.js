@@ -718,7 +718,7 @@ router.get('/tournois', authenticateToken, async (req, res) => {
 
   db.all(
     `SELECT t.tournoi_id, t.nom, t.mode, t.categorie, t.debut, t.lieu,
-            (SELECT COUNT(*) FROM inscriptions i WHERE i.tournoi_id = t.tournoi_id AND i.forfait != 1 AND ($3::int IS NULL OR i.organization_id = $3)) as nb_inscrits
+            (SELECT COUNT(*) FROM inscriptions i WHERE i.tournoi_id = t.tournoi_id AND i.forfait != 1 AND (i.statut IS NULL OR i.statut NOT IN ('désinscrit', 'indisponible')) AND ($3::int IS NULL OR i.organization_id = $3)) as nb_inscrits
      FROM tournoi_ext t
      WHERE t.debut >= $1 AND t.debut <= $2
        AND ($3::int IS NULL OR t.organization_id = $3)
@@ -2830,7 +2830,7 @@ router.get('/finales', authenticateToken, async (req, res) => {
 
   db.all(
     `SELECT t.tournoi_id, t.nom, t.mode, t.categorie, t.debut, t.fin, t.lieu,
-            (SELECT COUNT(*) FROM inscriptions i WHERE i.tournoi_id = t.tournoi_id AND i.forfait != 1 AND ($3::int IS NULL OR i.organization_id = $3)) as nb_inscrits
+            (SELECT COUNT(*) FROM inscriptions i WHERE i.tournoi_id = t.tournoi_id AND i.forfait != 1 AND (i.statut IS NULL OR i.statut NOT IN ('désinscrit', 'indisponible')) AND ($3::int IS NULL OR i.organization_id = $3)) as nb_inscrits
      FROM tournoi_ext t
      WHERE (t.debut >= $1 AND t.debut <= $2)
        AND (UPPER(t.nom) LIKE '%FINALE%' OR UPPER(t.nom) LIKE '%FINAL%')
@@ -4140,13 +4140,14 @@ router.get('/t1-participants', authenticateToken, async (req, res) => {
       );
     });
 
-    // Get inscriptions for T2 tournament to mark already inscribed players
+    // Get inscriptions for T2 tournament to mark already inscribed/indisponible players
     let inscribedLicences = new Set();
+    let inscriptionStatuts = {};
     const t2TournoiId = t2External?.tournoi_id;
     if (t2TournoiId) {
       const inscriptions = await new Promise((resolve, reject) => {
         db.all(
-          `SELECT REPLACE(UPPER(licence), ' ', '') as normalized_licence FROM inscriptions WHERE tournoi_id = $1`,
+          `SELECT REPLACE(UPPER(licence), ' ', '') as normalized_licence, statut FROM inscriptions WHERE tournoi_id = $1`,
           [t2TournoiId],
           (err, rows) => {
             if (err) reject(err);
@@ -4155,6 +4156,7 @@ router.get('/t1-participants', authenticateToken, async (req, res) => {
         );
       });
       inscribedLicences = new Set(inscriptions.map(i => i.normalized_licence));
+      inscriptions.forEach(i => { inscriptionStatuts[i.normalized_licence] = i.statut || 'inscrit'; });
     }
 
     const alreadyInscribedCount = participants.filter(p =>
@@ -4173,19 +4175,23 @@ router.get('/t1-participants', authenticateToken, async (req, res) => {
         location: t2Tournament?.location || t2External?.lieu,
         tournoi_id: t2TournoiId
       } : null,
-      participants: participants.map(p => ({
-        licence: p.licence,
-        player_name: p.player_name,
-        first_name: p.first_name,
-        last_name: p.last_name,
-        email: p.email,
-        club: p.club,
-        contact_id: p.contact_id,
-        t1_position: p.position,
-        t1_points: p.match_points,
-        email_optin: p.email_optin,
-        already_inscribed: inscribedLicences.has(p.licence?.replace(/\s/g, '').toUpperCase())
-      })),
+      participants: participants.map(p => {
+        const normLicence = p.licence?.replace(/\s/g, '').toUpperCase();
+        return {
+          licence: p.licence,
+          player_name: p.player_name,
+          first_name: p.first_name,
+          last_name: p.last_name,
+          email: p.email,
+          club: p.club,
+          contact_id: p.contact_id,
+          t1_position: p.position,
+          t1_points: p.match_points,
+          email_optin: p.email_optin,
+          already_inscribed: inscribedLicences.has(normLicence),
+          inscription_statut: inscriptionStatuts[normLicence] || null
+        };
+      }),
       emailCount: participants.filter(p => p.email && p.email.includes('@')).length,
       alreadyInscribedCount
     });
@@ -4312,13 +4318,14 @@ router.get('/ranking-for-relance', authenticateToken, async (req, res) => {
       );
     });
 
-    // Get inscriptions for T3 tournament to mark already inscribed players
+    // Get inscriptions for T3 tournament to mark already inscribed/indisponible players
     let inscribedLicences = new Set();
+    let inscriptionStatuts = {};
     const t3TournoiId = t3External?.tournoi_id;
     if (t3TournoiId) {
       const inscriptions = await new Promise((resolve, reject) => {
         db.all(
-          `SELECT REPLACE(UPPER(licence), ' ', '') as normalized_licence FROM inscriptions WHERE tournoi_id = $1`,
+          `SELECT REPLACE(UPPER(licence), ' ', '') as normalized_licence, statut FROM inscriptions WHERE tournoi_id = $1`,
           [t3TournoiId],
           (err, rows) => {
             if (err) reject(err);
@@ -4327,6 +4334,7 @@ router.get('/ranking-for-relance', authenticateToken, async (req, res) => {
         );
       });
       inscribedLicences = new Set(inscriptions.map(i => i.normalized_licence));
+      inscriptions.forEach(i => { inscriptionStatuts[i.normalized_licence] = i.statut || 'inscrit'; });
     }
 
     const alreadyInscribedCount = rankings.filter(r =>
@@ -4340,20 +4348,24 @@ router.get('/ranking-for-relance', authenticateToken, async (req, res) => {
         location: t3Tournament?.location || t3External?.lieu,
         tournoi_id: t3TournoiId
       } : null,
-      participants: rankings.map(r => ({
-        licence: r.licence,
-        player_name: r.player_name,
-        first_name: r.first_name,
-        last_name: r.last_name,
-        email: r.email,
-        club: r.club,
-        contact_id: r.contact_id,
-        rank_position: r.rank_position,
-        total_points: r.total_match_points,
-        avg_moyenne: r.avg_moyenne,
-        email_optin: r.email_optin,
-        already_inscribed: inscribedLicences.has(r.licence?.replace(/\s/g, '').toUpperCase())
-      })),
+      participants: rankings.map(r => {
+        const normLicence = r.licence?.replace(/\s/g, '').toUpperCase();
+        return {
+          licence: r.licence,
+          player_name: r.player_name,
+          first_name: r.first_name,
+          last_name: r.last_name,
+          email: r.email,
+          club: r.club,
+          contact_id: r.contact_id,
+          rank_position: r.rank_position,
+          total_points: r.total_match_points,
+          avg_moyenne: r.avg_moyenne,
+          email_optin: r.email_optin,
+          already_inscribed: inscribedLicences.has(normLicence),
+          inscription_statut: inscriptionStatuts[normLicence] || null
+        };
+      }),
       emailCount: rankings.filter(r => r.email && r.email.includes('@')).length,
       alreadyInscribedCount
     });
@@ -4492,13 +4504,14 @@ router.get('/t1-players', authenticateToken, async (req, res) => {
       );
     });
 
-    // Get inscriptions for T1 tournament to mark already inscribed players
+    // Get inscriptions for T1 tournament to mark already inscribed/indisponible players
     let inscribedLicences = new Set();
+    let inscriptionStatuts = {};
     const t1TournoiId = t1External?.tournoi_id;
     if (t1TournoiId) {
       const inscriptions = await new Promise((resolve, reject) => {
         db.all(
-          `SELECT REPLACE(UPPER(licence), ' ', '') as normalized_licence FROM inscriptions WHERE tournoi_id = $1`,
+          `SELECT REPLACE(UPPER(licence), ' ', '') as normalized_licence, statut FROM inscriptions WHERE tournoi_id = $1`,
           [t1TournoiId],
           (err, rows) => {
             if (err) reject(err);
@@ -4507,6 +4520,7 @@ router.get('/t1-players', authenticateToken, async (req, res) => {
         );
       });
       inscribedLicences = new Set(inscriptions.map(i => i.normalized_licence));
+      inscriptions.forEach(i => { inscriptionStatuts[i.normalized_licence] = i.statut || 'inscrit'; });
     }
 
     const alreadyInscribedCount = players.filter(p =>
@@ -4522,17 +4536,21 @@ router.get('/t1-players', authenticateToken, async (req, res) => {
         location: t1External.lieu,
         tournoi_id: t1TournoiId
       } : null,
-      participants: players.map(p => ({
-        licence: p.licence,
-        player_name: `${p.first_name || ''} ${p.last_name || ''}`.trim() || p.licence,
-        first_name: p.first_name,
-        last_name: p.last_name,
-        email: p.email,
-        club: p.club,
-        ffb_ranking: p.ffb_ranking,
-        email_optin: p.email_optin,
-        already_inscribed: inscribedLicences.has(p.licence?.replace(/\s/g, '').toUpperCase())
-      })),
+      participants: players.map(p => {
+        const normLicence = p.licence?.replace(/\s/g, '').toUpperCase();
+        return {
+          licence: p.licence,
+          player_name: `${p.first_name || ''} ${p.last_name || ''}`.trim() || p.licence,
+          first_name: p.first_name,
+          last_name: p.last_name,
+          email: p.email,
+          club: p.club,
+          ffb_ranking: p.ffb_ranking,
+          email_optin: p.email_optin,
+          already_inscribed: inscribedLicences.has(normLicence),
+          inscription_statut: inscriptionStatuts[normLicence] || null
+        };
+      }),
       emailCount: players.filter(p => p.email && p.email.includes('@')).length,
       alreadyInscribedCount
     });
@@ -4660,12 +4678,13 @@ router.get('/finale-qualified', authenticateToken, async (req, res) => {
     const qualifiedCount = rankings.length < 9 ? 4 : 6;
     const qualified = rankings.filter(r => r.rank_position <= qualifiedCount);
 
-    // Get inscriptions for finale tournament to mark already inscribed players
+    // Get inscriptions for finale tournament to mark already inscribed/indisponible players
     let inscribedLicences = new Set();
+    let inscriptionStatuts = {};
     if (finale?.tournoi_id) {
       const inscriptions = await new Promise((resolve, reject) => {
         db.all(
-          `SELECT REPLACE(UPPER(licence), ' ', '') as normalized_licence FROM inscriptions WHERE tournoi_id = $1`,
+          `SELECT REPLACE(UPPER(licence), ' ', '') as normalized_licence, statut FROM inscriptions WHERE tournoi_id = $1`,
           [finale.tournoi_id],
           (err, rows) => {
             if (err) reject(err);
@@ -4674,6 +4693,7 @@ router.get('/finale-qualified', authenticateToken, async (req, res) => {
         );
       });
       inscribedLicences = new Set(inscriptions.map(i => i.normalized_licence));
+      inscriptions.forEach(i => { inscriptionStatuts[i.normalized_licence] = i.statut || 'inscrit'; });
     }
 
     const alreadyInscribedCount = qualified.filter(r =>
@@ -4704,20 +4724,24 @@ router.get('/finale-qualified', authenticateToken, async (req, res) => {
       qualifiedCount,
       totalInRanking: rankings.length,
       convocationRequired: !convocationSent,
-      participants: qualified.map(r => ({
-        licence: r.licence,
-        player_name: r.player_name,
-        first_name: r.first_name,
-        last_name: r.last_name,
-        email: r.email,
-        club: r.club,
-        contact_id: r.contact_id,
-        rank_position: r.rank_position,
-        total_points: r.total_match_points,
-        avg_moyenne: r.avg_moyenne,
-        email_optin: r.email_optin,
-        already_inscribed: inscribedLicences.has(r.licence?.replace(/\s/g, '').toUpperCase())
-      })),
+      participants: qualified.map(r => {
+        const normLicence = r.licence?.replace(/\s/g, '').toUpperCase();
+        return {
+          licence: r.licence,
+          player_name: r.player_name,
+          first_name: r.first_name,
+          last_name: r.last_name,
+          email: r.email,
+          club: r.club,
+          contact_id: r.contact_id,
+          rank_position: r.rank_position,
+          total_points: r.total_match_points,
+          avg_moyenne: r.avg_moyenne,
+          email_optin: r.email_optin,
+          already_inscribed: inscribedLicences.has(normLicence),
+          inscription_statut: inscriptionStatuts[normLicence] || null
+        };
+      }),
       emailCount: qualified.filter(r => r.email && r.email.includes('@')).length,
       alreadyInscribedCount
     });
@@ -4856,7 +4880,8 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
         t1_date: t1Tournament.tournament_date ? new Date(t1Tournament.tournament_date).toLocaleDateString('fr-FR') : '',
         tournament_date: customData?.tournament_date || '',
         tournament_lieu: customData?.tournament_lieu || '',
-        deadline_date: deadlineDate
+        deadline_date: deadlineDate,
+        tournoi_id: customData?.tournoi_id || null
       };
 
     } else if (relanceType === 't3') {
@@ -4919,7 +4944,8 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
         category: categoryRow.display_name,
         tournament_date: customData?.tournament_date || '',
         tournament_lieu: customData?.tournament_lieu || '',
-        deadline_date: deadlineDate
+        deadline_date: deadlineDate,
+        tournoi_id: customData?.tournoi_id || null
       };
 
       console.log('[Relance T3] tournamentInfo:', JSON.stringify(tournamentInfo));
@@ -5088,7 +5114,8 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
         qualified_count: qualifiedCount,
         finale_date: finaleDate,
         finale_lieu: finaleLieu,
-        deadline_date: deadlineDate
+        deadline_date: deadlineDate,
+        tournoi_id: customData?.tournoi_id || finale?.tournoi_id || null
       };
     }
 
@@ -5209,10 +5236,31 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
         const tournamentsUrlObj = new URL(playerAppUrl);
         tournamentsUrlObj.searchParams.set('page', 'tournaments');
         const playerAppTournamentsUrl = tournamentsUrlObj.toString();
+        // Build unavailability deep link URL (only if we have a target tournoi_id)
+        const targetTournoiId = tournamentInfo.tournoi_id;
+        let unavailabilityUrl = null;
+        if (targetTournoiId) {
+          const unavailUrlObj = new URL(playerAppUrl);
+          unavailUrlObj.searchParams.set('page', 'tournaments');
+          unavailUrlObj.searchParams.set('action', 'unavailable');
+          unavailUrlObj.searchParams.set('tournoi', targetTournoiId);
+          unavailabilityUrl = unavailUrlObj.toString();
+        }
+
         const extInscriptionEnabled = await appSettings.getOrgSetting(orgId, 'external_inscription_enabled');
         const extInscriptionUrl = await appSettings.getOrgSetting(orgId, 'external_inscription_url');
         const hasExternalInscription = extInscriptionEnabled === 'true' && extInscriptionUrl;
         let inscriptionMethodHtml;
+
+        // Build the unavailability button HTML (gray outline style)
+        const buildUnavailabilityButtonHtml = () => {
+          if (!unavailabilityUrl) return '';
+          return `<div style="text-align: center; margin: 10px 0 20px 0;">
+              <a href="${unavailabilityUrl}" target="_blank" style="display: inline-block; background: #fff; color: #757575; padding: 10px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 14px; border: 2px solid #bdbdbd;">
+                Indiquer mon indisponibilité
+              </a>
+            </div>`;
+        };
 
         // Build the "sans compte" HTML based on external inscription setting
         const notificationEmail = await appSettings.getOrgSetting(orgId, 'summary_email') || organizationEmail;
@@ -5246,6 +5294,7 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
                     📱 S'inscrire via l'Espace Joueur
                   </a>
                 </div>
+                ${buildUnavailabilityButtonHtml()}
               </div>
               <div style="background: #ffebee; padding: 10px; border-radius: 8px;">
                 <p style="margin: 0 0 8px 0; font-size: 12px; color: #c62828; font-weight: bold;">❌ Version joueur SANS compte Espace Joueur :</p>
@@ -5271,7 +5320,8 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
               <a href="${playerAppTournamentsUrl}" target="_blank" style="display: inline-block; background: ${primaryColor}; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
                 📱 S'inscrire via l'Espace Joueur
               </a>
-            </div>`;
+            </div>
+            ${buildUnavailabilityButtonHtml()}`;
           } else {
             inscriptionMethodHtml = buildSansCompteHtml();
           }

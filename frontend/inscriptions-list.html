@@ -762,6 +762,9 @@
       if (inscription.statut === 'désinscrit') {
         return '<span class="badge" style="background: #6c757d; color: white;">Désinscrit</span>';
       }
+      if (inscription.statut === 'indisponible') {
+        return '<span class="badge" style="background: #9e9e9e; color: white;">Indisponible</span>';
+      }
       if (inscription.forfait === 1) {
         return '<span class="badge badge-forfait">Forfait</span>';
       }
