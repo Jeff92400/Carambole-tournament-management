@@ -219,6 +219,25 @@ app.get('/logo.png', (req, res) => {
   });
 });
 
+// Public endpoint for ligue logos (no auth required — logos are not sensitive)
+app.get('/ligue-logo/:numero', (req, res) => {
+  const db = require('./db-loader');
+  db.get(
+    `SELECT logo_data, logo_content_type FROM ffb_ligues WHERE numero = $1`,
+    [req.params.numero],
+    (err, row) => {
+      if (err || !row || !row.logo_data) {
+        return res.status(404).send('Logo not found');
+      }
+      res.setHeader('Content-Type', row.logo_content_type || 'image/png');
+      res.setHeader('Cache-Control', 'public, max-age=3600');
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+      const fileData = Buffer.isBuffer(row.logo_data) ? row.logo_data : Buffer.from(row.logo_data);
+      res.send(fileData);
+    }
+  );
+});
+
 // API Routes with rate limiting
 // Apply strict rate limit only to login/password endpoints, general limit for other auth routes
 app.use('/api/auth/login', authLimiter);
