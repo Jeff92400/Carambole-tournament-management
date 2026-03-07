@@ -177,7 +177,13 @@ app.use('/images/clubs', (req, res, next) => {
   );
 });
 
-app.use(express.static(frontendPath));
+app.use(express.static(frontendPath, {
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.html')) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    }
+  }
+}));
 
 // Public endpoint for organization logo (needed for emails)
 // Must allow cross-origin access for email clients (Outlook, Gmail, etc.)
