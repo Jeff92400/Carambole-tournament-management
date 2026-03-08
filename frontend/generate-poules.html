@@ -5707,11 +5707,6 @@
         return;
       }
 
-      if (lieuA === lieuB) {
-        alert('Les deux lieux doivent être différents');
-        return;
-      }
-
       try {
         const response = await authFetch(`${API_URL}/inscriptions/tournoi/${tournoiId}/split`, {
           method: 'POST',
