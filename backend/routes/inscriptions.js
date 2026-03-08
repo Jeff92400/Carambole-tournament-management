@@ -1232,6 +1232,9 @@ router.post('/create', authenticateToken, async (req, res) => {
 
   } catch (error) {
     console.error('Error creating inscription:', error);
+    if (error.message && error.message.includes('idx_unique_licence_tournoi')) {
+      return res.status(409).json({ error: 'Ce joueur est déjà inscrit à ce tournoi.' });
+    }
     res.status(500).json({ error: error.message });
   }
 });

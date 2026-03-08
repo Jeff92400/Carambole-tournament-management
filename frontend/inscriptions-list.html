@@ -175,6 +175,7 @@
     <div id="createInscriptionModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
       <div style="background: white; padding: 30px; border-radius: 12px; max-width: 500px; max-height: 80vh; overflow-y: auto; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
         <h3 style="margin-top: 0; color: #1F4788;">➕ Nouvelle inscription</h3>
+        <div id="createInscriptionError" style="display: none; background: #fff3cd; border: 1px solid #ffc107; color: #856404; padding: 10px 14px; border-radius: 6px; margin-bottom: 15px; font-size: 13px;"></div>
         <form id="createInscriptionForm">
           <div style="margin-bottom: 15px;">
             <label style="display: block; margin-bottom: 5px; font-weight: bold;">Tournoi *</label>
@@ -1222,6 +1223,7 @@
       document.getElementById('create_convoque').value = '0';
       document.getElementById('create_forfait').value = '0';
       document.getElementById('create_commentaire').value = '';
+      document.getElementById('createInscriptionError').style.display = 'none';
 
       document.getElementById('createInscriptionModal').style.display = 'flex';
     }
@@ -1294,18 +1296,22 @@
         });
 
         const result = await response.json();
+        const errorDiv = document.getElementById('createInscriptionError');
 
         if (!response.ok) {
-          throw new Error(result.error || 'Failed to create inscription');
+          errorDiv.textContent = result.error || 'Erreur lors de la création';
+          errorDiv.style.display = 'block';
+          return;
         }
 
         closeCreateModal();
         await loadInscriptions();
-        alert(`Inscription créée avec succès (ID: ${result.inscription_id})`);
 
       } catch (error) {
         console.error('Error creating inscription:', error);
-        alert('Erreur lors de la création: ' + error.message);
+        const errorDiv = document.getElementById('createInscriptionError');
+        errorDiv.textContent = 'Erreur de connexion au serveur';
+        errorDiv.style.display = 'block';
       }
     });
 
