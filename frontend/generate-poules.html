@@ -531,6 +531,10 @@
     <div class="card" id="step3" style="display: none;">
       <h3>Étape 3: Validation et Aperçu</h3>
 
+      <!-- Split tournament context banner -->
+      <div id="splitContextBanner" style="display: none; background: linear-gradient(135deg, #e3f2fd, #bbdefb); padding: 14px 18px; border-radius: 8px; margin-bottom: 15px; border-left: 4px solid #1976d2;">
+      </div>
+
       <div class="summary-box">
         <div class="summary-row">
           <span>Catégorie:</span>
@@ -2134,6 +2138,29 @@
     // Make selectSplitChild available globally (called from onclick)
     window.selectSplitChild = selectSplitChild;
 
+    // Navigate back to step 1 and auto-select the other split child
+    function goToSplitChild(targetLabel) {
+      // Go back to step 1
+      goToStep(1);
+      // Refresh the split children data (convocation_sent_at may have changed), then auto-select
+      if (matchingTournoi?._parentTournoiId) {
+        const parentId = matchingTournoi._parentTournoiId;
+        // Reset matchingTournoi to parent state
+        matchingTournoi.tournoi_id = parentId;
+        delete matchingTournoi._selectedChildTournoiId;
+        delete matchingTournoi._selectedSplitLabel;
+        selectedSplitChild = null;
+        // Reload children (refreshes convocation_sent_at) then auto-select the target
+        loadSplitChildren(parentId, currentCategory).then(() => {
+          const targetChild = splitChildren.find(c => c.split_label === targetLabel);
+          if (targetChild) {
+            selectSplitChild(targetLabel, targetChild.tournoi_id);
+          }
+        });
+      }
+    }
+    window.goToSplitChild = goToSplitChild;
+
     // Mode selector change - populate levels
     document.getElementById('modeSelect').addEventListener('change', (e) => {
       const selectedMode = e.target.value;
@@ -2845,6 +2872,31 @@
 
       // Load game parameters for this category
       loadGameParameters();
+
+      // Show split context banner if this is a split tournament
+      const splitBanner = document.getElementById('splitContextBanner');
+      if (selectedSplitChild && splitChildren.length > 0) {
+        const tNum = currentTournament || '?';
+        const otherChild = splitChildren.find(c => c.split_label !== selectedSplitChild);
+        const otherConvoked = otherChild?.convocation_sent_at;
+        let bannerHtml = `<div style="display:flex; align-items:center; gap:10px;">
+          <span style="font-size:1.3em;">&#9432;</span>
+          <div>
+            <strong style="color:#1565c0;">Tournoi ${tNum} ${selectedSplitChild}</strong>
+            <span style="color:#555;"> — Tournoi dédoublé, groupe ${selectedSplitChild} sur ${splitChildren.length}.</span>`;
+        if (otherChild) {
+          if (otherConvoked) {
+            bannerHtml += `<br><span style="color:#2e7d32; font-size:0.9em;">&#10003; Tournoi ${tNum} ${otherChild.split_label} (${otherChild.lieu || '?'}) : convocations déjà envoyées.</span>`;
+          } else {
+            bannerHtml += `<br><span style="color:#e65100; font-size:0.9em;">&#9888; Tournoi ${tNum} ${otherChild.split_label} (${otherChild.lieu || '?'}) : convocations en attente.</span>`;
+          }
+        }
+        bannerHtml += '</div></div>';
+        splitBanner.innerHTML = bannerHtml;
+        splitBanner.style.display = 'block';
+      } else {
+        splitBanner.style.display = 'none';
+      }
 
       goToStep(3);
     });
@@ -4110,6 +4162,25 @@
           // Skip if this is a resend (forfait) - club was already notified
           if (result.results.sent.length > 0 && lastGeneratedData.locations && !lastGeneratedData.skipClubReminders) {
             await sendClubReminders(lastGeneratedData, playersWithEmails.length);
+          }
+
+          // For split tournaments: show banner to guide user to the other group
+          if (selectedSplitChild && splitChildren.length > 0 && result.results.sent.length > 0) {
+            const otherChild = splitChildren.find(c => c.split_label !== selectedSplitChild);
+            if (otherChild && !otherChild.convocation_sent_at) {
+              const tNum = currentTournament || '?';
+              const otherLabel = otherChild.split_label;
+              const otherLieu = otherChild.lieu || 'lieu non défini';
+              results.innerHTML += `<div style="background: linear-gradient(135deg, #fff3e0, #ffe0b2); padding: 16px 20px; border-radius: 8px; margin-top: 15px; border-left: 4px solid #ff9800; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+                <div>
+                  <strong style="color: #e65100; font-size: 1.05em;">Tournoi ${tNum} ${selectedSplitChild} terminé</strong>
+                  <p style="margin: 4px 0 0 0; color: #555; font-size: 0.9em;">Il reste le <strong>Tournoi ${tNum} ${otherLabel}</strong> (${otherLieu}) à convoquer.</p>
+                </div>
+                <button class="btn" onclick="goToSplitChild('${otherLabel}')" style="background: #ff9800; color: white; padding: 10px 24px; font-size: 0.95em; white-space: nowrap;">
+                  Passer au Tournoi ${tNum} ${otherLabel}
+                </button>
+              </div>`;
+            }
           }
         } else {
           progressText.textContent = `Erreur: ${result.error}`;
