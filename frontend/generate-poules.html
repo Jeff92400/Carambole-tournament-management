@@ -1951,6 +1951,8 @@
       matchingTournoi._selectedChildTournoiId = childTournoiId;
       matchingTournoi._selectedSplitLabel = splitLabel;
       matchingTournoi.lieu = childTournoi.lieu;
+      // Clear lieu_2 — each child has a single location
+      matchingTournoi.lieu_2 = null;
       // Override tournoi_id with child's ID for convocations and save-poules
       matchingTournoi.tournoi_id = childTournoiId;
 
@@ -2628,8 +2630,12 @@
                        (tournamentTypes.find(tt => String(tt.tournament_number) === currentTournament)?.is_finale) ||
                        (window.selectedUpcomingTournament && window.selectedUpcomingTournament.isFinale);
       const tournamentTypeLabel = tournamentTypes.find(tt => String(tt.tournament_number) === currentTournament)?.display_name;
-      document.getElementById('summaryTournament').textContent =
-        tournamentTypeLabel || (isFinale ? 'Finale Départementale' : `Tournoi ${currentTournament}`);
+      let summaryTournamentText = tournamentTypeLabel || (isFinale ? 'Finale Départementale' : `Tournoi ${currentTournament}`);
+      // Append split child label if applicable
+      if (selectedSplitChild && matchingTournoi?._selectedSplitLabel) {
+        summaryTournamentText += ` (Lieu ${matchingTournoi._selectedSplitLabel})`;
+      }
+      document.getElementById('summaryTournament').textContent = summaryTournamentText;
 
       // Store isFinale globally for later use
       window.currentCompetitionIsFinale = isFinale;
