@@ -1808,9 +1808,10 @@
       document.getElementById('loadPlayersBtn').disabled = !canLoad;
 
       // Load tournament info if all fields are selected
-      if (categoryId && tournament) {
+      // BUT skip if a split child is already selected (avoid circular reset)
+      if (categoryId && tournament && !selectedSplitChild) {
         loadTournamentInfo(categoryId, tournament);
-      } else {
+      } else if (!categoryId || !tournament) {
         document.getElementById('tournamentInfo').style.display = 'none';
         matchingTournoi = null;
         hideSplitChildSelector();
