@@ -2035,10 +2035,11 @@
 
     // Handle selection of a split child (A or B)
     async function selectSplitChild(splitLabel, childTournoiId) {
+      console.log('selectSplitChild called:', splitLabel, childTournoiId);
       selectedSplitChild = splitLabel;
 
-      const childTournoi = splitChildren.find(c => c.tournoi_id === childTournoiId);
-      if (!childTournoi) return;
+      const childTournoi = splitChildren.find(c => String(c.tournoi_id) === String(childTournoiId));
+      if (!childTournoi) { console.error('Split child not found:', childTournoiId, 'in', splitChildren); return; }
 
       // Visual feedback: highlight selected button, dim others
       document.querySelectorAll('.split-child-btn').forEach(btn => {
@@ -2054,6 +2055,11 @@
           btn.style.color = '#666';
         }
       });
+
+      if (!matchingTournoi) {
+        console.error('matchingTournoi is null in selectSplitChild');
+        return;
+      }
 
       // Update the tournament info display with child's lieu
       document.getElementById('tournamentInfoLieu').textContent = childTournoi.lieu || 'Non défini';

@@ -32,7 +32,7 @@ L'application fonctionne en tandem avec une **Application Joueur** destinée aux
 - Voir le calendrier des compétitions
 - Recevoir les annonces du comité
 
-**Important :** Les données sont partagées entre les deux applications. Quand un joueur s'inscrit via l'Application Joueur, son inscription apparaît automatiquement dans l'application de gestion.
+> **Important :** Les données sont partagées entre les deux applications. Quand un joueur s'inscrit via l'Application Joueur, son inscription apparaît automatiquement dans l'application de gestion.
 
 ### Structure d'une saison
 
@@ -69,8 +69,6 @@ Page d'accueil de l'application (avant authentification)
 - Lien "Mot de passe oublié ?"
 - Numéro de version de l'application
 
-*[Screenshot: Page de connexion — Capture de la page de login avec le logo, les champs identifiant/mot de passe et le bouton "Se connecter"]*
-
 ### Actions utilisateur
 
 1. Saisir le nom d'utilisateur
@@ -90,7 +88,7 @@ Page d'accueil de l'application (avant authentification)
 
 Sur chaque page de l'application, un bouton rond **?** est affiché en bas à droite de l'écran. En cliquant dessus, ce guide utilisateur s'ouvre dans un nouvel onglet, directement à la section correspondant à la page sur laquelle vous vous trouvez.
 
-**Exemple :** si vous êtes sur la page "Classements" et que vous cliquez sur **?**, le guide s'ouvrira directement à la section "Classements".
+> **Exemple :** si vous êtes sur la page "Classements" et que vous cliquez sur **?**, le guide s'ouvrira directement à la section "Classements".
 
 ## Bouton "Tournois à venir"
 
@@ -107,7 +105,7 @@ Le tableau présente pour chaque tournoi :
 - **Lieu** : club ou salle accueillant le tournoi
 - **Inscrits** : nombre de joueurs inscrits (hors forfaits et désinscrits)
 
-**Astuce :** ce bouton est accessible à tous les utilisateurs (administrateur, éditeur, lecteur, club). Il permet de consulter rapidement le calendrier sans quitter la page en cours.
+> **Astuce :** ce bouton est accessible à tous les utilisateurs (administrateur, éditeur, lecteur, club). Il permet de consulter rapidement le calendrier sans quitter la page en cours.
 
 ---
 
@@ -147,8 +145,6 @@ Liste des actions urgentes à effectuer :
 - Relances à envoyer (compétitions proches avec joueurs non relancés)
 - Résultats à envoyer après un tournoi terminé
 
-*[Screenshot: Dashboard — Vue d'ensemble — Capture du tableau de bord avec les cartes de statistiques (joueurs actifs, compétitions, participants), les alertes et les actions rapides]*
-
 #### Actions rapides
 
 Boutons d'accès direct aux fonctions les plus utilisées :
@@ -160,7 +156,7 @@ Boutons d'accès direct aux fonctions les plus utilisées :
 - Voir les Classements
 - Vainqueurs Finales
 
-**Lien avec l'Application Joueur :** Le compteur "Inscriptions saison" inclut toutes les inscriptions, y compris celles faites par les joueurs via l'Application Joueur.
+> **Lien avec l'Application Joueur :** Le compteur "Inscriptions saison" inclut toutes les inscriptions, y compris celles faites par les joueurs via l'Application Joueur.
 
 ---
 
@@ -179,8 +175,6 @@ Consultation et export des classements saison par catégorie.
 - **Saison** : Sélectionner la saison (ex: 2025-2026)
 - **Mode de jeu** : Libre, Cadre, Bande, 3 Bandes
 - **Classement FFB** : N1, N2, N3, R1, R2, R3, R4, etc.
-
-*[Screenshot: Classements — Filtres et tableau — Capture de la page classements avec les filtres (saison, mode, niveau) et le tableau de classement affiché. Montrer les joueurs qualifiés en vert.]*
 
 ### Mode Standard (3 Tournois Qualificatifs)
 
@@ -224,9 +218,7 @@ En mode journées, l'affichage du classement est basé sur les **points de posit
 | Rep | Total des reprises (tournois retenus) |
 | MS | Meilleure série de la saison |
 
-*[Screenshot: Classements — Mode Journées — Capture du classement en mode journées avec colonnes J1/J2/J3, scores retenus en gras et scores écartés barrés, Total Top 2, moyennes par journée]*
-
-**Scores retenus / écartés :** Lorsque le paramètre « Meilleurs résultats retenus » est configuré (dans Paramètres > Types de Tournoi), seuls les N meilleurs résultats comptent pour le classement. Les scores retenus sont affichés en **gras**, les scores écartés sont ~~barrés~~. Cette fonctionnalité est disponible dans les deux modes (Standard et Journées).
+> **Scores retenus / écartés :** Lorsque le paramètre « Meilleurs résultats retenus » est configuré (dans Paramètres > Types de Tournoi), seuls les N meilleurs résultats comptent pour le classement. Les scores retenus sont affichés en **gras**, les scores écartés sont ~~barrés~~. Cette fonctionnalité est disponible dans les deux modes (Standard et Journées).
 
 #### Classement pour la Finale de District
 
@@ -251,8 +243,6 @@ En mode journées, lorsque tous les tournois qualificatifs de la saison ont ét�
 
 ### Historique joueur
 
-*[Screenshot: Historique d'un joueur — Capture de la fiche historique d'un joueur avec ses informations, classements par discipline et résultats par saison]*
-
 Cliquer sur le nom d'un joueur dans le classement pour accéder à sa fiche historique. Cette page affiche :
 
 - Informations du joueur (nom, licence, club, classements par discipline)
@@ -264,7 +254,7 @@ Cliquer sur le nom d'un joueur dans le classement pour accéder à sa fiche hist
 - **Exporter en Excel** : Télécharge le classement au format Excel avec mise en forme
 - **Recalculer** : Force le recalcul du classement (utile après modification de résultats ou changement de mode)
 
-**Lien avec l'Application Joueur :** Les joueurs peuvent consulter les classements dans l'Application Joueur (consultation seule).
+> **Lien avec l'Application Joueur :** Les joueurs peuvent consulter les classements dans l'Application Joueur (consultation seule).
 
 ---
 
@@ -289,8 +279,6 @@ Cliquer sur "Compétitions" dans la barre de navigation
 
 Fonction principale pour préparer un tournoi : sélection des joueurs, génération des poules, envoi des convocations.
 
-*[Screenshot: Générer les poules — Sélection du tournoi — Capture montrant les filtres (mode, niveau, saison, tournoi), les cartes de compétitions à venir et le bouton "Charger les joueurs"]*
-
 #### Étape 1 : Sélection du tournoi
 
 **Filtres à renseigner :**
@@ -310,8 +298,6 @@ Fonction principale pour préparer un tournoi : sélection des joueurs, généra
 - Date et lieu (possibilité de double lieu pour les tournois répartis sur 2 salles)
 - Nombre de joueurs inscrits
 
-*[Screenshot: Générer les poules — Liste des joueurs — Capture de la liste des joueurs avec cases à cocher, badges de statut (Inscrit/Forfait/Désinscrit) et boutons d'action]*
-
 #### Étape 2 : Sélection des joueurs
 
 **Pour chaque joueur :**
@@ -321,7 +307,7 @@ Fonction principale pour préparer un tournoi : sélection des joueurs, généra
 - Nom et prénom
 - Club
 - Licence
-- Badge de statut (Inscrit / Forfait / Indisponible / Désinscrit)
+- Badge de statut (Inscrit, Forfait, Indisponible, Désinscrit)
 
 **Boutons d'action :**
 
@@ -331,8 +317,6 @@ Fonction principale pour préparer un tournoi : sélection des joueurs, généra
 - **Gérer les forfaits** : Ouvre la fenêtre de gestion des forfaits
 
 #### Étape 3 : Prévisualisation des poules
-
-*[Screenshot: Générer les poules — Prévisualisation — Capture des poules générées avec la composition de chaque poule, le planning des matchs et les paramètres de jeu (distance/reprises)]*
 
 Les poules sont générées automatiquement avec répartition équilibrée. Pour chaque poule : liste des joueurs avec leur club et planning des matchs avec horaires.
 
@@ -348,11 +332,9 @@ Les poules sont générées automatiquement avec répartition équilibrée. Pour
 
 #### Étape 4 : Envoi des convocations
 
-*[Screenshot: Convocation — Prévisualisation email — Capture de l'aperçu de l'email de convocation avec le logo, les informations du tournoi, la poule et le planning des matchs]*
-
 **Prévisualisation de l'email :** aperçu de l'email tel qu'il sera reçu par les joueurs, avec logo, informations du tournoi, composition de la poule et planning des matchs.
 
-**Mode Test :** Cocher "Mode Test - Envoyer uniquement à mon adresse", saisir une adresse email de test, puis cliquer sur "Envoyer le Test" pour vérifier le rendu avant l'envoi réel.
+> **Mode Test :** Cocher "Mode Test - Envoyer uniquement à mon adresse", saisir une adresse email de test, puis cliquer sur "Envoyer le Test" pour vérifier le rendu avant l'envoi réel.
 
 **Ce qui se passe après l'envoi :**
 
@@ -361,7 +343,7 @@ Les poules sont générées automatiquement avec répartition équilibrée. Pour
 - Les poules sont enregistrées en base de données
 - Le statut des joueurs passe à "Convoqué"
 
-**Lien avec l'Application Joueur :** Après l'envoi des convocations, les joueurs peuvent voir leur convocation, la composition complète de toutes les poules et le planning des matchs dans l'Application Joueur.
+> **Lien avec l'Application Joueur :** Après l'envoi des convocations, les joueurs peuvent voir leur convocation, la composition complète de toutes les poules et le planning des matchs dans l'Application Joueur.
 
 ---
 
@@ -374,8 +356,6 @@ Bouton "Gérer les forfaits" sur la page Générer poules (après avoir chargé 
 ### Description
 
 Permet de gérer les joueurs qui déclarent forfait après avoir reçu leur convocation.
-
-*[Screenshot: Gestion des forfaits — Capture de la fenêtre de gestion des forfaits avec la liste des joueurs, les cases à cocher et les boutons "Enregistrer" / "Ajouter un remplaçant"]*
 
 #### Processus complet de gestion d'un forfait
 
@@ -406,19 +386,17 @@ Import des résultats des tournois terminés pour mise à jour des classements. 
 
 Le fonctionnement de l'import et de l'affichage des résultats dépend du **mode de qualification** configuré pour votre organisation (dans Paramètres > Mode de qualification) :
 
-| | Mode Standard | Mode Journées Qualificatives |
-|---|---|---|
+|  | Mode Standard | Mode Journées Qualificatives |
+|--|---------------|------------------------------|
 | **Principe** | Les points de match sont cumulés sur les 3 tournois (T1+T2+T3). Le classement saison est basé sur le total des points de match. | Chaque tournoi donne un **classement par position** (1er, 2ème, ...) converti en **points de classement** via un barème. Le classement saison retient les N meilleurs scores sur M journées. |
 | **Import recommandé** | **Onglet 1 — Import Classements E2i** Un seul fichier CSV récapitulatif par tournoi. | **Onglet 2 — Import Matchs E2i** Fichiers CSV de matchs individuels par phase (poules, demi-finales, finale, classements). Permet la détection automatique des phases et le calcul du classement final. |
 | **Classement final du tournoi** | Trié par points de match (desc), puis moyenne, puis meilleure série. | Positions 1-4 déterminées par le tableau (SF → Finale/Petite Finale). Positions 5-N par les matchs de classement. Trié par position finale. |
 | **Écran de résultats** | Colonnes : CLT, Licence, Joueur, Club, Pts Match, bonus (dynamiques), Total, Points, Reprises, Moyenne, MS. | Colonnes : CLT, Licence, Joueur, Club, Clt poule, Clt Finale, Pts clt, Bonus, Pts Clt Total, PM, Pts, R, MS, MGP, MPART. |
 | **Classement saison** | Total des points de match cumulés sur T1+T2+T3 (+bonus si configuré). | Somme des N meilleurs scores de position (+bonus moyenne saison). Scores retenus en **gras**, écartés ~~barrés~~. |
 
-**Quel onglet utiliser ?** L'onglet 1 (Import Classements) fonctionne pour les deux modes. L'onglet 2 (Import Matchs E2i) est plus précis et recommandé en mode journées car il détecte automatiquement les phases (poules, demi-finales, finales, classements) et calcule les positions finales en conséquence. En mode standard, l'onglet 2 fonctionne aussi (agrégation des matchs par joueur).
+> **Quel onglet utiliser ?** L'onglet 1 (Import Classements) fonctionne pour les deux modes. L'onglet 2 (Import Matchs E2i) est plus précis et recommandé en mode journées car il détecte automatiquement les phases (poules, demi-finales, finales, classements) et calcule les positions finales en conséquence. En mode standard, l'onglet 2 fonctionne aussi (agrégation des matchs par joueur).
 
 ### Onglet 1 — Import Classements E2i (mode Standard)
-
-*[Screenshot: Import Classements E2i — Mode Standard — Capture de la page d'import CSV (onglet 1) avec la sélection de catégorie, la zone de dépôt du fichier et le tableau des résultats importés]*
 
 #### Processus d'import
 
@@ -436,13 +414,11 @@ Le fonctionnement de l'import et de l'affichage des résultats dépend du **mode
 - Moyenne générale
 - Meilleure série
 
-**Mode Journées avec l'onglet 1 :** Si votre organisation est en mode journées, l'import via l'onglet 1 fonctionne aussi. Le système classe les joueurs par points de match (puis moyenne en cas d'égalité) et attribue automatiquement les **points de position** selon le barème configuré dans **Paramètres > Types de Tournoi > Points par position**. Cependant, cette méthode ne distingue pas les phases (poules vs classements vs tableau) — pour un classement plus précis en mode journées, utilisez l'onglet 2 (Import Matchs E2i).
+> **Mode Journées avec l'onglet 1 :** Si votre organisation est en mode journées, l'import via l'onglet 1 fonctionne aussi. Le système classe les joueurs par points de match (puis moyenne en cas d'égalité) et attribue automatiquement les **points de position** selon le barème configuré dans **Paramètres > Types de Tournoi > Points par position**. Cependant, cette méthode ne distingue pas les phases (poules vs classements vs tableau) — pour un classement plus précis en mode journées, utilisez l'onglet 2 (Import Matchs E2i).
 
 ### Onglet 2 — Import Matchs E2i (recommandé en mode Journées)
 
 L'onglet **« Import Matchs E2i »** permet d'importer directement les fichiers CSV de matchs individuels exportés depuis **telemat.org / E2i**. Cette méthode est recommandée en mode journées car elle détecte automatiquement les phases de la journée et calcule le classement final en conséquence.
-
-*[Screenshot: Import Matchs E2i — Mode Journées — Capture de l'onglet Import Matchs E2i avec les 4 zones de dépôt par phase (Poules, Demi-finales, Finale/Petite Finale, Classement)]*
 
 #### Format attendu
 
@@ -476,47 +452,31 @@ Chaque fichier correspond à une poule ou phase (POULE A, POULE B, DEMI-FINALE, 
 - **Bonus moyenne (mode journées) :** Bonus de 0 à +3 points selon la moyenne du joueur par rapport aux seuils de sa catégorie (mini, milieu, maxi).
 - **Recalcul global :** Tous les bonus et les classements de saison sont recalculés après chaque import.
 
-**Dégradation du dernier joueur :** En mode journées, une option dans **Paramètres > Types de Tournoi > Points par position** permet d'activer la dégradation du dernier joueur : le dernier classé reçoit les points de la position N+1 (par exemple, s'il y a 10 joueurs, le 10e reçoit les points du 11e).
+> **Dégradation du dernier joueur :** En mode journées, une option dans **Paramètres > Types de Tournoi > Points par position** permet d'activer la dégradation du dernier joueur : le dernier classé reçoit les points de la position N+1 (par exemple, s'il y a 10 joueurs, le 10e reçoit les points du 11e).
 
-### Phase Finale (Tableau) — Mode Journées uniquement
+> **En résumé :** Avec l'Import Matchs E2i, le processus est simple : remplissez les 4 zones de dépôt avec vos fichiers CSV (poules, demi-finales, finale, classement), cliquez sur « Aperçu des résultats », vérifiez, puis sauvegardez. Le système calcule automatiquement le classement complet de la journée. C'est tout !
 
-En mode journées, après l'import des résultats de poules, une page dédiée permet de gérer la **phase finale** de la journée : demi-finales, finale, petite finale et matchs de classement.
+### Phase Finale manuelle (Tableau) — Alternative sans fichiers CSV
 
-*[Screenshot: Phase finale — Tableau et matchs de classement — Capture de la page Phase Finale avec les joueurs qualifiés, les demi-finales, finale/petite finale, et les matchs de classement]*
+Si vous ne disposez pas des fichiers CSV des phases finales (demi-finales, finale, classement), une page dédiée permet de **saisir manuellement** les résultats de la phase finale match par match. Accessible depuis l'écran de résultats d'un tournoi en mode journées, ou via l'URL `tournament-bracket.html?id=X`.
 
-#### Accès
-
-Depuis la page de résultats d'un tournoi en mode journées, ou directement via l'URL `tournament-bracket.html?id=X`.
+> **Note :** Si vous utilisez l'Import Matchs E2i avec les 4 fichiers CSV, cette page n'est **pas nécessaire** — tout est calculé automatiquement lors de l'import.
 
 #### Fonctionnement
 
-1. **Génération du tableau :** Cliquer sur « Générer le tableau ». Le système identifie les 4 meilleurs joueurs des poules (qualification par PM → Moyenne → MS) et génère automatiquement les matchs :
-   - **Demi-finale 1 :** 1er qualifié vs 4ème qualifié
-   - **Demi-finale 2 :** 2ème qualifié vs 3ème qualifié
-   - **Matchs de classement (CL1) :** Les joueurs non qualifiés sont appariés par paires du bas vers le haut
-2. **Saisie des résultats :** Pour chaque match, saisir les points et reprises de chaque joueur, puis cliquer sur « Valider ». Lorsque les deux demi-finales sont complètes, la **Finale** et la **Petite Finale** sont générées automatiquement.
-3. **Classement Tour 2 (optionnel) :** Après le tour 1 de classement, un tour 2 de matchs croisés est généré si activé dans les paramètres.
-4. **Validation finale :** Lorsque tous les matchs sont joués, cliquer sur « Valider les positions ». Le système attribue les positions finales (1-N), les points de position, et recalcule le classement saison.
-
-#### Cas particulier : poule unique
-
-Si le nombre de joueurs est inférieur au seuil configuré (par défaut 6), le tournoi se déroule en **poule unique** (tous contre tous). Pas de tableau ni de matchs de classement. Le classement final est directement issu de la poule.
-
-#### Joueur exempt (bye)
-
-Si le nombre de joueurs non qualifiés est impair, le joueur le mieux classé est **exempt** au tour 1 : il est classé directement à la position suivant les qualifiés (5ème par défaut).
+1. **Génération du tableau :** Le système identifie les meilleurs joueurs des poules et génère les matchs (demi-finales + matchs de classement).
+2. **Saisie des résultats :** Pour chaque match, saisir les points et reprises, puis valider. La Finale et la Petite Finale sont générées après les demi-finales.
+3. **Validation finale :** Cliquer sur « Valider les positions » pour attribuer les positions, les points de position, et recalculer le classement saison.
 
 ### Écran de résultats d'un tournoi
 
-La page de résultats d'un tournoi s'affiche en cliquant sur l'icône **œil** dans la liste des tournois, ou via le lien « Voir le détail » après un import. Le titre indique le numéro du tournoi (ex. « Classement du Tournoi 2 » ou « Classement de la Finale Départementale »).
+La page de résultats d'un tournoi s'affiche en cliquant sur l'icône **oeil** dans la liste des tournois, ou via le lien « Voir le détail » après un import. Le titre indique le numéro du tournoi (ex. « Classement du Tournoi 2 » ou « Classement de la Finale Départementale »).
 
 #### En-tête
 
 L'en-tête affiche : la **saison**, la **date**, le **lieu** et le nombre de **participants**. Si le bonus moyenne est activé, un bandeau d'information résume les paliers du bonus (mini, milieu, maxi et points attribués).
 
 #### Mode Standard — Colonnes du tableau
-
-*[Screenshot: Résultats d'un tournoi — Mode Standard — Capture de l'écran de résultats en mode standard avec les colonnes CLT, Licence, Joueur, Club, Pts Match, Bonus, Total, Points, Reprises, Moyenne, MS]*
 
 | Colonne | Description |
 |---------|-------------|
@@ -535,8 +495,6 @@ L'en-tête affiche : la **saison**, la **date**, le **lieu** et le nombre de **p
 | MS | Meilleure série |
 
 #### Mode Journées — Colonnes du tableau
-
-*[Screenshot: Résultats d'un tournoi — Mode Journées — Capture de l'écran de résultats en mode journées avec les colonnes CLT, Licence, Joueur, Club, Clt poule, Clt Finale, Pts clt, bonus, Pts Clt Total, PM, Pts, R, MS, MGP, MPART]*
 
 | Colonne | Description |
 |---------|-------------|
@@ -619,7 +577,7 @@ Vue d'ensemble de tous les tournois internes (T1, T2, T3, Finale) avec leurs ré
 
 ### Actions disponibles
 
-- **Voir les résultats** (icône œil) : Ouvre la page de résultats détaillés du tournoi
+- **Voir les résultats** (icône oeil) : Ouvre la page de résultats détaillés du tournoi
 - **Modifier** (icône crayon, admin) : Permet de modifier le lieu et le statut d'envoi des résultats
 - **Statut email** (icône email, admin) : Indique si les résultats ont été envoyés par email. Cliquer pour basculer le statut ou accéder à l'envoi des résultats.
 - **Supprimer** (icône poubelle, admin) : Supprime le tournoi et recalcule les classements
@@ -637,8 +595,6 @@ Vue d'ensemble de tous les tournois internes (T1, T2, T3, Finale) avec leurs ré
 ### Accès
 
 Cliquer sur "Calendrier" dans la barre de navigation
-
-*[Screenshot: Calendrier des compétitions — Capture de la vue calendrier mensuelle avec les compétitions en couleur par mode de jeu et le bouton "Ajouter une compétition"]*
 
 ### Vue calendrier
 
@@ -668,9 +624,9 @@ Pour supprimer définitivement une compétition (et toutes ses inscriptions asso
 3. Cliquer sur le bouton rouge **"Supprimer"** sur la ligne correspondante
 4. Confirmer la suppression dans la boîte de dialogue
 
-**Attention :** La suppression est irréversible. Toutes les inscriptions liées à cette compétition seront également supprimées. Cette action est réservée aux administrateurs.
+> **Attention :** La suppression est irréversible. Toutes les inscriptions liées à cette compétition seront également supprimées. Cette action est réservée aux administrateurs.
 
-**Lien avec l'Application Joueur :** Le calendrier est visible par les joueurs dans l'Application Joueur. Les joueurs peuvent s'inscrire directement aux compétitions à venir depuis leur application. Les inscriptions apparaissent automatiquement dans l'application de gestion.
+> **Lien avec l'Application Joueur :** Le calendrier est visible par les joueurs dans l'Application Joueur. Les joueurs peuvent s'inscrire directement aux compétitions à venir depuis leur application. Les inscriptions apparaissent automatiquement dans l'application de gestion.
 
 ---
 
@@ -680,19 +636,32 @@ Pour supprimer définitivement une compétition (et toutes ses inscriptions asso
 
 Lorsqu'une compétition reçoit trop d'inscriptions pour se dérouler sur un seul site, il est possible de **dédoubler** le tournoi en deux sous-tournois (A et B), chacun organisé dans un lieu différent. Les résultats des deux sous-tournois sont ensuite fusionnés pour produire un classement unique.
 
-**Exemple :** Le tournoi T1 de Libre R2 reçoit 24 inscriptions. La salle habituelle ne peut accueillir que 12 joueurs. L'administrateur dédouble le tournoi : 12 joueurs jouent à Courbevoie (A), 12 joueurs jouent à Châtillon (B). Les résultats des deux salles sont fusionnés en un seul classement T1 Libre R2.
+> **Exemple :** Le tournoi T1 de Libre R2 reçoit 24 inscriptions. La salle habituelle ne peut accueillir que 12 joueurs. L'administrateur dédouble le tournoi : 12 joueurs jouent à Courbevoie (A), 12 joueurs jouent à Châtillon (B). Les résultats des deux salles sont fusionnés en un seul classement T1 Libre R2.
 
 ### Comment dédoubler un tournoi
 
-1. Aller dans **Compétitions > Liste des tournois externes** (page Tournois Externes)
-2. Repérer le tournoi à venir que vous souhaitez dédoubler
-3. Cliquer sur le bouton **« Dédoubler »** sur la ligne du tournoi
-4. Dans la fenêtre qui s'affiche, saisir les deux lieux :
-   - **Lieu A** : lieu du premier sous-tournoi
-   - **Lieu B** : lieu du second sous-tournoi
+Le dédoublement est accessible depuis deux endroits :
+
+#### Depuis la page Compétitions (recommandé)
+
+1. Aller sur la page **Compétitions** (page principale de gestion des poules)
+2. Dans la section **« Compétitions à venir »**, repérer le tournoi souhaité. Le bouton **« Dédoubler (2 lieux) »** apparaît automatiquement lorsqu'un tournoi a **plus de 6 inscrits**.
+3. Cliquer sur le bouton **« Dédoubler (2 lieux) »**
+4. Dans la fenêtre qui s'affiche, sélectionner les deux clubs dans les listes déroulantes :
+   - **Lieu A** : club du premier sous-tournoi
+   - **Lieu B** : club du second sous-tournoi
 5. Valider : deux sous-tournois sont créés automatiquement, identifiés par les suffixes **(A)** et **(B)**
 
-**Résultat :** Le tournoi d'origine devient un tournoi « parent » et deux tournois « enfants » (A et B) apparaissent dans la liste. Les inscriptions du tournoi parent sont conservées et pourront être réparties entre A et B à l'étape suivante.
+#### Depuis la liste des tournois externes
+
+1. Aller dans **Paramètres > Liste des tournois de la saison**
+2. Repérer le tournoi à venir que vous souhaitez dédoubler
+3. Cliquer sur le bouton **« Dédoubler »** sur la ligne du tournoi
+4. Suivre les mêmes étapes que ci-dessus
+
+> **Note :** Les deux lieux peuvent être le même club (par exemple, si le tournoi se déroule dans deux salles différentes du même club).
+
+> **Résultat :** Le tournoi d'origine devient un tournoi « parent » et deux tournois « enfants » (A et B) apparaissent dans la liste. Les inscriptions du tournoi parent sont conservées et pourront être réparties entre A et B à l'étape suivante.
 
 ---
 
@@ -704,12 +673,12 @@ Après avoir dédoublé un tournoi, il faut répartir les joueurs inscrits entre
 
 ### Processus de répartition
 
-1. Sur la ligne du tournoi dédoublé, cliquer sur le bouton **« Répartir »**
+1. Depuis la page **Compétitions** (bouton **« Répartir les joueurs A/B »** sur la carte du tournoi dédoublé) ou depuis la **liste des tournois externes** (bouton **« Répartir »** sur la ligne du tournoi)
 2. **Répartition automatique (serpentine) :** Cliquer sur **« Répartition automatique (serpentine) »** pour distribuer les joueurs de manière équilibrée entre A et B en fonction de leur classement. Les joueurs sont alternés : le 1er va en A, le 2e en B, le 3e en B, le 4e en A, etc. (serpentine), ce qui garantit un niveau homogène entre les deux sous-tournois.
 3. **Ajustements manuels :** Vous pouvez ensuite modifier la répartition en cliquant sur un joueur pour le déplacer de A vers B ou de B vers A.
 4. Une fois satisfait de la répartition, cliquer sur **« Enregistrer »** pour sauvegarder.
 
-**Conseil :** La répartition en serpentine est recommandée car elle assure un équilibre de niveau entre les deux sous-tournois. Les ajustements manuels permettent ensuite de prendre en compte des contraintes logistiques (proximité géographique d'un joueur, préférences, etc.).
+> **Conseil :** La répartition en serpentine est recommandée car elle assure un équilibre de niveau entre les deux sous-tournois. Les ajustements manuels permettent ensuite de prendre en compte des contraintes logistiques (proximité géographique d'un joueur, préférences, etc.).
 
 ---
 
@@ -730,7 +699,7 @@ Lors de l'import des résultats d'un tournoi qui a été dédoublé, la page d'i
 5. Cliquer sur **« Enregistrer la compétition »**
 6. Les résultats des deux sous-tournois sont **fusionnés automatiquement** en un classement unique pour la catégorie
 
-**Fusion des résultats :** Le classement final du tournoi combine les résultats des deux lieux. Les joueurs sont classés ensemble, comme s'ils avaient participé à un seul tournoi. Le classement saison est recalculé automatiquement après l'import.
+> **Fusion des résultats :** Le classement final du tournoi combine les résultats des deux lieux. Les joueurs sont classés ensemble, comme s'ils avaient participé à un seul tournoi. Le classement saison est recalculé automatiquement après l'import.
 
 ---
 
@@ -742,7 +711,7 @@ Si le dédoublement n'est finalement plus nécessaire (par exemple, en cas de d�
 
 ### Conditions
 
-**Attention :** L'annulation du dédoublement n'est possible que si les convocations n'ont pas encore été envoyées pour les sous-tournois A et B. Une fois les convocations envoyées, le dédoublement ne peut plus être annulé.
+> **Attention :** L'annulation du dédoublement n'est possible que si les convocations n'ont pas encore été envoyées pour les sous-tournois A et B. Une fois les convocations envoyées, le dédoublement ne peut plus être annulé.
 
 ### Processus d'annulation
 
@@ -778,15 +747,17 @@ Cliquer sur "Com joueurs" dans la barre de navigation
 
 Publication d'annonces visibles dans l'Application Joueur.
 
-*[Screenshot: Annonces — Capture de la page annonces avec le formulaire de création (titre, message, type) et la liste des annonces existantes avec leur statut]*
-
 #### Créer une annonce
 
 **Champs à remplir :**
 
 - **Titre** : Titre de l'annonce
 - **Message** : Contenu de l'annonce
-- **Type** : INFO (Information générale), ALERTE (Message important), RESULTATS (Résultats de compétition), PERSO (Message personnel ciblé)
+- **Type** :
+  - INFO : Information générale
+  - ALERTE : Message important
+  - RESULTATS : Résultats de compétition
+  - PERSO : Message personnel ciblé
 
 **Options avancées :**
 
@@ -805,7 +776,7 @@ Publication d'annonces visibles dans l'Application Joueur.
 
 Section pliable permettant de supprimer en lot les annonces expirées, inactives, ou par période.
 
-**Lien avec l'Application Joueur :** Les annonces actives et non expirées apparaissent dans l'Application Joueur. Les annonces PERSO n'apparaissent que pour le joueur ciblé.
+> **Lien avec l'Application Joueur :** Les annonces actives et non expirées apparaissent dans l'Application Joueur. Les annonces PERSO n'apparaissent que pour le joueur ciblé.
 
 ---
 
@@ -814,8 +785,6 @@ Section pliable permettant de supprimer en lot les annonces expirées, inactives
 ### Description
 
 Envoi d'emails de masse à un groupe de joueurs.
-
-*[Screenshot: Composer un email — Capture de la page d'envoi d'email avec les filtres de destinataires, l'éditeur riche et les variables disponibles]*
 
 #### Étape 1 : Sélectionner les destinataires
 
@@ -849,7 +818,7 @@ Envoi d'emails de masse à un groupe de joueurs.
 | `{organization_short_name}` | Sigle de l'organisation |
 | `{organization_email}` | Email de contact de l'organisation |
 
-**Modèles par défaut :** Pour les relances (T1, T2, T3, Finale), il est possible d'enregistrer le message comme modèle par défaut. Ce modèle sera pré-rempli automatiquement lors des prochaines relances du même type.
+> **Modèles par défaut :** Pour les relances (T1, T2, T3, Finale), il est possible d'enregistrer le message comme modèle par défaut. Ce modèle sera pré-rempli automatiquement lors des prochaines relances du même type.
 
 #### Étape 3 : Mode test (recommandé)
 
@@ -888,8 +857,6 @@ Historique des emails envoyés.
 
 Gestion des invitations envoyées aux joueurs pour créer leur compte sur l'Application Joueur.
 
-*[Screenshot: Invitations Espace Joueur — Capture de la page invitations avec l'onglet d'envoi (liste des joueurs) et l'onglet suivi (statuts En attente / Inscrit)]*
-
 #### Onglet "Envoyer des invitations"
 
 **Objectif :** Inviter des joueurs à rejoindre l'Application Joueur
@@ -920,7 +887,7 @@ L'email d'invitation contient : présentation de l'Application Joueur, instructi
 - **Variables disponibles :** `{first_name}`, `{organization_name}`, `{organization_short_name}`, `{organization_email}`
 - **Guide PDF :** Télécharger un PDF joint automatiquement à chaque invitation
 
-**Lien avec l'Application Joueur :** Quand un joueur crée son compte sur l'Application Joueur, son statut passe automatiquement de "En attente" à "Inscrit". Le bouton "Synchroniser statuts" force cette vérification.
+> **Lien avec l'Application Joueur :** Quand un joueur crée son compte sur l'Application Joueur, son statut passe automatiquement de "En attente" à "Inscrit". Le bouton "Synchroniser statuts" force cette vérification.
 
 ---
 
@@ -986,9 +953,9 @@ Depuis la page **Paramètres**, cliquer sur le bouton vert **"Générer tournois
 5. **Contrôler la prévisualisation** — Vérifier le tableau récapitulatif de tous les tournois détectés (date, nom, mode, catégorie, lieu, taille). Les finales sont mises en évidence.
 6. **Cliquer sur "Importer les tournois"** — Tous les tournois sont créés dans le calendrier. Si un tournoi avec le même identifiant existe déjà, il est mis à jour.
 
-**Identification du club organisateur :** Le système détecte le club à partir de la couleur de fond des cellules du fichier Excel. En alternative, le format **T1/A** (lettre du club après le slash) est également reconnu. Si ni la couleur ni la lettre ne correspondent à un club connu, le processus s'arrête et demande de corriger le fichier ou de configurer la correspondance.
+> **Identification du club organisateur :** Le système détecte le club à partir de la couleur de fond des cellules du fichier Excel. En alternative, le format **T1/A** (lettre du club après le slash) est également reconnu. Si ni la couleur ni la lettre ne correspondent à un club connu, le processus s'arrête et demande de corriger le fichier ou de configurer la correspondance.
 
-**Important :** Après la génération, il est recommandé de vérifier les compétitions créées dans le menu **Calendrier**. Les tournois peuvent être modifiés individuellement si nécessaire (changement de date, de lieu, etc.).
+> **Important :** Après la génération, il est recommandé de vérifier les compétitions créées dans le menu **Calendrier**. Les tournois peuvent être modifiés individuellement si nécessaire (changement de date, de lieu, etc.).
 
 ---
 
@@ -997,8 +964,6 @@ Depuis la page **Paramètres**, cliquer sur le bouton vert **"Générer tournois
 ### Description
 
 Configuration des informations générales de l'organisation.
-
-*[Screenshot: Paramètres — Organisation — Capture de la page paramètres organisation avec le formulaire (nom, sigle, logo, emails) et la personnalisation visuelle (couleurs)]*
 
 #### Champs configurables
 
@@ -1061,8 +1026,6 @@ Configure le comportement des emails de relance pour les joueurs qui n'ont pas d
 
 Configuration du mode de qualification pour les finales et gestion des types de tournoi.
 
-*[Screenshot: Paramètres — Types de Tournoi — Capture de la page types de tournoi avec les cartes de sélection du mode (Standard / Journées) et le tableau des types]*
-
 #### Choisir le mode de qualification
 
 Deux modes disponibles, sélectionnables par carte :
@@ -1084,8 +1047,8 @@ Active un bonus de points par tournoi basé sur la moyenne du joueur par rapport
 
 | Type | Formule |
 |------|---------|
-| **Normal** | Au-dessus du max → +2 \| Entre min et max → +1 \| En dessous du min → 0 |
-| **Par paliers** | < min → 0 \| min–milieu → +1 \| milieu–max → +2 \| ≥ max → +3 |
+| **Normal** | Au-dessus du max → +2 | Entre min et max → +1 | En dessous du min → 0 |
+| **Par paliers** | < min → 0 | min–milieu → +1 | milieu–max → +2 | >= max → +3 |
 
 **Périmètre de calcul :** un second sélecteur permet de choisir la base de calcul de la moyenne utilisée pour le bonus :
 
@@ -1136,8 +1099,6 @@ Tableau configurable qui définit le nombre de points attribués pour chaque pos
 
 Configuration des paramètres de jeu (Distance, Reprises) par mode et catégorie pour la saison en cours.
 
-*[Screenshot: Paramètres — Paramètres de jeu — Capture du tableau des paramètres de jeu par catégorie (distance, reprises, moyenne mini/maxi)]*
-
 #### Paramètres par catégorie
 
 | Paramètre | Description |
@@ -1153,7 +1114,7 @@ Ces paramètres sont utilisés pour :
 - Le calcul du bonus moyenne (seuils mini/maxi)
 - La validation des classifications FFB
 
-**Surcharge par tournoi :** Les paramètres Distance et Reprises peuvent être modifiés pour un tournoi spécifique directement depuis la page "Générer les poules" (bouton "Valider les paramètres"). Ces surcharges n'affectent que le tournoi concerné.
+> **Surcharge par tournoi :** Les paramètres Distance et Reprises peuvent être modifiés pour un tournoi spécifique directement depuis la page "Générer les poules" (bouton "Valider les paramètres"). Ces surcharges n'affectent que le tournoi concerné.
 
 ---
 
@@ -1166,8 +1127,6 @@ Menu Paramètres > Types de tournois (section "Barème des points")
 ### Description
 
 Configuration des règles de calcul des points de match et des bonus. Le barème est visible dans les deux modes (Standard et Journées), directement sous la section Bonus Moyenne.
-
-*[Screenshot: Paramètres — Barème de points — Capture de la page barème avec le tableau de base (V/N/D) et les blocs de bonus avec leurs conditions structurées]*
 
 #### Barème de base (Victoire / Nul / Défaite)
 
@@ -1216,8 +1175,6 @@ Menu Paramètres > Classifications FFB
 
 Gestion des classifications FFB par discipline pour chaque joueur. Permet d'attribuer un classement FFB (N1, R2, D3, etc.) et une moyenne FFB par mode de jeu.
 
-*[Screenshot: Classifications FFB — Capture de la page classifications avec la recherche par licence, les lignes discipline/classement/moyenne et le tableau récapitulatif]*
-
 #### Recherche d'un joueur
 
 1. Saisir le numéro de licence dans le champ de recherche
@@ -1231,7 +1188,7 @@ Pour chaque joueur, il est possible de gérer les classifications par mode de je
 - **Classement** : Dropdown avec les niveaux FFB disponibles (N1 à D3)
 - **Moyenne FFB** : Valeur numérique avec 3 décimales
 
-**Validation :** Un indicateur de plage de moyenne s'affiche (ex: "Plage: 15.000 - 50.000") pour guider la saisie.
+> **Validation :** Un indicateur de plage de moyenne s'affiche (ex: "Plage: 15.000 - 50.000") pour guider la saisie.
 
 **Actions :**
 
@@ -1265,8 +1222,6 @@ Les logos des clubs apparaissent dans les classements (tableau et export Excel) 
 ### Description
 
 Gestion des données de base du système, organisée en onglets.
-
-*[Screenshot: Données de référence — Capture de la page données de référence avec les onglets (Modes de jeu, Classements FFB, Catégories, Config. Poules)]*
 
 #### Onglet "Modes de jeu"
 
@@ -1320,8 +1275,6 @@ Menu Paramètres > Logs d'activité (lien direct)
 
 Historique des actions effectuées par les utilisateurs de l'application et de l'Espace Joueur.
 
-*[Screenshot: Logs d'activité — Capture de la page logs avec les statistiques rapides (7 jours), les filtres et le tableau des actions]*
-
 #### Statistiques rapides (7 derniers jours)
 
 - Connexions
@@ -1368,12 +1321,10 @@ Via le menu "Inscriptions" dans la barre de navigation
 
 Vue complète de toutes les inscriptions aux compétitions.
 
-*[Screenshot: Liste des inscriptions — Capture de la liste des inscriptions avec les filtres (saison, mode, statut), le tableau et les badges de statut colorés]*
-
 ### Filtres disponibles
 
 - **Saison**, **Mode de jeu**, **Niveau**
-- **Statut** : Inscrit / Convoqué / Forfait / Indisponible / Désinscrit
+- **Statut** : Inscrit, Convoqué, Forfait, Indisponible, Désinscrit
 - **Recherche** : Par nom ou licence
 
 ### Tableau affiché
@@ -1403,13 +1354,13 @@ Vue complète de toutes les inscriptions aux compétitions.
 4. Vérifier/compléter email et téléphone
 5. Cliquer sur "Enregistrer"
 
-**Lien avec l'Application Joueur :** Les inscriptions avec source "player_app" ont été faites par le joueur lui-même. Ces inscriptions ne doivent généralement pas être modifiées manuellement.
+> **Lien avec l'Application Joueur :** Les inscriptions avec source "player_app" ont été faites par le joueur lui-même. Ces inscriptions ne doivent généralement pas être modifiées manuellement.
 
 #### Statut « Indisponible »
 
 Les joueurs peuvent déclarer leur indisponibilité pour une compétition via l'Application Joueur, soit directement depuis la carte de la compétition, soit via le bouton « Indiquer mon indisponibilité » dans les emails de relance.
 
-- Une inscription est créée avec le statut **Indisponible**
+- Une inscription est créée avec le statut Indisponible
 - L'administrateur reçoit un **email de notification** à l'adresse configurée dans Paramètres > Email de notification
 - Le joueur indisponible est **automatiquement exclu** des prochaines relances
 - Le joueur peut changer d'avis et s'inscrire tant que les inscriptions sont ouvertes — le statut passe alors à « Inscrit »
@@ -1482,7 +1433,7 @@ Les joueurs peuvent déclarer leur indisponibilité pour une compétition via l'
 ## Glossaire
 
 | Terme | Définition |
-|-------|-----------|
+|-------|------------|
 | Application Joueur / Espace Joueur | Application permettant aux licenciés de s'inscrire et consulter leurs informations |
 | Barème | Ensemble des règles définissant l'attribution des points de match et des bonus |
 | Bonus Moyenne | Points bonus par tournoi selon la moyenne du joueur par rapport aux seuils min/max de la catégorie. Deux types : Normal (+0/+1/+2) ou Par paliers (+0/+1/+2/+3). Deux périmètres : Poules uniquement (par défaut) ou Journée complète (inclut phases finales et classement). Disponible dans les deux modes (Standard et Journées). En mode Journées, un bonus similaire peut être activé sur le classement saisonnier. |
@@ -1503,7 +1454,7 @@ Les joueurs peuvent déclarer leur indisponibilité pour une compétition via l'
 | Poule | Groupe de joueurs s'affrontant lors d'un tournoi |
 | Reprise | Unité de jeu au billard (tour de jeu) |
 | Saison | Période allant de septembre à août (ex: 2025-2026) |
-| Répartition serpentine | Méthode de distribution équilibrée des joueurs entre deux sous-tournois : les joueurs triés par classement sont alternés (1er vers A, 2e vers B, 3e vers B, 4e vers A, etc.) pour garantir un niveau homogène |
+| Répartition serpentine | Méthode de distribution équilibrée des joueurs entre deux sous-tournois : les joueurs triés par classement sont alternés (1er → A, 2e → B, 3e → B, 4e → A, etc.) pour garantir un niveau homogène |
 | Série | Nombre de points consécutifs marqués sans rater |
 | E2i / telemat.org | Système fédéral de saisie et gestion des compétitions FFB. Les fichiers CSV de matchs exportés depuis E2i peuvent être importés dans l'application. |
 | MGP (Moyenne Générale Parties) | Moyenne générale du joueur calculée sur l'ensemble des matchs d'un tournoi (total points / total reprises) |
@@ -1515,7 +1466,7 @@ Les joueurs peuvent déclarer leur indisponibilité pour une compétition via l'
 
 ## Checklist des captures d'écran
 
-**Instructions :** Pour chaque capture ci-dessous, prenez une copie d'écran de la page indiquée et enregistrez-la dans le dossier `screenshots/` avec le nom de fichier spécifié. Puis décommentez la balise `<img>` correspondante dans le HTML pour remplacer le placeholder.
+> **Instructions :** Pour chaque capture ci-dessous, prenez une copie d'écran de la page indiquée et enregistrez-la dans le dossier `screenshots/` avec le nom de fichier spécifié.
 
 | ID | Fichier | Page / État à capturer | Détails |
 |----|---------|------------------------|---------|
@@ -1529,7 +1480,11 @@ Les joueurs peuvent déclarer leur indisponibilité pour une compétition via l'
 | IMG-08 | `08-poules-preview.png` | Générer poules — Étape 3 | Après génération : prévisualisation des poules avec composition, planning et paramètres de jeu. |
 | IMG-09 | `09-convocation-email.png` | Convocation — Aperçu email | Aperçu de l'email de convocation avec logo, infos tournoi, poule et planning. |
 | IMG-10 | `10-forfaits.png` | Gestion des forfaits | Depuis Générer poules, cliquer "Gérer les forfaits". Montrer la liste avec cases à cocher et actions. |
-| IMG-11 | `11-resultats-import.png` | Import des résultats | Menu Compétitions > Résultats. Montrer la sélection du tournoi et/ou le tableau après import. |
+| IMG-11 | `11-resultats-import.png` | Import Classements E2i (onglet 1) | Menu Compétitions > Résultats > onglet « Import Classements E2i ». Montrer la sélection de catégorie et la zone de dépôt du fichier CSV. |
+| IMG-11B | `11b-import-matchs-e2i.png` | Import Matchs E2i (onglet 2) | Onglet « Import Matchs E2i » avec les 4 zones de dépôt par phase (Poules, Demi-finales, Finale/Petite Finale, Classement). |
+| IMG-11C | `11c-phase-finale-bracket.png` | Phase Finale (Tableau) | Page tournament-bracket.html après génération : joueurs qualifiés, demi-finales, finale/petite finale, matchs de classement. |
+| IMG-11D | `11d-resultats-standard.png` | Résultats d'un tournoi — Mode Standard | Page de résultats d'un tournoi en mode standard : colonnes CLT, Licence, Joueur, Club, Pts Match, Bonus, Total, Points, Reprises, Moyenne, MS. |
+| IMG-11E | `11e-resultats-journees.png` | Résultats d'un tournoi — Mode Journées | Page de résultats d'un tournoi en mode journées : colonnes CLT, Clt poule, Clt Finale, Pts clt, bonus, Pts Clt Total, PM, Pts, R, MS, MGP, MPART. |
 | IMG-12 | `12-calendrier.png` | Calendrier | Vue calendrier mensuelle avec des compétitions affichées (couleurs par mode). Choisir un mois avec plusieurs événements. |
 | IMG-13 | `13-annonces.png` | Annonces | Menu Com joueurs > Annonces. Montrer le formulaire de création et quelques annonces existantes si possible. |
 | IMG-14 | `14-composer-email.png` | Composer un email | Menu Com joueurs > Composer. Montrer les filtres de destinataires, l'éditeur riche et la liste des variables. |
@@ -1543,12 +1498,12 @@ Les joueurs peuvent déclarer leur indisponibilité pour une compétition via l'
 | IMG-22 | `22-logs-activite.png` | Paramètres > Logs d'activité | Statistiques rapides + filtres + quelques lignes de log dans le tableau. |
 | IMG-23 | `23-inscriptions-liste.png` | Liste des inscriptions | Menu Inscriptions. Filtrer pour afficher des résultats. Montrer les badges de statut colorés. |
 
-**Astuce :** Pour des captures de bonne qualité, utilisez la résolution de votre écran standard (pas de zoom). Largeur recommandée : 1200-1400px. Format PNG recommandé.
+> **Astuce :** Pour des captures de bonne qualité, utilisez la résolution de votre écran standard (pas de zoom). Largeur recommandée : 1200-1400px. Format PNG recommandé.
 
-**Activation des images :** Une fois les captures placées dans le dossier `screenshots/`, ouvrez ce fichier HTML et pour chaque placeholder, décommentez la ligne `<img src="screenshots/XX-nom.png">`. Le placeholder gris sera alors remplacé par la vraie capture.
+> **Activation des images :** Une fois les captures placées dans le dossier `screenshots/`, ouvrez le fichier HTML et pour chaque placeholder, décommentez la ligne `<img src="screenshots/XX-nom.png">`. Le placeholder gris sera alors remplacé par la vraie capture.
 
 ---
 
 Document de référence pour l'Application de Gestion des Tournois — Version 2.0.200
 
-JR ©
+JR (c)
