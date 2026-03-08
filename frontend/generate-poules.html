@@ -894,6 +894,63 @@
     </div>
   </div>
 
+  <!-- Split Tournament Modal -->
+  <div id="splitModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
+    <div style="background: white; padding: 30px; border-radius: 12px; max-width: 500px; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
+      <h3 style="margin-top: 0;">Dédoubler le tournoi</h3>
+      <p id="splitTournoiName" style="color: #666; margin-bottom: 20px;"></p>
+      <input type="hidden" id="split_tournoi_id">
+      <div style="display: grid; gap: 15px;">
+        <div>
+          <label style="display: block; margin-bottom: 5px; font-weight: bold;">Lieu A</label>
+          <select id="split_lieu_a" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+            <option value="">-- Sélectionner un club --</option>
+          </select>
+        </div>
+        <div>
+          <label style="display: block; margin-bottom: 5px; font-weight: bold;">Lieu B</label>
+          <select id="split_lieu_b" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+            <option value="">-- Sélectionner un club --</option>
+          </select>
+        </div>
+      </div>
+      <div style="display: flex; gap: 10px; margin-top: 20px;">
+        <button id="confirmSplitBtn" class="btn" style="flex: 1; background: #e65100;">Dédoubler</button>
+        <button id="cancelSplitBtn" class="btn" style="flex: 1; background: #999;">Annuler</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Distribution Modal -->
+  <div id="distributionModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; overflow-y: auto;">
+    <div style="background: white; margin: 30px auto; padding: 30px; border-radius: 12px; max-width: 900px; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+        <h3 style="margin: 0;">Répartition des joueurs</h3>
+        <button id="closeDistributionBtn" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #999;">&times;</button>
+      </div>
+      <p id="distributionTournoiName" style="color: #666; margin-bottom: 10px;"></p>
+      <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+        <button id="autoDistributeBtn" class="btn" style="background: #17a2b8; padding: 8px 16px; font-size: 13px;">Répartition automatique (serpentine)</button>
+        <span id="distributionCount" style="color: #666; font-size: 13px; align-self: center;"></span>
+      </div>
+      <input type="hidden" id="distribution_tournoi_id">
+      <div class="split-columns">
+        <div class="split-column col-a">
+          <h4 style="color: #1976d2;">Lieu A — <span id="lieuAName">-</span> (<span id="countA">0</span>)</h4>
+          <div id="playersA"></div>
+        </div>
+        <div class="split-column col-b">
+          <h4 style="color: #e65100;">Lieu B — <span id="lieuBName">-</span> (<span id="countB">0</span>)</h4>
+          <div id="playersB"></div>
+        </div>
+      </div>
+      <div style="display: flex; gap: 10px; margin-top: 20px;">
+        <button id="saveDistributionBtn" class="btn" style="flex: 1; background: #4CAF50;">Enregistrer la répartition</button>
+        <button id="cancelDistributionBtn" class="btn" style="flex: 1; background: #999;">Annuler</button>
+      </div>
+    </div>
+  </div>
+
   <script src="js/auth-utils.js?v=197"></script>
   <script src="js/app-branding.js?v=215"></script>
   <script src="js/reference-data.js"></script>
@@ -5618,9 +5675,17 @@
     let currentDistributionPlayers = [];
     let currentDistributionChildren = [];
 
+    function populateSplitClubSelects() {
+      const options = '<option value="">-- Sélectionner un club --</option>' +
+        clubs.map(c => `<option value="${c.city || c.display_name || c.name}">${c.display_name || c.name}${c.city ? ' (' + c.city + ')' : ''}</option>`).join('');
+      document.getElementById('split_lieu_a').innerHTML = options;
+      document.getElementById('split_lieu_b').innerHTML = options;
+    }
+
     function openSplitModal(tournoi) {
       document.getElementById('split_tournoi_id').value = tournoi.tournoi_id;
       document.getElementById('splitTournoiName').textContent = `${tournoi.nom} — ${tournoi.mode} ${tournoi.categorie}`;
+      populateSplitClubSelects();
       document.getElementById('split_lieu_a').value = '';
       document.getElementById('split_lieu_b').value = '';
       document.getElementById('splitModal').style.display = 'flex';
@@ -5634,11 +5699,16 @@
 
     document.getElementById('confirmSplitBtn').addEventListener('click', async () => {
       const tournoiId = document.getElementById('split_tournoi_id').value;
-      const lieuA = document.getElementById('split_lieu_a').value.trim();
-      const lieuB = document.getElementById('split_lieu_b').value.trim();
+      const lieuA = document.getElementById('split_lieu_a').value;
+      const lieuB = document.getElementById('split_lieu_b').value;
 
       if (!lieuA || !lieuB) {
-        alert('Veuillez renseigner les deux lieux');
+        alert('Veuillez sélectionner les deux lieux');
+        return;
+      }
+
+      if (lieuA === lieuB) {
+        alert('Les deux lieux doivent être différents');
         return;
       }
 
@@ -5985,59 +6055,6 @@
             Confirmer et régénérer
           </button>
         </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Split Tournament Modal -->
-  <div id="splitModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
-    <div style="background: white; padding: 30px; border-radius: 12px; max-width: 500px; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
-      <h3 style="margin-top: 0;">Dédoubler le tournoi</h3>
-      <p id="splitTournoiName" style="color: #666; margin-bottom: 20px;"></p>
-      <input type="hidden" id="split_tournoi_id">
-      <div style="display: grid; gap: 15px;">
-        <div>
-          <label style="display: block; margin-bottom: 5px; font-weight: bold;">Lieu A</label>
-          <input type="text" id="split_lieu_a" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" placeholder="Ex: Maisons-Alfort">
-        </div>
-        <div>
-          <label style="display: block; margin-bottom: 5px; font-weight: bold;">Lieu B</label>
-          <input type="text" id="split_lieu_b" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" placeholder="Ex: Livry-Gargan">
-        </div>
-      </div>
-      <div style="display: flex; gap: 10px; margin-top: 20px;">
-        <button id="confirmSplitBtn" class="btn" style="flex: 1; background: #e65100;">Dédoubler</button>
-        <button id="cancelSplitBtn" class="btn" style="flex: 1; background: #999;">Annuler</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Distribution Modal -->
-  <div id="distributionModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; overflow-y: auto;">
-    <div style="background: white; margin: 30px auto; padding: 30px; border-radius: 12px; max-width: 900px; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-        <h3 style="margin: 0;">Répartition des joueurs</h3>
-        <button id="closeDistributionBtn" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #999;">&times;</button>
-      </div>
-      <p id="distributionTournoiName" style="color: #666; margin-bottom: 10px;"></p>
-      <div style="display: flex; gap: 10px; margin-bottom: 15px;">
-        <button id="autoDistributeBtn" class="btn" style="background: #17a2b8; padding: 8px 16px; font-size: 13px;">Répartition automatique (serpentine)</button>
-        <span id="distributionCount" style="color: #666; font-size: 13px; align-self: center;"></span>
-      </div>
-      <input type="hidden" id="distribution_tournoi_id">
-      <div class="split-columns">
-        <div class="split-column col-a">
-          <h4 style="color: #1976d2;">Lieu A — <span id="lieuAName">-</span> (<span id="countA">0</span>)</h4>
-          <div id="playersA"></div>
-        </div>
-        <div class="split-column col-b">
-          <h4 style="color: #e65100;">Lieu B — <span id="lieuBName">-</span> (<span id="countB">0</span>)</h4>
-          <div id="playersB"></div>
-        </div>
-      </div>
-      <div style="display: flex; gap: 10px; margin-top: 20px;">
-        <button id="saveDistributionBtn" class="btn" style="flex: 1; background: #4CAF50;">Enregistrer la répartition</button>
-        <button id="cancelDistributionBtn" class="btn" style="flex: 1; background: #999;">Annuler</button>
       </div>
     </div>
   </div>
