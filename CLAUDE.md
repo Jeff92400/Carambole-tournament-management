@@ -48,7 +48,7 @@ git push origin main
 
 ## Versioning
 
-**Current Version:** V 2.0.284 03/26
+**Current Version:** V 2.0.285 03/26
 
 Version is displayed at the bottom of the login screen (`frontend/login.html`).
 
@@ -804,6 +804,28 @@ CDBHS color mapping (from legend rows 22-27):
   - `backend/routes/email.js` - buildUniversalVariables, all email endpoints
   - `backend/routes/emailing.js` - replaceVar calls in send-results, relances, etc.
   - `frontend/emailing.html` - 8+ template editor variable lists
+
+- **Customizable KPI Dashboard (widget selector):** Replace the current hardcoded dashboard stats with a dynamic KPI engine where each CDB picks 9-15 indicators from a catalog of ~65 KPIs. Interactive mockup: `mockup-dashboard-kpis.html`.
+
+  **KPI Catalog (8 domains):** Joueurs (14), Compétitions (10), Inscriptions (12), Catégories (7), Clubs (6), Engagement (8), Tendances (3), Classements (4).
+
+  **Storage:** `organization_settings` key `dashboard_kpis` = JSON array of selected KPI IDs. Default = current 9 existing KPIs.
+
+  **Backend:**
+  - `GET /api/dashboard/kpis` — compute values for selected KPIs only
+  - `GET /api/dashboard/kpi-catalog` — full catalog with metadata (name, desc, category, theme)
+  - `PUT /api/dashboard/kpis` — save CDB's selection
+  - KPI engine: single function mapping each KPI ID → SQL query, executed only for selected KPIs
+
+  **Frontend:** Dynamic widget rendering in 3-column grid, "Personnaliser le tableau de bord" button opens selector modal with collapsible categories, checkboxes, "Existant/Nouveau" badges, selection counter.
+
+  **Phased rollout:**
+  | Phase | Scope | Effort |
+  |-------|-------|--------|
+  | Phase 1 | 15 existing KPIs → dynamic rendering + selector UI | ~2 days |
+  | Phase 2 | +20 new single-query KPIs (taux, ratios, counts) | ~3 days |
+  | Phase 3 | +15 cross-season KPIs (N vs N-1 comparisons) | ~2 days |
+  | Phase 4 | +15 advanced KPIs (charts, engagement tracking) | ~3 days |
 
 - **Player historical analytics (multi-season stats):** All tournament data (`tournament_results`, `rankings`) is retained permanently across seasons and scoped by `organization_id`. Season averages are computed on-the-fly (`SUM(points)/SUM(reprises)` from `tournament_results`) — not stored as a snapshot. This means we can build rich player analytics over time:
   - Average (moyenne) progression per mode across seasons
