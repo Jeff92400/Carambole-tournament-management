@@ -1290,17 +1290,22 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
   console.log('Using Resend API for email sending');
   console.log(`Competition type: ${isFinale ? 'FINALE' : 'TOURNAMENT'}`);
 
-  // Check if this is a split child tournament (has split_label)
+  // Check if this is a split child tournament (has split_label and parent_tournoi_id)
   let splitLabel = null;
+  let parentTournoiId = null;
   if (tournoiId) {
     const db = require('../db-loader');
     try {
       const splitRow = await new Promise((resolve, reject) => {
-        db.get('SELECT split_label FROM tournoi_ext WHERE tournoi_id = $1', [tournoiId], (err, row) => err ? reject(err) : resolve(row));
+        db.get('SELECT split_label, parent_tournoi_id FROM tournoi_ext WHERE tournoi_id = $1', [tournoiId], (err, row) => err ? reject(err) : resolve(row));
       });
       if (splitRow?.split_label) {
         splitLabel = splitRow.split_label;
         console.log(`Split tournament detected: Lieu ${splitLabel}`);
+      }
+      if (splitRow?.parent_tournoi_id) {
+        parentTournoiId = splitRow.parent_tournoi_id;
+        console.log(`Split child tournament — inscriptions are on parent tournoi_id=${parentTournoiId}`);
       }
     } catch (e) { /* ignore */ }
   }
@@ -1717,6 +1722,8 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
   // Skip in test mode to avoid modifying real data
   if (tournoiId && results.sent.length > 0 && !isTestMode && !skipSavePoules) {
     try {
+      // For split child tournaments, inscriptions live on the parent tournament
+      const inscriptionTournoiId = parentTournoiId || tournoiId;
       // Get players who received emails with their convocation details
       const sentPlayers = players.filter(p => results.sent.some(s => s.email === p.email));
 
@@ -1744,6 +1751,7 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
           : '';
 
         // Update inscription with convocation details
+        // For split child tournaments, inscriptions live on the parent tournament
         await new Promise((resolve, reject) => {
           db.run(
             `UPDATE inscriptions
@@ -1763,7 +1771,7 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
               playerLocation?.startTime || null,
               specialNote || null,
               playerLocation?.phone || null,
-              tournoiId,
+              inscriptionTournoiId,
               player.licence
             ],
             (err) => {
@@ -1774,7 +1782,7 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
         });
       }
 
-      console.log(`Updated convoque status and convocation details for ${sentPlayers.length} players in tournament ${tournoiId}`);
+      console.log(`Updated convoque status and convocation details for ${sentPlayers.length} players in tournament ${inscriptionTournoiId}${parentTournoiId ? ` (parent of child ${tournoiId})` : ''}`);
 
       // Skip saving poules in test mode
       if (!isTestMode && !skipSavePoules) {

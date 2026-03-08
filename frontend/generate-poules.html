@@ -2036,7 +2036,6 @@
 
     // Handle selection of a split child (A or B)
     async function selectSplitChild(splitLabel, childTournoiId) {
-      console.log('selectSplitChild called:', splitLabel, childTournoiId);
       selectedSplitChild = splitLabel;
 
       const childTournoi = splitChildren.find(c => String(c.tournoi_id) === String(childTournoiId));
