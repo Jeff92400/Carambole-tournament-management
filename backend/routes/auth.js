@@ -893,26 +893,29 @@ router.delete('/users/:id', authenticateToken, requireAdmin, (req, res) => {
       return res.status(500).json({ error: 'Error finding user' });
     }
 
-    db.run('DELETE FROM users WHERE id = $1 AND ($2::int IS NULL OR organization_id = $2)', [userId, orgId], function(err) {
-      if (err) {
-        return res.status(500).json({ error: 'Error deleting user' });
-      }
+    // Nullify FK in admin_activity_logs to avoid constraint violation
+    db.run('UPDATE admin_activity_logs SET user_id = NULL WHERE user_id = $1', [userId], function() {
+      db.run('DELETE FROM users WHERE id = $1 AND ($2::int IS NULL OR organization_id = $2)', [userId, orgId], function(err) {
+        if (err) {
+          return res.status(500).json({ error: 'Error deleting user' });
+        }
 
-      if (this.changes === 0) {
-        return res.status(404).json({ error: 'User not found' });
-      }
+        if (this.changes === 0) {
+          return res.status(404).json({ error: 'User not found' });
+        }
 
-      // Log user deletion
-      logAdminAction({
-        req,
-        action: ACTION_TYPES.USER_DELETED,
-        details: `Suppression utilisateur: ${user?.username || 'inconnu'}`,
-        targetType: 'user',
-        targetId: userId,
-        targetName: user?.username
+        // Log user deletion
+        logAdminAction({
+          req,
+          action: ACTION_TYPES.USER_DELETED,
+          details: `Suppression utilisateur: ${user?.username || 'inconnu'}`,
+          targetType: 'user',
+          targetId: userId,
+          targetName: user?.username
+        });
+
+        res.json({ message: 'User deleted successfully' });
       });
-
-      res.json({ message: 'User deleted successfully' });
     });
   });
 });
