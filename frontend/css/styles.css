@@ -706,13 +706,16 @@ tbody tr:nth-child(even) {
   opacity: 0.85;
 }
 
-/* Table rows: left accent bar on hover */
+/* Table rows: left accent bar on hover (applied to first cell to avoid pseudo-cell shift) */
 tbody tr {
   transition: background 0.2s ease;
+}
+
+tbody td:first-child {
   position: relative;
 }
 
-tbody tr::before {
+tbody td:first-child::before {
   content: '';
   position: absolute;
   left: 0;
@@ -727,7 +730,7 @@ tbody tr::before {
   border-radius: 0 2px 2px 0;
 }
 
-tbody tr:hover::before {
+tbody tr:hover td:first-child::before {
   opacity: 1;
   transform: scaleY(1);
 }
@@ -742,7 +745,7 @@ tbody tr:hover::before {
   .login-container {
     animation: none;
   }
-  tbody tr::before {
+  tbody td:first-child::before {
     transition: none;
   }
 }
