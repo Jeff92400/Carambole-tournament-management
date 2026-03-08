@@ -860,13 +860,14 @@ router.get('/lookup-date', authenticateToken, async (req, res) => {
     // Match by tournament_number column (direct integer match)
     // categorie can be combined (e.g. "R3-R4") — match exact or as hyphen-delimited segment
     const row = await dbGetAsync(
-      `SELECT debut, lieu, lieu_2 FROM tournoi_ext
+      `SELECT tournoi_id, debut, lieu, lieu_2, is_split FROM tournoi_ext
        WHERE UPPER(mode) = UPPER($1)
          AND (UPPER(categorie) = UPPER($2)
               OR UPPER($2) = ANY(string_to_array(UPPER(categorie), '-')))
          AND tournament_number = $3
          AND ($4::int IS NULL OR organization_id = $4)
          AND (status IS NULL OR status = 'active')
+         AND parent_tournoi_id IS NULL
        ORDER BY debut DESC
        LIMIT 1`,
       [mode, categorie, parseInt(tournamentNumber), orgId]
@@ -875,7 +876,18 @@ router.get('/lookup-date', authenticateToken, async (req, res) => {
     if (row && row.debut) {
       // Return date in YYYY-MM-DD format for the date input
       const dateStr = new Date(row.debut).toISOString().split('T')[0];
-      return res.json({ found: true, date: dateStr, lieu: row.lieu || '', lieu_2: row.lieu_2 || '' });
+      const result = { found: true, date: dateStr, lieu: row.lieu || '', lieu_2: row.lieu_2 || '', is_split: row.is_split === true, tournoi_id: row.tournoi_id };
+
+      // If split, also return children info
+      if (row.is_split) {
+        const children = await dbAllAsync(
+          `SELECT tournoi_id, split_label, lieu FROM tournoi_ext WHERE parent_tournoi_id = $1 ORDER BY split_label`,
+          [row.tournoi_id]
+        );
+        result.children = children;
+      }
+
+      return res.json(result);
     }
 
     res.json({ found: false });
@@ -4581,12 +4593,21 @@ router.post('/import-matches', authenticateToken, upload.array('files', 20), asy
 
   try {
     // 1. Parse all CSV files into matches
+    // subTournaments[] is a parallel array: ['A', 'B', ...] matching files order (for split tournaments)
+    // multer puts bracket-syntax fields as 'subTournaments[]' literal key
+    const rawSub = req.body['subTournaments[]'] || req.body.subTournaments || [];
+    const subTournaments = Array.isArray(rawSub) ? rawSub : [rawSub];
     let allMatches = [];
     const fileInfo = [];
-    for (const file of files) {
+    for (let fi = 0; fi < files.length; fi++) {
+      const file = files[fi];
       const matches = await parseMatchCSV(file.path);
+      const subTag = subTournaments[fi] || null;
+      if (subTag) {
+        matches.forEach(m => { m.sub_tournament = subTag; });
+      }
       const poules = [...new Set(matches.map(m => m.poule_name))];
-      fileInfo.push({ filename: file.originalname, matchCount: matches.length, poules });
+      fileInfo.push({ filename: file.originalname, matchCount: matches.length, poules, subTournament: subTag });
       allMatches = allMatches.concat(matches);
     }
 
@@ -4656,20 +4677,20 @@ router.post('/import-matches', authenticateToken, upload.array('files', 20), asy
       }
     }
 
-    // 5. Insert all matches into tournament_matches
+    // 5. Insert all matches into tournament_matches (with sub_tournament tag for split tournaments)
     for (const match of allMatches) {
       await dbRunAsync(
         `INSERT INTO tournament_matches (
           tournament_id, phase_number, match_date, table_name, poule_name,
           player1_licence, player1_name, player1_points, player1_reprises, player1_serie, player1_match_points, player1_moyenne,
           player2_licence, player2_name, player2_points, player2_reprises, player2_serie, player2_match_points, player2_moyenne,
-          game_mode, organization_id
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)`,
+          game_mode, organization_id, sub_tournament
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)`,
         [
           tournamentId, match.phase_number, match.match_date, match.table_name, match.poule_name,
           match.player1_licence, match.player1_name, match.player1_points, match.player1_reprises, match.player1_serie, match.player1_match_points, match.player1_moyenne,
           match.player2_licence, match.player2_name, match.player2_points, match.player2_reprises, match.player2_serie, match.player2_match_points, match.player2_moyenne,
-          match.game_mode, orgId
+          match.game_mode, orgId, match.sub_tournament || null
         ]
       );
     }
@@ -4776,12 +4797,19 @@ router.post('/import-matches/preview', authenticateToken, upload.array('files', 
   }
 
   try {
+    const rawSub = req.body['subTournaments[]'] || req.body.subTournaments || [];
+    const subTournaments = Array.isArray(rawSub) ? rawSub : [rawSub];
     let allMatches = [];
     const fileInfo = [];
-    for (const file of files) {
+    for (let fi = 0; fi < files.length; fi++) {
+      const file = files[fi];
       const matches = await parseMatchCSV(file.path);
+      const subTag = subTournaments[fi] || null;
+      if (subTag) {
+        matches.forEach(m => { m.sub_tournament = subTag; });
+      }
       const poules = [...new Set(matches.map(m => m.poule_name))];
-      fileInfo.push({ filename: file.originalname, matchCount: matches.length, poules });
+      fileInfo.push({ filename: file.originalname, matchCount: matches.length, poules, subTournament: subTag });
       allMatches = allMatches.concat(matches);
     }
 

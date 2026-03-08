@@ -222,8 +222,14 @@
             </div>
           </div>
 
+          <!-- Split tournament indicator (hidden by default) -->
+          <div id="splitBanner" style="display: none; background: #fff3e0; border: 1px solid #e65100; border-radius: 8px; padding: 12px 16px; margin-bottom: 12px;">
+            <strong style="color: #e65100;">Tournoi dédoublé</strong>
+            <span id="splitBannerText" style="color: #666; margin-left: 8px;"></span>
+          </div>
+
           <!-- Upload mode toggle -->
-          <div style="display: flex; gap: 0; margin-bottom: 12px; border: 2px solid #e0e0e0; border-radius: 8px; overflow: hidden;">
+          <div id="uploadModeToggle" style="display: flex; gap: 0; margin-bottom: 12px; border: 2px solid #e0e0e0; border-radius: 8px; overflow: hidden;">
             <button type="button" id="btnModeSingle" onclick="switchUploadMode('single')" style="flex: 1; padding: 10px; border: none; background: var(--color-primary, #1F4788); color: white; cursor: pointer; font-size: 13px; font-weight: 700;">
               Fichier unique (toutes phases)
             </button>
@@ -232,7 +238,31 @@
             </button>
           </div>
 
-          <!-- Single file upload zone -->
+          <!-- Split tournament upload zones (hidden by default, shown when tournament is split) -->
+          <div id="splitUploadZones" style="display: none;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+              <div class="phase-upload-zone">
+                <div class="phase-zone-header" style="background: #1976d2;">Fichier CSV — Lieu A (<span id="splitUploadLieuA">A</span>)</div>
+                <div class="phase-zone-droparea" id="zone-SPLIT-A" style="padding: 25px; text-align: center;">
+                  <p style="margin: 0; font-size: 13px; color: #666;">CSV du sous-tournoi A</p>
+                  <p style="font-size: 11px; color: #999; margin: 6px 0 0 0;">Cliquez ou glissez-déposez</p>
+                  <input type="file" accept=".csv" style="display: none;">
+                </div>
+                <div class="phase-zone-files" id="files-SPLIT-A"></div>
+              </div>
+              <div class="phase-upload-zone">
+                <div class="phase-zone-header" style="background: #e65100;">Fichier CSV — Lieu B (<span id="splitUploadLieuB">B</span>)</div>
+                <div class="phase-zone-droparea" id="zone-SPLIT-B" style="padding: 25px; text-align: center;">
+                  <p style="margin: 0; font-size: 13px; color: #666;">CSV du sous-tournoi B</p>
+                  <p style="font-size: 11px; color: #999; margin: 6px 0 0 0;">Cliquez ou glissez-déposez</p>
+                  <input type="file" accept=".csv" style="display: none;">
+                </div>
+                <div class="phase-zone-files" id="files-SPLIT-B"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Single file upload zone (hidden when split mode is active) -->
           <div id="singleFileZone">
             <div class="phase-upload-zone" data-phase="SINGLE">
               <div class="phase-zone-header">Fichier CSV compétition (toutes phases)</div>
@@ -989,11 +1019,108 @@
             if (data.lieu) document.getElementById('matchTournamentLocation').value = data.lieu;
             if (data.lieu_2) document.getElementById('matchTournamentLocation2').value = data.lieu_2;
           }
+          // Handle split tournament detection
+          handleSplitDetection(data);
         }
       } catch (error) {
         // Silently fail — date field remains editable
       }
     }
+
+    // Split tournament state
+    let isSplitMode = false;
+    let splitFileA = null;
+    let splitFileB = null;
+    let splitChildren = [];
+
+    function handleSplitDetection(data) {
+      const banner = document.getElementById('splitBanner');
+      const splitZones = document.getElementById('splitUploadZones');
+      const uploadToggle = document.getElementById('uploadModeToggle');
+      const singleZone = document.getElementById('singleFileZone');
+      const phaseGrid = document.getElementById('phaseUploadGrid');
+
+      if (data.is_split && data.children && data.children.length === 2) {
+        isSplitMode = true;
+        splitChildren = data.children;
+        const childA = data.children.find(c => c.split_label === 'A');
+        const childB = data.children.find(c => c.split_label === 'B');
+
+        banner.style.display = 'block';
+        document.getElementById('splitBannerText').textContent =
+          `Lieu A : ${childA?.lieu || 'A'} — Lieu B : ${childB?.lieu || 'B'}`;
+        document.getElementById('splitUploadLieuA').textContent = childA?.lieu || 'A';
+        document.getElementById('splitUploadLieuB').textContent = childB?.lieu || 'B';
+
+        // Show split zones, hide normal upload
+        splitZones.style.display = 'block';
+        uploadToggle.style.display = 'none';
+        singleZone.style.display = 'none';
+        phaseGrid.style.display = 'none';
+
+        // Clear normal upload files
+        singleFile = null;
+        document.getElementById('files-SINGLE').innerHTML = '';
+        PHASE_KEYS.forEach(phase => { matchFilesByPhase[phase] = []; renderPhaseFileList(phase); });
+      } else {
+        isSplitMode = false;
+        splitChildren = [];
+        splitFileA = null;
+        splitFileB = null;
+        document.getElementById('files-SPLIT-A').innerHTML = '';
+        document.getElementById('files-SPLIT-B').innerHTML = '';
+
+        banner.style.display = 'none';
+        splitZones.style.display = 'none';
+        uploadToggle.style.display = 'flex';
+        // Restore current upload mode
+        switchUploadMode(uploadMode);
+      }
+
+      // Hide preview when switching
+      document.getElementById('matchPreviewCard').style.display = 'none';
+      document.getElementById('importMatchesBtn').style.display = 'none';
+    }
+
+    // Set up drag/drop/click for split file zones
+    ['A', 'B'].forEach(label => {
+      const droparea = document.getElementById('zone-SPLIT-' + label);
+      const fileInput = droparea.querySelector('input[type="file"]');
+
+      droparea.addEventListener('click', (e) => { if (e.target !== fileInput) fileInput.click(); });
+      droparea.addEventListener('dragover', (e) => { e.preventDefault(); droparea.classList.add('dragover'); });
+      droparea.addEventListener('dragleave', () => { droparea.classList.remove('dragover'); });
+      droparea.addEventListener('drop', (e) => {
+        e.preventDefault();
+        droparea.classList.remove('dragover');
+        if (e.dataTransfer.files.length > 0) setSplitFile(label, e.dataTransfer.files[0]);
+      });
+      fileInput.addEventListener('change', () => {
+        if (fileInput.files.length > 0) setSplitFile(label, fileInput.files[0]);
+        fileInput.value = '';
+      });
+    });
+
+    function setSplitFile(label, file) {
+      if (label === 'A') splitFileA = file;
+      else splitFileB = file;
+      const container = document.getElementById('files-SPLIT-' + label);
+      container.innerHTML = `
+        <div class="phase-file-item">
+          <span>📄 ${file.name} <span style="color: #999;">(${(file.size / 1024).toFixed(1)} Ko)</span></span>
+          <button onclick="removeSplitFile('${label}')">✕</button>
+        </div>
+      `;
+    }
+
+    function removeSplitFile(label) {
+      if (label === 'A') splitFileA = null;
+      else splitFileB = null;
+      document.getElementById('files-SPLIT-' + label).innerHTML = '';
+      document.getElementById('matchPreviewCard').style.display = 'none';
+      document.getElementById('importMatchesBtn').style.display = 'none';
+    }
+    window.removeSplitFile = removeSplitFile;
 
     document.getElementById('matchTournamentDate').addEventListener('change', (e) => {
       if (e.target.value) {
@@ -1137,6 +1264,12 @@
     }
 
     function getAllMatchFiles() {
+      if (isSplitMode) {
+        const all = [];
+        if (splitFileA) all.push(splitFileA);
+        if (splitFileB) all.push(splitFileB);
+        return all;
+      }
       if (uploadMode === 'single') {
         return singleFile ? [singleFile] : [];
       }
@@ -1145,6 +1278,15 @@
         matchFilesByPhase[phase].forEach(f => all.push(f));
       });
       return all;
+    }
+
+    // Returns sub-tournament tags parallel to getAllMatchFiles() — only for split mode
+    function getSubTournamentTags() {
+      if (!isSplitMode) return [];
+      const tags = [];
+      if (splitFileA) tags.push('A');
+      if (splitFileB) tags.push('B');
+      return tags;
     }
 
     // Preview matches
@@ -1168,6 +1310,13 @@
         return;
       }
 
+      // Validate split mode files
+      if (isSplitMode && allFiles.length < 2) {
+        errorDiv.textContent = 'Veuillez sélectionner un fichier CSV pour chaque lieu (A et B)';
+        errorDiv.style.display = 'block';
+        return;
+      }
+
       previewBtn.disabled = true;
       previewBtn.textContent = 'Analyse en cours...';
 
@@ -1175,6 +1324,9 @@
         const formData = new FormData();
         allFiles.forEach(f => formData.append('files', f));
         formData.append('categoryId', categoryId);
+        // Add sub-tournament tags for split mode
+        const subTags = getSubTournamentTags();
+        subTags.forEach(tag => formData.append('subTournaments[]', tag));
 
         const response = await fetch(`${API_URL}/tournaments/import-matches/preview`, {
           method: 'POST',
@@ -1290,6 +1442,9 @@
         formData.append('season', season);
         formData.append('location', document.getElementById('matchTournamentLocation').value);
         formData.append('location_2', document.getElementById('matchTournamentLocation2').value);
+        // Add sub-tournament tags for split mode
+        const subTags = getSubTournamentTags();
+        subTags.forEach(tag => formData.append('subTournaments[]', tag));
 
         const response = await fetch(`${API_URL}/tournaments/import-matches`, {
           method: 'POST',
@@ -1339,7 +1494,11 @@
           renderPhaseFileList(phase);
         });
         singleFile = null;
+        splitFileA = null;
+        splitFileB = null;
         document.getElementById('files-SINGLE').innerHTML = '';
+        document.getElementById('files-SPLIT-A').innerHTML = '';
+        document.getElementById('files-SPLIT-B').innerHTML = '';
         document.getElementById('matchPreviewCard').style.display = 'none';
         document.getElementById('importMatchesBtn').style.display = 'none';
 

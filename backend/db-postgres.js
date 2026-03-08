@@ -547,6 +547,13 @@ async function initializeDatabase() {
       console.log(`[MIGRATION] Backfilled location for ${backfillResult.rowCount} CDB9394 tournaments`);
     }
 
+    // Split tournament support (migration - March 2026)
+    // Parent/child model: parent holds inscriptions, children represent physical events at different locations
+    await client.query(`ALTER TABLE tournoi_ext ADD COLUMN IF NOT EXISTS is_split BOOLEAN DEFAULT FALSE`);
+    await client.query(`ALTER TABLE tournoi_ext ADD COLUMN IF NOT EXISTS parent_tournoi_id INTEGER REFERENCES tournoi_ext(tournoi_id)`);
+    await client.query(`ALTER TABLE tournoi_ext ADD COLUMN IF NOT EXISTS split_label VARCHAR(5)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_tournoi_ext_parent ON tournoi_ext(parent_tournoi_id) WHERE parent_tournoi_id IS NOT NULL`);
+
     // Tournament parameter overrides table (migration - February 2026)
     // Allows per-tournament customization of Distance and Reprises values
     await client.query(`
@@ -594,6 +601,9 @@ async function initializeDatabase() {
     // Add statut column to track inscription status (inscrit, désinscrit)
     // Note: forfait is separate - used only after official convocation is sent
     await client.query(`ALTER TABLE inscriptions ADD COLUMN IF NOT EXISTS statut VARCHAR(20) DEFAULT 'inscrit'`);
+
+    // Split tournament: track which sub-tournament (A/B) a player is assigned to
+    await client.query(`ALTER TABLE inscriptions ADD COLUMN IF NOT EXISTS assigned_split VARCHAR(5)`);
 
     // Add unique constraint on (normalized licence, tournoi_id) to prevent duplicates
     // This ensures a player can only be inscribed once per tournament regardless of source
@@ -1993,6 +2003,9 @@ async function initializeDatabase() {
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_tournament_matches_tournament ON tournament_matches(tournament_id)
     `);
+
+    // Split tournament: track which sub-tournament (A/B) a match came from
+    await client.query(`ALTER TABLE tournament_matches ADD COLUMN IF NOT EXISTS sub_tournament TEXT`);
 
     // New columns on tournament_results for match-based imports
     await client.query(`ALTER TABLE tournament_results ADD COLUMN IF NOT EXISTS meilleure_partie REAL`);

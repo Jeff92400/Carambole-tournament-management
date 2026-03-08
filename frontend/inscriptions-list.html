@@ -831,7 +831,7 @@
         row.innerHTML = `
           <td>${inscription.inscription_id}</td>
           <td><strong>${inscription.licence || '-'}</strong></td>
-          <td>${inscription.tournoi_nom || tournoi.nom || `Tournoi #${inscription.tournoi_id}`}</td>
+          <td>${inscription.tournoi_nom || tournoi.nom || `Tournoi #${inscription.tournoi_id}`}${inscription.assigned_split ? `<span style="background: ${inscription.assigned_split === 'A' ? '#1976d2' : '#e65100'}; color: white; padding: 1px 6px; border-radius: 8px; font-size: 10px; margin-left: 6px; font-weight: bold;">${inscription.assigned_split}</span>` : ''}</td>
           <td><span class="badge ${getModeBadgeClass(inscription.mode || tournoi.mode)}">${inscription.mode || tournoi.mode || '-'}</span></td>
           <td>${inscription.categorie || tournoi.categorie || '-'}</td>
           <td>${inscription.email || '-'}</td>

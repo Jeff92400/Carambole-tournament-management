@@ -3521,4 +3521,439 @@ router.post('/bulk-convoque-past', authenticateToken, async (req, res) => {
   }
 });
 
+// ===================== SPLIT TOURNAMENT (DÉDOUBLEMENT) =====================
+
+/**
+ * POST /tournoi/:id/split — Dédoubler un tournoi en 2 sous-tournois (A et B)
+ * Creates 2 child tournoi_ext entries linked to the parent.
+ */
+router.post('/tournoi/:id/split', authenticateToken, async (req, res) => {
+  if (req.user?.role !== 'admin') {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  const orgId = req.user.organizationId || null;
+  const parentId = parseInt(req.params.id);
+  const { lieuA, lieuB } = req.body;
+
+  if (!lieuA || !lieuB) {
+    return res.status(400).json({ error: 'lieuA et lieuB sont requis' });
+  }
+
+  try {
+    // Get parent tournament
+    const parent = await new Promise((resolve, reject) => {
+      db.get('SELECT * FROM tournoi_ext WHERE tournoi_id = $1 AND ($2::int IS NULL OR organization_id = $2)',
+        [parentId, orgId], (err, row) => { if (err) reject(err); else resolve(row); });
+    });
+
+    if (!parent) return res.status(404).json({ error: 'Tournoi non trouvé' });
+    if (parent.is_split) return res.status(400).json({ error: 'Ce tournoi est déjà dédoublé' });
+    if (parent.parent_tournoi_id) return res.status(400).json({ error: 'Impossible de dédoubler un sous-tournoi' });
+
+    // Get next IDs
+    const maxIdResult = await new Promise((resolve, reject) => {
+      db.get('SELECT MAX(tournoi_id) as max_id FROM tournoi_ext WHERE ($1::int IS NULL OR organization_id = $1)',
+        [orgId], (err, row) => { if (err) reject(err); else resolve(row); });
+    });
+    const baseId = (maxIdResult?.max_id || 0) + 1;
+
+    // Mark parent as split
+    await new Promise((resolve, reject) => {
+      db.run('UPDATE tournoi_ext SET is_split = TRUE WHERE tournoi_id = $1', [parentId],
+        function(err) { if (err) reject(err); else resolve(); });
+    });
+
+    // Create child A
+    const childAId = baseId;
+    await new Promise((resolve, reject) => {
+      db.run(`INSERT INTO tournoi_ext (tournoi_id, nom, mode, categorie, taille, debut, fin, grand_coin, taille_cadre,
+              lieu, tournament_number, organization_id, is_split, parent_tournoi_id, split_label, status)
+              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, FALSE, $13, $14, $15)`,
+        [childAId, `${parent.nom} - A`, parent.mode, parent.categorie, parent.taille,
+         parent.debut, parent.fin, parent.grand_coin, parent.taille_cadre,
+         lieuA, parent.tournament_number, orgId, parentId, 'A', parent.status || 'active'],
+        function(err) { if (err) reject(err); else resolve(); });
+    });
+
+    // Create child B
+    const childBId = baseId + 1;
+    await new Promise((resolve, reject) => {
+      db.run(`INSERT INTO tournoi_ext (tournoi_id, nom, mode, categorie, taille, debut, fin, grand_coin, taille_cadre,
+              lieu, tournament_number, organization_id, is_split, parent_tournoi_id, split_label, status)
+              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, FALSE, $13, $14, $15)`,
+        [childBId, `${parent.nom} - B`, parent.mode, parent.categorie, parent.taille,
+         parent.debut, parent.fin, parent.grand_coin, parent.taille_cadre,
+         lieuB, parent.tournament_number, orgId, parentId, 'B', parent.status || 'active'],
+        function(err) { if (err) reject(err); else resolve(); });
+    });
+
+    res.json({
+      success: true,
+      message: 'Tournoi dédoublé avec succès',
+      parentId,
+      childA: { id: childAId, label: 'A', lieu: lieuA },
+      childB: { id: childBId, label: 'B', lieu: lieuB }
+    });
+
+  } catch (error) {
+    console.error('Error splitting tournament:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /tournoi/:id/unsplit — Annuler le dédoublement
+ * Deletes children, resets parent, clears assigned_split on inscriptions.
+ */
+router.post('/tournoi/:id/unsplit', authenticateToken, async (req, res) => {
+  if (req.user?.role !== 'admin') {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  const orgId = req.user.organizationId || null;
+  const parentId = parseInt(req.params.id);
+
+  try {
+    const parent = await new Promise((resolve, reject) => {
+      db.get('SELECT * FROM tournoi_ext WHERE tournoi_id = $1 AND ($2::int IS NULL OR organization_id = $2)',
+        [parentId, orgId], (err, row) => { if (err) reject(err); else resolve(row); });
+    });
+
+    if (!parent) return res.status(404).json({ error: 'Tournoi non trouvé' });
+    if (!parent.is_split) return res.status(400).json({ error: 'Ce tournoi n\'est pas dédoublé' });
+
+    // Check no convocations sent on children
+    const children = await new Promise((resolve, reject) => {
+      db.all('SELECT tournoi_id, split_label, convocation_sent_at FROM tournoi_ext WHERE parent_tournoi_id = $1',
+        [parentId], (err, rows) => { if (err) reject(err); else resolve(rows || []); });
+    });
+
+    const convoked = children.filter(c => c.convocation_sent_at);
+    if (convoked.length > 0) {
+      return res.status(400).json({
+        error: 'Impossible d\'annuler : des convocations ont déjà été envoyées pour ' +
+               convoked.map(c => c.split_label).join(', ')
+      });
+    }
+
+    // Delete children
+    for (const child of children) {
+      await new Promise((resolve, reject) => {
+        db.run('DELETE FROM tournoi_ext WHERE tournoi_id = $1', [child.tournoi_id],
+          function(err) { if (err) reject(err); else resolve(); });
+      });
+    }
+
+    // Reset parent
+    await new Promise((resolve, reject) => {
+      db.run('UPDATE tournoi_ext SET is_split = FALSE WHERE tournoi_id = $1', [parentId],
+        function(err) { if (err) reject(err); else resolve(); });
+    });
+
+    // Clear assigned_split on inscriptions
+    await new Promise((resolve, reject) => {
+      db.run('UPDATE inscriptions SET assigned_split = NULL WHERE tournoi_id = $1', [parentId],
+        function(err) { if (err) reject(err); else resolve(); });
+    });
+
+    res.json({ success: true, message: 'Dédoublement annulé' });
+
+  } catch (error) {
+    console.error('Error unsplitting tournament:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /tournoi/:id/split-distribution — Get current A/B distribution with ranking data
+ * Returns inscriptions with assigned_split + ranking info for the two-column UI.
+ */
+router.get('/tournoi/:id/split-distribution', authenticateToken, async (req, res) => {
+  const orgId = req.user.organizationId || null;
+  const parentId = parseInt(req.params.id);
+
+  try {
+    // Get parent tournament
+    const tournament = await new Promise((resolve, reject) => {
+      db.get('SELECT * FROM tournoi_ext WHERE tournoi_id = $1 AND ($2::int IS NULL OR organization_id = $2)',
+        [parentId, orgId], (err, row) => { if (err) reject(err); else resolve(row); });
+    });
+    if (!tournament) return res.status(404).json({ error: 'Tournoi non trouvé' });
+
+    // Get children
+    const children = await new Promise((resolve, reject) => {
+      db.all('SELECT tournoi_id, split_label, lieu FROM tournoi_ext WHERE parent_tournoi_id = $1 ORDER BY split_label',
+        [parentId], (err, rows) => { if (err) reject(err); else resolve(rows || []); });
+    });
+
+    // Get active inscriptions with player info
+    const inscriptions = await new Promise((resolve, reject) => {
+      db.all(`SELECT i.*, p.first_name, p.last_name, p.club
+              FROM inscriptions i
+              LEFT JOIN players p ON REPLACE(i.licence, ' ', '') = REPLACE(p.licence, ' ', '')
+              WHERE i.tournoi_id = $1 AND i.statut != 'désinscrit' AND i.forfait = 0
+              AND ($2::int IS NULL OR i.organization_id = $2)
+              ORDER BY i.timestamp ASC`,
+        [parentId, orgId], (err, rows) => { if (err) reject(err); else resolve(rows || []); });
+    });
+
+    // Get ranking data (reuses simulation ranking logic)
+    const rankMap = await getSplitRankingData(tournament, orgId);
+
+    // Enrich inscriptions with ranking
+    const players = inscriptions.map(insc => {
+      const licNorm = insc.licence?.replace(/\s/g, '');
+      const rank = rankMap[licNorm] || null;
+      return {
+        inscription_id: insc.inscription_id,
+        licence: insc.licence,
+        first_name: insc.first_name || '',
+        last_name: insc.last_name || '',
+        club: insc.club || '',
+        assigned_split: insc.assigned_split || null,
+        rank,
+        rank_display: rank ? `#${rank}` : 'Nouveau'
+      };
+    });
+
+    res.json({
+      tournament: {
+        id: tournament.tournoi_id,
+        nom: tournament.nom,
+        mode: tournament.mode,
+        categorie: tournament.categorie,
+        is_split: tournament.is_split
+      },
+      children,
+      players
+    });
+
+  } catch (error) {
+    console.error('Error getting split distribution:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /tournoi/:id/distribute-split — Auto-distribute players via serpentine to A/B
+ * Returns the proposed distribution (does NOT save yet — frontend can adjust).
+ */
+router.post('/tournoi/:id/distribute-split', authenticateToken, async (req, res) => {
+  if (req.user?.role !== 'admin') {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  const orgId = req.user.organizationId || null;
+  const parentId = parseInt(req.params.id);
+
+  try {
+    const tournament = await new Promise((resolve, reject) => {
+      db.get('SELECT * FROM tournoi_ext WHERE tournoi_id = $1 AND ($2::int IS NULL OR organization_id = $2)',
+        [parentId, orgId], (err, row) => { if (err) reject(err); else resolve(row); });
+    });
+    if (!tournament) return res.status(404).json({ error: 'Tournoi non trouvé' });
+    if (!tournament.is_split) return res.status(400).json({ error: 'Ce tournoi n\'est pas dédoublé' });
+
+    // Get active inscriptions
+    const inscriptions = await new Promise((resolve, reject) => {
+      db.all(`SELECT i.*, p.first_name, p.last_name, p.club
+              FROM inscriptions i
+              LEFT JOIN players p ON REPLACE(i.licence, ' ', '') = REPLACE(p.licence, ' ', '')
+              WHERE i.tournoi_id = $1 AND i.statut != 'désinscrit' AND i.forfait = 0
+              AND ($2::int IS NULL OR i.organization_id = $2)
+              ORDER BY i.timestamp ASC`,
+        [parentId, orgId], (err, rows) => { if (err) reject(err); else resolve(rows || []); });
+    });
+
+    if (inscriptions.length < 2) {
+      return res.status(400).json({ error: 'Pas assez de joueurs pour répartir' });
+    }
+
+    // Get ranking data
+    const rankMap = await getSplitRankingData(tournament, orgId);
+
+    // Build sorted player list (ranked first by ranking, then new players by timestamp)
+    const rankedPlayers = [];
+    const newPlayers = [];
+
+    inscriptions.forEach(insc => {
+      const licNorm = insc.licence?.replace(/\s/g, '');
+      const rank = rankMap[licNorm];
+      const playerData = {
+        inscription_id: insc.inscription_id,
+        licence: insc.licence,
+        first_name: insc.first_name || '',
+        last_name: insc.last_name || '',
+        club: insc.club || '',
+        rank: rank || null,
+        timestamp: insc.timestamp
+      };
+      if (rank) {
+        rankedPlayers.push(playerData);
+      } else {
+        newPlayers.push(playerData);
+      }
+    });
+
+    rankedPlayers.sort((a, b) => a.rank - b.rank);
+    newPlayers.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+    const sortedPlayers = [...rankedPlayers, ...newPlayers];
+
+    // Serpentine into 2 groups
+    const countA = Math.ceil(sortedPlayers.length / 2);
+    const countB = sortedPlayers.length - countA;
+    const groups = distributeSimulationSerpentine(sortedPlayers, [countA, countB]);
+
+    const distribution = {};
+    groups[0].players.forEach(p => { distribution[p.inscription_id] = 'A'; });
+    groups[1].players.forEach(p => { distribution[p.inscription_id] = 'B'; });
+
+    // Return proposed distribution (frontend will display and allow adjustments)
+    const result = sortedPlayers.map((p, idx) => ({
+      ...p,
+      assigned_split: distribution[p.inscription_id],
+      serpentine_rank: idx + 1
+    }));
+
+    res.json({
+      success: true,
+      distribution: result,
+      countA: groups[0].players.length,
+      countB: groups[1].players.length
+    });
+
+  } catch (error) {
+    console.error('Error distributing split:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * PUT /tournoi/:id/save-split-assignments — Save A/B assignments (bulk update)
+ * Body: { assignments: { inscription_id: 'A' | 'B', ... } }
+ */
+router.put('/tournoi/:id/save-split-assignments', authenticateToken, async (req, res) => {
+  if (req.user?.role !== 'admin') {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  const orgId = req.user.organizationId || null;
+  const parentId = parseInt(req.params.id);
+  const { assignments } = req.body;
+
+  if (!assignments || typeof assignments !== 'object') {
+    return res.status(400).json({ error: 'assignments object requis' });
+  }
+
+  try {
+    const tournament = await new Promise((resolve, reject) => {
+      db.get('SELECT * FROM tournoi_ext WHERE tournoi_id = $1 AND ($2::int IS NULL OR organization_id = $2)',
+        [parentId, orgId], (err, row) => { if (err) reject(err); else resolve(row); });
+    });
+    if (!tournament) return res.status(404).json({ error: 'Tournoi non trouvé' });
+
+    let updated = 0;
+    for (const [inscriptionId, split] of Object.entries(assignments)) {
+      if (split !== 'A' && split !== 'B' && split !== null) continue;
+      await new Promise((resolve, reject) => {
+        db.run('UPDATE inscriptions SET assigned_split = $1 WHERE inscription_id = $2 AND tournoi_id = $3',
+          [split, parseInt(inscriptionId), parentId],
+          function(err) { if (err) reject(err); else { updated += this.changes; resolve(); } });
+      });
+    }
+
+    res.json({ success: true, message: `${updated} affectation(s) enregistrée(s)`, updated });
+
+  } catch (error) {
+    console.error('Error saving split assignments:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * Helper: Get ranking data for split distribution serpentine.
+ * Returns a map of { normalizedLicence: rankPosition }
+ * Reuses the same ranking logic as the simulation endpoint.
+ */
+async function getSplitRankingData(tournament, orgId) {
+  const modeToGameType = {
+    'LIBRE': 'LIBRE', '3BANDES': '3BANDES', '3 BANDES': '3BANDES',
+    'BANDE': 'BANDE', 'BANDES': 'BANDE', '1BANDE': 'BANDE', '1 BANDE': 'BANDE',
+    'CADRE': 'CADRE'
+  };
+
+  const rawMode = tournament.mode?.toUpperCase();
+  const rawLevel = tournament.categorie?.toUpperCase();
+  const gameType = modeToGameType[rawMode] || rawMode;
+
+  // Determine season
+  const tDate = tournament.debut ? new Date(tournament.debut) : new Date();
+  const tYear = tDate.getFullYear();
+  const tMonth = tDate.getMonth();
+  const currentSeason = tMonth >= 8 ? `${tYear}-${tYear + 1}` : `${tYear - 1}-${tYear}`;
+
+  // Get category
+  const category = await new Promise((resolve, reject) => {
+    db.get('SELECT * FROM categories WHERE UPPER(game_type) = $1 AND UPPER(level) = $2',
+      [gameType, rawLevel], (err, row) => { if (err) reject(err); else resolve(row); });
+  });
+
+  if (!category) return {};
+
+  const qualMode = orgId ? (await appSettings.getOrgSetting(orgId, 'qualification_mode') || 'standard') : 'standard';
+  const tournamentNumber = tournament.tournament_number || 1;
+  const useFFBAverage = qualMode === 'journees' && tournamentNumber === 1;
+
+  const rankMap = {};
+
+  if (useFFBAverage) {
+    // Journées TQ1: sort by moyenne_ffb
+    const gameModeRow = await new Promise((resolve, reject) => {
+      db.get('SELECT id FROM game_modes WHERE UPPER(code) = $1', [gameType],
+        (err, row) => { if (err) reject(err); else resolve(row); });
+    });
+    if (gameModeRow) {
+      const ffbRows = await new Promise((resolve, reject) => {
+        db.all('SELECT licence, moyenne_ffb FROM player_ffb_classifications WHERE game_mode_id = $1 AND season = $2 ORDER BY moyenne_ffb DESC',
+          [gameModeRow.id, currentSeason], (err, rows) => { if (err) reject(err); else resolve(rows || []); });
+      });
+      ffbRows.forEach((r, idx) => {
+        const licNorm = r.licence?.replace(/\s/g, '');
+        if (licNorm) rankMap[licNorm] = idx + 1;
+      });
+    }
+  } else {
+    // Standard or journées TQ2+: sort by seasonal ranking
+    const rankings = await new Promise((resolve, reject) => {
+      db.all('SELECT licence, rank_position FROM rankings WHERE category_id = $1 AND season = $2 ORDER BY rank_position ASC',
+        [category.id, currentSeason], (err, rows) => { if (err) reject(err); else resolve(rows || []); });
+    });
+    rankings.forEach(r => {
+      const licNorm = r.licence?.replace(/\s/g, '');
+      if (licNorm) rankMap[licNorm] = r.rank_position;
+    });
+  }
+
+  return rankMap;
+}
+
+/**
+ * GET /tournoi/:id/children — Get child tournaments for a split parent
+ */
+router.get('/tournoi/:id/children', authenticateToken, async (req, res) => {
+  const orgId = req.user.organizationId || null;
+  const parentId = parseInt(req.params.id);
+
+  try {
+    const children = await new Promise((resolve, reject) => {
+      db.all(`SELECT * FROM tournoi_ext WHERE parent_tournoi_id = $1 AND ($2::int IS NULL OR organization_id = $2) ORDER BY split_label`,
+        [parentId, orgId], (err, rows) => { if (err) reject(err); else resolve(rows || []); });
+    });
+    res.json(children);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;
