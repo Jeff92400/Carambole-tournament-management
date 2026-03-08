@@ -266,6 +266,37 @@
       height: 14px;
       width: 14px;
     }
+    .upcoming-tournament-card .split-btn {
+      display: block;
+      width: 100%;
+      margin-top: 6px;
+      padding: 6px 12px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      transition: background 0.2s;
+      background: #e65100;
+      color: white;
+    }
+    .upcoming-tournament-card .split-btn:hover { background: #bf360c; }
+    .upcoming-tournament-card .split-btn.distribute { background: #1976d2; }
+    .upcoming-tournament-card .split-btn.distribute:hover { background: #1565c0; }
+    .upcoming-tournament-card .split-btn.unsplit { background: #ff9800; }
+    .upcoming-tournament-card .split-btn.unsplit:hover { background: #f57c00; }
+    .badge-split { background: #fff3e0; color: #e65100; font-size: 10px; padding: 2px 6px; border-radius: 8px; margin-left: 6px; font-weight: bold; }
+    .split-columns { display: flex; gap: 20px; min-height: 300px; }
+    .split-column { flex: 1; border: 2px solid #ddd; border-radius: 8px; padding: 10px; min-height: 200px; }
+    .split-column.col-a { border-color: #1976d2; }
+    .split-column.col-b { border-color: #e65100; }
+    .split-column h4 { margin: 0 0 10px; text-align: center; }
+    .split-player { display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; margin: 4px 0; background: #f8f9fa; border-radius: 6px; font-size: 13px; cursor: pointer; transition: background 0.15s; }
+    .split-player:hover { background: #e3f2fd; }
+    .split-player .rank { color: #888; font-size: 11px; min-width: 30px; }
+    .split-player .name { flex: 1; font-weight: 500; }
+    .split-player .club { color: #666; font-size: 11px; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .split-player .move-btn { background: none; border: none; cursor: pointer; font-size: 16px; padding: 0 4px; }
   </style>
 </head>
 <body>
@@ -1379,6 +1410,13 @@
             const inscritCount = t.isFinale ? (t.inscribed_finalist_count || 0) : (t.inscrit_count || 0);
             const showSimulation = daysUntil >= 7 && inscritCount >= 3;
 
+            // Split button: show "Dédoubler" if > 6 inscrits, not finale, not already split
+            const isSplit = t.is_split === true;
+            const splitBadge = isSplit ? '<span class="badge-split">DÉDOUBLÉ</span>' : '';
+            const SPLIT_MIN_PLAYERS = 7;
+            const showSplitBtn = !t.isFinale && !isSplit && inscritCount >= SPLIT_MIN_PLAYERS;
+            const showDistributeBtn = !t.isFinale && isSplit;
+
             return `
               <div class="upcoming-tournament-card"
                    style="${cardStyle}"
@@ -1392,7 +1430,7 @@
                    data-is-finale="${t.isFinale}"
                    data-finalist-count="${t.finalist_count || 0}"
                    data-inscribed-finalist-count="${t.inscribed_finalist_count || 0}">
-                <div class="tournament-mode">${t.mode} - ${t.categorie}${badgeHtml}</div>
+                <div class="tournament-mode">${t.mode} - ${t.categorie}${badgeHtml}${splitBadge}</div>
                 <div class="tournament-name">${t.isFinale ? 'Finale Départementale' : t.nom}</div>
                 <div class="tournament-details">
                   <span class="tournament-date">📅 ${dateStr}</span>
@@ -1405,6 +1443,19 @@
                 ${showSimulation ? `
                   <button class="simulation-btn" data-tournoi-id="${t.tournoi_id}" onclick="event.stopPropagation(); openSimulationModal(${t.tournoi_id});">
                     <img src="images/french-billiard.png" alt=""> Simulation des poules
+                  </button>
+                ` : ''}
+                ${showSplitBtn ? `
+                  <button class="split-btn" onclick="event.stopPropagation(); openSplitModal({tournoi_id: ${t.tournoi_id}, nom: '${(t.nom || '').replace(/'/g, "\\'")}', mode: '${(t.mode || '').replace(/'/g, "\\'")}', categorie: '${(t.categorie || '').replace(/'/g, "\\'")}'});">
+                    Dédoubler (2 lieux)
+                  </button>
+                ` : ''}
+                ${showDistributeBtn ? `
+                  <button class="split-btn distribute" onclick="event.stopPropagation(); openDistributionModal({tournoi_id: ${t.tournoi_id}, nom: '${(t.nom || '').replace(/'/g, "\\'")}', mode: '${(t.mode || '').replace(/'/g, "\\'")}', categorie: '${(t.categorie || '').replace(/'/g, "\\'")}'});">
+                    Répartir les joueurs A/B
+                  </button>
+                  <button class="split-btn unsplit" onclick="event.stopPropagation(); unsplitTournoi(${t.tournoi_id});" style="margin-top: 4px;">
+                    Annuler le dédoublement
                   </button>
                 ` : ''}
               </div>
@@ -5561,6 +5612,249 @@
         alert('Erreur lors de la purge');
       }
     });
+
+    // ─── Split Tournament Functions ───────────────────────────────────
+
+    let currentDistributionPlayers = [];
+    let currentDistributionChildren = [];
+
+    function openSplitModal(tournoi) {
+      document.getElementById('split_tournoi_id').value = tournoi.tournoi_id;
+      document.getElementById('splitTournoiName').textContent = `${tournoi.nom} — ${tournoi.mode} ${tournoi.categorie}`;
+      document.getElementById('split_lieu_a').value = '';
+      document.getElementById('split_lieu_b').value = '';
+      document.getElementById('splitModal').style.display = 'flex';
+    }
+
+    function closeSplitModal() {
+      document.getElementById('splitModal').style.display = 'none';
+    }
+
+    document.getElementById('cancelSplitBtn').addEventListener('click', closeSplitModal);
+
+    document.getElementById('confirmSplitBtn').addEventListener('click', async () => {
+      const tournoiId = document.getElementById('split_tournoi_id').value;
+      const lieuA = document.getElementById('split_lieu_a').value.trim();
+      const lieuB = document.getElementById('split_lieu_b').value.trim();
+
+      if (!lieuA || !lieuB) {
+        alert('Veuillez renseigner les deux lieux');
+        return;
+      }
+
+      try {
+        const response = await authFetch(`${API_URL}/inscriptions/tournoi/${tournoiId}/split`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ lieuA, lieuB })
+        });
+
+        const data = await response.json();
+        if (response.ok && data.success) {
+          closeSplitModal();
+          document.getElementById('successMessage').textContent = data.message;
+          document.getElementById('successMessage').style.display = 'block';
+          setTimeout(() => { document.getElementById('successMessage').style.display = 'none'; }, 3000);
+          loadUpcomingTournaments();
+        } else {
+          alert(data.error || 'Erreur lors du dédoublement');
+        }
+      } catch (error) {
+        console.error('Error splitting tournament:', error);
+        alert('Erreur de connexion au serveur');
+      }
+    });
+
+    async function unsplitTournoi(tournoiId) {
+      if (!confirm('Annuler le dédoublement de ce tournoi ?\n\nLes sous-tournois A et B seront supprimés et les affectations des joueurs effacées.')) return;
+
+      try {
+        const response = await authFetch(`${API_URL}/inscriptions/tournoi/${tournoiId}/unsplit`, {
+          method: 'POST'
+        });
+        const data = await response.json();
+        if (response.ok && data.success) {
+          document.getElementById('successMessage').textContent = data.message || 'Dédoublement annulé';
+          document.getElementById('successMessage').style.display = 'block';
+          setTimeout(() => { document.getElementById('successMessage').style.display = 'none'; }, 3000);
+          loadUpcomingTournaments();
+        } else {
+          alert(data.error || 'Erreur');
+        }
+      } catch (error) {
+        console.error('Error unsplitting tournament:', error);
+        alert('Erreur de connexion au serveur');
+      }
+    }
+
+    async function openDistributionModal(tournoi) {
+      const modal = document.getElementById('distributionModal');
+      const playersA = document.getElementById('playersA');
+      const playersB = document.getElementById('playersB');
+
+      modal.style.display = 'block';
+      playersA.innerHTML = '<div class="spinner" style="margin: 40px auto;"></div>';
+      playersB.innerHTML = '';
+      document.getElementById('distributionTournoiName').textContent = `${tournoi.nom} — ${tournoi.mode} ${tournoi.categorie}`;
+      document.getElementById('distribution_tournoi_id').value = tournoi.tournoi_id;
+
+      try {
+        const response = await authFetch(`${API_URL}/inscriptions/tournoi/${tournoi.tournoi_id}/split-distribution`);
+        const data = await response.json();
+
+        if (!response.ok) {
+          playersA.innerHTML = `<p style="color: #dc3545; text-align: center;">${data.error || 'Erreur'}</p>`;
+          return;
+        }
+
+        currentDistributionPlayers = data.players;
+        currentDistributionChildren = data.children;
+
+        const childA = data.children.find(c => c.split_label === 'A');
+        const childB = data.children.find(c => c.split_label === 'B');
+        document.getElementById('lieuAName').textContent = childA?.lieu || 'A';
+        document.getElementById('lieuBName').textContent = childB?.lieu || 'B';
+
+        renderDistribution();
+        updateDistributionCount();
+      } catch (error) {
+        console.error('Error loading distribution:', error);
+        playersA.innerHTML = '<p style="color: #dc3545; text-align: center;">Erreur de connexion</p>';
+      }
+    }
+
+    function renderDistribution() {
+      const playersA = document.getElementById('playersA');
+      const playersB = document.getElementById('playersB');
+
+      const inA = currentDistributionPlayers.filter(p => p.assigned_split === 'A');
+      const inB = currentDistributionPlayers.filter(p => p.assigned_split === 'B');
+      const unassigned = currentDistributionPlayers.filter(p => !p.assigned_split);
+
+      playersA.innerHTML = inA.map(p => renderSplitPlayerCard(p, 'A')).join('');
+      playersB.innerHTML = inB.map(p => renderSplitPlayerCard(p, 'B')).join('');
+
+      if (unassigned.length > 0) {
+        playersA.innerHTML += `<div style="border-top: 2px dashed #ccc; margin: 10px 0; padding-top: 6px; font-size: 11px; color: #999; text-align: center;">Non affectés (${unassigned.length})</div>`;
+        playersA.innerHTML += unassigned.map(p => renderSplitPlayerCard(p, null)).join('');
+      }
+
+      document.getElementById('countA').textContent = inA.length;
+      document.getElementById('countB').textContent = inB.length;
+    }
+
+    function renderSplitPlayerCard(player, currentSplit) {
+      const moveLabel = currentSplit === 'A' ? '→ B' : currentSplit === 'B' ? '← A' : '→ A';
+      const targetSplit = currentSplit === 'A' ? 'B' : 'A';
+      return `
+        <div class="split-player" onclick="moveSplitPlayer(${player.inscription_id}, '${currentSplit || ''}', '${targetSplit}')">
+          <span class="rank">${player.rank_display || player.rank ? '#' + player.rank : 'Nouveau'}</span>
+          <span class="name">${player.last_name} ${player.first_name}</span>
+          <span class="club">${player.club}</span>
+          <button class="move-btn" title="Déplacer vers ${targetSplit}">${moveLabel}</button>
+        </div>
+      `;
+    }
+
+    function moveSplitPlayer(inscriptionId, fromSplit, toSplit) {
+      const player = currentDistributionPlayers.find(p => p.inscription_id === inscriptionId);
+      if (player) {
+        player.assigned_split = toSplit;
+        renderDistribution();
+        updateDistributionCount();
+      }
+    }
+
+    function updateDistributionCount() {
+      const total = currentDistributionPlayers.length;
+      const assigned = currentDistributionPlayers.filter(p => p.assigned_split).length;
+      document.getElementById('distributionCount').textContent = `${assigned}/${total} joueurs affectés`;
+    }
+
+    document.getElementById('autoDistributeBtn').addEventListener('click', async () => {
+      const tournoiId = document.getElementById('distribution_tournoi_id').value;
+      const btn = document.getElementById('autoDistributeBtn');
+      btn.disabled = true;
+      btn.textContent = 'Calcul en cours...';
+
+      try {
+        const response = await authFetch(`${API_URL}/inscriptions/tournoi/${tournoiId}/distribute-split`, {
+          method: 'POST'
+        });
+        const data = await response.json();
+
+        if (response.ok && data.success) {
+          data.distribution.forEach(d => {
+            const player = currentDistributionPlayers.find(p => p.inscription_id === d.inscription_id);
+            if (player) {
+              player.assigned_split = d.assigned_split;
+              if (!player.rank && d.rank) player.rank = d.rank;
+            }
+          });
+          renderDistribution();
+          updateDistributionCount();
+        } else {
+          alert(data.error || 'Erreur lors de la répartition automatique');
+        }
+      } catch (error) {
+        console.error('Error auto-distributing:', error);
+        alert('Erreur de connexion au serveur');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Répartition automatique (serpentine)';
+      }
+    });
+
+    document.getElementById('saveDistributionBtn').addEventListener('click', async () => {
+      const tournoiId = document.getElementById('distribution_tournoi_id').value;
+      const unassigned = currentDistributionPlayers.filter(p => !p.assigned_split);
+
+      if (unassigned.length > 0) {
+        if (!confirm(`${unassigned.length} joueur(s) non affecté(s). Enregistrer quand même ?`)) return;
+      }
+
+      const assignments = {};
+      currentDistributionPlayers.forEach(p => {
+        assignments[p.inscription_id] = p.assigned_split || null;
+      });
+
+      const btn = document.getElementById('saveDistributionBtn');
+      btn.disabled = true;
+      btn.textContent = 'Enregistrement...';
+
+      try {
+        const response = await authFetch(`${API_URL}/inscriptions/tournoi/${tournoiId}/save-split-assignments`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ assignments })
+        });
+
+        const data = await response.json();
+        if (response.ok && data.success) {
+          closeDistributionModal();
+          document.getElementById('successMessage').textContent = data.message;
+          document.getElementById('successMessage').style.display = 'block';
+          setTimeout(() => { document.getElementById('successMessage').style.display = 'none'; }, 3000);
+        } else {
+          alert(data.error || "Erreur lors de l'enregistrement");
+        }
+      } catch (error) {
+        console.error('Error saving distribution:', error);
+        alert('Erreur de connexion au serveur');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Enregistrer la répartition';
+      }
+    });
+
+    function closeDistributionModal() {
+      document.getElementById('distributionModal').style.display = 'none';
+      currentDistributionPlayers = [];
+      currentDistributionChildren = [];
+    }
+
+    document.getElementById('cancelDistributionBtn').addEventListener('click', closeDistributionModal);
+    document.getElementById('closeDistributionBtn').addEventListener('click', closeDistributionModal);
   </script>
 
   <!-- Forfait Management Modal -->
@@ -5691,6 +5985,59 @@
             Confirmer et régénérer
           </button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Split Tournament Modal -->
+  <div id="splitModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
+    <div style="background: white; padding: 30px; border-radius: 12px; max-width: 500px; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
+      <h3 style="margin-top: 0;">Dédoubler le tournoi</h3>
+      <p id="splitTournoiName" style="color: #666; margin-bottom: 20px;"></p>
+      <input type="hidden" id="split_tournoi_id">
+      <div style="display: grid; gap: 15px;">
+        <div>
+          <label style="display: block; margin-bottom: 5px; font-weight: bold;">Lieu A</label>
+          <input type="text" id="split_lieu_a" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" placeholder="Ex: Maisons-Alfort">
+        </div>
+        <div>
+          <label style="display: block; margin-bottom: 5px; font-weight: bold;">Lieu B</label>
+          <input type="text" id="split_lieu_b" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" placeholder="Ex: Livry-Gargan">
+        </div>
+      </div>
+      <div style="display: flex; gap: 10px; margin-top: 20px;">
+        <button id="confirmSplitBtn" class="btn" style="flex: 1; background: #e65100;">Dédoubler</button>
+        <button id="cancelSplitBtn" class="btn" style="flex: 1; background: #999;">Annuler</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Distribution Modal -->
+  <div id="distributionModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; overflow-y: auto;">
+    <div style="background: white; margin: 30px auto; padding: 30px; border-radius: 12px; max-width: 900px; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+        <h3 style="margin: 0;">Répartition des joueurs</h3>
+        <button id="closeDistributionBtn" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #999;">&times;</button>
+      </div>
+      <p id="distributionTournoiName" style="color: #666; margin-bottom: 10px;"></p>
+      <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+        <button id="autoDistributeBtn" class="btn" style="background: #17a2b8; padding: 8px 16px; font-size: 13px;">Répartition automatique (serpentine)</button>
+        <span id="distributionCount" style="color: #666; font-size: 13px; align-self: center;"></span>
+      </div>
+      <input type="hidden" id="distribution_tournoi_id">
+      <div class="split-columns">
+        <div class="split-column col-a">
+          <h4 style="color: #1976d2;">Lieu A — <span id="lieuAName">-</span> (<span id="countA">0</span>)</h4>
+          <div id="playersA"></div>
+        </div>
+        <div class="split-column col-b">
+          <h4 style="color: #e65100;">Lieu B — <span id="lieuBName">-</span> (<span id="countB">0</span>)</h4>
+          <div id="playersB"></div>
+        </div>
+      </div>
+      <div style="display: flex; gap: 10px; margin-top: 20px;">
+        <button id="saveDistributionBtn" class="btn" style="flex: 1; background: #4CAF50;">Enregistrer la répartition</button>
+        <button id="cancelDistributionBtn" class="btn" style="flex: 1; background: #999;">Annuler</button>
       </div>
     </div>
   </div>

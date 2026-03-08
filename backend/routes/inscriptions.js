@@ -873,6 +873,7 @@ router.get('/tournoi/upcoming', authenticateToken, (req, res) => {
     LEFT JOIN inscriptions i ON t.tournoi_id = i.tournoi_id
     WHERE t.debut >= $1 AND t.debut <= $2
     AND LOWER(t.nom) NOT LIKE '%finale%'
+    AND t.parent_tournoi_id IS NULL
     AND ($3::int IS NULL OR t.organization_id = $3)
     GROUP BY t.tournoi_id
     ORDER BY t.debut ASC, t.mode, t.categorie
@@ -904,6 +905,7 @@ router.get('/tournoi/calendar', authenticateToken, (req, res) => {
     LEFT JOIN inscriptions i ON t.tournoi_id = i.tournoi_id
     WHERE t.debut >= $1
     AND LOWER(COALESCE(t.status, '')) != 'cancelled'
+    AND t.parent_tournoi_id IS NULL
     AND ($2::int IS NULL OR t.organization_id = $2)
     AND UPPER(COALESCE(t.nom, '')) NOT LIKE 'TEST%'
     GROUP BY t.tournoi_id
