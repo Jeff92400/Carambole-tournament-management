@@ -48,7 +48,7 @@ git push origin main
 
 ## Versioning
 
-**Current Version:** V 2.0.285 03/26
+**Current Version:** V 2.0.286 03/26
 
 Version is displayed at the bottom of the login screen (`frontend/login.html`).
 
@@ -826,6 +826,36 @@ CDBHS color mapping (from legend rows 22-27):
   | Phase 2 | +20 new single-query KPIs (taux, ratios, counts) | ~3 days |
   | Phase 3 | +15 cross-season KPIs (N vs N-1 comparisons) | ~2 days |
   | Phase 4 | +15 advanced KPIs (charts, engagement tracking) | ~3 days |
+
+- **Push Notifications for Player App (Web Push):** Send native mobile notifications to players without them opening the app. Uses the Web Push API + existing Service Worker — completely free (no SMS cost).
+
+  **Use cases:**
+  - Convocation sent → push "Vous avez été convoqué pour 3 Bandes R1 du 21/03"
+  - Relance → push "Rappel : inscrivez-vous avant le 15/03 pour Libre N2"
+  - Results published → push "Les résultats du tournoi Cadre 47/2 sont disponibles"
+  - New announcement → push notification with announcement title
+
+  **iOS caveat:** Only works if PWA is added to home screen (since iOS 16.4). Android works everywhere.
+
+  **Implementation:**
+
+  | Component | Details | Effort |
+  |-----------|---------|--------|
+  | VAPID keys | Generate once, store as `VAPID_PUBLIC_KEY` + `VAPID_PRIVATE_KEY` env vars | 10 min |
+  | `push_subscriptions` table | `id`, `player_account_id`, `organization_id`, `endpoint`, `p256dh`, `auth`, `created_at`, `last_used_at` | Schema only |
+  | Backend: `web-push` npm | `POST /api/player/push/subscribe` (save subscription), `POST /api/player/push/unsubscribe`, helper `sendPushToPlayer(licence, orgId, {title, body, url})` | ~1 day |
+  | Frontend: permission prompt | On first login, ask "Autoriser les notifications ?". Store subscription via Service Worker `pushManager.subscribe()` | ~0.5 day |
+  | Service Worker: push handler | `self.addEventListener('push', ...)` → `self.registration.showNotification(title, {body, icon, data: {url}})`. Click handler opens the relevant page. | ~0.5 day |
+  | Integration: hook into email flows | After sending convocation/relance/results email, also trigger push for players with subscriptions. Add to `emailing.js` (relances), `email.js` (convocations), `tournaments.js` (results) | ~1-2 days |
+  | Notification preferences | Per-player toggle in Espace Joueur settings: "Recevoir les notifications push" (on/off). Stored in `player_accounts.push_enabled` | ~0.5 day |
+
+  **Total effort:** ~3-4 days
+
+  **Key decisions:**
+  - Push is opt-in (browser permission + app toggle)
+  - Notifications are org-scoped (player only gets pushes from their CDB)
+  - Failed pushes (expired subscriptions) are auto-cleaned from `push_subscriptions`
+  - Admin can preview/test push from emailing page before sending to all
 
 - **Player historical analytics (multi-season stats):** All tournament data (`tournament_results`, `rankings`) is retained permanently across seasons and scoped by `organization_id`. Season averages are computed on-the-fly (`SUM(points)/SUM(reprises)` from `tournament_results`) — not stored as a snapshot. This means we can build rich player analytics over time:
   - Average (moyenne) progression per mode across seasons
