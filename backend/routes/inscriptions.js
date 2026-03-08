@@ -3692,7 +3692,7 @@ router.get('/tournoi/:id/split-distribution', authenticateToken, async (req, res
       db.all(`SELECT i.*, p.first_name, p.last_name, p.club
               FROM inscriptions i
               LEFT JOIN players p ON REPLACE(i.licence, ' ', '') = REPLACE(p.licence, ' ', '')
-              WHERE i.tournoi_id = $1 AND i.statut != 'désinscrit' AND i.forfait = 0
+              WHERE i.tournoi_id = $1 AND (i.statut IS NULL OR i.statut NOT IN ('désinscrit', 'indisponible')) AND i.forfait = 0
               AND ($2::int IS NULL OR i.organization_id = $2)
               ORDER BY i.timestamp ASC`,
         [parentId, orgId], (err, rows) => { if (err) reject(err); else resolve(rows || []); });
@@ -3760,7 +3760,7 @@ router.post('/tournoi/:id/distribute-split', authenticateToken, async (req, res)
       db.all(`SELECT i.*, p.first_name, p.last_name, p.club
               FROM inscriptions i
               LEFT JOIN players p ON REPLACE(i.licence, ' ', '') = REPLACE(p.licence, ' ', '')
-              WHERE i.tournoi_id = $1 AND i.statut != 'désinscrit' AND i.forfait = 0
+              WHERE i.tournoi_id = $1 AND (i.statut IS NULL OR i.statut NOT IN ('désinscrit', 'indisponible')) AND i.forfait = 0
               AND ($2::int IS NULL OR i.organization_id = $2)
               ORDER BY i.timestamp ASC`,
         [parentId, orgId], (err, rows) => { if (err) reject(err); else resolve(rows || []); });
