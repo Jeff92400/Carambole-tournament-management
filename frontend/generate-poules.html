@@ -426,6 +426,20 @@
         </div>
       </div>
 
+      <!-- Split tournament child selector (shown when tournament is_split) -->
+      <div id="splitChildSelector" style="display: none; margin-bottom: 20px; padding: 15px; background: #fff3e0; border-radius: 8px; border-left: 4px solid #ff9800;">
+        <div style="margin-bottom: 10px;">
+          <strong style="color: #e65100; font-size: 1em;">Tournoi dédoublé</strong>
+          <p style="margin: 5px 0 0 0; color: #666; font-size: 0.9em;">
+            Ce tournoi est réparti sur deux lieux. Sélectionnez le lieu pour lequel vous souhaitez générer les poules.
+          </p>
+        </div>
+        <div id="splitChildButtons" style="display: flex; gap: 10px; flex-wrap: wrap;">
+          <!-- Buttons will be injected dynamically -->
+        </div>
+        <p id="splitChildStatus" style="margin: 10px 0 0 0; font-size: 0.85em; color: #666; display: none;"></p>
+      </div>
+
       <button class="btn" id="loadPlayersBtn" disabled>Charger les joueurs</button>
     </div>
 
@@ -1063,6 +1077,8 @@
     let currentGameParams = null;
     let isFinale = false;
     let tournamentTypes = [];
+    let splitChildren = [];       // Child tournaments when parent is_split
+    let selectedSplitChild = null; // Selected child ('A' or 'B') for split tournaments
 
     // Poule configuration (auto-computed from API)
     let POULE_CONFIG = {};
@@ -1501,8 +1517,9 @@
         // Trigger change event to load tournament info
         document.getElementById('categorySelect').dispatchEvent(new Event('change'));
 
-        // Enable load button
-        document.getElementById('loadPlayersBtn').disabled = false;
+        // Enable load button (updateLoadButtonState handles split tournaments automatically)
+        // For split tournaments, the button will be re-disabled by loadSplitChildren
+        updateLoadButtonState();
 
         // Scroll to step 1
         document.getElementById('step1').scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -1672,7 +1689,15 @@
       const season = document.getElementById('seasonSelect').value;
       const tournament = document.getElementById('tournamentSelect').value;
 
-      document.getElementById('loadPlayersBtn').disabled = !categoryId || !season || !tournament;
+      // Base condition: all selectors must have values
+      let canLoad = categoryId && season && tournament;
+
+      // Additional condition for split tournaments: a child must be selected
+      if (canLoad && splitChildren.length > 0 && !selectedSplitChild) {
+        canLoad = false;
+      }
+
+      document.getElementById('loadPlayersBtn').disabled = !canLoad;
 
       // Load tournament info if all fields are selected
       if (categoryId && tournament) {
@@ -1680,6 +1705,7 @@
       } else {
         document.getElementById('tournamentInfo').style.display = 'none';
         matchingTournoi = null;
+        hideSplitChildSelector();
       }
     }
 
@@ -1687,6 +1713,9 @@
     async function loadTournamentInfo(categoryId, tournamentNum) {
       const category = categories.find(c => c.id == categoryId);
       if (!category) return;
+
+      // Reset split state when loading a new tournament
+      hideSplitChildSelector();
 
       // Convert internal level codes to IONOS format
       // Levels in DB: N3GC, R1, R2, R3, R4, N3, etc.
@@ -1766,6 +1795,13 @@
               document.getElementById('tournamentInfoInscrits').textContent = `${inscCount} joueurs`;
             }
             document.getElementById('tournamentInfo').style.display = 'block';
+
+            // Handle split tournaments: show child selector if is_split
+            if (matchingTournoi.is_split === true || matchingTournoi.is_split === 1) {
+              await loadSplitChildren(matchingTournoi.tournoi_id, category);
+            } else {
+              hideSplitChildSelector();
+            }
           } else if (window.selectedUpcomingTournament && (tournamentNum === 'Finale' || isFinale)) {
             // For finals selected from upcoming tournaments card, use stored data
             const upcomingData = window.selectedUpcomingTournament;
@@ -1805,8 +1841,10 @@
             const ifc = upcomingData.inscribed_finalist_count || 0;
             document.getElementById('tournamentInfoInscrits').textContent = `${ifc}/${fc} inscrits`;
             document.getElementById('tournamentInfo').style.display = 'block';
+            hideSplitChildSelector();
           } else {
             document.getElementById('tournamentInfo').style.display = 'none';
+            hideSplitChildSelector();
           }
         }
       } catch (error) {
@@ -1814,6 +1852,149 @@
         document.getElementById('tournamentInfo').style.display = 'none';
       }
     }
+
+    // ==========================================
+    // SPLIT TOURNAMENT HANDLING
+    // ==========================================
+
+    // Hide the split child selector and reset state
+    function hideSplitChildSelector() {
+      document.getElementById('splitChildSelector').style.display = 'none';
+      document.getElementById('splitChildButtons').innerHTML = '';
+      document.getElementById('splitChildStatus').style.display = 'none';
+      splitChildren = [];
+      selectedSplitChild = null;
+    }
+
+    // Load child tournaments for a split parent and show the selector UI
+    async function loadSplitChildren(parentTournoiId, category) {
+      try {
+        const response = await fetch(`${API_URL}/inscriptions/tournoi/${parentTournoiId}/children`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (!response.ok) {
+          console.error('Failed to load split children');
+          hideSplitChildSelector();
+          return;
+        }
+
+        splitChildren = await response.json();
+
+        if (splitChildren.length === 0) {
+          hideSplitChildSelector();
+          return;
+        }
+
+        // Build child selector buttons
+        const buttonsContainer = document.getElementById('splitChildButtons');
+        buttonsContainer.innerHTML = splitChildren.map(child => {
+          const label = child.split_label || '?';
+          const lieu = child.lieu || 'Lieu non défini';
+          return `<button class="btn split-child-btn" data-split-label="${label}" data-child-id="${child.tournoi_id}"
+                    style="background: #ff9800; color: white; padding: 10px 20px; font-size: 0.95em; border: 2px solid transparent; transition: all 0.2s;"
+                    onclick="selectSplitChild('${label}', ${child.tournoi_id})">
+                    Lieu ${label} — ${lieu}
+                  </button>`;
+        }).join('');
+
+        document.getElementById('splitChildSelector').style.display = 'block';
+
+        // Reset selection
+        selectedSplitChild = null;
+
+        // Disable the load button until a child is selected
+        document.getElementById('loadPlayersBtn').disabled = true;
+
+        // Show status message
+        const statusEl = document.getElementById('splitChildStatus');
+        statusEl.textContent = 'Veuillez sélectionner un lieu avant de continuer.';
+        statusEl.style.color = '#e65100';
+        statusEl.style.display = 'block';
+
+      } catch (error) {
+        console.error('Error loading split children:', error);
+        hideSplitChildSelector();
+      }
+    }
+
+    // Handle selection of a split child (A or B)
+    async function selectSplitChild(splitLabel, childTournoiId) {
+      selectedSplitChild = splitLabel;
+
+      const childTournoi = splitChildren.find(c => c.tournoi_id === childTournoiId);
+      if (!childTournoi) return;
+
+      // Visual feedback: highlight selected button, dim others
+      document.querySelectorAll('.split-child-btn').forEach(btn => {
+        if (btn.dataset.splitLabel === splitLabel) {
+          btn.style.background = '#e65100';
+          btn.style.borderColor = '#bf360c';
+          btn.style.fontWeight = 'bold';
+          btn.style.color = 'white';
+        } else {
+          btn.style.background = '#ffcc80';
+          btn.style.borderColor = 'transparent';
+          btn.style.fontWeight = 'normal';
+          btn.style.color = '#666';
+        }
+      });
+
+      // Update the tournament info display with child's lieu
+      document.getElementById('tournamentInfoLieu').textContent = childTournoi.lieu || 'Non défini';
+
+      // Store the child's tournoi_id on matchingTournoi so it's used for convocations/save-poules
+      // Keep original parent ID (only set once — don't overwrite if already switching between children)
+      if (!matchingTournoi._parentTournoiId) {
+        matchingTournoi._parentTournoiId = matchingTournoi.tournoi_id;
+      }
+      matchingTournoi._selectedChildTournoiId = childTournoiId;
+      matchingTournoi._selectedSplitLabel = splitLabel;
+      matchingTournoi.lieu = childTournoi.lieu;
+      // Override tournoi_id with child's ID for convocations and save-poules
+      matchingTournoi.tournoi_id = childTournoiId;
+
+      // Load inscription count filtered by assigned_split
+      const parentTournoiId = matchingTournoi._parentTournoiId;
+      try {
+        const inscResponse = await fetch(`${API_URL}/inscriptions/tournoi/${parentTournoiId}/inscriptions`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (inscResponse.ok) {
+          const allInscriptions = await inscResponse.json();
+          const splitInscriptions = allInscriptions.filter(i =>
+            i.assigned_split === splitLabel && i.forfait !== 1
+          );
+          const unassignedCount = allInscriptions.filter(i => !i.assigned_split && i.forfait !== 1).length;
+          document.getElementById('tournamentInfoInscrits').textContent = `${splitInscriptions.length} joueurs (lieu ${splitLabel})`;
+
+          if (unassignedCount > 0) {
+            const statusEl = document.getElementById('splitChildStatus');
+            statusEl.innerHTML = `Lieu ${splitLabel} sélectionné — <strong>${splitInscriptions.length}</strong> joueur(s) assigné(s).`
+              + ` <span style="color: #e65100;">${unassignedCount} joueur(s) non encore distribué(s) — ils seront exclus.</span>`;
+            statusEl.style.color = '#333';
+            statusEl.style.display = 'block';
+          } else {
+            const statusEl = document.getElementById('splitChildStatus');
+            statusEl.textContent = `Lieu ${splitLabel} sélectionné — ${splitInscriptions.length} joueur(s) assigné(s). Les poules seront générées uniquement pour ces joueurs.`;
+            statusEl.style.color = '#2e7d32';
+            statusEl.style.display = 'block';
+          }
+        }
+      } catch (e) {
+        console.error('Error loading split inscription count:', e);
+        // Still show a generic status
+        const statusEl = document.getElementById('splitChildStatus');
+        statusEl.textContent = `Lieu ${splitLabel} sélectionné — les poules seront générées uniquement pour les joueurs assignés à ce lieu.`;
+        statusEl.style.color = '#2e7d32';
+        statusEl.style.display = 'block';
+      }
+
+      // Re-enable the load button
+      updateLoadButtonState();
+    }
+    // Make selectSplitChild available globally (called from onclick)
+    window.selectSplitChild = selectSplitChild;
 
     // Mode selector change - populate levels
     document.getElementById('modeSelect').addEventListener('change', (e) => {
@@ -1874,6 +2055,12 @@
       currentCategory = categories.find(c => c.id == categoryId);
       currentSeason = season;
       currentTournament = tournamentNum;
+
+      // Safety check: if tournament is split but no child selected, abort
+      if (splitChildren.length > 0 && !selectedSplitChild) {
+        alert('Ce tournoi est dédoublé. Veuillez sélectionner un lieu (A ou B) avant de continuer.');
+        return;
+      }
 
       // Check if this is a finale
       const isFinaleCompetition = isFinale || tournamentNum === 'Finale' || (tournamentTypes.find(tt => String(tt.tournament_number) === tournamentNum)?.is_finale);
@@ -1941,15 +2128,24 @@
 
         // Load inscriptions using the already-matched tournament
         if (matchingTournoi) {
-          const inscriptionsResponse = await fetch(`${API_URL}/inscriptions/tournoi/${matchingTournoi.tournoi_id}/inscriptions`, {
+          // For split tournaments, inscriptions are on the parent — use parent ID
+          const inscriptionsTournoiId = matchingTournoi._parentTournoiId || matchingTournoi.tournoi_id;
+          const inscriptionsResponse = await fetch(`${API_URL}/inscriptions/tournoi/${inscriptionsTournoiId}/inscriptions`, {
             headers: { 'Authorization': `Bearer ${token}` }
           });
 
-          // Fetch player emails for email convocations
-          fetchPlayerEmails(matchingTournoi.tournoi_id);
+          // Fetch player emails for email convocations (use parent ID since emails are linked to inscriptions)
+          fetchPlayerEmails(inscriptionsTournoiId);
 
           if (inscriptionsResponse.ok) {
-            const inscriptions = await inscriptionsResponse.json();
+            let inscriptions = await inscriptionsResponse.json();
+
+            // For split tournaments: filter inscriptions to only those assigned to the selected child
+            if (selectedSplitChild) {
+              inscriptions = inscriptions.filter(i =>
+                i.assigned_split === selectedSplitChild
+              );
+            }
 
             // For FINALE: Don't show "new players" section - only finalists matter
             if (isFinaleCompetition) {
@@ -2367,6 +2563,8 @@
       newPlayers = [];
       lastMinutePlayers = [];
       selectedPlayers = [];
+      // Reset split tournament state
+      hideSplitChildSelector();
       // Clear save poules result message
       const savePoulesResult = document.getElementById('savePoulesResult');
       if (savePoulesResult) {

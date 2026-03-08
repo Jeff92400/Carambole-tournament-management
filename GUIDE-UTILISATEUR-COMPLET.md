@@ -674,6 +674,89 @@ Pour supprimer définitivement une compétition (et toutes ses inscriptions asso
 
 ---
 
+## Calendrier > Dédoubler un tournoi
+
+### Quand utiliser le dédoublement ?
+
+Lorsqu'une compétition reçoit trop d'inscriptions pour se dérouler sur un seul site, il est possible de **dédoubler** le tournoi en deux sous-tournois (A et B), chacun organisé dans un lieu différent. Les résultats des deux sous-tournois sont ensuite fusionnés pour produire un classement unique.
+
+**Exemple :** Le tournoi T1 de Libre R2 reçoit 24 inscriptions. La salle habituelle ne peut accueillir que 12 joueurs. L'administrateur dédouble le tournoi : 12 joueurs jouent à Courbevoie (A), 12 joueurs jouent à Châtillon (B). Les résultats des deux salles sont fusionnés en un seul classement T1 Libre R2.
+
+### Comment dédoubler un tournoi
+
+1. Aller dans **Compétitions > Liste des tournois externes** (page Tournois Externes)
+2. Repérer le tournoi à venir que vous souhaitez dédoubler
+3. Cliquer sur le bouton **« Dédoubler »** sur la ligne du tournoi
+4. Dans la fenêtre qui s'affiche, saisir les deux lieux :
+   - **Lieu A** : lieu du premier sous-tournoi
+   - **Lieu B** : lieu du second sous-tournoi
+5. Valider : deux sous-tournois sont créés automatiquement, identifiés par les suffixes **(A)** et **(B)**
+
+**Résultat :** Le tournoi d'origine devient un tournoi « parent » et deux tournois « enfants » (A et B) apparaissent dans la liste. Les inscriptions du tournoi parent sont conservées et pourront être réparties entre A et B à l'étape suivante.
+
+---
+
+## Calendrier > Répartir les joueurs entre A et B
+
+### Description
+
+Après avoir dédoublé un tournoi, il faut répartir les joueurs inscrits entre les deux sous-tournois. L'application propose une répartition automatique équilibrée (serpentine) et permet des ajustements manuels.
+
+### Processus de répartition
+
+1. Sur la ligne du tournoi dédoublé, cliquer sur le bouton **« Répartir »**
+2. **Répartition automatique (serpentine) :** Cliquer sur **« Répartition automatique (serpentine) »** pour distribuer les joueurs de manière équilibrée entre A et B en fonction de leur classement. Les joueurs sont alternés : le 1er va en A, le 2e en B, le 3e en B, le 4e en A, etc. (serpentine), ce qui garantit un niveau homogène entre les deux sous-tournois.
+3. **Ajustements manuels :** Vous pouvez ensuite modifier la répartition en cliquant sur un joueur pour le déplacer de A vers B ou de B vers A.
+4. Une fois satisfait de la répartition, cliquer sur **« Enregistrer »** pour sauvegarder.
+
+**Conseil :** La répartition en serpentine est recommandée car elle assure un équilibre de niveau entre les deux sous-tournois. Les ajustements manuels permettent ensuite de prendre en compte des contraintes logistiques (proximité géographique d'un joueur, préférences, etc.).
+
+---
+
+## Compétitions > Importer les résultats d'un tournoi dédoublé
+
+### Description
+
+Lors de l'import des résultats d'un tournoi qui a été dédoublé, la page d'import affiche **deux zones de dépôt** distinctes : une pour le sous-tournoi A et une pour le sous-tournoi B.
+
+### Processus d'import
+
+1. Aller dans **Compétitions > Résultats**
+2. Sélectionner la catégorie et le numéro de tournoi correspondant au tournoi dédoublé
+3. La page détecte automatiquement que le tournoi est dédoublé et affiche **deux zones de dépôt** :
+   - **Zone A** : déposer le fichier CSV des résultats du lieu A
+   - **Zone B** : déposer le fichier CSV des résultats du lieu B
+4. Déposer chaque fichier CSV dans la zone correspondante
+5. Cliquer sur **« Enregistrer la compétition »**
+6. Les résultats des deux sous-tournois sont **fusionnés automatiquement** en un classement unique pour la catégorie
+
+**Fusion des résultats :** Le classement final du tournoi combine les résultats des deux lieux. Les joueurs sont classés ensemble, comme s'ils avaient participé à un seul tournoi. Le classement saison est recalculé automatiquement après l'import.
+
+---
+
+## Calendrier > Annuler un dédoublement
+
+### Description
+
+Si le dédoublement n'est finalement plus nécessaire (par exemple, en cas de désistements ramenant le nombre de joueurs à un niveau gérable sur un seul site), il est possible d'annuler le dédoublement.
+
+### Conditions
+
+**Attention :** L'annulation du dédoublement n'est possible que si les convocations n'ont pas encore été envoyées pour les sous-tournois A et B. Une fois les convocations envoyées, le dédoublement ne peut plus être annulé.
+
+### Processus d'annulation
+
+1. Sur la ligne du tournoi dédoublé dans la liste des tournois externes, cliquer sur le bouton **« Annuler split »**
+2. Confirmer l'annulation dans la boîte de dialogue
+
+### Conséquences de l'annulation
+
+- Les sous-tournois A et B sont supprimés
+- Les affectations de joueurs aux sous-tournois sont effacées
+- Le tournoi parent retrouve son état initial avec toutes les inscriptions d'origine
+
+---
+
 ## Menu : Com Joueurs (Communication Joueurs)
 
 ### Accès
@@ -1407,6 +1490,7 @@ Les joueurs peuvent déclarer leur indisponibilité pour une compétition via l'
 | CDB | Comité Départemental de Billard — chaque CDB dispose de son propre environnement isolé |
 | Classification FFB | Classement attribué par la FFB à un joueur pour une discipline donnée (ex: R2 en 3 Bandes) |
 | Convocation | Email envoyé au joueur avec toutes les informations du tournoi et sa poule |
+| Dédoublement | Action de scinder un tournoi en deux sous-tournois (A et B) organisés dans deux lieux différents, lorsque le nombre d'inscrits dépasse la capacité d'un seul site |
 | Distance | Nombre de points (caramboles) à atteindre pour gagner une manche |
 | Forfait | Joueur qui ne peut pas participer après avoir été convoqué |
 | Journée Qualificative | Mode de compétition avec poules, classement par points de position attribués selon la position finale |
@@ -1419,6 +1503,7 @@ Les joueurs peuvent déclarer leur indisponibilité pour une compétition via l'
 | Poule | Groupe de joueurs s'affrontant lors d'un tournoi |
 | Reprise | Unité de jeu au billard (tour de jeu) |
 | Saison | Période allant de septembre à août (ex: 2025-2026) |
+| Répartition serpentine | Méthode de distribution équilibrée des joueurs entre deux sous-tournois : les joueurs triés par classement sont alternés (1er vers A, 2e vers B, 3e vers B, 4e vers A, etc.) pour garantir un niveau homogène |
 | Série | Nombre de points consécutifs marqués sans rater |
 | E2i / telemat.org | Système fédéral de saisie et gestion des compétitions FFB. Les fichiers CSV de matchs exportés depuis E2i peuvent être importés dans l'application. |
 | MGP (Moyenne Générale Parties) | Moyenne générale du joueur calculée sur l'ensemble des matchs d'un tournoi (total points / total reprises) |

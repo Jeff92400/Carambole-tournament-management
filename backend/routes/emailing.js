@@ -722,6 +722,7 @@ router.get('/tournois', authenticateToken, async (req, res) => {
      FROM tournoi_ext t
      WHERE t.debut >= $1 AND t.debut <= $2
        AND ($3::int IS NULL OR t.organization_id = $3)
+       AND t.parent_tournoi_id IS NULL
      ORDER BY t.debut ASC, t.mode, t.categorie`,
     [seasonStart, seasonEnd, orgId],
     (err, rows) => {
@@ -2835,6 +2836,7 @@ router.get('/finales', authenticateToken, async (req, res) => {
      WHERE (t.debut >= $1 AND t.debut <= $2)
        AND (UPPER(t.nom) LIKE '%FINALE%' OR UPPER(t.nom) LIKE '%FINAL%')
        AND ($3::int IS NULL OR t.organization_id = $3)
+       AND t.parent_tournoi_id IS NULL
      ORDER BY t.debut ASC, t.mode, t.categorie`,
     [seasonStart, seasonEnd, orgId],
     (err, rows) => {
@@ -3980,6 +3982,7 @@ router.get('/next-tournament', authenticateToken, async (req, res) => {
          WHERE ${modeCondition} AND UPPER(categorie) = $${catParamIdx}
          AND ${nameCondition}
          AND ($${orgParamIdx}::int IS NULL OR organization_id = $${orgParamIdx})
+         AND parent_tournoi_id IS NULL
          ORDER BY debut DESC LIMIT 1`,
         [...modeParams, category.toUpperCase(), orgId],
         (err, row) => {
@@ -4131,6 +4134,7 @@ router.get('/t1-participants', authenticateToken, async (req, res) => {
          WHERE ${t2ModeCondition} AND UPPER(categorie) = $${t2CatParamIdx}
          AND ${t2NameCondition}
          AND ($${t2OrgParamIdx}::int IS NULL OR organization_id = $${t2OrgParamIdx})
+         AND parent_tournoi_id IS NULL
          ORDER BY debut DESC LIMIT 1`,
         [...t2ModeParams, category.toUpperCase(), orgId],
         (err, row) => {
@@ -4290,6 +4294,7 @@ router.get('/ranking-for-relance', authenticateToken, async (req, res) => {
          WHERE ${modeCondition} AND UPPER(categorie) = $${catParamIdx}
          AND ${nameCondition}
          AND ($${t3OrgParamIdx}::int IS NULL OR organization_id = $${t3OrgParamIdx})
+         AND parent_tournoi_id IS NULL
          ORDER BY debut DESC LIMIT 1`,
         [...modeParams, category.toUpperCase(), orgId],
         (err, row) => {
@@ -4495,6 +4500,7 @@ router.get('/t1-players', authenticateToken, async (req, res) => {
          WHERE ${modeCondition} AND UPPER(categorie) = $${catParamIdx}
          AND ${nameCondition}
          AND ($${t1OrgParamIdx}::int IS NULL OR organization_id = $${t1OrgParamIdx})
+         AND parent_tournoi_id IS NULL
          ORDER BY debut DESC LIMIT 1`,
         [...modeParams, category.toUpperCase(), orgId],
         (err, row) => {
@@ -4646,6 +4652,7 @@ router.get('/finale-qualified', authenticateToken, async (req, res) => {
          WHERE UPPER(mode) = $1 AND UPPER(categorie) = $2
          AND (UPPER(nom) LIKE '%FINALE%' OR UPPER(nom) LIKE '%FINAL%')
          AND ($3::int IS NULL OR organization_id = $3)
+         AND parent_tournoi_id IS NULL
          ORDER BY debut DESC LIMIT 1`,
         [mode.toUpperCase(), category.toUpperCase(), orgId],
         (err, row) => {
@@ -5057,6 +5064,7 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
            AND (UPPER(nom) LIKE '%FINALE%' OR UPPER(nom) LIKE '%FINAL%')
            AND debut >= $4
            AND ($5::int IS NULL OR organization_id = $5)
+           AND parent_tournoi_id IS NULL
            ORDER BY debut ASC LIMIT 1`,
           [mode.toUpperCase(), categoryUpper, categoryUpper + '%', new Date().toISOString().split('T')[0], orgId],
           (err, row) => {

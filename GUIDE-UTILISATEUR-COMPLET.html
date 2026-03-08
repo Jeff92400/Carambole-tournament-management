@@ -462,6 +462,10 @@
 
     <a href="#calendrier" class="section-title">Calendrier</a>
     <a href="#calendrier">Calendrier</a>
+    <a href="#dedoublement" class="sub">Dédoubler un tournoi</a>
+    <a href="#repartition-joueurs" class="sub">Répartir les joueurs</a>
+    <a href="#import-dedouble" class="sub">Import résultats (dédoublé)</a>
+    <a href="#annuler-dedoublement" class="sub">Annuler un dédoublement</a>
 
     <a href="#communication" class="section-title">Communication</a>
     <a href="#annonces">Annonces</a>
@@ -1372,6 +1376,114 @@
     <div class="info-card">
       <strong>Lien avec l'Application Joueur :</strong> Le calendrier est visible par les joueurs dans l'Application Joueur. Les joueurs peuvent s'inscrire directement aux compétitions à venir depuis leur application. Les inscriptions apparaissent automatiquement dans l'application de gestion.
     </div>
+  </section>
+
+  <hr>
+
+  <!-- ======================== DÉDOUBLEMENT DE TOURNOI ======================== -->
+  <section id="dedoublement">
+    <h2>Calendrier > Dédoubler un tournoi</h2>
+
+    <h3>Quand utiliser le dédoublement ?</h3>
+    <p>Lorsqu'une compétition reçoit trop d'inscriptions pour se dérouler sur un seul site, il est possible de <strong>dédoubler</strong> le tournoi en deux sous-tournois (A et B), chacun organisé dans un lieu différent. Les résultats des deux sous-tournois sont ensuite fusionnés pour produire un classement unique.</p>
+
+    <div class="info-card accent">
+      <strong>Exemple :</strong> Le tournoi T1 de Libre R2 reçoit 24 inscriptions. La salle habituelle ne peut accueillir que 12 joueurs. L'administrateur dédouble le tournoi : 12 joueurs jouent à Courbevoie (A), 12 joueurs jouent à Châtillon (B). Les résultats des deux salles sont fusionnés en un seul classement T1 Libre R2.
+    </div>
+
+    <h3>Comment dédoubler un tournoi</h3>
+    <ol class="steps">
+      <li>Aller dans <strong>Compétitions &gt; Liste des tournois externes</strong> (page Tournois Externes)</li>
+      <li>Repérer le tournoi à venir que vous souhaitez dédoubler</li>
+      <li>Cliquer sur le bouton <strong>« Dédoubler »</strong> sur la ligne du tournoi</li>
+      <li>Dans la fenêtre qui s'affiche, saisir les deux lieux :
+        <ul>
+          <li><strong>Lieu A</strong> : lieu du premier sous-tournoi</li>
+          <li><strong>Lieu B</strong> : lieu du second sous-tournoi</li>
+        </ul>
+      </li>
+      <li>Valider : deux sous-tournois sont créés automatiquement, identifiés par les suffixes <strong>(A)</strong> et <strong>(B)</strong></li>
+    </ol>
+
+    <div class="info-card">
+      <strong>Résultat :</strong> Le tournoi d'origine devient un tournoi « parent » et deux tournois « enfants » (A et B) apparaissent dans la liste. Les inscriptions du tournoi parent sont conservées et pourront être réparties entre A et B à l'étape suivante.
+    </div>
+  </section>
+
+  <hr>
+
+  <section id="repartition-joueurs">
+    <h2>Calendrier > Répartir les joueurs entre A et B</h2>
+
+    <h3>Description</h3>
+    <p>Après avoir dédoublé un tournoi, il faut répartir les joueurs inscrits entre les deux sous-tournois. L'application propose une répartition automatique équilibrée (serpentine) et permet des ajustements manuels.</p>
+
+    <h3>Processus de répartition</h3>
+    <ol class="steps">
+      <li>Sur la ligne du tournoi dédoublé, cliquer sur le bouton <strong>« Répartir »</strong></li>
+      <li><strong>Répartition automatique (serpentine) :</strong> Cliquer sur <strong>« Répartition automatique (serpentine) »</strong> pour distribuer les joueurs de manière équilibrée entre A et B en fonction de leur classement. Les joueurs sont alternés : le 1er va en A, le 2e en B, le 3e en B, le 4e en A, etc. (serpentine), ce qui garantit un niveau homogène entre les deux sous-tournois.</li>
+      <li><strong>Ajustements manuels :</strong> Vous pouvez ensuite modifier la répartition en cliquant sur un joueur pour le déplacer de A vers B ou de B vers A.</li>
+      <li>Une fois satisfait de la répartition, cliquer sur <strong>« Enregistrer »</strong> pour sauvegarder.</li>
+    </ol>
+
+    <div class="info-card accent">
+      <strong>Conseil :</strong> La répartition en serpentine est recommandée car elle assure un équilibre de niveau entre les deux sous-tournois. Les ajustements manuels permettent ensuite de prendre en compte des contraintes logistiques (proximité géographique d'un joueur, préférences, etc.).
+    </div>
+  </section>
+
+  <hr>
+
+  <section id="import-dedouble">
+    <h2>Compétitions > Importer les résultats d'un tournoi dédoublé</h2>
+
+    <h3>Description</h3>
+    <p>Lors de l'import des résultats d'un tournoi qui a été dédoublé, la page d'import affiche <strong>deux zones de dépôt</strong> distinctes : une pour le sous-tournoi A et une pour le sous-tournoi B.</p>
+
+    <h3>Processus d'import</h3>
+    <ol class="steps">
+      <li>Aller dans <strong>Compétitions &gt; Résultats</strong></li>
+      <li>Sélectionner la catégorie et le numéro de tournoi correspondant au tournoi dédoublé</li>
+      <li>La page détecte automatiquement que le tournoi est dédoublé et affiche <strong>deux zones de dépôt</strong> :
+        <ul>
+          <li><strong>Zone A</strong> : déposer le fichier CSV des résultats du lieu A</li>
+          <li><strong>Zone B</strong> : déposer le fichier CSV des résultats du lieu B</li>
+        </ul>
+      </li>
+      <li>Déposer chaque fichier CSV dans la zone correspondante</li>
+      <li>Cliquer sur <strong>« Enregistrer la compétition »</strong></li>
+      <li>Les résultats des deux sous-tournois sont <strong>fusionnés automatiquement</strong> en un classement unique pour la catégorie</li>
+    </ol>
+
+    <div class="info-card">
+      <strong>Fusion des résultats :</strong> Le classement final du tournoi combine les résultats des deux lieux. Les joueurs sont classés ensemble, comme s'ils avaient participé à un seul tournoi. Le classement saison est recalculé automatiquement après l'import.
+    </div>
+  </section>
+
+  <hr>
+
+  <section id="annuler-dedoublement">
+    <h2>Calendrier > Annuler un dédoublement</h2>
+
+    <h3>Description</h3>
+    <p>Si le dédoublement n'est finalement plus nécessaire (par exemple, en cas de désistements ramenant le nombre de joueurs à un niveau gérable sur un seul site), il est possible d'annuler le dédoublement.</p>
+
+    <h3>Conditions</h3>
+    <div class="info-card warning">
+      <strong>Attention :</strong> L'annulation du dédoublement n'est possible que si les convocations n'ont pas encore été envoyées pour les sous-tournois A et B. Une fois les convocations envoyées, le dédoublement ne peut plus être annulé.
+    </div>
+
+    <h3>Processus d'annulation</h3>
+    <ol class="steps">
+      <li>Sur la ligne du tournoi dédoublé dans la liste des tournois externes, cliquer sur le bouton <strong>« Annuler split »</strong></li>
+      <li>Confirmer l'annulation dans la boîte de dialogue</li>
+    </ol>
+
+    <h3>Conséquences de l'annulation</h3>
+    <ul>
+      <li>Les sous-tournois A et B sont supprimés</li>
+      <li>Les affectations de joueurs aux sous-tournois sont effacées</li>
+      <li>Le tournoi parent retrouve son état initial avec toutes les inscriptions d'origine</li>
+    </ul>
   </section>
 
   <hr>
@@ -2339,6 +2451,7 @@
         <tr><td>CDB</td><td>Comité Départemental de Billard &mdash; chaque CDB dispose de son propre environnement isolé</td></tr>
         <tr><td>Classification FFB</td><td>Classement attribué par la FFB à un joueur pour une discipline donnée (ex: R2 en 3 Bandes)</td></tr>
         <tr><td>Convocation</td><td>Email envoyé au joueur avec toutes les informations du tournoi et sa poule</td></tr>
+        <tr><td>Dédoublement</td><td>Action de scinder un tournoi en deux sous-tournois (A et B) organisés dans deux lieux différents, lorsque le nombre d'inscrits dépasse la capacité d'un seul site</td></tr>
         <tr><td>Distance</td><td>Nombre de points (caramboles) à atteindre pour gagner une manche</td></tr>
         <tr><td>Forfait</td><td>Joueur qui ne peut pas participer après avoir été convoqué</td></tr>
         <tr><td>Journée Qualificative</td><td>Mode de compétition avec poules, classement par points de position attribués selon la position finale</td></tr>
@@ -2351,6 +2464,7 @@
         <tr><td>Poule</td><td>Groupe de joueurs s'affrontant lors d'un tournoi</td></tr>
         <tr><td>Reprise</td><td>Unité de jeu au billard (tour de jeu)</td></tr>
         <tr><td>Saison</td><td>Période allant de septembre à août (ex: 2025-2026)</td></tr>
+        <tr><td>Répartition serpentine</td><td>Méthode de distribution équilibrée des joueurs entre deux sous-tournois : les joueurs triés par classement sont alternés (1er &rarr; A, 2e &rarr; B, 3e &rarr; B, 4e &rarr; A, etc.) pour garantir un niveau homogène</td></tr>
         <tr><td>Série</td><td>Nombre de points consécutifs marqués sans rater</td></tr>
         <tr><td>E2i / telemat.org</td><td>Système fédéral de saisie et gestion des compétitions FFB. Les fichiers CSV de matchs exportés depuis E2i peuvent être importés dans l'application.</td></tr>
         <tr><td>MGP (Moyenne Générale Parties)</td><td>Moyenne générale du joueur calculée sur l'ensemble des matchs d'un tournoi (total points / total reprises)</td></tr>
