@@ -10,9 +10,13 @@ const { getRankingTournamentNumbers } = require('./settings');
 const router = express.Router();
 
 // Get organization logo as buffer from database (for Excel exports)
-async function getOrganizationLogoBuffer() {
+async function getOrganizationLogoBuffer(orgId) {
   return new Promise((resolve) => {
-    db.get('SELECT file_data, content_type FROM organization_logo ORDER BY created_at DESC LIMIT 1', [], (err, row) => {
+    const query = orgId
+      ? 'SELECT file_data, content_type FROM organization_logo WHERE organization_id = $1 ORDER BY created_at DESC LIMIT 1'
+      : 'SELECT file_data, content_type FROM organization_logo ORDER BY created_at DESC LIMIT 1';
+    const params = orgId ? [orgId] : [];
+    db.get(query, params, (err, row) => {
       if (err || !row) {
         // Fallback to static French billiard icon
         const fallbackPath = path.join(__dirname, '../../frontend/images/FrenchBillard-Icon-small.png');
@@ -403,7 +407,7 @@ router.get('/export', authenticateToken, async (req, res) => {
 
       // Add organization logo
       try {
-        const logoBuffer = await getOrganizationLogoBuffer();
+        const logoBuffer = await getOrganizationLogoBuffer(orgId);
         if (logoBuffer) {
           const imageId = workbook.addImage({
             buffer: logoBuffer,

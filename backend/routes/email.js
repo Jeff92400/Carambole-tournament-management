@@ -19,10 +19,14 @@ const FRENCH_BILLARD_ICON_IMG = `<img src="${FRENCH_BILLARD_ICON_BASE64}" alt="ð
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 // Get organization logo as buffer from database (for PDFs)
-async function getOrganizationLogoBuffer() {
+async function getOrganizationLogoBuffer(orgId) {
   const db = require('../db-loader');
   return new Promise((resolve) => {
-    db.get('SELECT file_data, content_type FROM organization_logo ORDER BY created_at DESC LIMIT 1', [], (err, row) => {
+    const query = orgId
+      ? 'SELECT file_data, content_type FROM organization_logo WHERE organization_id = $1 ORDER BY created_at DESC LIMIT 1'
+      : 'SELECT file_data, content_type FROM organization_logo ORDER BY created_at DESC LIMIT 1';
+    const params = orgId ? [orgId] : [];
+    db.get(query, params, (err, row) => {
       if (err || !row) {
         // Fallback to static French billiard icon
         const fallbackPath = path.join(__dirname, '../../frontend/images/FrenchBillard-Icon-small.png');
@@ -457,7 +461,7 @@ async function generatePlayerConvocationPDF(player, tournamentInfo, allPoules, l
   // Fetch logo before entering Promise to avoid async issues
   let logoBuffer = null;
   try {
-    logoBuffer = await getOrganizationLogoBuffer();
+    logoBuffer = await getOrganizationLogoBuffer(brandingSettings.orgId);
   } catch (err) {
     console.log('Logo not found for PDF:', err.message);
   }
@@ -817,7 +821,7 @@ async function generateSummaryConvocationPDF(tournamentInfo, allPoules, location
   // Fetch logo before entering Promise to avoid async issues
   let logoBuffer = null;
   try {
-    logoBuffer = await getOrganizationLogoBuffer();
+    logoBuffer = await getOrganizationLogoBuffer(brandingSettings.orgId);
   } catch (err) {
     console.log('Logo not found for PDF:', err.message);
   }
@@ -1414,7 +1418,7 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
         gameParams,
         selectedDistance,
         rankingData,
-        emailSettings // Pass branding settings for PDF colors
+        { ...emailSettings, orgId } // Pass branding settings + orgId for PDF colors/logo
       );
 
       const base64Content = pdfBuffer.toString('base64');
@@ -1851,6 +1855,7 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
       const brandingSettings = await appSettings.getOrgSettingsBatch(req.user?.organizationId, [
         'primary_color', 'secondary_color', 'accent_color', 'organization_name'
       ]);
+      brandingSettings.orgId = req.user?.organizationId || null;
 
       // Generate summary PDF for archival
       const archivePdfBuffer = await generateSummaryConvocationPDF(
@@ -2465,6 +2470,7 @@ router.post('/generate-summary-pdf', authenticateToken, async (req, res) => {
     const brandingSettings = await appSettings.getOrgSettingsBatch(req.user?.organizationId, [
       'primary_color', 'secondary_color', 'accent_color', 'organization_name'
     ]);
+    brandingSettings.orgId = req.user?.organizationId || null;
 
     // Generate PDF
     const pdfBuffer = await generateSummaryConvocationPDF(

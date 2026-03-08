@@ -294,9 +294,13 @@ async function assignPositionPointsIfJournees(tournamentId, orgId) {
 }
 
 // Get organization logo as buffer from database (for Excel exports)
-async function getOrganizationLogoBuffer() {
+async function getOrganizationLogoBuffer(orgId) {
   return new Promise((resolve) => {
-    db.get('SELECT file_data, content_type FROM organization_logo ORDER BY created_at DESC LIMIT 1', [], (err, row) => {
+    const query = orgId
+      ? 'SELECT file_data, content_type FROM organization_logo WHERE organization_id = $1 ORDER BY created_at DESC LIMIT 1'
+      : 'SELECT file_data, content_type FROM organization_logo ORDER BY created_at DESC LIMIT 1';
+    const params = orgId ? [orgId] : [];
+    db.get(query, params, (err, row) => {
       if (err || !row) {
         // Fallback to static French billiard icon
         const fallbackPath = path.join(__dirname, '../../frontend/images/FrenchBillard-Icon-small.png');
@@ -2466,11 +2470,19 @@ router.get('/:id/export', authenticateToken, async (req, res) => {
           try {
             const orgId = req.user.organizationId || null;
 
-            // ── Compute bonus moyenne ON THE FLY for Excel export too ──
+            // ── Detect journées mode for position_points column ──
+            let isJourneesMode = false;
+            try {
+              const qualMode = orgId ? (await appSettings.getOrgSetting(orgId, 'qualification_mode')) : null;
+              isJourneesMode = qualMode === 'journees';
+            } catch (e) { /* ignore */ }
+
+            // ── Compute bonus moyenne ON THE FLY for Excel export (with poule scope support) ──
             try {
               const bonusEnabled = orgId ? ((await appSettings.getOrgSetting(orgId, 'bonus_moyenne_enabled')) === 'true') : false;
               if (bonusEnabled && results && results.length > 0) {
                 const bonusType = (await appSettings.getOrgSetting(orgId, 'bonus_moyenne_type')) || 'normal';
+                const bonusScope = (await appSettings.getOrgSetting(orgId, 'bonus_moyenne_scope')) || 'poule';
                 const tier1 = parseInt(await appSettings.getOrgSetting(orgId, 'scoring_avg_tier_1')) || 1;
                 const tier2 = parseInt(await appSettings.getOrgSetting(orgId, 'scoring_avg_tier_2')) || 2;
                 const tier3 = parseInt(await appSettings.getOrgSetting(orgId, 'scoring_avg_tier_3')) || 3;
@@ -2485,10 +2497,49 @@ router.get('/:id/export', authenticateToken, async (req, res) => {
                 const moyenneMini = (gp && gp.moyenne_mini != null) ? parseFloat(gp.moyenne_mini) : 0;
                 const moyenneMaxi = (gp && gp.moyenne_maxi != null) ? parseFloat(gp.moyenne_maxi) : 999;
                 const moyenneMiddle = Math.round((moyenneMini + moyenneMaxi) / 2 * 100) / 100;
+
+                // When scope is 'poule', compute poule-only moyennes (exclude bracket/classification)
+                let pouleOnlyMoyennes = null;
+                if (bonusScope === 'poule') {
+                  try {
+                    const matchCount = await dbGetAsync(
+                      'SELECT COUNT(*) as cnt FROM tournament_matches WHERE tournament_id = $1', [tournamentId]
+                    );
+                    if (matchCount && matchCount.cnt > 0) {
+                      const allMatches = await dbAllAsync(
+                        'SELECT poule_name, player1_licence, player1_points, player1_reprises, player2_licence, player2_points, player2_reprises FROM tournament_matches WHERE tournament_id = $1',
+                        [tournamentId]
+                      );
+                      const pouleStats = {};
+                      for (const m of allMatches) {
+                        if (isClassificationPoule(m.poule_name)) continue;
+                        for (const side of ['player1', 'player2']) {
+                          const licence = m[`${side}_licence`];
+                          if (!licence) continue;
+                          const pts = parseFloat(m[`${side}_points`]) || 0;
+                          const rep = parseFloat(m[`${side}_reprises`]) || 0;
+                          if (!pouleStats[licence]) pouleStats[licence] = { points: 0, reprises: 0 };
+                          pouleStats[licence].points += pts;
+                          pouleStats[licence].reprises += rep;
+                        }
+                      }
+                      pouleOnlyMoyennes = {};
+                      for (const [licence, stats] of Object.entries(pouleStats)) {
+                        pouleOnlyMoyennes[licence.replace(/ /g, '')] = stats.reprises > 0 ? stats.points / stats.reprises : 0;
+                      }
+                    }
+                  } catch (e) { /* tournament_matches may not exist */ }
+                }
+
                 for (const r of results) {
                   let detail = {};
                   try { detail = JSON.parse(r.bonus_detail || '{}'); } catch (e) { detail = {}; }
-                  const moyenne = Math.round((r.reprises > 0 ? r.points / r.reprises : 0) * 100) / 100;
+                  // Use poule-only moyenne when available (scope=poule), otherwise full tournament
+                  const licenceNorm = (r.licence || '').replace(/ /g, '');
+                  const moyenneRaw = pouleOnlyMoyennes && pouleOnlyMoyennes[licenceNorm] !== undefined
+                    ? pouleOnlyMoyennes[licenceNorm]
+                    : (r.reprises > 0 ? r.points / r.reprises : 0);
+                  const moyenne = Math.round(moyenneRaw * 100) / 100;
                   let bonus = 0;
                   if (bonusType === 'tiered') {
                     if (moyenne >= moyenneMaxi) bonus = tier3;
@@ -2506,6 +2557,55 @@ router.get('/:id/export', authenticateToken, async (req, res) => {
               }
             } catch (bonusErr) {
               console.error('[EXPORT] Error computing bonus moyenne on the fly:', bonusErr);
+            }
+
+            // ── Compute position_points ON THE FLY for journées mode ──
+            if (isJourneesMode && results && results.length > 0) {
+              try {
+                const nbPlayers = results.length;
+                const lookup = await getPositionPointsLookup(orgId, nbPlayers);
+                if (Object.keys(lookup).length > 0) {
+                  let hasBracket = false;
+                  try {
+                    const mRow = await dbGetAsync('SELECT 1 FROM tournament_matches WHERE tournament_id = $1 LIMIT 1', [tournamentId]);
+                    hasBracket = !!mRow;
+                  } catch (e) { /* table may not exist */ }
+
+                  const degradation = await appSettings.getOrgSetting(orgId, 'position_points_degradation');
+
+                  if (hasBracket) {
+                    for (const r of results) {
+                      const pos = r.position || 0;
+                      let pp;
+                      if (degradation === 'last_player' && pos === nbPlayers && nbPlayers > 0) {
+                        pp = lookup[pos + 1] || 0;
+                      } else {
+                        pp = lookup[pos] || 0;
+                      }
+                      r.position_points = pp;
+                    }
+                  } else {
+                    const sorted = [...results].sort((a, b) => {
+                      if (b.match_points !== a.match_points) return b.match_points - a.match_points;
+                      const avgA = a.reprises > 0 ? a.points / a.reprises : 0;
+                      const avgB = b.reprises > 0 ? b.points / b.reprises : 0;
+                      return avgB - avgA;
+                    });
+                    for (let i = 0; i < sorted.length; i++) {
+                      const position = i + 1;
+                      let pp;
+                      if (degradation === 'last_player' && position === nbPlayers && nbPlayers > 0) {
+                        pp = lookup[position + 1] || 0;
+                      } else {
+                        pp = lookup[position] || 0;
+                      }
+                      sorted[i].position_points = pp;
+                    }
+                  }
+                }
+              } catch (ppErr) {
+                console.error('[EXPORT] Error computing position points:', ppErr);
+              }
             }
 
             // Parse bonus_detail to find dynamic bonus columns
@@ -2550,17 +2650,18 @@ router.get('/:id/export', authenticateToken, async (req, res) => {
             }
 
             const hasBonusCols = bonusColumns.length > 0;
+            const hasPositionPoints = isJourneesMode && results.some(r => r.position_points > 0);
             // Base cols: Position, Licence, Joueur, Club, Logo, Pts Match = 6
-            // + bonus columns + Total (if bonus) + Points, Reprises, Moyenne, Meilleure Série = 4
-            const totalExcelCols = 10 + bonusColumns.length + (hasBonusCols ? 1 : 0);
+            // + bonus columns + Total (if bonus) + Pts Clt (if journées) + Points, Reprises, Moyenne, Meilleure Série = 4
+            const totalExcelCols = 10 + bonusColumns.length + (hasBonusCols ? 1 : 0) + (hasPositionPoints ? 1 : 0);
             const lastCol = String.fromCharCode(64 + totalExcelCols);
 
             const workbook = new ExcelJS.Workbook();
             const worksheet = workbook.addWorksheet('Résultats');
 
-            // Add organization logo
+            // Add organization logo (scoped to org)
             try {
-              const logoBuffer = await getOrganizationLogoBuffer();
+              const logoBuffer = await getOrganizationLogoBuffer(orgId);
               if (logoBuffer) {
                 const imageId = workbook.addImage({
                   buffer: logoBuffer,
@@ -2660,6 +2761,9 @@ router.get('/:id/export', authenticateToken, async (req, res) => {
               bonusColumns.forEach(col => headerValues.push(col.label));
               headerValues.push('Total');
             }
+            if (hasPositionPoints) {
+              headerValues.push('Pts Clt');
+            }
             headerValues.push('Points', 'Reprises', 'Moyenne', 'Meilleure Série');
             worksheet.getRow(headerRow).values = headerValues;
 
@@ -2696,6 +2800,9 @@ router.get('/:id/export', authenticateToken, async (req, res) => {
               if (hasBonusCols) {
                 bonusColumns.forEach(col => rowValues.push(bonusDetail[col.ruleType] || 0));
                 rowValues.push(result.match_points + totalBonus);
+              }
+              if (hasPositionPoints) {
+                rowValues.push(result.position_points || 0);
               }
               rowValues.push(result.points, result.reprises, moyenne, result.serie);
 
@@ -2796,6 +2903,9 @@ router.get('/:id/export', authenticateToken, async (req, res) => {
             if (hasBonusCols) {
               bonusColumns.forEach(() => colWidths.push({ width: 12 })); // Bonus columns
               colWidths.push({ width: 10 }); // Total
+            }
+            if (hasPositionPoints) {
+              colWidths.push({ width: 10 }); // Pts Clt
             }
             colWidths.push(
               { width: 12 },  // Points
