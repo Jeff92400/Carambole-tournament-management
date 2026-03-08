@@ -2465,13 +2465,26 @@ Le {organization_short_name}`;
 
 // Generate summary/neutral PDF (for printing - no personalization)
 router.post('/generate-summary-pdf', authenticateToken, async (req, res) => {
-  const { poules, category, season, tournament, tournamentDate, locations, gameParams, selectedDistance, mockRankingData, isFinale } = req.body;
+  const { poules, category, season, tournament, tournamentDate, locations, gameParams, selectedDistance, mockRankingData, isFinale, tournoiId } = req.body;
 
   try {
     const db = require('../db-loader');
 
     // Determine if this is a finale
     const isFinaleCompetition = isFinale || tournament === 'Finale' || tournament === '4';
+
+    // Check if this is a split child tournament
+    let summaryPdfSplitLabel = null;
+    if (tournoiId) {
+      try {
+        const splitRow = await new Promise((resolve, reject) => {
+          db.get('SELECT split_label FROM tournoi_ext WHERE tournoi_id = $1', [tournoiId], (err, row) => err ? reject(err) : resolve(row));
+        });
+        if (splitRow?.split_label) {
+          summaryPdfSplitLabel = splitRow.split_label;
+        }
+      } catch (e) { /* ignore */ }
+    }
 
     // Fetch qualification mode for this org
     const summaryQualMode = req.user?.organizationId ? (await appSettings.getOrgSetting(req.user.organizationId, 'qualification_mode') || 'standard') : 'standard';
@@ -2483,7 +2496,8 @@ router.post('/generate-summary-pdf', authenticateToken, async (req, res) => {
       season: season,
       date: tournamentDate,
       isFinale: isFinaleCompetition,
-      qualificationMode: summaryQualMode
+      qualificationMode: summaryQualMode,
+      splitLabel: summaryPdfSplitLabel
     };
 
     // Get ranking data

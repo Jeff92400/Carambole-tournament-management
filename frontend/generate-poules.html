@@ -3551,7 +3551,8 @@
             } : null,
             selectedDistance: selectedDistance,
             mockRankingData: mockRankingData,
-            isFinale: isFinale
+            isFinale: isFinale,
+            tournoiId: matchingTournoi?.tournoi_id || null
           })
         });
 
@@ -3560,7 +3561,8 @@
           const url = window.URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
-          a.download = `Convocation_${currentCategory.display_name.replace(/\s+/g, '_')}_T${currentTournament}_${currentSeason}.pdf`;
+          const splitSuffix = matchingTournoi?._selectedSplitLabel ? `_${matchingTournoi._selectedSplitLabel}` : '';
+          a.download = `Convocation_${currentCategory.display_name.replace(/\s+/g, '_')}_T${currentTournament}${splitSuffix}_${currentSeason}.pdf`;
           document.body.appendChild(a);
           a.click();
           a.remove();
