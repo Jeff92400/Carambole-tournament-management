@@ -714,6 +714,7 @@
         <button class="btn btn-success" id="generateExcelBtn" style="background: #28a745;">Générer le fichier Excel</button>
         <button class="btn" id="generateSummaryPdfBtn" style="background: #dc3545; color: white;">Générer PDF Récapitulatif</button>
         <button class="btn" id="goToEmailBtn" style="background: #17a2b8; color: white;">Envoyer les convocations</button>
+        <button class="btn" id="goToOtherGroupBtn" style="display: none; background: #ff9800; color: white;"></button>
       </div>
     </div>
 
@@ -804,6 +805,7 @@
         <div class="action-buttons" style="justify-content: center;">
           <button class="btn" id="backToStep3Btn" style="background: #6c757d;">Retour à l'aperçu</button>
           <button class="btn" id="newGenerationBtn">Nouvelle génération</button>
+          <button class="btn" id="goToOtherGroupBtnStep4" style="display: none; background: #ff9800; color: white;"></button>
         </div>
       </div>
     </div>
@@ -2894,8 +2896,19 @@
         bannerHtml += '</div></div>';
         splitBanner.innerHTML = bannerHtml;
         splitBanner.style.display = 'block';
+
+        // Show "go to other group" button in action bar
+        const otherGroupBtn = document.getElementById('goToOtherGroupBtn');
+        if (otherChild) {
+          otherGroupBtn.textContent = `Passer au Tournoi ${tNum} ${otherChild.split_label}`;
+          otherGroupBtn.onclick = () => goToSplitChild(otherChild.split_label);
+          otherGroupBtn.style.display = '';
+        } else {
+          otherGroupBtn.style.display = 'none';
+        }
       } else {
         splitBanner.style.display = 'none';
+        document.getElementById('goToOtherGroupBtn').style.display = 'none';
       }
 
       goToStep(3);
@@ -3423,6 +3436,22 @@
 
       goToStep(4);
       updateEmailStats();
+
+      // Show "go to other group" button on step 4 for split tournaments
+      const otherGroupBtnS4 = document.getElementById('goToOtherGroupBtnStep4');
+      if (selectedSplitChild && splitChildren.length > 0) {
+        const tNum = currentTournament || '?';
+        const otherChild = splitChildren.find(c => c.split_label !== selectedSplitChild);
+        if (otherChild) {
+          otherGroupBtnS4.textContent = `Passer au Tournoi ${tNum} ${otherChild.split_label}`;
+          otherGroupBtnS4.onclick = () => goToSplitChild(otherChild.split_label);
+          otherGroupBtnS4.style.display = '';
+        } else {
+          otherGroupBtnS4.style.display = 'none';
+        }
+      } else {
+        otherGroupBtnS4.style.display = 'none';
+      }
     });
 
     // Generate Summary PDF (neutral - no personalization)
