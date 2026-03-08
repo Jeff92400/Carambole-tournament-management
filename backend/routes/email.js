@@ -2475,15 +2475,17 @@ router.post('/generate-summary-pdf', authenticateToken, async (req, res) => {
 
     // Check if this is a split child tournament
     let summaryPdfSplitLabel = null;
+    console.log(`[Summary PDF] tournoiId from request: ${tournoiId}`);
     if (tournoiId) {
       try {
         const splitRow = await new Promise((resolve, reject) => {
-          db.get('SELECT split_label FROM tournoi_ext WHERE tournoi_id = $1', [tournoiId], (err, row) => err ? reject(err) : resolve(row));
+          db.get('SELECT split_label, parent_tournoi_id FROM tournoi_ext WHERE tournoi_id = $1', [tournoiId], (err, row) => err ? reject(err) : resolve(row));
         });
+        console.log(`[Summary PDF] split_label lookup result:`, splitRow);
         if (splitRow?.split_label) {
           summaryPdfSplitLabel = splitRow.split_label;
         }
-      } catch (e) { /* ignore */ }
+      } catch (e) { console.error('[Summary PDF] Error looking up split_label:', e); }
     }
 
     // Fetch qualification mode for this org
