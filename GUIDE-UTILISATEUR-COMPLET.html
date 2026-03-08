@@ -972,6 +972,36 @@
     <div class="info-card">
       <strong>Lien avec l'Application Joueur :</strong> Après l'envoi des convocations, les joueurs peuvent voir leur convocation, la composition complète de toutes les poules et le planning des matchs dans l'Application Joueur.
     </div>
+
+    <h4>Cas particulier : Générer les poules d'un tournoi dédoublé</h4>
+    <p>Pour un tournoi dédoublé, la génération des poules et l'envoi des convocations se font <strong>en deux passes</strong>, une par sous-tournoi (Tournoi X A puis Tournoi X B).</p>
+
+    <h5>Sélection du sous-tournoi</h5>
+    <p>Lorsque vous sélectionnez un tournoi dédoublé, un <strong>sélecteur de sous-tournoi</strong> apparaît avec deux boutons :</p>
+    <ul>
+      <li><strong>Tournoi X A</strong> — nom du club A</li>
+      <li><strong>Tournoi X B</strong> — nom du club B</li>
+    </ul>
+    <p>Chaque bouton affiche un <strong>badge de statut</strong> :</p>
+    <ul>
+      <li><span class="badge badge-green">Convoqué</span> : les convocations ont déjà été envoyées pour ce sous-tournoi</li>
+      <li><span class="badge badge-yellow">En attente</span> : les convocations n'ont pas encore été envoyées</li>
+    </ul>
+    <p>Un message sous les boutons indique les convocations restantes à envoyer.</p>
+
+    <h5>Processus en deux passes</h5>
+    <ol class="steps">
+      <li>Sélectionner le <strong>Tournoi X A</strong> — seuls les joueurs assignés au sous-tournoi A sont chargés</li>
+      <li>Suivre les étapes habituelles : vérifier les joueurs, générer les poules, envoyer les convocations</li>
+      <li>Un <strong>bandeau d'information</strong> en haut de l'étape 3 indique quel sous-tournoi est en cours et le statut de l'autre</li>
+      <li>Un bouton <strong>« Passer au Tournoi X B »</strong> est disponible dans la barre d'actions (étapes 3 et 4), même sans envoyer les convocations</li>
+      <li>Cliquer sur ce bouton pour revenir automatiquement à l'étape 1 avec le sous-tournoi B pré-sélectionné</li>
+      <li>Répéter les étapes pour le sous-tournoi B</li>
+    </ol>
+
+    <div class="info-card">
+      <strong>Identification des convocations :</strong> Le PDF récapitulatif et l'email de convocation incluent automatiquement le suffixe A ou B dans le titre (ex : « CONVOCATION TOURNOI N°1 A »), permettant de distinguer clairement les deux sous-tournois.
+    </div>
   </section>
 
   <hr>
@@ -1401,8 +1431,8 @@
       <li>Cliquer sur le bouton <strong>« Dédoubler (2 lieux) »</strong></li>
       <li>Dans la fenêtre qui s'affiche, sélectionner les deux clubs dans les listes déroulantes :
         <ul>
-          <li><strong>Lieu A</strong> : club du premier sous-tournoi</li>
-          <li><strong>Lieu B</strong> : club du second sous-tournoi</li>
+          <li><strong>Tournoi A</strong> : club du premier sous-tournoi</li>
+          <li><strong>Tournoi B</strong> : club du second sous-tournoi</li>
         </ul>
       </li>
       <li>Valider : deux sous-tournois sont créés automatiquement, identifiés par les suffixes <strong>(A)</strong> et <strong>(B)</strong></li>
