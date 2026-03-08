@@ -508,7 +508,8 @@ async function generatePlayerConvocationPDF(player, tournamentInfo, allPoules, l
 
       // Header - CONVOCATION
       const isFinale = tournamentInfo.tournamentNum === '4' || tournamentInfo.tournamentNum === 'Finale' || tournamentInfo.isFinale;
-      const tournamentLabel = isFinale ? 'FINALE DÉPARTEMENTALE' : `TOURNOI N°${tournamentInfo.tournamentNum}`;
+      const pdfSplitSuffix = tournamentInfo.splitLabel ? ` — LIEU ${tournamentInfo.splitLabel}` : '';
+      const tournamentLabel = isFinale ? 'FINALE DÉPARTEMENTALE' : `TOURNOI N°${tournamentInfo.tournamentNum}${pdfSplitSuffix}`;
       const headerColor = isFinale ? '#D4AF37' : primaryColor; // Gold for finals
       const headerTextColor = isFinale ? primaryColor : 'white';
       doc.rect(40, y, pageWidth, 45).fill(headerColor);
@@ -858,7 +859,8 @@ async function generateSummaryConvocationPDF(tournamentInfo, allPoules, location
 
       // Header - CONVOCATION
       const isFinale = tournamentInfo.tournamentNum === '4' || tournamentInfo.tournamentNum === 'Finale' || tournamentInfo.isFinale;
-      const tournamentLabel = isFinale ? 'FINALE DÉPARTEMENTALE' : `TOURNOI N°${tournamentInfo.tournamentNum}`;
+      const pdfSplitSuffix = tournamentInfo.splitLabel ? ` — LIEU ${tournamentInfo.splitLabel}` : '';
+      const tournamentLabel = isFinale ? 'FINALE DÉPARTEMENTALE' : `TOURNOI N°${tournamentInfo.tournamentNum}${pdfSplitSuffix}`;
       const headerColor = isFinale ? '#D4AF37' : primaryColor; // Gold for finals
       const headerTextColor = isFinale ? primaryColor : 'white';
       doc.rect(40, y, pageWidth, 45).fill(headerColor);
@@ -1288,6 +1290,21 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
   console.log('Using Resend API for email sending');
   console.log(`Competition type: ${isFinale ? 'FINALE' : 'TOURNAMENT'}`);
 
+  // Check if this is a split child tournament (has split_label)
+  let splitLabel = null;
+  if (tournoiId) {
+    const db = require('../db-loader');
+    try {
+      const splitRow = await new Promise((resolve, reject) => {
+        db.get('SELECT split_label FROM tournoi_ext WHERE tournoi_id = $1', [tournoiId], (err, row) => err ? reject(err) : resolve(row));
+      });
+      if (splitRow?.split_label) {
+        splitLabel = splitRow.split_label;
+        console.log(`Split tournament detected: Lieu ${splitLabel}`);
+      }
+    } catch (e) { /* ignore */ }
+  }
+
   // Fetch email template - use finale template if isFinale
   const orgId = req.user.organizationId || null;
   const templateType = isFinale ? 'convocation-finale' : 'convocation';
@@ -1319,7 +1336,8 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
     skipped: []
   };
 
-  const tournamentLabel = (isFinale || tournament === 'Finale' || tournament === '4') ? 'Finale Départementale' : `Tournoi ${tournament}`;
+  const splitSuffix = splitLabel ? ` — Lieu ${splitLabel}` : '';
+  const tournamentLabel = (isFinale || tournament === 'Finale' || tournament === '4') ? 'Finale Départementale' : `Tournoi ${tournament}${splitSuffix}`;
   const dateStr = tournamentDate
     ? new Date(tournamentDate).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
     : 'Date à définir';
@@ -1411,7 +1429,8 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
           tournamentNum: tournament,
           date: tournamentDate,
           isFinale: isFinale,
-          qualificationMode
+          qualificationMode,
+          splitLabel: splitLabel
         },
         poules,
         locations,
@@ -1848,7 +1867,8 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
         season: season,
         date: tournamentDate,
         isFinale: isFinale || tournament === 'Finale' || tournament === '4',
-        qualificationMode: archiveQualMode
+        qualificationMode: archiveQualMode,
+        splitLabel: splitLabel
       };
 
       // Get branding settings
