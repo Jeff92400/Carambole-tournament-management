@@ -902,13 +902,13 @@
       <input type="hidden" id="split_tournoi_id">
       <div style="display: grid; gap: 15px;">
         <div>
-          <label style="display: block; margin-bottom: 5px; font-weight: bold;">Lieu A</label>
+          <label id="splitLabelA" style="display: block; margin-bottom: 5px; font-weight: bold;">Tournoi A — Club</label>
           <select id="split_lieu_a" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
             <option value="">-- Sélectionner un club --</option>
           </select>
         </div>
         <div>
-          <label style="display: block; margin-bottom: 5px; font-weight: bold;">Lieu B</label>
+          <label id="splitLabelB" style="display: block; margin-bottom: 5px; font-weight: bold;">Tournoi B — Club</label>
           <select id="split_lieu_b" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
             <option value="">-- Sélectionner un club --</option>
           </select>
@@ -936,11 +936,11 @@
       <input type="hidden" id="distribution_tournoi_id">
       <div class="split-columns">
         <div class="split-column col-a">
-          <h4 style="color: #1976d2;">Lieu A — <span id="lieuAName">-</span> (<span id="countA">0</span>)</h4>
+          <h4 style="color: #1976d2;"><span id="labelA">Tournoi A</span> — <span id="lieuAName">-</span> (<span id="countA">0</span>)</h4>
           <div id="playersA"></div>
         </div>
         <div class="split-column col-b">
-          <h4 style="color: #e65100;">Lieu B — <span id="lieuBName">-</span> (<span id="countB">0</span>)</h4>
+          <h4 style="color: #e65100;"><span id="labelB">Tournoi B</span> — <span id="lieuBName">-</span> (<span id="countB">0</span>)</h4>
           <div id="playersB"></div>
         </div>
       </div>
@@ -2002,15 +2002,24 @@
           return;
         }
 
-        // Build child selector buttons
+        // Build child selector buttons with convocation status
         const buttonsContainer = document.getElementById('splitChildButtons');
+        const allConvoked = splitChildren.every(c => c.convocation_sent_at);
+        const someConvoked = splitChildren.some(c => c.convocation_sent_at);
+
+        const tNum = currentTournament || '?';
         buttonsContainer.innerHTML = splitChildren.map(child => {
           const label = child.split_label || '?';
           const lieu = child.lieu || 'Lieu non défini';
+          const isConvoked = !!child.convocation_sent_at;
+          const statusBadge = isConvoked
+            ? '<span style="display:inline-block; margin-left:8px; padding:2px 8px; border-radius:10px; font-size:0.75em; background:#c8e6c9; color:#2e7d32;">Convoqué</span>'
+            : '<span style="display:inline-block; margin-left:8px; padding:2px 8px; border-radius:10px; font-size:0.75em; background:#fff3e0; color:#e65100;">En attente</span>';
+          const btnBg = isConvoked ? '#78909c' : '#ff9800';
           return `<button class="btn split-child-btn" data-split-label="${label}" data-child-id="${child.tournoi_id}"
-                    style="background: #ff9800; color: white; padding: 10px 20px; font-size: 0.95em; border: 2px solid transparent; transition: all 0.2s;"
+                    style="background: ${btnBg}; color: white; padding: 10px 20px; font-size: 0.95em; border: 2px solid transparent; transition: all 0.2s;"
                     onclick="selectSplitChild('${label}', ${child.tournoi_id})">
-                    Lieu ${label} — ${lieu}
+                    Tournoi ${tNum} ${label} — ${lieu}${statusBadge}
                   </button>`;
         }).join('');
 
@@ -2022,10 +2031,17 @@
         // Disable the load button until a child is selected
         document.getElementById('loadPlayersBtn').disabled = true;
 
-        // Show status message
+        // Show contextual status message
         const statusEl = document.getElementById('splitChildStatus');
-        statusEl.textContent = 'Veuillez sélectionner un lieu avant de continuer.';
-        statusEl.style.color = '#e65100';
+        if (allConvoked) {
+          statusEl.innerHTML = `<strong style="color:#2e7d32;">&#10003; Les convocations ont été envoyées pour les deux groupes.</strong> Vous pouvez resélectionner un tournoi pour renvoyer les convocations si nécessaire.`;
+        } else if (someConvoked) {
+          const pending = splitChildren.filter(c => !c.convocation_sent_at).map(c => `Tournoi ${tNum} ${c.split_label}`).join(', ');
+          statusEl.innerHTML = `<strong style="color:#e65100;">&#9888; Convocations restantes :</strong> ${pending}. Sélectionnez le tournoi pour continuer.`;
+        } else {
+          statusEl.textContent = 'Veuillez sélectionner un tournoi avant de continuer.';
+          statusEl.style.color = '#e65100';
+        }
         statusEl.style.display = 'block';
 
       } catch (error) {
@@ -2089,26 +2105,25 @@
             i.assigned_split === splitLabel && i.forfait !== 1
           );
           const unassignedCount = allInscriptions.filter(i => !i.assigned_split && i.forfait !== 1).length;
-          document.getElementById('tournamentInfoInscrits').textContent = `${splitInscriptions.length} joueurs (lieu ${splitLabel})`;
+          document.getElementById('tournamentInfoInscrits').textContent = `${splitInscriptions.length} joueurs (Tournoi ${currentTournament || '?'} ${splitLabel})`;
 
           if (unassignedCount > 0) {
             const statusEl = document.getElementById('splitChildStatus');
-            statusEl.innerHTML = `Lieu ${splitLabel} sélectionné — <strong>${splitInscriptions.length}</strong> joueur(s) assigné(s).`
+            statusEl.innerHTML = `Tournoi ${currentTournament || '?'} ${splitLabel} sélectionné — <strong>${splitInscriptions.length}</strong> joueur(s) assigné(s).`
               + ` <span style="color: #e65100;">${unassignedCount} joueur(s) non encore distribué(s) — ils seront exclus.</span>`;
             statusEl.style.color = '#333';
             statusEl.style.display = 'block';
           } else {
             const statusEl = document.getElementById('splitChildStatus');
-            statusEl.textContent = `Lieu ${splitLabel} sélectionné — ${splitInscriptions.length} joueur(s) assigné(s). Les poules seront générées uniquement pour ces joueurs.`;
+            statusEl.textContent = `Tournoi ${currentTournament || '?'} ${splitLabel} sélectionné — ${splitInscriptions.length} joueur(s) assigné(s). Les poules seront générées uniquement pour ces joueurs.`;
             statusEl.style.color = '#2e7d32';
             statusEl.style.display = 'block';
           }
         }
       } catch (e) {
         console.error('Error loading split inscription count:', e);
-        // Still show a generic status
         const statusEl = document.getElementById('splitChildStatus');
-        statusEl.textContent = `Lieu ${splitLabel} sélectionné — les poules seront générées uniquement pour les joueurs assignés à ce lieu.`;
+        statusEl.textContent = `Tournoi ${currentTournament || '?'} ${splitLabel} sélectionné — les poules seront générées uniquement pour les joueurs assignés à ce groupe.`;
         statusEl.style.color = '#2e7d32';
         statusEl.style.display = 'block';
       }
@@ -2754,7 +2769,7 @@
       let summaryTournamentText = tournamentTypeLabel || (isFinale ? 'Finale Départementale' : `Tournoi ${currentTournament}`);
       // Append split child label if applicable
       if (selectedSplitChild && matchingTournoi?._selectedSplitLabel) {
-        summaryTournamentText += ` (Lieu ${matchingTournoi._selectedSplitLabel})`;
+        summaryTournamentText += ` ${matchingTournoi._selectedSplitLabel}`;
       }
       document.getElementById('summaryTournament').textContent = summaryTournamentText;
 
@@ -5691,6 +5706,11 @@
     function openSplitModal(tournoi) {
       document.getElementById('split_tournoi_id').value = tournoi.tournoi_id;
       document.getElementById('splitTournoiName').textContent = `${tournoi.nom} — ${tournoi.mode} ${tournoi.categorie}`;
+      // Extract tournament number for labels (e.g., "T1 LIBRE N2" → "1")
+      const tNumMatch = (tournoi.nom || '').match(/T(\d+)/i);
+      const tNum = tNumMatch ? tNumMatch[1] : '?';
+      document.getElementById('splitLabelA').textContent = `Tournoi ${tNum} A — Club`;
+      document.getElementById('splitLabelB').textContent = `Tournoi ${tNum} B — Club`;
       populateSplitClubSelects();
       document.getElementById('split_lieu_a').value = '';
       document.getElementById('split_lieu_b').value = '';
@@ -5783,6 +5803,11 @@
 
         const childA = data.children.find(c => c.split_label === 'A');
         const childB = data.children.find(c => c.split_label === 'B');
+        // Extract tournament number from nom (e.g., "T1 LIBRE N2" → "1")
+        const tNumMatch = (tournoi.nom || '').match(/T(\d+)/i);
+        const tNum = tNumMatch ? tNumMatch[1] : '?';
+        document.getElementById('labelA').textContent = `Tournoi ${tNum} A`;
+        document.getElementById('labelB').textContent = `Tournoi ${tNum} B`;
         document.getElementById('lieuAName').textContent = childA?.lieu || 'A';
         document.getElementById('lieuBName').textContent = childB?.lieu || 'B';
 

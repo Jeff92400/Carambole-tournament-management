@@ -508,7 +508,7 @@ async function generatePlayerConvocationPDF(player, tournamentInfo, allPoules, l
 
       // Header - CONVOCATION
       const isFinale = tournamentInfo.tournamentNum === '4' || tournamentInfo.tournamentNum === 'Finale' || tournamentInfo.isFinale;
-      const pdfSplitSuffix = tournamentInfo.splitLabel ? ` — LIEU ${tournamentInfo.splitLabel}` : '';
+      const pdfSplitSuffix = tournamentInfo.splitLabel ? ` ${tournamentInfo.splitLabel}` : '';
       const tournamentLabel = isFinale ? 'FINALE DÉPARTEMENTALE' : `TOURNOI N°${tournamentInfo.tournamentNum}${pdfSplitSuffix}`;
       const headerColor = isFinale ? '#D4AF37' : primaryColor; // Gold for finals
       const headerTextColor = isFinale ? primaryColor : 'white';
@@ -859,7 +859,7 @@ async function generateSummaryConvocationPDF(tournamentInfo, allPoules, location
 
       // Header - CONVOCATION
       const isFinale = tournamentInfo.tournamentNum === '4' || tournamentInfo.tournamentNum === 'Finale' || tournamentInfo.isFinale;
-      const pdfSplitSuffix = tournamentInfo.splitLabel ? ` — LIEU ${tournamentInfo.splitLabel}` : '';
+      const pdfSplitSuffix = tournamentInfo.splitLabel ? ` ${tournamentInfo.splitLabel}` : '';
       const tournamentLabel = isFinale ? 'FINALE DÉPARTEMENTALE' : `TOURNOI N°${tournamentInfo.tournamentNum}${pdfSplitSuffix}`;
       const headerColor = isFinale ? '#D4AF37' : primaryColor; // Gold for finals
       const headerTextColor = isFinale ? primaryColor : 'white';
@@ -1341,7 +1341,7 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
     skipped: []
   };
 
-  const splitSuffix = splitLabel ? ` — Lieu ${splitLabel}` : '';
+  const splitSuffix = splitLabel ? ` ${splitLabel}` : '';
   const tournamentLabel = (isFinale || tournament === 'Finale' || tournament === '4') ? 'Finale Départementale' : `Tournoi ${tournament}${splitSuffix}`;
   const dateStr = tournamentDate
     ? new Date(tournamentDate).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
