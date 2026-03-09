@@ -695,6 +695,17 @@
         </div>
       </div>
 
+      <!-- RSVP Email Inscription Toggle -->
+      <div style="margin-top: 25px; padding-top: 20px; border-top: 1px solid #eee;">
+        <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
+          <input type="checkbox" id="enableRsvpEmail" style="width: 20px; height: 20px; cursor: pointer;">
+          <span style="font-weight: 500;">Inscription par email autorisée</span>
+        </label>
+        <small style="color: #666; margin-left: 32px; display: block; margin-top: 4px;">
+          Ajoute des boutons « Je participe » et « Indisponible » dans les emails de relance, permettant aux joueurs de répondre en un clic sans passer par l'Espace Joueur.
+        </small>
+      </div>
+
       <!-- Logo Upload -->
       <div style="margin-top: 25px; padding-top: 20px; border-top: 1px solid #eee;">
         <label style="display: block; margin-bottom: 8px; font-weight: 500;">Logo de l'organisation (pour les emails) :</label>
@@ -816,17 +827,6 @@
           <input type="text" id="emailSenderName" placeholder="ex: Mon Comité" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
           <small style="color: #666;">Nom affiché dans les emails envoyés</small>
         </div>
-      </div>
-
-      <!-- RSVP Email Inscription Toggle -->
-      <div style="margin-top: 25px; padding-top: 20px; border-top: 1px solid #eee;">
-        <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
-          <input type="checkbox" id="enableRsvpEmail" style="width: 20px; height: 20px; cursor: pointer;">
-          <span style="font-weight: 500;">Inscription par email autorisée</span>
-        </label>
-        <small style="color: #666; margin-left: 32px; display: block; margin-top: 4px;">
-          Ajoute des boutons « Je participe » et « Indisponible » dans les emails de relance, permettant aux joueurs de répondre en un clic sans passer par l'Espace Joueur. Désactivé par défaut pour encourager l'utilisation de l'application.
-        </small>
       </div>
 
       <button onclick="saveEmailsConfig()" class="btn" style="background: #28a745; padding: 12px 25px; margin-top: 20px;">
@@ -3394,7 +3394,6 @@
           document.getElementById('emailConvocations').value = settings.email_convocations || '';
           document.getElementById('emailNoreply').value = settings.email_noreply || '';
           document.getElementById('emailSenderName').value = settings.email_sender_name || '';
-          document.getElementById('enableRsvpEmail').checked = settings.rsvp_email_enabled === 'true';
         }
       } catch (error) {
         console.error('Error loading emails config:', error);
@@ -3415,8 +3414,7 @@
             email_communication: document.getElementById('emailCommunication').value.trim(),
             email_convocations: document.getElementById('emailConvocations').value.trim(),
             email_noreply: document.getElementById('emailNoreply').value.trim(),
-            email_sender_name: document.getElementById('emailSenderName').value.trim(),
-            rsvp_email_enabled: document.getElementById('enableRsvpEmail').checked ? 'true' : 'false'
+            email_sender_name: document.getElementById('emailSenderName').value.trim()
           })
         });
 
