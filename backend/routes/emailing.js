@@ -8,6 +8,8 @@ const appSettings = require('../utils/app-settings');
 const { logAdminAction, ACTION_TYPES } = require('../utils/admin-logger');
 const { getRankingTournamentNumbers, getFinaleTournamentNumber, getTournamentLabel } = require('./settings');
 
+const { buildRsvpButtonsHtml } = require('./rsvp');
+
 const router = express.Router();
 
 // Configure multer for email image uploads
@@ -3483,6 +3485,23 @@ router.put('/campaigns/:id', authenticateToken, async (req, res) => {
 
 // Default templates for relances
 const DEFAULT_RELANCE_TEMPLATES = {
+  relance_ouverture: {
+    subject: 'Ouverture des inscriptions {category}',
+    intro: `Bonjour {first_name},
+
+Les inscriptions pour le prochain tournoi {category} sont ouvertes !
+
+📅 Date : {tournament_date}
+📍 Lieu : {tournament_lieu}
+🎯 Distance : {distance} points en {reprises} reprises
+⏰ Date limite d'inscription : {deadline_date}
+
+{inscription_method}`,
+    outro: `Pour toute question ou information, écrivez à {organization_email}
+
+Sportivement,
+{organization_name}`
+  },
   relance_t1: {
     subject: 'Inscription T1 {category} - Ouverture de la saison {season}',
     intro: `Bonjour {first_name},
@@ -3926,7 +3945,9 @@ router.get('/next-tournament', authenticateToken, async (req, res) => {
 
     // Determine which tournament number to look for based on relance type
     let tournamentNumber;
-    if (relanceType === 't2') {
+    if (relanceType === 'ouverture' || relanceType === 't1') {
+      tournamentNumber = 1;
+    } else if (relanceType === 't2') {
       tournamentNumber = 2;
     } else if (relanceType === 't3') {
       tournamentNumber = 3;
@@ -4772,7 +4793,7 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
     });
   }
 
-  if (!['t1', 't2', 't3', 'finale'].includes(relanceType)) {
+  if (!['ouverture', 't1', 't2', 't3', 'finale'].includes(relanceType)) {
     return res.status(400).json({ error: 'Type de relance invalide' });
   }
 
@@ -4804,12 +4825,88 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
     const organizationName = await req.getOrgSetting('organization_name') || 'Comité Départemental de Billard';
     const organizationShortName = await req.getOrgSetting('organization_short_name') || 'CDBHS';
     const organizationEmail = await req.getOrgSetting('email_communication') || 'communication@cdbhs.net';
+    const rsvpEmailEnabled = await req.getOrgSetting('rsvp_email_enabled');
 
     // Get participants based on relance type
     let participants = [];
     let tournamentInfo = {};
 
-    if (relanceType === 't2') {
+    if (relanceType === 'ouverture' || relanceType === 't1') {
+      // Fetch all players with matching FFB ranking for this mode/category
+      const now = new Date();
+      const currentYear = now.getFullYear();
+      const currentMonth = now.getMonth();
+      const season = currentMonth >= 8 ? `${currentYear}-${currentYear + 1}` : `${currentYear - 1}-${currentYear}`;
+
+      const categoryUpper = category.toUpperCase();
+      const categoryRow = await new Promise((resolve, reject) => {
+        db.get(
+          `SELECT * FROM categories WHERE UPPER(game_type) = $1 AND (UPPER(level) = $2 OR UPPER(level) LIKE $3) AND ($4::int IS NULL OR organization_id = $4)`,
+          [mode.toUpperCase(), categoryUpper, categoryUpper + '%', orgId],
+          (err, row) => { if (err) reject(err); else resolve(row); }
+        );
+      });
+
+      if (!categoryRow) {
+        return res.status(404).json({ error: 'Category not found' });
+      }
+
+      // Get rank column for this game mode
+      const gameMode = await new Promise((resolve, reject) => {
+        db.get(
+          `SELECT rank_column FROM game_modes WHERE UPPER(mode_name) = UPPER($1) OR UPPER(display_name) = UPPER($1)`,
+          [mode],
+          (err, row) => { if (err) reject(err); else resolve(row); }
+        );
+      });
+
+      let rankColumn = gameMode?.rank_column;
+      if (!rankColumn) {
+        const modeUpper = mode.toUpperCase();
+        if (modeUpper === 'LIBRE') rankColumn = 'rank_libre';
+        else if (modeUpper === '3BANDES' || modeUpper === '3 BANDES') rankColumn = 'rank_3bandes';
+        else if (modeUpper === 'BANDE') rankColumn = 'rank_bande';
+        else if (modeUpper.includes('CADRE')) rankColumn = 'rank_cadre';
+        else rankColumn = 'rank_libre';
+      }
+
+      participants = await new Promise((resolve, reject) => {
+        db.all(
+          `SELECT p.licence, p.first_name, p.last_name, p.${rankColumn} as ffb_ranking,
+                  pc.id as contact_id, pc.email, pc.club
+           FROM players p
+           LEFT JOIN player_contacts pc ON REPLACE(p.licence, ' ', '') = REPLACE(pc.licence, ' ', '')
+           WHERE UPPER(p.${rankColumn}) = UPPER($1)
+             AND UPPER(p.licence) NOT LIKE 'TEST%'
+             AND ($2::int IS NULL OR p.organization_id = $2)
+           ORDER BY p.last_name, p.first_name`,
+          [categoryRow.level, orgId],
+          (err, rows) => { if (err) reject(err); else resolve(rows || []); }
+        );
+      });
+
+      // Calculate deadline (tournament date - 7 days)
+      let deadlineDate = '';
+      if (customData?.tournament_date) {
+        const tournamentDate = parseDateSafe(customData.tournament_date);
+        if (tournamentDate) {
+          const deadline = new Date(tournamentDate);
+          deadline.setDate(deadline.getDate() - 7);
+          deadlineDate = deadline.toLocaleDateString('fr-FR');
+        }
+      }
+
+      tournamentInfo = {
+        category: categoryRow.display_name,
+        season,
+        mode: mode,
+        ffb_ranking: categoryRow.level,
+        tournament_date: customData?.tournament_date || '',
+        tournament_lieu: customData?.tournament_lieu || '',
+        deadline_date: deadlineDate
+      };
+
+    } else if (relanceType === 't2') {
       const response = await new Promise((resolve) => {
         // Simulate internal API call by reusing the logic
         const req2 = { query: { mode, category } };
@@ -5205,6 +5302,11 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
         emailIntro = replaceVar(emailIntro, 'club', participant.club || '');
         emailIntro = replaceVar(emailIntro, 'category', tournamentInfo.category || '');
 
+        // T1/Ouverture-specific variables
+        emailIntro = replaceVar(emailIntro, 'ffb_ranking', participant.ffb_ranking || tournamentInfo.ffb_ranking || '');
+        emailIntro = replaceVar(emailIntro, 'season', tournamentInfo.season || '');
+        emailIntro = replaceVar(emailIntro, 'mode', tournamentInfo.mode || '');
+
         // T1 info
         emailIntro = replaceVar(emailIntro, 't1_position', participant.position || participant.t1_position || '');
         emailIntro = replaceVar(emailIntro, 't1_points', participant.match_points || participant.t1_points || '');
@@ -5335,6 +5437,13 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
           }
         }
 
+        // Add RSVP one-click buttons if tournoi_ext_id is available AND setting enabled for this CDB
+        const tournoiExtId = customData?.tournoi_ext_id;
+        if (tournoiExtId && rsvpEmailEnabled === 'true') {
+          const rsvpHtml = buildRsvpButtonsHtml(participant.licence, tournoiExtId, orgId, baseUrl, primaryColor);
+          inscriptionMethodHtml = rsvpHtml + inscriptionMethodHtml;
+        }
+
         emailIntro = replaceVar(emailIntro, 'inscription_method', inscriptionMethodHtml);
 
         // Outro replacements
@@ -5433,7 +5542,7 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
           </tr>`
         ).join('');
 
-        const relanceTypeLabels = { t2: 'T2', t3: 'T3', finale: 'Finale' };
+        const relanceTypeLabels = { ouverture: 'Ouverture', t1: 'T1', t2: 'T2', t3: 'T3', finale: 'Finale' };
 
         const summaryHtml = `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">

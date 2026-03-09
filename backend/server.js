@@ -52,6 +52,8 @@ const superAdminRoutes = require('./routes/super-admin');
 const ligueAdminRoutes = require('./routes/ligue-admin');
 const ffbImportRoutes = require('./routes/ffb-import');
 const bracketRoutes = require('./routes/bracket');
+const rsvpRoutes = require('./routes/rsvp');
+const { buildRsvpButtonsHtml } = require('./routes/rsvp');
 
 
 const app = express();
@@ -275,6 +277,7 @@ app.use('/api/super-admin', apiLimiter, superAdminRoutes);
 app.use('/api/ligue-admin', apiLimiter, ligueAdminRoutes);
 app.use('/api/ffb', apiLimiter, ffbImportRoutes);
 app.use('/api/bracket', apiLimiter, bracketRoutes);
+app.use('/api/rsvp', apiLimiter, rsvpRoutes);
 
 
 // App version endpoint (for automatic update detection)
@@ -340,7 +343,8 @@ async function processTemplatedScheduledEmail(db, resend, scheduled, delay) {
   const settingsKeys = [
     'primary_color', 'email_communication', 'email_sender_name',
     'organization_name', 'organization_short_name', 'summary_email',
-    'player_app_url', 'qualification_threshold', 'qualification_small', 'qualification_large'
+    'player_app_url', 'qualification_threshold', 'qualification_small', 'qualification_large',
+    'rsvp_email_enabled'
   ];
   const emailSettings = schedOrgId
     ? await appSettings.getOrgSettingsBatch(schedOrgId, settingsKeys)
@@ -497,8 +501,16 @@ async function processTemplatedScheduledEmail(db, resend, scheduled, delay) {
         );
       });
 
+      // Compute season for T1/ouverture templates
+      const now = new Date();
+      const currentYear = now.getFullYear();
+      const currentMonth = now.getMonth();
+      const scheduledSeason = currentMonth >= 8 ? `${currentYear}-${currentYear + 1}` : `${currentYear - 1}-${currentYear}`;
+
       templateVariables = {
         category: categoryDisplayName,
+        season: customData.season || scheduledSeason,
+        mode: scheduled.mode || '',
         tournament_date: customData.tournament_date || '',
         tournament_lieu: customData.tournament_lieu || '',
         finale_date: customData.finale_date || '',
@@ -593,6 +605,10 @@ async function processTemplatedScheduledEmail(db, resend, scheduled, delay) {
   let sentCount = 0;
   let failedCount = 0;
 
+  // Parse customData once for RSVP buttons
+  const rsvpCustomData = scheduled.custom_data ? JSON.parse(scheduled.custom_data) : {};
+  const rsvpTournoiExtId = rsvpCustomData.tournoi_ext_id || null;
+
   // Get email settings once (before the loop)
   const primaryColor = emailSettings.primary_color || '#1F4788';
   const senderName = emailSettings.email_sender_name || 'CDBHS';
@@ -659,6 +675,12 @@ async function processTemplatedScheduledEmail(db, resend, scheduled, delay) {
         </div>`;
       }
 
+      // Add RSVP one-click buttons if tournoi_ext_id is in customData AND setting enabled for this CDB
+      if (rsvpTournoiExtId && emailSettings.rsvp_email_enabled === 'true') {
+        const rsvpHtml = buildRsvpButtonsHtml(recipientLicence, rsvpTournoiExtId, schedOrgId, baseUrl, primaryColor);
+        inscriptionMethodHtml = rsvpHtml + inscriptionMethodHtml;
+      }
+
       // Replace template variables
       let emailBody = (scheduled.body || '')
         .replace(/\{player_name\}/g, `${recipient.first_name || ''} ${recipient.last_name || ''}`.trim())
@@ -674,6 +696,9 @@ async function processTemplatedScheduledEmail(db, resend, scheduled, delay) {
         .replace(/\{finale_date\}/g, templateVariables.finale_date || '')
         .replace(/\{finale_lieu\}/g, templateVariables.finale_lieu || '')
         .replace(/\{deadline_date\}/g, templateVariables.deadline_date || '')
+        .replace(/\{ffb_ranking\}/g, recipient.ffb_ranking || '')
+        .replace(/\{season\}/g, templateVariables.season || '')
+        .replace(/\{mode\}/g, templateVariables.mode || '')
         .replace(/\{inscription_method\}/g, inscriptionMethodHtml);
 
       let emailSubject = (scheduled.subject || '')

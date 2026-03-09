@@ -48,7 +48,7 @@ git push origin main
 
 ## Versioning
 
-**Current Version:** V 2.0.297 03/26
+**Current Version:** V 2.0.298 03/26
 
 Version is displayed at the bottom of the login screen (`frontend/login.html`).
 
@@ -867,3 +867,71 @@ CDBHS color mapping (from legend rows 22-27):
   **Data volume at scale (90 CDBs + 16 Ligues):** Under 1M rows after 10 years across all tables — no performance or storage concern for PostgreSQL. Queries are indexed by `season` and `organization_id`.
 
   **No schema changes needed** — the data model already supports this. Implementation is purely queries + UI (likely in Player App stats tab).
+
+- **CHATBOT & LIVE CHAT - PLAYER APP (REMINDER: June 15, 2026):** Hybrid chat system for the Player App — AI chatbot (Claude Haiku 4.5) for autonomous answers + live admin chat for human support.
+
+  **Architecture:** Polling-based (REST, every 5s when chat open). No WebSocket for v1. Both apps share the same PostgreSQL tables. Widget on Player App, support page on Tournament App.
+
+  **Database — 2 new tables:**
+  ```sql
+  chat_conversations (
+    id SERIAL PRIMARY KEY,
+    player_licence TEXT NOT NULL,
+    player_name TEXT,
+    organization_id INTEGER NOT NULL REFERENCES organizations(id),
+    mode TEXT NOT NULL DEFAULT 'ai',           -- 'ai' | 'admin'
+    status TEXT NOT NULL DEFAULT 'open',       -- 'open' | 'waiting' | 'closed'
+    assigned_admin_id INTEGER REFERENCES users(id),
+    unread_player INTEGER DEFAULT 0,
+    unread_admin INTEGER DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    closed_at TIMESTAMP
+  );
+  chat_messages (
+    id SERIAL PRIMARY KEY,
+    conversation_id INTEGER NOT NULL REFERENCES chat_conversations(id) ON DELETE CASCADE,
+    sender_type TEXT NOT NULL,                 -- 'player' | 'admin' | 'ai'
+    sender_name TEXT,
+    content TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  );
+  ```
+
+  **Conversation flow:**
+  1. Player opens chat -> conversation created in `ai` mode
+  2. AI answers using player context (upcoming tournaments, inscriptions, rankings, org info)
+  3. Player clicks "Parler a un administrateur" -> status becomes `waiting`
+  4. Admin sees notification badge in Tournament App navbar -> takes over conversation
+  5. Both sides poll for new messages
+  6. Admin closes conversation when resolved
+
+  **Phase 1 — Database (~30min):** Tables + migrations in `db-postgres.js`
+
+  **Phase 2 — AI Chatbot, Player App (~4-5h):**
+  - New `routes/chatbot.js`: `POST /chat/start`, `POST /chat/send`, `GET /chat/messages`, `POST /chat/request-admin`, `POST /chat/close`
+  - System prompt with player context (name, club, tournaments, rankings, org info)
+  - Claude Haiku 4.5 via Anthropic API (`ANTHROPIC_API_KEY` env var on Railway)
+  - Rate limit: 20 msg/player/hour, 50 msg max per conversation
+  - Frontend: `chat-widget.js` + `chat-widget.css` — floating button, chat panel, message bubbles
+  - Polling: 5s when open, 30s when closed (for badge)
+
+  **Phase 3 — Admin Support, Tournament App (~4-5h):**
+  - New `routes/chat-support.js`: `GET /conversations`, `GET /:id/messages`, `POST /reply`, `POST /assign`, `POST /close`, `GET /unread-count`
+  - New `chat-support.html`: two-column layout (conversation list + message thread)
+  - Navbar badge on all pages (poll every 60s) — admin-only visibility
+  - All endpoints org-scoped via `organization_id`
+
+  **Phase 4 — Settings & polish (~2h):**
+  - New org settings: `chatbot_enabled` (default false), `chatbot_ai_enabled` (default true), `chatbot_welcome_message`, `chatbot_auto_close_hours` (default 48)
+  - Scheduler: auto-close inactive conversations
+  - Guide utilisateur update
+
+  **Total estimated effort: ~11-12h**
+
+  **Prerequisites:** Anthropic API key, `ANTHROPIC_API_KEY` on Railway. Cost: < 5 EUR/month with Haiku 4.5.
+
+  **Decisions still open:**
+  - Conversation retention duration (before deletion)?
+  - Multiple admins can respond or one per CDB?
+  - Email notification to admin when player requests human support?

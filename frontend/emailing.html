@@ -3817,6 +3817,23 @@ Sportivement,
     // ==================== RELANCE TEMPLATES EDITOR ====================
 
     const DEFAULT_RELANCE_TEMPLATES_CLIENT = {
+      relance_ouverture: {
+        subject: 'Ouverture des inscriptions {category}',
+        intro: `Bonjour {first_name},
+
+Les inscriptions pour le prochain tournoi {category} sont ouvertes !
+
+📅 Date : {tournament_date}
+📍 Lieu : {tournament_lieu}
+🎯 Distance : {distance} points en {reprises} reprises
+⏰ Date limite d'inscription : {deadline_date}
+
+{inscription_method}`,
+        outro: `Pour toute question, n'hésitez pas à nous contacter.
+
+Sportivement,
+{organization_name}`
+      },
       relance_t2: {
         subject: 'Inscription T2 {category} - Confirmez votre participation',
         intro: `Bonjour {first_name},
@@ -3878,7 +3895,9 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
       // Set extra vars based on template type
       // Note: {inscription_method} shows app button for players with account, or cdbhs.net link for others
       // {distance} and {reprises} are available for all relance types (from validated game params)
-      if (key === 'relance_t2') {
+      if (key === 'relance_ouverture') {
+        extraVarsSpan.innerHTML = '<code>{ffb_ranking}</code> <code>{mode}</code> <code>{season}</code> <code>{tournament_date}</code> <code>{tournament_lieu}</code> <code>{deadline_date}</code> <code style="background:#fff3cd;border-color:#ffc107;">{distance}</code> <code style="background:#fff3cd;border-color:#ffc107;">{reprises}</code> <code style="background:#e8f5e9;border-color:#4caf50;">{inscription_method}</code>';
+      } else if (key === 'relance_t2') {
         extraVarsSpan.innerHTML = '<code>{t1_position}</code> <code>{t1_points}</code> <code>{t1_date}</code> <code>{tournament_date}</code> <code>{tournament_lieu}</code> <code>{deadline_date}</code> <code style="background:#fff3cd;border-color:#ffc107;">{distance}</code> <code style="background:#fff3cd;border-color:#ffc107;">{reprises}</code> <code style="background:#e8f5e9;border-color:#4caf50;">{inscription_method}</code>';
       } else if (key === 'relance_t3') {
         extraVarsSpan.innerHTML = '<code>{rank_position}</code> <code>{total_points}</code> <code>{tournament_date}</code> <code>{tournament_lieu}</code> <code>{deadline_date}</code> <code style="background:#fff3cd;border-color:#ffc107;">{distance}</code> <code style="background:#fff3cd;border-color:#ffc107;">{reprises}</code> <code style="background:#e8f5e9;border-color:#4caf50;">{inscription_method}</code>';
@@ -4380,7 +4399,24 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
       // Update extra variables based on type
       // Note: {inscription_method} shows app button for players with account, or cdbhs.net link for others
       // {distance} and {reprises} are available for all relance types (from validated game params)
-      if (relanceType === 't1') {
+      if (relanceType === 'ouverture') {
+        extraVarsSpan.innerHTML = '<code>{ffb_ranking}</code> <code>{mode}</code> <code>{season}</code> <code>{tournament_date}</code> <code>{tournament_lieu}</code> <code>{deadline_date}</code> <code style="background:#fff3cd;border-color:#ffc107;">{distance}</code> <code style="background:#fff3cd;border-color:#ffc107;">{reprises}</code> <code style="background:#e8f5e9;border-color:#4caf50;">{inscription_method}</code>';
+        customFieldsContent.innerHTML = `
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <div>
+              <label style="font-size: 12px;">Date du tournoi</label>
+              <input type="date" id="relanceT1Date" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+            </div>
+            <div>
+              <label style="font-size: 12px;">Lieu du tournoi</label>
+              <select id="relanceT1Lieu" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                ${clubOptions}
+              </select>
+            </div>
+          </div>
+        `;
+        customFieldsDiv.style.display = 'block';
+      } else if (relanceType === 't1') {
         extraVarsSpan.innerHTML = '<code>{ffb_ranking}</code> <code>{mode}</code> <code>{season}</code> <code>{tournament_date}</code> <code>{tournament_lieu}</code> <code>{deadline_date}</code> <code style="background:#fff3cd;border-color:#ffc107;">{distance}</code> <code style="background:#fff3cd;border-color:#ffc107;">{reprises}</code> <code style="background:#e8f5e9;border-color:#4caf50;">{inscription_method}</code>';
         customFieldsContent.innerHTML = `
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
@@ -4525,7 +4561,7 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
       if (pendingLieu || pendingDebut) {
         if (infoDiv) infoDiv.style.display = 'none';
 
-        if (relanceType === 't1') {
+        if (relanceType === 'ouverture' || relanceType === 't1') {
           if (pendingDebut) {
             const dateInput = document.getElementById('relanceT1Date');
             if (dateInput) dateInput.value = pendingDebut.split('T')[0];
@@ -4590,7 +4626,7 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
           infoDiv.style.display = 'none';
         }
 
-        if (relanceType === 't1') {
+        if (relanceType === 'ouverture' || relanceType === 't1') {
           if (data.tournament_date) {
             const dateInput = document.getElementById('relanceT1Date');
             if (dateInput) dateInput.value = data.tournament_date.split('T')[0];
@@ -4637,7 +4673,7 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
 
       try {
         let endpoint = '';
-        if (relanceType === 't1') {
+        if (relanceType === 'ouverture' || relanceType === 't1') {
           endpoint = `${API_URL}/emailing/t1-players?mode=${mode}&category=${category}`;
         } else if (relanceType === 't2') {
           endpoint = `${API_URL}/emailing/t1-participants?mode=${mode}&category=${category}`;
@@ -4680,7 +4716,7 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
         const infoContent = document.getElementById('relanceInfoContent');
         infoDiv.style.display = 'block';
 
-        if (relanceType === 't1' && relanceData.category) {
+        if ((relanceType === 'ouverture' || relanceType === 't1') && relanceData.category) {
           let t1Info = `
             <strong>Catégorie:</strong> ${relanceData.category.display_name}<br>
             <strong>Saison:</strong> ${relanceData.season || '-'}<br>
@@ -4895,7 +4931,7 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
 
       // Build custom data based on relance type
       let customData = {};
-      if (relanceType === 't1') {
+      if (relanceType === 'ouverture' || relanceType === 't1') {
         const dateInput = document.getElementById('relanceT1Date');
         const lieuInput = document.getElementById('relanceT1Lieu');
         customData.tournament_date = dateInput?.value ? new Date(dateInput.value).toLocaleDateString('fr-FR') : '';
@@ -4903,18 +4939,30 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
         customData.season = relanceData?.season || '';
         customData.mode = relanceData?.mode || '';
         customData.tournoi_id = relanceData?.t1Tournament?.tournoi_id || null;
+        // Include tournoi_ext_id for RSVP one-click links
+        if (relanceData?.t1Tournament?.tournoi_id) {
+          customData.tournoi_ext_id = relanceData.t1Tournament.tournoi_id;
+        }
       } else if (relanceType === 't2') {
         const dateInput = document.getElementById('relanceT2Date');
         const lieuInput = document.getElementById('relanceT2Lieu');
         customData.tournament_date = dateInput?.value ? new Date(dateInput.value).toLocaleDateString('fr-FR') : '';
         customData.tournament_lieu = lieuInput?.value || '';
         customData.tournoi_id = relanceData?.t2Tournament?.tournoi_id || null;
+        // Include tournoi_ext_id for RSVP one-click links
+        if (relanceData?.t2Tournament?.tournoi_id) {
+          customData.tournoi_ext_id = relanceData.t2Tournament.tournoi_id;
+        }
       } else if (relanceType === 't3') {
         const dateInput = document.getElementById('relanceT3Date');
         const lieuInput = document.getElementById('relanceT3Lieu');
         customData.tournament_date = dateInput?.value ? new Date(dateInput.value).toLocaleDateString('fr-FR') : '';
         customData.tournament_lieu = lieuInput?.value || '';
         customData.tournoi_id = relanceData?.t3Tournament?.tournoi_id || null;
+        // Include tournoi_ext_id for RSVP one-click links
+        if (relanceData?.t3Tournament?.tournoi_id) {
+          customData.tournoi_ext_id = relanceData.t3Tournament.tournoi_id;
+        }
       } else if (relanceType === 'finale') {
         const dateInput = document.getElementById('relanceFinaleDate');
         const lieuInput = document.getElementById('relanceFinaleLieu');
@@ -4923,6 +4971,10 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
         customData.finale_lieu = lieuInput?.value || '';
         customData.deadline_date = deadlineInput?.value ? new Date(deadlineInput.value).toLocaleDateString('fr-FR') : '';
         customData.tournoi_id = relanceData?.finale?.tournoi_id || null;
+        // Include tournoi_ext_id for RSVP one-click links
+        if (relanceData?.finale?.tournoi_id) {
+          customData.tournoi_ext_id = relanceData.finale.tournoi_id;
+        }
       }
 
       // Include validated game parameters for all relance types

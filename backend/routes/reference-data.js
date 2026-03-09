@@ -692,6 +692,7 @@ router.get('/activity-log-types', authenticateToken, (req, res) => {
 
 router.get('/relance-types', authenticateToken, (req, res) => {
   const types = [
+    { code: 'ouverture', display_name: 'Ouverture des inscriptions', template_key: 'relance_ouverture' },
     { code: 't1', display_name: 'Relance T1 (ouverture de saison)', template_key: 'relance_t1' },
     { code: 't2', display_name: 'Relance T2 (joueurs du T1)', template_key: 'relance_t2' },
     { code: 't3', display_name: 'Relance T3 (joueurs au classement)', template_key: 'relance_t3' },
