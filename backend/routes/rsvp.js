@@ -176,7 +176,7 @@ router.get('/', async (req, res) => {
       }
 
       // Create new inscription
-      const nextId = await getNextInscriptionId(tournoi_id);
+      const nextId = await getNextInscriptionId();
       const playerEmail = contact?.email || player?.email || '';
       const playerPhone = contact?.telephone || player?.telephone || '';
 
@@ -222,7 +222,7 @@ router.get('/', async (req, res) => {
       }
 
       // Create new inscription with statut 'indisponible'
-      const nextId = await getNextInscriptionId(tournoi_id);
+      const nextId = await getNextInscriptionId();
       const playerEmail = contact?.email || player?.email || '';
       const playerPhone = contact?.telephone || player?.telephone || '';
 
@@ -249,10 +249,10 @@ router.get('/', async (req, res) => {
 
 // ==================== HELPERS ====================
 
-async function getNextInscriptionId(tournoiId) {
+async function getNextInscriptionId() {
   const maxRow = await dbGet(
-    'SELECT COALESCE(MAX(inscription_id), 0) as max_id FROM inscriptions WHERE tournoi_id = $1',
-    [tournoiId]
+    'SELECT COALESCE(MAX(inscription_id), 0) as max_id FROM inscriptions',
+    []
   );
   return (maxRow?.max_id || 0) + 1;
 }
