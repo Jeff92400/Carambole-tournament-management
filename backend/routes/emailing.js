@@ -5376,6 +5376,12 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
         const notificationEmail = await appSettings.getOrgSetting(orgId, 'summary_email') || organizationEmail;
         const buildSansCompteHtml = () => {
           if (hasExternalInscription) {
+            const isEmail = extInscriptionUrl.includes('@') && !extInscriptionUrl.startsWith('http');
+            if (isEmail) {
+              return `<div style="margin: 0; padding: 15px; background: #fff; border-left: 4px solid ${primaryColor};">
+                <p style="margin: 0;">Confirmez votre inscription en écrivant à <a href="mailto:${extInscriptionUrl}" style="color: ${primaryColor}; font-weight: bold;">${extInscriptionUrl}</a></p>
+              </div>`;
+            }
             const urlLabel = extInscriptionUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
             return `<div style="margin: 0; padding: 15px; background: #fff; border-left: 4px solid ${primaryColor};">
               <p style="margin: 0;">Confirmez votre inscription sur <a href="${extInscriptionUrl}" target="_blank" style="color: ${primaryColor}; font-weight: bold;">${urlLabel}</a> ou en répondant à cet email.</p>
