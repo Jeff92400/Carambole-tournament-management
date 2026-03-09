@@ -1029,6 +1029,20 @@
         </div>
       </div>
 
+      <!-- Split (dédoublement) Toggle -->
+      <div style="margin-bottom: 25px; padding: 15px; background: #fff8e1; border-radius: 8px; border-left: 4px solid #ff9800;">
+        <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
+          <input type="checkbox" id="enableSplitTournaments" style="width: 20px; height: 20px; cursor: pointer;">
+          <div>
+            <strong style="font-size: 14px;">Autoriser le dédoublement des tournois</strong>
+            <p style="margin: 4px 0 0; color: #666; font-size: 12px;">
+              Permet de scinder un tournoi en deux sous-tournois (A et B) lorsque le nombre d'inscrits dépasse le seuil.
+              Les classements de chaque sous-tournoi sont fusionnés par appariement de positions.
+            </p>
+          </div>
+        </label>
+      </div>
+
       <!-- Tournament Types Table -->
       <div id="tournamentTypesTable" style="overflow-x: auto;">
         <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
@@ -4603,6 +4617,12 @@
 
           selectQualificationMode(settings.qualification_mode || 'standard');
 
+          // Load split tournaments toggle
+          const splitCheckbox = document.getElementById('enableSplitTournaments');
+          if (splitCheckbox) {
+            splitCheckbox.checked = settings.enable_split_tournaments === 'true';
+          }
+
           // Load degradation setting
           const degradationCheckbox = document.getElementById('positionPointsDegradation');
           if (degradationCheckbox) {
@@ -4668,7 +4688,8 @@
             scoring_avg_tier_1: document.getElementById('bonusTier1') ? document.getElementById('bonusTier1').value : '1',
             scoring_avg_tier_2: document.getElementById('bonusTier2') ? document.getElementById('bonusTier2').value : '2',
             scoring_avg_tier_3: document.getElementById('bonusTier3') ? document.getElementById('bonusTier3').value : '3',
-            position_points_degradation: document.getElementById('positionPointsDegradation').checked ? 'last_player' : 'none'
+            position_points_degradation: document.getElementById('positionPointsDegradation').checked ? 'last_player' : 'none',
+            enable_split_tournaments: document.getElementById('enableSplitTournaments').checked ? 'true' : 'false'
           })
         });
 

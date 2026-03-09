@@ -62,6 +62,9 @@ const defaults = {
   bonus_moyenne_enabled: 'false',
   bonus_moyenne_type: 'normal',
 
+  // Split (dédoublement) tournaments — only enabled for CDBs using journées qualificatives
+  enable_split_tournaments: 'false',
+
   // Scoring rule details (journées mode)
   scoring_match_points_loss: '0',
   scoring_match_points_draw: '1',
@@ -299,6 +302,7 @@ const ORG_ONLY_KEYS = new Set([
   'average_bonus_tiers',
   'bonus_moyenne_enabled',
   'bonus_moyenne_type',
+  'enable_split_tournaments',
 ]);
 
 /**

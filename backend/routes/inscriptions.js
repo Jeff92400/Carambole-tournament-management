@@ -3538,6 +3538,13 @@ router.post('/tournoi/:id/split', authenticateToken, async (req, res) => {
   }
 
   const orgId = req.user.organizationId || null;
+
+  // Check if split tournaments are enabled for this organization
+  const enableSplit = await appSettings.getOrgSetting(orgId, 'enable_split_tournaments');
+  if (enableSplit !== 'true') {
+    return res.status(403).json({ error: 'Le dédoublement des tournois n\'est pas activé pour cette organisation' });
+  }
+
   const parentId = parseInt(req.params.id);
   const { lieuA, lieuB } = req.body;
 

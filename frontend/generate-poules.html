@@ -996,6 +996,20 @@
       }
     })();
 
+    // Load split tournaments setting (org-specific)
+    window._splitTournamentsEnabled = false;
+    (async function loadSplitSetting() {
+      try {
+        const response = await fetch(`${API_URL}/settings/app/enable_split_tournaments`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          window._splitTournamentsEnabled = (data.value === 'true');
+        }
+      } catch (e) { /* default false */ }
+    })();
+
     // Logout
     document.getElementById('logoutBtn').addEventListener('click', (e) => {
       e.preventDefault();
@@ -1473,11 +1487,11 @@
             const inscritCount = t.isFinale ? (t.inscribed_finalist_count || 0) : (t.inscrit_count || 0);
             const showSimulation = daysUntil >= 7 && inscritCount >= 3;
 
-            // Split button: show "Dédoubler" if > 6 inscrits, not finale, not already split
+            // Split button: show "Dédoubler" if enabled for this org, > 6 inscrits, not finale, not already split
             const isSplit = t.is_split === true;
             const splitBadge = isSplit ? '<span class="badge-split">DÉDOUBLÉ</span>' : '';
             const SPLIT_MIN_PLAYERS = 7;
-            const showSplitBtn = !t.isFinale && !isSplit && inscritCount >= SPLIT_MIN_PLAYERS;
+            const showSplitBtn = window._splitTournamentsEnabled && !t.isFinale && !isSplit && inscritCount >= SPLIT_MIN_PLAYERS;
             const showDistributeBtn = !t.isFinale && isSplit;
 
             return `
