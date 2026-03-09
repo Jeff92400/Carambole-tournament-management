@@ -3393,9 +3393,9 @@ router.post('/:id/mark-results-unsent', authenticateToken, (req, res) => {
 // Recompute positions from stored tournament_matches, then re-apply position_points + bonuses.
 // Called by /recompute endpoint to fix positions when the classification algorithm is updated.
 async function recomputePositionsFromMatches(tournamentId) {
-  // Read all tournament_matches for this tournament
+  // Read all tournament_matches for this tournament (including sub_tournament for split detection)
   const matches = await dbAllAsync(
-    `SELECT phase_number, poule_name,
+    `SELECT phase_number, poule_name, sub_tournament,
        player1_licence, player1_name, player1_points, player1_reprises, player1_serie, player1_match_points, player1_moyenne,
        player2_licence, player2_name, player2_points, player2_reprises, player2_serie, player2_match_points, player2_moyenne
      FROM tournament_matches WHERE tournament_id = $1 ORDER BY phase_number, id`,
@@ -3407,6 +3407,7 @@ async function recomputePositionsFromMatches(tournamentId) {
   const allMatches = matches.map(m => ({
     phase_number: m.phase_number,
     poule_name: m.poule_name,
+    sub_tournament: m.sub_tournament || null,
     player1_licence: m.player1_licence, player1_name: m.player1_name,
     player1_points: m.player1_points, player1_reprises: m.player1_reprises,
     player1_serie: m.player1_serie, player1_match_points: m.player1_match_points,
@@ -4126,13 +4127,93 @@ function applyHeadToHead(players, allMatches) {
 }
 
 /**
+ * Merge results from multiple sub-tournaments (split A/B) into a unified ranking.
+ * Each sub-tournament is ranked independently, then positions are paired and
+ * tiebroken by: total match_points DESC → moyenne DESC → best série DESC.
+ *
+ * @param {Array} globalPlayerStats - Per-player stats aggregated from ALL matches
+ * @param {Array} allMatches - All raw matches (with sub_tournament tags)
+ * @param {string[]} subTags - Unique sub-tournament identifiers (e.g., ['A', 'B'])
+ * @returns {Array} globalPlayerStats with final_position set
+ */
+function computeSplitMerge(globalPlayerStats, allMatches, subTags) {
+  console.log(`[SPLIT-MERGE] Merging ${subTags.length} sub-tournaments: ${subTags.join(', ')}`);
+
+  // Step 1: Compute positions independently per sub-tournament
+  const subPositions = new Map(); // licence → { position, subTag, poule_rank }
+
+  for (const tag of subTags) {
+    const subMatches = allMatches.filter(m => m.sub_tournament === tag);
+    const subStats = aggregateMatchResults(subMatches);
+    // Remove sub_tournament to avoid infinite recursion in computeMatchRankings
+    const cleanMatches = subMatches.map(m => ({ ...m, sub_tournament: null }));
+    const ranked = computeMatchRankings(subStats, cleanMatches);
+
+    console.log(`[SPLIT-MERGE] Sub-tournament ${tag}: ${ranked.length} players`);
+    for (const player of ranked) {
+      subPositions.set(player.licence, {
+        position: player.final_position,
+        subTag: tag,
+        poule_rank: player.poule_rank
+      });
+      console.log(`[SPLIT-MERGE]   ${tag}#${player.final_position}: ${player.name} (PM=${player.total_match_points}, Moy=${player.total_reprises > 0 ? (player.total_points / player.total_reprises).toFixed(3) : 0}, MS=${player.max_serie})`);
+    }
+  }
+
+  // Step 2: Group by position across sub-tournaments, then tiebreak
+  const maxPos = Math.max(...[...subPositions.values()].map(v => v.position || 0));
+  let globalPosition = 1;
+
+  for (let pos = 1; pos <= maxPos; pos++) {
+    // Collect all players at this position from different sub-tournaments
+    const playersAtPos = globalPlayerStats.filter(p => {
+      const sub = subPositions.get(p.licence);
+      return sub && sub.position === pos;
+    });
+
+    if (playersAtPos.length === 0) continue;
+
+    // Sort by tiebreaker: PM DESC → moyenne DESC → série DESC
+    sortByPerformance(playersAtPos);
+
+    console.log(`[SPLIT-MERGE] Position ${pos} → merged ${globalPosition}-${globalPosition + playersAtPos.length - 1}: ${playersAtPos.map(p => p.name + '(PM=' + p.total_match_points + ')').join(' vs ')}`);
+
+    for (const player of playersAtPos) {
+      player.final_position = globalPosition++;
+      const sub = subPositions.get(player.licence);
+      if (sub) player.poule_rank = sub.poule_rank;
+    }
+  }
+
+  // Safety: handle players without a sub-tournament position
+  const unassigned = globalPlayerStats.filter(p => !p.final_position);
+  if (unassigned.length > 0) {
+    sortByPerformance(unassigned);
+    for (const p of unassigned) {
+      p.final_position = globalPosition++;
+    }
+  }
+
+  return globalPlayerStats;
+}
+
+/**
  * Compute poule rankings and overall tournament ranking from aggregated player stats.
  * Uses raw matches to properly separate regular poules from classification/bracket phases.
+ * For split tournaments (multiple sub_tournament tags), delegates to computeSplitMerge().
  * @param {Array} playerStats - Aggregated per-player stats from aggregateMatchResults()
  * @param {Array} allMatches - Raw parsed match objects (optional, for proper poule detection)
  * @returns {Array} playerStats with poule_rank and final_position added
  */
 function computeMatchRankings(playerStats, allMatches) {
+  // ── Split tournament detection: if multiple sub_tournament tags, merge independently ──
+  if (allMatches && allMatches.length > 0) {
+    const subTags = [...new Set(allMatches.filter(m => m.sub_tournament).map(m => m.sub_tournament))];
+    if (subTags.length >= 2) {
+      return computeSplitMerge(playerStats, allMatches, subTags);
+    }
+  }
+
   // ── If no raw matches available, fall back to legacy grouping ──
   if (!allMatches || allMatches.length === 0) {
     // Legacy: group by playerStats.poule_name (old behavior for backward compat)
@@ -4449,8 +4530,8 @@ function extractClassificationPositions(classificationPoules, regularPoules, mat
       ? Math.max(...pouleMatches.map(m => m.phase_number || 0))
       : 0;
 
-    // Skip DEMI-FINALE / DEMI FINALES — positions determined by FINALE and PETITE FINALE
-    if (upper.includes('DEMI-FINALE') || upper.includes('DEMI FINALE') || upper.includes('SEMI-FINAL')) {
+    // Skip DEMI-FINALE / DEMI FINALES / 1/2 FINALE — positions determined by FINALE and PETITE FINALE
+    if (upper.includes('DEMI-FINALE') || upper.includes('DEMI FINALE') || upper.includes('SEMI-FINAL') || upper.startsWith('1/2 FINALE')) {
       continue;
     }
 
@@ -4460,11 +4541,11 @@ function extractClassificationPositions(classificationPoules, regularPoules, mat
     if (upper.includes('PETITE FINALE')) {
       posStart = 3;
     }
-    // "FINALE N-M" (e.g., "Finale 1-2", "Finale 3-4") — extract N as posStart
+    // "FINALE N-M" or "FINALE (N & M)" (e.g., "Finale 1-2", "Finale (1 & 2)", "Finale 3-4") — extract N as posStart
     // E2I names petite finale as "Finale 3-4" (not "Petite finale"), so parse the number
     // Must check BEFORE generic FINALE to avoid "Finale 3-4" getting posStart=1
-    else if (/^FINALE\s+(\d+)\s*-\s*(\d+)/.test(upper)) {
-      const m = upper.match(/^FINALE\s+(\d+)\s*-\s*(\d+)/);
+    else if (/^FINALE\s*\(?\s*(\d+)\s*[-&]\s*(\d+)\s*\)?/.test(upper)) {
+      const m = upper.match(/^FINALE\s*\(?\s*(\d+)\s*[-&]\s*(\d+)\s*\)?/);
       posStart = parseInt(m[1]);
     }
     // "FINALE" (exact or with suffix like "(2)") = positions 1-2
@@ -4479,9 +4560,9 @@ function extractClassificationPositions(classificationPoules, regularPoules, mat
       const match = pouleName.match(/G\s*\d+-\d+\s*-\s*P\s*(\d+)-(\d+)/i);
       posStart = parseInt(match[2]); // Use max of P-range (e.g. 8 from "P 7-8")
     }
-    // "Classement XX-YY" or "Classement 09-10"
-    else if (/[Cc]lassement\s+(\d+)\s*-\s*(\d+)/.test(pouleName)) {
-      const match = pouleName.match(/[Cc]lassement\s+(\d+)\s*-\s*(\d+)/);
+    // "Classement XX-YY" or "Classement 09-10" or "Classement (3 & 4)" or "Classement 5 & 6"
+    else if (/[Cc]lassement\s*\(?\s*(\d+)\s*[-&]\s*(\d+)\s*\)?/.test(pouleName)) {
+      const match = pouleName.match(/[Cc]lassement\s*\(?\s*(\d+)\s*[-&]\s*(\d+)\s*\)?/);
       posStart = parseInt(match[1]);
     }
     // "PLACE NN-NN" (e.g., "PLACE 05-06", "PLACE 07-08")
