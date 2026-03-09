@@ -140,12 +140,13 @@ router.get('/', async (req, res) => {
 
     // Get org branding
     const orgSettings = organization_id
-      ? await appSettings.getOrgSettingsBatch(organization_id, ['primary_color', 'organization_short_name', 'organization_name', 'summary_email', 'player_app_url'])
+      ? await appSettings.getOrgSettingsBatch(organization_id, ['primary_color', 'organization_short_name', 'organization_name', 'summary_email', 'player_app_url', 'email_noreply', 'email_communication'])
       : {};
     const primaryColor = orgSettings.primary_color || '#1F4788';
     const orgShortName = orgSettings.organization_short_name || '';
     const orgName = orgSettings.organization_name || '';
     const adminEmail = orgSettings.summary_email || '';
+    const playerEmail = contact?.email || player?.email || '';
 
     if (response === 'yes') {
       // --- PLAYER WANTS TO PARTICIPATE ---
@@ -163,6 +164,7 @@ router.get('/', async (req, res) => {
             [existing.inscription_id]
           );
           await notifyAdmin(organization_id, licence, playerName, tournamentName, 'inscription', adminEmail, primaryColor, orgShortName, orgName);
+          await notifyPlayer(organization_id, playerEmail, playerName, tournamentLabel, 'inscription', primaryColor, orgShortName, orgName, orgSettings);
           return res.send(renderPage('Inscription confirmée', 'success',
             `${greeting}<br><br>Votre précédente indisponibilité a été annulée. Vous êtes maintenant <strong>inscrit(e)</strong> au tournoi :<br><br><strong>${tournamentLabel}</strong>`,
             primaryColor, orgShortName));
@@ -185,6 +187,7 @@ router.get('/', async (req, res) => {
       );
 
       await notifyAdmin(organization_id, licence, playerName, tournamentName, 'inscription', adminEmail, primaryColor, orgShortName, orgName);
+      await notifyPlayer(organization_id, playerEmail, playerName, tournamentLabel, 'inscription', primaryColor, orgShortName, orgName, orgSettings);
 
       return res.send(renderPage('Inscription confirmée', 'success',
         `${greeting}<br><br>Votre inscription au tournoi suivant a bien été enregistrée :<br><br><strong>${tournamentLabel}</strong><br><br>Vous recevrez une convocation par email avant le tournoi.`,
@@ -201,6 +204,7 @@ router.get('/', async (req, res) => {
             [existing.inscription_id]
           );
           await notifyAdmin(organization_id, licence, playerName, tournamentName, 'indisponible', adminEmail, primaryColor, orgShortName, orgName);
+          await notifyPlayer(organization_id, playerEmail, playerName, tournamentLabel, 'indisponible', primaryColor, orgShortName, orgName, orgSettings);
           return res.send(renderPage('Indisponibilité enregistrée', 'info',
             `${greeting}<br><br>Votre précédente inscription a été annulée. Votre indisponibilité pour le tournoi suivant a été notée :<br><br><strong>${tournamentLabel}</strong><br><br>Si vous changez d'avis, cliquez sur le lien "Je participe" dans l'email original.`,
             primaryColor, orgShortName));
@@ -229,6 +233,7 @@ router.get('/', async (req, res) => {
       );
 
       await notifyAdmin(organization_id, licence, playerName, tournamentName, 'indisponible', adminEmail, primaryColor, orgShortName, orgName);
+      await notifyPlayer(organization_id, playerEmail, playerName, tournamentLabel, 'indisponible', primaryColor, orgShortName, orgName, orgSettings);
 
       return res.send(renderPage('Indisponibilité enregistrée', 'info',
         `${greeting}<br><br>Votre indisponibilité pour le tournoi suivant a été notée :<br><br><strong>${tournamentLabel}</strong><br><br>Merci de nous avoir informés. Si vous changez d'avis, cliquez sur le lien "Je participe" dans l'email original.`,
@@ -294,6 +299,57 @@ async function notifyAdmin(orgId, licence, playerName, tournamentName, responseT
     });
   } catch (error) {
     console.error('[RSVP] Error sending admin notification:', error.message);
+  }
+}
+
+async function notifyPlayer(orgId, playerEmail, playerName, tournamentLabel, responseType, primaryColor, orgShortName, orgName, orgSettings) {
+  if (!playerEmail) return;
+
+  try {
+    const { Resend } = require('resend');
+    if (!process.env.RESEND_API_KEY) return;
+    const resend = new Resend(process.env.RESEND_API_KEY);
+
+    const senderEmail = orgSettings?.email_noreply || 'noreply@carambole-gestion.fr';
+    const replyTo = orgSettings?.email_communication || orgSettings?.summary_email || undefined;
+    const senderName = orgShortName || 'Gestion Tournois';
+    const color = primaryColor || '#1F4788';
+
+    const isInscription = responseType === 'inscription';
+    const statusEmoji = isInscription ? '✅' : '📋';
+    const subjectText = isInscription ? 'Confirmation d\'inscription' : 'Indisponibilité enregistrée';
+    const greeting = playerName ? `Bonjour ${playerName},` : 'Bonjour,';
+
+    const bodyText = isInscription
+      ? `Votre inscription au tournoi suivant a bien été enregistrée :<br><br><strong>${tournamentLabel}</strong><br><br>Vous recevrez une convocation par email avant le tournoi.`
+      : `Votre indisponibilité pour le tournoi suivant a bien été enregistrée :<br><br><strong>${tournamentLabel}</strong><br><br>Si vous changez d'avis, cliquez sur le lien « Je participe » dans l'email de relance original.`;
+
+    const emailOptions = {
+      from: `${senderName} <${senderEmail}>`,
+      to: [playerEmail],
+      subject: `${statusEmoji} ${subjectText} - ${orgShortName || 'Tournoi'}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 550px; margin: 0 auto;">
+          <div style="background: ${color}; color: white; padding: 20px; text-align: center;">
+            <h2 style="margin: 0; font-size: 20px;">${orgName || senderName}</h2>
+          </div>
+          <div style="padding: 25px; background: #ffffff;">
+            <p style="font-size: 15px; margin-bottom: 20px;">${greeting}</p>
+            <div style="background: ${isInscription ? '#d4edda' : '#e2e3e5'}; border-left: 4px solid ${isInscription ? '#28a745' : '#6c757d'}; padding: 15px; border-radius: 0 8px 8px 0; margin-bottom: 20px;">
+              <p style="margin: 0; font-size: 15px; line-height: 1.6;">${bodyText}</p>
+            </div>
+            <p style="font-size: 13px; color: #666;">Cet email est une confirmation automatique suite à votre réponse par email.</p>
+          </div>
+          <div style="background: ${color}; color: white; padding: 10px; text-align: center; font-size: 12px;">
+            ${orgName || senderName}
+          </div>
+        </div>`
+    };
+    if (replyTo) emailOptions.replyTo = replyTo;
+
+    await resend.emails.send(emailOptions);
+  } catch (error) {
+    console.error('[RSVP] Error sending player confirmation:', error.message);
   }
 }
 
