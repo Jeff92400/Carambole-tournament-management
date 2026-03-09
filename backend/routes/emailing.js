@@ -5446,6 +5446,7 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
 
         // Add RSVP one-click buttons if tournoi_ext_id is available AND setting enabled for this CDB
         const tournoiExtId = customData?.tournoi_ext_id;
+        console.log(`[RSVP Debug] tournoiExtId=${tournoiExtId}, rsvpEmailEnabled='${rsvpEmailEnabled}', customData keys=${Object.keys(customData || {}).join(',')}`);
         if (tournoiExtId && rsvpEmailEnabled === 'true') {
           const rsvpHtml = buildRsvpButtonsHtml(participant.licence, tournoiExtId, orgId, baseUrl, primaryColor);
           inscriptionMethodHtml = rsvpHtml + inscriptionMethodHtml;
