@@ -5378,8 +5378,9 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
           if (hasExternalInscription) {
             const isEmail = extInscriptionUrl.includes('@') && !extInscriptionUrl.startsWith('http');
             if (isEmail) {
+              // Leave email as plain text — convertEmailsToMailtoLinks will add the mailto link
               return `<div style="margin: 0; padding: 15px; background: #fff; border-left: 4px solid ${primaryColor};">
-                <p style="margin: 0;">Confirmez votre inscription en écrivant à <a href="mailto:${extInscriptionUrl}" style="color: ${primaryColor}; font-weight: bold;">${extInscriptionUrl}</a></p>
+                <p style="margin: 0;">Confirmez votre inscription en écrivant à ${extInscriptionUrl}</p>
               </div>`;
             }
             const urlLabel = extInscriptionUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
