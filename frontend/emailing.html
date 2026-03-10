@@ -467,6 +467,7 @@
       <div class="tab tooltip" data-tab="templates" data-tooltip="Emails type à composer et à utiliser pour relance et convocation">Templates</div>
       <div class="tab tooltip" data-tab="history" data-tooltip="Logs d'envois des emails">Historique</div>
       <div class="tab tooltip" data-tab="scheduled" data-tooltip="Envoi d'emails décalé">Programmés</div>
+      <div class="tab tooltip" data-tab="surveys" data-tooltip="Sondages de satisfaction pour l'Espace Joueur">Sondages</div>
     </div>
 
     <!-- TAB: Announcements -->
@@ -1945,6 +1946,74 @@
         </div>
       </div>
     </div>
+
+    <!-- TAB: Surveys -->
+    <div id="tab-surveys" class="tab-content">
+      <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 15px; margin-bottom: 15px;">
+          <div>
+            <h3 style="margin: 0;">Sondages de satisfaction</h3>
+            <p style="color: #666; margin: 5px 0 0 0;">
+              Créez des enquêtes de satisfaction affichées dans l'Espace Joueur. Un seul sondage peut être actif à la fois.
+            </p>
+          </div>
+          <button class="btn" onclick="showSurveyCreateForm()" style="white-space: nowrap;">
+            + Nouveau sondage
+          </button>
+        </div>
+
+        <!-- Create/Edit form (hidden by default) -->
+        <div id="surveyFormCard" class="card" style="display: none; background: #f8f9fa; border: 1px solid #dee2e6;">
+          <h4 id="surveyFormTitle" style="margin: 0 0 15px;">Nouveau sondage</h4>
+          <input type="hidden" id="surveyEditId">
+          <div style="margin-bottom: 12px;">
+            <label style="font-weight: 500; display: block; margin-bottom: 4px;">Titre du sondage</label>
+            <input type="text" id="surveyTitle" class="form-control" placeholder="Ex : Votre avis sur l'Espace Joueur" style="width: 100%;">
+          </div>
+          <div style="margin-bottom: 12px;">
+            <label style="font-weight: 500; display: block; margin-bottom: 4px;">Description (optionnel)</label>
+            <textarea id="surveyDescription" class="form-control" rows="2" placeholder="Quelques mots pour expliquer le sondage..." style="width: 100%;"></textarea>
+          </div>
+          <div style="margin-bottom: 12px;">
+            <label style="font-weight: 500; display: block; margin-bottom: 8px;">5 catégories à évaluer (notation de 1 à 5 étoiles)</label>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              <input type="text" id="surveyLabel1" class="form-control" placeholder="Catégorie 1 — ex : Inscription aux tournois">
+              <input type="text" id="surveyLabel2" class="form-control" placeholder="Catégorie 2 — ex : Résultats et classements">
+              <input type="text" id="surveyLabel3" class="form-control" placeholder="Catégorie 3 — ex : Convocations et poules">
+              <input type="text" id="surveyLabel4" class="form-control" placeholder="Catégorie 4 — ex : Navigation et ergonomie">
+              <input type="text" id="surveyLabel5" class="form-control" placeholder="Catégorie 5 — ex : Communication par email">
+            </div>
+          </div>
+          <div style="display: flex; gap: 10px; justify-content: flex-end;">
+            <button class="btn" style="background: #6c757d;" onclick="hideSurveyForm()">Annuler</button>
+            <button class="btn" onclick="saveSurvey()">Enregistrer</button>
+          </div>
+        </div>
+
+        <!-- Campaign list -->
+        <div id="surveyList"></div>
+        <div id="noSurveys" style="text-align: center; color: #666; padding: 40px; display: none;">
+          Aucun sondage créé.
+        </div>
+      </div>
+
+      <!-- Results panel (shown when clicking "Résultats") -->
+      <div id="surveyResultsPanel" class="card" style="display: none;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+          <h3 id="surveyResultsTitle" style="margin: 0;">Résultats</h3>
+          <button class="btn" style="background: #6c757d; padding: 6px 14px; font-size: 13px;" onclick="hideSurveyResults()">Fermer</button>
+        </div>
+
+        <!-- Summary stats -->
+        <div id="surveyResultsSummary" style="display: flex; flex-wrap: wrap; gap: 15px; margin-bottom: 20px;"></div>
+
+        <!-- Category averages with star bars -->
+        <div id="surveyResultsCategories" style="margin-bottom: 20px;"></div>
+
+        <!-- Comments -->
+        <div id="surveyResultsComments"></div>
+      </div>
+    </div>
   </div>
 
   <!-- Progress Overlay -->
@@ -2093,6 +2162,7 @@
           loadInscriptionEmailLogs();
         }
         if (tab.dataset.tab === 'scheduled') loadScheduled();
+        if (tab.dataset.tab === 'surveys') loadSurveys();
       });
     });
 
@@ -7560,6 +7630,353 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
       } catch (error) {
         console.error('Error loading audience count:', error);
       }
+    }
+
+    // ==================== SURVEYS ====================
+
+    const SURVEY_STATUS_LABELS = {
+      draft: 'Brouillon',
+      active: 'Actif',
+      closed: 'Clôturé'
+    };
+
+    const SURVEY_STATUS_COLORS = {
+      draft: '#6c757d',
+      active: '#28a745',
+      closed: '#dc3545'
+    };
+
+    async function loadSurveys() {
+      const listDiv = document.getElementById('surveyList');
+      const noDiv = document.getElementById('noSurveys');
+      listDiv.innerHTML = '<div class="loading"><div class="spinner"></div> Chargement...</div>';
+      noDiv.style.display = 'none';
+
+      try {
+        const response = await fetch(`${API_URL}/surveys`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!response.ok) throw new Error('Erreur serveur');
+        const campaigns = await response.json();
+
+        if (!campaigns || campaigns.length === 0) {
+          listDiv.innerHTML = '';
+          noDiv.style.display = 'block';
+          return;
+        }
+
+        listDiv.innerHTML = campaigns.map(c => {
+          const statusLabel = SURVEY_STATUS_LABELS[c.status] || c.status;
+          const statusColor = SURVEY_STATUS_COLORS[c.status] || '#999';
+          const createdDate = c.created_at ? new Date(c.created_at).toLocaleDateString('fr-FR') : '';
+          const activatedDate = c.activated_at ? new Date(c.activated_at).toLocaleDateString('fr-FR') : '';
+          const closedDate = c.closed_at ? new Date(c.closed_at).toLocaleDateString('fr-FR') : '';
+          const responseCount = c.response_count || 0;
+
+          let dateInfo = `Créé le ${createdDate}`;
+          if (activatedDate) dateInfo += ` · Activé le ${activatedDate}`;
+          if (closedDate) dateInfo += ` · Clôturé le ${closedDate}`;
+
+          let actions = '';
+          if (c.status === 'draft') {
+            actions = `
+              <button class="btn" style="padding: 5px 12px; font-size: 12px; background: #28a745;" onclick="activateSurvey(${c.id})">Activer</button>
+              <button class="btn" style="padding: 5px 12px; font-size: 12px; background: #17a2b8;" onclick="editSurvey(${c.id})">Modifier</button>
+              <button class="btn btn-danger" style="padding: 5px 12px; font-size: 12px;" onclick="deleteSurvey(${c.id})">Supprimer</button>
+            `;
+          } else if (c.status === 'active') {
+            actions = `
+              <button class="btn" style="padding: 5px 12px; font-size: 12px; background: #dc3545;" onclick="closeSurvey(${c.id})">Clôturer</button>
+              <button class="btn" style="padding: 5px 12px; font-size: 12px; background: #17a2b8;" onclick="viewSurveyResults(${c.id})">Résultats (${responseCount})</button>
+            `;
+          } else {
+            actions = `
+              <button class="btn" style="padding: 5px 12px; font-size: 12px; background: #17a2b8;" onclick="viewSurveyResults(${c.id})">Résultats (${responseCount})</button>
+              <button class="btn btn-danger" style="padding: 5px 12px; font-size: 12px;" onclick="deleteSurvey(${c.id})">Supprimer</button>
+            `;
+          }
+
+          const categories = [c.category_1_label, c.category_2_label, c.category_3_label, c.category_4_label, c.category_5_label]
+            .filter(Boolean)
+            .map(l => `<span style="background: #e9ecef; padding: 2px 8px; border-radius: 4px; font-size: 12px;">${l}</span>`)
+            .join(' ');
+
+          return `
+            <div style="border: 1px solid #dee2e6; border-radius: 8px; padding: 15px; margin-bottom: 12px; background: white;">
+              <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 10px;">
+                <div style="flex: 1; min-width: 200px;">
+                  <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 6px;">
+                    <strong style="font-size: 15px;">${escapeHtml(c.title)}</strong>
+                    <span style="background: ${statusColor}; color: white; padding: 2px 10px; border-radius: 12px; font-size: 11px; font-weight: 500;">${statusLabel}</span>
+                  </div>
+                  ${c.description ? `<p style="color: #666; margin: 0 0 6px; font-size: 13px;">${escapeHtml(c.description)}</p>` : ''}
+                  <div style="margin-bottom: 6px; display: flex; flex-wrap: wrap; gap: 4px;">${categories}</div>
+                  <div style="color: #999; font-size: 12px;">${dateInfo}</div>
+                </div>
+                <div style="display: flex; gap: 6px; flex-wrap: wrap; align-items: flex-start;">
+                  ${actions}
+                </div>
+              </div>
+            </div>
+          `;
+        }).join('');
+      } catch (err) {
+        console.error('Error loading surveys:', err);
+        listDiv.innerHTML = '<p style="color: #dc3545;">Erreur de chargement des sondages.</p>';
+      }
+    }
+
+    function showSurveyCreateForm() {
+      document.getElementById('surveyFormCard').style.display = 'block';
+      document.getElementById('surveyFormTitle').textContent = 'Nouveau sondage';
+      document.getElementById('surveyEditId').value = '';
+      document.getElementById('surveyTitle').value = '';
+      document.getElementById('surveyDescription').value = '';
+      document.getElementById('surveyLabel1').value = 'Inscription aux tournois';
+      document.getElementById('surveyLabel2').value = 'Résultats et classements';
+      document.getElementById('surveyLabel3').value = 'Convocations et poules';
+      document.getElementById('surveyLabel4').value = 'Navigation et ergonomie';
+      document.getElementById('surveyLabel5').value = 'Communication par email';
+      document.getElementById('surveyTitle').focus();
+    }
+
+    function hideSurveyForm() {
+      document.getElementById('surveyFormCard').style.display = 'none';
+    }
+
+    async function editSurvey(id) {
+      try {
+        const response = await fetch(`${API_URL}/surveys`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const campaigns = await response.json();
+        const c = campaigns.find(x => x.id === id);
+        if (!c) return;
+
+        document.getElementById('surveyFormCard').style.display = 'block';
+        document.getElementById('surveyFormTitle').textContent = 'Modifier le sondage';
+        document.getElementById('surveyEditId').value = id;
+        document.getElementById('surveyTitle').value = c.title || '';
+        document.getElementById('surveyDescription').value = c.description || '';
+        document.getElementById('surveyLabel1').value = c.category_1_label || '';
+        document.getElementById('surveyLabel2').value = c.category_2_label || '';
+        document.getElementById('surveyLabel3').value = c.category_3_label || '';
+        document.getElementById('surveyLabel4').value = c.category_4_label || '';
+        document.getElementById('surveyLabel5').value = c.category_5_label || '';
+        document.getElementById('surveyTitle').focus();
+      } catch (err) {
+        console.error('Error loading survey for edit:', err);
+      }
+    }
+
+    async function saveSurvey() {
+      const editId = document.getElementById('surveyEditId').value;
+      const title = document.getElementById('surveyTitle').value.trim();
+      const description = document.getElementById('surveyDescription').value.trim();
+
+      if (!title) {
+        showError('Le titre est requis');
+        return;
+      }
+
+      const labels = [1, 2, 3, 4, 5].map(i => document.getElementById(`surveyLabel${i}`).value.trim());
+      if (labels.some(l => !l)) {
+        showError('Les 5 catégories sont requises');
+        return;
+      }
+
+      const body = {
+        title,
+        description,
+        category_1_label: labels[0],
+        category_2_label: labels[1],
+        category_3_label: labels[2],
+        category_4_label: labels[3],
+        category_5_label: labels[4]
+      };
+
+      try {
+        const url = editId ? `${API_URL}/surveys/${editId}` : `${API_URL}/surveys`;
+        const method = editId ? 'PUT' : 'POST';
+        const response = await fetch(url, {
+          method,
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Erreur');
+
+        showSuccess(data.message || 'Sondage enregistré');
+        hideSurveyForm();
+        loadSurveys();
+      } catch (err) {
+        showError(err.message);
+      }
+    }
+
+    async function activateSurvey(id) {
+      if (!confirm('Activer ce sondage ? Il sera affiché dans l\'Espace Joueur.')) return;
+
+      try {
+        const response = await fetch(`${API_URL}/surveys/${id}/activate`, {
+          method: 'PATCH',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Erreur');
+        showSuccess(data.message || 'Sondage activé');
+        loadSurveys();
+      } catch (err) {
+        showError(err.message);
+      }
+    }
+
+    async function closeSurvey(id) {
+      if (!confirm('Clôturer ce sondage ? Les joueurs ne pourront plus y répondre.')) return;
+
+      try {
+        const response = await fetch(`${API_URL}/surveys/${id}/close`, {
+          method: 'PATCH',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Erreur');
+        showSuccess(data.message || 'Sondage clôturé');
+        loadSurveys();
+      } catch (err) {
+        showError(err.message);
+      }
+    }
+
+    async function deleteSurvey(id) {
+      if (!confirm('Supprimer ce sondage ? Cette action est irréversible.')) return;
+
+      try {
+        const response = await fetch(`${API_URL}/surveys/${id}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Erreur');
+        showSuccess(data.message || 'Sondage supprimé');
+        loadSurveys();
+      } catch (err) {
+        showError(err.message);
+      }
+    }
+
+    function renderStarBar(avg, maxStars) {
+      const fullStars = Math.floor(avg);
+      const hasHalf = (avg - fullStars) >= 0.25;
+      let html = '';
+      for (let i = 1; i <= maxStars; i++) {
+        if (i <= fullStars) {
+          html += '<span style="color: #f5a623; font-size: 18px;">&#9733;</span>';
+        } else if (i === fullStars + 1 && hasHalf) {
+          html += '<span style="color: #f5a623; font-size: 18px;">&#9733;</span>';
+        } else {
+          html += '<span style="color: #ddd; font-size: 18px;">&#9733;</span>';
+        }
+      }
+      return html;
+    }
+
+    async function viewSurveyResults(id) {
+      const panel = document.getElementById('surveyResultsPanel');
+      panel.style.display = 'block';
+      panel.scrollIntoView({ behavior: 'smooth' });
+
+      document.getElementById('surveyResultsSummary').innerHTML = '<div class="loading"><div class="spinner"></div> Chargement...</div>';
+      document.getElementById('surveyResultsCategories').innerHTML = '';
+      document.getElementById('surveyResultsComments').innerHTML = '';
+
+      try {
+        const response = await fetch(`${API_URL}/surveys/${id}/results`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!response.ok) throw new Error('Erreur');
+        const data = await response.json();
+
+        const { campaign, responseCount, averages, distribution, comments, declinedCount } = data;
+
+        document.getElementById('surveyResultsTitle').textContent = `Résultats : ${campaign.title}`;
+
+        // Summary cards
+        document.getElementById('surveyResultsSummary').innerHTML = `
+          <div style="background: #e3f2fd; padding: 15px 20px; border-radius: 8px; text-align: center; min-width: 120px;">
+            <div style="font-size: 28px; font-weight: bold; color: #1565c0;">${responseCount}</div>
+            <div style="font-size: 12px; color: #666;">Réponses</div>
+          </div>
+          <div style="background: #e8f5e9; padding: 15px 20px; border-radius: 8px; text-align: center; min-width: 120px;">
+            <div style="font-size: 28px; font-weight: bold; color: #2e7d32;">${averages.overall_rating || '-'}</div>
+            <div style="font-size: 12px; color: #666;">Note globale /5</div>
+          </div>
+          <div style="background: #fff3e0; padding: 15px 20px; border-radius: 8px; text-align: center; min-width: 120px;">
+            <div style="font-size: 28px; font-weight: bold; color: #e65100;">${comments.length}</div>
+            <div style="font-size: 12px; color: #666;">Commentaires</div>
+          </div>
+          <div style="background: #fce4ec; padding: 15px 20px; border-radius: 8px; text-align: center; min-width: 120px;">
+            <div style="font-size: 28px; font-weight: bold; color: #c62828;">${declinedCount}</div>
+            <div style="font-size: 12px; color: #666;">Refusé (3 rejets)</div>
+          </div>
+        `;
+
+        // Category averages
+        const categoryLabels = [
+          campaign.category_1_label,
+          campaign.category_2_label,
+          campaign.category_3_label,
+          campaign.category_4_label,
+          campaign.category_5_label,
+          'Note globale'
+        ];
+        const ratingKeys = ['rating_1', 'rating_2', 'rating_3', 'rating_4', 'rating_5', 'overall_rating'];
+
+        let catHtml = '<h4 style="margin: 0 0 12px;">Moyennes par catégorie</h4>';
+        ratingKeys.forEach((key, idx) => {
+          const avg = averages[key] || 0;
+          const dist = distribution[key] || {};
+          const distText = [5, 4, 3, 2, 1].map(s => `${s}★: ${dist[s] || 0}`).join(' · ');
+
+          catHtml += `
+            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 10px; padding: 8px 12px; background: ${idx === 5 ? '#f0f0f0' : '#fafafa'}; border-radius: 6px; ${idx === 5 ? 'border: 2px solid #ddd; font-weight: 500;' : ''}">
+              <div style="min-width: 200px; font-size: 14px;">${categoryLabels[idx]}</div>
+              <div>${renderStarBar(avg, 5)}</div>
+              <div style="font-weight: bold; min-width: 35px;">${avg}</div>
+              <div style="color: #999; font-size: 11px;">${distText}</div>
+            </div>
+          `;
+        });
+        document.getElementById('surveyResultsCategories').innerHTML = catHtml;
+
+        // Comments
+        if (comments.length > 0) {
+          let commHtml = '<h4 style="margin: 0 0 12px;">Commentaires</h4>';
+          commHtml += comments.map(c => `
+            <div style="border-left: 3px solid #1565c0; padding: 8px 12px; margin-bottom: 8px; background: #f8f9fa; border-radius: 0 6px 6px 0;">
+              <div style="font-size: 13px;">${escapeHtml(c.comment)}</div>
+              <div style="font-size: 11px; color: #999; margin-top: 4px;">${c.player_name || 'Anonyme'} · ${new Date(c.created_at).toLocaleDateString('fr-FR')}</div>
+            </div>
+          `).join('');
+          document.getElementById('surveyResultsComments').innerHTML = commHtml;
+        } else {
+          document.getElementById('surveyResultsComments').innerHTML = '<p style="color: #999; font-size: 13px;">Aucun commentaire.</p>';
+        }
+      } catch (err) {
+        console.error('Error loading survey results:', err);
+        document.getElementById('surveyResultsSummary').innerHTML = '<p style="color: #dc3545;">Erreur de chargement.</p>';
+      }
+    }
+
+    function hideSurveyResults() {
+      document.getElementById('surveyResultsPanel').style.display = 'none';
+    }
+
+    // Utility: escape HTML for survey display
+    function escapeHtml(str) {
+      if (!str) return '';
+      return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
     // Initial load of announcements (since it's the default tab now)

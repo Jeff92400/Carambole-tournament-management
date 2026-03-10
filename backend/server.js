@@ -54,6 +54,7 @@ const ffbImportRoutes = require('./routes/ffb-import');
 const bracketRoutes = require('./routes/bracket');
 const rsvpRoutes = require('./routes/rsvp');
 const { buildRsvpButtonsHtml } = require('./routes/rsvp');
+const surveysRoutes = require('./routes/surveys');
 
 
 const app = express();
@@ -278,6 +279,7 @@ app.use('/api/ligue-admin', apiLimiter, ligueAdminRoutes);
 app.use('/api/ffb', apiLimiter, ffbImportRoutes);
 app.use('/api/bracket', apiLimiter, bracketRoutes);
 app.use('/api/rsvp', apiLimiter, rsvpRoutes);
+app.use('/api/surveys', apiLimiter, surveysRoutes);
 
 
 // App version endpoint (for automatic update detection)

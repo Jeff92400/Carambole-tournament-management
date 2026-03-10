@@ -950,6 +950,57 @@ async function initializeDatabase() {
     await client.query(`ALTER TABLE announcements ADD COLUMN IF NOT EXISTS target_rankings TEXT`);
     await client.query(`ALTER TABLE announcements ADD COLUMN IF NOT EXISTS target_clubs TEXT`);
 
+    // Survey campaigns table (satisfaction surveys for Player App)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS survey_campaigns (
+        id SERIAL PRIMARY KEY,
+        title VARCHAR(255) NOT NULL,
+        description TEXT,
+        status VARCHAR(20) DEFAULT 'draft',
+        category_1_label VARCHAR(255) NOT NULL,
+        category_2_label VARCHAR(255) NOT NULL,
+        category_3_label VARCHAR(255) NOT NULL,
+        category_4_label VARCHAR(255) NOT NULL,
+        category_5_label VARCHAR(255) NOT NULL,
+        organization_id INTEGER REFERENCES organizations(id),
+        created_by TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        activated_at TIMESTAMP,
+        closed_at TIMESTAMP
+      )
+    `);
+
+    // Survey responses table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS survey_responses (
+        id SERIAL PRIMARY KEY,
+        campaign_id INTEGER NOT NULL REFERENCES survey_campaigns(id) ON DELETE CASCADE,
+        player_licence VARCHAR(50) NOT NULL,
+        player_name TEXT,
+        rating_1 INTEGER NOT NULL CHECK (rating_1 BETWEEN 1 AND 5),
+        rating_2 INTEGER NOT NULL CHECK (rating_2 BETWEEN 1 AND 5),
+        rating_3 INTEGER NOT NULL CHECK (rating_3 BETWEEN 1 AND 5),
+        rating_4 INTEGER NOT NULL CHECK (rating_4 BETWEEN 1 AND 5),
+        rating_5 INTEGER NOT NULL CHECK (rating_5 BETWEEN 1 AND 5),
+        overall_rating INTEGER NOT NULL CHECK (overall_rating BETWEEN 1 AND 5),
+        comment TEXT,
+        organization_id INTEGER,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(campaign_id, player_licence)
+      )
+    `);
+
+    // Survey dismissals table (tracks players who dismissed the survey)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS survey_dismissals (
+        campaign_id INTEGER NOT NULL REFERENCES survey_campaigns(id) ON DELETE CASCADE,
+        player_licence VARCHAR(50) NOT NULL,
+        dismiss_count INTEGER DEFAULT 1,
+        last_dismissed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (campaign_id, player_licence)
+      )
+    `);
+
     // Convocation poules table - stores full poule composition when convocations are sent
     await client.query(`
       CREATE TABLE IF NOT EXISTS convocation_poules (
