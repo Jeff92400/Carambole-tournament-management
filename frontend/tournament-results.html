@@ -240,7 +240,7 @@
     if (!requireAuth()) {
       throw new Error('Not authenticated'); // Stop script execution
     }
-    const token = localStorage.getItem('token');
+    const token = sessionStorage.getItem('token');
 
     // Apply role-based nav filtering
     applyRoleBasedNav();
@@ -320,7 +320,7 @@
     if (logoutBtn) {
       logoutBtn.addEventListener('click', (e) => {
         e.preventDefault();
-        localStorage.removeItem('token');
+        sessionStorage.removeItem('token');
         window.location.href = 'login.html';
       });
     }
@@ -803,7 +803,7 @@
     });
 
     // Show recompute button for admins
-    const userRole = localStorage.getItem('userRole');
+    const userRole = sessionStorage.getItem('userRole');
     if (userRole === 'admin') {
       const recomputeBtn = document.getElementById('recomputeBtn');
       recomputeBtn.style.display = 'inline-block';

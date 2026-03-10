@@ -16,7 +16,7 @@
 
 
   function doFetch(url) {
-    var fetchFn = window.authFetch || function (u) { return fetch(u, { headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') } }); };
+    var fetchFn = window.authFetch || function (u) { return fetch(u, { headers: { 'Authorization': 'Bearer ' + sessionStorage.getItem('token') } }); };
     return fetchFn(url);
   }
 
@@ -229,7 +229,7 @@
     navLinks.insertBefore(btn, insertBefore);
 
     // Hide "Classements" nav link for admin — accessible via quick actions & tournament pages
-    var role = localStorage.getItem('userRole');
+    var role = sessionStorage.getItem('userRole');
     if (role === 'admin') {
       var classementsLink = navLinks.querySelector('a[href="rankings.html"]');
       if (classementsLink) classementsLink.style.display = 'none';

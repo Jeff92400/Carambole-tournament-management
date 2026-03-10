@@ -563,8 +563,8 @@
     if (!requireAuth()) {
       throw new Error('Not authenticated');
     }
-    const token = localStorage.getItem('token');
-    const userRole = localStorage.getItem('userRole');
+    const token = sessionStorage.getItem('token');
+    const userRole = sessionStorage.getItem('userRole');
 
     // Initialize Quill rich text editor for template body
     const quillTemplateBody = new Quill('#templateBodyEditor', {
@@ -597,8 +597,8 @@
     // Logout
     document.getElementById('logoutBtn').addEventListener('click', (e) => {
       e.preventDefault();
-      localStorage.removeItem('token');
-      localStorage.removeItem('userRole');
+      sessionStorage.removeItem('token');
+      sessionStorage.removeItem('userRole');
       window.location.href = 'login.html';
     });
 

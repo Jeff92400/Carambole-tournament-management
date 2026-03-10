@@ -296,17 +296,17 @@
     if (!requireAuth()) {
       throw new Error('Not authenticated');
     }
-    const token = localStorage.getItem('token');
-    const isLecteur = localStorage.getItem('userRole') === 'lecteur';
+    const token = sessionStorage.getItem('token');
+    const isLecteur = sessionStorage.getItem('userRole') === 'lecteur';
 
     let currentRejectId = null;
 
     // Logout handler
     document.getElementById('logoutBtn').addEventListener('click', (e) => {
       e.preventDefault();
-      localStorage.removeItem('token');
-      localStorage.removeItem('userRole');
-      localStorage.removeItem('username');
+      sessionStorage.removeItem('token');
+      sessionStorage.removeItem('userRole');
+      sessionStorage.removeItem('username');
       window.location.href = 'login.html';
     });
 

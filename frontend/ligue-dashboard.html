@@ -228,11 +228,11 @@
     if (!requireAuth()) {
       throw new Error('Not authenticated');
     }
-    const token = localStorage.getItem('token');
+    const token = sessionStorage.getItem('token');
 
     // Check ligue admin or super admin access
-    const userRole = localStorage.getItem('userRole');
-    const isSuperAdmin = localStorage.getItem('isSuperAdmin') === 'true';
+    const userRole = sessionStorage.getItem('userRole');
+    const isSuperAdmin = sessionStorage.getItem('isSuperAdmin') === 'true';
     if (userRole !== 'ligue_admin' && !isSuperAdmin) {
       document.getElementById('dashboardContent').style.display = 'none';
       document.getElementById('accessDenied').style.display = 'block';

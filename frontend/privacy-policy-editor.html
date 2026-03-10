@@ -190,7 +190,7 @@ Vous pouvez utiliser le format Markdown :
     if (!requireAuth()) {
       throw new Error('Not authenticated');
     }
-    const token = localStorage.getItem('token');
+    const token = sessionStorage.getItem('token');
 
     // Check user role - admin only
     function checkAdminRole() {
@@ -210,9 +210,9 @@ Vous pouvez utiliser le format Markdown :
     // Logout
     document.getElementById('logoutBtn').addEventListener('click', (e) => {
       e.preventDefault();
-      localStorage.removeItem('token');
-      localStorage.removeItem('username');
-      localStorage.removeItem('userRole');
+      sessionStorage.removeItem('token');
+      sessionStorage.removeItem('username');
+      sessionStorage.removeItem('userRole');
       window.location.href = 'login.html';
     });
 

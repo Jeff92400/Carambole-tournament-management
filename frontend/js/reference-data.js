@@ -21,7 +21,7 @@ const ReferenceData = {
     }
 
     try {
-      const token = localStorage.getItem('token');
+      const token = sessionStorage.getItem('token');
       const response = await fetch(`/api/reference-data/${type}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });

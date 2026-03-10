@@ -1975,7 +1975,7 @@
     if (!requireAuth()) {
       throw new Error('Not authenticated'); // Stop script execution
     }
-    const token = localStorage.getItem('token');
+    const token = sessionStorage.getItem('token');
 
     // Initialize Quill rich text editor
     const quill = new Quill('#emailBodyEditor', {
@@ -2064,7 +2064,7 @@
     // Logout
     document.getElementById('logoutBtn').addEventListener('click', (e) => {
       e.preventDefault();
-      localStorage.removeItem('token');
+      sessionStorage.removeItem('token');
       window.location.href = 'login.html';
     });
 
@@ -5363,7 +5363,7 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
     async function checkPurgeAvailability() {
       try {
         // Check if user is admin by checking userRole from localStorage
-        const userRole = localStorage.getItem('userRole');
+        const userRole = sessionStorage.getItem('userRole');
         const btn = document.getElementById('showPurgeOptionsBtn');
 
         if (userRole === 'admin' || userRole === 'lecteur') {

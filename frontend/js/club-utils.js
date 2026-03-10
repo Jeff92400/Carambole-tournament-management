@@ -16,7 +16,7 @@ async function loadClubsFromDatabase() {
     return;
   }
 
-  const token = localStorage.getItem('token');
+  const token = sessionStorage.getItem('token');
   if (!token) {
     console.warn('No authentication token found');
     return;
@@ -77,7 +77,7 @@ function waitForClubsLoaded() {
 }
 
 // Load clubs when script loads (if authenticated)
-if (localStorage.getItem('token')) {
+if (sessionStorage.getItem('token')) {
   loadClubsFromDatabase();
 }
 

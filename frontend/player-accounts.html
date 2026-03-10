@@ -149,10 +149,10 @@
     if (!requireAuth()) {
       throw new Error('Not authenticated'); // Stop script execution
     }
-    const token = localStorage.getItem('token');
+    const token = sessionStorage.getItem('token');
 
     // Check admin role
-    const userRole = localStorage.getItem('userRole');
+    const userRole = sessionStorage.getItem('userRole');
     if (userRole !== 'admin') {
       window.location.href = 'dashboard.html';
     }
@@ -172,9 +172,9 @@
     // Logout
     document.getElementById('logoutBtn').addEventListener('click', (e) => {
       e.preventDefault();
-      localStorage.removeItem('token');
-      localStorage.removeItem('userRole');
-      localStorage.removeItem('username');
+      sessionStorage.removeItem('token');
+      sessionStorage.removeItem('userRole');
+      sessionStorage.removeItem('username');
       window.location.href = 'login.html';
     });
 

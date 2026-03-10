@@ -101,7 +101,7 @@
     <div id="accessDenied" style="display: none; text-align: center; padding: 40px; color: #666;">
       <h3>Accès refusé</h3>
       <p>Cette page est réservée au Super Admin.</p>
-      <a href="login.html?sa=1" class="btn" onclick="localStorage.clear();">Se reconnecter</a>
+      <a href="login.html?sa=1" class="btn" onclick="sessionStorage.clear();">Se reconnecter</a>
     </div>
 
     <div id="dashboardContent" style="display: none;">
@@ -202,10 +202,10 @@
     if (!requireAuth()) {
       throw new Error('Not authenticated');
     }
-    const token = localStorage.getItem('token');
+    const token = sessionStorage.getItem('token');
 
     // Check super admin access
-    const isSuperAdmin = localStorage.getItem('isSuperAdmin') === 'true';
+    const isSuperAdmin = sessionStorage.getItem('isSuperAdmin') === 'true';
     if (!isSuperAdmin) {
       document.getElementById('accessDenied').style.display = 'block';
       throw new Error('Not super admin');

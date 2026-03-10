@@ -277,8 +277,8 @@
     if (!requireAuth()) {
       throw new Error('Not authenticated');
     }
-    const token = localStorage.getItem('token');
-    const userRole = localStorage.getItem('userRole');
+    const token = sessionStorage.getItem('token');
+    const userRole = sessionStorage.getItem('userRole');
 
     // Check if user is admin
     if (userRole !== 'admin') {

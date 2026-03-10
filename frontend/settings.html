@@ -345,9 +345,9 @@
     if (!requireAuth()) {
       throw new Error('Not authenticated'); // Stop script execution
     }
-    const token = localStorage.getItem('token');
+    const token = sessionStorage.getItem('token');
 
-    const userRole = localStorage.getItem('userRole');
+    const userRole = sessionStorage.getItem('userRole');
 
     // Show/hide admin elements
     document.querySelectorAll('.admin-only').forEach(el => {
@@ -495,8 +495,8 @@
     // Logout handler
     document.getElementById('logoutBtn').addEventListener('click', (e) => {
       e.preventDefault();
-      localStorage.removeItem('token');
-      localStorage.removeItem('userRole');
+      sessionStorage.removeItem('token');
+      sessionStorage.removeItem('userRole');
       window.location.href = 'login.html';
     });
 

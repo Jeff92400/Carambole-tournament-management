@@ -367,8 +367,8 @@
   <script>
     const API_URL = '/api';
     if (!requireAuth()) throw new Error('Not authenticated');
-    if (localStorage.getItem('isSuperAdmin') !== 'true') {
-      localStorage.clear();
+    if (sessionStorage.getItem('isSuperAdmin') !== 'true') {
+      sessionStorage.clear();
       window.location.href = 'login.html?sa=1';
       throw new Error('Not super admin');
     }

@@ -217,13 +217,13 @@
     if (!requireAuth()) {
       throw new Error('Not authenticated'); // Stop script execution
     }
-    const token = localStorage.getItem('token');
+    const token = sessionStorage.getItem('token');
 
     // Initialize app branding (dynamic logo + org name)
     initAppBranding();
 
     // Check user role and show/hide elements based on role
-    const userRole = localStorage.getItem('userRole');
+    const userRole = sessionStorage.getItem('userRole');
     applyRoleBasedNav();
     // SA button always visible — super-admin pages verify access themselves
     if (userRole === 'admin' || userRole === 'lecteur') {
@@ -235,7 +235,7 @@
     }
     if (userRole === 'club') {
       // Populate club welcome banner
-      const clubName = localStorage.getItem('userClub') || 'votre club';
+      const clubName = sessionStorage.getItem('userClub') || 'votre club';
       document.getElementById('clubWelcomeName').textContent = clubName;
     }
 
@@ -420,7 +420,7 @@
 
     // Load pending enrollment requests count (admin and lecteur)
     async function loadPendingEnrollmentRequests() {
-      const userRole = localStorage.getItem('userRole');
+      const userRole = sessionStorage.getItem('userRole');
       if (userRole !== 'admin' && userRole !== 'lecteur') return;
 
       try {
@@ -448,7 +448,7 @@
 
     // Load tournaments with unsent results (admin and lecteur)
     async function loadUnsentResults() {
-      const userRole = localStorage.getItem('userRole');
+      const userRole = sessionStorage.getItem('userRole');
       if (userRole !== 'admin' && userRole !== 'lecteur') return;
 
       try {

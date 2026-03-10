@@ -327,7 +327,7 @@
     if (!requireAuth()) {
       throw new Error('Not authenticated');
     }
-    const token = localStorage.getItem('token');
+    const token = sessionStorage.getItem('token');
 
     let currentType = 'players';
     let fieldDefinitions = {};
@@ -648,8 +648,8 @@
     // Logout handler
     document.getElementById('logoutBtn').addEventListener('click', (e) => {
       e.preventDefault();
-      localStorage.removeItem('token');
-      localStorage.removeItem('userRole');
+      sessionStorage.removeItem('token');
+      sessionStorage.removeItem('userRole');
       window.location.href = 'login.html';
     });
   </script>

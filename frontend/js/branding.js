@@ -153,7 +153,7 @@
   async function loadCsvImportSetting() {
     try {
       const headers = {};
-      const token = localStorage.getItem('token');
+      const token = sessionStorage.getItem('token');
       if (token) headers['Authorization'] = `Bearer ${token}`;
       const response = await fetch('/api/settings/branding/csv-imports', { headers });
       if (response.ok) {

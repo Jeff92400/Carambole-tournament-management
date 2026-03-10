@@ -256,7 +256,7 @@
     const API_URL = '/api';
 
     if (!requireAuth()) { throw new Error('Not authenticated'); }
-    const token = localStorage.getItem('token');
+    const token = sessionStorage.getItem('token');
 
     // ==================== STATE ====================
 

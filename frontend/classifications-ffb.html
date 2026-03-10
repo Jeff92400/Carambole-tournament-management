@@ -173,7 +173,7 @@
     if (!requireAuth()) {
       throw new Error('Not authenticated');
     }
-    const token = localStorage.getItem('token');
+    const token = sessionStorage.getItem('token');
 
     // Check admin role
     let userRole = 'viewer';
@@ -193,7 +193,7 @@
     // Logout
     document.getElementById('logoutBtn').addEventListener('click', (e) => {
       e.preventDefault();
-      localStorage.removeItem('token');
+      sessionStorage.removeItem('token');
       window.location.href = 'login.html';
     });
 

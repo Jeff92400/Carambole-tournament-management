@@ -967,10 +967,10 @@
     if (!requireAuth()) {
       throw new Error('Not authenticated'); // Stop script execution
     }
-    const token = localStorage.getItem('token');
+    const token = sessionStorage.getItem('token');
 
     // Check user role and show/hide admin elements
-    const userRole = localStorage.getItem('userRole');
+    const userRole = sessionStorage.getItem('userRole');
     if (userRole === 'admin' || userRole === 'lecteur') {
       document.querySelectorAll('.admin-only').forEach(el => el.style.display = '');
     } else {
@@ -1013,9 +1013,9 @@
     // Logout
     document.getElementById('logoutBtn').addEventListener('click', (e) => {
       e.preventDefault();
-      localStorage.removeItem('token');
-      localStorage.removeItem('userRole');
-      localStorage.removeItem('username');
+      sessionStorage.removeItem('token');
+      sessionStorage.removeItem('userRole');
+      sessionStorage.removeItem('username');
       window.location.href = 'login.html';
     });
 

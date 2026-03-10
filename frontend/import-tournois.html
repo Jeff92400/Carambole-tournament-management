@@ -82,7 +82,7 @@
     if (!requireAuth()) {
       throw new Error('Not authenticated'); // Stop script execution
     }
-    const token = localStorage.getItem('token');
+    const token = sessionStorage.getItem('token');
 
     // File upload handling helper
     function setupFileUpload(uploadEl, inputEl, fileNameEl) {
@@ -242,8 +242,8 @@
     // Logout handler
     document.getElementById('logoutBtn').addEventListener('click', (e) => {
       e.preventDefault();
-      localStorage.removeItem('token');
-      localStorage.removeItem('userRole');
+      sessionStorage.removeItem('token');
+      sessionStorage.removeItem('userRole');
       window.location.href = 'login.html';
     });
   </script>

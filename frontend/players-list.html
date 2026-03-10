@@ -388,7 +388,7 @@
     if (!requireAuth()) {
       throw new Error('Not authenticated'); // Stop script execution
     }
-    const token = localStorage.getItem('token');
+    const token = sessionStorage.getItem('token');
 
     // Get user role from JWT token
     let userRole = 'viewer';
@@ -428,7 +428,7 @@
     // Logout
     document.getElementById('logoutBtn').addEventListener('click', (e) => {
       e.preventDefault();
-      localStorage.removeItem('token');
+      sessionStorage.removeItem('token');
       window.location.href = 'login.html';
     });
 

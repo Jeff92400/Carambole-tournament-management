@@ -6,8 +6,8 @@
 // 2. SA with stale non-CDBHS session (no ?org=) → redirect to login to reset
 (function() {
   const urlOrg = new URLSearchParams(window.location.search).get('org');
-  const isSA = localStorage.getItem('isSuperAdmin') === 'true';
-  const storedOrgId = localStorage.getItem('organizationId');
+  const isSA = sessionStorage.getItem('isSuperAdmin') === 'true';
+  const storedOrgId = sessionStorage.getItem('organizationId');
   const currentPage = window.location.pathname.split('/').pop();
 
   // Skip SA pages and login/forgot pages
@@ -15,7 +15,7 @@
     // no check needed
   } else if (urlOrg) {
     // ?org= present on a regular page — check if already in the right org
-    const storedSlug = localStorage.getItem('orgSlug');
+    const storedSlug = sessionStorage.getItem('orgSlug');
     if (storedSlug !== urlOrg) {
       // Different org requested → redirect to login for that org
       window.location.href = '/login.html?org=' + encodeURIComponent(urlOrg);
@@ -25,14 +25,14 @@
     // SA on a regular page without ?org=, non-CDBHS org, AND no active session marker
     // → stale session from a previous browser session → redirect to SA login
     // (sessionStorage is tab-scoped and cleared on browser close, so active sessions are preserved)
-    localStorage.removeItem('token');
-    localStorage.removeItem('sa_token');
-    localStorage.removeItem('organizationId');
-    localStorage.removeItem('userRole');
-    localStorage.removeItem('username');
-    localStorage.removeItem('userClub');
-    localStorage.removeItem('userClubId');
-    localStorage.removeItem('isSuperAdmin');
+    sessionStorage.removeItem('token');
+    sessionStorage.removeItem('sa_token');
+    sessionStorage.removeItem('organizationId');
+    sessionStorage.removeItem('userRole');
+    sessionStorage.removeItem('username');
+    sessionStorage.removeItem('userClub');
+    sessionStorage.removeItem('userClubId');
+    sessionStorage.removeItem('isSuperAdmin');
     window.location.href = '/login.html?sa=1';
   }
 })();
@@ -80,7 +80,7 @@ document.addEventListener('click', function(e) {
  * @returns {Promise<Response>} - The fetch response
  */
 async function authFetch(url, options = {}) {
-  const token = localStorage.getItem('token');
+  const token = sessionStorage.getItem('token');
 
   if (!token) {
     console.log('[Auth] No token found, redirecting to login');
@@ -112,21 +112,21 @@ async function authFetch(url, options = {}) {
  */
 function handleSessionExpired() {
   // Check if this was a SA session before clearing
-  const wasSuperAdmin = localStorage.getItem('isSuperAdmin') === 'true';
-  const hadSaToken = !!localStorage.getItem('sa_token');
+  const wasSuperAdmin = sessionStorage.getItem('isSuperAdmin') === 'true';
+  const hadSaToken = !!sessionStorage.getItem('sa_token');
   // Preserve org context before clearing
-  const orgSlug = localStorage.getItem('orgSlug');
+  const orgSlug = sessionStorage.getItem('orgSlug');
 
   // Clear stored credentials
-  localStorage.removeItem('token');
-  localStorage.removeItem('username');
-  localStorage.removeItem('role');
-  localStorage.removeItem('userRole');
-  localStorage.removeItem('userClub');
-  localStorage.removeItem('userClubId');
-  localStorage.removeItem('organizationId');
-  localStorage.removeItem('orgSlug');
-  localStorage.removeItem('sa_token');
+  sessionStorage.removeItem('token');
+  sessionStorage.removeItem('username');
+  sessionStorage.removeItem('role');
+  sessionStorage.removeItem('userRole');
+  sessionStorage.removeItem('userClub');
+  sessionStorage.removeItem('userClubId');
+  sessionStorage.removeItem('organizationId');
+  sessionStorage.removeItem('orgSlug');
+  sessionStorage.removeItem('sa_token');
   sessionStorage.removeItem('activeOrgSession');
 
   // Store message for login page to display
@@ -149,20 +149,20 @@ function handleSessionExpired() {
  * @returns {boolean} - True if authenticated
  */
 function requireAuth() {
-  const token = localStorage.getItem('token');
+  const token = sessionStorage.getItem('token');
   if (!token) {
     console.log('[Auth] No token found, redirecting to login');
     // SA pages → always redirect to SA login
     const currentPage = window.location.pathname.split('/').pop();
     const isOnSAPage = currentPage && currentPage.startsWith('super-admin');
-    const wasSuperAdmin = localStorage.getItem('isSuperAdmin') === 'true';
+    const wasSuperAdmin = sessionStorage.getItem('isSuperAdmin') === 'true';
     if (isOnSAPage || wasSuperAdmin) {
       window.location.href = '/login.html?sa=1';
       return false;
     }
     // Regular pages → preserve org context so login page shows correct CDB branding
     const urlOrg = new URLSearchParams(window.location.search).get('org');
-    const storedSlug = localStorage.getItem('orgSlug');
+    const storedSlug = sessionStorage.getItem('orgSlug');
     const orgParam = urlOrg || storedSlug;
     const loginUrl = orgParam ? '/login.html?org=' + encodeURIComponent(orgParam) : '/login.html';
     window.location.href = loginUrl;
@@ -176,12 +176,12 @@ function requireAuth() {
  * @returns {object|null} - User object with username and role
  */
 function getCurrentUser() {
-  const token = localStorage.getItem('token');
+  const token = sessionStorage.getItem('token');
   if (!token) return null;
 
   return {
-    username: localStorage.getItem('username'),
-    role: localStorage.getItem('role')
+    username: sessionStorage.getItem('username'),
+    role: sessionStorage.getItem('role')
   };
 }
 
@@ -190,21 +190,21 @@ function getCurrentUser() {
  */
 function logout() {
   // Check if this is a SA session before clearing
-  const wasSuperAdmin = localStorage.getItem('isSuperAdmin') === 'true';
-  const hadSaToken = !!localStorage.getItem('sa_token');
+  const wasSuperAdmin = sessionStorage.getItem('isSuperAdmin') === 'true';
+  const hadSaToken = !!sessionStorage.getItem('sa_token');
   // Preserve org context before clearing
-  const orgSlug = localStorage.getItem('orgSlug');
+  const orgSlug = sessionStorage.getItem('orgSlug');
 
-  localStorage.removeItem('token');
-  localStorage.removeItem('username');
-  localStorage.removeItem('role');
-  localStorage.removeItem('userRole');
-  localStorage.removeItem('userClub');
-  localStorage.removeItem('userClubId');
-  localStorage.removeItem('isSuperAdmin');
-  localStorage.removeItem('organizationId');
-  localStorage.removeItem('orgSlug');
-  localStorage.removeItem('sa_token');
+  sessionStorage.removeItem('token');
+  sessionStorage.removeItem('username');
+  sessionStorage.removeItem('role');
+  sessionStorage.removeItem('userRole');
+  sessionStorage.removeItem('userClub');
+  sessionStorage.removeItem('userClubId');
+  sessionStorage.removeItem('isSuperAdmin');
+  sessionStorage.removeItem('organizationId');
+  sessionStorage.removeItem('orgSlug');
+  sessionStorage.removeItem('sa_token');
   sessionStorage.removeItem('activeOrgSession');
 
   // SA users get the neutral SA login screen
@@ -223,18 +223,18 @@ function logout() {
  * Restores the SA token and navigates to SA pages.
  */
 function returnToSuperAdmin() {
-  const saToken = localStorage.getItem('sa_token');
+  const saToken = sessionStorage.getItem('sa_token');
   if (!saToken) {
     // No SA token stored — just navigate (SA pages will verify access)
     window.location.href = 'super-admin.html';
     return;
   }
   // Restore SA token
-  localStorage.setItem('token', saToken);
-  localStorage.removeItem('sa_token');
-  localStorage.removeItem('organizationId');
-  localStorage.setItem('userRole', 'admin');
-  localStorage.setItem('isSuperAdmin', 'true');
+  sessionStorage.setItem('token', saToken);
+  sessionStorage.removeItem('sa_token');
+  sessionStorage.removeItem('organizationId');
+  sessionStorage.setItem('userRole', 'admin');
+  sessionStorage.setItem('isSuperAdmin', 'true');
   window.location.href = 'super-admin-cdbs.html';
 }
 
@@ -299,7 +299,7 @@ async function checkAppVersion() {
 }
 
 // Check version on load and every hour (only if authenticated)
-if (localStorage.getItem('token')) {
+if (sessionStorage.getItem('token')) {
   checkAppVersion();
   setInterval(checkAppVersion, 60 * 60 * 1000); // 1 hour
 }
@@ -317,7 +317,7 @@ if (localStorage.getItem('token')) {
  * Call this after DOM is loaded on pages with navbars.
  */
 function applyRoleBasedNav() {
-  const userRole = localStorage.getItem('userRole');
+  const userRole = sessionStorage.getItem('userRole');
 
   if (userRole === 'admin' || userRole === 'lecteur') {
     // Admin and lecteur see everything, including admin-only

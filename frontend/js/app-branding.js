@@ -42,7 +42,7 @@ async function initAppBranding() {
       orgNameEl.innerHTML = html;
     }
     // If SA is impersonating a CDB, show a floating "Retour Plateforme" button
-    if (localStorage.getItem('sa_token')) {
+    if (sessionStorage.getItem('sa_token')) {
       injectSAReturnButton();
     }
   } catch (error) {
@@ -78,7 +78,7 @@ function injectSAReturnButton() {
  */
 async function getHeaderLogoSize() {
   try {
-    const token = localStorage.getItem('token');
+    const token = sessionStorage.getItem('token');
     if (!token) return 48; // Default size
 
     const response = await fetch('/api/settings/app/header_logo_size', {
@@ -101,7 +101,7 @@ async function getHeaderLogoSize() {
  */
 async function getOrganizationLogoUrl() {
   try {
-    const token = localStorage.getItem('token');
+    const token = sessionStorage.getItem('token');
     const response = await fetch('/api/settings/organization-logo', {
       headers: token ? { 'Authorization': `Bearer ${token}` } : {}
     });
@@ -127,7 +127,7 @@ async function getOrganizationLogoUrl() {
  */
 async function getOrganizationShortName() {
   try {
-    const token = localStorage.getItem('token');
+    const token = sessionStorage.getItem('token');
     if (!token) return null;
 
     const response = await fetch('/api/settings/app/organization_short_name', {
@@ -206,7 +206,7 @@ async function initPublicBranding(orgSlug) {
 
 // Auto-initialize on DOM ready if token exists
 document.addEventListener('DOMContentLoaded', function() {
-  const token = localStorage.getItem('token');
+  const token = sessionStorage.getItem('token');
   if (token) {
     // Authenticated page - load dynamic branding
     initAppBranding();

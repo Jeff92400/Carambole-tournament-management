@@ -1299,7 +1299,7 @@
     if (!requireAuth()) {
       throw new Error('Not authenticated'); // Stop script execution
     }
-    const token = localStorage.getItem('token');
+    const token = sessionStorage.getItem('token');
 
     // Check user role and hide admin sections for viewers
     function checkUserRole() {
@@ -1362,7 +1362,7 @@
 
     // Init tabs only for admin users; non-admins see just My Settings (no tabs)
     (function initSettingsTab() {
-      const role = localStorage.getItem('userRole');
+      const role = sessionStorage.getItem('userRole');
       if (role !== 'admin') return;
       const hash = window.location.hash.replace('#', '');
       const tab = resolveTabFromHash(hash) || 'organisation';
@@ -2501,7 +2501,7 @@
     // Logout
     document.getElementById('logoutBtn').addEventListener('click', (e) => {
       e.preventDefault();
-      localStorage.removeItem('token');
+      sessionStorage.removeItem('token');
       window.location.href = 'login.html';
     });
 
@@ -3967,7 +3967,7 @@
     }
 
     // Load logs stats on page load (admin and lecteur)
-    const userRole = localStorage.getItem('userRole');
+    const userRole = sessionStorage.getItem('userRole');
     if (userRole === 'admin' || userRole === 'lecteur') {
       loadLogsQuickStats();
     }

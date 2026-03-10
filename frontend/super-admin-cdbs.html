@@ -291,9 +291,9 @@
   <script>
     const API_URL = '/api';
     if (!requireAuth()) throw new Error('Not authenticated');
-    const token = localStorage.getItem('token');
-    if (localStorage.getItem('isSuperAdmin') !== 'true') {
-      localStorage.clear();
+    const token = sessionStorage.getItem('token');
+    if (sessionStorage.getItem('isSuperAdmin') !== 'true') {
+      sessionStorage.clear();
       window.location.href = 'login.html?sa=1';
       throw new Error('Not super admin');
     }
@@ -689,8 +689,8 @@
     async function goToDashboard(orgId, slug) {
       try {
         // Save the current SA token so we can come back
-        const saToken = localStorage.getItem('token');
-        localStorage.setItem('sa_token', saToken);
+        const saToken = sessionStorage.getItem('token');
+        sessionStorage.setItem('sa_token', saToken);
 
         // Get an impersonation token scoped to this CDB
         const res = await authFetch(`${API_URL}/super-admin/impersonate/${orgId}`, {
@@ -701,11 +701,11 @@
         if (!res.ok) throw new Error(data.error || 'Erreur');
 
         // Set the CDB-scoped token and update localStorage
-        localStorage.setItem('token', data.token);
-        localStorage.setItem('userRole', 'admin');
-        localStorage.setItem('organizationId', orgId);
-        localStorage.setItem('orgSlug', slug);
-        localStorage.setItem('isSuperAdmin', 'true');
+        sessionStorage.setItem('token', data.token);
+        sessionStorage.setItem('userRole', 'admin');
+        sessionStorage.setItem('organizationId', orgId);
+        sessionStorage.setItem('orgSlug', slug);
+        sessionStorage.setItem('isSuperAdmin', 'true');
         sessionStorage.setItem('activeOrgSession', 'true');
 
         // Navigate to the CDB dashboard (token already contains the correct org)

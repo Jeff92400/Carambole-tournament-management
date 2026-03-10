@@ -168,8 +168,8 @@
     const API_URL = '/api';
 
     if (!requireAuth()) throw new Error('Not authenticated');
-    const token = localStorage.getItem('token');
-    const userRole = localStorage.getItem('userRole');
+    const token = sessionStorage.getItem('token');
+    const userRole = sessionStorage.getItem('userRole');
     const isAdmin = userRole === 'admin';
 
     // Get tournament ID from URL

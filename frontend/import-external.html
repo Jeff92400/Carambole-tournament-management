@@ -86,11 +86,11 @@
     if (!requireAuth()) {
       throw new Error('Not authenticated'); // Stop script execution
     }
-    const token = localStorage.getItem('token');
+    const token = sessionStorage.getItem('token');
 
     // This page is accessible to all authenticated users (admin and viewer)
     // to allow updating inscriptions before generating poules
-    const userRole = localStorage.getItem('userRole');
+    const userRole = sessionStorage.getItem('userRole');
 
 
     // File upload handling helper

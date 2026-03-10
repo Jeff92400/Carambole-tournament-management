@@ -36,7 +36,7 @@
     </div>
 
     <div style="text-align: center; margin-top: 30px; color: #999; font-size: 12px;">
-      V 2.0.300 03/26
+      V 2.0.301 03/26
     </div>
     <div style="text-align: center; margin-top: 6px; color: #bbb; font-size: 10px;">
       JR ©
@@ -82,23 +82,23 @@
     // Force fresh login when org context has changed
     const urlParams = new URLSearchParams(window.location.search);
     const orgSlug = urlParams.get('org');
-    const storedOrgId = localStorage.getItem('organizationId');
+    const storedOrgId = sessionStorage.getItem('organizationId');
     // Clear session when:
     // 1. ?org= is present (switching to a specific CDB)
     // 2. No ?org= but session is for a non-default org (returning to default CDBHS)
     if (orgSlug || (storedOrgId && storedOrgId !== '1' && storedOrgId !== 'null' && storedOrgId !== 'undefined')) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('userRole');
-      localStorage.removeItem('username');
-      localStorage.removeItem('organizationId');
-      localStorage.removeItem('isSuperAdmin');
-      localStorage.removeItem('ligueNumero');
-      localStorage.removeItem('userClub');
-      localStorage.removeItem('userClubId');
+      sessionStorage.removeItem('token');
+      sessionStorage.removeItem('userRole');
+      sessionStorage.removeItem('username');
+      sessionStorage.removeItem('organizationId');
+      sessionStorage.removeItem('isSuperAdmin');
+      sessionStorage.removeItem('ligueNumero');
+      sessionStorage.removeItem('userClub');
+      sessionStorage.removeItem('userClubId');
     }
 
     // Check if already logged in
-    const token = localStorage.getItem('token');
+    const token = sessionStorage.getItem('token');
     if (token) {
       // Verify token is still valid
       fetch(`${API_URL}/auth/me`, {
@@ -107,15 +107,15 @@
         if (res.ok) {
           if (isSaLogin) {
             window.location.href = 'super-admin.html';
-          } else if (localStorage.getItem('userRole') === 'ligue_admin') {
+          } else if (sessionStorage.getItem('userRole') === 'ligue_admin') {
             window.location.href = 'ligue-dashboard.html';
           } else {
             window.location.href = 'dashboard.html';
           }
         } else {
-          localStorage.removeItem('token');
-          localStorage.removeItem('userRole');
-          localStorage.removeItem('username');
+          sessionStorage.removeItem('token');
+          sessionStorage.removeItem('userRole');
+          sessionStorage.removeItem('username');
         }
       }).catch(() => {});
     }
@@ -139,22 +139,22 @@
         const data = await response.json();
 
         if (response.ok) {
-          localStorage.setItem('token', data.token);
-          localStorage.setItem('userRole', data.user.role);
-          localStorage.setItem('username', data.user.username || username);
-          localStorage.setItem('userClub', data.user.club_name || '');
-          localStorage.setItem('userClubId', data.user.club_id || '');
-          localStorage.setItem('isSuperAdmin', data.user.is_super_admin ? 'true' : 'false');
+          sessionStorage.setItem('token', data.token);
+          sessionStorage.setItem('userRole', data.user.role);
+          sessionStorage.setItem('username', data.user.username || username);
+          sessionStorage.setItem('userClub', data.user.club_name || '');
+          sessionStorage.setItem('userClubId', data.user.club_id || '');
+          sessionStorage.setItem('isSuperAdmin', data.user.is_super_admin ? 'true' : 'false');
           // Store organization info for multi-CDB support
           if (data.user.organization_id) {
-            localStorage.setItem('organizationId', data.user.organization_id);
+            sessionStorage.setItem('organizationId', data.user.organization_id);
           }
           if (data.user.org_slug) {
-            localStorage.setItem('orgSlug', data.user.org_slug);
+            sessionStorage.setItem('orgSlug', data.user.org_slug);
           }
           // Store ligue info for ligue_admin
           if (data.user.ffb_ligue_numero) {
-            localStorage.setItem('ligueNumero', data.user.ffb_ligue_numero);
+            sessionStorage.setItem('ligueNumero', data.user.ffb_ligue_numero);
           }
           // Mark active session in this tab (prevents stale org redirect in auth-utils.js)
           sessionStorage.setItem('activeOrgSession', 'true');

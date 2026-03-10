@@ -118,7 +118,7 @@
     <div id="accessDenied" style="display: none; text-align: center; padding: 40px; color: #666;">
       <h3>Accès refusé</h3>
       <p>Cette page est réservée au Super Admin.</p>
-      <a href="login.html?sa=1" class="btn" onclick="localStorage.clear();">Se reconnecter</a>
+      <a href="login.html?sa=1" class="btn" onclick="sessionStorage.clear();">Se reconnecter</a>
     </div>
 
     <div id="pageContent" style="display: none;">
@@ -259,8 +259,8 @@
   <script>
     const API_URL = '/api';
     if (!requireAuth()) throw new Error('Not authenticated');
-    const token = localStorage.getItem('token');
-    if (localStorage.getItem('isSuperAdmin') !== 'true') {
+    const token = sessionStorage.getItem('token');
+    if (sessionStorage.getItem('isSuperAdmin') !== 'true') {
       document.getElementById('accessDenied').style.display = 'block';
       throw new Error('Not super admin');
     }
