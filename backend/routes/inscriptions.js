@@ -2111,6 +2111,17 @@ router.put('/tournoi/:id', authenticateToken, async (req, res) => {
       });
     });
 
+    // Propagate date change to child tournaments (split A/B)
+    if (dateChanged) {
+      await new Promise((resolve, reject) => {
+        db.run(
+          'UPDATE tournoi_ext SET debut = $1, fin = $2 WHERE parent_tournoi_id = $3',
+          [debut || null, fin || null, id],
+          function(err) { if (err) reject(err); else resolve(this.changes); }
+        );
+      });
+    }
+
     // Send email notifications only if:
     // 1. Date or location changed AND
     // 2. notify_on_changes is enabled (check the CURRENT value, before update) AND

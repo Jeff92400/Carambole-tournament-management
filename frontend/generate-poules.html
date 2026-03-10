@@ -1887,9 +1887,11 @@
           }
 
           // Fallback to tournament_number field, then name matching
+          // Skip child tournaments (parent_tournoi_id set) — only match parents or standalone
           if (!matchingTournoi) {
             const numericTournament = parseInt(tournamentNum);
             matchingTournoi = externalTournois.find(t =>
+              !t.parent_tournoi_id && (
               // Match by tournament_number field (most reliable)
               (numericTournament && t.tournament_number === numericTournament) ||
               // Match by name containing "TOURNOI X"
@@ -1897,7 +1899,7 @@
               // Match by name containing "TX" shorthand (e.g., "T1", "T2")
               (numericTournament && new RegExp(`\\bT${numericTournament}\\b`).test(t.nom.toUpperCase())) ||
               // Match finale
-              (isFinaleSelection && t.nom.toUpperCase().includes('FINALE'))
+              (isFinaleSelection && t.nom.toUpperCase().includes('FINALE')))
             );
           }
 
