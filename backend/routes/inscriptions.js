@@ -3536,21 +3536,23 @@ function buildFinaleMatchSchedule(numPlayers, players) {
     const c2 = getClub(m.p2);
     return c1 && c2 && c1 === c2;
   };
-  const enrich = (m) => ({
+  const enrich = (m, tableNum) => ({
     p1: m.p1, p2: m.p2,
     p1_name: getName(m.p1), p2_name: getName(m.p2),
-    p1_club: players[m.p1 - 1]?.club || '', p2_club: players[m.p2 - 1]?.club || ''
+    p1_club: players[m.p1 - 1]?.club || '', p2_club: players[m.p2 - 1]?.club || '',
+    same_club: isSameClub(m),
+    ...(tableNum !== undefined && { table: tableNum })
   });
 
   if (numPlayers === 3) {
     const matches = [{p1:1,p2:2},{p1:1,p2:3},{p1:2,p2:3}];
     matches.sort((a, b) => (isSameClub(a) ? 0 : 1) - (isSameClub(b) ? 0 : 1));
-    return { tables: '1 table', matches: matches.map(enrich) };
+    return { tables: '1 table', matches: matches.map(m => enrich(m)) };
   }
   if (numPlayers === 4) {
     const matches = [{p1:2,p2:3},{p1:1,p2:4},{p1:3,p2:4},{p1:1,p2:2},{p1:1,p2:3},{p1:2,p2:4}];
     matches.sort((a, b) => (isSameClub(a) ? 0 : 1) - (isSameClub(b) ? 0 : 1));
-    return { tables: '2 tables', matches: matches.map(enrich) };
+    return { tables: '2 tables', matches: matches.map(m => enrich(m)) };
   }
   if (numPlayers >= 6) {
     // 5 rounds, 3 simultaneous matches per round (one per table)
@@ -3567,13 +3569,13 @@ function buildFinaleMatchSchedule(numPlayers, players) {
       const bHas = b.some(m => isSameClub(m)) ? 0 : 1;
       return aHas - bHas;
     });
-    // Rebuild byTable from sorted rounds
-    const byTable = [
-      { name: 'Table 1', matches: rounds.map(r => enrich(r[0])) },
-      { name: 'Table 2', matches: rounds.map(r => enrich(r[1])) },
-      { name: 'Table 3', matches: rounds.map(r => enrich(r[2])) }
-    ];
-    return { tables: '3 tables', byTable };
+    // Return round-based format (Tour 1, Tour 2...) with table assignments
+    const roundsData = rounds.map((round, idx) => ({
+      number: idx + 1,
+      has_same_club: round.some(m => isSameClub(m)),
+      matches: round.map((m, tableIdx) => enrich(m, tableIdx + 1))
+    }));
+    return { tables: '3 tables', rounds: roundsData };
   }
   return null;
 }
