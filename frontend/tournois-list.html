@@ -957,8 +957,12 @@
       updateCategorieDropdown('edit_mode', 'edit_categorie');
       document.getElementById('edit_categorie').value = tournoi.categorie || '';
 
-      document.getElementById('edit_debut').value = tournoi.debut ? tournoi.debut.split('T')[0] : '';
-      document.getElementById('edit_fin').value = tournoi.fin ? tournoi.fin.split('T')[0] : '';
+      const debutVal = tournoi.debut ? tournoi.debut.split('T')[0] : '';
+      const finVal = tournoi.fin ? tournoi.fin.split('T')[0] : '';
+      document.getElementById('edit_debut').value = debutVal;
+      document.getElementById('edit_fin').value = finVal;
+      // If debut === fin (same-day tournament), mark fin as auto-fillable so changing debut syncs fin
+      window._autoFilledEditFin = (debutVal && debutVal === finVal) ? finVal : null;
       document.getElementById('edit_lieu').value = tournoi.lieu || '';
       document.getElementById('edit_lieu_2').value = tournoi.lieu_2 || '';
       document.getElementById('edit_tournament_number').value = tournoi.tournament_number || '';
@@ -1006,6 +1010,9 @@
     document.getElementById('editTournoiForm').addEventListener('submit', async (e) => {
       e.preventDefault();
 
+      const submitBtn = e.target.querySelector('button[type="submit"]');
+      if (submitBtn.disabled) return;
+
       const newStatus = document.getElementById('edit_status').value;
       const currentTournoi = allTournois.find(t => t.tournoi_id === parseInt(document.getElementById('edit_tournoi_id').value));
       const statusChangedToCancelled = newStatus === 'cancelled' && currentTournoi?.status !== 'cancelled';
@@ -1017,27 +1024,35 @@
         }
       }
 
-      const data = {
-        tournoi_id: parseInt(document.getElementById('edit_tournoi_id').value),
-        nom: document.getElementById('edit_nom').value,
-        mode: document.getElementById('edit_mode').value,
-        categorie: document.getElementById('edit_categorie').value,
-        tournament_number: parseInt(document.getElementById('edit_tournament_number').value) || null,
-        debut: document.getElementById('edit_debut').value || null,
-        fin: document.getElementById('edit_fin').value || null,
-        lieu: document.getElementById('edit_lieu').value || null,
-        lieu_2: document.getElementById('edit_lieu_2').value || null,
-        taille: parseInt(document.getElementById('edit_taille').value) || null,
-        taille_cadre: document.getElementById('edit_taille_cadre').value || null,
-        notify_on_changes: document.getElementById('edit_notify_on_changes').checked,
-        status: newStatus
-      };
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Enregistrement...';
 
-      const success = await updateTournoi(data);
-      if (success) {
-        closeEditModal();
-        await loadTournois();
-        alert('Tournoi mis à jour avec succès!');
+      try {
+        const data = {
+          tournoi_id: parseInt(document.getElementById('edit_tournoi_id').value),
+          nom: document.getElementById('edit_nom').value,
+          mode: document.getElementById('edit_mode').value,
+          categorie: document.getElementById('edit_categorie').value,
+          tournament_number: parseInt(document.getElementById('edit_tournament_number').value) || null,
+          debut: document.getElementById('edit_debut').value || null,
+          fin: document.getElementById('edit_fin').value || null,
+          lieu: document.getElementById('edit_lieu').value || null,
+          lieu_2: document.getElementById('edit_lieu_2').value || null,
+          taille: parseInt(document.getElementById('edit_taille').value) || null,
+          taille_cadre: document.getElementById('edit_taille_cadre').value || null,
+          notify_on_changes: document.getElementById('edit_notify_on_changes').checked,
+          status: newStatus
+        };
+
+        const success = await updateTournoi(data);
+        if (success) {
+          closeEditModal();
+          await loadTournois();
+          alert('Tournoi mis à jour avec succès!');
+        }
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Enregistrer';
       }
     });
 
@@ -1141,9 +1156,10 @@
 
       document.getElementById('edit_debut').addEventListener('change', function() {
         const finInput = document.getElementById('edit_fin');
-        if (!finInput.value || finInput.value === autoFilledFin.edit || finInput.value < this.value) {
+        if (!finInput.value || finInput.value === autoFilledFin.edit || finInput.value === window._autoFilledEditFin || finInput.value < this.value) {
           finInput.value = this.value;
           autoFilledFin.edit = this.value;
+          window._autoFilledEditFin = this.value;
         }
       });
     })();

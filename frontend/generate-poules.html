@@ -1517,9 +1517,14 @@
                   👥 ${t.isFinale ? `${t.inscribed_finalist_count || 0}/${t.finalist_count || 0} inscrits` : `${t.inscrit_count || 0} inscrit(s)`}
                 </div>
                 ${t3PendingBadge}
-                ${showSimulation ? `
+                ${showSimulation && !t.isFinale ? `
                   <button class="simulation-btn" data-tournoi-id="${t.tournoi_id}" onclick="event.stopPropagation(); openSimulationModal(${t.tournoi_id});">
                     <img src="images/french-billiard.png" alt=""> Simulation des poules
+                  </button>
+                ` : ''}
+                ${showSimulation && t.isFinale ? `
+                  <button class="simulation-btn" data-tournoi-id="${t.tournoi_id}" onclick="event.stopPropagation(); openFinaleMatchesModal(${t.tournoi_id});" style="background: linear-gradient(135deg, #ffc107, #ff9800);">
+                    🏆 Liste des matchs
                   </button>
                 ` : ''}
                 ${showSplitBtn ? `
@@ -4536,6 +4541,145 @@
           <div style="text-align: center; padding: 40px;">
             <div style="font-size: 3rem; margin-bottom: 16px;">❌</div>
             <p style="color: #dc3545;">Erreur lors du chargement de la simulation</p>
+          </div>
+        `;
+      }
+    }
+
+    // Generate round-robin match schedule for finale (same logic as email.js)
+    function generateFinaleMatchListHtml(players) {
+      const n = players.length;
+      const getName = (pos) => {
+        const p = players[pos - 1];
+        return p ? `${p.first_name} ${p.last_name}` : `Joueur ${pos}`;
+      };
+      const getClub = (pos) => {
+        const p = players[pos - 1];
+        return p ? (p.club || '') : '';
+      };
+
+      const MATCH_SCHEDULES = {
+        3: { tables: '1 table', matches: [{n:1,p1:1,p2:2},{n:2,p1:1,p2:3},{n:3,p1:2,p2:3}] },
+        4: { tables: '2 tables', matches: [{n:1,p1:2,p2:3},{n:2,p1:1,p2:4},{n:3,p1:3,p2:4,note:'(perdants M1 & M2)'},{n:4,p1:1,p2:2,note:'(gagnants M1 & M2)'},{n:5,p1:1,p2:3},{n:6,p1:2,p2:4}] },
+        6: {
+          tables: '3 tables',
+          byTable: [
+            { name: 'Table 1', matches: [{p1:1,p2:6},{p1:2,p2:3},{p1:1,p2:4},{p1:5,p2:6},{p1:4,p2:5}] },
+            { name: 'Table 2', matches: [{p1:2,p2:5},{p1:4,p2:6},{p1:3,p2:5},{p1:1,p2:3},{p1:1,p2:2}] },
+            { name: 'Table 3', matches: [{p1:3,p2:4},{p1:1,p2:5},{p1:2,p2:6},{p1:2,p2:4},{p1:3,p2:6}] }
+          ]
+        }
+      };
+
+      const schedule = MATCH_SCHEDULES[n];
+      if (!schedule) {
+        return `<p style="color: #666; text-align: center;">Programme des matchs non disponible pour ${n} joueurs</p>`;
+      }
+
+      // Player list header
+      let html = '<div style="margin-bottom: 16px;"><strong>Joueurs qualifiés :</strong><ol style="margin: 8px 0;">';
+      for (let i = 0; i < n; i++) {
+        html += `<li>${getName(i + 1)} <span style="color: #888; font-size: 12px;">(${getClub(i + 1) || '-'})</span></li>`;
+      }
+      html += '</ol></div>';
+
+      if (schedule.byTable) {
+        // 6 players: show by table
+        html += `<p style="margin-bottom: 12px; color: #666;">Tous contre tous — ${schedule.tables}</p>`;
+        html += '<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px;">';
+        schedule.byTable.forEach(table => {
+          html += `<div style="background: #f8f9fa; border-radius: 8px; overflow: hidden; border: 1px solid #e9ecef;">
+            <div style="background: var(--color-primary, #1F4788); color: white; padding: 8px 12px; font-weight: 600; text-align: center;">${table.name}</div>
+            <table style="width: 100%; border-collapse: collapse;">
+              ${table.matches.map((m, idx) => `
+                <tr style="background: ${idx % 2 === 0 ? 'white' : '#f8f9fa'};">
+                  <td style="padding: 6px 8px; font-size: 13px;">${getName(m.p1)}</td>
+                  <td style="padding: 6px 4px; text-align: center; color: #999; font-size: 12px;">vs</td>
+                  <td style="padding: 6px 8px; font-size: 13px;">${getName(m.p2)}</td>
+                </tr>
+              `).join('')}
+            </table>
+          </div>`;
+        });
+        html += '</div>';
+      } else {
+        // 3 or 4 players: single table
+        html += `<p style="margin-bottom: 12px; color: #666;">Tous contre tous — ${schedule.tables}</p>`;
+        html += `<table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+          <thead><tr style="background: var(--color-primary, #1F4788); color: white;">
+            <th style="padding: 8px;">Match</th>
+            <th style="padding: 8px;">Joueur</th>
+            <th style="padding: 8px;"></th>
+            <th style="padding: 8px;">Joueur</th>
+          </tr></thead><tbody>
+          ${schedule.matches.map((m, idx) => `
+            <tr style="background: ${idx % 2 === 0 ? 'white' : '#f8f9fa'};">
+              <td style="padding: 8px; text-align: center; font-weight: bold;">${m.n}</td>
+              <td style="padding: 8px;">${getName(m.p1)}</td>
+              <td style="padding: 8px; text-align: center; color: #999;">vs</td>
+              <td style="padding: 8px;">${getName(m.p2)}</td>
+            </tr>
+          `).join('')}
+          </tbody></table>`;
+      }
+
+      return html;
+    }
+
+    async function openFinaleMatchesModal(tournoiId) {
+      const modal = document.getElementById('simulationModal');
+      const content = document.getElementById('simulationContent');
+      const title = document.getElementById('simulationTitle');
+
+      modal.style.display = 'flex';
+      content.innerHTML = '<div class="spinner" style="margin: 40px auto;"></div>';
+      title.textContent = 'Chargement...';
+
+      try {
+        const response = await fetch(`${API_URL}/inscriptions/tournoi/${tournoiId}/simulation`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        const data = await response.json();
+
+        if (!data.available) {
+          content.innerHTML = `
+            <div style="text-align: center; padding: 40px;">
+              <div style="font-size: 3rem; margin-bottom: 16px;">👥</div>
+              <p style="color: #666;">${data.message}</p>
+            </div>
+          `;
+          title.textContent = 'Liste des matchs non disponible';
+          return;
+        }
+
+        title.textContent = `🏆 ${data.tournament.nom} - ${data.tournament.mode} ${data.tournament.categorie}`;
+
+        // Collect all players from poules (simulation returns a single poule for finales)
+        const allPlayers = [];
+        data.simulation.poules.forEach(p => {
+          p.players.forEach(player => allPlayers.push(player));
+        });
+
+        content.innerHTML = `
+          <div style="text-align: center; margin-bottom: 20px;">
+            <span style="background: #fff8e1; color: #f57f17; padding: 8px 16px; border-radius: 20px; font-size: 14px; font-weight: 600;">
+              ${allPlayers.length} finalistes • Tous contre tous
+            </span>
+          </div>
+          ${generateFinaleMatchListHtml(allPlayers)}
+          <div style="text-align: center; margin-top: 20px; padding-top: 16px; border-top: 1px solid #eee;">
+            <p style="font-size: 12px; color: #666;">
+              Liste générée le ${new Date().toLocaleString('fr-FR')}
+            </p>
+          </div>
+        `;
+      } catch (error) {
+        console.error('Finale matches error:', error);
+        content.innerHTML = `
+          <div style="text-align: center; padding: 40px;">
+            <div style="font-size: 3rem; margin-bottom: 16px;">❌</div>
+            <p style="color: #dc3545;">Erreur lors du chargement de la liste des matchs</p>
           </div>
         `;
       }
