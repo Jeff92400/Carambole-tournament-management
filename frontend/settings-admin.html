@@ -130,18 +130,20 @@
     }
 
     /* Accordion panels */
-    .accordion-panel { border: 1px solid #e0e0e0; border-radius: 8px; margin-bottom: 12px; overflow: hidden; }
+    .accordion-panel { border: 1px solid #e0e0e0; border-radius: 8px; margin-bottom: 12px; }
     .accordion-header {
       display: flex; justify-content: space-between; align-items: center;
       padding: 14px 18px; background: #f8f9fa; cursor: pointer; user-select: none; transition: background 0.2s;
+      border-radius: 7px;
     }
+    .accordion-panel.open .accordion-header { border-radius: 7px 7px 0 0; }
     .accordion-header:hover { background: #e9ecef; }
     .accordion-icon { display: inline-block; font-size: 10px; margin-right: 10px; transition: transform 0.2s; color: #666; }
     .accordion-panel.open .accordion-icon { transform: rotate(90deg); }
     .accordion-title { display: flex; align-items: center; font-size: 14px; }
     .accordion-summary { font-size: 12px; color: #888; font-weight: 400; max-width: 55%; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .accordion-body { max-height: 0; overflow: hidden; transition: max-height 0.3s ease, padding 0.3s ease; padding: 0 18px; }
-    .accordion-panel.open .accordion-body { max-height: 3000px; padding: 18px; }
+    .accordion-panel.open .accordion-body { max-height: 10000px; padding: 18px; }
   </style>
 </head>
 <body>
@@ -278,14 +280,18 @@
     </div>
 
     <!-- Player App Accounts Section - Admin Only -->
-    <div class="card admin-only" id="playerAppAccountsSection" data-settings-tab="espace-joueur">
+    <div class="accordion-panel admin-only" id="playerAppAccountsSection" data-settings-tab="espace-joueur">
+      <div class="accordion-header" onclick="toggleAccordion('playerAppAccountsSection')">
+        <div class="accordion-title"><span class="accordion-icon">&#9654;</span><strong>Comptes Espace Joueur</strong></div>
+        <span class="accordion-summary" id="summary-playerAccounts">Gestion des comptes</span>
+      </div>
+      <div class="accordion-body">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-        <h3 style="margin: 0;">Comptes Espace Joueur</h3>
+        <p style="margin: 0; color: #666;">Gérez les comptes de l'application Espace Joueur.</p>
         <a href="player-accounts.html" class="btn" style="background: #1F4788; padding: 8px 16px; font-size: 14px;">
           Voir tous les comptes
         </a>
       </div>
-      <p style="margin-bottom: 20px; color: #666;">Gérez les comptes de l'application Espace Joueur. Les comptes "Admin" peuvent se connecter en tant que n'importe quel joueur.</p>
 
       <!-- Add New Player Account Form -->
       <div style="margin-bottom: 25px; padding: 20px; background: #f8f9fa; border-radius: 8px;">
@@ -330,11 +336,16 @@
           <p style="color: #666; text-align: center; font-style: italic;">Entrez au moins 2 caractères pour rechercher</p>
         </div>
       </div>
+      </div>
     </div>
 
     <!-- Game Parameters Section - Admin Only -->
-    <div class="card admin-only" id="gameParametersSection" data-settings-tab="competitions">
-      <h3>Paramètres des épreuves</h3>
+    <div class="accordion-panel admin-only" id="gameParametersSection" data-settings-tab="competitions">
+      <div class="accordion-header" onclick="toggleAccordion('gameParametersSection')">
+        <div class="accordion-title"><span class="accordion-icon">&#9654;</span><strong>Paramètres des épreuves</strong></div>
+        <span class="accordion-summary" id="summary-gameParams">Chargement...</span>
+      </div>
+      <div class="accordion-body">
       <p style="margin-bottom: 20px; color: #666;">
         Configurez les règles pour chaque mode de jeu et catégorie (distance, reprises, moyennes qualificatives).
       </p>
@@ -411,6 +422,7 @@
       </div>
 
       <div id="gameParamsMessage" style="display: none; margin-top: 15px; padding: 10px; border-radius: 4px;"></div>
+      </div>
     </div>
 
     <!-- Category Mappings Section - Hidden (deprecated: IONOS decommissioned, remove for 2025-2026 season) -->
@@ -476,8 +488,12 @@
     </div>
 
     <!-- Email Scheduler Settings - Admin Only -->
-    <div class="card admin-only" id="emailSchedulerSection" data-settings-tab="espace-joueur">
-      <h3>Planification des emails</h3>
+    <div class="accordion-panel admin-only" id="emailSchedulerSection" data-settings-tab="espace-joueur">
+      <div class="accordion-header" onclick="toggleAccordion('emailSchedulerSection')">
+        <div class="accordion-title"><span class="accordion-icon">&#9654;</span><strong>Planification des emails</strong></div>
+        <span class="accordion-summary" id="summary-scheduler">Chargement...</span>
+      </div>
+      <div class="accordion-body">
       <p style="margin-bottom: 20px; color: #666;">
         Configurez l'heure d'envoi automatique des emails programmés.
       </p>
@@ -526,11 +542,16 @@
           Si un email a déjà été envoyé manuellement avant la date programmée, il sera automatiquement bloqué.
         </p>
       </div>
+      </div>
     </div>
 
     <!-- Player App Settings Section - Admin Only -->
-    <div class="card admin-only" id="playerAppSettingsSection" data-settings-tab="espace-joueur">
-      <h3>Paramètres Espace Joueur</h3>
+    <div class="accordion-panel admin-only" id="playerAppSettingsSection" data-settings-tab="espace-joueur">
+      <div class="accordion-header" onclick="toggleAccordion('playerAppSettingsSection')">
+        <div class="accordion-title"><span class="accordion-icon">&#9654;</span><strong>Paramètres Espace Joueur</strong></div>
+        <span class="accordion-summary" id="summary-playerAppSettings">Chargement...</span>
+      </div>
+      <div class="accordion-body">
       <p style="margin-bottom: 20px; color: #666;">
         Configurez les paramètres de l'application Espace Joueur.
       </p>
@@ -553,6 +574,7 @@
           Ce lien sera affiché dans l'application Espace Joueur lors des inscriptions aux tournois.
           Les joueurs devront confirmer avoir pris connaissance du règlement avant de s'inscrire.
         </p>
+      </div>
       </div>
     </div>
 
@@ -604,8 +626,12 @@
     </div>
 
     <!-- Maintenance Section - Admin Only -->
-    <div class="card admin-only" id="maintenanceSection" data-settings-tab="maintenance">
-      <h3>🔧 Maintenance</h3>
+    <div class="accordion-panel admin-only" id="maintenanceSection" data-settings-tab="maintenance">
+      <div class="accordion-header" onclick="toggleAccordion('maintenanceSection')">
+        <div class="accordion-title"><span class="accordion-icon">&#9654;</span><strong>Outils de maintenance</strong></div>
+        <span class="accordion-summary" id="summary-maintenance">Recalcul moyennes et classements</span>
+      </div>
+      <div class="accordion-body">
       <p style="margin-bottom: 20px; color: #666;">
         Outils de maintenance pour corriger les données existantes.
       </p>
@@ -648,11 +674,16 @@
       </div>
 
       <div id="maintenanceMessage" style="display: none; margin-top: 20px; padding: 15px; border-radius: 4px;"></div>
+      </div>
     </div>
 
     <!-- Organisation Section - Admin Only -->
-    <div class="card admin-only" id="organisationSection" data-settings-tab="organisation">
-      <h3>🏢 Organisation</h3>
+    <div class="accordion-panel admin-only" id="organisationSection" data-settings-tab="organisation">
+      <div class="accordion-header" onclick="toggleAccordion('organisationSection')">
+        <div class="accordion-title"><span class="accordion-icon">&#9654;</span><strong>Organisation</strong></div>
+        <span class="accordion-summary" id="summary-organisation">Chargement...</span>
+      </div>
+      <div class="accordion-body">
       <p style="margin-bottom: 20px; color: #666;">
         Configurez les informations de votre organisation. Ces informations seront utilisées dans les emails et l'application.
       </p>
@@ -741,11 +772,16 @@
         Enregistrer
       </button>
       <div id="organisationMessage" style="display: none; margin-top: 15px; padding: 10px; border-radius: 4px;"></div>
+      </div>
     </div>
 
     <!-- Identité Visuelle Section - Admin Only -->
-    <div class="card admin-only" id="brandingSection" data-settings-tab="organisation">
-      <h3>🎨 Identité Visuelle</h3>
+    <div class="accordion-panel admin-only" id="brandingSection" data-settings-tab="organisation">
+      <div class="accordion-header" onclick="toggleAccordion('brandingSection')">
+        <div class="accordion-title"><span class="accordion-icon">&#9654;</span><strong>Identité Visuelle</strong></div>
+        <span class="accordion-summary" id="summary-branding">Chargement...</span>
+      </div>
+      <div class="accordion-body">
       <p style="margin-bottom: 20px; color: #666;">
         Personnalisez les couleurs de l'application et des emails.
       </p>
@@ -797,11 +833,16 @@
         Enregistrer
       </button>
       <div id="brandingMessage" style="display: none; margin-top: 15px; padding: 10px; border-radius: 4px;"></div>
+      </div>
     </div>
 
     <!-- Emails Configuration Section - Admin Only -->
-    <div class="card admin-only" id="emailsConfigSection" data-settings-tab="organisation">
-      <h3>📧 Configuration des Emails</h3>
+    <div class="accordion-panel admin-only" id="emailsConfigSection" data-settings-tab="organisation">
+      <div class="accordion-header" onclick="toggleAccordion('emailsConfigSection')">
+        <div class="accordion-title"><span class="accordion-icon">&#9654;</span><strong>Configuration des Emails</strong></div>
+        <span class="accordion-summary" id="summary-emailsConfig">Chargement...</span>
+      </div>
+      <div class="accordion-body">
       <p style="margin-bottom: 15px; color: #666;">
         Configurez les adresses email utilisées pour les différents types de communications.
       </p>
@@ -838,11 +879,16 @@
         Enregistrer
       </button>
       <div id="emailsConfigMessage" style="display: none; margin-top: 15px; padding: 10px; border-radius: 4px;"></div>
+      </div>
     </div>
 
     <!-- Saison Section - Admin Only -->
-    <div class="card admin-only" id="seasonSection" data-settings-tab="organisation">
-      <h3>📅 Configuration de la Saison</h3>
+    <div class="accordion-panel admin-only" id="seasonSection" data-settings-tab="organisation">
+      <div class="accordion-header" onclick="toggleAccordion('seasonSection')">
+        <div class="accordion-title"><span class="accordion-icon">&#9654;</span><strong>Configuration de la Saison</strong></div>
+        <span class="accordion-summary" id="summary-season">Chargement...</span>
+      </div>
+      <div class="accordion-body">
       <p style="margin-bottom: 20px; color: #666;">
         Configurez le mois de début de saison pour le calcul automatique de la saison en cours.
       </p>
@@ -900,13 +946,18 @@
       </div>
 
       <div id="snapshotMessage" style="display: none; margin-top: 15px; padding: 10px; border-radius: 4px;"></div>
+      </div>
     </div>
 
     <!-- Time Thresholds Section - Admin Only -->
-    <div class="card admin-only" id="timeThresholdsSection" data-settings-tab="competitions">
-      <h3>Delais des Competitions</h3>
+    <div class="accordion-panel admin-only" id="timeThresholdsSection" data-settings-tab="competitions">
+      <div class="accordion-header" onclick="toggleAccordion('timeThresholdsSection')">
+        <div class="accordion-title"><span class="accordion-icon">&#9654;</span><strong>Délais des compétitions</strong></div>
+        <span class="accordion-summary" id="summary-timeThresholds">Chargement...</span>
+      </div>
+      <div class="accordion-body">
       <p style="margin-bottom: 20px; color: #666;">
-        Configurez les delais (en jours) utilises pour les fonctionnalites liees aux competitions.
+        Configurez les délais (en jours) utilisés pour les fonctionnalités liées aux compétitions.
       </p>
 
       <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px;">
@@ -964,16 +1015,21 @@
           - <strong>Simulation</strong> : la generation de poules de test est desactivee a l'approche du tournoi<br>
           - <strong>Relances</strong> : fenetre pendant laquelle les tournois apparaissent pour les relances<br>
           - <strong>Alertes</strong> : seuil de passage en mode urgent (rouge) sur le tableau de bord<br>
-          - <strong>Affichage</strong> : delai d'apparition des competitions sur la page Competitions
+          - <strong>Affichage</strong> : délai d'apparition des compétitions sur la page Compétitions
         </p>
+      </div>
       </div>
     </div>
 
     <!-- Classements Section - Admin Only -->
-    <div class="card admin-only" id="rankingsConfigSection" data-settings-tab="competitions">
-      <h3>Configuration des Classements</h3>
+    <div class="accordion-panel admin-only" id="rankingsConfigSection" data-settings-tab="competitions">
+      <div class="accordion-header" onclick="toggleAccordion('rankingsConfigSection')">
+        <div class="accordion-title"><span class="accordion-icon">&#9654;</span><strong>Qualification pour la finale</strong></div>
+        <span class="accordion-summary" id="summary-rankingsConfig">Chargement...</span>
+      </div>
+      <div class="accordion-body">
       <p style="margin-bottom: 20px; color: #666;">
-        Configurez les regles de qualification pour la finale departementale.
+        Configurez les règles de qualification pour la finale départementale.
       </p>
 
       <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px;">
@@ -1005,12 +1061,11 @@
           Chargement...
         </p>
       </div>
+      </div>
     </div>
 
-    <!-- Types de Tournoi Section - Admin Only -->
-    <div class="card admin-only" id="tournamentTypesSection" data-settings-tab="competitions">
-      <h3>🎯 Compétitions et Qualification</h3>
-
+    <!-- Qualification Settings - Admin Only -->
+    <div class="admin-only" id="tournamentTypesSection" data-settings-tab="competitions">
       <select id="qualificationMode" style="display: none;">
         <option value="standard">Standard</option>
         <option value="journees">Journées</option>
@@ -1256,8 +1311,12 @@
     </div>
 
     <!-- Politique de Confidentialité Section - Admin Only -->
-    <div class="card admin-only" id="privacyPolicySection" data-settings-tab="organisation">
-      <h3>📋 Politique de Confidentialité</h3>
+    <div class="accordion-panel admin-only" id="privacyPolicySection" data-settings-tab="organisation">
+      <div class="accordion-header" onclick="toggleAccordion('privacyPolicySection')">
+        <div class="accordion-title"><span class="accordion-icon">&#9654;</span><strong>Politique de Confidentialité</strong></div>
+        <span class="accordion-summary" id="summary-privacy">Non configurée</span>
+      </div>
+      <div class="accordion-body">
       <p style="margin-bottom: 20px; color: #666;">
         Gérez le texte complet de la politique de confidentialité affiché dans l'Espace Joueur.
       </p>
@@ -1272,12 +1331,17 @@
           Modifier la politique →
         </a>
       </div>
+      </div>
     </div>
 
 
     <!-- Activity Logs Section - Admin Only -->
-    <div class="card admin-only" id="activityLogsSection" data-settings-tab="maintenance">
-      <h3>📋 Logs d'activité</h3>
+    <div class="accordion-panel admin-only" id="activityLogsSection" data-settings-tab="maintenance">
+      <div class="accordion-header" onclick="toggleAccordion('activityLogsSection')">
+        <div class="accordion-title"><span class="accordion-icon">&#9654;</span><strong>Logs d'activité</strong></div>
+        <span class="accordion-summary" id="summary-logs">Chargement...</span>
+      </div>
+      <div class="accordion-body">
       <p style="margin-bottom: 20px; color: #666;">Consultez l'historique des actions des utilisateurs : connexions, inscriptions, créations de compte, etc.</p>
       <div style="display: flex; gap: 15px; flex-wrap: wrap; align-items: center;">
         <a href="activity-logs.html" class="btn" style="background: #1F4788; padding: 12px 25px; text-decoration: none;">
@@ -1286,6 +1350,7 @@
         <div id="logsQuickStats" style="display: flex; gap: 20px; color: #666; font-size: 0.9rem;">
           <span>Chargement des stats...</span>
         </div>
+      </div>
       </div>
     </div>
   </div>
@@ -1351,6 +1416,35 @@
     }
 
     function updateAccordionSummaries() {
+      const MONTH_NAMES = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
+
+      // --- Compétitions tab ---
+      // Paramètres des épreuves
+      const gpEl = document.getElementById('summary-gameParams');
+      if (gpEl) {
+        const count = document.querySelectorAll('#gameParametersBody tr[data-id]').length;
+        gpEl.textContent = count > 0 ? count + ' paramètres définis' : 'Aucun paramètre';
+      }
+      // Délais des compétitions
+      const dtEl = document.getElementById('summary-timeThresholds');
+      if (dtEl) {
+        const sim = document.getElementById('thresholdSimulationDisabled')?.value;
+        const rStart = document.getElementById('thresholdRelanceStart')?.value;
+        const rEnd = document.getElementById('thresholdRelanceEnd')?.value;
+        if (sim && rStart && rEnd) {
+          dtEl.textContent = 'Simulation ' + sim + 'j, Relances ' + rStart + '-' + rEnd + 'j';
+        }
+      }
+      // Qualification pour la finale
+      const rcEl = document.getElementById('summary-rankingsConfig');
+      if (rcEl) {
+        const threshold = document.getElementById('qualificationThreshold')?.value;
+        const small = document.getElementById('qualificationSmall')?.value;
+        const large = document.getElementById('qualificationLarge')?.value;
+        if (threshold && small && large) {
+          rcEl.textContent = 'Seuil ' + threshold + ' — ' + small + ' / ' + large + ' qualifiés';
+        }
+      }
       // Mode de qualification
       const modeEl = document.getElementById('summary-mode');
       if (modeEl) {
@@ -1393,6 +1487,61 @@
           rankEl.textContent = bestOf === '0' ? 'Tous les tournois' : bestOf + ' meilleurs sur ' + journees + ' journées';
         } else {
           rankEl.textContent = bestOf === '0' ? 'Tous les tournois' : bestOf + ' meilleurs résultats';
+        }
+      }
+
+      // --- Organisation tab ---
+      const orgEl = document.getElementById('summary-organisation');
+      if (orgEl) {
+        const shortName = document.getElementById('organizationShortName')?.value;
+        orgEl.textContent = shortName || 'Non configurée';
+      }
+      const brandEl = document.getElementById('summary-branding');
+      if (brandEl) {
+        const pc = document.getElementById('primaryColorText')?.value || '#1F4788';
+        brandEl.textContent = 'Couleur principale : ' + pc;
+      }
+      const emcEl = document.getElementById('summary-emailsConfig');
+      if (emcEl) {
+        const count = ['emailCommunication', 'emailConvocations', 'emailNoreply', 'emailSenderName']
+          .filter(id => document.getElementById(id)?.value?.trim()).length;
+        emcEl.textContent = count + '/4 champs configurés';
+      }
+      const seaEl = document.getElementById('summary-season');
+      if (seaEl) {
+        const monthVal = document.getElementById('seasonCutoffMonth')?.value;
+        if (monthVal !== undefined && monthVal !== '') {
+          seaEl.textContent = 'Début : ' + MONTH_NAMES[parseInt(monthVal)];
+        }
+      }
+      const privEl = document.getElementById('summary-privacy');
+      if (privEl) {
+        const lastUpdate = document.getElementById('privacyPolicyLastUpdate')?.textContent;
+        privEl.textContent = lastUpdate || 'Non configurée';
+      }
+
+      // --- Espace Joueur tab ---
+      const schEl = document.getElementById('summary-scheduler');
+      if (schEl) {
+        const hour = document.getElementById('schedulerHour')?.value;
+        if (hour !== undefined && hour !== '') {
+          schEl.textContent = 'Envoi à ' + hour.padStart(2, '0') + 'h00';
+        }
+      }
+      const pasEl = document.getElementById('summary-playerAppSettings');
+      if (pasEl) {
+        const url = document.getElementById('reglementUrl')?.value?.trim();
+        pasEl.textContent = url ? 'URL configurée' : 'Non configuré';
+      }
+
+      // --- Maintenance tab ---
+      const logEl = document.getElementById('summary-logs');
+      if (logEl) {
+        const stats = document.getElementById('logsQuickStats')?.textContent?.trim();
+        if (stats && !stats.includes('Chargement')) {
+          logEl.textContent = stats.substring(0, 50);
+        } else {
+          logEl.textContent = 'Historique des actions';
         }
       }
     }
@@ -2321,6 +2470,7 @@
           if (data.value) {
             document.getElementById('schedulerHour').value = data.value;
           }
+          updateAccordionSummaries();
         }
       } catch (error) {
         console.error('Error loading scheduler hour:', error);
@@ -2378,6 +2528,7 @@
           if (data.value) {
             document.getElementById('reglementUrl').value = data.value;
           }
+          updateAccordionSummaries();
         }
       } catch (error) {
         console.error('Error loading règlement URL:', error);
@@ -2599,6 +2750,7 @@
 
         gameParameters = await response.json();
         renderGameParametersTable();
+        updateAccordionSummaries();
       } catch (error) {
         console.error('Error loading game parameters:', error);
         document.getElementById('gameParametersBody').innerHTML = `
@@ -3235,6 +3387,7 @@
           document.getElementById('headerLogoSizeValue').textContent = logoSize + 'px';
           document.getElementById('logoSizePreview').style.width = logoSize + 'px';
           document.getElementById('logoSizePreview').style.height = logoSize + 'px';
+          updateAccordionSummaries();
         }
 
         // Load logo info
@@ -3423,6 +3576,7 @@
             document.getElementById(id).value = value;
             document.getElementById(id + 'Text').value = value;
           }
+          updateAccordionSummaries();
         }
       } catch (error) {
         console.error('Error loading branding settings:', error);
@@ -3483,6 +3637,7 @@
           document.getElementById('emailConvocations').value = settings.email_convocations || '';
           document.getElementById('emailNoreply').value = settings.email_noreply || '';
           document.getElementById('emailSenderName').value = settings.email_sender_name || '';
+          updateAccordionSummaries();
         }
       } catch (error) {
         console.error('Error loading emails config:', error);
@@ -3541,6 +3696,7 @@
           if (data.value) {
             document.getElementById('seasonCutoffMonth').value = data.value;
           }
+          updateAccordionSummaries();
         }
       } catch (error) {
         console.error('Error loading season settings:', error);
@@ -3661,6 +3817,7 @@
           document.getElementById('thresholdStaleImportWarning').value = settings.threshold_stale_import_warning || '7';
           document.getElementById('thresholdUrgentAlert').value = settings.threshold_urgent_alert || '7';
           document.getElementById('thresholdDisplayCompetitions').value = settings.threshold_display_competitions || '28';
+          updateAccordionSummaries();
         }
       } catch (error) {
         console.error('Error loading time thresholds:', error);
@@ -3702,9 +3859,10 @@
         });
 
         if (response.ok) {
-          msgDiv.textContent = 'Delais des competitions enregistres';
+          msgDiv.textContent = 'Délais des compétitions enregistrés';
           msgDiv.style.background = '#d4edda';
           msgDiv.style.color = '#155724';
+          updateAccordionSummaries();
         } else {
           throw new Error('Erreur lors de la sauvegarde');
         }
@@ -3742,6 +3900,7 @@
             settings.qualification_small || '4',
             settings.qualification_large || '6'
           );
+          updateAccordionSummaries();
         }
       } catch (error) {
         console.error('Error loading rankings config:', error);
@@ -3780,6 +3939,7 @@
           msgDiv.style.background = '#d4edda';
           msgDiv.style.color = '#155724';
           updateRankingsRuleDisplay(threshold, small, large);
+          updateAccordionSummaries();
         } else {
           throw new Error('Erreur lors de la sauvegarde');
         }
@@ -4005,6 +4165,7 @@
           } else {
             updateEl.textContent = 'Non configurée';
           }
+          updateAccordionSummaries();
         }
       } catch (error) {
         console.error('Error loading privacy policy info:', error);
@@ -4032,6 +4193,7 @@
               <span title="7 derniers jours">👤 <strong>${stats.newAccounts || 0}</strong> nouveaux comptes</span>
             `;
           }
+          updateAccordionSummaries();
         }
       } catch (error) {
         console.error('Error loading logs quick stats:', error);
