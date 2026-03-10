@@ -107,8 +107,8 @@ router.put('/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Enquête non trouvée' });
     }
 
-    if (campaign.status !== 'draft' && campaign.status !== 'scheduled') {
-      return res.status(400).json({ error: 'Seules les enquêtes en brouillon ou programmées peuvent être modifiées' });
+    if (campaign.status === 'closed') {
+      return res.status(400).json({ error: 'Les enquêtes clôturées ne peuvent pas être modifiées' });
     }
 
     const {
@@ -125,28 +125,44 @@ router.put('/:id', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Le titre est requis' });
     }
 
-    await new Promise((resolve, reject) => {
-      db.run(
-        `UPDATE survey_campaigns
-         SET title = $1, description = $2, category_1_label = $3, category_2_label = $4, category_3_label = $5, category_4_label = $6, category_5_label = $7
-         WHERE id = $8 AND ($9::int IS NULL OR organization_id = $9)`,
-        [
-          title,
-          description || null,
-          category_1_label || DEFAULT_CATEGORY_LABELS[0],
-          category_2_label || DEFAULT_CATEGORY_LABELS[1],
-          category_3_label || DEFAULT_CATEGORY_LABELS[2],
-          category_4_label || DEFAULT_CATEGORY_LABELS[3],
-          category_5_label || DEFAULT_CATEGORY_LABELS[4],
-          id,
-          orgId
-        ],
-        function(err) {
-          if (err) reject(err);
-          else resolve(this.changes);
-        }
-      );
-    });
+    // Active campaigns: only title and description can change
+    if (campaign.status === 'active') {
+      await new Promise((resolve, reject) => {
+        db.run(
+          `UPDATE survey_campaigns SET title = $1, description = $2
+           WHERE id = $3 AND ($4::int IS NULL OR organization_id = $4)`,
+          [title, description || null, id, orgId],
+          function(err) {
+            if (err) reject(err);
+            else resolve(this.changes);
+          }
+        );
+      });
+    } else {
+      // Draft/scheduled: full edit
+      await new Promise((resolve, reject) => {
+        db.run(
+          `UPDATE survey_campaigns
+           SET title = $1, description = $2, category_1_label = $3, category_2_label = $4, category_3_label = $5, category_4_label = $6, category_5_label = $7
+           WHERE id = $8 AND ($9::int IS NULL OR organization_id = $9)`,
+          [
+            title,
+            description || null,
+            category_1_label || DEFAULT_CATEGORY_LABELS[0],
+            category_2_label || DEFAULT_CATEGORY_LABELS[1],
+            category_3_label || DEFAULT_CATEGORY_LABELS[2],
+            category_4_label || DEFAULT_CATEGORY_LABELS[3],
+            category_5_label || DEFAULT_CATEGORY_LABELS[4],
+            id,
+            orgId
+          ],
+          function(err) {
+            if (err) reject(err);
+            else resolve(this.changes);
+          }
+        );
+      });
+    }
 
     res.json({ success: true, message: 'Enquête mise à jour' });
   } catch (err) {

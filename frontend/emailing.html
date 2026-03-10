@@ -7718,6 +7718,7 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
           } else if (c.status === 'active') {
             actions = `
               <button class="btn" style="padding: 5px 12px; font-size: 12px; background: #dc3545;" onclick="closeSurvey(${c.id})">Clôturer</button>
+              <button class="btn" style="padding: 5px 12px; font-size: 12px; background: #6c757d;" onclick="editSurveyTitle(${c.id})">Modifier titre</button>
               <button class="btn" style="padding: 5px 12px; font-size: 12px; background: #17a2b8;" onclick="viewSurveyResults(${c.id})">Résultats (${responseCount})</button>
             `;
           } else {
@@ -7891,6 +7892,42 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
         if (!response.ok) throw new Error(data.error || 'Erreur');
         showSuccess(data.message || 'Sondage activé');
         hideActivateModal();
+        loadSurveys();
+      } catch (err) {
+        showError(err.message);
+      }
+    }
+
+    async function editSurveyTitle(id) {
+      try {
+        const response = await fetch(`${API_URL}/surveys`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const campaigns = await response.json();
+        const c = campaigns.find(x => x.id === id);
+        if (!c) return;
+
+        const newTitle = prompt('Nouveau titre :', c.title);
+        if (!newTitle || newTitle.trim() === '' || newTitle.trim() === c.title) return;
+
+        const newDesc = prompt('Description (laisser vide pour ne pas changer) :', c.description || '');
+
+        const res2 = await fetch(`${API_URL}/surveys/${id}`, {
+          method: 'PUT',
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: newTitle.trim(),
+            description: newDesc !== null ? newDesc.trim() : (c.description || ''),
+            category_1_label: c.category_1_label,
+            category_2_label: c.category_2_label,
+            category_3_label: c.category_3_label,
+            category_4_label: c.category_4_label,
+            category_5_label: c.category_5_label
+          })
+        });
+        const data = await res2.json();
+        if (!res2.ok) throw new Error(data.error || 'Erreur');
+        showSuccess('Titre mis à jour');
         loadSurveys();
       } catch (err) {
         showError(err.message);
