@@ -1509,14 +1509,37 @@ router.delete('/tournoi/:tournoiId', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Tournoi non trouvé' });
     }
 
-    // Delete (cascades to inscriptions, convocation_poules, etc.)
-    await new Promise((resolve, reject) => {
-      db.run(
-        'DELETE FROM tournoi_ext WHERE tournoi_id = $1 AND ($2::int IS NULL OR organization_id = $2)',
-        [tournoiId, orgId],
-        function(err) { if (err) reject(err); else resolve(this.changes); }
+    // Collect IDs to delete: the tournoi itself + any split children
+    const childIds = await new Promise((resolve, reject) => {
+      db.all(
+        'SELECT tournoi_id FROM tournoi_ext WHERE parent_tournoi_id = $1',
+        [tournoiId],
+        (err, rows) => { if (err) reject(err); else resolve((rows || []).map(r => r.tournoi_id)); }
       );
     });
+    const allIds = [parseInt(tournoiId), ...childIds];
+
+    // Delete dependent rows in correct order (no ON DELETE CASCADE on most FKs)
+    const dbRun = (sql, params) => new Promise((resolve, reject) => {
+      db.run(sql, params, function(err) { if (err) reject(err); else resolve(this.changes); });
+    });
+
+    for (const id of allIds) {
+      await dbRun('DELETE FROM inscriptions WHERE tournoi_id = $1', [id]);
+      await dbRun('DELETE FROM convocation_poules WHERE tournoi_id = $1', [id]);
+      await dbRun('DELETE FROM convocation_files WHERE tournoi_ext_id = $1', [id]);
+      await dbRun('DELETE FROM tournament_relances WHERE tournoi_id = $1', [id]);
+      await dbRun('DELETE FROM tournament_parameter_overrides WHERE tournoi_id = $1', [id]);
+    }
+
+    // Delete children first, then parent
+    for (const childId of childIds) {
+      await dbRun('DELETE FROM tournoi_ext WHERE tournoi_id = $1', [childId]);
+    }
+    await dbRun(
+      'DELETE FROM tournoi_ext WHERE tournoi_id = $1 AND ($2::int IS NULL OR organization_id = $2)',
+      [tournoiId, orgId]
+    );
 
     res.json({ success: true, message: `Tournoi "${tournoi.nom}" supprimé` });
   } catch (error) {
