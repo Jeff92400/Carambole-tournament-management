@@ -3448,6 +3448,14 @@ router.get('/tournoi/:id/simulation', authenticateToken, async (req, res) => {
     // Distribute players using serpentine algorithm
     const poules = distributeSimulationSerpentine(playersWithRanks, config.poules);
 
+    // For finales, generate match schedule with same-club-first sorting
+    let finaleMatches = null;
+    if (isFinale && poules.length === 1) {
+      const players = poules[0].players;
+      const n = players.length;
+      finaleMatches = buildFinaleMatchSchedule(n, players);
+    }
+
     res.json({
       available: true,
       tournament: {
@@ -3462,6 +3470,8 @@ router.get('/tournoi/:id/simulation', authenticateToken, async (req, res) => {
         generated_at: new Date().toISOString(),
         player_count: playersWithRanks.length,
         config_description: config.description,
+        is_finale: isFinale,
+        finale_matches: finaleMatches,
         poules: poules.map(p => ({
           number: p.number,
           players: p.players.map(player => ({
@@ -3501,6 +3511,56 @@ function distributeSimulationSerpentine(players, pouleSizes) {
     round++;
   }
   return poules;
+}
+
+/**
+ * Build finale match schedule with same-club matches first.
+ * Same logic as email.js buildFinaleMatches — single source of truth for match ordering.
+ * Returns { tables: string, matches: [{p1, p2, p1_name, p2_name, p1_club, p2_club}], byTable?: [...] }
+ */
+function buildFinaleMatchSchedule(numPlayers, players) {
+  const getName = (pos) => {
+    const p = players[pos - 1];
+    return p ? `${p.first_name} ${p.last_name}` : `Joueur ${pos}`;
+  };
+  const getClub = (pos) => {
+    const p = players[pos - 1];
+    return (p?.club || '').toUpperCase().trim();
+  };
+  const isSameClub = (m) => {
+    const c1 = getClub(m.p1);
+    const c2 = getClub(m.p2);
+    return c1 && c2 && c1 === c2;
+  };
+  const enrich = (m) => ({
+    p1: m.p1, p2: m.p2,
+    p1_name: getName(m.p1), p2_name: getName(m.p2),
+    p1_club: players[m.p1 - 1]?.club || '', p2_club: players[m.p2 - 1]?.club || ''
+  });
+
+  if (numPlayers === 3) {
+    const matches = [{p1:1,p2:2},{p1:1,p2:3},{p1:2,p2:3}];
+    matches.sort((a, b) => (isSameClub(a) ? 0 : 1) - (isSameClub(b) ? 0 : 1));
+    return { tables: '1 table', matches: matches.map(enrich) };
+  }
+  if (numPlayers === 4) {
+    const matches = [{p1:2,p2:3},{p1:1,p2:4},{p1:3,p2:4},{p1:1,p2:2},{p1:1,p2:3},{p1:2,p2:4}];
+    matches.sort((a, b) => (isSameClub(a) ? 0 : 1) - (isSameClub(b) ? 0 : 1));
+    return { tables: '2 tables', matches: matches.map(enrich) };
+  }
+  if (numPlayers >= 6) {
+    const byTable = [
+      { name: 'Table 1', matches: [{p1:1,p2:6},{p1:2,p2:3},{p1:1,p2:4},{p1:5,p2:6},{p1:4,p2:5}] },
+      { name: 'Table 2', matches: [{p1:2,p2:5},{p1:4,p2:6},{p1:3,p2:5},{p1:1,p2:3},{p1:1,p2:2}] },
+      { name: 'Table 3', matches: [{p1:3,p2:4},{p1:1,p2:5},{p1:2,p2:6},{p1:2,p2:4},{p1:3,p2:6}] }
+    ];
+    byTable.forEach(t => {
+      t.matches.sort((a, b) => (isSameClub(a) ? 0 : 1) - (isSameClub(b) ? 0 : 1));
+      t.matches = t.matches.map(enrich);
+    });
+    return { tables: '3 tables', byTable };
+  }
+  return null;
 }
 
 // Update all past inscriptions to convoqué (admin only, one-time utility)
