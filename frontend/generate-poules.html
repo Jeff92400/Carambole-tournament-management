@@ -4566,14 +4566,16 @@
           html += `<div style="background: #f8f9fa; border-radius: 8px; overflow: hidden; border: 1px solid #e9ecef;">
             <div style="background: var(--color-primary, #1F4788); color: white; padding: 8px 12px; font-weight: 600; text-align: center;">${table.name}</div>
             <table style="width: 100%; border-collapse: collapse;">
-              ${table.matches.map((m, idx) => `
-                <tr style="background: ${idx % 2 === 0 ? 'white' : '#f8f9fa'};">
+              ${table.matches.map((m, idx) => {
+                const sameClub = m.p1_club && m.p2_club && m.p1_club.toUpperCase().trim() === m.p2_club.toUpperCase().trim();
+                return `
+                <tr style="background: ${sameClub ? '#fff8e1' : (idx % 2 === 0 ? 'white' : '#f8f9fa')};">
                   <td style="padding: 6px 4px; text-align: center; font-size: 12px; font-weight: 600; color: #999; width: 24px;">${idx + 1}</td>
-                  <td style="padding: 6px 8px; font-size: 13px;">${m.p1_name}</td>
+                  <td style="padding: 6px 8px; font-size: 13px;">${m.p1_name}${sameClub ? ' <span style="color: #f57f17; font-size: 10px;" title="Même club">&#9679;</span>' : ''}</td>
                   <td style="padding: 6px 4px; text-align: center; color: #999; font-size: 12px;">vs</td>
-                  <td style="padding: 6px 8px; font-size: 13px;">${m.p2_name}</td>
-                </tr>
-              `).join('')}
+                  <td style="padding: 6px 8px; font-size: 13px;">${m.p2_name}${sameClub ? ' <span style="color: #f57f17; font-size: 10px;" title="Même club">&#9679;</span>' : ''}</td>
+                </tr>`;
+              }).join('')}
             </table>
           </div>`;
         });
@@ -4587,14 +4589,16 @@
             <th style="padding: 8px;"></th>
             <th style="padding: 8px;">Joueur</th>
           </tr></thead><tbody>
-          ${finaleMatches.matches.map((m, idx) => `
-            <tr style="background: ${idx % 2 === 0 ? 'white' : '#f8f9fa'};">
+          ${finaleMatches.matches.map((m, idx) => {
+            const sameClub = m.p1_club && m.p2_club && m.p1_club.toUpperCase().trim() === m.p2_club.toUpperCase().trim();
+            return `
+            <tr style="background: ${sameClub ? '#fff8e1' : (idx % 2 === 0 ? 'white' : '#f8f9fa')};">
               <td style="padding: 8px; text-align: center; font-weight: bold;">${idx + 1}</td>
-              <td style="padding: 8px;">${m.p1_name}</td>
+              <td style="padding: 8px;">${m.p1_name}${sameClub ? ' <span style="color: #f57f17; font-size: 10px;" title="Même club">&#9679;</span>' : ''}</td>
               <td style="padding: 8px; text-align: center; color: #999;">vs</td>
-              <td style="padding: 8px;">${m.p2_name}</td>
-            </tr>
-          `).join('')}
+              <td style="padding: 8px;">${m.p2_name}${sameClub ? ' <span style="color: #f57f17; font-size: 10px;" title="Même club">&#9679;</span>' : ''}</td>
+            </tr>`;
+          }).join('')}
           </tbody></table>`;
       }
 
