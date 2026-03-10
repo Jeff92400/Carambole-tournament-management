@@ -4566,7 +4566,7 @@
           const roundBorder = round.has_same_club ? '#f9a825' : '#e9ecef';
           html += `<div style="background: ${roundBg}; border-radius: 8px; overflow: hidden; border: 1px solid ${roundBorder}; margin-bottom: 10px;">
             <div style="background: ${round.has_same_club ? '#f9a825' : 'var(--color-primary, #1F4788)'}; color: ${round.has_same_club ? '#333' : 'white'}; padding: 8px 12px; font-weight: 600; text-align: center; font-size: 13px;">
-              Tour ${round.number}${round.has_same_club ? ' — Joueurs du même club' : ''}
+              Tour ${round.number}${round.has_same_club ? ' — Matchs entre joueurs du même club (<span style="color: #f57f17; font-size: 11px;">&#9679;</span>) prioritaires' : ''}
             </div>
             <table style="width: 100%; border-collapse: collapse;">
               ${round.matches.map((m, idx) => `
