@@ -107,8 +107,8 @@ router.put('/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Enquête non trouvée' });
     }
 
-    if (campaign.status !== 'draft') {
-      return res.status(400).json({ error: 'Seules les enquêtes en brouillon peuvent être modifiées' });
+    if (campaign.status !== 'draft' && campaign.status !== 'scheduled') {
+      return res.status(400).json({ error: 'Seules les enquêtes en brouillon ou programmées peuvent être modifiées' });
     }
 
     const {
@@ -155,11 +155,27 @@ router.put('/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// Activate campaign
+// Activate campaign with start/end dates
 router.patch('/:id/activate', authenticateToken, async (req, res) => {
   const db = getDb();
   const { id } = req.params;
   const orgId = req.user.organizationId || null;
+  const { starts_at, ends_at } = req.body || {};
+
+  if (!starts_at || !ends_at) {
+    return res.status(400).json({ error: 'Les dates de début et de fin sont requises' });
+  }
+
+  const startDate = new Date(starts_at);
+  const endDate = new Date(ends_at);
+
+  if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+    return res.status(400).json({ error: 'Dates invalides' });
+  }
+
+  if (endDate <= startDate) {
+    return res.status(400).json({ error: 'La date de fin doit être postérieure à la date de début' });
+  }
 
   try {
     // Check campaign exists and is draft
@@ -178,14 +194,16 @@ router.patch('/:id/activate', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Enquête non trouvée' });
     }
 
-    if (campaign.status !== 'draft') {
-      return res.status(400).json({ error: 'Seules les enquêtes en brouillon peuvent être activées' });
+    if (campaign.status !== 'draft' && campaign.status !== 'scheduled') {
+      return res.status(400).json({ error: 'Seules les enquêtes en brouillon ou programmées peuvent être activées' });
     }
 
-    // Check no other active campaign exists for this org
-    const activeCampaign = await new Promise((resolve, reject) => {
+    // Check no other active/scheduled campaign overlaps for this org
+    const overlapping = await new Promise((resolve, reject) => {
       db.get(
-        `SELECT id, title FROM survey_campaigns WHERE status = 'active' AND id != $1 AND ($2::int IS NULL OR organization_id = $2)`,
+        `SELECT id, title FROM survey_campaigns
+         WHERE status IN ('active', 'scheduled') AND id != $1
+           AND ($2::int IS NULL OR organization_id = $2)`,
         [id, orgId],
         (err, row) => {
           if (err) reject(err);
@@ -194,16 +212,23 @@ router.patch('/:id/activate', authenticateToken, async (req, res) => {
       );
     });
 
-    if (activeCampaign) {
+    if (overlapping) {
       return res.status(400).json({
-        error: `Une autre enquête est déjà active : "${activeCampaign.title}". Fermez-la avant d'en activer une nouvelle.`
+        error: `Une autre enquête est déjà active ou programmée : "${overlapping.title}". Fermez-la avant d'en activer une nouvelle.`
       });
     }
 
+    // If start date is now or in the past, activate immediately; otherwise schedule
+    const now = new Date();
+    const newStatus = startDate <= now ? 'active' : 'scheduled';
+    const activatedAt = newStatus === 'active' ? 'CURRENT_TIMESTAMP' : 'NULL';
+
     await new Promise((resolve, reject) => {
       db.run(
-        `UPDATE survey_campaigns SET status = 'active', activated_at = CURRENT_TIMESTAMP WHERE id = $1 AND ($2::int IS NULL OR organization_id = $2)`,
-        [id, orgId],
+        `UPDATE survey_campaigns
+         SET status = $1, activated_at = ${activatedAt}, starts_at = $2, ends_at = $3
+         WHERE id = $4 AND ($5::int IS NULL OR organization_id = $5)`,
+        [newStatus, starts_at, ends_at, id, orgId],
         function(err) {
           if (err) reject(err);
           else resolve(this.changes);
@@ -211,7 +236,11 @@ router.patch('/:id/activate', authenticateToken, async (req, res) => {
       );
     });
 
-    res.json({ success: true, message: 'Enquête activée' });
+    const msg = newStatus === 'active'
+      ? 'Enquête activée'
+      : `Enquête programmée du ${startDate.toLocaleDateString('fr-FR')} au ${endDate.toLocaleDateString('fr-FR')}`;
+
+    res.json({ success: true, message: msg, status: newStatus });
   } catch (err) {
     console.error('Error activating survey campaign:', err);
     res.status(500).json({ error: err.message });
@@ -240,8 +269,8 @@ router.patch('/:id/close', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Enquête non trouvée' });
     }
 
-    if (campaign.status !== 'active') {
-      return res.status(400).json({ error: 'Seules les enquêtes actives peuvent être fermées' });
+    if (campaign.status !== 'active' && campaign.status !== 'scheduled') {
+      return res.status(400).json({ error: 'Seules les enquêtes actives ou programmées peuvent être fermées' });
     }
 
     await new Promise((resolve, reject) => {

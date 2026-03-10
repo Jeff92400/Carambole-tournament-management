@@ -966,9 +966,15 @@ async function initializeDatabase() {
         created_by TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         activated_at TIMESTAMP,
-        closed_at TIMESTAMP
+        closed_at TIMESTAMP,
+        starts_at TIMESTAMP,
+        ends_at TIMESTAMP
       )
     `);
+
+    // Migration: add starts_at/ends_at to survey_campaigns if missing
+    await client.query(`ALTER TABLE survey_campaigns ADD COLUMN IF NOT EXISTS starts_at TIMESTAMP`);
+    await client.query(`ALTER TABLE survey_campaigns ADD COLUMN IF NOT EXISTS ends_at TIMESTAMP`);
 
     // Survey responses table
     await client.query(`

@@ -1227,6 +1227,39 @@ app.listen(PORT, '0.0.0.0', () => {
   // Also run tournament alerts check on startup (after 60 seconds)
   setTimeout(() => checkTournamentAlerts(), 60000);
 
+  // Survey scheduler - auto-activate scheduled surveys and auto-close expired ones
+  async function processSurveySchedule() {
+    try {
+      // Activate scheduled surveys whose start date has passed
+      db.run(
+        `UPDATE survey_campaigns SET status = 'active', activated_at = CURRENT_TIMESTAMP
+         WHERE status = 'scheduled' AND starts_at <= CURRENT_TIMESTAMP`,
+        [],
+        function(err) {
+          if (err) console.error('[Survey Scheduler] Error activating:', err.message);
+          else if (this.changes > 0) console.log(`[Survey Scheduler] Activated ${this.changes} survey(s)`);
+        }
+      );
+
+      // Close active surveys whose end date has passed
+      db.run(
+        `UPDATE survey_campaigns SET status = 'closed', closed_at = CURRENT_TIMESTAMP
+         WHERE status = 'active' AND ends_at IS NOT NULL AND ends_at <= CURRENT_TIMESTAMP`,
+        [],
+        function(err) {
+          if (err) console.error('[Survey Scheduler] Error closing:', err.message);
+          else if (this.changes > 0) console.log(`[Survey Scheduler] Closed ${this.changes} expired survey(s)`);
+        }
+      );
+    } catch (error) {
+      console.error('[Survey Scheduler] Error:', error.message);
+    }
+  }
+
+  setInterval(processSurveySchedule, 300000); // Check every 5 minutes
+  console.log('[Survey Scheduler] Started - checking every 5 minutes');
+  setTimeout(processSurveySchedule, 35000); // Run on startup after 35s
+
   // Auto-sync contacts on startup (after a short delay to ensure DB is ready)
   setTimeout(async () => {
     try {

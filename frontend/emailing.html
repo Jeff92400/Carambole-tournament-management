@@ -2014,6 +2014,26 @@
         <div id="surveyResultsComments"></div>
       </div>
     </div>
+
+    <!-- Activate date picker modal -->
+    <div id="surveyActivateModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center;">
+      <div style="background: white; border-radius: 12px; padding: 25px; max-width: 400px; width: 90%; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
+        <h4 style="margin: 0 0 15px;">Programmer le sondage</h4>
+        <div style="margin-bottom: 15px;">
+          <label style="font-weight: 500; display: block; margin-bottom: 4px;">Date de début</label>
+          <input type="date" id="surveyStartDate" class="form-control" style="width: 100%;">
+        </div>
+        <div style="margin-bottom: 20px;">
+          <label style="font-weight: 500; display: block; margin-bottom: 4px;">Date de fin</label>
+          <input type="date" id="surveyEndDate" class="form-control" style="width: 100%;">
+        </div>
+        <p style="color: #666; font-size: 12px; margin: 0 0 15px;">Si la date de début est aujourd'hui ou passée, le sondage sera activé immédiatement. Sinon il sera programmé et activé automatiquement à la date prévue. Il sera clôturé automatiquement à la date de fin.</p>
+        <div style="display: flex; gap: 10px; justify-content: flex-end;">
+          <button class="btn" style="background: #6c757d;" onclick="hideActivateModal()">Annuler</button>
+          <button class="btn" style="background: #28a745;" onclick="confirmActivateSurvey()">Confirmer</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- Progress Overlay -->
@@ -7636,12 +7656,14 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
 
     const SURVEY_STATUS_LABELS = {
       draft: 'Brouillon',
+      scheduled: 'Programmé',
       active: 'Actif',
       closed: 'Clôturé'
     };
 
     const SURVEY_STATUS_COLORS = {
       draft: '#6c757d',
+      scheduled: '#ff9800',
       active: '#28a745',
       closed: '#dc3545'
     };
@@ -7673,16 +7695,25 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
           const closedDate = c.closed_at ? new Date(c.closed_at).toLocaleDateString('fr-FR') : '';
           const responseCount = c.response_count || 0;
 
+          const startsDate = c.starts_at ? new Date(c.starts_at).toLocaleDateString('fr-FR') : '';
+          const endsDate = c.ends_at ? new Date(c.ends_at).toLocaleDateString('fr-FR') : '';
+
           let dateInfo = `Créé le ${createdDate}`;
+          if (startsDate && endsDate) dateInfo += ` · Du ${startsDate} au ${endsDate}`;
           if (activatedDate) dateInfo += ` · Activé le ${activatedDate}`;
           if (closedDate) dateInfo += ` · Clôturé le ${closedDate}`;
 
           let actions = '';
           if (c.status === 'draft') {
             actions = `
-              <button class="btn" style="padding: 5px 12px; font-size: 12px; background: #28a745;" onclick="activateSurvey(${c.id})">Activer</button>
+              <button class="btn" style="padding: 5px 12px; font-size: 12px; background: #28a745;" onclick="showActivateModal(${c.id})">Activer</button>
               <button class="btn" style="padding: 5px 12px; font-size: 12px; background: #17a2b8;" onclick="editSurvey(${c.id})">Modifier</button>
               <button class="btn btn-danger" style="padding: 5px 12px; font-size: 12px;" onclick="deleteSurvey(${c.id})">Supprimer</button>
+            `;
+          } else if (c.status === 'scheduled') {
+            actions = `
+              <button class="btn" style="padding: 5px 12px; font-size: 12px; background: #dc3545;" onclick="closeSurvey(${c.id})">Annuler</button>
+              <button class="btn" style="padding: 5px 12px; font-size: 12px; background: #17a2b8;" onclick="editSurvey(${c.id})">Modifier</button>
             `;
           } else if (c.status === 'active') {
             actions = `
@@ -7815,17 +7846,51 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
       }
     }
 
-    async function activateSurvey(id) {
-      if (!confirm('Activer ce sondage ? Il sera affiché dans l\'Espace Joueur.')) return;
+    let surveyActivateId = null;
+
+    function showActivateModal(id) {
+      surveyActivateId = id;
+      // Default: today to +30 days
+      const today = new Date();
+      const in30 = new Date(today);
+      in30.setDate(in30.getDate() + 30);
+
+      document.getElementById('surveyStartDate').value = today.toISOString().slice(0, 10);
+      document.getElementById('surveyEndDate').value = in30.toISOString().slice(0, 10);
+      document.getElementById('surveyActivateModal').style.display = 'flex';
+    }
+
+    function hideActivateModal() {
+      document.getElementById('surveyActivateModal').style.display = 'none';
+      surveyActivateId = null;
+    }
+
+    async function confirmActivateSurvey() {
+      if (!surveyActivateId) return;
+
+      const startsAt = document.getElementById('surveyStartDate').value;
+      const endsAt = document.getElementById('surveyEndDate').value;
+
+      if (!startsAt || !endsAt) {
+        showError('Les dates de début et de fin sont requises');
+        return;
+      }
+
+      if (new Date(endsAt) <= new Date(startsAt)) {
+        showError('La date de fin doit être postérieure à la date de début');
+        return;
+      }
 
       try {
-        const response = await fetch(`${API_URL}/surveys/${id}/activate`, {
+        const response = await fetch(`${API_URL}/surveys/${surveyActivateId}/activate`, {
           method: 'PATCH',
-          headers: { 'Authorization': `Bearer ${token}` }
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ starts_at: startsAt, ends_at: endsAt })
         });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || 'Erreur');
         showSuccess(data.message || 'Sondage activé');
+        hideActivateModal();
         loadSurveys();
       } catch (err) {
         showError(err.message);
