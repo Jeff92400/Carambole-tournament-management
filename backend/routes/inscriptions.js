@@ -3553,15 +3553,26 @@ function buildFinaleMatchSchedule(numPlayers, players) {
     return { tables: '2 tables', matches: matches.map(enrich) };
   }
   if (numPlayers >= 6) {
-    const byTable = [
-      { name: 'Table 1', matches: [{p1:1,p2:6},{p1:2,p2:3},{p1:1,p2:4},{p1:5,p2:6},{p1:4,p2:5}] },
-      { name: 'Table 2', matches: [{p1:2,p2:5},{p1:4,p2:6},{p1:3,p2:5},{p1:1,p2:3},{p1:1,p2:2}] },
-      { name: 'Table 3', matches: [{p1:3,p2:4},{p1:1,p2:5},{p1:2,p2:6},{p1:2,p2:4},{p1:3,p2:6}] }
+    // 5 rounds, 3 simultaneous matches per round (one per table)
+    const rounds = [
+      [{p1:1,p2:6}, {p1:2,p2:5}, {p1:3,p2:4}],
+      [{p1:2,p2:3}, {p1:4,p2:6}, {p1:1,p2:5}],
+      [{p1:1,p2:4}, {p1:3,p2:5}, {p1:2,p2:6}],
+      [{p1:5,p2:6}, {p1:1,p2:3}, {p1:2,p2:4}],
+      [{p1:4,p2:5}, {p1:1,p2:2}, {p1:3,p2:6}]
     ];
-    byTable.forEach(t => {
-      t.matches.sort((a, b) => (isSameClub(a) ? 0 : 1) - (isSameClub(b) ? 0 : 1));
-      t.matches = t.matches.map(enrich);
+    // Sort rounds: rounds with any same-club match first
+    rounds.sort((a, b) => {
+      const aHas = a.some(m => isSameClub(m)) ? 0 : 1;
+      const bHas = b.some(m => isSameClub(m)) ? 0 : 1;
+      return aHas - bHas;
     });
+    // Rebuild byTable from sorted rounds
+    const byTable = [
+      { name: 'Table 1', matches: rounds.map(r => enrich(r[0])) },
+      { name: 'Table 2', matches: rounds.map(r => enrich(r[1])) },
+      { name: 'Table 3', matches: rounds.map(r => enrich(r[2])) }
+    ];
     return { tables: '3 tables', byTable };
   }
   return null;
