@@ -128,6 +128,20 @@
       .settings-tabs { flex-wrap: wrap; }
       .settings-tabs a { flex: none; width: 50%; font-size: 12px; padding: 10px 6px; }
     }
+
+    /* Accordion panels */
+    .accordion-panel { border: 1px solid #e0e0e0; border-radius: 8px; margin-bottom: 12px; overflow: hidden; }
+    .accordion-header {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 14px 18px; background: #f8f9fa; cursor: pointer; user-select: none; transition: background 0.2s;
+    }
+    .accordion-header:hover { background: #e9ecef; }
+    .accordion-icon { display: inline-block; font-size: 10px; margin-right: 10px; transition: transform 0.2s; color: #666; }
+    .accordion-panel.open .accordion-icon { transform: rotate(90deg); }
+    .accordion-title { display: flex; align-items: center; font-size: 14px; }
+    .accordion-summary { font-size: 12px; color: #888; font-weight: 400; max-width: 55%; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .accordion-body { max-height: 0; overflow: hidden; transition: max-height 0.3s ease, padding 0.3s ease; padding: 0 18px; }
+    .accordion-panel.open .accordion-body { max-height: 3000px; padding: 18px; }
   </style>
 </head>
 <body>
@@ -140,16 +154,7 @@
         <a href="generate-poules.html" class="nav-tooltip" data-tooltip="Compétitions à jouer / Convocations">Compétitions</a>
         <a href="calendar.html" class="nav-tooltip" data-tooltip="Calendrier de la saison">Calendrier</a>
         <a href="emailing.html" class="nav-tooltip" data-tooltip="Annonces, relances, résultats, convocation">Com joueurs</a>
-        <div class="nav-dropdown">
-          <a href="settings.html" class="nav-dropdown-btn active">Paramètres</a>
-          <div class="nav-dropdown-content">
-            <a href="settings-admin.html#organisation">Organisation</a>
-            <a href="settings-admin.html#utilisateurs">Utilisateurs</a>
-            <a href="settings-admin.html#competitions">Compétitions</a>
-            <a href="settings-admin.html#espace-joueur">Espace Joueur</a>
-            <a href="settings-admin.html#maintenance">Maintenance</a>
-          </div>
-        </div>
+        <a href="settings.html" class="active">Paramètres</a>
         <a href="#" id="logoutBtn" class="nav-logout">Déconnexion</a>
       </div>
     </div>
@@ -1004,224 +1009,240 @@
 
     <!-- Types de Tournoi Section - Admin Only -->
     <div class="card admin-only" id="tournamentTypesSection" data-settings-tab="competitions">
-      <h3>🎯 Types de Tournoi et Mode de qualification</h3>
+      <h3>🎯 Compétitions et Qualification</h3>
 
-      <!-- Qualification Mode Toggle Cards (top) -->
-      <p style="margin-bottom: 15px; color: #666;">Choisissez le mode de qualification pour les finales de votre comité.</p>
       <select id="qualificationMode" style="display: none;">
         <option value="standard">Standard</option>
         <option value="journees">Journées</option>
       </select>
-      <div style="display: flex; gap: 15px; margin-bottom: 30px; flex-wrap: wrap;">
-        <div id="modeCard-standard" onclick="selectQualificationMode('standard')" style="flex: 1; min-width: 220px; padding: 20px; border: 2px solid #ddd; border-radius: 10px; cursor: pointer; transition: all 0.2s ease; background: white;">
-          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
-            <span style="font-size: 24px;">🏆</span>
-            <strong style="font-size: 16px;">3 Tournois Qualificatifs</strong>
-          </div>
-          <p style="margin: 0; color: #666; font-size: 13px;">3 tournois (T1, T2, T3) avec cumul des points. Les meilleurs joueurs accèdent à la Finale Départementale.</p>
+
+      <!-- Accordion 1: Mode de qualification -->
+      <div class="accordion-panel" id="accordion-mode">
+        <div class="accordion-header" onclick="toggleAccordion('accordion-mode')">
+          <div class="accordion-title"><span class="accordion-icon">&#9654;</span><strong>Mode de qualification</strong></div>
+          <span class="accordion-summary" id="summary-mode">Standard</span>
         </div>
-        <div id="modeCard-journees" onclick="selectQualificationMode('journees')" style="flex: 1; min-width: 220px; padding: 20px; border: 2px solid #ddd; border-radius: 10px; cursor: pointer; transition: all 0.2s ease; background: white;">
-          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
-            <span style="font-size: 24px;">📋</span>
-            <strong style="font-size: 16px;">Journées Qualificatives</strong>
-          </div>
-          <p style="margin: 0; color: #666; font-size: 13px;">Journées avec poules + tableau final. Classement par points de position (meilleurs N sur M journées).</p>
-        </div>
-      </div>
-
-      <!-- Split (dédoublement) Toggle -->
-      <div style="margin-bottom: 25px; padding: 15px; background: #fff8e1; border-radius: 8px; border-left: 4px solid #ff9800;">
-        <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
-          <input type="checkbox" id="enableSplitTournaments" style="width: 20px; height: 20px; cursor: pointer;">
-          <div>
-            <strong style="font-size: 14px;">Autoriser le dédoublement des tournois</strong>
-            <p style="margin: 4px 0 0; color: #666; font-size: 12px;">
-              Permet de scinder un tournoi en deux sous-tournois (A et B) lorsque le nombre d'inscrits dépasse le seuil.
-              Les classements de chaque sous-tournoi sont fusionnés par appariement de positions.
-            </p>
-          </div>
-        </label>
-      </div>
-
-      <!-- Tournament Types Table -->
-      <div id="tournamentTypesTable" style="overflow-x: auto;">
-        <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
-          <thead>
-            <tr style="background: #1F4788; color: white;">
-              <th style="padding: 12px; text-align: center;">N°</th>
-              <th style="padding: 12px; text-align: left;">Code</th>
-              <th style="padding: 12px; text-align: left;">Nom d'affichage</th>
-              <th style="padding: 12px; text-align: center;">Classement</th>
-              <th style="padding: 12px; text-align: center;">Finale</th>
-              <th style="padding: 12px; text-align: center;">Actions</th>
-            </tr>
-          </thead>
-          <tbody id="tournamentTypesBody">
-            <tr><td colspan="6" style="text-align: center; padding: 20px; color: #666;">Chargement...</td></tr>
-          </tbody>
-          <tfoot>
-            <tr style="background: #f8f9fa; border-top: 2px solid #ddd;">
-              <td style="padding: 12px; text-align: center;">
-                <input type="number" id="newTtNumber" placeholder="N°" style="width: 50px; padding: 6px; border: 1px solid #ddd; border-radius: 4px;" min="1">
-              </td>
-              <td style="padding: 12px;">
-                <input type="text" id="newTtCode" placeholder="Code (ex: T4)" style="width: 80px; padding: 6px; border: 1px solid #ddd; border-radius: 4px;">
-              </td>
-              <td style="padding: 12px;">
-                <input type="text" id="newTtName" placeholder="Nom d'affichage" style="width: 200px; padding: 6px; border: 1px solid #ddd; border-radius: 4px;">
-              </td>
-              <td style="padding: 12px; text-align: center;">
-                <input type="checkbox" id="newTtInclude" checked style="width: 20px; height: 20px; cursor: pointer;">
-              </td>
-              <td style="padding: 12px; text-align: center;">
-                <input type="checkbox" id="newTtFinale" style="width: 20px; height: 20px; cursor: pointer;">
-              </td>
-              <td style="padding: 12px; text-align: center;">
-                <button onclick="addTournamentType()" class="btn" style="background: #007bff; padding: 5px 12px; font-size: 12px;">
-                  Ajouter
-                </button>
-              </td>
-            </tr>
-          </tfoot>
-        </table>
-      </div>
-
-      <div id="tournamentTypesMessage" style="display: none; margin-top: 15px; padding: 10px; border-radius: 4px;"></div>
-
-      <!-- Bonus Moyenne (common - both modes) -->
-      <hr style="margin: 25px 0; border: none; border-top: 1px solid #ddd;">
-      <h4 style="margin-bottom: 15px;">Bonus Moyenne</h4>
-      <div style="margin-bottom: 20px;">
-        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
-          <input type="checkbox" id="bonusMoyenneEnabled" style="width: 20px; height: 20px; cursor: pointer;">
-          <span style="font-weight: 500;">Activer le bonus moyenne</span>
-        </label>
-        <p style="margin: 5px 0 0 30px; color: #666; font-size: 13px;">
-          Ajoute des points bonus selon la moyenne du joueur par rapport aux seuils min/max de la catégorie (Paramètres de jeu).
-        </p>
-        <div id="bonusMoyenneTypeSelector" style="display: none; margin: 15px 0 0 0;">
-          <!-- Type cards side by side -->
-          <div style="display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 15px;">
-            <label id="bonusTypeCard-normal" onclick="document.querySelector('input[name=bonusMoyenneType][value=normal]').checked=true; updateBonusMoyenneTiers(); updateBonusTypeCards();"
-              style="flex: 1; min-width: 200px; padding: 14px 16px; border: 2px solid #ddd; border-radius: 8px; cursor: pointer; background: white; transition: all 0.2s ease;">
-              <input type="radio" name="bonusMoyenneType" value="normal" checked style="display: none;" onchange="updateBonusMoyenneTiers(); updateBonusTypeCards();">
-              <div style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">Normal</div>
-              <div style="color: #666; font-size: 12px;">2 paliers : entre min/max et au-dessus du max</div>
-            </label>
-            <label id="bonusTypeCard-tiered" onclick="document.querySelector('input[name=bonusMoyenneType][value=tiered]').checked=true; updateBonusMoyenneTiers(); updateBonusTypeCards();"
-              style="flex: 1; min-width: 200px; padding: 14px 16px; border: 2px solid #ddd; border-radius: 8px; cursor: pointer; background: white; transition: all 0.2s ease;">
-              <input type="radio" name="bonusMoyenneType" value="tiered" style="display: none;" onchange="updateBonusMoyenneTiers(); updateBonusTypeCards();">
-              <div style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">Par paliers</div>
-              <div style="color: #666; font-size: 12px;">3 paliers : min&ndash;milieu, milieu&ndash;max, &ge; max</div>
-            </label>
-          </div>
-
-          <!-- Scope: poule vs journée complète -->
-          <div style="margin-bottom: 15px;">
-            <div style="font-weight: 500; font-size: 13px; margin-bottom: 8px; color: #555;">Périmètre de calcul de la moyenne</div>
-            <div style="display: flex; gap: 12px; flex-wrap: wrap;">
-              <label id="bonusScopeCard-poule" onclick="document.querySelector('input[name=bonusMoyenneScope][value=poule]').checked=true; updateBonusScopeCards();"
-                style="flex: 1; min-width: 200px; padding: 14px 16px; border: 2px solid #ddd; border-radius: 8px; cursor: pointer; background: white; transition: all 0.2s ease;">
-                <input type="radio" name="bonusMoyenneScope" value="poule" checked style="display: none;" onchange="updateBonusScopeCards();">
-                <div style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">Poules uniquement</div>
-                <div style="color: #666; font-size: 12px;">Seuls les matchs de poule (exclut phases finales et classement)</div>
-              </label>
-              <label id="bonusScopeCard-journee" onclick="document.querySelector('input[name=bonusMoyenneScope][value=journee]').checked=true; updateBonusScopeCards();"
-                style="flex: 1; min-width: 200px; padding: 14px 16px; border: 2px solid #ddd; border-radius: 8px; cursor: pointer; background: white; transition: all 0.2s ease;">
-                <input type="radio" name="bonusMoyenneScope" value="journee" style="display: none;" onchange="updateBonusScopeCards();">
-                <div style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">Journée complète</div>
-                <div style="color: #666; font-size: 12px;">Tous les matchs de la journée (poules + phases finales + classement)</div>
-              </label>
+        <div class="accordion-body">
+          <p style="margin-bottom: 15px; color: #666;">Choisissez le mode de qualification pour les finales de votre comité.</p>
+          <div style="display: flex; gap: 15px; margin-bottom: 20px; flex-wrap: wrap;">
+            <div id="modeCard-standard" onclick="selectQualificationMode('standard')" style="flex: 1; min-width: 220px; padding: 20px; border: 2px solid #ddd; border-radius: 10px; cursor: pointer; transition: all 0.2s ease; background: white;">
+              <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+                <span style="font-size: 24px;">🏆</span>
+                <strong style="font-size: 16px;">3 Tournois Qualificatifs</strong>
+              </div>
+              <p style="margin: 0; color: #666; font-size: 13px;">3 tournois (T1, T2, T3) avec cumul des points. Les meilleurs joueurs accèdent à la Finale Départementale.</p>
+            </div>
+            <div id="modeCard-journees" onclick="selectQualificationMode('journees')" style="flex: 1; min-width: 220px; padding: 20px; border: 2px solid #ddd; border-radius: 10px; cursor: pointer; transition: all 0.2s ease; background: white;">
+              <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+                <span style="font-size: 24px;">📋</span>
+                <strong style="font-size: 16px;">Journées Qualificatives</strong>
+              </div>
+              <p style="margin: 0; color: #666; font-size: 13px;">Journées avec poules + tableau final. Classement par points de position (meilleurs N sur M journées).</p>
             </div>
           </div>
+          <div style="padding: 15px; background: #fff8e1; border-radius: 8px; border-left: 4px solid #ff9800;">
+            <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
+              <input type="checkbox" id="enableSplitTournaments" style="width: 20px; height: 20px; cursor: pointer;">
+              <div>
+                <strong style="font-size: 14px;">Autoriser le dédoublement des tournois</strong>
+                <p style="margin: 4px 0 0; color: #666; font-size: 12px;">
+                  Permet de scinder un tournoi en deux sous-tournois (A et B) lorsque le nombre d'inscrits dépasse le seuil.
+                  Les classements de chaque sous-tournoi sont fusionnés par appariement de positions.
+                </p>
+              </div>
+            </label>
+          </div>
+        </div>
+      </div>
 
-          <!-- Editable tier points — compact -->
-          <div id="bonusMoyenneTiers" style="max-width: 380px;">
-            <table style="width: 100%; border-collapse: collapse; font-size: 13px; border-radius: 6px; overflow: hidden; border: 1px solid #ddd;">
+      <!-- Accordion 2: Types de tournoi -->
+      <div class="accordion-panel" id="accordion-types">
+        <div class="accordion-header" onclick="toggleAccordion('accordion-types')">
+          <div class="accordion-title"><span class="accordion-icon">&#9654;</span><strong>Types de tournoi</strong></div>
+          <span class="accordion-summary" id="summary-types">Chargement...</span>
+        </div>
+        <div class="accordion-body">
+          <div id="tournamentTypesTable" style="overflow-x: auto;">
+            <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
               <thead>
-                <tr style="background: var(--color-primary, #1F4788); color: white;">
-                  <th style="padding: 8px 14px; text-align: left; font-weight: 500;">Moyenne du joueur</th>
-                  <th style="padding: 8px 14px; text-align: center; font-weight: 500; width: 70px;">Pts</th>
+                <tr style="background: #1F4788; color: white;">
+                  <th style="padding: 12px; text-align: center;">N°</th>
+                  <th style="padding: 12px; text-align: left;">Code</th>
+                  <th style="padding: 12px; text-align: left;">Nom d'affichage</th>
+                  <th style="padding: 12px; text-align: center;">Classement</th>
+                  <th style="padding: 12px; text-align: center;">Finale</th>
+                  <th style="padding: 12px; text-align: center;">Actions</th>
                 </tr>
               </thead>
-              <tbody id="bonusMoyenneTiersBody">
-                <!-- Dynamically populated by updateBonusMoyenneTiers() -->
+              <tbody id="tournamentTypesBody">
+                <tr><td colspan="6" style="text-align: center; padding: 20px; color: #666;">Chargement...</td></tr>
               </tbody>
+              <tfoot>
+                <tr style="background: #f8f9fa; border-top: 2px solid #ddd;">
+                  <td style="padding: 12px; text-align: center;">
+                    <input type="number" id="newTtNumber" placeholder="N°" style="width: 50px; padding: 6px; border: 1px solid #ddd; border-radius: 4px;" min="1">
+                  </td>
+                  <td style="padding: 12px;">
+                    <input type="text" id="newTtCode" placeholder="Code (ex: T4)" style="width: 80px; padding: 6px; border: 1px solid #ddd; border-radius: 4px;">
+                  </td>
+                  <td style="padding: 12px;">
+                    <input type="text" id="newTtName" placeholder="Nom d'affichage" style="width: 200px; padding: 6px; border: 1px solid #ddd; border-radius: 4px;">
+                  </td>
+                  <td style="padding: 12px; text-align: center;">
+                    <input type="checkbox" id="newTtInclude" checked style="width: 20px; height: 20px; cursor: pointer;">
+                  </td>
+                  <td style="padding: 12px; text-align: center;">
+                    <input type="checkbox" id="newTtFinale" style="width: 20px; height: 20px; cursor: pointer;">
+                  </td>
+                  <td style="padding: 12px; text-align: center;">
+                    <button onclick="addTournamentType()" class="btn" style="background: #007bff; padding: 5px 12px; font-size: 12px;">
+                      Ajouter
+                    </button>
+                  </td>
+                </tr>
+              </tfoot>
             </table>
           </div>
+          <div id="tournamentTypesMessage" style="display: none; margin-top: 15px; padding: 10px; border-radius: 4px;"></div>
         </div>
       </div>
 
-      <!-- Barème des points (common - both modes) -->
-      <hr style="margin: 25px 0; border: none; border-top: 1px solid #ddd;">
-      <h4 style="margin-bottom: 15px;">Barème des points</h4>
-      <div id="scoringRuleBlocks" style="margin-top: 10px;">
-        <div style="text-align: center; padding: 20px; color: #666;">Chargement...</div>
-      </div>
-      <div style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
-        <h4 style="margin: 0 0 10px; font-size: 14px; color: var(--color-primary, #1F4788);">
-          Ajouter un nouveau bloc de conditions
-        </h4>
-        <div class="add-block-form">
-          <input type="text" id="newBlockName" placeholder="Nom du bloc (ex: Bonus Participation)" maxlength="50">
-          <input type="text" id="newBlockLabel" placeholder="Libellé colonne (ex: Bonus Part.)" maxlength="30" style="max-width: 200px;">
-          <button class="btn-add-sm" onclick="addScoringBlock()">Ajouter le bloc</button>
+      <!-- Accordion 3: Bonus Moyenne -->
+      <div class="accordion-panel" id="accordion-bonus">
+        <div class="accordion-header" onclick="toggleAccordion('accordion-bonus')">
+          <div class="accordion-title"><span class="accordion-icon">&#9654;</span><strong>Bonus Moyenne</strong></div>
+          <span class="accordion-summary" id="summary-bonus">Désactivé</span>
         </div>
-      </div>
-
-      <!-- Best-of-count setting (visible for both modes) -->
-      <hr style="margin: 25px 0; border: none; border-top: 1px solid #ddd;">
-      <h4 style="margin-bottom: 15px;">Meilleurs résultats retenus</h4>
-      <div style="display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 10px;">
-        <div style="flex: 1; min-width: 180px; max-width: 300px;">
-          <label style="display: block; margin-bottom: 8px; font-weight: 500;">Nombre de résultats retenus :</label>
-          <input type="number" id="bestOfCount" value="0" min="0" max="10" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
-        </div>
-      </div>
-      <p style="margin: 0 0 15px 0; color: #666; font-size: 13px;">
-        Laisser vide ou 0 = tous les tournois comptent. Exemple : 2 = seuls les 2 meilleurs résultats sont retenus pour le classement.
-      </p>
-
-      <!-- Journées-specific settings (hidden when standard) -->
-      <div id="journeesSettings" style="display: none;">
-        <hr style="margin: 25px 0; border: none; border-top: 1px solid #ddd;">
-        <h4 style="margin-bottom: 15px;">Paramètres des Journées Qualificatives</h4>
-        <div style="display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 20px;">
-          <div style="flex: 1; min-width: 180px;">
-            <label style="display: block; margin-bottom: 8px; font-weight: 500;">Nombre de journées :</label>
-            <input type="number" id="journeesCount" value="3" min="1" max="10" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
-          </div>
-        </div>
-
-        <div style="margin-bottom: 20px;">
-          <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
-            <input type="checkbox" id="averageBonusTiers" style="width: 20px; height: 20px; cursor: pointer;">
-            <span style="font-weight: 500;">Bonus Moyenne au classement saisonnier</span>
-          </label>
-          <p style="margin: 5px 0 0 30px; color: #666; font-size: 13px;">
-            Ajoute un bonus au classement saisonnier selon la moyenne des meilleurs tournois retenus (utilise le même type Normal/Par paliers que le bonus par tournoi ci-dessus).
-          </p>
-        </div>
-
-        <div style="margin-bottom: 20px; padding: 15px; background: #e7f3ff; border-left: 4px solid var(--color-primary, #1F4788); border-radius: 4px;">
-          <strong>Points par position</strong>
-          <p style="margin: 5px 0 10px 0; color: #666; font-size: 13px;">Configurez les points attribués en fonction du classement final. Si le tournoi a moins de joueurs que de positions, la règle de dégradation ci-dessous s'applique au dernier classé.</p>
-
-          <div style="margin-bottom: 12px; display: flex; align-items: center; gap: 10px;">
-            <label for="ppMaxPlayersInput" style="font-size: 13px; font-weight: 600; white-space: nowrap;">Nombre max de joueurs :</label>
-            <input type="number" id="ppMaxPlayersInput" min="2" max="30" value="15" style="width: 70px; padding: 6px 8px; border: 1px solid #ccc; border-radius: 4px; text-align: center; font-size: 14px; font-weight: 600;">
-            <button onclick="applyMaxPlayers()" class="btn" style="padding: 6px 14px; font-size: 13px;">Appliquer</button>
-          </div>
-
-          <div id="positionPointsMatrixEditor">
-            <!-- Dynamically populated matrix table -->
-          </div>
-
-          <div style="margin-top: 15px; padding-top: 12px; border-top: 1px solid #c5ddf5;">
-            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px;">
-              <input type="checkbox" id="positionPointsDegradation" style="width: 16px; height: 16px;">
-              <span><strong>Dégradation du dernier joueur</strong> — Le dernier classé reçoit les points de la position N+1 (ex: si 10 joueurs, le 10e reçoit les points du 11e)</span>
+        <div class="accordion-body">
+          <div style="margin-bottom: 20px;">
+            <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+              <input type="checkbox" id="bonusMoyenneEnabled" style="width: 20px; height: 20px; cursor: pointer;">
+              <span style="font-weight: 500;">Activer le bonus moyenne</span>
             </label>
+            <p style="margin: 5px 0 0 30px; color: #666; font-size: 13px;">
+              Ajoute des points bonus selon la moyenne du joueur par rapport aux seuils min/max de la catégorie (Paramètres de jeu).
+            </p>
+            <div id="bonusMoyenneTypeSelector" style="display: none; margin: 15px 0 0 0;">
+              <div style="display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 15px;">
+                <label id="bonusTypeCard-normal" onclick="document.querySelector('input[name=bonusMoyenneType][value=normal]').checked=true; updateBonusMoyenneTiers(); updateBonusTypeCards();"
+                  style="flex: 1; min-width: 200px; padding: 14px 16px; border: 2px solid #ddd; border-radius: 8px; cursor: pointer; background: white; transition: all 0.2s ease;">
+                  <input type="radio" name="bonusMoyenneType" value="normal" checked style="display: none;" onchange="updateBonusMoyenneTiers(); updateBonusTypeCards();">
+                  <div style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">Normal</div>
+                  <div style="color: #666; font-size: 12px;">2 paliers : entre min/max et au-dessus du max</div>
+                </label>
+                <label id="bonusTypeCard-tiered" onclick="document.querySelector('input[name=bonusMoyenneType][value=tiered]').checked=true; updateBonusMoyenneTiers(); updateBonusTypeCards();"
+                  style="flex: 1; min-width: 200px; padding: 14px 16px; border: 2px solid #ddd; border-radius: 8px; cursor: pointer; background: white; transition: all 0.2s ease;">
+                  <input type="radio" name="bonusMoyenneType" value="tiered" style="display: none;" onchange="updateBonusMoyenneTiers(); updateBonusTypeCards();">
+                  <div style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">Par paliers</div>
+                  <div style="color: #666; font-size: 12px;">3 paliers : min&ndash;milieu, milieu&ndash;max, &ge; max</div>
+                </label>
+              </div>
+              <div style="margin-bottom: 15px;">
+                <div style="font-weight: 500; font-size: 13px; margin-bottom: 8px; color: #555;">Périmètre de calcul de la moyenne</div>
+                <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                  <label id="bonusScopeCard-poule" onclick="document.querySelector('input[name=bonusMoyenneScope][value=poule]').checked=true; updateBonusScopeCards();"
+                    style="flex: 1; min-width: 200px; padding: 14px 16px; border: 2px solid #ddd; border-radius: 8px; cursor: pointer; background: white; transition: all 0.2s ease;">
+                    <input type="radio" name="bonusMoyenneScope" value="poule" checked style="display: none;" onchange="updateBonusScopeCards();">
+                    <div style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">Poules uniquement</div>
+                    <div style="color: #666; font-size: 12px;">Seuls les matchs de poule (exclut phases finales et classement)</div>
+                  </label>
+                  <label id="bonusScopeCard-journee" onclick="document.querySelector('input[name=bonusMoyenneScope][value=journee]').checked=true; updateBonusScopeCards();"
+                    style="flex: 1; min-width: 200px; padding: 14px 16px; border: 2px solid #ddd; border-radius: 8px; cursor: pointer; background: white; transition: all 0.2s ease;">
+                    <input type="radio" name="bonusMoyenneScope" value="journee" style="display: none;" onchange="updateBonusScopeCards();">
+                    <div style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">Journée complète</div>
+                    <div style="color: #666; font-size: 12px;">Tous les matchs de la journée (poules + phases finales + classement)</div>
+                  </label>
+                </div>
+              </div>
+              <div id="bonusMoyenneTiers" style="max-width: 380px;">
+                <table style="width: 100%; border-collapse: collapse; font-size: 13px; border-radius: 6px; overflow: hidden; border: 1px solid #ddd;">
+                  <thead>
+                    <tr style="background: var(--color-primary, #1F4788); color: white;">
+                      <th style="padding: 8px 14px; text-align: left; font-weight: 500;">Moyenne du joueur</th>
+                      <th style="padding: 8px 14px; text-align: center; font-weight: 500; width: 70px;">Pts</th>
+                    </tr>
+                  </thead>
+                  <tbody id="bonusMoyenneTiersBody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Accordion 4: Barème des points -->
+      <div class="accordion-panel" id="accordion-bareme">
+        <div class="accordion-header" onclick="toggleAccordion('accordion-bareme')">
+          <div class="accordion-title"><span class="accordion-icon">&#9654;</span><strong>Barème des points</strong></div>
+          <span class="accordion-summary" id="summary-bareme">Chargement...</span>
+        </div>
+        <div class="accordion-body">
+          <div id="scoringRuleBlocks" style="margin-top: 10px;">
+            <div style="text-align: center; padding: 20px; color: #666;">Chargement...</div>
+          </div>
+          <div style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+            <h4 style="margin: 0 0 10px; font-size: 14px; color: var(--color-primary, #1F4788);">
+              Ajouter un nouveau bloc de conditions
+            </h4>
+            <div class="add-block-form">
+              <input type="text" id="newBlockName" placeholder="Nom du bloc (ex: Bonus Participation)" maxlength="50">
+              <input type="text" id="newBlockLabel" placeholder="Libellé colonne (ex: Bonus Part.)" maxlength="30" style="max-width: 200px;">
+              <button class="btn-add-sm" onclick="addScoringBlock()">Ajouter le bloc</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Accordion 5: Classement saisonnier -->
+      <div class="accordion-panel" id="accordion-ranking">
+        <div class="accordion-header" onclick="toggleAccordion('accordion-ranking')">
+          <div class="accordion-title"><span class="accordion-icon">&#9654;</span><strong>Classement saisonnier</strong></div>
+          <span class="accordion-summary" id="summary-ranking">Tous les tournois</span>
+        </div>
+        <div class="accordion-body">
+          <h4 style="margin-bottom: 15px;">Meilleurs résultats retenus</h4>
+          <div style="display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 10px;">
+            <div style="flex: 1; min-width: 180px; max-width: 300px;">
+              <label style="display: block; margin-bottom: 8px; font-weight: 500;">Nombre de résultats retenus :</label>
+              <input type="number" id="bestOfCount" value="0" min="0" max="10" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+            </div>
+          </div>
+          <p style="margin: 0 0 15px 0; color: #666; font-size: 13px;">
+            Laisser vide ou 0 = tous les tournois comptent. Exemple : 2 = seuls les 2 meilleurs résultats sont retenus pour le classement.
+          </p>
+          <div id="journeesSettings" style="display: none;">
+            <h4 style="margin-bottom: 15px;">Paramètres des Journées Qualificatives</h4>
+            <div style="display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 20px;">
+              <div style="flex: 1; min-width: 180px;">
+                <label style="display: block; margin-bottom: 8px; font-weight: 500;">Nombre de journées :</label>
+                <input type="number" id="journeesCount" value="3" min="1" max="10" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+              </div>
+            </div>
+            <div style="margin-bottom: 20px;">
+              <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                <input type="checkbox" id="averageBonusTiers" style="width: 20px; height: 20px; cursor: pointer;">
+                <span style="font-weight: 500;">Bonus Moyenne au classement saisonnier</span>
+              </label>
+              <p style="margin: 5px 0 0 30px; color: #666; font-size: 13px;">
+                Ajoute un bonus au classement saisonnier selon la moyenne des meilleurs tournois retenus (utilise le même type Normal/Par paliers que le bonus par tournoi ci-dessus).
+              </p>
+            </div>
+            <div style="margin-bottom: 20px; padding: 15px; background: #e7f3ff; border-left: 4px solid var(--color-primary, #1F4788); border-radius: 4px;">
+              <strong>Points par position</strong>
+              <p style="margin: 5px 0 10px 0; color: #666; font-size: 13px;">Configurez les points attribués en fonction du classement final. Si le tournoi a moins de joueurs que de positions, la règle de dégradation ci-dessous s'applique au dernier classé.</p>
+              <div style="margin-bottom: 12px; display: flex; align-items: center; gap: 10px;">
+                <label for="ppMaxPlayersInput" style="font-size: 13px; font-weight: 600; white-space: nowrap;">Nombre max de joueurs :</label>
+                <input type="number" id="ppMaxPlayersInput" min="2" max="30" value="15" style="width: 70px; padding: 6px 8px; border: 1px solid #ccc; border-radius: 4px; text-align: center; font-size: 14px; font-weight: 600;">
+                <button onclick="applyMaxPlayers()" class="btn" style="padding: 6px 14px; font-size: 13px;">Appliquer</button>
+              </div>
+              <div id="positionPointsMatrixEditor"></div>
+              <div style="margin-top: 15px; padding-top: 12px; border-top: 1px solid #c5ddf5;">
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px;">
+                  <input type="checkbox" id="positionPointsDegradation" style="width: 16px; height: 16px;">
+                  <span><strong>Dégradation du dernier joueur</strong> — Le dernier classé reçoit les points de la position N+1 (ex: si 10 joueurs, le 10e reçoit les points du 11e)</span>
+                </label>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -1322,6 +1343,59 @@
     document.querySelectorAll('[data-settings-tab]').forEach(el => {
       el._originalDisplay = el.style.display || '';
     });
+
+    // ============ ACCORDION PANELS ============
+    function toggleAccordion(panelId) {
+      document.getElementById(panelId).classList.toggle('open');
+      updateAccordionSummaries();
+    }
+
+    function updateAccordionSummaries() {
+      // Mode de qualification
+      const modeEl = document.getElementById('summary-mode');
+      if (modeEl) {
+        const mode = document.getElementById('qualificationMode')?.value;
+        const split = document.getElementById('enableSplitTournaments')?.checked;
+        let text = mode === 'journees' ? 'Journées Qualificatives' : 'Standard';
+        if (split) text += ' + Dédoublement';
+        modeEl.textContent = text;
+      }
+      // Types de tournoi
+      const typesEl = document.getElementById('summary-types');
+      if (typesEl) {
+        const count = document.querySelectorAll('#tournamentTypesBody tr[data-id]').length;
+        typesEl.textContent = count > 0 ? count + ' types définis' : 'Aucun';
+      }
+      // Bonus Moyenne
+      const bonusEl = document.getElementById('summary-bonus');
+      if (bonusEl) {
+        const enabled = document.getElementById('bonusMoyenneEnabled')?.checked;
+        if (enabled) {
+          const type = document.querySelector('input[name="bonusMoyenneType"]:checked')?.value;
+          bonusEl.textContent = 'Activé — ' + (type === 'tiered' ? 'Par paliers' : 'Normal');
+        } else {
+          bonusEl.textContent = 'Désactivé';
+        }
+      }
+      // Barème des points
+      const baremeEl = document.getElementById('summary-bareme');
+      if (baremeEl) {
+        const blocks = document.querySelectorAll('#scoringRuleBlocks .scoring-block');
+        baremeEl.textContent = blocks.length > 0 ? blocks.length + ' bloc(s)' : 'Aucun bloc';
+      }
+      // Classement saisonnier
+      const rankEl = document.getElementById('summary-ranking');
+      if (rankEl) {
+        const bestOf = document.getElementById('bestOfCount')?.value || '0';
+        const mode = document.getElementById('qualificationMode')?.value;
+        if (mode === 'journees') {
+          const journees = document.getElementById('journeesCount')?.value || '3';
+          rankEl.textContent = bestOf === '0' ? 'Tous les tournois' : bestOf + ' meilleurs sur ' + journees + ' journées';
+        } else {
+          rankEl.textContent = bestOf === '0' ? 'Tous les tournois' : bestOf + ' meilleurs résultats';
+        }
+      }
+    }
 
     function switchSettingsTab(tabName) {
       // Hide all tabbed sections
@@ -1440,6 +1514,7 @@
           msgDiv.textContent = 'Paramètres enregistrés avec succès !';
           msgDiv.style.background = '#d4edda';
           msgDiv.style.color = '#155724';
+          updateAccordionSummaries();
         } else {
           const data = await response.json();
           throw new Error(data.error || 'Erreur lors de la sauvegarde');
@@ -3774,6 +3849,7 @@
           </td>
         </tr>
       `).join('');
+      updateAccordionSummaries();
     }
 
     async function saveTournamentType(id) {
@@ -4661,6 +4737,9 @@
         // Load scoring rules (barème)
         await loadScoringMetadata();
         await loadScoringRules();
+
+        // Update accordion summaries with loaded data
+        updateAccordionSummaries();
 
       } catch (error) {
         console.error('Error loading qualification settings:', error);
