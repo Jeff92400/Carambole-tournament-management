@@ -730,25 +730,16 @@ Lien avec l'Application Joueur : Quand un joueur crée son compte sur l'Applicat
 
 Menu : Paramètres
 Accès
-Survoler "Paramètres ▼" dans la barre de navigation (visible uniquement pour les administrateurs). Un menu déroulant apparaît avec 5 onglets :
-	•	Organisation — Identité, couleurs, emails, saison, politique de confidentialité
+Cliquer sur "Paramètres" dans la barre de navigation (visible uniquement pour les administrateurs). La page d'accueil des paramètres affiche les raccourcis principaux (génération de la saison, clubs, données de référence, etc.).
+Les paramètres d'administration sont organisés en 5 onglets, chacun contenant des panneaux repliables (accordéons). Chaque panneau affiche un résumé de sa configuration lorsqu'il est fermé — cliquer sur l'en-tête pour le déplier :
+	•	Organisation — Organisation, Identité Visuelle, Configuration des Emails, Configuration de la Saison, Politique de Confidentialité
 	•	Utilisateurs — Mon compte, mot de passe, gestion des utilisateurs
-	•	Compétitions — Paramètres des épreuves, types de tournoi, classements, délais
-	•	Espace Joueur — Comptes joueurs, paramètres de l'application, planification des emails
-	•	Maintenance — Outils de maintenance, logs d'activité
-Cliquer directement sur "Paramètres" ouvre la page d'accueil des paramètres (avec la génération de la saison et les raccourcis). Les liens du menu déroulant mènent directement à l'onglet correspondant dans la page d'administration.
-Sous-sections disponibles
-	•	Générer les tournois de la saison (à partir du calendrier Excel) — page Paramètres
-	•	Paramètres de l'organisation — onglet Organisation
-	•	Gestion des utilisateurs — onglet Utilisateurs
-	•	Types de Tournoi et Mode de qualification — onglet Compétitions
-	•	Paramètres de jeu (Distance, Reprises par catégorie) — onglet Compétitions
-	•	Barème de points — onglet Compétitions
-	•	Classifications FFB
-	•	Gestion des clubs
-	•	Données de référence
-	•	Politique de Confidentialité — onglet Organisation
-	•	Logs d'activité — onglet Maintenance
+	•	Compétitions — Paramètres des épreuves, Délais des compétitions, Qualification pour la finale, Mode de qualification, Types de tournoi, Bonus Moyenne, Barème des points, Classement saisonnier
+	•	Espace Joueur — Comptes Espace Joueur, Planification des emails, Paramètres Espace Joueur
+	•	Maintenance — Outils de maintenance, Logs d'activité
+Navigation par accordéons
+Chaque section de paramètres est présentée sous forme de panneau repliable. Lorsqu'un panneau est fermé, un résumé de la configuration actuelle est affiché à droite de l'en-tête (par exemple : "4 types définis", "Journées Qualificatives + Dédoublement", "Envoi à 08h00"). Cliquer sur l'en-tête pour ouvrir ou fermer le panneau.
+Dans l'onglet Compétitions, les 5 derniers panneaux (Mode de qualification à Classement saisonnier) partagent un même bouton "Enregistrer" situé en bas du groupe. Les autres panneaux ont chacun leur propre bouton de sauvegarde.
 
 Paramètres > Générer les tournois de la saison
 Description
@@ -778,7 +769,12 @@ Important : Après la génération, il est recommandé de vérifier les compéti
 
 Paramètres > Organisation
 Description
-Configuration des informations générales de l'organisation.
+Configuration des informations générales de l'organisation. L'onglet Organisation contient 5 panneaux repliables, chacun avec son propre bouton "Enregistrer" :
+	•	Organisation — Nom, sigle, email de notification, options d'import/inscription, logo
+	•	Identité Visuelle — Couleurs de l'application (principale, secondaire, accent, fonds)
+	•	Configuration des Emails — Adresses email d'expédition
+	•	Configuration de la Saison — Mois de début de saison, clôture des statistiques
+	•	Politique de Confidentialité — Lien vers l'éditeur
 IMG-16
 
 Champs configurables
@@ -851,7 +847,7 @@ Types de Tournoi
 Tableau listant les types de tournoi définis (T1, T2, T3, Finale, etc.) avec code, nom d'affichage, et options (compte pour le classement, est une finale). Il est possible d'ajouter de nouveaux types via le formulaire en bas du tableau.
 Bonus Moyenne
 (Visible dans les deux modes : Standard et Journées)
-Active un bonus de points par tournoi basé sur la moyenne du joueur par rapport aux seuils min/max de la catégorie (configurés dans Paramètres de jeu).
+Active un bonus de points par tournoi basé sur la moyenne du joueur par rapport aux seuils min/max de la catégorie (configurés dans le panneau "Paramètres des épreuves").
 Type
 Formule
 Normal
@@ -890,7 +886,9 @@ Tableau configurable qui définit le nombre de points attribués pour chaque pos
 	•	etc.
 	•	Possibilité d'ajouter ou modifier des positions
 
-Paramètres > Paramètres de jeu
+Paramètres > Paramètres des épreuves
+Accès
+Paramètres > onglet Compétitions > panneau "Paramètres des épreuves"
 Description
 Configuration des paramètres de jeu (Distance, Reprises) par mode et catégorie pour la saison en cours.
 IMG-18
@@ -998,6 +996,8 @@ Onglet "Config. Poules"
 	•	Tableau de prévisualisation : pour chaque nombre de joueurs, la répartition en poules est affichée
 
 Paramètres > Politique de Confidentialité
+Accès
+Paramètres > onglet Organisation > panneau "Politique de Confidentialité"
 Description
 Éditeur de la politique de confidentialité affichée dans l'Application Joueur (conformité RGPD).
 Fonctionnalités
@@ -1009,7 +1009,7 @@ Fonctionnalités
 
 Paramètres > Logs d'activité
 Accès
-Menu Paramètres > Logs d'activité (lien direct)
+Paramètres > onglet Maintenance > panneau "Logs d'activité"
 Description
 Historique des actions effectuées par les utilisateurs de l'application et de l'Espace Joueur.
 IMG-22
@@ -1286,15 +1286,15 @@ Menu Com joueurs > Invitations. Montrer l'onglet suivi avec les statuts "En atte
 IMG-16
 16-param-organisation.png
 Paramètres > Organisation
-Formulaire complet avec nom, sigle, logo, emails et section couleurs.
+Onglet Organisation avec les panneaux repliables (Organisation, Identité Visuelle, Emails, Saison, Confidentialité).
 IMG-17
 17-param-types-tournoi.png
-Paramètres > Types de Tournoi
-Les deux cartes de sélection du mode (Standard/Journées), le tableau des types et les paramètres journées si visible.
+Paramètres > Compétitions
+Onglet Compétitions avec les panneaux repliables (Paramètres des épreuves, Délais, Qualification, Mode, Types, Bonus, Barème, Classement).
 IMG-18
 18-param-jeu.png
-Paramètres > Paramètres de jeu
-Tableau des paramètres de jeu par catégorie avec distance, reprises et moyennes.
+Paramètres > Paramètres des épreuves
+Panneau "Paramètres des épreuves" dans l'onglet Compétitions avec distance, reprises et moyennes par catégorie.
 IMG-19
 19-param-bareme.png
 Paramètres > Barème de points
@@ -1309,8 +1309,8 @@ Paramètres > Données de référence
 Page avec les onglets visibles. Montrer l'onglet "Catégories" ou "Modes de jeu".
 IMG-22
 22-logs-activite.png
-Paramètres > Logs d'activité
-Statistiques rapides + filtres + quelques lignes de log dans le tableau.
+Paramètres > Maintenance > Logs d'activité
+Panneau "Logs d'activité" dans l'onglet Maintenance avec statistiques rapides, filtres et tableau.
 IMG-23
 23-inscriptions-liste.png
 Liste des inscriptions

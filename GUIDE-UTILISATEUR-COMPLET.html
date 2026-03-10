@@ -478,7 +478,7 @@
     <a href="#param-organisation">Organisation</a>
     <a href="#param-utilisateurs">Utilisateurs</a>
     <a href="#param-types-tournoi">Types de Tournoi</a>
-    <a href="#param-jeu">Paramètres de jeu</a>
+    <a href="#param-jeu">Paramètres des épreuves</a>
     <a href="#param-bareme">Barème de Points</a>
     <a href="#param-classifications">Classifications FFB</a>
     <a href="#param-clubs">Clubs</a>
@@ -1755,30 +1755,19 @@
     <h2>Menu : Paramètres</h2>
 
     <h3>Accès</h3>
-    <p>Survoler "Paramètres ▼" dans la barre de navigation (visible uniquement pour les administrateurs). Un menu déroulant apparaît avec 5 onglets :</p>
+    <p>Cliquer sur <strong>"Paramètres"</strong> dans la barre de navigation (visible uniquement pour les administrateurs). La page d'accueil des paramètres affiche les raccourcis principaux (génération de la saison, clubs, données de référence, etc.).</p>
+    <p>Les paramètres d'administration sont organisés en <strong>5 onglets</strong>, chacun contenant des <strong>panneaux repliables (accordéons)</strong>. Chaque panneau affiche un résumé de sa configuration lorsqu'il est fermé — cliquer sur l'en-tête pour le déplier :</p>
     <ul>
-      <li><strong>Organisation</strong> — Identité, couleurs, emails, saison, politique de confidentialité</li>
+      <li><strong>Organisation</strong> — Organisation, Identité Visuelle, Configuration des Emails, Configuration de la Saison, Politique de Confidentialité</li>
       <li><strong>Utilisateurs</strong> — Mon compte, mot de passe, gestion des utilisateurs</li>
-      <li><strong>Compétitions</strong> — Paramètres des épreuves, types de tournoi, classements, délais</li>
-      <li><strong>Espace Joueur</strong> — Comptes joueurs, paramètres de l'application, planification des emails</li>
-      <li><strong>Maintenance</strong> — Outils de maintenance, logs d'activité</li>
+      <li><strong>Compétitions</strong> — Paramètres des épreuves, Délais des compétitions, Qualification pour la finale, Mode de qualification, Types de tournoi, Bonus Moyenne, Barème des points, Classement saisonnier</li>
+      <li><strong>Espace Joueur</strong> — Comptes Espace Joueur, Planification des emails, Paramètres Espace Joueur</li>
+      <li><strong>Maintenance</strong> — Outils de maintenance, Logs d'activité</li>
     </ul>
-    <p>Cliquer directement sur "Paramètres" ouvre la page d'accueil des paramètres (avec la génération de la saison et les raccourcis). Les liens du menu déroulant mènent directement à l'onglet correspondant dans la page d'administration.</p>
 
-    <h3>Sous-sections disponibles</h3>
-    <ul>
-      <li><strong>Générer les tournois de la saison</strong> (à partir du calendrier Excel) — page Paramètres</li>
-      <li>Paramètres de l'organisation — onglet Organisation</li>
-      <li>Gestion des utilisateurs — onglet Utilisateurs</li>
-      <li>Types de Tournoi et Mode de qualification — onglet Compétitions</li>
-      <li>Paramètres de jeu (Distance, Reprises par catégorie) — onglet Compétitions</li>
-      <li>Barème de points — onglet Compétitions</li>
-      <li>Classifications FFB</li>
-      <li>Gestion des clubs</li>
-      <li>Données de référence</li>
-      <li>Politique de Confidentialité — onglet Organisation</li>
-      <li>Logs d'activité — onglet Maintenance</li>
-    </ul>
+    <h3>Navigation par accordéons</h3>
+    <p>Chaque section de paramètres est présentée sous forme de panneau repliable. Lorsqu'un panneau est fermé, un <strong>résumé</strong> de la configuration actuelle est affiché à droite de l'en-tête (par exemple : "4 types définis", "Journées Qualificatives + Dédoublement", "Envoi à 08h00"). Cliquer sur l'en-tête pour ouvrir ou fermer le panneau.</p>
+    <p>Dans l'onglet <strong>Compétitions</strong>, les 5 derniers panneaux (Mode de qualification à Classement saisonnier) partagent un même bouton "Enregistrer" situé en bas du groupe. Les autres panneaux ont chacun leur propre bouton de sauvegarde.</p>
   </section>
 
   <hr>
@@ -1836,13 +1825,20 @@
     <h2>Paramètres > Organisation</h2>
 
     <h3>Description</h3>
-    <p>Configuration des informations générales de l'organisation.</p>
+    <p>Configuration des informations générales de l'organisation. L'onglet Organisation contient 5 panneaux repliables, chacun avec son propre bouton "Enregistrer" :</p>
+    <ul>
+      <li><strong>Organisation</strong> — Nom, sigle, email de notification, options d'import/inscription, logo</li>
+      <li><strong>Identité Visuelle</strong> — Couleurs de l'application (principale, secondaire, accent, fonds)</li>
+      <li><strong>Configuration des Emails</strong> — Adresses email d'expédition</li>
+      <li><strong>Configuration de la Saison</strong> — Mois de début de saison, clôture des statistiques</li>
+      <li><strong>Politique de Confidentialité</strong> — Lien vers l'éditeur</li>
+    </ul>
 
     <div class="screenshot-placeholder">
       <span class="screenshot-id">IMG-16</span>
       <span class="screenshot-icon">&#128247;</span>
       <span class="screenshot-label">Paramètres — Organisation</span>
-      <span class="screenshot-desc">Capture de la page paramètres organisation avec le formulaire (nom, sigle, logo, emails) et la personnalisation visuelle (couleurs)</span>
+      <span class="screenshot-desc">Capture de l'onglet Organisation avec les panneaux repliables (Organisation, Identité Visuelle, Emails, Saison, Confidentialité)</span>
       <img src="screenshots/16-param-organisation.png" alt="Paramètres organisation">
     </div>
 
@@ -1927,18 +1923,18 @@
     <h2>Paramètres > Types de Tournoi et Mode de Qualification</h2>
 
     <h3>Description</h3>
-    <p>Configuration du mode de qualification pour les finales et gestion des types de tournoi.</p>
+    <p>Configuration du mode de qualification pour les finales et gestion des types de tournoi. Ces paramètres sont répartis dans 5 panneaux repliables (accordéons) dans l'onglet Compétitions, avec un bouton "Enregistrer" commun en bas du groupe.</p>
 
     <div class="screenshot-placeholder">
       <span class="screenshot-id">IMG-17</span>
       <span class="screenshot-icon">&#128247;</span>
       <span class="screenshot-label">Paramètres — Types de Tournoi</span>
-      <span class="screenshot-desc">Capture de la page types de tournoi avec les cartes de sélection du mode (Standard / Journées) et le tableau des types</span>
+      <span class="screenshot-desc">Capture de l'onglet Compétitions avec les panneaux repliables : Mode de qualification, Types de tournoi, Bonus Moyenne, Barème des points, Classement saisonnier</span>
       <img src="screenshots/17-param-types-tournoi.png" alt="Types de tournoi et mode de qualification">
     </div>
 
     <h4>Choisir le mode de qualification</h4>
-    <p>Deux modes disponibles, sélectionnables par carte :</p>
+    <p>Panneau <strong>"Mode de qualification"</strong>. Deux modes disponibles, sélectionnables par carte :</p>
     <table>
       <thead>
         <tr><th>Mode</th><th>Description</th></tr>
@@ -1960,7 +1956,7 @@
 
     <h4>Bonus Moyenne</h4>
     <p>(Visible dans les deux modes : Standard et Journées)</p>
-    <p>Active un bonus de points par tournoi basé sur la moyenne du joueur par rapport aux seuils min/max de la catégorie (configurés dans Paramètres de jeu).</p>
+    <p>Active un bonus de points par tournoi basé sur la moyenne du joueur par rapport aux seuils min/max de la catégorie (configurés dans le panneau "Paramètres des épreuves").</p>
     <table>
       <thead>
         <tr><th>Type</th><th>Formule</th></tr>
@@ -2034,7 +2030,10 @@
 
   <!-- Paramètres > Paramètres de jeu -->
   <section id="param-jeu">
-    <h2>Paramètres > Paramètres de jeu</h2>
+    <h2>Paramètres > Paramètres des épreuves</h2>
+
+    <h3>Accès</h3>
+    <p>Paramètres &gt; onglet <strong>Compétitions</strong> &gt; panneau <strong>"Paramètres des épreuves"</strong></p>
 
     <h3>Description</h3>
     <p>Configuration des paramètres de jeu (Distance, Reprises) par mode et catégorie pour la saison en cours.</p>
@@ -2042,9 +2041,9 @@
     <div class="screenshot-placeholder">
       <span class="screenshot-id">IMG-18</span>
       <span class="screenshot-icon">&#128247;</span>
-      <span class="screenshot-label">Paramètres — Paramètres de jeu</span>
-      <span class="screenshot-desc">Capture du tableau des paramètres de jeu par catégorie (distance, reprises, moyenne mini/maxi)</span>
-      <img src="screenshots/18-param-jeu.png" alt="Paramètres de jeu">
+      <span class="screenshot-label">Paramètres — Paramètres des épreuves</span>
+      <span class="screenshot-desc">Capture du panneau "Paramètres des épreuves" dans l'onglet Compétitions (distance, reprises, moyenne mini/maxi par catégorie)</span>
+      <img src="screenshots/18-param-jeu.png" alt="Paramètres des épreuves">
     </div>
 
     <h4>Paramètres par catégorie</h4>
@@ -2079,10 +2078,10 @@
     <h2>Paramètres > Barème de Points</h2>
 
     <h3>Accès</h3>
-    <p>Menu Paramètres > Types de tournois (section "Barème des points")</p>
+    <p>Paramètres &gt; onglet Compétitions &gt; panneau <strong>"Barème des points"</strong></p>
 
     <h3>Description</h3>
-    <p>Configuration des règles de calcul des points de match et des bonus. Le barème est visible dans les deux modes (Standard et Journées), directement sous la section Bonus Moyenne.</p>
+    <p>Configuration des règles de calcul des points de match et des bonus. Le barème est visible dans les deux modes (Standard et Journées), dans un panneau repliable dédié.</p>
 
     <div class="screenshot-placeholder">
       <span class="screenshot-id">IMG-19</span>
@@ -2248,6 +2247,9 @@
   <section id="param-confidentialite">
     <h2>Paramètres > Politique de Confidentialité</h2>
 
+    <h3>Accès</h3>
+    <p>Paramètres &gt; onglet <strong>Organisation</strong> &gt; panneau <strong>"Politique de Confidentialité"</strong></p>
+
     <h3>Description</h3>
     <p>Éditeur de la politique de confidentialité affichée dans l'Application Joueur (conformité RGPD).</p>
 
@@ -2268,7 +2270,7 @@
     <h2>Paramètres > Logs d'activité</h2>
 
     <h3>Accès</h3>
-    <p>Menu Paramètres > Logs d'activité (lien direct)</p>
+    <p>Paramètres &gt; onglet <strong>Maintenance</strong> &gt; panneau <strong>"Logs d'activité"</strong></p>
 
     <h3>Description</h3>
     <p>Historique des actions effectuées par les utilisateurs de l'application et de l'Espace Joueur.</p>
@@ -2651,19 +2653,19 @@
           <td>IMG-16</td>
           <td><code>16-param-organisation.png</code></td>
           <td>Paramètres > Organisation</td>
-          <td>Formulaire complet avec nom, sigle, logo, emails et section couleurs.</td>
+          <td>Onglet Organisation avec les panneaux repliables (Organisation, Identité Visuelle, Emails, Saison, Confidentialité).</td>
         </tr>
         <tr>
           <td>IMG-17</td>
           <td><code>17-param-types-tournoi.png</code></td>
-          <td>Paramètres > Types de Tournoi</td>
-          <td>Les deux cartes de sélection du mode (Standard/Journées), le tableau des types et les paramètres journées si visible.</td>
+          <td>Paramètres > Compétitions</td>
+          <td>Onglet Compétitions avec les panneaux repliables (Paramètres des épreuves, Délais, Qualification, Mode, Types, Bonus, Barème, Classement).</td>
         </tr>
         <tr>
           <td>IMG-18</td>
           <td><code>18-param-jeu.png</code></td>
-          <td>Paramètres > Paramètres de jeu</td>
-          <td>Tableau des paramètres de jeu par catégorie avec distance, reprises et moyennes.</td>
+          <td>Paramètres > Paramètres des épreuves</td>
+          <td>Panneau "Paramètres des épreuves" dans l'onglet Compétitions avec distance, reprises et moyennes par catégorie.</td>
         </tr>
         <tr>
           <td>IMG-19</td>
@@ -2686,8 +2688,8 @@
         <tr>
           <td>IMG-22</td>
           <td><code>22-logs-activite.png</code></td>
-          <td>Paramètres > Logs d'activité</td>
-          <td>Statistiques rapides + filtres + quelques lignes de log dans le tableau.</td>
+          <td>Paramètres > Maintenance > Logs d'activité</td>
+          <td>Panneau "Logs d'activité" dans l'onglet Maintenance avec statistiques rapides, filtres et tableau.</td>
         </tr>
         <tr>
           <td>IMG-23</td>
