@@ -3442,18 +3442,22 @@ router.get('/tournoi/:id/simulation', authenticateToken, async (req, res) => {
       p.finalRank = idx + 1;
     });
 
-    // Get poule configuration
-    const config = await getPouleConfigForOrg(playersWithRanks.length, orgId);
-
-    // Distribute players using serpentine algorithm
-    const poules = distributeSimulationSerpentine(playersWithRanks, config.poules);
-
-    // For finales, generate match schedule with same-club-first sorting
+    // For finales: single poule (all players, round-robin). For regular: serpentine.
+    let poules;
+    let configDescription;
     let finaleMatches = null;
-    if (isFinale && poules.length === 1) {
-      const players = poules[0].players;
-      const n = players.length;
-      finaleMatches = buildFinaleMatchSchedule(n, players);
+
+    if (isFinale) {
+      poules = [{
+        number: 1,
+        players: playersWithRanks.map((p, idx) => ({ ...p, originalRank: idx + 1 }))
+      }];
+      configDescription = `1 poule unique de ${playersWithRanks.length} joueurs (Finale - tous contre tous)`;
+      finaleMatches = buildFinaleMatchSchedule(playersWithRanks.length, poules[0].players);
+    } else {
+      const config = await getPouleConfigForOrg(playersWithRanks.length, orgId);
+      poules = distributeSimulationSerpentine(playersWithRanks, config.poules);
+      configDescription = config.description;
     }
 
     res.json({
@@ -3469,7 +3473,7 @@ router.get('/tournoi/:id/simulation', authenticateToken, async (req, res) => {
       simulation: {
         generated_at: new Date().toISOString(),
         player_count: playersWithRanks.length,
-        config_description: config.description,
+        config_description: configDescription,
         is_finale: isFinale,
         finale_matches: finaleMatches,
         poules: poules.map(p => ({
