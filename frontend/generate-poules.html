@@ -1102,7 +1102,7 @@
           btnEl.textContent = '✅ Publié !';
           btnEl.style.background = '#28a745';
           setTimeout(() => {
-            btnEl.textContent = '🌐 Mettre à jour le site';
+            btnEl.textContent = '🌐 MAJ publication sur le site';
             btnEl.style.background = 'linear-gradient(135deg, #0070c0, #004080)';
             btnEl.disabled = false;
           }, 2000);
@@ -1757,7 +1757,7 @@
                 ` : ''}
                 ${window._wpEnabled && t.convocation_sent_at ? `
                   <button class="simulation-btn" onclick="event.stopPropagation(); publishCardToWp(${t.tournoi_id}, this);" style="background: linear-gradient(135deg, #0070c0, #004080); margin-top: 4px;">
-                    🌐 ${t.wp_post_id ? 'Mettre à jour le site' : 'Publier sur le site'}
+                    🌐 ${t.wp_post_id ? 'MAJ publication sur le site' : 'Publication sur le site'}
                   </button>
                 ` : ''}
               </div>
