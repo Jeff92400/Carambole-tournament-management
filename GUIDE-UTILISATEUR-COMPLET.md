@@ -438,7 +438,11 @@ Si le connecteur WordPress est configuré (voir [Paramètres > Site Web / WordPr
 - **Mise à jour :** Si un article a déjà été publié pour ce tournoi, il est mis à jour automatiquement (pas de doublon).
 - **Suppression :** Un bouton « Supprimer l'article » permet de retirer l'article du site WordPress.
 
-L'article publié contient : le titre du tournoi, la date, le(s) lieu(x), les paramètres de jeu (distance/reprises), la composition des poules avec les noms et clubs des joueurs, et un lien vers la page publique du tournoi.
+Sur les cartes de tournoi (Compétitions à venir), un bouton indique l'état de la publication :
+- **« Publication sur le site »** — aucun article n'a encore été publié pour ce tournoi
+- **« MAJ publication sur le site »** — un article existe déjà et sera mis à jour
+
+L'article publié contient : le titre du tournoi, la date, le(s) lieu(x), les paramètres de jeu (distance/reprises), la composition des poules avec le lieu de chaque poule, les noms et clubs des joueurs, un lien de téléchargement du PDF de convocation, et un lien vers la page publique du tournoi.
 
 > **Mode Test et WordPress :** En mode test, l'article est publié comme brouillon sur WordPress avec le préfixe [TEST] dans le titre et un bandeau d'avertissement dans le contenu. Cela permet de vérifier le rendu sur le site sans publier réellement. Pensez à supprimer l'article test depuis l'application après vérification.
 
