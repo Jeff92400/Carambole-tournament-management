@@ -193,6 +193,9 @@ function buildConvocationHtml({ tournament, poules, locations, gameParams, speci
   const categoryName = tournament.categoryName || '';
   const tournamentLabel = tournament.label || '';
 
+  parts.push(`<p>Cette annonce est la confirmation de la convocation qui a été envoyée par email ; nous vous en rappelons les détails ci-dessous.</p>`);
+  parts.push(`<p>Bonne compétition !</p>`);
+
   parts.push(`<p><strong>${categoryName} — ${tournamentLabel}</strong></p>`);
 
   // Location(s)
@@ -381,8 +384,11 @@ router.post('/publish-convocation', authenticateToken, async (req, res) => {
       wp.siteUrl, wp.username, wp.password, season, 'convocations'
     );
 
-    // Build post title
-    const dateStr = tournament.date || '';
+    // Build post title — format date if raw ISO string
+    const rawDate = tournament.date || '';
+    const dateStr = rawDate.includes('T')
+      ? new Date(rawDate).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+      : rawDate;
     const titleBase = `Convocation — ${tournament.categoryName || ''} ${tournament.label || ''} — ${dateStr}`.trim();
     const title = isTest ? `[TEST] ${titleBase}` : titleBase;
 
