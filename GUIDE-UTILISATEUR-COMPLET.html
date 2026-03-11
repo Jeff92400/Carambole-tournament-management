@@ -1569,6 +1569,7 @@
       <li>Composer un email</li>
       <li>Historique</li>
       <li>Invitations Espace Joueur</li>
+      <li>Sondages</li>
     </ul>
   </section>
 
@@ -1769,6 +1770,69 @@
     <div class="info-card">
       <strong>Lien avec l'Application Joueur :</strong> Quand un joueur crée son compte sur l'Application Joueur, son statut passe automatiquement de "En attente" à "Inscrit". Le bouton "Synchroniser statuts" force cette vérification.
     </div>
+  </section>
+
+  <hr>
+
+  <!-- Sondages -->
+  <section id="sondages">
+    <h2>Com Joueurs > Sondages</h2>
+
+    <h3>Description</h3>
+    <p>Création et gestion d'enquêtes de satisfaction destinées aux joueurs de l'Application Joueur. Les sondages apparaissent sous forme de bannière dans l'application mobile.</p>
+
+    <h3>Créer une campagne</h3>
+    <ol>
+      <li>Cliquer sur l'onglet <strong>Sondages</strong> dans la page Com Joueurs</li>
+      <li>Cliquer sur <strong>Nouvelle enquête</strong></li>
+      <li>Renseigner le <strong>titre</strong> (affiché aux joueurs dans la bannière) et la <strong>description</strong> (optionnelle)</li>
+      <li>Personnaliser les <strong>5 catégories de notation</strong> si nécessaire (valeurs par défaut fournies)</li>
+      <li>Cliquer sur <strong>Créer</strong></li>
+    </ol>
+
+    <h3>Activer une campagne (programmation)</h3>
+    <ol>
+      <li>Depuis la liste des campagnes, cliquer sur <strong>Activer</strong> sur une campagne en brouillon</li>
+      <li>Choisir la <strong>date de début</strong> et la <strong>date de fin</strong></li>
+      <li>Si la date de début est aujourd'hui ou passée, la campagne est activée immédiatement</li>
+      <li>Si la date de début est future, la campagne passe en statut <strong>Programmée</strong> et sera activée automatiquement</li>
+      <li>La campagne sera automatiquement clôturée à la date de fin</li>
+    </ol>
+
+    <div class="info-card">
+      <strong>Limitation :</strong> Une seule campagne peut être active ou programmée à la fois. Fermez la campagne en cours avant d'en activer une nouvelle.
+    </div>
+
+    <h3>Modifier une campagne</h3>
+    <ul>
+      <li><strong>Brouillon / Programmée :</strong> Modification complète (titre, description, catégories)</li>
+      <li><strong>Active :</strong> Seuls le titre et la description peuvent être modifiés (les catégories sont verrouillées car des réponses existent déjà)</li>
+      <li><strong>Clôturée :</strong> Aucune modification possible</li>
+    </ul>
+
+    <h3>Fonctionnement côté joueur</h3>
+    <ul>
+      <li>Une <strong>bannière</strong> s'affiche en haut de l'Application Joueur pendant la période active</li>
+      <li>Le joueur note chaque catégorie de <strong>1 à 5 étoiles</strong>, attribue une <strong>note globale</strong>, et peut laisser un <strong>commentaire libre</strong></li>
+      <li>Si le joueur ferme la bannière <strong>3 fois</strong>, elle ne s'affiche plus pour cette campagne</li>
+      <li>Chaque joueur ne peut répondre qu'<strong>une seule fois</strong> par campagne</li>
+    </ul>
+
+    <h3>Consulter les résultats</h3>
+    <p>Cliquer sur <strong>Résultats</strong> sur une campagne active ou clôturée pour voir :</p>
+    <ul>
+      <li><strong>Nombre de réponses</strong> et <strong>note moyenne globale</strong></li>
+      <li><strong>Moyennes par catégorie</strong> avec distribution des notes (barres de progression)</li>
+      <li><strong>Nombre de joueurs ayant décliné</strong> (fermé la bannière 3 fois)</li>
+      <li><strong>Commentaires libres</strong> des joueurs avec nom et date</li>
+    </ul>
+
+    <h3>Cycle de vie d'une campagne</h3>
+    <p><strong>Brouillon</strong> → <strong>Programmée</strong> (ou <strong>Active</strong>) → <strong>Clôturée</strong></p>
+    <ul>
+      <li><strong>Clôturer :</strong> Arrête la collecte de réponses (les résultats restent consultables)</li>
+      <li><strong>Supprimer :</strong> Possible uniquement pour les campagnes en brouillon ou clôturées</li>
+    </ul>
   </section>
 
   <hr>

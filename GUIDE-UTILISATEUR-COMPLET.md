@@ -885,13 +885,13 @@ Si le dédoublement n'est finalement plus nécessaire (par exemple, en cas de d�
 ### Accès
 
 Cliquer sur "Com joueurs" dans la barre de navigation
-
 ### Sous-menus / Onglets disponibles
 
 - Annonces
 - Composer un email
 - Historique
 - Invitations Espace Joueur
+- Sondages
 
 ---
 
@@ -1048,6 +1048,61 @@ L'email d'invitation contient : présentation de l'Application Joueur, instructi
 - **Guide PDF :** Télécharger un PDF joint automatiquement à chaque invitation
 
 > **Lien avec l'Application Joueur :** Quand un joueur crée son compte sur l'Application Joueur, son statut passe automatiquement de "En attente" à "Inscrit". Le bouton "Synchroniser statuts" force cette vérification.
+
+---
+
+## Com Joueurs > Sondages
+
+### Description
+
+Création et gestion d'enquêtes de satisfaction destinées aux joueurs de l'Application Joueur. Les sondages apparaissent sous forme de bannière dans l'application mobile.
+
+### Créer une campagne
+
+1. Cliquer sur l'onglet **Sondages** dans la page Com Joueurs
+2. Cliquer sur **Nouvelle enquête**
+3. Renseigner le **titre** (affiché aux joueurs dans la bannière) et la **description** (optionnelle)
+4. Personnaliser les **5 catégories de notation** si nécessaire (valeurs par défaut fournies)
+5. Cliquer sur **Créer**
+
+### Activer une campagne (programmation)
+
+1. Depuis la liste des campagnes, cliquer sur **Activer** sur une campagne en brouillon
+2. Choisir la **date de début** et la **date de fin**
+3. Si la date de début est aujourd'hui ou passée, la campagne est activée immédiatement
+4. Si la date de début est future, la campagne passe en statut **Programmée** et sera activée automatiquement
+5. La campagne sera automatiquement clôturée à la date de fin
+
+> **Limitation :** Une seule campagne peut être active ou programmée à la fois. Fermez la campagne en cours avant d'en activer une nouvelle.
+
+### Modifier une campagne
+
+- **Brouillon / Programmée :** Modification complète (titre, description, catégories)
+- **Active :** Seuls le titre et la description peuvent être modifiés (les catégories sont verrouillées car des réponses existent déjà)
+- **Clôturée :** Aucune modification possible
+
+### Fonctionnement côté joueur
+
+- Une **bannière** s'affiche en haut de l'Application Joueur pendant la période active
+- Le joueur note chaque catégorie de **1 à 5 étoiles**, attribue une **note globale**, et peut laisser un **commentaire libre**
+- Si le joueur ferme la bannière **3 fois**, elle ne s'affiche plus pour cette campagne
+- Chaque joueur ne peut répondre qu'**une seule fois** par campagne
+
+### Consulter les résultats
+
+Cliquer sur **Résultats** sur une campagne active ou clôturée pour voir :
+
+- **Nombre de réponses** et **note moyenne globale**
+- **Moyennes par catégorie** avec distribution des notes (barres de progression)
+- **Nombre de joueurs ayant décliné** (fermé la bannière 3 fois)
+- **Commentaires libres** des joueurs avec nom et date
+
+### Cycle de vie d'une campagne
+
+**Brouillon** → **Programmée** (ou **Active**) → **Clôturée**
+
+- **Clôturer :** Arrête la collecte de réponses (les résultats restent consultables)
+- **Supprimer :** Possible uniquement pour les campagnes en brouillon ou clôturées
 
 ---
 
