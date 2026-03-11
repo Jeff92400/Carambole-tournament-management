@@ -5,38 +5,130 @@ const { logAdminAction, ACTION_TYPES } = require('../utils/admin-logger');
 
 const router = express.Router();
 
-// ─── Helper: Build WP Authorization header ───────────────────────────────────
-function wpAuthHeader(username, appPassword) {
-  const credentials = Buffer.from(`${username}:${appPassword}`).toString('base64');
-  return `Basic ${credentials}`;
+// ═══════════════════════════════════════════════════════════════════════════════
+// WordPress XML-RPC Client
+// The REST API on cdbhs.net is locked by a security plugin.
+// XML-RPC (xmlrpc.php) is available and supports posts + categories.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ─── Helper: Build XML-RPC request body ───────────────────────────────────────
+function xmlrpcCall(method, params) {
+  const escapeXml = (str) => String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+
+  function toXmlValue(val) {
+    if (val === null || val === undefined) return '<string></string>';
+    if (typeof val === 'boolean') return `<boolean>${val ? 1 : 0}</boolean>`;
+    if (typeof val === 'number' && Number.isInteger(val)) return `<int>${val}</int>`;
+    if (typeof val === 'number') return `<double>${val}</double>`;
+    if (typeof val === 'string') return `<string>${escapeXml(val)}</string>`;
+    if (Array.isArray(val)) {
+      return '<array><data>' + val.map(v => `<value>${toXmlValue(v)}</value>`).join('') + '</data></array>';
+    }
+    if (typeof val === 'object') {
+      const members = Object.entries(val).map(([k, v]) =>
+        `<member><name>${escapeXml(k)}</name><value>${toXmlValue(v)}</value></member>`
+      ).join('');
+      return `<struct>${members}</struct>`;
+    }
+    return `<string>${escapeXml(String(val))}</string>`;
+  }
+
+  const paramsXml = params.map(p => `<param><value>${toXmlValue(p)}</value></param>`).join('');
+  return `<?xml version="1.0"?><methodCall><methodName>${method}</methodName><params>${paramsXml}</params></methodCall>`;
 }
 
-// ─── Helper: Call WordPress REST API ──────────────────────────────────────────
-async function wpFetch(siteUrl, path, { method = 'GET', body, username, appPassword } = {}) {
-  const url = `${siteUrl.replace(/\/+$/, '')}/wp-json/wp/v2${path}`;
-  const headers = {
-    'Authorization': wpAuthHeader(username, appPassword),
-    'Content-Type': 'application/json',
-    'User-Agent': 'CaramboleTournamentApp/1.0'
-  };
-
-  const options = { method, headers };
-  if (body) {
-    options.body = JSON.stringify(body);
+// ─── Helper: Parse XML-RPC response ───────────────────────────────────────────
+function parseXmlRpcResponse(xml) {
+  // Check for fault
+  const faultMatch = xml.match(/<fault>[\s\S]*?<string>([\s\S]*?)<\/string>/);
+  if (faultMatch) {
+    throw new Error(faultMatch[1].replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>'));
   }
 
-  const response = await fetch(url, options);
-  const data = await response.json();
+  // Simple recursive XML-RPC value parser
+  function parseValue(str) {
+    // String
+    let m = str.match(/^<string>([\s\S]*?)<\/string>$/);
+    if (m) return m[1].replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"');
+
+    // Int
+    m = str.match(/^<(?:int|i4)>([-\d]+)<\/(?:int|i4)>$/);
+    if (m) return parseInt(m[1], 10);
+
+    // Boolean
+    m = str.match(/^<boolean>([01])<\/boolean>$/);
+    if (m) return m[1] === '1';
+
+    // Double
+    m = str.match(/^<double>([\d.+-]+)<\/double>$/);
+    if (m) return parseFloat(m[1]);
+
+    // Array
+    if (str.startsWith('<array>')) {
+      const values = [];
+      const valueRegex = /<value>([\s\S]*?)<\/value>/g;
+      const dataContent = str.match(/<data>([\s\S]*?)<\/data>/);
+      if (dataContent) {
+        let vm;
+        while ((vm = valueRegex.exec(dataContent[1])) !== null) {
+          values.push(parseValue(vm[1].trim()));
+        }
+      }
+      return values;
+    }
+
+    // Struct
+    if (str.startsWith('<struct>')) {
+      const obj = {};
+      const memberRegex = /<member>\s*<name>([\s\S]*?)<\/name>\s*<value>([\s\S]*?)<\/value>\s*<\/member>/g;
+      let mm;
+      while ((mm = memberRegex.exec(str)) !== null) {
+        obj[mm[1].trim()] = parseValue(mm[2].trim());
+      }
+      return obj;
+    }
+
+    // Plain text (no type tag = string in XML-RPC)
+    return str.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+  }
+
+  // Extract the top-level value from params
+  const paramMatch = xml.match(/<params>\s*<param>\s*<value>([\s\S]*?)<\/value>\s*<\/param>\s*<\/params>/);
+  if (!paramMatch) {
+    // Some responses wrap differently
+    const valueMatch = xml.match(/<value>([\s\S]*?)<\/value>/);
+    if (valueMatch) return parseValue(valueMatch[1].trim());
+    throw new Error('Réponse XML-RPC invalide');
+  }
+
+  return parseValue(paramMatch[1].trim());
+}
+
+// ─── Helper: Call WordPress XML-RPC ───────────────────────────────────────────
+async function wpXmlRpc(siteUrl, method, params) {
+  const url = `${siteUrl.replace(/\/+$/, '')}/xmlrpc.php`;
+  const body = xmlrpcCall(method, params);
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'text/xml',
+      'User-Agent': 'CaramboleTournamentApp/1.0'
+    },
+    body
+  });
+
+  const text = await response.text();
 
   if (!response.ok) {
-    const errorMsg = data?.message || data?.code || `HTTP ${response.status}`;
-    const error = new Error(errorMsg);
-    error.status = response.status;
-    error.wpCode = data?.code;
-    throw error;
+    throw new Error(`HTTP ${response.status}: ${text.substring(0, 200)}`);
   }
 
-  return data;
+  return parseXmlRpcResponse(text);
 }
 
 // ─── Helper: Get WP settings for an org ───────────────────────────────────────
@@ -46,51 +138,49 @@ async function getWpSettings(orgId) {
   return {
     siteUrl: settings.wp_site_url || '',
     username: settings.wp_username || '',
-    appPassword: settings.wp_app_password || '',
+    password: settings.wp_app_password || '',
     defaultStatus: settings.wp_default_status || 'draft',
     enabled: settings.wp_enabled === 'true'
   };
 }
 
-// ─── Helper: Find or create a WP category ─────────────────────────────────────
-async function findOrCreateCategory(siteUrl, username, appPassword, slug, name, parentId) {
-  const params = new URLSearchParams({ slug, per_page: '1' });
-  const existing = await wpFetch(siteUrl, `/categories?${params}`, { username, appPassword });
+// ─── Helper: Find a category by slug, or create it ────────────────────────────
+async function findOrCreateCategory(siteUrl, username, password, slug, name, parentId) {
+  // wp.getTerms(blog_id, username, password, taxonomy, filter)
+  const terms = await wpXmlRpc(siteUrl, 'wp.getTerms', [
+    0, username, password, 'category', { search: slug }
+  ]);
 
-  if (existing.length > 0) {
-    return existing[0];
+  // Search for exact slug match
+  if (Array.isArray(terms)) {
+    const found = terms.find(t => t.slug === slug);
+    if (found) return { id: parseInt(found.term_id, 10), name: found.name, slug: found.slug };
   }
 
-  // Create category
-  const body = { name, slug };
-  if (parentId) body.parent = parentId;
-  return wpFetch(siteUrl, '/categories', { method: 'POST', body, username, appPassword });
+  // Create category: wp.newTerm(blog_id, username, password, content)
+  const content = { name, taxonomy: 'category', slug };
+  if (parentId) content.parent = parentId;
+  const termId = await wpXmlRpc(siteUrl, 'wp.newTerm', [0, username, password, content]);
+
+  return { id: parseInt(termId, 10), name, slug };
 }
 
 // ─── Helper: Build season category hierarchy ──────────────────────────────────
-// Creates: "2025-2026" (parent) > "Convocations 2025-2026" (child)
-async function getOrCreateSeasonCategory(siteUrl, username, appPassword, season, type) {
-  // Parent category: the season itself (e.g., "2025-2026")
+async function getOrCreateSeasonCategory(siteUrl, username, password, season, type) {
   const seasonSlug = season.replace(/\s/g, '-').toLowerCase();
-  const parentCat = await findOrCreateCategory(siteUrl, username, appPassword, seasonSlug, season);
+  const parentCat = await findOrCreateCategory(siteUrl, username, password, seasonSlug, season);
 
-  // Child category: e.g., "Convocations 2025-2026"
-  const typeLabels = {
-    convocations: 'Convocations',
-    resultats: 'Résultats'
-  };
+  const typeLabels = { convocations: 'Convocations', resultats: 'Résultats' };
   const label = typeLabels[type] || type;
   const childName = `${label} ${season}`;
   const childSlug = `${type}-${seasonSlug}`;
-  return findOrCreateCategory(siteUrl, username, appPassword, childSlug, childName, parentCat.id);
+  return findOrCreateCategory(siteUrl, username, password, childSlug, childName, parentCat.id);
 }
 
 // ─── Helper: Generate convocation HTML content ────────────────────────────────
 function buildConvocationHtml({ tournament, poules, locations, gameParams, specialNote, publicPageUrl }) {
   const parts = [];
 
-  // Header info
-  const date = tournament.date || '';
   const categoryName = tournament.categoryName || '';
   const tournamentLabel = tournament.label || '';
 
@@ -171,28 +261,36 @@ router.post('/test-connection', authenticateToken, async (req, res) => {
   try {
     const wp = await getWpSettings(orgId);
 
-    if (!wp.siteUrl || !wp.username || !wp.appPassword) {
-      return res.status(400).json({ error: 'Configuration WordPress incomplète. Renseignez l\'URL, l\'identifiant et le mot de passe application.' });
+    if (!wp.siteUrl || !wp.username || !wp.password) {
+      return res.status(400).json({ error: 'Configuration WordPress incomplète. Renseignez l\'URL, l\'identifiant et le mot de passe.' });
     }
 
-    // Test by fetching current user info
-    const user = await wpFetch(wp.siteUrl, '/users/me', { username: wp.username, appPassword: wp.appPassword });
+    // Test with wp.getUsersBlogs — simplest auth check
+    const blogs = await wpXmlRpc(wp.siteUrl, 'wp.getUsersBlogs', [wp.username, wp.password]);
 
-    // Also test category listing to verify permissions
-    await wpFetch(wp.siteUrl, '/categories?per_page=1', { username: wp.username, appPassword: wp.appPassword });
+    if (!blogs || blogs.length === 0) {
+      return res.status(400).json({ error: 'Connexion réussie mais aucun blog trouvé.' });
+    }
+
+    const blogName = blogs[0]?.blogName || blogs[0]?.blogname || wp.siteUrl;
+
+    // Also test category access
+    await wpXmlRpc(wp.siteUrl, 'wp.getTerms', [0, wp.username, wp.password, 'category', { number: 1 }]);
 
     res.json({
       success: true,
-      message: `Connexion réussie ! Connecté en tant que "${user.name}" sur ${wp.siteUrl}`,
-      user: { name: user.name, slug: user.slug }
+      message: `Connexion réussie ! Site : "${blogName}"`,
+      blog: { name: blogName, url: blogs[0]?.url || wp.siteUrl }
     });
   } catch (error) {
     console.error('[WordPress] Connection test failed:', error.message);
     let msg = 'Échec de la connexion WordPress.';
-    if (error.status === 401 || error.status === 403) {
-      msg += ' Identifiants invalides ou permissions insuffisantes.';
+    if (error.message.includes('Incorrect username or password') || error.message.includes('identifiant')) {
+      msg += ' Identifiants invalides.';
     } else if (error.message.includes('fetch failed') || error.message.includes('ENOTFOUND')) {
       msg += ' URL du site introuvable.';
+    } else if (error.message.includes('XML-RPC services are disabled')) {
+      msg += ' Les services XML-RPC sont désactivés sur ce site WordPress.';
     } else {
       msg += ` ${error.message}`;
     }
@@ -206,18 +304,20 @@ router.get('/categories', authenticateToken, async (req, res) => {
 
   try {
     const wp = await getWpSettings(orgId);
-    if (!wp.siteUrl || !wp.username || !wp.appPassword) {
+    if (!wp.siteUrl || !wp.username || !wp.password) {
       return res.status(400).json({ error: 'Configuration WordPress incomplète.' });
     }
 
-    const categories = await wpFetch(wp.siteUrl, '/categories?per_page=100', { username: wp.username, appPassword: wp.appPassword });
+    const terms = await wpXmlRpc(wp.siteUrl, 'wp.getTerms', [
+      0, wp.username, wp.password, 'category', { number: 100 }
+    ]);
 
-    res.json(categories.map(c => ({
-      id: c.id,
-      name: c.name,
-      slug: c.slug,
-      parent: c.parent,
-      count: c.count
+    res.json((terms || []).map(t => ({
+      id: parseInt(t.term_id, 10),
+      name: t.name,
+      slug: t.slug,
+      parent: parseInt(t.parent || 0, 10),
+      count: parseInt(t.count || 0, 10)
     })));
   } catch (error) {
     console.error('[WordPress] Failed to list categories:', error.message);
@@ -236,7 +336,7 @@ router.post('/publish-convocation', authenticateToken, async (req, res) => {
     if (!wp.enabled) {
       return res.status(400).json({ error: 'Publication WordPress désactivée. Activez-la dans Paramètres > Site Web.' });
     }
-    if (!wp.siteUrl || !wp.username || !wp.appPassword) {
+    if (!wp.siteUrl || !wp.username || !wp.password) {
       return res.status(400).json({ error: 'Configuration WordPress incomplète.' });
     }
 
@@ -248,7 +348,6 @@ router.post('/publish-convocation', authenticateToken, async (req, res) => {
 
     // Build public page URL
     const baseUrl = process.env.BASE_URL || 'https://cdbhs-tournament-management-production.up.railway.app';
-    // Fetch org slug
     const org = await new Promise((resolve, reject) => {
       db.get('SELECT slug FROM organizations WHERE id = $1', [orgId], (err, row) => {
         if (err) reject(err);
@@ -260,18 +359,12 @@ router.post('/publish-convocation', authenticateToken, async (req, res) => {
 
     // Build HTML content
     const htmlContent = buildConvocationHtml({
-      tournament,
-      poules,
-      locations,
-      gameParams,
-      specialNote,
-      publicPageUrl
+      tournament, poules, locations, gameParams, specialNote, publicPageUrl
     });
 
     // Find or create the season category
     const category = await getOrCreateSeasonCategory(
-      wp.siteUrl, wp.username, wp.appPassword,
-      season, 'convocations'
+      wp.siteUrl, wp.username, wp.password, season, 'convocations'
     );
 
     // Build post title
@@ -290,45 +383,48 @@ router.post('/publish-convocation', authenticateToken, async (req, res) => {
       );
     });
 
-    let wpPost;
+    let wpPostId;
     let isUpdate = false;
+    let postUrl = '';
 
     if (existingPost?.wp_post_id) {
-      // Update existing post
+      // Update existing post: wp.editPost(blog_id, username, password, post_id, content)
       isUpdate = true;
       const now = new Date();
       const updateNote = `<div style="background: #d4edda; padding: 8px 12px; border-left: 4px solid #28a745; margin-bottom: 15px;"><strong>🔄 Mise à jour du ${now.toLocaleDateString('fr-FR')} à ${now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</strong></div>`;
 
-      wpPost = await wpFetch(wp.siteUrl, `/posts/${existingPost.wp_post_id}`, {
-        method: 'PUT',
-        body: {
-          title,
-          content: updateNote + htmlContent,
-          categories: [category.id],
-          status: wp.defaultStatus
-        },
-        username: wp.username,
-        appPassword: wp.appPassword
-      });
+      await wpXmlRpc(wp.siteUrl, 'wp.editPost', [
+        0, wp.username, wp.password, existingPost.wp_post_id,
+        {
+          post_title: title,
+          post_content: updateNote + htmlContent,
+          terms: { category: [category.id] },
+          post_status: wp.defaultStatus
+        }
+      ]);
+      wpPostId = existingPost.wp_post_id;
+      postUrl = `${wp.siteUrl}/?p=${wpPostId}`;
     } else {
-      // Create new post
-      wpPost = await wpFetch(wp.siteUrl, '/posts', {
-        method: 'POST',
-        body: {
-          title,
-          content: htmlContent,
-          categories: [category.id],
-          status: wp.defaultStatus
-        },
-        username: wp.username,
-        appPassword: wp.appPassword
-      });
+      // Create new post: wp.newPost(blog_id, username, password, content)
+      wpPostId = await wpXmlRpc(wp.siteUrl, 'wp.newPost', [
+        0, wp.username, wp.password,
+        {
+          post_title: title,
+          post_content: htmlContent,
+          post_type: 'post',
+          post_status: wp.defaultStatus,
+          terms: { category: [category.id] }
+        }
+      ]);
+
+      wpPostId = parseInt(wpPostId, 10);
+      postUrl = `${wp.siteUrl}/?p=${wpPostId}`;
 
       // Store the WP post ID in tournoi_ext
       await new Promise((resolve, reject) => {
         db.run(
           'UPDATE tournoi_ext SET wp_post_id = $1 WHERE tournoi_id = $2',
-          [wpPost.id, tournoiId],
+          [wpPostId, tournoiId],
           (err) => {
             if (err) reject(err);
             else resolve();
@@ -350,8 +446,8 @@ router.post('/publish-convocation', authenticateToken, async (req, res) => {
     res.json({
       success: true,
       isUpdate,
-      postId: wpPost.id,
-      postUrl: wpPost.link || `${wp.siteUrl}/?p=${wpPost.id}`,
+      postId: wpPostId,
+      postUrl,
       message: isUpdate
         ? 'Article WordPress mis à jour avec succès.'
         : 'Article publié sur WordPress avec succès.'
@@ -361,8 +457,8 @@ router.post('/publish-convocation', authenticateToken, async (req, res) => {
     console.error('[WordPress] Publish convocation failed:', error.message);
 
     let msg = 'Échec de la publication WordPress.';
-    if (error.status === 401 || error.status === 403) {
-      msg += ' Identifiants invalides ou permissions insuffisantes.';
+    if (error.message.includes('Incorrect username') || error.message.includes('identifiant')) {
+      msg += ' Identifiants invalides.';
     } else {
       msg += ` ${error.message}`;
     }
