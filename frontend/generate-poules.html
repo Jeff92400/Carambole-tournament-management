@@ -1080,6 +1080,44 @@
       }
     }
 
+    // Publish from tournament card (uses saved data)
+    async function publishCardToWp(tournoiId, btnEl) {
+      const originalText = btnEl.textContent;
+      btnEl.disabled = true;
+      btnEl.textContent = '🌐 Publication...';
+
+      try {
+        const response = await fetch(`${API_URL}/wordpress/publish-from-saved/${tournoiId}`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ season: currentSeason })
+        });
+
+        const data = await response.json();
+
+        if (response.ok && data.success) {
+          btnEl.textContent = '✅ Publié !';
+          btnEl.style.background = '#28a745';
+          setTimeout(() => {
+            btnEl.textContent = '🌐 Mettre à jour le site';
+            btnEl.style.background = 'linear-gradient(135deg, #0070c0, #004080)';
+            btnEl.disabled = false;
+          }, 2000);
+        } else {
+          alert(data.error || 'Échec de la publication');
+          btnEl.textContent = originalText;
+          btnEl.disabled = false;
+        }
+      } catch (error) {
+        alert('Erreur réseau');
+        btnEl.textContent = originalText;
+        btnEl.disabled = false;
+      }
+    }
+
     // Standalone publish to WP (without sending emails)
     async function publishStandaloneToWp() {
       if (!lastGeneratedData?.tournoiId) {
@@ -1715,6 +1753,11 @@
                   </button>
                   <button class="split-btn unsplit" onclick="event.stopPropagation(); unsplitTournoi(${t.tournoi_id});" style="margin-top: 4px;">
                     Annuler le dédoublement
+                  </button>
+                ` : ''}
+                ${window._wpEnabled && t.convocation_sent_at ? `
+                  <button class="simulation-btn" onclick="event.stopPropagation(); publishCardToWp(${t.tournoi_id}, this);" style="background: linear-gradient(135deg, #0070c0, #004080); margin-top: 4px;">
+                    🌐 ${t.wp_post_id ? 'Mettre à jour le site' : 'Publier sur le site'}
                   </button>
                 ` : ''}
               </div>
