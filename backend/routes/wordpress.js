@@ -25,6 +25,7 @@ function xmlrpcCall(method, params) {
     if (typeof val === 'number' && Number.isInteger(val)) return `<int>${val}</int>`;
     if (typeof val === 'number') return `<double>${val}</double>`;
     if (typeof val === 'string') return `<string>${escapeXml(val)}</string>`;
+    if (Buffer.isBuffer(val)) return `<base64>${val.toString('base64')}</base64>`;
     if (Array.isArray(val)) {
       return '<array><data>' + val.map(v => `<value>${toXmlValue(v)}</value>`).join('') + '</data></array>';
     }
@@ -186,8 +187,22 @@ async function getOrCreateSeasonCategory(siteUrl, username, password, season, ty
   return findOrCreateCategory(siteUrl, username, password, childSlug, childName, parentId);
 }
 
+// ─── Helper: Upload file to WordPress via XML-RPC ────────────────────────────
+async function uploadFileToWp(siteUrl, username, password, filename, contentType, data) {
+  try {
+    const result = await wpXmlRpc(siteUrl, 'wp.uploadFile', [
+      0, username, password,
+      { name: filename, type: contentType, bits: data, overwrite: true }
+    ]);
+    return result?.url || result?.link || null;
+  } catch (err) {
+    console.warn(`[WordPress] Could not upload file "${filename}": ${err.message}`);
+    return null;
+  }
+}
+
 // ─── Helper: Generate convocation HTML content ────────────────────────────────
-function buildConvocationHtml({ tournament, poules, locations, gameParams, specialNote, publicPageUrl }) {
+function buildConvocationHtml({ tournament, poules, locations, gameParams, specialNote, publicPageUrl, pdfUrl }) {
   const parts = [];
 
   const categoryName = tournament.categoryName || '';
@@ -229,11 +244,28 @@ function buildConvocationHtml({ tournament, poules, locations, gameParams, speci
 
   parts.push('<hr>');
 
+  // Build location lookup by locationNum for per-poule display
+  const locationByNum = {};
+  if (locations && locations.length > 0) {
+    for (const loc of locations) {
+      if (loc.locationNum) locationByNum[loc.locationNum] = loc;
+    }
+  }
+
   // Poules
   if (poules && poules.length > 0) {
     for (const poule of poules) {
       const pouleNum = poule.number || poule.pouleNumber || '';
       parts.push(`<h3>Poule ${pouleNum}</h3>`);
+
+      // Show location for this poule (useful when 2+ locations)
+      const pouleLoc = poule.locationNum ? locationByNum[poule.locationNum] : null;
+      if (pouleLoc) {
+        const locName = pouleLoc.name || '';
+        parts.push(`<p style="color: #555; font-size: 0.95em;">📍 ${locName}</p>`);
+      } else if (poule.locationName) {
+        parts.push(`<p style="color: #555; font-size: 0.95em;">📍 ${poule.locationName}</p>`);
+      }
 
       if (poule.players && poule.players.length > 0) {
         parts.push('<table style="border-collapse: collapse; width: 100%; margin-bottom: 15px;">');
@@ -252,6 +284,11 @@ function buildConvocationHtml({ tournament, poules, locations, gameParams, speci
         parts.push('</tbody></table>');
       }
     }
+  }
+
+  // PDF download link
+  if (pdfUrl) {
+    parts.push(`<p>📄 <a href="${pdfUrl}">Télécharger la convocation en PDF</a></p>`);
   }
 
   // Link to public page
@@ -374,9 +411,29 @@ router.post('/publish-convocation', authenticateToken, async (req, res) => {
     const orgSlug = org?.slug || 'cdbhs';
     const publicPageUrl = `${baseUrl}/public/${orgSlug}/tournament/${tournoiId}`;
 
+    // Fetch latest convocation PDF and upload to WordPress
+    let pdfUrl = null;
+    try {
+      const pdfRow = await new Promise((resolve, reject) => {
+        db.get(
+          `SELECT pdf_data, filename FROM convocation_files
+           WHERE tournoi_ext_id = $1 ORDER BY id DESC LIMIT 1`,
+          [tournoiId],
+          (err, row) => { if (err) reject(err); else resolve(row); }
+        );
+      });
+      if (pdfRow?.pdf_data) {
+        const pdfBuffer = Buffer.isBuffer(pdfRow.pdf_data) ? pdfRow.pdf_data : Buffer.from(pdfRow.pdf_data);
+        const pdfFilename = pdfRow.filename || `convocation-${tournoiId}.pdf`;
+        pdfUrl = await uploadFileToWp(wp.siteUrl, wp.username, wp.password, pdfFilename, 'application/pdf', pdfBuffer);
+      }
+    } catch (err) {
+      console.warn(`[WordPress] PDF upload skipped: ${err.message}`);
+    }
+
     // Build HTML content
     const htmlContent = buildConvocationHtml({
-      tournament, poules, locations, gameParams, specialNote, publicPageUrl
+      tournament, poules, locations, gameParams, specialNote, publicPageUrl, pdfUrl
     });
 
     // Find or create the season category
@@ -541,6 +598,7 @@ router.post('/publish-from-saved/:tournoiId', authenticateToken, async (req, res
       if (!poulesMap[row.poule_number]) {
         poulesMap[row.poule_number] = {
           number: row.poule_number,
+          locationName: row.location_name || '',
           players: []
         };
       }
@@ -599,6 +657,26 @@ router.post('/publish-from-saved/:tournoiId', authenticateToken, async (req, res
     const levelName = tournament.categorie || '';
     const fullCategoryName = modeName && levelName ? `${modeName} – ${levelName}` : (modeName || levelName);
 
+    // Fetch latest convocation PDF and upload to WordPress
+    let pdfUrl = null;
+    try {
+      const pdfRow = await new Promise((resolve, reject) => {
+        db.get(
+          `SELECT pdf_data, filename FROM convocation_files
+           WHERE tournoi_ext_id = $1 ORDER BY id DESC LIMIT 1`,
+          [tournoiId],
+          (err, row) => { if (err) reject(err); else resolve(row); }
+        );
+      });
+      if (pdfRow?.pdf_data) {
+        const pdfBuffer = Buffer.isBuffer(pdfRow.pdf_data) ? pdfRow.pdf_data : Buffer.from(pdfRow.pdf_data);
+        const pdfFilename = pdfRow.filename || `convocation-${tournoiId}.pdf`;
+        pdfUrl = await uploadFileToWp(wp.siteUrl, wp.username, wp.password, pdfFilename, 'application/pdf', pdfBuffer);
+      }
+    } catch (err) {
+      console.warn(`[WordPress] PDF upload skipped: ${err.message}`);
+    }
+
     // Build HTML
     const htmlContent = buildConvocationHtml({
       tournament: { categoryName: fullCategoryName, label: tournamentLabel, date: dateStr },
@@ -606,7 +684,8 @@ router.post('/publish-from-saved/:tournoiId', authenticateToken, async (req, res
       locations,
       gameParams: gameParams || null,
       specialNote: null,
-      publicPageUrl
+      publicPageUrl,
+      pdfUrl
     });
 
     // Determine season
