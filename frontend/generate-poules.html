@@ -1041,7 +1041,7 @@
     })();
 
     // Publish convocation to WordPress
-    async function publishConvocationToWp(tournoiId, tournament, poules, locations, gameParams, specialNote, season) {
+    async function publishConvocationToWp(tournoiId, tournament, poules, locations, gameParams, specialNote, season, isTest) {
       const statusEl = document.getElementById('wpPublishStatus');
       if (statusEl) statusEl.textContent = 'Publication en cours...';
 
@@ -1052,7 +1052,7 @@
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({ tournoiId, tournament, poules, locations, gameParams, specialNote, season })
+          body: JSON.stringify({ tournoiId, tournament, poules, locations, gameParams, specialNote, season, isTest: !!isTest })
         });
 
         const data = await response.json();
@@ -4284,12 +4284,13 @@
               lastGeneratedData.locations,
               lastGeneratedData.gameParams,
               document.getElementById('specialNoteField').value.trim(),
-              currentSeason
+              currentSeason,
+              true // isTest
             );
             if (wpResult) {
               const wpLabel = wpResult.isUpdate ? 'Mis à jour' : 'Publié';
               results.innerHTML += `<div style="background: #e7f3ff; padding: 10px; border-radius: 4px; margin-top: 10px; border-left: 4px solid #0070c0;">
-                <strong>🌐 ${wpLabel} sur le site web (brouillon)</strong>
+                <strong>🌐 ${wpLabel} sur le site web (brouillon test)</strong>
                 ${wpResult.postUrl ? ` — <a href="${wpResult.postUrl}" target="_blank">Voir l'article</a>` : ''}
               </div>`;
               // Refresh WP status display

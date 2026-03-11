@@ -113,6 +113,7 @@ cdbhs-tournament-management/
 | `player-accounts.js` | Player App account management |
 | `announcements.js` | Global announcements for Player App |
 | `player-invitations.js` | Invitation emails for Player App registration |
+| `wordpress.js` | WordPress XML-RPC connector for publishing convocations |
 
 ## Key Frontend Pages
 
@@ -125,6 +126,7 @@ cdbhs-tournament-management/
 | `inscriptions-list.html` | Player registrations |
 | `player-invitations.html` | Player App invitation management |
 | `settings-admin.html` | System administration |
+| `public-tournament.html` | Public tournament page (no auth, org-branded) |
 
 ## Database
 
@@ -307,6 +309,62 @@ tournament_parameter_overrides (
   validated_at, validated_by, created_at
 )
 ```
+
+## WordPress Connector (Site Web Publishing)
+
+Convocation articles can be published directly to a CDB's WordPress website from within the app. Uses XML-RPC API (`xmlrpc.php`) — the REST API is locked by security plugins on some WP installations.
+
+### Architecture
+
+- **Custom XML-RPC client** in `backend/routes/wordpress.js` — no external npm dependency
+- XML-RPC methods used: `wp.getUsersBlogs` (test), `wp.getTerms` (list categories), `wp.newTerm` (create category), `wp.newPost` (create), `wp.editPost` (update), `wp.deletePost` (delete)
+- **Category hierarchy**: auto-creates `Saison {season}` > `Convocations {season}` (graceful fallback if user lacks permission — publishes without category)
+- **Re-send handling**: `tournoi_ext.wp_post_id` tracks published posts — updates existing post instead of creating duplicates
+- **Public tournament page**: `/public/:orgSlug/tournament/:id` — standalone page (no auth) showing tournament info + poule compositions, linked from WP articles
+
+### Per-Organization Settings (organization_settings)
+
+| Key | Description |
+|-----|-------------|
+| `wp_site_url` | WordPress site URL (e.g., `https://cdbhs.net`) |
+| `wp_username` | WordPress username |
+| `wp_app_password` | WordPress Application Password |
+| `wp_default_status` | Default post status: `draft` or `publish` |
+| `wp_enabled` | Enable/disable WP publishing (`true`/`false`) |
+
+### API Endpoints (`/api/wordpress/`)
+
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| POST | `/test-connection` | Test WP credentials via `wp.getUsersBlogs` |
+| GET | `/categories` | List WP categories |
+| POST | `/publish-convocation` | Create/update post from frontend convocation data |
+| POST | `/publish-from-saved/:tournoiId` | Create/update post from saved DB data (standalone) |
+| GET | `/status/:tournoiId` | Check if tournament has a WP post |
+| DELETE | `/delete/:tournoiId` | Delete WP post + clear `wp_post_id` |
+
+### Database Column
+
+- `tournoi_ext.wp_post_id INTEGER` — tracks which WP post corresponds to each tournament
+
+### Frontend Integration (generate-poules.html)
+
+- **Step 4 (convocations)**: "Publier également sur le site web" checkbox — publishes alongside email send
+- **Standalone publish button**: "Publier sur le site web (sans envoyer d'emails)" — available after poules are generated
+- **Tournament cards**: "Publier sur le site" / "Mettre à jour le site" button when WP is enabled and convocations have been sent
+- **Delete button**: removes article from WordPress
+- **Test mode**: publishes as draft with `[TEST]` title prefix and red warning banner in content
+- **Status indicator**: shows existing post info with link to WP article
+
+### Files
+
+| File | Purpose |
+|------|---------|
+| `backend/routes/wordpress.js` | XML-RPC client, all WP endpoints |
+| `frontend/generate-poules.html` | WP publish UI (checkbox, buttons, status) |
+| `frontend/settings-admin.html` | WP connector settings panel (Organisation tab) |
+| `frontend/public-tournament.html` | Public tournament page (no auth) |
+| `backend/server.js` | Public page route + public API endpoint |
 
 ## Email Template Variables
 

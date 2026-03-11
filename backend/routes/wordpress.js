@@ -147,22 +147,30 @@ async function getWpSettings(orgId) {
 // ─── Helper: Find a category by slug, or create it ────────────────────────────
 async function findOrCreateCategory(siteUrl, username, password, slug, name, parentId) {
   // wp.getTerms(blog_id, username, password, taxonomy, filter)
-  const terms = await wpXmlRpc(siteUrl, 'wp.getTerms', [
-    0, username, password, 'category', { search: slug }
-  ]);
+  try {
+    const terms = await wpXmlRpc(siteUrl, 'wp.getTerms', [
+      0, username, password, 'category', { search: slug }
+    ]);
 
-  // Search for exact slug match
-  if (Array.isArray(terms)) {
-    const found = terms.find(t => t.slug === slug);
-    if (found) return { id: parseInt(found.term_id, 10), name: found.name, slug: found.slug };
+    // Search for exact slug match
+    if (Array.isArray(terms)) {
+      const found = terms.find(t => t.slug === slug);
+      if (found) return { id: parseInt(found.term_id, 10), name: found.name, slug: found.slug };
+    }
+  } catch (err) {
+    console.warn(`[WordPress] Could not list categories: ${err.message}`);
   }
 
   // Create category: wp.newTerm(blog_id, username, password, content)
-  const content = { name, taxonomy: 'category', slug };
-  if (parentId) content.parent = parentId;
-  const termId = await wpXmlRpc(siteUrl, 'wp.newTerm', [0, username, password, content]);
-
-  return { id: parseInt(termId, 10), name, slug };
+  try {
+    const content = { name, taxonomy: 'category', slug };
+    if (parentId) content.parent = parentId;
+    const termId = await wpXmlRpc(siteUrl, 'wp.newTerm', [0, username, password, content]);
+    return { id: parseInt(termId, 10), name, slug };
+  } catch (err) {
+    console.warn(`[WordPress] Could not create category "${name}": ${err.message}. Post will be published without category.`);
+    return null;
+  }
 }
 
 // ─── Helper: Build season category hierarchy ──────────────────────────────────
@@ -174,7 +182,8 @@ async function getOrCreateSeasonCategory(siteUrl, username, password, season, ty
   const label = typeLabels[type] || type;
   const childName = `${label} ${season}`;
   const childSlug = `${type}-${seasonSlug}`;
-  return findOrCreateCategory(siteUrl, username, password, childSlug, childName, parentCat.id);
+  const parentId = parentCat ? parentCat.id : null;
+  return findOrCreateCategory(siteUrl, username, password, childSlug, childName, parentId);
 }
 
 // ─── Helper: Generate convocation HTML content ────────────────────────────────
@@ -340,11 +349,16 @@ router.post('/publish-convocation', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Configuration WordPress incomplète.' });
     }
 
-    const { tournoiId, tournament, poules, locations, gameParams, specialNote, season } = req.body;
+    const { tournoiId, tournament, poules, locations, gameParams, specialNote, season, isTest } = req.body;
 
     if (!tournoiId || !tournament || !poules || !season) {
       return res.status(400).json({ error: 'Données de convocation manquantes (tournoiId, tournament, poules, season requis).' });
     }
+
+    // Test banner
+    const testBanner = isTest
+      ? '<div style="background: #f8d7da; padding: 12px 16px; border: 2px solid #dc3545; border-radius: 6px; margin-bottom: 15px; text-align: center; font-size: 16px;"><strong>⚠️ ARTICLE TEST — Ne pas en tenir compte ⚠️</strong></div>'
+      : '';
 
     // Build public page URL
     const baseUrl = process.env.BASE_URL || 'https://cdbhs-tournament-management-production.up.railway.app';
@@ -369,7 +383,8 @@ router.post('/publish-convocation', authenticateToken, async (req, res) => {
 
     // Build post title
     const dateStr = tournament.date || '';
-    const title = `Convocation — ${tournament.categoryName || ''} ${tournament.label || ''} — ${dateStr}`.trim();
+    const titleBase = `Convocation — ${tournament.categoryName || ''} ${tournament.label || ''} — ${dateStr}`.trim();
+    const title = isTest ? `[TEST] ${titleBase}` : titleBase;
 
     // Check if we already published for this tournament (wp_post_id)
     const existingPost = await new Promise((resolve, reject) => {
@@ -393,28 +408,30 @@ router.post('/publish-convocation', authenticateToken, async (req, res) => {
       const now = new Date();
       const updateNote = `<div style="background: #d4edda; padding: 8px 12px; border-left: 4px solid #28a745; margin-bottom: 15px;"><strong>🔄 Mise à jour du ${now.toLocaleDateString('fr-FR')} à ${now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</strong></div>`;
 
+      const updateContent = {
+        post_title: title,
+        post_content: testBanner + updateNote + htmlContent,
+        post_status: wp.defaultStatus
+      };
+      if (category) updateContent.terms = { category: [category.id] };
+
       await wpXmlRpc(wp.siteUrl, 'wp.editPost', [
-        0, wp.username, wp.password, existingPost.wp_post_id,
-        {
-          post_title: title,
-          post_content: updateNote + htmlContent,
-          terms: { category: [category.id] },
-          post_status: wp.defaultStatus
-        }
+        0, wp.username, wp.password, existingPost.wp_post_id, updateContent
       ]);
       wpPostId = existingPost.wp_post_id;
       postUrl = `${wp.siteUrl}/?p=${wpPostId}`;
     } else {
       // Create new post: wp.newPost(blog_id, username, password, content)
+      const newPostContent = {
+        post_title: title,
+        post_content: testBanner + htmlContent,
+        post_type: 'post',
+        post_status: wp.defaultStatus
+      };
+      if (category) newPostContent.terms = { category: [category.id] };
+
       wpPostId = await wpXmlRpc(wp.siteUrl, 'wp.newPost', [
-        0, wp.username, wp.password,
-        {
-          post_title: title,
-          post_content: htmlContent,
-          post_type: 'post',
-          post_status: wp.defaultStatus,
-          terms: { category: [category.id] }
-        }
+        0, wp.username, wp.password, newPostContent
       ]);
 
       wpPostId = parseInt(wpPostId, 10);
@@ -605,16 +622,20 @@ router.post('/publish-from-saved/:tournoiId', authenticateToken, async (req, res
       const now = new Date();
       const updateNote = `<div style="background: #d4edda; padding: 8px 12px; border-left: 4px solid #28a745; margin-bottom: 15px;"><strong>🔄 Mise à jour du ${now.toLocaleDateString('fr-FR')} à ${now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</strong></div>`;
 
+      const updateContent2 = { post_title: title, post_content: updateNote + htmlContent, post_status: wp.defaultStatus };
+      if (category) updateContent2.terms = { category: [category.id] };
+
       await wpXmlRpc(wp.siteUrl, 'wp.editPost', [
-        0, wp.username, wp.password, tournament.wp_post_id,
-        { post_title: title, post_content: updateNote + htmlContent, terms: { category: [category.id] }, post_status: wp.defaultStatus }
+        0, wp.username, wp.password, tournament.wp_post_id, updateContent2
       ]);
       wpPostId = tournament.wp_post_id;
       postUrl = `${wp.siteUrl}/?p=${wpPostId}`;
     } else {
+      const newPostContent2 = { post_title: title, post_content: htmlContent, post_type: 'post', post_status: wp.defaultStatus };
+      if (category) newPostContent2.terms = { category: [category.id] };
+
       wpPostId = await wpXmlRpc(wp.siteUrl, 'wp.newPost', [
-        0, wp.username, wp.password,
-        { post_title: title, post_content: htmlContent, post_type: 'post', post_status: wp.defaultStatus, terms: { category: [category.id] } }
+        0, wp.username, wp.password, newPostContent2
       ]);
       wpPostId = parseInt(wpPostId, 10);
       postUrl = `${wp.siteUrl}/?p=${wpPostId}`;
