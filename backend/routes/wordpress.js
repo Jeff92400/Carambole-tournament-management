@@ -594,9 +594,14 @@ router.post('/publish-from-saved/:tournoiId', authenticateToken, async (req, res
 
     const tournamentLabel = `T${tournament.tournament_number || ''}`;
 
+    // Build full category name from mode + categorie (e.g., "Bande – R1")
+    const modeName = tournament.mode || '';
+    const levelName = tournament.categorie || '';
+    const fullCategoryName = modeName && levelName ? `${modeName} – ${levelName}` : (modeName || levelName);
+
     // Build HTML
     const htmlContent = buildConvocationHtml({
-      tournament: { categoryName: tournament.categorie, label: tournamentLabel, date: dateStr },
+      tournament: { categoryName: fullCategoryName, label: tournamentLabel, date: dateStr },
       poules,
       locations,
       gameParams: gameParams || null,
@@ -617,7 +622,7 @@ router.post('/publish-from-saved/:tournoiId', authenticateToken, async (req, res
       wp.siteUrl, wp.username, wp.password, effectiveSeason, 'convocations'
     );
 
-    const title = `Convocation — ${tournament.categorie} ${tournamentLabel} — ${dateStr}`.trim();
+    const title = `Convocation — ${fullCategoryName} ${tournamentLabel} — ${dateStr}`.trim();
 
     let wpPostId;
     let isUpdate = false;
