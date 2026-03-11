@@ -264,11 +264,25 @@ IMG-09
 
 Prévisualisation de l'email : aperçu de l'email tel qu'il sera reçu par les joueurs, avec logo, informations du tournoi, composition de la poule et planning des matchs.
 Mode Test : Cocher "Mode Test - Envoyer uniquement à mon adresse", saisir une adresse email de test, puis cliquer sur "Envoyer le Test" pour vérifier le rendu avant l'envoi réel.
+
+Publication sur le site web (WordPress)
+Si le connecteur WordPress est configuré (voir Paramètres > Site Web / WordPress), une option « Publier également sur le site web » apparaît à l'étape 4 :
+	•	Avec l'envoi des convocations : Cocher la case « Publier également sur le site web » avant d'envoyer. L'article est créé automatiquement sur le site WordPress en même temps que l'envoi des emails.
+	•	Sans envoyer d'emails : Utiliser le bouton « Publier sur le site web (sans envoyer d'emails) » pour publier l'article indépendamment.
+	•	Mise à jour : Si un article a déjà été publié pour ce tournoi, il est mis à jour automatiquement (pas de doublon).
+	•	Suppression : Un bouton « Supprimer l'article » permet de retirer l'article du site WordPress.
+L'article publié contient : le titre du tournoi, la date, le(s) lieu(x), les paramètres de jeu (distance/reprises), la composition des poules avec les noms et clubs des joueurs, et un lien vers la page publique du tournoi.
+
+> Mode Test et WordPress : En mode test, l'article est publié comme brouillon sur WordPress avec le préfixe [TEST] dans le titre et un bandeau d'avertissement dans le contenu. Pensez à supprimer l'article test depuis l'application après vérification.
+
+> Page publique du tournoi : Chaque tournoi dispose d'une page publique accessible sans connexion, affichant les informations du tournoi et la composition des poules. Le lien vers cette page est automatiquement inclus dans l'article WordPress.
+
 Ce qui se passe après l'envoi :
 	•	Chaque joueur reçoit un email personnalisé
 	•	Un PDF récapitulatif est joint à l'email
 	•	Les poules sont enregistrées en base de données
 	•	Le statut des joueurs passe à "Convoqué"
+	•	Si la case « Publier sur le site web » est cochée, un article est publié sur le site WordPress
 Lien avec l'Application Joueur : Après l'envoi des convocations, les joueurs peuvent voir leur convocation, la composition complète de toutes les poules et le planning des matchs dans l'Application Joueur.
 Cas particulier : Générer les poules d'un tournoi dédoublé
 Pour un tournoi dédoublé, la génération des poules et l'envoi des convocations se font en deux passes, une par sous-tournoi (Tournoi X A puis Tournoi X B).
@@ -810,6 +824,42 @@ Couleur des dégradés, survols
 Couleur d'accent
 Couleur des alertes, badges
 
+Paramètres > Site Web / WordPress
+
+Accès : Onglet Organisation des Paramètres > panneau « Site Web / WordPress »
+
+Description : Configure la connexion au site WordPress de l'organisation pour publier automatiquement les convocations sous forme d'articles. Cette fonctionnalité utilise le protocole XML-RPC de WordPress.
+
+Prérequis :
+	•	Un site WordPress avec XML-RPC activé (activé par défaut sur la plupart des installations)
+	•	Un compte WordPress avec les permissions de publication (rôle Éditeur ou Administrateur recommandé)
+	•	Un Mot de passe d'application WordPress (différent du mot de passe classique)
+
+Générer un mot de passe d'application WordPress :
+	1.	Connectez-vous à l'administration WordPress de votre site
+	2.	Allez dans Utilisateurs > Profil
+	3.	Descendez jusqu'à la section « Mots de passe d'application »
+	4.	Saisissez un nom (ex: « Gestion Tournois ») et cliquez sur « Ajouter un mot de passe d'application »
+	5.	Copiez le mot de passe généré (il ne sera plus affiché)
+
+Configuration :
+Paramètre — Description
+URL du site — Adresse complète du site WordPress (ex: https://cdbhs.net)
+Nom d'utilisateur — Identifiant du compte WordPress
+Mot de passe d'application — Mot de passe d'application généré (avec ou sans espaces)
+Statut par défaut — Brouillon (à relire avant publication) ou Publié (visible immédiatement)
+Activer la publication — Active ou désactive globalement la fonctionnalité
+
+Test de connexion : Après avoir saisi les informations, cliquez sur « Tester la connexion » pour vérifier que l'application peut se connecter au site WordPress.
+
+Catégories WordPress : Les articles publiés sont automatiquement classés dans une hiérarchie de catégories :
+	•	Saison 2025-2026 (catégorie parente)
+		•	Convocations 2025-2026 (catégorie enfant)
+
+Ces catégories sont créées automatiquement si elles n'existent pas et si le compte WordPress dispose des permissions nécessaires. Dans le cas contraire, l'article est publié sans catégorie.
+
+> Permissions WordPress : Pour que les catégories soient créées automatiquement, le compte WordPress doit avoir le rôle Éditeur ou Administrateur. Si le compte a un rôle inférieur (ex: Auteur), les articles seront publiés sans catégorie — vous pourrez les classer manuellement depuis WordPress.
+
 Paramètres > Utilisateurs
 Rôles disponibles
 Rôle
@@ -1193,6 +1243,12 @@ Série
 Nombre de points consécutifs marqués sans rater
 E2i / telemat.org
 Système fédéral de saisie et gestion des compétitions FFB. Les fichiers CSV de matchs exportés depuis E2i peuvent être importés dans l'application.
+Mot de passe d'application
+Mot de passe spécifique généré par WordPress pour les connexions depuis des applications tierces. Différent du mot de passe de connexion classique.
+XML-RPC
+Protocole utilisé pour communiquer avec WordPress depuis l'application. Permet de créer, modifier et supprimer des articles à distance.
+Page publique du tournoi
+Page accessible sans connexion affichant les informations d'un tournoi et la composition des poules. URL : /public/{slug}/tournament/{id}
 MGP (Moyenne Générale Parties)
 Moyenne générale du joueur calculée sur l'ensemble des matchs d'un tournoi (total points / total reprises)
 MPART (Meilleure Partie)
