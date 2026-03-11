@@ -772,6 +772,15 @@
             </div>
           </div>
 
+          <!-- Publish to website option -->
+          <div id="wpPublishOption" style="display: none; margin-bottom: 15px; padding: 10px 15px; background: #f0f7ff; border: 1px solid #b8daff; border-radius: 6px;">
+            <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 14px;">
+              <input type="checkbox" id="wpPublishCheckbox" checked style="width: 18px; height: 18px;">
+              <span>🌐 Publier également sur le site web</span>
+              <span id="wpPublishStatus" style="font-size: 12px; color: #666;"></span>
+            </label>
+          </div>
+
           <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
             <button class="btn" id="sendConvocationsBtn" style="background: #17a2b8;">
               ✉️ Envoyer les convocations
@@ -1000,6 +1009,63 @@
         }
       } catch (e) { /* default false */ }
     })();
+
+    // Load WordPress publish setting
+    window._wpEnabled = false;
+    (async function loadWpSetting() {
+      try {
+        const response = await fetch(`${API_URL}/settings/app/wp_enabled`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          window._wpEnabled = (data.value === 'true');
+          if (window._wpEnabled) {
+            document.getElementById('wpPublishOption').style.display = 'block';
+          }
+        }
+      } catch (e) { /* default false */ }
+    })();
+
+    // Publish convocation to WordPress
+    async function publishConvocationToWp(tournoiId, tournament, poules, locations, gameParams, specialNote, season) {
+      const statusEl = document.getElementById('wpPublishStatus');
+      if (statusEl) statusEl.textContent = 'Publication en cours...';
+
+      try {
+        const response = await fetch(`${API_URL}/wordpress/publish-convocation`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ tournoiId, tournament, poules, locations, gameParams, specialNote, season })
+        });
+
+        const data = await response.json();
+
+        if (response.ok && data.success) {
+          if (statusEl) {
+            statusEl.textContent = data.isUpdate ? '✅ Article mis à jour' : '✅ Publié';
+            statusEl.style.color = '#28a745';
+          }
+          return data;
+        } else {
+          if (statusEl) {
+            statusEl.textContent = `❌ ${data.error || 'Échec'}`;
+            statusEl.style.color = '#dc3545';
+          }
+          return null;
+        }
+      } catch (error) {
+        console.error('[WordPress] Publish error:', error);
+        if (statusEl) {
+          statusEl.textContent = '❌ Erreur réseau';
+          statusEl.style.color = '#dc3545';
+        }
+        return null;
+      }
+    }
 
     // Logout
     document.getElementById('logoutBtn').addEventListener('click', (e) => {
@@ -4205,6 +4271,31 @@
           // Skip if this is a resend (forfait) - club was already notified
           if (result.results.sent.length > 0 && lastGeneratedData.locations && !lastGeneratedData.skipClubReminders) {
             await sendClubReminders(lastGeneratedData, playersWithEmails.length);
+          }
+
+          // Publish to WordPress if enabled and checkbox checked
+          if (window._wpEnabled && document.getElementById('wpPublishCheckbox')?.checked && result.results.sent.length > 0) {
+            const tournamentInfo = {
+              label: `T${currentTournament || ''}`,
+              categoryName: currentCategory?.display_name || currentCategory?.short_name || '',
+              date: lastGeneratedData.tournamentDate || ''
+            };
+            const wpResult = await publishConvocationToWp(
+              lastGeneratedData.tournoiId,
+              tournamentInfo,
+              lastGeneratedData.poules,
+              lastGeneratedData.locations,
+              lastGeneratedData.gameParams,
+              document.getElementById('specialNoteField').value.trim(),
+              currentSeason
+            );
+            if (wpResult) {
+              const wpLabel = wpResult.isUpdate ? 'Mis à jour' : 'Publié';
+              results.innerHTML += `<div style="background: #e7f3ff; padding: 10px; border-radius: 4px; margin-bottom: 10px; border-left: 4px solid #0070c0;">
+                <strong>🌐 ${wpLabel} sur le site web</strong>
+                ${wpResult.postUrl ? ` — <a href="${wpResult.postUrl}" target="_blank">Voir l'article</a>` : ''}
+              </div>`;
+            }
           }
 
           // For split tournaments: show banner to guide user to the other group

@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tournoi — Gestion des Compétitions</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f8f9fa;
+      color: #333;
+      min-height: 100vh;
+    }
+    .header {
+      background: var(--primary, #1F4788);
+      color: white;
+      padding: 20px 0;
+      text-align: center;
+    }
+    .header h1 {
+      font-size: 1.3em;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .header .org-name {
+      font-size: 0.9em;
+      opacity: 0.85;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .tournament-card {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+      padding: 24px;
+      margin-bottom: 20px;
+    }
+    .tournament-title {
+      font-size: 1.4em;
+      font-weight: 700;
+      color: var(--primary, #1F4788);
+      margin-bottom: 12px;
+    }
+    .tournament-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-bottom: 16px;
+      font-size: 0.95em;
+    }
+    .tournament-meta .meta-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: #555;
+    }
+    .poule-section {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+      margin-bottom: 16px;
+      overflow: hidden;
+    }
+    .poule-header {
+      background: var(--primary, #1F4788);
+      color: white;
+      padding: 12px 20px;
+      font-weight: 600;
+      font-size: 1.05em;
+    }
+    .poule-location {
+      padding: 8px 20px;
+      background: #f0f4f8;
+      font-size: 0.85em;
+      color: #666;
+    }
+    .poule-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .poule-table th {
+      background: #f8f9fa;
+      padding: 10px 20px;
+      text-align: left;
+      font-weight: 600;
+      font-size: 0.85em;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .poule-table td {
+      padding: 10px 20px;
+      border-top: 1px solid #eee;
+      font-size: 0.95em;
+    }
+    .poule-table tr:hover {
+      background: #f8f9fa;
+    }
+    .game-params {
+      display: flex;
+      gap: 20px;
+      padding: 12px 20px;
+      background: #e7f3ff;
+      border-radius: 8px;
+      font-size: 0.9em;
+      margin-top: 8px;
+    }
+    .game-params strong {
+      color: var(--primary, #1F4788);
+    }
+    .no-data {
+      text-align: center;
+      padding: 40px;
+      color: #999;
+      font-size: 1.1em;
+    }
+    .loading {
+      text-align: center;
+      padding: 60px;
+      color: #999;
+    }
+    .error-msg {
+      text-align: center;
+      padding: 40px;
+      color: #dc3545;
+      font-size: 1.1em;
+    }
+    .footer {
+      text-align: center;
+      padding: 20px;
+      color: #999;
+      font-size: 0.8em;
+    }
+    @media (max-width: 600px) {
+      .container { padding: 12px; }
+      .tournament-card { padding: 16px; }
+      .tournament-meta { flex-direction: column; gap: 8px; }
+      .poule-table th, .poule-table td { padding: 8px 12px; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header" id="pageHeader">
+    <div class="org-name" id="orgName"></div>
+    <h1 id="pageTitle">Chargement...</h1>
+  </div>
+
+  <div class="container" id="content">
+    <div class="loading" id="loadingMsg">Chargement des données du tournoi...</div>
+  </div>
+
+  <div class="footer">
+    Plateforme de Gestion des Compétitions FFB
+  </div>
+
+  <script>
+    // Extract org slug and tournament ID from URL
+    const pathParts = window.location.pathname.split('/');
+    const orgSlugIdx = pathParts.indexOf('public') + 1;
+    const tournoiIdIdx = pathParts.indexOf('tournament') + 1;
+    const orgSlug = pathParts[orgSlugIdx] || '';
+    const tournoiId = pathParts[tournoiIdIdx] || '';
+
+    async function loadTournament() {
+      const content = document.getElementById('content');
+      const loadingMsg = document.getElementById('loadingMsg');
+
+      if (!orgSlug || !tournoiId) {
+        loadingMsg.className = 'error-msg';
+        loadingMsg.textContent = 'URL invalide.';
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/public/${orgSlug}/tournament/${tournoiId}`);
+
+        if (!response.ok) {
+          const err = await response.json().catch(() => ({}));
+          loadingMsg.className = 'error-msg';
+          loadingMsg.textContent = err.error || 'Tournoi introuvable.';
+          return;
+        }
+
+        const data = await response.json();
+        const { tournament, poules, branding, gameParams } = data;
+
+        // Apply branding
+        if (branding.primary_color) {
+          document.documentElement.style.setProperty('--primary', branding.primary_color);
+        }
+        const orgNameEl = document.getElementById('orgName');
+        orgNameEl.textContent = branding.organization_name || branding.organization_short_name || '';
+
+        // Page title
+        document.getElementById('pageTitle').textContent = tournament.nom || 'Tournoi';
+        document.title = `${tournament.nom || 'Tournoi'} — ${branding.organization_short_name || ''}`;
+
+        // Build content
+        let html = '';
+
+        // Tournament info card
+        html += '<div class="tournament-card">';
+        html += `<div class="tournament-title">${tournament.nom || ''}</div>`;
+        html += '<div class="tournament-meta">';
+
+        if (tournament.debut) {
+          const date = new Date(tournament.debut);
+          const dateStr = date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+          html += `<div class="meta-item">📅 ${dateStr}</div>`;
+        }
+        if (tournament.lieu) {
+          html += `<div class="meta-item">📍 ${tournament.lieu}</div>`;
+        }
+        if (tournament.lieu_2) {
+          html += `<div class="meta-item">📍 ${tournament.lieu_2}</div>`;
+        }
+        html += `<div class="meta-item">🎯 ${tournament.mode || ''}</div>`;
+        html += `<div class="meta-item">📊 ${tournament.categorie || ''}</div>`;
+
+        html += '</div>'; // end meta
+
+        // Game params
+        if (gameParams) {
+          html += '<div class="game-params">';
+          if (gameParams.distance) html += `<span><strong>Distance :</strong> ${gameParams.distance} pts</span>`;
+          if (gameParams.reprises) html += `<span><strong>Reprises :</strong> ${gameParams.reprises}</span>`;
+          html += '</div>';
+        }
+
+        html += '</div>'; // end card
+
+        // Poules
+        if (poules && poules.length > 0) {
+          for (const poule of poules) {
+            html += '<div class="poule-section">';
+            html += `<div class="poule-header">Poule ${poule.number}</div>`;
+
+            if (poule.location || poule.startTime) {
+              const locParts = [];
+              if (poule.location) locParts.push(`📍 ${poule.location}`);
+              if (poule.address) locParts.push(poule.address);
+              if (poule.startTime) locParts.push(`⏰ ${poule.startTime}`);
+              html += `<div class="poule-location">${locParts.join(' — ')}</div>`;
+            }
+
+            html += '<table class="poule-table">';
+            html += '<thead><tr><th>Joueur</th><th>Club</th></tr></thead>';
+            html += '<tbody>';
+            for (const player of poule.players) {
+              html += `<tr><td>${player.name || ''}</td><td>${player.club || ''}</td></tr>`;
+            }
+            html += '</tbody></table>';
+            html += '</div>';
+          }
+        } else {
+          html += '<div class="no-data">Les compositions de poules ne sont pas encore disponibles.</div>';
+        }
+
+        loadingMsg.style.display = 'none';
+        content.innerHTML += html;
+
+      } catch (error) {
+        console.error('Error loading tournament:', error);
+        loadingMsg.className = 'error-msg';
+        loadingMsg.textContent = 'Erreur lors du chargement des données.';
+      }
+    }
+
+    loadTournament();
+  </script>
+</body>
+</html>

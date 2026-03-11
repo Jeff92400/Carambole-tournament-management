@@ -882,6 +882,73 @@
       </div>
     </div>
 
+    <!-- WordPress / Site Web Section - Admin Only -->
+    <div class="accordion-panel admin-only" id="wordpressSection" data-settings-tab="organisation">
+      <div class="accordion-header" onclick="toggleAccordion('wordpressSection')">
+        <div class="accordion-title"><span class="accordion-icon">&#9654;</span><strong>Site Web / WordPress</strong></div>
+        <span class="accordion-summary" id="summary-wordpress">Chargement...</span>
+      </div>
+      <div class="accordion-body">
+      <p style="margin-bottom: 15px; color: #666;">
+        Connectez votre site WordPress pour publier automatiquement les convocations et résultats.
+        Utilisez un <strong>mot de passe application</strong> (pas votre mot de passe WordPress habituel).
+      </p>
+
+      <div style="background: #e7f3ff; padding: 10px 15px; border-radius: 6px; margin-bottom: 20px; font-size: 13px;">
+        <strong>💡 Comment obtenir un mot de passe application :</strong>
+        <ol style="margin: 8px 0 0 20px; padding: 0;">
+          <li>Connectez-vous à votre site WordPress (wp-admin)</li>
+          <li>Allez dans <strong>Utilisateurs → Profil</strong></li>
+          <li>Descendez jusqu'à <strong>Mots de passe d'application</strong></li>
+          <li>Entrez un nom (ex: "Plateforme Tournois") et cliquez <strong>Ajouter</strong></li>
+          <li>Copiez le mot de passe généré et collez-le ci-dessous</li>
+        </ol>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 20px;">
+        <label style="font-weight: 500;">Activer la publication :</label>
+        <label class="toggle-switch" style="position: relative; display: inline-block; width: 50px; height: 26px;">
+          <input type="checkbox" id="wpEnabled" style="opacity: 0; width: 0; height: 0;">
+          <span style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background: #ccc; border-radius: 26px; transition: 0.3s;" onclick="this.previousElementSibling.click(); this.style.background = this.previousElementSibling.checked ? '#28a745' : '#ccc'; this.querySelector('span').style.transform = this.previousElementSibling.checked ? 'translateX(24px)' : 'translateX(0)';"><span style="position: absolute; height: 20px; width: 20px; left: 3px; bottom: 3px; background: white; border-radius: 50%; transition: 0.3s;"></span></span>
+        </label>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px;">
+        <div>
+          <label style="display: block; margin-bottom: 8px; font-weight: 500;">URL du site WordPress :</label>
+          <input type="url" id="wpSiteUrl" placeholder="ex: https://cdbhs.net" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+          <small style="color: #666;">L'adresse de votre site (sans /wp-admin)</small>
+        </div>
+        <div>
+          <label style="display: block; margin-bottom: 8px; font-weight: 500;">Identifiant WordPress :</label>
+          <input type="text" id="wpUsername" placeholder="ex: admin" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+        </div>
+        <div>
+          <label style="display: block; margin-bottom: 8px; font-weight: 500;">Mot de passe application :</label>
+          <input type="password" id="wpAppPassword" placeholder="xxxx xxxx xxxx xxxx xxxx xxxx" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+          <small style="color: #666;">Généré depuis WordPress → Profil → Mots de passe d'application</small>
+        </div>
+        <div>
+          <label style="display: block; margin-bottom: 8px; font-weight: 500;">Statut par défaut des articles :</label>
+          <select id="wpDefaultStatus" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+            <option value="draft">Brouillon (relecture avant publication)</option>
+            <option value="publish">Publié directement</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="display: flex; gap: 15px; margin-top: 20px; flex-wrap: wrap;">
+        <button onclick="testWordpressConnection()" class="btn" style="background: #17a2b8; padding: 12px 25px;">
+          🔌 Tester la connexion
+        </button>
+        <button onclick="saveWordpressSettings()" class="btn" style="background: #28a745; padding: 12px 25px;">
+          Enregistrer
+        </button>
+      </div>
+      <div id="wordpressMessage" style="display: none; margin-top: 15px; padding: 10px; border-radius: 4px;"></div>
+      </div>
+    </div>
+
     <!-- Saison Section - Admin Only -->
     <div class="accordion-panel admin-only" id="seasonSection" data-settings-tab="organisation">
       <div class="accordion-header" onclick="toggleAccordion('seasonSection')">
@@ -3683,6 +3750,141 @@
     loadEmailsConfig();
 
     // ============= END EMAILS CONFIG SETTINGS =============
+
+    // ============= WORDPRESS SETTINGS =============
+
+    async function loadWordpressSettings() {
+      try {
+        const response = await fetch(`${API_URL}/settings/app-all`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          const settings = await response.json();
+          document.getElementById('wpSiteUrl').value = settings.wp_site_url || '';
+          document.getElementById('wpUsername').value = settings.wp_username || '';
+          document.getElementById('wpAppPassword').value = settings.wp_app_password || '';
+          document.getElementById('wpDefaultStatus').value = settings.wp_default_status || 'draft';
+
+          const enabled = settings.wp_enabled === 'true';
+          document.getElementById('wpEnabled').checked = enabled;
+          // Update toggle visual
+          const toggleSpan = document.getElementById('wpEnabled').nextElementSibling;
+          if (toggleSpan) {
+            toggleSpan.style.background = enabled ? '#28a745' : '#ccc';
+            const dot = toggleSpan.querySelector('span');
+            if (dot) dot.style.transform = enabled ? 'translateX(24px)' : 'translateX(0)';
+          }
+
+          // Update summary
+          const summaryEl = document.getElementById('summary-wordpress');
+          if (summaryEl) {
+            summaryEl.textContent = enabled && settings.wp_site_url
+              ? `✅ ${settings.wp_site_url}`
+              : 'Non configuré';
+          }
+        }
+      } catch (error) {
+        console.error('Error loading WordPress settings:', error);
+      }
+    }
+
+    async function saveWordpressSettings() {
+      const msgDiv = document.getElementById('wordpressMessage');
+
+      try {
+        const response = await fetch(`${API_URL}/settings/app-bulk`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            wp_site_url: document.getElementById('wpSiteUrl').value.trim().replace(/\/+$/, ''),
+            wp_username: document.getElementById('wpUsername').value.trim(),
+            wp_app_password: document.getElementById('wpAppPassword').value.trim(),
+            wp_default_status: document.getElementById('wpDefaultStatus').value,
+            wp_enabled: document.getElementById('wpEnabled').checked ? 'true' : 'false'
+          })
+        });
+
+        if (response.ok) {
+          msgDiv.textContent = 'Paramètres WordPress enregistrés';
+          msgDiv.style.background = '#d4edda';
+          msgDiv.style.color = '#155724';
+          loadWordpressSettings(); // Refresh summary
+        } else {
+          throw new Error('Erreur lors de la sauvegarde');
+        }
+      } catch (error) {
+        console.error('Error saving WordPress settings:', error);
+        msgDiv.textContent = error.message;
+        msgDiv.style.background = '#f8d7da';
+        msgDiv.style.color = '#721c24';
+      }
+
+      msgDiv.style.display = 'block';
+      setTimeout(() => { msgDiv.style.display = 'none'; }, 3000);
+    }
+
+    async function testWordpressConnection() {
+      const msgDiv = document.getElementById('wordpressMessage');
+      msgDiv.textContent = 'Test en cours...';
+      msgDiv.style.background = '#fff3cd';
+      msgDiv.style.color = '#856404';
+      msgDiv.style.display = 'block';
+
+      // Save first so the backend has the latest values
+      try {
+        await fetch(`${API_URL}/settings/app-bulk`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            wp_site_url: document.getElementById('wpSiteUrl').value.trim().replace(/\/+$/, ''),
+            wp_username: document.getElementById('wpUsername').value.trim(),
+            wp_app_password: document.getElementById('wpAppPassword').value.trim(),
+            wp_default_status: document.getElementById('wpDefaultStatus').value,
+            wp_enabled: document.getElementById('wpEnabled').checked ? 'true' : 'false'
+          })
+        });
+      } catch (e) {
+        // Continue with test anyway
+      }
+
+      try {
+        const response = await fetch(`${API_URL}/wordpress/test-connection`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        const data = await response.json();
+
+        if (response.ok && data.success) {
+          msgDiv.textContent = data.message;
+          msgDiv.style.background = '#d4edda';
+          msgDiv.style.color = '#155724';
+        } else {
+          msgDiv.textContent = data.error || 'Échec de la connexion';
+          msgDiv.style.background = '#f8d7da';
+          msgDiv.style.color = '#721c24';
+        }
+      } catch (error) {
+        msgDiv.textContent = 'Erreur réseau lors du test de connexion.';
+        msgDiv.style.background = '#f8d7da';
+        msgDiv.style.color = '#721c24';
+      }
+
+      setTimeout(() => { msgDiv.style.display = 'none'; }, 5000);
+    }
+
+    loadWordpressSettings();
+
+    // ============= END WORDPRESS SETTINGS =============
 
     // ============= SEASON SETTINGS =============
 

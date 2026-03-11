@@ -554,6 +554,9 @@ async function initializeDatabase() {
     await client.query(`ALTER TABLE tournoi_ext ADD COLUMN IF NOT EXISTS split_label VARCHAR(5)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_tournoi_ext_parent ON tournoi_ext(parent_tournoi_id) WHERE parent_tournoi_id IS NOT NULL`);
 
+    // WordPress publication tracking (migration - March 2026)
+    await client.query(`ALTER TABLE tournoi_ext ADD COLUMN IF NOT EXISTS wp_post_id INTEGER`);
+
     // Tournament parameter overrides table (migration - February 2026)
     // Allows per-tournament customization of Distance and Reprises values
     await client.query(`

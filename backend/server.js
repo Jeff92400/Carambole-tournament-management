@@ -55,6 +55,7 @@ const bracketRoutes = require('./routes/bracket');
 const rsvpRoutes = require('./routes/rsvp');
 const { buildRsvpButtonsHtml } = require('./routes/rsvp');
 const surveysRoutes = require('./routes/surveys');
+const wordpressRoutes = require('./routes/wordpress');
 
 
 const app = express();
@@ -280,6 +281,7 @@ app.use('/api/ffb', apiLimiter, ffbImportRoutes);
 app.use('/api/bracket', apiLimiter, bracketRoutes);
 app.use('/api/rsvp', apiLimiter, rsvpRoutes);
 app.use('/api/surveys', apiLimiter, surveysRoutes);
+app.use('/api/wordpress', apiLimiter, wordpressRoutes);
 
 
 // App version endpoint (for automatic update detection)
@@ -296,6 +298,106 @@ app.get('/api/health', (req, res) => {
     app: 'cdbhs-tournament-management',
     timestamp: new Date().toISOString()
   });
+});
+
+// ─── Public tournament page (no auth required) ─────────────────────────────
+app.get('/public/:orgSlug/tournament/:id', (req, res) => {
+  res.sendFile(path.join(frontendPath, 'public-tournament.html'));
+});
+
+// ─── Public API: tournament data for public page (no auth) ──────────────────
+app.get('/api/public/:orgSlug/tournament/:id', async (req, res) => {
+  const dbLoader = require('./db-loader');
+  const { orgSlug, id } = req.params;
+
+  try {
+    // Resolve org from slug
+    const org = await new Promise((resolve, reject) => {
+      dbLoader.get(
+        'SELECT id, name FROM organizations WHERE slug = $1 AND is_active = true',
+        [orgSlug],
+        (err, row) => { if (err) reject(err); else resolve(row); }
+      );
+    });
+    if (!org) return res.status(404).json({ error: 'Organisation introuvable.' });
+
+    // Fetch tournament
+    const tournament = await new Promise((resolve, reject) => {
+      dbLoader.get(
+        `SELECT tournoi_id, nom, mode, categorie, debut, fin, lieu, lieu_2, status,
+                tournament_number, is_split, split_label
+         FROM tournoi_ext
+         WHERE tournoi_id = $1 AND organization_id = $2`,
+        [id, org.id],
+        (err, row) => { if (err) reject(err); else resolve(row); }
+      );
+    });
+    if (!tournament) return res.status(404).json({ error: 'Tournoi introuvable.' });
+
+    // Fetch poules (if convocations have been sent)
+    const poules = await new Promise((resolve, reject) => {
+      dbLoader.all(
+        `SELECT poule_number, licence, player_name, club, location_name,
+                location_address, start_time, player_order
+         FROM convocation_poules
+         WHERE tournoi_id = $1
+         ORDER BY poule_number, player_order`,
+        [id],
+        (err, rows) => { if (err) reject(err); else resolve(rows || []); }
+      );
+    });
+
+    // Group poules
+    const poulesGrouped = {};
+    for (const row of poules) {
+      if (!poulesGrouped[row.poule_number]) {
+        poulesGrouped[row.poule_number] = {
+          number: row.poule_number,
+          location: row.location_name,
+          address: row.location_address,
+          startTime: row.start_time,
+          players: []
+        };
+      }
+      poulesGrouped[row.poule_number].players.push({
+        name: row.player_name,
+        club: row.club
+      });
+    }
+
+    // Fetch org branding
+    const brandingKeys = ['organization_name', 'organization_short_name', 'primary_color', 'secondary_color'];
+    const branding = {};
+    for (const key of brandingKeys) {
+      const setting = await new Promise((resolve, reject) => {
+        dbLoader.get(
+          'SELECT value FROM organization_settings WHERE organization_id = $1 AND key = $2',
+          [org.id, key],
+          (err, row) => { if (err) reject(err); else resolve(row); }
+        );
+      });
+      branding[key] = setting?.value || '';
+    }
+
+    // Fetch game parameters override
+    const paramOverride = await new Promise((resolve, reject) => {
+      dbLoader.get(
+        'SELECT distance, reprises FROM tournament_parameter_overrides WHERE tournoi_id = $1',
+        [id],
+        (err, row) => { if (err) reject(err); else resolve(row); }
+      );
+    });
+
+    res.json({
+      tournament,
+      poules: Object.values(poulesGrouped),
+      branding,
+      gameParams: paramOverride || null
+    });
+  } catch (error) {
+    console.error('[Public] Tournament fetch error:', error.message);
+    res.status(500).json({ error: 'Erreur interne.' });
+  }
 });
 
 // Serve frontend pages
