@@ -907,11 +907,11 @@
       </div>
 
       <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 20px;">
-        <label style="font-weight: 500;">Activer la publication :</label>
-        <label class="toggle-switch" style="position: relative; display: inline-block; width: 50px; height: 26px;">
-          <input type="checkbox" id="wpEnabled" style="opacity: 0; width: 0; height: 0;">
-          <span style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background: #ccc; border-radius: 26px; transition: 0.3s;" onclick="this.previousElementSibling.click(); this.style.background = this.previousElementSibling.checked ? '#28a745' : '#ccc'; this.querySelector('span').style.transform = this.previousElementSibling.checked ? 'translateX(24px)' : 'translateX(0)';"><span style="position: absolute; height: 20px; width: 20px; left: 3px; bottom: 3px; background: white; border-radius: 50%; transition: 0.3s;"></span></span>
-        </label>
+        <span style="font-weight: 500;">Activer la publication :</span>
+        <div style="position: relative; display: inline-block; width: 50px; height: 26px; cursor: pointer;" onclick="var cb=document.getElementById('wpEnabled'); cb.checked=!cb.checked; var bg=cb.checked?'#28a745':'#ccc'; var tx=cb.checked?'translateX(24px)':'translateX(0)'; this.querySelector('.wp-toggle-track').style.background=bg; this.querySelector('.wp-toggle-dot').style.transform=tx;">
+          <input type="checkbox" id="wpEnabled" style="opacity: 0; width: 0; height: 0; position: absolute;">
+          <span class="wp-toggle-track" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: #ccc; border-radius: 26px; transition: 0.3s;"><span class="wp-toggle-dot" style="position: absolute; height: 20px; width: 20px; left: 3px; bottom: 3px; background: white; border-radius: 50%; transition: 0.3s;"></span></span>
+        </div>
       </div>
 
       <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px;">
@@ -3769,10 +3769,10 @@
           const enabled = settings.wp_enabled === 'true';
           document.getElementById('wpEnabled').checked = enabled;
           // Update toggle visual
-          const toggleSpan = document.getElementById('wpEnabled').nextElementSibling;
-          if (toggleSpan) {
-            toggleSpan.style.background = enabled ? '#28a745' : '#ccc';
-            const dot = toggleSpan.querySelector('span');
+          const track = document.querySelector('.wp-toggle-track');
+          if (track) {
+            track.style.background = enabled ? '#28a745' : '#ccc';
+            const dot = track.querySelector('.wp-toggle-dot');
             if (dot) dot.style.transform = enabled ? 'translateX(24px)' : 'translateX(0)';
           }
 
