@@ -470,6 +470,7 @@ router.post('/publish-convocation', authenticateToken, async (req, res) => {
 // ─── Get publish status for a tournament ──────────────────────────────────────
 router.get('/status/:tournoiId', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
+  const orgId = req.user.organizationId || null;
   const tournoiId = req.params.tournoiId;
 
   try {
@@ -484,13 +485,76 @@ router.get('/status/:tournoiId', authenticateToken, async (req, res) => {
       );
     });
 
+    const wp = await getWpSettings(orgId);
+
     res.json({
       published: !!row?.wp_post_id,
-      wpPostId: row?.wp_post_id || null
+      wpPostId: row?.wp_post_id || null,
+      siteUrl: wp.siteUrl || ''
     });
   } catch (error) {
     console.error('[WordPress] Status check failed:', error.message);
     res.status(500).json({ error: 'Erreur lors de la vérification du statut.' });
+  }
+});
+
+// ─── Delete a WordPress post ──────────────────────────────────────────────────
+router.delete('/delete/:tournoiId', authenticateToken, async (req, res) => {
+  const db = require('../db-loader');
+  const orgId = req.user.organizationId || null;
+  const tournoiId = req.params.tournoiId;
+
+  try {
+    const wp = await getWpSettings(orgId);
+    if (!wp.siteUrl || !wp.username || !wp.password) {
+      return res.status(400).json({ error: 'Configuration WordPress incomplète.' });
+    }
+
+    // Get the WP post ID
+    const row = await new Promise((resolve, reject) => {
+      db.get(
+        'SELECT wp_post_id FROM tournoi_ext WHERE tournoi_id = $1',
+        [tournoiId],
+        (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        }
+      );
+    });
+
+    if (!row?.wp_post_id) {
+      return res.status(404).json({ error: 'Aucun article WordPress associé à ce tournoi.' });
+    }
+
+    // Delete post via XML-RPC: wp.deletePost(blog_id, username, password, post_id)
+    await wpXmlRpc(wp.siteUrl, 'wp.deletePost', [0, wp.username, wp.password, row.wp_post_id]);
+
+    // Clear the wp_post_id in our database
+    await new Promise((resolve, reject) => {
+      db.run(
+        'UPDATE tournoi_ext SET wp_post_id = NULL WHERE tournoi_id = $1',
+        [tournoiId],
+        (err) => {
+          if (err) reject(err);
+          else resolve();
+        }
+      );
+    });
+
+    logAdminAction({
+      req,
+      action: ACTION_TYPES.PUBLISH_WEBSITE || 'publish_website',
+      details: `Suppression article WordPress pour tournoi ${tournoiId}`,
+      targetType: 'tournament',
+      targetId: tournoiId,
+      targetName: `Post WP #${row.wp_post_id}`
+    });
+
+    res.json({ success: true, message: 'Article WordPress supprimé.' });
+
+  } catch (error) {
+    console.error('[WordPress] Delete failed:', error.message);
+    res.status(500).json({ error: `Échec de la suppression. ${error.message}` });
   }
 });
 

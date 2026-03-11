@@ -774,11 +774,18 @@
 
           <!-- Publish to website option -->
           <div id="wpPublishOption" style="display: none; margin-bottom: 15px; padding: 10px 15px; background: #f0f7ff; border: 1px solid #b8daff; border-radius: 6px;">
-            <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 14px;">
-              <input type="checkbox" id="wpPublishCheckbox" checked style="width: 18px; height: 18px;">
-              <span>🌐 Publier également sur le site web</span>
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+              <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 14px;">
+                <input type="checkbox" id="wpPublishCheckbox" checked style="width: 18px; height: 18px;">
+                <span>🌐 Publier également sur le site web</span>
+              </label>
               <span id="wpPublishStatus" style="font-size: 12px; color: #666;"></span>
-            </label>
+            </div>
+            <div id="wpExistingPost" style="display: none; margin-top: 8px; padding: 8px 12px; background: #e7f3ff; border-radius: 4px; font-size: 13px;">
+              <span>📝 Un article existe déjà pour ce tournoi (sera mis à jour)</span>
+              <a id="wpExistingPostLink" href="#" target="_blank" style="margin-left: 8px; color: #0070c0;">Voir</a>
+              <button id="wpDeletePostBtn" onclick="deleteWpPost()" style="margin-left: 8px; background: #dc3545; color: white; border: none; border-radius: 4px; padding: 3px 10px; font-size: 12px; cursor: pointer;">Supprimer</button>
+            </div>
           </div>
 
           <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
@@ -1064,6 +1071,61 @@
           statusEl.style.color = '#dc3545';
         }
         return null;
+      }
+    }
+
+    // Check if a WP post already exists for the current tournament
+    async function checkWpPublishStatus(tournoiId) {
+      if (!window._wpEnabled || !tournoiId) return;
+      try {
+        const response = await fetch(`${API_URL}/wordpress/status/${tournoiId}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          const existingDiv = document.getElementById('wpExistingPost');
+          if (data.published && existingDiv) {
+            existingDiv.style.display = 'block';
+            existingDiv.dataset.tournoiId = tournoiId;
+            existingDiv.dataset.wpPostId = data.wpPostId;
+            const link = document.getElementById('wpExistingPostLink');
+            if (link && data.siteUrl) {
+              link.href = `${data.siteUrl}/wp-admin/post.php?post=${data.wpPostId}&action=edit`;
+            }
+          } else if (existingDiv) {
+            existingDiv.style.display = 'none';
+          }
+        }
+      } catch (e) { /* ignore */ }
+    }
+
+    // Delete a WP post from the app
+    async function deleteWpPost() {
+      const existingDiv = document.getElementById('wpExistingPost');
+      const tournoiId = existingDiv?.dataset.tournoiId;
+      if (!tournoiId) return;
+
+      if (!confirm('Supprimer l\'article WordPress pour ce tournoi ?')) return;
+
+      try {
+        const response = await fetch(`${API_URL}/wordpress/delete/${tournoiId}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+        if (response.ok && data.success) {
+          existingDiv.style.display = 'none';
+          const statusEl = document.getElementById('wpPublishStatus');
+          if (statusEl) {
+            statusEl.textContent = '🗑️ Article supprimé';
+            statusEl.style.color = '#dc3545';
+            setTimeout(() => { statusEl.textContent = ''; }, 3000);
+          }
+        } else {
+          alert(data.error || 'Erreur lors de la suppression');
+        }
+      } catch (error) {
+        alert('Erreur réseau lors de la suppression');
       }
     }
 
@@ -4013,6 +4075,10 @@
     // Store the data used for generation so we can use it for emails
     function storeGenerationData(data) {
       lastGeneratedData = data;
+      // Check WP publish status for this tournament
+      if (data?.tournoiId) {
+        checkWpPublishStatus(data.tournoiId);
+      }
     }
 
     // Test mode toggle
@@ -4102,6 +4168,33 @@
             <strong>✅ Test envoyé</strong><br>
             Convocation de <strong>${testPlayer.first_name} ${testPlayer.last_name}</strong> envoyée à <strong>${testEmail}</strong>
           </div>`;
+
+          // Also publish to WordPress if enabled and checkbox checked
+          if (window._wpEnabled && document.getElementById('wpPublishCheckbox')?.checked) {
+            const tournamentInfo = {
+              label: `T${currentTournament || ''}`,
+              categoryName: currentCategory?.display_name || currentCategory?.short_name || '',
+              date: lastGeneratedData.tournamentDate || ''
+            };
+            const wpResult = await publishConvocationToWp(
+              lastGeneratedData.tournoiId,
+              tournamentInfo,
+              lastGeneratedData.poules,
+              lastGeneratedData.locations,
+              lastGeneratedData.gameParams,
+              document.getElementById('specialNoteField').value.trim(),
+              currentSeason
+            );
+            if (wpResult) {
+              const wpLabel = wpResult.isUpdate ? 'Mis à jour' : 'Publié';
+              results.innerHTML += `<div style="background: #e7f3ff; padding: 10px; border-radius: 4px; margin-top: 10px; border-left: 4px solid #0070c0;">
+                <strong>🌐 ${wpLabel} sur le site web (brouillon)</strong>
+                ${wpResult.postUrl ? ` — <a href="${wpResult.postUrl}" target="_blank">Voir l'article</a>` : ''}
+              </div>`;
+              // Refresh WP status display
+              checkWpPublishStatus(lastGeneratedData.tournoiId);
+            }
+          }
         } else {
           progressText.textContent = `Erreur: ${result.error || 'Échec de l\'envoi'}`;
           progressText.style.color = '#dc3545';
