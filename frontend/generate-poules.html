@@ -781,10 +781,16 @@
               </label>
               <span id="wpPublishStatus" style="font-size: 12px; color: #666;"></span>
             </div>
-            <div id="wpExistingPost" style="display: none; margin-top: 8px; padding: 8px 12px; background: #e7f3ff; border-radius: 4px; font-size: 13px;">
+            <div id="wpExistingPost" style="display: none; margin-top: 8px; padding: 8px 12px; background: #e7f3ff; border-radius: 4px; font-size: 13px; display: none; align-items: center; gap: 8px; flex-wrap: wrap;">
               <span>📝 Un article existe déjà pour ce tournoi (sera mis à jour)</span>
-              <a id="wpExistingPostLink" href="#" target="_blank" style="margin-left: 8px; color: #0070c0;">Voir</a>
-              <button id="wpDeletePostBtn" onclick="deleteWpPost()" style="margin-left: 8px; background: #dc3545; color: white; border: none; border-radius: 4px; padding: 3px 10px; font-size: 12px; cursor: pointer;">Supprimer</button>
+              <a id="wpExistingPostLink" href="#" target="_blank" style="color: #0070c0;">Voir</a>
+              <button onclick="deleteWpPost()" style="background: #dc3545; color: white; border: none; border-radius: 4px; padding: 3px 10px; font-size: 12px; cursor: pointer;">Supprimer</button>
+            </div>
+            <div style="margin-top: 8px;">
+              <button id="wpPublishStandaloneBtn" onclick="publishStandaloneToWp()" class="btn" style="background: #0070c0; padding: 6px 16px; font-size: 13px; display: none;">
+                🌐 Publier sur le site web (sans envoyer d'emails)
+              </button>
+              <span id="wpStandaloneStatus" style="font-size: 12px; margin-left: 8px;"></span>
             </div>
           </div>
 
@@ -1074,6 +1080,55 @@
       }
     }
 
+    // Standalone publish to WP (without sending emails)
+    async function publishStandaloneToWp() {
+      if (!lastGeneratedData?.tournoiId) {
+        alert('Aucun tournoi sélectionné');
+        return;
+      }
+
+      const btn = document.getElementById('wpPublishStandaloneBtn');
+      const statusEl = document.getElementById('wpStandaloneStatus');
+      btn.disabled = true;
+      btn.textContent = '🌐 Publication en cours...';
+      if (statusEl) { statusEl.textContent = ''; statusEl.style.color = ''; }
+
+      try {
+        const response = await fetch(`${API_URL}/wordpress/publish-from-saved/${lastGeneratedData.tournoiId}`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ season: currentSeason })
+        });
+
+        const data = await response.json();
+
+        if (response.ok && data.success) {
+          const label = data.isUpdate ? 'Mis à jour' : 'Publié';
+          if (statusEl) {
+            statusEl.innerHTML = `✅ ${label} — <a href="${data.postUrl || '#'}" target="_blank">Voir l'article</a>`;
+            statusEl.style.color = '#28a745';
+          }
+          checkWpPublishStatus(lastGeneratedData.tournoiId);
+        } else {
+          if (statusEl) {
+            statusEl.textContent = `❌ ${data.error || 'Échec'}`;
+            statusEl.style.color = '#dc3545';
+          }
+        }
+      } catch (error) {
+        if (statusEl) {
+          statusEl.textContent = '❌ Erreur réseau';
+          statusEl.style.color = '#dc3545';
+        }
+      }
+
+      btn.disabled = false;
+      btn.textContent = '🌐 Publier sur le site web (sans envoyer d\'emails)';
+    }
+
     // Check if a WP post already exists for the current tournament
     async function checkWpPublishStatus(tournoiId) {
       if (!window._wpEnabled || !tournoiId) return;
@@ -1095,6 +1150,9 @@
           } else if (existingDiv) {
             existingDiv.style.display = 'none';
           }
+          // Always show standalone publish button when WP is enabled and poules exist
+          const standaloneBtn = document.getElementById('wpPublishStandaloneBtn');
+          if (standaloneBtn) standaloneBtn.style.display = '';
         }
       } catch (e) { /* ignore */ }
     }

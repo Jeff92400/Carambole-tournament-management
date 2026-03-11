@@ -467,6 +467,182 @@ router.post('/publish-convocation', authenticateToken, async (req, res) => {
   }
 });
 
+// ─── Publish from saved convocation data (no email send) ──────────────────────
+router.post('/publish-from-saved/:tournoiId', authenticateToken, async (req, res) => {
+  const db = require('../db-loader');
+  const orgId = req.user.organizationId || null;
+  const tournoiId = req.params.tournoiId;
+  const { season } = req.body;
+
+  try {
+    const wp = await getWpSettings(orgId);
+
+    if (!wp.enabled) {
+      return res.status(400).json({ error: 'Publication WordPress désactivée.' });
+    }
+    if (!wp.siteUrl || !wp.username || !wp.password) {
+      return res.status(400).json({ error: 'Configuration WordPress incomplète.' });
+    }
+
+    // Fetch tournament info
+    const tournament = await new Promise((resolve, reject) => {
+      db.get(
+        `SELECT tournoi_id, nom, mode, categorie, debut, lieu, lieu_2, wp_post_id, tournament_number
+         FROM tournoi_ext WHERE tournoi_id = $1 AND ($2::int IS NULL OR organization_id = $2)`,
+        [tournoiId, orgId],
+        (err, row) => { if (err) reject(err); else resolve(row); }
+      );
+    });
+
+    if (!tournament) {
+      return res.status(404).json({ error: 'Tournoi introuvable.' });
+    }
+
+    // Fetch saved poules
+    const pouleRows = await new Promise((resolve, reject) => {
+      db.all(
+        `SELECT poule_number, player_name, club, location_name, location_address, start_time, player_order
+         FROM convocation_poules WHERE tournoi_id = $1 ORDER BY poule_number, player_order`,
+        [tournoiId],
+        (err, rows) => { if (err) reject(err); else resolve(rows || []); }
+      );
+    });
+
+    if (pouleRows.length === 0) {
+      return res.status(400).json({ error: 'Aucune composition de poules sauvegardée pour ce tournoi. Envoyez d\'abord les convocations.' });
+    }
+
+    // Group into poules
+    const poulesMap = {};
+    for (const row of pouleRows) {
+      if (!poulesMap[row.poule_number]) {
+        poulesMap[row.poule_number] = {
+          number: row.poule_number,
+          players: []
+        };
+      }
+      // Split player_name into last_name / first_name for the HTML builder
+      const nameParts = (row.player_name || '').split(' ');
+      poulesMap[row.poule_number].players.push({
+        last_name: nameParts[0] || '',
+        first_name: nameParts.slice(1).join(' ') || '',
+        club: row.club || ''
+      });
+    }
+    const poules = Object.values(poulesMap);
+
+    // Build locations from poule data
+    const locationSet = new Map();
+    for (const row of pouleRows) {
+      if (row.location_name && !locationSet.has(row.location_name)) {
+        locationSet.set(row.location_name, {
+          name: row.location_name,
+          street: row.location_address || '',
+          city: '',
+          startTime: row.start_time || ''
+        });
+      }
+    }
+    const locations = Array.from(locationSet.values());
+
+    // Fetch game params override
+    const gameParams = await new Promise((resolve, reject) => {
+      db.get(
+        'SELECT distance, reprises FROM tournament_parameter_overrides WHERE tournoi_id = $1',
+        [tournoiId],
+        (err, row) => { if (err) reject(err); else resolve(row); }
+      );
+    });
+
+    // Build public page URL
+    const baseUrl = process.env.BASE_URL || 'https://cdbhs-tournament-management-production.up.railway.app';
+    const org = await new Promise((resolve, reject) => {
+      db.get('SELECT slug FROM organizations WHERE id = $1', [orgId], (err, row) => {
+        if (err) reject(err); else resolve(row);
+      });
+    });
+    const orgSlug = org?.slug || 'cdbhs';
+    const publicPageUrl = `${baseUrl}/public/${orgSlug}/tournament/${tournoiId}`;
+
+    // Format date
+    const dateStr = tournament.debut
+      ? new Date(tournament.debut).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+      : '';
+
+    const tournamentLabel = `T${tournament.tournament_number || ''}`;
+
+    // Build HTML
+    const htmlContent = buildConvocationHtml({
+      tournament: { categoryName: tournament.categorie, label: tournamentLabel, date: dateStr },
+      poules,
+      locations,
+      gameParams: gameParams || null,
+      specialNote: null,
+      publicPageUrl
+    });
+
+    // Determine season
+    const effectiveSeason = season || (() => {
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = now.getMonth();
+      return month >= 8 ? `${year}-${year + 1}` : `${year - 1}-${year}`;
+    })();
+
+    // Find or create category
+    const category = await getOrCreateSeasonCategory(
+      wp.siteUrl, wp.username, wp.password, effectiveSeason, 'convocations'
+    );
+
+    const title = `Convocation — ${tournament.categorie} ${tournamentLabel} — ${dateStr}`.trim();
+
+    let wpPostId;
+    let isUpdate = false;
+    let postUrl = '';
+
+    if (tournament.wp_post_id) {
+      isUpdate = true;
+      const now = new Date();
+      const updateNote = `<div style="background: #d4edda; padding: 8px 12px; border-left: 4px solid #28a745; margin-bottom: 15px;"><strong>🔄 Mise à jour du ${now.toLocaleDateString('fr-FR')} à ${now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</strong></div>`;
+
+      await wpXmlRpc(wp.siteUrl, 'wp.editPost', [
+        0, wp.username, wp.password, tournament.wp_post_id,
+        { post_title: title, post_content: updateNote + htmlContent, terms: { category: [category.id] }, post_status: wp.defaultStatus }
+      ]);
+      wpPostId = tournament.wp_post_id;
+      postUrl = `${wp.siteUrl}/?p=${wpPostId}`;
+    } else {
+      wpPostId = await wpXmlRpc(wp.siteUrl, 'wp.newPost', [
+        0, wp.username, wp.password,
+        { post_title: title, post_content: htmlContent, post_type: 'post', post_status: wp.defaultStatus, terms: { category: [category.id] } }
+      ]);
+      wpPostId = parseInt(wpPostId, 10);
+      postUrl = `${wp.siteUrl}/?p=${wpPostId}`;
+
+      await new Promise((resolve, reject) => {
+        db.run('UPDATE tournoi_ext SET wp_post_id = $1 WHERE tournoi_id = $2', [wpPostId, tournoiId], (err) => {
+          if (err) reject(err); else resolve();
+        });
+      });
+    }
+
+    logAdminAction({
+      req,
+      action: ACTION_TYPES.PUBLISH_WEBSITE || 'publish_website',
+      details: `${isUpdate ? 'Mise à jour' : 'Publication'} WordPress (standalone): ${title}`,
+      targetType: 'tournament',
+      targetId: tournoiId,
+      targetName: title
+    });
+
+    res.json({ success: true, isUpdate, postId: wpPostId, postUrl, message: isUpdate ? 'Article mis à jour.' : 'Article publié.' });
+
+  } catch (error) {
+    console.error('[WordPress] Publish from saved failed:', error.message);
+    res.status(500).json({ error: `Échec de la publication. ${error.message}` });
+  }
+});
+
 // ─── Get publish status for a tournament ──────────────────────────────────────
 router.get('/status/:tournoiId', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
