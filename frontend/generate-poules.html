@@ -2092,18 +2092,22 @@
           const isFinaleSelection = tournamentNum === 'Finale' || (tournamentTypes.find(tt => String(tt.tournament_number) === tournamentNum)?.is_finale);
           const targetName = isFinaleSelection ? 'FINALE' : `TOURNOI ${tournamentNum}`;
 
+          // Use a local variable to avoid race conditions with the global matchingTournoi
+          // (multiple rapid updateLoadButtonState calls can reset the global while we await)
+          let foundTournoi = null;
+
           if (selectedTournoiId) {
             // First try to find by exact tournoi_id in the API response
-            matchingTournoi = externalTournois.find(t => t.tournoi_id == selectedTournoiId);
+            foundTournoi = externalTournois.find(t => t.tournoi_id == selectedTournoiId);
 
             // If not found in filtered results, fetch it directly by ID
-            if (!matchingTournoi) {
+            if (!foundTournoi) {
               try {
                 const directResponse = await fetch(`${API_URL}/inscriptions/tournoi/${selectedTournoiId}`, {
                   headers: { 'Authorization': `Bearer ${token}` }
                 });
                 if (directResponse.ok) {
-                  matchingTournoi = await directResponse.json();
+                  foundTournoi = await directResponse.json();
                 }
               } catch (e) {
                 console.log('Could not fetch tournament directly:', e);
@@ -2113,9 +2117,9 @@
 
           // Fallback to tournament_number field, then name matching
           // Skip child tournaments (parent_tournoi_id set) — only match parents or standalone
-          if (!matchingTournoi) {
+          if (!foundTournoi) {
             const numericTournament = parseInt(tournamentNum);
-            matchingTournoi = externalTournois.find(t =>
+            foundTournoi = externalTournois.find(t =>
               !t.parent_tournoi_id && (
               // Match by tournament_number field (most reliable)
               (numericTournament && t.tournament_number === numericTournament) ||
@@ -2128,9 +2132,12 @@
             );
           }
 
-          if (matchingTournoi) {
+          if (foundTournoi) {
+            // Assign to global for use by later steps (player loading, poule generation)
+            matchingTournoi = foundTournoi;
+
             // Load inscription count
-            const inscResponse = await fetch(`${API_URL}/inscriptions/tournoi/${matchingTournoi.tournoi_id}/inscriptions`, {
+            const inscResponse = await fetch(`${API_URL}/inscriptions/tournoi/${foundTournoi.tournoi_id}/inscriptions`, {
               headers: { 'Authorization': `Bearer ${token}` }
             });
             let inscCount = 0;
@@ -2140,16 +2147,16 @@
             }
 
             // Format date
-            const dateStr = matchingTournoi.debut
-              ? new Date(matchingTournoi.debut).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+            const dateStr = foundTournoi.debut
+              ? new Date(foundTournoi.debut).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
               : 'Non définie';
 
             document.getElementById('tournamentInfoName').textContent =
-              `${category.display_name} - ${matchingTournoi.nom}`;
+              `${category.display_name} - ${foundTournoi.nom}`;
             document.getElementById('tournamentInfoDate').textContent = dateStr;
-            document.getElementById('tournamentInfoLieu').textContent = matchingTournoi.lieu || 'Non défini';
+            document.getElementById('tournamentInfoLieu').textContent = foundTournoi.lieu || 'Non défini';
             // For finals, show "X/Y inscrits" (inscribed finalists / total finalists)
-            const isFinaleTournoi = matchingTournoi.nom?.toUpperCase().includes('FINALE') || tournamentNum === 'Finale' || isFinale;
+            const isFinaleTournoi = foundTournoi.nom?.toUpperCase().includes('FINALE') || tournamentNum === 'Finale' || isFinale;
             if (isFinaleTournoi && window.selectedUpcomingTournament) {
               const fc = window.selectedUpcomingTournament.finalist_count || 0;
               const ifc = window.selectedUpcomingTournament.inscribed_finalist_count || 0;
@@ -2160,8 +2167,8 @@
             document.getElementById('tournamentInfo').style.display = 'block';
 
             // Handle split tournaments: show child selector if is_split
-            if (matchingTournoi.is_split === true || matchingTournoi.is_split === 1) {
-              await loadSplitChildren(matchingTournoi.tournoi_id, category);
+            if (foundTournoi.is_split === true || foundTournoi.is_split === 1) {
+              await loadSplitChildren(foundTournoi.tournoi_id, category);
             } else {
               hideSplitChildSelector();
             }
