@@ -2422,19 +2422,48 @@ Le {organization_short_name}`;
       </div>
     `;
 
+    // Fetch the latest convocation PDF for this tournament (if available)
+    let attachments = [];
+    if (tournoiId) {
+      const pdfRow = await new Promise((resolve, reject) => {
+        db.get(
+          `SELECT pdf_data, filename FROM convocation_files
+           WHERE tournoi_ext_id = $1 AND is_sent = TRUE
+           ORDER BY sent_at DESC LIMIT 1`,
+          [tournoiId],
+          (err, row) => {
+            if (err) reject(err);
+            else resolve(row);
+          }
+        );
+      });
+      if (pdfRow && pdfRow.pdf_data) {
+        const pdfBuffer = Buffer.isBuffer(pdfRow.pdf_data) ? pdfRow.pdf_data : Buffer.from(pdfRow.pdf_data);
+        attachments.push({
+          filename: pdfRow.filename || 'convocation.pdf',
+          content: pdfBuffer
+        });
+      }
+    }
+
     // Send the email
     const recipients = [emailToSend];
     if (ccEmail) {
       recipients.push(ccEmail);
     }
 
-    await resend.emails.send({
+    const emailPayload = {
       from: buildFromAddress(emailSettings, 'convocations'),
       to: recipients,
       subject: subject,
       html: emailBody,
       replyTo: contactEmail
-    });
+    };
+    if (attachments.length > 0) {
+      emailPayload.attachments = attachments;
+    }
+
+    await resend.emails.send(emailPayload);
 
     // Log to email_campaigns (include tournament_id for duplicate tracking)
     await new Promise((resolve, reject) => {
