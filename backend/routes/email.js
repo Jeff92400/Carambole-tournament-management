@@ -3110,6 +3110,170 @@ router.post('/unavailability-notification', async (req, res) => {
   }
 });
 
+// Send forfait notification to CDB admin (called by Player App)
+router.post('/forfait-notification', async (req, res) => {
+  const { player_name, player_licence, player_club, tournament_name, mode, category, tournament_date, location, tournoiId, api_key, organization_id } = req.body;
+
+  if (api_key !== process.env.PLAYER_APP_API_KEY) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const resend = getResend();
+  if (!resend) {
+    return res.status(500).json({ error: 'Email not configured' });
+  }
+
+  if (!player_name || !tournament_name) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  try {
+    const orgId = organization_id || null;
+    const emailSettings = await getEmailTemplateSettings(orgId);
+    const summaryEmail = await getSummaryEmail(orgId);
+
+    if (!summaryEmail) {
+      console.log('No summary_email configured for org', orgId, '— skipping forfait notification');
+      return res.json({ success: true, message: 'No summary email configured, notification skipped' });
+    }
+
+    const baseUrl = process.env.BASE_URL || 'https://cdbhs-tournament-management-production.up.railway.app';
+    const primaryColor = emailSettings.primary_color || '#1F4788';
+    const orgShortName = emailSettings.organization_short_name || 'CDB';
+    const forfaitNotifOrgSlug = await appSettings.getOrgSlug(orgId);
+    const logoUrl = appSettings.buildLogoUrl(baseUrl, forfaitNotifOrgSlug);
+
+    const dateStr = tournament_date
+      ? new Date(tournament_date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+      : 'Date à définir';
+
+    const subject = `${orgShortName} — Forfait déclaré : ${player_name}`;
+
+    const forfaitLink = `${baseUrl}/generate-poules.html`;
+
+    await resend.emails.send({
+      from: buildFromAddress(emailSettings, 'noreply'),
+      to: [summaryEmail],
+      subject: subject,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <div style="background: ${primaryColor}; color: white; padding: 20px; text-align: center;">
+            <img src="${logoUrl}" alt="${orgShortName}" style="height: 60px; max-width: 80%; width: auto; margin-bottom: 10px;" onerror="this.style.display='none'">
+            <h1 style="margin: 0; font-size: 24px;">${orgShortName}</h1>
+            <p style="margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">FORFAIT DÉCLARÉ</p>
+          </div>
+          <div style="padding: 20px; background: #f8f9fa;">
+            <p style="margin: 0 0 15px 0;">Le joueur suivant a déclaré forfait via l'Espace Joueur :</p>
+            <div style="margin-bottom: 20px; padding: 15px; background: white; border-radius: 4px; border-left: 4px solid #dc3545;">
+              <p style="margin: 5px 0;"><strong>Joueur :</strong> ${player_name}</p>
+              ${player_licence ? `<p style="margin: 5px 0;"><strong>Licence :</strong> ${player_licence}</p>` : ''}
+              ${player_club ? `<p style="margin: 5px 0;"><strong>Club :</strong> ${player_club}</p>` : ''}
+              <p style="margin: 5px 0;"><strong>Tournoi :</strong> ${tournament_name}</p>
+              ${mode ? `<p style="margin: 5px 0;"><strong>Mode :</strong> ${mode}</p>` : ''}
+              ${category ? `<p style="margin: 5px 0;"><strong>Catégorie :</strong> ${category}</p>` : ''}
+              <p style="margin: 5px 0;"><strong>Date :</strong> ${dateStr}</p>
+              ${location ? `<p style="margin: 5px 0;"><strong>Lieu :</strong> ${location}</p>` : ''}
+            </div>
+            <p style="margin: 0 0 15px 0;">Rendez-vous sur la page <strong>Compétitions à Jouer</strong> &gt; <strong>Gestion des forfaits</strong> pour gérer ce forfait.</p>
+            <div style="text-align: center; margin-top: 20px;">
+              <a href="${forfaitLink}" style="display: inline-block; padding: 12px 24px; background: ${primaryColor}; color: white; text-decoration: none; border-radius: 6px; font-weight: bold;">Gérer les forfaits</a>
+            </div>
+          </div>
+          ${buildEmailFooter(emailSettings)}
+        </div>
+      `
+    });
+
+    console.log(`Forfait notification sent to ${summaryEmail} for player ${player_name}`);
+    res.json({ success: true, message: 'Notification sent' });
+
+  } catch (error) {
+    console.error('Error sending forfait notification:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Send forfait confirmation to player (called by Player App)
+router.post('/forfait-confirmation', async (req, res) => {
+  const { player_email, player_name, tournament_name, mode, category, tournament_date, location, api_key, organization_id } = req.body;
+
+  if (api_key !== process.env.PLAYER_APP_API_KEY) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const resend = getResend();
+  if (!resend) {
+    return res.status(500).json({ error: 'Email not configured' });
+  }
+
+  if (!player_email || !player_name || !tournament_name) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  try {
+    const orgId = organization_id || null;
+    const emailSettings = await getEmailTemplateSettings(orgId);
+    const contactEmail = await getContactEmail(orgId);
+    const baseUrl = process.env.BASE_URL || 'https://cdbhs-tournament-management-production.up.railway.app';
+    const primaryColor = emailSettings.primary_color || '#1F4788';
+    const orgShortName = emailSettings.organization_short_name || 'CDB';
+    const forfaitConfOrgSlug = await appSettings.getOrgSlug(orgId);
+    const logoUrl = appSettings.buildLogoUrl(baseUrl, forfaitConfOrgSlug);
+
+    const dateStr = tournament_date
+      ? new Date(tournament_date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+      : 'Date à définir';
+
+    const subject = `${orgShortName} — Forfait confirmé`;
+
+    await resend.emails.send({
+      from: buildFromAddress(emailSettings, 'noreply'),
+      replyTo: contactEmail,
+      to: [player_email],
+      subject: subject,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <div style="background: ${primaryColor}; color: white; padding: 20px; text-align: center;">
+            <img src="${logoUrl}" alt="${orgShortName}" style="height: 60px; max-width: 80%; width: auto; margin-bottom: 10px;" onerror="this.style.display='none'">
+            <h1 style="margin: 0; font-size: 24px;">${orgShortName}</h1>
+            <p style="margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">FORFAIT CONFIRMÉ</p>
+          </div>
+          <div style="padding: 20px; background: #f8f9fa;">
+            <p style="margin: 0 0 15px 0;">Bonjour ${player_name},</p>
+            <p style="margin: 0 0 15px 0;">Votre forfait pour la compétition suivante a bien été enregistré :</p>
+            <div style="margin-bottom: 20px; padding: 15px; background: white; border-radius: 4px; border-left: 4px solid #dc3545;">
+              <p style="margin: 5px 0;"><strong>Tournoi :</strong> ${tournament_name}</p>
+              ${mode ? `<p style="margin: 5px 0;"><strong>Mode :</strong> ${mode}</p>` : ''}
+              ${category ? `<p style="margin: 5px 0;"><strong>Catégorie :</strong> ${category}</p>` : ''}
+              <p style="margin: 5px 0;"><strong>Date :</strong> ${dateStr}</p>
+              ${location ? `<p style="margin: 5px 0;"><strong>Lieu :</strong> ${location}</p>` : ''}
+            </div>
+            <p style="margin: 0 0 10px 0; color: #dc3545; font-weight: bold;">Cette action est définitive et ne peut pas être annulée depuis l'application.</p>
+            <p style="margin: 0 0 15px 0;">Si vous avez déclaré ce forfait par erreur, veuillez contacter votre comité à l'adresse : <a href="mailto:${contactEmail || ''}">${contactEmail || ''}</a></p>
+          </div>
+          ${buildEmailFooter(emailSettings)}
+        </div>
+      `
+    });
+
+    // Log the email
+    const db = require('../db-loader');
+    db.run(
+      `INSERT INTO inscription_email_logs (email_type, player_email, player_name, tournament_name, mode, category, tournament_date, location, status, organization_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'sent', $9)`,
+      ['forfait', player_email, player_name, tournament_name, mode || '', category || '', dateStr, location || '', orgId],
+      (err) => { if (err) console.error('Error logging forfait email:', err); }
+    );
+
+    console.log(`Forfait confirmation sent to ${player_email} for ${player_name}`);
+    res.json({ success: true, message: 'Confirmation sent' });
+
+  } catch (error) {
+    console.error('Error sending forfait confirmation:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Send contact message from Player App (called by Player App)
 router.post('/contact', async (req, res) => {
   const { player_email, player_name, player_licence, player_club, subject, message, api_key, attachments } = req.body;
