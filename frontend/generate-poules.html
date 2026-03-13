@@ -1729,7 +1729,7 @@
                   <span>📍 ${t.lieu || 'Lieu non défini'}${t.lieu_2 ? ' + ' + t.lieu_2 : ''}</span>
                 </div>
                 <div class="tournament-inscrits">
-                  👥 ${t.isFinale ? `${t.inscribed_finalist_count || 0}/${t.finalist_count || 0} inscrits` : `${t.inscrit_count || 0} inscrit(s)`}
+                  👥 ${t.isFinale ? `${t.inscribed_finalist_count || 0}/${t.finalist_count || 0} inscrits` : `${t.inscrit_count || 0} inscrit(s)${t.forfait_count > 0 ? ` <span style="color: #dc3545;">${t.forfait_count} forfait(s)</span>` : ''}`}
                 </div>
                 ${t3PendingBadge}
                 ${showSimulation && !t.isFinale ? `
