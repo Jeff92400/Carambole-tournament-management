@@ -1685,7 +1685,7 @@ router.post('/send-finale-results', authenticateToken, async (req, res) => {
             🏆 ${tournamentLabel}
           </h2>
           <p style="margin: 0; font-size: 18px; color: #333; font-weight: 600;">${tournament.display_name}</p>
-          ${tournamentDate ? `<p style="margin: 10px 0 0 0; color: #666;">${tournamentDate}${tournament.location ? ` - ${tournament.location}` : ''}</p>` : ''}
+          ${tournamentDate ? `<p style="margin: 10px 0 0 0; color: #666;">${tournamentDate}${tournament.location ? ` - ${tournament.location}` : ''}${tournament.location_2 ? ' / ' + tournament.location_2 : ''}</p>` : ''}
         </div>
 
         <!-- Intro Text -->
@@ -1797,7 +1797,7 @@ router.post('/send-finale-results', authenticateToken, async (req, res) => {
                 <h3 style="margin-top: 0; color: ${primaryColor};">📍 Informations de la Finale</h3>
                 <p><strong>Finale :</strong> ${tournament.display_name}</p>
                 <p><strong>Date :</strong> ${tournamentDate}</p>
-                <p><strong>Lieu :</strong> ${tournament.location || '-'}</p>
+                <p><strong>Lieu :</strong> ${(tournament.location || '-') + (tournament.location_2 ? ' / ' + tournament.location_2 : '')}</p>
               </div>
 
               <h3 style="color: ${primaryColor};">📧 Liste des Destinataires (${sentResults.sent.length})</h3>
@@ -2599,7 +2599,7 @@ router.post('/send-results', authenticateToken, async (req, res) => {
               <img src="${logoUrl}" alt="Logo" style="height: 60px; max-width: 80%; width: auto; margin-bottom: 10px;" onerror="this.style.display='none'">
               <h1 style="margin: 0; font-size: 24px;">${await req.getOrgSetting('organization_name') || 'Comité Départemental de Billard'}</h1>
               <p style="margin: 10px 0 0 0; opacity: 0.9;">Résultats - ${tournament.display_name}</p>
-              <p style="margin: 5px 0 0 0; opacity: 0.8; font-size: 14px;">${tournamentDate}${tournament.location ? ' - ' + tournament.location : ''}</p>
+              <p style="margin: 5px 0 0 0; opacity: 0.8; font-size: 14px;">${tournamentDate}${tournament.location ? ' - ' + tournament.location : ''}${tournament.location_2 ? ' / ' + tournament.location_2 : ''}</p>
             </div>
             <div style="padding: 20px; background: #f8f9fa; line-height: 1.6;">
               ${imageHtml}
@@ -2717,7 +2717,7 @@ router.post('/send-results', authenticateToken, async (req, res) => {
                 <h3 style="margin-top: 0; color: ${primaryColor};">📍 Informations du Tournoi</h3>
                 <p><strong>Tournoi :</strong> ${tournament.display_name}</p>
                 <p><strong>Date :</strong> ${tournamentDate}</p>
-                <p><strong>Lieu :</strong> ${tournament.location || '-'}</p>
+                <p><strong>Lieu :</strong> ${(tournament.location || '-') + (tournament.location_2 ? ' / ' + tournament.location_2 : '')}</p>
               </div>
 
               <h3 style="color: ${primaryColor};">📧 Liste des Destinataires (${sentResults.sent.length})</h3>
