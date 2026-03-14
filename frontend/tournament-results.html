@@ -380,7 +380,7 @@
           data.tournament.tournament_date
             ? new Date(data.tournament.tournament_date).toLocaleDateString('fr-FR')
             : 'Non spécifiée';
-        document.getElementById('tournamentLocation').textContent = data.tournament.location || 'Non spécifié';
+        document.getElementById('tournamentLocation').textContent = (data.tournament.location || 'Non spécifié') + (data.tournament.location_2 ? ' / ' + data.tournament.location_2 : '');
         document.getElementById('participantCount').textContent = data.results.length;
 
         // Update rankings link with category ID
