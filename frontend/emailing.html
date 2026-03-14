@@ -6141,7 +6141,7 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
         // Update info section
         document.getElementById('tournamentInfoTitle').textContent = tournament.display_name || '-';
         document.getElementById('tournamentInfoDate').textContent = tournament.tournament_date ? new Date(tournament.tournament_date).toLocaleDateString('fr-FR') : '-';
-        document.getElementById('tournamentInfoLieu').textContent = tournament.location || '-';
+        document.getElementById('tournamentInfoLieu').textContent = (tournament.location || '-') + (tournament.location_2 ? ' / ' + tournament.location_2 : '');
         document.getElementById('tournamentInfoMode').textContent = tournament.game_type || '-';
         document.getElementById('tournamentInfoCategory').textContent = tournament.level || '-';
         document.getElementById('tournamentInfoParticipants').textContent = tournamentResults.length;
@@ -6513,7 +6513,7 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
         // Update info section
         document.getElementById('finaleInfoTitle').textContent = tournament.display_name || '-';
         document.getElementById('finaleInfoDate').textContent = tournament.tournament_date ? new Date(tournament.tournament_date).toLocaleDateString('fr-FR') : '-';
-        document.getElementById('finaleInfoLieu').textContent = tournament.location || '-';
+        document.getElementById('finaleInfoLieu').textContent = (tournament.location || '-') + (tournament.location_2 ? ' / ' + tournament.location_2 : '');
         document.getElementById('finaleInfoMode').textContent = tournament.game_type || '-';
         document.getElementById('finaleInfoCategory').textContent = tournament.level || '-';
         document.getElementById('finaleInfoParticipants').textContent = finaleResults.length;
