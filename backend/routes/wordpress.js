@@ -861,12 +861,31 @@ function buildResultsArticleHtml({ tournament, results, rankings, nextTournament
     ? new Date(tournament.tournament_date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
     : '';
 
-  // --- Opening paragraph ---
+  // --- Opening paragraph (varied per tournament) ---
   const locationPhrase = fullLocation ? `au club de ${fullLocation}` : '';
+  const datePhrase = dateStr ? `le ${dateStr}` : '';
+
+  // Use tournament ID to deterministically pick a variant (consistent on republish)
+  const variantIndex = (tournament.id || 0) % 5;
+
   if (isFinale) {
-    parts.push(`<p>La <strong>Finale Départementale</strong> de <strong>${categoryName}</strong> s'est déroulée ${dateStr ? `le ${dateStr}` : ''} ${locationPhrase}. Une compétition décisive qui a tenu toutes ses promesses !</p>`);
+    const finaleOpenings = [
+      `La <strong>Finale Départementale</strong> de <strong>${categoryName}</strong> s'est déroulée ${datePhrase} ${locationPhrase}. Une compétition décisive qui a tenu toutes ses promesses !`,
+      `Place à la <strong>Finale Départementale</strong> de <strong>${categoryName}</strong> ! ${datePhrase ? `Ce ${datePhrase}` : ''} ${locationPhrase}, les meilleurs joueurs du département se sont affrontés pour le titre.`,
+      `Le grand rendez-vous de la saison est arrivé : la <strong>Finale Départementale</strong> de <strong>${categoryName}</strong> s'est jouée ${datePhrase} ${locationPhrase}. Retour sur une compétition d'exception.`,
+      `${locationPhrase ? `C'est ${locationPhrase}` : 'C\'est'} que s'est tenue ${datePhrase} la <strong>Finale Départementale</strong> de <strong>${categoryName}</strong>. L'aboutissement d'une saison de compétition intense.`,
+      `Moment fort de la saison : la <strong>Finale Départementale</strong> de <strong>${categoryName}</strong> a réuni ${datePhrase} ${locationPhrase} les meilleurs compétiteurs du département.`
+    ];
+    parts.push(`<p>${finaleOpenings[variantIndex]}</p>`);
   } else {
-    parts.push(`<p>Belle journée de compétition ${dateStr ? `ce ${dateStr}` : ''} ${locationPhrase} pour le <strong>${tournamentLabel}</strong> de <strong>${categoryName}</strong>.</p>`);
+    const regularOpenings = [
+      `Belle journée de compétition ${datePhrase ? `ce ${datePhrase}` : ''} ${locationPhrase} pour le <strong>${tournamentLabel}</strong> de <strong>${categoryName}</strong>.`,
+      `Les joueurs de <strong>${categoryName}</strong> se sont retrouvés ${datePhrase} ${locationPhrase} pour le <strong>${tournamentLabel}</strong>. Compte-rendu de cette journée de compétition.`,
+      `Le <strong>${tournamentLabel}</strong> de <strong>${categoryName}</strong> s'est déroulé ${datePhrase} ${locationPhrase}. Retour sur les résultats de cette rencontre.`,
+      `Journée de billard réussie ${datePhrase} ${locationPhrase} ! Le <strong>${tournamentLabel}</strong> de <strong>${categoryName}</strong> a offert de belles parties.`,
+      `${locationPhrase ? `C'est ${locationPhrase}` : 'C\'est'} que se tenait ${datePhrase} le <strong>${tournamentLabel}</strong> de <strong>${categoryName}</strong>. Voici les résultats de cette compétition.`
+    ];
+    parts.push(`<p>${regularOpenings[variantIndex]}</p>`);
   }
 
   // --- Winner / Podium section ---
@@ -904,7 +923,15 @@ function buildResultsArticleHtml({ tournament, results, rankings, nextTournament
     const winnerName = winner.display_name || winner.player_name;
     const winnerClub = winner.club || '';
     const winnerMoyenne = winner.reprises > 0 ? (winner.points / winner.reprises).toFixed(3) : '';
-    parts.push(`<p><strong>${winnerName}</strong> (${winnerClub}) remporte la compétition${winnerMoyenne ? ` avec une moyenne de ${winnerMoyenne}` : ''}. Félicitations !</p>`);
+    const moyennePhrase = winnerMoyenne ? ` avec une moyenne de ${winnerMoyenne}` : '';
+    const winnerPhrases = [
+      `<strong>${winnerName}</strong> (${winnerClub}) remporte la compétition${moyennePhrase}. Félicitations !`,
+      `C'est <strong>${winnerName}</strong> (${winnerClub}) qui s'impose${moyennePhrase}. Bravo !`,
+      `Victoire de <strong>${winnerName}</strong> (${winnerClub})${moyennePhrase}. Belle performance !`,
+      `<strong>${winnerName}</strong> (${winnerClub}) termine en tête de ce tournoi${moyennePhrase}.`,
+      `<strong>${winnerName}</strong> du ${winnerClub} décroche la première place${moyennePhrase}. Félicitations !`
+    ];
+    parts.push(`<p>${winnerPhrases[variantIndex]}</p>`);
   }
 
   // --- Full results table ---
