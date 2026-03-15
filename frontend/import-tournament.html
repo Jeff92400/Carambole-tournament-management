@@ -800,14 +800,8 @@
           // when bonuses are active, the admin should verify the full
           // ranking (match points + bonuses) before sending to players
           if (data.tournamentId && data.imported > 0) {
-            if (data.hasBonuses) {
-              // Show info message instead of popup
-              showBonusInfoMessage(data.tournamentId, categoryId);
-            } else {
-              setTimeout(() => {
-                showSendResultsPopup(data.tournamentId, categoryId);
-              }, 500);
-            }
+            // Always show info message pointing to manual send
+            showBonusInfoMessage(data.tournamentId, categoryId);
           }
         } else {
           errorDiv.textContent = data.error || 'Erreur lors de l\'import';
