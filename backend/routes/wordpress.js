@@ -868,13 +868,12 @@ function buildResultsArticleHtml({ tournament, results, rankings, nextTournament
     parts.push(`<p>Belle journée de compétition ${dateStr ? `ce ${dateStr}` : ''} ${fullLocation ? `à ${fullLocation}` : ''} pour le <strong>${tournamentLabel}</strong> de <strong>${categoryName}</strong>.</p>`);
   }
 
-  // --- Podium section (top 3) ---
-  if (results.length >= 3) {
+  // --- Winner / Podium section ---
+  if (isFinale && results.length >= 3) {
+    // Finale: full podium with medals and visual cards
     const top3 = results.slice(0, 3);
     const medals = ['🥇', '🥈', '🥉'];
-    const podiumLabels = ['1ère place', '2ème place', '3ème place'];
 
-    // Opening podium sentence
     const winner = top3[0];
     const winnerName = winner.display_name || winner.player_name;
     const winnerClub = winner.club || '';
@@ -882,7 +881,6 @@ function buildResultsArticleHtml({ tournament, results, rankings, nextTournament
 
     parts.push(`<p><strong>${winnerName}</strong> (${winnerClub}) s'impose brillamment${winnerMoyenne !== '-' ? ` avec une moyenne de ${winnerMoyenne}` : ''}, devant <strong>${top3[1].display_name || top3[1].player_name}</strong> (${top3[1].club || ''}) et <strong>${top3[2].display_name || top3[2].player_name}</strong> (${top3[2].club || ''}).</p>`);
 
-    // Podium visual cards
     parts.push('<div style="display: flex; justify-content: center; gap: 15px; margin: 20px 0; flex-wrap: wrap;">');
     for (let i = 0; i < 3; i++) {
       const r = top3[i];
@@ -900,9 +898,12 @@ function buildResultsArticleHtml({ tournament, results, rankings, nextTournament
     }
     parts.push('</div>');
   } else if (results.length > 0) {
-    // Less than 3 results — just mention winner
+    // Regular tournaments: just mention the winner, no podium/medals
     const winner = results[0];
-    parts.push(`<p><strong>${winner.display_name || winner.player_name}</strong> (${winner.club || ''}) remporte la compétition. Félicitations !</p>`);
+    const winnerName = winner.display_name || winner.player_name;
+    const winnerClub = winner.club || '';
+    const winnerMoyenne = winner.reprises > 0 ? (winner.points / winner.reprises).toFixed(3) : '';
+    parts.push(`<p><strong>${winnerName}</strong> (${winnerClub}) remporte la compétition${winnerMoyenne ? ` avec une moyenne de ${winnerMoyenne}` : ''}. Félicitations !</p>`);
   }
 
   // --- Full results table ---
