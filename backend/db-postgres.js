@@ -287,6 +287,9 @@ async function initializeDatabase() {
       ALTER TABLE tournaments ADD COLUMN IF NOT EXISTS results_email_sent_at TIMESTAMP
     `);
 
+    // Add wp_results_post_id column for WordPress results publishing (migration - March 2026)
+    await client.query(`ALTER TABLE tournaments ADD COLUMN IF NOT EXISTS wp_results_post_id INTEGER`);
+
     // Mark all existing tournaments as results sent (one-time migration for existing data)
     // Only runs if NO tournaments have been marked as sent yet (first deployment)
     const sentCheck = await client.query(`SELECT COUNT(*) as cnt FROM tournaments WHERE results_email_sent = TRUE`);

@@ -1128,6 +1128,28 @@
               </div>
             </div>
 
+            <!-- WordPress publish option for results -->
+            <div id="wpResultsPublishOption" style="display: none; margin-bottom: 15px; padding: 10px 15px; background: #f0f7ff; border: 1px solid #b8daff; border-radius: 6px;">
+              <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+                <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 14px;">
+                  <input type="checkbox" id="wpResultsPublishCheckbox" checked style="width: 18px; height: 18px;">
+                  <span>🌐 Publier également sur le site web</span>
+                </label>
+                <span id="wpResultsPublishStatus" style="font-size: 12px; color: #666;"></span>
+              </div>
+              <div id="wpResultsExistingPost" style="display: none; margin-top: 8px; padding: 8px 12px; background: #e7f3ff; border-radius: 4px; font-size: 13px; align-items: center; gap: 8px; flex-wrap: wrap;">
+                <span>📝 Un article résultats existe déjà (sera mis à jour)</span>
+                <a id="wpResultsExistingPostLink" href="#" target="_blank" style="color: #0070c0;">Voir</a>
+                <button onclick="deleteWpResultsPost()" style="background: #dc3545; color: white; border: none; border-radius: 4px; padding: 3px 10px; font-size: 12px; cursor: pointer;">Supprimer</button>
+              </div>
+              <div style="margin-top: 8px;">
+                <button id="wpResultsStandaloneBtn" onclick="publishResultsToWpStandalone()" class="btn" style="background: #0070c0; padding: 6px 16px; font-size: 13px; display: none;">
+                  🌐 Publier sur le site web (sans envoyer d'emails)
+                </button>
+                <span id="wpResultsStandaloneStatus" style="font-size: 12px; margin-left: 8px;"></span>
+              </div>
+            </div>
+
             <button class="btn" id="sendResultsBtn" style="width: 100%; padding: 15px; font-size: 16px; background: #1F4788;" disabled>
               Envoyer les Résultats
             </button>
@@ -1244,6 +1266,28 @@
               </label>
               <div id="finaleTestEmailInput" style="display: none; margin-top: 10px;">
                 <input type="email" id="finaleTestEmail" placeholder="votre.email@exemple.com" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+              </div>
+            </div>
+
+            <!-- WordPress publish option for finale results -->
+            <div id="wpFinaleResultsPublishOption" style="display: none; margin-bottom: 15px; padding: 10px 15px; background: #f0f7ff; border: 1px solid #b8daff; border-radius: 6px;">
+              <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+                <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 14px;">
+                  <input type="checkbox" id="wpFinaleResultsPublishCheckbox" checked style="width: 18px; height: 18px;">
+                  <span>🌐 Publier également sur le site web</span>
+                </label>
+                <span id="wpFinaleResultsPublishStatus" style="font-size: 12px; color: #666;"></span>
+              </div>
+              <div id="wpFinaleResultsExistingPost" style="display: none; margin-top: 8px; padding: 8px 12px; background: #e7f3ff; border-radius: 4px; font-size: 13px; align-items: center; gap: 8px; flex-wrap: wrap;">
+                <span>📝 Un article résultats existe déjà (sera mis à jour)</span>
+                <a id="wpFinaleResultsExistingPostLink" href="#" target="_blank" style="color: #0070c0;">Voir</a>
+                <button onclick="deleteWpFinaleResultsPost()" style="background: #dc3545; color: white; border: none; border-radius: 4px; padding: 3px 10px; font-size: 12px; cursor: pointer;">Supprimer</button>
+              </div>
+              <div style="margin-top: 8px;">
+                <button id="wpFinaleResultsStandaloneBtn" onclick="publishFinaleResultsToWpStandalone()" class="btn" style="background: #0070c0; padding: 6px 16px; font-size: 13px; display: none;">
+                  🌐 Publier sur le site web (sans envoyer d'emails)
+                </button>
+                <span id="wpFinaleResultsStandaloneStatus" style="font-size: 12px; margin-left: 8px;"></span>
               </div>
             </div>
 
@@ -6167,6 +6211,9 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
         previewDiv.style.display = 'block';
         sendBtn.disabled = data.emailCount === 0;
 
+        // Check WordPress publish status for this tournament
+        checkWpResultsStatus(selectedTournamentData.id);
+
       } catch (error) {
         console.error('Error loading tournament data:', error);
         showError('Erreur lors du chargement des données du tournoi');
@@ -6311,6 +6358,15 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
 
         if (response.ok) {
           showSuccess(result.message);
+
+          // Publish to WordPress if enabled and checkbox checked
+          if (window._wpEnabled && document.getElementById('wpResultsPublishCheckbox')?.checked) {
+            const wpResult = await publishResultsToWp(selectedTournamentData.id, isTestMode);
+            if (wpResult) {
+              const wpLabel = wpResult.isUpdate ? 'Mis à jour' : 'Publié';
+              showSuccess(`${result.message} | 🌐 ${wpLabel} sur le site web`);
+            }
+          }
         } else {
           showError(result.error || 'Erreur lors de l\'envoi');
         }
@@ -6570,6 +6626,9 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
         previewDiv.style.display = 'block';
         sendBtn.disabled = emailCount === 0;
 
+        // Check WordPress publish status for this finale
+        checkWpFinaleResultsStatus(selectedFinaleData.id);
+
       } catch (error) {
         console.error('Error loading finale data:', error);
         showError('Erreur: ' + error.message);
@@ -6628,6 +6687,15 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
         const result = await response.json();
         if (response.ok) {
           showSuccess(result.message);
+
+          // Publish to WordPress if enabled and checkbox checked
+          if (window._wpEnabled && document.getElementById('wpFinaleResultsPublishCheckbox')?.checked) {
+            const wpResult = await publishFinaleResultsToWp(selectedFinaleData.id, testMode);
+            if (wpResult) {
+              const wpLabel = wpResult.isUpdate ? 'Mis à jour' : 'Publié';
+              showSuccess(`${result.message} | 🌐 ${wpLabel} sur le site web`);
+            }
+          }
         } else {
           showError(result.error || 'Erreur lors de l\'envoi');
         }
@@ -6858,6 +6926,198 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
       ]);
     }
 
+    // ==================== WORDPRESS RESULTS PUBLISHING ====================
+
+    window._wpEnabled = false;
+    let _wpResultsTournamentId = null;
+    let _wpFinaleResultsTournamentId = null;
+
+    async function loadWpSetting() {
+      try {
+        const response = await fetch(`${API_URL}/settings/app/wp_enabled`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          window._wpEnabled = (data.value === 'true');
+        }
+      } catch (e) { /* default false */ }
+    }
+
+    async function checkWpResultsStatus(tournamentId) {
+      if (!window._wpEnabled || !tournamentId) {
+        document.getElementById('wpResultsPublishOption').style.display = 'none';
+        return;
+      }
+      _wpResultsTournamentId = tournamentId;
+      document.getElementById('wpResultsPublishOption').style.display = 'block';
+      document.getElementById('wpResultsStandaloneBtn').style.display = 'inline-block';
+
+      try {
+        const response = await fetch(`${API_URL}/wordpress/results-status/${tournamentId}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          const existingDiv = document.getElementById('wpResultsExistingPost');
+          if (data.published) {
+            existingDiv.style.display = 'flex';
+            const link = document.getElementById('wpResultsExistingPostLink');
+            link.href = `${data.siteUrl}/?p=${data.wpPostId}`;
+            document.getElementById('wpResultsPublishStatus').textContent = '📝 Article existant';
+            document.getElementById('wpResultsPublishStatus').style.color = '#0070c0';
+          } else {
+            existingDiv.style.display = 'none';
+            document.getElementById('wpResultsPublishStatus').textContent = '';
+          }
+        }
+      } catch (e) {
+        console.warn('[WordPress] Could not check results status:', e);
+      }
+    }
+
+    async function publishResultsToWp(tournamentId, isTest) {
+      const statusEl = document.getElementById('wpResultsPublishStatus');
+      if (statusEl) { statusEl.textContent = 'Publication en cours...'; statusEl.style.color = '#666'; }
+
+      try {
+        const response = await fetch(`${API_URL}/wordpress/publish-results`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tournamentId, isTest: !!isTest })
+        });
+        const data = await response.json();
+        if (response.ok && data.success) {
+          if (statusEl) { statusEl.textContent = data.isUpdate ? '✅ Article mis à jour' : '✅ Publié'; statusEl.style.color = '#28a745'; }
+          // Refresh status to show existing post UI
+          await checkWpResultsStatus(tournamentId);
+          return data;
+        } else {
+          if (statusEl) { statusEl.textContent = `❌ ${data.error || 'Échec'}`; statusEl.style.color = '#dc3545'; }
+          return null;
+        }
+      } catch (error) {
+        console.error('[WordPress] Publish results error:', error);
+        if (statusEl) { statusEl.textContent = '❌ Erreur réseau'; statusEl.style.color = '#dc3545'; }
+        return null;
+      }
+    }
+
+    async function publishResultsToWpStandalone() {
+      if (!_wpResultsTournamentId) return;
+      const isTest = document.getElementById('testModeCheck')?.checked || false;
+      const statusEl = document.getElementById('wpResultsStandaloneStatus');
+      if (statusEl) statusEl.textContent = '';
+      const result = await publishResultsToWp(_wpResultsTournamentId, isTest);
+      if (result && statusEl) {
+        statusEl.textContent = result.isUpdate ? '✅ Mis à jour' : '✅ Publié';
+        statusEl.style.color = '#28a745';
+      }
+    }
+
+    async function deleteWpResultsPost() {
+      if (!_wpResultsTournamentId) return;
+      if (!confirm('Supprimer l\'article résultats de WordPress ?')) return;
+      try {
+        const response = await fetch(`${API_URL}/wordpress/delete-results/${_wpResultsTournamentId}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          document.getElementById('wpResultsExistingPost').style.display = 'none';
+          document.getElementById('wpResultsPublishStatus').textContent = '🗑️ Supprimé';
+          document.getElementById('wpResultsPublishStatus').style.color = '#6c757d';
+        }
+      } catch (e) { console.error('[WordPress] Delete results error:', e); }
+    }
+
+    // --- Finale WordPress functions ---
+    async function checkWpFinaleResultsStatus(tournamentId) {
+      if (!window._wpEnabled || !tournamentId) {
+        document.getElementById('wpFinaleResultsPublishOption').style.display = 'none';
+        return;
+      }
+      _wpFinaleResultsTournamentId = tournamentId;
+      document.getElementById('wpFinaleResultsPublishOption').style.display = 'block';
+      document.getElementById('wpFinaleResultsStandaloneBtn').style.display = 'inline-block';
+
+      try {
+        const response = await fetch(`${API_URL}/wordpress/results-status/${tournamentId}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          const existingDiv = document.getElementById('wpFinaleResultsExistingPost');
+          if (data.published) {
+            existingDiv.style.display = 'flex';
+            const link = document.getElementById('wpFinaleResultsExistingPostLink');
+            link.href = `${data.siteUrl}/?p=${data.wpPostId}`;
+            document.getElementById('wpFinaleResultsPublishStatus').textContent = '📝 Article existant';
+            document.getElementById('wpFinaleResultsPublishStatus').style.color = '#0070c0';
+          } else {
+            existingDiv.style.display = 'none';
+            document.getElementById('wpFinaleResultsPublishStatus').textContent = '';
+          }
+        }
+      } catch (e) {
+        console.warn('[WordPress] Could not check finale results status:', e);
+      }
+    }
+
+    async function publishFinaleResultsToWp(tournamentId, isTest) {
+      const statusEl = document.getElementById('wpFinaleResultsPublishStatus');
+      if (statusEl) { statusEl.textContent = 'Publication en cours...'; statusEl.style.color = '#666'; }
+
+      try {
+        const response = await fetch(`${API_URL}/wordpress/publish-results`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tournamentId, isTest: !!isTest })
+        });
+        const data = await response.json();
+        if (response.ok && data.success) {
+          if (statusEl) { statusEl.textContent = data.isUpdate ? '✅ Article mis à jour' : '✅ Publié'; statusEl.style.color = '#28a745'; }
+          await checkWpFinaleResultsStatus(tournamentId);
+          return data;
+        } else {
+          if (statusEl) { statusEl.textContent = `❌ ${data.error || 'Échec'}`; statusEl.style.color = '#dc3545'; }
+          return null;
+        }
+      } catch (error) {
+        console.error('[WordPress] Publish finale results error:', error);
+        if (statusEl) { statusEl.textContent = '❌ Erreur réseau'; statusEl.style.color = '#dc3545'; }
+        return null;
+      }
+    }
+
+    async function publishFinaleResultsToWpStandalone() {
+      if (!_wpFinaleResultsTournamentId) return;
+      const isTest = document.getElementById('finaleTestModeCheck')?.checked || false;
+      const statusEl = document.getElementById('wpFinaleResultsStandaloneStatus');
+      if (statusEl) statusEl.textContent = '';
+      const result = await publishFinaleResultsToWp(_wpFinaleResultsTournamentId, isTest);
+      if (result && statusEl) {
+        statusEl.textContent = result.isUpdate ? '✅ Mis à jour' : '✅ Publié';
+        statusEl.style.color = '#28a745';
+      }
+    }
+
+    async function deleteWpFinaleResultsPost() {
+      if (!_wpFinaleResultsTournamentId) return;
+      if (!confirm('Supprimer l\'article résultats finale de WordPress ?')) return;
+      try {
+        const response = await fetch(`${API_URL}/wordpress/delete-results/${_wpFinaleResultsTournamentId}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          document.getElementById('wpFinaleResultsExistingPost').style.display = 'none';
+          document.getElementById('wpFinaleResultsPublishStatus').textContent = '🗑️ Supprimé';
+          document.getElementById('wpFinaleResultsPublishStatus').style.color = '#6c757d';
+        }
+      } catch (e) { console.error('[WordPress] Delete finale results error:', e); }
+    }
+
     async function initialize() {
       await initReferenceData(); // Load dynamic selectors first
       await loadGameModes(); // Load game modes for dropdowns
@@ -6872,6 +7132,7 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
       await loadSummaryEmailSetting();
       await loadRelanceHistory();
       setupImagePasteHandler(); // Setup image paste functionality
+      await loadWpSetting(); // Load WordPress enabled status
 
       // Check for relance action from URL params (from dashboard alert)
       await handleRelanceFromDashboard();

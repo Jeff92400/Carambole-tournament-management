@@ -2,6 +2,7 @@ const express = require('express');
 const { authenticateToken } = require('./auth');
 const appSettings = require('../utils/app-settings');
 const { logAdminAction, ACTION_TYPES } = require('../utils/admin-logger');
+const { getRankingTournamentNumbers, getFinaleTournamentNumber, getTournamentLabel } = require('./settings');
 
 const router = express.Router();
 
@@ -841,6 +842,468 @@ router.delete('/delete/:tournoiId', authenticateToken, async (req, res) => {
 
   } catch (error) {
     console.error('[WordPress] Delete failed:', error.message);
+    res.status(500).json({ error: `Échec de la suppression. ${error.message}` });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// RESULTS PUBLISHING
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ─── Helper: Generate results article HTML (sports reporting style) ──────────
+function buildResultsArticleHtml({ tournament, results, rankings, nextTournament, qualifiedPlayers, isFinale, isLastQualifying, tournamentLabel, orgShortName }) {
+  const parts = [];
+  const categoryName = tournament.display_name || '';
+  const location = tournament.location || '';
+  const location2 = tournament.location_2 || '';
+  const fullLocation = location + (location2 ? ' / ' + location2 : '');
+  const dateStr = tournament.tournament_date
+    ? new Date(tournament.tournament_date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+    : '';
+
+  // --- Opening paragraph ---
+  if (isFinale) {
+    parts.push(`<p>La <strong>Finale Départementale</strong> de <strong>${categoryName}</strong> s'est déroulée ${dateStr ? `le ${dateStr}` : ''} ${fullLocation ? `à ${fullLocation}` : ''}. Une compétition décisive qui a tenu toutes ses promesses !</p>`);
+  } else {
+    parts.push(`<p>Belle journée de compétition ${dateStr ? `ce ${dateStr}` : ''} ${fullLocation ? `à ${fullLocation}` : ''} pour le <strong>${tournamentLabel}</strong> de <strong>${categoryName}</strong>.</p>`);
+  }
+
+  // --- Podium section (top 3) ---
+  if (results.length >= 3) {
+    const top3 = results.slice(0, 3);
+    const medals = ['🥇', '🥈', '🥉'];
+    const podiumLabels = ['1ère place', '2ème place', '3ème place'];
+
+    // Opening podium sentence
+    const winner = top3[0];
+    const winnerName = winner.display_name || winner.player_name;
+    const winnerClub = winner.club || '';
+    const winnerMoyenne = winner.reprises > 0 ? (winner.points / winner.reprises).toFixed(3) : '-';
+
+    parts.push(`<p><strong>${winnerName}</strong> (${winnerClub}) s'impose brillamment${winnerMoyenne !== '-' ? ` avec une moyenne de ${winnerMoyenne}` : ''}, devant <strong>${top3[1].display_name || top3[1].player_name}</strong> (${top3[1].club || ''}) et <strong>${top3[2].display_name || top3[2].player_name}</strong> (${top3[2].club || ''}).</p>`);
+
+    // Podium visual cards
+    parts.push('<div style="display: flex; justify-content: center; gap: 15px; margin: 20px 0; flex-wrap: wrap;">');
+    for (let i = 0; i < 3; i++) {
+      const r = top3[i];
+      const name = r.display_name || r.player_name;
+      const club = r.club || '';
+      const moyenne = r.reprises > 0 ? (r.points / r.reprises).toFixed(3) : '-';
+      const bgColors = ['#FFFBEB', '#F9FAFB', '#FEF3E7'];
+      const borderColors = ['#F59E0B', '#9CA3AF', '#D97706'];
+      parts.push(`<div style="text-align: center; padding: 15px 20px; background: ${bgColors[i]}; border: 2px solid ${borderColors[i]}; border-radius: 10px; min-width: 150px;">
+        <div style="font-size: 32px;">${medals[i]}</div>
+        <div style="font-weight: 700; font-size: 15px; margin: 8px 0 2px 0;">${name}</div>
+        <div style="font-size: 13px; color: #555; font-style: italic;">${club}</div>
+        <div style="font-size: 12px; color: #888; margin-top: 4px;">${r.match_points || 0} pts · Moy: ${moyenne}</div>
+      </div>`);
+    }
+    parts.push('</div>');
+  } else if (results.length > 0) {
+    // Less than 3 results — just mention winner
+    const winner = results[0];
+    parts.push(`<p><strong>${winner.display_name || winner.player_name}</strong> (${winner.club || ''}) remporte la compétition. Félicitations !</p>`);
+  }
+
+  // --- Full results table ---
+  parts.push(`<h3>Résultats complets</h3>`);
+  parts.push('<table style="width: 100%; border-collapse: collapse; margin: 15px 0; font-size: 14px;">');
+  parts.push('<thead><tr style="background: #1F4788; color: white;">');
+  parts.push('<th style="padding: 10px; border: 1px solid #ddd; text-align: center;">Pos</th>');
+  parts.push('<th style="padding: 10px; border: 1px solid #ddd; text-align: left;">Joueur</th>');
+  parts.push('<th style="padding: 10px; border: 1px solid #ddd; text-align: left;">Club</th>');
+  parts.push('<th style="padding: 10px; border: 1px solid #ddd; text-align: center;">Pts Match</th>');
+  parts.push('<th style="padding: 10px; border: 1px solid #ddd; text-align: center;">Moyenne</th>');
+  parts.push('</tr></thead><tbody>');
+
+  for (let i = 0; i < results.length; i++) {
+    const r = results[i];
+    const name = r.display_name || r.player_name;
+    const club = r.club || '';
+    const moyenne = r.reprises > 0 ? (r.points / r.reprises).toFixed(3) : '-';
+    const bg = i < 3 ? (i === 0 ? '#FFFBEB' : i === 1 ? '#F9FAFB' : '#FEF3E7') : (i % 2 === 0 ? 'white' : '#f8f9fa');
+    const fw = i < 3 ? 'bold' : 'normal';
+    parts.push(`<tr style="background: ${bg};"><td style="padding: 8px; border: 1px solid #ddd; text-align: center; font-weight: ${fw};">${r.position || i + 1}</td><td style="padding: 8px; border: 1px solid #ddd; font-weight: ${fw};">${name}</td><td style="padding: 8px; border: 1px solid #ddd;">${club}</td><td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${r.match_points || '-'}</td><td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${moyenne}</td></tr>`);
+  }
+  parts.push('</tbody></table>');
+
+  // --- Season ranking table (not for finale) ---
+  if (!isFinale && rankings && rankings.length > 0) {
+    parts.push(`<h3>Classement général après le ${tournamentLabel}</h3>`);
+    parts.push('<table style="width: 100%; border-collapse: collapse; margin: 15px 0; font-size: 14px;">');
+    parts.push('<thead><tr style="background: #28a745; color: white;">');
+    parts.push('<th style="padding: 10px; border: 1px solid #ddd; text-align: center;">Pos</th>');
+    parts.push('<th style="padding: 10px; border: 1px solid #ddd; text-align: left;">Joueur</th>');
+    parts.push('<th style="padding: 10px; border: 1px solid #ddd; text-align: center;">Total Pts</th>');
+    parts.push('<th style="padding: 10px; border: 1px solid #ddd; text-align: center;">Moyenne</th>');
+    parts.push('</tr></thead><tbody>');
+
+    for (let i = 0; i < rankings.length; i++) {
+      const r = rankings[i];
+      const name = r.player_name || r.licence;
+      const avgMoyenne = r.avg_moyenne ? r.avg_moyenne.toFixed(3) : '-';
+      const bg = i % 2 === 0 ? 'white' : '#f8f9fa';
+      parts.push(`<tr style="background: ${bg};"><td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${r.rank_position}</td><td style="padding: 8px; border: 1px solid #ddd;">${name}</td><td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${r.total_match_points || '-'}</td><td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${avgMoyenne}</td></tr>`);
+    }
+    parts.push('</tbody></table>');
+  }
+
+  // --- After T3: qualification section ---
+  if (isLastQualifying && qualifiedPlayers && qualifiedPlayers.length > 0) {
+    const qualifiedNames = qualifiedPlayers.map(p => `<strong>${p.player_name}</strong>`).join(', ');
+    parts.push(`<div style="background: #d4edda; padding: 15px 20px; border-left: 4px solid #28a745; margin: 20px 0; border-radius: 4px;">`);
+    parts.push(`<p style="margin: 0 0 8px 0;">🎉 <strong>Après cette dernière journée de qualification, les ${qualifiedPlayers.length} premiers joueurs sont qualifiés pour la Finale Départementale :</strong></p>`);
+    parts.push(`<p style="margin: 0;">${qualifiedNames}</p>`);
+    if (nextTournament) {
+      const finaleDate = nextTournament.debut
+        ? new Date(nextTournament.debut).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+        : '';
+      const finaleLieu = nextTournament.lieu || '';
+      const finaleLieu2 = nextTournament.lieu_2 || '';
+      const fullFinaleLieu = finaleLieu + (finaleLieu2 ? ' / ' + finaleLieu2 : '');
+      if (finaleDate || fullFinaleLieu) {
+        parts.push(`<p style="margin: 8px 0 0 0;">📅 La finale se tiendra ${finaleDate ? `le ${finaleDate}` : ''} ${fullFinaleLieu ? `à ${fullFinaleLieu}` : ''}</p>`);
+      }
+    }
+    parts.push('</div>');
+  }
+
+  // --- For finale: special closing ---
+  if (isFinale && results.length > 0) {
+    const winner = results[0];
+    const winnerName = winner.display_name || winner.player_name;
+    const winnerClub = winner.club || '';
+    parts.push(`<div style="background: #fff3cd; padding: 15px 20px; border-left: 4px solid #ffc107; margin: 20px 0; border-radius: 4px;">`);
+    parts.push(`<p style="margin: 0;">🏆 <strong>${winnerName}</strong> (${winnerClub}) est sacré(e) champion(ne) départemental(e) et représentera le département au niveau de la Ligue. Toutes nos félicitations !</p>`);
+    parts.push('</div>');
+  }
+
+  // --- Next tournament info (for T1, T2 — not T3 which has qualification section, not finale) ---
+  if (!isFinale && !isLastQualifying && nextTournament) {
+    const nextDate = nextTournament.debut
+      ? new Date(nextTournament.debut).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+      : '';
+    const nextLieu = nextTournament.lieu || '';
+    const nextLieu2 = nextTournament.lieu_2 || '';
+    const fullNextLieu = nextLieu + (nextLieu2 ? ' / ' + nextLieu2 : '');
+    if (nextDate || fullNextLieu) {
+      parts.push(`<p style="margin-top: 20px;">📅 <strong>Prochain rendez-vous :</strong> ${nextDate ? `le ${nextDate}` : ''} ${fullNextLieu ? `à ${fullNextLieu}` : ''}. Nous comptons sur votre présence !</p>`);
+    }
+  }
+
+  return parts.join('\n');
+}
+
+// ─── Publish results to WordPress ─────────────────────────────────────────────
+router.post('/publish-results', authenticateToken, async (req, res) => {
+  const db = require('../db-loader');
+  const orgId = req.user.organizationId || null;
+
+  try {
+    const wp = await getWpSettings(orgId);
+
+    if (!wp.enabled) {
+      return res.status(400).json({ error: 'Publication WordPress désactivée. Activez-la dans Paramètres > Site Web.' });
+    }
+    if (!wp.siteUrl || !wp.username || !wp.password) {
+      return res.status(400).json({ error: 'Configuration WordPress incomplète.' });
+    }
+
+    const { tournamentId, season, isTest } = req.body;
+
+    if (!tournamentId) {
+      return res.status(400).json({ error: 'tournamentId requis.' });
+    }
+
+    // Fetch tournament info
+    const tournament = await new Promise((resolve, reject) => {
+      db.get(`
+        SELECT t.*, c.display_name, c.game_type, c.level
+        FROM tournaments t
+        JOIN categories c ON t.category_id = c.id
+        WHERE t.id = $1 AND ($2::int IS NULL OR t.organization_id = $2)
+      `, [tournamentId, orgId], (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
+
+    if (!tournament) {
+      return res.status(404).json({ error: 'Tournoi non trouvé.' });
+    }
+
+    // Fetch results with player info
+    const results = await new Promise((resolve, reject) => {
+      db.all(`
+        SELECT tr.*,
+               pc.first_name, pc.last_name, pc.club,
+               COALESCE(pc.first_name || ' ' || pc.last_name, tr.player_name) as display_name
+        FROM tournament_results tr
+        LEFT JOIN player_contacts pc ON REPLACE(tr.licence, ' ', '') = REPLACE(pc.licence, ' ', '')
+        WHERE tr.tournament_id = $1
+        ORDER BY tr.position ASC
+      `, [tournamentId], (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows || []);
+      });
+    });
+
+    if (results.length === 0) {
+      return res.status(400).json({ error: 'Aucun résultat trouvé pour ce tournoi.' });
+    }
+
+    // Fetch season rankings
+    const rankings = await new Promise((resolve, reject) => {
+      db.all(`
+        SELECT r.*,
+               COALESCE(p.first_name || ' ' || p.last_name, r.licence) as player_name
+        FROM rankings r
+        LEFT JOIN players p ON REPLACE(r.licence, ' ', '') = REPLACE(p.licence, ' ', '')
+        WHERE r.season = $1 AND r.category_id = $2
+          AND ($3::int IS NULL OR r.organization_id = $3)
+        ORDER BY r.rank_position ASC
+      `, [tournament.season, tournament.category_id, orgId], (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows || []);
+      });
+    });
+
+    // Determine tournament type
+    const finaleNumber = await getFinaleTournamentNumber(orgId);
+    const rankingNumbers = await getRankingTournamentNumbers(orgId);
+    const lastRankingNumber = Math.max(...rankingNumbers);
+    const isFinale = tournament.tournament_number === finaleNumber;
+    const isLastQualifying = tournament.tournament_number === lastRankingNumber;
+
+    // Get tournament label
+    const tournamentLabel = await getTournamentLabel(tournament.tournament_number, orgId) || (isFinale ? 'Finale Départementale' : `T${tournament.tournament_number}`);
+
+    // Fetch next tournament (from tournoi_ext — same mode/category, future date)
+    let nextTournament = null;
+    if (!isFinale) {
+      const nextTournamentRow = await new Promise((resolve, reject) => {
+        db.get(`
+          SELECT tournoi_id, nom, debut, lieu, lieu_2, tournament_number
+          FROM tournoi_ext
+          WHERE UPPER(mode) = UPPER($1)
+            AND UPPER(categorie) = UPPER($2)
+            AND debut > $3
+            AND ($4::int IS NULL OR organization_id = $4)
+          ORDER BY debut ASC
+          LIMIT 1
+        `, [tournament.game_type, tournament.level, tournament.tournament_date, orgId], (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        });
+      });
+      nextTournament = nextTournamentRow || null;
+    }
+
+    // Determine qualified players (after T3)
+    let qualifiedPlayers = [];
+    if (isLastQualifying && rankings.length > 0) {
+      const qualifiedCount = rankings.length < 9 ? 4 : 6;
+      qualifiedPlayers = rankings.filter(r => r.rank_position <= qualifiedCount);
+    }
+
+    // Get org short name
+    const orgShortName = await appSettings.getOrgSetting(orgId, 'organization_short_name') || 'CDBHS';
+
+    // Build HTML article
+    const htmlContent = buildResultsArticleHtml({
+      tournament,
+      results,
+      rankings,
+      nextTournament,
+      qualifiedPlayers,
+      isFinale,
+      isLastQualifying,
+      tournamentLabel,
+      orgShortName
+    });
+
+    // Test banner
+    const testBanner = isTest
+      ? '<div style="background: #f8d7da; padding: 12px 16px; border: 2px solid #dc3545; border-radius: 6px; margin-bottom: 15px; text-align: center; font-size: 16px;"><strong>⚠️ ARTICLE TEST — Ne pas en tenir compte ⚠️</strong></div>'
+      : '';
+
+    // Determine season
+    const effectiveSeason = season || tournament.season || (() => {
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = now.getMonth();
+      return month >= 8 ? `${year}-${year + 1}` : `${year - 1}-${year}`;
+    })();
+
+    // Find or create the season category
+    const category = await getOrCreateSeasonCategory(
+      wp.siteUrl, wp.username, wp.password, effectiveSeason, 'resultats'
+    );
+
+    // Build post title
+    const rawDate = tournament.tournament_date || '';
+    const dateForTitle = rawDate
+      ? new Date(rawDate).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+      : '';
+    const titleBase = `Résultats — ${tournament.display_name} ${tournamentLabel} — ${dateForTitle}`.trim();
+    const title = isTest ? `[TEST] ${titleBase}` : titleBase;
+
+    // Check if already published
+    let wpPostId;
+    let isUpdate = false;
+    let postUrl = '';
+
+    if (tournament.wp_results_post_id) {
+      // Update existing post
+      isUpdate = true;
+      const now = new Date();
+      const updateNote = `<div style="background: #d4edda; padding: 8px 12px; border-left: 4px solid #28a745; margin-bottom: 15px;"><strong>🔄 Mise à jour du ${now.toLocaleDateString('fr-FR')} à ${now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</strong></div>`;
+
+      const updateContent = {
+        post_title: title,
+        post_content: testBanner + updateNote + htmlContent,
+        post_status: wp.defaultStatus
+      };
+      if (category) updateContent.terms = { category: [category.id] };
+
+      await wpXmlRpc(wp.siteUrl, 'wp.editPost', [
+        0, wp.username, wp.password, tournament.wp_results_post_id, updateContent
+      ]);
+      wpPostId = tournament.wp_results_post_id;
+      postUrl = `${wp.siteUrl}/?p=${wpPostId}`;
+    } else {
+      // Create new post
+      const newPostContent = {
+        post_title: title,
+        post_content: testBanner + htmlContent,
+        post_type: 'post',
+        post_status: wp.defaultStatus
+      };
+      if (category) newPostContent.terms = { category: [category.id] };
+
+      wpPostId = await wpXmlRpc(wp.siteUrl, 'wp.newPost', [
+        0, wp.username, wp.password, newPostContent
+      ]);
+      wpPostId = parseInt(wpPostId, 10);
+      postUrl = `${wp.siteUrl}/?p=${wpPostId}`;
+
+      // Store the WP post ID
+      await new Promise((resolve, reject) => {
+        db.run(
+          'UPDATE tournaments SET wp_results_post_id = $1 WHERE id = $2',
+          [wpPostId, tournamentId],
+          (err) => { if (err) reject(err); else resolve(); }
+        );
+      });
+    }
+
+    // Log the action
+    logAdminAction({
+      req,
+      action: ACTION_TYPES.PUBLISH_WEBSITE || 'publish_website',
+      details: `${isUpdate ? 'Mise à jour' : 'Publication'} résultats WordPress: ${title}`,
+      targetType: 'tournament_results',
+      targetId: tournamentId,
+      targetName: title
+    });
+
+    res.json({
+      success: true,
+      isUpdate,
+      postId: wpPostId,
+      postUrl,
+      message: isUpdate
+        ? 'Article résultats mis à jour sur WordPress.'
+        : 'Article résultats publié sur WordPress.'
+    });
+
+  } catch (error) {
+    console.error('[WordPress] Publish results failed:', error.message);
+    let msg = 'Échec de la publication des résultats sur WordPress.';
+    if (error.message.includes('Incorrect username') || error.message.includes('identifiant')) {
+      msg += ' Identifiants invalides.';
+    } else {
+      msg += ` ${error.message}`;
+    }
+    res.status(500).json({ error: msg });
+  }
+});
+
+// ─── Get results publish status ───────────────────────────────────────────────
+router.get('/results-status/:tournamentId', authenticateToken, async (req, res) => {
+  const db = require('../db-loader');
+  const orgId = req.user.organizationId || null;
+  const tournamentId = req.params.tournamentId;
+
+  try {
+    const row = await new Promise((resolve, reject) => {
+      db.get(
+        'SELECT wp_results_post_id FROM tournaments WHERE id = $1 AND ($2::int IS NULL OR organization_id = $2)',
+        [tournamentId, orgId],
+        (err, row) => { if (err) reject(err); else resolve(row); }
+      );
+    });
+
+    const wp = await getWpSettings(orgId);
+
+    res.json({
+      published: !!row?.wp_results_post_id,
+      wpPostId: row?.wp_results_post_id || null,
+      siteUrl: wp.siteUrl || ''
+    });
+  } catch (error) {
+    console.error('[WordPress] Results status check failed:', error.message);
+    res.status(500).json({ error: 'Erreur lors de la vérification du statut.' });
+  }
+});
+
+// ─── Delete a results WordPress post ──────────────────────────────────────────
+router.delete('/delete-results/:tournamentId', authenticateToken, async (req, res) => {
+  const db = require('../db-loader');
+  const orgId = req.user.organizationId || null;
+  const tournamentId = req.params.tournamentId;
+
+  try {
+    const wp = await getWpSettings(orgId);
+    if (!wp.siteUrl || !wp.username || !wp.password) {
+      return res.status(400).json({ error: 'Configuration WordPress incomplète.' });
+    }
+
+    const row = await new Promise((resolve, reject) => {
+      db.get(
+        'SELECT wp_results_post_id FROM tournaments WHERE id = $1 AND ($2::int IS NULL OR organization_id = $2)',
+        [tournamentId, orgId],
+        (err, row) => { if (err) reject(err); else resolve(row); }
+      );
+    });
+
+    if (!row?.wp_results_post_id) {
+      return res.status(404).json({ error: 'Aucun article résultats WordPress associé à ce tournoi.' });
+    }
+
+    await wpXmlRpc(wp.siteUrl, 'wp.deletePost', [0, wp.username, wp.password, row.wp_results_post_id]);
+
+    await new Promise((resolve, reject) => {
+      db.run(
+        'UPDATE tournaments SET wp_results_post_id = NULL WHERE id = $1',
+        [tournamentId],
+        (err) => { if (err) reject(err); else resolve(); }
+      );
+    });
+
+    logAdminAction({
+      req,
+      action: ACTION_TYPES.PUBLISH_WEBSITE || 'publish_website',
+      details: `Suppression article résultats WordPress pour tournoi ${tournamentId}`,
+      targetType: 'tournament_results',
+      targetId: tournamentId,
+      targetName: `Post WP #${row.wp_results_post_id}`
+    });
+
+    res.json({ success: true, message: 'Article résultats WordPress supprimé.' });
+
+  } catch (error) {
+    console.error('[WordPress] Delete results failed:', error.message);
     res.status(500).json({ error: `Échec de la suppression. ${error.message}` });
   }
 });
