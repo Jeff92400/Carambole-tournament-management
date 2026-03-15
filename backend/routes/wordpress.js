@@ -952,9 +952,9 @@ function buildResultsArticleHtml({ tournament, results, rankings, nextTournament
 
   // --- After T3: qualification section ---
   if (isLastQualifying && qualifiedPlayers && qualifiedPlayers.length > 0) {
-    const qualifiedNames = qualifiedPlayers.map(p => `<strong>${p.player_name}</strong>`).join(', ');
+    const qualifiedNames = qualifiedPlayers.map(p => p.player_name).join(', ');
     parts.push(`<div style="background: #d4edda; padding: 15px 20px; border-left: 4px solid #28a745; margin: 20px 0; border-radius: 4px;">`);
-    parts.push(`<p style="margin: 0 0 8px 0;">🎉 <strong>Après cette dernière journée de qualification, les ${qualifiedPlayers.length} premiers joueurs sont qualifiés pour la Finale Départementale :</strong></p>`);
+    parts.push(`<p style="margin: 0 0 8px 0;">🎉 Après cette dernière journée de qualification, les ${qualifiedPlayers.length} premiers joueurs sont qualifiés pour la Finale Départementale :</p>`);
     parts.push(`<p style="margin: 0;">${qualifiedNames}</p>`);
     // Finale location: use the winner's club (1st in rankings)
     const winnerClubName = qualifiedPlayers[0]?.club || '';
@@ -966,7 +966,7 @@ function buildResultsArticleHtml({ tournament, results, rankings, nextTournament
       const finaleLieu = nextTournament.lieu || '';
       const finaleLocationText = winnerClubName ? `au club de ${winnerClubName}` : (finaleLieu ? `au club de ${finaleLieu}` : '');
       if (finaleDate || finaleLocationText) {
-        parts.push(`<p style="margin: 8px 0 0 0;">📅 La finale se tiendra ${finaleDate ? `le ${finaleDate}` : ''} ${finaleLocationText}</p>`);
+        parts.push(`<p style="margin: 8px 0 0 0;">📅 La finale se tiendra ${finaleDate ? `le ${finaleDate}` : ''} ${finaleLocationText}. Une convocation officielle confirmera ce rendez-vous.</p>`);
       }
     }
     parts.push('</div>');
