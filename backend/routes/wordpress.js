@@ -862,10 +862,11 @@ function buildResultsArticleHtml({ tournament, results, rankings, nextTournament
     : '';
 
   // --- Opening paragraph ---
+  const locationPhrase = fullLocation ? `au club de ${fullLocation}` : '';
   if (isFinale) {
-    parts.push(`<p>La <strong>Finale Départementale</strong> de <strong>${categoryName}</strong> s'est déroulée ${dateStr ? `le ${dateStr}` : ''} ${fullLocation ? `à ${fullLocation}` : ''}. Une compétition décisive qui a tenu toutes ses promesses !</p>`);
+    parts.push(`<p>La <strong>Finale Départementale</strong> de <strong>${categoryName}</strong> s'est déroulée ${dateStr ? `le ${dateStr}` : ''} ${locationPhrase}. Une compétition décisive qui a tenu toutes ses promesses !</p>`);
   } else {
-    parts.push(`<p>Belle journée de compétition ${dateStr ? `ce ${dateStr}` : ''} ${fullLocation ? `à ${fullLocation}` : ''} pour le <strong>${tournamentLabel}</strong> de <strong>${categoryName}</strong>.</p>`);
+    parts.push(`<p>Belle journée de compétition ${dateStr ? `ce ${dateStr}` : ''} ${locationPhrase} pour le <strong>${tournamentLabel}</strong> de <strong>${categoryName}</strong>.</p>`);
   }
 
   // --- Winner / Podium section ---
@@ -955,15 +956,17 @@ function buildResultsArticleHtml({ tournament, results, rankings, nextTournament
     parts.push(`<div style="background: #d4edda; padding: 15px 20px; border-left: 4px solid #28a745; margin: 20px 0; border-radius: 4px;">`);
     parts.push(`<p style="margin: 0 0 8px 0;">🎉 <strong>Après cette dernière journée de qualification, les ${qualifiedPlayers.length} premiers joueurs sont qualifiés pour la Finale Départementale :</strong></p>`);
     parts.push(`<p style="margin: 0;">${qualifiedNames}</p>`);
+    // Finale location: use the winner's club (1st in rankings)
+    const winnerClubName = qualifiedPlayers[0]?.club || '';
     if (nextTournament) {
       const finaleDate = nextTournament.debut
         ? new Date(nextTournament.debut).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
         : '';
+      // Prefer winner's club as finale location, fallback to tournoi_ext.lieu
       const finaleLieu = nextTournament.lieu || '';
-      const finaleLieu2 = nextTournament.lieu_2 || '';
-      const fullFinaleLieu = finaleLieu + (finaleLieu2 ? ' / ' + finaleLieu2 : '');
-      if (finaleDate || fullFinaleLieu) {
-        parts.push(`<p style="margin: 8px 0 0 0;">📅 La finale se tiendra ${finaleDate ? `le ${finaleDate}` : ''} ${fullFinaleLieu ? `à ${fullFinaleLieu}` : ''}</p>`);
+      const finaleLocationText = winnerClubName ? `au club de ${winnerClubName}` : (finaleLieu ? `au club de ${finaleLieu}` : '');
+      if (finaleDate || finaleLocationText) {
+        parts.push(`<p style="margin: 8px 0 0 0;">📅 La finale se tiendra ${finaleDate ? `le ${finaleDate}` : ''} ${finaleLocationText}</p>`);
       }
     }
     parts.push('</div>');
@@ -1057,7 +1060,8 @@ router.post('/publish-results', authenticateToken, async (req, res) => {
     const rankings = await new Promise((resolve, reject) => {
       db.all(`
         SELECT r.*,
-               COALESCE(p.first_name || ' ' || p.last_name, r.licence) as player_name
+               COALESCE(p.first_name || ' ' || p.last_name, r.licence) as player_name,
+               p.club
         FROM rankings r
         LEFT JOIN players p ON REPLACE(r.licence, ' ', '') = REPLACE(p.licence, ' ', '')
         WHERE r.season = $1 AND r.category_id = $2
