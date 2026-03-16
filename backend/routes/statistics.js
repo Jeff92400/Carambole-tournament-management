@@ -1243,7 +1243,7 @@ router.get('/debug/courbevoie-report', authenticateToken, async (req, res) => {
   }
 });
 
-// Debug: Get players without clubs
+// Debug: Get players without clubs (including whitespace-only clubs)
 router.get('/debug/players-no-club', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
   const orgId = req.user.organizationId || null;
@@ -1258,11 +1258,13 @@ router.get('/debug/players-no-club', authenticateToken, async (req, res) => {
       rank_libre,
       rank_cadre,
       rank_bande,
-      rank_3bandes
+      rank_3bandes,
+      LENGTH(club) as club_length,
+      LENGTH(TRIM(club)) as club_trimmed_length
     FROM players
-    WHERE (club IS NULL OR club = '')
+    WHERE (club IS NULL OR club = '' OR TRIM(club) = '')
       AND ($1::int IS NULL OR organization_id = $1)
-    ORDER BY last_name, first_name
+    ORDER BY is_active DESC, last_name, first_name
   `;
 
   db.all(query, [orgId], (err, rows) => {

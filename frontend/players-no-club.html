@@ -162,6 +162,19 @@
       if (player.rank_bande && player.rank_bande !== 'NC') ranks.push(`Bande: ${player.rank_bande}`);
       if (player.rank_3bandes && player.rank_3bandes !== 'NC') ranks.push(`3 Bandes: ${player.rank_3bandes}`);
 
+      // Analyze club value
+      let clubDisplay = '❌ NON RENSEIGNÉ';
+      let clubNote = '';
+
+      if (player.club) {
+        if (player.club_trimmed_length === 0) {
+          clubDisplay = `⚠️ "${player.club}" (espaces uniquement)`;
+          clubNote = `<div style="margin-top: 8px; padding: 8px; background: #fff3cd; border-left: 3px solid #ffc107; font-size: 12px;">Ce joueur a des espaces dans le champ club (longueur: ${player.club_length}). Cela compte comme "Club inconnu" dans les statistiques.</div>`;
+        } else {
+          clubDisplay = player.club;
+        }
+      }
+
       return `
         <div class="player-card">
           <div class="player-name">
@@ -175,9 +188,10 @@
               <span class="info-label">Licence:</span> ${player.licence}
             </div>
             <div class="info-item">
-              <span class="info-label">Club:</span> ${player.club || '❌ NON RENSEIGNÉ'}
+              <span class="info-label">Club:</span> ${clubDisplay}
             </div>
           </div>
+          ${clubNote}
           ${ranks.length > 0 ? `
             <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #eee;">
               <span class="info-label">Classements:</span> ${ranks.join(' • ')}
