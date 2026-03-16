@@ -147,6 +147,7 @@
           <h4><span class="icon">📅</span> Calendrier, Tournois et Compétitions</h4>
           <p>Calendrier de la saison, tournois, inscriptions et statistiques.</p>
           <div class="card-links">
+            <a href="#" onclick="openSeasonImportModal(); return false;" class="card-link" style="background: #28a745; color: white;"><span class="link-icon">🗓️</span> Générer tournois saison</a>
             <a href="calendar.html" class="card-link"><span class="link-icon">📅</span> Calendrier (vue et téléchargement)</a>
             <a href="settings-admin.html#timeThresholdsSection" class="card-link"><span class="link-icon">⏱️</span> Alertes, délais pour les compétitions</a>
             <a href="tournois-list.html" class="card-link"><span class="link-icon">📋</span> Liste des tournois de la saison <span id="countTournois" class="count-badge"></span></a>
@@ -195,18 +196,24 @@
         </div>
 
         <div class="settings-card admin-only">
-          <h4><span class="icon">🛠️</span> Outils & Logs</h4>
-          <p>Génération, logs et outils de maintenance.</p>
+          <h4><span class="icon">🛠️</span> Outils & Maintenance</h4>
+          <p>Outils de diagnostic et maintenance.</p>
           <div class="card-links">
-            <a href="#" onclick="openSeasonImportModal(); return false;" class="card-link" style="background: #28a745; color: white;"><span class="link-icon">🗓️</span> Générer tournois saison</a>
-            <a href="admin-activity-logs.html" class="card-link"><span class="link-icon">🔐</span> Logs Administrateur</a>
-            <a href="activity-logs.html" class="card-link"><span class="link-icon">📱</span> Logs Espace Joueur</a>
             <a href="settings-admin.html#maintenanceSection" class="card-link"><span class="link-icon">🔧</span> Recalculer les moyennes</a>
             <a href="settings-admin.html#maintenanceSection" class="card-link"><span class="link-icon">🏆</span> Recalculer les classements</a>
-            <a href="merge-licences.html" class="card-link" style="background: #1F4788; color: white;"><span class="link-icon">🔧</span> Fusionner des licences</a>
+            <a href="merge-licences.html" class="card-link"><span class="link-icon">🔧</span> Fusionner des licences</a>
             <a href="players-no-club.html" class="card-link"><span class="link-icon">👥</span> Joueurs sans club</a>
             <a href="club-inconnu-debug.html" class="card-link"><span class="link-icon">🔍</span> Joueurs "Club inconnu"</a>
             <a href="courbevoie-investigation.html" class="card-link"><span class="link-icon">📊</span> Rapport statistiques</a>
+          </div>
+        </div>
+
+        <div class="settings-card admin-only">
+          <h4><span class="icon">📋</span> Logs</h4>
+          <p>Historique des actions et activités.</p>
+          <div class="card-links">
+            <a href="admin-activity-logs.html" class="card-link"><span class="link-icon">🔐</span> Logs Administrateur</a>
+            <a href="activity-logs.html" class="card-link"><span class="link-icon">📱</span> Logs Espace Joueur</a>
           </div>
         </div>
       </div>
