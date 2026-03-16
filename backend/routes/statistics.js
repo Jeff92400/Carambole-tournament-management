@@ -1243,4 +1243,34 @@ router.get('/debug/courbevoie-report', authenticateToken, async (req, res) => {
   }
 });
 
+// Debug: Get players without clubs
+router.get('/debug/players-no-club', authenticateToken, async (req, res) => {
+  const db = require('../db-loader');
+  const orgId = req.user.organizationId || null;
+
+  const query = `
+    SELECT
+      licence,
+      first_name,
+      last_name,
+      club,
+      is_active,
+      rank_libre,
+      rank_cadre,
+      rank_bande,
+      rank_3bandes
+    FROM players
+    WHERE (club IS NULL OR club = '')
+      AND ($1::int IS NULL OR organization_id = $1)
+    ORDER BY last_name, first_name
+  `;
+
+  db.all(query, [orgId], (err, rows) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+    res.json(rows || []);
+  });
+});
+
 module.exports = router;
