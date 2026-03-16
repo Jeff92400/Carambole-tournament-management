@@ -1307,6 +1307,61 @@ router.get('/debug/club-inconnu-players', authenticateToken, async (req, res) =>
   });
 });
 
+// Debug: Find all licence numbers for a player by name
+router.get('/debug/find-player-licences/:name', authenticateToken, async (req, res) => {
+  const db = require('../db-loader');
+  const name = req.params.name.toUpperCase();
+
+  try {
+    // Search in players table
+    const players = await new Promise((resolve, reject) => {
+      db.all(`
+        SELECT licence, first_name, last_name, club
+        FROM players
+        WHERE UPPER(last_name) LIKE $1 OR UPPER(first_name) LIKE $1
+      `, [`%${name}%`], (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows || []);
+      });
+    });
+
+    // Search in tournament_results
+    const tournamentResults = await new Promise((resolve, reject) => {
+      db.all(`
+        SELECT DISTINCT licence, player_name, COUNT(*) as result_count
+        FROM tournament_results
+        WHERE UPPER(player_name) LIKE $1
+        GROUP BY licence, player_name
+      `, [`%${name}%`], (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows || []);
+      });
+    });
+
+    // Search in inscriptions
+    const inscriptions = await new Promise((resolve, reject) => {
+      db.all(`
+        SELECT DISTINCT licence, nom, prenom, COUNT(*) as inscription_count
+        FROM inscriptions
+        WHERE UPPER(nom) LIKE $1 OR UPPER(prenom) LIKE $1
+        GROUP BY licence, nom, prenom
+      `, [`%${name}%`], (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows || []);
+      });
+    });
+
+    res.json({
+      searchTerm: name,
+      players,
+      tournamentResults,
+      inscriptions
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Fix: Merge duplicate player licences
 router.post('/fix/merge-licences', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
