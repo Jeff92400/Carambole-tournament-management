@@ -1149,4 +1149,106 @@ router.get('/players/debug/:licence', authenticateToken, async (req, res) => {
   });
 });
 
+// Debug: Investigate Courbevoie statistics - browser-accessible report
+router.get('/debug/courbevoie-report', authenticateToken, async (req, res) => {
+  const db = require('../db-loader');
+  const { season } = req.query;
+  const targetSeason = season || await getCurrentSeason();
+  const orgId = req.user.organizationId || null;
+
+  const report = {
+    season: targetSeason,
+    timestamp: new Date().toISOString(),
+    queries: {}
+  };
+
+  try {
+    // Query 1: Top clubs by player count
+    report.queries.playersByClub = await new Promise((resolve, reject) => {
+      db.all(`
+        SELECT club, COUNT(DISTINCT licence) as player_count
+        FROM players
+        WHERE club IS NOT NULL AND club != ''
+          AND ($1::int IS NULL OR organization_id = $1)
+        GROUP BY club
+        ORDER BY player_count DESC
+        LIMIT 15
+      `, [orgId], (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows || []);
+      });
+    });
+
+    // Query 2: Podiums by club and game type
+    report.queries.podiumsByClub = await new Promise((resolve, reject) => {
+      db.all(`
+        SELECT
+          p.club,
+          c.game_type,
+          COUNT(CASE WHEN tr.position = 1 THEN 1 END) as gold,
+          COUNT(CASE WHEN tr.position = 2 THEN 1 END) as silver,
+          COUNT(CASE WHEN tr.position = 3 THEN 1 END) as bronze,
+          COUNT(*) as total_podiums
+        FROM tournament_results tr
+        JOIN tournaments t ON tr.tournament_id = t.id
+        JOIN categories c ON t.category_id = c.id
+        LEFT JOIN players p ON REPLACE(tr.licence, ' ', '') = REPLACE(p.licence, ' ', '')
+        WHERE t.season = $1
+          AND tr.position IN (1, 2, 3)
+          AND ($2::int IS NULL OR t.organization_id = $2)
+        GROUP BY p.club, c.game_type
+        ORDER BY c.game_type, total_podiums DESC
+      `, [targetSeason, orgId], (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows || []);
+      });
+    });
+
+    // Query 3: Courbevoie players
+    report.queries.courbevoiePlayers = await new Promise((resolve, reject) => {
+      db.all(`
+        SELECT licence, first_name, last_name, club
+        FROM players
+        WHERE UPPER(club) LIKE '%COURBEVOIE%'
+          AND ($1::int IS NULL OR organization_id = $1)
+        LIMIT 50
+      `, [orgId], (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows || []);
+      });
+    });
+
+    // Query 4: Sample podium results
+    report.queries.sampleResults = await new Promise((resolve, reject) => {
+      db.all(`
+        SELECT
+          tr.licence,
+          tr.player_name,
+          p.club,
+          tr.position,
+          c.display_name as category,
+          t.tournament_number
+        FROM tournament_results tr
+        JOIN tournaments t ON tr.tournament_id = t.id
+        JOIN categories c ON t.category_id = c.id
+        LEFT JOIN players p ON REPLACE(tr.licence, ' ', '') = REPLACE(p.licence, ' ', '')
+        WHERE t.season = $1
+          AND tr.position IN (1, 2, 3)
+          AND ($2::int IS NULL OR t.organization_id = $2)
+        ORDER BY RANDOM()
+        LIMIT 30
+      `, [targetSeason, orgId], (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows || []);
+      });
+    });
+
+    res.json(report);
+
+  } catch (error) {
+    console.error('Error generating Courbevoie report:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;

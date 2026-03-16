@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Investigation Courbevoie</title>
+  <link rel="stylesheet" href="css/styles.css?v=2">
+  <style>
+    .section {
+      background: white;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+
+    .section-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: #1F4788;
+      margin-bottom: 15px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th, td {
+      padding: 8px;
+      text-align: left;
+      border-bottom: 1px solid #eee;
+    }
+
+    th {
+      background: #f8f9fa;
+      font-weight: 600;
+    }
+
+    .highlight {
+      background: #fff3cd;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="navbar">
+      <h2>
+        <img src="images/FrenchBillard-Icon-small.png" alt="" style="height: 48px; width: 48px; vertical-align: middle; margin-right: 8px;">
+        Investigation Courbevoie
+      </h2>
+      <div class="nav-links">
+        <a href="statistiques.html">← Retour aux stats</a>
+        <a href="dashboard.html">Tableau de bord</a>
+      </div>
+    </div>
+
+    <div id="errorMessage" class="error" style="display: none;"></div>
+    <div id="loading" style="text-align: center; padding: 40px;">
+      <div style="display: inline-block; width: 40px; height: 40px; border: 3px solid #e0e0e0; border-top-color: #1F4788; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+      <p>Chargement de l'analyse...</p>
+    </div>
+
+    <div id="results" style="display: none;">
+      <div class="card">
+        <h3>🔍 Analyse des Statistiques Courbevoie</h3>
+        <p id="reportInfo" style="color: #666; font-size: 14px;"></p>
+
+        <div class="section">
+          <div class="section-title">📊 Clubs par nombre de joueurs</div>
+          <div id="playersByClub"></div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">🏅 Podiums par club (2025-2026)</div>
+          <div id="podiumsByClub"></div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">🎯 Joueurs de Courbevoie</div>
+          <div id="courbevoiePlayers"></div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">📋 Échantillon de résultats</div>
+          <div id="sampleResults"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <style>
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+
+  <script src="js/auth-utils.js?v=197"></script>
+  <script>
+    const API_URL = '/api';
+
+    if (!requireAuth()) {
+      throw new Error('Not authenticated');
+    }
+    const token = sessionStorage.getItem('token');
+
+    async function loadData() {
+      try {
+        const response = await fetch(`${API_URL}/statistics/debug/courbevoie-report?season=2025-2026`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (!response.ok) {
+          throw new Error(`Erreur ${response.status}`);
+        }
+
+        const data = await response.json();
+
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('results').style.display = 'block';
+        document.getElementById('reportInfo').textContent = `Rapport généré le ${new Date(data.timestamp).toLocaleString('fr-FR')} pour la saison ${data.season}`;
+
+        // Display players by club
+        const playersByClub = data.queries.playersByClub;
+        if (playersByClub.length === 0) {
+          document.getElementById('playersByClub').innerHTML = '<p>Aucun joueur trouvé</p>';
+        } else {
+          let html = '<table><thead><tr><th>Club</th><th>Nombre de joueurs</th></tr></thead><tbody>';
+          playersByClub.forEach((row, i) => {
+            const highlight = row.club.toUpperCase().includes('COURBEVOIE') ? 'highlight' : '';
+            html += `<tr class="${highlight}"><td>${row.club}</td><td><strong>${row.player_count}</strong></td></tr>`;
+          });
+          html += '</tbody></table>';
+          document.getElementById('playersByClub').innerHTML = html;
+        }
+
+        // Display podiums by club
+        const podiums = data.queries.podiumsByClub;
+        if (podiums.length === 0) {
+          document.getElementById('podiumsByClub').innerHTML = '<p>Aucun podium trouvé</p>';
+        } else {
+          // Group by game type
+          const byGameType = {};
+          podiums.forEach(row => {
+            if (!byGameType[row.game_type]) {
+              byGameType[row.game_type] = [];
+            }
+            byGameType[row.game_type].push(row);
+          });
+
+          let html = '';
+          Object.entries(byGameType).forEach(([gameType, clubs]) => {
+            html += `<h4 style="margin-top: 20px; color: #333;">${gameType}</h4>`;
+            html += '<table><thead><tr><th>Club</th><th>🥇</th><th>🥈</th><th>🥉</th><th>Total</th></tr></thead><tbody>';
+            clubs.slice(0, 10).forEach(club => {
+              const highlight = club.club && club.club.toUpperCase().includes('COURBEVOIE') ? 'highlight' : '';
+              html += `<tr class="${highlight}"><td>${club.club || 'Non renseigné'}</td><td>${club.gold}</td><td>${club.silver}</td><td>${club.bronze}</td><td><strong>${club.total_podiums}</strong></td></tr>`;
+            });
+            html += '</tbody></table>';
+          });
+          document.getElementById('podiumsByClub').innerHTML = html;
+        }
+
+        // Display Courbevoie players
+        const courbPlayers = data.queries.courbevoiePlayers;
+        if (courbPlayers.length === 0) {
+          document.getElementById('courbevoiePlayers').innerHTML = '<p>⚠️ Aucun joueur Courbevoie trouvé dans la table players !</p>';
+        } else {
+          let html = `<p>Trouvé ${courbPlayers.length} joueur(s) :</p>`;
+          html += '<table><thead><tr><th>Nom</th><th>Prénom</th><th>Licence</th><th>Club</th></tr></thead><tbody>';
+          courbPlayers.forEach(player => {
+            html += `<tr><td>${player.last_name}</td><td>${player.first_name}</td><td>${player.licence}</td><td>${player.club}</td></tr>`;
+          });
+          html += '</tbody></table>';
+          document.getElementById('courbevoiePlayers').innerHTML = html;
+        }
+
+        // Display sample results
+        const samples = data.queries.sampleResults;
+        if (samples.length === 0) {
+          document.getElementById('sampleResults').innerHTML = '<p>Aucun résultat trouvé</p>';
+        } else {
+          let html = '<table><thead><tr><th>Pos</th><th>Joueur</th><th>Licence</th><th>Club</th><th>Catégorie</th><th>T#</th></tr></thead><tbody>';
+          samples.forEach(result => {
+            const position = ['🥇', '🥈', '🥉'][result.position - 1];
+            const highlight = result.club && result.club.toUpperCase().includes('COURBEVOIE') ? 'highlight' : '';
+            html += `<tr class="${highlight}"><td>${position}</td><td>${result.player_name}</td><td>${result.licence}</td><td>${result.club || '❌ MANQUANT'}</td><td>${result.category}</td><td>T${result.tournament_number}</td></tr>`;
+          });
+          html += '</tbody></table>';
+          document.getElementById('sampleResults').innerHTML = html;
+        }
+
+      } catch (error) {
+        console.error('Error:', error);
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('errorMessage').textContent = `Erreur : ${error.message}`;
+        document.getElementById('errorMessage').style.display = 'block';
+      }
+    }
+
+    window.addEventListener('DOMContentLoaded', loadData);
+  </script>
+</body>
+</html>
