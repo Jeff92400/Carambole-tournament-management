@@ -1371,7 +1371,19 @@ router.post('/fix/merge-licences', authenticateToken, async (req, res) => {
       });
     });
 
-    // Step 5: Delete wrong player record
+    // Step 5: Update rankings
+    const rankingsCount = await new Promise((resolve, reject) => {
+      db.run(`
+        UPDATE rankings
+        SET licence = $2
+        WHERE REPLACE(licence, ' ', '') = $1
+      `, [wrongNormalized, correctLicence], function(err) {
+        if (err) reject(err);
+        else resolve(this.changes);
+      });
+    });
+
+    // Step 6: Delete wrong player record
     await new Promise((resolve, reject) => {
       db.run(`
         DELETE FROM players
@@ -1388,7 +1400,8 @@ router.post('/fix/merge-licences', authenticateToken, async (req, res) => {
       message: 'Licences merged successfully',
       updatedTournamentResults: trCount,
       updatedInscriptions: insCount,
-      updatedPlayerAccounts: paCount
+      updatedPlayerAccounts: paCount,
+      updatedRankings: rankingsCount
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
