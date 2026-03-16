@@ -898,7 +898,7 @@ CDBHS color mapping (from legend rows 22-27):
   | Phase 3 | +15 cross-season KPIs (N vs N-1 comparisons) | ~2 days |
   | Phase 4 | +15 advanced KPIs (charts, engagement tracking) | ~3 days |
 
-- **Push Notifications for Player App (Web Push):** Send native mobile notifications to players without them opening the app. Uses the Web Push API + existing Service Worker — completely free (no SMS cost).
+- **Push Notifications for Player App (Web Push) — IN PROGRESS:** Send native mobile notifications to players without them opening the app. Uses the Web Push API + existing Service Worker — completely free (no SMS cost).
 
   **Use cases:**
   - Convocation sent → push "Vous avez été convoqué pour 3 Bandes R1 du 21/03"
@@ -908,25 +908,97 @@ CDBHS color mapping (from legend rows 22-27):
 
   **iOS caveat:** Only works if PWA is added to home screen (since iOS 16.4). Android works everywhere.
 
-  **Implementation:**
+  **Implementation Status:**
 
-  | Component | Details | Effort |
-  |-----------|---------|--------|
-  | VAPID keys | Generate once, store as `VAPID_PUBLIC_KEY` + `VAPID_PRIVATE_KEY` env vars | 10 min |
-  | `push_subscriptions` table | `id`, `player_account_id`, `organization_id`, `endpoint`, `p256dh`, `auth`, `created_at`, `last_used_at` | Schema only |
-  | Backend: `web-push` npm | `POST /api/player/push/subscribe` (save subscription), `POST /api/player/push/unsubscribe`, helper `sendPushToPlayer(licence, orgId, {title, body, url})` | ~1 day |
-  | Frontend: permission prompt | On first login, ask "Autoriser les notifications ?". Store subscription via Service Worker `pushManager.subscribe()` | ~0.5 day |
-  | Service Worker: push handler | `self.addEventListener('push', ...)` → `self.registration.showNotification(title, {body, icon, data: {url}})`. Click handler opens the relevant page. | ~0.5 day |
-  | Integration: hook into email flows | After sending convocation/relance/results email, also trigger push for players with subscriptions. Add to `emailing.js` (relances), `email.js` (convocations), `tournaments.js` (results) | ~1-2 days |
-  | Notification preferences | Per-player toggle in Espace Joueur settings: "Recevoir les notifications push" (on/off). Stored in `player_accounts.push_enabled` | ~0.5 day |
+  ### ✅ PHASE 1 — VAPID Keys & npm Package (COMPLETED — March 16, 2026)
+  - Generated VAPID keys:
+    - Public: `BN1LA9Kgw4ZZZuLyRynB3LlONnCKNRItfvZf56Xcw7iNw3NVZAnYBM4P824iVU3bRMjWwCC7lhdQ2QkSy4eTkc0`
+    - Private: `IOjFLoJCqsY-fK5bkX-5cdiD5zb60jgYpmrQ8ybP6AY`
+  - **⚠️ ACTION REQUIRED:** Add to Railway env vars as `VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY`
+  - Installed `web-push` npm package
+  - Commit: `8e79f7a`
 
-  **Total effort:** ~3-4 days
+  ### ✅ PHASE 2 — Database Schema (COMPLETED — March 16, 2026)
+  - Added `push_enabled BOOLEAN DEFAULT true` to `player_accounts` table
+  - Added `organization_id INTEGER` to `player_accounts` table
+  - Created `push_subscriptions` table:
+    ```sql
+    CREATE TABLE push_subscriptions (
+      id SERIAL PRIMARY KEY,
+      player_account_id INTEGER REFERENCES player_accounts(id) ON DELETE CASCADE,
+      organization_id INTEGER REFERENCES organizations(id),
+      endpoint TEXT NOT NULL UNIQUE,
+      p256dh TEXT NOT NULL,
+      auth TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      last_used_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+    ```
+  - Created indexes on `player_account_id` and `organization_id`
+  - File: `backend/db-postgres.js` (lines 935-961)
+  - Commit: `8e79f7a`
+
+  ### ⏸️ PHASE 3 — Backend API Routes (PENDING — ~1 day)
+  - Create `backend/routes/push.js`:
+    - `POST /api/player/push/subscribe` — save push subscription
+    - `POST /api/player/push/unsubscribe` — remove subscription
+    - `DELETE /api/player/push/subscription/:id` — delete by ID
+    - `GET /api/player/push/status` — check if player has active subscription
+  - Create helper function `sendPushToPlayer(licence, orgId, {title, body, url})` in push.js
+  - Auto-cleanup expired subscriptions (410 Gone responses)
+
+  ### ⏸️ PHASE 4 — Player App Frontend (PENDING — ~0.5 day)
+  - Permission prompt on first login: "Autoriser les notifications ?"
+  - Service Worker `pushManager.subscribe()` using VAPID public key
+  - Save subscription to backend via `POST /api/player/push/subscribe`
+  - Settings toggle: "Recevoir les notifications push" (updates `player_accounts.push_enabled`)
+  - Service Worker push event handler:
+    ```javascript
+    self.addEventListener('push', event => {
+      const data = event.data.json();
+      self.registration.showNotification(data.title, {
+        body: data.body,
+        icon: '/images/icon-192.png',
+        badge: '/images/badge-72.png',
+        data: { url: data.url }
+      });
+    });
+    self.addEventListener('notificationclick', event => {
+      event.notification.close();
+      clients.openWindow(event.notification.data.url);
+    });
+    ```
+
+  ### ⏸️ PHASE 5 — Integration with Email Flows (PENDING — ~1-2 days)
+  - After sending convocation email → trigger push for convoqued players (`backend/routes/email.js`)
+  - After sending relance email → trigger push for non-registered players (`backend/routes/emailing.js`)
+  - After publishing results → trigger push for participants (`backend/routes/tournaments.js`)
+  - After creating announcement → trigger push for all players in org (`backend/routes/announcements.js`)
+  - Fire-and-forget pattern (email success not dependent on push success)
+
+  ### ⏸️ PHASE 6 — Admin Controls (PENDING — ~0.5 day)
+  - Test/preview push notification from `emailing.html` before sending campaign
+  - View push subscription stats per org in settings or dashboard
+  - Manual push notification sender (admin can send custom push to all players)
+
+  ### ⏸️ PHASE 7 — Cleanup & Monitoring (PENDING — ~0.5 day)
+  - Scheduled job to delete subscriptions older than 90 days with no `last_used_at` update
+  - Subscription stats in Super Admin dashboard (total subscriptions per CDB)
+  - Error logging for failed push sends
+
+  **Total effort remaining:** ~3-4 days for Phases 3-7
 
   **Key decisions:**
   - Push is opt-in (browser permission + app toggle)
   - Notifications are org-scoped (player only gets pushes from their CDB)
   - Failed pushes (expired subscriptions) are auto-cleaned from `push_subscriptions`
   - Admin can preview/test push from emailing page before sending to all
+
+  **Files ready for Phase 3:**
+  - Database schema: ✅ Ready
+  - VAPID keys: ✅ Generated (need to be added to Railway)
+  - npm package: ✅ Installed
+  - Next: Create `backend/routes/push.js` and expose endpoints
 
 - **Player historical analytics (multi-season stats):** All tournament data (`tournament_results`, `rankings`) is retained permanently across seasons and scoped by `organization_id`. Season averages are computed on-the-fly (`SUM(points)/SUM(reprises)` from `tournament_results`) — not stored as a snapshot. This means we can build rich player analytics over time:
   - Average (moyenne) progression per mode across seasons
