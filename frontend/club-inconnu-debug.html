@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Debug: Players with "Club inconnu"</title>
+  <link rel="stylesheet" href="css/styles.css?v=2">
+  <style>
+    .player-card {
+      background: white;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 15px;
+    }
+
+    .player-name {
+      font-size: 18px;
+      font-weight: 700;
+      color: #1F4788;
+      margin-bottom: 10px;
+    }
+
+    .player-info {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .info-item {
+      font-size: 14px;
+    }
+
+    .info-label {
+      font-weight: 600;
+      color: #666;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-right: 5px;
+    }
+
+    .badge-active {
+      background: #d4edda;
+      color: #155724;
+    }
+
+    .badge-inactive {
+      background: #f8d7da;
+      color: #721c24;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="navbar">
+      <h2>
+        <img src="images/FrenchBillard-Icon-small.png" alt="" style="height: 48px; width: 48px; vertical-align: middle; margin-right: 8px;">
+        Debug: Joueurs "Club inconnu"
+      </h2>
+      <div class="nav-links">
+        <a href="statistiques.html">← Retour aux stats</a>
+        <a href="dashboard.html">Tableau de bord</a>
+      </div>
+    </div>
+
+    <div id="errorMessage" class="error" style="display: none;"></div>
+    <div id="loading" style="text-align: center; padding: 40px;">
+      <div style="display: inline-block; width: 40px; height: 40px; border: 3px solid #e0e0e0; border-top-color: #1F4788; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+      <p>Chargement...</p>
+    </div>
+
+    <div id="results" style="display: none;">
+      <div class="card">
+        <h3>🔍 Joueurs avec "Club inconnu" / "Non renseigné" dans le champ club</h3>
+        <p id="count" style="color: #666; margin-bottom: 20px;"></p>
+        <div id="playersList"></div>
+      </div>
+    </div>
+  </div>
+
+  <style>
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+
+  <script src="js/auth-utils.js?v=197"></script>
+  <script>
+    const API_URL = '/api';
+
+    if (!requireAuth()) {
+      throw new Error('Not authenticated');
+    }
+    const token = sessionStorage.getItem('token');
+
+    async function loadData() {
+      try {
+        const response = await fetch(`${API_URL}/statistics/debug/club-inconnu-players`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (!response.ok) {
+          throw new Error(`Erreur ${response.status}`);
+        }
+
+        const players = await response.json();
+
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('results').style.display = 'block';
+
+        const activePlayers = players.filter(p => p.is_active === 1 || p.is_active === true);
+        const inactivePlayers = players.filter(p => p.is_active === 0 || p.is_active === false);
+
+        document.getElementById('count').textContent =
+          `${players.length} joueur(s) trouvé(s) avec "Club inconnu" ou "Non renseigné" dans le champ club (${activePlayers.length} actif(s), ${inactivePlayers.length} inactif(s))`;
+
+        if (players.length === 0) {
+          document.getElementById('playersList').innerHTML =
+            '<p style="text-align: center; color: #666; padding: 40px;">✅ Aucun joueur avec "Club inconnu" trouvé !</p>';
+          return;
+        }
+
+        let html = '';
+
+        // Show active players first
+        if (activePlayers.length > 0) {
+          html += '<h4 style="color: #28a745; margin-bottom: 15px;">Joueurs actifs</h4>';
+          activePlayers.forEach(player => {
+            html += renderPlayerCard(player, true);
+          });
+        }
+
+        // Then inactive players
+        if (inactivePlayers.length > 0) {
+          html += '<h4 style="color: #666; margin-top: 30px; margin-bottom: 15px;">Joueurs inactifs</h4>';
+          inactivePlayers.forEach(player => {
+            html += renderPlayerCard(player, false);
+          });
+        }
+
+        document.getElementById('playersList').innerHTML = html;
+
+      } catch (error) {
+        console.error('Error:', error);
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('errorMessage').textContent = `Erreur : ${error.message}`;
+        document.getElementById('errorMessage').style.display = 'block';
+      }
+    }
+
+    function renderPlayerCard(player, isActive) {
+      const ranks = [];
+      if (player.rank_libre && player.rank_libre !== 'NC') ranks.push(`Libre: ${player.rank_libre}`);
+      if (player.rank_cadre && player.rank_cadre !== 'NC') ranks.push(`Cadre: ${player.rank_cadre}`);
+      if (player.rank_bande && player.rank_bande !== 'NC') ranks.push(`Bande: ${player.rank_bande}`);
+      if (player.rank_3bandes && player.rank_3bandes !== 'NC') ranks.push(`3 Bandes: ${player.rank_3bandes}`);
+
+      return `
+        <div class="player-card">
+          <div class="player-name">
+            ${player.first_name} ${player.last_name}
+            <span class="badge ${isActive ? 'badge-active' : 'badge-inactive'}">
+              ${isActive ? 'Actif' : 'Inactif'}
+            </span>
+          </div>
+          <div class="player-info">
+            <div class="info-item">
+              <span class="info-label">Licence:</span> ${player.licence}
+            </div>
+            <div class="info-item">
+              <span class="info-label">Club:</span> "${player.club}" (longueur: ${player.club_length})
+            </div>
+          </div>
+          ${ranks.length > 0 ? `
+            <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #eee;">
+              <span class="info-label">Classements:</span> ${ranks.join(' • ')}
+            </div>
+          ` : ''}
+        </div>
+      `;
+    }
+
+    window.addEventListener('DOMContentLoaded', loadData);
+  </script>
+</body>
+</html>

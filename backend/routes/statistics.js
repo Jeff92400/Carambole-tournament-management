@@ -1275,4 +1275,36 @@ router.get('/debug/players-no-club', authenticateToken, async (req, res) => {
   });
 });
 
+// Debug: Find players with "Club inconnu" or "Non renseigné" as actual club value
+router.get('/debug/club-inconnu-players', authenticateToken, async (req, res) => {
+  const db = require('../db-loader');
+  const orgId = req.user.organizationId || null;
+
+  const query = `
+    SELECT
+      licence,
+      first_name,
+      last_name,
+      club,
+      is_active,
+      rank_libre,
+      rank_cadre,
+      rank_bande,
+      rank_3bandes,
+      LENGTH(club) as club_length,
+      LENGTH(TRIM(club)) as club_trimmed_length
+    FROM players
+    WHERE (UPPER(club) LIKE '%INCONNU%' OR UPPER(club) LIKE '%NON RENSEIGN%' OR UPPER(club) = 'NON RENSEIGNÉ')
+      AND ($1::int IS NULL OR organization_id = $1)
+    ORDER BY is_active DESC, last_name, first_name
+  `;
+
+  db.all(query, [orgId], (err, rows) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+    res.json(rows || []);
+  });
+});
+
 module.exports = router;
