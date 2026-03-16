@@ -932,6 +932,34 @@ async function initializeDatabase() {
     await client.query(`ALTER TABLE player_accounts ADD COLUMN IF NOT EXISTS gdpr_consent_date TIMESTAMP`);
     await client.query(`ALTER TABLE player_accounts ADD COLUMN IF NOT EXISTS gdpr_consent_version VARCHAR(10)`);
 
+    // Add push notification preference to player_accounts (migration - March 2026)
+    await client.query(`ALTER TABLE player_accounts ADD COLUMN IF NOT EXISTS push_enabled BOOLEAN DEFAULT true`);
+
+    // Add organization_id to player_accounts for multi-CDB support (migration)
+    await client.query(`ALTER TABLE player_accounts ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)`);
+
+    // Push subscriptions table (for Web Push notifications)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS push_subscriptions (
+        id SERIAL PRIMARY KEY,
+        player_account_id INTEGER REFERENCES player_accounts(id) ON DELETE CASCADE,
+        organization_id INTEGER REFERENCES organizations(id),
+        endpoint TEXT NOT NULL UNIQUE,
+        p256dh TEXT NOT NULL,
+        auth TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        last_used_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Index for faster lookups by player and org
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_push_subscriptions_player ON push_subscriptions(player_account_id)
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_push_subscriptions_org ON push_subscriptions(organization_id)
+    `);
+
     // Announcements table (for Player App notifications)
     await client.query(`
       CREATE TABLE IF NOT EXISTS announcements (
