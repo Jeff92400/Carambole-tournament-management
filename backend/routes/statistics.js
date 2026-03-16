@@ -1307,6 +1307,37 @@ router.get('/debug/club-inconnu-players', authenticateToken, async (req, res) =>
   });
 });
 
+// Fix: Update club name for a specific player
+router.post('/fix/update-club', authenticateToken, async (req, res) => {
+  const db = require('../db-loader');
+  const { licence, club } = req.body;
+  const orgId = req.user.organizationId || null;
+
+  if (!licence || !club) {
+    return res.status(400).json({ error: 'licence and club required' });
+  }
+
+  const normalized = licence.replace(/\s+/g, '');
+
+  try {
+    await new Promise((resolve, reject) => {
+      db.run(`
+        UPDATE players
+        SET club = $1
+        WHERE REPLACE(licence, ' ', '') = $2
+          AND ($3::int IS NULL OR organization_id = $3)
+      `, [club, normalized, orgId], function(err) {
+        if (err) reject(err);
+        else resolve(this.changes);
+      });
+    });
+
+    res.json({ success: true, message: 'Club updated successfully' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Debug: Find all licence numbers for a player by name
 router.get('/debug/find-player-licences/:name', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
@@ -1376,11 +1407,26 @@ router.post('/fix/merge-licences', authenticateToken, async (req, res) => {
   const correctNormalized = correctLicence.replace(/\s+/g, '');
 
   try {
-    // Step 1: Copy club info from wrong licence to correct licence
+    // Step 1: Copy club info intelligently - use the one that's NOT "Club inconnu" or empty
     await new Promise((resolve, reject) => {
       db.run(`
         UPDATE players
-        SET club = (SELECT club FROM players WHERE REPLACE(licence, ' ', '') = $1 AND ($3::int IS NULL OR organization_id = $3))
+        SET club = (
+          SELECT CASE
+            WHEN correct.club IS NOT NULL
+              AND correct.club != ''
+              AND UPPER(correct.club) NOT LIKE '%INCONNU%'
+              AND UPPER(correct.club) NOT LIKE '%NON RENSEIGN%'
+            THEN correct.club
+            ELSE wrong.club
+          END
+          FROM players wrong
+          CROSS JOIN players correct
+          WHERE REPLACE(wrong.licence, ' ', '') = $1
+            AND REPLACE(correct.licence, ' ', '') = $2
+            AND ($3::int IS NULL OR wrong.organization_id = $3)
+            AND ($3::int IS NULL OR correct.organization_id = $3)
+        )
         WHERE REPLACE(licence, ' ', '') = $2
           AND ($3::int IS NULL OR organization_id = $3)
       `, [wrongNormalized, correctNormalized, orgId], (err) => {
