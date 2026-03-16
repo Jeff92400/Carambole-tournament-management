@@ -81,6 +81,10 @@
       margin-bottom: 15px;
       border-radius: 4px;
     }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
   </style>
 </head>
 <body>
@@ -142,10 +146,6 @@
       throw new Error('Not authenticated');
     }
     const token = sessionStorage.getItem('token');
-
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
 
     async function loadDebugData() {
       const season = document.getElementById('seasonSelect').value;
