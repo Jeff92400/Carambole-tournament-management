@@ -1307,4 +1307,92 @@ router.get('/debug/club-inconnu-players', authenticateToken, async (req, res) =>
   });
 });
 
+// Fix: Merge duplicate player licences
+router.post('/fix/merge-licences', authenticateToken, async (req, res) => {
+  const db = require('../db-loader');
+  const { wrongLicence, correctLicence } = req.body;
+  const orgId = req.user.organizationId || null;
+
+  if (!wrongLicence || !correctLicence) {
+    return res.status(400).json({ error: 'wrongLicence and correctLicence required' });
+  }
+
+  const wrongNormalized = wrongLicence.replace(/\s+/g, '');
+  const correctNormalized = correctLicence.replace(/\s+/g, '');
+
+  try {
+    // Step 1: Copy club info from wrong licence to correct licence
+    await new Promise((resolve, reject) => {
+      db.run(`
+        UPDATE players
+        SET club = (SELECT club FROM players WHERE REPLACE(licence, ' ', '') = $1 AND ($3::int IS NULL OR organization_id = $3))
+        WHERE REPLACE(licence, ' ', '') = $2
+          AND ($3::int IS NULL OR organization_id = $3)
+      `, [wrongNormalized, correctNormalized, orgId], (err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+
+    // Step 2: Update tournament_results
+    const trCount = await new Promise((resolve, reject) => {
+      db.run(`
+        UPDATE tournament_results
+        SET licence = $2
+        WHERE REPLACE(licence, ' ', '') = $1
+      `, [wrongNormalized, correctLicence], function(err) {
+        if (err) reject(err);
+        else resolve(this.changes);
+      });
+    });
+
+    // Step 3: Update inscriptions
+    const insCount = await new Promise((resolve, reject) => {
+      db.run(`
+        UPDATE inscriptions
+        SET licence = $2, normalized_licence = $3
+        WHERE REPLACE(licence, ' ', '') = $1
+      `, [wrongNormalized, correctLicence, correctNormalized], function(err) {
+        if (err) reject(err);
+        else resolve(this.changes);
+      });
+    });
+
+    // Step 4: Update player_accounts if exists
+    const paCount = await new Promise((resolve, reject) => {
+      db.run(`
+        UPDATE player_accounts
+        SET licence = $2
+        WHERE REPLACE(licence, ' ', '') = $1
+          AND ($3::int IS NULL OR organization_id = $3)
+      `, [wrongNormalized, correctLicence, orgId], function(err) {
+        if (err) reject(err);
+        else resolve(this.changes);
+      });
+    });
+
+    // Step 5: Delete wrong player record
+    await new Promise((resolve, reject) => {
+      db.run(`
+        DELETE FROM players
+        WHERE REPLACE(licence, ' ', '') = $1
+          AND ($2::int IS NULL OR organization_id = $2)
+      `, [wrongNormalized, orgId], (err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+
+    res.json({
+      success: true,
+      message: 'Licences merged successfully',
+      updatedTournamentResults: trCount,
+      updatedInscriptions: insCount,
+      updatedPlayerAccounts: paCount
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
