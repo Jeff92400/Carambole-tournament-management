@@ -1266,6 +1266,30 @@ router.delete('/all', authenticateToken, (req, res) => {
   });
 });
 
+// Delete individual player
+router.delete('/:licence', authenticateToken, (req, res) => {
+  const licence = req.params.licence.replace(/\s+/g, '');
+  const orgId = req.user.organizationId || null;
+
+  db.run(
+    'DELETE FROM players WHERE REPLACE(licence, \' \', \'\') = $1 AND ($2::int IS NULL OR organization_id = $2)',
+    [licence, orgId],
+    function(err) {
+      if (err) {
+        return res.status(500).json({ error: err.message });
+      }
+      if (this.changes === 0) {
+        return res.status(404).json({ error: 'Player not found' });
+      }
+      res.json({
+        success: true,
+        message: 'Player deleted successfully',
+        deleted: this.changes
+      });
+    }
+  );
+});
+
 // Get player account info (for Player App)
 router.get('/:licence/account', authenticateToken, (req, res) => {
   const licence = req.params.licence.replace(/\s+/g, '');
