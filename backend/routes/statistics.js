@@ -1038,6 +1038,83 @@ router.get('/debug/game-types', authenticateToken, async (req, res) => {
   });
 });
 
+// Debug: Get detailed club mapping analysis for podiums
+router.get('/debug/club-podiums', authenticateToken, async (req, res) => {
+  const db = require('../db-loader');
+  const { season } = req.query;
+  const targetSeason = season || await getCurrentSeason();
+  const orgId = req.user.organizationId || null;
+
+  const query = `
+    SELECT
+      p.club as original_club,
+      COALESCE(ca.canonical_name, p.club, 'Non renseigné') as resolved_club,
+      ca.alias as matched_alias,
+      ca.canonical_name as alias_canonical,
+      c.game_type,
+      tr.position,
+      COUNT(*) as count
+    FROM tournament_results tr
+    JOIN tournaments t ON tr.tournament_id = t.id
+    JOIN categories c ON t.category_id = c.id
+    LEFT JOIN players p ON REPLACE(tr.licence, ' ', '') = REPLACE(p.licence, ' ', '')
+    LEFT JOIN club_aliases ca ON UPPER(REPLACE(REPLACE(REPLACE(COALESCE(p.club, ''), ' ', ''), '.', ''), '-', ''))
+                                = UPPER(REPLACE(REPLACE(REPLACE(ca.alias, ' ', ''), '.', ''), '-', ''))
+    WHERE t.season = $1
+      AND tr.position IN (1, 2, 3)
+      AND ($2::int IS NULL OR t.organization_id = $2)
+    GROUP BY p.club, COALESCE(ca.canonical_name, p.club), ca.alias, ca.canonical_name, c.game_type, tr.position
+    ORDER BY resolved_club, c.game_type, tr.position
+  `;
+
+  db.all(query, [targetSeason, orgId], (err, rows) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+
+    // Analyze the results to find issues
+    const analysis = {
+      totalPodiums: rows.reduce((sum, r) => sum + r.count, 0),
+      clubBreakdown: {}
+    };
+
+    rows.forEach(row => {
+      const resolvedClub = row.resolved_club;
+      if (!analysis.clubBreakdown[resolvedClub]) {
+        analysis.clubBreakdown[resolvedClub] = {
+          totalPodiums: 0,
+          originalClubs: new Set(),
+          byGameType: {}
+        };
+      }
+      analysis.clubBreakdown[resolvedClub].totalPodiums += row.count;
+      analysis.clubBreakdown[resolvedClub].originalClubs.add(row.original_club);
+
+      const gameType = row.game_type;
+      if (!analysis.clubBreakdown[resolvedClub].byGameType[gameType]) {
+        analysis.clubBreakdown[resolvedClub].byGameType[gameType] = {
+          gold: 0,
+          silver: 0,
+          bronze: 0
+        };
+      }
+      if (row.position === 1) analysis.clubBreakdown[resolvedClub].byGameType[gameType].gold += row.count;
+      if (row.position === 2) analysis.clubBreakdown[resolvedClub].byGameType[gameType].silver += row.count;
+      if (row.position === 3) analysis.clubBreakdown[resolvedClub].byGameType[gameType].bronze += row.count;
+    });
+
+    // Convert Sets to arrays for JSON
+    Object.keys(analysis.clubBreakdown).forEach(club => {
+      analysis.clubBreakdown[club].originalClubs = Array.from(analysis.clubBreakdown[club].originalClubs);
+    });
+
+    res.json({
+      detailedData: rows,
+      analysis
+    });
+  });
+});
+
 // Debug: Get tournament results for a specific player
 router.get('/players/debug/:licence', authenticateToken, async (req, res) => {
   const db = require('../db-loader');

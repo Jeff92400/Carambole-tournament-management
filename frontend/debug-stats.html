@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Debug - Statistiques Clubs</title>
+  <link rel="stylesheet" href="css/styles.css?v=2">
+  <style>
+    .debug-section {
+      background: white;
+      border: 1px solid #e0e0e0;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+
+    .debug-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: #1F4788;
+      margin-bottom: 15px;
+    }
+
+    .club-detail {
+      border-left: 3px solid #1F4788;
+      padding: 10px 15px;
+      margin-bottom: 10px;
+      background: #f8f9fa;
+    }
+
+    .club-name {
+      font-weight: 700;
+      color: #333;
+      font-size: 16px;
+    }
+
+    .podium-count {
+      color: #666;
+      font-size: 14px;
+    }
+
+    .original-clubs {
+      margin-top: 8px;
+      padding: 8px;
+      background: white;
+      border-radius: 4px;
+    }
+
+    .original-club-item {
+      font-size: 12px;
+      color: #555;
+      padding: 4px 0;
+    }
+
+    .game-type-stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .game-type-card {
+      background: white;
+      padding: 8px;
+      border-radius: 4px;
+      border: 1px solid #ddd;
+    }
+
+    .warning {
+      background: #fff3cd;
+      border-left: 4px solid #ffc107;
+      padding: 12px;
+      margin-bottom: 15px;
+      border-radius: 4px;
+    }
+
+    .error {
+      background: #f8d7da;
+      border-left: 4px solid #dc3545;
+      padding: 12px;
+      margin-bottom: 15px;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="navbar">
+      <h2>
+        <img src="images/FrenchBillard-Icon-small.png" alt="" style="height: 48px; width: 48px; vertical-align: middle; margin-right: 8px;">
+        CDB - Debug Statistiques
+      </h2>
+      <div class="nav-links">
+        <a href="statistiques.html">← Retour aux stats</a>
+        <a href="dashboard.html">Tableau de bord</a>
+      </div>
+    </div>
+
+    <div id="errorMessage" class="error" style="display: none;"></div>
+
+    <div class="card">
+      <h3>🔍 Analyse des Statistiques Clubs</h3>
+      <p>Cette page analyse comment les podiums sont attribués aux clubs en vérifiant le mapping des alias.</p>
+
+      <div style="margin-bottom: 20px;">
+        <label for="seasonSelect" style="font-weight: 600; margin-right: 10px;">Saison :</label>
+        <select id="seasonSelect" style="padding: 8px 15px; border: 1px solid #ddd; border-radius: 8px;">
+          <option value="2025-2026">2025-2026</option>
+        </select>
+        <button onclick="loadDebugData()" class="btn" style="margin-left: 10px;">Analyser</button>
+      </div>
+
+      <div id="loadingMsg" style="display: none; padding: 20px; text-align: center;">
+        <div style="display: inline-block; width: 40px; height: 40px; border: 3px solid #e0e0e0; border-top-color: #1F4788; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+        <p>Analyse en cours...</p>
+      </div>
+
+      <div id="resultsContainer" style="display: none;">
+        <div class="debug-section">
+          <div class="debug-title">📊 Résumé</div>
+          <div id="summary"></div>
+        </div>
+
+        <div class="debug-section">
+          <div class="debug-title">🏅 Détail par Club</div>
+          <div id="clubBreakdown"></div>
+        </div>
+
+        <div class="debug-section">
+          <div class="debug-title">📋 Données Brutes</div>
+          <pre id="rawData" style="background: #f5f5f5; padding: 15px; border-radius: 4px; overflow-x: auto; font-size: 12px;"></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/auth-utils.js?v=197"></script>
+  <script>
+    const API_URL = '/api';
+
+    if (!requireAuth()) {
+      throw new Error('Not authenticated');
+    }
+    const token = sessionStorage.getItem('token');
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    async function loadDebugData() {
+      const season = document.getElementById('seasonSelect').value;
+      const loadingMsg = document.getElementById('loadingMsg');
+      const resultsContainer = document.getElementById('resultsContainer');
+      const errorMessage = document.getElementById('errorMessage');
+
+      loadingMsg.style.display = 'block';
+      resultsContainer.style.display = 'none';
+      errorMessage.style.display = 'none';
+
+      try {
+        const response = await fetch(`${API_URL}/statistics/debug/club-podiums?season=${season}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (!response.ok) {
+          throw new Error(`Erreur ${response.status}: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+
+        loadingMsg.style.display = 'none';
+        resultsContainer.style.display = 'block';
+
+        // Display summary
+        const summary = document.getElementById('summary');
+        summary.innerHTML = `
+          <p><strong>Total podiums :</strong> ${data.analysis.totalPodiums}</p>
+          <p><strong>Nombre de clubs :</strong> ${Object.keys(data.analysis.clubBreakdown).length}</p>
+        `;
+
+        // Display club breakdown
+        const clubBreakdown = document.getElementById('clubBreakdown');
+        const clubs = Object.entries(data.analysis.clubBreakdown)
+          .sort((a, b) => b[1].totalPodiums - a[1].totalPodiums);
+
+        clubBreakdown.innerHTML = clubs.map(([clubName, clubData]) => {
+          const hasMerging = clubData.originalClubs.length > 1 ||
+                            clubData.originalClubs[0] !== clubName;
+
+          let html = `
+            <div class="club-detail">
+              <div class="club-name">${clubName}</div>
+              <div class="podium-count">Total podiums: ${clubData.totalPodiums}</div>
+          `;
+
+          // Show warning if multiple clubs are merged
+          if (hasMerging) {
+            html += `
+              <div class="warning" style="margin-top: 10px;">
+                ⚠️ Ce club regroupe plusieurs noms originaux :
+                <div class="original-clubs">
+                  ${clubData.originalClubs.map(orig =>
+                    `<div class="original-club-item">• ${orig}</div>`
+                  ).join('')}
+                </div>
+              </div>
+            `;
+          }
+
+          // Show breakdown by game type
+          html += `
+            <div class="game-type-stats">
+              ${Object.entries(clubData.byGameType).map(([gameType, stats]) => `
+                <div class="game-type-card">
+                  <strong>${gameType}</strong><br>
+                  🥇 ${stats.gold} | 🥈 ${stats.silver} | 🥉 ${stats.bronze}
+                </div>
+              `).join('')}
+            </div>
+          `;
+
+          html += `</div>`;
+          return html;
+        }).join('');
+
+        // Display raw data
+        document.getElementById('rawData').textContent = JSON.stringify(data, null, 2);
+
+      } catch (error) {
+        console.error('Error loading debug data:', error);
+        loadingMsg.style.display = 'none';
+        errorMessage.textContent = `Erreur : ${error.message}`;
+        errorMessage.style.display = 'block';
+      }
+    }
+
+    // Auto-load on page load
+    window.addEventListener('DOMContentLoaded', () => {
+      loadDebugData();
+    });
+  </script>
+</body>
+</html>
