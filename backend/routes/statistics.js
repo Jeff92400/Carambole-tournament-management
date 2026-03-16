@@ -1350,9 +1350,9 @@ router.post('/fix/merge-licences', authenticateToken, async (req, res) => {
     const insCount = await new Promise((resolve, reject) => {
       db.run(`
         UPDATE inscriptions
-        SET licence = $2, normalized_licence = $3
+        SET licence = $2
         WHERE REPLACE(licence, ' ', '') = $1
-      `, [wrongNormalized, correctLicence, correctNormalized], function(err) {
+      `, [wrongNormalized, correctLicence], function(err) {
         if (err) reject(err);
         else resolve(this.changes);
       });
