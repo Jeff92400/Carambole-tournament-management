@@ -6,7 +6,7 @@
   <title>Test Push Notifications - CDBHS</title>
   <link rel="stylesheet" href="css/styles.css">
   <script src="js/branding.js"></script>
-  <script src="js/auth.js"></script>
+  <script src="js/auth-utils.js"></script>
   <style>
     .test-container {
       max-width: 800px;
@@ -123,7 +123,7 @@
   <!-- Navbar -->
   <nav class="navbar" style="backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); background: rgba(255, 255, 255, 0.95); box-shadow: 0 4px 12px rgba(31, 71, 136, 0.08), 0 8px 24px rgba(31, 71, 136, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.8);">
     <div class="navbar-brand">
-      <img id="app-logo" src="images/Logo-Carambole-small.png" alt="Logo" style="height: 40px; width: auto; margin-right: 12px;">
+      <img id="app-logo" src="images/FrenchBillard-Icon-small.png" alt="Logo" style="height: 40px; width: auto; margin-right: 12px;" onerror="this.style.display='none'">
       <h2 style="margin: 0; font-size: 1.5rem; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;">
         <span id="app-org-name" data-page-title="Test Push Notifications">CDB</span>
       </h2>
@@ -194,9 +194,10 @@
 
   <script>
     // Check authentication
-    if (!isAuthenticated()) {
-      window.location.href = 'login.html';
+    if (!requireAuth()) {
+      throw new Error('Not authenticated');
     }
+    const API_URL = '/api';
 
     const form = document.getElementById('testForm');
     const sendBtn = document.getElementById('sendBtn');
