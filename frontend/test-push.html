@@ -181,6 +181,11 @@
       </div>
     </div>
 
+    <div class="test-card" id="debugCard" style="display: none;">
+      <h3 style="margin-top: 0;">🔍 Informations de débogage</h3>
+      <div id="debugInfo" style="font-family: monospace; font-size: 13px; background: #f8f9fa; padding: 12px; border-radius: 6px; white-space: pre-wrap;"></div>
+    </div>
+
     <div class="test-card">
       <h3 style="margin-top: 0;">ℹ️ Notes importantes</h3>
       <ul style="color: #666; line-height: 1.6;">
@@ -203,6 +208,9 @@
     const form = document.getElementById('testForm');
     const sendBtn = document.getElementById('sendBtn');
     const alert = document.getElementById('alert');
+    const licenceInput = document.getElementById('licence');
+    const debugCard = document.getElementById('debugCard');
+    const debugInfo = document.getElementById('debugInfo');
 
     function showAlert(message, type) {
       alert.textContent = message;
@@ -212,6 +220,27 @@
         alert.style.display = 'none';
       }, 5000);
     }
+
+    // Load debug info when licence is entered
+    licenceInput.addEventListener('blur', async () => {
+      const licence = licenceInput.value.trim();
+      if (!licence) {
+        debugCard.style.display = 'none';
+        return;
+      }
+
+      try {
+        const response = await authFetch(`/api/push/debug/${licence}`);
+        const data = await response.json();
+
+        debugCard.style.display = 'block';
+        debugInfo.textContent = JSON.stringify(data, null, 2);
+      } catch (error) {
+        console.error('Debug error:', error);
+        debugCard.style.display = 'block';
+        debugInfo.textContent = `Erreur: ${error.message}`;
+      }
+    });
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
