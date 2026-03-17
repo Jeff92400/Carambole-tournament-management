@@ -3321,8 +3321,8 @@ router.get('/tournoi/:id/simulation', authenticateToken, async (req, res) => {
     const simCategory = await new Promise((resolve, reject) => {
       db.get(
         `SELECT * FROM categories
-         WHERE UPPER(game_type) = $1 AND UPPER(level) = $2`,
-        [gameType, categoryLevel],
+         WHERE UPPER(game_type) = $1 AND UPPER(level) = $2 AND ($3::int IS NULL OR organization_id = $3)`,
+        [gameType, categoryLevel, orgId],
         (err, row) => {
           if (err) reject(err);
           else resolve(row);
