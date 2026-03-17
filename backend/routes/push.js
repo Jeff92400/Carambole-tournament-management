@@ -5,18 +5,29 @@ const db = require('../db-loader');
 const { authenticatePlayerToken } = require('./player-accounts');
 
 // Configure VAPID keys from environment variables
-const vapidPublicKey = process.env.VAPID_PUBLIC_KEY;
-const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY;
+// Trim to remove any whitespace, line breaks, or quotes
+const vapidPublicKey = process.env.VAPID_PUBLIC_KEY?.trim().replace(/['"]/g, '');
+const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY?.trim().replace(/['"]/g, '');
 
 if (!vapidPublicKey || !vapidPrivateKey) {
   console.warn('⚠️ VAPID keys not configured - push notifications will not work');
+  console.warn(`   Public key: ${vapidPublicKey ? 'present' : 'missing'}`);
+  console.warn(`   Private key: ${vapidPrivateKey ? 'present' : 'missing'}`);
 } else {
-  webPush.setVapidDetails(
-    'mailto:noreply@cdbhs.net',
-    vapidPublicKey,
-    vapidPrivateKey
-  );
-  console.log('✅ Web Push configured with VAPID keys');
+  try {
+    webPush.setVapidDetails(
+      'mailto:noreply@cdbhs.net',
+      vapidPublicKey,
+      vapidPrivateKey
+    );
+    console.log('✅ Web Push configured with VAPID keys');
+  } catch (error) {
+    console.error('❌ Failed to configure VAPID keys:', error.message);
+    console.error(`   Public key length: ${vapidPublicKey.length} chars`);
+    console.error(`   Public key starts with: ${vapidPublicKey.substring(0, 20)}...`);
+    console.error(`   Public key ends with: ...${vapidPublicKey.substring(vapidPublicKey.length - 20)}`);
+    console.error('   Push notifications will not work until VAPID keys are fixed');
+  }
 }
 
 /**
