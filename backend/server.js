@@ -284,6 +284,7 @@ app.use('/api/rsvp', apiLimiter, rsvpRoutes);
 app.use('/api/surveys', apiLimiter, surveysRoutes);
 app.use('/api/wordpress', apiLimiter, wordpressRoutes);
 app.use('/api/player/push', apiLimiter, pushRoutes);
+app.use('/api/push', apiLimiter, pushRoutes); // Admin test endpoint
 
 
 // App version endpoint (for automatic update detection)
