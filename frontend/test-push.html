@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Test Push Notifications - CDBHS</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <script src="js/branding.js"></script>
+  <script src="js/auth.js"></script>
+  <style>
+    .test-container {
+      max-width: 800px;
+      margin: 40px auto;
+      padding: 20px;
+    }
+
+    .test-card {
+      background: white;
+      border-radius: 8px;
+      padding: 24px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      margin-bottom: 20px;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    .form-group label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 500;
+      color: #333;
+    }
+
+    .form-group input,
+    .form-group textarea {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+
+    .form-group textarea {
+      min-height: 80px;
+      resize: vertical;
+    }
+
+    .btn-test {
+      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 6px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+
+    .btn-test:hover {
+      transform: translateY(-2px);
+    }
+
+    .btn-test:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .alert {
+      padding: 12px 16px;
+      border-radius: 6px;
+      margin-bottom: 20px;
+      display: none;
+    }
+
+    .alert.success {
+      background: #d4edda;
+      color: #155724;
+      border: 1px solid #c3e6cb;
+    }
+
+    .alert.error {
+      background: #f8d7da;
+      color: #721c24;
+      border: 1px solid #f5c6cb;
+    }
+
+    .alert.info {
+      background: #d1ecf1;
+      color: #0c5460;
+      border: 1px solid #bee5eb;
+    }
+
+    .examples {
+      background: #f8f9fa;
+      padding: 16px;
+      border-radius: 6px;
+      margin-top: 20px;
+    }
+
+    .examples h3 {
+      margin-top: 0;
+      font-size: 14px;
+      color: #666;
+    }
+
+    .examples ul {
+      margin: 8px 0;
+      padding-left: 20px;
+    }
+
+    .examples li {
+      margin: 4px 0;
+      font-size: 13px;
+      color: #555;
+    }
+  </style>
+</head>
+<body>
+  <!-- Navbar -->
+  <nav class="navbar" style="backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); background: rgba(255, 255, 255, 0.95); box-shadow: 0 4px 12px rgba(31, 71, 136, 0.08), 0 8px 24px rgba(31, 71, 136, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.8);">
+    <div class="navbar-brand">
+      <img id="app-logo" src="images/Logo-Carambole-small.png" alt="Logo" style="height: 40px; width: auto; margin-right: 12px;">
+      <h2 style="margin: 0; font-size: 1.5rem; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;">
+        <span id="app-org-name" data-page-title="Test Push Notifications">CDB</span>
+      </h2>
+    </div>
+    <div class="navbar-nav">
+      <a href="dashboard.html" class="nav-link">← Retour</a>
+      <a href="#" onclick="logout()" class="nav-link">Déconnexion</a>
+    </div>
+  </nav>
+
+  <div class="test-container">
+    <div class="alert" id="alert"></div>
+
+    <div class="test-card">
+      <h2 style="margin-top: 0;">🔔 Test Push Notifications</h2>
+      <p style="color: #666; margin-bottom: 24px;">
+        Envoyez des notifications de test à votre mobile avant le déploiement Phase 5.
+      </p>
+
+      <form id="testForm">
+        <div class="form-group">
+          <label for="licence">Numéro de licence du joueur *</label>
+          <input type="text" id="licence" placeholder="Ex: 123456" required>
+        </div>
+
+        <div class="form-group">
+          <label for="title">Titre de la notification *</label>
+          <input type="text" id="title" placeholder="Ex: Convocation Tournoi 1" required>
+        </div>
+
+        <div class="form-group">
+          <label for="body">Message *</label>
+          <textarea id="body" placeholder="Ex: Vous avez été convoqué pour 3 Bandes R1 du 21/03" required></textarea>
+        </div>
+
+        <div class="form-group">
+          <label for="url">URL (optionnel)</label>
+          <input type="text" id="url" placeholder="Ex: / ou /inscriptions">
+        </div>
+
+        <button type="submit" class="btn-test" id="sendBtn">
+          📲 Envoyer la notification
+        </button>
+      </form>
+
+      <div class="examples">
+        <h3>💡 Exemples de notifications à tester :</h3>
+        <ul>
+          <li><strong>Convocation:</strong> "Vous avez été convoqué pour 3 Bandes R1 du 21/03"</li>
+          <li><strong>Relance:</strong> "Rappel : inscrivez-vous avant le 15/03 pour Libre N2"</li>
+          <li><strong>Résultats:</strong> "Les résultats du tournoi Cadre 47/2 sont disponibles"</li>
+          <li><strong>Annonce:</strong> "Nouvelle annonce importante du CDBHS"</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="test-card">
+      <h3 style="margin-top: 0;">ℹ️ Notes importantes</h3>
+      <ul style="color: #666; line-height: 1.6;">
+        <li>Assurez-vous d'avoir activé les notifications dans l'app Player</li>
+        <li>Sur iOS, l'app doit être ajoutée à l'écran d'accueil</li>
+        <li>La notification apparaîtra même si l'app est fermée</li>
+        <li>Cliquer sur la notification ouvrira l'app à l'URL spécifiée</li>
+        <li>Les notifications sont envoyées en temps réel (< 1 seconde)</li>
+      </ul>
+    </div>
+  </div>
+
+  <script>
+    // Check authentication
+    if (!isAuthenticated()) {
+      window.location.href = 'login.html';
+    }
+
+    const form = document.getElementById('testForm');
+    const sendBtn = document.getElementById('sendBtn');
+    const alert = document.getElementById('alert');
+
+    function showAlert(message, type) {
+      alert.textContent = message;
+      alert.className = `alert ${type}`;
+      alert.style.display = 'block';
+      setTimeout(() => {
+        alert.style.display = 'none';
+      }, 5000);
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const licence = document.getElementById('licence').value.trim();
+      const title = document.getElementById('title').value.trim();
+      const body = document.getElementById('body').value.trim();
+      const url = document.getElementById('url').value.trim() || '/';
+
+      if (!licence || !title || !body) {
+        showAlert('Tous les champs obligatoires doivent être remplis', 'error');
+        return;
+      }
+
+      sendBtn.disabled = true;
+      sendBtn.textContent = '⏳ Envoi en cours...';
+
+      try {
+        const response = await authFetch('/api/push/test', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ licence, title, body, url })
+        });
+
+        const data = await response.json();
+
+        if (response.ok && data.success) {
+          showAlert(`✅ ${data.message}`, 'success');
+          console.log('Push test result:', data);
+        } else {
+          showAlert(`❌ Erreur: ${data.error || 'Échec de l\'envoi'}`, 'error');
+          console.error('Push test failed:', data);
+        }
+
+      } catch (error) {
+        console.error('Push test error:', error);
+        showAlert(`❌ Erreur: ${error.message}`, 'error');
+      } finally {
+        sendBtn.disabled = false;
+        sendBtn.textContent = '📲 Envoyer la notification';
+      }
+    });
+  </script>
+</body>
+</html>

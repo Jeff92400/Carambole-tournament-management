@@ -465,6 +465,55 @@ async function sendPushToPlayers(licences, orgId, notification) {
   };
 }
 
+/**
+ * POST /api/push/test
+ * Test endpoint to send a push notification to a specific player
+ * Admin-only, for testing before Phase 5 rollout
+ */
+router.post('/test', async (req, res) => {
+  const { licence, title, body, url } = req.body;
+
+  if (!licence) {
+    return res.status(400).json({ error: 'Player licence required' });
+  }
+
+  if (!title || !body) {
+    return res.status(400).json({ error: 'Title and body required' });
+  }
+
+  try {
+    // Get organization ID from the authenticated user (req.user.organizationId)
+    // For now, use org ID 1 (CDBHS) as default for testing
+    const orgId = req.user?.organizationId || 1;
+
+    const result = await sendPushToPlayer(licence, orgId, {
+      title: title,
+      body: body,
+      url: url || '/'
+    });
+
+    if (result.success) {
+      res.json({
+        success: true,
+        message: `Notification sent to ${result.sent} device(s)`,
+        sent: result.sent,
+        failed: result.failed
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        error: result.error || 'Failed to send notification',
+        sent: result.sent,
+        failed: result.failed
+      });
+    }
+
+  } catch (error) {
+    console.error('Test push error:', error);
+    res.status(500).json({ error: 'Failed to send test notification' });
+  }
+});
+
 // Export router and helper functions
 module.exports = router;
 module.exports.sendPushToPlayer = sendPushToPlayer;
