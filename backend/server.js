@@ -56,6 +56,7 @@ const rsvpRoutes = require('./routes/rsvp');
 const { buildRsvpButtonsHtml } = require('./routes/rsvp');
 const surveysRoutes = require('./routes/surveys');
 const wordpressRoutes = require('./routes/wordpress');
+const pushRoutes = require('./routes/push');
 
 
 const app = express();
@@ -282,6 +283,7 @@ app.use('/api/bracket', apiLimiter, bracketRoutes);
 app.use('/api/rsvp', apiLimiter, rsvpRoutes);
 app.use('/api/surveys', apiLimiter, surveysRoutes);
 app.use('/api/wordpress', apiLimiter, wordpressRoutes);
+app.use('/api/player/push', apiLimiter, pushRoutes);
 
 
 // App version endpoint (for automatic update detection)
