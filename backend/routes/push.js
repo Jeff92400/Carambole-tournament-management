@@ -379,8 +379,8 @@ async function sendPushToPlayer(licence, orgId, notification) {
       title: notification.title,
       body: notification.body,
       url: notification.url || '/',
-      icon: '/images/icon-192.png',
-      badge: '/images/badge-72.png'
+      icon: '/images/FrenchBillard-Icon-small.png',
+      badge: '/images/FrenchBillard-Icon-small.png'
     });
 
     let sent = 0;
