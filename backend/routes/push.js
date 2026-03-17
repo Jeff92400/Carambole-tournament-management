@@ -414,11 +414,15 @@ async function sendPushToPlayer(licence, orgId, notification) {
 
       } catch (error) {
         failed++;
-        console.error(`Push send error for subscription ${sub.id}:`, error);
+        console.error(`❌ Push send error for subscription ${sub.id}:`);
+        console.error(`   Status: ${error.statusCode || 'N/A'}`);
+        console.error(`   Message: ${error.message}`);
+        console.error(`   Body: ${error.body || 'N/A'}`);
+        console.error(`   Endpoint: ${sub.endpoint.substring(0, 50)}...`);
 
         // If subscription is expired (410 Gone), delete it
         if (error.statusCode === 410) {
-          console.log(`Removing expired subscription ${sub.id}`);
+          console.log(`🗑️ Removing expired subscription ${sub.id}`);
           await new Promise((resolve, reject) => {
             db.run(
               'DELETE FROM push_subscriptions WHERE id = $1',
@@ -466,6 +470,63 @@ async function sendPushToPlayers(licences, orgId, notification) {
 }
 
 /**
+ * GET /api/push/debug/:licence
+ * Debug endpoint to check push subscription details for a player
+ */
+router.get('/debug/:licence', async (req, res) => {
+  const licence = req.params.licence;
+  const orgId = req.user?.organizationId || 1;
+
+  try {
+    // Get player account
+    const playerAccount = await new Promise((resolve, reject) => {
+      db.get(
+        'SELECT id, push_enabled FROM player_accounts WHERE REPLACE(licence, \' \', \'\') = $1 AND ($2::int IS NULL OR organization_id = $2)',
+        [licence.replace(/\s/g, ''), orgId],
+        (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        }
+      );
+    });
+
+    if (!playerAccount) {
+      return res.json({ found: false, error: 'Player account not found' });
+    }
+
+    // Get subscriptions
+    const subscriptions = await new Promise((resolve, reject) => {
+      db.all(
+        'SELECT id, endpoint, p256dh, auth, created_at, last_used_at FROM push_subscriptions WHERE player_account_id = $1',
+        [playerAccount.id],
+        (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows || []);
+        }
+      );
+    });
+
+    res.json({
+      found: true,
+      player_account_id: playerAccount.id,
+      push_enabled: playerAccount.push_enabled,
+      subscription_count: subscriptions.length,
+      subscriptions: subscriptions.map(sub => ({
+        id: sub.id,
+        endpoint_preview: sub.endpoint.substring(0, 50) + '...',
+        created_at: sub.created_at,
+        last_used_at: sub.last_used_at
+      })),
+      vapid_configured: !!vapidPublicKey && !!vapidPrivateKey
+    });
+
+  } catch (error) {
+    console.error('Debug endpoint error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
  * POST /api/push/test
  * Test endpoint to send a push notification to a specific player
  * Admin-only, for testing before Phase 5 rollout
@@ -486,11 +547,16 @@ router.post('/test', async (req, res) => {
     // For now, use org ID 1 (CDBHS) as default for testing
     const orgId = req.user?.organizationId || 1;
 
+    console.log(`[Push Test] Sending to licence: ${licence}, org: ${orgId}`);
+    console.log(`[Push Test] Payload: ${title} / ${body} / ${url || '/'}`);
+
     const result = await sendPushToPlayer(licence, orgId, {
       title: title,
       body: body,
       url: url || '/'
     });
+
+    console.log(`[Push Test] Result: sent=${result.sent}, failed=${result.failed}, error=${result.error || 'none'}`);
 
     if (result.success) {
       res.json({
