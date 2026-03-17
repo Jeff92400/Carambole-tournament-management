@@ -994,11 +994,52 @@ CDBHS color mapping (from legend rows 22-27):
   - Failed pushes (expired subscriptions) are auto-cleaned from `push_subscriptions`
   - Admin can preview/test push from emailing page before sending to all
 
-  **Files ready for Phase 3:**
-  - Database schema: ✅ Ready
-  - VAPID keys: ✅ Generated (need to be added to Railway)
-  - npm package: ✅ Installed
-  - Next: Create `backend/routes/push.js` and expose endpoints
+  ### ✅ PHASE 3 — Backend API Routes (COMPLETED — March 17, 2026)
+  - Created `backend/routes/push.js` with endpoints:
+    - `POST /api/player/push/subscribe` - save push subscription
+    - `POST /api/player/push/unsubscribe` - remove subscription
+    - `DELETE /api/player/push/subscription/:id` - delete by ID
+    - `GET /api/player/push/status` - check subscription status
+    - `POST /api/player/push/toggle` - toggle push_enabled preference
+  - Helper functions:
+    - `sendPushToPlayer(licence, orgId, notification)` - send to single player
+    - `sendPushToPlayers(licences, orgId, notification)` - send to multiple
+  - Features:
+    - VAPID configuration from env vars (added to Railway)
+    - Auto-cleanup of expired subscriptions (410 Gone)
+    - Player authentication required for all endpoints
+    - Organization-scoped subscriptions
+  - Mounted routes in `server.js` at `/api/player/push`
+  - Commits: `acc35c5`, `10e48f2`, `948d37c`
+  - Status: ✅ Deployed and working
+
+  ### 📋 NOTIFICATION TYPES (planned)
+
+  **Permission Flow:**
+  - Two permission layers: Browser native permission + App-level toggle
+  - Browser shows "Allow notifications?" popup on first Player App visit
+  - Players can toggle in Player App → Settings → "Recevoir les notifications push"
+  - Opt-in by default (players must actively grant permission)
+  - iOS: Only works if PWA is added to home screen
+  - Android: Works everywhere
+
+  **Notification List by Priority:**
+
+  | Priority | Notification Type | When Triggered | Content |
+  |----------|------------------|----------------|---------|
+  | **HIGH** | Convocation | Admin sends from `generate-poules.html` | "Vous avez été convoqué pour [Mode] [Catégorie] du [Date]" → Link to tournament details |
+  | **HIGH** | Relance | Player hasn't registered, deadline approaching | "Rappel : inscrivez-vous avant le [Date] pour [Mode] [Catégorie]" → Link to registration |
+  | **HIGH** | Results Published | Admin publishes results | "Les résultats du tournoi [Mode] [Catégorie] sont disponibles" → Link to results |
+  | **MEDIUM** | Announcements | Admin creates announcement | Announcement title + message → Link to announcements |
+  | **MEDIUM** | Finale Qualification | Player qualifies after T3 | "Félicitations ! Vous êtes qualifié pour la Finale [Mode] [Catégorie]" → Link to rankings |
+  | **LOW** | Rankings Updated | After tournament results | "Les classements de la saison [2024-2025] ont été mis à jour" → Link to rankings |
+  | **LOW** | Registration Confirmation | Player registers via app | "Inscription confirmée pour [Mode] [Catégorie] du [Date]" → Link to registrations |
+  | **LOW** | Tournament Changes | Tournament cancelled/rescheduled | "Modification : Le tournoi [Mode] [Catégorie] est [annulé/reporté]" → Link to calendar |
+
+  **Implementation Priority:**
+  - Phase 5: Convocation, Relance, Results (high-frequency, high-value)
+  - Phase 6: Announcements, Finale Qualification (medium)
+  - Phase 7: Rankings, Registration Confirmation, Tournament Changes (low)
 
 - **Player historical analytics (multi-season stats):** All tournament data (`tournament_results`, `rankings`) is retained permanently across seasons and scoped by `organization_id`. Season averages are computed on-the-fly (`SUM(points)/SUM(reprises)` from `tournament_results`) — not stored as a snapshot. This means we can build rich player analytics over time:
   - Average (moyenne) progression per mode across seasons
