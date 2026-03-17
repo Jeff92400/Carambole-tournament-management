@@ -397,8 +397,12 @@ async function sendPushToPlayer(licence, orgId, notification) {
           }
         };
 
-        await webPush.sendNotification(pushSubscription, payload);
+        const result = await webPush.sendNotification(pushSubscription, payload);
         sent++;
+
+        console.log(`✅ Push sent successfully to subscription ${sub.id}`);
+        console.log(`   FCM Response Status: ${result.statusCode}`);
+        console.log(`   FCM Response Body: ${result.body || 'empty'}`);
 
         // Update last_used_at
         await new Promise((resolve, reject) => {
