@@ -9,6 +9,8 @@ const { logAdminAction, ACTION_TYPES } = require('../utils/admin-logger');
 const { getColumnMapping } = require('./import-config');
 const appSettings = require('../utils/app-settings');
 const { getRankingTournamentNumbers, getFinaleTournamentNumber, getTournamentLabel } = require('./settings');
+const { buildNotification, getResultsNotificationType } = require('../notification-messages');
+const { sendPushToPlayers } = require('./push');
 
 /**
  * Default column mapping for tournament results imports
@@ -850,6 +852,51 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
                           }
                         } catch (e) {
                           console.error('[IMPORT] Error checking bonus settings:', e);
+                        }
+
+                        // Send push notifications to all participants (fire-and-forget)
+                        try {
+                          // Get tournament details and participants
+                          const tournamentInfo = await new Promise((resolve, reject) => {
+                            db.get(
+                              `SELECT t.id, t.tournament_number, c.display_name as category_name
+                               FROM tournaments t
+                               JOIN categories c ON t.category_id = c.id
+                               WHERE t.id = $1`,
+                              [finalTournamentId],
+                              (err, row) => err ? reject(err) : resolve(row)
+                            );
+                          });
+
+                          const participants = await new Promise((resolve, reject) => {
+                            db.all(
+                              'SELECT licence, position FROM tournament_results WHERE tournament_id = $1',
+                              [finalTournamentId],
+                              (err, rows) => err ? reject(err) : resolve(rows)
+                            );
+                          });
+
+                          if (tournamentInfo && participants.length > 0) {
+                            const notifType = getResultsNotificationType(tournamentInfo.category_name);
+                            const licences = participants.map(p => p.licence);
+
+                            // Send to each player with their position
+                            for (const participant of participants) {
+                              try {
+                                const resultsNotif = buildNotification(notifType, {
+                                  tournoiName: tournamentInfo.category_name,
+                                  position: participant.position
+                                });
+                                await sendPushToPlayers([participant.licence], orgId, resultsNotif);
+                              } catch (playerNotifError) {
+                                console.error(`[RESULTS] Failed to send to ${participant.licence}:`, playerNotifError.message);
+                              }
+                            }
+                            console.log(`[RESULTS] Sent ${notifType} notifications to ${participants.length} players`);
+                          }
+                        } catch (notifError) {
+                          console.error('[RESULTS] Failed to send push notifications:', notifError.message);
+                          // Don't fail import if push notification fails
                         }
 
                         res.json({
@@ -4897,6 +4944,44 @@ router.post('/import-matches', authenticateToken, upload.array('files', 20), asy
       }
     } catch (e) {
       console.error('[IMPORT-MATCHES] Error checking bonus settings:', e);
+    }
+
+    // Send push notifications to all participants (fire-and-forget)
+    try {
+      // Get tournament details and participants
+      const tournamentInfo = await dbGetAsync(
+        `SELECT t.id, t.tournament_number, c.display_name as category_name
+         FROM tournaments t
+         JOIN categories c ON t.category_id = c.id
+         WHERE t.id = $1`,
+        [tournamentId]
+      );
+
+      const participants = await dbAllAsync(
+        'SELECT licence, position FROM tournament_results WHERE tournament_id = $1',
+        [tournamentId]
+      );
+
+      if (tournamentInfo && participants.length > 0) {
+        const notifType = getResultsNotificationType(tournamentInfo.category_name);
+
+        // Send to each player with their position
+        for (const participant of participants) {
+          try {
+            const resultsNotif = buildNotification(notifType, {
+              tournoiName: tournamentInfo.category_name,
+              position: participant.position
+            });
+            await sendPushToPlayers([participant.licence], orgId, resultsNotif);
+          } catch (playerNotifError) {
+            console.error(`[RESULTS] Failed to send to ${participant.licence}:`, playerNotifError.message);
+          }
+        }
+        console.log(`[RESULTS] Sent ${notifType} notifications to ${participants.length} players`);
+      }
+    } catch (notifError) {
+      console.error('[RESULTS] Failed to send push notifications:', notifError.message);
+      // Don't fail import if push notification fails
     }
 
     res.json({

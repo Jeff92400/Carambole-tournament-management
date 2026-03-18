@@ -8,6 +8,8 @@ const appSettings = require('../utils/app-settings');
 const { getPouleConfigForOrg } = require('../utils/poule-config');
 const { logAdminAction, ACTION_TYPES } = require('../utils/admin-logger');
 const { getFinaleTournamentNumber, getRankingTournamentNumbers } = require('./settings');
+const { buildNotification } = require('../notification-messages');
+const { sendPushToPlayer } = require('./push');
 
 const router = express.Router();
 
@@ -1546,6 +1548,21 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
         name: `${player.first_name} ${player.last_name}`,
         email: player.email
       });
+
+      // Send push notification (fire-and-forget)
+      try {
+        const convocationNotif = buildNotification('CONVOCATION', {
+          tournoiName: `${category.display_name} - ${tournamentLabel}`,
+          date: dateStr,
+          heure: playerLocation?.startTime?.replace(':', 'H') || '14H00',
+          lieu: playerLocation?.name || 'À définir',
+          pouleNumber: playerPoule.pouleNumber
+        });
+        await sendPushToPlayer(player.licence, orgId, convocationNotif);
+      } catch (notifError) {
+        console.error('[CONVOCATION] Failed to send push notification:', notifError.message);
+        // Don't fail email if push notification fails
+      }
 
       // Add delay between emails to avoid rate limiting (1.5 seconds)
       await delay(1500);
