@@ -4,6 +4,9 @@ const webPush = require('web-push');
 const jwt = require('jsonwebtoken');
 const db = require('../db-loader');
 
+// Player App URL for proxying push notification requests
+const PLAYER_APP_URL = process.env.PLAYER_APP_URL || 'https://cdbhs-player-app-production.up.railway.app';
+
 // Middleware to authenticate Player App JWT tokens
 // NOTE: This expects Player App tokens in the Authorization header
 // Player App uses the same JWT_SECRET as the Tournament Management app
@@ -581,6 +584,76 @@ router.post('/test', async (req, res) => {
   } catch (error) {
     console.error('Test push error:', error);
     res.status(500).json({ error: 'Failed to send test notification' });
+  }
+});
+
+/**
+ * PROXY ENDPOINTS - Forward push notification requests to Player App
+ * These avoid CORS issues by making same-origin requests from the frontend
+ */
+
+/**
+ * POST /api/push/test (PROXY)
+ * Proxy test notification request to Player App
+ * No auth required - this is called from test-push.html admin page
+ */
+router.post('/test', async (req, res) => {
+  try {
+    const { licence, title, body, url } = req.body;
+
+    console.log('[Push Proxy] Forwarding test notification to Player App');
+    console.log(`[Push Proxy] Licence: ${licence}, Title: ${title}`);
+
+    // Forward to Player App
+    const response = await fetch(`${PLAYER_APP_URL}/api/player/push/test`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ licence, title, body, url })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error('[Push Proxy] Player App error:', data);
+      return res.status(response.status).json(data);
+    }
+
+    console.log('[Push Proxy] Success:', data);
+    res.json(data);
+
+  } catch (error) {
+    console.error('[Push Proxy] Error:', error);
+    res.status(500).json({ error: 'Failed to forward push notification', details: error.message });
+  }
+});
+
+/**
+ * GET /api/push/debug/:licence (PROXY)
+ * Proxy debug info request to Player App
+ * No auth required - this is called from test-push.html admin page
+ */
+router.get('/debug/:licence', async (req, res) => {
+  try {
+    const { licence } = req.params;
+
+    console.log('[Push Proxy] Forwarding debug request to Player App for licence:', licence);
+
+    // Forward to Player App
+    const response = await fetch(`${PLAYER_APP_URL}/api/player/push/debug/${licence}`);
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error('[Push Proxy] Player App error:', data);
+      return res.status(response.status).json(data);
+    }
+
+    res.json(data);
+
+  } catch (error) {
+    console.error('[Push Proxy] Error:', error);
+    res.status(500).json({ error: 'Failed to fetch debug info', details: error.message });
   }
 });
 

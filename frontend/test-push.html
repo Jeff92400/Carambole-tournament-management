@@ -204,8 +204,6 @@
       throw new Error('Not authenticated');
     }
     const API_URL = '/api';
-    // Player App URL for push notifications
-    const PLAYER_APP_URL = 'https://cdbhs-player-app-production.up.railway.app/api/player';
 
     const form = document.getElementById('testForm');
     const sendBtn = document.getElementById('sendBtn');
@@ -232,7 +230,7 @@
       }
 
       try {
-        const response = await fetch(`${PLAYER_APP_URL}/push/debug/${licence}`);
+        const response = await fetch(`${API_URL}/push/debug/${licence}`);
         const data = await response.json();
 
         debugCard.style.display = 'block';
@@ -261,7 +259,7 @@
       sendBtn.textContent = '⏳ Envoi en cours...';
 
       try {
-        const response = await fetch(`${PLAYER_APP_URL}/push/test`, {
+        const response = await fetch(`${API_URL}/push/test`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
