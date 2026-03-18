@@ -549,8 +549,8 @@ router.post('/test', async (req, res) => {
     console.log('[Push Proxy] Forwarding test notification to Player App');
     console.log(`[Push Proxy] Licence: ${licence}, Title: ${title}`);
 
-    // Forward to Player App
-    const response = await fetch(`${PLAYER_APP_URL}/api/player/push/test`, {
+    // Forward to Player App (using new endpoint name to bypass caching)
+    const response = await fetch(`${PLAYER_APP_URL}/api/player/push/test-notification`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
