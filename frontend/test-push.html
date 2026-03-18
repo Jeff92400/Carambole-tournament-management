@@ -204,6 +204,7 @@
       throw new Error('Not authenticated');
     }
     const API_URL = '/api';
+    const token = localStorage.getItem('token');
 
     const form = document.getElementById('testForm');
     const sendBtn = document.getElementById('sendBtn');
@@ -230,7 +231,9 @@
       }
 
       try {
-        const response = await fetch(`${API_URL}/push/debug/${licence}`);
+        const response = await fetch(`${API_URL}/push/debug/${licence}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
         const data = await response.json();
 
         debugCard.style.display = 'block';
@@ -262,7 +265,8 @@
         const response = await fetch(`${API_URL}/push/test`, {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
           },
           body: JSON.stringify({ licence, title, body, url })
         });
