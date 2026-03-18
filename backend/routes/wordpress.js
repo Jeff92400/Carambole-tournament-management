@@ -1072,7 +1072,7 @@ router.post('/publish-results', authenticateToken, async (req, res) => {
         FROM tournament_results tr
         LEFT JOIN player_contacts pc ON REPLACE(tr.licence, ' ', '') = REPLACE(pc.licence, ' ', '')
         WHERE tr.tournament_id = $1
-        ORDER BY tr.position ASC
+        ORDER BY tr.match_points DESC, tr.moyenne DESC
       `, [tournamentId], (err, rows) => {
         if (err) reject(err);
         else resolve(rows || []);

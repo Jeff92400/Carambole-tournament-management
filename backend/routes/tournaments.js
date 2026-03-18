@@ -26,6 +26,35 @@ const DEFAULT_TOURNAMENT_MAPPING = {
 };
 
 /**
+ * Recalculate positions for a tournament based on match_points and moyenne
+ * This ensures positions are always correct even if CSV had wrong values
+ */
+function recalculatePositions(tournamentId, orgId, callback) {
+  const updateQuery = `
+    UPDATE tournament_results
+    SET position = sub.rank
+    FROM (
+      SELECT tr.id,
+             ROW_NUMBER() OVER (PARTITION BY tr.tournament_id ORDER BY tr.match_points DESC, tr.moyenne DESC) as rank
+      FROM tournament_results tr
+      JOIN tournaments t ON tr.tournament_id = t.id
+      WHERE tr.tournament_id = $1
+        AND ($2::int IS NULL OR t.organization_id = $2)
+    ) sub
+    WHERE tournament_results.id = sub.id
+  `;
+
+  db.run(updateQuery, [tournamentId, orgId], (err) => {
+    if (err) {
+      console.error('[RECALC-POSITIONS] Error recalculating positions:', err);
+      return callback(err);
+    }
+    console.log(`[RECALC-POSITIONS] Positions recalculated for tournament ${tournamentId}`);
+    callback(null);
+  });
+}
+
+/**
  * Helper to get value from record using mapping configuration
  */
 function getMappedValue(record, mapping, fieldName, defaultValue = null) {
@@ -779,11 +808,19 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
 
                     const orgId = req.user.organizationId || null;
 
-                    // Recompute ALL bonuses for the category (position points + barème + bonus moyenne)
-                    // This handles ALL tournaments, not just the newly imported one — ensures
-                    // previously imported tournaments also get updated position_points and bonuses
-                    recomputeAllBonuses(categoryId, season, orgId, async () => {
-                      recalculateRankings(categoryId, season, async () => {
+                    // CRITICAL: Recalculate positions based on correct sorting (match_points DESC, moyenne DESC)
+                    // This fixes any incorrect positions that may have been in the CSV file
+                    recalculatePositions(finalTournamentId, orgId, (recalcErr) => {
+                      if (recalcErr) {
+                        console.error('[CSV-IMPORT] Error recalculating positions, continuing anyway:', recalcErr);
+                        // Don't fail the import, just log the error
+                      }
+
+                      // Recompute ALL bonuses for the category (position points + barème + bonus moyenne)
+                      // This handles ALL tournaments, not just the newly imported one — ensures
+                      // previously imported tournaments also get updated position_points and bonuses
+                      recomputeAllBonuses(categoryId, season, orgId, async () => {
+                        recalculateRankings(categoryId, season, async () => {
                         // Clean up uploaded file
                         fs.unlinkSync(req.file.path);
 
@@ -822,8 +859,9 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
                           hasBonuses,
                           errors: errors.length > 0 ? errors : undefined
                         });
+                        });
                       });
-                    });
+                    }); // Close recalculatePositions callback
                   });
                 } // Close insertTournamentResults function
               });
@@ -4810,6 +4848,17 @@ router.post('/import-matches', authenticateToken, upload.array('files', 20), asy
     }
 
     console.log(`[IMPORT-MATCHES] Inserted ${rankedStats.length} player results for tournament ${tournamentId}`);
+
+    // 7.5. Recalculate positions to ensure correct sorting
+    await new Promise((resolve, reject) => {
+      recalculatePositions(tournamentId, orgId, (err) => {
+        if (err) {
+          console.error('[IMPORT-MATCHES] Error recalculating positions:', err);
+          // Don't fail, continue anyway
+        }
+        resolve();
+      });
+    });
 
     // 8. Chain: position points → bonuses → rankings
     await new Promise((resolve) => {

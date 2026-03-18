@@ -2258,7 +2258,7 @@ router.get('/tournament-results/:id', authenticateToken, async (req, res) => {
         LEFT JOIN inscriptions insc ON REPLACE(tr.licence, ' ', '') = REPLACE(insc.licence, ' ', '')
           AND insc.tournoi_id = $2
         WHERE tr.tournament_id = $1
-        ORDER BY tr.position ASC
+        ORDER BY tr.match_points DESC, tr.moyenne DESC
       `, [id, matchingTournoi?.tournoi_id || -1], (err, rows) => {
         if (err) reject(err);
         else resolve(rows || []);
@@ -2396,7 +2396,7 @@ router.post('/send-results', authenticateToken, async (req, res) => {
           AND insc.tournoi_id = $2
           AND insc.email IS NOT NULL AND insc.email != '' AND insc.email LIKE '%@%'
         WHERE tr.tournament_id = $1
-        ORDER BY tr.position ASC
+        ORDER BY tr.match_points DESC, tr.moyenne DESC
       `, [tournamentId, matchingTournoi?.tournoi_id || -1], (err, rows) => {
         if (err) reject(err);
         else resolve(rows || []);
@@ -4098,7 +4098,7 @@ router.get('/t1-participants', authenticateToken, async (req, res) => {
          FROM tournament_results tr
          LEFT JOIN player_contacts pc ON REPLACE(tr.licence, ' ', '') = REPLACE(pc.licence, ' ', '')
          WHERE tr.tournament_id = $1
-         ORDER BY tr.position ASC`,
+         ORDER BY tr.match_points DESC, tr.moyenne DESC`,
         [t1Tournament.id],
         (err, rows) => {
           if (err) reject(err);
@@ -4959,7 +4959,7 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
            FROM tournament_results tr
            LEFT JOIN player_contacts pc ON REPLACE(tr.licence, ' ', '') = REPLACE(pc.licence, ' ', '')
            WHERE tr.tournament_id = $1
-           ORDER BY tr.position ASC`,
+           ORDER BY tr.match_points DESC, tr.moyenne DESC`,
           [t1Tournament.id],
           (err, rows) => {
             if (err) reject(err);
