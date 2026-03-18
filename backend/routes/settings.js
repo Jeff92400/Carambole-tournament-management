@@ -1846,6 +1846,87 @@ router.put('/stage-scoring', authenticateToken, requireAdmin, async (req, res) =
   }
 });
 
+// ==================== PUSH NOTIFICATIONS TEST MODE ====================
+
+// Get test licences list
+router.get('/push-test-licences', authenticateToken, async (req, res) => {
+  try {
+    const db = getDb();
+    const orgId = req.user.organizationId || null;
+
+    const result = await new Promise((resolve, reject) => {
+      db.get(
+        `SELECT value FROM organization_settings
+         WHERE organization_id = $1 AND key = 'push_notification_test_licences'`,
+        [orgId],
+        (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        }
+      );
+    });
+
+    let licences = [];
+    if (result && result.value) {
+      try {
+        licences = JSON.parse(result.value);
+      } catch (parseError) {
+        console.error('[PUSH-TEST] Error parsing test licences:', parseError);
+      }
+    }
+
+    res.json({ licences });
+  } catch (error) {
+    console.error('[PUSH-TEST] Error loading test licences:', error);
+    res.status(500).json({ error: 'Erreur lors du chargement des licences de test' });
+  }
+});
+
+// Save test licences list
+router.put('/push-test-licences', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const db = getDb();
+    const orgId = req.user.organizationId || null;
+    let { licences } = req.body;
+
+    // Validate input
+    if (!Array.isArray(licences)) {
+      return res.status(400).json({ error: 'Le format de licences est invalide' });
+    }
+
+    // Normalize licences: uppercase, remove spaces
+    licences = licences.map(l => String(l).trim().toUpperCase().replace(/\s+/g, '')).filter(l => l.length > 0);
+
+    // Validate max 10 licences (empty array is allowed for general activation)
+    if (licences.length > 10) {
+      return res.status(400).json({ error: 'Maximum 10 licences autorisées' });
+    }
+
+    // Store as JSON in organization_settings
+    const jsonValue = JSON.stringify(licences);
+
+    await new Promise((resolve, reject) => {
+      db.run(
+        `INSERT INTO organization_settings (organization_id, key, value)
+         VALUES ($1, 'push_notification_test_licences', $2)
+         ON CONFLICT (organization_id, key) DO UPDATE SET value = $2`,
+        [orgId, jsonValue],
+        (err) => {
+          if (err) reject(err);
+          else resolve();
+        }
+      );
+    });
+
+    console.log(`[PUSH-TEST] Updated test licences for org ${orgId}: ${licences.length} licences`);
+
+    res.json({ success: true, licences });
+  } catch (error) {
+    console.error('[PUSH-TEST] Error saving test licences:', error);
+    res.status(500).json({ error: 'Erreur lors de l\'enregistrement des licences de test' });
+  }
+});
+
 module.exports = router;
 module.exports.getRankingTournamentNumbers = getRankingTournamentNumbers;
 module.exports.getFinaleTournamentNumber = getFinaleTournamentNumber;

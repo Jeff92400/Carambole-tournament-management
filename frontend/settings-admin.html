@@ -579,6 +579,63 @@
       </div>
     </div>
 
+    <!-- Push Notifications Test Mode Section - Admin Only -->
+    <div class="accordion-panel admin-only" id="pushNotifTestSection" data-settings-tab="espace-joueur">
+      <div class="accordion-header" onclick="toggleAccordion('pushNotifTestSection')">
+        <div class="accordion-title"><span class="accordion-icon">&#9654;</span><strong>🔔 Notifications Push - Mode Test</strong></div>
+        <span class="accordion-summary" id="summary-pushNotifTest">Chargement...</span>
+      </div>
+      <div class="accordion-body">
+        <p style="margin-bottom: 20px; color: #666;">
+          Gérez les licences autorisées à recevoir les notifications push pendant la phase de test.
+          <strong>Maximum : 10 licences.</strong>
+        </p>
+
+        <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin-bottom: 20px; border-radius: 4px;">
+          <strong>⚠️ Mode Test actif :</strong>
+          <p style="margin: 10px 0 0 0; color: #856404;">
+            Seules les licences listées ci-dessous recevront les notifications push (convocations, résultats).
+            Pour activer les notifications pour <strong>tous les joueurs</strong>, videz la liste et enregistrez.
+          </p>
+        </div>
+
+        <div style="margin-bottom: 20px;">
+          <label style="display: block; margin-bottom: 8px; font-weight: 500;">
+            Licences de test (une par ligne, max 10) :
+          </label>
+          <textarea
+            id="pushTestLicences"
+            rows="6"
+            placeholder="Exemple :&#10;170229G&#10;123456A&#10;789012B"
+            style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-family: monospace; font-size: 14px; resize: vertical;"
+          ></textarea>
+          <div style="margin-top: 5px; color: #666; font-size: 13px;">
+            <span id="pushTestLicenceCount">0</span> / 10 licences
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+          <button onclick="savePushTestLicences()" class="btn" style="background: #28a745; padding: 12px 25px;">
+            💾 Enregistrer
+          </button>
+          <button onclick="activatePushForAll()" class="btn" style="background: #dc3545; padding: 12px 25px;">
+            🚀 Activer pour tous les joueurs
+          </button>
+        </div>
+
+        <div id="pushTestMessage" style="display: none; margin-top: 15px; padding: 10px; border-radius: 4px;"></div>
+
+        <div style="margin-top: 30px; padding: 15px; background: #e7f3ff; border-left: 4px solid #1F4788; border-radius: 4px;">
+          <strong>ℹ️ Comment ça marche :</strong>
+          <ul style="margin: 10px 0 0 20px; color: #666; line-height: 1.8;">
+            <li><strong>Mode Test :</strong> Seules les licences listées reçoivent les notifications (idéal pour tester avec l'équipe du comité)</li>
+            <li><strong>Activation générale :</strong> Liste vide = tous les joueurs avec l'app installée reçoivent les notifications</li>
+            <li><strong>Utilisation :</strong> Parfait pour tester avec les nouveaux CDB avant activation générale</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
     <!-- Club Aliases Section - Hidden (deprecated: club names now standardized in player file) -->
     <div class="card admin-only" id="clubAliasesSection" data-settings-tab="maintenance" style="display: none;">
       <h3>Alias des Clubs</h3>
@@ -5340,6 +5397,7 @@
     }
 
     loadQualificationSettings();
+    loadPushTestLicences();
 
     // Bonus Moyenne toggle
     document.getElementById('bonusMoyenneEnabled').addEventListener('change', function() {
@@ -5394,6 +5452,192 @@
     window.addEventListener('hashchange', handleHashNavigation);
 
     // ============= END HASH-BASED CARD NAVIGATION =============
+
+    // ============= PUSH NOTIFICATIONS TEST MODE =============
+
+    async function loadPushTestLicences() {
+      try {
+        const response = await fetch(`${API_URL}/settings/push-test-licences`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          const textarea = document.getElementById('pushTestLicences');
+          const licences = data.licences || [];
+
+          // Populate textarea (one licence per line)
+          textarea.value = licences.join('\n');
+
+          // Update counter
+          updatePushTestLicenceCount();
+
+          // Update summary
+          const summary = document.getElementById('summary-pushNotifTest');
+          if (licences.length === 0) {
+            summary.textContent = 'Mode activé pour tous les joueurs';
+            summary.style.color = '#28a745';
+          } else {
+            summary.textContent = `${licences.length} licence${licences.length > 1 ? 's' : ''} de test`;
+            summary.style.color = '#666';
+          }
+        } else {
+          console.error('Failed to load push test licences');
+        }
+      } catch (error) {
+        console.error('Error loading push test licences:', error);
+      }
+    }
+
+    async function savePushTestLicences() {
+      const textarea = document.getElementById('pushTestLicences');
+      const messageDiv = document.getElementById('pushTestMessage');
+
+      // Parse licences from textarea
+      const licences = textarea.value
+        .split('\n')
+        .map(line => line.trim().toUpperCase())
+        .filter(line => line.length > 0);
+
+      // Validate max 10 licences
+      if (licences.length > 10) {
+        messageDiv.textContent = '❌ Erreur : Maximum 10 licences autorisées';
+        messageDiv.style.display = 'block';
+        messageDiv.style.background = '#f8d7da';
+        messageDiv.style.color = '#721c24';
+        messageDiv.style.borderLeft = '4px solid #dc3545';
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API_URL}/settings/push-test-licences`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ licences })
+        });
+
+        if (response.ok) {
+          messageDiv.textContent = '✅ Licences de test enregistrées avec succès';
+          messageDiv.style.display = 'block';
+          messageDiv.style.background = '#d4edda';
+          messageDiv.style.color = '#155724';
+          messageDiv.style.borderLeft = '4px solid #28a745';
+
+          // Reload to update summary
+          loadPushTestLicences();
+
+          // Hide message after 3s
+          setTimeout(() => {
+            messageDiv.style.display = 'none';
+          }, 3000);
+        } else {
+          const error = await response.json();
+          messageDiv.textContent = `❌ Erreur : ${error.error || 'Erreur inconnue'}`;
+          messageDiv.style.display = 'block';
+          messageDiv.style.background = '#f8d7da';
+          messageDiv.style.color = '#721c24';
+          messageDiv.style.borderLeft = '4px solid #dc3545';
+        }
+      } catch (error) {
+        console.error('Error saving push test licences:', error);
+        messageDiv.textContent = '❌ Erreur lors de l\'enregistrement';
+        messageDiv.style.display = 'block';
+        messageDiv.style.background = '#f8d7da';
+        messageDiv.style.color = '#721c24';
+        messageDiv.style.borderLeft = '4px solid #dc3545';
+      }
+    }
+
+    async function activatePushForAll() {
+      if (!confirm('Êtes-vous sûr de vouloir activer les notifications pour TOUS les joueurs ?\n\nCela supprimera la liste de licences de test et activera les notifications pour tous les joueurs de votre organisation.')) {
+        return;
+      }
+
+      const messageDiv = document.getElementById('pushTestMessage');
+
+      try {
+        const response = await fetch(`${API_URL}/settings/push-test-licences`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ licences: [] })
+        });
+
+        if (response.ok) {
+          // Clear textarea
+          document.getElementById('pushTestLicences').value = '';
+
+          messageDiv.textContent = '✅ Notifications activées pour tous les joueurs';
+          messageDiv.style.display = 'block';
+          messageDiv.style.background = '#d4edda';
+          messageDiv.style.color = '#155724';
+          messageDiv.style.borderLeft = '4px solid #28a745';
+
+          // Reload to update summary
+          loadPushTestLicences();
+
+          // Hide message after 5s
+          setTimeout(() => {
+            messageDiv.style.display = 'none';
+          }, 5000);
+        } else {
+          const error = await response.json();
+          messageDiv.textContent = `❌ Erreur : ${error.error || 'Erreur inconnue'}`;
+          messageDiv.style.display = 'block';
+          messageDiv.style.background = '#f8d7da';
+          messageDiv.style.color = '#721c24';
+          messageDiv.style.borderLeft = '4px solid #dc3545';
+        }
+      } catch (error) {
+        console.error('Error activating push for all:', error);
+        messageDiv.textContent = '❌ Erreur lors de l\'activation';
+        messageDiv.style.display = 'block';
+        messageDiv.style.background = '#f8d7da';
+        messageDiv.style.color = '#721c24';
+        messageDiv.style.borderLeft = '4px solid #dc3545';
+      }
+    }
+
+    function updatePushTestLicenceCount() {
+      const textarea = document.getElementById('pushTestLicences');
+      const counter = document.getElementById('pushTestLicenceCount');
+
+      if (textarea && counter) {
+        const licences = textarea.value
+          .split('\n')
+          .map(line => line.trim())
+          .filter(line => line.length > 0);
+
+        counter.textContent = licences.length;
+
+        // Color code the counter
+        if (licences.length > 10) {
+          counter.style.color = '#dc3545';
+          counter.style.fontWeight = 'bold';
+        } else if (licences.length === 10) {
+          counter.style.color = '#ffc107';
+          counter.style.fontWeight = 'bold';
+        } else {
+          counter.style.color = '#666';
+          counter.style.fontWeight = 'normal';
+        }
+      }
+    }
+
+    // Attach real-time counter update to textarea
+    document.addEventListener('DOMContentLoaded', () => {
+      const textarea = document.getElementById('pushTestLicences');
+      if (textarea) {
+        textarea.addEventListener('input', updatePushTestLicenceCount);
+      }
+    });
+
+    // ============= END PUSH NOTIFICATIONS TEST MODE =============
   </script>
 
   <!-- Edit Game Parameter Modal -->
