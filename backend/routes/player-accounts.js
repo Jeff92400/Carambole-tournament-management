@@ -746,4 +746,36 @@ function generateConvocationICS(inscription) {
   return ics.join('\r\n');
 }
 
+/**
+ * GET /api/player-accounts/by-club
+ * Get count of player accounts grouped by club
+ */
+router.get('/by-club', authenticateToken, async (req, res) => {
+  const orgId = req.user.organizationId || null;
+
+  try {
+    const query = `
+      SELECT COALESCE(p.club, 'Club non renseigné') as club,
+             COUNT(DISTINCT pa.id) as count
+      FROM player_accounts pa
+      LEFT JOIN players p ON REPLACE(pa.licence, ' ', '') = REPLACE(p.licence, ' ', '')
+      WHERE ($1::int IS NULL OR pa.organization_id = $1)
+        AND UPPER(pa.licence) NOT LIKE 'TEST%'
+      GROUP BY p.club
+      ORDER BY count DESC, club ASC
+    `;
+
+    db.all(query, [orgId], (err, rows) => {
+      if (err) {
+        console.error('Error fetching player accounts by club:', err);
+        return res.status(500).json({ error: 'Failed to load club breakdown' });
+      }
+      res.json(rows || []);
+    });
+  } catch (error) {
+    console.error('Error in /by-club endpoint:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;

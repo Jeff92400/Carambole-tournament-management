@@ -346,6 +346,31 @@
       </div>
     </div>
 
+    <!-- Club Breakdown -->
+    <div class="card" style="margin-bottom: 25px;">
+      <h3 style="margin-bottom: 15px; font-size: 16px; color: #333;">
+        <img src="images/FrenchBillard-Icon-small.png" alt="" style="height: 20px; width: 20px; vertical-align: middle; margin-right: 8px;">
+        Répartition par club
+      </h3>
+      <div id="clubBreakdownLoading" style="text-align: center; padding: 20px; color: #666;">
+        <div class="spinner" style="display: inline-block; margin-right: 10px;"></div>
+        Chargement...
+      </div>
+      <div id="clubBreakdownContainer" style="display: none;">
+        <table style="width: 100%; border-collapse: collapse;">
+          <thead>
+            <tr style="background: #f8f9fa; border-bottom: 2px solid #dee2e6;">
+              <th style="padding: 10px 15px; text-align: left; font-weight: 600; color: #495057; font-size: 13px;">Club</th>
+              <th style="padding: 10px 15px; text-align: center; font-weight: 600; color: #495057; font-size: 13px; width: 100px;">Nombre</th>
+            </tr>
+          </thead>
+          <tbody id="clubBreakdownBody">
+            <!-- Populated by JavaScript -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
     <!-- Tabs -->
     <div class="tabs">
       <button class="tab-btn active" data-tab="send">Envoyer des invitations</button>
@@ -621,6 +646,38 @@
         }
       } catch (error) {
         console.error('Error loading stats:', error);
+      }
+    }
+
+    // Load club breakdown
+    async function loadClubBreakdown() {
+      try {
+        const response = await fetch(`${API_URL}/player-accounts/by-club`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          const clubs = await response.json();
+          const tbody = document.getElementById('clubBreakdownBody');
+          const loading = document.getElementById('clubBreakdownLoading');
+          const container = document.getElementById('clubBreakdownContainer');
+
+          if (clubs.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="2" style="text-align: center; padding: 20px; color: #999;">Aucune donnée</td></tr>';
+          } else {
+            tbody.innerHTML = clubs.map((club, index) => `
+              <tr style="border-bottom: 1px solid #e9ecef; ${index % 2 === 0 ? 'background: #f8f9fa;' : ''}">
+                <td style="padding: 10px 15px; font-size: 14px; color: #495057;">${club.club}</td>
+                <td style="padding: 10px 15px; text-align: center; font-weight: 600; color: #1F4788; font-size: 14px;">${club.count}</td>
+              </tr>
+            `).join('');
+          }
+
+          loading.style.display = 'none';
+          container.style.display = 'block';
+        }
+      } catch (error) {
+        console.error('Error loading club breakdown:', error);
+        document.getElementById('clubBreakdownLoading').innerHTML = '<div style="color: #dc3545;">Erreur de chargement</div>';
       }
     }
 
@@ -1398,6 +1455,7 @@ Le comite sportif du {organization_name}`;
 
     // Initialize
     loadStats();
+    loadClubBreakdown();
     loadClubs();
     loadGameModes();
     loadFFBRankings();
