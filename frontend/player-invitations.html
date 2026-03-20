@@ -545,6 +545,32 @@
     </div>
   </div>
 
+  <!-- Club Players Modal -->
+  <div class="modal" id="clubPlayersModal">
+    <div class="modal-content" style="max-width: 700px;">
+      <div class="modal-header">
+        <h3 id="clubPlayersTitle">Joueurs du club</h3>
+        <button class="modal-close" onclick="closeClubPlayersModal()">&times;</button>
+      </div>
+      <div class="modal-body" style="max-height: 500px; overflow-y: auto;">
+        <div id="clubPlayersLoading" style="text-align: center; padding: 20px;">Chargement...</div>
+        <table id="clubPlayersTable" class="data-table" style="display: none;">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Joueur</th>
+              <th>Date d'inscription</th>
+            </tr>
+          </thead>
+          <tbody id="clubPlayersTableBody"></tbody>
+        </table>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeClubPlayersModal()">Fermer</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Send Confirmation Modal -->
   <div class="modal" id="sendModal">
     <div class="modal-content">
@@ -667,7 +693,9 @@
             tbody.innerHTML = clubs.map((club, index) => `
               <tr style="border-bottom: 1px solid #e9ecef; ${index % 2 === 0 ? 'background: #f8f9fa;' : ''}">
                 <td style="padding: 10px 15px; font-size: 14px; color: #495057;">${club.club}</td>
-                <td style="padding: 10px 15px; text-align: center; font-weight: 600; color: #1F4788; font-size: 14px;">${club.count}</td>
+                <td style="padding: 10px 15px; text-align: center; font-weight: 600; color: #1F4788; font-size: 14px;">
+                  <a href="#" onclick="showClubPlayers('${club.club.replace(/'/g, "\\'")}'); return false;" style="color: #1F4788; text-decoration: none; cursor: pointer; border-bottom: 1px dashed #1F4788;" title="Cliquer pour voir la liste">${club.count}</a>
+                </td>
               </tr>
             `).join('');
           }
@@ -1113,6 +1141,57 @@
       document.getElementById('signedUpModal').style.display = 'none';
     }
 
+    // Show club players modal
+    async function showClubPlayers(clubName) {
+      document.getElementById('clubPlayersModal').style.display = 'block';
+      document.getElementById('clubPlayersTitle').textContent = `Joueurs de ${clubName}`;
+      document.getElementById('clubPlayersLoading').style.display = 'block';
+      document.getElementById('clubPlayersTable').style.display = 'none';
+
+      try {
+        // Get all player accounts and filter by club
+        const response = await fetch(`${API_URL}/player-accounts?all=true`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const accounts = await response.json();
+
+        if (response.ok) {
+          // Filter by club name
+          const clubPlayers = accounts.filter(acc => acc.club === clubName);
+
+          // Sort by last name
+          clubPlayers.sort((a, b) => {
+            const nameA = (a.player_name || a.licence || '').split(' ').pop().toUpperCase();
+            const nameB = (b.player_name || b.licence || '').split(' ').pop().toUpperCase();
+            return nameA.localeCompare(nameB, 'fr');
+          });
+
+          const tbody = document.getElementById('clubPlayersTableBody');
+          tbody.innerHTML = clubPlayers.map((acc, index) => `
+            <tr>
+              <td>${index + 1}</td>
+              <td><strong>${acc.player_name || acc.licence}</strong></td>
+              <td>${acc.created_at ? new Date(acc.created_at).toLocaleDateString('fr-FR') : '-'}</td>
+            </tr>
+          `).join('');
+
+          document.getElementById('clubPlayersLoading').style.display = 'none';
+          document.getElementById('clubPlayersTable').style.display = 'table';
+        } else {
+          showError(accounts.error || 'Erreur lors du chargement');
+          closeClubPlayersModal();
+        }
+      } catch (error) {
+        console.error('Error loading club players:', error);
+        showError('Erreur de connexion');
+        closeClubPlayersModal();
+      }
+    }
+
+    function closeClubPlayersModal() {
+      document.getElementById('clubPlayersModal').style.display = 'none';
+    }
+
     async function confirmSend() {
       const testMode = document.getElementById('testModeCheckbox').checked;
       const testEmail = document.getElementById('testEmailInput').value;
@@ -1451,6 +1530,9 @@ Le comite sportif du {organization_name}`;
     // Close modal on outside click
     document.getElementById('sendModal').addEventListener('click', (e) => {
       if (e.target.id === 'sendModal') closeSendModal();
+    });
+    document.getElementById('clubPlayersModal').addEventListener('click', (e) => {
+      if (e.target.id === 'clubPlayersModal') closeClubPlayersModal();
     });
 
     // Initialize
