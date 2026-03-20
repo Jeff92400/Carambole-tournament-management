@@ -153,6 +153,12 @@
             <input type="text" id="searchInput" placeholder="Ex: DUPONT" style="flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
           </div>
         </div>
+        <div style="min-width: 180px;">
+          <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">Club</label>
+          <select id="filterClub" style="width: 100%; padding: 8px; font-size: 13px; border: 1px solid #ddd; border-radius: 4px;">
+            <option value="">Tous</option>
+          </select>
+        </div>
         <div class="admin-only" style="min-width: 150px;">
           <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">Player App</label>
           <select id="filterAppUser" style="width: 100%; padding: 8px; font-size: 13px; border: 1px solid #ddd; border-radius: 4px;">
@@ -487,6 +493,11 @@
         if (response.ok) {
           const clubs = await response.json();
           clubsList = clubs.map(club => club.name).sort();
+
+          // Populate club filter dropdown
+          const clubFilter = document.getElementById('filterClub');
+          clubFilter.innerHTML = '<option value="">Tous</option>' +
+            clubsList.map(club => `<option value="${club}">${club}</option>`).join('');
         }
       } catch (error) {
         console.error('Error loading clubs list:', error);
@@ -1440,6 +1451,7 @@
     function applyFilters() {
       const searchTerm = document.getElementById('searchInput').value.toLowerCase();
       const nameFilterType = document.getElementById('filterNameType').value;
+      const clubFilter = document.getElementById('filterClub').value;
       const appUserFilter = document.getElementById('filterAppUser')?.value || '';
       const statusFilter = document.getElementById('filterStatus').value;
 
@@ -1472,6 +1484,11 @@
           if (!nameMatch) return false;
         }
 
+        // Club filter
+        if (clubFilter && player.club !== clubFilter) {
+          return false;
+        }
+
         // Player App User filter
         if (appUserFilter === 'true' && player.player_app_user !== true) return false;
         if (appUserFilter === 'false' && player.player_app_user === true) return false;
@@ -1489,6 +1506,7 @@
     function resetFilters() {
       document.getElementById('searchInput').value = '';
       document.getElementById('filterNameType').value = 'contains';
+      document.getElementById('filterClub').value = '';
       if (document.getElementById('filterAppUser')) {
         document.getElementById('filterAppUser').value = '';
       }
@@ -1506,6 +1524,7 @@
       window.searchTimeout = setTimeout(applyFilters, 300);
     });
     document.getElementById('filterNameType').addEventListener('change', applyFilters);
+    document.getElementById('filterClub').addEventListener('change', applyFilters);
     if (document.getElementById('filterAppUser')) {
       document.getElementById('filterAppUser').addEventListener('change', applyFilters);
     }
