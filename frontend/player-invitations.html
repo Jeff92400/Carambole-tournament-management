@@ -317,6 +317,11 @@
         gap: 10px;
       }
     }
+
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
   </style>
 </head>
 <body>
@@ -394,6 +399,13 @@
             <option value="">Tous les classements</option>
           </select>
           <input type="text" id="candidateSearch" placeholder="Rechercher un joueur...">
+          <button class="btn btn-secondary" onclick="syncContactsFromPlayers()" id="syncContactsBtn" style="white-space: nowrap;">
+            <span id="syncContactsIcon">🔄</span> Synchroniser contacts
+          </button>
+        </div>
+
+        <div id="syncInfo" style="display: none; padding: 10px; background: #e3f2fd; border-radius: 6px; margin-bottom: 15px; font-size: 13px; color: #1976d2;">
+          <strong>ℹ️ Info:</strong> Si des joueurs actifs avec email n'apparaissent pas dans la liste, cliquez sur "Synchroniser contacts" pour mettre à jour depuis le fichier joueurs.
         </div>
 
         <div class="action-bar">
@@ -1190,6 +1202,49 @@
 
     function closeClubPlayersModal() {
       document.getElementById('clubPlayersModal').style.display = 'none';
+    }
+
+    // Sync contacts from players table
+    async function syncContactsFromPlayers() {
+      const btn = document.getElementById('syncContactsBtn');
+      const icon = document.getElementById('syncContactsIcon');
+      const originalText = btn.innerHTML;
+
+      // Disable button and show loading
+      btn.disabled = true;
+      btn.innerHTML = '<span style="display: inline-block; animation: spin 1s linear infinite;">⏳</span> Synchronisation...';
+
+      try {
+        const response = await fetch(`${API_URL}/emailing/sync-contacts`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          showSuccess(data.message || 'Contacts synchronises avec succes');
+          // Reload candidates and stats
+          await loadCandidates();
+          await loadStats();
+          await loadClubBreakdown();
+          // Show info message if candidates list is still empty
+          setTimeout(() => {
+            if (candidates.length === 0) {
+              document.getElementById('syncInfo').style.display = 'block';
+            }
+          }, 500);
+        } else {
+          showError(data.error || 'Erreur lors de la synchronisation');
+        }
+      } catch (error) {
+        console.error('Error syncing contacts:', error);
+        showError('Erreur de connexion');
+      } finally {
+        // Re-enable button
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+      }
     }
 
     async function confirmSend() {
