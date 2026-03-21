@@ -8553,7 +8553,7 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
       const url = document.getElementById('notifUrl').value;
 
       if (!title || !body) {
-        showError('Le titre et le message sont requis');
+        alert('Le titre et le message sont requis');
         return;
       }
 
@@ -8567,7 +8567,7 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
           const players = await response.json();
           licences = players.map(p => p.licence);
         } catch (error) {
-          showError('Erreur lors de la récupération des joueurs');
+          alert('Erreur lors de la récupération des joueurs');
           console.error(error);
           return;
         }
@@ -8579,12 +8579,12 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
           .filter(l => l.length > 0);
 
         if (licences.length === 0) {
-          showError('Vous n\'avez indiqué aucun numéro de licence comme destinataire');
+          alert('Vous n\'avez indiqué aucun numéro de licence comme destinataire');
           return;
         }
 
         if (licences.length > 15) {
-          showError('Maximum 15 licences autorisées');
+          alert('Maximum 15 licences autorisées');
           return;
         }
       }
