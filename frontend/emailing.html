@@ -488,18 +488,18 @@
           <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
             <label style="font-weight: bold; color: #333; margin-bottom: 10px; display: block;">📬 Destinataires :</label>
             <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 15px;">
-              <label style="display: flex; align-items: center; gap: 8px; padding: 10px 15px; background: white; border: 2px solid #1F4788; border-radius: 8px; cursor: pointer; transition: all 0.2s;" class="notif-recipient-option selected">
-                <input type="radio" name="notifRecipient" value="all" checked style="width: 16px; height: 16px;" onchange="toggleNotifLicenceInput()">
+              <label style="display: flex; align-items: center; gap: 8px; padding: 10px 15px; background: white; border: 2px solid #ddd; border-radius: 8px; cursor: pointer; transition: all 0.2s;" class="notif-recipient-option">
+                <input type="radio" name="notifRecipient" value="all" style="width: 16px; height: 16px;" onchange="toggleNotifLicenceInput()">
                 <span style="font-size: 14px;">👥 Tous les joueurs</span>
               </label>
-              <label style="display: flex; align-items: center; gap: 8px; padding: 10px 15px; background: white; border: 2px solid #ddd; border-radius: 8px; cursor: pointer; transition: all 0.2s;" class="notif-recipient-option">
-                <input type="radio" name="notifRecipient" value="specific" style="width: 16px; height: 16px;" onchange="toggleNotifLicenceInput()">
+              <label style="display: flex; align-items: center; gap: 8px; padding: 10px 15px; background: white; border: 2px solid #1F4788; border-radius: 8px; cursor: pointer; transition: all 0.2s;" class="notif-recipient-option selected">
+                <input type="radio" name="notifRecipient" value="specific" checked style="width: 16px; height: 16px;" onchange="toggleNotifLicenceInput()">
                 <span style="font-size: 14px;">📋 Liste de licences</span>
               </label>
             </div>
 
-            <!-- Licence input (hidden by default) -->
-            <div id="notifLicenceInputContainer" style="display: none;">
+            <!-- Licence input (visible by default now) -->
+            <div id="notifLicenceInputContainer" style="display: block;">
               <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #333;">
                 Licences (une par ligne, maximum 15) :
               </label>
@@ -8579,7 +8579,7 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
           .filter(l => l.length > 0);
 
         if (licences.length === 0) {
-          showError('Aucune licence saisie');
+          showError('Vous n\'avez indiqué aucun numéro de licence comme destinataire');
           return;
         }
 
