@@ -1927,6 +1927,85 @@ router.put('/push-test-licences', authenticateToken, requireAdmin, async (req, r
   }
 });
 
+// Get push admin copy settings (batch endpoint)
+router.get('/org-settings-batch', authenticateToken, async (req, res) => {
+  try {
+    const db = getDb();
+    const orgId = req.user.organizationId || null;
+    const keys = req.query.keys ? req.query.keys.split(',') : [];
+
+    if (keys.length === 0) {
+      return res.status(400).json({ error: 'No keys provided' });
+    }
+
+    // Build placeholders for SQL query
+    const placeholders = keys.map((_, i) => `$${i + 2}`).join(',');
+
+    const rows = await new Promise((resolve, reject) => {
+      db.all(
+        `SELECT key, value FROM organization_settings
+         WHERE organization_id = $1 AND key IN (${placeholders})`,
+        [orgId, ...keys],
+        (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows || []);
+        }
+      );
+    });
+
+    // Build response object
+    const settings = {};
+    keys.forEach(key => {
+      const row = rows.find(r => r.key === key);
+      settings[key] = row ? row.value : null;
+    });
+
+    res.json(settings);
+  } catch (error) {
+    console.error('[ORG-SETTINGS] Error loading batch settings:', error);
+    res.status(500).json({ error: 'Erreur lors du chargement des paramètres' });
+  }
+});
+
+// Save push admin copy settings (batch endpoint)
+router.put('/org-settings-batch', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const db = getDb();
+    const orgId = req.user.organizationId || null;
+    const settings = req.body;
+
+    if (!settings || typeof settings !== 'object') {
+      return res.status(400).json({ error: 'Invalid settings object' });
+    }
+
+    // Save each setting
+    for (const [key, value] of Object.entries(settings)) {
+      // Convert boolean to string for storage
+      const stringValue = typeof value === 'boolean' ? String(value) : String(value);
+
+      await new Promise((resolve, reject) => {
+        db.run(
+          `INSERT INTO organization_settings (organization_id, key, value)
+           VALUES ($1, $2, $3)
+           ON CONFLICT (organization_id, key) DO UPDATE SET value = $3`,
+          [orgId, key, stringValue],
+          (err) => {
+            if (err) reject(err);
+            else resolve();
+          }
+        );
+      });
+    }
+
+    console.log(`[ORG-SETTINGS] Updated ${Object.keys(settings).length} settings for org ${orgId}`);
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('[ORG-SETTINGS] Error saving batch settings:', error);
+    res.status(500).json({ error: 'Erreur lors de l\'enregistrement des paramètres' });
+  }
+});
+
 module.exports = router;
 module.exports.getRankingTournamentNumbers = getRankingTournamentNumbers;
 module.exports.getFinaleTournamentNumber = getFinaleTournamentNumber;
