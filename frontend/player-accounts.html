@@ -91,16 +91,76 @@
                style="padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px; width: 300px;">
       </div>
 
+      <!-- Bulk Push Notification Section -->
+      <div id="bulkNotificationSection" style="display: none; background: #e7f3ff; border-left: 4px solid #1F4788; padding: 15px; margin-bottom: 20px; border-radius: 4px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <strong>📱 Envoyer une notification push</strong>
+          <button onclick="closeBulkNotification()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #666;">&times;</button>
+        </div>
+
+        <div style="margin-bottom: 12px;">
+          <span id="selectedCount" style="font-weight: 500; color: #1F4788;">0 joueur(s) sélectionné(s)</span>
+        </div>
+
+        <div style="margin-bottom: 12px;">
+          <label style="display: block; margin-bottom: 4px; font-weight: 500; font-size: 14px;">Titre :</label>
+          <input type="text" id="notifTitle" maxlength="50" placeholder="Ex: Rappel Important"
+                 style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
+          <small style="color: #666;">Maximum 50 caractères</small>
+        </div>
+
+        <div style="margin-bottom: 12px;">
+          <label style="display: block; margin-bottom: 4px; font-weight: 500; font-size: 14px;">Message :</label>
+          <textarea id="notifBody" maxlength="150" rows="3" placeholder="Ex: N'oubliez pas de vous inscrire avant dimanche!"
+                    style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; resize: vertical;"></textarea>
+          <small style="color: #666;">Maximum 150 caractères</small>
+        </div>
+
+        <div style="margin-bottom: 12px;">
+          <label style="display: block; margin-bottom: 4px; font-weight: 500; font-size: 14px;">Lien (optionnel) :</label>
+          <select id="notifUrl" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
+            <option value="/">Accueil</option>
+            <option value="/tournaments">Tournois disponibles</option>
+            <option value="/inscriptions">Mes inscriptions</option>
+            <option value="/stats">Mes statistiques</option>
+          </select>
+        </div>
+
+        <div style="display: flex; gap: 10px;">
+          <button onclick="sendBulkNotification()" class="btn" style="background: #28a745; padding: 10px 20px;">
+            📱 Envoyer à <span id="sendCount">0</span> joueur(s)
+          </button>
+          <button onclick="closeBulkNotification()" class="btn btn-secondary" style="padding: 10px 20px;">
+            Annuler
+          </button>
+        </div>
+
+        <div id="bulkNotifMessage" style="display: none; margin-top: 12px; padding: 10px; border-radius: 4px;"></div>
+      </div>
+
       <div id="loadingAccounts" class="loading">
         <div class="spinner"></div>
         Chargement des comptes...
       </div>
 
       <div id="accountsTable" style="display: none;">
+        <!-- Selection Actions Bar -->
+        <div id="selectionActions" style="display: none; background: #f8f9fa; padding: 12px; margin-bottom: 15px; border-radius: 4px; border: 1px solid #ddd;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span><strong id="selectionCount">0</strong> joueur(s) sélectionné(s)</span>
+            <button onclick="openBulkNotification()" class="btn" style="background: #1F4788; padding: 8px 16px;">
+              📱 Envoyer une notification
+            </button>
+          </div>
+        </div>
+
         <div class="table-container">
           <table>
             <thead>
               <tr>
+                <th style="width: 40px;">
+                  <input type="checkbox" id="selectAll" onchange="toggleSelectAll(this.checked)" style="cursor: pointer;">
+                </th>
                 <th>Joueur</th>
                 <th>Licence</th>
                 <th>Email</th>
@@ -218,6 +278,9 @@
 
         row.innerHTML = `
           <td>
+            <input type="checkbox" class="player-checkbox" data-licence="${account.licence}" onchange="updateSelectionCount()" style="cursor: pointer;">
+          </td>
+          <td>
             ${account.player_name || '<em style="color:#999">Non lié</em>'}
             ${account.is_admin ? '<span class="admin-badge" style="margin-left: 8px;">ADMIN</span>' : ''}
           </td>
@@ -321,6 +384,158 @@
       document.getElementById('deleteModal').style.display = 'none';
       accountToDelete = null;
     });
+
+    // ============= BULK PUSH NOTIFICATIONS =============
+
+    // Toggle select all checkboxes
+    function toggleSelectAll(checked) {
+      document.querySelectorAll('.player-checkbox').forEach(cb => {
+        cb.checked = checked;
+      });
+      updateSelectionCount();
+    }
+
+    // Update selection count and show/hide actions bar
+    function updateSelectionCount() {
+      const checkedBoxes = document.querySelectorAll('.player-checkbox:checked');
+      const count = checkedBoxes.length;
+
+      // Update selection actions bar
+      const actionsBar = document.getElementById('selectionActions');
+      const countEl = document.getElementById('selectionCount');
+
+      if (count > 0) {
+        actionsBar.style.display = 'block';
+        countEl.textContent = count;
+      } else {
+        actionsBar.style.display = 'none';
+      }
+
+      // Update "select all" checkbox state
+      const allCheckboxes = document.querySelectorAll('.player-checkbox');
+      const selectAllCheckbox = document.getElementById('selectAll');
+      if (selectAllCheckbox) {
+        selectAllCheckbox.checked = allCheckboxes.length > 0 && count === allCheckboxes.length;
+      }
+    }
+
+    // Open bulk notification form
+    function openBulkNotification() {
+      const checkedBoxes = document.querySelectorAll('.player-checkbox:checked');
+      const count = checkedBoxes.length;
+
+      if (count === 0) {
+        alert('Veuillez sélectionner au moins un joueur');
+        return;
+      }
+
+      document.getElementById('bulkNotificationSection').style.display = 'block';
+      document.getElementById('selectedCount').textContent = `${count} joueur(s) sélectionné(s)`;
+      document.getElementById('sendCount').textContent = count;
+
+      // Scroll to notification form
+      document.getElementById('bulkNotificationSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    // Close bulk notification form
+    function closeBulkNotification() {
+      document.getElementById('bulkNotificationSection').style.display = 'none';
+      document.getElementById('notifTitle').value = '';
+      document.getElementById('notifBody').value = '';
+      document.getElementById('notifUrl').value = '/';
+      document.getElementById('bulkNotifMessage').style.display = 'none';
+    }
+
+    // Send bulk notification
+    async function sendBulkNotification() {
+      const checkedBoxes = document.querySelectorAll('.player-checkbox:checked');
+      const licences = Array.from(checkedBoxes).map(cb => cb.dataset.licence);
+
+      const title = document.getElementById('notifTitle').value.trim();
+      const body = document.getElementById('notifBody').value.trim();
+      const url = document.getElementById('notifUrl').value;
+
+      const messageDiv = document.getElementById('bulkNotifMessage');
+
+      // Validation
+      if (!title) {
+        messageDiv.textContent = '❌ Veuillez saisir un titre';
+        messageDiv.style.display = 'block';
+        messageDiv.style.background = '#f8d7da';
+        messageDiv.style.color = '#721c24';
+        messageDiv.style.borderLeft = '4px solid #dc3545';
+        return;
+      }
+
+      if (!body) {
+        messageDiv.textContent = '❌ Veuillez saisir un message';
+        messageDiv.style.display = 'block';
+        messageDiv.style.background = '#f8d7da';
+        messageDiv.style.color = '#721c24';
+        messageDiv.style.borderLeft = '4px solid #dc3545';
+        return;
+      }
+
+      if (licences.length === 0) {
+        messageDiv.textContent = '❌ Aucun joueur sélectionné';
+        messageDiv.style.display = 'block';
+        messageDiv.style.background = '#f8d7da';
+        messageDiv.style.color = '#721c24';
+        messageDiv.style.borderLeft = '4px solid #dc3545';
+        return;
+      }
+
+      // Confirmation
+      if (!confirm(`Êtes-vous sûr de vouloir envoyer cette notification à ${licences.length} joueur(s) ?\n\nTitre: ${title}\nMessage: ${body}`)) {
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API_URL}/push/bulk`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            licences,
+            title,
+            body,
+            url
+          })
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || 'Erreur lors de l\'envoi');
+        }
+
+        const result = await response.json();
+
+        messageDiv.textContent = `✅ Notification envoyée avec succès à ${result.total_sent} joueur(s)`;
+        messageDiv.style.display = 'block';
+        messageDiv.style.background = '#d4edda';
+        messageDiv.style.color = '#155724';
+        messageDiv.style.borderLeft = '4px solid #28a745';
+
+        // Clear form and close after 2s
+        setTimeout(() => {
+          closeBulkNotification();
+          // Uncheck all checkboxes
+          toggleSelectAll(false);
+        }, 2000);
+
+      } catch (error) {
+        console.error('Error sending bulk notification:', error);
+        messageDiv.textContent = `❌ Erreur: ${error.message}`;
+        messageDiv.style.display = 'block';
+        messageDiv.style.background = '#f8d7da';
+        messageDiv.style.color = '#721c24';
+        messageDiv.style.borderLeft = '4px solid #dc3545';
+      }
+    }
+
+    // ============= END BULK PUSH NOTIFICATIONS =============
 
     // Initialize
     loadAccounts();

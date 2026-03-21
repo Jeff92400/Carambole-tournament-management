@@ -611,6 +611,53 @@ router.get('/debug/:licence', async (req, res) => {
 });
 
 /**
+ * POST /api/push/bulk
+ * Send bulk notification to multiple players (admin only)
+ * Body: { licences: [], title, body, url }
+ */
+router.post('/bulk', async (req, res) => {
+  try {
+    const { licences, title, body, url } = req.body;
+    const orgId = req.user?.organizationId || 1;
+
+    // Validation
+    if (!Array.isArray(licences) || licences.length === 0) {
+      return res.status(400).json({ error: 'Aucun joueur sélectionné' });
+    }
+
+    if (!title || !body) {
+      return res.status(400).json({ error: 'Titre et message requis' });
+    }
+
+    console.log(`[BULK PUSH] Sending to ${licences.length} players for org ${orgId}`);
+    console.log(`[BULK PUSH] Title: ${title}`);
+    console.log(`[BULK PUSH] Body: ${body}`);
+
+    // Send to all players
+    const notification = {
+      title,
+      body,
+      url: url || '/'
+    };
+
+    const result = await sendPushToPlayers(licences, orgId, notification);
+
+    console.log(`[BULK PUSH] Sent: ${result.total_sent}, Failed: ${result.total_failed}`);
+
+    res.json({
+      success: true,
+      total_sent: result.total_sent,
+      total_failed: result.total_failed,
+      message: `Notification envoyée à ${result.total_sent} joueur(s)`
+    });
+
+  } catch (error) {
+    console.error('[BULK PUSH] Error:', error);
+    res.status(500).json({ error: 'Erreur lors de l\'envoi des notifications' });
+  }
+});
+
+/**
  * HELPER FUNCTION: Send copy of notification to admin if enabled
  * @param {number} orgId - Organization ID
  * @param {string} playerLicence - Player licence who received the notification
