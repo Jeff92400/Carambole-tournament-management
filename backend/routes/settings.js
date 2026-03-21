@@ -2006,6 +2006,33 @@ router.put('/org-settings-batch', authenticateToken, requireAdmin, async (req, r
   }
 });
 
+// Quick enable push notifications for all players (admin only)
+router.post('/enable-push-notifications', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const db = getDb();
+    const orgId = req.user.organizationId || null;
+
+    await new Promise((resolve, reject) => {
+      db.run(
+        `INSERT INTO organization_settings (organization_id, key, value)
+         VALUES ($1, 'push_notification_test_licences', '[]')
+         ON CONFLICT (organization_id, key) DO UPDATE SET value = '[]'`,
+        [orgId],
+        (err) => {
+          if (err) reject(err);
+          else resolve();
+        }
+      );
+    });
+
+    console.log(`[PUSH] Enabled push notifications for all players in org ${orgId}`);
+    res.json({ success: true, message: 'Push notifications enabled for all players' });
+  } catch (error) {
+    console.error('[PUSH] Error enabling push notifications:', error);
+    res.status(500).json({ error: 'Erreur lors de l\'activation des notifications' });
+  }
+});
+
 module.exports = router;
 module.exports.getRankingTournamentNumbers = getRankingTournamentNumbers;
 module.exports.getFinaleTournamentNumber = getFinaleTournamentNumber;

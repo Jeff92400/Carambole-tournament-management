@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mockup — Dashboard KPI Widget Selector</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
+    .container {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      padding: 30px;
+      max-width: 1200px;
+      margin: 20px auto;
+    }
+    .header-bar {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 20px; padding-bottom: 15px; border-bottom: 2px solid #f0f0f0;
+    }
+    .header-bar h2 { color: #1F4788; font-size: 22px; }
+    .btn-customize {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 10px 20px; background: #1F4788; color: white;
+      border: none; border-radius: 8px; cursor: pointer;
+      font-size: 14px; font-weight: 600;
+      box-shadow: 0 4px 12px rgba(31, 71, 136, 0.3);
+      transition: all 0.2s;
+    }
+    .btn-customize:hover { background: #163a6e; transform: translateY(-1px); }
+    .btn-customize svg { width: 18px; height: 18px; }
+
+    /* Season selector */
+    .season-bar {
+      display: flex; align-items: center; gap: 10px; margin-bottom: 15px;
+    }
+    .season-bar label { font-weight: bold; color: #333; font-size: 13px; }
+    .season-bar select {
+      padding: 5px 10px; border: 2px solid #1F4788; border-radius: 6px;
+      font-size: 14px; font-weight: bold; color: #1F4788; background: white;
+    }
+
+    /* KPI Grid */
+    .kpi-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
+      margin-bottom: 20px;
+    }
+    .kpi-section-title {
+      grid-column: 1 / -1; font-size: 12px; color: #666;
+      margin: 4px 0 2px 0; font-weight: bold; text-transform: uppercase;
+    }
+    .kpi-widget {
+      padding: 14px; border-radius: 12px; text-align: center; color: white;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15), 0 10px 28px rgba(0,0,0,0.12);
+      transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s;
+      cursor: default; position: relative;
+    }
+    .kpi-widget:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 8px 20px rgba(0,0,0,0.18), 0 16px 36px rgba(0,0,0,0.14);
+    }
+    .kpi-widget h5 { margin: 0 0 4px 0; font-size: 11px; opacity: 0.9; text-transform: uppercase; letter-spacing: 0.3px; }
+    .kpi-widget .val { font-size: 28px; font-weight: bold; line-height: 1; }
+    .kpi-widget .sub { font-size: 10px; opacity: 0.75; margin-top: 3px; }
+    .kpi-widget .trend { font-size: 11px; margin-top: 4px; opacity: 0.9; }
+    .kpi-widget .trend.up { color: #b8ffb8; }
+    .kpi-widget .trend.down { color: #ffb8b8; }
+
+    /* Color themes */
+    .theme-purple { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+    .theme-green { background: linear-gradient(135deg, #28a745 0%, #20c997 100%); }
+    .theme-blue { background: linear-gradient(135deg, #1F4788 0%, #2563eb 100%); }
+    .theme-orange { background: linear-gradient(135deg, #f97316 0%, #f59e0b 100%); }
+    .theme-red { background: linear-gradient(135deg, #dc3545 0%, #e74c3c 100%); }
+    .theme-teal { background: linear-gradient(135deg, #0d9488 0%, #06b6d4 100%); }
+    .theme-pink { background: linear-gradient(135deg, #ec4899 0%, #a855f7 100%); }
+    .theme-gray { background: linear-gradient(135deg, #6b7280 0%, #9ca3af 100%); }
+
+    /* Wide widget (2 columns) */
+    .kpi-widget.wide { grid-column: span 2; }
+    .kpi-widget.wide .val { font-size: 22px; }
+
+    /* Chart placeholder */
+    .mini-chart {
+      display: flex; align-items: flex-end; gap: 3px; justify-content: center;
+      height: 40px; margin-top: 8px;
+    }
+    .mini-chart .bar {
+      width: 12px; border-radius: 2px 2px 0 0; background: rgba(255,255,255,0.4);
+      transition: height 0.3s;
+    }
+
+    /* ============ MODAL ============ */
+    .modal-overlay {
+      display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.5); z-index: 1000; overflow-y: auto;
+      animation: fadeIn 0.2s;
+    }
+    .modal-overlay.active { display: block; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+    .modal {
+      background: white; margin: 30px auto; max-width: 800px;
+      border-radius: 12px; box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+      animation: slideUp 0.3s;
+    }
+    @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+    .modal-header {
+      padding: 20px 24px; border-bottom: 1px solid #eee;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .modal-header h3 { color: #1F4788; font-size: 18px; }
+    .modal-close {
+      background: none; border: none; font-size: 28px; cursor: pointer; color: #666;
+      width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;
+      border-radius: 50%; transition: background 0.2s;
+    }
+    .modal-close:hover { background: #f0f0f0; }
+
+    .modal-body { padding: 20px 24px; max-height: 65vh; overflow-y: auto; }
+
+    .modal-footer {
+      padding: 16px 24px; border-top: 1px solid #eee;
+      display: flex; justify-content: flex-end; gap: 10px;
+    }
+    .btn-cancel {
+      padding: 10px 20px; border: 1px solid #ddd; border-radius: 8px;
+      background: white; cursor: pointer; font-size: 14px; color: #666;
+    }
+    .btn-save {
+      padding: 10px 24px; border: none; border-radius: 8px;
+      background: #1F4788; color: white; cursor: pointer; font-size: 14px; font-weight: 600;
+      box-shadow: 0 2px 8px rgba(31, 71, 136, 0.3);
+    }
+    .btn-save:hover { background: #163a6e; }
+
+    /* Category sections in modal */
+    .category-section {
+      margin-bottom: 20px; border: 1px solid #e5e7eb; border-radius: 10px;
+      overflow: hidden;
+    }
+    .category-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 16px; background: #f8f9fa; cursor: pointer;
+      border-bottom: 1px solid #e5e7eb; user-select: none;
+    }
+    .category-header:hover { background: #f0f1f3; }
+    .category-header h4 { font-size: 14px; color: #333; display: flex; align-items: center; gap: 8px; }
+    .category-header .count {
+      font-size: 11px; background: #e5e7eb; color: #666;
+      padding: 2px 8px; border-radius: 10px;
+    }
+    .category-header .chevron { transition: transform 0.2s; font-size: 12px; color: #999; }
+    .category-header.expanded .chevron { transform: rotate(180deg); }
+
+    .category-items { padding: 8px 12px; display: none; }
+    .category-items.expanded { display: block; }
+
+    .kpi-item {
+      display: flex; align-items: center; gap: 12px;
+      padding: 8px 10px; border-radius: 6px; cursor: pointer;
+      transition: background 0.15s;
+    }
+    .kpi-item:hover { background: #f5f6f8; }
+
+    .kpi-checkbox {
+      width: 20px; height: 20px; border: 2px solid #d1d5db;
+      border-radius: 4px; display: flex; align-items: center; justify-content: center;
+      transition: all 0.15s; flex-shrink: 0;
+    }
+    .kpi-item.selected .kpi-checkbox {
+      background: #1F4788; border-color: #1F4788;
+    }
+    .kpi-item.selected .kpi-checkbox::after {
+      content: '✓'; color: white; font-size: 12px; font-weight: bold;
+    }
+    .kpi-info { flex: 1; }
+    .kpi-info .name { font-size: 13px; font-weight: 600; color: #333; }
+    .kpi-info .desc { font-size: 11px; color: #888; margin-top: 1px; }
+
+    .kpi-badge {
+      font-size: 10px; padding: 2px 8px; border-radius: 10px; font-weight: 600;
+    }
+    .badge-existing { background: #d1fae5; color: #065f46; }
+    .badge-new { background: #dbeafe; color: #1e40af; }
+
+    /* Counter */
+    .selection-counter {
+      font-size: 13px; color: #666; padding: 10px 0;
+      border-bottom: 1px solid #eee; margin-bottom: 15px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .counter-num {
+      font-weight: bold; color: #1F4788; font-size: 20px;
+    }
+    .counter-label { color: #999; }
+    .counter-max { color: #999; font-size: 12px; }
+
+    /* Color dot */
+    .color-dot {
+      width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+    }
+
+    /* Info tooltip */
+    .info-banner {
+      background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px;
+      padding: 12px 16px; margin-bottom: 15px; font-size: 13px; color: #1e40af;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .info-banner strong { font-weight: 700; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="header-bar">
+      <h2>CDB Tournois — Tableau de bord</h2>
+      <button class="btn-customize" onclick="openModal()">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+          <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+        </svg>
+        Personnaliser le tableau de bord
+      </button>
+    </div>
+
+    <!-- Season selector -->
+    <div class="season-bar">
+      <label>Saison :</label>
+      <select>
+        <option selected>2025-2026</option>
+        <option>2024-2025</option>
+      </select>
+    </div>
+
+    <!-- KPI Grid (demo: what the dashboard looks like with selected widgets) -->
+    <div class="kpi-grid" id="dashboardGrid">
+      <!-- Section: Joueurs -->
+      <div class="kpi-section-title">Joueurs</div>
+
+      <div class="kpi-widget theme-purple">
+        <h5>Joueurs Actifs</h5>
+        <div class="val">47</div>
+        <div class="trend up">+3 vs saison précédente</div>
+      </div>
+      <div class="kpi-widget theme-purple">
+        <h5>Taux d'activité</h5>
+        <div class="val">78%</div>
+        <div class="sub">47 actifs / 60 licenciés</div>
+      </div>
+      <div class="kpi-widget theme-purple">
+        <h5>Adoption Espace Joueur</h5>
+        <div class="val">62%</div>
+        <div class="sub">37 comptes / 60 joueurs</div>
+      </div>
+
+      <!-- Section: Compétitions -->
+      <div class="kpi-section-title">Compétitions</div>
+
+      <div class="kpi-widget theme-blue">
+        <h5>Compétitions jouées</h5>
+        <div class="val">18</div>
+      </div>
+      <div class="kpi-widget theme-blue">
+        <h5>Taux de réalisation</h5>
+        <div class="val">67%</div>
+        <div class="sub">18 joués / 27 programmés</div>
+      </div>
+      <div class="kpi-widget theme-blue">
+        <h5>Moyenne joueurs / tournoi</h5>
+        <div class="val">6.2</div>
+        <div class="trend down">-0.4 vs saison précédente</div>
+      </div>
+
+      <!-- Section: Inscriptions -->
+      <div class="kpi-section-title">Inscriptions</div>
+
+      <div class="kpi-widget theme-green">
+        <h5>Total Inscriptions</h5>
+        <div class="val">329</div>
+      </div>
+      <div class="kpi-widget theme-green">
+        <h5>Auto-inscriptions</h5>
+        <div class="val">74%</div>
+        <div class="sub">244 Espace Joueur</div>
+      </div>
+      <div class="kpi-widget theme-green">
+        <h5>Taux de fiabilité</h5>
+        <div class="val">91%</div>
+        <div class="sub">Présents / Inscrits</div>
+      </div>
+
+      <!-- Section: Clubs -->
+      <div class="kpi-section-title">Clubs</div>
+
+      <div class="kpi-widget theme-teal">
+        <h5>Clubs actifs</h5>
+        <div class="val">8</div>
+      </div>
+      <div class="kpi-widget theme-teal">
+        <h5>Club le plus engagé</h5>
+        <div class="val" style="font-size: 16px;">BC Courbevoie</div>
+        <div class="sub">5.2 inscriptions / joueur</div>
+      </div>
+      <div class="kpi-widget theme-teal">
+        <h5>Diversité inter-clubs</h5>
+        <div class="val">5.4</div>
+        <div class="sub">clubs / tournoi (moy.)</div>
+      </div>
+
+      <!-- Section: Tendances (wide chart widget) -->
+      <div class="kpi-section-title">Tendances</div>
+
+      <div class="kpi-widget wide theme-orange">
+        <h5>Participation mensuelle</h5>
+        <div class="mini-chart">
+          <div class="bar" style="height: 15px;" title="Sep: 18"></div>
+          <div class="bar" style="height: 28px;" title="Oct: 35"></div>
+          <div class="bar" style="height: 35px;" title="Nov: 42"></div>
+          <div class="bar" style="height: 30px;" title="Déc: 38"></div>
+          <div class="bar" style="height: 40px;" title="Jan: 52"></div>
+          <div class="bar" style="height: 38px;" title="Fév: 48"></div>
+          <div class="bar" style="height: 32px;" title="Mar: 40"></div>
+          <div class="bar" style="height: 18px; opacity: 0.3;" title="Avr"></div>
+          <div class="bar" style="height: 12px; opacity: 0.3;" title="Mai"></div>
+          <div class="bar" style="height: 8px; opacity: 0.3;" title="Jun"></div>
+        </div>
+        <div class="sub" style="margin-top: 6px;">Inscriptions par mois — barres claires = à venir</div>
+      </div>
+      <div class="kpi-widget theme-orange">
+        <h5>Évolution N / N-1</h5>
+        <div class="val" style="color: #b8ffb8;">+12%</div>
+        <div class="sub">Inscriptions vs 2024-2025</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ WIDGET SELECTOR MODAL ============ -->
+  <div class="modal-overlay" id="modalOverlay">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Personnaliser le tableau de bord</h3>
+        <button class="modal-close" onclick="closeModal()">&times;</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="info-banner">
+          <strong>Conseil :</strong> Sélectionnez 9 à 15 indicateurs pour un tableau de bord lisible. Les indicateurs sont regroupés en lignes de 3.
+        </div>
+
+        <div class="selection-counter">
+          <span class="counter-num" id="counterNum">15</span>
+          <span>indicateurs sélectionnés</span>
+          <span class="counter-max">(recommandé : 9-15)</span>
+        </div>
+
+        <!-- Categories -->
+        <div id="categoriesContainer"></div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn-cancel" onclick="closeModal()">Annuler</button>
+        <button class="btn-save" onclick="saveSelection()">Enregistrer</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ============================================================
+    // KPI CATALOG — This is the full registry of available KPIs
+    // Each CDB picks from this catalog.
+    // ============================================================
+    const KPI_CATALOG = [
+      // ---- JOUEURS ----
+      { id: 'players_total', category: 'Joueurs', name: 'Joueurs licenciés', desc: 'Nombre total de joueurs du CDB', existing: true, theme: 'purple' },
+      { id: 'players_active', category: 'Joueurs', name: 'Joueurs actifs', desc: 'Joueurs avec au moins 1 inscription cette saison', existing: true, theme: 'purple' },
+      { id: 'players_inactive', category: 'Joueurs', name: 'Joueurs inactifs', desc: 'Licenciés sans aucune inscription cette saison', existing: false, theme: 'purple' },
+      { id: 'players_activity_rate', category: 'Joueurs', name: 'Taux d\'activité', desc: 'Actifs / Total licenciés — santé de l\'engagement', existing: false, theme: 'purple' },
+      { id: 'players_lost', category: 'Joueurs', name: 'Joueurs perdus', desc: 'Actifs la saison précédente, inactifs cette saison', existing: false, theme: 'purple' },
+      { id: 'players_recovered', category: 'Joueurs', name: 'Joueurs récupérés', desc: 'Inactifs la saison précédente, de retour cette saison', existing: false, theme: 'purple' },
+      { id: 'players_avg_age', category: 'Joueurs', name: 'Moyenne d\'âge', desc: 'Âge moyen des joueurs actifs (si dates de naissance disponibles)', existing: false, theme: 'purple' },
+      { id: 'players_ffb_distribution', category: 'Joueurs', name: 'Répartition classement FFB', desc: 'Distribution des joueurs par niveau FFB (N1 à NC)', existing: true, theme: 'purple' },
+      { id: 'players_ffb_progression', category: 'Joueurs', name: 'Progression de classement', desc: 'Joueurs montés/descendus de classement FFB vs saison précédente', existing: false, theme: 'purple' },
+      { id: 'players_top10', category: 'Joueurs', name: 'Top 10 par moyenne', desc: 'Meilleurs joueurs par moyenne de la saison, par discipline', existing: false, theme: 'purple' },
+      { id: 'players_multi_discipline', category: 'Joueurs', name: 'Joueurs multi-disciplines', desc: 'Joueurs participant à 2 ou + modes de jeu', existing: false, theme: 'purple' },
+      { id: 'players_loyalty', category: 'Joueurs', name: 'Fidélité (saisons consécutives)', desc: 'Joueurs actifs depuis N saisons sans interruption', existing: false, theme: 'purple' },
+      { id: 'players_app_accounts', category: 'Joueurs', name: 'Comptes Espace Joueur', desc: 'Nombre de joueurs avec un compte Espace Joueur', existing: true, theme: 'purple' },
+      { id: 'players_app_adoption', category: 'Joueurs', name: 'Taux d\'adoption Espace Joueur', desc: 'Comptes Espace Joueur / Total joueurs', existing: false, theme: 'purple' },
+
+      // ---- COMPÉTITIONS ----
+      { id: 'comp_planned', category: 'Compétitions', name: 'Tournois programmés', desc: 'Total des compétitions prévues cette saison', existing: true, theme: 'blue' },
+      { id: 'comp_played', category: 'Compétitions', name: 'Compétitions jouées', desc: 'Compétitions dont les résultats ont été enregistrés', existing: true, theme: 'blue' },
+      { id: 'comp_upcoming', category: 'Compétitions', name: 'Compétitions à venir', desc: 'Compétitions futures pas encore jouées', existing: true, theme: 'blue' },
+      { id: 'comp_completion_rate', category: 'Compétitions', name: 'Taux de réalisation', desc: 'Jouées / Programmées — les tournois ont-ils lieu ?', existing: false, theme: 'blue' },
+      { id: 'comp_avg_players', category: 'Compétitions', name: 'Moyenne joueurs / tournoi', desc: 'Nombre moyen d\'inscrits par compétition', existing: false, theme: 'blue' },
+      { id: 'comp_most_popular', category: 'Compétitions', name: 'Tournoi le plus populaire', desc: 'Compétition avec le plus d\'inscriptions', existing: false, theme: 'blue' },
+      { id: 'comp_by_mode', category: 'Compétitions', name: 'Répartition par mode de jeu', desc: '% de tournois en Libre, Bande, 3 Bandes, Cadre', existing: false, theme: 'blue' },
+      { id: 'comp_calendar_density', category: 'Compétitions', name: 'Densité calendrier', desc: 'Nombre de tournois par mois — équilibre de la planification', existing: false, theme: 'blue' },
+      { id: 'comp_forfaits', category: 'Compétitions', name: 'Forfaits par tournoi', desc: 'Nombre moyen de forfaits — indicateur de fiabilité', existing: false, theme: 'blue' },
+      { id: 'comp_convocation_rate', category: 'Compétitions', name: 'Taux de convocation', desc: 'Convoqués / Inscrits par compétition', existing: false, theme: 'blue' },
+
+      // ---- INSCRIPTIONS ----
+      { id: 'insc_total', category: 'Inscriptions', name: 'Inscriptions totales', desc: 'Total des inscriptions de la saison', existing: true, theme: 'green' },
+      { id: 'insc_by_source', category: 'Inscriptions', name: 'Espace Joueur vs Manuel', desc: 'Répartition auto-inscription / saisie admin', existing: false, theme: 'green' },
+      { id: 'insc_self_rate', category: 'Inscriptions', name: 'Taux d\'auto-inscription', desc: 'Inscriptions Espace Joueur / Total — utilité de l\'app', existing: false, theme: 'green' },
+      { id: 'insc_unavailable', category: 'Inscriptions', name: 'Indisponibilités déclarées', desc: 'Joueurs ayant déclaré leur indisponibilité', existing: true, theme: 'green' },
+      { id: 'insc_cancelled', category: 'Inscriptions', name: 'Désinscriptions', desc: 'Inscriptions annulées par les joueurs', existing: false, theme: 'green' },
+      { id: 'insc_reliability', category: 'Inscriptions', name: 'Taux de fiabilité', desc: '(Inscrits - Forfaits - Désinscrits) / Inscrits', existing: false, theme: 'green' },
+      { id: 'insc_per_player', category: 'Inscriptions', name: 'Inscriptions / joueur (moy.)', desc: 'Nombre moyen de tournois par joueur actif', existing: false, theme: 'green' },
+      { id: 'insc_full_season', category: 'Inscriptions', name: 'Joueurs 100% présents', desc: 'Inscrits à tous les tournois de leur catégorie', existing: false, theme: 'green' },
+      { id: 'insc_avg_delay', category: 'Inscriptions', name: 'Délai moyen d\'inscription', desc: 'Jours entre publication et inscription', existing: false, theme: 'green' },
+      { id: 'insc_late', category: 'Inscriptions', name: 'Inscriptions tardives (< 7j)', desc: 'Inscriptions de dernière minute', existing: false, theme: 'green' },
+      { id: 'insc_peak', category: 'Inscriptions', name: 'Pic d\'inscriptions', desc: 'Jour et heure où les joueurs s\'inscrivent le plus', existing: false, theme: 'green' },
+      { id: 'insc_after_relance', category: 'Inscriptions', name: 'Inscriptions après relance', desc: 'Inscriptions dans les 48h suivant un email de relance', existing: false, theme: 'green' },
+
+      // ---- CATÉGORIES ----
+      { id: 'cat_active', category: 'Catégories', name: 'Catégories actives', desc: 'Catégories avec au moins 1 tournoi cette saison', existing: true, theme: 'pink' },
+      { id: 'cat_players', category: 'Catégories', name: 'Joueurs par catégorie', desc: 'Distribution des joueurs par catégorie de jeu', existing: true, theme: 'pink' },
+      { id: 'cat_most_popular', category: 'Catégories', name: 'Catégorie la plus disputée', desc: 'Catégorie avec le plus d\'inscriptions cumulées', existing: false, theme: 'pink' },
+      { id: 'cat_declining', category: 'Catégories', name: 'Catégorie en déclin', desc: 'Catégories perdant des participants vs saison précédente', existing: false, theme: 'pink' },
+      { id: 'cat_growing', category: 'Catégories', name: 'Catégorie en croissance', desc: 'Catégories gagnant des participants', existing: false, theme: 'pink' },
+      { id: 'cat_avg_score', category: 'Catégories', name: 'Moyenne par catégorie', desc: 'Score moyen des joueurs par catégorie — indicateur de niveau', existing: false, theme: 'pink' },
+      { id: 'cat_avg_progression', category: 'Catégories', name: 'Progression des moyennes', desc: 'Évolution du niveau moyen par catégorie entre saisons', existing: false, theme: 'pink' },
+
+      // ---- CLUBS ----
+      { id: 'club_count', category: 'Clubs', name: 'Nombre de clubs', desc: 'Clubs actifs dans le CDB', existing: true, theme: 'teal' },
+      { id: 'club_players', category: 'Clubs', name: 'Joueurs par club', desc: 'Distribution des joueurs entre les clubs', existing: true, theme: 'teal' },
+      { id: 'club_most_players', category: 'Clubs', name: 'Club le plus représenté', desc: 'Club avec le plus de joueurs actifs', existing: false, theme: 'teal' },
+      { id: 'club_most_engaged', category: 'Clubs', name: 'Club le plus engagé', desc: 'Meilleur ratio inscriptions / joueur', existing: false, theme: 'teal' },
+      { id: 'club_hosts', category: 'Clubs', name: 'Clubs hébergeurs', desc: 'Clubs accueillant le plus de compétitions', existing: false, theme: 'teal' },
+      { id: 'club_diversity', category: 'Clubs', name: 'Diversité inter-clubs', desc: 'Nombre moyen de clubs différents par tournoi', existing: false, theme: 'teal' },
+
+      // ---- ENGAGEMENT ----
+      { id: 'eng_emails_sent', category: 'Engagement', name: 'Emails envoyés', desc: 'Total des emails envoyés cette saison', existing: false, theme: 'orange' },
+      { id: 'eng_open_rate', category: 'Engagement', name: 'Taux d\'ouverture', desc: 'Taux d\'ouverture des emails (si tracking activé)', existing: false, theme: 'orange' },
+      { id: 'eng_relances_sent', category: 'Engagement', name: 'Relances envoyées', desc: 'Nombre de campagnes de relance', existing: false, theme: 'orange' },
+      { id: 'eng_relance_effect', category: 'Engagement', name: 'Efficacité des relances', desc: 'Inscriptions dans les 48h post-relance', existing: false, theme: 'orange' },
+      { id: 'eng_convocations', category: 'Engagement', name: 'Convocations envoyées', desc: 'Nombre de convocations émises', existing: false, theme: 'orange' },
+      { id: 'eng_announcements', category: 'Engagement', name: 'Annonces actives', desc: 'Annonces en cours dans l\'Espace Joueur', existing: false, theme: 'orange' },
+      { id: 'eng_app_logins', category: 'Engagement', name: 'Connexions Espace Joueur', desc: 'Connexions ce mois depuis l\'Espace Joueur', existing: false, theme: 'orange' },
+      { id: 'eng_never_connected', category: 'Engagement', name: 'Joueurs jamais connectés', desc: 'Ont un compte mais ne se sont jamais connectés', existing: false, theme: 'orange' },
+
+      // ---- TENDANCES ----
+      { id: 'trend_yoy', category: 'Tendances', name: 'Évolution N / N-1', desc: 'Comparaison joueurs, inscriptions, tournois vs saison précédente', existing: false, theme: 'orange' },
+      { id: 'trend_monthly', category: 'Tendances', name: 'Participation mensuelle', desc: 'Courbe des inscriptions par mois (graphique)', existing: false, theme: 'orange', wide: true },
+      { id: 'trend_seasonality', category: 'Tendances', name: 'Saisonnalité', desc: 'Mois les plus actifs / les plus calmes', existing: false, theme: 'orange' },
+
+      // ---- CLASSEMENTS ----
+      { id: 'rank_players', category: 'Classements', name: 'Joueurs classés', desc: 'Nombre de joueurs au classement cette saison', existing: true, theme: 'gray' },
+      { id: 'rank_best_avg', category: 'Classements', name: 'Meilleure moyenne', desc: 'Plus haute moyenne de la saison, par discipline', existing: false, theme: 'gray' },
+      { id: 'rank_record', category: 'Classements', name: 'Record de moyenne', desc: 'Meilleure moyenne historique toutes saisons confondues', existing: false, theme: 'gray' },
+      { id: 'rank_avg_progress', category: 'Classements', name: 'Progression des moyennes', desc: 'Évolution du niveau moyen vs saison précédente', existing: false, theme: 'gray' },
+    ];
+
+    // Default selection (what's shown on load)
+    let selectedKPIs = new Set([
+      'players_active', 'players_activity_rate', 'players_app_adoption',
+      'comp_played', 'comp_completion_rate', 'comp_avg_players',
+      'insc_total', 'insc_self_rate', 'insc_reliability',
+      'club_count', 'club_most_engaged', 'club_diversity',
+      'trend_monthly', 'trend_yoy'
+    ]);
+
+    // ============ MODAL LOGIC ============
+
+    function openModal() {
+      renderCategories();
+      updateCounter();
+      document.getElementById('modalOverlay').classList.add('active');
+    }
+
+    function closeModal() {
+      document.getElementById('modalOverlay').classList.remove('active');
+    }
+
+    function saveSelection() {
+      closeModal();
+      // In real app: POST to /api/settings/dashboard-kpis with selectedKPIs
+      alert('Configuration sauvegardée ! (' + selectedKPIs.size + ' indicateurs)\n\nEn production, cette sélection serait stockée dans organization_settings.');
+    }
+
+    function renderCategories() {
+      const container = document.getElementById('categoriesContainer');
+      const categories = [...new Set(KPI_CATALOG.map(k => k.category))];
+
+      container.innerHTML = categories.map(cat => {
+        const items = KPI_CATALOG.filter(k => k.category === cat);
+        const selectedCount = items.filter(k => selectedKPIs.has(k.id)).length;
+        const colorMap = { 'Joueurs': '#764ba2', 'Compétitions': '#2563eb', 'Inscriptions': '#28a745', 'Catégories': '#ec4899', 'Clubs': '#0d9488', 'Engagement': '#f97316', 'Tendances': '#f59e0b', 'Classements': '#6b7280' };
+        const color = colorMap[cat] || '#666';
+
+        return `
+          <div class="category-section">
+            <div class="category-header expanded" onclick="toggleCategory(this)">
+              <h4>
+                <span class="color-dot" style="background: ${color};"></span>
+                ${cat}
+                <span class="count">${selectedCount} / ${items.length}</span>
+              </h4>
+              <span class="chevron">&#9660;</span>
+            </div>
+            <div class="category-items expanded">
+              ${items.map(k => `
+                <div class="kpi-item ${selectedKPIs.has(k.id) ? 'selected' : ''}" onclick="toggleKPI('${k.id}', this)">
+                  <div class="kpi-checkbox"></div>
+                  <div class="kpi-info">
+                    <div class="name">${k.name}</div>
+                    <div class="desc">${k.desc}</div>
+                  </div>
+                  <span class="kpi-badge ${k.existing ? 'badge-existing' : 'badge-new'}">${k.existing ? 'Existant' : 'Nouveau'}</span>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function toggleCategory(header) {
+      header.classList.toggle('expanded');
+      const items = header.nextElementSibling;
+      items.classList.toggle('expanded');
+    }
+
+    function toggleKPI(id, element) {
+      if (selectedKPIs.has(id)) {
+        selectedKPIs.delete(id);
+        element.classList.remove('selected');
+      } else {
+        selectedKPIs.add(id);
+        element.classList.add('selected');
+      }
+      updateCounter();
+      // Update category count
+      const section = element.closest('.category-section');
+      const cat = section.querySelector('.category-header h4 .color-dot').nextSibling.textContent.trim();
+      const items = KPI_CATALOG.filter(k => k.category === cat);
+      const selectedCount = items.filter(k => selectedKPIs.has(k.id)).length;
+      section.querySelector('.count').textContent = `${selectedCount} / ${items.length}`;
+    }
+
+    function updateCounter() {
+      const num = document.getElementById('counterNum');
+      num.textContent = selectedKPIs.size;
+      num.style.color = selectedKPIs.size > 15 ? '#dc3545' : '#1F4788';
+    }
+
+    // Close modal on overlay click
+    document.getElementById('modalOverlay').addEventListener('click', function(e) {
+      if (e.target === this) closeModal();
+    });
+  </script>
+</body>
+</html>
