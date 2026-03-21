@@ -1687,6 +1687,8 @@ async function initializeDatabase() {
       ['average_bonus_tiers', 'false'],
       ['bonus_moyenne_enabled', 'false'],
       ['bonus_moyenne_type', 'normal'],
+      ['push_notifications_test_mode', 'false'],
+      ['push_test_licences', ''],
     ];
     for (const [key, value] of qualificationDefaults) {
       await client.query(`
