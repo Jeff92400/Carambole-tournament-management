@@ -558,7 +558,7 @@
               id="notifUrl"
               style="width: 100%; max-width: 400px; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;"
             >
-              <option value="/">🏠 Page d'accueil</option>
+              <option value="">🏠 Page d'accueil</option>
               <option value="#tournaments">🏆 Vos compétitions</option>
               <option value="#inscriptions">📝 Inscriptions</option>
               <option value="#stats">📊 Stats</option>
@@ -566,6 +566,9 @@
               <option value="#profile">👤 Profil & FAQ</option>
               <option value="#contact">✉️ Contact</option>
             </select>
+            <div style="margin-top: 6px; font-size: 12px; color: #666;">
+              💡 Les notifications ouvriront l'Espace Joueur sur la page sélectionnée
+            </div>
           </div>
 
           <!-- Preview -->
@@ -8650,7 +8653,10 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
         } else {
           table.style.display = 'block';
           tbody.innerHTML = history.map(item => `
-            <tr style="border-bottom: 1px solid #eee;">
+            <tr class="notif-history-row" style="border-bottom: 1px solid #eee; position: relative; transition: transform 0.3s ease;"
+                data-title="${escapeHtml(item.title)}"
+                data-body="${escapeHtml(item.body)}"
+                data-url="${escapeHtml(item.url || '')}">
               <td style="padding: 12px;">${new Date(item.sent_at).toLocaleString('fr-FR')}</td>
               <td style="padding: 12px; font-weight: 500;">${escapeHtml(item.title)}</td>
               <td style="padding: 12px; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(item.body)}</td>
@@ -8673,6 +8679,9 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
               </td>
             </tr>
           `).join('');
+
+          // Initialize swipe-to-delete for mobile
+          initSwipeToDelete();
         }
       } catch (error) {
         loading.innerHTML = '<div style="color: #dc3545;">Erreur de chargement</div>';
@@ -8680,7 +8689,33 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
       }
     }
 
-    // Delete notification from history - using event delegation
+    // Delete notification from history helper function
+    async function deleteNotificationFromHistory(title, body, url) {
+      try {
+        const response = await authFetch(`${API_URL}/push/history`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title, body, url: url || null })
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || 'Erreur lors de la suppression');
+        }
+
+        const result = await response.json();
+        showSuccess(`✅ ${result.deleted_count} entrée(s) supprimée(s) de l'historique`);
+
+        // Reload history
+        loadNotificationHistory();
+
+      } catch (error) {
+        showError(error.message);
+        console.error('Delete notification history error:', error);
+      }
+    }
+
+    // Delete notification from history - button click
     document.addEventListener('click', async function(e) {
       if (e.target.closest('.delete-notif-btn')) {
         const btn = e.target.closest('.delete-notif-btn');
@@ -8692,30 +8727,78 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
           return;
         }
 
-        try {
-          const response = await authFetch(`${API_URL}/push/history`, {
-            method: 'DELETE',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ title, body, url: url || null })
-          });
-
-          if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.error || 'Erreur lors de la suppression');
-          }
-
-          const result = await response.json();
-          showSuccess(`✅ ${result.deleted_count} entrée(s) supprimée(s) de l'historique`);
-
-          // Reload history
-          loadNotificationHistory();
-
-        } catch (error) {
-          showError(error.message);
-          console.error('Delete notification history error:', error);
-        }
+        await deleteNotificationFromHistory(title, body, url);
       }
     });
+
+    // Swipe-to-delete functionality for mobile
+    function initSwipeToDelete() {
+      const rows = document.querySelectorAll('.notif-history-row');
+
+      rows.forEach(row => {
+        let startX = 0;
+        let currentX = 0;
+        let isSwiping = false;
+
+        row.addEventListener('touchstart', (e) => {
+          startX = e.touches[0].clientX;
+          isSwiping = true;
+        }, { passive: true });
+
+        row.addEventListener('touchmove', (e) => {
+          if (!isSwiping) return;
+
+          currentX = e.touches[0].clientX;
+          const diffX = startX - currentX;
+
+          // Only allow swipe to the left
+          if (diffX > 0) {
+            row.style.transform = `translateX(-${Math.min(diffX, 100)}px)`;
+
+            // Show delete background when swiped
+            if (diffX > 50) {
+              row.style.background = 'linear-gradient(to left, #dc3545 0%, transparent 100%)';
+            } else {
+              row.style.background = '';
+            }
+          }
+        }, { passive: true });
+
+        row.addEventListener('touchend', async (e) => {
+          if (!isSwiping) return;
+          isSwiping = false;
+
+          const diffX = startX - currentX;
+
+          // If swiped more than 100px, delete
+          if (diffX > 100) {
+            const title = row.dataset.title;
+            const body = row.dataset.body;
+            const url = row.dataset.url;
+
+            // Animate row sliding out
+            row.style.transform = 'translateX(-100%)';
+            row.style.opacity = '0';
+
+            // Delete after animation
+            setTimeout(async () => {
+              await deleteNotificationFromHistory(title, body, url);
+            }, 300);
+
+          } else {
+            // Reset position
+            row.style.transform = '';
+            row.style.background = '';
+          }
+        }, { passive: true });
+
+        row.addEventListener('touchcancel', () => {
+          isSwiping = false;
+          row.style.transform = '';
+          row.style.background = '';
+        }, { passive: true });
+      });
+    }
 
     // ============= END NOTIFICATIONS TAB =============
 

@@ -654,11 +654,21 @@ router.post('/bulk', async (req, res) => {
     console.log(`[BULK PUSH] Title: ${title}`);
     console.log(`[BULK PUSH] Body: ${body}`);
 
+    // Construct full URL - if url starts with #, prepend Player App base URL
+    let fullUrl = url || '/';
+    if (fullUrl.startsWith('#')) {
+      fullUrl = `${PLAYER_APP_URL}/${fullUrl}`;
+    } else if (fullUrl === '') {
+      fullUrl = PLAYER_APP_URL;
+    }
+
+    console.log(`[BULK PUSH] Full URL: ${fullUrl}`);
+
     // Send to all players
     const notification = {
       title,
       body,
-      url: url || '/'
+      url: fullUrl
     };
 
     const result = await sendPushToPlayers(licences, orgId, notification);
