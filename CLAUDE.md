@@ -837,6 +837,40 @@ CDBHS color mapping (from legend rows 22-27):
 
 - **~~Email address consolidation~~** *(DONE Feb 2026)*: All hardcoded `cdbhs92@gmail.com` fallbacks removed from backend routes and frontend. Email is now loaded dynamically from `organization_settings` via `appSettings.getOrgSetting()`. Only the org #1 database seed (`db-postgres.js`, `settings.js`) still references it — correct by design. The `@cdbhs.net` sender address fallbacks remain in code but are dead code: new CDBs get their addresses auto-generated from the platform domain (`carambole-gestion.fr`) during creation in super-admin, and CDBHS values are in the database.
 
+- **DOCUMENTATION UPDATE (REMINDER: March 22, 2026):** Update all documentation files to reflect new push notification features implemented in March 2026.
+
+  **Changes to document:**
+  - **Push Notifications feature** (March 2026):
+    - Tournament Management App: Com joueurs → Notifs tab for bulk push notifications
+    - Notification destination selector (Page d'accueil, Vos compétitions, Inscriptions, Stats, etc.)
+    - History panel with delete functionality (button + swipe-to-delete on mobile)
+    - Player App: Bell icon notification center with swipe-to-delete
+    - Backend: DELETE endpoint for notification history
+    - Full URLs for hash navigation in notifications
+
+  **Files to update:**
+  1. **`frontend/guide-utilisateur.html`** - User guide served in the app
+     - Add new section: "Envoyer des notifications push aux joueurs"
+     - Location: After "Gestion des emails" section
+     - Cover: accessing Com joueurs → Notifs, selecting recipients, composing notifications, viewing history, deleting notifications
+
+  2. **`GUIDE-UTILISATEUR-COMPLET.html`** (root) - Copy of user guide
+     - Sync from `frontend/guide-utilisateur.html` after updates
+
+  3. **`GUIDE-UTILISATEUR-COMPLET.md`** (root) - Markdown version
+     - Regenerate from updated HTML content
+
+  4. **Player App documentation** (`cdbhs-player-app/CLAUDE.md`)
+     - Update "Notification Center" section with swipe-to-delete functionality
+     - Document DELETE `/api/player/push/notifications/:id` endpoint
+
+  **Process:**
+  - Update `frontend/guide-utilisateur.html` first (primary source of truth)
+  - Sync changes to `GUIDE-UTILISATEUR-COMPLET.html` (root)
+  - Regenerate `GUIDE-UTILISATEUR-COMPLET.md` from HTML
+  - Update Player App CLAUDE.md
+  - Include all 4 files in the same commit
+
 - **EMAIL TEMPLATE VARIABLES REFACTORING (REMINDER: June 26, 2026):** Centralize all email template variables into a single source of truth. Currently variables are scattered across multiple locations causing maintenance issues and inconsistencies.
 
   **Current problem:**
