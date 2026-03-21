@@ -601,7 +601,7 @@
 
         <div style="margin-bottom: 20px;">
           <label style="display: block; margin-bottom: 8px; font-weight: 500;">
-            Licences de test (une par ligne, max 10) :
+            Licences de test (une par ligne, max 15) :
           </label>
           <textarea
             id="pushTestLicences"
@@ -610,7 +610,7 @@
             style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-family: monospace; font-size: 14px; resize: vertical;"
           ></textarea>
           <div style="margin-top: 5px; color: #666; font-size: 13px;">
-            <span id="pushTestLicenceCount">0</span> / 10 licences
+            <span id="pushTestLicenceCount">0</span> / 15 licences
           </div>
         </div>
 
@@ -5499,9 +5499,9 @@
         .map(line => line.trim().toUpperCase())
         .filter(line => line.length > 0);
 
-      // Validate max 10 licences
-      if (licences.length > 10) {
-        messageDiv.textContent = '❌ Erreur : Maximum 10 licences autorisées';
+      // Validate max 15 licences
+      if (licences.length > 15) {
+        messageDiv.textContent = '❌ Erreur : Maximum 15 licences autorisées';
         messageDiv.style.display = 'block';
         messageDiv.style.background = '#f8d7da';
         messageDiv.style.color = '#721c24';
