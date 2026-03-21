@@ -636,6 +636,64 @@
       </div>
     </div>
 
+    <!-- Push Notifications Admin Copy Section - Admin Only -->
+    <div class="accordion-panel admin-only" id="pushAdminCopySection" data-settings-tab="espace-joueur">
+      <div class="accordion-header" onclick="toggleAccordion('pushAdminCopySection')">
+        <div class="accordion-title"><span class="accordion-icon">&#9654;</span><strong>📬 Copie Admin des Notifications</strong></div>
+        <span class="accordion-summary" id="summary-pushAdminCopy">Chargement...</span>
+      </div>
+      <div class="accordion-body">
+        <p style="margin-bottom: 20px; color: #666;">
+          Recevez une copie de chaque notification push envoyée aux joueurs.
+          Pratique pour surveiller les notifications et vérifier leur contenu.
+        </p>
+
+        <div style="margin-bottom: 25px;">
+          <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
+            <input type="checkbox" id="pushAdminCopyEnabled" style="width: 20px; height: 20px; cursor: pointer;">
+            <span style="font-weight: 500;">Recevoir une copie des notifications push</span>
+          </label>
+          <small style="color: #666; margin-left: 32px; display: block; margin-top: 4px;">
+            Chaque notification envoyée à un joueur vous sera également envoyée avec le préfixe "[Copie Admin]"
+          </small>
+        </div>
+
+        <div style="margin-bottom: 25px;">
+          <label style="display: block; margin-bottom: 8px; font-weight: 500;">
+            Licence de l'administrateur :
+          </label>
+          <input
+            type="text"
+            id="pushAdminLicence"
+            placeholder="Ex: 170229G"
+            style="width: 100%; max-width: 300px; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-family: monospace; font-size: 14px;"
+          >
+          <small style="color: #666; display: block; margin-top: 4px;">
+            Votre licence doit être enregistrée dans l'Espace Joueur pour recevoir les notifications.
+          </small>
+        </div>
+
+        <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+          <button onclick="savePushAdminCopySettings()" class="btn" style="background: #28a745; padding: 12px 25px;">
+            💾 Enregistrer
+          </button>
+        </div>
+
+        <div id="pushAdminCopyMessage" style="display: none; margin-top: 15px; padding: 10px; border-radius: 4px;"></div>
+
+        <div style="margin-top: 30px; padding: 15px; background: #e7f3ff; border-left: 4px solid #1F4788; border-radius: 4px;">
+          <strong>ℹ️ Exemple de notification :</strong>
+          <div style="margin-top: 10px; background: white; padding: 12px; border-radius: 8px; border: 1px solid #ddd;">
+            <strong style="color: #1F4788;">[Copie Admin] 📢 Convocation — 3 Bandes R3 - T1</strong>
+            <p style="margin: 8px 0 0 0; color: #666; font-size: 14px;">
+              📬 Notification envoyée à Jean Dupont<br><br>
+              Vous êtes convoqué(e) le sam. 29 mars 2026 à 14h00 à Salle Centrale. Poule 1. Bonne compétition !
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Club Aliases Section - Hidden (deprecated: club names now standardized in player file) -->
     <div class="card admin-only" id="clubAliasesSection" data-settings-tab="maintenance" style="display: none;">
       <h3>Alias des Clubs</h3>
@@ -5398,6 +5456,7 @@
 
     loadQualificationSettings();
     loadPushTestLicences();
+    loadPushAdminCopySettings();
 
     // Bonus Moyenne toggle
     document.getElementById('bonusMoyenneEnabled').addEventListener('change', function() {
@@ -5600,6 +5659,114 @@
         messageDiv.style.background = '#f8d7da';
         messageDiv.style.color = '#721c24';
         messageDiv.style.borderLeft = '4px solid #dc3545';
+      }
+    }
+
+    // ============= PUSH ADMIN COPY =============
+
+    async function loadPushAdminCopySettings() {
+      try {
+        const response = await fetch(`${API_URL}/settings/org-settings-batch?keys=push_admin_copy_enabled,push_admin_licence`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (response.ok) {
+          const settings = await response.json();
+
+          // Load checkbox
+          const enabledCheckbox = document.getElementById('pushAdminCopyEnabled');
+          if (enabledCheckbox) {
+            enabledCheckbox.checked = settings.push_admin_copy_enabled === 'true' || settings.push_admin_copy_enabled === true;
+          }
+
+          // Load licence
+          const licenceInput = document.getElementById('pushAdminLicence');
+          if (licenceInput) {
+            licenceInput.value = settings.push_admin_licence || '';
+          }
+
+          // Update summary
+          updatePushAdminCopySummary();
+        }
+      } catch (error) {
+        console.error('Error loading push admin copy settings:', error);
+      }
+    }
+
+    async function savePushAdminCopySettings() {
+      const enabledCheckbox = document.getElementById('pushAdminCopyEnabled');
+      const licenceInput = document.getElementById('pushAdminLicence');
+      const messageDiv = document.getElementById('pushAdminCopyMessage');
+
+      const enabled = enabledCheckbox.checked;
+      const licence = licenceInput.value.trim();
+
+      // Validate licence if enabled
+      if (enabled && !licence) {
+        messageDiv.textContent = '❌ Veuillez saisir votre licence pour activer cette fonctionnalité';
+        messageDiv.style.display = 'block';
+        messageDiv.style.background = '#f8d7da';
+        messageDiv.style.color = '#721c24';
+        messageDiv.style.borderLeft = '4px solid #dc3545';
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API_URL}/settings/org-settings-batch`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            push_admin_copy_enabled: enabled,
+            push_admin_licence: licence
+          })
+        });
+
+        if (response.ok) {
+          messageDiv.textContent = '✅ Paramètres enregistrés avec succès';
+          messageDiv.style.display = 'block';
+          messageDiv.style.background = '#d4edda';
+          messageDiv.style.color = '#155724';
+          messageDiv.style.borderLeft = '4px solid #28a745';
+
+          // Update summary
+          updatePushAdminCopySummary();
+
+          // Hide message after 3s
+          setTimeout(() => {
+            messageDiv.style.display = 'none';
+          }, 3000);
+        } else {
+          const error = await response.json();
+          messageDiv.textContent = `❌ Erreur : ${error.error || 'Erreur inconnue'}`;
+          messageDiv.style.display = 'block';
+          messageDiv.style.background = '#f8d7da';
+          messageDiv.style.color = '#721c24';
+          messageDiv.style.borderLeft = '4px solid #dc3545';
+        }
+      } catch (error) {
+        console.error('Error saving push admin copy settings:', error);
+        messageDiv.textContent = '❌ Erreur lors de l\'enregistrement';
+        messageDiv.style.display = 'block';
+        messageDiv.style.background = '#f8d7da';
+        messageDiv.style.color = '#721c24';
+        messageDiv.style.borderLeft = '4px solid #dc3545';
+      }
+    }
+
+    function updatePushAdminCopySummary() {
+      const summaryEl = document.getElementById('summary-pushAdminCopy');
+      const enabledCheckbox = document.getElementById('pushAdminCopyEnabled');
+      const licenceInput = document.getElementById('pushAdminLicence');
+
+      if (summaryEl && enabledCheckbox) {
+        if (enabledCheckbox.checked && licenceInput.value.trim()) {
+          summaryEl.textContent = `Activé (${licenceInput.value.trim()})`;
+        } else {
+          summaryEl.textContent = 'Désactivé';
+        }
       }
     }
 

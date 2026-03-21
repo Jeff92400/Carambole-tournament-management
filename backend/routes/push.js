@@ -331,9 +331,10 @@ router.post('/toggle', authenticatePlayerToken, async (req, res) => {
  * @param {string} licence - Player's licence number
  * @param {number} orgId - Organization ID
  * @param {object} notification - { title, body, url }
+ * @param {object} options - { skipAdminCopy: boolean } - Skip sending copy to admin
  * @returns {Promise<{success: boolean, sent: number, failed: number}>}
  */
-async function sendPushToPlayer(licence, orgId, notification) {
+async function sendPushToPlayer(licence, orgId, notification, options = {}) {
   if (!vapidPublicKey || !vapidPrivateKey) {
     console.warn('⚠️ VAPID keys not configured - skipping push notification');
     return { success: false, sent: 0, failed: 0, error: 'VAPID not configured' };
@@ -442,6 +443,13 @@ async function sendPushToPlayer(licence, orgId, notification) {
           });
         }
       }
+    }
+
+    // Send copy to admin if enabled (fire-and-forget, skip if this IS the admin copy)
+    if (!options.skipAdminCopy && sent > 0) {
+      sendAdminCopyIfEnabled(orgId, licence, notification).catch(err => {
+        console.error('[ADMIN COPY] Failed to send admin copy:', err.message);
+      });
     }
 
     return { success: sent > 0, sent, failed };
@@ -601,6 +609,62 @@ router.get('/debug/:licence', async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch debug info', details: error.message });
   }
 });
+
+/**
+ * HELPER FUNCTION: Send copy of notification to admin if enabled
+ * @param {number} orgId - Organization ID
+ * @param {string} playerLicence - Player licence who received the notification
+ * @param {object} notification - { title, body, url }
+ */
+async function sendAdminCopyIfEnabled(orgId, playerLicence, notification) {
+  try {
+    const appSettings = require('../utils/app-settings');
+
+    // Check if admin copy is enabled
+    const isEnabled = await appSettings.getOrgSetting(orgId, 'push_admin_copy_enabled');
+
+    if (isEnabled !== 'true' && isEnabled !== true) {
+      return; // Feature disabled
+    }
+
+    // Get the admin's licence from organization settings or users table
+    const adminLicence = await appSettings.getOrgSetting(orgId, 'push_admin_licence');
+
+    if (!adminLicence) {
+      console.log('[ADMIN COPY] No admin licence configured for org', orgId);
+      return;
+    }
+
+    // Get player name for the copy notification
+    const player = await new Promise((resolve, reject) => {
+      db.get(
+        'SELECT first_name, last_name FROM players WHERE REPLACE(licence, \' \', \'\') = $1 AND ($2::int IS NULL OR organization_id = $2)',
+        [playerLicence.replace(/\s/g, ''), orgId],
+        (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        }
+      );
+    });
+
+    const playerName = player ? `${player.first_name} ${player.last_name}` : playerLicence;
+
+    // Modify notification for admin
+    const adminNotification = {
+      title: `[Copie Admin] ${notification.title}`,
+      body: `📬 Notification envoyée à ${playerName}\n\n${notification.body}`,
+      url: notification.url
+    };
+
+    // Send to admin with skipAdminCopy flag to prevent infinite loop
+    console.log(`[ADMIN COPY] Sending copy to admin (licence: ${adminLicence})`);
+    await sendPushToPlayer(adminLicence, orgId, adminNotification, { skipAdminCopy: true });
+
+  } catch (error) {
+    console.error('[ADMIN COPY] Error:', error.message);
+    // Don't throw - this is fire-and-forget
+  }
+}
 
 // Export router and helper functions
 module.exports = router;
