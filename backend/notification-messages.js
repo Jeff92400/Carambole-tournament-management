@@ -3,7 +3,6 @@
  *
  * Version: 1.0 (Mars 2026)
  * Status: Hardcoded - To be migrated to database settings in future
- * Reference: See NOTIFICATION_MESSAGES.md for complete documentation
  *
  * IMPORTANT: These messages will eventually be moved to the database
  * to allow admin editing via the Tournament Management App.

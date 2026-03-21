@@ -7,6 +7,8 @@ const { authenticateToken } = require('./auth');
 const appSettings = require('../utils/app-settings');
 const { logAdminAction, ACTION_TYPES } = require('../utils/admin-logger');
 const { getRankingTournamentNumbers, getFinaleTournamentNumber, getTournamentLabel } = require('./settings');
+const { buildNotification, getResultsNotificationType } = require('../notification-messages');
+const { sendPushToPlayer } = require('./push');
 
 const { buildRsvpButtonsHtml } = require('./rsvp');
 
@@ -2640,6 +2642,20 @@ router.post('/send-results', authenticateToken, async (req, res) => {
           name: participant.player_name,
           email: participant.email
         });
+
+        // Send push notification (fire-and-forget)
+        try {
+          const tournoiName = `${tournament.display_name}`;
+          const notifType = getResultsNotificationType(tournoiName);
+          const resultsNotif = buildNotification(notifType, {
+            tournoiName,
+            position: participant.position
+          });
+          await sendPushToPlayer(participant.licence, orgId, resultsNotif);
+        } catch (notifError) {
+          console.error('[RESULTS] Failed to send push notification:', notifError.message);
+          // Don't fail email if push notification fails
+        }
 
         // Update last_contacted
         await new Promise((resolve) => {
@@ -5500,6 +5516,17 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
           name: participant.player_name || `${participant.first_name} ${participant.last_name}`,
           email: participant.email
         });
+
+        // Send push notification (fire-and-forget)
+        try {
+          const relanceNotif = buildNotification('REMINDER_LAST_DAY', {
+            tournoiName: `${tournamentInfo.category}`,
+          });
+          await sendPushToPlayer(participant.licence, orgId, relanceNotif);
+        } catch (notifError) {
+          console.error('[RELANCE] Failed to send push notification:', notifError.message);
+          // Don't fail email if push notification fails
+        }
 
         // Update last_contacted
         if (participant.contact_id) {
