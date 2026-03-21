@@ -1897,9 +1897,9 @@ router.put('/push-test-licences', authenticateToken, requireAdmin, async (req, r
     // Normalize licences: uppercase, remove spaces
     licences = licences.map(l => String(l).trim().toUpperCase().replace(/\s+/g, '')).filter(l => l.length > 0);
 
-    // Validate max 10 licences (empty array is allowed for general activation)
-    if (licences.length > 10) {
-      return res.status(400).json({ error: 'Maximum 10 licences autorisées' });
+    // Validate max 15 licences (empty array is allowed for general activation)
+    if (licences.length > 15) {
+      return res.status(400).json({ error: 'Maximum 15 licences autorisées' });
     }
 
     // Store as JSON in organization_settings
