@@ -602,6 +602,7 @@
                 <th style="padding: 12px; text-align: left;">Message</th>
                 <th style="padding: 12px; text-align: center;">Destinataires</th>
                 <th style="padding: 12px; text-align: center;">Envoyés</th>
+                <th style="padding: 12px; text-align: center; width: 100px;">Actions</th>
               </tr>
             </thead>
             <tbody id="notifHistoryBody">
@@ -8659,12 +8660,51 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
                   ${item.sent_count}
                 </span>
               </td>
+              <td style="padding: 12px; text-align: center;">
+                <button
+                  class="btn-danger"
+                  style="padding: 6px 12px; font-size: 12px; border: none; border-radius: 4px; cursor: pointer;"
+                  onclick="deleteNotificationHistory('${escapeHtml(item.title)}', '${escapeHtml(item.body)}', '${item.url || ''}')"
+                  title="Supprimer cette notification de l'historique">
+                  🗑️
+                </button>
+              </td>
             </tr>
           `).join('');
         }
       } catch (error) {
         loading.innerHTML = '<div style="color: #dc3545;">Erreur de chargement</div>';
         console.error('Load notification history error:', error);
+      }
+    }
+
+    // Delete notification from history
+    async function deleteNotificationHistory(title, body, url) {
+      if (!confirm(`Êtes-vous sûr de vouloir supprimer cette notification de l'historique ?\n\nTitre : ${title}\nMessage : ${body}`)) {
+        return;
+      }
+
+      try {
+        const response = await authFetch(`${API_URL}/push/history`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title, body, url })
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || 'Erreur lors de la suppression');
+        }
+
+        const result = await response.json();
+        showSuccess(`✅ ${result.deleted_count} entrée(s) supprimée(s) de l'historique`);
+
+        // Reload history
+        loadNotificationHistory();
+
+      } catch (error) {
+        showError(error.message);
+        console.error('Delete notification history error:', error);
       }
     }
 

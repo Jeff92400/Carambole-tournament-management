@@ -721,6 +721,49 @@ router.get('/history', async (req, res) => {
 });
 
 /**
+ * DELETE /api/push/history
+ * Delete notification(s) from history by title, body, and url
+ * Deletes all entries matching the group (same notification sent to multiple players)
+ */
+router.delete('/history', async (req, res) => {
+  try {
+    const orgId = req.user?.organizationId || 1;
+    const { title, body, url } = req.body;
+
+    if (!title || !body) {
+      return res.status(400).json({ error: 'Le titre et le message sont requis' });
+    }
+
+    // Delete all entries matching this notification group
+    const result = await new Promise((resolve, reject) => {
+      db.run(
+        `DELETE FROM push_notification_history
+         WHERE organization_id = $1
+           AND title = $2
+           AND body = $3
+           AND ($4::text IS NULL OR url = $4)`,
+        [orgId, title, body, url || null],
+        function(err) {
+          if (err) reject(err);
+          else resolve({ deleted_count: this.changes });
+        }
+      );
+    });
+
+    console.log(`[PUSH HISTORY] Deleted ${result.deleted_count} notification(s) for org ${orgId}`);
+    res.json({
+      success: true,
+      deleted_count: result.deleted_count,
+      message: `${result.deleted_count} entrée(s) supprimée(s)`
+    });
+
+  } catch (error) {
+    console.error('[PUSH HISTORY DELETE] Error:', error);
+    res.status(500).json({ error: 'Erreur lors de la suppression de l\'historique' });
+  }
+});
+
+/**
  * HELPER FUNCTION: Send copy of notification to admin if enabled
  * @param {number} orgId - Organization ID
  * @param {string} playerLicence - Player licence who received the notification
