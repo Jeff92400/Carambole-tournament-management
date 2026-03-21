@@ -837,7 +837,7 @@ CDBHS color mapping (from legend rows 22-27):
 
 - **~~Email address consolidation~~** *(DONE Feb 2026)*: All hardcoded `cdbhs92@gmail.com` fallbacks removed from backend routes and frontend. Email is now loaded dynamically from `organization_settings` via `appSettings.getOrgSetting()`. Only the org #1 database seed (`db-postgres.js`, `settings.js`) still references it — correct by design. The `@cdbhs.net` sender address fallbacks remain in code but are dead code: new CDBs get their addresses auto-generated from the platform domain (`carambole-gestion.fr`) during creation in super-admin, and CDBHS values are in the database.
 
-- **DOCUMENTATION UPDATE (REMINDER: March 22, 2026):** Update all documentation files to reflect new push notification features implemented in March 2026.
+- **DOCUMENTATION UPDATE (SCHEDULED: March 22, 2026 at 08:58):** Update all documentation files to reflect new push notification features implemented in March 2026.
 
   **Changes to document:**
   - **Push Notifications feature** (March 2026):
