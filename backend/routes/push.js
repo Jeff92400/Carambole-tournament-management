@@ -445,6 +445,27 @@ async function sendPushToPlayer(licence, orgId, notification, options = {}) {
       }
     }
 
+    // Store notification in history if at least one was sent successfully
+    if (sent > 0) {
+      try {
+        await new Promise((resolve, reject) => {
+          db.run(
+            `INSERT INTO push_notification_history (player_account_id, organization_id, title, body, url)
+             VALUES ($1, $2, $3, $4, $5)`,
+            [playerAccount.id, orgId, notification.title, notification.body, notification.url || '/'],
+            (err) => {
+              if (err) reject(err);
+              else resolve();
+            }
+          );
+        });
+        console.log(`[Push History] Stored notification for player ${licence}`);
+      } catch (historyError) {
+        console.error('[Push History] Failed to store notification:', historyError.message);
+        // Don't fail the whole operation if history storage fails
+      }
+    }
+
     // Send copy to admin if enabled (fire-and-forget, skip if this IS the admin copy)
     if (!options.skipAdminCopy && sent > 0) {
       sendAdminCopyIfEnabled(orgId, licence, notification).catch(err => {
