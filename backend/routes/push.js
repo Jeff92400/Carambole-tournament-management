@@ -679,6 +679,48 @@ router.post('/bulk', async (req, res) => {
 });
 
 /**
+ * GET /api/push/history
+ * Get notification history for admin view (Tournament Management app)
+ */
+router.get('/history', async (req, res) => {
+  try {
+    const orgId = req.user?.organizationId || 1;
+    const limit = parseInt(req.query.limit) || 50;
+
+    // Get recent notifications from history table
+    // Group by notification content to show unique sends
+    const notifications = await new Promise((resolve, reject) => {
+      db.all(
+        `SELECT
+          title,
+          body,
+          url,
+          COUNT(DISTINCT player_account_id) as sent_count,
+          MAX(sent_at) as sent_at,
+          'specific' as recipient_type,
+          COUNT(DISTINCT player_account_id) as recipient_count
+         FROM push_notification_history
+         WHERE organization_id = $1
+         GROUP BY title, body, url
+         ORDER BY MAX(sent_at) DESC
+         LIMIT $2`,
+        [orgId, limit],
+        (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows || []);
+        }
+      );
+    });
+
+    res.json(notifications);
+
+  } catch (error) {
+    console.error('[PUSH HISTORY] Error:', error);
+    res.status(500).json({ error: 'Erreur lors du chargement de l\'historique' });
+  }
+});
+
+/**
  * HELPER FUNCTION: Send copy of notification to admin if enabled
  * @param {number} orgId - Organization ID
  * @param {string} playerLicence - Player licence who received the notification

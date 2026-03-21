@@ -458,7 +458,8 @@
     <div id="successMessage" class="success" style="display: none;"></div>
 
     <div class="tabs">
-      <div class="tab active tooltip" data-tab="announcements" data-tooltip="Annonces affichées dans l'Espace Joueur">Annonces</div>
+      <div class="tab active tooltip" data-tab="notifications" data-tooltip="Notifications push vers l'Espace Joueur">🔔 Notifs</div>
+      <div class="tab tooltip" data-tab="announcements" data-tooltip="Annonces affichées dans l'Espace Joueur">Annonces</div>
       <div class="tab tooltip" data-tab="compose" data-tooltip="Email avec texte libre et destinataires à sélectionner depuis la base joueurs">Composer</div>
       <div class="tab tooltip" data-tab="relances" data-tooltip="Rappels d'inscription par tournois et finales">Relances</div>
       <div class="tab tooltip" data-tab="results" data-tooltip="Classement à l'issue de chaque rencontre">Résultats Tournoi</div>
@@ -470,8 +471,147 @@
       <div class="tab tooltip" data-tab="surveys" data-tooltip="Sondages de satisfaction pour l'Espace Joueur">Sondages</div>
     </div>
 
+    <!-- TAB: Notifications -->
+    <div id="tab-notifications" class="tab-content active">
+      <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 15px; margin-bottom: 15px;">
+          <div>
+            <h3 style="margin: 0;">📱 Envoyer une notification push</h3>
+            <p style="color: #666; margin: 5px 0 0 0;">
+              Notifications instantanées vers l'application mobile des joueurs.
+            </p>
+          </div>
+        </div>
+
+        <form id="sendNotificationForm">
+          <!-- Destinataires Section -->
+          <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+            <label style="font-weight: bold; color: #333; margin-bottom: 10px; display: block;">📬 Destinataires :</label>
+            <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 15px;">
+              <label style="display: flex; align-items: center; gap: 8px; padding: 10px 15px; background: white; border: 2px solid #1F4788; border-radius: 8px; cursor: pointer; transition: all 0.2s;" class="notif-recipient-option selected">
+                <input type="radio" name="notifRecipient" value="all" checked style="width: 16px; height: 16px;" onchange="toggleNotifLicenceInput()">
+                <span style="font-size: 14px;">👥 Tous les joueurs</span>
+              </label>
+              <label style="display: flex; align-items: center; gap: 8px; padding: 10px 15px; background: white; border: 2px solid #ddd; border-radius: 8px; cursor: pointer; transition: all 0.2s;" class="notif-recipient-option">
+                <input type="radio" name="notifRecipient" value="specific" style="width: 16px; height: 16px;" onchange="toggleNotifLicenceInput()">
+                <span style="font-size: 14px;">📋 Liste de licences</span>
+              </label>
+            </div>
+
+            <!-- Licence input (hidden by default) -->
+            <div id="notifLicenceInputContainer" style="display: none;">
+              <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #333;">
+                Licences (une par ligne, maximum 15) :
+              </label>
+              <textarea
+                id="notifLicences"
+                rows="6"
+                placeholder="Exemple :&#10;170229G&#10;123456A&#10;789012B"
+                style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-family: monospace; font-size: 14px; resize: vertical;"
+              ></textarea>
+              <div style="margin-top: 5px; color: #666; font-size: 13px;">
+                <span id="notifLicenceCount">0</span> / 15 licences
+              </div>
+            </div>
+          </div>
+
+          <!-- Notification Content -->
+          <div style="margin-bottom: 20px;">
+            <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #333;">
+              📝 Titre (50 caractères max) :
+            </label>
+            <input
+              type="text"
+              id="notifTitle"
+              maxlength="50"
+              placeholder="Ex: Rappel Important"
+              style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;"
+              required
+            >
+            <div style="margin-top: 5px; color: #666; font-size: 13px; text-align: right;">
+              <span id="notifTitleCount">0</span> / 50
+            </div>
+          </div>
+
+          <div style="margin-bottom: 20px;">
+            <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #333;">
+              💬 Message (150 caractères max) :
+            </label>
+            <textarea
+              id="notifBody"
+              maxlength="150"
+              rows="3"
+              placeholder="Ex: N'oubliez pas de vous inscrire avant le 15 mars pour le tournoi Libre N2"
+              style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; resize: vertical;"
+              required
+            ></textarea>
+            <div style="margin-top: 5px; color: #666; font-size: 13px; text-align: right;">
+              <span id="notifBodyCount">0</span> / 150
+            </div>
+          </div>
+
+          <div style="margin-bottom: 20px;">
+            <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #333;">
+              🔗 Destination (page à ouvrir) :
+            </label>
+            <select
+              id="notifUrl"
+              style="width: 100%; max-width: 400px; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;"
+            >
+              <option value="/">🏠 Accueil</option>
+              <option value="/tournaments">🏆 Tournois disponibles</option>
+              <option value="/inscriptions">📝 Mes inscriptions</option>
+              <option value="/stats">📊 Mes statistiques</option>
+              <option value="/calendar">📅 Calendrier</option>
+              <option value="/profile">👤 Profil</option>
+            </select>
+          </div>
+
+          <!-- Preview -->
+          <div style="background: #f0f7ff; border: 2px dashed #2196F3; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+            <div style="font-weight: 600; color: #1565c0; margin-bottom: 10px;">📱 Aperçu de la notification :</div>
+            <div style="background: white; border-radius: 8px; padding: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+              <div id="notifPreviewTitle" style="font-weight: 600; font-size: 14px; color: #333; margin-bottom: 6px;">Titre de la notification</div>
+              <div id="notifPreviewBody" style="font-size: 13px; color: #666; line-height: 1.4;">Message de la notification...</div>
+            </div>
+          </div>
+
+          <!-- Send Button -->
+          <button type="submit" class="btn" style="background: #2196F3; padding: 12px 30px; font-size: 16px;">
+            📤 Envoyer la notification
+          </button>
+        </form>
+      </div>
+
+      <!-- Notification History -->
+      <div class="card" style="margin-top: 30px;">
+        <h3 style="margin-top: 0;">📜 Historique des notifications envoyées</h3>
+        <div id="notifHistoryLoading" style="text-align: center; padding: 40px; color: #666;">
+          Chargement...
+        </div>
+        <div id="notifHistoryEmpty" style="display: none; text-align: center; padding: 40px; color: #999;">
+          Aucune notification envoyée
+        </div>
+        <div id="notifHistoryTable" style="display: none; overflow-x: auto;">
+          <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+              <tr style="background: #f8f9fa; border-bottom: 2px solid #ddd;">
+                <th style="padding: 12px; text-align: left;">Date</th>
+                <th style="padding: 12px; text-align: left;">Titre</th>
+                <th style="padding: 12px; text-align: left;">Message</th>
+                <th style="padding: 12px; text-align: center;">Destinataires</th>
+                <th style="padding: 12px; text-align: center;">Envoyés</th>
+              </tr>
+            </thead>
+            <tbody id="notifHistoryBody">
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
     <!-- TAB: Announcements -->
-    <div id="tab-announcements" class="tab-content active">
+    <div id="tab-announcements" class="tab-content">
       <div class="card">
         <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 15px; margin-bottom: 15px;">
           <div>
@@ -8342,9 +8482,195 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
       return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
-    // Initial load of announcements (since it's the default tab now)
-    loadAnnouncements();
-    loadAudienceCount();
+    // ============= NOTIFICATIONS TAB =============
+
+    // Toggle licence input visibility
+    function toggleNotifLicenceInput() {
+      const selectedValue = document.querySelector('input[name="notifRecipient"]:checked').value;
+      const container = document.getElementById('notifLicenceInputContainer');
+      container.style.display = selectedValue === 'specific' ? 'block' : 'none';
+
+      // Update radio button styles
+      document.querySelectorAll('.notif-recipient-option').forEach(opt => {
+        const radio = opt.querySelector('input[type="radio"]');
+        if (radio.checked) {
+          opt.classList.add('selected');
+          opt.style.borderColor = '#1F4788';
+        } else {
+          opt.classList.remove('selected');
+          opt.style.borderColor = '#ddd';
+        }
+      });
+    }
+
+    // Update character counters and preview
+    document.addEventListener('DOMContentLoaded', function() {
+      const titleInput = document.getElementById('notifTitle');
+      const bodyInput = document.getElementById('notifBody');
+      const licencesInput = document.getElementById('notifLicences');
+
+      if (titleInput) {
+        titleInput.addEventListener('input', function() {
+          document.getElementById('notifTitleCount').textContent = this.value.length;
+          document.getElementById('notifPreviewTitle').textContent = this.value || 'Titre de la notification';
+        });
+      }
+
+      if (bodyInput) {
+        bodyInput.addEventListener('input', function() {
+          document.getElementById('notifBodyCount').textContent = this.value.length;
+          document.getElementById('notifPreviewBody').textContent = this.value || 'Message de la notification...';
+        });
+      }
+
+      if (licencesInput) {
+        licencesInput.addEventListener('input', function() {
+          const lines = this.value.split('\n').filter(l => l.trim().length > 0);
+          document.getElementById('notifLicenceCount').textContent = lines.length;
+        });
+      }
+
+      // Form submit
+      const notifForm = document.getElementById('sendNotificationForm');
+      if (notifForm) {
+        notifForm.addEventListener('submit', async function(e) {
+          e.preventDefault();
+          await sendBulkNotification();
+        });
+      }
+    });
+
+    // Send bulk notification
+    async function sendBulkNotification() {
+      const recipientType = document.querySelector('input[name="notifRecipient"]:checked').value;
+      const title = document.getElementById('notifTitle').value.trim();
+      const body = document.getElementById('notifBody').value.trim();
+      const url = document.getElementById('notifUrl').value;
+
+      if (!title || !body) {
+        showError('Le titre et le message sont requis');
+        return;
+      }
+
+      let licences = [];
+
+      if (recipientType === 'all') {
+        // Get all player licences from the database
+        try {
+          const response = await authFetch(`${API_URL}/players`);
+          if (!response.ok) throw new Error('Failed to fetch players');
+          const players = await response.json();
+          licences = players.map(p => p.licence);
+        } catch (error) {
+          showError('Erreur lors de la récupération des joueurs');
+          console.error(error);
+          return;
+        }
+      } else {
+        // Parse licences from textarea
+        const licencesText = document.getElementById('notifLicences').value;
+        licences = licencesText.split('\n')
+          .map(l => l.trim().toUpperCase())
+          .filter(l => l.length > 0);
+
+        if (licences.length === 0) {
+          showError('Aucune licence saisie');
+          return;
+        }
+
+        if (licences.length > 15) {
+          showError('Maximum 15 licences autorisées');
+          return;
+        }
+      }
+
+      // Confirmation
+      const confirmMsg = recipientType === 'all'
+        ? `Envoyer la notification à TOUS les joueurs (${licences.length}) ?`
+        : `Envoyer la notification à ${licences.length} joueur(s) ?`;
+
+      if (!confirm(confirmMsg)) return;
+
+      // Send
+      try {
+        const response = await authFetch(`${API_URL}/push/bulk`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ licences, title, body, url })
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || 'Erreur lors de l\'envoi');
+        }
+
+        const result = await response.json();
+        showSuccess(`✅ Notification envoyée à ${result.total_sent} joueur(s)`);
+
+        // Reset form
+        document.getElementById('sendNotificationForm').reset();
+        document.getElementById('notifTitleCount').textContent = '0';
+        document.getElementById('notifBodyCount').textContent = '0';
+        document.getElementById('notifLicenceCount').textContent = '0';
+        document.getElementById('notifPreviewTitle').textContent = 'Titre de la notification';
+        document.getElementById('notifPreviewBody').textContent = 'Message de la notification...';
+        toggleNotifLicenceInput();
+
+        // Reload history
+        loadNotificationHistory();
+
+      } catch (error) {
+        showError(error.message);
+        console.error('Send notification error:', error);
+      }
+    }
+
+    // Load notification history
+    async function loadNotificationHistory() {
+      const loading = document.getElementById('notifHistoryLoading');
+      const empty = document.getElementById('notifHistoryEmpty');
+      const table = document.getElementById('notifHistoryTable');
+      const tbody = document.getElementById('notifHistoryBody');
+
+      loading.style.display = 'block';
+      empty.style.display = 'none';
+      table.style.display = 'none';
+
+      try {
+        const response = await authFetch(`${API_URL}/push/history?limit=50`);
+        if (!response.ok) throw new Error('Failed to load history');
+
+        const history = await response.json();
+        loading.style.display = 'none';
+
+        if (history.length === 0) {
+          empty.style.display = 'block';
+        } else {
+          table.style.display = 'block';
+          tbody.innerHTML = history.map(item => `
+            <tr style="border-bottom: 1px solid #eee;">
+              <td style="padding: 12px;">${new Date(item.sent_at).toLocaleString('fr-FR')}</td>
+              <td style="padding: 12px; font-weight: 500;">${escapeHtml(item.title)}</td>
+              <td style="padding: 12px; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(item.body)}</td>
+              <td style="padding: 12px; text-align: center;">${item.recipient_type === 'all' ? 'Tous' : item.recipient_count + ' joueurs'}</td>
+              <td style="padding: 12px; text-align: center;">
+                <span style="background: #4caf50; color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600;">
+                  ${item.sent_count}
+                </span>
+              </td>
+            </tr>
+          `).join('');
+        }
+      } catch (error) {
+        loading.innerHTML = '<div style="color: #dc3545;">Erreur de chargement</div>';
+        console.error('Load notification history error:', error);
+      }
+    }
+
+    // ============= END NOTIFICATIONS TAB =============
+
+    // Initial load - notifications is now the default tab
+    loadNotificationHistory();
 
     initialize();
   </script>
