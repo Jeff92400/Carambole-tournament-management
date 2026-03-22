@@ -327,6 +327,83 @@ router.post('/toggle', authenticatePlayerToken, async (req, res) => {
 });
 
 /**
+ * GET /api/player/push/can-subscribe
+ * Check if current player is allowed to subscribe to push notifications
+ * IMPORTANT: Returns false during test mode if player is not in test licences list
+ * Returns true when test mode is disabled (empty test licences array)
+ * Requires Player App authentication
+ */
+router.get('/can-subscribe', authenticatePlayerToken, async (req, res) => {
+  const licence = req.player.licence;
+  const orgId = req.player.organizationId;
+
+  try {
+    // Check if test mode is active
+    const testLicencesResult = await new Promise((resolve, reject) => {
+      db.get(
+        `SELECT value FROM organization_settings
+         WHERE organization_id = $1 AND key = 'push_notification_test_licences'`,
+        [orgId],
+        (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        }
+      );
+    });
+
+    let testLicences = [];
+    if (testLicencesResult && testLicencesResult.value) {
+      try {
+        testLicences = JSON.parse(testLicencesResult.value);
+      } catch (parseError) {
+        console.error('[CAN-SUBSCRIBE] Error parsing test licences:', parseError);
+      }
+    }
+
+    // If test mode is disabled (empty array or null), everyone can subscribe
+    if (!Array.isArray(testLicences) || testLicences.length === 0) {
+      console.log(`[CAN-SUBSCRIBE] ✅ Test mode disabled - player ${licence} can subscribe`);
+      return res.json({
+        can_subscribe: true,
+        test_mode: false,
+        message: 'Push notifications are available for all players'
+      });
+    }
+
+    // Test mode is active - check if player is in the test list
+    const normalizedTestLicences = testLicences.map(l => l.replace(/\s/g, '').toUpperCase());
+    const normalizedPlayerLicence = licence.replace(/\s/g, '').toUpperCase();
+    const isInTestList = normalizedTestLicences.includes(normalizedPlayerLicence);
+
+    if (isInTestList) {
+      console.log(`[CAN-SUBSCRIBE] ✅ Test mode active - player ${licence} IS in test list - can subscribe`);
+      return res.json({
+        can_subscribe: true,
+        test_mode: true,
+        message: 'You are in the test group for push notifications'
+      });
+    } else {
+      console.log(`[CAN-SUBSCRIBE] ⚠️  Test mode active - player ${licence} NOT in test list - cannot subscribe`);
+      return res.json({
+        can_subscribe: false,
+        test_mode: true,
+        message: 'Push notifications are currently being tested and will be available soon'
+      });
+    }
+
+  } catch (error) {
+    console.error('[CAN-SUBSCRIBE] Error:', error);
+    // Fail open - allow subscription if we can't determine test mode status
+    res.json({
+      can_subscribe: true,
+      test_mode: false,
+      message: 'Push notifications are available',
+      error: 'Could not check test mode status'
+    });
+  }
+});
+
+/**
  * HELPER FUNCTION: Send push notification to a specific player
  * @param {string} licence - Player's licence number
  * @param {number} orgId - Organization ID
