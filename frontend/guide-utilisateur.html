@@ -470,6 +470,7 @@
     <a href="#communication" class="section-title">Communication</a>
     <a href="#annonces">Annonces</a>
     <a href="#composer-email">Composer un email</a>
+    <a href="#notifications-push">Notifications Push</a>
     <a href="#historique-emails">Historique emails</a>
     <a href="#invitations">Invitations Espace Joueur</a>
 
@@ -1696,6 +1697,122 @@
       <li>Confirmer l'envoi</li>
       <li>Message de confirmation avec le nombre d'emails envoyés</li>
     </ol>
+  </section>
+
+  <hr>
+
+  <!-- Notifications Push -->
+  <section id="notifications-push">
+    <h2>Com Joueurs > Notifs (Notifications Push)</h2>
+
+    <h3>Description</h3>
+    <p>Envoi de notifications push instantanées vers l'Application Joueur. Les notifications apparaissent directement sur le téléphone des joueurs, même lorsque l'application n'est pas ouverte.</p>
+
+    <div class="info-card accent">
+      <strong>📱 Avantage des notifications push :</strong> Contrairement aux emails, les notifications push sont instantanées et ont un taux d'ouverture beaucoup plus élevé. Idéales pour les communications urgentes (changement de dernière minute, rappel important, etc.).
+    </div>
+
+    <div class="screenshot-placeholder">
+      <span class="screenshot-id">IMG-14B</span>
+      <span class="screenshot-icon">&#128247;</span>
+      <span class="screenshot-label">Onglet Notifs</span>
+      <span class="screenshot-desc">Capture de l'interface d'envoi de notifications push avec sélection des destinataires et aperçu</span>
+      <img src="screenshots/14b-notifications-push.png" alt="Notifications Push">
+    </div>
+
+    <h3>Accès</h3>
+    <ol class="steps">
+      <li>Menu principal : <strong>Com Joueurs</strong></li>
+      <li>Onglet : <strong>🔔 Notifs</strong> (premier onglet)</li>
+    </ol>
+
+    <h3>Étape 1 : Sélectionner les destinataires</h3>
+    <p><strong>Deux modes disponibles :</strong></p>
+    <ul>
+      <li><strong>📋 Liste de licences</strong> (par défaut) : Saisir les numéros de licence manuellement (un par ligne, maximum 15)</li>
+      <li><strong>👥 Tous les joueurs</strong> : Envoyer à tous les joueurs ayant activé les notifications dans l'Application Joueur</li>
+    </ul>
+
+    <div class="warning-card">
+      <strong>⚠️ Important :</strong> Seuls les joueurs ayant activé les notifications push dans l'Espace Joueur recevront la notification. Les joueurs n'ayant pas encore accepté les notifications ne la recevront pas.
+    </div>
+
+    <h3>Étape 2 : Composer la notification</h3>
+    <p><strong>Champs obligatoires :</strong></p>
+    <ul>
+      <li><strong>Titre</strong> (50 caractères maximum) : Titre court et accrocheur
+        <br><em>Exemple : "Rappel Important"</em>
+      </li>
+      <li><strong>Message</strong> (150 caractères maximum) : Message concis et clair
+        <br><em>Exemple : "N'oubliez pas de vous inscrire avant le 15 mars pour le tournoi Libre N2"</em>
+      </li>
+      <li><strong>Destination</strong> : Page de l'Application Joueur à ouvrir lorsque le joueur tape sur la notification
+        <ul>
+          <li>🏠 Page d'accueil</li>
+          <li>🏆 Vos compétitions</li>
+          <li>📝 Inscriptions</li>
+          <li>📊 Stats</li>
+          <li>📅 Compétitions CDB</li>
+          <li>👤 Profil & FAQ</li>
+          <li>✉️ Contact</li>
+        </ul>
+      </li>
+    </ul>
+
+    <div class="info-card">
+      <strong>📱 Aperçu en direct :</strong> L'interface affiche un aperçu en temps réel de la notification telle qu'elle apparaîtra sur le téléphone du joueur.
+    </div>
+
+    <h3>Étape 3 : Envoyer la notification</h3>
+    <ol class="steps">
+      <li>Vérifier le titre, le message et la destination dans l'aperçu</li>
+      <li>Cliquer sur <strong>📤 Envoyer la notification</strong></li>
+      <li>Confirmer l'envoi dans la boîte de dialogue</li>
+      <li>Message de confirmation : "✅ Notification envoyée à X joueur(s)"</li>
+    </ol>
+
+    <h3>Historique des notifications envoyées</h3>
+    <p>L'historique apparaît en bas de la page et affiche :</p>
+    <ul>
+      <li><strong>Date et heure</strong> d'envoi</li>
+      <li><strong>Titre</strong> de la notification</li>
+      <li><strong>Message</strong> envoyé</li>
+      <li><strong>Destinataires</strong> : Nombre de joueurs ciblés</li>
+      <li><strong>Envoyés</strong> : Nombre de notifications effectivement envoyées</li>
+      <li><strong>Actions</strong> : Bouton de suppression 🗑️</li>
+    </ul>
+
+    <h4>Supprimer des notifications de l'historique</h4>
+    <p><strong>Sur ordinateur :</strong></p>
+    <ul>
+      <li>Cliquer sur le bouton 🗑️ dans la colonne "Actions"</li>
+      <li>Confirmer la suppression</li>
+    </ul>
+
+    <p><strong>Sur mobile/tablette :</strong></p>
+    <ul>
+      <li>Glisser la ligne de droite à gauche (swipe)</li>
+      <li>Un fond rouge apparaît pour confirmer l'action</li>
+      <li>Relâcher après 120 pixels pour supprimer</li>
+    </ul>
+
+    <div class="info-card">
+      <strong>💡 Bon à savoir :</strong> La suppression de l'historique n'affecte pas les notifications déjà reçues par les joueurs. Elle permet uniquement de nettoyer l'interface administrateur (par exemple, pour supprimer les notifications de test).
+    </div>
+
+    <h3>Côté joueur : Réception des notifications</h3>
+    <p>Dans l'Application Joueur :</p>
+    <ol class="steps">
+      <li>Le joueur reçoit une notification instantanée sur son téléphone</li>
+      <li>En tapant sur la notification, l'Application s'ouvre sur la page sélectionnée (destination)</li>
+      <li>L'icône 🔔 (en haut à droite) affiche un badge avec le nombre de notifications non lues</li>
+      <li>En tapant sur 🔔, le joueur accède au centre de notifications avec l'historique</li>
+      <li>Le joueur peut supprimer les notifications en glissant de droite à gauche (swipe-to-delete)</li>
+    </ol>
+
+    <div class="warning-card">
+      <strong>⚠️ iOS (iPhone/iPad) :</strong> Les notifications push ne fonctionnent que si le joueur a ajouté l'Application Joueur sur son écran d'accueil (via Partager > Ajouter à l'écran d'accueil). Sur Android, les notifications fonctionnent directement depuis le navigateur.
+    </div>
   </section>
 
   <hr>

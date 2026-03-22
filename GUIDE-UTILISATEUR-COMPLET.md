@@ -44,6 +44,7 @@
 **Communication**
 - [Annonces](#com-joueurs--annonces)
 - [Composer un email](#com-joueurs--composer-un-email)
+- [Notifications Push](#com-joueurs--notifs-notifications-push)
 - [Historique emails](#com-joueurs--historique)
 - [Invitations Espace Joueur](#com-joueurs--invitations-espace-joueur)
 
@@ -991,6 +992,94 @@ Envoi d'emails de masse à un groupe de joueurs.
 2. Cliquer sur "Envoyer"
 3. Confirmer l'envoi
 4. Message de confirmation avec le nombre d'emails envoyés
+
+---
+
+## Com Joueurs > Notifs (Notifications Push)
+
+### Description
+
+Envoi de notifications push instantanées vers l'Application Joueur. Les notifications apparaissent directement sur le téléphone des joueurs, même lorsque l'application n'est pas ouverte.
+
+**📱 Avantage des notifications push :** Contrairement aux emails, les notifications push sont instantanées et ont un taux d'ouverture beaucoup plus élevé. Idéales pour les communications urgentes (changement de dernière minute, rappel important, etc.).
+
+[Capture d'écran : Onglet Notifs]
+
+### Accès
+
+1. Menu principal : **Com Joueurs**
+2. Onglet : **🔔 Notifs** (premier onglet)
+
+### Étape 1 : Sélectionner les destinataires
+
+**Deux modes disponibles :**
+
+- **📋 Liste de licences** (par défaut) : Saisir les numéros de licence manuellement (un par ligne, maximum 15)
+- **👥 Tous les joueurs** : Envoyer à tous les joueurs ayant activé les notifications dans l'Application Joueur
+
+⚠️ **Important :** Seuls les joueurs ayant activé les notifications push dans l'Espace Joueur recevront la notification. Les joueurs n'ayant pas encore accepté les notifications ne la recevront pas.
+
+### Étape 2 : Composer la notification
+
+**Champs obligatoires :**
+
+- **Titre** (50 caractères maximum) : Titre court et accrocheur
+  - _Exemple : "Rappel Important"_
+- **Message** (150 caractères maximum) : Message concis et clair
+  - _Exemple : "N'oubliez pas de vous inscrire avant le 15 mars pour le tournoi Libre N2"_
+- **Destination** : Page de l'Application Joueur à ouvrir lorsque le joueur tape sur la notification
+  - 🏠 Page d'accueil
+  - 🏆 Vos compétitions
+  - 📝 Inscriptions
+  - 📊 Stats
+  - 📅 Compétitions CDB
+  - 👤 Profil & FAQ
+  - ✉️ Contact
+
+**📱 Aperçu en direct :** L'interface affiche un aperçu en temps réel de la notification telle qu'elle apparaîtra sur le téléphone du joueur.
+
+### Étape 3 : Envoyer la notification
+
+1. Vérifier le titre, le message et la destination dans l'aperçu
+2. Cliquer sur **📤 Envoyer la notification**
+3. Confirmer l'envoi dans la boîte de dialogue
+4. Message de confirmation : "✅ Notification envoyée à X joueur(s)"
+
+### Historique des notifications envoyées
+
+L'historique apparaît en bas de la page et affiche :
+
+- **Date et heure** d'envoi
+- **Titre** de la notification
+- **Message** envoyé
+- **Destinataires** : Nombre de joueurs ciblés
+- **Envoyés** : Nombre de notifications effectivement envoyées
+- **Actions** : Bouton de suppression 🗑️
+
+#### Supprimer des notifications de l'historique
+
+**Sur ordinateur :**
+- Cliquer sur le bouton 🗑️ dans la colonne "Actions"
+- Confirmer la suppression
+
+**Sur mobile/tablette :**
+- Glisser la ligne de droite à gauche (swipe)
+- Un fond rouge apparaît pour confirmer l'action
+- Relâcher après 120 pixels pour supprimer
+
+💡 **Bon à savoir :** La suppression de l'historique n'affecte pas les notifications déjà reçues par les joueurs. Elle permet uniquement de nettoyer l'interface administrateur (par exemple, pour supprimer les notifications de test).
+
+### Côté joueur : Réception des notifications
+
+Dans l'Application Joueur :
+
+1. Le joueur reçoit une notification instantanée sur son téléphone
+2. En tapant sur la notification, l'Application s'ouvre sur la page sélectionnée (destination)
+3. L'icône 🔔 (en haut à droite) affiche un badge avec le nombre de notifications non lues
+4. En tapant sur 🔔, le joueur accède au centre de notifications avec l'historique
+5. Le joueur peut supprimer les notifications en glissant de droite à gauche (swipe-to-delete)
+
+⚠️ **iOS (iPhone/iPad) :** Les notifications push ne fonctionnent que si le joueur a ajouté l'Application Joueur sur son écran d'accueil (via Partager > Ajouter à l'écran d'accueil). Sur Android, les notifications fonctionnent directement depuis le navigateur.
 
 ---
 
