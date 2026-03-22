@@ -165,6 +165,7 @@
                 <th>Licence</th>
                 <th>Email</th>
                 <th>Club</th>
+                <th>Notifs</th>
                 <th>Admin</th>
                 <th>Dernière connexion</th>
                 <th>Actions</th>
@@ -276,6 +277,20 @@
             })
           : 'Jamais';
 
+        // Notification status indicator
+        let notifStatus = '';
+        let notifTitle = '';
+        if (account.has_push_subscription && account.push_enabled !== false) {
+          notifStatus = '🔔✅';
+          notifTitle = 'Notifications activées';
+        } else if (account.push_enabled === false) {
+          notifStatus = '🔔❌';
+          notifTitle = 'Notifications désactivées par le joueur';
+        } else {
+          notifStatus = '🔔⚪';
+          notifTitle = 'Notifications non activées';
+        }
+
         row.innerHTML = `
           <td>
             <input type="checkbox" class="player-checkbox" data-licence="${account.licence}" onchange="updateSelectionCount()" style="cursor: pointer;">
@@ -287,6 +302,9 @@
           <td>${account.licence}</td>
           <td>${account.email}</td>
           <td>${account.club || '-'}</td>
+          <td style="text-align: center; font-size: 1.2rem;" title="${notifTitle}">
+            ${notifStatus}
+          </td>
           <td>
             <div class="admin-toggle ${account.is_admin ? 'active' : ''}"
                  onclick="toggleAdmin(${account.id}, ${!account.is_admin})"

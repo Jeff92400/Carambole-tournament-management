@@ -48,13 +48,16 @@ router.get('/', authenticateToken, (req, res) => {
   if (all === 'true') {
     const query = `
       SELECT pa.id, pa.licence, pa.email, pa.is_admin, pa.email_verified,
-             pa.created_at, pa.last_login,
+             pa.created_at, pa.last_login, pa.push_enabled,
              CONCAT(p.first_name, ' ', p.last_name) as player_name,
-             p.club
+             p.club,
+             CASE WHEN ps.id IS NOT NULL THEN true ELSE false END as has_push_subscription
       FROM player_accounts pa
       LEFT JOIN players p ON REPLACE(pa.licence, ' ', '') = REPLACE(p.licence, ' ', '')
+      LEFT JOIN push_subscriptions ps ON ps.player_account_id = pa.id
       WHERE UPPER(pa.licence) NOT LIKE 'TEST%'
         AND ($1::int IS NULL OR pa.organization_id = $1)
+      GROUP BY pa.id, p.first_name, p.last_name, p.club
       ORDER BY pa.created_at DESC
     `;
 
