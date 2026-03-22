@@ -635,10 +635,11 @@ router.get('/debug/:licence', async (req, res) => {
  * POST /api/push/bulk
  * Send bulk notification to multiple players (admin only)
  * Body: { licences: [], title, body, url }
+ * IMPORTANT: Respects test mode - if push_notification_test_licences is non-empty, only those licences receive notifications
  */
 router.post('/bulk', async (req, res) => {
   try {
-    const { licences, title, body, url } = req.body;
+    let { licences, title, body, url } = req.body;
     const orgId = req.user?.organizationId || 1;
 
     // Validation
@@ -653,6 +654,55 @@ router.post('/bulk', async (req, res) => {
     console.log(`[BULK PUSH] Sending to ${licences.length} players for org ${orgId}`);
     console.log(`[BULK PUSH] Title: ${title}`);
     console.log(`[BULK PUSH] Body: ${body}`);
+
+    // ==================== TEST MODE FILTERING ====================
+    // Check if test mode is active (non-empty test licences list)
+    const testLicencesResult = await new Promise((resolve, reject) => {
+      db.get(
+        `SELECT value FROM organization_settings
+         WHERE organization_id = $1 AND key = 'push_notification_test_licences'`,
+        [orgId],
+        (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        }
+      );
+    });
+
+    let testLicences = [];
+    if (testLicencesResult && testLicencesResult.value) {
+      try {
+        testLicences = JSON.parse(testLicencesResult.value);
+      } catch (parseError) {
+        console.error('[PUSH-TEST] Error parsing test licences:', parseError);
+      }
+    }
+
+    // If test mode is active (non-empty array), filter licences to only test licences
+    if (Array.isArray(testLicences) && testLicences.length > 0) {
+      const normalizedTestLicences = testLicences.map(l => l.replace(/\s/g, '').toUpperCase());
+      const originalCount = licences.length;
+
+      licences = licences.filter(l =>
+        normalizedTestLicences.includes(l.replace(/\s/g, '').toUpperCase())
+      );
+
+      console.log(`[PUSH-TEST] ⚠️  TEST MODE ACTIVE - ${testLicences.length} licence(s) autorisée(s)`);
+      console.log(`[PUSH-TEST] Filtered ${originalCount} licences → ${licences.length} test licences`);
+
+      if (licences.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: '⚠️ Mode test actif : aucun joueur sélectionné n\'est dans la liste de test',
+          message: `Mode test actif avec ${testLicences.length} licence(s) autorisée(s). Pour envoyer à tous les joueurs, videz la liste de test dans Paramètres > Notifications Push > Mode Test.`,
+          test_mode: true,
+          test_licences_count: testLicences.length
+        });
+      }
+    } else {
+      console.log('[PUSH-TEST] ✅ Test mode disabled - sending to all selected players');
+    }
+    // ==================== END TEST MODE FILTERING ====================
 
     // Construct full URL - if url starts with #, prepend Player App base URL
     let fullUrl = url || '/';
