@@ -675,16 +675,83 @@ router.post('/bulk', async (req, res) => {
 
     console.log(`[BULK PUSH] Sent: ${result.total_sent}, Failed: ${result.total_failed}`);
 
+    // If no notifications were sent, provide helpful error message
+    if (result.total_sent === 0) {
+      return res.status(400).json({
+        success: false,
+        total_sent: 0,
+        total_failed: result.total_failed,
+        error: 'Aucun joueur n\'a reçu la notification',
+        message: `Les ${licences.length} joueur(s) sélectionné(s) n'ont pas activé les notifications push dans l'Application Joueur. Ils doivent d'abord cliquer sur l'icône 🔔 et autoriser les notifications.`
+      });
+    }
+
     res.json({
       success: true,
       total_sent: result.total_sent,
       total_failed: result.total_failed,
-      message: `Notification envoyée à ${result.total_sent} joueur(s)`
+      message: `Notification envoyée à ${result.total_sent} joueur(s)${result.total_failed > 0 ? ` (${result.total_failed} non abonné(s))` : ''}`
     });
 
   } catch (error) {
     console.error('[BULK PUSH] Error:', error);
     res.status(500).json({ error: 'Erreur lors de l\'envoi des notifications' });
+  }
+});
+
+/**
+ * GET /api/push/subscription-status
+ * Get subscription statistics for the organization
+ * Returns: { total_players, subscribed_players, subscription_rate }
+ */
+router.get('/subscription-status', async (req, res) => {
+  try {
+    const orgId = req.user?.organizationId || 1;
+
+    // Count total player accounts for this org
+    const totalPlayersResult = await new Promise((resolve, reject) => {
+      db.get(
+        `SELECT COUNT(*) as count
+         FROM player_accounts
+         WHERE ($1::int IS NULL OR organization_id = $1)`,
+        [orgId],
+        (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        }
+      );
+    });
+
+    // Count players with active push subscriptions
+    const subscribedPlayersResult = await new Promise((resolve, reject) => {
+      db.get(
+        `SELECT COUNT(DISTINCT pa.id) as count
+         FROM player_accounts pa
+         INNER JOIN push_subscriptions ps ON ps.player_account_id = pa.id
+         WHERE ($1::int IS NULL OR pa.organization_id = $1)
+           AND pa.push_enabled = true`,
+        [orgId],
+        (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        }
+      );
+    });
+
+    const totalPlayers = totalPlayersResult.count || 0;
+    const subscribedPlayers = subscribedPlayersResult.count || 0;
+    const subscriptionRate = totalPlayers > 0 ? Math.round((subscribedPlayers / totalPlayers) * 100) : 0;
+
+    res.json({
+      total_players: totalPlayers,
+      subscribed_players: subscribedPlayers,
+      subscription_rate: subscriptionRate,
+      message: `${subscribedPlayers} joueur(s) abonné(s) sur ${totalPlayers} (${subscriptionRate}%)`
+    });
+
+  } catch (error) {
+    console.error('[Push Subscription Status] Error:', error);
+    res.status(500).json({ error: 'Erreur lors de la récupération des statistiques' });
   }
 });
 
