@@ -586,52 +586,74 @@
         <span class="accordion-summary" id="summary-pushNotifTest">Chargement...</span>
       </div>
       <div class="accordion-body">
-        <p style="margin-bottom: 20px; color: #666;">
-          Gérez les licences autorisées à recevoir les notifications push pendant la phase de test.
-          <strong>Maximum : 15 licences.</strong>
-        </p>
-
-        <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin-bottom: 20px; border-radius: 4px;">
-          <strong>⚠️ Mode Test actif :</strong>
-          <p style="margin: 10px 0 0 0; color: #856404;">
-            Seules les licences listées ci-dessous recevront les notifications push (convocations, résultats).
-            Pour activer les notifications pour <strong>tous les joueurs</strong>, videz la liste et enregistrez.
-          </p>
-        </div>
-
-        <div style="margin-bottom: 20px;">
-          <label style="display: block; margin-bottom: 8px; font-weight: 500;">
-            Licences de test (une par ligne, max 15) :
-          </label>
-          <textarea
-            id="pushTestLicences"
-            rows="6"
-            placeholder="Exemple :&#10;170229G&#10;123456A&#10;789012B"
-            style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-family: monospace; font-size: 14px; resize: vertical;"
-          ></textarea>
-          <div style="margin-top: 5px; color: #666; font-size: 13px;">
-            <span id="pushTestLicenceCount">0</span> / 15 licences
+        <!-- GENERAL ACTIVATION BANNER (shown when list is empty) -->
+        <div id="generalActivationBanner" style="display: none; background: linear-gradient(135deg, #28a745 0%, #20a83a 100%); color: white; padding: 25px; margin-bottom: 25px; border-radius: 12px; box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);">
+          <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 10px;">
+            <div style="font-size: 48px;">✅</div>
+            <div>
+              <h3 style="margin: 0; font-size: 1.3em;">Mode Général Actif</h3>
+              <p style="margin: 5px 0 0 0; font-size: 1.05em; opacity: 0.95;">
+                Les notifications push sont activées pour <strong>tous les joueurs</strong> de votre organisation.
+              </p>
+            </div>
+          </div>
+          <div style="background: rgba(255,255,255,0.15); padding: 15px; border-radius: 8px; margin-top: 15px;">
+            <p style="margin: 0; font-size: 0.95em; line-height: 1.6;">
+              <strong>🔒 Important :</strong> Pour des raisons de sécurité et pour éviter la confusion des joueurs,
+              il n'est pas possible de revenir en mode test une fois l'activation générale effectuée.
+              Si nécessaire, contactez l'administrateur de la plateforme.
+            </p>
           </div>
         </div>
 
-        <div style="display: flex; gap: 15px; flex-wrap: wrap;">
-          <button onclick="savePushTestLicences()" class="btn" style="background: #28a745; padding: 12px 25px;">
-            💾 Enregistrer
-          </button>
-          <button onclick="activatePushForAll()" class="btn" style="background: #dc3545; padding: 12px 25px;">
-            🚀 Activer pour tous les joueurs
-          </button>
-        </div>
+        <!-- TEST MODE SECTION (shown when test licences exist) -->
+        <div id="testModeSection">
+          <p style="margin-bottom: 20px; color: #666;">
+            Gérez les licences autorisées à recevoir les notifications push pendant la phase de test.
+            <strong>Maximum : 15 licences.</strong>
+          </p>
 
-        <div id="pushTestMessage" style="display: none; margin-top: 15px; padding: 10px; border-radius: 4px;"></div>
+          <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin-bottom: 20px; border-radius: 4px;">
+            <strong>⚠️ Mode Test actif :</strong>
+            <p style="margin: 10px 0 0 0; color: #856404;">
+              Seules les licences listées ci-dessous recevront les notifications push (convocations, résultats).
+            </p>
+          </div>
 
-        <div style="margin-top: 30px; padding: 15px; background: #e7f3ff; border-left: 4px solid #1F4788; border-radius: 4px;">
-          <strong>ℹ️ Comment ça marche :</strong>
-          <ul style="margin: 10px 0 0 20px; color: #666; line-height: 1.8;">
-            <li><strong>Mode Test :</strong> Seules les licences listées reçoivent les notifications (idéal pour tester avec l'équipe du comité)</li>
-            <li><strong>Activation générale :</strong> Liste vide = tous les joueurs avec l'app installée reçoivent les notifications</li>
-            <li><strong>Utilisation :</strong> Parfait pour tester avec les nouveaux CDB avant activation générale</li>
-          </ul>
+          <div style="margin-bottom: 20px;">
+            <label style="display: block; margin-bottom: 8px; font-weight: 500;">
+              Licences de test (une par ligne, max 15) :
+            </label>
+            <textarea
+              id="pushTestLicences"
+              rows="6"
+              placeholder="Exemple :&#10;170229G&#10;123456A&#10;789012B"
+              style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-family: monospace; font-size: 14px; resize: vertical;"
+            ></textarea>
+            <div style="margin-top: 5px; color: #666; font-size: 13px;">
+              <span id="pushTestLicenceCount">0</span> / 15 licences
+            </div>
+          </div>
+
+          <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+            <button id="savePushTestBtn" onclick="savePushTestLicences()" class="btn" style="background: #28a745; padding: 12px 25px;">
+              💾 Enregistrer
+            </button>
+            <button id="activatePushForAllBtn" onclick="activatePushForAll()" class="btn" style="background: #dc3545; padding: 12px 25px;">
+              🚀 Activer pour tous les joueurs
+            </button>
+          </div>
+
+          <div id="pushTestMessage" style="display: none; margin-top: 15px; padding: 10px; border-radius: 4px;"></div>
+
+          <div style="margin-top: 30px; padding: 15px; background: #e7f3ff; border-left: 4px solid #1F4788; border-radius: 4px;">
+            <strong>ℹ️ Comment ça marche :</strong>
+            <ul style="margin: 10px 0 0 20px; color: #666; line-height: 1.8;">
+              <li><strong>Mode Test :</strong> Seules les licences listées reçoivent les notifications (idéal pour tester avec l'équipe du comité)</li>
+              <li><strong>Activation générale :</strong> Cliquez sur "Activer pour tous les joueurs" pour déployer à tous</li>
+              <li><strong>Utilisation :</strong> Parfait pour tester avec les nouveaux CDB avant activation générale</li>
+            </ul>
+          </div>
         </div>
       </div>
     </div>
@@ -5533,12 +5555,25 @@
 
           // Update summary
           const summary = document.getElementById('summary-pushNotifTest');
+          const generalBanner = document.getElementById('generalActivationBanner');
+          const testSection = document.getElementById('testModeSection');
+
           if (licences.length === 0) {
+            // GENERAL ACTIVATION MODE - Show banner, hide test section
             summary.textContent = 'Mode activé pour tous les joueurs';
             summary.style.color = '#28a745';
+            summary.style.fontWeight = 'bold';
+
+            generalBanner.style.display = 'block';
+            testSection.style.display = 'none';
           } else {
+            // TEST MODE - Show test section, hide banner
             summary.textContent = `${licences.length} licence${licences.length > 1 ? 's' : ''} de test`;
             summary.style.color = '#666';
+            summary.style.fontWeight = 'normal';
+
+            generalBanner.style.display = 'none';
+            testSection.style.display = 'block';
           }
         } else {
           console.error('Failed to load push test licences');
@@ -5611,7 +5646,7 @@
     }
 
     async function activatePushForAll() {
-      if (!confirm('Êtes-vous sûr de vouloir activer les notifications pour TOUS les joueurs ?\n\nCela supprimera la liste de licences de test et activera les notifications pour tous les joueurs de votre organisation.')) {
+      if (!confirm('⚠️ ACTIVATION GÉNÉRALE DES NOTIFICATIONS PUSH\n\nÊtes-vous sûr de vouloir activer les notifications pour TOUS les joueurs ?\n\n🔒 IMPORTANT : Cette action est irréversible.\nIl ne sera pas possible de revenir en mode test après cette activation.\n\nConfirmer l\'activation générale ?')) {
         return;
       }
 
