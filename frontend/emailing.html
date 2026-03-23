@@ -184,38 +184,6 @@
     .history-table th, .history-table td {
       padding: 10px;
     }
-    .tabs {
-      display: flex;
-      border-bottom: 2px solid #ddd;
-      margin-bottom: 20px;
-      overflow-x: auto;
-      overflow-y: hidden;
-      -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
-      padding-right: 20px; /* Prevent last tab from being cut off */
-    }
-    .tab {
-      padding: 10px 20px;
-      cursor: pointer;
-      border-bottom: 2px solid transparent;
-      margin-bottom: -2px;
-      color: #666;
-      white-space: nowrap; /* Prevent text wrapping */
-      flex-shrink: 0; /* Prevent tab compression */
-    }
-    .tab:hover {
-      color: #1F4788;
-    }
-    .tab.active {
-      color: #1F4788;
-      border-bottom-color: #1F4788;
-      font-weight: bold;
-    }
-    .tab-content {
-      display: none;
-    }
-    .tab-content.active {
-      display: block;
-    }
     .progress-overlay {
       position: fixed;
       top: 0;
@@ -442,6 +410,66 @@
       border-top: 1px solid #eee;
       background: #f8f9fa;
     }
+
+    /* Accordion panels */
+    .accordion-panel {
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      margin-bottom: 12px;
+      background: white;
+    }
+    .accordion-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 14px 18px;
+      background: #f8f9fa;
+      cursor: pointer;
+      user-select: none;
+      transition: background 0.2s;
+      border-radius: 7px;
+    }
+    .accordion-panel.open .accordion-header {
+      border-radius: 7px 7px 0 0;
+    }
+    .accordion-header:hover {
+      background: #e9ecef;
+    }
+    .accordion-icon {
+      display: inline-block;
+      font-size: 10px;
+      margin-right: 10px;
+      transition: transform 0.2s;
+      color: #666;
+    }
+    .accordion-panel.open .accordion-icon {
+      transform: rotate(90deg);
+    }
+    .accordion-title {
+      display: flex;
+      align-items: center;
+      font-size: 14px;
+    }
+    .accordion-summary {
+      font-size: 12px;
+      color: #888;
+      font-weight: 400;
+      max-width: 55%;
+      text-align: right;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .accordion-body {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.3s ease, padding 0.3s ease;
+      padding: 0 18px;
+    }
+    .accordion-panel.open .accordion-body {
+      max-height: 10000px;
+      padding: 18px;
+    }
   </style>
 </head>
 <body>
@@ -463,22 +491,16 @@
     <div id="errorMessage" class="error" style="display: none;"></div>
     <div id="successMessage" class="success" style="display: none;"></div>
 
-    <div class="tabs">
-      <div class="tab active tooltip" data-tab="notifications" data-tooltip="Notifications push vers l'Espace Joueur">🔔 Notifs</div>
-      <div class="tab tooltip" data-tab="announcements" data-tooltip="Annonces affichées dans l'Espace Joueur">Annonces</div>
-      <div class="tab tooltip" data-tab="compose" data-tooltip="Email avec texte libre et destinataires à sélectionner depuis la base joueurs">Composer</div>
-      <div class="tab tooltip" data-tab="relances" data-tooltip="Rappels d'inscription par tournois et finales">Relances</div>
-      <div class="tab tooltip" data-tab="results" data-tooltip="Classement à l'issue de chaque rencontre">Résultats Tournoi</div>
-      <div class="tab tooltip" data-tab="finale-results" data-tooltip="Résultats de la finale avec podium">Résultats Finale</div>
-      <div class="tab tooltip" data-tab="contacts" data-tooltip="Modification infos joueur">Gestion Contacts</div>
-      <div class="tab tooltip" data-tab="templates" data-tooltip="Emails type à composer et à utiliser pour relance et convocation">Templates</div>
-      <div class="tab tooltip" data-tab="history" data-tooltip="Logs d'envois des emails">Historique</div>
-      <div class="tab tooltip" data-tab="scheduled" data-tooltip="Envoi d'emails décalé">Programmés</div>
-      <div class="tab tooltip" data-tab="surveys" data-tooltip="Sondages de satisfaction pour l'Espace Joueur">Sondages</div>
-    </div>
-
-    <!-- TAB: Notifications -->
-    <div id="tab-notifications" class="tab-content active">
+    <!-- ACCORDION: Notifications Push -->
+    <div class="accordion-panel open" id="panel-notifications">
+      <div class="accordion-header" onclick="toggleAccordion('panel-notifications')">
+        <div class="accordion-title">
+          <span class="accordion-icon">&#9654;</span>
+          <strong>🔔 Notifications Push</strong>
+        </div>
+        <span class="accordion-summary" id="summary-notifications">Chargement...</span>
+      </div>
+      <div class="accordion-body">
       <div class="card">
         <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 15px; margin-bottom: 15px;">
           <div>
@@ -623,9 +645,19 @@
         </div>
       </div>
     </div>
+      </div>
+    </div>
 
-    <!-- TAB: Announcements -->
-    <div id="tab-announcements" class="tab-content">
+    <!-- ACCORDION: Announcements -->
+    <div class="accordion-panel" id="panel-announcements">
+      <div class="accordion-header" onclick="toggleAccordion('panel-announcements')">
+        <div class="accordion-title">
+          <span class="accordion-icon">&#9654;</span>
+          <strong>📢 Annonces</strong>
+        </div>
+        <span class="accordion-summary" id="summary-announcements">Chargement...</span>
+      </div>
+      <div class="accordion-body">
       <div class="card">
         <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 15px; margin-bottom: 15px;">
           <div>
@@ -804,9 +836,19 @@
         </details>
       </div>
     </div>
+      </div>
+    </div>
 
-    <!-- TAB: Compose Email -->
-    <div id="tab-compose" class="tab-content">
+    <!-- ACCORDION: Composer -->
+    <div class="accordion-panel" id="panel-compose">
+      <div class="accordion-header" onclick="toggleAccordion('panel-compose')">
+        <div class="accordion-title">
+          <span class="accordion-icon">&#9654;</span>
+          <strong>✉️ Composer</strong>
+        </div>
+        <span class="accordion-summary" id="summary-compose">Chargement...</span>
+      </div>
+      <div class="accordion-body">
       <div class="stats-mini">
         <div class="stat-mini">
           <div class="value" id="totalContacts">-</div>
@@ -966,8 +1008,19 @@
       </div>
     </div>
 
-    <!-- TAB: Relances Inscriptions -->
-    <div id="tab-relances" class="tab-content">
+      </div>
+    </div>
+
+    <!-- ACCORDION: Relances -->
+    <div class="accordion-panel" id="panel-relances">
+      <div class="accordion-header" onclick="toggleAccordion('panel-relances')">
+        <div class="accordion-title">
+          <span class="accordion-icon">&#9654;</span>
+          <strong>🔔 Relances</strong>
+        </div>
+        <span class="accordion-summary" id="summary-relances">Chargement...</span>
+      </div>
+      <div class="accordion-body">
       <div class="card">
         <h3>Relances Inscriptions</h3>
         <p style="color: #666; margin-bottom: 20px;">
@@ -1181,8 +1234,19 @@
       </div>
     </div>
 
-    <!-- TAB: Tournament Results -->
-    <div id="tab-results" class="tab-content">
+      </div>
+    </div>
+
+    <!-- ACCORDION: Résultats Tournoi -->
+    <div class="accordion-panel" id="panel-results">
+      <div class="accordion-header" onclick="toggleAccordion('panel-results')">
+        <div class="accordion-title">
+          <span class="accordion-icon">&#9654;</span>
+          <strong>🏆 Résultats Tournoi</strong>
+        </div>
+        <span class="accordion-summary" id="summary-results">Chargement...</span>
+      </div>
+      <div class="accordion-body">
       <div class="card">
         <h3>Envoyer les Résultats d'un Tournoi</h3>
         <p style="color: #666; margin-bottom: 20px;">
@@ -1323,8 +1387,19 @@
       </div>
     </div>
 
-    <!-- TAB: Finale Results -->
-    <div id="tab-finale-results" class="tab-content">
+      </div>
+    </div>
+
+    <!-- ACCORDION: Résultats Finale -->
+    <div class="accordion-panel" id="panel-finale-results">
+      <div class="accordion-header" onclick="toggleAccordion('panel-finale-results')">
+        <div class="accordion-title">
+          <span class="accordion-icon">&#9654;</span>
+          <strong>🥇 Résultats Finale</strong>
+        </div>
+        <span class="accordion-summary" id="summary-finale-results">Chargement...</span>
+      </div>
+      <div class="accordion-body">
       <div class="card">
         <h3>🏆 Envoyer les Résultats d'une Finale</h3>
         <p style="color: #666; margin-bottom: 20px;">
@@ -1453,8 +1528,19 @@
       </div>
     </div>
 
-    <!-- TAB: Contacts Management -->
-    <div id="tab-contacts" class="tab-content">
+      </div>
+    </div>
+
+    <!-- ACCORDION: Gestion Contacts -->
+    <div class="accordion-panel" id="panel-contacts">
+      <div class="accordion-header" onclick="toggleAccordion('panel-contacts')">
+        <div class="accordion-title">
+          <span class="accordion-icon">&#9654;</span>
+          <strong>👥 Gestion Contacts</strong>
+        </div>
+        <span class="accordion-summary" id="summary-contacts">Chargement...</span>
+      </div>
+      <div class="accordion-body">
       <!-- Cross-link to Settings -->
       <div style="background: #e7f3ff; padding: 10px 15px; border-radius: 6px; margin-bottom: 20px; font-size: 13px; display: flex; align-items: center; gap: 10px;">
         <span>💡</span>
@@ -1589,8 +1675,19 @@
       </div>
     </div>
 
-    <!-- TAB: Templates -->
-    <div id="tab-templates" class="tab-content">
+      </div>
+    </div>
+
+    <!-- ACCORDION: Templates -->
+    <div class="accordion-panel" id="panel-templates">
+      <div class="accordion-header" onclick="toggleAccordion('panel-templates')">
+        <div class="accordion-title">
+          <span class="accordion-icon">&#9654;</span>
+          <strong>📝 Templates</strong>
+        </div>
+        <span class="accordion-summary" id="summary-templates">Chargement...</span>
+      </div>
+      <div class="accordion-body">
       <!-- Template Card Grid -->
       <div class="template-grid">
         <div class="template-card" data-template="convocation">
@@ -1988,8 +2085,19 @@
       </div>
     </div>
 
-    <!-- TAB: History -->
-    <div id="tab-history" class="tab-content">
+      </div>
+    </div>
+
+    <!-- ACCORDION: Historique -->
+    <div class="accordion-panel" id="panel-history">
+      <div class="accordion-header" onclick="toggleAccordion('panel-history')">
+        <div class="accordion-title">
+          <span class="accordion-icon">&#9654;</span>
+          <strong>📜 Historique</strong>
+        </div>
+        <span class="accordion-summary" id="summary-history">Chargement...</span>
+      </div>
+      <div class="accordion-body">
       <!-- Historique Inscriptions/Désinscriptions (Player App) -->
       <div class="card">
         <h3>Historique Inscriptions (App Joueur)</h3>
@@ -2123,8 +2231,19 @@
       </div>
     </div>
 
-    <!-- TAB: Scheduled -->
-    <div id="tab-scheduled" class="tab-content">
+      </div>
+    </div>
+
+    <!-- ACCORDION: Programmés -->
+    <div class="accordion-panel" id="panel-scheduled">
+      <div class="accordion-header" onclick="toggleAccordion('panel-scheduled')">
+        <div class="accordion-title">
+          <span class="accordion-icon">&#9654;</span>
+          <strong>⏰ Programmés</strong>
+        </div>
+        <span class="accordion-summary" id="summary-scheduled">Chargement...</span>
+      </div>
+      <div class="accordion-body">
       <div class="card">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
           <h3 style="margin: 0;">Emails programmés</h3>
@@ -2145,8 +2264,19 @@
       </div>
     </div>
 
-    <!-- TAB: Surveys -->
-    <div id="tab-surveys" class="tab-content">
+      </div>
+    </div>
+
+    <!-- ACCORDION: Sondages -->
+    <div class="accordion-panel" id="panel-surveys">
+      <div class="accordion-header" onclick="toggleAccordion('panel-surveys')">
+        <div class="accordion-title">
+          <span class="accordion-icon">&#9654;</span>
+          <strong>📊 Sondages</strong>
+        </div>
+        <span class="accordion-summary" id="summary-surveys">Chargement...</span>
+      </div>
+      <div class="accordion-body">
       <div class="card">
         <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 15px; margin-bottom: 15px;">
           <div>
@@ -2210,6 +2340,8 @@
 
         <!-- Comments -->
         <div id="surveyResultsComments"></div>
+      </div>
+    </div>
       </div>
     </div>
 
@@ -2346,22 +2478,35 @@
       window.location.href = 'login.html';
     });
 
-    // Tab switching
-    document.querySelectorAll('.tab').forEach(tab => {
-      tab.addEventListener('click', () => {
-        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    // Accordion toggle function
+    window.toggleAccordion = function(panelId) {
+      const panel = document.getElementById(panelId);
+      const wasOpen = panel.classList.contains('open');
 
-        tab.classList.add('active');
-        document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+      // Toggle this panel
+      panel.classList.toggle('open');
 
-        // Load data for specific tabs
-        if (tab.dataset.tab === 'relances') loadRelanceTemplates();
-        if (tab.dataset.tab === 'results') loadImportedTournaments();
-        if (tab.dataset.tab === 'finale-results') loadImportedFinales();
-        if (tab.dataset.tab === 'contacts') { loadAllContacts(); loadClubEmails(); }
-        if (tab.dataset.tab === 'templates') {
-          // Reset to grid view when switching to templates tab
+      // Load data when opening specific panels for the first time
+      if (!wasOpen) {
+        const panelName = panelId.replace('panel-', '');
+
+        if (panelName === 'announcements') {
+          loadAnnouncements().then(() => updateAnnouncementsSummary());
+        }
+        if (panelName === 'relances') {
+          loadRelanceTemplates().then(() => updateRelancesSummary());
+        }
+        if (panelName === 'results') {
+          loadImportedTournaments().then(() => updateResultsSummary());
+        }
+        if (panelName === 'finale-results') {
+          loadImportedFinales().then(() => updateFinaleResultsSummary());
+        }
+        if (panelName === 'contacts') {
+          Promise.all([loadAllContacts(), loadClubEmails()]).then(() => updateContactsSummary());
+        }
+        if (panelName === 'templates') {
+          // Reset to grid view when opening templates panel
           hideAllTemplateEditors();
           document.querySelector('.template-grid').style.display = 'grid';
           // Pre-load all templates in background
@@ -2373,16 +2518,131 @@
           loadClubReminderTemplate();
           loadInscriptionConfirmationTemplate();
           loadInscriptionCancellationTemplate();
+          updateAccordionSummary('templates', '8 templates');
         }
-        if (tab.dataset.tab === 'history') {
-          loadHistory();
-          restoreInscriptionDateFilters();
-          loadInscriptionEmailLogs();
+        if (panelName === 'history') {
+          Promise.all([loadHistory(), restoreInscriptionDateFilters(), loadInscriptionEmailLogs()]).then(() => updateHistorySummary());
         }
-        if (tab.dataset.tab === 'scheduled') loadScheduled();
-        if (tab.dataset.tab === 'surveys') loadSurveys();
-      });
-    });
+        if (panelName === 'scheduled') {
+          loadScheduled().then(() => updateScheduledSummary());
+        }
+        if (panelName === 'surveys') {
+          loadSurveys().then(() => updateSurveysSummary());
+        }
+      }
+    };
+
+    // ==================== ACCORDION SUMMARY UPDATES ====================
+
+    // Update accordion summary texts dynamically
+    function updateAccordionSummary(panelName, text) {
+      const summaryElement = document.getElementById(`summary-${panelName}`);
+      if (summaryElement) {
+        summaryElement.textContent = text;
+      }
+    }
+
+    // Update push notifications summary
+    async function updateNotificationsSummary() {
+      try {
+        const response = await fetch(`${API_URL}/push/status`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+
+        if (data.test_mode) {
+          const count = data.test_licences?.length || 0;
+          updateAccordionSummary('notifications', `Mode test • ${count} licence${count > 1 ? 's' : ''}`);
+        } else {
+          const subCount = data.subscription_count || 0;
+          const totalPlayers = data.total_players || 0;
+          if (totalPlayers > 0) {
+            const pct = Math.round((subCount / totalPlayers) * 100);
+            updateAccordionSummary('notifications', `${subCount} / ${totalPlayers} abonnés (${pct}%)`);
+          } else {
+            updateAccordionSummary('notifications', `${subCount} abonné${subCount > 1 ? 's' : ''}`);
+          }
+        }
+      } catch (error) {
+        updateAccordionSummary('notifications', 'Erreur chargement');
+      }
+    }
+
+    // Update announcements summary
+    function updateAnnouncementsSummary() {
+      const tableBody = document.querySelector('#announcementsTable tbody');
+      if (tableBody) {
+        const rowCount = tableBody.querySelectorAll('tr').length;
+        updateAccordionSummary('announcements', `${rowCount} annonce${rowCount > 1 ? 's' : ''} active${rowCount > 1 ? 's' : ''}`);
+      }
+    }
+
+    // Update relances summary
+    function updateRelancesSummary() {
+      const tableBody = document.querySelector('#relanceTemplatesTable tbody');
+      if (tableBody) {
+        const rowCount = tableBody.querySelectorAll('tr').length;
+        updateAccordionSummary('relances', `${rowCount} tournoi${rowCount > 1 ? 's' : ''}`);
+      }
+    }
+
+    // Update results summary
+    function updateResultsSummary() {
+      const tableBody = document.querySelector('#importedTournamentsTable tbody');
+      if (tableBody) {
+        const rowCount = tableBody.querySelectorAll('tr').length;
+        updateAccordionSummary('results', `${rowCount} tournoi${rowCount > 1 ? 's' : ''} importé${rowCount > 1 ? 's' : ''}`);
+      }
+    }
+
+    // Update finale results summary
+    function updateFinaleResultsSummary() {
+      const tableBody = document.querySelector('#importedFinalesTable tbody');
+      if (tableBody) {
+        const rowCount = tableBody.querySelectorAll('tr').length;
+        updateAccordionSummary('finale-results', `${rowCount} finale${rowCount > 1 ? 's' : ''} importée${rowCount > 1 ? 's' : ''}`);
+      }
+    }
+
+    // Update contacts summary
+    function updateContactsSummary() {
+      const count = allContacts.length || 0;
+      updateAccordionSummary('contacts', `${count} contact${count > 1 ? 's' : ''}`);
+    }
+
+    // Update history summary
+    function updateHistorySummary() {
+      const tableBody = document.querySelector('#historyTable tbody');
+      if (tableBody) {
+        const rowCount = tableBody.querySelectorAll('tr').length;
+        updateAccordionSummary('history', `${rowCount} email${rowCount > 1 ? 's' : ''} envoyé${rowCount > 1 ? 's' : ''}`);
+      }
+    }
+
+    // Update scheduled summary
+    function updateScheduledSummary() {
+      const tableBody = document.querySelector('#scheduledTable tbody');
+      if (tableBody) {
+        const rowCount = tableBody.querySelectorAll('tr').length;
+        updateAccordionSummary('scheduled', `${rowCount} email${rowCount > 1 ? 's' : ''} programmé${rowCount > 1 ? 's' : ''}`);
+      }
+    }
+
+    // Update surveys summary
+    function updateSurveysSummary() {
+      const tableBody = document.querySelector('#surveysTable tbody');
+      if (tableBody) {
+        const rowCount = tableBody.querySelectorAll('tr').length;
+        updateAccordionSummary('surveys', `${rowCount} sondage${rowCount > 1 ? 's' : ''}`);
+      }
+    }
+
+    // Initialize summaries on page load
+    function initializeAllSummaries() {
+      updateNotificationsSummary();
+      updateAccordionSummary('compose', 'Prêt à composer');
+      // Other summaries will update when panels are opened
+    }
 
     // ==================== TEMPLATE CARD GRID HANDLERS ====================
 
@@ -7288,6 +7548,9 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
       setupImagePasteHandler(); // Setup image paste functionality
       await loadWpSetting(); // Load WordPress enabled status
 
+      // Initialize accordion summaries
+      initializeAllSummaries();
+
       // Check for relance action from URL params (from dashboard alert)
       await handleRelanceFromDashboard();
     }
@@ -7341,14 +7604,10 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
           window.pendingRelanceLieu = lieu;
           window.pendingRelanceDebut = debut;
 
-          // Switch to relances tab
-          document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-          document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-
-          const relancesTab = document.querySelector('.tab[data-tab="relances"]');
-          if (relancesTab) {
-            relancesTab.classList.add('active');
-            document.getElementById('tab-relances').classList.add('active');
+          // Open relances accordion panel
+          const relancesPanel = document.getElementById('panel-relances');
+          if (relancesPanel && !relancesPanel.classList.contains('open')) {
+            toggleAccordion('panel-relances');
           }
 
           // Pre-select mode (normalize: remove spaces and uppercase to match dropdown values like "3BANDES")
@@ -8041,16 +8300,8 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
       });
     }
 
-    // Load announcements on tab switch
-    const originalTabHandler = document.querySelectorAll('.tab')[0]?.onclick;
-    document.querySelectorAll('.tab').forEach(tab => {
-      const originalClick = tab.onclick;
-      tab.addEventListener('click', () => {
-        if (tab.dataset.tab === 'announcements') {
-          loadAnnouncements();
-        }
-      });
-    });
+    // Load announcements when accordion panel opens (handled by toggleAccordion)
+    // Note: Announcements are loaded via the toggleAccordion function when panel-announcements is opened
 
     // Load audience count
     async function loadAudienceCount() {
