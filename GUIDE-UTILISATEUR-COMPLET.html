@@ -1566,12 +1566,114 @@
 
     <h3>Sous-menus / Onglets disponibles</h3>
     <ul>
+      <li>Notifications Push</li>
       <li>Annonces</li>
       <li>Composer un email</li>
+      <li>Relances</li>
+      <li>Résultats Tournoi</li>
+      <li>Résultats Finale</li>
+      <li>Gestion Contacts</li>
+      <li>Templates</li>
       <li>Historique</li>
-      <li>Invitations Espace Joueur</li>
+      <li>Programmés</li>
       <li>Sondages</li>
     </ul>
+  </section>
+
+  <hr>
+
+  <!-- Notifications Push -->
+  <section id="notifications-push">
+    <h2>Com Joueurs > Notifications Push</h2>
+
+    <h3>Description</h3>
+    <p>Envoi de notifications push instantanées vers l'Application Joueur (Espace Joueur) installée sur les smartphones des joueurs. Les notifications apparaissent directement sur l'écran du téléphone, même si l'application n'est pas ouverte.</p>
+
+    <div class="info-card">
+      <strong>📱 Compatibilité :</strong>
+      <ul>
+        <li><strong>Android :</strong> Fonctionne partout (avec ou sans PWA installée)</li>
+        <li><strong>iOS :</strong> Fonctionne uniquement si l'Espace Joueur a été ajouté à l'écran d'accueil (PWA installée)</li>
+      </ul>
+    </div>
+
+    <div class="screenshot-placeholder">
+      <span class="screenshot-id">IMG-12A</span>
+      <span class="screenshot-icon">&#128247;</span>
+      <span class="screenshot-label">Notifications Push</span>
+      <span class="screenshot-desc">Capture de l'onglet Notifications Push avec le formulaire d'envoi (destinataires, titre, message, destination) et l'historique des notifications envoyées</span>
+      <img src="screenshots/12a-notifications-push.png" alt="Notifications Push">
+    </div>
+
+    <h4>Envoyer une notification push</h4>
+
+    <p><strong>Étape 1 : Sélectionner les destinataires</strong></p>
+    <ul>
+      <li><strong>Tous les joueurs</strong> : Envoie à tous les joueurs ayant activé les notifications</li>
+      <li><strong>Liste de licences</strong> : Envoie uniquement aux licences spécifiées (une par ligne, maximum 15)</li>
+    </ul>
+
+    <p><strong>Étape 2 : Composer la notification</strong></p>
+    <ul>
+      <li><strong>Titre</strong> : Titre court (50 caractères maximum) - Ex: "Rappel Important"</li>
+      <li><strong>Message</strong> : Contenu de la notification (150 caractères maximum) - Ex: "N'oubliez pas de vous inscrire avant le 15 mars pour le tournoi Libre N2"</li>
+      <li><strong>Destination</strong> : Page de l'Espace Joueur à ouvrir quand le joueur clique sur la notification
+        <ul>
+          <li>🏠 Page d'accueil</li>
+          <li>🏆 Vos compétitions</li>
+          <li>📝 Inscriptions</li>
+          <li>📊 Stats</li>
+          <li>📅 Compétitions CDB</li>
+          <li>👤 Profil & FAQ</li>
+          <li>✉️ Contact</li>
+        </ul>
+      </li>
+    </ul>
+
+    <p><strong>Étape 3 : Prévisualiser et envoyer</strong></p>
+    <ul>
+      <li>Vérifiez l'aperçu de la notification (affichage comme sur le téléphone)</li>
+      <li>Cliquez sur <strong>📤 Envoyer la notification</strong></li>
+      <li>La notification est envoyée instantanément aux joueurs abonnés</li>
+    </ul>
+
+    <h4>Statut des abonnements</h4>
+    <p>En haut à droite du formulaire, vous voyez le nombre de joueurs abonnés aux notifications push :</p>
+    <ul>
+      <li><strong>Exemple :</strong> "12 / 58 abonnés (21%)"</li>
+      <li>Seuls les joueurs ayant autorisé les notifications dans l'Espace Joueur recevront les notifications</li>
+    </ul>
+
+    <h4>Historique des notifications envoyées</h4>
+    <p>Le tableau d'historique affiche toutes les notifications envoyées avec :</p>
+    <ul>
+      <li><strong>Date et heure</strong> d'envoi</li>
+      <li><strong>Titre et message</strong> de la notification</li>
+      <li><strong>Destinataires</strong> : "Tous les joueurs" ou nombre de licences ciblées</li>
+      <li><strong>Envoyés</strong> : Nombre de notifications effectivement envoyées</li>
+      <li><strong>Action Supprimer</strong> : Supprime l'entrée de l'historique (n'affecte pas les notifications déjà reçues par les joueurs)</li>
+    </ul>
+
+    <div class="warning-card">
+      <strong>⚠️ Important :</strong>
+      <ul>
+        <li>Les notifications sont <strong>instantanées et définitives</strong> - vérifiez bien le contenu avant d'envoyer</li>
+        <li>Respectez une fréquence raisonnable pour ne pas surcharger les joueurs</li>
+        <li>Utilisez un langage clair et concis (limites de caractères)</li>
+      </ul>
+    </div>
+
+    <h4>Cas d'usage recommandés</h4>
+    <ul>
+      <li><strong>Rappel date limite inscription</strong> : "Plus que 3 jours pour vous inscrire au tournoi Cadre 47/2 du 28/03"</li>
+      <li><strong>Résultats publiés</strong> : "Les résultats du tournoi 3 Bandes N2 sont disponibles !"</li>
+      <li><strong>Changement de dernière minute</strong> : "Attention : Le tournoi Libre R1 est reporté au 05/04"</li>
+      <li><strong>Annonce importante</strong> : "Assemblée Générale le 15 juin - Tous les joueurs sont invités"</li>
+    </ul>
+
+    <div class="info-card">
+      <strong>💡 Astuce :</strong> Les joueurs peuvent gérer leurs notifications dans l'Espace Joueur → Paramètres → "Recevoir les notifications push". Ils peuvent consulter l'historique de leurs notifications reçues via l'icône 🔔 en haut de l'écran.
+    </div>
   </section>
 
   <hr>

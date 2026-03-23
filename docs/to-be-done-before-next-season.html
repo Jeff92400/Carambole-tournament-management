@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tâches à Réaliser Avant la Saison 2026-2027</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            line-height: 1.6;
+            color: #2c3e50;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+
+        header {
+            background: linear-gradient(135deg, #1F4788 0%, #667eea 100%);
+            color: white;
+            padding: 40px;
+            text-align: center;
+        }
+
+        header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+
+        header .subtitle {
+            font-size: 1.2em;
+            opacity: 0.95;
+        }
+
+        .metadata {
+            background: #f8f9fa;
+            padding: 20px 40px;
+            border-bottom: 3px solid #667eea;
+            display: flex;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        .metadata-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .metadata-item strong {
+            color: #1F4788;
+        }
+
+        .content {
+            padding: 40px;
+        }
+
+        .section {
+            margin-bottom: 40px;
+        }
+
+        .section-title {
+            font-size: 1.8em;
+            color: #1F4788;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 3px solid #667eea;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .priority-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.5em;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .priority-critical {
+            background: #e74c3c;
+            color: white;
+        }
+
+        .priority-high {
+            background: #f39c12;
+            color: white;
+        }
+
+        .priority-medium {
+            background: #3498db;
+            color: white;
+        }
+
+        .priority-low {
+            background: #95a5a6;
+            color: white;
+        }
+
+        .task-card {
+            background: white;
+            border: 2px solid #e1e8ed;
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 20px;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+
+        .task-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 24px rgba(102, 126, 234, 0.2);
+            border-color: #667eea;
+        }
+
+        .task-card h3 {
+            color: #1F4788;
+            font-size: 1.4em;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .task-status {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 0.7em;
+            font-weight: bold;
+        }
+
+        .status-todo {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .status-in-progress {
+            background: #cce5ff;
+            color: #004085;
+        }
+
+        .status-ready {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-blocked {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .task-meta {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+
+        .task-meta-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: #666;
+            font-size: 0.95em;
+        }
+
+        .task-description {
+            color: #555;
+            margin-bottom: 15px;
+            line-height: 1.7;
+        }
+
+        .task-details {
+            background: #f8f9fa;
+            border-left: 4px solid #667eea;
+            padding: 15px;
+            margin-top: 15px;
+            border-radius: 4px;
+        }
+
+        .task-details ul {
+            margin-left: 20px;
+            margin-top: 10px;
+        }
+
+        .task-details li {
+            margin-bottom: 8px;
+            color: #555;
+        }
+
+        .timeline {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            padding: 30px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+        }
+
+        .timeline-title {
+            font-size: 1.3em;
+            color: #1F4788;
+            margin-bottom: 15px;
+            font-weight: bold;
+        }
+
+        .timeline-item {
+            padding: 12px 0;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        .timeline-item:last-child {
+            border-bottom: none;
+        }
+
+        .timeline-date {
+            font-weight: bold;
+            color: #667eea;
+            display: inline-block;
+            min-width: 150px;
+        }
+
+        .icon {
+            font-size: 1.2em;
+        }
+
+        footer {
+            background: #2c3e50;
+            color: white;
+            padding: 20px 40px;
+            text-align: center;
+            font-size: 0.9em;
+        }
+
+        @media print {
+            body {
+                background: white;
+                padding: 0;
+            }
+
+            .container {
+                box-shadow: none;
+            }
+
+            .task-card {
+                page-break-inside: avoid;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📋 Tâches à Réaliser Avant la Saison 2026-2027</h1>
+            <div class="subtitle">Plateforme de Gestion des Tournois de Carambole FFB</div>
+        </header>
+
+        <div class="metadata">
+            <div class="metadata-item">
+                <span class="icon">📅</span>
+                <strong>Document créé :</strong> 22 mars 2026
+            </div>
+            <div class="metadata-item">
+                <span class="icon">🎯</span>
+                <strong>Échéance principale :</strong> Juillet-Août 2026
+            </div>
+            <div class="metadata-item">
+                <span class="icon">⏱️</span>
+                <strong>Fin de saison :</strong> Juin 2026
+            </div>
+        </div>
+
+        <div class="content">
+            <!-- TIMELINE SECTION -->
+            <div class="timeline">
+                <div class="timeline-title">🗓️ Calendrier Récapitulatif</div>
+                <div class="timeline-item">
+                    <span class="timeline-date">Mars 2026</span>
+                    <span>Documentation notifications push + Refactoring modes</span>
+                </div>
+                <div class="timeline-item">
+                    <span class="timeline-date">Avril-Mai 2026</span>
+                    <span>Finalisation notifications push (Phases 4-7)</span>
+                </div>
+                <div class="timeline-item">
+                    <span class="timeline-date">Avant Juin 2026</span>
+                    <span>Décision stratégie URL & modèle de paiement + Refactoring variables emails</span>
+                </div>
+                <div class="timeline-item">
+                    <span class="timeline-date">Juillet-Août 2026</span>
+                    <span>Détection couleurs calendrier + Tableau de bord KPI (période hors-saison)</span>
+                </div>
+                <div class="timeline-item">
+                    <span class="timeline-date">Avant Sept 2026</span>
+                    <span>Import calendrier saison 2026-27 avec détection automatique</span>
+                </div>
+            </div>
+
+            <!-- CRITICAL TASKS -->
+            <div class="section">
+                <h2 class="section-title">
+                    <span class="icon">🔴</span>
+                    Tâches Critiques
+                    <span class="priority-badge priority-critical">Priorité Maximale</span>
+                </h2>
+
+                <div class="task-card">
+                    <h3>
+                        Refactoring Mode/game_type
+                        <span class="task-status status-todo">À FAIRE</span>
+                    </h3>
+                    <div class="task-meta">
+                        <div class="task-meta-item">
+                            <span class="icon">⏱️</span>
+                            <strong>Effort estimé :</strong> 2-3 jours
+                        </div>
+                        <div class="task-meta-item">
+                            <span class="icon">📅</span>
+                            <strong>Échéance :</strong> Avant mai 2026
+                        </div>
+                    </div>
+                    <div class="task-description">
+                        Éliminer TOUS les modes codés en dur ('LIBRE', 'BANDE', '3BANDES', 'CADRE') et les remplacer par des recherches dynamiques dans la table <code>game_modes</code>. Cette tâche résoudra les bugs récurrents causés par des valeurs incohérentes ('3 BANDES' vs '3BANDES').
+                    </div>
+                    <div class="task-details">
+                        <strong>Fichiers impactés :</strong>
+                        <ul>
+                            <li><code>backend/routes/players.js</code> (lignes 171-174, 322-325) - Mappings colonnes CSV</li>
+                            <li><code>backend/routes/inscriptions.js</code> (lignes 2826-2833) - Map normalisation modes</li>
+                            <li><code>backend/routes/emailing.js</code> (lignes 4173-4176) - Mapping colonnes classement</li>
+                            <li><code>backend/routes/player-invitations.js</code> (lignes 214-217) - Mapping colonnes classement</li>
+                            <li><code>backend/routes/calendar.js</code> (lignes 534-537) - Parsing Excel</li>
+                            <li><code>backend/routes/settings.js</code> (lignes 135-138) - Tri ORDER BY</li>
+                        </ul>
+                        <strong>Solution :</strong> Toujours charger la table <code>game_modes</code> avec le champ <code>rank_column</code> et l'utiliser pour tous les mappages mode → classement.
+                    </div>
+                </div>
+            </div>
+
+            <!-- SCHEDULED TASKS -->
+            <div class="section">
+                <h2 class="section-title">
+                    <span class="icon">⚠️</span>
+                    Tâches Planifiées & En Retard
+                    <span class="priority-badge priority-high">Haute Priorité</span>
+                </h2>
+
+                <div class="task-card">
+                    <h3>
+                        Documentation - Notifications Push
+                        <span class="task-status status-todo">EN RETARD</span>
+                    </h3>
+                    <div class="task-meta">
+                        <div class="task-meta-item">
+                            <span class="icon">📅</span>
+                            <strong>Planifié :</strong> 22 mars 2026
+                        </div>
+                        <div class="task-meta-item">
+                            <span class="icon">⏱️</span>
+                            <strong>Effort estimé :</strong> 2-3 heures
+                        </div>
+                    </div>
+                    <div class="task-description">
+                        Mettre à jour tous les fichiers de documentation pour refléter les nouvelles fonctionnalités de notifications push implémentées en mars 2026.
+                    </div>
+                    <div class="task-details">
+                        <strong>Fichiers à mettre à jour :</strong>
+                        <ul>
+                            <li><code>frontend/guide-utilisateur.html</code> - Ajouter section "Envoyer des notifications push aux joueurs"</li>
+                            <li><code>GUIDE-UTILISATEUR-COMPLET.html</code> - Synchroniser depuis le guide principal</li>
+                            <li><code>GUIDE-UTILISATEUR-COMPLET.md</code> - Régénérer depuis HTML</li>
+                            <li><code>cdbhs-player-app/CLAUDE.md</code> - Documenter fonctionnalité swipe-to-delete</li>
+                        </ul>
+                        <strong>Contenu à documenter :</strong>
+                        <ul>
+                            <li>Com joueurs → Onglet Notifs pour notifications push en masse</li>
+                            <li>Sélecteur de destination (Page d'accueil, Vos compétitions, Inscriptions, Stats)</li>
+                            <li>Panneau historique avec suppression (bouton + swipe-to-delete mobile)</li>
+                            <li>Espace Joueur : Centre de notifications avec icône cloche</li>
+                            <li>URLs complètes pour navigation hash dans les notifications</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="task-card">
+                    <h3>
+                        Notifications Push - Phases 4 à 7
+                        <span class="task-status status-in-progress">EN COURS</span>
+                    </h3>
+                    <div class="task-meta">
+                        <div class="task-meta-item">
+                            <span class="icon">⏱️</span>
+                            <strong>Effort restant :</strong> 3-4 jours
+                        </div>
+                        <div class="task-meta-item">
+                            <span class="icon">📅</span>
+                            <strong>Échéance :</strong> Avril-Mai 2026
+                        </div>
+                    </div>
+                    <div class="task-description">
+                        Finaliser l'implémentation des notifications push web. Les phases 1-3 (clés VAPID, schéma DB, routes backend) sont terminées et déployées.
+                    </div>
+                    <div class="task-details">
+                        <strong>✅ Phases complétées :</strong>
+                        <ul>
+                            <li>Phase 1 : Clés VAPID & package npm (16 mars 2026)</li>
+                            <li>Phase 2 : Schéma base de données (16 mars 2026)</li>
+                            <li>Phase 3 : Routes API backend (17 mars 2026)</li>
+                        </ul>
+                        <strong>⏸️ Phases restantes :</strong>
+                        <ul>
+                            <li><strong>Phase 4</strong> (~0.5 jour) : Frontend Espace Joueur - invite permission, Service Worker, toggle paramètres</li>
+                            <li><strong>Phase 5</strong> (~1-2 jours) : Intégration emails - convocations, relances, résultats, annonces</li>
+                            <li><strong>Phase 6</strong> (~0.5 jour) : Contrôles admin - test/aperçu, stats, envoi manuel</li>
+                            <li><strong>Phase 7</strong> (~0.5 jour) : Nettoyage & monitoring - job planifié, logs erreurs</li>
+                        </ul>
+                        <strong>Note :</strong> iOS fonctionne uniquement si PWA ajoutée à l'écran d'accueil. Android fonctionne partout.
+                    </div>
+                </div>
+            </div>
+
+            <!-- BEFORE END OF SEASON -->
+            <div class="section">
+                <h2 class="section-title">
+                    <span class="icon">🎯</span>
+                    Avant la Fin de Saison (Juin 2026)
+                    <span class="priority-badge priority-high">Haute Priorité</span>
+                </h2>
+
+                <div class="task-card">
+                    <h3>
+                        Stratégie URL & Modèle de Paiement
+                        <span class="task-status status-todo">DÉCISION REQUISE</span>
+                    </h3>
+                    <div class="task-meta">
+                        <div class="task-meta-item">
+                            <span class="icon">💰</span>
+                            <strong>Coût estimé :</strong> 25-30 €/an (2 domaines)
+                        </div>
+                        <div class="task-meta-item">
+                            <span class="icon">📅</span>
+                            <strong>Échéance :</strong> Avant juin 2026
+                        </div>
+                    </div>
+                    <div class="task-description">
+                        Décider de la stratégie URL pour la multi-CDB et du modèle de paiement pour l'hébergement et les domaines personnalisés.
+                    </div>
+                    <div class="task-details">
+                        <strong>Situation actuelle :</strong>
+                        <ul>
+                            <li>Gestion Tournois : <code>cdbhs-tournament-management-production.up.railway.app</code> (4 admins)</li>
+                            <li>Espace Joueur : <code>cdbhs-player-app-production.up.railway.app</code> (57 PWA installées)</li>
+                            <li>Paiement actuel : Personnel (propriétaire)</li>
+                        </ul>
+                        <strong>Stratégie recommandée :</strong>
+                        <ul>
+                            <li><strong>Espace Joueur :</strong> Garder URL CDBHS + ajouter domaine neutre en alias (ex: <code>joueurs-carambole.app</code>)</li>
+                            <li><strong>Gestion Tournois :</strong> Passer à URL neutre (ex: <code>admin-carambole.fr</code>)</li>
+                            <li><strong>Raison :</strong> 57 joueurs devraient réinstaller la PWA si l'URL change</li>
+                        </ul>
+                        <strong>Modèles de paiement possibles :</strong>
+                        <ul>
+                            <li><strong>Centralisé :</strong> Propriétaire paie, CDBs contribuent via abonnement annuel</li>
+                            <li><strong>Per-CDB :</strong> Chaque CDB paie domaine personnalisé + part hébergement</li>
+                            <li><strong>Hybride :</strong> URLs <code>.up.railway.app</code> gratuites, domaines personnalisés payants optionnels</li>
+                        </ul>
+                        <strong>Action requise :</strong> Réévaluer structure coûts et modèle paiement hors-saison (juillet-août 2026) avant scaling vers d'autres CDBs.
+                    </div>
+                </div>
+
+                <div class="task-card">
+                    <h3>
+                        Refactoring Variables Templates Email
+                        <span class="task-status status-todo">À FAIRE</span>
+                    </h3>
+                    <div class="task-meta">
+                        <div class="task-meta-item">
+                            <span class="icon">⏱️</span>
+                            <strong>Effort estimé :</strong> 2-3 jours
+                        </div>
+                        <div class="task-meta-item">
+                            <span class="icon">📅</span>
+                            <strong>Planifié :</strong> 26 juin 2026
+                        </div>
+                    </div>
+                    <div class="task-description">
+                        Centraliser toutes les variables de templates email dans une source unique de vérité. Actuellement, les variables sont dispersées dans 5+ fichiers, causant des problèmes de maintenance et des incohérences.
+                    </div>
+                    <div class="task-details">
+                        <strong>Problème actuel :</strong>
+                        <ul>
+                            <li><code>buildUniversalVariables()</code> dans email.js définit certaines variables</li>
+                            <li>Chaque endpoint email ajoute ses propres variables spécifiques</li>
+                            <li>Le HTML frontend code en dur les listes de variables (8+ endroits)</li>
+                            <li>CLAUDE.md documente les variables séparément</li>
+                            <li>Ajouter une nouvelle variable nécessite des changements dans 5+ fichiers</li>
+                        </ul>
+                        <strong>Solution proposée :</strong>
+                        <ul>
+                            <li>Créer <code>backend/utils/email-variables.js</code> avec source unique</li>
+                            <li>Ajouter endpoint API <code>GET /api/email/available-variables</code></li>
+                            <li>Frontend charge les variables dynamiquement depuis l'API</li>
+                            <li>Toutes les fonctions d'envoi utilisent <code>replaceAllVariables()</code> centralisée</li>
+                            <li>Optionnel : Stocker dans table <code>email_template_variables</code> pour descriptions éditables par admin</li>
+                        </ul>
+                        <strong>Fichiers à refactoriser :</strong>
+                        <ul>
+                            <li><code>backend/routes/email.js</code></li>
+                            <li><code>backend/routes/emailing.js</code></li>
+                            <li><code>frontend/emailing.html</code> (8+ éditeurs de templates)</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- OFF-SEASON WORK -->
+            <div class="section">
+                <h2 class="section-title">
+                    <span class="icon">🟢</span>
+                    Travaux Hors-Saison (Juillet-Septembre 2026)
+                    <span class="priority-badge priority-medium">Priorité Moyenne</span>
+                </h2>
+
+                <div class="task-card">
+                    <h3>
+                        Génération Calendrier - Détection Couleurs
+                        <span class="task-status status-todo">À FAIRE</span>
+                    </h3>
+                    <div class="task-meta">
+                        <div class="task-meta-item">
+                            <span class="icon">⏱️</span>
+                            <strong>Effort estimé :</strong> 3-4 jours
+                        </div>
+                        <div class="task-meta-item">
+                            <span class="icon">📅</span>
+                            <strong>Échéance :</strong> Avant sept 2026
+                        </div>
+                    </div>
+                    <div class="task-description">
+                        Implémenter la détection automatique des clubs via les couleurs de cellules Excel. Actuellement, le parser fonctionne mais les emplacements sont "Non défini". Objectif : 100% précision avant la saison 2026-27.
+                    </div>
+                    <div class="task-details">
+                        <strong>Stratégie : couleur d'abord, code lettre en fallback</strong>
+                        <ul>
+                            <li><strong>Détection couleur (primaire) :</strong> Excel encode le club via couleur fond cellule. ExcelJS lit <code>cell.fill.fgColor.argb</code></li>
+                            <li><strong>Code lettre (fallback) :</strong> Si aucune couleur reconnue, utiliser codes lettres (T1/A → club A, T2/B → club B)</li>
+                            <li><strong>Mapping CDBHS :</strong> FF974806 = Bois-Colombes, FF00B0F0 = Châtillon, etc.</li>
+                        </ul>
+                        <strong>Flux utilisateur (assistant 4 étapes) :</strong>
+                        <ul>
+                            <li><strong>Étape 1 :</strong> Upload - Sélectionner saison + fichier Excel</li>
+                            <li><strong>Étape 2 :</strong> Validation couleurs - Parser Excel, extraire couleurs uniques, afficher mapping proposé couleur→club. Admin valide ou corrige. Mappings précédents pré-remplis.</li>
+                            <li><strong>Étape 3 :</strong> Aperçu - Table complète tournois avec dates, modes, catégories, emplacements (résolus)</li>
+                            <li><strong>Étape 4 :</strong> Import - Créer/MAJ entrées <code>tournoi_ext</code></li>
+                        </ul>
+                        <strong>Règles validation :</strong>
+                        <ul>
+                            <li>Si cellule tournoi a couleur non reconnue ET pas de code lettre → <strong>ARRÊTER</strong>, montrer cellules non résolues</li>
+                            <li>Finales (FD) exemptées - emplacement TBD acceptable</li>
+                            <li>Ne jamais générer tournois avec emplacements manquants silencieusement</li>
+                        </ul>
+                        <strong>Implémentation :</strong>
+                        <ul>
+                            <li>Nouvelle table ou entrées <code>organization_settings</code> : <code>calendar_color_mapping</code> (JSON)</li>
+                            <li>Endpoint backend étape 2 : <code>POST /calendar/import-season/detect-colors</code></li>
+                            <li>Frontend étape 2 : carrés colorés avec dropdown clubs, sauvegarder mapping à confirmation</li>
+                            <li>Option auto-détection : parser zone légende Excel pour suggérer mappings</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="task-card">
+                    <h3>
+                        Refactoring UI - Accordéon Onglet Communication
+                        <span class="task-status status-todo">À FAIRE</span>
+                    </h3>
+                    <div class="task-meta">
+                        <div class="task-meta-item">
+                            <span class="icon">⏱️</span>
+                            <strong>Effort estimé :</strong> 1-2 jours
+                        </div>
+                        <div class="task-meta-item">
+                            <span class="icon">📅</span>
+                            <strong>Échéance :</strong> Juillet-Août 2026
+                        </div>
+                    </div>
+                    <div class="task-description">
+                        Convertir les onglets horizontaux de la page "Com Joueurs" (emailing.html) en sections accordéon collapsibles, correspondant au pattern UI utilisé dans "Espace Joueur". Cette refonte améliore l'UX mobile en éliminant le défilement horizontal.
+                    </div>
+                    <div class="task-details">
+                        <strong>Problème actuel :</strong>
+                        <ul>
+                            <li>11 onglets horizontaux (Notifs, Annonces, Composer, Relances, etc.) causent défilement horizontal sur petits écrans</li>
+                            <li>Derniers onglets (Sondages) coupés à droite de l'écran</li>
+                            <li>Pattern incohérent avec reste de l'application</li>
+                        </ul>
+                        <strong>Solution :</strong>
+                        <ul>
+                            <li>Remplacer tabs par panneaux accordéon collapsibles avec CSS <code>.accordion-panel</code></li>
+                            <li>Ajouter texte résumé dynamique dans headers accordéon (ex: "12 / 58 abonnés (21%)")</li>
+                            <li>Conserver lazy loading - données chargées uniquement au premier clic sur panel</li>
+                            <li>Garder premier panel (Notifications) ouvert par défaut</li>
+                        </ul>
+                        <strong>Raison report hors-saison :</strong> Première tentative de refactoring (23 mars 2026) a introduit 10 balises <code>&lt;/div&gt;</code> fermantes non appariées causant cassure complète du layout. Nécessite approche incrémentale avec tests après chaque section convertie. Mieux adapté à période hors-compétition.
+                        <strong>Endpoint déjà créé :</strong> <code>GET /api/emailing/push/status</code> existe déjà pour stats accordéon notifications.
+                    </div>
+                </div>
+
+                <div class="task-card">
+                    <h3>
+                        Tableau de Bord KPI Personnalisable
+                        <span class="task-status status-todo">À FAIRE</span>
+                    </h3>
+                    <div class="task-meta">
+                        <div class="task-meta-item">
+                            <span class="icon">⏱️</span>
+                            <strong>Effort estimé :</strong> 10 jours (4 phases)
+                        </div>
+                        <div class="task-meta-item">
+                            <span class="icon">📅</span>
+                            <strong>Échéance :</strong> Hors-saison
+                        </div>
+                    </div>
+                    <div class="task-description">
+                        Remplacer les stats codées en dur du tableau de bord par un moteur KPI dynamique où chaque CDB choisit 9-15 indicateurs parmi un catalogue de ~65 KPIs. Maquette interactive disponible : <code>mockup-dashboard-kpis.html</code>
+                    </div>
+                    <div class="task-details">
+                        <strong>Catalogue KPI (8 domaines) :</strong>
+                        <ul>
+                            <li>Joueurs (14 KPIs)</li>
+                            <li>Compétitions (10 KPIs)</li>
+                            <li>Inscriptions (12 KPIs)</li>
+                            <li>Catégories (7 KPIs)</li>
+                            <li>Clubs (6 KPIs)</li>
+                            <li>Engagement (8 KPIs)</li>
+                            <li>Tendances (3 KPIs)</li>
+                            <li>Classements (4 KPIs)</li>
+                        </ul>
+                        <strong>Stockage :</strong> Clé <code>organization_settings</code> <code>dashboard_kpis</code> = tableau JSON des IDs KPI sélectionnés. Par défaut = 9 KPIs existants actuels.
+                        <strong>Déploiement par phases :</strong>
+                        <ul>
+                            <li><strong>Phase 1</strong> (~2 jours) : 15 KPIs existants → rendu dynamique + UI sélecteur</li>
+                            <li><strong>Phase 2</strong> (~3 jours) : +20 nouveaux KPIs requête simple (taux, ratios, counts)</li>
+                            <li><strong>Phase 3</strong> (~2 jours) : +15 KPIs cross-saison (comparaisons N vs N-1)</li>
+                            <li><strong>Phase 4</strong> (~3 jours) : +15 KPIs avancés (graphiques, suivi engagement)</li>
+                        </ul>
+                        <strong>Backend :</strong>
+                        <ul>
+                            <li><code>GET /api/dashboard/kpis</code> - calculer valeurs pour KPIs sélectionnés uniquement</li>
+                            <li><code>GET /api/dashboard/kpi-catalog</code> - catalogue complet avec métadonnées</li>
+                            <li><code>PUT /api/dashboard/kpis</code> - sauvegarder sélection CDB</li>
+                            <li>Moteur KPI : fonction unique mappant chaque ID KPI → requête SQL</li>
+                        </ul>
+                        <strong>Frontend :</strong> Rendu widgets dynamique en grille 3 colonnes, bouton "Personnaliser le tableau de bord" ouvre modal sélecteur avec catégories collapsibles, checkboxes, badges "Existant/Nouveau", compteur sélection.
+                    </div>
+                </div>
+            </div>
+
+            <!-- ON HOLD -->
+            <div class="section">
+                <h2 class="section-title">
+                    <span class="icon">⏸️</span>
+                    En Attente / Futures Fonctionnalités
+                    <span class="priority-badge priority-low">Priorité Basse</span>
+                </h2>
+
+                <div class="task-card">
+                    <h3>
+                        Mode 2 : Journées Qualificatives (CDB 93+94)
+                        <span class="task-status status-blocked">EN ATTENTE VALIDATION</span>
+                    </h3>
+                    <div class="task-meta">
+                        <div class="task-meta-item">
+                            <span class="icon">📅</span>
+                            <strong>Statut :</strong> Specs révisées 18 fév 2026
+                        </div>
+                        <div class="task-meta-item">
+                            <span class="icon">🚫</span>
+                            <strong>Blocage :</strong> Attente GO utilisateur
+                        </div>
+                    </div>
+                    <div class="task-description">
+                        <strong>⚠️ NE PAS IMPLÉMENTER SANS GO EXPLICITE UTILISATEUR</strong><br>
+                        Système de qualification alternatif avec poules (matin) → bracket semi-finales/finale → matches de classement (après-midi). Scoring basé sur position finale, pas points de match cumulés.
+                    </div>
+                    <div class="task-details">
+                        <strong>Statut actuel :</strong>
+                        <ul>
+                            <li>Description fonctionnelle V2 envoyée à CDB 93 & 94 pour validation</li>
+                            <li>Plan technique à <code>~/.claude/plans/structured-hugging-blossom.md</code></li>
+                            <li>Correction clé : scoring BASÉ SUR POSITION, pas points de match cumulés</li>
+                        </ul>
+                        <strong>Encore TBD (en attente CDB 93+94) :</strong>
+                        <ul>
+                            <li>Table lookup position-vers-points - Combien de points pour 1er, 2e, 3e... ?</li>
+                            <li>Formule qualification bracket depuis poules - "points de match + quelque chose" - c'est quoi le quelque chose ?</li>
+                            <li>Seeding serpentine - Nom exact du champ moyenne dans fichier joueur ?</li>
+                        </ul>
+                        <strong>4 Phases d'implémentation :</strong>
+                        <ul>
+                            <li><strong>Phase 1 :</strong> Infrastructure & paramètres</li>
+                            <li><strong>Phase 2 :</strong> Poules de 2 & évolution serpentine</li>
+                            <li><strong>Phase 3 :</strong> Moteur bracket & classement</li>
+                            <li><strong>Phase 4 :</strong> Classement saison & finale</li>
+                        </ul>
+                        <strong>Impact :</strong> ~75% du codebase réutilisé. Mode "3 Tournois" (CDB92) zéro impact.
+                    </div>
+                </div>
+
+                <div class="task-card">
+                    <h3>
+                        Chatbot & Chat en Direct - Espace Joueur
+                        <span class="task-status status-ready">PRÊT</span>
+                    </h3>
+                    <div class="task-meta">
+                        <div class="task-meta-item">
+                            <span class="icon">⏱️</span>
+                            <strong>Effort estimé :</strong> 11-12 heures
+                        </div>
+                        <div class="task-meta-item">
+                            <span class="icon">📅</span>
+                            <strong>Planifié :</strong> 15 juin 2026
+                        </div>
+                        <div class="task-meta-item">
+                            <span class="icon">💰</span>
+                            <strong>Coût :</strong> < 5 €/mois
+                        </div>
+                    </div>
+                    <div class="task-description">
+                        Système de chat hybride pour l'Espace Joueur - chatbot IA (Claude Haiku 4.5) pour réponses autonomes + chat direct admin pour support humain. Architecture basée polling (REST, 5s quand ouvert). Pas de WebSocket pour v1.
+                    </div>
+                    <div class="task-details">
+                        <strong>Flux conversation :</strong>
+                        <ul>
+                            <li>Joueur ouvre chat → conversation créée en mode <code>ai</code></li>
+                            <li>IA répond avec contexte joueur (tournois à venir, inscriptions, classements, infos org)</li>
+                            <li>Joueur clique "Parler à un administrateur" → statut devient <code>waiting</code></li>
+                            <li>Admin voit badge notification dans navbar App Tournois → prend en charge conversation</li>
+                            <li>Les deux côtés pollent pour nouveaux messages</li>
+                            <li>Admin ferme conversation quand résolue</li>
+                        </ul>
+                        <strong>Phases :</strong>
+                        <ul>
+                            <li><strong>Phase 1</strong> (~30min) : Tables base de données + migrations</li>
+                            <li><strong>Phase 2</strong> (~4-5h) : Chatbot IA + frontend Espace Joueur</li>
+                            <li><strong>Phase 3</strong> (~4-5h) : Support admin + interface App Tournois</li>
+                            <li><strong>Phase 4</strong> (~2h) : Paramètres & finitions</li>
+                        </ul>
+                        <strong>Prérequis :</strong> Clé API Anthropic, <code>ANTHROPIC_API_KEY</code> sur Railway. Coût : < 5 EUR/mois avec Haiku 4.5.
+                        <strong>Décisions encore ouvertes :</strong>
+                        <ul>
+                            <li>Durée rétention conversation (avant suppression) ?</li>
+                            <li>Plusieurs admins peuvent répondre ou un par CDB ?</li>
+                            <li>Notification email à admin quand joueur demande support humain ?</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="task-card">
+                    <h3>
+                        Analytiques Historiques Joueur (Stats Multi-Saisons)
+                        <span class="task-status status-todo">CONCEPT</span>
+                    </h3>
+                    <div class="task-meta">
+                        <div class="task-meta-item">
+                            <span class="icon">📅</span>
+                            <strong>Échéance :</strong> Aucune
+                        </div>
+                        <div class="task-meta-item">
+                            <span class="icon">⚙️</span>
+                            <strong>Changements schéma :</strong> Aucun requis
+                        </div>
+                    </div>
+                    <div class="task-description">
+                        Le modèle de données supporte déjà ceci. Toutes les données tournois (<code>tournament_results</code>, <code>rankings</code>) sont conservées de façon permanente entre saisons et scopées par <code>organization_id</code>. Possibilité de construire analytiques riches joueurs au fil du temps.
+                    </div>
+                    <div class="task-details">
+                        <strong>Analytiques possibles :</strong>
+                        <ul>
+                            <li>Progression moyenne par mode entre saisons</li>
+                            <li>Tendances participation (tournois joués par saison, régularité)</li>
+                            <li>Évolution classement (position en catégorie année après année)</li>
+                            <li>Progression meilleure série</li>
+                            <li>Stats cross-CDB au niveau Ligue ou FFB (toutes orgs partagent même base)</li>
+                        </ul>
+                        <strong>Volume données à l'échelle (90 CDBs + 16 Ligues) :</strong> < 1M lignes après 10 ans sur toutes tables - pas de souci performance ou stockage pour PostgreSQL. Requêtes indexées par <code>season</code> et <code>organization_id</code>.
+                        <strong>Implémentation :</strong> Uniquement requêtes + UI (probablement dans onglet stats Espace Joueur). Pas de changements schéma nécessaires.
+                    </div>
+                </div>
+            </div>
+
+            <!-- RECOMMENDATIONS -->
+            <div class="section">
+                <h2 class="section-title">
+                    <span class="icon">💡</span>
+                    Recommandations de Priorisation
+                </h2>
+
+                <div class="task-details" style="border-left-color: #1F4788;">
+                    <strong style="font-size: 1.1em; color: #1F4788;">Ordre d'exécution recommandé :</strong>
+                    <ol style="margin-top: 15px;">
+                        <li style="margin-bottom: 12px;">
+                            <strong>AUJOURD'HUI (22 mars) :</strong> Mise à jour documentation notifications push (tâche planifiée)
+                        </li>
+                        <li style="margin-bottom: 12px;">
+                            <strong>CETTE SEMAINE :</strong> Finaliser notifications push Phases 4-7 (3-4 jours restants)
+                        </li>
+                        <li style="margin-bottom: 12px;">
+                            <strong>AVANT MAI :</strong> Refactoring Mode/game_type (CRITIQUE - prévient bugs récurrents)
+                        </li>
+                        <li style="margin-bottom: 12px;">
+                            <strong>15 JUIN :</strong> Implémentation chatbot (si souhaité)
+                        </li>
+                        <li style="margin-bottom: 12px;">
+                            <strong>AVANT 26 JUIN :</strong> Décision stratégie URL + refactoring variables email
+                        </li>
+                        <li style="margin-bottom: 12px;">
+                            <strong>JUILLET-AOÛT :</strong> Détection couleurs calendrier + tableau de bord KPI (travaux hors-saison)
+                        </li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+
+        <footer>
+            <p>📄 Document généré le 22 mars 2026 | Plateforme Gestion Tournois Carambole FFB</p>
+            <p style="margin-top: 8px; opacity: 0.8;">Source : <code>/Users/jeffrallet/Carambole-tournament-management/CLAUDE.md</code></p>
+        </footer>
+    </div>
+</body>
+</html>

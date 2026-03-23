@@ -823,6 +823,78 @@ CDBHS color mapping (from legend rows 22-27):
 - Modal instructions in `settings.html` still reference "T1/A" format — update when color detection is implemented
 - Target: ready and 100% accurate before 2026-27 season start
 
+## URL Strategy & Custom Domains
+
+**CONTEXT (March 22, 2026):** Originally developed for CDBHS with "cdbhs" in URLs. As we expand to other CDBs, we need a neutral branding strategy.
+
+### Current Railway Services
+
+| Service | Current URL | Users/Players |
+|---------|-------------|---------------|
+| **Tournament Management** | `cdbhs-tournament-management-production.up.railway.app` | 4 admins (including owner) |
+| **Player App** | `cdbhs-player-app-production.up.railway.app` | 57 installed PWAs (as of March 2026) |
+| **Demo** | `carambole-competition-app-demo.up.railway.app` | Training/testing |
+
+### Recommended Strategy: Keep + Add Neutral Domains
+
+**Decision rationale:** With 57 players having installed the Player App PWA, forcing a URL change would require all players to reinstall. Instead, keep existing URLs operational indefinitely and add neutral custom domains as aliases.
+
+**For Player App:**
+- **Keep** `cdbhs-player-app-production.up.railway.app` active (no disruption to installed PWAs)
+- **Add** neutral custom domain (e.g., `joueurs-carambole.app`, `inscription-carambole.fr`) pointing to the same Railway service
+- Both URLs serve the same backend
+- CDBHS players: no impact
+- New CDBs: get the neutral URL
+
+**For Tournament Management:**
+- **Change** to neutral URL (low impact — 4 admins, easy to communicate)
+- Suggested neutral domains: `admin-carambole.app`, `tournois-carambole.fr`, `gestion-carambole.app`
+- Update bookmarks for 3 other admins
+
+**For Demo:**
+- Already neutral (`carambole-competition-app-demo.up.railway.app`)
+- Optional: add custom domain for cleaner branding
+
+### Implementation Steps
+
+1. **Purchase custom domains** (~$12-15/year each)
+   - Suggested registrar: OVH, Gandi, Namecheap
+   - Recommended: `.fr` for French branding, `.app` for modern feel
+   - Estimated cost: ~$25-30/year for 2 domains
+
+2. **Add custom domains in Railway** (included in plan, no extra cost)
+   - Railway dashboard → Service → Settings → Custom Domains
+   - Add CNAME record at domain registrar pointing to Railway
+   - Both old and new URLs work simultaneously
+
+3. **Update documentation & communication**
+   - Update `CLAUDE.md` with new URLs
+   - Update Player App `organization_settings.player_app_url` for new CDBs
+   - Send email to CDBHS admins about Tournament Management URL change
+
+### Payment & Cost Management
+
+**Current status (March 2026):** Owner is paying personally for Railway hosting.
+
+**Action items before end of season (June 2026):**
+- Clarify who will pay for custom domains (per-CDB or centralized?)
+- Clarify who will pay for Railway hosting at scale (when multiple CDBs are onboarded)
+- Potential models:
+  - **Centralized:** Platform owner pays, CDBs contribute via annual subscription
+  - **Per-CDB:** Each CDB pays for their own custom domain + share of hosting
+  - **Hybrid:** Platform provides `.up.railway.app` URLs free, CDBs pay for custom domains if desired
+
+**Reminder:** Re-evaluate cost structure and payment model during off-season (July-August 2026) before scaling to additional CDBs.
+
+### Railway Projects Naming Convention
+
+Once neutral domains are in place, consider renaming Railway projects for clarity:
+- `Carambole-Tournament Management` → `Carambole-Admin-App` or `FFB-Tournois-Platform`
+- `Player App Carambole` → `Carambole-Player-App` (already neutral)
+- `CDB-demo-App` → `Carambole-Demo` (already neutral)
+
+**Note:** Renaming Railway projects does NOT affect deployment or URLs. Internal naming only.
+
 ## Future Work / Roadmap
 
 - **CRITICAL - Mode/game_type refactoring:** Remove ALL hardcoded mode values ('LIBRE', 'BANDE', '3BANDES', 'CADRE') and replace with dynamic lookups from `game_modes` table. This is causing recurring bugs due to inconsistent values ('3 BANDES' vs '3BANDES'). Files with hardcoded modes:
