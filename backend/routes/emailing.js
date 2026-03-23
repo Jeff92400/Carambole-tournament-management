@@ -154,6 +154,68 @@ router.post('/upload-image', authenticateToken, imageUpload.single('image'), (re
   }
 });
 
+// API endpoint to get push notification status (for admin interface)
+router.get('/push/status', authenticateToken, async (req, res) => {
+  const db = require('../db-loader');
+  const orgId = req.user.organizationId || null;
+
+  try {
+    // Get test mode setting
+    const testLicencesStr = await appSettings.getOrgSetting(orgId, 'push_notification_test_licences');
+    let testLicences = [];
+    let testMode = false;
+
+    if (testLicencesStr) {
+      try {
+        testLicences = JSON.parse(testLicencesStr);
+        testMode = Array.isArray(testLicences) && testLicences.length > 0;
+      } catch (e) {
+        console.error('[PUSH/STATUS] Error parsing test licences:', e);
+      }
+    }
+
+    // Get subscription count from Player App database
+    const subCount = await new Promise((resolve, reject) => {
+      db.get(
+        `SELECT COUNT(DISTINCT ps.id) as count
+         FROM push_subscriptions ps
+         WHERE ($1::int IS NULL OR ps.organization_id = $1)`,
+        [orgId],
+        (err, row) => {
+          if (err) reject(err);
+          else resolve(row?.count || 0);
+        }
+      );
+    });
+
+    // Get total players count
+    const totalPlayers = await new Promise((resolve, reject) => {
+      db.get(
+        `SELECT COUNT(*) as count
+         FROM players
+         WHERE UPPER(licence) NOT LIKE 'TEST%'
+         AND ($1::int IS NULL OR organization_id = $1)`,
+        [orgId],
+        (err, row) => {
+          if (err) reject(err);
+          else resolve(row?.count || 0);
+        }
+      );
+    });
+
+    res.json({
+      test_mode: testMode,
+      test_licences: testLicences,
+      subscription_count: subCount,
+      total_players: totalPlayers
+    });
+
+  } catch (error) {
+    console.error('[PUSH/STATUS] Error:', error);
+    res.status(500).json({ error: 'Failed to get push status' });
+  }
+});
+
 // API endpoint to get summary email
 router.get('/summary-email', authenticateToken, async (req, res) => {
   try {

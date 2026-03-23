@@ -644,7 +644,6 @@
           </table>
         </div>
       </div>
-    </div>
       </div>
     </div>
 
@@ -2545,7 +2544,7 @@
     // Update push notifications summary
     async function updateNotificationsSummary() {
       try {
-        const response = await fetch(`${API_URL}/push/status`, {
+        const response = await fetch(`${API_URL}/emailing/push/status`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();
