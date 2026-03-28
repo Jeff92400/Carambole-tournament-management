@@ -1,5 +1,6 @@
 const express = require('express');
 const ExcelJS = require('exceljs');
+const PDFDocument = require('pdfkit');
 const path = require('path');
 const fs = require('fs');
 const db = require('../db-loader');
@@ -916,7 +917,6 @@ router.get('/eligibility/export', authenticateToken, async (req, res) => {
     });
 
     // Create Excel workbook
-    const ExcelJS = require('exceljs');
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('Éligibilité');
 
@@ -1079,7 +1079,6 @@ router.get('/eligibility/export-pdf', authenticateToken, async (req, res) => {
     });
 
     // Create PDF using PDFKit
-    const PDFDocument = require('pdfkit');
     const doc = new PDFDocument({ size: 'A4', layout: 'landscape', margin: 30 });
 
     // Set response headers
