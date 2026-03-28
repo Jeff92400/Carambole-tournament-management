@@ -222,12 +222,16 @@
 
             <div style="grid-column: 1 / -1;">
               <label style="display: block; margin-bottom: 5px; font-weight: bold;">Lieu</label>
-              <input type="text" id="edit_lieu" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+              <select id="edit_lieu" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                <option value="">-- Sélectionner un club --</option>
+              </select>
             </div>
 
             <div style="grid-column: 1 / -1;">
               <label style="display: block; margin-bottom: 5px; font-weight: bold;">Lieu 2 <span style="font-weight: normal; color: #888;">(si split sur 2 sites)</span></label>
-              <input type="text" id="edit_lieu_2" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" placeholder="Laisser vide si un seul lieu">
+              <select id="edit_lieu_2" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                <option value="">Laisser vide si un seul lieu</option>
+              </select>
             </div>
 
             <div>
@@ -308,12 +312,16 @@
 
             <div style="grid-column: 1 / -1;">
               <label style="display: block; margin-bottom: 5px; font-weight: bold;">Lieu</label>
-              <input type="text" id="create_lieu" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" placeholder="Ex: Courbevoie, Antony...">
+              <select id="create_lieu" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                <option value="">-- Sélectionner un club --</option>
+              </select>
             </div>
 
             <div style="grid-column: 1 / -1;">
               <label style="display: block; margin-bottom: 5px; font-weight: bold;">Lieu 2 <span style="font-weight: normal; color: #888;">(si split sur 2 sites)</span></label>
-              <input type="text" id="create_lieu_2" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" placeholder="Laisser vide si un seul lieu">
+              <select id="create_lieu_2" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                <option value="">Laisser vide si un seul lieu</option>
+              </select>
             </div>
 
             <div>
@@ -495,6 +503,37 @@
         }
       } catch (error) {
         console.error('Error loading categories:', error);
+      }
+    }
+
+    // Load clubs for lieu dropdown
+    async function loadClubs() {
+      try {
+        const response = await fetch(`${API_URL}/clubs`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (response.ok) {
+          const clubs = await response.json();
+
+          // Populate all lieu dropdowns
+          const lieuSelects = ['edit_lieu', 'edit_lieu_2', 'create_lieu', 'create_lieu_2'];
+          lieuSelects.forEach(selectId => {
+            const select = document.getElementById(selectId);
+            const currentFirstOption = select.options[0].cloneNode(true); // Keep placeholder
+            select.innerHTML = '';
+            select.appendChild(currentFirstOption);
+
+            clubs.forEach(club => {
+              const option = document.createElement('option');
+              option.value = club.display_name;
+              option.textContent = club.display_name;
+              select.appendChild(option);
+            });
+          });
+        }
+      } catch (error) {
+        console.error('Error loading clubs:', error);
       }
     }
 
@@ -1577,6 +1616,7 @@
     loadGameModes(); // Load game modes for dropdowns
     loadCategories(); // Load categories for modal dropdowns
     loadTournamentRounds(); // Load tournament rounds for create/edit dropdowns
+    loadClubs(); // Load clubs for lieu dropdowns
     loadTournois();
   </script>
 
