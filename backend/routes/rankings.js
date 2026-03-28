@@ -697,4 +697,133 @@ router.get('/export', authenticateToken, async (req, res) => {
   });
 });
 
+// Get player eligibility report (accessible to all authenticated users)
+router.get('/eligibility', authenticateToken, async (req, res) => {
+  try {
+    const { season } = req.query;
+    const orgId = req.user.organizationId || null;
+
+    if (!season) {
+      return res.status(400).json({ error: 'Season required' });
+    }
+
+    const rankingNumbers = await getRankingTournamentNumbers(orgId);
+    const rankingNumbersSQL = rankingNumbers.join(',');
+
+    // Get all players who have played at least one tournament in the season
+    const query = `
+      SELECT
+        p.licence,
+        p.first_name,
+        p.last_name,
+        p.club,
+        c.game_type as mode,
+        c.level as categorie,
+        c.id as category_id,
+        SUM(tr.points) as total_points,
+        SUM(tr.reprises) as total_reprises,
+        CAST(SUM(tr.points) AS FLOAT) / NULLIF(SUM(tr.reprises), 0) as moyenne_saison,
+        COUNT(DISTINCT t.id) as nb_tournaments,
+        gp.moyenne_mini,
+        gp.moyenne_maxi
+      FROM tournament_results tr
+      JOIN tournaments t ON tr.tournament_id = t.id
+      JOIN categories c ON t.category_id = c.id
+      JOIN players p ON tr.licence = p.licence
+      LEFT JOIN game_parameters gp ON
+        UPPER(REPLACE(gp.mode, ' ', '')) = UPPER(REPLACE(c.game_type, ' ', ''))
+        AND gp.level = c.level
+        AND gp.season = $1
+        AND ($2::int IS NULL OR gp.organization_id = $2)
+      WHERE t.season = $1
+        AND t.tournament_number IN (${rankingNumbersSQL})
+        AND ($2::int IS NULL OR t.organization_id = $2)
+        AND UPPER(p.licence) NOT LIKE 'TEST%'
+      GROUP BY
+        p.licence, p.first_name, p.last_name, p.club,
+        c.game_type, c.level, c.id,
+        gp.moyenne_mini, gp.moyenne_maxi
+      HAVING COUNT(DISTINCT t.id) >= 1
+      ORDER BY c.game_type, c.level, moyenne_saison DESC
+    `;
+
+    db.all(query, [season, orgId], (err, rows) => {
+      if (err) {
+        console.error('Error fetching eligibility data:', err);
+        return res.status(500).json({ error: err.message });
+      }
+
+      // Enrich with eligibility status
+      const enriched = rows.map(row => {
+        const moy = row.moyenne_saison;
+        const min = row.moyenne_mini;
+        const max = row.moyenne_maxi;
+
+        let status = 'maintien';
+        let status_label = 'Maintien';
+        let suggested_category = row.categorie;
+        let emoji = '🟢';
+
+        if (!min || !max) {
+          // No thresholds configured
+          status = 'non_configure';
+          status_label = 'Non configuré';
+          emoji = '⚪';
+        } else if (moy > max) {
+          // Must move up
+          status = 'montee_obligatoire';
+          status_label = 'Montée obligatoire';
+          emoji = '🔴';
+          suggested_category = getSuggestedCategory(row.mode, row.categorie, 'up');
+        } else if (moy < min) {
+          // Should move down
+          status = 'descente_suggeree';
+          status_label = 'Descente suggérée';
+          emoji = '🟠';
+          suggested_category = getSuggestedCategory(row.mode, row.categorie, 'down');
+        } else if (moy > max * 0.9) {
+          // Close to upper limit
+          status = 'proche_montee';
+          status_label = 'Proche montée';
+          emoji = '🔵';
+        } else if (moy < min * 1.1) {
+          // Close to lower limit
+          status = 'proche_descente';
+          status_label = 'Proche descente';
+          emoji = '⚫';
+        }
+
+        return {
+          ...row,
+          moyenne_saison: moy ? parseFloat(moy.toFixed(2)) : 0,
+          status,
+          status_label,
+          status_emoji: emoji,
+          suggested_category
+        };
+      });
+
+      res.json(enriched);
+    });
+  } catch (error) {
+    console.error('Error in eligibility endpoint:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Helper function to suggest next category (up or down)
+function getSuggestedCategory(mode, currentLevel, direction) {
+  // FFB ranking hierarchy (from highest to lowest)
+  const hierarchy = ['N1', 'N2', 'N3', 'R1', 'R2', 'R3', 'R4', 'R5', 'D1', 'D2', 'D3', 'NC'];
+
+  const currentIndex = hierarchy.indexOf(currentLevel);
+  if (currentIndex === -1) return currentLevel; // Not found
+
+  if (direction === 'up') {
+    return currentIndex > 0 ? hierarchy[currentIndex - 1] : currentLevel;
+  } else {
+    return currentIndex < hierarchy.length - 1 ? hierarchy[currentIndex + 1] : currentLevel;
+  }
+}
+
 module.exports = router;

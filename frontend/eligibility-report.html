@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Éligibilité des joueurs - CDB Tournois</title>
+  <link rel="icon" type="image/png" href="images/FrenchBillard-Icon-small.png">
+  <link rel="stylesheet" href="css/styles.css?v=2">
+  <script src="js/branding.js?v=197"></script>
+  <script src="js/auth-utils.js"></script>
+  <script src="js/app-branding.js?v=215"></script>
+  <style>
+    .summary-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+      margin-bottom: 25px;
+    }
+    .summary-card {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      text-align: center;
+    }
+    .summary-card h3 {
+      margin: 0 0 10px 0;
+      font-size: 28px;
+      color: var(--color-primary);
+    }
+    .summary-card p {
+      margin: 0;
+      color: #666;
+      font-size: 14px;
+    }
+    .filter-bar {
+      display: flex;
+      gap: 15px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .filter-bar select, .filter-bar input {
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+    .filter-bar select {
+      min-width: 150px;
+    }
+    .filter-bar input[type="text"] {
+      flex: 1;
+      min-width: 200px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: white;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    th {
+      background: var(--color-primary);
+      color: white;
+      padding: 12px;
+      text-align: left;
+      font-weight: 600;
+    }
+    td {
+      padding: 12px;
+      border-bottom: 1px solid #eee;
+    }
+    tr:hover {
+      background: #f5f5f5;
+    }
+    .status-emoji {
+      font-size: 20px;
+    }
+    .moyenne-cell {
+      font-weight: bold;
+      color: var(--color-primary);
+    }
+    .warning-banner {
+      background: linear-gradient(135deg, #fff3cd, #ffeaa7);
+      border-left: 4px solid #ff9800;
+      padding: 15px 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .warning-banner .icon {
+      font-size: 24px;
+    }
+  </style>
+</head>
+<body>
+  <nav class="navbar">
+    <div style="display: flex; align-items: center; gap: 15px;">
+      <img id="nav-logo" src="images/CDBHS.png" alt="Logo" class="logo" style="width: 48px; height: 48px; border-radius: 8px;" onerror="this.src='images/FrenchBillard-Icon-small.png'">
+      <h2 id="app-org-name" data-page-title="Éligibilité des joueurs">CDB</h2>
+    </div>
+    <div class="nav-links">
+      <a href="dashboard.html" data-tooltip="Retour au tableau de bord">Accueil</a>
+      <a href="rankings.html" data-tooltip="Classements de la saison">Classements</a>
+      <a href="#" id="logoutBtn" data-tooltip="Déconnexion">Déconnexion</a>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="card">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h3>Éligibilité des joueurs - Saison <span id="currentSeason">-</span></h3>
+        <div>
+          <button class="btn" id="exportPdfBtn" style="background: #dc3545;">📄 Export PDF</button>
+          <button class="btn" id="exportExcelBtn" style="background: #28a745; margin-left: 10px;">📊 Export Excel</button>
+        </div>
+      </div>
+
+      <div class="warning-banner" id="warningBanner" style="display: none;">
+        <span class="icon">⚠️</span>
+        <div>
+          <strong>Saison en cours</strong> - Les éligibilités sont provisoires et seront finalisées à la fin de la saison.
+        </div>
+      </div>
+
+      <!-- Summary Cards -->
+      <div class="summary-cards">
+        <div class="summary-card">
+          <h3 id="totalPlayers">-</h3>
+          <p>📊 Joueurs actifs</p>
+        </div>
+        <div class="summary-card">
+          <h3 id="maintienCount">-</h3>
+          <p>🟢 Maintien</p>
+        </div>
+        <div class="summary-card">
+          <h3 id="monteeCount">-</h3>
+          <p>🔴 Montée</p>
+        </div>
+        <div class="summary-card">
+          <h3 id="descenteCount">-</h3>
+          <p>🟠 Descente</p>
+        </div>
+      </div>
+
+      <!-- Filters -->
+      <div class="filter-bar">
+        <select id="modeFilter">
+          <option value="">Tous les modes</option>
+        </select>
+        <select id="statusFilter">
+          <option value="">Tous les statuts</option>
+          <option value="maintien">🟢 Maintien</option>
+          <option value="montee_obligatoire">🔴 Montée obligatoire</option>
+          <option value="descente_suggeree">🟠 Descente suggérée</option>
+          <option value="proche_montee">🔵 Proche montée</option>
+          <option value="proche_descente">⚫ Proche descente</option>
+        </select>
+        <select id="categorieFilter">
+          <option value="">Toutes les catégories</option>
+        </select>
+        <select id="clubFilter">
+          <option value="">Tous les clubs</option>
+        </select>
+        <input type="text" id="searchInput" placeholder="🔍 Rechercher un joueur...">
+      </div>
+
+      <!-- Table -->
+      <div style="overflow-x: auto;">
+        <table id="eligibilityTable">
+          <thead>
+            <tr>
+              <th>Joueur</th>
+              <th>Club</th>
+              <th>Mode</th>
+              <th>Cat. actuelle</th>
+              <th>Moy. saison</th>
+              <th>Moy. Min</th>
+              <th>Moy. Max</th>
+              <th>Statut</th>
+              <th>Cat. suggérée</th>
+            </tr>
+          </thead>
+          <tbody id="eligibilityTableBody">
+            <tr>
+              <td colspan="9" style="text-align: center; padding: 40px; color: #999;">
+                Chargement des données...
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div id="errorMessage" class="error-message" style="display: none;"></div>
+  <div id="successMessage" class="success-message" style="display: none;"></div>
+
+  <script>
+    const API_URL = '/api';
+
+    if (!requireAuth()) {
+      throw new Error('Not authenticated');
+    }
+    const token = localStorage.getItem('token');
+
+    let allData = [];
+    let filteredData = [];
+
+    // Get current season
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth() + 1;
+    const currentSeason = month >= 9 ? `${year}-${year + 1}` : `${year - 1}-${year}`;
+    document.getElementById('currentSeason').textContent = currentSeason;
+
+    // Check if season is ongoing (before June 30)
+    const isOngoing = month < 7;
+    if (isOngoing) {
+      document.getElementById('warningBanner').style.display = 'flex';
+    }
+
+    // Load data
+    async function loadEligibilityData() {
+      try {
+        const response = await authFetch(`${API_URL}/rankings/eligibility?season=${encodeURIComponent(currentSeason)}`);
+
+        if (!response.ok) {
+          throw new Error('Erreur lors du chargement des données');
+        }
+
+        allData = await response.json();
+        populateFilters();
+        applyFilters();
+        updateSummary();
+      } catch (error) {
+        console.error('Error loading eligibility data:', error);
+        document.getElementById('eligibilityTableBody').innerHTML = `
+          <tr>
+            <td colspan="9" style="text-align: center; padding: 40px; color: #dc3545;">
+              ❌ Erreur lors du chargement des données: ${error.message}
+            </td>
+          </tr>
+        `;
+      }
+    }
+
+    // Populate filter dropdowns
+    function populateFilters() {
+      // Modes
+      const modes = [...new Set(allData.map(d => d.mode))].sort();
+      const modeFilter = document.getElementById('modeFilter');
+      modes.forEach(mode => {
+        const option = document.createElement('option');
+        option.value = mode;
+        option.textContent = mode;
+        modeFilter.appendChild(option);
+      });
+
+      // Categories
+      const categories = [...new Set(allData.map(d => d.categorie))].sort();
+      const categorieFilter = document.getElementById('categorieFilter');
+      categories.forEach(cat => {
+        const option = document.createElement('option');
+        option.value = cat;
+        option.textContent = cat;
+        categorieFilter.appendChild(option);
+      });
+
+      // Clubs
+      const clubs = [...new Set(allData.map(d => d.club).filter(c => c))].sort();
+      const clubFilter = document.getElementById('clubFilter');
+      clubs.forEach(club => {
+        const option = document.createElement('option');
+        option.value = club;
+        option.textContent = club;
+        clubFilter.appendChild(option);
+      });
+    }
+
+    // Apply filters
+    function applyFilters() {
+      const modeFilter = document.getElementById('modeFilter').value;
+      const statusFilter = document.getElementById('statusFilter').value;
+      const categorieFilter = document.getElementById('categorieFilter').value;
+      const clubFilter = document.getElementById('clubFilter').value;
+      const searchText = document.getElementById('searchInput').value.toLowerCase();
+
+      filteredData = allData.filter(row => {
+        const matchesMode = !modeFilter || row.mode === modeFilter;
+        const matchesStatus = !statusFilter || row.status === statusFilter;
+        const matchesCategorie = !categorieFilter || row.categorie === categorieFilter;
+        const matchesClub = !clubFilter || row.club === clubFilter;
+        const matchesSearch = !searchText ||
+          `${row.first_name} ${row.last_name}`.toLowerCase().includes(searchText) ||
+          row.licence.toLowerCase().includes(searchText);
+
+        return matchesMode && matchesStatus && matchesCategorie && matchesClub && matchesSearch;
+      });
+
+      renderTable();
+      updateSummary();
+    }
+
+    // Render table
+    function renderTable() {
+      const tbody = document.getElementById('eligibilityTableBody');
+
+      if (filteredData.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="9" style="text-align: center; padding: 40px; color: #999;">
+              Aucun joueur ne correspond aux critères de filtrage.
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      tbody.innerHTML = filteredData.map(row => `
+        <tr>
+          <td><strong>${row.first_name} ${row.last_name}</strong><br><small style="color: #999;">${row.licence}</small></td>
+          <td>${row.club || '-'}</td>
+          <td>${row.mode}</td>
+          <td><strong>${row.categorie}</strong></td>
+          <td class="moyenne-cell">${row.moyenne_saison.toFixed(2)}</td>
+          <td>${row.moyenne_mini || '-'}</td>
+          <td>${row.moyenne_maxi || '-'}</td>
+          <td><span class="status-emoji">${row.status_emoji}</span> ${row.status_label}</td>
+          <td><strong>${row.suggested_category}</strong></td>
+        </tr>
+      `).join('');
+    }
+
+    // Update summary cards
+    function updateSummary() {
+      const total = filteredData.length;
+      const maintien = filteredData.filter(d => d.status === 'maintien' || d.status === 'proche_montee' || d.status === 'proche_descente').length;
+      const montee = filteredData.filter(d => d.status === 'montee_obligatoire').length;
+      const descente = filteredData.filter(d => d.status === 'descente_suggeree').length;
+
+      document.getElementById('totalPlayers').textContent = total;
+      document.getElementById('maintienCount').textContent = maintien;
+      document.getElementById('monteeCount').textContent = montee;
+      document.getElementById('descenteCount').textContent = descente;
+    }
+
+    // Filter event listeners
+    document.getElementById('modeFilter').addEventListener('change', applyFilters);
+    document.getElementById('statusFilter').addEventListener('change', applyFilters);
+    document.getElementById('categorieFilter').addEventListener('change', applyFilters);
+    document.getElementById('clubFilter').addEventListener('change', applyFilters);
+    document.getElementById('searchInput').addEventListener('input', applyFilters);
+
+    // Export buttons (placeholder - to be implemented)
+    document.getElementById('exportPdfBtn').addEventListener('click', () => {
+      alert('Export PDF - À implémenter');
+    });
+
+    document.getElementById('exportExcelBtn').addEventListener('click', () => {
+      alert('Export Excel - À implémenter');
+    });
+
+    // Logout
+    document.getElementById('logoutBtn').addEventListener('click', (e) => {
+      e.preventDefault();
+      logout();
+    });
+
+    // Initialize
+    loadEligibilityData();
+  </script>
+</body>
+</html>
