@@ -118,7 +118,7 @@
 <body>
   <nav class="navbar" style="flex-wrap: nowrap; align-items: center;">
     <div style="display: flex; align-items: center; gap: 15px; min-width: 0; flex: 1 1 auto;">
-      <img id="nav-logo" src="images/CDBHS.png" alt="Logo" class="logo" style="width: 48px; height: 48px; border-radius: 8px; flex-shrink: 0;" onerror="this.src='images/FrenchBillard-Icon-small.png'">
+      <img id="app-header-icon" src="images/FrenchBillard-Icon-small.png" alt="Logo" class="logo" style="width: 48px; height: 48px; border-radius: 8px; flex-shrink: 0;" onerror="this.src='images/FrenchBillard-Icon-small.png'">
       <h2 id="app-org-name" data-page-title="Éligibilité des joueurs" style="line-height: 1.3; margin: 0;">CDB</h2>
     </div>
     <div class="nav-links" style="flex-shrink: 0;">
@@ -224,7 +224,7 @@
     if (!requireAuth()) {
       throw new Error('Not authenticated');
     }
-    const token = localStorage.getItem('token');
+    const token = sessionStorage.getItem('token');
 
     let allData = [];
     let filteredData = [];
