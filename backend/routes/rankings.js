@@ -709,6 +709,11 @@ router.get('/eligibility', authenticateToken, async (req, res) => {
 
     const rankingNumbers = await getRankingTournamentNumbers(orgId);
 
+    // Fallback if no ranking numbers configured
+    if (!rankingNumbers || rankingNumbers.length === 0) {
+      return res.json([]);
+    }
+
     // Build dynamic IN clause with proper parameterization
     const rankingPlaceholders = rankingNumbers.map((_, i) => `$${i + 3}`).join(',');
 
@@ -738,7 +743,7 @@ router.get('/eligibility', authenticateToken, async (req, res) => {
         AND gp.season = $1
         AND ($2::int IS NULL OR gp.organization_id = $2)
       WHERE t.season = $1
-        AND t.tournament_number IN (${rankingPlaceholders})
+        AND t.tournament_number IN (` + rankingPlaceholders + `)
         AND ($2::int IS NULL OR t.organization_id = $2)
         AND UPPER(p.licence) NOT LIKE 'TEST%'
       GROUP BY
