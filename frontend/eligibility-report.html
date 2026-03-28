@@ -129,6 +129,7 @@
       <h2 id="app-org-name" data-page-title="Éligibilité des joueurs" style="line-height: 1.3; margin: 0;">CDB</h2>
     </div>
     <div class="nav-links" style="flex-shrink: 0;">
+      <a href="#" id="backBtn" data-tooltip="Retour">← Retour</a>
       <a href="dashboard.html" data-tooltip="Retour au tableau de bord">Accueil</a>
       <a href="rankings.html" data-tooltip="Classements de la saison">Classements</a>
       <a href="#" id="logoutBtn" data-tooltip="Déconnexion">Déconnexion</a>
@@ -388,6 +389,17 @@
 
     document.getElementById('exportExcelBtn').addEventListener('click', () => {
       alert('Export Excel - À implémenter');
+    });
+
+    // Back button - redirect based on role
+    document.getElementById('backBtn').addEventListener('click', (e) => {
+      e.preventDefault();
+      const userRole = sessionStorage.getItem('userRole');
+      if (userRole === 'admin') {
+        window.location.href = 'settings-admin.html';
+      } else {
+        window.location.href = 'dashboard.html';
+      }
     });
 
     // Logout
