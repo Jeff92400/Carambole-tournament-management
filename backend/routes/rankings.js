@@ -832,6 +832,55 @@ router.get('/eligibility', authenticateToken, async (req, res) => {
   }
 });
 
+// Helper function to determine eligibility status
+function determineEligibilityStatus(moyenne, min, max) {
+  if (!min || !max) {
+    return {
+      status: 'non_configure',
+      label: 'Non configuré',
+      emoji: '⚪',
+      direction: null
+    };
+  }
+
+  if (moyenne > max) {
+    return {
+      status: 'montee_obligatoire',
+      label: 'Montée obligatoire',
+      emoji: '🔴',
+      direction: 'up'
+    };
+  } else if (moyenne < min) {
+    return {
+      status: 'descente_suggeree',
+      label: 'Descente suggérée',
+      emoji: '🟠',
+      direction: 'down'
+    };
+  } else if (moyenne > max * 0.9) {
+    return {
+      status: 'proche_montee',
+      label: 'Proche montée',
+      emoji: '🔵',
+      direction: null
+    };
+  } else if (moyenne < min * 1.1) {
+    return {
+      status: 'proche_descente',
+      label: 'Proche descente',
+      emoji: '⚫',
+      direction: null
+    };
+  } else {
+    return {
+      status: 'maintien',
+      label: 'Maintien',
+      emoji: '🟢',
+      direction: null
+    };
+  }
+}
+
 // Helper function to suggest next category (up or down)
 function getSuggestedCategory(mode, currentLevel, direction) {
   // FFB ranking hierarchy (from highest to lowest)
