@@ -832,25 +832,6 @@ router.get('/eligibility', authenticateToken, async (req, res) => {
   }
 });
 
-// Helper function to extract city name from club name
-function extractClubCity(clubName) {
-  if (!clubName || clubName === '-') return '-';
-
-  // Common patterns: "BILLARD CLUB CLICHOIS" -> "CLICHOIS"
-  // "A DE BILLARD COURBEVOIE LA DEFENSE" -> "COURBEVOIE"
-  // "S C M C BILLARD CLUB" -> "S C M C"
-
-  // Remove common prefixes
-  let city = clubName
-    .replace(/^(A DE |S C M C |BILLARD CLUB |BILLARD BOIS |BILLARD )/i, '')
-    .replace(/(LA DEFENSE|LA GARENNE)/i, '')
-    .trim();
-
-  // Take first word as city name
-  const words = city.split(' ');
-  return words[0] || clubName.substring(0, 15);
-}
-
 // Helper function to determine eligibility status
 function determineEligibilityStatus(moyenne, min, max) {
   if (!min || !max) {
@@ -1172,7 +1153,7 @@ router.get('/eligibility/export-pdf', authenticateToken, async (req, res) => {
 
     // Table header
     let y = 80;
-    const colWidths = [90, 80, 45, 25, 25, 25, 25, 70, 25];
+    const colWidths = [100, 110, 40, 22, 22, 22, 22, 70, 22];
     const headers = ['Joueur', 'Club', 'Mode', 'Cat.', 'Moy.', 'Min', 'Max', 'Statut', 'Sugg.'];
 
     doc.fontSize(8).font('Helvetica-Bold');
@@ -1185,7 +1166,7 @@ router.get('/eligibility/export-pdf', authenticateToken, async (req, res) => {
 
     // Table rows
     y += 15;
-    doc.font('Helvetica').fontSize(7);
+    doc.font('Helvetica').fontSize(6.5);
 
     processedData.forEach((row, index) => {
       if (y > 530) { // New page if needed
@@ -1211,7 +1192,7 @@ router.get('/eligibility/export-pdf', authenticateToken, async (req, res) => {
 
       const rowData = [
         `${row.first_name} ${row.last_name}`,
-        extractClubCity(row.club || '-'),
+        row.club || '-',
         row.mode,
         row.categorie,
         row.moyenne_saison ? row.moyenne_saison.toFixed(2) : '-',
