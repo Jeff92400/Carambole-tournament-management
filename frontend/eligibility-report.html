@@ -94,13 +94,24 @@
     .warning-banner .icon {
       font-size: 24px;
     }
-    /* Override navbar subtitle to prevent vertical stacking */
-    .navbar h2 {
-      max-height: 50px;
-      overflow: hidden;
+    /* Override navbar to display inline without line breaks */
+    #app-org-name {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      flex-wrap: wrap;
     }
-    .navbar-subtitle {
-      display: none !important;
+    .navbar-subtitle,
+    .navbar-page-title {
+      display: inline;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .navbar-subtitle br {
+      display: none;
+    }
+    .navbar-subtitle::after {
+      content: ' - ';
     }
   </style>
 </head>
