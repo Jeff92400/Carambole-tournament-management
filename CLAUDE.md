@@ -841,19 +841,19 @@ CDBHS color mapping (from legend rows 22-27):
 
 **For Player App:**
 - **Keep** `cdbhs-player-app-production.up.railway.app` active (no disruption to installed PWAs)
-- **Add** neutral custom domain (e.g., `joueurs-carambole.app`, `inscription-carambole.fr`) pointing to the same Railway service
+- **Add** custom domain with **Kayros branding** (e.g., `joueurs.kayros.fr`, `kayros-joueurs.app`, `app.kayros.fr`) pointing to the same Railway service
 - Both URLs serve the same backend
 - CDBHS players: no impact
-- New CDBs: get the neutral URL
+- New CDBs: get the Kayros-branded URL
 
 **For Tournament Management:**
-- **Change** to neutral URL (low impact — 4 admins, easy to communicate)
-- Suggested neutral domains: `admin-carambole.app`, `tournois-carambole.fr`, `gestion-carambole.app`
+- **Change** to Kayros-branded URL (low impact — 4 admins, easy to communicate)
+- Suggested domains with **Kayros branding**: `admin.kayros.fr`, `kayros-admin.app`, `gestion.kayros.fr`, `kayros.app`
 - Update bookmarks for 3 other admins
 
 **For Demo:**
 - Already neutral (`carambole-competition-app-demo.up.railway.app`)
-- Optional: add custom domain for cleaner branding
+- Optional: add Kayros-branded custom domain (e.g., `demo.kayros.fr`)
 
 ### Implementation Steps
 
@@ -888,10 +888,10 @@ CDBHS color mapping (from legend rows 22-27):
 
 ### Railway Projects Naming Convention
 
-Once neutral domains are in place, consider renaming Railway projects for clarity:
-- `Carambole-Tournament Management` → `Carambole-Admin-App` or `FFB-Tournois-Platform`
-- `Player App Carambole` → `Carambole-Player-App` (already neutral)
-- `CDB-demo-App` → `Carambole-Demo` (already neutral)
+Once Kayros-branded domains are in place, consider renaming Railway projects for clarity:
+- `Carambole-Tournament Management` → `Kayros-Admin-App` or `Kayros-Gestion`
+- `Player App Carambole` → `Kayros-Player-App` or `Kayros-Joueurs`
+- `CDB-demo-App` → `Kayros-Demo`
 
 **Note:** Renaming Railway projects does NOT affect deployment or URLs. Internal naming only.
 
