@@ -1212,7 +1212,13 @@ router.get('/eligibility/export-pdf', authenticateToken, async (req, res) => {
           doc.rect(x, y, colWidths[i], 12).stroke('#CCCCCC');
           doc.fillColor('#000000');
         }
-        doc.text(String(cell), x + 2, y + 3, { width: colWidths[i] - 4, align: 'left' });
+        doc.text(String(cell), x + 2, y + 3, {
+          width: colWidths[i] - 4,
+          height: 10,
+          align: 'left',
+          ellipsis: true,
+          lineBreak: false
+        });
         x += colWidths[i];
       });
 
