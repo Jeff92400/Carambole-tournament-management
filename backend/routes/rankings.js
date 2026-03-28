@@ -846,4 +846,167 @@ function getSuggestedCategory(mode, currentLevel, direction) {
   }
 }
 
+// Export eligibility data to Excel
+router.get('/eligibility/export', authenticateToken, async (req, res) => {
+  const { season } = req.query;
+
+  if (!season) {
+    return res.status(400).json({ error: 'Season required' });
+  }
+
+  try {
+    const orgId = req.user.organizationId || null;
+
+    // Get the same eligibility data as the report
+    const rankingNumbers = await getRankingTournamentNumbers(orgId);
+    const rankingPlaceholders = rankingNumbers.map((_, idx) => `$${idx + 3}`).join(',');
+    const queryParams = [season, orgId, ...rankingNumbers];
+
+    const query = `
+      SELECT
+        p.licence,
+        p.first_name,
+        p.last_name,
+        p.club,
+        c.game_type as mode,
+        c.level as categorie,
+        c.id as category_id,
+        SUM(tr.points) as total_points,
+        SUM(tr.reprises) as total_reprises,
+        CAST(SUM(tr.points) AS FLOAT) / NULLIF(SUM(tr.reprises), 0) as moyenne_saison,
+        COUNT(DISTINCT t.id) as nb_tournaments,
+        gp.moyenne_mini,
+        gp.moyenne_maxi
+      FROM tournament_results tr
+      JOIN tournaments t ON tr.tournament_id = t.id
+      JOIN categories c ON t.category_id = c.id
+      JOIN players p ON tr.licence = p.licence
+      LEFT JOIN game_parameters gp ON
+        UPPER(REPLACE(gp.mode, ' ', '')) = UPPER(REPLACE(c.game_type, ' ', ''))
+        AND gp.categorie = c.level
+        AND ($2::int IS NULL OR gp.organization_id = $2)
+      WHERE t.season = $1
+        AND t.tournament_number IN (` + rankingPlaceholders + `)
+        AND ($2::int IS NULL OR t.organization_id = $2)
+        AND UPPER(p.licence) NOT LIKE 'TEST%'
+      GROUP BY p.licence, p.first_name, p.last_name, p.club, c.game_type, c.level, c.id, gp.moyenne_mini, gp.moyenne_maxi
+      HAVING COUNT(DISTINCT t.id) > 0
+      ORDER BY c.game_type, c.level, moyenne_saison DESC
+    `;
+
+    const rows = await new Promise((resolve, reject) => {
+      db.all(query, queryParams, (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows || []);
+      });
+    });
+
+    // Process each row to add status and suggested category
+    const processedData = rows.map(row => {
+      const status = determineEligibilityStatus(row.moyenne_saison, row.moyenne_mini, row.moyenne_maxi);
+      const suggestedCategory = getSuggestedCategory(row.mode, row.categorie, status.direction);
+
+      return {
+        ...row,
+        status: status.status,
+        status_label: status.label,
+        suggested_category: suggestedCategory,
+        moyenne_saison: row.moyenne_saison || 0
+      };
+    });
+
+    // Create Excel workbook
+    const ExcelJS = require('exceljs');
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Éligibilité');
+
+    // Define columns
+    worksheet.columns = [
+      { header: 'Licence', key: 'licence', width: 12 },
+      { header: 'Prénom', key: 'first_name', width: 15 },
+      { header: 'Nom', key: 'last_name', width: 15 },
+      { header: 'Club', key: 'club', width: 30 },
+      { header: 'Mode', key: 'mode', width: 12 },
+      { header: 'Cat. actuelle', key: 'categorie', width: 12 },
+      { header: 'Moy. saison', key: 'moyenne_saison', width: 12 },
+      { header: 'Moy. Min', key: 'moyenne_mini', width: 12 },
+      { header: 'Moy. Max', key: 'moyenne_maxi', width: 12 },
+      { header: 'Statut', key: 'status_label', width: 20 },
+      { header: 'Cat. suggérée', key: 'suggested_category', width: 12 }
+    ];
+
+    // Style header row
+    worksheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    worksheet.getRow(1).fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FF1F4788' }
+    };
+    worksheet.getRow(1).alignment = { vertical: 'middle', horizontal: 'center' };
+
+    // Add data rows with conditional formatting
+    processedData.forEach(row => {
+      const excelRow = worksheet.addRow({
+        licence: row.licence,
+        first_name: row.first_name,
+        last_name: row.last_name,
+        club: row.club || '-',
+        mode: row.mode,
+        categorie: row.categorie,
+        moyenne_saison: row.moyenne_saison ? row.moyenne_saison.toFixed(2) : '-',
+        moyenne_mini: row.moyenne_mini || '-',
+        moyenne_maxi: row.moyenne_maxi || '-',
+        status_label: row.status_label,
+        suggested_category: row.suggested_category
+      });
+
+      // Color-code status column based on status
+      const statusCell = excelRow.getCell('status_label');
+      if (row.status === 'montee_obligatoire') {
+        statusCell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FFDC3545' }
+        };
+        statusCell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
+      } else if (row.status === 'descente_suggeree') {
+        statusCell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FFFFC107' }
+        };
+      } else if (row.status === 'proche_montee') {
+        statusCell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FF2196F3' }
+        };
+        statusCell.font = { color: { argb: 'FFFFFFFF' } };
+      } else if (row.status === 'maintien') {
+        statusCell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FF28A745' }
+        };
+        statusCell.font = { color: { argb: 'FFFFFFFF' } };
+      }
+    });
+
+    // Generate filename
+    const filename = `Eligibilite_Joueurs_${season.replace('/', '-')}.xlsx`;
+
+    // Set response headers
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+    // Write to response
+    await workbook.xlsx.write(res);
+    res.end();
+
+  } catch (error) {
+    console.error('[Eligibility Export] Error:', error);
+    res.status(500).json({ error: 'Export failed', details: error.message });
+  }
+});
+
 module.exports = router;

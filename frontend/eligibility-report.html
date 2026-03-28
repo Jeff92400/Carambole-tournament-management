@@ -9,6 +9,8 @@
   <script src="js/branding.js?v=197"></script>
   <script src="js/auth-utils.js"></script>
   <script src="js/app-branding.js?v=215"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
   <style>
     /* Override body centering for this page */
     body {
@@ -382,13 +384,126 @@
     document.getElementById('clubFilter').addEventListener('change', applyFilters);
     document.getElementById('searchInput').addEventListener('input', applyFilters);
 
-    // Export buttons (placeholder - to be implemented)
-    document.getElementById('exportPdfBtn').addEventListener('click', () => {
-      alert('Export PDF - À implémenter');
+    // Export to Excel
+    document.getElementById('exportExcelBtn').addEventListener('click', async () => {
+      try {
+        const response = await fetch(
+          `${API_URL}/rankings/eligibility/export?season=${encodeURIComponent(currentSeason)}`,
+          {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          }
+        );
+
+        if (response.ok) {
+          // Get filename from Content-Disposition header
+          const contentDisposition = response.headers.get('Content-Disposition');
+          let filename = `Eligibilite_Joueurs_${currentSeason.replace('/', '-')}.xlsx`;
+          if (contentDisposition) {
+            const matches = /filename="([^"]+)"/.exec(contentDisposition);
+            if (matches && matches[1]) {
+              filename = matches[1];
+            }
+          }
+
+          const blob = await response.blob();
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+        } else {
+          alert('Erreur lors de l\'export Excel');
+        }
+      } catch (error) {
+        console.error('Excel export error:', error);
+        alert('Erreur lors de l\'export Excel');
+      }
     });
 
-    document.getElementById('exportExcelBtn').addEventListener('click', () => {
-      alert('Export Excel - À implémenter');
+    // Export to PDF
+    document.getElementById('exportPdfBtn').addEventListener('click', () => {
+      try {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF('l', 'mm', 'a4'); // landscape, millimeters, A4
+
+        // Add title
+        doc.setFontSize(16);
+        doc.setFont(undefined, 'bold');
+        doc.text(`Éligibilité des joueurs - Saison ${currentSeason}`, 14, 15);
+
+        // Add summary
+        doc.setFontSize(10);
+        doc.setFont(undefined, 'normal');
+        const total = filteredData.length;
+        const maintien = filteredData.filter(d => d.status === 'maintien' || d.status === 'proche_montee' || d.status === 'proche_descente').length;
+        const montee = filteredData.filter(d => d.status === 'montee_obligatoire').length;
+        const descente = filteredData.filter(d => d.status === 'descente_suggeree').length;
+        doc.text(`Total: ${total} joueurs  |  Maintien: ${maintien}  |  Montée: ${montee}  |  Descente: ${descente}`, 14, 22);
+
+        // Prepare table data
+        const tableData = filteredData.map(row => [
+          `${row.first_name} ${row.last_name}`,
+          row.club || '-',
+          row.mode,
+          row.categorie,
+          row.moyenne_saison.toFixed(2),
+          row.moyenne_mini || '-',
+          row.moyenne_maxi || '-',
+          row.status_label,
+          row.suggested_category
+        ]);
+
+        // Add table
+        doc.autoTable({
+          head: [['Joueur', 'Club', 'Mode', 'Cat.', 'Moy.', 'Min', 'Max', 'Statut', 'Cat. sugg.']],
+          body: tableData,
+          startY: 28,
+          styles: { fontSize: 8, cellPadding: 2 },
+          headStyles: { fillColor: [31, 71, 136], textColor: 255, fontStyle: 'bold' },
+          columnStyles: {
+            0: { cellWidth: 40 }, // Joueur
+            1: { cellWidth: 45 }, // Club
+            2: { cellWidth: 20 }, // Mode
+            3: { cellWidth: 15 }, // Cat.
+            4: { cellWidth: 15 }, // Moy.
+            5: { cellWidth: 15 }, // Min
+            6: { cellWidth: 15 }, // Max
+            7: { cellWidth: 35 }, // Statut
+            8: { cellWidth: 20 }  // Cat. sugg.
+          },
+          didParseCell: function(data) {
+            // Color-code status cells
+            if (data.column.index === 7 && data.section === 'body') {
+              const rowData = filteredData[data.row.index];
+              if (rowData.status === 'montee_obligatoire') {
+                data.cell.styles.fillColor = [220, 53, 69];
+                data.cell.styles.textColor = 255;
+                data.cell.styles.fontStyle = 'bold';
+              } else if (rowData.status === 'descente_suggeree') {
+                data.cell.styles.fillColor = [255, 193, 7];
+                data.cell.styles.textColor = 0;
+              } else if (rowData.status === 'proche_montee') {
+                data.cell.styles.fillColor = [33, 150, 243];
+                data.cell.styles.textColor = 255;
+              } else if (rowData.status === 'maintien') {
+                data.cell.styles.fillColor = [40, 167, 69];
+                data.cell.styles.textColor = 255;
+              }
+            }
+          }
+        });
+
+        // Save PDF
+        doc.save(`Eligibilite_Joueurs_${currentSeason.replace('/', '-')}.pdf`);
+      } catch (error) {
+        console.error('PDF export error:', error);
+        alert('Erreur lors de l\'export PDF');
+      }
     });
 
     // Back button - redirect based on role
