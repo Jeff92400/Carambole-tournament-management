@@ -703,19 +703,24 @@ router.get('/eligibility', authenticateToken, async (req, res) => {
     const { season } = req.query;
     const orgId = req.user.organizationId || null;
 
+    console.log('[Eligibility] Request:', { season, orgId });
+
     if (!season) {
       return res.status(400).json({ error: 'Season required' });
     }
 
     const rankingNumbers = await getRankingTournamentNumbers(orgId);
+    console.log('[Eligibility] Ranking numbers:', rankingNumbers);
 
     // Fallback if no ranking numbers configured
     if (!rankingNumbers || rankingNumbers.length === 0) {
+      console.log('[Eligibility] No ranking numbers, returning empty array');
       return res.json([]);
     }
 
     // Build dynamic IN clause with proper parameterization
     const rankingPlaceholders = rankingNumbers.map((_, i) => `$${i + 3}`).join(',');
+    console.log('[Eligibility] Placeholders:', rankingPlaceholders);
 
     // Get all players who have played at least one tournament in the season
     const query = `
@@ -754,11 +759,18 @@ router.get('/eligibility', authenticateToken, async (req, res) => {
       ORDER BY c.game_type, c.level, moyenne_saison DESC
     `;
 
-    db.all(query, [season, orgId, ...rankingNumbers], (err, rows) => {
+    const params = [season, orgId, ...rankingNumbers];
+    console.log('[Eligibility] Query params:', params);
+    console.log('[Eligibility] Query:', query.substring(0, 500));
+
+    db.all(query, params, (err, rows) => {
       if (err) {
-        console.error('Error fetching eligibility data:', err);
+        console.error('[Eligibility] Database error:', err);
+        console.error('[Eligibility] Error stack:', err.stack);
         return res.status(500).json({ error: err.message });
       }
+
+      console.log('[Eligibility] Rows returned:', rows ? rows.length : 0);
 
       // Enrich with eligibility status
       const enriched = rows.map(row => {
@@ -810,10 +822,12 @@ router.get('/eligibility', authenticateToken, async (req, res) => {
         };
       });
 
+      console.log('[Eligibility] Returning', enriched.length, 'enriched rows');
       res.json(enriched);
     });
   } catch (error) {
-    console.error('Error in eligibility endpoint:', error);
+    console.error('[Eligibility] Catch block error:', error);
+    console.error('[Eligibility] Error stack:', error.stack);
     res.status(500).json({ error: error.message });
   }
 });
