@@ -744,7 +744,7 @@ router.get('/eligibility', authenticateToken, async (req, res) => {
       JOIN players p ON tr.licence = p.licence
       LEFT JOIN game_parameters gp ON
         UPPER(REPLACE(gp.mode, ' ', '')) = UPPER(REPLACE(c.game_type, ' ', ''))
-        AND gp.level = c.level
+        AND gp.categorie = c.level
         AND gp.season = $1
         AND ($2::int IS NULL OR gp.organization_id = $2)
       WHERE t.season = $1
