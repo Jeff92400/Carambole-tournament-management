@@ -1009,4 +1009,177 @@ router.get('/eligibility/export', authenticateToken, async (req, res) => {
   }
 });
 
+// Export eligibility data to PDF
+router.get('/eligibility/export-pdf', authenticateToken, async (req, res) => {
+  const { season } = req.query;
+
+  if (!season) {
+    return res.status(400).json({ error: 'Season required' });
+  }
+
+  try {
+    const orgId = req.user.organizationId || null;
+
+    // Get the same eligibility data as the Excel export
+    const rankingNumbers = await getRankingTournamentNumbers(orgId);
+    const rankingPlaceholders = rankingNumbers.map((_, idx) => `$${idx + 3}`).join(',');
+    const queryParams = [season, orgId, ...rankingNumbers];
+
+    const query = `
+      SELECT
+        p.licence,
+        p.first_name,
+        p.last_name,
+        p.club,
+        c.game_type as mode,
+        c.level as categorie,
+        c.id as category_id,
+        SUM(tr.points) as total_points,
+        SUM(tr.reprises) as total_reprises,
+        CAST(SUM(tr.points) AS FLOAT) / NULLIF(SUM(tr.reprises), 0) as moyenne_saison,
+        COUNT(DISTINCT t.id) as nb_tournaments,
+        gp.moyenne_mini,
+        gp.moyenne_maxi
+      FROM tournament_results tr
+      JOIN tournaments t ON tr.tournament_id = t.id
+      JOIN categories c ON t.category_id = c.id
+      JOIN players p ON tr.licence = p.licence
+      LEFT JOIN game_parameters gp ON
+        UPPER(REPLACE(gp.mode, ' ', '')) = UPPER(REPLACE(c.game_type, ' ', ''))
+        AND gp.categorie = c.level
+        AND ($2::int IS NULL OR gp.organization_id = $2)
+      WHERE t.season = $1
+        AND t.tournament_number IN (` + rankingPlaceholders + `)
+        AND ($2::int IS NULL OR t.organization_id = $2)
+        AND UPPER(p.licence) NOT LIKE 'TEST%'
+      GROUP BY p.licence, p.first_name, p.last_name, p.club, c.game_type, c.level, c.id, gp.moyenne_mini, gp.moyenne_maxi
+      HAVING COUNT(DISTINCT t.id) > 0
+      ORDER BY c.game_type, c.level, moyenne_saison DESC
+    `;
+
+    const rows = await new Promise((resolve, reject) => {
+      db.all(query, queryParams, (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows || []);
+      });
+    });
+
+    // Process each row
+    const processedData = rows.map(row => {
+      const status = determineEligibilityStatus(row.moyenne_saison, row.moyenne_mini, row.moyenne_maxi);
+      const suggestedCategory = getSuggestedCategory(row.mode, row.categorie, status.direction);
+
+      return {
+        ...row,
+        status: status.status,
+        status_label: status.label,
+        suggested_category: suggestedCategory,
+        moyenne_saison: row.moyenne_saison || 0
+      };
+    });
+
+    // Create PDF using PDFKit
+    const PDFDocument = require('pdfkit');
+    const doc = new PDFDocument({ size: 'A4', layout: 'landscape', margin: 30 });
+
+    // Set response headers
+    const filename = `Eligibilite_Joueurs_${season.replace('/', '-')}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+    // Pipe PDF to response
+    doc.pipe(res);
+
+    // Title
+    doc.fontSize(16).font('Helvetica-Bold').text(`Éligibilité des joueurs - Saison ${season}`, 30, 30);
+
+    // Summary stats
+    const total = processedData.length;
+    const maintien = processedData.filter(d => ['maintien', 'proche_montee', 'proche_descente'].includes(d.status)).length;
+    const montee = processedData.filter(d => d.status === 'montee_obligatoire').length;
+    const descente = processedData.filter(d => d.status === 'descente_suggeree').length;
+    doc.fontSize(10).font('Helvetica').text(
+      `Total: ${total} joueurs  |  Maintien: ${maintien}  |  Montée: ${montee}  |  Descente: ${descente}`,
+      30, 55
+    );
+
+    // Table header
+    let y = 80;
+    const colWidths = [60, 120, 50, 30, 30, 30, 30, 80, 30];
+    const headers = ['Joueur', 'Club', 'Mode', 'Cat.', 'Moy.', 'Min', 'Max', 'Statut', 'Sugg.'];
+
+    doc.fontSize(8).font('Helvetica-Bold');
+    let x = 30;
+    headers.forEach((header, i) => {
+      doc.rect(x, y, colWidths[i], 15).fillAndStroke('#1F4788', '#1F4788');
+      doc.fillColor('white').text(header, x + 2, y + 4, { width: colWidths[i] - 4, align: 'left' });
+      x += colWidths[i];
+    });
+
+    // Table rows
+    y += 15;
+    doc.font('Helvetica').fontSize(7);
+
+    processedData.forEach((row, index) => {
+      if (y > 530) { // New page if needed
+        doc.addPage();
+        y = 30;
+      }
+
+      // Status color
+      let bgColor = '#FFFFFF';
+      let textColor = '#000000';
+      if (row.status === 'montee_obligatoire') {
+        bgColor = '#DC3545';
+        textColor = '#FFFFFF';
+      } else if (row.status === 'descente_suggeree') {
+        bgColor = '#FFC107';
+      } else if (row.status === 'proche_montee') {
+        bgColor = '#2196F3';
+        textColor = '#FFFFFF';
+      } else if (row.status === 'maintien') {
+        bgColor = '#28A745';
+        textColor = '#FFFFFF';
+      }
+
+      const rowData = [
+        `${row.first_name} ${row.last_name}`.substring(0, 25),
+        (row.club || '-').substring(0, 40),
+        row.mode,
+        row.categorie,
+        row.moyenne_saison ? row.moyenne_saison.toFixed(2) : '-',
+        row.moyenne_mini || '-',
+        row.moyenne_maxi || '-',
+        row.status_label.substring(0, 30),
+        row.suggested_category
+      ];
+
+      x = 30;
+      rowData.forEach((cell, i) => {
+        // Background for status column
+        if (i === 7) {
+          doc.rect(x, y, colWidths[i], 12).fillAndStroke(bgColor, '#CCCCCC');
+          doc.fillColor(textColor);
+        } else {
+          doc.rect(x, y, colWidths[i], 12).stroke('#CCCCCC');
+          doc.fillColor('#000000');
+        }
+        doc.text(String(cell), x + 2, y + 3, { width: colWidths[i] - 4, align: 'left' });
+        x += colWidths[i];
+      });
+
+      y += 12;
+    });
+
+    // Finalize PDF
+    doc.end();
+
+  } catch (error) {
+    console.error('[Eligibility PDF Export] Error:', error);
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'PDF export failed', details: error.message });
+    }
+  }
+});
+
 module.exports = router;
