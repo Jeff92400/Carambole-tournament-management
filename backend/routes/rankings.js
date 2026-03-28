@@ -708,7 +708,9 @@ router.get('/eligibility', authenticateToken, async (req, res) => {
     }
 
     const rankingNumbers = await getRankingTournamentNumbers(orgId);
-    const rankingNumbersSQL = rankingNumbers.join(',');
+
+    // Build dynamic IN clause with proper parameterization
+    const rankingPlaceholders = rankingNumbers.map((_, i) => `$${i + 3}`).join(',');
 
     // Get all players who have played at least one tournament in the season
     const query = `
@@ -736,7 +738,7 @@ router.get('/eligibility', authenticateToken, async (req, res) => {
         AND gp.season = $1
         AND ($2::int IS NULL OR gp.organization_id = $2)
       WHERE t.season = $1
-        AND t.tournament_number IN (${rankingNumbersSQL})
+        AND t.tournament_number IN (${rankingPlaceholders})
         AND ($2::int IS NULL OR t.organization_id = $2)
         AND UPPER(p.licence) NOT LIKE 'TEST%'
       GROUP BY
@@ -747,7 +749,7 @@ router.get('/eligibility', authenticateToken, async (req, res) => {
       ORDER BY c.game_type, c.level, moyenne_saison DESC
     `;
 
-    db.all(query, [season, orgId], (err, rows) => {
+    db.all(query, [season, orgId, ...rankingNumbers], (err, rows) => {
       if (err) {
         console.error('Error fetching eligibility data:', err);
         return res.status(500).json({ error: err.message });
