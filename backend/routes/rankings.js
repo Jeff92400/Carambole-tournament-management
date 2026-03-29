@@ -745,7 +745,7 @@ router.get('/eligibility', authenticateToken, async (req, res) => {
       JOIN players p ON tr.licence = p.licence
       LEFT JOIN game_parameters gp ON
         UPPER(REPLACE(gp.mode, ' ', '')) = UPPER(REPLACE(c.game_type, ' ', ''))
-        AND gp.categorie = c.level
+        AND UPPER(gp.categorie) = UPPER(c.level)
         AND ($2::int IS NULL OR gp.organization_id = $2)
       WHERE t.season = $1
         AND t.tournament_number IN (` + rankingPlaceholders + `)
@@ -933,7 +933,7 @@ router.get('/eligibility/export', authenticateToken, async (req, res) => {
       JOIN players p ON tr.licence = p.licence
       LEFT JOIN game_parameters gp ON
         UPPER(REPLACE(gp.mode, ' ', '')) = UPPER(REPLACE(c.game_type, ' ', ''))
-        AND gp.categorie = c.level
+        AND UPPER(gp.categorie) = UPPER(c.level)
         AND ($2::int IS NULL OR gp.organization_id = $2)
       WHERE t.season = $1
         AND t.tournament_number IN (` + rankingPlaceholders + `)
@@ -1095,7 +1095,7 @@ router.get('/eligibility/export-pdf', authenticateToken, async (req, res) => {
       JOIN players p ON tr.licence = p.licence
       LEFT JOIN game_parameters gp ON
         UPPER(REPLACE(gp.mode, ' ', '')) = UPPER(REPLACE(c.game_type, ' ', ''))
-        AND gp.categorie = c.level
+        AND UPPER(gp.categorie) = UPPER(c.level)
         AND ($2::int IS NULL OR gp.organization_id = $2)
       WHERE t.season = $1
         AND t.tournament_number IN (` + rankingPlaceholders + `)
