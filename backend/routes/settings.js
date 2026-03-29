@@ -175,6 +175,7 @@ router.get('/game-parameters', authenticateToken, async (req, res) => {
 
     // Get game parameters
     const orgId = req.user.organizationId || null;
+    console.log('[GameParams] Fetching for orgId:', orgId);
     const params = await new Promise((resolve, reject) => {
       db.all(
         `SELECT * FROM game_parameters WHERE ($1::int IS NULL OR organization_id = $1) ORDER BY
@@ -198,6 +199,9 @@ router.get('/game-parameters', authenticateToken, async (req, res) => {
         }
       );
     });
+
+    console.log('[GameParams] Found', params.length, 'params');
+    console.log('[GameParams] Cadre params:', params.filter(p => p.mode && p.mode.includes('Cadre')));
 
     // Enrich params with mode display names
     const enrichedParams = params.map(param => {
