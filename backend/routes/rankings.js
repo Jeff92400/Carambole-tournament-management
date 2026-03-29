@@ -781,13 +781,14 @@ router.get('/eligibility', authenticateToken, async (req, res) => {
           console.log('[Eligibility] Sample Cadre row:', cadreRow);
         }
 
-        // Debug: Check what's in game_parameters for Cadre
+        // Debug: Check what's in game_parameters for Cadre - CHECK ALL orgs!
         db.all(
-          "SELECT mode, categorie, moyenne_mini, moyenne_maxi FROM game_parameters WHERE mode LIKE '%Cadre%' AND organization_id = $1",
-          [orgId],
+          "SELECT mode, categorie, moyenne_mini, moyenne_maxi, organization_id FROM game_parameters WHERE mode LIKE '%Cadre%'",
+          [],
           (err, gpRows) => {
             if (!err && gpRows) {
-              console.log('[Eligibility] game_parameters Cadre entries:', gpRows);
+              console.log('[Eligibility] game_parameters Cadre entries (ALL orgs):', gpRows);
+              console.log('[Eligibility] Looking for orgId:', orgId);
             }
           }
         );
