@@ -1356,7 +1356,7 @@ function computeBonusPoints(tournamentId, categoryId, orgId, callback) {
         `SELECT c.display_name as category_name, c.game_type, c.level,
                 gp.moyenne_mini, gp.moyenne_maxi
          FROM categories c
-         LEFT JOIN game_parameters gp ON UPPER(REPLACE(gp.mode, ' ', '')) = UPPER(REPLACE(c.game_type, ' ', '')) AND UPPER(gp.categorie) = UPPER(c.level) AND gp.organization_id = c.organization_id
+         LEFT JOIN game_parameters gp ON UPPER(TRIM(c.game_type)) LIKE UPPER(TRIM(gp.mode)) || '%' AND UPPER(gp.categorie) = UPPER(c.level) AND gp.organization_id = c.organization_id
          WHERE c.id = ?`,
         [categoryId],
         (err, catInfo) => {
@@ -3300,7 +3300,7 @@ router.get('/bonus-diagnostic', authenticateToken, async (req, res) => {
       const gpJoin = await dbGetAsync(
         `SELECT gp.id, gp.mode, gp.categorie, gp.organization_id, gp.moyenne_mini, gp.moyenne_maxi
          FROM categories c
-         LEFT JOIN game_parameters gp ON UPPER(REPLACE(gp.mode, ' ', '')) = UPPER(REPLACE(c.game_type, ' ', '')) AND UPPER(gp.categorie) = UPPER(c.level) AND gp.organization_id = c.organization_id
+         LEFT JOIN game_parameters gp ON UPPER(TRIM(c.game_type)) LIKE UPPER(TRIM(gp.mode)) || '%' AND UPPER(gp.categorie) = UPPER(c.level) AND gp.organization_id = c.organization_id
          WHERE c.id = $1`,
         [cat.id]
       );
