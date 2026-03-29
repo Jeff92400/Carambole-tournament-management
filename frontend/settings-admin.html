@@ -1167,8 +1167,41 @@
         <span class="accordion-summary" id="summary-season">Chargement...</span>
       </div>
       <div class="accordion-body">
+
+      <!-- Current Season Override -->
+      <h3 style="margin-top: 0;">📅 Saison actuelle</h3>
       <p style="margin-bottom: 20px; color: #666;">
-        Configurez le mois de début de saison pour le calcul automatique de la saison en cours.
+        Définissez manuellement la saison en cours ou laissez le calcul automatique.
+      </p>
+
+      <div style="display: flex; gap: 20px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 20px;">
+        <div style="flex: 1; min-width: 200px; max-width: 300px;">
+          <label style="display: block; margin-bottom: 8px; font-weight: 500;">Saison en cours :</label>
+          <input type="text" id="currentSeasonDisplay" readonly
+            style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; background: #f5f5f5; font-size: 14px; font-weight: 600;"
+            placeholder="Chargement...">
+        </div>
+        <div style="flex: 1; min-width: 200px; max-width: 300px;">
+          <label style="display: block; margin-bottom: 8px; font-weight: 500;">Forcer la saison (optionnel) :</label>
+          <input type="text" id="seasonOverrideInput"
+            style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;"
+            placeholder="2026-2027">
+        </div>
+        <button onclick="saveSeasonOverride()" class="btn" style="background: #28a745; padding: 12px 25px;">
+          Appliquer
+        </button>
+        <button onclick="clearSeasonOverride()" class="btn" style="background: #6c757d; padding: 12px 25px;">
+          Réinitialiser (auto)
+        </button>
+      </div>
+
+      <div id="seasonOverrideMessage" style="display: none; margin-bottom: 20px; padding: 10px; border-radius: 4px;"></div>
+
+      <!-- Season Start Month -->
+      <hr style="margin: 30px 0; border: none; border-top: 1px solid #ddd;">
+      <h3 style="margin-top: 0;">📆 Calcul automatique</h3>
+      <p style="margin-bottom: 20px; color: #666;">
+        Configurez le mois de début de saison pour le calcul automatique (utilisé si aucune saison forcée).
       </p>
 
       <div style="display: flex; gap: 20px; align-items: flex-end; flex-wrap: wrap;">
@@ -1199,8 +1232,10 @@
       <div style="margin-top: 20px; padding: 15px; background: #e7f3ff; border-left: 4px solid #1F4788; border-radius: 4px;">
         <strong>Information :</strong>
         <p style="margin: 10px 0 0 0; color: #666;">
-          La saison est calculée automatiquement en fonction du mois actuel.
-          Par exemple, avec Septembre comme mois de début, de Septembre 2024 à Août 2025, la saison sera "2024-2025".
+          <strong>Mode automatique :</strong> La saison est calculée en fonction du mois actuel.
+          Par exemple, avec Septembre comme mois de début, de Septembre 2024 à Août 2025, la saison sera "2024-2025".<br><br>
+          <strong>Mode manuel :</strong> Vous pouvez forcer une saison spécifique (ex: pendant la transition Juin-Août, forcer "2026-2027" avant la rentrée officielle).
+          Cela affectera tous les sélecteurs de saison dans l'application (tableaux de bord, classements, éligibilité, etc.).
         </p>
       </div>
 
@@ -4115,6 +4150,111 @@
         console.error('Error loading season settings:', error);
       }
     }
+
+    // ============= SEASON OVERRIDE =============
+
+    async function loadSeasonOverride() {
+      try {
+        const response = await authFetch(`${API_URL}/settings/current-season`);
+        if (!response.ok) throw new Error('Erreur de chargement');
+
+        const data = await response.json();
+        const displayEl = document.getElementById('currentSeasonDisplay');
+        const inputEl = document.getElementById('seasonOverrideInput');
+
+        displayEl.value = data.currentSeason + (data.isOverridden ? ' (forcée)' : ' (auto)');
+        displayEl.style.color = data.isOverridden ? '#c0392b' : '#27ae60';
+        inputEl.value = data.override || '';
+        inputEl.placeholder = data.currentSeason;
+      } catch (error) {
+        console.error('Error loading season override:', error);
+      }
+    }
+
+    async function saveSeasonOverride() {
+      const msgDiv = document.getElementById('seasonOverrideMessage');
+      const override = document.getElementById('seasonOverrideInput').value.trim();
+
+      if (!override) {
+        msgDiv.textContent = 'Veuillez entrer une saison (ex: 2026-2027) ou utilisez "Réinitialiser"';
+        msgDiv.style.background = '#fff3cd';
+        msgDiv.style.color = '#856404';
+        msgDiv.style.display = 'block';
+        setTimeout(() => { msgDiv.style.display = 'none'; }, 3000);
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API_URL}/settings/current-season`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ override })
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || 'Erreur lors de la sauvegarde');
+        }
+
+        const data = await response.json();
+        msgDiv.textContent = `✓ Saison forcée : ${data.currentSeason}`;
+        msgDiv.style.background = '#d4edda';
+        msgDiv.style.color = '#155724';
+
+        await loadSeasonOverride();
+      } catch (error) {
+        console.error('Error saving season override:', error);
+        msgDiv.textContent = error.message;
+        msgDiv.style.background = '#f8d7da';
+        msgDiv.style.color = '#721c24';
+      }
+
+      msgDiv.style.display = 'block';
+      setTimeout(() => { msgDiv.style.display = 'none'; }, 4000);
+    }
+
+    async function clearSeasonOverride() {
+      const msgDiv = document.getElementById('seasonOverrideMessage');
+
+      if (!confirm('Revenir au calcul automatique de la saison ?')) {
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API_URL}/settings/current-season`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ override: '' })
+        });
+
+        if (!response.ok) throw new Error('Erreur lors de la réinitialisation');
+
+        const data = await response.json();
+        msgDiv.textContent = `✓ Mode automatique réactivé : ${data.currentSeason}`;
+        msgDiv.style.background = '#d4edda';
+        msgDiv.style.color = '#155724';
+
+        await loadSeasonOverride();
+      } catch (error) {
+        console.error('Error clearing season override:', error);
+        msgDiv.textContent = error.message;
+        msgDiv.style.background = '#f8d7da';
+        msgDiv.style.color = '#721c24';
+      }
+
+      msgDiv.style.display = 'block';
+      setTimeout(() => { msgDiv.style.display = 'none'; }, 4000);
+    }
+
+    loadSeasonOverride();
+
+    // ============= SEASON START MONTH =============
 
     async function saveSeasonSettings() {
       const msgDiv = document.getElementById('seasonMessage');
