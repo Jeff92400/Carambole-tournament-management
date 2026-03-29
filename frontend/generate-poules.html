@@ -2567,8 +2567,15 @@
               // Find inscriptions that are NOT in the qualified finalists list
               const rankedLicences = new Set(rankedPlayers.map(p => p.licence.replace(/\s/g, '')));
 
-              newPlayers = inscriptions
-                .filter(i => !rankedLicences.has(i.licence?.replace(/\s/g, '')) && i.forfait !== 1)
+              console.log('=== FINALE DEBUG ===');
+              console.log('Total inscriptions:', inscriptions.length);
+              console.log('Inscriptions:', inscriptions);
+              console.log('Ranked licences:', Array.from(rankedLicences));
+
+              const nonFinalists = inscriptions.filter(i => !rankedLicences.has(i.licence?.replace(/\s/g, '')) && i.forfait !== 1);
+              console.log('Non-finalist inscriptions:', nonFinalists);
+
+              newPlayers = nonFinalists
                 .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
                 .map((i, index) => ({
                   licence: i.licence,
@@ -2585,6 +2592,8 @@
                   inscription_id: i.inscription_id,
                   selected: true  // Auto-select last-minute players in finales
                 }));
+
+              console.log('newPlayers array:', newPlayers);
 
               // Mark finalists who have inscribed AND auto-select only INSCRIBED finalists
               rankedPlayers.forEach(p => {
@@ -2699,8 +2708,15 @@
       // Update titles based on competition type
       if (isFinaleCompetition) {
         rankedTitle.textContent = `🏆 Finalistes qualifiés (${rankedPlayers.length} joueurs)`;
-        newPlayersTitle.style.display = 'none';
-        newList.style.display = 'none';
+        // Show newPlayers section only if there are non-finalist inscriptions (last-minute players)
+        if (newPlayers.length > 0) {
+          newPlayersTitle.textContent = 'Joueurs additionnels (hors finalistes)';
+          newPlayersTitle.style.display = 'block';
+          newList.style.display = 'block';
+        } else {
+          newPlayersTitle.style.display = 'none';
+          newList.style.display = 'none';
+        }
       } else {
         rankedTitle.textContent = 'Joueurs classés (du classement actuel)';
         newPlayersTitle.style.display = 'block';
