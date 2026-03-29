@@ -360,40 +360,27 @@ router.delete('/game-parameters/:id', authenticateToken, requireAdmin, (req, res
   );
 });
 
-// Fix game parameter mode values (admin only) - match categories.game_type
-router.post('/game-parameters/fix-modes', authenticateToken, requireAdmin, (req, res) => {
+// Fix game parameter organization_id (admin only) - set orgId for rows with NULL
+router.post('/game-parameters/fix-org', authenticateToken, requireAdmin, (req, res) => {
   const db = getDb();
-  const orgId = req.user.organizationId || null;
+  const orgId = req.user.organizationId || 1;
 
-  // Update game_parameters.mode to match categories.game_type exactly
-  const updates = [
-    { from: 'CADRE', to: 'Cadre 42/2' },
-    { from: 'CADRE 42/2', to: 'Cadre 42/2' },
-    { from: 'cadre 42/2', to: 'Cadre 42/2' },
-    { from: 'cadre', to: 'Cadre 42/2' }
-  ];
-
-  let completed = 0;
-  let updated = 0;
-
-  updates.forEach(({ from, to }) => {
-    db.run(
-      'UPDATE game_parameters SET mode = $1 WHERE mode = $2 AND ($3::int IS NULL OR organization_id = $3)',
-      [to, from, orgId],
-      function(err) {
-        if (err) {
-          console.error('Error updating mode:', err);
-        } else if (this.changes > 0) {
-          console.log(`Updated ${this.changes} rows: ${from} -> ${to}`);
-          updated += this.changes;
-        }
-        completed++;
-        if (completed === updates.length) {
-          res.json({ success: true, message: `Fixed ${updated} game parameter mode values`, updated });
-        }
+  db.run(
+    'UPDATE game_parameters SET organization_id = $1 WHERE organization_id IS NULL OR organization_id = 0',
+    [orgId],
+    function(err) {
+      if (err) {
+        console.error('Error updating organization_id:', err);
+        return res.status(500).json({ error: err.message });
       }
-    );
-  });
+      console.log(`Updated ${this.changes} game_parameters rows with organization_id = ${orgId}`);
+      res.json({
+        success: true,
+        message: `Fixed ${this.changes} game parameter organization_id values`,
+        updated: this.changes
+      });
+    }
+  );
 });
 
 // ============= TOURNAMENT PARAMETER OVERRIDES =============
