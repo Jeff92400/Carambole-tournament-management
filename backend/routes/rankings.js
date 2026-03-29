@@ -743,8 +743,9 @@ router.get('/eligibility', authenticateToken, async (req, res) => {
       JOIN tournaments t ON tr.tournament_id = t.id
       JOIN categories c ON t.category_id = c.id
       JOIN players p ON tr.licence = p.licence
+      LEFT JOIN game_modes gm ON UPPER(gm.code) = UPPER(c.game_type)
       LEFT JOIN game_parameters gp ON
-        UPPER(REPLACE(gp.mode, ' ', '')) = UPPER(REPLACE(c.game_type, ' ', ''))
+        UPPER(gp.mode) = UPPER(gm.code)
         AND UPPER(gp.categorie) = UPPER(c.level)
         AND ($2::int IS NULL OR gp.organization_id = $2)
       WHERE t.season = $1
@@ -931,8 +932,9 @@ router.get('/eligibility/export', authenticateToken, async (req, res) => {
       JOIN tournaments t ON tr.tournament_id = t.id
       JOIN categories c ON t.category_id = c.id
       JOIN players p ON tr.licence = p.licence
+      LEFT JOIN game_modes gm ON UPPER(gm.code) = UPPER(c.game_type)
       LEFT JOIN game_parameters gp ON
-        UPPER(REPLACE(gp.mode, ' ', '')) = UPPER(REPLACE(c.game_type, ' ', ''))
+        UPPER(gp.mode) = UPPER(gm.code)
         AND UPPER(gp.categorie) = UPPER(c.level)
         AND ($2::int IS NULL OR gp.organization_id = $2)
       WHERE t.season = $1
@@ -1093,8 +1095,9 @@ router.get('/eligibility/export-pdf', authenticateToken, async (req, res) => {
       JOIN tournaments t ON tr.tournament_id = t.id
       JOIN categories c ON t.category_id = c.id
       JOIN players p ON tr.licence = p.licence
+      LEFT JOIN game_modes gm ON UPPER(gm.code) = UPPER(c.game_type)
       LEFT JOIN game_parameters gp ON
-        UPPER(REPLACE(gp.mode, ' ', '')) = UPPER(REPLACE(c.game_type, ' ', ''))
+        UPPER(gp.mode) = UPPER(gm.code)
         AND UPPER(gp.categorie) = UPPER(c.level)
         AND ($2::int IS NULL OR gp.organization_id = $2)
       WHERE t.season = $1
