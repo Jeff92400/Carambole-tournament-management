@@ -2562,9 +2562,29 @@
               );
             }
 
-            // For FINALE: Don't show "new players" section - only finalists matter
+            // For FINALE: Include non-finalist inscriptions (last-minute players) in newPlayers
             if (isFinaleCompetition) {
-              newPlayers = [];
+              // Find inscriptions that are NOT in the qualified finalists list
+              const rankedLicences = new Set(rankedPlayers.map(p => p.licence.replace(/\s/g, '')));
+
+              newPlayers = inscriptions
+                .filter(i => !rankedLicences.has(i.licence?.replace(/\s/g, '')) && i.forfait !== 1)
+                .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
+                .map((i, index) => ({
+                  licence: i.licence,
+                  first_name: i.first_name || 'Inconnu',
+                  last_name: i.last_name || 'Inconnu',
+                  club: i.club || '',
+                  email: i.email || null,
+                  timestamp: i.timestamp,
+                  isNew: true,
+                  isLastMinute: i.source === 'manual',
+                  forfait: i.forfait,
+                  desinscrit: i.statut === 'désinscrit',
+                  indisponible: i.statut === 'indisponible',
+                  inscription_id: i.inscription_id,
+                  selected: true  // Auto-select last-minute players in finales
+                }));
 
               // Mark finalists who have inscribed AND auto-select only INSCRIBED finalists
               rankedPlayers.forEach(p => {
