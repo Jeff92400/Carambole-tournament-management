@@ -175,7 +175,6 @@ router.get('/game-parameters', authenticateToken, async (req, res) => {
 
     // Get game parameters
     const orgId = req.user.organizationId || null;
-    console.log('[GameParams] Fetching for orgId:', orgId);
     const params = await new Promise((resolve, reject) => {
       db.all(
         `SELECT * FROM game_parameters WHERE ($1::int IS NULL OR organization_id = $1) ORDER BY
@@ -199,10 +198,6 @@ router.get('/game-parameters', authenticateToken, async (req, res) => {
         }
       );
     });
-
-    console.log('[GameParams] Found', params.length, 'params');
-    console.log('[GameParams] Cadre params:', params.filter(p => p.mode && p.mode.includes('Cadre')));
-    console.log('[GameParams] All modes:', params.map(p => ({ id: p.id, mode: p.mode, cat: p.categorie })));
 
     // Enrich params with mode display names
     const enrichedParams = params.map(param => {
@@ -319,8 +314,6 @@ router.put('/game-parameters/:id', authenticateToken, requireAdmin, (req, res) =
   const { coin, distance_normale, distance_reduite, reprises, moyenne_mini, moyenne_maxi } = req.body;
   const orgId = req.user.organizationId || null;
 
-  console.log('[GameParams UPDATE] id:', id, 'orgId:', orgId, 'data:', { coin, distance_normale, reprises, moyenne_mini, moyenne_maxi });
-
   db.run(
     `UPDATE game_parameters SET
        coin = $1,
@@ -334,15 +327,11 @@ router.put('/game-parameters/:id', authenticateToken, requireAdmin, (req, res) =
     [coin, distance_normale, distance_reduite || null, reprises, moyenne_mini, moyenne_maxi, id, orgId],
     function(err) {
       if (err) {
-        console.error('[GameParams UPDATE] Error:', err);
         return res.status(500).json({ error: err.message });
       }
-      console.log('[GameParams UPDATE] Changes:', this.changes);
       if (this.changes === 0) {
-        console.log('[GameParams UPDATE] No rows updated - parameter not found or wrong org');
         return res.status(404).json({ error: 'Parameter not found' });
       }
-      console.log('[GameParams UPDATE] Success!');
       res.json({ success: true, message: 'Game parameter updated' });
     }
   );
