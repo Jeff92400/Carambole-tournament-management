@@ -1046,15 +1046,18 @@ router.get('/finales/upcoming', authenticateToken, async (req, res) => {
           );
         });
 
-        // Count how many finalists are inscribed
+        // Count total active inscriptions (excluding forfait)
+        const totalInscriptions = inscriptions.length;
+
+        // Also count how many finalists are inscribed (for reference)
         const inscribedLicences = inscriptions.map(i => i.licence?.replace(/\s/g, ''));
         const inscribedFinalistCount = finalistLicences.filter(l => inscribedLicences.includes(l)).length;
-        console.log(`Result: ${inscribedFinalistCount}/${finalistLicences.length} finalists inscribed`);
+        console.log(`Result: ${totalInscriptions} total inscriptions (${inscribedFinalistCount}/${finalistLicences.length} finalists)`);
 
         return {
           ...final,
           finalist_count: finalistLicences.length,
-          inscribed_finalist_count: inscribedFinalistCount
+          inscribed_finalist_count: totalInscriptions  // Changed to show total inscriptions instead of just finalists
         };
       } catch (err) {
         console.error(`Error processing final ${final.tournoi_id}:`, err);
