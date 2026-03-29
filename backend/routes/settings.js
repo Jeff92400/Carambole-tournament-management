@@ -360,6 +360,46 @@ router.delete('/game-parameters/:id', authenticateToken, requireAdmin, (req, res
   );
 });
 
+// Fix game parameter mode values (admin only) - normalize to codes
+router.post('/game-parameters/fix-modes', authenticateToken, requireAdmin, (req, res) => {
+  const db = getDb();
+  const orgId = req.user.organizationId || null;
+
+  const updates = [
+    { from: 'Cadre 42/2', to: 'CADRE' },
+    { from: 'CADRE 42/2', to: 'CADRE' },
+    { from: 'cadre 42/2', to: 'CADRE' },
+    { from: '3 Bandes', to: '3 BANDES' },
+    { from: '3 bandes', to: '3 BANDES' },
+    { from: 'Bande', to: 'BANDE' },
+    { from: 'bande', to: 'BANDE' },
+    { from: 'Libre', to: 'LIBRE' },
+    { from: 'libre', to: 'LIBRE' }
+  ];
+
+  let completed = 0;
+  let updated = 0;
+
+  updates.forEach(({ from, to }) => {
+    db.run(
+      'UPDATE game_parameters SET mode = $1 WHERE mode = $2 AND ($3::int IS NULL OR organization_id = $3)',
+      [to, from, orgId],
+      function(err) {
+        if (err) {
+          console.error('Error updating mode:', err);
+        } else if (this.changes > 0) {
+          console.log(`Updated ${this.changes} rows: ${from} -> ${to}`);
+          updated += this.changes;
+        }
+        completed++;
+        if (completed === updates.length) {
+          res.json({ success: true, message: `Fixed ${updated} game parameter mode values`, updated });
+        }
+      }
+    );
+  });
+});
+
 // ============= TOURNAMENT PARAMETER OVERRIDES =============
 
 // Get tournament parameter override (or defaults if no override exists)
