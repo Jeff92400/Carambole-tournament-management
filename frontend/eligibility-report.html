@@ -175,6 +175,9 @@
 
       <!-- Filters -->
       <div class="filter-bar">
+        <label style="font-weight: 500; margin-right: 8px;">Saison :</label>
+        <select id="seasonFilter" style="margin-right: 20px;">
+        </select>
         <select id="modeFilter">
           <option value="">Tous les modes</option>
         </select>
@@ -242,18 +245,35 @@
     const year = now.getFullYear();
     const month = now.getMonth() + 1;
     const currentSeason = month >= 9 ? `${year}-${year + 1}` : `${year - 1}-${year}`;
+    let selectedSeason = currentSeason;
     document.getElementById('currentSeason').textContent = currentSeason;
 
+    // Populate season dropdown (starting from 2025-2026)
+    function populateSeasonDropdown() {
+      const seasonFilter = document.getElementById('seasonFilter');
+      const startYear = 2025;
+      const currentYear = parseInt(currentSeason.split('-')[0]);
+      const seasons = [];
+
+      for (let year = currentYear; year >= startYear; year--) {
+        seasons.push(`${year}-${year + 1}`);
+      }
+
+      seasonFilter.innerHTML = seasons.map(s =>
+        `<option value="${s}" ${s === currentSeason ? 'selected' : ''}>${s}</option>`
+      ).join('');
+    }
+
     // Check if season is ongoing (before June 30)
-    const isOngoing = month < 7;
-    if (isOngoing) {
-      document.getElementById('warningBanner').style.display = 'flex';
+    function updateWarningBanner() {
+      const isOngoing = selectedSeason === currentSeason && month < 7;
+      document.getElementById('warningBanner').style.display = isOngoing ? 'flex' : 'none';
     }
 
     // Load data
     async function loadEligibilityData() {
       try {
-        const response = await authFetch(`${API_URL}/rankings/eligibility?season=${encodeURIComponent(currentSeason)}`);
+        const response = await authFetch(`${API_URL}/rankings/eligibility?season=${encodeURIComponent(selectedSeason)}`);
 
         if (!response.ok) {
           throw new Error('Erreur lors du chargement des données');
@@ -263,6 +283,7 @@
         populateFilters();
         applyFilters();
         updateSummary();
+        updateWarningBanner();
       } catch (error) {
         console.error('Error loading eligibility data:', error);
         document.getElementById('eligibilityTableBody').innerHTML = `
@@ -375,6 +396,13 @@
       document.getElementById('descenteCount').textContent = descente;
     }
 
+    // Season change listener
+    document.getElementById('seasonFilter').addEventListener('change', (e) => {
+      selectedSeason = e.target.value;
+      loadEligibilityData();
+      updateWarningBanner();
+    });
+
     // Filter event listeners
     document.getElementById('modeFilter').addEventListener('change', applyFilters);
     document.getElementById('statusFilter').addEventListener('change', applyFilters);
@@ -386,7 +414,7 @@
     document.getElementById('exportExcelBtn').addEventListener('click', async () => {
       try {
         const response = await fetch(
-          `${API_URL}/rankings/eligibility/export?season=${encodeURIComponent(currentSeason)}`,
+          `${API_URL}/rankings/eligibility/export?season=${encodeURIComponent(selectedSeason)}`,
           {
             headers: {
               'Authorization': `Bearer ${token}`
@@ -427,7 +455,7 @@
     document.getElementById('exportPdfBtn').addEventListener('click', async () => {
       try {
         const response = await fetch(
-          `${API_URL}/rankings/eligibility/export-pdf?season=${encodeURIComponent(currentSeason)}`,
+          `${API_URL}/rankings/eligibility/export-pdf?season=${encodeURIComponent(selectedSeason)}`,
           {
             headers: {
               'Authorization': `Bearer ${token}`
@@ -481,6 +509,8 @@
     });
 
     // Initialize
+    populateSeasonDropdown();
+    updateWarningBanner();
     loadEligibilityData();
   </script>
 </body>
