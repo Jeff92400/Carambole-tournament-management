@@ -1767,36 +1767,86 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
           ? [playerLocation.street, playerLocation.zip_code, playerLocation.city].filter(Boolean).join(' ')
           : '';
 
-        // Update inscription with convocation details
+        // Insert or update inscription with convocation details
         // For split child tournaments, inscriptions live on the parent tournament
-        await new Promise((resolve, reject) => {
-          db.run(
-            `UPDATE inscriptions
-             SET convoque = 1,
-                 convocation_poule = $1,
-                 convocation_lieu = $2,
-                 convocation_adresse = $3,
-                 convocation_heure = $4,
-                 convocation_notes = $5,
-                 convocation_phone = $6
-             WHERE tournoi_id = $7
-             AND REPLACE(licence, ' ', '') = REPLACE($8, ' ', '')`,
-            [
-              playerPouleNumber ? String(playerPouleNumber) : null,
-              playerLocation?.name || null,
-              fullAddress || null,
-              playerLocation?.startTime || null,
-              specialNote || null,
-              playerLocation?.phone || null,
-              inscriptionTournoiId,
-              player.licence
-            ],
-            (err) => {
+        // This handles both existing inscriptions and last-minute players
+
+        // First check if inscription exists
+        const existingInscription = await new Promise((resolve, reject) => {
+          db.get(
+            `SELECT inscription_id FROM inscriptions
+             WHERE tournoi_id = $1
+             AND REPLACE(UPPER(licence), ' ', '') = REPLACE(UPPER($2), ' ', '')`,
+            [inscriptionTournoiId, player.licence],
+            (err, row) => {
               if (err) reject(err);
-              else resolve();
+              else resolve(row);
             }
           );
         });
+
+        if (existingInscription) {
+          // Update existing inscription
+          await new Promise((resolve, reject) => {
+            db.run(
+              `UPDATE inscriptions
+               SET convoque = 1,
+                   convocation_poule = $1,
+                   convocation_lieu = $2,
+                   convocation_adresse = $3,
+                   convocation_heure = $4,
+                   convocation_notes = $5,
+                   convocation_phone = $6,
+                   email = COALESCE($7, email)
+               WHERE inscription_id = $8`,
+              [
+                playerPouleNumber ? String(playerPouleNumber) : null,
+                playerLocation?.name || null,
+                fullAddress || null,
+                playerLocation?.startTime || null,
+                specialNote || null,
+                playerLocation?.phone || null,
+                player.email || null,
+                existingInscription.inscription_id
+              ],
+              (err) => {
+                if (err) reject(err);
+                else resolve();
+              }
+            );
+          });
+        } else {
+          // Insert new inscription (last-minute player)
+          await new Promise((resolve, reject) => {
+            db.run(
+              `INSERT INTO inscriptions (
+                 inscription_id, tournoi_id, licence, email, timestamp,
+                 source, statut, convoque, convocation_poule, convocation_lieu,
+                 convocation_adresse, convocation_heure, convocation_notes, convocation_phone
+               )
+               VALUES (
+                 (SELECT COALESCE(MAX(inscription_id), 0) + 1 FROM inscriptions),
+                 $1, $2, $3, CURRENT_TIMESTAMP,
+                 'manual', 'inscrit', 1, $4, $5, $6, $7, $8, $9
+               )`,
+              [
+                inscriptionTournoiId,
+                player.licence,
+                player.email || null,
+                playerPouleNumber ? String(playerPouleNumber) : null,
+                playerLocation?.name || null,
+                fullAddress || null,
+                playerLocation?.startTime || null,
+                specialNote || null,
+                playerLocation?.phone || null
+              ],
+              (err) => {
+                if (err) reject(err);
+                else resolve();
+              }
+            );
+          });
+        }
       }
 
       console.log(`Updated convoque status and convocation details for ${sentPlayers.length} players in tournament ${inscriptionTournoiId}${parentTournoiId ? ` (parent of child ${tournoiId})` : ''}`);
