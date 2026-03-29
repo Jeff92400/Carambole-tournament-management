@@ -4205,6 +4205,7 @@
         msgDiv.style.color = '#155724';
 
         await loadSeasonOverride();
+        await populateSnapshotSeasons(); // Refresh stats closure dropdown
       } catch (error) {
         console.error('Error saving season override:', error);
         msgDiv.textContent = error.message;
@@ -4241,6 +4242,7 @@
         msgDiv.style.color = '#155724';
 
         await loadSeasonOverride();
+        await populateSnapshotSeasons(); // Refresh stats closure dropdown
       } catch (error) {
         console.error('Error clearing season override:', error);
         msgDiv.textContent = error.message;
@@ -4293,25 +4295,50 @@
 
     // ============= SEASON STATS SNAPSHOT =============
 
-    // Populate season selector with current + 2 previous seasons
-    (function populateSnapshotSeasons() {
-      const now = new Date();
-      const month = now.getMonth() + 1;
-      const year = now.getFullYear();
-      // September = 9 (matches app_settings default)
-      const startMonth = 9;
-      const currentStartYear = month >= startMonth ? year : year - 1;
-      const select = document.getElementById('snapshotSeason');
-      for (let i = 0; i < 1; i++) {
-        const sy = currentStartYear - i;
-        const label = `${sy}-${sy + 1}`;
+    // Populate season selector respecting override
+    async function populateSnapshotSeasons() {
+      try {
+        // Get current season (respects override)
+        const response = await authFetch(`${API_URL}/settings/current-season`);
+        const data = await response.json();
+        const currentSeason = data.currentSeason;
+
+        const select = document.getElementById('snapshotSeason');
+        select.innerHTML = ''; // Clear existing
+
+        // Add current season
         const opt = document.createElement('option');
-        opt.value = label;
-        opt.textContent = label;
-        if (i === 0) opt.selected = true;
+        opt.value = currentSeason;
+        opt.textContent = currentSeason + (data.isOverridden ? ' (en cours - forcée)' : ' (en cours)');
+        opt.selected = true;
+        select.appendChild(opt);
+
+        // Optionally add previous seasons for manual closure
+        const [startYear] = currentSeason.split('-').map(Number);
+        for (let i = 1; i <= 2; i++) {
+          const sy = startYear - i;
+          const label = `${sy}-${sy + 1}`;
+          const prevOpt = document.createElement('option');
+          prevOpt.value = label;
+          prevOpt.textContent = label;
+          select.appendChild(prevOpt);
+        }
+      } catch (error) {
+        console.error('Error populating snapshot seasons:', error);
+        // Fallback to simple current season
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = now.getMonth() + 1;
+        const currentStartYear = month >= 9 ? year : year - 1;
+        const select = document.getElementById('snapshotSeason');
+        const opt = document.createElement('option');
+        opt.value = `${currentStartYear}-${currentStartYear + 1}`;
+        opt.textContent = `${currentStartYear}-${currentStartYear + 1}`;
         select.appendChild(opt);
       }
-    })();
+    }
+
+    populateSnapshotSeasons();
 
     async function takeSeasonSnapshot() {
       const season = document.getElementById('snapshotSeason').value;
