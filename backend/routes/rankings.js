@@ -778,13 +778,19 @@ router.get('/eligibility', authenticateToken, async (req, res) => {
         // Debug: show first row with Cadre
         const cadreRow = rows.find(r => r.mode && r.mode.toLowerCase().includes('cadre'));
         if (cadreRow) {
-          console.log('[Eligibility] Sample Cadre row:', {
-            mode: cadreRow.mode,
-            categorie: cadreRow.categorie,
-            moyenne_mini: cadreRow.moyenne_mini,
-            moyenne_maxi: cadreRow.moyenne_maxi
-          });
+          console.log('[Eligibility] Sample Cadre row:', cadreRow);
         }
+
+        // Debug: Check what's in game_parameters for Cadre
+        db.all(
+          "SELECT mode, categorie, moyenne_mini, moyenne_maxi FROM game_parameters WHERE mode LIKE '%Cadre%' AND organization_id = $1",
+          [orgId],
+          (err, gpRows) => {
+            if (!err && gpRows) {
+              console.log('[Eligibility] game_parameters Cadre entries:', gpRows);
+            }
+          }
+        );
       }
 
       // Enrich with eligibility status
