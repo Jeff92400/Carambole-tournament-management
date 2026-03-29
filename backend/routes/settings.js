@@ -202,6 +202,7 @@ router.get('/game-parameters', authenticateToken, async (req, res) => {
 
     console.log('[GameParams] Found', params.length, 'params');
     console.log('[GameParams] Cadre params:', params.filter(p => p.mode && p.mode.includes('Cadre')));
+    console.log('[GameParams] All modes:', params.map(p => ({ id: p.id, mode: p.mode, cat: p.categorie })));
 
     // Enrich params with mode display names
     const enrichedParams = params.map(param => {
