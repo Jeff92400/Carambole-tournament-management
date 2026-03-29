@@ -3002,7 +3002,7 @@
     });
 
     // Validate and preview
-    document.getElementById('validatePlayersBtn').addEventListener('click', () => {
+    document.getElementById('validatePlayersBtn').addEventListener('click', async () => {
       // Count selected players first
       const selectedCount =
         rankedPlayers.filter(p => p.selected).length +
@@ -3012,6 +3012,41 @@
       if (selectedCount < 3) {
         alert('Pour être organisée, une compétition doit comporter au moins 3 inscrits.');
         return;
+      }
+
+      // Save selected last-minute players to inscriptions table before proceeding
+      const selectedLastMinute = lastMinutePlayers.filter(p => p.selected);
+      if (selectedLastMinute.length > 0 && matchingTournoi?.tournoi_id) {
+        try {
+          const response = await fetch(`${API_URL}/inscriptions/save-last-minute`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              tournoi_id: matchingTournoi.tournoi_id,
+              players: selectedLastMinute
+            })
+          });
+
+          const result = await response.json();
+
+          if (!response.ok) {
+            console.error('Error saving last-minute players:', result);
+            alert(`Erreur lors de la sauvegarde des joueurs last-minute: ${result.error || 'Erreur inconnue'}`);
+            return;
+          }
+
+          console.log(`Saved ${result.savedPlayers.length} last-minute player(s) to inscriptions table`);
+          if (result.skippedPlayers.length > 0) {
+            console.log(`Skipped ${result.skippedPlayers.length} player(s):`, result.skippedPlayers);
+          }
+        } catch (error) {
+          console.error('Error saving last-minute players:', error);
+          alert('Erreur lors de la sauvegarde des joueurs last-minute. Veuillez réessayer.');
+          return;
+        }
       }
 
       // Build final player list with re-ranking

@@ -1241,6 +1241,99 @@ router.post('/create', authenticateToken, async (req, res) => {
   }
 });
 
+// Save last-minute players as inscriptions (bulk create)
+router.post('/save-last-minute', authenticateToken, async (req, res) => {
+  if (req.user?.role !== 'admin') {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  const orgId = req.user.organizationId || null;
+  const { tournoi_id, players } = req.body;
+
+  if (!tournoi_id || !Array.isArray(players) || players.length === 0) {
+    return res.status(400).json({ error: 'tournoi_id and players array are required' });
+  }
+
+  try {
+    const savedPlayers = [];
+    const skippedPlayers = [];
+
+    for (const player of players) {
+      if (!player.licence) {
+        skippedPlayers.push({ player, reason: 'Missing licence' });
+        continue;
+      }
+
+      // Clean up licence (remove spaces)
+      const cleanLicence = (player.licence || '').replace(/\s+/g, '').trim();
+
+      // Check if inscription already exists
+      const existing = await new Promise((resolve, reject) => {
+        db.get(
+          `SELECT inscription_id FROM inscriptions
+           WHERE tournoi_id = $1
+           AND REPLACE(UPPER(licence), ' ', '') = REPLACE(UPPER($2), ' ', '')
+           AND ($3::int IS NULL OR organization_id = $3)`,
+          [tournoi_id, cleanLicence, orgId],
+          (err, row) => {
+            if (err) reject(err);
+            else resolve(row);
+          }
+        );
+      });
+
+      if (existing) {
+        skippedPlayers.push({ player, reason: 'Already registered' });
+        continue;
+      }
+
+      // Get the next inscription_id
+      const maxIdResult = await new Promise((resolve, reject) => {
+        db.get('SELECT MAX(inscription_id) as max_id FROM inscriptions WHERE ($1::int IS NULL OR organization_id = $1)', [orgId], (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        });
+      });
+
+      const nextId = (maxIdResult?.max_id || 0) + 1;
+
+      // Insert the new inscription
+      await new Promise((resolve, reject) => {
+        db.run(`
+          INSERT INTO inscriptions (inscription_id, tournoi_id, licence, email, timestamp, source, statut, organization_id)
+          VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, 'manual', 'inscrit', $5)
+        `, [nextId, tournoi_id, cleanLicence, player.email || null, orgId], function(err) {
+          if (err) reject(err);
+          else resolve({ id: nextId, changes: this.changes });
+        });
+      });
+
+      savedPlayers.push({ licence: cleanLicence, inscription_id: nextId });
+    }
+
+    // Log the action
+    logAdminAction({
+      req,
+      action: ACTION_TYPES.ADD_INSCRIPTION,
+      details: `${savedPlayers.length} inscription(s) last-minute ajoutées au tournoi ${tournoi_id}`,
+      targetType: 'inscription',
+      targetId: tournoi_id,
+      targetName: `Tournoi ${tournoi_id}`
+    });
+
+    res.json({
+      success: true,
+      message: `${savedPlayers.length} inscription(s) saved`,
+      savedPlayers,
+      skippedPlayers
+    });
+
+  } catch (error) {
+    console.error('Error saving last-minute players:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ==================== Excel Import for Inscriptions ====================
 
 /**
