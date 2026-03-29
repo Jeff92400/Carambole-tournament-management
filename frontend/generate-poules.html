@@ -2567,15 +2567,8 @@
               // Find inscriptions that are NOT in the qualified finalists list
               const rankedLicences = new Set(rankedPlayers.map(p => p.licence.replace(/\s/g, '')));
 
-              console.log('=== FINALE DEBUG ===');
-              console.log('Total inscriptions:', inscriptions.length);
-              console.log('Inscriptions:', inscriptions);
-              console.log('Ranked licences:', Array.from(rankedLicences));
-
-              const nonFinalists = inscriptions.filter(i => !rankedLicences.has(i.licence?.replace(/\s/g, '')) && i.forfait !== 1);
-              console.log('Non-finalist inscriptions:', nonFinalists);
-
-              newPlayers = nonFinalists
+              newPlayers = inscriptions
+                .filter(i => !rankedLicences.has(i.licence?.replace(/\s/g, '')) && i.forfait !== 1)
                 .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
                 .map((i, index) => ({
                   licence: i.licence,
@@ -2592,8 +2585,6 @@
                   inscription_id: i.inscription_id,
                   selected: true  // Auto-select last-minute players in finales
                 }));
-
-              console.log('newPlayers array:', newPlayers);
 
               // Mark finalists who have inscribed AND auto-select only INSCRIBED finalists
               rankedPlayers.forEach(p => {
