@@ -3018,6 +3018,7 @@
       const selectedLastMinute = lastMinutePlayers.filter(p => p.selected);
       if (selectedLastMinute.length > 0 && matchingTournoi?.tournoi_id) {
         try {
+          console.log('Saving last-minute players:', selectedLastMinute);
           const response = await fetch(`${API_URL}/inscriptions/save-last-minute`, {
             method: 'POST',
             headers: {
@@ -3038,9 +3039,43 @@
             return;
           }
 
-          console.log(`Saved ${result.savedPlayers.length} last-minute player(s) to inscriptions table`);
+          console.log(`✅ Saved ${result.savedPlayers.length} last-minute player(s) to inscriptions table`);
           if (result.skippedPlayers.length > 0) {
-            console.log(`Skipped ${result.skippedPlayers.length} player(s):`, result.skippedPlayers);
+            console.log(`⚠️ Skipped ${result.skippedPlayers.length} player(s):`, result.skippedPlayers);
+          }
+
+          // Reload inscriptions to include the newly saved last-minute players
+          const inscriptionsTournoiId = matchingTournoi._parentTournoiId || matchingTournoi.tournoi_id;
+          const inscriptionsResponse = await fetch(`${API_URL}/inscriptions/tournoi/${inscriptionsTournoiId}/inscriptions`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+
+          if (inscriptionsResponse.ok) {
+            const freshInscriptions = await inscriptionsResponse.json();
+            console.log(`✅ Reloaded ${freshInscriptions.length} inscriptions from database`);
+
+            // Merge the saved last-minute players into newPlayers so they appear in the list
+            const savedLicences = result.savedPlayers.map(p => p.licence.replace(/\s/g, ''));
+            const lastMinuteInscriptions = freshInscriptions.filter(i =>
+              savedLicences.includes(i.licence?.replace(/\s/g, ''))
+            );
+
+            lastMinuteInscriptions.forEach(insc => {
+              // Check if already in rankedPlayers or newPlayers
+              const alreadyExists = rankedPlayers.some(p => p.licence === insc.licence) ||
+                                    newPlayers.some(p => p.licence === insc.licence);
+
+              if (!alreadyExists) {
+                newPlayers.push({
+                  ...insc,
+                  isNew: false,
+                  isLastMinute: true,
+                  selected: true
+                });
+              }
+            });
+
+            console.log(`✅ Added ${lastMinuteInscriptions.length} last-minute players to selection list`);
           }
         } catch (error) {
           console.error('Error saving last-minute players:', error);
