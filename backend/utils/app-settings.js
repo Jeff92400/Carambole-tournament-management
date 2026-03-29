@@ -38,6 +38,7 @@ const defaults = {
 
   // Season settings
   season_start_month: '9', // September (1-12 format)
+  current_season_override: '', // Manual override for current season (e.g., "2026-2027")
 
   // Ranking settings
   qualification_threshold: '9',
@@ -220,9 +221,20 @@ async function getSeasonStartMonth() {
 /**
  * Calculate season string for a given date
  * @param {Date} date - Date to calculate season for (defaults to now)
+ * @param {number} orgId - Organization ID (for org-specific override)
  * @returns {Promise<string>} Season string in format "YYYY-YYYY" (e.g., "2025-2026")
  */
-async function getCurrentSeason(date = new Date()) {
+async function getCurrentSeason(date = new Date(), orgId = null) {
+  // Check for manual override first (org-aware)
+  const override = orgId
+    ? await getOrgSetting(orgId, 'current_season_override')
+    : await getSetting('current_season_override');
+
+  if (override && override.trim()) {
+    return override.trim();
+  }
+
+  // Auto-calculate based on date and season start month
   const startMonth = await getSeasonStartMonth();
   const month = date.getMonth() + 1; // Convert to 1-indexed
   const year = date.getFullYear();

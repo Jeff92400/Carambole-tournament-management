@@ -2055,6 +2055,55 @@ router.post('/enable-push-notifications', authenticateToken, requireAdmin, async
   }
 });
 
+// Get/set current season override (admin only)
+router.get('/current-season', authenticateToken, async (req, res) => {
+  try {
+    const orgId = req.user.organizationId || null;
+    const currentSeason = await appSettings.getCurrentSeason(new Date(), orgId);
+    const override = orgId
+      ? await appSettings.getOrgSetting(orgId, 'current_season_override')
+      : await appSettings.getSetting('current_season_override');
+
+    res.json({
+      currentSeason,
+      override: override || null,
+      isOverridden: !!(override && override.trim())
+    });
+  } catch (error) {
+    console.error('[SEASON] Error getting current season:', error);
+    res.status(500).json({ error: 'Erreur lors de la récupération de la saison' });
+  }
+});
+
+router.put('/current-season', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const orgId = req.user.organizationId || null;
+    const { override } = req.body;
+
+    // Validate format if provided (empty string clears the override)
+    if (override && override.trim()) {
+      const seasonPattern = /^\d{4}-\d{4}$/;
+      if (!seasonPattern.test(override.trim())) {
+        return res.status(400).json({ error: 'Format invalide (attendu: YYYY-YYYY, ex: 2026-2027)' });
+      }
+    }
+
+    await appSettings.setOrgSetting(orgId, 'current_season_override', override || '');
+    const newCurrent = await appSettings.getCurrentSeason(new Date(), orgId);
+
+    console.log(`[SEASON] Season override ${override ? 'set to ' + override : 'cleared'} for org ${orgId}`);
+
+    res.json({
+      success: true,
+      currentSeason: newCurrent,
+      override: override || null
+    });
+  } catch (error) {
+    console.error('[SEASON] Error setting season override:', error);
+    res.status(500).json({ error: 'Erreur lors de la mise à jour de la saison' });
+  }
+});
+
 module.exports = router;
 module.exports.getRankingTournamentNumbers = getRankingTournamentNumbers;
 module.exports.getFinaleTournamentNumber = getFinaleTournamentNumber;
