@@ -897,6 +897,105 @@ Once Kayros-branded domains are in place, consider renaming Railway projects for
 
 ## Future Work / Roadmap
 
+### 🎯 V3.0 Release — Off-Season 2026 (June-August)
+
+**All items in this roadmap will be bundled into the V3.0 release.** This major version bump reflects the accumulation of UX improvements, technical debt cleanup, and architectural enhancements implemented piece-by-piece throughout the 2025-2026 season.
+
+**Target:** Deploy V3.0 at the start of 2026-2027 season (September 2026)
+
+**Guiding Principle: Intuitivity First**
+
+Every change in V3.0 must improve the user experience by making the app more intuitive. This applies to:
+- **Settings pages** - Clear grouping, progressive disclosure, obvious action → consequence relationships
+- **Dashboard & navigation** - Easy access to frequent actions, reduced cognitive load
+- **Forms & wizards** - Step-by-step flows with clear progress indication
+- **Tables & lists** - Relevant default sorting, smart filtering, export options
+- **Error messages** - Actionable guidance instead of technical jargon
+- **Onboarding** - New admins can accomplish tasks without documentation or support
+
+**Design philosophy:** If a new admin (who didn't design the app with us) can't figure out what to do within 10 seconds of looking at a page, the UI needs improvement.
+
+---
+
+### 🎨 UI/UX Improvements (V3.0 Priority)
+
+- **Settings Page Reorganization (CRITICAL):** The settings-admin.html page has grown to 4500+ lines with 15+ accordion sections added piece-by-piece. Many sections are rarely used but take up space. The current structure is non-intuitive even for the app creator. **This is the #1 UX priority for V3.0.**
+
+  **Current problems:**
+  - No clear hierarchy (frequently used vs. rarely used settings)
+  - Related settings scattered across different sections
+  - Too many top-level sections create overwhelming choice
+  - No search or filter to find settings quickly
+  - Advanced/technical settings mixed with basic ones
+  - Some sections only needed during specific times (e.g., season transition)
+
+  **Proposed structure:**
+  1. **Essentiel (Always visible)**
+     - Organisation (name, logo, colors, contact info)
+     - Communication (email addresses, sender name)
+     - Paramètres de compétition (game parameters, qualification thresholds)
+
+  2. **Avancé (Collapsed by default)**
+     - Saison (season config, stats closure) — only needed June-August
+     - Emails (templates, WordPress connector)
+     - Import (calendar, color mappings)
+     - Scoring (barème, bonus rules)
+     - Délais (time thresholds)
+
+  3. **Rarement utilisé (Separate tab or page)**
+     - Technical settings (mode de jeu order, privacy policy)
+     - Hidden sections cleanup (IONOS mappings, club aliases)
+
+  **Additional improvements:**
+  - **Search bar** at top of settings page — type "email" → filter to email-related sections
+  - **Quick settings card** on dashboard — 3-4 most frequently edited settings with direct edit buttons
+  - **Usage tracking** — log which settings are accessed most → inform better grouping
+  - **Contextual help** — "?" icon next to each section with explanation and examples
+  - **Setting presets** — "Configuration recommandée pour petits comités" vs "Configuration recommandée pour grands comités"
+
+  **Files impacted:**
+  - `frontend/settings-admin.html` (4500+ lines → reorganize)
+  - `frontend/dashboard.html` (add quick settings card)
+  - `frontend/css/styles.css` (new collapsible group styles)
+  - Documentation updates in user guide
+
+  **Target:** Complete for V3.0 release (August 2026)
+
+- **Dashboard Improvements:**
+  - Quick actions bar with most frequent operations (create tournament, send convocation, view rankings)
+  - Customizable KPI widgets (see KPI Dashboard section below)
+  - Recent activity feed (last 10 actions taken by any admin)
+  - Smart alerts with action buttons (click "Fix" to go directly to the relevant page)
+
+- **Navigation & Menu Structure:**
+  - Reduce top-level menu items from current 10+ to 6-7 core sections
+  - Group related pages into submenus (e.g., "Compétitions" → Tournois, Résultats, Classements)
+  - Sticky "Create Tournament" FAB (floating action button) on key pages
+  - Breadcrumb navigation for multi-step processes
+
+- **Forms & Data Entry:**
+  - Replace raw text inputs with smart selectors (clubs, categories, players)
+  - Inline validation with helpful messages ("Ce club n'existe pas, voulez-vous le créer ?")
+  - Autosave drafts for long forms
+  - "Save & Continue" vs "Save & Exit" options
+
+- **Tables & Lists:**
+  - Sticky headers on scroll
+  - Column sorting saved per-user
+  - Quick filter pills (e.g., "Tournois à venir", "Inscriptions manquantes")
+  - Bulk actions (select multiple rows → send email, export, delete)
+
+- **Mobile Responsiveness:**
+  - Tournament Management app is currently desktop-first — improve mobile layout
+  - Touch-friendly controls (larger tap targets, swipe gestures)
+  - Mobile-optimized tables (collapsible rows, horizontal scroll)
+
+  **Timeline:** Incremental improvements throughout V3.0 development, with settings page as top priority.
+
+---
+
+### 🔧 Technical Debt & Refactoring (V3.0)
+
 - **CRITICAL - Mode/game_type refactoring:** Remove ALL hardcoded mode values ('LIBRE', 'BANDE', '3BANDES', 'CADRE') and replace with dynamic lookups from `game_modes` table. This is causing recurring bugs due to inconsistent values ('3 BANDES' vs '3BANDES'). Files with hardcoded modes:
   - `backend/routes/players.js` (lines 171-174, 322-325) - CSV column mappings
   - `backend/routes/inscriptions.js` (lines 2826-2833) - mode normalization map
