@@ -360,21 +360,17 @@ router.delete('/game-parameters/:id', authenticateToken, requireAdmin, (req, res
   );
 });
 
-// Fix game parameter mode values (admin only) - normalize to codes
+// Fix game parameter mode values (admin only) - match categories.game_type
 router.post('/game-parameters/fix-modes', authenticateToken, requireAdmin, (req, res) => {
   const db = getDb();
   const orgId = req.user.organizationId || null;
 
+  // Update game_parameters.mode to match categories.game_type exactly
   const updates = [
-    { from: 'Cadre 42/2', to: 'CADRE' },
-    { from: 'CADRE 42/2', to: 'CADRE' },
-    { from: 'cadre 42/2', to: 'CADRE' },
-    { from: '3 Bandes', to: '3 BANDES' },
-    { from: '3 bandes', to: '3 BANDES' },
-    { from: 'Bande', to: 'BANDE' },
-    { from: 'bande', to: 'BANDE' },
-    { from: 'Libre', to: 'LIBRE' },
-    { from: 'libre', to: 'LIBRE' }
+    { from: 'CADRE', to: 'Cadre 42/2' },
+    { from: 'CADRE 42/2', to: 'Cadre 42/2' },
+    { from: 'cadre 42/2', to: 'Cadre 42/2' },
+    { from: 'cadre', to: 'Cadre 42/2' }
   ];
 
   let completed = 0;
