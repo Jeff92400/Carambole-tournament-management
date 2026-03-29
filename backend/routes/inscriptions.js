@@ -1028,7 +1028,11 @@ router.get('/finales/upcoming', authenticateToken, async (req, res) => {
         // Get inscriptions for this tournament
         const inscriptions = await new Promise((resolve, reject) => {
           db.all(
-            `SELECT licence FROM inscriptions WHERE tournoi_id = $1 AND (forfait IS NULL OR forfait != 1) AND ($2::int IS NULL OR organization_id = $2)`,
+            `SELECT licence FROM inscriptions
+             WHERE tournoi_id = $1
+             AND (forfait IS NULL OR forfait != 1)
+             AND (statut IS NULL OR statut NOT IN ('désinscrit', 'indisponible'))
+             AND ($2::int IS NULL OR organization_id = $2)`,
             [final.tournoi_id, orgId],
             (err, rows) => {
               if (err) {
