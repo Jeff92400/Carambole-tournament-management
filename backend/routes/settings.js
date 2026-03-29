@@ -370,23 +370,23 @@ router.delete('/game-parameters/:id', authenticateToken, requireAdmin, (req, res
   );
 });
 
-// Fix game parameter organization_id (admin only) - set orgId for rows with NULL
-router.post('/game-parameters/fix-org', authenticateToken, requireAdmin, (req, res) => {
+// Fix CADRE mode to match categories table
+router.post('/game-parameters/fix-cadre', authenticateToken, requireAdmin, (req, res) => {
   const db = getDb();
-  const orgId = req.user.organizationId || 1;
+  const orgId = req.user.organizationId || null;
 
   db.run(
-    'UPDATE game_parameters SET organization_id = $1 WHERE organization_id IS NULL OR organization_id = 0',
+    "UPDATE game_parameters SET mode = 'Cadre 42/2' WHERE mode = 'CADRE' AND ($1::int IS NULL OR organization_id = $1)",
     [orgId],
     function(err) {
       if (err) {
-        console.error('Error updating organization_id:', err);
+        console.error('Error fixing CADRE mode:', err);
         return res.status(500).json({ error: err.message });
       }
-      console.log(`Updated ${this.changes} game_parameters rows with organization_id = ${orgId}`);
+      console.log(`Updated ${this.changes} CADRE rows to 'Cadre 42/2'`);
       res.json({
         success: true,
-        message: `Fixed ${this.changes} game parameter organization_id values`,
+        message: `Fixed ${this.changes} CADRE parameters`,
         updated: this.changes
       });
     }
