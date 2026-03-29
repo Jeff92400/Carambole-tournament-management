@@ -771,6 +771,18 @@ router.get('/eligibility', authenticateToken, async (req, res) => {
       }
 
       console.log('[Eligibility] Rows returned:', rows ? rows.length : 0);
+      if (rows && rows.length > 0) {
+        // Debug: show first row with Cadre
+        const cadreRow = rows.find(r => r.mode && r.mode.toLowerCase().includes('cadre'));
+        if (cadreRow) {
+          console.log('[Eligibility] Sample Cadre row:', {
+            mode: cadreRow.mode,
+            categorie: cadreRow.categorie,
+            moyenne_mini: cadreRow.moyenne_mini,
+            moyenne_maxi: cadreRow.moyenne_maxi
+          });
+        }
+      }
 
       // Enrich with eligibility status
       const enriched = rows.map(row => {
