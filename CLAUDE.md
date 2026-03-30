@@ -1269,6 +1269,27 @@ Every change in V3.0 must improve the user experience by making the app more int
   - ✅ `GUIDE-UTILISATEUR-COMPLET.md` - Added update note
   - ✅ This file (CLAUDE.md) - Phase 1 status documentation
 
+  ### ✅ PHASE 2 — High-Priority Notifications (COMPLETED — March 2026)
+  **Status: 2/2 notification triggers implemented (already deployed before Phase B+C)**
+
+  #### Tournament Management App
+  - ✅ **CONVOCATION** (`backend/routes/email.js:1554-1561`)
+    - Triggers when admin sends convocations from generate-poules.html
+    - Sends to each convoked player
+    - Includes tournament name, date, time, location, and poule number
+    - Fire-and-forget pattern (non-blocking)
+    - Variables: `tournoiName`, `date`, `heure`, `lieu`, `pouleNumber`
+
+  - ✅ **RESULTS_NORMAL / RESULTS_FINALE** (`backend/routes/tournaments.js:880-895`)
+    - Triggers after CSV import of tournament results
+    - Automatically detects if tournament is a finale using `getResultsNotificationType()`
+    - Sends to all participants with their individual position
+    - Fire-and-forget pattern (non-blocking)
+    - Variables: `tournoiName`, `position`
+
+  #### Implementation Note
+  Phase 2 was implemented before Phase B+C but not documented separately. These triggers have been working in production since the initial push notification rollout in March 2026.
+
   ### ✅ PHASE B+C — Tournament Events & Finale Qualification (COMPLETED — March 30, 2026)
   **Status: 5/5 notification triggers implemented**
 
@@ -1332,9 +1353,9 @@ Every change in V3.0 must improve the user experience by making the app more int
 
   | Priority | Notification Type | Status | When Triggered | Content |
   |----------|------------------|--------|----------------|---------|
-  | **HIGH** | Convocation | ⏸️ Pending | Admin sends from `generate-poules.html` | "Vous avez été convoqué pour [Mode] [Catégorie] du [Date]" → Link to tournament details |
+  | **HIGH** | Convocation | ✅ Done | Admin sends from `generate-poules.html` | "Vous avez été convoqué pour [Mode] [Catégorie] du [Date]" → Link to tournament details |
   | **HIGH** | Relance | ⏸️ Pending | Player hasn't registered, deadline approaching | "Rappel : inscrivez-vous avant le [Date] pour [Mode] [Catégorie]" → Link to registration |
-  | **HIGH** | Results Published | ⏸️ Pending | Admin publishes results | "Les résultats du tournoi [Mode] [Catégorie] sont disponibles" → Link to results |
+  | **HIGH** | Results Published | ✅ Done | Admin imports tournament results | "Les résultats du tournoi [Mode] [Catégorie] sont disponibles" → Link to results |
   | **MEDIUM** | Announcements (Urgent) | ✅ Done | Admin creates urgent announcement | Announcement title + message → Link to home |
   | **MEDIUM** | Finale Qualification | ✅ Done | Player qualifies after T3 | "Félicitations ! Vous êtes qualifié pour la Finale [Mode] [Catégorie]" → Link to rankings |
   | **LOW** | Rankings Updated | ⏸️ Pending | After tournament results | "Les classements de la saison [2024-2025] ont été mis à jour" → Link to rankings |
@@ -1349,7 +1370,8 @@ Every change in V3.0 must improve the user experience by making the app more int
 
   **Implementation Status:**
   - ✅ Phase 1 (Complete): Urgent announcements, inscription confirmed, forfeit, welcome, WordPress articles
-  - ⏸️ Phase 2 (Pending): Convocation, relance, results published
+  - ✅ Phase 2 (Complete): Convocation, results published (already deployed)
+  - ⏸️ Reminder emails (REMINDER_LAST_DAY) (Pending)
   - ✅ Phase B+C (Complete): Tournament events (new, date/location changes, cancellation) + finale qualification
 
 - **Player historical analytics (multi-season stats):** All tournament data (`tournament_results`, `rankings`) is retained permanently across seasons and scoped by `organization_id`. Season averages are computed on-the-fly (`SUM(points)/SUM(reprises)` from `tournament_results`) — not stored as a snapshot. This means we can build rich player analytics over time:
