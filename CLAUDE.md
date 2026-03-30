@@ -20,6 +20,48 @@ This registration information is displayed on both login screens:
 - Tournament Management App: `frontend/login.html` (line 42-44)
 - Player App: `frontend/index.html` (line 489-490)
 
+## Documentation OneDrive
+
+**Localisation:** `/Users/jeffrallet/Library/CloudStorage/OneDrive-Personal/Billard/Projet Tournois management FFB/Documentations CDB/`
+
+**Structure organisée (30 mars 2026):**
+```
+/Documentations CDB/
+├── CLAUDE.md (source de vérité - synchronisé depuis ce fichier)
+├── CLAUDE-Player-App.md (synchronisé depuis Player App repo)
+├── README.md (guide d'utilisation de la documentation)
+├── INDEX.md
+├── sync-from-repos.sh (script de synchronisation automatique)
+├── REORGANISATION-PROPOSITION.md (historique de la réorganisation)
+│
+├── 📂 Sources Github/
+│   ├── Carambole-player-app-main.zip (archive dépôt APP officiel)
+│   ├── Dowload Gitlab.zip (archive dépôt APP officiel)
+│   └── README.md (explication des archives)
+│
+├── 📂 Guides-Utilisateur/
+│   ├── GUIDE-UTILISATEUR-COMPLET.html (guide actuel)
+│   ├── GUIDE-UTILISATEUR-COMPLET.md
+│   └── Guides d'installation (comité, joueur)
+│
+├── 📂 Guides-Technique/
+│   ├── CSV_FORMAT_GUIDE.md
+│   ├── Schema-Base-Donnees.sql
+│   └── Références techniques
+│
+└── 📂 Planification/
+    ├── Taches-Avant-Saison-2026-27.html (TODO list)
+    └── Mode "Journées Qualificatives" V7.html
+```
+
+**Principe:** 1 fichier = 1 source de vérité (aucune duplication)
+
+**Synchronisation:**
+```bash
+cd "/Users/jeffrallet/Library/CloudStorage/OneDrive-Personal/Billard/Projet Tournois management FFB/Documentations CDB"
+./sync-from-repos.sh
+```
+
 ## Deployment Workflow
 
 ### Environment
