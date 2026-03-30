@@ -1239,6 +1239,30 @@ router.post('/publish-results', authenticateToken, async (req, res) => {
       targetName: title
     });
 
+    // Automatically send push notification to participants (fire-and-forget)
+    if (!isTest) {
+      const { buildNotification } = require('../notification-messages');
+      const { sendPushToPlayers } = require('./push');
+
+      // Send notification asynchronously (don't wait for it)
+      (async () => {
+        try {
+          const notification = buildNotification('ARTICLE_PUBLISHED', {
+            tournoiName: `${tournament.display_name} ${tournamentLabel}`,
+            articleUrl: postUrl
+          });
+
+          const participantLicences = results.map(r => r.licence);
+          const pushResult = await sendPushToPlayers(participantLicences, orgId, notification);
+
+          console.log(`[WP ARTICLE] Auto-sent notification to ${pushResult.total_sent} player(s) for tournament ${tournamentId}`);
+        } catch (pushError) {
+          console.error('[WP ARTICLE] Failed to send auto push notification:', pushError.message);
+          // Don't fail the WordPress publication if push fails
+        }
+      })();
+    }
+
     res.json({
       success: true,
       isUpdate,
