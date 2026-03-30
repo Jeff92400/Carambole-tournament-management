@@ -2297,3 +2297,16 @@ Document de référence pour l'Application de Gestion des Tournois -- Version
 
 JR (C)
 
+
+---
+
+## MISE À JOUR - Mars 2026 : Notifications Push
+
+### Nouvelles fonctionnalités documentées dans le guide HTML
+
+- **Notifications push automatiques** : 5 types de notifications automatiques (annonce urgente, inscription confirmée, forfait, bienvenue, article WordPress)
+- **URL personnalisée** : Possibilité d'envoyer des notifications avec des liens externes
+- **Liste des abonnés** : Clic sur le pourcentage pour voir la liste détaillée des joueurs abonnés
+- **Article WordPress** : Notification automatique lors de la publication d'articles de résultats
+
+**Note :** Pour la version complète et à jour de la documentation, consultez le fichier HTML `frontend/guide-utilisateur.html` ou `GUIDE-UTILISATEUR-COMPLET.html`.

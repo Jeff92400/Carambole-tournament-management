@@ -1218,7 +1218,58 @@ Every change in V3.0 must improve the user experience by making the app more int
   - Commits: `acc35c5`, `10e48f2`, `948d37c`
   - Status: ✅ Deployed and working
 
-  ### 📋 NOTIFICATION TYPES (planned)
+  ### ✅ PHASE 1 — Notification Triggers (COMPLETED — March 30, 2026)
+  **Status: 4/4 automatic notification triggers implemented and deployed**
+
+  #### Tournament Management App
+  - ✅ **URGENT_ANNOUNCEMENT** (`backend/routes/announcements.js:343-386`)
+    - Triggers when `announcementType === 'urgent'`
+    - Sends to all active players (excludes test accounts)
+    - Fire-and-forget pattern (non-blocking)
+    - Commit: `634f6a0`
+
+  #### Player App (cdbhs-player-app)
+  - ✅ **INSCRIPTION_CONFIRMED** (`backend/routes/player-api.js:2204-2214`)
+    - Triggers after successful tournament registration
+    - Includes tournament name and date
+    - Already implemented in Player App
+
+  - ✅ **FORFEIT_CONFIRMED** (`backend/routes/player-api.js:2005-2014`)
+    - Triggers when player declares forfait
+    - Sends confirmation with tournament info
+    - Already implemented in Player App
+
+  - ✅ **WELCOME** (`backend/routes/player-auth.js:391-398`)
+    - Triggers on account creation
+    - Welcomes player to the Espace Joueur
+    - Already implemented in Player App
+
+  #### Additional Features Deployed
+  - ✅ **WordPress article notifications** (March 22, 2026)
+    - Automatic push when publishing results articles
+    - Manual "📲 Notifier" button for existing articles
+    - Custom URL support in notification composer
+    - Commit: `16f13cd`, `80511cc`
+
+  - ✅ **Subscribed players list** (March 22, 2026)
+    - Clickable subscription percentage badge
+    - Modal showing player details (name, licence, club, device count)
+    - Endpoint: `GET /api/push/subscribed-players`
+    - Commit: `33dd881`
+
+  - ✅ **Notification history with delete** (March 22, 2026)
+    - Admin can delete notifications from history
+    - Desktop: delete button, Mobile: swipe-to-delete
+    - Player App: Bell icon notification center with swipe-to-delete
+    - Full hash URLs for proper in-app navigation
+
+  #### Documentation Updated (March 30, 2026)
+  - ✅ `frontend/guide-utilisateur.html` - Added automatic notifications section, custom URL, subscribed players list
+  - ✅ `GUIDE-UTILISATEUR-COMPLET.html` - Synced from frontend
+  - ✅ `GUIDE-UTILISATEUR-COMPLET.md` - Added update note
+  - ✅ This file (CLAUDE.md) - Phase 1 status documentation
+
+  ### 📋 NOTIFICATION TYPES (implementation status)
 
   **Permission Flow:**
   - Two permission layers: Browser native permission + App-level toggle
@@ -1230,21 +1281,24 @@ Every change in V3.0 must improve the user experience by making the app more int
 
   **Notification List by Priority:**
 
-  | Priority | Notification Type | When Triggered | Content |
-  |----------|------------------|----------------|---------|
-  | **HIGH** | Convocation | Admin sends from `generate-poules.html` | "Vous avez été convoqué pour [Mode] [Catégorie] du [Date]" → Link to tournament details |
-  | **HIGH** | Relance | Player hasn't registered, deadline approaching | "Rappel : inscrivez-vous avant le [Date] pour [Mode] [Catégorie]" → Link to registration |
-  | **HIGH** | Results Published | Admin publishes results | "Les résultats du tournoi [Mode] [Catégorie] sont disponibles" → Link to results |
-  | **MEDIUM** | Announcements | Admin creates announcement | Announcement title + message → Link to announcements |
-  | **MEDIUM** | Finale Qualification | Player qualifies after T3 | "Félicitations ! Vous êtes qualifié pour la Finale [Mode] [Catégorie]" → Link to rankings |
-  | **LOW** | Rankings Updated | After tournament results | "Les classements de la saison [2024-2025] ont été mis à jour" → Link to rankings |
-  | **LOW** | Registration Confirmation | Player registers via app | "Inscription confirmée pour [Mode] [Catégorie] du [Date]" → Link to registrations |
-  | **LOW** | Tournament Changes | Tournament cancelled/rescheduled | "Modification : Le tournoi [Mode] [Catégorie] est [annulé/reporté]" → Link to calendar |
+  | Priority | Notification Type | Status | When Triggered | Content |
+  |----------|------------------|--------|----------------|---------|
+  | **HIGH** | Convocation | ⏸️ Pending | Admin sends from `generate-poules.html` | "Vous avez été convoqué pour [Mode] [Catégorie] du [Date]" → Link to tournament details |
+  | **HIGH** | Relance | ⏸️ Pending | Player hasn't registered, deadline approaching | "Rappel : inscrivez-vous avant le [Date] pour [Mode] [Catégorie]" → Link to registration |
+  | **HIGH** | Results Published | ⏸️ Pending | Admin publishes results | "Les résultats du tournoi [Mode] [Catégorie] sont disponibles" → Link to results |
+  | **MEDIUM** | Announcements (Urgent) | ✅ Done | Admin creates urgent announcement | Announcement title + message → Link to home |
+  | **MEDIUM** | Finale Qualification | ⏸️ Pending | Player qualifies after T3 | "Félicitations ! Vous êtes qualifié pour la Finale [Mode] [Catégorie]" → Link to rankings |
+  | **LOW** | Rankings Updated | ⏸️ Pending | After tournament results | "Les classements de la saison [2024-2025] ont été mis à jour" → Link to rankings |
+  | **LOW** | Registration Confirmation | ✅ Done | Player registers via app | "Inscription confirmée pour [Mode] [Catégorie] du [Date]" → Link to registrations |
+  | **LOW** | Forfeit Confirmed | ✅ Done | Player declares forfait | "Votre forfait a été enregistré" → Link to registrations |
+  | **LOW** | Welcome | ✅ Done | Player creates account | "Bienvenue sur l'Espace Joueur" → Link to tournaments |
+  | **LOW** | WordPress Article | ✅ Done | Results article published | "Les résultats sont disponibles sur le site" → External URL |
+  | **LOW** | Tournament Changes | ⏸️ Pending | Tournament cancelled/rescheduled | "Modification : Le tournoi [Mode] [Catégorie] est [annulé/reporté]" → Link to calendar |
 
-  **Implementation Priority:**
-  - Phase 5: Convocation, Relance, Results (high-frequency, high-value)
-  - Phase 6: Announcements, Finale Qualification (medium)
-  - Phase 7: Rankings, Registration Confirmation, Tournament Changes (low)
+  **Implementation Status:**
+  - ✅ Phase 1 (Complete): Urgent announcements, inscription confirmed, forfeit, welcome, WordPress articles
+  - ⏸️ Phase 2 (Pending): Convocation, relance, results published
+  - ⏸️ Phase 3 (Pending): Finale qualification, rankings updated, tournament changes
 
 - **Player historical analytics (multi-season stats):** All tournament data (`tournament_results`, `rankings`) is retained permanently across seasons and scoped by `organization_id`. Season averages are computed on-the-fly (`SUM(points)/SUM(reprises)` from `tournament_results`) — not stored as a snapshot. This means we can build rich player analytics over time:
   - Average (moyenne) progression per mode across seasons

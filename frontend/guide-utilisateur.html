@@ -1626,9 +1626,14 @@
           <li>📅 Compétitions CDB</li>
           <li>👤 Profil & FAQ</li>
           <li>✉️ Contact</li>
+          <li>🔗 URL personnalisée (ex: lien vers un article WordPress)</li>
         </ul>
       </li>
     </ul>
+
+    <div class="info-card">
+      <strong>🔗 URL personnalisée :</strong> Permet de diriger les joueurs vers n'importe quel lien externe (ex: article du site web, page d'inscription externe, formulaire en ligne). Saisissez l'URL complète commençant par <code>https://</code>
+    </div>
 
     <p><strong>Étape 3 : Prévisualiser et envoyer</strong></p>
     <ul>
@@ -1642,7 +1647,12 @@
     <ul>
       <li><strong>Exemple :</strong> "12 / 58 abonnés (21%)"</li>
       <li>Seuls les joueurs ayant autorisé les notifications dans l'Espace Joueur recevront les notifications</li>
+      <li><strong>Liste détaillée :</strong> Cliquez sur le pourcentage pour afficher la liste complète des joueurs abonnés avec leur nom, licence, club et nombre d'appareils enregistrés</li>
     </ul>
+
+    <div class="info-card">
+      <strong>📱 Plusieurs appareils :</strong> Un joueur peut recevoir les notifications sur plusieurs appareils (smartphone personnel, tablette, etc.). Le compteur d'appareils indique le nombre d'inscriptions actives par joueur.
+    </div>
 
     <h4>Historique des notifications envoyées</h4>
     <p>Le tableau d'historique affiche toutes les notifications envoyées avec :</p>
@@ -1700,11 +1710,15 @@
       <li><strong>Message</strong> : Contenu de l'annonce</li>
       <li><strong>Type</strong> :
         <span class="badge badge-blue">INFO</span> Information générale,
-        <span class="badge badge-red">ALERTE</span> Message important,
+        <span class="badge badge-red">ALERTE</span> Message important (déclenche une notification push automatique),
         <span class="badge badge-green">RESULTATS</span> Résultats de compétition,
         <span class="badge badge-yellow">PERSO</span> Message personnel ciblé
       </li>
     </ul>
+
+    <div class="info-card accent">
+      <strong>📲 Notification push automatique :</strong> Lorsque vous créez une annonce de type <span class="badge badge-red">ALERTE</span> (urgente), une notification push est automatiquement envoyée à tous les joueurs ayant activé les notifications dans l'Espace Joueur. Cela garantit que les messages importants sont reçus instantanément, en complément de l'affichage dans l'application.
+    </div>
 
     <p><strong>Options avancées :</strong></p>
     <ul>
@@ -1900,6 +1914,52 @@
 
     <div class="info-card">
       <strong>💡 Bon à savoir :</strong> La suppression de l'historique n'affecte pas les notifications déjà reçues par les joueurs. Elle permet uniquement de nettoyer l'interface administrateur (par exemple, pour supprimer les notifications de test).
+    </div>
+
+    <h3>Notifications automatiques</h3>
+    <p>Certaines actions dans l'application déclenchent automatiquement l'envoi de notifications push aux joueurs concernés, sans intervention manuelle de votre part. Ces notifications sont envoyées instantanément et apparaissent également dans l'historique.</p>
+
+    <h4>Types de notifications automatiques</h4>
+
+    <table>
+      <thead>
+        <tr><th>Déclencheur</th><th>Destinataires</th><th>Contenu</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Annonce urgente</strong></td>
+          <td>Tous les joueurs actifs (ou joueur ciblé si annonce personnelle)</td>
+          <td>Titre et message de l'annonce (150 premiers caractères)</td>
+        </tr>
+        <tr>
+          <td><strong>Inscription confirmée</strong></td>
+          <td>Le joueur qui vient de s'inscrire (depuis l'Espace Joueur)</td>
+          <td>"✅ Inscription enregistrée — Vous êtes inscrit(e) au [Tournoi] le [Date]"</td>
+        </tr>
+        <tr>
+          <td><strong>Forfait enregistré</strong></td>
+          <td>Le joueur qui a déclaré forfait (depuis l'Espace Joueur)</td>
+          <td>"⚠️ Forfait enregistré — Votre forfait pour le [Tournoi] a été pris en compte"</td>
+        </tr>
+        <tr>
+          <td><strong>Compte créé</strong></td>
+          <td>Le nouveau joueur qui crée son compte Espace Joueur</td>
+          <td>"🎉 Bienvenue sur l'Espace Joueur — Découvrez les compétitions disponibles"</td>
+        </tr>
+        <tr>
+          <td><strong>Article WordPress publié</strong></td>
+          <td>Tous les participants du tournoi (convocations ou résultats)</td>
+          <td>"📰 Article publié — Les résultats du [Tournoi] sont disponibles sur le site"</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="info-card accent">
+      <strong>💡 Avantage :</strong> Ces notifications automatiques améliorent l'expérience joueur en les tenant informés en temps réel, sans effort supplémentaire de votre part. Elles complètent les emails envoyés et garantissent que les joueurs reçoivent l'information instantanément.
+    </div>
+
+    <div class="warning-card">
+      <strong>⚠️ Important :</strong> Les notifications automatiques ne sont envoyées qu'aux joueurs ayant activé les notifications push dans l'Espace Joueur. Les joueurs qui n'ont pas activé les notifications continueront à recevoir uniquement les emails classiques.
     </div>
 
     <h3>Côté joueur : Réception des notifications</h3>
