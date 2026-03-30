@@ -632,6 +632,57 @@
           </table>
         </div>
       </div>
+
+      <!-- Modal: Subscribed Players List -->
+      <div id="subscribedPlayersModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 10000; padding: 20px; overflow-y: auto;">
+        <div style="max-width: 800px; margin: 40px auto; background: white; border-radius: 12px; box-shadow: 0 10px 40px rgba(0,0,0,0.3);">
+          <!-- Header -->
+          <div style="padding: 20px 25px; border-bottom: 1px solid #e0e0e0; display: flex; justify-content: space-between; align-items: center;">
+            <h3 style="margin: 0; color: #1F4788;">📲 Joueurs avec notifications actives</h3>
+            <button onclick="closeSubscribedPlayersModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #999; line-height: 1;">&times;</button>
+          </div>
+
+          <!-- Loading state -->
+          <div id="subscribedPlayersLoading" style="padding: 60px 20px; text-align: center; color: #666;">
+            <div style="font-size: 40px; margin-bottom: 10px;">⏳</div>
+            Chargement...
+          </div>
+
+          <!-- Content -->
+          <div id="subscribedPlayersContent" style="display: none;">
+            <!-- Summary -->
+            <div id="subscribedPlayersSummary" style="padding: 20px 25px; background: #f8f9fa; border-bottom: 1px solid #e0e0e0;"></div>
+
+            <!-- Table -->
+            <div style="max-height: 500px; overflow-y: auto;">
+              <table style="width: 100%; border-collapse: collapse;">
+                <thead style="position: sticky; top: 0; background: white; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                  <tr style="border-bottom: 2px solid #ddd;">
+                    <th style="padding: 12px 25px; text-align: left; font-size: 13px; color: #666; font-weight: 600;">Nom</th>
+                    <th style="padding: 12px; text-align: left; font-size: 13px; color: #666; font-weight: 600;">Licence</th>
+                    <th style="padding: 12px; text-align: left; font-size: 13px; color: #666; font-weight: 600;">Club</th>
+                    <th style="padding: 12px; text-align: center; font-size: 13px; color: #666; font-weight: 600;">Appareils</th>
+                  </tr>
+                </thead>
+                <tbody id="subscribedPlayersTableBody">
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Empty state -->
+            <div id="subscribedPlayersEmpty" style="display: none; padding: 60px 20px; text-align: center; color: #999;">
+              <div style="font-size: 40px; margin-bottom: 10px;">📭</div>
+              <p style="margin: 0; font-size: 16px;">Aucun joueur n'a activé les notifications</p>
+              <p style="margin: 10px 0 0 0; font-size: 13px; color: #bbb;">Les joueurs doivent cliquer sur 🔔 dans l'Espace Joueur</p>
+            </div>
+          </div>
+
+          <!-- Footer -->
+          <div style="padding: 15px 25px; border-top: 1px solid #e0e0e0; text-align: right;">
+            <button onclick="closeSubscribedPlayersModal()" class="btn" style="background: #6c757d; padding: 10px 20px;">Fermer</button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- TAB: Announcements -->
@@ -8817,7 +8868,7 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
         }
 
         statusDiv.innerHTML = `
-          <div style="font-size: 13px; font-weight: 500; color: ${statusColor};">
+          <div onclick="showSubscribedPlayersList()" style="font-size: 13px; font-weight: 500; color: ${statusColor}; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.opacity='0.7'" onmouseout="this.style.opacity='1'">
             ${icon} ${subscribed_players} / ${total_players} abonné(s) (${subscription_rate}%)
           </div>
           <div style="font-size: 11px; color: #999; margin-top: 2px;">
@@ -8834,6 +8885,93 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
         `;
       }
     }
+
+    // Show subscribed players modal
+    async function showSubscribedPlayersList() {
+      const modal = document.getElementById('subscribedPlayersModal');
+      const loading = document.getElementById('subscribedPlayersLoading');
+      const content = document.getElementById('subscribedPlayersContent');
+      const summary = document.getElementById('subscribedPlayersSummary');
+      const tbody = document.getElementById('subscribedPlayersTableBody');
+      const empty = document.getElementById('subscribedPlayersEmpty');
+
+      // Show modal
+      modal.style.display = 'block';
+      loading.style.display = 'block';
+      content.style.display = 'none';
+
+      try {
+        const response = await authFetch(`${API_URL}/push/subscribed-players`);
+        const data = await response.json();
+
+        loading.style.display = 'none';
+        content.style.display = 'block';
+
+        if (data.count === 0) {
+          empty.style.display = 'block';
+          summary.innerHTML = `<p style="margin: 0; color: #999;">Aucun joueur n'a activé les notifications push pour le moment.</p>`;
+          tbody.innerHTML = '';
+          return;
+        }
+
+        empty.style.display = 'none';
+
+        // Summary
+        summary.innerHTML = `
+          <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
+            <div>
+              <div style="font-size: 24px; font-weight: bold; color: #28a745;">${data.count}</div>
+              <div style="font-size: 13px; color: #666;">joueur(s) abonné(s)</div>
+            </div>
+            <div style="flex: 1; min-width: 200px;">
+              <p style="margin: 0; font-size: 13px; color: #555;">
+                Ces joueurs recevront les notifications push sur leur(s) appareil(s).
+              </p>
+            </div>
+          </div>
+        `;
+
+        // Table rows
+        tbody.innerHTML = data.players.map(player => {
+          const name = `${player.first_name || ''} ${player.last_name || ''}`.trim() || 'N/A';
+          const club = player.club || '-';
+          const devices = player.subscription_count || 0;
+
+          return `
+            <tr style="border-bottom: 1px solid #f0f0f0;">
+              <td style="padding: 12px 25px; font-weight: 500;">${name}</td>
+              <td style="padding: 12px; color: #666; font-family: monospace; font-size: 13px;">${player.licence}</td>
+              <td style="padding: 12px; color: #666; font-size: 13px;">${club}</td>
+              <td style="padding: 12px; text-align: center;">
+                <span style="background: #e8f5e9; color: #2e7d32; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: 600;">
+                  ${devices} ${devices > 1 ? 'appareils' : 'appareil'}
+                </span>
+              </td>
+            </tr>
+          `;
+        }).join('');
+
+      } catch (error) {
+        console.error('Failed to load subscribed players:', error);
+        loading.style.display = 'none';
+        content.style.display = 'block';
+        summary.innerHTML = `<p style="margin: 0; color: #dc3545;">❌ Erreur lors du chargement de la liste</p>`;
+        tbody.innerHTML = '';
+      }
+    }
+
+    // Close subscribed players modal
+    function closeSubscribedPlayersModal() {
+      document.getElementById('subscribedPlayersModal').style.display = 'none';
+    }
+
+    // Close modal when clicking outside
+    document.addEventListener('click', function(e) {
+      const modal = document.getElementById('subscribedPlayersModal');
+      if (e.target === modal) {
+        closeSubscribedPlayersModal();
+      }
+    });
 
     // Load notification history
     async function loadNotificationHistory() {

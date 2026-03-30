@@ -883,6 +883,51 @@ router.get('/subscription-status', async (req, res) => {
 });
 
 /**
+ * GET /api/push/subscribed-players
+ * Get list of players with active push subscriptions
+ * Returns: array of { licence, first_name, last_name, subscription_count }
+ */
+router.get('/subscribed-players', async (req, res) => {
+  try {
+    const orgId = req.user?.organizationId || 1;
+
+    // Get list of players with active push subscriptions
+    const subscribedPlayers = await new Promise((resolve, reject) => {
+      db.all(
+        `SELECT
+          pa.licence,
+          p.first_name,
+          p.last_name,
+          p.club,
+          COUNT(ps.id) as subscription_count,
+          MAX(ps.last_used_at) as last_notification_at
+         FROM player_accounts pa
+         INNER JOIN push_subscriptions ps ON ps.player_account_id = pa.id
+         LEFT JOIN players p ON REPLACE(pa.licence, ' ', '') = REPLACE(p.licence, ' ', '')
+         WHERE ($1::int IS NULL OR pa.organization_id = $1)
+           AND pa.push_enabled = true
+         GROUP BY pa.licence, p.first_name, p.last_name, p.club
+         ORDER BY p.last_name ASC, p.first_name ASC`,
+        [orgId],
+        (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows || []);
+        }
+      );
+    });
+
+    res.json({
+      count: subscribedPlayers.length,
+      players: subscribedPlayers
+    });
+
+  } catch (error) {
+    console.error('[Push Subscribed Players] Error:', error);
+    res.status(500).json({ error: 'Erreur lors de la récupération de la liste' });
+  }
+});
+
+/**
  * GET /api/push/history
  * Get notification history for admin view (Tournament Management app)
  */
