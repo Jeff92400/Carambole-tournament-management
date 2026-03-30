@@ -1290,6 +1290,31 @@ Every change in V3.0 must improve the user experience by making the app more int
   #### Implementation Note
   Phase 2 was implemented before Phase B+C but not documented separately. These triggers have been working in production since the initial push notification rollout in March 2026.
 
+  ### ✅ PHASE 3 — Automatic Reminder Notifications (COMPLETED — March 30, 2026)
+  **Status: 1/1 automatic notification scheduler implemented**
+
+  #### Scheduled Daily Check (server.js)
+  - ✅ **REMINDER_LAST_DAY** (`backend/server.js:1336-1451`)
+    - Runs automatically every day at 9 AM Paris time
+    - Checks for tournaments with registration deadline (`fin`) = tomorrow
+    - Finds players who haven't registered yet (excludes forfait and désinscrit)
+    - Sends push notification to unregistered players only
+    - Organization-scoped with test account exclusion
+    - Variables: `tournoiName`, `closingDate`
+
+  #### Technical Implementation
+  - **Scheduler**: `setInterval` checks every hour, executes only at 9 AM Paris time
+  - **Query pattern**: `WHERE DATE(fin) = tomorrow AND status = 'active'`
+  - **Player filtering**: All active players MINUS registered players = unregistered players
+  - **Fire-and-forget**: Non-blocking async pattern, errors logged without breaking scheduler
+  - **Startup check**: Runs 90 seconds after server startup for testing
+  - **Logs**: `[Automatic Reminders]` prefix for easy monitoring
+
+  #### Why Daily at 9 AM?
+  - Gives players the full day to register before deadline
+  - Avoids late-night notifications
+  - Paris timezone ensures consistent timing across deployments
+
   ### ✅ PHASE B+C — Tournament Events & Finale Qualification (COMPLETED — March 30, 2026)
   **Status: 5/5 notification triggers implemented**
 
@@ -1354,7 +1379,7 @@ Every change in V3.0 must improve the user experience by making the app more int
   | Priority | Notification Type | Status | When Triggered | Content |
   |----------|------------------|--------|----------------|---------|
   | **HIGH** | Convocation | ✅ Done | Admin sends from `generate-poules.html` | "Vous avez été convoqué pour [Mode] [Catégorie] du [Date]" → Link to tournament details |
-  | **HIGH** | Relance | ⏸️ Pending | Player hasn't registered, deadline approaching | "Rappel : inscrivez-vous avant le [Date] pour [Mode] [Catégorie]" → Link to registration |
+  | **HIGH** | Reminder Last Day | ✅ Done | Automatic daily check for deadline tomorrow | "Les inscriptions pour le [Tournoi] ferment demain. Inscrivez-vous vite !" → Link to registration |
   | **HIGH** | Results Published | ✅ Done | Admin imports tournament results | "Les résultats du tournoi [Mode] [Catégorie] sont disponibles" → Link to results |
   | **MEDIUM** | Announcements (Urgent) | ✅ Done | Admin creates urgent announcement | Announcement title + message → Link to home |
   | **MEDIUM** | Finale Qualification | ✅ Done | Player qualifies after T3 | "Félicitations ! Vous êtes qualifié pour la Finale [Mode] [Catégorie]" → Link to rankings |
@@ -1371,8 +1396,9 @@ Every change in V3.0 must improve the user experience by making the app more int
   **Implementation Status:**
   - ✅ Phase 1 (Complete): Urgent announcements, inscription confirmed, forfeit, welcome, WordPress articles
   - ✅ Phase 2 (Complete): Convocation, results published (already deployed)
-  - ⏸️ Reminder emails (REMINDER_LAST_DAY) (Pending)
+  - ✅ Phase 3 (Complete): Automatic reminder notifications (REMINDER_LAST_DAY)
   - ✅ Phase B+C (Complete): Tournament events (new, date/location changes, cancellation) + finale qualification
+  - ⏸️ Rankings Updated (Optional - considered redundant with RESULTS notifications)
 
 - **Player historical analytics (multi-season stats):** All tournament data (`tournament_results`, `rankings`) is retained permanently across seasons and scoped by `organization_id`. Season averages are computed on-the-fly (`SUM(points)/SUM(reprises)` from `tournament_results`) — not stored as a snapshot. This means we can build rich player analytics over time:
   - Average (moyenne) progression per mode across seasons

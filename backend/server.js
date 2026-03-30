@@ -1332,6 +1332,124 @@ app.listen(PORT, '0.0.0.0', () => {
   // Also run tournament alerts check on startup (after 60 seconds)
   setTimeout(() => checkTournamentAlerts(), 60000);
 
+  // Automatic push notification reminders - check daily for tournaments with deadline tomorrow
+  async function checkAutomaticReminders() {
+    const db = require('./db-loader');
+    const { buildNotification } = require('./notification-messages');
+    const { sendPushToPlayers } = require('./routes/push');
+
+    console.log('[Automatic Reminders] Starting daily check...');
+
+    try {
+      // Get tomorrow's date (Paris timezone)
+      const now = new Date();
+      const parisNow = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
+      const tomorrow = new Date(parisNow);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+
+      const tomorrowStr = tomorrow.toISOString().split('T')[0]; // YYYY-MM-DD
+      console.log(`[Automatic Reminders] Checking for tournaments with deadline: ${tomorrowStr}`);
+
+      // Find all tournaments with deadline (fin) = tomorrow
+      const tournaments = await new Promise((resolve, reject) => {
+        db.all(
+          `SELECT tournoi_id, nom, mode, categorie, debut, fin, organization_id
+           FROM tournoi_ext
+           WHERE DATE(fin) = $1
+             AND (status IS NULL OR status = 'active')`,
+          [tomorrowStr],
+          (err, rows) => err ? reject(err) : resolve(rows || [])
+        );
+      });
+
+      if (tournaments.length === 0) {
+        console.log('[Automatic Reminders] No tournaments with deadline tomorrow');
+        return;
+      }
+
+      console.log(`[Automatic Reminders] Found ${tournaments.length} tournament(s) with deadline tomorrow`);
+
+      for (const tournament of tournaments) {
+        try {
+          const tournamentName = `${tournament.nom} - ${tournament.mode} ${tournament.categorie}`;
+          const closingDate = new Date(tournament.fin).toLocaleDateString('fr-FR', {
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric'
+          });
+
+          // Get all active players in this organization
+          const allPlayers = await new Promise((resolve, reject) => {
+            db.all(
+              `SELECT licence FROM players
+               WHERE ($1::int IS NULL OR organization_id = $1)
+                 AND UPPER(licence) NOT LIKE 'TEST%'`,
+              [tournament.organization_id],
+              (err, rows) => err ? reject(err) : resolve(rows || [])
+            );
+          });
+
+          // Get players already registered for this tournament
+          const registeredPlayers = await new Promise((resolve, reject) => {
+            db.all(
+              `SELECT DISTINCT licence FROM inscriptions
+               WHERE tournoi_id = $1
+                 AND (forfait IS NULL OR forfait != 1)
+                 AND (statut IS NULL OR statut NOT IN ('désinscrit', 'indisponible'))`,
+              [tournament.tournoi_id],
+              (err, rows) => err ? reject(err) : resolve(rows || [])
+            );
+          });
+
+          const registeredSet = new Set(registeredPlayers.map(p => p.licence));
+          const unregisteredPlayers = allPlayers.filter(p => !registeredSet.has(p.licence));
+
+          if (unregisteredPlayers.length === 0) {
+            console.log(`[Automatic Reminders] Tournament ${tournament.tournoi_id}: all players already registered`);
+            continue;
+          }
+
+          console.log(`[Automatic Reminders] Tournament ${tournament.tournoi_id}: ${unregisteredPlayers.length} unregistered player(s)`);
+
+          // Send push notification to unregistered players
+          const notification = buildNotification('REMINDER_LAST_DAY', {
+            tournoiName: tournamentName,
+            closingDate: closingDate
+          });
+
+          const licences = unregisteredPlayers.map(p => p.licence);
+          const result = await sendPushToPlayers(licences, tournament.organization_id, notification);
+          console.log(`[Automatic Reminders] Sent ${result.total_sent} reminder(s) for tournament ${tournament.tournoi_id}`);
+
+        } catch (tournamentError) {
+          console.error(`[Automatic Reminders] Error processing tournament ${tournament.tournoi_id}:`, tournamentError.message);
+          // Continue with next tournament
+        }
+      }
+
+      console.log('[Automatic Reminders] Daily check completed');
+
+    } catch (error) {
+      console.error('[Automatic Reminders] Error:', error.message);
+    }
+  }
+
+  // Run automatic reminders check daily at 9 AM Paris time
+  setInterval(async () => {
+    const now = new Date();
+    const parisNow = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
+    const hour = parisNow.getHours();
+
+    // Only run at 9 AM (hour === 9)
+    if (hour === 9) {
+      await checkAutomaticReminders();
+    }
+  }, 3600000); // Check every hour (but only run at 9 AM)
+  console.log('[Automatic Reminders] Started - will run daily at 9 AM Paris time');
+
+  // Also run once on startup (after 90 seconds) for testing
+  setTimeout(() => checkAutomaticReminders(), 90000);
+
   // Survey scheduler - auto-activate scheduled surveys and auto-close expired ones
   async function processSurveySchedule() {
     try {
