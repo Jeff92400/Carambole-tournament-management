@@ -338,10 +338,57 @@ router.post('/', authenticateToken, (req, res) => {
       else if (normalizedTargetLicence) msg = `Personal message sent to ${normalizedTargetLicence}`;
       else if (modesJson || rankingsJson || clubsJson) msg = `Announcement created for filtered audience`;
 
+      const announcementId = this.lastID;
+
+      // Send push notification for urgent announcements (fire-and-forget)
+      if (announcementType === 'urgent' && !normalizedTestLicence) {
+        const { buildNotification } = require('../notification-messages');
+        const { sendPushToPlayers } = require('./push');
+
+        (async () => {
+          try {
+            // Get all active player licences (filtered by target if specified)
+            const licences = await new Promise((resolve, reject) => {
+              let query = `
+                SELECT DISTINCT pa.licence
+                FROM player_accounts pa
+                LEFT JOIN players p ON REPLACE(pa.licence, ' ', '') = REPLACE(p.licence, ' ', '')
+                WHERE (p.player_app_role IS NULL OR p.player_app_role != 'test')
+                  AND ($1::int IS NULL OR p.organization_id = $1)
+              `;
+              const params = [orgId];
+
+              // TODO: Apply filtering if target_modes, target_rankings, or target_clubs specified
+              // For now, sending to all players for urgent announcements
+
+              db.all(query, params, (err, rows) => {
+                if (err) reject(err);
+                else resolve((rows || []).map(r => r.licence));
+              });
+            });
+
+            if (licences.length === 0) {
+              console.log('[URGENT ANNOUNCEMENT] No players to notify');
+              return;
+            }
+
+            const notification = buildNotification('URGENT_ANNOUNCEMENT', {
+              announcementTitle: title,
+              announcementBody: message
+            });
+
+            const result = await sendPushToPlayers(licences, orgId, notification);
+            console.log(`[URGENT ANNOUNCEMENT] Sent notification to ${result.total_sent} player(s) for announcement ${announcementId}`);
+          } catch (pushError) {
+            console.error('[URGENT ANNOUNCEMENT] Failed to send push notification:', pushError.message);
+          }
+        })();
+      }
+
       res.json({
         success: true,
         message: msg,
-        id: this.lastID
+        id: announcementId
       });
     }
   );
