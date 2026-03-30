@@ -1,7 +1,9 @@
 ![Billard Français](images/FrenchBillard-Icon-small.png)
 
-## Guide Utilisateur  
+## Guide Utilisateur
 Gestion des Tournois
+
+**Dernière mise à jour:** 30 mars 2026 — Ajout du tableau complet des 12 notifications automatiques dans la section "Com Joueurs > Notifications Push"
 
 Accueil Présentation Générale Multi-organisation Modes de qualification Page
 de Connexion Bouton d'aide (?) Bouton "Tournois à venir" Menus Accueil
