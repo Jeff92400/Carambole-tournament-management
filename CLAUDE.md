@@ -9,6 +9,17 @@ This file provides guidance to Claude Code when working with this repository.
 **Production URL:** https://cdbhs-tournament-management-production.up.railway.app
 **Related App:** Player App (Espace Joueur) in separate repo `cdbhs-player-app` - shares the same PostgreSQL database
 
+### Copyright & Registration
+
+**Software Name:** Kayros
+**Copyright:** © 2025-26 Jeff R. Tous droits réservés.
+**Legal Protection:** Logiciel protégé
+**Registration Number:** Dépôt APP n°IDDN.FR.001.130044.000.S.P.2026.000.42000
+
+This registration information is displayed on both login screens:
+- Tournament Management App: `frontend/login.html` (line 42-44)
+- Player App: `frontend/index.html` (line 489-490)
+
 ## Deployment Workflow
 
 ### Environment

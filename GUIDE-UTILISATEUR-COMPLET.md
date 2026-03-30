@@ -3,7 +3,7 @@
 ## Guide Utilisateur
 Gestion des Tournois
 
-**Dernière mise à jour:** 30 mars 2026 — Ajout du tableau complet des 12 notifications automatiques dans la section "Com Joueurs > Notifications Push"
+**Dernière mise à jour:** 30 mars 2026 — Ajout des informations légales (copyright et dépôt APP) et du tableau complet des 12 notifications automatiques
 
 Accueil Présentation Générale Multi-organisation Modes de qualification Page
 de Connexion Bouton d'aide (?) Bouton "Tournois à venir" Menus Accueil
