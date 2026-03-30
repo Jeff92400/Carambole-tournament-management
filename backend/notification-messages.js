@@ -109,6 +109,14 @@ const NOTIFICATION_MESSAGES = {
     corps: (variables) =>
       `Les résultats du ${variables.tournoiName} sont maintenant disponibles sur le site de votre comité. Appuyez pour consulter l'article !`,
     url: (variables) => variables.articleUrl // External URL to WordPress article
+  },
+
+  // ==================== 10. FINALE QUALIFICATION ====================
+  FINALE_QUALIFICATION: {
+    titre: (variables) => `🏆 Qualification Finale !`,
+    corps: (variables) =>
+      `Félicitations ! Vous êtes qualifié(e) pour la Finale ${variables.tournoiName}. Rendez-vous le ${variables.finaleDate}.`,
+    url: '/stats'
   }
 };
 

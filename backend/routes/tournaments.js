@@ -899,6 +899,108 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
                           // Don't fail import if push notification fails
                         }
 
+                        // Send FINALE_QUALIFICATION notifications if this is the last qualifying tournament (fire-and-forget)
+                        (async () => {
+                          try {
+                            // Get ranking tournament numbers to determine if this is the last qualifying tournament
+                            const rankingNumbers = await getRankingTournamentNumbers(orgId);
+                            const isLastQualifyingTournament = rankingNumbers && rankingNumbers.length > 0 &&
+                              tournamentNumber === Math.max(...rankingNumbers);
+
+                            if (isLastQualifyingTournament) {
+                              console.log(`[FINALE_QUALIFICATION] Tournament ${tournamentNumber} is the last qualifying tournament, checking for qualified players`);
+
+                              // Get current rankings for this category
+                              const rankings = await new Promise((resolve, reject) => {
+                                db.all(
+                                  `SELECT r.licence, r.rank_position, r.total_match_points, p.first_name, p.last_name
+                                   FROM rankings r
+                                   JOIN players p ON r.licence = p.licence
+                                   WHERE r.category_id = $1 AND r.season = $2
+                                     AND ($3::int IS NULL OR r.organization_id = $3)
+                                   ORDER BY r.rank_position ASC`,
+                                  [categoryId, season, orgId],
+                                  (err, rows) => err ? reject(err) : resolve(rows || [])
+                                );
+                              });
+
+                              if (rankings.length > 0) {
+                                // Determine qualification threshold (< 9 players → 4 qualified, >= 9 → 6 qualified)
+                                const qualificationThreshold = orgId ?
+                                  (await appSettings.getOrgSetting(orgId, 'qualification_threshold')) :
+                                  '9';
+                                const qualificationSmall = orgId ?
+                                  (await appSettings.getOrgSetting(orgId, 'qualification_small')) :
+                                  '4';
+                                const qualificationLarge = orgId ?
+                                  (await appSettings.getOrgSetting(orgId, 'qualification_large')) :
+                                  '6';
+
+                                const threshold = parseInt(qualificationThreshold) || 9;
+                                const smallCount = parseInt(qualificationSmall) || 4;
+                                const largeCount = parseInt(qualificationLarge) || 6;
+
+                                const qualifiedCount = rankings.length < threshold ? smallCount : largeCount;
+                                const qualifiedPlayers = rankings.filter(r => r.rank_position <= qualifiedCount);
+
+                                console.log(`[FINALE_QUALIFICATION] ${qualifiedPlayers.length} players qualified (threshold: ${qualifiedCount})`);
+
+                                if (qualifiedPlayers.length > 0) {
+                                  // Get finale tournament details if it exists
+                                  const finaleNumber = await getFinaleTournamentNumber(orgId);
+                                  const categoryInfo = await new Promise((resolve, reject) => {
+                                    db.get(
+                                      'SELECT display_name, game_type, level FROM categories WHERE id = $1',
+                                      [categoryId],
+                                      (err, row) => err ? reject(err) : resolve(row)
+                                    );
+                                  });
+
+                                  const finaleTournament = await new Promise((resolve, reject) => {
+                                    db.get(
+                                      `SELECT debut FROM tournoi_ext
+                                       WHERE UPPER(mode) = UPPER($1)
+                                         AND UPPER(categorie) LIKE '%' || UPPER($2) || '%'
+                                         AND tournament_number = $3
+                                         AND ($4::int IS NULL OR organization_id = $4)
+                                         AND (status IS NULL OR status = 'active')
+                                       ORDER BY debut DESC
+                                       LIMIT 1`,
+                                      [categoryInfo?.game_type || '', categoryInfo?.level || '', finaleNumber, orgId],
+                                      (err, row) => {
+                                        if (err) reject(err);
+                                        else resolve(row);
+                                      }
+                                    );
+                                  });
+
+                                  const finaleDate = finaleTournament?.debut ?
+                                    new Date(finaleTournament.debut).toLocaleDateString('fr-FR', {
+                                      weekday: 'long',
+                                      day: 'numeric',
+                                      month: 'long',
+                                      year: 'numeric'
+                                    }) :
+                                    'Date à confirmer';
+
+                                  // Send notifications to qualified players
+                                  const licences = qualifiedPlayers.map(p => p.licence);
+                                  const notification = buildNotification('FINALE_QUALIFICATION', {
+                                    tournoiName: categoryInfo?.display_name || 'Finale',
+                                    finaleDate: finaleDate
+                                  });
+
+                                  const result = await sendPushToPlayers(licences, orgId, notification);
+                                  console.log(`[FINALE_QUALIFICATION] Sent notification to ${result.total_sent} qualified player(s)`);
+                                }
+                              }
+                            }
+                          } catch (qualifError) {
+                            console.error('[FINALE_QUALIFICATION] Failed to send notifications:', qualifError.message);
+                            // Don't fail import if qualification notifications fail
+                          }
+                        })();
+
                         res.json({
                           message: 'Tournament imported successfully',
                           tournamentId: finalTournamentId,

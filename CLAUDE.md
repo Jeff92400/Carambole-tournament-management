@@ -1269,6 +1269,55 @@ Every change in V3.0 must improve the user experience by making the app more int
   - ✅ `GUIDE-UTILISATEUR-COMPLET.md` - Added update note
   - ✅ This file (CLAUDE.md) - Phase 1 status documentation
 
+  ### ✅ PHASE B+C — Tournament Events & Finale Qualification (COMPLETED — March 30, 2026)
+  **Status: 5/5 notification triggers implemented**
+
+  #### Tournament Management App
+  - ✅ **NEW_TOURNAMENT** (`backend/routes/inscriptions.js:2133-2174`)
+    - Triggers when admin creates a new tournament
+    - Sends to all active players in the organization
+    - Includes tournament name and registration closing date
+    - Fire-and-forget pattern (non-blocking)
+    - Variables: `tournoiName`, `closingDate`
+
+  - ✅ **TOURNAMENT_DATE_CHANGED** (`backend/routes/inscriptions.js:2456-2485`)
+    - Triggers when admin changes tournament date
+    - Sends to all registered players for that tournament
+    - Includes old and new dates
+    - Integrated with existing `sendTournamentChangeNotifications()` function
+    - Variables: `tournoiName`, `oldDate`, `newDate`
+
+  - ✅ **TOURNAMENT_LOCATION_CHANGED** (`backend/routes/inscriptions.js:2456-2485`)
+    - Triggers when admin changes tournament location
+    - Sends to all registered players for that tournament
+    - Includes tournament date and old/new locations
+    - Integrated with existing `sendTournamentChangeNotifications()` function
+    - Variables: `tournoiName`, `date`, `oldLocation`, `newLocation`
+
+  - ✅ **TOURNAMENT_CANCELLED** (`backend/routes/inscriptions.js:2258-2299`)
+    - Triggers when admin sets tournament status to 'cancelled'
+    - Sends to all registered players for that tournament
+    - Includes tournament name and original date
+    - Fire-and-forget async pattern
+    - Variables: `tournoiName`, `date`
+
+  - ✅ **FINALE_QUALIFICATION** (`backend/routes/tournaments.js:902-1002`)
+    - Triggers after importing results for the last qualifying tournament (T3)
+    - Automatically detects if tournament is the last qualifier using `getRankingTournamentNumbers()`
+    - Determines qualified players based on org settings:
+      - < 9 players → top 4 qualified
+      - >= 9 players → top 6 qualified
+    - Fetches finale tournament details if available
+    - Sends to all qualified players
+    - Variables: `tournoiName`, `finaleDate`
+
+  #### Implementation Details
+  - All triggers use fire-and-forget async pattern with try-catch to prevent blocking main operations
+  - Organization-scoped: all queries filter by `organization_id`
+  - Excludes test accounts (licence NOT LIKE 'TEST%')
+  - Uses centralized `buildNotification()` and `sendPushToPlayers()` functions from `notification-messages.js` and `push.js`
+  - Logs success/failure for monitoring without breaking main workflows
+
   ### 📋 NOTIFICATION TYPES (implementation status)
 
   **Permission Flow:**
@@ -1287,18 +1336,21 @@ Every change in V3.0 must improve the user experience by making the app more int
   | **HIGH** | Relance | ⏸️ Pending | Player hasn't registered, deadline approaching | "Rappel : inscrivez-vous avant le [Date] pour [Mode] [Catégorie]" → Link to registration |
   | **HIGH** | Results Published | ⏸️ Pending | Admin publishes results | "Les résultats du tournoi [Mode] [Catégorie] sont disponibles" → Link to results |
   | **MEDIUM** | Announcements (Urgent) | ✅ Done | Admin creates urgent announcement | Announcement title + message → Link to home |
-  | **MEDIUM** | Finale Qualification | ⏸️ Pending | Player qualifies after T3 | "Félicitations ! Vous êtes qualifié pour la Finale [Mode] [Catégorie]" → Link to rankings |
+  | **MEDIUM** | Finale Qualification | ✅ Done | Player qualifies after T3 | "Félicitations ! Vous êtes qualifié pour la Finale [Mode] [Catégorie]" → Link to rankings |
   | **LOW** | Rankings Updated | ⏸️ Pending | After tournament results | "Les classements de la saison [2024-2025] ont été mis à jour" → Link to rankings |
   | **LOW** | Registration Confirmation | ✅ Done | Player registers via app | "Inscription confirmée pour [Mode] [Catégorie] du [Date]" → Link to registrations |
   | **LOW** | Forfeit Confirmed | ✅ Done | Player declares forfait | "Votre forfait a été enregistré" → Link to registrations |
   | **LOW** | Welcome | ✅ Done | Player creates account | "Bienvenue sur l'Espace Joueur" → Link to tournaments |
   | **LOW** | WordPress Article | ✅ Done | Results article published | "Les résultats sont disponibles sur le site" → External URL |
-  | **LOW** | Tournament Changes | ⏸️ Pending | Tournament cancelled/rescheduled | "Modification : Le tournoi [Mode] [Catégorie] est [annulé/reporté]" → Link to calendar |
+  | **LOW** | New Tournament Created | ✅ Done | Admin creates new tournament | "Les inscriptions pour [Tournoi] sont ouvertes jusqu'au [Date]" → Link to tournaments |
+  | **LOW** | Tournament Date Changed | ✅ Done | Admin changes tournament date | "Le tournoi [Nom] a été modifié. Nouvelle date : [Date]" → Link to registrations |
+  | **LOW** | Tournament Location Changed | ✅ Done | Admin changes tournament location | "Le tournoi [Nom] aura lieu à [Lieu]" → Link to registrations |
+  | **LOW** | Tournament Cancelled | ✅ Done | Admin cancels tournament | "Le tournoi [Nom] est annulé" → Link to registrations |
 
   **Implementation Status:**
   - ✅ Phase 1 (Complete): Urgent announcements, inscription confirmed, forfeit, welcome, WordPress articles
   - ⏸️ Phase 2 (Pending): Convocation, relance, results published
-  - ⏸️ Phase 3 (Pending): Finale qualification, rankings updated, tournament changes
+  - ✅ Phase B+C (Complete): Tournament events (new, date/location changes, cancellation) + finale qualification
 
 - **Player historical analytics (multi-season stats):** All tournament data (`tournament_results`, `rankings`) is retained permanently across seasons and scoped by `organization_id`. Season averages are computed on-the-fly (`SUM(points)/SUM(reprises)` from `tournament_results`) — not stored as a snapshot. This means we can build rich player analytics over time:
   - Average (moyenne) progression per mode across seasons

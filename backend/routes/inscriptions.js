@@ -2130,6 +2130,49 @@ router.post('/tournoi', authenticateToken, async (req, res) => {
       });
     });
 
+    // Send NEW_TOURNAMENT push notifications to eligible players (fire-and-forget)
+    (async () => {
+      try {
+        const { buildNotification } = require('../notification-messages');
+        const { sendPushToPlayers } = require('./push');
+
+        // Get all active players in this organization who could participate
+        // (exclude test accounts, only active players)
+        const eligiblePlayers = await new Promise((resolve, reject) => {
+          db.all(`
+            SELECT DISTINCT licence
+            FROM players
+            WHERE ($1::int IS NULL OR organization_id = $1)
+              AND UPPER(licence) NOT LIKE 'TEST%'
+          `, [orgId], (err, rows) => {
+            if (err) reject(err);
+            else resolve(rows || []);
+          });
+        });
+
+        if (eligiblePlayers.length > 0) {
+          const tournamentName = `${nom} - ${mode} ${categorie}`;
+          const closingDate = fin ? new Date(fin).toLocaleDateString('fr-FR', {
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric'
+          }) : 'Date limite non définie';
+
+          const notification = buildNotification('NEW_TOURNAMENT', {
+            tournoiName: tournamentName,
+            closingDate: closingDate
+          });
+
+          const licences = eligiblePlayers.map(p => p.licence);
+          const result = await sendPushToPlayers(licences, orgId, notification);
+          console.log(`[NEW_TOURNAMENT] Sent notification to ${result.total_sent} player(s) for tournament ${nextId}`);
+        }
+      } catch (pushError) {
+        console.error('[NEW_TOURNAMENT] Failed to send push notification:', pushError.message);
+        // Don't fail the tournament creation if push fails
+      }
+    })();
+
     res.json({
       success: true,
       message: 'Tournament created successfully',
@@ -2254,6 +2297,49 @@ router.put('/tournoi/:id', authenticateToken, async (req, res) => {
         targetId: id,
         targetName: `${nom} - ${mode} ${categorie}`
       });
+
+      // Send cancellation push notifications to all inscribed players (fire-and-forget)
+      (async () => {
+        try {
+          const { buildNotification } = require('../notification-messages');
+          const { sendPushToPlayers } = require('./push');
+
+          // Get all inscribed players for this tournament
+          const inscriptions = await new Promise((resolve, reject) => {
+            db.all(`
+              SELECT DISTINCT licence
+              FROM inscriptions
+              WHERE tournoi_id = $1
+                AND ($2::int IS NULL OR organization_id = $2)
+            `, [id, orgId], (err, rows) => {
+              if (err) reject(err);
+              else resolve(rows || []);
+            });
+          });
+
+          if (inscriptions.length > 0) {
+            const tournamentName = `${nom} - ${mode} ${categorie}`;
+            const dateStr = debut ? new Date(debut).toLocaleDateString('fr-FR', {
+              weekday: 'long',
+              day: 'numeric',
+              month: 'long',
+              year: 'numeric'
+            }) : '';
+
+            const notification = buildNotification('TOURNAMENT_CANCELLED', {
+              tournoiName: tournamentName,
+              date: dateStr
+            });
+
+            const licences = inscriptions.map(i => i.licence);
+            const result = await sendPushToPlayers(licences, orgId, notification);
+            console.log(`[TOURNAMENT_CANCELLED] Sent notification to ${result.total_sent} player(s) for tournament ${id}`);
+          }
+        } catch (pushError) {
+          console.error('[TOURNAMENT_CANCELLED] Failed to send push notification:', pushError.message);
+          // Don't fail the tournament update if push fails
+        }
+      })();
     }
 
     // Build response message
@@ -2452,6 +2538,37 @@ async function sendTournamentChangeNotifications(tournoiId, oldTournament, newDa
         });
         sentCount++;
         console.log(`[Tournament Change] Email sent to ${inscription.player_email}`);
+
+        // Send push notification (fire-and-forget)
+        try {
+          const { buildNotification } = require('../notification-messages');
+          const { sendPushToPlayer } = require('./push');
+
+          let notificationType;
+          let notifVariables = { tournoiName: tournamentName };
+
+          if (dateChanged && locationChanged) {
+            // For both changes, prioritize date change notification
+            notificationType = 'TOURNAMENT_DATE_CHANGED';
+            notifVariables.oldDate = formatDate(oldDate);
+            notifVariables.newDate = formatDate(newDate);
+          } else if (dateChanged) {
+            notificationType = 'TOURNAMENT_DATE_CHANGED';
+            notifVariables.oldDate = formatDate(oldDate);
+            notifVariables.newDate = formatDate(newDate);
+          } else if (locationChanged) {
+            notificationType = 'TOURNAMENT_LOCATION_CHANGED';
+            notifVariables.date = formatDate(newData.debut || oldTournament.debut);
+            notifVariables.oldLocation = oldLieu || 'Non défini';
+            notifVariables.newLocation = newLieu;
+          }
+
+          const notification = buildNotification(notificationType, notifVariables);
+          await sendPushToPlayer(inscription.licence, orgId, notification);
+        } catch (notifError) {
+          console.error('[Tournament Change] Failed to send push notification:', notifError.message);
+          // Don't fail email if push notification fails
+        }
 
         // Small delay to avoid rate limiting
         await new Promise(resolve => setTimeout(resolve, 100));
