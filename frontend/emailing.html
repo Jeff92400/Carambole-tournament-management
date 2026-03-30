@@ -566,6 +566,7 @@
             <select
               id="notifUrl"
               style="width: 100%; max-width: 400px; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;"
+              onchange="toggleCustomUrlInput()"
             >
               <option value="">🏠 Page d'accueil</option>
               <option value="#tournaments">🏆 Vos compétitions</option>
@@ -574,9 +575,18 @@
               <option value="#calendar">📅 Compétitions CDB</option>
               <option value="#profile">👤 Profil & FAQ</option>
               <option value="#contact">✉️ Contact</option>
+              <option value="CUSTOM">🔗 URL personnalisée (ex: article WordPress)</option>
             </select>
+            <div id="customUrlInput" style="display: none; margin-top: 10px;">
+              <input
+                type="url"
+                id="customUrl"
+                placeholder="https://cdbhs.net/?p=12345 ou https://..."
+                style="width: 100%; max-width: 400px; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;"
+              />
+            </div>
             <div style="margin-top: 6px; font-size: 12px; color: #666;">
-              💡 Les notifications ouvriront l'Espace Joueur sur la page sélectionnée
+              💡 Les notifications ouvriront l'Espace Joueur sur la page sélectionnée (ou l'URL personnalisée dans le navigateur)
             </div>
           </div>
 
@@ -1294,6 +1304,7 @@
               <div id="wpResultsExistingPost" style="display: none; margin-top: 8px; padding: 8px 12px; background: #e7f3ff; border-radius: 4px; font-size: 13px; align-items: center; gap: 8px; flex-wrap: wrap;">
                 <span>📝 Un article résultats existe déjà (sera mis à jour)</span>
                 <a id="wpResultsExistingPostLink" href="#" target="_blank" style="color: #0070c0;">Voir</a>
+                <button onclick="notifyWpResultsArticle()" style="background: #28a745; color: white; border: none; border-radius: 4px; padding: 3px 10px; font-size: 12px; cursor: pointer; margin-left: 4px;">📲 Notifier</button>
                 <button onclick="deleteWpResultsPost()" style="background: #dc3545; color: white; border: none; border-radius: 4px; padding: 3px 10px; font-size: 12px; cursor: pointer;">Supprimer</button>
               </div>
               <div style="margin-top: 8px;">
@@ -1435,6 +1446,7 @@
               <div id="wpFinaleResultsExistingPost" style="display: none; margin-top: 8px; padding: 8px 12px; background: #e7f3ff; border-radius: 4px; font-size: 13px; align-items: center; gap: 8px; flex-wrap: wrap;">
                 <span>📝 Un article résultats existe déjà (sera mis à jour)</span>
                 <a id="wpFinaleResultsExistingPostLink" href="#" target="_blank" style="color: #0070c0;">Voir</a>
+                <button onclick="notifyWpFinaleResultsArticle()" style="background: #28a745; color: white; border: none; border-radius: 4px; padding: 3px 10px; font-size: 12px; cursor: pointer; margin-left: 4px;">📲 Notifier</button>
                 <button onclick="deleteWpFinaleResultsPost()" style="background: #dc3545; color: white; border: none; border-radius: 4px; padding: 3px 10px; font-size: 12px; cursor: pointer;">Supprimer</button>
               </div>
               <div style="margin-top: 8px;">
@@ -7185,6 +7197,61 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
       } catch (e) { console.error('[WordPress] Delete results error:', e); }
     }
 
+    async function notifyWpResultsArticle() {
+      if (!_wpResultsTournamentId) return;
+      if (!confirm('Envoyer une notification push aux participants pour les informer de l\'article WordPress ?')) return;
+
+      const statusEl = document.getElementById('wpResultsPublishStatus');
+      const originalText = statusEl.textContent;
+      const originalColor = statusEl.style.color;
+
+      try {
+        statusEl.textContent = '📲 Envoi en cours...';
+        statusEl.style.color = '#666';
+
+        const response = await fetch(`${API_URL}/wordpress/notify-article`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ tournamentId: _wpResultsTournamentId })
+        });
+
+        const data = await response.json();
+
+        if (response.ok && data.success) {
+          statusEl.textContent = `✅ ${data.message}`;
+          statusEl.style.color = '#28a745';
+          alert(`✅ ${data.message}`);
+          // Restore original status after 3 seconds
+          setTimeout(() => {
+            statusEl.textContent = originalText;
+            statusEl.style.color = originalColor;
+          }, 3000);
+        } else {
+          statusEl.textContent = `❌ ${data.error || 'Erreur'}`;
+          statusEl.style.color = '#dc3545';
+          alert(`❌ Erreur: ${data.error || 'Échec de l\'envoi'}`);
+          // Restore original status after 3 seconds
+          setTimeout(() => {
+            statusEl.textContent = originalText;
+            statusEl.style.color = originalColor;
+          }, 3000);
+        }
+      } catch (error) {
+        console.error('[WordPress] Notify article error:', error);
+        statusEl.textContent = '❌ Erreur réseau';
+        statusEl.style.color = '#dc3545';
+        alert('❌ Erreur réseau lors de l\'envoi de la notification');
+        // Restore original status after 3 seconds
+        setTimeout(() => {
+          statusEl.textContent = originalText;
+          statusEl.style.color = originalColor;
+        }, 3000);
+      }
+    }
+
     // --- Finale WordPress functions ---
     async function checkWpFinaleResultsStatus(tournamentId) {
       if (!window._wpEnabled || !tournamentId) {
@@ -7270,6 +7337,61 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
           document.getElementById('wpFinaleResultsPublishStatus').style.color = '#6c757d';
         }
       } catch (e) { console.error('[WordPress] Delete finale results error:', e); }
+    }
+
+    async function notifyWpFinaleResultsArticle() {
+      if (!_wpFinaleResultsTournamentId) return;
+      if (!confirm('Envoyer une notification push aux participants pour les informer de l\'article WordPress ?')) return;
+
+      const statusEl = document.getElementById('wpFinaleResultsPublishStatus');
+      const originalText = statusEl.textContent;
+      const originalColor = statusEl.style.color;
+
+      try {
+        statusEl.textContent = '📲 Envoi en cours...';
+        statusEl.style.color = '#666';
+
+        const response = await fetch(`${API_URL}/wordpress/notify-article`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ tournamentId: _wpFinaleResultsTournamentId })
+        });
+
+        const data = await response.json();
+
+        if (response.ok && data.success) {
+          statusEl.textContent = `✅ ${data.message}`;
+          statusEl.style.color = '#28a745';
+          alert(`✅ ${data.message}`);
+          // Restore original status after 3 seconds
+          setTimeout(() => {
+            statusEl.textContent = originalText;
+            statusEl.style.color = originalColor;
+          }, 3000);
+        } else {
+          statusEl.textContent = `❌ ${data.error || 'Erreur'}`;
+          statusEl.style.color = '#dc3545';
+          alert(`❌ Erreur: ${data.error || 'Échec de l\'envoi'}`);
+          // Restore original status after 3 seconds
+          setTimeout(() => {
+            statusEl.textContent = originalText;
+            statusEl.style.color = originalColor;
+          }, 3000);
+        }
+      } catch (error) {
+        console.error('[WordPress] Notify finale article error:', error);
+        statusEl.textContent = '❌ Erreur réseau';
+        statusEl.style.color = '#dc3545';
+        alert('❌ Erreur réseau lors de l\'envoi de la notification');
+        // Restore original status after 3 seconds
+        setTimeout(() => {
+          statusEl.textContent = originalText;
+          statusEl.style.color = originalColor;
+        }, 3000);
+      }
     }
 
     async function initialize() {
@@ -8554,12 +8676,44 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
       }
     });
 
+    // Toggle custom URL input visibility
+    function toggleCustomUrlInput() {
+      const urlSelect = document.getElementById('notifUrl');
+      const customUrlDiv = document.getElementById('customUrlInput');
+      const customUrlInput = document.getElementById('customUrl');
+
+      if (urlSelect.value === 'CUSTOM') {
+        customUrlDiv.style.display = 'block';
+        customUrlInput.required = true;
+      } else {
+        customUrlDiv.style.display = 'none';
+        customUrlInput.required = false;
+        customUrlInput.value = '';
+      }
+    }
+
     // Send bulk notification
     async function sendBulkNotification() {
       const recipientType = document.querySelector('input[name="notifRecipient"]:checked').value;
       const title = document.getElementById('notifTitle').value.trim();
       const body = document.getElementById('notifBody').value.trim();
-      const url = document.getElementById('notifUrl').value;
+      let url = document.getElementById('notifUrl').value;
+
+      // If custom URL is selected, use the custom URL input
+      if (url === 'CUSTOM') {
+        url = document.getElementById('customUrl').value.trim();
+        if (!url) {
+          alert('Veuillez saisir une URL personnalisée');
+          return;
+        }
+        // Validate URL format
+        try {
+          new URL(url);
+        } catch (e) {
+          alert('URL invalide. Format attendu: https://example.com/...');
+          return;
+        }
+      }
 
       if (!title || !body) {
         alert('Le titre et le message sont requis');
@@ -8629,6 +8783,7 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
         document.getElementById('notifPreviewTitle').textContent = 'Titre de la notification';
         document.getElementById('notifPreviewBody').textContent = 'Message de la notification...';
         toggleNotifLicenceInput();
+        toggleCustomUrlInput();
 
         // Reload history and subscription status
         loadPushSubscriptionStatus();

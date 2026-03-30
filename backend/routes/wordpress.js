@@ -1340,4 +1340,104 @@ router.delete('/delete-results/:tournamentId', authenticateToken, async (req, re
   }
 });
 
+// ─── Send push notification for existing WordPress article ───────────────────
+router.post('/notify-article', authenticateToken, async (req, res) => {
+  const db = require('../db-loader');
+  const { buildNotification } = require('../notification-messages');
+  const { sendPushToPlayers } = require('./push');
+  const orgId = req.user.organizationId || null;
+
+  try {
+    const { tournamentId } = req.body;
+
+    if (!tournamentId) {
+      return res.status(400).json({ error: 'tournamentId requis.' });
+    }
+
+    // Fetch tournament info + WordPress post ID
+    const tournament = await new Promise((resolve, reject) => {
+      db.get(`
+        SELECT t.*, c.display_name, c.game_type, c.level
+        FROM tournaments t
+        JOIN categories c ON t.category_id = c.id
+        WHERE t.id = $1 AND ($2::int IS NULL OR t.organization_id = $2)
+      `, [tournamentId, orgId], (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
+
+    if (!tournament) {
+      return res.status(404).json({ error: 'Tournoi non trouvé.' });
+    }
+
+    if (!tournament.wp_results_post_id) {
+      return res.status(400).json({ error: 'Aucun article WordPress associé à ce tournoi.' });
+    }
+
+    // Build WordPress article URL
+    const wp = await getWpSettings(orgId);
+    const articleUrl = `${wp.siteUrl}/?p=${tournament.wp_results_post_id}`;
+
+    // Get tournament label
+    const { getFinaleTournamentNumber } = require('./settings');
+    const finaleNumber = await getFinaleTournamentNumber(orgId);
+    const isFinale = tournament.tournament_number === finaleNumber;
+    const tournamentLabel = isFinale ? 'Finale' : `T${tournament.tournament_number}`;
+    const tournoiName = `${tournament.display_name} ${tournamentLabel}`;
+
+    // Fetch all participants from tournament_results
+    const participants = await new Promise((resolve, reject) => {
+      db.all(`
+        SELECT DISTINCT licence
+        FROM tournament_results
+        WHERE tournament_id = $1
+      `, [tournamentId], (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows || []);
+      });
+    });
+
+    if (participants.length === 0) {
+      return res.status(400).json({ error: 'Aucun participant trouvé pour ce tournoi.' });
+    }
+
+    // Build notification
+    const notification = buildNotification('ARTICLE_PUBLISHED', {
+      tournoiName,
+      articleUrl
+    });
+
+    console.log(`[NOTIFY ARTICLE] Sending notification for tournament ${tournamentId} to ${participants.length} players`);
+    console.log(`[NOTIFY ARTICLE] Article URL: ${articleUrl}`);
+
+    // Send push notifications
+    const licences = participants.map(p => p.licence);
+    const result = await sendPushToPlayers(licences, orgId, notification);
+
+    console.log(`[NOTIFY ARTICLE] Sent: ${result.total_sent}, Failed: ${result.total_failed}`);
+
+    // Log admin action
+    logAdminAction({
+      req,
+      action: ACTION_TYPES.SEND_NOTIFICATION || 'send_notification',
+      details: `Notification article WordPress envoyée: ${tournoiName}`,
+      targetType: 'tournament_results',
+      targetId: tournamentId,
+      targetName: tournoiName
+    });
+
+    res.json({
+      success: true,
+      total_sent: result.total_sent,
+      total_failed: result.total_failed,
+      message: `Notification envoyée à ${result.total_sent} joueur(s)${result.total_failed > 0 ? ` (${result.total_failed} non abonné(s))` : ''}`
+    });
+
+  } catch (error) {
+    console.error('[NOTIFY ARTICLE] Error:', error);
+    res.status(500).json({ error: 'Erreur lors de l\'envoi de la notification.' });
+  }
+});
+
 module.exports = router;

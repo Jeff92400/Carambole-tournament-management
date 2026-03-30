@@ -101,6 +101,14 @@ const NOTIFICATION_MESSAGES = {
     corps: () =>
       `Votre compte a été créé avec succès. Découvrez les compétitions disponibles et vos statistiques !`,
     url: '/tournaments'
+  },
+
+  // ==================== 9. WORDPRESS ARTICLE PUBLISHED ====================
+  ARTICLE_PUBLISHED: {
+    titre: (variables) => `📰 Article publié — ${variables.tournoiName}`,
+    corps: (variables) =>
+      `Les résultats du ${variables.tournoiName} sont maintenant disponibles sur le site de votre comité. Appuyez pour consulter l'article !`,
+    url: (variables) => variables.articleUrl // External URL to WordPress article
   }
 };
 
@@ -120,7 +128,7 @@ function buildNotification(type, variables = {}) {
   return {
     title: typeof template.titre === 'function' ? template.titre(variables) : template.titre,
     body: typeof template.corps === 'function' ? template.corps(variables) : template.corps,
-    url: template.url
+    url: typeof template.url === 'function' ? template.url(variables) : template.url
   };
 }
 
