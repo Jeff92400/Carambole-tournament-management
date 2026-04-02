@@ -8691,7 +8691,19 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
     }
 
     // Update character counters and preview
-    document.addEventListener('DOMContentLoaded', function() {
+    document.addEventListener('DOMContentLoaded', async function() {
+      // Load Player App URL from organization settings for notification URLs
+      try {
+        const response = await authFetch(`${API_URL}/settings/org/player_app_url`);
+        if (response.ok) {
+          const data = await response.json();
+          window.cachedPlayerAppUrl = data.value || 'https://cdbhs-player-app-production.up.railway.app';
+        }
+      } catch (error) {
+        console.warn('Could not load player_app_url, using default:', error);
+        window.cachedPlayerAppUrl = 'https://cdbhs-player-app-production.up.railway.app';
+      }
+
       const titleInput = document.getElementById('notifTitle');
       const bodyInput = document.getElementById('notifBody');
       const licencesInput = document.getElementById('notifLicences');
@@ -8764,6 +8776,11 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
           alert('URL invalide. Format attendu: https://example.com/...');
           return;
         }
+      } else if (url && url.startsWith('#')) {
+        // Convert hash URLs to full Player App URLs
+        // Get the Player App URL from organization settings (cached globally)
+        const playerAppUrl = window.cachedPlayerAppUrl || 'https://cdbhs-player-app-production.up.railway.app';
+        url = playerAppUrl + url;
       }
 
       if (!title || !body) {
