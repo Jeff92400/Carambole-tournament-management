@@ -860,6 +860,7 @@ router.put('/app-bulk', authenticateToken, requireAdmin, async (req, res) => {
   const settings = req.body; // Object with key-value pairs
 
   try {
+    const db = getDb();
     const orgId = req.user?.organizationId;
     if (!orgId) {
       console.error('[SETTINGS] app-bulk save rejected: no organizationId on user', req.user?.username);
@@ -869,6 +870,25 @@ router.put('/app-bulk', authenticateToken, requireAdmin, async (req, res) => {
     for (const [key, value] of Object.entries(settings)) {
       await appSettings.setOrgSetting(orgId, key, value);
 
+      // CRITICAL: If organization_short_name is being updated, also update the organizations table
+      // The branding endpoint reads from organizations.short_name (authoritative source)
+      if (key === 'organization_short_name') {
+        await new Promise((resolve, reject) => {
+          db.run(
+            `UPDATE organizations SET short_name = $1 WHERE id = $2`,
+            [value, orgId],
+            (err) => {
+              if (err) {
+                console.error('[SETTINGS] Error updating organizations.short_name:', err);
+                reject(err);
+              } else {
+                console.log(`[SETTINGS] Updated organizations.short_name to "${value}" for org ${orgId}`);
+                resolve();
+              }
+            }
+          );
+        });
+      }
     }
     res.json({ success: true, message: 'Settings updated' });
   } catch (err) {
