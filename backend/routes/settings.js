@@ -2048,6 +2048,56 @@ router.put('/org-settings-batch', authenticateToken, requireAdmin, async (req, r
   }
 });
 
+// One-time sync: Copy organization_short_name from organization_settings to organizations.short_name
+router.post('/sync-org-short-name', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const db = getDb();
+    const orgId = req.user.organizationId || null;
+
+    if (!orgId) {
+      return res.status(400).json({ error: 'Organization ID required' });
+    }
+
+    // Get the value from organization_settings
+    const shortName = await new Promise((resolve, reject) => {
+      db.get(
+        `SELECT value FROM organization_settings WHERE organization_id = $1 AND key = 'organization_short_name'`,
+        [orgId],
+        (err, row) => {
+          if (err) reject(err);
+          else resolve(row?.value);
+        }
+      );
+    });
+
+    if (!shortName) {
+      return res.status(404).json({ error: 'No organization_short_name found in settings' });
+    }
+
+    // Update organizations table
+    await new Promise((resolve, reject) => {
+      db.run(
+        `UPDATE organizations SET short_name = $1 WHERE id = $2`,
+        [shortName, orgId],
+        (err) => {
+          if (err) reject(err);
+          else resolve();
+        }
+      );
+    });
+
+    console.log(`[SYNC] Synced organizations.short_name to "${shortName}" for org ${orgId}`);
+    res.json({
+      success: true,
+      message: `Organization short name synced to: ${shortName}`,
+      shortName
+    });
+  } catch (error) {
+    console.error('[SYNC] Error syncing org short name:', error);
+    res.status(500).json({ error: 'Erreur lors de la synchronisation' });
+  }
+});
+
 // Quick enable push notifications for all players (admin only)
 router.post('/enable-push-notifications', authenticateToken, requireAdmin, async (req, res) => {
   try {
