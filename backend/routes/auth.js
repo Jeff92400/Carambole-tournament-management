@@ -142,7 +142,7 @@ router.post('/login', (req, res) => {
       if (err || !result) {
         // Log failed login attempt (wrong password)
         logAdminAction({
-          req: { ...req, user: { userId: user.id, username: user.username, role: user.role } },
+          req: { ...req, user: { userId: user.id, username: user.username, role: user.role, organizationId: user.organization_id } },
           action: ACTION_TYPES.LOGIN_FAILED,
           details: 'Mot de passe incorrect'
         });
@@ -197,9 +197,9 @@ router.post('/login', (req, res) => {
 
       const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '24h' });
 
-      // Log successful login
+      // Log successful login with correct organizationId
       logAdminAction({
-        req: { ...req, user: { userId: user.id, username: user.username, role: user.role } },
+        req: { ...req, user: { userId: user.id, username: user.username, role: user.role, organizationId: targetOrgId } },
         action: ACTION_TYPES.LOGIN_SUCCESS,
         details: `Connexion réussie pour ${user.username}` + (orgSlug ? ` (org: ${orgSlug})` : '')
       });
