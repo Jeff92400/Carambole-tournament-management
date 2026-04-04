@@ -2017,6 +2017,26 @@ router.put('/org-settings-batch', authenticateToken, requireAdmin, async (req, r
           }
         );
       });
+
+      // CRITICAL: If organization_short_name is being updated, also update the organizations table
+      // The branding endpoint reads from organizations.short_name (authoritative source)
+      if (key === 'organization_short_name' && orgId) {
+        await new Promise((resolve, reject) => {
+          db.run(
+            `UPDATE organizations SET short_name = $1 WHERE id = $2`,
+            [stringValue, orgId],
+            (err) => {
+              if (err) {
+                console.error('[ORG-SETTINGS] Error updating organizations.short_name:', err);
+                reject(err);
+              } else {
+                console.log(`[ORG-SETTINGS] Updated organizations.short_name to "${stringValue}" for org ${orgId}`);
+                resolve();
+              }
+            }
+          );
+        });
+      }
     }
 
     console.log(`[ORG-SETTINGS] Updated ${Object.keys(settings).length} settings for org ${orgId}`);
