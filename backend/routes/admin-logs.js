@@ -21,6 +21,22 @@ function requireAdminOrLecteur(req, res, next) {
 }
 
 /**
+ * DEBUG ENDPOINT - GET /api/admin-logs/debug-auth
+ * Returns current user's auth info for troubleshooting
+ */
+router.get('/debug-auth', authenticateToken, (req, res) => {
+  res.json({
+    userId: req.user.userId,
+    username: req.user.username,
+    role: req.user.role,
+    organizationId: req.user.organizationId,
+    isSuperAdmin: req.user.isSuperAdmin,
+    clubId: req.user.clubId,
+    ligueNumero: req.user.ligueNumero
+  });
+});
+
+/**
  * GET /api/admin-logs
  * Get admin activity logs with optional filters
  */
