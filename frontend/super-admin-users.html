@@ -3,11 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Plateforme Gestion des Tournois CDB - Utilisateurs</title>
+  <title>Gestion des Utilisateurs - Super Admin</title>
   <link rel="icon" type="image/png" href="images/FFB.png">
-  <link rel="stylesheet" href="css/styles.css?v=2">
+  <link rel="stylesheet" href="css/styles.css?v=3">
   <style>
-    .sa-nav { display: flex; gap: 0; background: white; border-radius: 12px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); overflow: hidden; }
+    /* SA Navigation */
+    .sa-nav { display: flex; gap: 0; background: white; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); overflow: hidden; }
     .sa-nav a {
       flex: 1; text-align: center; padding: 12px 8px; text-decoration: none; font-size: 13px; font-weight: 600;
       color: #666; border-bottom: 3px solid transparent; transition: all 0.2s;
@@ -17,63 +18,135 @@
     .sa-nav a .nav-icon { display: block; font-size: 18px; margin-bottom: 2px; }
     .sa-nav a.sa-help { flex: 0; min-width: 44px; color: #999; font-size: 18px; }
 
-    .section-title { font-size: 13px; color: #666; margin: 16px 0 8px 0; font-weight: bold; text-transform: uppercase; }
-    .card { background: white; border-radius: 12px; padding: 16px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
-    .card h3 { margin: 0 0 12px 0; font-size: 15px; color: #333; }
+    /* KPI Cards */
+    .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+    .kpi-card { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+    .kpi-card h4 { margin: 0 0 8px 0; font-size: 12px; text-transform: uppercase; color: #999; font-weight: 600; }
+    .kpi-card .kpi-value { font-size: 32px; font-weight: bold; color: var(--color-primary, #1F4788); margin-bottom: 4px; }
+    .kpi-card .kpi-detail { font-size: 13px; color: #666; }
 
-    .users-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    .users-table th { background: #f5f5f5; padding: 8px 10px; text-align: left; font-size: 11px; text-transform: uppercase; color: #666; }
-    .users-table td { padding: 8px 10px; border-bottom: 1px solid #f0f0f0; }
+    /* Filters Section */
+    .filters-section { background: white; border-radius: 12px; padding: 16px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+    .filters-grid { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 12px; align-items: end; }
+    @media (max-width: 1024px) { .filters-grid { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 640px) { .filters-grid { grid-template-columns: 1fr; } }
+    .filter-group label { display: block; font-size: 12px; font-weight: 600; color: #555; margin-bottom: 6px; }
+    .filter-group input, .filter-group select {
+      width: 100%; padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; box-sizing: border-box;
+    }
+    .filter-group input:focus, .filter-group select:focus {
+      border-color: var(--color-primary, #1F4788); outline: none; box-shadow: 0 0 0 2px rgba(31,71,136,0.1);
+    }
+
+    /* Table */
+    .users-table-container { background: white; border-radius: 12px; padding: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); overflow-x: auto; }
+    .users-table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 1200px; }
+    .users-table th {
+      background: #f5f5f5; padding: 10px 12px; text-align: left; font-size: 11px; text-transform: uppercase;
+      color: #666; font-weight: 700; border-bottom: 2px solid #e0e0e0; position: sticky; top: 0; z-index: 1;
+    }
+    .users-table td { padding: 12px; border-bottom: 1px solid #f0f0f0; vertical-align: middle; }
     .users-table tr:hover { background: #fafafa; }
-    .badge { padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: bold; }
+    .users-table tbody tr { cursor: pointer; }
+
+    /* Badges */
+    .badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; text-transform: uppercase; }
     .badge-active { background: #d4edda; color: #155724; }
     .badge-inactive { background: #f8d7da; color: #721c24; }
+    .badge-sa { background: #ffeaa7; color: #d63031; }
+    .role-badge { background: #e3f2fd; color: #0d47a1; padding: 4px 12px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+    .role-admin { background: #ffebee; color: #c62828; }
+    .role-viewer { background: #e8f5e9; color: #2e7d32; }
+    .role-lecteur { background: #fff3e0; color: #e65100; }
+    .role-ligue { background: #f3e5f5; color: #6a1b9a; }
 
-    .create-form { display: none; }
-    .create-form.visible { display: block; }
-    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-    @media (max-width: 768px) { .form-grid { grid-template-columns: 1fr; } }
-    .form-grid .form-group { margin-bottom: 0; }
-    .form-grid label { display: block; font-size: 12px; font-weight: 600; color: #555; margin-bottom: 4px; }
-    .form-grid input, .form-grid select { width: 100%; padding: 8px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; box-sizing: border-box; }
-    .form-grid input:focus, .form-grid select:focus { border-color: var(--color-primary, #1F4788); outline: none; box-shadow: 0 0 0 2px rgba(31,71,136,0.1); }
-    .form-actions { margin-top: 12px; display: flex; gap: 8px; }
-
-    .btn-sm { padding: 4px 12px; font-size: 12px; border-radius: 4px; border: none; cursor: pointer; }
+    /* Buttons */
+    .btn { padding: 8px 16px; border: none; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
     .btn-primary { background: var(--color-primary, #1F4788); color: white; }
-    .btn-primary:hover { opacity: 0.9; }
+    .btn-primary:hover { opacity: 0.9; transform: translateY(-1px); box-shadow: 0 2px 6px rgba(0,0,0,0.15); }
+    .btn-secondary { background: #6c757d; color: white; }
+    .btn-secondary:hover { background: #5a6268; }
+    .btn-success { background: #28a745; color: white; }
+    .btn-success:hover { background: #218838; }
     .btn-danger { background: #dc3545; color: white; }
     .btn-danger:hover { background: #c82333; }
-    .btn-outline { background: white; color: #333; border: 1px solid #ddd; }
-    .btn-outline:hover { background: #f5f5f5; }
-    .btn-lg { padding: 10px 24px; font-size: 14px; border-radius: 6px; }
+    .btn-sm { padding: 4px 10px; font-size: 12px; }
+    .btn-icon { background: transparent; border: 1px solid #ddd; color: #666; padding: 6px 12px; }
+    .btn-icon:hover { background: #f5f5f5; }
 
-    .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); padding: 12px 24px; border-radius: 8px; color: white; font-size: 14px; z-index: 10000; box-shadow: 0 4px 12px rgba(0,0,0,0.3); display: none; }
-    .toast.success { background: #28a745; }
-    .toast.error { background: #dc3545; }
-    .toast.visible { display: block; }
+    /* Modal */
+    .modal-overlay {
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 9999;
+      display: none; align-items: center; justify-content: center; animation: fadeIn 0.2s;
+    }
+    .modal-overlay.show { display: flex; }
+    .modal {
+      background: white; border-radius: 12px; width: 90%; max-width: 600px; max-height: 90vh; overflow-y: auto;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.3); animation: slideUp 0.3s;
+    }
+    .modal-header { padding: 20px 24px; border-bottom: 1px solid #f0f0f0; display: flex; justify-content: space-between; align-items: center; }
+    .modal-header h3 { margin: 0; font-size: 18px; color: #333; }
+    .modal-close { background: none; border: none; font-size: 24px; color: #999; cursor: pointer; padding: 0; width: 30px; height: 30px; }
+    .modal-close:hover { color: #333; }
+    .modal-body { padding: 24px; }
+    .modal-footer { padding: 16px 24px; border-top: 1px solid #f0f0f0; display: flex; gap: 12px; justify-content: flex-end; }
 
-    .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; animation: spin 0.8s linear infinite; vertical-align: middle; margin-right: 6px; }
+    .form-group { margin-bottom: 16px; }
+    .form-group label { display: block; font-size: 13px; font-weight: 600; color: #333; margin-bottom: 6px; }
+    .form-group label .required { color: #dc3545; }
+    .form-group input, .form-group select, .form-group textarea {
+      width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; box-sizing: border-box;
+    }
+    .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+      border-color: var(--color-primary, #1F4788); outline: none; box-shadow: 0 0 0 2px rgba(31,71,136,0.1);
+    }
+    .form-group small { display: block; margin-top: 4px; font-size: 12px; color: #666; }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    @media (max-width: 640px) { .form-row { grid-template-columns: 1fr; } }
+
+    .checkbox-group { display: flex; align-items: center; gap: 8px; }
+    .checkbox-group input[type="checkbox"] { width: auto; margin: 0; }
+    .checkbox-group label { margin: 0; font-weight: normal; }
+
+    /* Toast */
+    .toast {
+      position: fixed; bottom: 24px; right: 24px; background: white; padding: 16px 20px; border-radius: 8px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.2); z-index: 10000; display: none; min-width: 300px; animation: slideInRight 0.3s;
+    }
+    .toast.show { display: block; }
+    .toast.success { border-left: 4px solid #28a745; }
+    .toast.error { border-left: 4px solid #dc3545; }
+    .toast-content { display: flex; align-items: center; gap: 12px; }
+    .toast-icon { font-size: 20px; }
+    .toast-message { flex: 1; font-size: 14px; color: #333; }
+
+    /* Loading */
+    .loading { text-align: center; padding: 40px; color: #999; }
+    .spinner { display: inline-block; width: 20px; height: 20px; border: 3px solid rgba(0,0,0,0.1); border-top-color: var(--color-primary, #1F4788); border-radius: 50%; animation: spin 0.8s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes slideUp { from { transform: translateY(30px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    @keyframes slideInRight { from { transform: translateX(100px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 
-    .empty-state { text-align: center; padding: 32px; color: #999; }
-    .empty-state .icon { font-size: 36px; margin-bottom: 8px; }
+    .empty-state { text-align: center; padding: 60px 20px; color: #999; }
+    .empty-state .icon { font-size: 48px; margin-bottom: 16px; opacity: 0.5; }
+    .empty-state h3 { font-size: 18px; margin: 0 0 8px 0; }
+    .empty-state p { font-size: 14px; margin: 0; }
 
-    .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.4); z-index: 9000; display: none; align-items: center; justify-content: center; }
-    .modal-overlay.visible { display: flex; }
-    .modal { background: white; border-radius: 12px; padding: 20px; width: 90%; max-width: 400px; box-shadow: 0 8px 32px rgba(0,0,0,0.2); }
-    .modal h3 { margin: 0 0 16px 0; font-size: 15px; }
-    .modal .form-group { margin-bottom: 12px; }
-    .modal .form-group label { display: block; font-size: 12px; font-weight: 600; color: #555; margin-bottom: 4px; }
-    .modal .form-group input { width: 100%; padding: 8px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; box-sizing: border-box; }
-    .modal .form-group input:focus { border-color: var(--color-primary, #1F4788); outline: none; }
+    .table-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .table-header h3 { margin: 0; font-size: 16px; color: #333; }
+    .table-count { font-size: 14px; color: #999; font-weight: normal; margin-left: 8px; }
   </style>
 </head>
 <body>
   <div class="container">
+    <!-- Header -->
     <div class="navbar">
       <div>
-        <h2 style="margin-bottom: 0;"><img id="app-header-icon" src="images/FFB.png" alt="" style="height: 48px; width: 48px; vertical-align: middle; margin-right: 8px; border-radius: 6px;" onerror="this.src='images/FrenchBillard-Icon-small.png';"><span id="app-org-name" data-page-title="Super Admin">Plateforme Gestion des Tournois CDB</span></h2>
+        <h2 style="margin-bottom: 0;">
+          <img id="app-header-icon" src="images/FFB.png" alt="" style="height: 48px; width: 48px; vertical-align: middle; margin-right: 8px; border-radius: 6px;" onerror="this.src='images/FrenchBillard-Icon-small.png';">
+          <span id="app-org-name" data-page-title="Utilisateurs">Plateforme Gestion des Tournois CDB</span>
+        </h2>
       </div>
       <div class="nav-links">
         <a href="#" id="logoutBtn" class="nav-logout">Déconnexion</a>
@@ -115,508 +188,630 @@
       </a>
     </nav>
 
+    <!-- Access Denied Message -->
     <div id="accessDenied" style="display: none; text-align: center; padding: 40px; color: #666;">
       <h3>Accès refusé</h3>
       <p>Cette page est réservée au Super Admin.</p>
-      <a href="login.html?sa=1" class="btn" onclick="sessionStorage.clear();">Se reconnecter</a>
+      <a href="login.html?sa=1" class="btn btn-primary" onclick="sessionStorage.clear();">Se reconnecter</a>
     </div>
 
+    <!-- Page Content -->
     <div id="pageContent" style="display: none;">
 
-      <!-- Super Admins + CDB Admins -->
-      <div class="card">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-          <h3 style="margin: 0;">Super Admin &amp; Administrateurs CDB <span id="allAdminCount" style="font-weight: normal; color: #999; font-size: 13px;"></span></h3>
-        </div>
-        <div style="overflow-x: auto;">
-          <table class="users-table" id="allAdminsTable">
-            <thead>
-              <tr>
-                <th>Rôle</th>
-                <th>CDB</th>
-                <th>Identifiant</th>
-                <th>Email</th>
-                <th>Statut</th>
-                <th>Dernière connexion</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody id="allAdminsTbody">
-              <tr><td colspan="7" style="text-align: center; color: #999;">Chargement...</td></tr>
-            </tbody>
-          </table>
-        </div>
+      <!-- Overview KPIs -->
+      <div class="kpi-grid" id="kpiGrid">
+        <!-- Will be populated by JS -->
       </div>
 
-      <!-- Ligue Admins -->
-      <div class="card">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-          <h3 style="margin: 0;">Administrateurs Ligue <span id="ligueAdminCount" style="font-weight: normal; color: #999; font-size: 13px;"></span></h3>
-          <button class="btn-sm btn-primary btn-lg" onclick="toggleCreateForm()">+ Créer un admin ligue</button>
-        </div>
-        <div style="overflow-x: auto;">
-          <table class="users-table" id="ligueAdminsTable">
-            <thead>
-              <tr>
-                <th>Ligue</th>
-                <th>Identifiant</th>
-                <th>Email</th>
-                <th>Statut</th>
-                <th>Dernière connexion</th>
-                <th>Créé le</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody id="ligueAdminsTbody">
-              <tr><td colspan="7" style="text-align: center; color: #999;">Chargement...</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- Create Ligue Admin Form (hidden by default) -->
-      <div class="card create-form" id="createForm">
-        <h3>Créer un administrateur ligue</h3>
-        <div class="form-grid">
-          <div class="form-group" style="grid-column: 1 / -1;">
-            <label>Ligue</label>
-            <select id="ligueSelect" onchange="onLigueSelected()">
-              <option value="">-- Sélectionner une ligue --</option>
+      <!-- Filters -->
+      <div class="filters-section">
+        <div class="filters-grid">
+          <div class="filter-group">
+            <label>Rechercher</label>
+            <input type="text" id="searchInput" placeholder="Nom d'utilisateur, email..." oninput="applyFilters()">
+          </div>
+          <div class="filter-group">
+            <label>CDB</label>
+            <select id="cdbFilter" onchange="applyFilters()">
+              <option value="">Tous les CDBs</option>
+              <!-- Populated by JS -->
             </select>
           </div>
-          <div class="form-group" id="licenceSearchGroup" style="grid-column: 1 / -1; display: none;">
-            <label>Administrateur (licencié FFB) <span style="color: #c00;">*</span></label>
-            <div style="position: relative;">
-              <input type="text" id="licenceSearch" placeholder="Rechercher par nom ou n° de licence..." oninput="searchLigueLicence()" autocomplete="off">
-              <span id="licenceSearchSpinner" style="display: none; position: absolute; right: 10px; top: 10px;">
-                <span class="spinner"></span>
-              </span>
-              <div id="licenceSearchResults" style="display: none; position: absolute; z-index: 100; background: white; border: 1px solid #ddd; border-radius: 8px; max-height: 200px; overflow-y: auto; width: 100%; box-shadow: 0 4px 12px rgba(0,0,0,0.15);"></div>
-            </div>
-            <div id="licenceSelectedInfo" style="display: none; margin-top: 8px; padding: 12px; background: #f0f4ff; border-radius: 8px; border: 1px solid #d0d8f0;">
-              <div style="display: flex; justify-content: space-between; align-items: start;">
-                <div>
-                  <strong id="licenceSelectedName"></strong>
-                  <span id="licenceSelectedLicence" style="color: #666; margin-left: 8px;"></span>
-                  <br><span style="font-size: 12px; color: #666;">Club : </span><span id="licenceSelectedClub" style="font-size: 12px;"></span>
-                  <br><span style="font-size: 12px; color: #666;">Email : </span><span id="licenceSelectedEmail" style="font-size: 12px;"></span>
-                  <br><span style="font-size: 12px; color: #666;">Tél : </span><span id="licenceSelectedTel" style="font-size: 12px;"></span>
-                </div>
-                <button class="btn-sm btn-outline" onclick="clearLicenceSelection()" style="font-size: 11px;">Modifier</button>
-              </div>
-            </div>
+          <div class="filter-group">
+            <label>Rôle</label>
+            <select id="roleFilter" onchange="applyFilters()">
+              <option value="">Tous les rôles</option>
+              <option value="admin">Admin</option>
+              <option value="viewer">Viewer</option>
+              <option value="lecteur">Lecteur</option>
+              <option value="ligue_admin">Admin Ligue</option>
+            </select>
           </div>
-          <div class="form-group">
-            <label>Identifiant</label>
-            <input type="text" id="adminUsername" placeholder="ex: ligue_idf">
-          </div>
-          <div class="form-group">
-            <label>Email</label>
-            <input type="email" id="adminEmail" placeholder="email@exemple.fr">
-          </div>
-          <div class="form-group">
-            <label>Mot de passe</label>
-            <input type="text" id="adminPassword" placeholder="6 caractères minimum">
+          <div class="filter-group">
+            <label>Statut</label>
+            <select id="statusFilter" onchange="applyFilters()">
+              <option value="">Tous</option>
+              <option value="active">Actifs</option>
+              <option value="inactive">Inactifs</option>
+              <option value="super">Super Admin</option>
+            </select>
           </div>
         </div>
-        <div class="form-actions">
-          <button class="btn-sm btn-primary btn-lg" onclick="createLigueAdmin()" id="btnCreate">Créer</button>
-          <button class="btn-sm btn-outline btn-lg" onclick="toggleCreateForm()">Annuler</button>
+      </div>
+
+      <!-- Users Table -->
+      <div class="users-table-container">
+        <div class="table-header">
+          <h3>Tous les utilisateurs <span class="table-count" id="tableCount">(0)</span></h3>
+          <button class="btn btn-primary" onclick="openCreateModal()">+ Créer un utilisateur</button>
         </div>
+        <div id="tableLoading" class="loading">
+          <div class="spinner"></div>
+          <div style="margin-top: 12px;">Chargement des utilisateurs...</div>
+        </div>
+        <div id="tableEmpty" class="empty-state" style="display: none;">
+          <div class="icon">👥</div>
+          <h3>Aucun utilisateur trouvé</h3>
+          <p>Aucun utilisateur ne correspond aux filtres sélectionnés</p>
+        </div>
+        <table class="users-table" id="usersTable" style="display: none;">
+          <thead>
+            <tr>
+              <th>Utilisateur</th>
+              <th>Email</th>
+              <th>Rôle</th>
+              <th>CDB</th>
+              <th>Statut</th>
+              <th>Dernière connexion</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="usersTableBody">
+            <!-- Populated by JS -->
+          </tbody>
+        </table>
       </div>
 
     </div>
+
   </div>
 
   <!-- Edit User Modal -->
   <div class="modal-overlay" id="editModal">
     <div class="modal">
-      <h3>Modifier l'utilisateur</h3>
-      <input type="hidden" id="editUserId">
-      <div class="form-group">
-        <label>Identifiant</label>
-        <input type="text" id="editUsername">
+      <div class="modal-header">
+        <h3>Modifier l'utilisateur</h3>
+        <button class="modal-close" onclick="closeEditModal()">&times;</button>
       </div>
-      <div class="form-group">
-        <label>Email</label>
-        <input type="email" id="editEmail" placeholder="email@exemple.fr">
+      <div class="modal-body">
+        <input type="hidden" id="editUserId">
+
+        <div class="form-group">
+          <label>Nom d'utilisateur</label>
+          <input type="text" id="editUsername" readonly style="background: #f5f5f5; cursor: not-allowed;">
+          <small>Le nom d'utilisateur ne peut pas être modifié</small>
+        </div>
+
+        <div class="form-group">
+          <label>Email</label>
+          <input type="email" id="editEmail" placeholder="email@example.com">
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Rôle <span class="required">*</span></label>
+            <select id="editRole">
+              <option value="admin">Admin</option>
+              <option value="viewer">Viewer</option>
+              <option value="lecteur">Lecteur</option>
+              <option value="ligue_admin">Admin Ligue</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label>CDB</label>
+            <select id="editOrganization">
+              <option value="">Aucun (Super Admin uniquement)</option>
+              <!-- Populated by JS -->
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <div class="checkbox-group">
+            <input type="checkbox" id="editSuperAdmin">
+            <label for="editSuperAdmin">Super Admin (accès complet à toutes les organisations)</label>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <div class="checkbox-group">
+            <input type="checkbox" id="editActive">
+            <label for="editActive">Compte actif</label>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Nouveau mot de passe (optionnel)</label>
+          <input type="password" id="editPassword" placeholder="Laisser vide pour ne pas changer">
+          <small>Minimum 6 caractères</small>
+        </div>
       </div>
-      <div class="form-group">
-        <label>Nouveau mot de passe <span style="font-weight: normal; color: #999;">(laisser vide pour ne pas changer)</span></label>
-        <input type="text" id="editPassword" placeholder="6 caractères minimum">
-      </div>
-      <div style="display: flex; gap: 8px; margin-top: 16px;">
-        <button class="btn-sm btn-primary btn-lg" onclick="saveUserEdit()" id="btnSaveEdit">Enregistrer</button>
-        <button class="btn-sm btn-outline btn-lg" onclick="closeEditModal()">Annuler</button>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeEditModal()">Annuler</button>
+        <button class="btn btn-primary" onclick="saveUser()">Enregistrer</button>
       </div>
     </div>
   </div>
 
-  <!-- Toast notification -->
-  <div class="toast" id="toast"></div>
+  <!-- Create User Modal -->
+  <div class="modal-overlay" id="createModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Créer un utilisateur</h3>
+        <button class="modal-close" onclick="closeCreateModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Nom d'utilisateur <span class="required">*</span></label>
+          <input type="text" id="createUsername" placeholder="admin92, viewer93..." autocomplete="off">
+          <small>Unique, lettres, chiffres et tirets uniquement</small>
+        </div>
 
-  <script src="js/auth-utils.js?v=197"></script>
+        <div class="form-group">
+          <label>Email</label>
+          <input type="email" id="createEmail" placeholder="email@example.com" autocomplete="off">
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Rôle <span class="required">*</span></label>
+            <select id="createRole">
+              <option value="admin">Admin</option>
+              <option value="viewer">Viewer</option>
+              <option value="lecteur">Lecteur</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label>CDB <span class="required">*</span></label>
+            <select id="createOrganization">
+              <option value="">-- Sélectionner un CDB --</option>
+              <!-- Populated by JS -->
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Mot de passe <span class="required">*</span></label>
+          <input type="password" id="createPassword" placeholder="Minimum 6 caractères" autocomplete="new-password">
+        </div>
+
+        <div class="form-group">
+          <label>Confirmer le mot de passe <span class="required">*</span></label>
+          <input type="password" id="createPasswordConfirm" placeholder="Retaper le mot de passe">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeCreateModal()">Annuler</button>
+        <button class="btn btn-primary" onclick="createUser()">Créer l'utilisateur</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div class="toast" id="toast">
+    <div class="toast-content">
+      <div class="toast-icon" id="toastIcon"></div>
+      <div class="toast-message" id="toastMessage"></div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="js/auth-utils.js"></script>
+  <script src="js/app-branding.js"></script>
   <script>
     const API_URL = '/api';
-    if (!requireAuth()) throw new Error('Not authenticated');
+
+    // Check auth
+    if (!requireAuth()) {
+      throw new Error('Not authenticated');
+    }
     const token = sessionStorage.getItem('token');
-    if (sessionStorage.getItem('isSuperAdmin') !== 'true') {
+
+    // Check super admin access
+    const user = getCurrentUser();
+    if (!user.isSuperAdmin) {
+      document.getElementById('pageContent').style.display = 'none';
       document.getElementById('accessDenied').style.display = 'block';
       throw new Error('Not super admin');
     }
-    document.getElementById('pageContent').style.display = 'block';
-    document.getElementById('logoutBtn').addEventListener('click', (e) => { e.preventDefault(); logout(); });
 
-    // ==================== Toast ====================
-    function showToast(message, type = 'success') {
-      const toast = document.getElementById('toast');
-      toast.textContent = message;
-      toast.className = `toast ${type} visible`;
-      setTimeout(() => toast.classList.remove('visible'), 4000);
-    }
+    // Global state
+    let allUsers = [];
+    let allOrganizations = [];
+    let stats = {};
 
-    // ==================== Format dates ====================
-    function formatDate(dateStr) {
-      if (!dateStr) return '-';
-      const d = new Date(dateStr);
-      return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-    }
-    function formatDateShort(dateStr) {
-      if (!dateStr) return '-';
-      const d = new Date(dateStr);
-      return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-    }
-
-    // ==================== Load All Admins (Super + CDB) ====================
-    async function loadAllAdmins() {
+    // Initialize page
+    document.addEventListener('DOMContentLoaded', async () => {
       try {
-        const res = await authFetch(`${API_URL}/super-admin/all-admins`);
-        const admins = await res.json();
-        const tbody = document.getElementById('allAdminsTbody');
-        document.getElementById('allAdminCount').textContent = `(${admins.length})`;
-
-        if (admins.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #999;">Aucun administrateur</td></tr>';
-          return;
-        }
-
-        tbody.innerHTML = admins.map(a => {
-          const roleBadge = a.is_super_admin
-            ? '<span style="background: #dc3545; color: white; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600;">Super Admin</span>'
-            : '<span style="background: #1F4788; color: white; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600;">Admin CDB</span>';
-          const statusBadge = a.is_active
-            ? '<span class="badge badge-active">Actif</span>'
-            : '<span class="badge badge-inactive">Inactif</span>';
-          return `<tr>
-            <td>${roleBadge}</td>
-            <td>${a.org_name || '<span style="color: #999;">-</span>'}</td>
-            <td><strong>${a.username}</strong></td>
-            <td>${a.email || '<span style="color: #ccc;">-</span>'}</td>
-            <td>${statusBadge}</td>
-            <td>${formatDate(a.last_login)}</td>
-            <td><button class="btn-sm btn-outline" onclick="openEditModal(${a.id}, '${a.username.replace(/'/g, "\\'")}', '${(a.email || '').replace(/'/g, "\\'")}')">Modifier</button></td>
-          </tr>`;
-        }).join('');
+        await Promise.all([
+          loadOrganizations(),
+          loadStats(),
+          loadUsers()
+        ]);
+        document.getElementById('pageContent').style.display = 'block';
       } catch (error) {
-        console.error('Error loading all admins:', error);
-      }
-    }
-
-    // ==================== Load Ligue Admins ====================
-    async function loadLigueAdmins() {
-      try {
-        const res = await authFetch(`${API_URL}/super-admin/ligue-admins`);
-        const admins = await res.json();
-        const tbody = document.getElementById('ligueAdminsTbody');
-        document.getElementById('ligueAdminCount').textContent = `(${admins.length})`;
-
-        if (admins.length === 0) {
-          tbody.innerHTML = `<tr><td colspan="7">
-            <div class="empty-state">
-              <div class="icon">&#x1F465;</div>
-              <p>Aucun administrateur ligue créé</p>
-              <p style="font-size: 12px;">Cliquez sur "+ Créer un admin ligue" pour commencer</p>
-            </div>
-          </td></tr>`;
-          return;
-        }
-
-        tbody.innerHTML = admins.map(a => {
-          const statusBadge = a.is_active
-            ? '<span class="badge badge-active">Actif</span>'
-            : '<span class="badge badge-inactive">Inactif</span>';
-          return `<tr>
-            <td><img src="${API_URL}/super-admin/ligues/${a.ffb_ligue_numero}/logo" alt="" style="height: 24px; width: 24px; vertical-align: middle; margin-right: 6px; border-radius: 4px; object-fit: contain;" onerror="this.style.display='none'"><strong>${a.ligue_nom || 'Ligue ' + a.ffb_ligue_numero}</strong><br><span style="font-size: 11px; color: #888;">N° ${a.ffb_ligue_numero}</span></td>
-            <td><strong>${a.username}</strong></td>
-            <td>${a.email || '<span style="color: #ccc;">-</span>'}</td>
-            <td>${statusBadge}</td>
-            <td>${formatDate(a.last_login)}</td>
-            <td>${formatDateShort(a.created_at)}</td>
-            <td>
-              <button class="btn-sm btn-outline" onclick="openEditModal(${a.id}, '${a.username.replace(/'/g, "\\'")}', '${(a.email || '').replace(/'/g, "\\'")}')" style="margin-right: 4px;">Modifier</button>
-              <button class="btn-sm ${a.is_active ? 'btn-danger' : 'btn-primary'}" onclick="toggleActive(${a.id}, ${a.is_active})" title="${a.is_active ? 'Désactiver' : 'Activer'}">${a.is_active ? 'Désact.' : 'Activer'}</button>
-            </td>
-          </tr>`;
-        }).join('');
-      } catch (error) {
-        console.error('Error loading ligue admins:', error);
+        console.error('Error initializing page:', error);
         showToast('Erreur de chargement', 'error');
       }
+    });
+
+    // Load organizations
+    async function loadOrganizations() {
+      const response = await authFetch(`${API_URL}/super-admin/organizations`);
+      allOrganizations = await response.json();
+
+      // Populate CDB filter
+      const cdbFilter = document.getElementById('cdbFilter');
+      allOrganizations.forEach(org => {
+        const option = document.createElement('option');
+        option.value = org.id;
+        option.textContent = org.short_name || org.name;
+        cdbFilter.appendChild(option);
+      });
+
+      // Populate edit/create organization selects
+      populateOrgSelects();
     }
 
-    // ==================== Toggle Active ====================
-    async function toggleActive(userId, currentState) {
-      const action = currentState ? 'Désactiver' : 'Activer';
-      if (!confirm(`${action} cet administrateur ligue ?`)) return;
+    function populateOrgSelects() {
+      const editSelect = document.getElementById('editOrganization');
+      const createSelect = document.getElementById('createOrganization');
 
+      allOrganizations.forEach(org => {
+        const editOption = document.createElement('option');
+        editOption.value = org.id;
+        editOption.textContent = org.short_name || org.name;
+        editSelect.appendChild(editOption);
+
+        const createOption = document.createElement('option');
+        createOption.value = org.id;
+        createOption.textContent = org.short_name || org.name;
+        createSelect.appendChild(createOption);
+      });
+    }
+
+    // Load stats
+    async function loadStats() {
+      const response = await authFetch(`${API_URL}/super-admin/users/stats`);
+      stats = await response.json();
+      renderKPIs();
+    }
+
+    function renderKPIs() {
+      const grid = document.getElementById('kpiGrid');
+      grid.innerHTML = `
+        <div class="kpi-card">
+          <h4>Total Utilisateurs</h4>
+          <div class="kpi-value">${stats.total || 0}</div>
+          <div class="kpi-detail">${stats.active || 0} actifs, ${stats.inactive || 0} inactifs</div>
+        </div>
+        <div class="kpi-card">
+          <h4>Super Admins</h4>
+          <div class="kpi-value">${stats.superAdmins || 0}</div>
+          <div class="kpi-detail">Accès complet plateforme</div>
+        </div>
+        <div class="kpi-card">
+          <h4>Par Rôle</h4>
+          <div class="kpi-value">${stats.byRole?.length || 0}</div>
+          <div class="kpi-detail">${stats.byRole?.map(r => `${r.role}: ${r.count}`).join(', ') || 'Aucun'}</div>
+        </div>
+        <div class="kpi-card">
+          <h4>Par CDB</h4>
+          <div class="kpi-value">${stats.byCDB?.length || 0}</div>
+          <div class="kpi-detail">${stats.byCDB?.slice(0, 2).map(c => `${c.name}: ${c.count}`).join(', ') || 'Aucun'}</div>
+        </div>
+      `;
+    }
+
+    // Load users
+    async function loadUsers() {
       try {
-        const res = await authFetch(`${API_URL}/super-admin/ligue-admins/${userId}/toggle-active`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' }
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Erreur');
-        showToast(`Utilisateur ${!currentState ? 'activé' : 'désactivé'}`);
-        loadLigueAdmins();
+        document.getElementById('tableLoading').style.display = 'block';
+        document.getElementById('usersTable').style.display = 'none';
+        document.getElementById('tableEmpty').style.display = 'none';
+
+        const response = await authFetch(`${API_URL}/super-admin/users`);
+        allUsers = await response.json();
+
+        document.getElementById('tableLoading').style.display = 'none';
+        renderUsers();
       } catch (error) {
-        showToast(error.message, 'error');
+        console.error('Error loading users:', error);
+        document.getElementById('tableLoading').style.display = 'none';
+        showToast('Erreur lors du chargement des utilisateurs', 'error');
       }
     }
 
-    // ==================== Ligue Picklist ====================
-    let ligues = [];
-
-    async function loadLigues() {
-      try {
-        const res = await authFetch(`${API_URL}/ffb/ligues`);
-        ligues = await res.json();
-        const select = document.getElementById('ligueSelect');
-        select.innerHTML = '<option value="">-- Sélectionner une ligue --</option>' +
-          ligues.map(l => `<option value="${l.numero}">${l.nom || 'Ligue ' + l.numero} (${l.club_count} clubs, ${l.licence_count} licenciés)</option>`).join('');
-      } catch (error) {
-        console.error('Error loading ligues:', error);
-      }
+    // Apply filters
+    function applyFilters() {
+      renderUsers();
     }
 
-    function onLigueSelected() {
-      const numero = document.getElementById('ligueSelect').value;
-      clearLicenceSelection();
-      if (numero) {
-        const ligue = ligues.find(l => String(l.numero) === String(numero));
-        const slug = (ligue?.nom || '').toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '').substring(0, 15);
-        document.getElementById('adminUsername').value = 'ligue_' + (slug || numero);
-        document.getElementById('licenceSearchGroup').style.display = 'block';
-      } else {
-        document.getElementById('adminUsername').value = '';
-        document.getElementById('licenceSearchGroup').style.display = 'none';
-      }
-    }
+    function renderUsers() {
+      const search = document.getElementById('searchInput').value.toLowerCase();
+      const cdbFilter = document.getElementById('cdbFilter').value;
+      const roleFilter = document.getElementById('roleFilter').value;
+      const statusFilter = document.getElementById('statusFilter').value;
 
-    // ==================== FFB Licence Search ====================
-    let licenceSearchTimeout = null;
-    let selectedLicence = null;
-
-    function searchLigueLicence() {
-      clearTimeout(licenceSearchTimeout);
-      const q = document.getElementById('licenceSearch').value.trim();
-      const ligueNumero = document.getElementById('ligueSelect').value;
-      const resultsDiv = document.getElementById('licenceSearchResults');
-
-      if (!ligueNumero) {
-        showToast('Sélectionnez d\'abord une ligue', 'error');
-        return;
-      }
-      if (q.length < 2) {
-        resultsDiv.style.display = 'none';
-        return;
-      }
-
-      document.getElementById('licenceSearchSpinner').style.display = 'inline';
-      licenceSearchTimeout = setTimeout(async () => {
-        try {
-          const res = await authFetch(`${API_URL}/super-admin/ffb-licences/search-ligue?ligue_numero=${encodeURIComponent(ligueNumero)}&q=${encodeURIComponent(q)}`);
-          const players = await res.json();
-
-          if (players.length === 0) {
-            resultsDiv.innerHTML = '<div style="padding: 10px; color: #999; font-size: 13px;">Aucun résultat</div>';
-          } else {
-            resultsDiv.innerHTML = players.map(p => `
-              <div style="padding: 8px 10px; cursor: pointer; border-bottom: 1px solid #f0f0f0; font-size: 13px;"
-                   onmouseover="this.style.background='#f0f4ff'" onmouseout="this.style.background='white'"
-                   onclick='selectLicence(${JSON.stringify(p).replace(/'/g, "&#39;")})'>
-                <strong>${p.prenom} ${p.nom}</strong>
-                <span style="color: #888; margin-left: 8px;">${p.licence}</span>
-                ${p.club_nom ? `<span style="color: #666; margin-left: 8px; font-size: 11px;">${p.club_nom}</span>` : ''}
-              </div>
-            `).join('');
-          }
-          resultsDiv.style.display = 'block';
-        } catch (error) {
-          console.error('Licence search error:', error);
-        } finally {
-          document.getElementById('licenceSearchSpinner').style.display = 'none';
+      let filtered = allUsers.filter(user => {
+        // Search
+        if (search && !user.username.toLowerCase().includes(search) &&
+            !(user.email || '').toLowerCase().includes(search)) {
+          return false;
         }
-      }, 300);
-    }
 
-    function selectLicence(player) {
-      selectedLicence = player;
-      document.getElementById('licenceSearchResults').style.display = 'none';
-      document.getElementById('licenceSearch').style.display = 'none';
+        // CDB filter
+        if (cdbFilter && String(user.organization_id) !== cdbFilter) {
+          return false;
+        }
 
-      const infoDiv = document.getElementById('licenceSelectedInfo');
-      infoDiv.style.display = 'block';
-      document.getElementById('licenceSelectedName').textContent = `${player.prenom} ${player.nom}`;
-      document.getElementById('licenceSelectedLicence').textContent = `(${player.licence})`;
-      document.getElementById('licenceSelectedClub').textContent = player.club_nom || '-';
-      document.getElementById('licenceSelectedEmail').textContent = player.email || '-';
-      document.getElementById('licenceSelectedTel').textContent = player.tel_port || player.tel_fixe || '-';
+        // Role filter
+        if (roleFilter && user.role !== roleFilter) {
+          return false;
+        }
 
-      // Auto-fill email if available
-      if (player.email) {
-        document.getElementById('adminEmail').value = player.email;
-      }
-    }
+        // Status filter
+        if (statusFilter === 'active' && !user.is_active) return false;
+        if (statusFilter === 'inactive' && user.is_active) return false;
+        if (statusFilter === 'super' && !user.is_super_admin) return false;
 
-    function clearLicenceSelection() {
-      selectedLicence = null;
-      const infoDiv = document.getElementById('licenceSelectedInfo');
-      if (infoDiv) infoDiv.style.display = 'none';
-      const searchInput = document.getElementById('licenceSearch');
-      if (searchInput) {
-        searchInput.style.display = 'block';
-        searchInput.value = '';
-      }
-      const resultsDiv = document.getElementById('licenceSearchResults');
-      if (resultsDiv) resultsDiv.style.display = 'none';
-    }
+        return true;
+      });
 
-    // ==================== Create Form ====================
-    function toggleCreateForm() {
-      const form = document.getElementById('createForm');
-      form.classList.toggle('visible');
-      if (form.classList.contains('visible') && ligues.length === 0) {
-        loadLigues();
-      }
-    }
+      const tbody = document.getElementById('usersTableBody');
+      document.getElementById('tableCount').textContent = `(${filtered.length})`;
 
-    async function createLigueAdmin() {
-      const ffb_ligue_numero = document.getElementById('ligueSelect').value;
-      const username = document.getElementById('adminUsername').value.trim();
-      const email = document.getElementById('adminEmail').value.trim();
-      const password = document.getElementById('adminPassword').value.trim();
-
-      if (!ffb_ligue_numero) {
-        showToast('Veuillez sélectionner une ligue', 'error');
+      if (filtered.length === 0) {
+        document.getElementById('usersTable').style.display = 'none';
+        document.getElementById('tableEmpty').style.display = 'block';
         return;
       }
-      if (!selectedLicence) {
-        showToast('Veuillez sélectionner un licencié FFB comme administrateur', 'error');
+
+      document.getElementById('tableEmpty').style.display = 'none';
+      document.getElementById('usersTable').style.display = 'table';
+
+      tbody.innerHTML = filtered.map(user => {
+        const roleBadgeClass = {
+          'admin': 'role-admin',
+          'viewer': 'role-viewer',
+          'lecteur': 'role-lecteur',
+          'ligue_admin': 'role-ligue'
+        }[user.role] || '';
+
+        const roleLabel = {
+          'admin': 'Admin',
+          'viewer': 'Viewer',
+          'lecteur': 'Lecteur',
+          'ligue_admin': 'Admin Ligue'
+        }[user.role] || user.role;
+
+        const lastLogin = user.last_login ? new Date(user.last_login).toLocaleDateString('fr-FR', {
+          day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
+        }) : 'Jamais';
+
+        return `
+          <tr onclick="openEditModal(${user.id})">
+            <td>
+              <strong>${user.username}</strong>
+              ${user.is_super_admin ? '<span class="badge badge-sa" style="margin-left: 8px;">SA</span>' : ''}
+            </td>
+            <td>${user.email || '<span style="color: #999;">Non renseigné</span>'}</td>
+            <td><span class="role-badge ${roleBadgeClass}">${roleLabel}</span></td>
+            <td>${user.organization_name || '<span style="color: #999;">-</span>'}</td>
+            <td><span class="badge ${user.is_active ? 'badge-active' : 'badge-inactive'}">${user.is_active ? 'Actif' : 'Inactif'}</span></td>
+            <td style="color: #666; font-size: 12px;">${lastLogin}</td>
+            <td onclick="event.stopPropagation();">
+              <button class="btn btn-sm btn-icon" onclick="openEditModal(${user.id})" title="Modifier">✏️</button>
+              <button class="btn btn-sm ${user.is_active ? 'btn-danger' : 'btn-success'}" onclick="toggleActive(${user.id}, ${!user.is_active})" title="${user.is_active ? 'Désactiver' : 'Activer'}">
+                ${user.is_active ? '🚫' : '✅'}
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    // Open edit modal
+    async function openEditModal(userId) {
+      const user = allUsers.find(u => u.id === userId);
+      if (!user) return;
+
+      document.getElementById('editUserId').value = user.id;
+      document.getElementById('editUsername').value = user.username;
+      document.getElementById('editEmail').value = user.email || '';
+      document.getElementById('editRole').value = user.role;
+      document.getElementById('editOrganization').value = user.organization_id || '';
+      document.getElementById('editSuperAdmin').checked = user.is_super_admin;
+      document.getElementById('editActive').checked = user.is_active;
+      document.getElementById('editPassword').value = '';
+
+      document.getElementById('editModal').classList.add('show');
+    }
+
+    function closeEditModal() {
+      document.getElementById('editModal').classList.remove('show');
+    }
+
+    async function saveUser() {
+      const userId = document.getElementById('editUserId').value;
+      const email = document.getElementById('editEmail').value.trim();
+      const role = document.getElementById('editRole').value;
+      const organizationId = document.getElementById('editOrganization').value;
+      const isSuperAdmin = document.getElementById('editSuperAdmin').checked;
+      const isActive = document.getElementById('editActive').checked;
+      const password = document.getElementById('editPassword').value;
+
+      try {
+        // Update basic info
+        if (email || password) {
+          const body = { email: email || null };
+          if (password) {
+            if (password.length < 6) {
+              showToast('Le mot de passe doit contenir au moins 6 caractères', 'error');
+              return;
+            }
+            body.password = password;
+          }
+          await authFetch(`${API_URL}/super-admin/users/${userId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+          });
+        }
+
+        // Update role
+        await authFetch(`${API_URL}/super-admin/users/${userId}/role`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ role })
+        });
+
+        // Update organization
+        await authFetch(`${API_URL}/super-admin/users/${userId}/organization`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ organization_id: organizationId ? parseInt(organizationId) : null })
+        });
+
+        // Update super admin status
+        await authFetch(`${API_URL}/super-admin/users/${userId}/super-admin`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ is_super_admin: isSuperAdmin })
+        });
+
+        // Update active status
+        await authFetch(`${API_URL}/super-admin/users/${userId}/toggle-active`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ is_active: isActive })
+        });
+
+        showToast('Utilisateur modifié avec succès', 'success');
+        closeEditModal();
+        await Promise.all([loadStats(), loadUsers()]);
+      } catch (error) {
+        console.error('Error saving user:', error);
+        const errorData = await error.json().catch(() => ({ error: 'Erreur inconnue' }));
+        showToast(errorData.error || 'Erreur lors de la sauvegarde', 'error');
+      }
+    }
+
+    // Create user modal
+    function openCreateModal() {
+      document.getElementById('createUsername').value = '';
+      document.getElementById('createEmail').value = '';
+      document.getElementById('createRole').value = 'admin';
+      document.getElementById('createOrganization').value = '';
+      document.getElementById('createPassword').value = '';
+      document.getElementById('createPasswordConfirm').value = '';
+
+      document.getElementById('createModal').classList.add('show');
+    }
+
+    function closeCreateModal() {
+      document.getElementById('createModal').classList.remove('show');
+    }
+
+    async function createUser() {
+      const username = document.getElementById('createUsername').value.trim();
+      const email = document.getElementById('createEmail').value.trim();
+      const role = document.getElementById('createRole').value;
+      const organizationId = document.getElementById('createOrganization').value;
+      const password = document.getElementById('createPassword').value;
+      const passwordConfirm = document.getElementById('createPasswordConfirm').value;
+
+      // Validation
+      if (!username || !role || !organizationId || !password) {
+        showToast('Veuillez remplir tous les champs requis', 'error');
         return;
       }
-      if (!username || !password) {
-        showToast('Veuillez remplir l\'identifiant et le mot de passe', 'error');
+
+      if (password !== passwordConfirm) {
+        showToast('Les mots de passe ne correspondent pas', 'error');
         return;
       }
+
       if (password.length < 6) {
         showToast('Le mot de passe doit contenir au moins 6 caractères', 'error');
         return;
       }
 
-      const btn = document.getElementById('btnCreate');
-      btn.disabled = true;
-      btn.innerHTML = '<span class="spinner"></span>Création...';
-
       try {
-        const res = await authFetch(`${API_URL}/super-admin/ligue-admins`, {
+        const response = await authFetch(`${API_URL}/super-admin/users`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username, email, password, ffb_ligue_numero, ffb_licence: selectedLicence.licence })
+          body: JSON.stringify({
+            username,
+            email: email || null,
+            password,
+            role,
+            organization_id: parseInt(organizationId)
+          })
         });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Erreur');
 
-        showToast(data.message || 'Admin ligue créé');
-        document.getElementById('createForm').classList.remove('visible');
-
-        // Reset form
-        document.getElementById('ligueSelect').value = '';
-        document.getElementById('adminUsername').value = '';
-        document.getElementById('adminEmail').value = '';
-        document.getElementById('adminPassword').value = '';
-        clearLicenceSelection();
-        document.getElementById('licenceSearchGroup').style.display = 'none';
-
-        loadLigueAdmins();
+        const data = await response.json();
+        showToast(data.message || 'Utilisateur créé avec succès', 'success');
+        closeCreateModal();
+        await Promise.all([loadStats(), loadUsers()]);
       } catch (error) {
-        showToast(error.message, 'error');
-      } finally {
-        btn.disabled = false;
-        btn.textContent = 'Créer';
+        console.error('Error creating user:', error);
+        const errorData = await error.json().catch(() => ({ error: 'Erreur inconnue' }));
+        showToast(errorData.error || 'Erreur lors de la création', 'error');
       }
     }
 
-    // ==================== Edit User Modal ====================
-    function openEditModal(userId, username, email) {
-      document.getElementById('editUserId').value = userId;
-      document.getElementById('editUsername').value = username;
-      document.getElementById('editEmail').value = email;
-      document.getElementById('editPassword').value = '';
-      document.getElementById('editModal').classList.add('visible');
-    }
-
-    function closeEditModal() {
-      document.getElementById('editModal').classList.remove('visible');
-    }
-
-    async function saveUserEdit() {
-      const userId = document.getElementById('editUserId').value;
-      const username = document.getElementById('editUsername').value.trim();
-      const email = document.getElementById('editEmail').value.trim();
-      const password = document.getElementById('editPassword').value;
-
-      if (!username) {
-        showToast('L\'identifiant est obligatoire', 'error');
-        return;
-      }
-
-      const btn = document.getElementById('btnSaveEdit');
-      btn.disabled = true;
-      btn.innerHTML = '<span class="spinner"></span>Enregistrement...';
-
+    // Toggle active
+    async function toggleActive(userId, newState) {
       try {
-        const body = { username, email };
-        if (password) body.password = password;
-
-        const res = await authFetch(`${API_URL}/super-admin/users/${userId}`, {
+        await authFetch(`${API_URL}/super-admin/users/${userId}/toggle-active`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body)
+          body: JSON.stringify({ is_active: newState })
         });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Erreur');
 
-        showToast('Utilisateur modifié');
-        closeEditModal();
-        loadAllAdmins();
-        loadLigueAdmins();
+        showToast(`Utilisateur ${newState ? 'activé' : 'désactivé'}`, 'success');
+        await Promise.all([loadStats(), loadUsers()]);
       } catch (error) {
-        showToast(error.message, 'error');
-      } finally {
-        btn.disabled = false;
-        btn.textContent = 'Enregistrer';
+        console.error('Error toggling active:', error);
+        const errorData = await error.json().catch(() => ({ error: 'Erreur inconnue' }));
+        showToast(errorData.error || 'Erreur lors de la modification', 'error');
       }
     }
 
-    // Close modal on overlay click
-    document.getElementById('editModal').addEventListener('click', function(e) {
-      if (e.target === this) closeEditModal();
-    });
+    // Toast notification
+    function showToast(message, type = 'success') {
+      const toast = document.getElementById('toast');
+      const icon = document.getElementById('toastIcon');
+      const messageEl = document.getElementById('toastMessage');
 
-    // ==================== Init ====================
-    loadAllAdmins();
-    loadLigueAdmins();
+      toast.className = `toast ${type}`;
+      icon.textContent = type === 'success' ? '✓' : '✕';
+      messageEl.textContent = message;
+      toast.classList.add('show');
+
+      setTimeout(() => {
+        toast.classList.remove('show');
+      }, 4000);
+    }
+
+    // Logout
+    document.getElementById('logoutBtn').addEventListener('click', (e) => {
+      e.preventDefault();
+      logout();
+    });
   </script>
-  <div style="position: fixed; bottom: 8px; right: 12px; font-size: 10px; color: #bbb; z-index: 9999;">SA 1.0.3</div>
 </body>
 </html>

@@ -189,9 +189,16 @@ router.get('/ffb-licences/search-ligue', async (req, res) => {
 });
 
 // GET /api/super-admin/users — List all users
+// GET /api/super-admin/users — Get all users with organization info
 router.get('/users', (req, res) => {
   db.all(
-    `SELECT id, username, email, role, is_active, is_super_admin, club_id, last_login, created_at FROM users ORDER BY id`,
+    `SELECT
+      u.id, u.username, u.email, u.role, u.is_active, u.is_super_admin,
+      u.club_id, u.last_login, u.created_at, u.organization_id, u.ffb_ligue_numero,
+      o.name as organization_name, o.slug as organization_slug
+    FROM users u
+    LEFT JOIN organizations o ON u.organization_id = o.id
+    ORDER BY u.id`,
     [],
     (err, users) => {
       if (err) {
@@ -201,6 +208,53 @@ router.get('/users', (req, res) => {
       res.json(users || []);
     }
   );
+});
+
+// GET /api/super-admin/users/stats — Get user statistics
+router.get('/users/stats', async (req, res) => {
+  try {
+    // Total users
+    const totalResult = await dbGet(`SELECT COUNT(*) as total FROM users`);
+    const total = parseInt(totalResult?.total || 0);
+
+    // Active vs inactive
+    const activeResult = await dbGet(`SELECT COUNT(*) as count FROM users WHERE is_active = 1`);
+    const active = parseInt(activeResult?.count || 0);
+
+    // By role
+    const roleStats = await dbAll(`
+      SELECT role, COUNT(*) as count
+      FROM users
+      GROUP BY role
+      ORDER BY count DESC
+    `);
+
+    // By CDB
+    const cdbStats = await dbAll(`
+      SELECT o.name, COUNT(u.id) as count
+      FROM users u
+      LEFT JOIN organizations o ON u.organization_id = o.id
+      WHERE u.organization_id IS NOT NULL
+      GROUP BY o.id, o.name
+      ORDER BY count DESC
+    `);
+
+    // Super admins
+    const superAdminResult = await dbGet(`SELECT COUNT(*) as count FROM users WHERE is_super_admin = true`);
+    const superAdmins = parseInt(superAdminResult?.count || 0);
+
+    res.json({
+      total,
+      active,
+      inactive: total - active,
+      superAdmins,
+      byRole: roleStats || [],
+      byCDB: cdbStats || []
+    });
+  } catch (error) {
+    console.error('Error fetching user stats:', error);
+    res.status(500).json({ error: 'Erreur: ' + error.message });
+  }
 });
 
 // PUT /api/super-admin/users/:id/super-admin — Grant/revoke super admin
@@ -350,6 +404,160 @@ router.post('/ligue-admins', async (req, res) => {
   } catch (error) {
     console.error('Error creating ligue admin:', error);
     res.status(500).json({ error: 'Erreur lors de la création de l\'admin ligue' });
+  }
+});
+
+// PUT /api/super-admin/users/:id/role — Change user role
+router.put('/users/:id/role', async (req, res) => {
+  const { id } = req.params;
+  const { role } = req.body;
+
+  const validRoles = ['admin', 'viewer', 'lecteur', 'ligue_admin'];
+  if (!validRoles.includes(role)) {
+    return res.status(400).json({ error: 'Rôle invalide. Valeurs: admin, viewer, lecteur, ligue_admin' });
+  }
+
+  try {
+    const user = await dbGet(`SELECT id, username, role FROM users WHERE id = $1`, [id]);
+    if (!user) return res.status(404).json({ error: 'Utilisateur non trouvé' });
+
+    await dbRun(`UPDATE users SET role = $1 WHERE id = $2`, [role, id]);
+
+    logAdminAction({
+      req,
+      action: ACTION_TYPES.USER_UPDATED,
+      targetType: 'user',
+      targetId: id,
+      details: `Rôle modifié: ${user.username} (${user.role} → ${role})`
+    });
+
+    res.json({ success: true, message: 'Rôle modifié avec succès' });
+  } catch (error) {
+    console.error('Error changing user role:', error);
+    res.status(500).json({ error: 'Erreur: ' + error.message });
+  }
+});
+
+// PUT /api/super-admin/users/:id/organization — Reassign user to different CDB
+router.put('/users/:id/organization', async (req, res) => {
+  const { id } = req.params;
+  const { organization_id } = req.body;
+
+  try {
+    const user = await dbGet(`SELECT id, username, organization_id FROM users WHERE id = $1`, [id]);
+    if (!user) return res.status(404).json({ error: 'Utilisateur non trouvé' });
+
+    // Validate organization exists if not null
+    if (organization_id !== null) {
+      const org = await dbGet(`SELECT id, short_name FROM organizations WHERE id = $1`, [organization_id]);
+      if (!org) return res.status(404).json({ error: 'Organisation introuvable' });
+    }
+
+    await dbRun(`UPDATE users SET organization_id = $1 WHERE id = $2`, [organization_id || null, id]);
+
+    logAdminAction({
+      req,
+      action: ACTION_TYPES.USER_UPDATED,
+      targetType: 'user',
+      targetId: id,
+      details: `CDB réassigné: ${user.username} (org ${user.organization_id} → ${organization_id})`
+    });
+
+    res.json({ success: true, message: 'CDB réassigné avec succès' });
+  } catch (error) {
+    console.error('Error reassigning organization:', error);
+    res.status(500).json({ error: 'Erreur: ' + error.message });
+  }
+});
+
+// PUT /api/super-admin/users/:id/toggle-active — Enable/disable user
+router.put('/users/:id/toggle-active', async (req, res) => {
+  const { id } = req.params;
+  const { is_active } = req.body;
+
+  if (typeof is_active !== 'boolean') {
+    return res.status(400).json({ error: 'is_active doit être un booléen' });
+  }
+
+  // Prevent disabling yourself
+  if (parseInt(id) === req.user.userId && !is_active) {
+    return res.status(400).json({ error: 'Vous ne pouvez pas désactiver votre propre compte' });
+  }
+
+  try {
+    const user = await dbGet(`SELECT id, username FROM users WHERE id = $1`, [id]);
+    if (!user) return res.status(404).json({ error: 'Utilisateur non trouvé' });
+
+    await dbRun(`UPDATE users SET is_active = $1 WHERE id = $2`, [is_active ? 1 : 0, id]);
+
+    logAdminAction({
+      req,
+      action: ACTION_TYPES.USER_UPDATED,
+      targetType: 'user',
+      targetId: id,
+      details: `Utilisateur ${user.username} ${is_active ? 'activé' : 'désactivé'}`
+    });
+
+    res.json({ success: true, message: `Utilisateur ${is_active ? 'activé' : 'désactivé'}` });
+  } catch (error) {
+    console.error('Error toggling user active status:', error);
+    res.status(500).json({ error: 'Erreur: ' + error.message });
+  }
+});
+
+// POST /api/super-admin/users — Create new CDB user (admin/viewer/lecteur)
+router.post('/users', async (req, res) => {
+  const { username, email, password, role, organization_id } = req.body;
+
+  if (!username || !password || !role || !organization_id) {
+    return res.status(400).json({ error: 'Champs requis: username, password, role, organization_id' });
+  }
+
+  const validRoles = ['admin', 'viewer', 'lecteur'];
+  if (!validRoles.includes(role)) {
+    return res.status(400).json({ error: 'Rôle invalide pour un utilisateur CDB. Valeurs: admin, viewer, lecteur' });
+  }
+
+  if (password.length < 6) {
+    return res.status(400).json({ error: 'Le mot de passe doit contenir au moins 6 caractères' });
+  }
+
+  try {
+    // Check username uniqueness
+    const existing = await dbGet(`SELECT id FROM users WHERE username = $1`, [username]);
+    if (existing) {
+      return res.status(409).json({ error: 'Ce nom d\'utilisateur existe déjà' });
+    }
+
+    // Validate organization exists
+    const org = await dbGet(`SELECT id, short_name FROM organizations WHERE id = $1`, [organization_id]);
+    if (!org) {
+      return res.status(404).json({ error: 'Organisation introuvable' });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    const result = await dbRun(
+      `INSERT INTO users (username, password_hash, email, role, is_active, organization_id)
+       VALUES ($1, $2, $3, $4, 1, $5)`,
+      [username, passwordHash, email || null, role, organization_id]
+    );
+
+    logAdminAction({
+      req,
+      action: ACTION_TYPES.USER_CREATED,
+      targetType: 'user',
+      targetId: result.lastID,
+      details: `Utilisateur créé: ${username} (${role}) pour ${org.short_name}`
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Utilisateur créé avec succès',
+      user: { id: result.lastID, username, role, organization_id, organization_name: org.short_name }
+    });
+  } catch (error) {
+    console.error('Error creating user:', error);
+    res.status(500).json({ error: 'Erreur lors de la création de l\'utilisateur' });
   }
 });
 
