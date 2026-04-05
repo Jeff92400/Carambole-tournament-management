@@ -37,6 +37,41 @@ router.get('/debug-auth', authenticateToken, (req, res) => {
 });
 
 /**
+ * TEMP DEBUG - Check admin94 logs org_id values
+ */
+router.get('/debug-admin94-logs', (req, res) => {
+  db.all(`
+    SELECT username, user_id, organization_id, action_type, created_at
+    FROM admin_activity_logs
+    WHERE username IN ('admin94', 'Denis', 'Michel', 'JMHB')
+    ORDER BY username, created_at DESC
+    LIMIT 50
+  `, [], (err, logs) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+
+    // Group by org_id
+    const byOrg = {};
+    logs.forEach(log => {
+      const orgKey = log.organization_id || 'NULL';
+      if (!byOrg[orgKey]) byOrg[orgKey] = [];
+      byOrg[orgKey].push({
+        username: log.username,
+        action: log.action_type,
+        created: log.created_at
+      });
+    });
+
+    res.json({
+      totalLogs: logs.length,
+      byOrganization: byOrg,
+      rawSample: logs.slice(0, 10)
+    });
+  });
+});
+
+/**
  * GET /api/admin-logs
  * Get admin activity logs with optional filters
  */
