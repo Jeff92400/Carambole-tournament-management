@@ -7,6 +7,7 @@
   <link rel="icon" type="image/png" href="images/FrenchBillard-Icon-small.png">
   <link rel="stylesheet" href="css/styles.css?v=2">
   <script src="js/branding.js?v=197"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <style>
     .filters-card {
       background: white;
@@ -281,7 +282,7 @@
       </div>
 
       <p style="font-size: 12px; color: #856404; margin: 10px 0 0 0;">
-        ⚠️ La suppression est définitive. Aucun backup automatique - exportez manuellement si nécessaire.
+        ⚠️ La suppression est définitive. Un backup Excel sera automatiquement téléchargé avant suppression.
       </p>
     </div>
 
@@ -599,7 +600,7 @@
       document.getElementById('logsContainer').scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
-    // Execute delete with filters (no automatic backup)
+    // Execute delete with filters (with automatic Excel backup)
     async function executeDeleteWithFilters() {
       const startDate = document.getElementById('deleteStartDate').value;
       const endDate = document.getElementById('deleteEndDate').value;
@@ -621,11 +622,58 @@
 
       const filterDesc = filters.length > 0 ? filters.join(', ') : 'TOUS LES LOGS';
 
-      if (!confirm(`⚠️ ATTENTION ⚠️\n\nVous allez supprimer les logs avec les critères suivants :\n${filterDesc}\n\n⚠️ Cette action est DÉFINITIVE et SANS sauvegarde automatique.\n⚠️ Exportez les logs manuellement si vous souhaitez les conserver.\n\nContinuer ?`)) {
+      if (!confirm(`⚠️ ATTENTION ⚠️\n\nVous allez supprimer les logs avec les critères suivants :\n${filterDesc}\n\nUne sauvegarde Excel sera téléchargée avant suppression.\n\nContinuer ?`)) {
         return;
       }
 
       try {
+        // Step 1: Fetch logs to be deleted for backup
+        const params = new URLSearchParams();
+        params.append('limit', 100000);
+        if (startDate) params.append('startDate', startDate);
+        if (endDate) params.append('endDate', endDate);
+        if (actionType) params.append('actionType', actionType);
+        if (username) params.append('username', username);
+
+        const fetchResponse = await fetch(`${API_URL}/admin-logs?${params}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (!fetchResponse.ok) throw new Error('Impossible de récupérer les logs');
+
+        const data = await fetchResponse.json();
+        const logsToDelete = data.logs || [];
+
+        if (logsToDelete.length === 0) {
+          alert('Aucun log à supprimer avec ces critères.');
+          return;
+        }
+
+        // Step 2: Generate and download Excel backup
+        const headers = ['Date/Heure', 'Utilisateur', 'Rôle', 'Action', 'Détails', 'Type cible', 'ID cible', 'Nom cible', 'IP'];
+        const rows = logsToDelete.map(log => [
+          formatDateTime(log.created_at),
+          log.username || '',
+          log.user_role || '',
+          log.action_type || '',
+          log.action_details || '',
+          log.target_type || '',
+          log.target_id || '',
+          log.target_name || '',
+          log.ip_address || ''
+        ]);
+
+        const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+        ws['!cols'] = [
+          { wch: 18 }, { wch: 15 }, { wch: 10 }, { wch: 25 },
+          { wch: 40 }, { wch: 15 }, { wch: 10 }, { wch: 20 }, { wch: 15 }
+        ];
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Logs Admin');
+        const dateStr = new Date().toISOString().slice(0, 10);
+        XLSX.writeFile(wb, `backup-admin-logs-${dateStr}.xlsx`);
+
+        // Step 3: Delete logs
         const deleteBody = {};
         if (startDate) deleteBody.startDate = startDate + 'T00:00:00';
         if (endDate) deleteBody.endDate = endDate + 'T23:59:59';
@@ -644,7 +692,7 @@
 
         if (deleteResponse.ok) {
           const result = await deleteResponse.json();
-          alert(`✅ ${result.deleted} logs supprimés avec succès.`);
+          alert(`✅ Sauvegarde téléchargée.\n${result.deleted} logs supprimés avec succès.`);
           document.getElementById('deletePreview').textContent = '';
           loadLogs();
           loadStats();
