@@ -38,9 +38,20 @@ router.get('/', authenticateToken, requireAdminOrLecteur, (req, res) => {
   const isSuperAdmin = req.user.isSuperAdmin;
 
   // Super admin can specify org via query param, regular admin always uses their own
-  const targetOrgId = isSuperAdmin && organizationId !== undefined
-    ? (organizationId === '' ? null : parseInt(organizationId))
-    : (req.user.organizationId || null);
+  let targetOrgId;
+  if (isSuperAdmin && organizationId !== undefined) {
+    // Super admin with explicit org filter
+    targetOrgId = organizationId === '' ? null : parseInt(organizationId);
+  } else if (!isSuperAdmin) {
+    // Regular admin MUST have an organization
+    if (!req.user.organizationId) {
+      return res.status(403).json({ error: 'Organization ID required for non-super-admin users' });
+    }
+    targetOrgId = req.user.organizationId;
+  } else {
+    // Super admin without filter = show all (null)
+    targetOrgId = null;
+  }
 
   let query = `
     SELECT
@@ -126,6 +137,10 @@ router.get('/', authenticateToken, requireAdminOrLecteur, (req, res) => {
  * Get quick statistics for dashboard
  */
 router.get('/stats', authenticateToken, requireAdminOrLecteur, (req, res) => {
+  // Regular admins MUST have an organization
+  if (!req.user.isSuperAdmin && !req.user.organizationId) {
+    return res.status(403).json({ error: 'Organization ID required' });
+  }
   const orgId = req.user.organizationId || null;
   // Last 7 days stats
   db.get(`
@@ -172,6 +187,10 @@ router.get('/stats', authenticateToken, requireAdminOrLecteur, (req, res) => {
  * Get list of distinct action types for filtering
  */
 router.get('/action-types', authenticateToken, requireAdminOrLecteur, (req, res) => {
+  // Regular admins MUST have an organization
+  if (!req.user.isSuperAdmin && !req.user.organizationId) {
+    return res.status(403).json({ error: 'Organization ID required' });
+  }
   const orgId = req.user.organizationId || null;
   db.all(`
     SELECT DISTINCT action_type, COUNT(*) as count
@@ -198,9 +217,17 @@ router.get('/usernames', authenticateToken, requireAdminOrLecteur, (req, res) =>
   const isSuperAdmin = req.user.isSuperAdmin;
 
   // Super admin can specify org, regular admin always uses their own
-  const targetOrgId = isSuperAdmin && organizationId !== undefined
-    ? (organizationId === '' ? null : parseInt(organizationId))
-    : (req.user.organizationId || null);
+  let targetOrgId;
+  if (isSuperAdmin && organizationId !== undefined) {
+    targetOrgId = organizationId === '' ? null : parseInt(organizationId);
+  } else if (!isSuperAdmin) {
+    if (!req.user.organizationId) {
+      return res.status(403).json({ error: 'Organization ID required' });
+    }
+    targetOrgId = req.user.organizationId;
+  } else {
+    targetOrgId = null;
+  }
 
   db.all(`
     SELECT DISTINCT username, COUNT(*) as count
@@ -236,7 +263,17 @@ router.post('/preview-delete', authenticateToken, requireAdmin, (req, res) => {
   const isSuperAdmin = req.user.isSuperAdmin;
 
   // Super admin can specify org, regular admin always uses their own
-  const targetOrgId = isSuperAdmin && organizationId !== undefined ? organizationId : (req.user.organizationId || null);
+  let targetOrgId;
+  if (isSuperAdmin && organizationId !== undefined) {
+    targetOrgId = organizationId;
+  } else if (!isSuperAdmin) {
+    if (!req.user.organizationId) {
+      return res.status(403).json({ error: 'Organization ID required' });
+    }
+    targetOrgId = req.user.organizationId;
+  } else {
+    targetOrgId = null;
+  }
 
   let query = 'SELECT COUNT(*) as count FROM admin_activity_logs WHERE ($1::int IS NULL OR organization_id = $1)';
   const params = [targetOrgId];
@@ -306,7 +343,17 @@ router.delete('/', authenticateToken, requireAdmin, (req, res) => {
   const isSuperAdmin = req.user.isSuperAdmin;
 
   // CRITICAL: Super admin can specify org, regular admin ALWAYS uses their own org (prevent cross-CDB deletion)
-  const targetOrgId = isSuperAdmin && organizationId !== undefined ? organizationId : (req.user.organizationId || null);
+  let targetOrgId;
+  if (isSuperAdmin && organizationId !== undefined) {
+    targetOrgId = organizationId;
+  } else if (!isSuperAdmin) {
+    if (!req.user.organizationId) {
+      return res.status(403).json({ error: 'Organization ID required' });
+    }
+    targetOrgId = req.user.organizationId;
+  } else {
+    targetOrgId = null;
+  }
 
   let query = 'DELETE FROM admin_activity_logs WHERE ($1::int IS NULL OR organization_id = $1)';
   const params = [targetOrgId];
