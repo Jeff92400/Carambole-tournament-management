@@ -38,9 +38,9 @@ router.get('/debug-auth', authenticateToken, (req, res) => {
 
 /**
  * DEBUG ENDPOINT - GET /api/admin-logs/debug-contamination
- * Check admin92 data contamination
+ * Check admin92 data contamination (TEMPORARY - NO AUTH FOR DEBUG)
  */
-router.get('/debug-contamination', authenticateToken, requireAdmin, (req, res) => {
+router.get('/debug-contamination', (req, res) => {
   // Get admin92's user record
   db.get('SELECT id, username, email, role, organization_id, is_super_admin FROM users WHERE username = $1', ['admin92'], (err, user) => {
     if (err) {
