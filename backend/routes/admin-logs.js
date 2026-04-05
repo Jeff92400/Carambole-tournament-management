@@ -37,6 +37,51 @@ router.get('/debug-auth', authenticateToken, (req, res) => {
 });
 
 /**
+ * DEBUG ENDPOINT - GET /api/admin-logs/debug-contamination
+ * Check admin92 data contamination
+ */
+router.get('/debug-contamination', authenticateToken, requireAdmin, (req, res) => {
+  // Get admin92's user record
+  db.get('SELECT id, username, email, role, organization_id, is_super_admin FROM users WHERE username = $1', ['admin92'], (err, user) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+
+    // Get log count by org for admin92
+    db.all(`
+      SELECT organization_id, COUNT(*) as log_count
+      FROM admin_activity_logs
+      WHERE username = $1
+      GROUP BY organization_id
+      ORDER BY organization_id
+    `, ['admin92'], (err, logCounts) => {
+      if (err) {
+        return res.status(500).json({ error: err.message });
+      }
+
+      // Get sample logs from each org
+      db.all(`
+        SELECT username, user_id, organization_id, action_type, created_at
+        FROM admin_activity_logs
+        WHERE username = $1
+        ORDER BY organization_id, created_at DESC
+        LIMIT 20
+      `, ['admin92'], (err, sampleLogs) => {
+        if (err) {
+          return res.status(500).json({ error: err.message });
+        }
+
+        res.json({
+          admin92User: user,
+          logCountsByOrg: logCounts,
+          sampleLogs: sampleLogs
+        });
+      });
+    });
+  });
+});
+
+/**
  * GET /api/admin-logs
  * Get admin activity logs with optional filters
  */
