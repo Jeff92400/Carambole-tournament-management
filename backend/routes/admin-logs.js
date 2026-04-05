@@ -88,6 +88,7 @@ router.get('/', authenticateToken, requireAdminOrLecteur, (req, res) => {
       target_id,
       target_name,
       ip_address,
+      organization_id,
       created_at
     FROM admin_activity_logs
     WHERE ($1::int IS NULL OR organization_id = $1)
@@ -153,7 +154,12 @@ router.get('/', authenticateToken, requireAdminOrLecteur, (req, res) => {
       }
 
       console.log('[ADMIN-LOGS DEBUG] Returned logs count:', logs?.length);
-      console.log('[ADMIN-LOGS DEBUG] First 3 logs org_ids:', logs?.slice(0, 3).map(l => ({ username: l.username, user_id: l.user_id })));
+      console.log('[ADMIN-LOGS DEBUG] First 10 logs with org_id:', logs?.slice(0, 10).map(l => ({
+        username: l.username,
+        user_id: l.user_id,
+        org_id: l.organization_id,
+        action: l.action_type
+      })));
 
       res.json({
         logs: logs || [],
