@@ -195,6 +195,7 @@ router.get('/users', (req, res) => {
     `SELECT
       u.id, u.username, u.email, u.role, u.is_active, u.is_super_admin,
       u.club_id, u.last_login, u.created_at, u.organization_id, u.ffb_ligue_numero,
+      u.last_password_change,
       o.name as organization_name, o.slug as organization_slug
     FROM users u
     LEFT JOIN organizations o ON u.organization_id = o.id
@@ -321,6 +322,7 @@ router.put('/users/:id', async (req, res) => {
       if (password.length < 6) return res.status(400).json({ error: 'Mot de passe: 6 caractères minimum' });
       const hash = await bcrypt.hash(password, 10);
       updates.push(`password_hash = $${idx++}`); params.push(hash);
+      updates.push(`last_password_change = CURRENT_TIMESTAMP`);
     }
 
     if (updates.length === 0) return res.status(400).json({ error: 'Rien à modifier' });
@@ -383,8 +385,8 @@ router.post('/ligue-admins', async (req, res) => {
 
     const passwordHash = await bcrypt.hash(password, 10);
     const result = await dbRun(
-      `INSERT INTO users (username, password_hash, email, role, is_active, ffb_ligue_numero)
-       VALUES ($1, $2, $3, 'ligue_admin', 1, $4)`,
+      `INSERT INTO users (username, password_hash, email, role, is_active, ffb_ligue_numero, last_password_change)
+       VALUES ($1, $2, $3, 'ligue_admin', 1, $4, CURRENT_TIMESTAMP)`,
       [username, passwordHash, email || null, ffb_ligue_numero]
     );
 
@@ -537,8 +539,8 @@ router.post('/users', async (req, res) => {
 
     const passwordHash = await bcrypt.hash(password, 10);
     const result = await dbRun(
-      `INSERT INTO users (username, password_hash, email, role, is_active, organization_id)
-       VALUES ($1, $2, $3, $4, 1, $5)`,
+      `INSERT INTO users (username, password_hash, email, role, is_active, organization_id, last_password_change)
+       VALUES ($1, $2, $3, $4, 1, $5, CURRENT_TIMESTAMP)`,
       [username, passwordHash, email || null, role, organization_id]
     );
 
@@ -920,8 +922,8 @@ router.post('/organizations', async (req, res) => {
     // Create admin user
     const passwordHash = await bcrypt.hash(admin_password, 10);
     await dbRun(
-      `INSERT INTO users (username, password_hash, email, role, is_active, organization_id)
-       VALUES ($1, $2, $3, 'admin', 1, $4)`,
+      `INSERT INTO users (username, password_hash, email, role, is_active, organization_id, last_password_change)
+       VALUES ($1, $2, $3, 'admin', 1, $4, CURRENT_TIMESTAMP)`,
       [admin_username, passwordHash, admin_email || null, orgId]
     );
 

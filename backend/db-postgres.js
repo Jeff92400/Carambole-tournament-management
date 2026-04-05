@@ -88,6 +88,7 @@ async function initializeDatabase() {
     await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_super_admin BOOLEAN DEFAULT FALSE`);
     await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)`);
     await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS ffb_ligue_numero VARCHAR(10)`);
+    await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_password_change TIMESTAMP`);
 
     // Players table
     await client.query(`

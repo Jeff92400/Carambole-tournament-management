@@ -332,9 +332,33 @@
         </div>
 
         <div class="form-group">
-          <label>Nouveau mot de passe (optionnel)</label>
-          <input type="password" id="editPassword" placeholder="Laisser vide pour ne pas changer">
-          <small>Minimum 6 caractères</small>
+          <label>Mot de passe</label>
+          <div style="background: #f8f9fa; padding: 12px; border-radius: 4px; margin-bottom: 12px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <span style="font-weight: 500;">Statut:</span>
+              <span id="passwordStatus" style="color: #28a745; font-weight: 500;">✓ Défini</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span style="font-weight: 500;">Dernière modification:</span>
+              <span id="lastPasswordChange" style="color: #6c757d;">Jamais</span>
+            </div>
+          </div>
+
+          <div class="checkbox-group" style="margin-bottom: 12px;">
+            <input type="checkbox" id="resetPasswordCheckbox" onchange="togglePasswordReset()">
+            <label for="resetPasswordCheckbox">Réinitialiser le mot de passe</label>
+          </div>
+
+          <div id="passwordResetFields" style="display: none;">
+            <div class="form-group">
+              <label>Nouveau mot de passe <span class="required">*</span></label>
+              <input type="password" id="editPassword" placeholder="Minimum 6 caractères">
+            </div>
+            <div class="form-group">
+              <label>Confirmer le mot de passe <span class="required">*</span></label>
+              <input type="password" id="editPasswordConfirm" placeholder="Retaper le mot de passe">
+            </div>
+          </div>
         </div>
       </div>
       <div class="modal-footer">
@@ -623,6 +647,31 @@
       }).join('');
     }
 
+    // Toggle password reset fields
+    function togglePasswordReset() {
+      const checkbox = document.getElementById('resetPasswordCheckbox');
+      const fields = document.getElementById('passwordResetFields');
+      fields.style.display = checkbox.checked ? 'block' : 'none';
+
+      if (!checkbox.checked) {
+        document.getElementById('editPassword').value = '';
+        document.getElementById('editPasswordConfirm').value = '';
+      }
+    }
+
+    // Format date for display
+    function formatDate(dateString) {
+      if (!dateString) return 'Jamais';
+      const date = new Date(dateString);
+      return date.toLocaleDateString('fr-FR', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    }
+
     // Open edit modal
     async function openEditModal(userId) {
       const user = allUsers.find(u => u.id === userId);
@@ -636,6 +685,18 @@
       document.getElementById('editSuperAdmin').checked = user.is_super_admin;
       document.getElementById('editActive').checked = user.is_active;
       document.getElementById('editPassword').value = '';
+      document.getElementById('editPasswordConfirm').value = '';
+
+      // Reset password reset checkbox
+      document.getElementById('resetPasswordCheckbox').checked = false;
+      document.getElementById('passwordResetFields').style.display = 'none';
+
+      // Update password status
+      const hasPassword = user.password_hash || user.last_password_change;
+      document.getElementById('passwordStatus').innerHTML = hasPassword
+        ? '<span style="color: #28a745;">✓ Défini</span>'
+        : '<span style="color: #dc3545;">⚠️ Non défini</span>';
+      document.getElementById('lastPasswordChange').textContent = formatDate(user.last_password_change);
 
       document.getElementById('editModal').classList.add('show');
     }
@@ -651,17 +712,31 @@
       const organizationId = document.getElementById('editOrganization').value;
       const isSuperAdmin = document.getElementById('editSuperAdmin').checked;
       const isActive = document.getElementById('editActive').checked;
+      const resetPassword = document.getElementById('resetPasswordCheckbox').checked;
       const password = document.getElementById('editPassword').value;
+      const passwordConfirm = document.getElementById('editPasswordConfirm').value;
 
       try {
-        // Update basic info
-        if (email || password) {
+        // Validate password if resetting
+        if (resetPassword) {
+          if (!password) {
+            showToast('Le mot de passe est requis', 'error');
+            return;
+          }
+          if (password.length < 6) {
+            showToast('Le mot de passe doit contenir au moins 6 caractères', 'error');
+            return;
+          }
+          if (password !== passwordConfirm) {
+            showToast('Les mots de passe ne correspondent pas', 'error');
+            return;
+          }
+        }
+
+        // Update basic info (email and password if resetting)
+        if (email || resetPassword) {
           const body = { email: email || null };
-          if (password) {
-            if (password.length < 6) {
-              showToast('Le mot de passe doit contenir au moins 6 caractères', 'error');
-              return;
-            }
+          if (resetPassword && password) {
             body.password = password;
           }
           await authFetch(`${API_URL}/super-admin/users/${userId}`, {
