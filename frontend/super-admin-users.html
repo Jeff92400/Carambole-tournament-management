@@ -692,10 +692,9 @@
       document.getElementById('passwordResetFields').style.display = 'none';
 
       // Update password status
-      const hasPassword = user.password_hash || user.last_password_change;
-      document.getElementById('passwordStatus').innerHTML = hasPassword
-        ? '<span style="color: #28a745;">✓ Défini</span>'
-        : '<span style="color: #dc3545;">⚠️ Non défini</span>';
+      // All existing users have a password (required at creation)
+      // We never send password_hash to frontend for security, so always show "Défini"
+      document.getElementById('passwordStatus').innerHTML = '<span style="color: #28a745;">✓ Défini</span>';
       document.getElementById('lastPasswordChange').textContent = formatDate(user.last_password_change);
 
       document.getElementById('editModal').classList.add('show');
