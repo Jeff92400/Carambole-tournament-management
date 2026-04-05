@@ -172,8 +172,8 @@ function requireAuth() {
 }
 
 /**
- * Get current user info from localStorage
- * @returns {object|null} - User object with username and role
+ * Get current user info from sessionStorage
+ * @returns {object|null} - User object with username, role, and isSuperAdmin
  */
 function getCurrentUser() {
   const token = sessionStorage.getItem('token');
@@ -181,7 +181,8 @@ function getCurrentUser() {
 
   return {
     username: sessionStorage.getItem('username'),
-    role: sessionStorage.getItem('role')
+    role: sessionStorage.getItem('role'),
+    isSuperAdmin: sessionStorage.getItem('isSuperAdmin') === 'true'
   };
 }
 
