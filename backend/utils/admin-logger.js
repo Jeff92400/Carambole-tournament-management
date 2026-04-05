@@ -22,11 +22,15 @@ function logAdminAction({ req, action, details, targetType, targetId, targetName
     const userId = req.user?.userId || null;
     const username = req.user?.username || 'unknown';
     const userRole = req.user?.role || 'unknown';
-    const organizationId = req.user?.organizationId || null;
+    const isSuperAdmin = req.user?.isSuperAdmin || false;
     const ipAddress = req.ip || req.connection?.remoteAddress || null;
     const userAgent = req.headers?.['user-agent'] || null;
 
-    console.log(`[AdminLog] Logging action: ${action} by ${username} (${userRole})`);
+    // CRITICAL: Super admin logs ALWAYS use organization_id = NULL
+    // This prevents contamination when SA views different CDB contexts
+    const organizationId = isSuperAdmin ? null : (req.user?.organizationId || null);
+
+    console.log(`[AdminLog] Logging action: ${action} by ${username} (${userRole})${isSuperAdmin ? ' [SUPER ADMIN]' : ''}`);
 
     db.run(
       `INSERT INTO admin_activity_logs
@@ -37,7 +41,7 @@ function logAdminAction({ req, action, details, targetType, targetId, targetName
         if (err) {
           console.error('[AdminLog] Failed to insert log:', err.message);
         } else {
-          console.log(`[AdminLog] Successfully logged: ${action}`);
+          console.log(`[AdminLog] Successfully logged: ${action} (org: ${organizationId || 'GLOBAL'})`);
         }
       }
     );

@@ -1533,6 +1533,17 @@ async function initializeDatabase() {
     await client.query(`UPDATE scheduled_emails SET organization_id = 1 WHERE organization_id IS NULL`);
     await client.query(`UPDATE player_invitations SET organization_id = 1 WHERE organization_id IS NULL`);
     await client.query(`UPDATE admin_activity_logs SET organization_id = 1 WHERE organization_id IS NULL`);
+
+    // CRITICAL FIX (April 2026): Clean up contaminated super admin logs
+    // Super admin logs should always have organization_id = NULL (global logs)
+    // This fixes the bug where admin92 (super admin) created logs with wrong org_id
+    await client.query(`
+      UPDATE admin_activity_logs
+      SET organization_id = NULL
+      WHERE user_id IN (SELECT id FROM users WHERE is_super_admin = true)
+    `);
+    console.log('[Migration] Cleaned up super admin logs - set organization_id to NULL');
+
     // Assign enrollment_requests org from player's org
     await client.query(`
       UPDATE enrollment_requests er

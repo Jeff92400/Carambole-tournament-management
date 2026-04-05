@@ -487,6 +487,7 @@
     <a href="#param-wordpress">Site Web / WordPress</a>
     <a href="#param-confidentialite">Politique de Confidentialité</a>
     <a href="#param-logs">Logs d'activité</a>
+    <a href="#param-admin-logs">Logs Administrateur</a>
 
     <a href="#inscriptions-list" class="section-title">Inscriptions</a>
     <a href="#inscriptions-list">Liste des inscriptions</a>
@@ -2821,6 +2822,140 @@
       <li><strong>Export Excel</strong> : Télécharge les logs filtrés au format Excel</li>
       <li><strong>Rafraîchissement automatique</strong> : Toggle pour actualiser les logs toutes les 30 secondes</li>
       <li><strong>Pagination</strong> : 50 logs par page</li>
+    </ul>
+
+    <h4>Zone dangereuse - Suppression sélective de logs (Admin uniquement)</h4>
+    <p>Une zone dédiée permet de supprimer des logs selon des critères précis.</p>
+
+    <div class="warning">
+      <strong>⚠️ Attention</strong> : La suppression est définitive. Un backup Excel est automatiquement téléchargé avant toute suppression.
+    </div>
+
+    <h5>Filtres de suppression</h5>
+    <ul>
+      <li><strong>Date début / Date fin</strong> : Période à supprimer</li>
+      <li><strong>Type d'action</strong> : Sélectionner un type spécifique (ex: "Echec connexion", "Inscription confirmée")</li>
+      <li><strong>Licence</strong> : Supprimer les logs d'un joueur spécifique</li>
+      <li><strong>CDB (Super Admin)</strong> : Sélectionner l'organisation (visible uniquement pour les super admins)</li>
+    </ul>
+
+    <h5>Processus de suppression</h5>
+    <ol>
+      <li>Définir les critères de suppression dans la zone dangereuse</li>
+      <li>Cliquer sur <strong>"👁️ Prévisualiser + Afficher"</strong>
+        <ul>
+          <li>Affiche le nombre de logs concernés (ex: "96 log(s) seront supprimés")</li>
+          <li>Synchronise automatiquement les filtres du tableau principal</li>
+          <li>Affiche les logs qui seront supprimés pour vérification visuelle</li>
+        </ul>
+      </li>
+      <li>Vérifier visuellement les logs affichés dans le tableau</li>
+      <li>Cliquer sur <strong>"🗑️ Supprimer les logs"</strong></li>
+      <li>Confirmer la suppression dans la boîte de dialogue</li>
+      <li>Le système :
+        <ul>
+          <li>Télécharge automatiquement un fichier Excel de sauvegarde (<code>backup-activity-logs-YYYY-MM-DD.xlsx</code>)</li>
+          <li>Supprime les logs de la base de données</li>
+          <li>Affiche le message : "✅ Sauvegarde téléchargée. X logs supprimés avec succès"</li>
+        </ul>
+      </li>
+    </ol>
+
+    <h5>Scoping par organisation</h5>
+    <ul>
+      <li><strong>Admin régulier</strong> : Ne peut supprimer que les logs de son organisation (le sélecteur CDB est masqué)</li>
+      <li><strong>Super Admin</strong> : Peut sélectionner une organisation spécifique ou tous les CDBs</li>
+    </ul>
+  </section>
+
+  <hr>
+
+  <!-- Logs Administrateur -->
+  <section id="param-admin-logs">
+    <h2>Paramètres > Logs Administrateur</h2>
+
+    <h3>Accès</h3>
+    <p>Paramètres &gt; onglet <strong>Maintenance</strong> &gt; panneau <strong>"Logs Administrateur"</strong></p>
+
+    <h3>Description</h3>
+    <p>Historique des actions effectuées par les administrateurs dans l'application de gestion des tournois (imports, exports, envois d'emails, modifications de paramètres, etc.).</p>
+
+    <h4>Statistiques rapides (7 derniers jours)</h4>
+    <ul>
+      <li>Connexions (admin)</li>
+      <li>Imports (tournois, inscriptions)</li>
+      <li>Emails envoyés</li>
+      <li>Total actions</li>
+      <li>Utilisateurs actifs avec leur dernière activité</li>
+    </ul>
+
+    <h4>Filtres disponibles</h4>
+    <ul>
+      <li><strong>Période</strong> : Date de début et de fin</li>
+      <li><strong>Type d'action</strong> : Connexion, import, export, email, modification, etc.</li>
+      <li><strong>Utilisateur</strong> : Nom d'utilisateur de l'administrateur</li>
+    </ul>
+
+    <h4>Tableau des logs</h4>
+    <table>
+      <thead>
+        <tr><th>Colonne</th><th>Description</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Date/Heure</td><td>Horodatage de l'action</td></tr>
+        <tr><td>Utilisateur</td><td>Nom d'utilisateur de l'administrateur</td></tr>
+        <tr><td>Rôle</td><td>admin, viewer, ou lecteur</td></tr>
+        <tr><td>Action</td><td>Type d'action effectuée</td></tr>
+        <tr><td>Détails</td><td>Informations complémentaires sur l'action</td></tr>
+      </tbody>
+    </table>
+
+    <h4>Actions</h4>
+    <ul>
+      <li><strong>Pagination</strong> : 50 logs par page</li>
+    </ul>
+
+    <h4>Zone dangereuse - Suppression sélective de logs (Admin uniquement)</h4>
+    <p>Une zone dédiée permet de supprimer des logs selon des critères précis.</p>
+
+    <div class="warning">
+      <strong>⚠️ Attention</strong> : La suppression est définitive. Un backup Excel est automatiquement téléchargé avant toute suppression.
+    </div>
+
+    <h5>Filtres de suppression</h5>
+    <ul>
+      <li><strong>Date début / Date fin</strong> : Période à supprimer</li>
+      <li><strong>Type d'action</strong> : Sélectionner un type spécifique (ex: "Echec connexion", "Import tournoi")</li>
+      <li><strong>Utilisateur</strong> : Supprimer les logs d'un utilisateur spécifique (ex: admin92)</li>
+      <li><strong>CDB (Super Admin)</strong> : Sélectionner l'organisation (visible uniquement pour les super admins)</li>
+    </ul>
+
+    <h5>Processus de suppression</h5>
+    <ol>
+      <li>Définir les critères de suppression dans la zone dangereuse</li>
+      <li>Cliquer sur <strong>"👁️ Prévisualiser + Afficher"</strong>
+        <ul>
+          <li>Affiche le nombre de logs concernés (ex: "96 log(s) seront supprimés")</li>
+          <li>Synchronise automatiquement les filtres du tableau principal</li>
+          <li>Affiche les logs qui seront supprimés pour vérification visuelle</li>
+        </ul>
+      </li>
+      <li>Vérifier visuellement les logs affichés dans le tableau</li>
+      <li>Cliquer sur <strong>"🗑️ Supprimer les logs"</strong></li>
+      <li>Confirmer la suppression dans la boîte de dialogue</li>
+      <li>Le système :
+        <ul>
+          <li>Télécharge automatiquement un fichier Excel de sauvegarde (<code>backup-admin-logs-YYYY-MM-DD.xlsx</code>)</li>
+          <li>Supprime les logs de la base de données</li>
+          <li>Affiche le message : "✅ Sauvegarde téléchargée. X logs supprimés avec succès"</li>
+        </ul>
+      </li>
+    </ol>
+
+    <h5>Scoping par organisation</h5>
+    <ul>
+      <li><strong>Admin régulier</strong> : Ne peut supprimer que les logs de son organisation (le sélecteur CDB est masqué)</li>
+      <li><strong>Super Admin</strong> : Peut sélectionner une organisation spécifique ou tous les CDBs</li>
     </ul>
   </section>
 

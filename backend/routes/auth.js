@@ -141,8 +141,10 @@ router.post('/login', (req, res) => {
     bcrypt.compare(password, user.password_hash, async (err, result) => {
       if (err || !result) {
         // Log failed login attempt (wrong password)
+        // Super admin logs use NULL org_id to prevent contamination
+        const logOrgId = user.is_super_admin ? null : user.organization_id;
         logAdminAction({
-          req: { ...req, user: { userId: user.id, username: user.username, role: user.role, organizationId: user.organization_id } },
+          req: { ...req, user: { userId: user.id, username: user.username, role: user.role, organizationId: logOrgId } },
           action: ACTION_TYPES.LOGIN_FAILED,
           details: 'Mot de passe incorrect'
         });
@@ -197,9 +199,13 @@ router.post('/login', (req, res) => {
 
       const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '24h' });
 
+      // CRITICAL: Super admin activity logs should ALWAYS use organization_id = NULL
+      // This prevents contamination of CDB-specific logs when SA views other orgs
+      const logOrgId = user.is_super_admin ? null : targetOrgId;
+
       // Log successful login with correct organizationId
       logAdminAction({
-        req: { ...req, user: { userId: user.id, username: user.username, role: user.role, organizationId: targetOrgId } },
+        req: { ...req, user: { userId: user.id, username: user.username, role: user.role, organizationId: logOrgId } },
         action: ACTION_TYPES.LOGIN_SUCCESS,
         details: `Connexion réussie pour ${user.username}` + (orgSlug ? ` (org: ${orgSlug})` : '')
       });
