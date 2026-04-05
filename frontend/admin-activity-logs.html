@@ -233,9 +233,56 @@
         <div class="filter-group">
           <button class="btn" onclick="loadLogs()">Filtrer</button>
           <button class="btn btn-secondary" onclick="resetFilters()" style="margin-left: 5px;">Reset</button>
-          <button class="btn btn-danger" onclick="purgeLogs()" style="margin-left: 5px;">Purger</button>
         </div>
       </div>
+    </div>
+
+    <!-- Danger Zone (Admin Only) -->
+    <div class="admin-only" id="dangerZone" style="display: none; background: #fff3cd; border: 2px solid #ffc107; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+      <h3 style="margin-top: 0; color: #856404; display: flex; align-items: center; gap: 8px;">
+        ⚠️ Zone dangereuse - Suppression de logs admin
+      </h3>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-bottom: 12px;">
+        <div class="filter-group">
+          <label>Date début</label>
+          <input type="date" id="deleteStartDate">
+        </div>
+        <div class="filter-group">
+          <label>Date fin</label>
+          <input type="date" id="deleteEndDate">
+        </div>
+        <div class="filter-group">
+          <label>Type d'action</label>
+          <select id="deleteActionType">
+            <option value="">Tous</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label>Utilisateur</label>
+          <input type="text" id="deleteUsername" placeholder="Ex: admin92">
+        </div>
+        <div class="filter-group super-admin-only" style="display: none;">
+          <label>CDB (Super Admin)</label>
+          <select id="deleteOrgId">
+            <option value="">Tous les CDBs</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="display: flex; gap: 10px; align-items: center;">
+        <button onclick="previewDelete()" style="background: #ffc107; color: #000; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: bold;">
+          👁️ Prévisualiser
+        </button>
+        <button onclick="executeDeleteWithFilters()" style="background: #dc3545; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: bold;">
+          🗑️ Supprimer les logs
+        </button>
+        <span id="deletePreview" style="font-size: 13px; color: #856404; font-weight: bold; margin-left: 10px;"></span>
+      </div>
+
+      <p style="font-size: 12px; color: #856404; margin: 10px 0 0 0;">
+        ⚠️ La suppression est définitive. Aucun backup automatique - exportez manuellement si nécessaire.
+      </p>
     </div>
 
     <!-- Logs Table -->
@@ -317,6 +364,8 @@
       loadStats();
       loadActionTypes();
       loadLogs();
+      loadOrganizations(); // Load CDB selector for super admin
+      populateDeleteActionTypes(); // Populate delete action type filter
 
       // Save filters when they change
       document.getElementById('filterStartDate').addEventListener('change', saveFilters);
@@ -477,41 +526,158 @@
       loadLogs();
     }
 
-    async function purgeLogs() {
-      const startDate = document.getElementById('filterStartDate').value;
-      const endDate = document.getElementById('filterEndDate').value;
+    // Preview delete count
+    async function previewDelete() {
+      const previewSpan = document.getElementById('deletePreview');
+      previewSpan.textContent = 'Calcul en cours...';
+      previewSpan.style.color = '#666';
 
-      if (!startDate || !endDate) {
-        alert('Veuillez sélectionner une date de début et une date de fin pour purger les logs.');
+      try {
+        const body = {};
+        const startDate = document.getElementById('deleteStartDate').value;
+        const endDate = document.getElementById('deleteEndDate').value;
+        const actionType = document.getElementById('deleteActionType').value;
+        const username = document.getElementById('deleteUsername').value;
+        const orgId = document.getElementById('deleteOrgId').value;
+
+        if (startDate) body.startDate = startDate + 'T00:00:00';
+        if (endDate) body.endDate = endDate + 'T23:59:59';
+        if (actionType) body.actionType = actionType;
+        if (username) body.username = username;
+        if (orgId) body.organizationId = parseInt(orgId);
+
+        const response = await fetch(`${API_URL}/admin-logs/preview-delete`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(body)
+        });
+
+        if (!response.ok) throw new Error('Preview failed');
+        const result = await response.json();
+
+        previewSpan.textContent = `${result.count} log(s) seront supprimés`;
+        previewSpan.style.color = result.count > 0 ? '#dc3545' : '#28a745';
+      } catch (error) {
+        console.error('Error previewing delete:', error);
+        previewSpan.textContent = 'Erreur de prévisualisation';
+        previewSpan.style.color = '#dc3545';
+      }
+    }
+
+    // Execute delete with filters (no automatic backup)
+    async function executeDeleteWithFilters() {
+      const startDate = document.getElementById('deleteStartDate').value;
+      const endDate = document.getElementById('deleteEndDate').value;
+      const actionType = document.getElementById('deleteActionType').value;
+      const username = document.getElementById('deleteUsername').value;
+      const orgId = document.getElementById('deleteOrgId').value;
+
+      // Build filter description
+      const filters = [];
+      if (startDate) filters.push(`depuis ${formatDateFR(startDate)}`);
+      if (endDate) filters.push(`jusqu'à ${formatDateFR(endDate)}`);
+      if (actionType) filters.push(`type: ${formatActionType(actionType)}`);
+      if (username) filters.push(`utilisateur: ${username}`);
+      if (orgId) {
+        const orgSelect = document.getElementById('deleteOrgId');
+        const orgName = orgSelect.options[orgSelect.selectedIndex].text;
+        filters.push(`CDB: ${orgName}`);
+      }
+
+      const filterDesc = filters.length > 0 ? filters.join(', ') : 'TOUS LES LOGS';
+
+      if (!confirm(`⚠️ ATTENTION ⚠️\n\nVous allez supprimer les logs avec les critères suivants :\n${filterDesc}\n\n⚠️ Cette action est DÉFINITIVE et SANS sauvegarde automatique.\n⚠️ Exportez les logs manuellement si vous souhaitez les conserver.\n\nContinuer ?`)) {
         return;
       }
 
-      const confirmMsg = `Êtes-vous sûr de vouloir supprimer tous les logs entre le ${formatDate(startDate)} et le ${formatDate(endDate)} ?\n\nCette action est irréversible.`;
-      if (!confirm(confirmMsg)) return;
-
       try {
-        const response = await fetch(`${API_URL}/admin-logs`, {
+        const deleteBody = {};
+        if (startDate) deleteBody.startDate = startDate + 'T00:00:00';
+        if (endDate) deleteBody.endDate = endDate + 'T23:59:59';
+        if (actionType) deleteBody.actionType = actionType;
+        if (username) deleteBody.username = username;
+        if (orgId) deleteBody.organizationId = parseInt(orgId);
+
+        const deleteResponse = await fetch(`${API_URL}/admin-logs`, {
           method: 'DELETE',
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({ startDate, endDate })
+          body: JSON.stringify(deleteBody)
         });
 
-        const data = await response.json();
-
-        if (response.ok) {
-          alert(`${data.deleted} log(s) supprimé(s)`);
+        if (deleteResponse.ok) {
+          const result = await deleteResponse.json();
+          alert(`✅ ${result.deleted} logs supprimés avec succès.`);
+          document.getElementById('deletePreview').textContent = '';
           loadLogs();
           loadStats();
         } else {
-          alert(data.error || 'Erreur lors de la suppression');
+          const error = await deleteResponse.json();
+          alert('❌ Erreur: ' + (error.error || 'Impossible de supprimer les logs'));
         }
       } catch (error) {
-        console.error('Error purging logs:', error);
-        alert('Erreur de connexion');
+        console.error('Error during delete:', error);
+        alert('❌ Erreur lors de la suppression : ' + error.message);
       }
+    }
+
+    // Load organizations for super admin CDB selector
+    async function loadOrganizations() {
+      try {
+        const response = await fetch(`${API_URL}/super-admin/organizations`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (!response.ok) return; // Not super admin or error
+
+        const orgs = await response.json();
+        const select = document.getElementById('deleteOrgId');
+
+        orgs.forEach(org => {
+          const option = document.createElement('option');
+          option.value = org.id;
+          option.textContent = `${org.short_name || org.name} (${org.name})`;
+          select.appendChild(option);
+        });
+
+        // Show super admin elements
+        document.querySelectorAll('.super-admin-only').forEach(el => el.style.display = '');
+      } catch (error) {
+        console.error('Error loading organizations:', error);
+      }
+    }
+
+    // Populate deleteActionType selector with available action types
+    async function populateDeleteActionTypes() {
+      try {
+        const response = await fetch(`${API_URL}/admin-logs/action-types`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!response.ok) return;
+
+        const actionTypes = await response.json();
+        const select = document.getElementById('deleteActionType');
+
+        actionTypes.forEach(at => {
+          const option = document.createElement('option');
+          option.value = at.action_type;
+          option.textContent = formatActionType(at.action_type);
+          select.appendChild(option);
+        });
+      } catch (error) {
+        console.error('Error loading action types for delete:', error);
+      }
+    }
+
+    // Format date as French (DD/MM/YYYY)
+    function formatDateFR(dateStr) {
+      const [year, month, day] = dateStr.split('-');
+      return `${day}/${month}/${year}`;
     }
 
     function formatDate(dateStr) {

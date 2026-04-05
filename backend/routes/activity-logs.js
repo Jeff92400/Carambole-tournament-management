@@ -252,21 +252,26 @@ router.get('/stats', authenticateToken, requireViewer, async (req, res) => {
 });
 
 /**
- * DELETE /api/activity-logs
- * Clear activity logs (admin only)
- * Supports optional date range filtering
+ * POST /api/activity-logs/preview-delete
+ * Preview how many logs would be deleted with given criteria (admin only)
  *
- * Body params (optional):
- * - startDate: Delete from this date
- * - endDate: Delete to this date
+ * Body params (all optional):
+ * - startDate: Filter from this date
+ * - endDate: Filter to this date
+ * - actionType: Filter by action type (comma-separated)
+ * - licence: Filter by player licence
+ * - organizationId: Super admin can specify org to preview (regular admin always uses their org)
  */
-router.delete('/', authenticateToken, requireAdmin, async (req, res) => {
+router.post('/preview-delete', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const { startDate, endDate } = req.body || {};
-    const orgId = req.user.organizationId || null;
+    const { startDate, endDate, actionType, licence, organizationId } = req.body || {};
+    const isSuperAdmin = req.user.isSuperAdmin;
 
-    let query = 'DELETE FROM activity_logs WHERE ($1::int IS NULL OR organization_id = $1)';
-    const params = [orgId];
+    // Super admin can specify org, regular admin always uses their own
+    const targetOrgId = isSuperAdmin && organizationId !== undefined ? organizationId : (req.user.organizationId || null);
+
+    let query = 'SELECT COUNT(*) as count FROM activity_logs WHERE ($1::int IS NULL OR organization_id = $1)';
+    const params = [targetOrgId];
     let paramIndex = 2;
 
     if (startDate) {
@@ -281,12 +286,98 @@ router.delete('/', authenticateToken, requireAdmin, async (req, res) => {
       paramIndex++;
     }
 
+    if (actionType) {
+      const actionTypes = actionType.split(',').map(t => t.trim());
+      query += ` AND action_type = ANY($${paramIndex})`;
+      params.push(actionTypes);
+      paramIndex++;
+    }
+
+    if (licence) {
+      query += ` AND licence = $${paramIndex}`;
+      params.push(licence);
+      paramIndex++;
+    }
+
+    const result = await db.query(query, params);
+    const count = parseInt(result.rows[0]?.count || 0);
+
+    res.json({
+      count,
+      criteria: {
+        startDate: startDate || null,
+        endDate: endDate || null,
+        actionType: actionType || null,
+        licence: licence || null,
+        organizationId: targetOrgId
+      }
+    });
+  } catch (error) {
+    console.error('Preview delete error:', error);
+    res.status(500).json({ error: 'Failed to preview deletion' });
+  }
+});
+
+/**
+ * DELETE /api/activity-logs
+ * Clear activity logs (admin only)
+ * Supports optional filters: date range, action type, licence
+ *
+ * Body params (all optional):
+ * - startDate: Delete from this date
+ * - endDate: Delete to this date
+ * - actionType: Delete by action type (comma-separated for multiple)
+ * - licence: Delete by player licence
+ * - organizationId: Super admin can specify org to delete from (regular admin always uses their org)
+ */
+router.delete('/', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { startDate, endDate, actionType, licence, organizationId } = req.body || {};
+    const isSuperAdmin = req.user.isSuperAdmin;
+
+    // CRITICAL: Super admin can specify org, regular admin ALWAYS uses their own org (prevent cross-CDB deletion)
+    const targetOrgId = isSuperAdmin && organizationId !== undefined ? organizationId : (req.user.organizationId || null);
+
+    let query = 'DELETE FROM activity_logs WHERE ($1::int IS NULL OR organization_id = $1)';
+    const params = [targetOrgId];
+    let paramIndex = 2;
+
+    if (startDate) {
+      query += ` AND created_at >= $${paramIndex}`;
+      params.push(startDate);
+      paramIndex++;
+    }
+
+    if (endDate) {
+      query += ` AND created_at <= $${paramIndex}`;
+      params.push(endDate);
+      paramIndex++;
+    }
+
+    if (actionType) {
+      const actionTypes = actionType.split(',').map(t => t.trim());
+      query += ` AND action_type = ANY($${paramIndex})`;
+      params.push(actionTypes);
+      paramIndex++;
+    }
+
+    if (licence) {
+      query += ` AND licence = $${paramIndex}`;
+      params.push(licence);
+      paramIndex++;
+    }
+
     const result = await db.query(query, params);
 
-    const rangeInfo = startDate || endDate
-      ? ` (${startDate || 'debut'} - ${endDate || 'fin'})`
-      : ' (tous)';
-    console.log(`Activity logs cleared by admin: ${req.user.email}${rangeInfo} - ${result.rowCount} deleted`);
+    const criteriaInfo = [
+      startDate ? `depuis ${startDate}` : null,
+      endDate ? `jusqu'à ${endDate}` : null,
+      actionType ? `type: ${actionType}` : null,
+      licence ? `licence: ${licence}` : null,
+      targetOrgId ? `org: ${targetOrgId}` : 'all orgs'
+    ].filter(Boolean).join(', ');
+
+    console.log(`[ACTIVITY-LOGS] Deleted by ${req.user.username}: ${result.rowCount} rows (${criteriaInfo})`);
 
     res.json({
       success: true,

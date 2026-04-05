@@ -360,8 +360,62 @@
       </div>
       <div style="display: flex; gap: 10px; margin-top: 12px;">
         <button class="export-btn" onclick="exportExcel()">Exporter Excel</button>
-        <button class="admin-only" onclick="openResetModal()" style="display: none; background: #dc3545; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 13px;">Réinitialiser</button>
       </div>
+    </div>
+
+    <!-- Danger Zone (Admin Only) -->
+    <div class="admin-only" id="dangerZone" style="display: none; background: #fff3cd; border: 2px solid #ffc107; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+      <h3 style="margin-top: 0; color: #856404; display: flex; align-items: center; gap: 8px;">
+        ⚠️ Zone dangereuse - Suppression de logs
+      </h3>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-bottom: 12px;">
+        <div class="filter-group">
+          <label>Date début</label>
+          <input type="date" id="deleteStartDate">
+        </div>
+        <div class="filter-group">
+          <label>Date fin</label>
+          <input type="date" id="deleteEndDate">
+        </div>
+        <div class="filter-group">
+          <label>Type d'action</label>
+          <select id="deleteActionType">
+            <option value="">Tous</option>
+            <option value="login_success">Connexion réussie</option>
+            <option value="login_failed">Connexion échouée</option>
+            <option value="account_created">Compte créé</option>
+            <option value="inscription_created">Inscription</option>
+            <option value="inscription_cancelled">Désinscription</option>
+            <option value="password_reset_requested">Demande reset MDP</option>
+            <option value="password_reset_completed">Reset MDP effectué</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label>Licence</label>
+          <input type="text" id="deleteLicence" placeholder="Ex: 123456">
+        </div>
+        <div class="filter-group super-admin-only" style="display: none;">
+          <label>CDB (Super Admin)</label>
+          <select id="deleteOrgId">
+            <option value="">Tous les CDBs</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="display: flex; gap: 10px; align-items: center;">
+        <button onclick="previewDelete()" style="background: #ffc107; color: #000; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: bold;">
+          👁️ Prévisualiser
+        </button>
+        <button onclick="executeDeleteWithFilters()" style="background: #dc3545; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: bold;">
+          🗑️ Supprimer les logs
+        </button>
+        <span id="deletePreview" style="font-size: 13px; color: #856404; font-weight: bold; margin-left: 10px;"></span>
+      </div>
+
+      <p style="font-size: 12px; color: #856404; margin: 10px 0 0 0;">
+        ⚠️ La suppression est définitive. Une sauvegarde Excel sera automatiquement téléchargée avant la suppression.
+      </p>
     </div>
 
     <!-- Logs Table -->
@@ -376,44 +430,6 @@
       <button id="nextBtn" onclick="nextPage()">Suivant</button>
     </div>
 
-    <!-- Reset Modal -->
-    <div id="resetModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center;">
-      <div style="background: white; padding: 25px; border-radius: 10px; max-width: 450px; width: 90%;">
-        <h3 style="margin-top: 0; color: #dc3545;">Réinitialiser les logs</h3>
-        <p style="color: #666; font-size: 14px;">Les logs seront automatiquement sauvegardés en Excel avant suppression.</p>
-
-        <div style="margin: 20px 0;">
-          <label style="display: block; margin-bottom: 15px; cursor: pointer;">
-            <input type="radio" name="resetType" value="all" checked style="margin-right: 8px;">
-            <strong>Toute la saison</strong>
-            <span style="display: block; margin-left: 22px; font-size: 13px; color: #666;">Supprimer tous les logs</span>
-          </label>
-          <label style="display: block; cursor: pointer;">
-            <input type="radio" name="resetType" value="range" style="margin-right: 8px;">
-            <strong>Entre 2 dates</strong>
-            <span style="display: block; margin-left: 22px; font-size: 13px; color: #666;">Supprimer les logs d'une période</span>
-          </label>
-        </div>
-
-        <div id="dateRangeInputs" style="display: none; margin: 15px 0; padding: 15px; background: #f8f9fa; border-radius: 6px;">
-          <div style="display: flex; gap: 15px;">
-            <div style="flex: 1;">
-              <label style="font-size: 12px; color: #666;">Date début</label>
-              <input type="date" id="resetStartDate" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-            </div>
-            <div style="flex: 1;">
-              <label style="font-size: 12px; color: #666;">Date fin</label>
-              <input type="date" id="resetEndDate" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-            </div>
-          </div>
-        </div>
-
-        <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
-          <button onclick="closeResetModal()" style="padding: 10px 20px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">Annuler</button>
-          <button onclick="executeReset()" style="padding: 10px 20px; background: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer;">Confirmer la suppression</button>
-        </div>
-      </div>
-    </div>
   </div>
 
   <script src="js/auth-utils.js?v=197"></script>
@@ -730,70 +746,93 @@
       XLSX.writeFile(wb, `activity-logs-${new Date().toISOString().slice(0, 10)}.xlsx`);
     }
 
-    // Modal functions
-    function openResetModal() {
-      document.getElementById('resetModal').style.display = 'flex';
-      // Set default dates for range
-      const today = new Date();
-      document.getElementById('resetEndDate').value = today.toISOString().slice(0, 10);
-      const startOfSeason = new Date(today.getFullYear(), 8, 1); // Sept 1
-      if (today < startOfSeason) startOfSeason.setFullYear(startOfSeason.getFullYear() - 1);
-      document.getElementById('resetStartDate').value = startOfSeason.toISOString().slice(0, 10);
+    // Preview delete count
+    async function previewDelete() {
+      const previewSpan = document.getElementById('deletePreview');
+      previewSpan.textContent = 'Calcul en cours...';
+      previewSpan.style.color = '#666';
+
+      try {
+        const body = {};
+        const startDate = document.getElementById('deleteStartDate').value;
+        const endDate = document.getElementById('deleteEndDate').value;
+        const actionType = document.getElementById('deleteActionType').value;
+        const licence = document.getElementById('deleteLicence').value;
+        const orgId = document.getElementById('deleteOrgId').value;
+
+        if (startDate) body.startDate = startDate + 'T00:00:00';
+        if (endDate) body.endDate = endDate + 'T23:59:59';
+        if (actionType) body.actionType = actionType;
+        if (licence) body.licence = licence;
+        if (orgId) body.organizationId = parseInt(orgId);
+
+        const response = await fetch(`${API_URL}/activity-logs/preview-delete`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(body)
+        });
+
+        if (!response.ok) throw new Error('Preview failed');
+        const result = await response.json();
+
+        previewSpan.textContent = `${result.count} log(s) seront supprimés`;
+        previewSpan.style.color = result.count > 0 ? '#dc3545' : '#28a745';
+      } catch (error) {
+        console.error('Error previewing delete:', error);
+        previewSpan.textContent = 'Erreur de prévisualisation';
+        previewSpan.style.color = '#dc3545';
+      }
     }
 
-    function closeResetModal() {
-      document.getElementById('resetModal').style.display = 'none';
-    }
+    // Execute delete with filters and backup
+    async function executeDeleteWithFilters() {
+      const startDate = document.getElementById('deleteStartDate').value;
+      const endDate = document.getElementById('deleteEndDate').value;
+      const actionType = document.getElementById('deleteActionType').value;
+      const licence = document.getElementById('deleteLicence').value;
+      const orgId = document.getElementById('deleteOrgId').value;
 
-    // Toggle date range inputs
-    document.addEventListener('change', (e) => {
-      if (e.target.name === 'resetType') {
-        document.getElementById('dateRangeInputs').style.display =
-          e.target.value === 'range' ? 'block' : 'none';
-      }
-    });
-
-    // Execute reset with backup
-    async function executeReset() {
-      const resetType = document.querySelector('input[name="resetType"]:checked').value;
-      let startDate = null;
-      let endDate = null;
-
-      if (resetType === 'range') {
-        startDate = document.getElementById('resetStartDate').value;
-        endDate = document.getElementById('resetEndDate').value;
-        if (!startDate || !endDate) {
-          alert('Veuillez sélectionner les dates de début et fin.');
-          return;
-        }
-        // Add time to end date to include the full day
-        endDate = endDate + 'T23:59:59';
+      // Build filter description
+      const filters = [];
+      if (startDate) filters.push(`depuis ${formatDateFR(startDate)}`);
+      if (endDate) filters.push(`jusqu'à ${formatDateFR(endDate)}`);
+      if (actionType) filters.push(`type: ${formatActionType(actionType)}`);
+      if (licence) filters.push(`licence: ${licence}`);
+      if (orgId) {
+        const orgSelect = document.getElementById('deleteOrgId');
+        const orgName = orgSelect.options[orgSelect.selectedIndex].text;
+        filters.push(`CDB: ${orgName}`);
       }
 
-      if (!confirm('Cette action va :\n1. Télécharger une sauvegarde Excel des logs\n2. Supprimer les logs sélectionnés\n\nContinuer ?')) {
+      const filterDesc = filters.length > 0 ? filters.join(', ') : 'TOUS LES LOGS';
+
+      if (!confirm(`⚠️ ATTENTION ⚠️\n\nVous allez supprimer les logs avec les critères suivants :\n${filterDesc}\n\nUne sauvegarde Excel sera téléchargée avant suppression.\n\nContinuer ?`)) {
         return;
       }
 
       try {
-        // Step 1: Fetch all logs to be deleted
-        let fetchUrl = `${API_URL}/activity-logs?limit=10000`;
-        if (startDate) fetchUrl += `&startDate=${startDate}`;
-        if (endDate) fetchUrl += `&endDate=${endDate}`;
+        // Step 1: Fetch logs to be deleted for backup
+        const params = new URLSearchParams();
+        params.append('limit', 100000);
+        if (startDate) params.append('startDate', startDate + 'T00:00:00');
+        if (endDate) params.append('endDate', endDate + 'T23:59:59');
+        if (actionType) params.append('actionType', actionType);
+        if (licence) params.append('licence', licence);
 
-        const fetchResponse = await fetch(fetchUrl, {
+        const fetchResponse = await fetch(`${API_URL}/activity-logs?${params}`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
 
-        if (!fetchResponse.ok) {
-          throw new Error('Impossible de récupérer les logs');
-        }
+        if (!fetchResponse.ok) throw new Error('Impossible de récupérer les logs');
 
         const data = await fetchResponse.json();
-        const logsToDelete = data.logs;
+        const logsToDelete = data.logs || [];
 
         if (logsToDelete.length === 0) {
-          alert('Aucun log à supprimer pour cette période.');
-          closeResetModal();
+          alert('Aucun log à supprimer avec ces critères.');
           return;
         }
 
@@ -811,53 +850,72 @@
           log.ip_address || ''
         ]);
 
-        // Create Excel workbook
         const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-        // Set column widths
         ws['!cols'] = [
-          { wch: 18 }, // Date/Heure
-          { wch: 25 }, // Action
-          { wch: 8 },  // Statut
-          { wch: 10 }, // Licence
-          { wch: 25 }, // Joueur
-          { wch: 30 }, // Email
-          { wch: 20 }, // Cible
-          { wch: 40 }, // Details
-          { wch: 15 }  // IP
+          { wch: 18 }, { wch: 25 }, { wch: 8 }, { wch: 10 },
+          { wch: 25 }, { wch: 30 }, { wch: 20 }, { wch: 40 }, { wch: 15 }
         ];
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Logs');
         const dateStr = new Date().toISOString().slice(0, 10);
-        XLSX.writeFile(wb, `backup-logs-${dateStr}.xlsx`);
+        XLSX.writeFile(wb, `backup-activity-logs-${dateStr}.xlsx`);
 
         // Step 3: Delete logs
-        let deleteUrl = `${API_URL}/activity-logs`;
         const deleteBody = {};
-        if (startDate) deleteBody.startDate = startDate;
-        if (endDate) deleteBody.endDate = endDate;
+        if (startDate) deleteBody.startDate = startDate + 'T00:00:00';
+        if (endDate) deleteBody.endDate = endDate + 'T23:59:59';
+        if (actionType) deleteBody.actionType = actionType;
+        if (licence) deleteBody.licence = licence;
+        if (orgId) deleteBody.organizationId = parseInt(orgId);
 
-        const deleteResponse = await fetch(deleteUrl, {
+        const deleteResponse = await fetch(`${API_URL}/activity-logs`, {
           method: 'DELETE',
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
           },
-          body: Object.keys(deleteBody).length > 0 ? JSON.stringify(deleteBody) : undefined
+          body: JSON.stringify(deleteBody)
         });
 
         if (deleteResponse.ok) {
           const result = await deleteResponse.json();
-          alert(`Sauvegarde téléchargée.\n${result.deleted} logs supprimés.`);
-          closeResetModal();
+          alert(`✅ Sauvegarde téléchargée.\n${result.deleted} logs supprimés avec succès.`);
+          document.getElementById('deletePreview').textContent = '';
           loadStats();
           loadLogs();
         } else {
           const error = await deleteResponse.json();
-          alert('Erreur: ' + (error.error || 'Impossible de supprimer les logs'));
+          alert('❌ Erreur: ' + (error.error || 'Impossible de supprimer les logs'));
         }
       } catch (error) {
-        console.error('Error during reset:', error);
-        alert('Erreur lors de la réinitialisation : ' + error.message);
+        console.error('Error during delete:', error);
+        alert('❌ Erreur lors de la suppression : ' + error.message);
+      }
+    }
+
+    // Load organizations for super admin CDB selector
+    async function loadOrganizations() {
+      try {
+        const response = await fetch(`${API_URL}/super-admin/organizations`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (!response.ok) return; // Not super admin or error
+
+        const orgs = await response.json();
+        const select = document.getElementById('deleteOrgId');
+
+        orgs.forEach(org => {
+          const option = document.createElement('option');
+          option.value = org.id;
+          option.textContent = `${org.short_name || org.name} (${org.name})`;
+          select.appendChild(option);
+        });
+
+        // Show super admin elements
+        document.querySelectorAll('.super-admin-only').forEach(el => el.style.display = '');
+      } catch (error) {
+        console.error('Error loading organizations:', error);
       }
     }
 
@@ -908,6 +966,7 @@
     // Initial load
     loadStats();
     loadLogs();
+    loadOrganizations(); // Load CDB selector for super admin
 
     // ==================== ANALYTICS ====================
     let activityChart = null;

@@ -182,32 +182,143 @@ router.get('/action-types', authenticateToken, requireAdminOrLecteur, (req, res)
 });
 
 /**
- * DELETE /api/admin-logs
- * Clear logs between two dates (admin only)
+ * POST /api/admin-logs/preview-delete
+ * Preview how many logs would be deleted with given criteria (admin only)
+ *
+ * Body params (all optional):
+ * - startDate: Filter from this date
+ * - endDate: Filter to this date
+ * - actionType: Filter by action type (comma-separated)
+ * - username: Filter by username
+ * - organizationId: Super admin can specify org to preview (regular admin always uses their org)
  */
-router.delete('/', authenticateToken, requireAdmin, (req, res) => {
-  const orgId = req.user.organizationId || null;
-  const { startDate, endDate } = req.body;
+router.post('/preview-delete', authenticateToken, requireAdmin, (req, res) => {
+  const { startDate, endDate, actionType, username, organizationId } = req.body || {};
+  const isSuperAdmin = req.user.isSuperAdmin;
 
-  if (!startDate || !endDate) {
-    return res.status(400).json({ error: 'Dates de début et de fin requises' });
+  // Super admin can specify org, regular admin always uses their own
+  const targetOrgId = isSuperAdmin && organizationId !== undefined ? organizationId : (req.user.organizationId || null);
+
+  let query = 'SELECT COUNT(*) as count FROM admin_activity_logs WHERE ($1::int IS NULL OR organization_id = $1)';
+  const params = [targetOrgId];
+  let paramIndex = 2;
+
+  if (startDate) {
+    query += ` AND created_at >= $${paramIndex}`;
+    params.push(startDate);
+    paramIndex++;
   }
 
-  db.run(
-    'DELETE FROM admin_activity_logs WHERE created_at >= $1 AND created_at <= $2 AND ($3::int IS NULL OR organization_id = $3)',
-    [startDate, endDate + ' 23:59:59', orgId],
-    function(err) {
-      if (err) {
-        console.error('Error deleting admin logs:', err);
-        return res.status(500).json({ error: 'Erreur lors de la suppression des logs' });
-      }
+  if (endDate) {
+    query += ` AND created_at <= $${paramIndex}`;
+    params.push(endDate + ' 23:59:59');
+    paramIndex++;
+  }
 
-      res.json({
-        message: 'Logs supprimés',
-        deleted: this.changes || 0
-      });
+  if (actionType) {
+    const actionTypes = actionType.split(',').map(t => t.trim());
+    query += ` AND action_type = ANY($${paramIndex})`;
+    params.push(actionTypes);
+    paramIndex++;
+  }
+
+  if (username) {
+    query += ` AND username ILIKE $${paramIndex}`;
+    params.push(`%${username}%`);
+    paramIndex++;
+  }
+
+  db.get(query, params, (err, result) => {
+    if (err) {
+      console.error('Preview delete error:', err);
+      return res.status(500).json({ error: 'Failed to preview deletion' });
     }
-  );
+
+    const count = parseInt(result?.count || 0);
+
+    res.json({
+      count,
+      criteria: {
+        startDate: startDate || null,
+        endDate: endDate || null,
+        actionType: actionType || null,
+        username: username || null,
+        organizationId: targetOrgId
+      }
+    });
+  });
+});
+
+/**
+ * DELETE /api/admin-logs
+ * Clear admin logs (admin only)
+ * Supports optional filters: date range, action type, username
+ *
+ * Body params (all optional):
+ * - startDate: Delete from this date
+ * - endDate: Delete to this date
+ * - actionType: Delete by action type (comma-separated for multiple)
+ * - username: Delete by username (partial match)
+ * - organizationId: Super admin can specify org to delete from (regular admin always uses their org)
+ */
+router.delete('/', authenticateToken, requireAdmin, (req, res) => {
+  const { startDate, endDate, actionType, username, organizationId } = req.body || {};
+  const isSuperAdmin = req.user.isSuperAdmin;
+
+  // CRITICAL: Super admin can specify org, regular admin ALWAYS uses their own org (prevent cross-CDB deletion)
+  const targetOrgId = isSuperAdmin && organizationId !== undefined ? organizationId : (req.user.organizationId || null);
+
+  let query = 'DELETE FROM admin_activity_logs WHERE ($1::int IS NULL OR organization_id = $1)';
+  const params = [targetOrgId];
+  let paramIndex = 2;
+
+  if (startDate) {
+    query += ` AND created_at >= $${paramIndex}`;
+    params.push(startDate);
+    paramIndex++;
+  }
+
+  if (endDate) {
+    query += ` AND created_at <= $${paramIndex}`;
+    params.push(endDate + ' 23:59:59');
+    paramIndex++;
+  }
+
+  if (actionType) {
+    const actionTypes = actionType.split(',').map(t => t.trim());
+    query += ` AND action_type = ANY($${paramIndex})`;
+    params.push(actionTypes);
+    paramIndex++;
+  }
+
+  if (username) {
+    query += ` AND username ILIKE $${paramIndex}`;
+    params.push(`%${username}%`);
+    paramIndex++;
+  }
+
+  db.run(query, params, function(err) {
+    if (err) {
+      console.error('Clear admin logs error:', err);
+      return res.status(500).json({ error: 'Failed to clear admin logs' });
+    }
+
+    const criteriaInfo = [
+      startDate ? `depuis ${startDate}` : null,
+      endDate ? `jusqu'à ${endDate}` : null,
+      actionType ? `type: ${actionType}` : null,
+      username ? `username: ${username}` : null,
+      targetOrgId ? `org: ${targetOrgId}` : 'all orgs'
+    ].filter(Boolean).join(', ');
+
+    console.log(`[ADMIN-LOGS] Deleted by ${req.user.username}: ${this.changes} rows (${criteriaInfo})`);
+
+    res.json({
+      success: true,
+      message: 'Les logs ont été supprimés',
+      deleted: this.changes || 0
+    });
+  });
 });
 
 module.exports = router;
