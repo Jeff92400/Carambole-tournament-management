@@ -3,775 +3,1310 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Guide Super Admin - Création et Onboarding d'un CDB</title>
-  <link rel="icon" type="image/png" href="images/FFB.png">
+  <title>Guide Super Admin - Plateforme FFB Carambole</title>
   <style>
-    :root {
-      --primary: #1F4788;
-      --primary-light: #2a5ba8;
-      --secondary: #667eea;
-      --accent: #ffc107;
-      --bg: #f8f9fa;
-      --bg-card: #ffffff;
-      --text: #333;
-      --text-light: #666;
-      --border: #e0e0e0;
-      --green: #28a745;
-      --green-bg: #d4edda;
-      --yellow-bg: #fff3cd;
-      --red-bg: #f8d7da;
-      --sidebar-width: 280px;
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
     }
-
-    * { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
-      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
-      color: var(--text);
-      background: var(--bg);
-      line-height: 1.7;
-      font-size: 15px;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      background: #f5f5f5;
+      padding: 20px;
     }
 
-    /* Sidebar */
-    .sidebar {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: var(--sidebar-width);
-      height: 100vh;
-      background: var(--primary);
-      color: white;
-      overflow-y: auto;
-      padding: 20px 0;
-      z-index: 100;
-      scrollbar-width: thin;
-      scrollbar-color: rgba(255,255,255,0.3) transparent;
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      background: white;
+      padding: 40px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
     }
 
-    .sidebar::-webkit-scrollbar { width: 6px; }
-    .sidebar::-webkit-scrollbar-track { background: transparent; }
-    .sidebar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.3); border-radius: 3px; }
-
-    .sidebar-header {
-      padding: 10px 20px 25px;
-      border-bottom: 1px solid rgba(255,255,255,0.15);
-      margin-bottom: 15px;
+    .header {
       text-align: center;
+      margin-bottom: 40px;
+      padding-bottom: 20px;
+      border-bottom: 3px solid #1F4788;
     }
 
-    .sidebar-header img {
-      height: 50px;
-      width: 50px;
+    .header h1 {
+      color: #1F4788;
+      font-size: 2.5rem;
       margin-bottom: 10px;
     }
 
-    .sidebar-header h2 {
-      font-size: 14px;
-      font-weight: 600;
-      letter-spacing: 0.5px;
-      opacity: 0.95;
+    .header .subtitle {
+      color: #666;
+      font-size: 1.2rem;
     }
 
-    .sidebar nav a {
-      display: block;
-      color: rgba(255,255,255,0.8);
-      text-decoration: none;
-      padding: 8px 20px;
-      font-size: 13px;
-      transition: all 0.2s;
-      border-left: 3px solid transparent;
-    }
-
-    .sidebar nav a:hover,
-    .sidebar nav a.active {
-      background: rgba(255,255,255,0.1);
-      color: white;
-      border-left-color: var(--accent);
-    }
-
-    .sidebar nav a.section-title {
-      font-weight: 700;
-      text-transform: uppercase;
-      font-size: 11px;
-      letter-spacing: 1px;
-      color: rgba(255,255,255,0.5);
-      margin-top: 15px;
-      padding-bottom: 4px;
-      pointer-events: none;
-    }
-
-    .sidebar nav a.sub {
-      padding-left: 32px;
-      font-size: 12.5px;
-    }
-
-    /* Main content */
-    .main {
-      margin-left: var(--sidebar-width);
-      padding: 40px 50px 80px;
-      max-width: 960px;
-    }
-
-    /* Header banner */
-    .page-header {
-      background: linear-gradient(135deg, var(--primary), var(--secondary));
-      color: white;
-      padding: 40px 40px 35px;
-      border-radius: 12px;
+    .toc {
+      background: #f8f9fa;
+      padding: 20px;
+      border-radius: 6px;
       margin-bottom: 40px;
-      box-shadow: 0 4px 20px rgba(31,71,136,0.25);
     }
 
-    .page-header h1 {
-      font-size: 26px;
-      font-weight: 700;
-      margin-bottom: 8px;
+    .toc h2 {
+      color: #1F4788;
+      margin-bottom: 15px;
     }
 
-    .page-header p {
-      font-size: 14px;
-      opacity: 0.85;
+    .toc ul {
+      list-style: none;
     }
 
-    .page-header .back-link {
-      display: inline-block;
-      margin-top: 12px;
-      color: rgba(255,255,255,0.8);
+    .toc li {
+      margin: 8px 0;
+    }
+
+    .toc a {
+      color: #1F4788;
       text-decoration: none;
-      font-size: 13px;
-      transition: color 0.2s;
+      font-weight: 500;
     }
 
-    .page-header .back-link:hover {
-      color: white;
+    .toc a:hover {
+      text-decoration: underline;
     }
 
-    /* Sections */
-    section {
-      margin-bottom: 45px;
+    .section {
+      margin-bottom: 40px;
     }
 
-    h2 {
-      color: var(--primary);
-      font-size: 22px;
-      font-weight: 700;
-      margin: 45px 0 20px;
+    .section h2 {
+      color: #1F4788;
+      font-size: 1.8rem;
+      margin-bottom: 20px;
       padding-bottom: 10px;
-      border-bottom: 2px solid var(--primary);
+      border-bottom: 2px solid #e0e0e0;
     }
 
-    h3 {
-      color: var(--primary-light);
-      font-size: 18px;
-      font-weight: 600;
-      margin: 30px 0 12px;
+    .section h3 {
+      color: #333;
+      font-size: 1.4rem;
+      margin: 25px 0 15px 0;
     }
 
-    h4 {
-      color: var(--text);
-      font-size: 15px;
-      font-weight: 600;
-      margin: 20px 0 10px;
+    .section h4 {
+      color: #555;
+      font-size: 1.1rem;
+      margin: 20px 0 10px 0;
     }
 
-    p {
-      margin-bottom: 12px;
+    .section p {
+      margin-bottom: 15px;
+      text-align: justify;
     }
 
-    ul, ol {
-      margin: 10px 0 15px 24px;
+    .section ul, .section ol {
+      margin: 15px 0 15px 30px;
     }
 
-    li {
-      margin-bottom: 5px;
+    .section li {
+      margin: 8px 0;
     }
 
-    strong {
-      color: var(--primary);
+    .alert {
+      padding: 15px;
+      border-radius: 6px;
+      margin: 20px 0;
+      border-left: 4px solid;
     }
 
-    /* Tables */
+    .alert-info {
+      background: #d1ecf1;
+      border-color: #0c5460;
+      color: #0c5460;
+    }
+
+    .alert-warning {
+      background: #fff3cd;
+      border-color: #856404;
+      color: #856404;
+    }
+
+    .alert-danger {
+      background: #f8d7da;
+      border-color: #721c24;
+      color: #721c24;
+    }
+
+    .alert-success {
+      background: #d4edda;
+      border-color: #155724;
+      color: #155724;
+    }
+
+    .code-block {
+      background: #f4f4f4;
+      padding: 15px;
+      border-radius: 4px;
+      border-left: 3px solid #1F4788;
+      margin: 15px 0;
+      font-family: 'Courier New', monospace;
+      overflow-x: auto;
+    }
+
+    .step-box {
+      background: #f8f9fa;
+      padding: 20px;
+      border-radius: 6px;
+      margin: 15px 0;
+      border: 1px solid #dee2e6;
+    }
+
+    .step-box h4 {
+      color: #1F4788;
+      margin-top: 0;
+    }
+
     table {
       width: 100%;
       border-collapse: collapse;
-      margin: 15px 0 20px;
-      background: white;
-      border-radius: 8px;
-      overflow: hidden;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+      margin: 20px 0;
     }
 
-    thead th {
-      background: var(--primary);
+    table th {
+      background: #1F4788;
       color: white;
-      padding: 10px 14px;
+      padding: 12px;
       text-align: left;
-      font-size: 13px;
-      font-weight: 600;
-      letter-spacing: 0.3px;
     }
 
-    tbody td {
-      padding: 9px 14px;
-      border-bottom: 1px solid var(--border);
-      font-size: 13.5px;
+    table td {
+      padding: 10px 12px;
+      border-bottom: 1px solid #dee2e6;
     }
 
-    tbody tr:last-child td {
-      border-bottom: none;
+    table tr:nth-child(even) {
+      background: #f8f9fa;
     }
 
-    tbody tr:nth-child(even) {
-      background: #f9fafb;
-    }
-
-    /* Info cards */
-    .info-card {
-      background: white;
-      border-radius: 8px;
-      border-left: 4px solid var(--primary);
-      padding: 16px 20px;
-      margin: 15px 0;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.06);
-    }
-
-    .info-card.accent {
-      border-left-color: var(--accent);
-    }
-
-    .info-card.green {
-      border-left-color: var(--green);
-      background: var(--green-bg);
-    }
-
-    .info-card.warning {
-      border-left-color: #dc3545;
-      background: var(--red-bg);
-    }
-
-    /* Step list */
-    .steps {
-      counter-reset: step;
-      list-style: none;
-      margin-left: 0;
-      padding-left: 0;
-    }
-
-    .steps > li {
-      counter-increment: step;
-      position: relative;
-      padding-left: 40px;
-      margin-bottom: 14px;
-    }
-
-    .steps > li::before {
-      content: counter(step);
-      position: absolute;
-      left: 0;
-      top: 1px;
-      width: 26px;
-      height: 26px;
-      background: var(--primary);
-      color: white;
-      border-radius: 50%;
-      font-size: 13px;
-      font-weight: 700;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    /* Tags / badges */
     .badge {
       display: inline-block;
-      padding: 2px 10px;
+      padding: 4px 10px;
       border-radius: 12px;
-      font-size: 12px;
+      font-size: 0.85rem;
       font-weight: 600;
-      margin-right: 4px;
+      margin: 0 4px;
     }
-    .badge-green { background: var(--green-bg); color: #155724; }
-    .badge-yellow { background: var(--yellow-bg); color: #856404; }
-    .badge-red { background: var(--red-bg); color: #721c24; }
-    .badge-blue { background: #d1ecf1; color: #0c5460; }
 
-    /* Code / variables */
-    code {
-      background: #eef1f6;
-      color: var(--primary);
-      padding: 2px 7px;
+    .badge-sa {
+      background: #6f42c1;
+      color: white;
+    }
+
+    .badge-admin {
+      background: #1F4788;
+      color: white;
+    }
+
+    .badge-viewer {
+      background: #28a745;
+      color: white;
+    }
+
+    .screenshot {
+      max-width: 100%;
+      border: 1px solid #dee2e6;
       border-radius: 4px;
-      font-family: 'SF Mono', 'Fira Code', monospace;
-      font-size: 13px;
+      margin: 20px 0;
     }
 
-    /* Separator */
-    hr {
-      border: none;
-      border-top: 1px solid var(--border);
-      margin: 35px 0;
-    }
-
-    /* Checklist */
-    .checklist {
-      list-style: none;
-      margin-left: 0;
-      padding-left: 0;
-    }
-
-    .checklist li {
-      padding: 8px 12px;
-      margin-bottom: 4px;
-      background: white;
-      border-radius: 6px;
-      border-left: 3px solid var(--border);
-      font-size: 14px;
-    }
-
-    .checklist li::before {
-      content: "\2610  ";
-      color: var(--primary);
-      font-weight: bold;
-    }
-
-    /* Version footer */
-    .version-footer {
+    .footer {
       text-align: center;
-      color: var(--text-light);
-      font-size: 12px;
       margin-top: 60px;
       padding-top: 20px;
-      border-top: 1px solid var(--border);
+      border-top: 2px solid #e0e0e0;
+      color: #666;
+      font-size: 0.9rem;
     }
 
-    /* Print */
     @media print {
-      .sidebar { display: none; }
-      .main { margin-left: 0; padding: 20px; max-width: 100%; }
-      .page-header { box-shadow: none; }
-      table { box-shadow: none; }
-      h2 { page-break-before: always; }
-      h2:first-of-type { page-break-before: auto; }
-    }
-
-    /* Responsive */
-    @media (max-width: 900px) {
-      .sidebar { display: none; }
-      .main { margin-left: 0; padding: 20px; }
+      body {
+        background: white;
+        padding: 0;
+      }
+      .container {
+        box-shadow: none;
+        padding: 20px;
+      }
+      .no-print {
+        display: none;
+      }
     }
   </style>
 </head>
 <body>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <h1>Guide Super Admin</h1>
+      <p class="subtitle">Plateforme Nationale FFB - Gestion Multi-CDB</p>
+      <p style="color: #999; font-size: 0.9rem; margin-top: 10px;">Version 1.0 - Avril 2026</p>
+    </div>
 
-<!-- Sidebar Navigation -->
-<aside class="sidebar">
-  <div class="sidebar-header">
-    <img src="images/FrenchBillard-Icon-small.png" alt="Billard Français" onerror="this.style.display='none'">
-    <h2>Guide Super Admin<br>Onboarding CDB</h2>
+    <!-- Table of Contents -->
+    <div class="toc">
+      <h2>📋 Table des matières</h2>
+      <ul>
+        <li><a href="#overview">1. Vue d'ensemble</a></li>
+        <li><a href="#architecture">2. Architecture de la plateforme</a></li>
+        <li><a href="#cdbs">3. Gestion des CDBs</a></li>
+        <li><a href="#ffb-data">4. Données FFB</a></li>
+        <li><a href="#ligues">5. Gestion des Ligues</a></li>
+        <li><a href="#users">6. Gestion des utilisateurs</a></li>
+        <li><a href="#settings">7. Paramètres plateforme</a></li>
+        <li><a href="#navigation">8. Navigation et accès</a></li>
+        <li><a href="#workflows">9. Flux de travail courants</a></li>
+        <li><a href="#troubleshooting">10. Dépannage</a></li>
+      </ul>
+    </div>
+
+    <!-- Section 1: Overview -->
+    <div class="section" id="overview">
+      <h2>1. Vue d'ensemble</h2>
+      
+      <h3>Qu'est-ce que le Super Admin ?</h3>
+      <p>Le <strong>Super Admin (SA)</strong> est le rôle de plus haut niveau de la plateforme. Il permet de :</p>
+      <ul>
+        <li>Gérer l'ensemble des Comités Départementaux de Billard (CDB) sur une plateforme centralisée</li>
+        <li>Importer et maintenir les données officielles de la Fédération Française de Billard (FFB)</li>
+        <li>Créer et configurer de nouveaux CDBs</li>
+        <li>Gérer les utilisateurs à travers toutes les organisations</li>
+        <li>Accéder à n'importe quel CDB pour assistance ou vérification</li>
+      </ul>
+
+      <div class="alert alert-info">
+        <strong>💡 Important :</strong> Le Super Admin a accès à toutes les données de tous les CDBs. Ce rôle doit être réservé aux administrateurs de confiance au niveau national FFB.
+      </div>
+
+      <h3>Responsabilités du Super Admin</h3>
+      <table>
+        <tr>
+          <th>Domaine</th>
+          <th>Responsabilités</th>
+        </tr>
+        <tr>
+          <td><strong>Données FFB</strong></td>
+          <td>Import des fichiers CSV officiels (Ligues, Clubs, Licences)</td>
+        </tr>
+        <tr>
+          <td><strong>CDBs</strong></td>
+          <td>Création, configuration, activation/désactivation</td>
+        </tr>
+        <tr>
+          <td><strong>Utilisateurs</strong></td>
+          <td>Gestion des comptes admins CDB, admins ligue, droits d'accès</td>
+        </tr>
+        <tr>
+          <td><strong>Support</strong></td>
+          <td>Assistance technique, réinitialisation mots de passe, dépannage</td>
+        </tr>
+        <tr>
+          <td><strong>Plateforme</strong></td>
+          <td>Paramètres globaux, domaine email, templates de bienvenue</td>
+        </tr>
+      </table>
+    </div>
+
+    <!-- Section 2: Architecture -->
+    <div class="section" id="architecture">
+      <h2>2. Architecture de la plateforme</h2>
+
+      <h3>Hiérarchie des données FFB</h3>
+      <p>La plateforme reflète la structure officielle de la FFB :</p>
+
+      <div class="code-block">
+FFB (Fédération)
+  └─ Ligues (16 ligues régionales)
+      └─ CDBs (~88 comités départementaux)
+          └─ Clubs (~590 clubs)
+              └─ Licenciés (~20 000 joueurs)
+      </div>
+
+      <h3>Multi-organisation (Multi-CDB)</h3>
+      <p>Chaque CDB dispose de son propre environnement complètement isolé :</p>
+      
+      <table>
+        <tr>
+          <th>Élément</th>
+          <th>Isolation</th>
+          <th>Exemple</th>
+        </tr>
+        <tr>
+          <td>Joueurs</td>
+          <td>✅ Séparés par CDB</td>
+          <td>Les joueurs du CDB 92 ne sont pas visibles par le CDB 93</td>
+        </tr>
+        <tr>
+          <td>Compétitions</td>
+          <td>✅ Séparées par CDB</td>
+          <td>Chaque CDB gère ses propres tournois</td>
+        </tr>
+        <tr>
+          <td>Classements</td>
+          <td>✅ Séparés par CDB</td>
+          <td>Les classements sont calculés indépendamment</td>
+        </tr>
+        <tr>
+          <td>Paramètres</td>
+          <td>✅ Personnalisables</td>
+          <td>Logo, couleurs, emails, règles de notation</td>
+        </tr>
+        <tr>
+          <td>Utilisateurs</td>
+          <td>✅ Assignés à un CDB</td>
+          <td>Un admin ne peut gérer que son CDB</td>
+        </tr>
+      </table>
+
+      <div class="alert alert-success">
+        <strong>✓ Avantage :</strong> Cette isolation garantit que chaque CDB travaille de manière autonome, sans risque de contamination de données entre départements.
+      </div>
+
+      <h3>Données partagées</h3>
+      <p>Certaines données sont partagées au niveau national :</p>
+      <ul>
+        <li><strong>Ligues FFB</strong> - Liste des 16 ligues régionales</li>
+        <li><strong>CDBs FFB</strong> - Liste des comités départementaux</li>
+        <li><strong>Clubs FFB</strong> - Référentiel national des clubs</li>
+        <li><strong>Licenciés FFB</strong> - Base nationale des licences actives</li>
+      </ul>
+
+      <div class="alert alert-info">
+        <strong>💡 Note :</strong> Ces données partagées sont en lecture seule pour les CDBs. Seul le Super Admin peut les importer et les mettre à jour.
+      </div>
+    </div>
+
+    <!-- Section 3: CDB Management -->
+    <div class="section" id="cdbs">
+      <h2>3. Gestion des CDBs</h2>
+
+      <h3>Créer un nouveau CDB</h3>
+      
+      <div class="step-box">
+        <h4>Étape 1 : Accéder à la page CDBs</h4>
+        <p>Depuis le tableau de bord Super Admin, cliquez sur <strong>CDBs</strong> dans la barre de navigation.</p>
+      </div>
+
+      <div class="step-box">
+        <h4>Étape 2 : Cliquer sur "Créer un CDB"</h4>
+        <p>Un formulaire s'ouvre avec les champs suivants :</p>
+        <ul>
+          <li><strong>CDB FFB</strong> - Sélectionner dans la liste des CDBs officiels (ex: "92 - HAUTS DE SEINE")</li>
+          <li><strong>Nom complet</strong> - Auto-rempli depuis FFB (ex: "Comité Départemental de Billard des Hauts-de-Seine")</li>
+          <li><strong>Nom court</strong> - Version abrégée (ex: "CDBHS")</li>
+          <li><strong>Slug</strong> - Identifiant URL unique (ex: "cdbhs")</li>
+          <li><strong>Admin - Rechercher un licencié</strong> - Chercher le futur admin dans les licences FFB</li>
+          <li><strong>Nom d'utilisateur admin</strong> - Login pour le premier admin</li>
+          <li><strong>Email admin</strong> - Email du premier admin</li>
+          <li><strong>Mot de passe admin</strong> - Mot de passe initial</li>
+        </ul>
+      </div>
+
+      <div class="step-box">
+        <h4>Étape 3 : Validation et création</h4>
+        <p>Lors de la création, la plateforme effectue automatiquement :</p>
+        <ol>
+          <li>Création de l'organisation dans la base</li>
+          <li>Génération des adresses email (ex: <code>cdbhs@carambole-gestion.fr</code>)</li>
+          <li>Création du compte admin initial</li>
+          <li>Copie des catégories de référence depuis le CDB #1</li>
+          <li>Initialisation des paramètres par défaut</li>
+        </ol>
+      </div>
+
+      <div class="alert alert-warning">
+        <strong>⚠️ Important :</strong> Le slug choisi sera utilisé dans l'URL Player App (<code>?org=slug</code>). Il ne peut pas être modifié après création.
+      </div>
+
+      <h3>Peupler les joueurs du CDB (Seeding)</h3>
+      
+      <p>Après création d'un CDB, il faut importer les joueurs depuis la base FFB :</p>
+
+      <div class="step-box">
+        <h4>Option 1 : Import depuis la page CDBs</h4>
+        <ol>
+          <li>Sur la ligne du CDB, cliquez sur "Importer joueurs FFB"</li>
+          <li>Une prévisualisation affiche les joueurs FFB du département (ex: 150 licenciés)</li>
+          <li>Validez pour importer tous les joueurs dans la table <code>players</code> du CDB</li>
+        </ol>
+      </div>
+
+      <div class="step-box">
+        <h4>Option 2 : Import manuel par l'admin CDB</h4>
+        <p>L'admin du CDB peut également importer ses joueurs via <strong>Paramètres → Import joueurs</strong> en uploadant un fichier CSV.</p>
+      </div>
+
+      <h3>Synchroniser les joueurs FFB</h3>
+      
+      <p>Au fil de la saison, de nouveaux licenciés arrivent ou des données changent (classements, clubs). Pour synchroniser :</p>
+
+      <ol>
+        <li>Cliquez sur "Sync FFB" sur la ligne du CDB</li>
+        <li>La prévisualisation affiche :
+          <ul>
+            <li><span style="color: #28a745;">✓ Joueurs à jour</span></li>
+            <li><span style="color: #ffc107;">⚠ Joueurs à mettre à jour</span> (classement ou club modifié)</li>
+            <li><span style="color: #17a2b8;">+ Nouveaux licenciés</span> (pas encore dans le CDB)</li>
+          </ul>
+        </li>
+        <li>Validez pour appliquer les changements</li>
+      </ol>
+
+      <div class="alert alert-info">
+        <strong>💡 Conseil :</strong> Effectuez une synchronisation en début de saison (septembre) et une à mi-saison (janvier) pour garder les données à jour.
+      </div>
+
+      <h3>Envoyer l'email de bienvenue</h3>
+      
+      <p>Après configuration du CDB, envoyez l'email de bienvenue à l'admin :</p>
+
+      <ol>
+        <li>Sur la ligne du CDB, cliquez sur l'icône email (✉️)</li>
+        <li>Le template de bienvenue pré-rempli s'affiche (configurable dans Paramètres)</li>
+        <li>Vérifiez le contenu et envoyez</li>
+        <li>L'admin recevra :
+          <ul>
+            <li>Lien vers le dashboard du CDB</li>
+            <li>Lien vers le Player App</li>
+            <li>Identifiants de connexion</li>
+            <li>Guide d'utilisation</li>
+          </ul>
+        </li>
+      </ol>
+
+      <h3>Désactiver / Réactiver un CDB</h3>
+      
+      <p>Pour désactiver temporairement un CDB (ex: non-paiement, CDB dissout) :</p>
+
+      <ol>
+        <li>Cliquez sur le bouton toggle "Actif / Inactif"</li>
+        <li>Un CDB inactif :
+          <ul>
+            <li>❌ Les admins ne peuvent plus se connecter</li>
+            <li>❌ Le Player App affiche un message "CDB non disponible"</li>
+            <li>✅ Les données sont préservées (pas de suppression)</li>
+          </ul>
+        </li>
+        <li>Réactivation possible à tout moment</li>
+      </ol>
+
+      <h3>Supprimer un CDB</h3>
+      
+      <div class="alert alert-danger">
+        <strong>⚠️ DANGER - Action irréversible !</strong><br>
+        La suppression d'un CDB efface TOUTES ses données :
+        <ul>
+          <li>Joueurs, compétitions, résultats, classements</li>
+          <li>Utilisateurs, emails, paramètres</li>
+          <li>Logs d'activité</li>
+        </ul>
+        <p><strong>Il n'y a aucun moyen de récupérer ces données après suppression.</strong></p>
+      </div>
+
+      <p>Processus de suppression :</p>
+      <ol>
+        <li>Cliquez sur le bouton "Supprimer" (icône poubelle)</li>
+        <li>Une confirmation vous demande de taper le nom du CDB</li>
+        <li>La suppression est immédiate et définitive</li>
+      </ol>
+
+      <div class="alert alert-warning">
+        <strong>💡 Alternative :</strong> Pour conserver les données historiques, préférez <strong>désactiver</strong> le CDB plutôt que le supprimer.
+      </div>
+    </div>
+
+    <!-- Section 4: FFB Data -->
+    <div class="section" id="ffb-data">
+      <h2>4. Données FFB</h2>
+
+      <h3>Sources de données officielles</h3>
+      
+      <p>La FFB fournit des fichiers CSV officiels contenant :</p>
+
+      <table>
+        <tr>
+          <th>Fichier</th>
+          <th>Contenu</th>
+          <th>Fréquence de mise à jour</th>
+        </tr>
+        <tr>
+          <td><strong>Ligues.csv</strong></td>
+          <td>16 ligues régionales</td>
+          <td>Rarement (structure stable)</td>
+        </tr>
+        <tr>
+          <td><strong>Clubs.csv</strong></td>
+          <td>~590 clubs nationaux</td>
+          <td>Annuelle (nouveaux clubs, fermetures)</td>
+        </tr>
+        <tr>
+          <td><strong>Licences.csv</strong></td>
+          <td>~20 000 licenciés actifs</td>
+          <td>Mensuelle ou trimestrielle</td>
+        </tr>
+      </table>
+
+      <h3>Importer les fichiers FFB</h3>
+      
+      <p>Depuis <strong>FFB Fichiers</strong> dans la barre de navigation :</p>
+
+      <div class="step-box">
+        <h4>Import Ligues</h4>
+        <ol>
+          <li>Cliquez sur "Choisir un fichier" sous la section Ligues</li>
+          <li>Sélectionnez <code>Ligues.csv</code></li>
+          <li>Cliquez sur "Importer"</li>
+          <li>Résultat : 16 ligues importées ou mises à jour</li>
+        </ol>
+      </div>
+
+      <div class="step-box">
+        <h4>Import Clubs</h4>
+        <ol>
+          <li>Sélectionnez <code>Clubs.csv</code></li>
+          <li>Le système extrait automatiquement le numéro de ligue et le code CDB</li>
+          <li>Résultat : ~590 clubs importés, liés à leurs ligues et CDBs</li>
+        </ol>
+      </div>
+
+      <div class="step-box">
+        <h4>Import Licences</h4>
+        <ol>
+          <li>Sélectionnez <code>Licences.csv</code></li>
+          <li>Pour chaque licence, le système enregistre :
+            <ul>
+              <li>Numéro de licence</li>
+              <li>Nom, prénom, email</li>
+              <li>Ligue, CDB, club</li>
+              <li>Classements (Libre, Cadre, Bande, 3 Bandes)</li>
+            </ul>
+          </li>
+          <li>Résultat : ~20 000 licenciés importés</li>
+        </ol>
+      </div>
+
+      <div class="alert alert-info">
+        <strong>💡 Ordre d'import :</strong> Importez toujours dans cet ordre : <strong>Ligues → Clubs → Licences</strong>. Les licences dépendent des clubs, qui dépendent des ligues.
+      </div>
+
+      <h3>Consulter les données FFB</h3>
+      
+      <p>Page <strong>Données FFB</strong> pour explorer les données importées :</p>
+
+      <ul>
+        <li><strong>Onglet Ligues</strong> - Liste des 16 ligues avec nombre de clubs et licenciés</li>
+        <li><strong>Onglet CDBs</strong> - Liste des ~88 CDBs avec leur ligue d'appartenance</li>
+        <li><strong>Onglet Clubs</strong> - Liste des ~590 clubs avec filtres par ligue/CDB</li>
+        <li><strong>Onglet Licenciés</strong> - Recherche de licenciés avec filtres avancés</li>
+      </ul>
+
+      <h3>Utilisation des données FFB</h3>
+      
+      <p>Les données FFB servent de référentiel pour :</p>
+
+      <ul>
+        <li><strong>Création de CDBs</strong> - Sélection dans la liste officielle des CDBs</li>
+        <li><strong>Recherche d'admins</strong> - Recherche de licenciés FFB pour créer un compte admin</li>
+        <li><strong>Seeding joueurs</strong> - Import des licenciés d'un département dans un CDB</li>
+        <li><strong>Synchronisation</strong> - Mise à jour des classements et changements de clubs</li>
+      </ul>
+
+      <div class="alert alert-warning">
+        <strong>⚠️ Protection des données :</strong> Les données FFB sont confidentielles. L'accès est réservé au Super Admin. Les CDBs ne voient que leurs propres joueurs.
+      </div>
+    </div>
+
+    <!-- Section 5: Ligues -->
+    <div class="section" id="ligues">
+      <h2>5. Gestion des Ligues</h2>
+
+      <h3>Vue d'ensemble</h3>
+      
+      <p>La page <strong>Ligues</strong> permet de gérer les 16 ligues régionales FFB.</p>
+
+      <h3>Informations de contact</h3>
+      
+      <p>Pour chaque ligue, vous pouvez ajouter :</p>
+
+      <ul>
+        <li>Email de contact</li>
+        <li>Téléphone</li>
+        <li>Site web</li>
+        <li>Adresse postale</li>
+        <li>Logo de la ligue</li>
+      </ul>
+
+      <div class="step-box">
+        <h4>Modifier les informations d'une ligue</h4>
+        <ol>
+          <li>Cliquez sur le bouton "Modifier" (icône crayon) sur la ligne de la ligue</li>
+          <li>Remplissez les champs souhaités</li>
+          <li>Pour le logo :
+            <ul>
+              <li>Formats acceptés : PNG, JPG, SVG</li>
+              <li>Taille recommandée : 200x200 pixels</li>
+              <li>Poids max : 2 MB</li>
+            </ul>
+          </li>
+          <li>Cliquez sur "Enregistrer"</li>
+        </ol>
+      </div>
+
+      <h3>Admins de ligue (à venir)</h3>
+      
+      <div class="alert alert-info">
+        <strong>💡 Fonctionnalité future :</strong> Les admins de ligue auront accès à un tableau de bord regroupant les statistiques et calendriers de tous les CDBs de leur ligue.
+      </div>
+
+      <p>Actuellement, vous pouvez créer un compte "Admin Ligue" via <strong>Utilisateurs → Créer Admin Ligue</strong>.</p>
+    </div>
+
+    <!-- Section 6: Users -->
+    <div class="section" id="users">
+      <h2>6. Gestion des utilisateurs</h2>
+
+      <h3>Types d'utilisateurs</h3>
+      
+      <table>
+        <tr>
+          <th>Rôle</th>
+          <th>Badge</th>
+          <th>Accès</th>
+          <th>Utilisation</th>
+        </tr>
+        <tr>
+          <td><strong>Super Admin</strong></td>
+          <td><span class="badge badge-sa">SA</span></td>
+          <td>Plateforme entière, tous CDBs</td>
+          <td>Administrateur national FFB</td>
+        </tr>
+        <tr>
+          <td><strong>Admin</strong></td>
+          <td><span class="badge badge-admin">Admin</span></td>
+          <td>Un seul CDB, accès complet</td>
+          <td>Administrateur d'un CDB</td>
+        </tr>
+        <tr>
+          <td><strong>Lecteur</strong></td>
+          <td><span class="badge badge-viewer">Lecteur</span></td>
+          <td>Un seul CDB, lecture seule</td>
+          <td>Audit, consultation sans modification</td>
+        </tr>
+        <tr>
+          <td><strong>Viewer</strong></td>
+          <td><span class="badge badge-viewer">Viewer</span></td>
+          <td>Un seul CDB, lecture limitée</td>
+          <td>Consultation basique (tournois, classements)</td>
+        </tr>
+        <tr>
+          <td><strong>Admin Ligue</strong></td>
+          <td><span class="badge badge-admin">Ligue</span></td>
+          <td>Tous CDBs de sa ligue</td>
+          <td>Responsable régional (future fonctionnalité)</td>
+        </tr>
+      </table>
+
+      <h3>Voir tous les utilisateurs</h3>
+      
+      <p>Page <strong>Utilisateurs</strong> - Vue d'ensemble :</p>
+
+      <ul>
+        <li><strong>KPIs en haut</strong> :
+          <ul>
+            <li>Nombre total d'utilisateurs</li>
+            <li>Nombre de Super Admins</li>
+            <li>Répartition par rôle</li>
+            <li>Répartition par CDB</li>
+          </ul>
+        </li>
+        <li><strong>Filtres</strong> :
+          <ul>
+            <li>Recherche par nom d'utilisateur ou email</li>
+            <li>Filtre par CDB</li>
+            <li>Filtre par rôle</li>
+            <li>Filtre par statut (Actif / Inactif)</li>
+          </ul>
+        </li>
+        <li><strong>Tableau</strong> : Liste de tous les utilisateurs de tous les CDBs</li>
+      </ul>
+
+      <h3>Créer un utilisateur pour un CDB</h3>
+      
+      <div class="step-box">
+        <h4>Depuis la page Utilisateurs</h4>
+        <ol>
+          <li>Cliquez sur "Créer un utilisateur"</li>
+          <li>Remplissez :
+            <ul>
+              <li><strong>Nom d'utilisateur</strong> (unique)</li>
+              <li><strong>Email</strong> (optionnel mais recommandé)</li>
+              <li><strong>Mot de passe</strong> (minimum 6 caractères)</li>
+              <li><strong>Rôle</strong> (Admin, Viewer, Lecteur)</li>
+              <li><strong>CDB</strong> (sélectionner le CDB d'appartenance)</li>
+            </ul>
+          </li>
+          <li>Cliquez sur "Créer"</li>
+        </ol>
+      </div>
+
+      <div class="alert alert-warning">
+        <strong>💡 Mot de passe initial :</strong> Communiquez le mot de passe à l'utilisateur de manière sécurisée (téléphone, email chiffré). Recommandez-lui de le changer immédiatement après première connexion.
+      </div>
+
+      <h3>Modifier un utilisateur</h3>
+      
+      <p>Cliquez sur une ligne du tableau ou sur le bouton "Modifier" :</p>
+
+      <ul>
+        <li><strong>Nom d'utilisateur</strong> - Non modifiable (en lecture seule)</li>
+        <li><strong>Email</strong> - Modifiable</li>
+        <li><strong>Rôle</strong> - Modifiable (Admin, Viewer, Lecteur)</li>
+        <li><strong>CDB</strong> - Réassignable (changer l'utilisateur de CDB)</li>
+        <li><strong>Super Admin</strong> - Case à cocher pour donner/retirer les droits SA</li>
+        <li><strong>Compte actif</strong> - Activer/désactiver le compte</li>
+        <li><strong>Mot de passe</strong> - Section dédiée (voir ci-dessous)</li>
+      </ul>
+
+      <h3>Réinitialiser un mot de passe</h3>
+      
+      <p>Dans le formulaire de modification d'utilisateur :</p>
+
+      <div class="step-box">
+        <h4>Section Mot de passe</h4>
+        <p>Affiche :</p>
+        <ul>
+          <li><strong>Statut</strong> : ✓ Défini (tous les utilisateurs existants ont un mot de passe)</li>
+          <li><strong>Dernière modification</strong> : Date de la dernière réinitialisation, ou "Jamais"</li>
+        </ul>
+        
+        <p>Pour réinitialiser :</p>
+        <ol>
+          <li>Cochez <strong>"Réinitialiser le mot de passe"</strong></li>
+          <li>Deux champs apparaissent :
+            <ul>
+              <li>Nouveau mot de passe</li>
+              <li>Confirmer mot de passe</li>
+            </ul>
+          </li>
+          <li>Saisissez le nouveau mot de passe (minimum 6 caractères)</li>
+          <li>Confirmez-le en le retapant</li>
+          <li>Cliquez sur "Enregistrer"</li>
+        </ol>
+      </div>
+
+      <div class="alert alert-info">
+        <strong>💡 Quand utiliser cette fonction ?</strong>
+        <ul>
+          <li>Un utilisateur a perdu/oublié son mot de passe</li>
+          <li>L'email de l'utilisateur est invalide (fonction "Mot de passe oublié" ne marche pas)</li>
+          <li>Urgence : besoin d'accès immédiat</li>
+        </ul>
+        <p><strong>Méthode normale :</strong> L'utilisateur utilise "Mot de passe oublié ?" sur la page de connexion (réception d'un code par email).</p>
+      </div>
+
+      <h3>Activer / Désactiver un utilisateur</h3>
+      
+      <p>Deux méthodes :</p>
+
+      <ul>
+        <li><strong>Depuis le tableau</strong> : Cliquez sur le bouton 🚫 (Désactiver) ou ✅ (Activer)</li>
+        <li><strong>Depuis le formulaire</strong> : Décochez/Cochez "Compte actif" et enregistrez</li>
+      </ul>
+
+      <p>Effet d'un compte inactif :</p>
+      <ul>
+        <li>❌ Connexion impossible (message "Compte désactivé")</li>
+        <li>✅ Données préservées (logs d'activité conservés)</li>
+        <li>✅ Réactivation possible à tout moment</li>
+      </ul>
+
+      <h3>Donner/Retirer les droits Super Admin</h3>
+      
+      <div class="alert alert-warning">
+        <strong>⚠️ Attention :</strong> Le rôle Super Admin donne accès à TOUTES les données de TOUS les CDBs. À réserver aux administrateurs de confiance.
+      </div>
+
+      <p>Pour donner les droits SA :</p>
+
+      <ol>
+        <li>Ouvrez l'utilisateur en modification</li>
+        <li>Cochez <strong>"Super Admin (accès complet à toutes les organisations)"</strong></li>
+        <li>Enregistrez</li>
+        <li>L'utilisateur a maintenant accès au menu Super Admin</li>
+      </ol>
+
+      <p>Un Super Admin peut également avoir un CDB d'appartenance (optionnel). Cela définit son contexte par défaut à la connexion.</p>
+    </div>
+
+    <!-- Section 7: Settings -->
+    <div class="section" id="settings">
+      <h2>7. Paramètres plateforme</h2>
+
+      <h3>Domaine email de la plateforme</h3>
+      
+      <p>Page <strong>Paramètres</strong> - Section "Domaine email plateforme" :</p>
+
+      <p>Configurez le domaine utilisé pour générer les adresses email des nouveaux CDBs.</p>
+
+      <div class="step-box">
+        <h4>Configuration actuelle (exemple)</h4>
+        <ul>
+          <li><strong>Domaine</strong> : <code>carambole-gestion.fr</code></li>
+          <li><strong>Effet</strong> : Lors de la création du CDB "CDBHS" (slug: <code>cdbhs</code>), les adresses suivantes sont auto-générées :
+            <ul>
+              <li><code>cdbhs@carambole-gestion.fr</code> (communication)</li>
+              <li><code>convocations-cdbhs@carambole-gestion.fr</code> (convocations)</li>
+              <li><code>noreply-cdbhs@carambole-gestion.fr</code> (emails automatiques)</li>
+            </ul>
+          </li>
+        </ul>
+      </div>
+
+      <div class="alert alert-warning">
+        <strong>⚠️ Configuration DNS requise :</strong>
+        <ul>
+          <li>Le domaine doit être vérifié dans Resend (plateforme d'envoi d'emails)</li>
+          <li>Les enregistrements DKIM et SPF doivent être configurés</li>
+          <li>Voir documentation Resend pour les détails techniques</li>
+        </ul>
+      </div>
+
+      <h3>Email de bienvenue CDB</h3>
+      
+      <p>Personnalisez l'email envoyé aux admins des nouveaux CDBs :</p>
+
+      <div class="step-box">
+        <h4>Éditeur de template</h4>
+        <p>Utilisez l'éditeur riche (Quill) pour composer l'email avec :</p>
+        <ul>
+          <li>Mise en forme (gras, italique, listes)</li>
+          <li>Variables dynamiques (voir tableau ci-dessous)</li>
+          <li>Instructions de connexion</li>
+          <li>Liens vers les guides</li>
+        </ul>
+      </div>
+
+      <h4>Variables disponibles</h4>
+      <table>
+        <tr>
+          <th>Variable</th>
+          <th>Description</th>
+          <th>Exemple</th>
+        </tr>
+        <tr>
+          <td><code>{organization_name}</code></td>
+          <td>Nom complet du CDB</td>
+          <td>Comité Départemental de Billard des Hauts-de-Seine</td>
+        </tr>
+        <tr>
+          <td><code>{organization_short_name}</code></td>
+          <td>Nom court</td>
+          <td>CDBHS</td>
+        </tr>
+        <tr>
+          <td><code>{admin_username}</code></td>
+          <td>Login de l'admin</td>
+          <td>admin92</td>
+        </tr>
+        <tr>
+          <td><code>{admin_email}</code></td>
+          <td>Email de l'admin</td>
+          <td>contact@cdbhs.net</td>
+        </tr>
+        <tr>
+          <td><code>{dashboard_url}</code></td>
+          <td>Lien vers le dashboard</td>
+          <td>https://app.com/login.html?org=cdbhs</td>
+        </tr>
+        <tr>
+          <td><code>{player_app_url}</code></td>
+          <td>Lien vers le Player App</td>
+          <td>https://player.app/?org=cdbhs</td>
+        </tr>
+      </table>
+
+      <div class="step-box">
+        <h4>Envoyer un email de test</h4>
+        <ol>
+          <li>Composez votre template avec les variables</li>
+          <li>Cliquez sur "Envoyer un test"</li>
+          <li>Entrez votre email</li>
+          <li>Vous recevrez l'email avec les variables remplacées par des valeurs d'exemple</li>
+        </ol>
+      </div>
+
+      <div class="alert alert-success">
+        <strong>✓ Conseil :</strong> Incluez dans l'email de bienvenue :
+        <ul>
+          <li>Identifiants de connexion</li>
+          <li>Lien vers le guide utilisateur</li>
+          <li>Lien vers le Player App (à partager avec les joueurs)</li>
+          <li>Contacts support</li>
+          <li>Prochaines étapes recommandées (import joueurs, paramétrage)</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Section 8: Navigation -->
+    <div class="section" id="navigation">
+      <h2>8. Navigation et accès</h2>
+
+      <h3>Menu Super Admin</h3>
+      
+      <p>Lorsque vous êtes connecté en tant que Super Admin, la barre de navigation affiche :</p>
+
+      <table>
+        <tr>
+          <th>Onglet</th>
+          <th>Page</th>
+          <th>Description</th>
+        </tr>
+        <tr>
+          <td>📊</td>
+          <td>Tableau de bord</td>
+          <td>KPIs plateforme, statistiques FFB, enrôlements récents</td>
+        </tr>
+        <tr>
+          <td>🏢</td>
+          <td>CDBs</td>
+          <td>Gestion des comités départementaux</td>
+        </tr>
+        <tr>
+          <td>🏛️</td>
+          <td>Ligues</td>
+          <td>Gestion des ligues régionales</td>
+        </tr>
+        <tr>
+          <td>📊</td>
+          <td>Données FFB</td>
+          <td>Consultation des données FFB importées</td>
+        </tr>
+        <tr>
+          <td>📁</td>
+          <td>FFB Fichiers</td>
+          <td>Import des CSV FFB (Ligues, Clubs, Licences)</td>
+        </tr>
+        <tr>
+          <td>👥</td>
+          <td>Utilisateurs</td>
+          <td>Gestion de tous les utilisateurs plateforme</td>
+        </tr>
+        <tr>
+          <td>⚙️</td>
+          <td>Paramètres</td>
+          <td>Domaine email, template de bienvenue</td>
+        </tr>
+      </table>
+
+      <h3>Dropdown CDB</h3>
+      
+      <p>En haut à droite de la barre de navigation, un <strong>dropdown CDB</strong> permet de :</p>
+
+      <ul>
+        <li>Voir la liste de tous les CDBs actifs</li>
+        <li>Cliquer sur un CDB pour accéder directement à son dashboard</li>
+        <li>Naviguer entre les contextes SA et CDB</li>
+      </ul>
+
+      <div class="step-box">
+        <h4>Accéder au dashboard d'un CDB</h4>
+        <ol>
+          <li>Cliquez sur le dropdown CDB (en haut à droite)</li>
+          <li>Sélectionnez le CDB souhaité (ex: "CDBHS")</li>
+          <li>Vous êtes redirigé vers le dashboard du CDB</li>
+          <li>Vous voyez maintenant :
+            <ul>
+              <li>Les joueurs de ce CDB uniquement</li>
+              <li>Les compétitions de ce CDB</li>
+              <li>Les classements de ce CDB</li>
+              <li>Les paramètres de ce CDB</li>
+            </ul>
+          </li>
+        </ol>
+      </div>
+
+      <div class="alert alert-info">
+        <strong>💡 Contexte CDB vs SA :</strong>
+        <ul>
+          <li><strong>Pages SA</strong> (super-admin-*.html) → Données de tous les CDBs</li>
+          <li><strong>Pages CDB</strong> (dashboard.html, etc.) → Données d'un seul CDB</li>
+        </ul>
+        <p>Le Super Admin peut naviguer librement entre ces deux contextes.</p>
+      </div>
+
+      <h3>Retour au niveau SA</h3>
+      
+      <p>Depuis le dashboard d'un CDB, pour revenir au niveau Super Admin :</p>
+
+      <ul>
+        <li><strong>Option 1</strong> : Cliquez sur un des onglets SA dans le menu (Tableau de bord SA, CDBs, etc.)</li>
+        <li><strong>Option 2</strong> : Utilisez le dropdown CDB et sélectionnez "Niveau Super Admin"</li>
+      </ul>
+    </div>
+
+    <!-- Section 9: Workflows -->
+    <div class="section" id="workflows">
+      <h2>9. Flux de travail courants</h2>
+
+      <h3>Scénario 1 : Onboarding d'un nouveau CDB</h3>
+      
+      <div class="step-box">
+        <h4>Workflow complet</h4>
+        <ol>
+          <li><strong>Importer les données FFB</strong> (si pas déjà fait) :
+            <ul>
+              <li>FFB Fichiers → Importer Ligues.csv</li>
+              <li>FFB Fichiers → Importer Clubs.csv</li>
+              <li>FFB Fichiers → Importer Licences.csv</li>
+            </ul>
+          </li>
+          <li><strong>Créer le CDB</strong> :
+            <ul>
+              <li>CDBs → Créer un CDB</li>
+              <li>Remplir le formulaire (sélection FFB CDB, admin, etc.)</li>
+              <li>Valider la création</li>
+            </ul>
+          </li>
+          <li><strong>Importer les joueurs FFB</strong> :
+            <ul>
+              <li>Sur la ligne du CDB → Importer joueurs FFB</li>
+              <li>Prévisualisation → Valider</li>
+            </ul>
+          </li>
+          <li><strong>Envoyer l'email de bienvenue</strong> :
+            <ul>
+              <li>Sur la ligne du CDB → Icône email ✉️</li>
+              <li>Vérifier le contenu → Envoyer</li>
+            </ul>
+          </li>
+          <li><strong>Assistance initiale</strong> :
+            <ul>
+              <li>Accéder au dashboard du CDB (dropdown CDB)</li>
+              <li>Vérifier que les joueurs sont bien importés</li>
+              <li>Aider l'admin à paramétrer (logo, couleurs, emails)</li>
+            </ul>
+          </li>
+        </ol>
+      </div>
+
+      <h3>Scénario 2 : Début de saison (septembre)</h3>
+      
+      <div class="step-box">
+        <h4>Actions recommandées</h4>
+        <ol>
+          <li><strong>Mettre à jour les données FFB</strong> :
+            <ul>
+              <li>Recevoir les nouveaux fichiers CSV de la FFB</li>
+              <li>Importer Licences.csv (nouveaux licenciés, changements de clubs)</li>
+              <li>Importer Clubs.csv si modifications</li>
+            </ul>
+          </li>
+          <li><strong>Synchroniser les CDBs</strong> :
+            <ul>
+              <li>Pour chaque CDB actif → Sync FFB</li>
+              <li>Appliquer les mises à jour (nouveaux joueurs, classements)</li>
+            </ul>
+          </li>
+          <li><strong>Vérifier les comptes admins</strong> :
+            <ul>
+              <li>Utilisateurs → Vérifier que tous les admins sont actifs</li>
+              <li>Réinitialiser les mots de passe si besoin</li>
+            </ul>
+          </li>
+        </ol>
+      </div>
+
+      <h3>Scénario 3 : Support utilisateur</h3>
+      
+      <div class="step-box">
+        <h4>Un admin CDB a oublié son mot de passe</h4>
+        <ol>
+          <li><strong>Méthode normale</strong> : Diriger l'admin vers "Mot de passe oublié ?" sur la page de connexion</li>
+          <li><strong>Si l'email est invalide</strong> :
+            <ul>
+              <li>Utilisateurs → Trouver l'utilisateur</li>
+              <li>Modifier → Mettre à jour l'email</li>
+              <li>Enregistrer → L'admin peut maintenant utiliser "Mot de passe oublié ?"</li>
+            </ul>
+          </li>
+          <li><strong>En urgence</strong> :
+            <ul>
+              <li>Utilisateurs → Trouver l'utilisateur</li>
+              <li>Modifier → Réinitialiser le mot de passe</li>
+              <li>Communiquer le nouveau mot de passe par téléphone</li>
+              <li>Recommander à l'admin de le changer après connexion</li>
+            </ul>
+          </li>
+        </ol>
+      </div>
+
+      <div class="step-box">
+        <h4>Un admin CDB ne voit pas ses joueurs</h4>
+        <ol>
+          <li>Accéder au dashboard du CDB (dropdown CDB → sélectionner le CDB)</li>
+          <li>Vérifier page Joueurs → Si vide :</li>
+          <li>Retour niveau SA → CDBs → Importer joueurs FFB pour ce CDB</li>
+          <li>Vérifier à nouveau depuis le dashboard du CDB</li>
+        </ol>
+      </div>
+
+      <div class="step-box">
+        <h4>Un CDB veut changer son logo/couleurs</h4>
+        <ol>
+          <li>Option 1 : L'admin CDB peut le faire lui-même (Paramètres → Organisation)</li>
+          <li>Option 2 : Vous le faites pour lui :
+            <ul>
+              <li>Dropdown CDB → Sélectionner le CDB</li>
+              <li>Paramètres → Organisation</li>
+              <li>Upload logo, modifier couleurs</li>
+              <li>Enregistrer</li>
+            </ul>
+          </li>
+        </ol>
+      </div>
+    </div>
+
+    <!-- Section 10: Troubleshooting -->
+    <div class="section" id="troubleshooting">
+      <h2>10. Dépannage</h2>
+
+      <h3>Problème : Import FFB échoue</h3>
+      
+      <p><strong>Symptômes :</strong> Message d'erreur lors de l'import d'un fichier CSV FFB</p>
+
+      <p><strong>Causes possibles :</strong></p>
+      <ul>
+        <li>Format du fichier incorrect (délimiteur, encodage)</li>
+        <li>Colonnes manquantes ou renommées</li>
+        <li>Données manquantes (ex: ligue_numero vide dans Clubs.csv)</li>
+      </ul>
+
+      <p><strong>Solutions :</strong></p>
+      <ol>
+        <li>Vérifier le format CSV : délimiteur point-virgule <code>;</code>, encodage UTF-8</li>
+        <li>Ouvrir le fichier dans un éditeur de texte pour vérifier les en-têtes</li>
+        <li>Comparer avec les fichiers précédents (structure identique ?)</li>
+        <li>Tester avec un échantillon de 10 lignes d'abord</li>
+        <li>Consulter les logs serveur pour le message d'erreur exact</li>
+      </ol>
+
+      <h3>Problème : Un CDB ne reçoit pas les emails</h3>
+      
+      <p><strong>Symptômes :</strong> Emails de bienvenue ou notifications non reçus</p>
+
+      <p><strong>Vérifications :</strong></p>
+      <ol>
+        <li>Vérifier que l'adresse email du destinataire est correcte (Utilisateurs → Modifier)</li>
+        <li>Vérifier le dossier spam/courrier indésirable</li>
+        <li>Vérifier que le domaine email est bien vérifié dans Resend :
+          <ul>
+            <li>Se connecter à Resend → Domains</li>
+            <li>Vérifier que le domaine a le statut "Verified" ✅</li>
+            <li>Si non vérifié, configurer les enregistrements DNS (DKIM, SPF)</li>
+          </ul>
+        </li>
+        <li>Tester avec une adresse email personnelle (Gmail, Outlook)</li>
+      </ol>
+
+      <div class="alert alert-warning">
+        <strong>⚠️ Limitation Resend (plan gratuit) :</strong>
+        <ul>
+          <li>1 seul domaine personnalisé</li>
+          <li>100 emails / jour</li>
+          <li>3 000 emails / mois</li>
+        </ul>
+        <p>Si plusieurs CDBs partagent le même domaine email, les limites s'appliquent globalement.</p>
+      </div>
+
+      <h3>Problème : Un admin ne peut pas se connecter</h3>
+      
+      <p><strong>Symptômes :</strong> Message "Identifiants incorrects" ou "Compte désactivé"</p>
+
+      <p><strong>Vérifications :</strong></p>
+      <ol>
+        <li><strong>Vérifier le statut du compte</strong> :
+          <ul>
+            <li>Utilisateurs → Rechercher l'utilisateur</li>
+            <li>Vérifier que "Compte actif" est coché</li>
+            <li>Si inactif → Activer et enregistrer</li>
+          </ul>
+        </li>
+        <li><strong>Vérifier le CDB</strong> :
+          <ul>
+            <li>CDBs → Vérifier que le CDB est actif</li>
+            <li>Si inactif → Réactiver</li>
+          </ul>
+        </li>
+        <li><strong>Réinitialiser le mot de passe</strong> :
+          <ul>
+            <li>Utilisateurs → Modifier → Réinitialiser le mot de passe</li>
+            <li>Communiquer le nouveau mot de passe à l'admin</li>
+          </ul>
+        </li>
+        <li><strong>Vérifier l'URL de connexion</strong> :
+          <ul>
+            <li>URL correcte : <code>/login.html?org=slug</code></li>
+            <li>Exemple : <code>/login.html?org=cdbhs</code></li>
+          </ul>
+        </li>
+      </ol>
+
+      <h3>Problème : Les données d'un CDB se mélangent avec un autre</h3>
+      
+      <p><strong>Symptômes :</strong> Un admin voit les joueurs/tournois d'un autre CDB</p>
+
+      <p><strong>Cause :</strong> Contamination de données (bug critique d'isolation)</p>
+
+      <div class="alert alert-danger">
+        <strong>⚠️ ALERTE SÉCURITÉ :</strong> Ce problème ne devrait jamais arriver. Si observé, contactez immédiatement le développeur.
+      </div>
+
+      <p><strong>Vérifications immédiates :</strong></p>
+      <ol>
+        <li>Vérifier les logs d'activité du CDB concerné</li>
+        <li>Vérifier l'<code>organization_id</code> des données contaminées</li>
+        <li>Arrêter toute opération sur la plateforme</li>
+        <li>Créer un backup de la base de données</li>
+        <li>Analyser le code et corriger le bug avant reprise</li>
+      </ol>
+
+      <h3>Problème : La synchronisation FFB ne trouve pas de nouveaux joueurs</h3>
+      
+      <p><strong>Symptômes :</strong> Sync FFB affiche "0 nouveaux licenciés" alors qu'il devrait y en avoir</p>
+
+      <p><strong>Causes possibles :</strong></p>
+      <ul>
+        <li>Le fichier Licences.csv n'a pas été réimporté</li>
+        <li>Le code CDB dans le fichier FFB ne correspond pas au code CDB de l'organisation</li>
+        <li>Les joueurs ont déjà été importés (vérifier la table players du CDB)</li>
+      </ul>
+
+      <p><strong>Solutions :</strong></p>
+      <ol>
+        <li>Vérifier la date du dernier import FFB (Données FFB → onglet Licenciés)</li>
+        <li>Réimporter Licences.csv si nécessaire</li>
+        <li>Vérifier le code FFB CDB dans CDBs → Modifier CDB</li>
+        <li>Comparer manuellement : nombre de licenciés FFB vs nombre de joueurs dans le CDB</li>
+      </ol>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <p><strong>Plateforme FFB - Gestion Multi-CDB</strong></p>
+      <p>Guide Super Admin - Version 1.0 - Avril 2026</p>
+      <p>© 2025-26 Jeff R. Tous droits réservés.</p>
+      <p>Logiciel Kayros protégé - Dépôt APP n°IDDN.FR.001.130044.000.S.P.2026.000.42000</p>
+    </div>
   </div>
-  <nav>
-    <a href="#introduction" class="section-title">Accueil</a>
-    <a href="#introduction">Introduction</a>
-
-    <a href="#prerequis" class="section-title">Préparation</a>
-    <a href="#prerequis">Pré-requis : Données FFB</a>
-    <a href="#prerequis-import" class="sub">Import des fichiers</a>
-    <a href="#prerequis-domaine" class="sub">Domaine email</a>
-
-    <a href="#creation" class="section-title">Création</a>
-    <a href="#creation">Créer un nouveau CDB</a>
-    <a href="#creation-etape1" class="sub">Sélection du CDB</a>
-    <a href="#creation-etape2" class="sub">Infos organisation</a>
-    <a href="#creation-etape3" class="sub">Administrateur</a>
-    <a href="#creation-etape4" class="sub">Résumé et finalisation</a>
-
-    <a href="#points-attention" class="section-title">Vigilance</a>
-    <a href="#points-attention">Points d'attention critiques</a>
-
-    <a href="#post-creation" class="section-title">Post-création</a>
-    <a href="#post-creation">Checklist administrateur</a>
-
-    <a href="#sync-ffb" class="section-title">Maintenance</a>
-    <a href="#sync-ffb">Synchronisation FFB</a>
-
-    <a href="#suppression" class="section-title">Suppression</a>
-    <a href="#suppression">Supprimer un CDB</a>
-
-    <a href="#depannage" class="section-title">Aide</a>
-    <a href="#depannage">Dépannage</a>
-  </nav>
-</aside>
-
-<!-- Main Content -->
-<div class="main">
-
-  <!-- Header -->
-  <div class="page-header">
-    <h1>Guide Super Admin &mdash; Création et Onboarding d'un CDB</h1>
-    <p>Procédure complète pour créer un nouveau Comité Départemental de Billard sur la plateforme, de l'import des données FFB à la mise en service.</p>
-    <a href="super-admin.html" class="back-link">&larr; Retour au tableau de bord Super Admin</a>
-  </div>
-
-  <!-- ========================================== -->
-  <!-- SECTION 1: INTRODUCTION -->
-  <!-- ========================================== -->
-  <section id="introduction">
-    <h2>1. Introduction</h2>
-
-    <p>Ce guide décrit la procédure complète pour créer et configurer un nouveau CDB (Comité Départemental de Billard) sur la plateforme de gestion des tournois. Il est destiné exclusivement au <strong>Super Admin</strong> de la plateforme.</p>
-
-    <h3>Objectif</h3>
-    <p>À l'issue de cette procédure, le nouveau CDB disposera de :</p>
-    <ul>
-      <li>Une organisation active avec ses clubs et joueurs importés depuis les données FFB</li>
-      <li>Un compte administrateur pour le responsable du CDB</li>
-      <li>Des adresses email de communication configurées automatiquement</li>
-      <li>Un accès à l'Espace Joueur (Player App) pour les licenciés</li>
-    </ul>
-
-    <h3>Pré-requis</h3>
-    <ul>
-      <li>Être connecté en tant que <strong>Super Admin</strong></li>
-      <li>Disposer des fichiers FFB à jour (Ligues, Clubs, Licences)</li>
-      <li>Connaître le code CDB de l'organisation à créer (ex : 0692, 9394)</li>
-      <li>Avoir identifié le futur administrateur du CDB (nom, licence FFB)</li>
-    </ul>
-  </section>
-
-  <!-- ========================================== -->
-  <!-- SECTION 2: PRÉ-REQUIS DONNÉES FFB -->
-  <!-- ========================================== -->
-  <section id="prerequis">
-    <h2>2. Pré-requis : Données FFB</h2>
-
-    <p>Avant de créer un CDB, il est <strong>impératif</strong> d'avoir importé les fichiers de données FFB sur la plateforme. Ces données servent à :</p>
-    <ul>
-      <li>Peupler la liste des CDB disponibles à la création</li>
-      <li>Identifier les clubs rattachés au CDB</li>
-      <li>Importer automatiquement les joueurs licenciés dans le nouveau CDB</li>
-    </ul>
-
-    <h3 id="prerequis-import">Import des fichiers FFB</h3>
-
-    <ol class="steps">
-      <li>Accéder à <strong>Super Admin &gt; FFB Fichiers</strong></li>
-      <li>Importer les trois fichiers CSV dans l'ordre suivant :
-        <table>
-          <thead>
-            <tr><th>Ordre</th><th>Fichier</th><th>Contenu</th></tr>
-          </thead>
-          <tbody>
-            <tr><td>1</td><td>Ligues</td><td>Liste des ligues régionales</td></tr>
-            <tr><td>2</td><td>Clubs</td><td>Clubs rattachés à chaque ligue et CDB</td></tr>
-            <tr><td>3</td><td>Licences</td><td>Joueurs licenciés avec clubs, classements et moyennes</td></tr>
-          </tbody>
-        </table>
-      </li>
-      <li>Vérifier les compteurs sur le <strong>Tableau de bord</strong> Super Admin (nombre de ligues, CDB, clubs, licences)</li>
-    </ol>
-
-    <div class="info-card accent">
-      <strong>Important :</strong> L'ordre d'import est crucial. Les licences référencent les clubs, qui eux-mêmes référencent les ligues. Importer dans le désordre peut entraîner des données incohérentes.
-    </div>
-
-    <h3 id="prerequis-domaine">Vérifier le domaine email</h3>
-
-    <p>Les adresses email du nouveau CDB sont générées automatiquement à partir du <strong>domaine email de la plateforme</strong>.</p>
-
-    <ol class="steps">
-      <li>Accéder à <strong>Super Admin &gt; Paramètres</strong></li>
-      <li>Vérifier que le champ <strong>Domaine email de la plateforme</strong> est renseigné (ex : <code>carambole-gestion.fr</code>)</li>
-      <li>S'assurer que ce domaine est <strong>vérifié dans Resend</strong> (enregistrements DNS DKIM + SPF configurés)</li>
-    </ol>
-
-    <div class="info-card warning">
-      <strong>Attention :</strong> Si le domaine n'est pas vérifié dans Resend, les emails envoyés par le nouveau CDB seront <strong>silencieusement rejetés</strong>. L'API Resend retourne un statut 200 (succès) même pour un domaine non vérifié &mdash; les emails ne sont simplement jamais délivrés.
-    </div>
-  </section>
-
-  <!-- ========================================== -->
-  <!-- SECTION 3: CRÉATION D'UN NOUVEAU CDB -->
-  <!-- ========================================== -->
-  <section id="creation">
-    <h2>3. Créer un nouveau CDB &mdash; Étape par étape</h2>
-
-    <h3 id="creation-etape1">Étape 1 : Sélection du CDB</h3>
-
-    <ol class="steps">
-      <li>Accéder à <strong>Super Admin &gt; CDBs</strong></li>
-      <li>Cliquer sur le bouton <strong>« Créer un CDB »</strong></li>
-      <li>Dans le formulaire de création :
-        <ul>
-          <li><strong>Sélectionner la Ligue</strong> &mdash; Choisir la ligue régionale de rattachement</li>
-          <li><strong>Sélectionner le(s) code(s) CDB</strong> &mdash; La liste affiche uniquement les CDB de la ligue sélectionnée qui ne sont pas encore créés sur la plateforme. Il est possible de sélectionner plusieurs codes CDB pour regrouper des comités (ex : 93 + 94 = CDB 9394).</li>
-        </ul>
-      </li>
-    </ol>
-
-    <h3 id="creation-etape2">Étape 2 : Informations de l'organisation</h3>
-
-    <p>Après sélection du CDB, les champs suivants sont <strong>pré-remplis automatiquement</strong> à partir des données FFB :</p>
-
-    <table>
-      <thead>
-        <tr><th>Champ</th><th>Description</th><th>Exemple</th></tr>
-      </thead>
-      <tbody>
-        <tr><td>Nom complet</td><td>Nom officiel de l'organisation</td><td>Comité Départemental de Billard des Hauts-de-Seine</td></tr>
-        <tr><td>Nom court</td><td>Abréviation pour l'affichage</td><td>CDBHS</td></tr>
-        <tr><td>Slug</td><td>Identifiant technique (URL, emails, fichiers)</td><td>cdbhs</td></tr>
-      </tbody>
-    </table>
-
-    <div class="info-card warning">
-      <strong>Le slug est permanent !</strong> Une fois le CDB créé, le slug ne peut plus être modifié. Il est utilisé dans les URLs, les adresses email et les chemins de fichiers. Vérifiez-le soigneusement avant de valider.
-    </div>
-
-    <h3 id="creation-etape3">Étape 3 : Administrateur du CDB</h3>
-
-    <ol class="steps">
-      <li><strong>Rechercher le licencié FFB</strong> qui sera administrateur du CDB &mdash; saisir son nom ou numéro de licence dans le champ de recherche</li>
-      <li>Sélectionner le joueur dans les résultats</li>
-      <li><strong>Définir les identifiants</strong> du compte administrateur :
-        <ul>
-          <li><strong>Nom d'utilisateur</strong> &mdash; pré-rempli, modifiable</li>
-          <li><strong>Mot de passe</strong> &mdash; définir un mot de passe temporaire</li>
-        </ul>
-      </li>
-    </ol>
-
-    <div class="info-card accent">
-      <strong>Sécurité :</strong> Communiquez le mot de passe temporaire par <strong>SMS</strong> ou appel téléphonique, jamais par email. L'administrateur devra le changer à sa première connexion.
-    </div>
-
-    <h3 id="creation-etape4">Étape 4 : Résumé et finalisation</h3>
-
-    <ol class="steps">
-      <li>Cliquer sur <strong>« Créer le CDB »</strong></li>
-      <li>Un résumé s'affiche avec les informations créées :
-        <ul>
-          <li>Nombre de <strong>clubs importés</strong> depuis les données FFB</li>
-          <li>Nombre de <strong>joueurs importés</strong> (licenciés rattachés aux clubs du CDB)</li>
-          <li><strong>URL de connexion</strong> du CDB (pour l'administrateur)</li>
-          <li><strong>URL de l'Espace Joueur</strong> (Player App)</li>
-        </ul>
-      </li>
-      <li><strong>Copier les URLs</strong> affichées &mdash; elles seront nécessaires pour communiquer à l'administrateur</li>
-      <li>Optionnel : cliquer sur <strong>« Envoyer le mail de bienvenue »</strong> pour notifier l'administrateur avec ses identifiants et les URLs</li>
-    </ol>
-
-    <div class="info-card green">
-      <strong>Création terminée !</strong> Le CDB est maintenant actif sur la plateforme. L'administrateur peut se connecter et commencer à configurer son environnement.
-    </div>
-  </section>
-
-  <!-- ========================================== -->
-  <!-- SECTION 4: POINTS D'ATTENTION CRITIQUES -->
-  <!-- ========================================== -->
-  <section id="points-attention">
-    <h2>4. Points d'attention critiques</h2>
-
-    <table>
-      <thead>
-        <tr><th>Point</th><th>Détail</th><th>Impact</th></tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td><strong>Slug permanent</strong></td>
-          <td>Le slug est utilisé dans les URLs, les adresses email (<code>slug@domaine</code>) et les chemins de fichiers (logos des clubs). Il ne peut pas être modifié après création.</td>
-          <td><span class="badge badge-red">Irréversible</span></td>
-        </tr>
-        <tr>
-          <td><strong>Adresses email auto-générées</strong></td>
-          <td>Trois adresses sont créées automatiquement : <code>{slug}@{domaine}</code> pour la communication, les convocations et le no-reply. Elles sont modifiables ultérieurement dans les paramètres du CDB.</td>
-          <td><span class="badge badge-yellow">Configurable</span></td>
-        </tr>
-        <tr>
-          <td><strong>Domaine Resend vérifié</strong></td>
-          <td>Le domaine email doit être vérifié dans Resend (DNS DKIM + SPF). Sans vérification, les emails sont silencieusement rejetés (pas d'erreur visible).</td>
-          <td><span class="badge badge-red">Bloquant</span></td>
-        </tr>
-        <tr>
-          <td><strong>Mot de passe admin</strong></td>
-          <td>Le mot de passe initial doit être communiqué par un canal sécurisé (SMS, téléphone). Ne jamais l'envoyer par email.</td>
-          <td><span class="badge badge-yellow">Sécurité</span></td>
-        </tr>
-        <tr>
-          <td><strong>Qualité des données FFB</strong></td>
-          <td>Les clubs et joueurs importés dépendent directement de la qualité du fichier FFB Licences. Des données manquantes ou incorrectes (ex : clubs sans code CDB) entraîneront des joueurs ou clubs non importés.</td>
-          <td><span class="badge badge-yellow">Qualité</span></td>
-        </tr>
-        <tr>
-          <td><strong>URL Espace Joueur</strong></td>
-          <td>L'URL de la Player App est automatiquement enregistrée dans les paramètres du CDB et disponible comme variable <code>{player_app_url}</code> dans le modèle de mail de bienvenue.</td>
-          <td><span class="badge badge-green">Automatique</span></td>
-        </tr>
-      </tbody>
-    </table>
-  </section>
-
-  <!-- ========================================== -->
-  <!-- SECTION 5: CHECKLIST POST-CRÉATION -->
-  <!-- ========================================== -->
-  <section id="post-creation">
-    <h2>5. Post-création : Checklist administrateur CDB</h2>
-
-    <p>Une fois le CDB créé, l'administrateur du CDB doit effectuer les actions suivantes pour finaliser la configuration. Transmettez-lui cette liste.</p>
-
-    <h3>Actions prioritaires</h3>
-
-    <ul class="checklist">
-      <li><strong>Changer le mot de passe</strong> &mdash; Paramètres &gt; Mon profil &gt; Modifier le mot de passe</li>
-      <li><strong>Configurer le branding</strong> &mdash; Paramètres &gt; Apparence : couleurs, logo de l'organisation</li>
-      <li><strong>Vérifier les adresses email</strong> &mdash; Paramètres &gt; Emails : adresses de communication, convocations, no-reply</li>
-      <li><strong>Configurer les paramètres de jeu</strong> &mdash; Paramètres &gt; Paramètres de jeu : distances et reprises par catégorie</li>
-    </ul>
-
-    <h3>Configuration complémentaire</h3>
-
-    <ul class="checklist">
-      <li><strong>Créer les utilisateurs</strong> &mdash; Utilisateurs : ajouter les éditeurs et consultants si nécessaire</li>
-      <li><strong>Vérifier les clubs importés</strong> &mdash; Clubs : vérifier la liste, ajouter les logos des clubs</li>
-      <li><strong>Vérifier les joueurs importés</strong> &mdash; Joueurs : vérifier les licenciés, compléter les informations manquantes (emails, téléphones)</li>
-      <li><strong>Créer le calendrier</strong> &mdash; Calendrier : importer ou créer manuellement les tournois de la saison</li>
-      <li><strong>Configurer les catégories</strong> &mdash; Paramètres &gt; Catégories : activer/désactiver les catégories utilisées</li>
-      <li><strong>Tester l'envoi d'email</strong> &mdash; Envoyer un email de test depuis Emailing pour vérifier que le domaine Resend fonctionne</li>
-    </ul>
-  </section>
-
-  <!-- ========================================== -->
-  <!-- SECTION 6: SYNCHRONISATION FFB -->
-  <!-- ========================================== -->
-  <section id="sync-ffb">
-    <h2>6. Synchronisation FFB</h2>
-
-    <p>La synchronisation FFB permet de mettre à jour les joueurs d'un CDB existant avec les dernières données du fichier FFB Licences.</p>
-
-    <h3>Quand synchroniser ?</h3>
-    <ul>
-      <li>En <strong>début de saison</strong> &mdash; pour intégrer les nouveaux licenciés et mettre à jour les classements</li>
-      <li>Après un <strong>nouvel import du fichier Licences</strong> &mdash; pour refléter les modifications FFB</li>
-      <li>Quand un CDB signale des <strong>joueurs manquants</strong> dans sa liste</li>
-    </ul>
-
-    <h3>Procédure</h3>
-
-    <ol class="steps">
-      <li>S'assurer que le dernier fichier FFB Licences a été importé (<strong>Super Admin &gt; FFB Fichiers</strong>)</li>
-      <li>Accéder à <strong>Super Admin &gt; CDBs</strong></li>
-      <li>Sur la ligne du CDB concerné, cliquer sur <strong>« Sync FFB »</strong></li>
-      <li>Un aperçu s'affiche montrant les différences détectées :
-        <ul>
-          <li><span class="badge badge-green">Nouveau</span> Joueurs à ajouter (nouveaux licenciés)</li>
-          <li><span class="badge badge-yellow">Modifié</span> Joueurs avec des informations mises à jour (classement, club, etc.)</li>
-        </ul>
-      </li>
-      <li>Vérifier les changements proposés</li>
-      <li>Cliquer sur <strong>« Appliquer la synchronisation »</strong> pour confirmer</li>
-    </ol>
-
-    <div class="info-card">
-      <strong>Note :</strong> La synchronisation n'efface jamais de joueurs existants. Elle ajoute les nouveaux et met à jour les informations des joueurs existants (classement, club de rattachement, etc.).
-    </div>
-  </section>
-
-  <!-- ========================================== -->
-  <!-- SECTION 7: SUPPRESSION D'UN CDB -->
-  <!-- ========================================== -->
-  <section id="suppression">
-    <h2>7. Suppression d'un CDB</h2>
-
-    <div class="info-card warning">
-      <strong>Action irréversible !</strong> La suppression d'un CDB entraîne la suppression <strong>définitive</strong> de toutes ses données. Cette opération ne peut pas être annulée.
-    </div>
-
-    <h3>Données supprimées</h3>
-
-    <p>La suppression d'un CDB entraîne la suppression de :</p>
-
-    <ul>
-      <li>L'organisation et ses paramètres</li>
-      <li>Tous les <strong>joueurs</strong> rattachés au CDB</li>
-      <li>Tous les <strong>clubs</strong> et leurs logos</li>
-      <li>Tous les <strong>tournois</strong> (calendrier et résultats)</li>
-      <li>Toutes les <strong>inscriptions</strong></li>
-      <li>Tous les <strong>classements</strong> saisonniers</li>
-      <li>Tous les <strong>utilisateurs</strong> (comptes admin, éditeur, consultants)</li>
-      <li>Tous les <strong>comptes joueurs</strong> (Player App)</li>
-      <li>Toutes les <strong>campagnes email</strong> et modèles</li>
-      <li>Toutes les <strong>catégories</strong> et paramètres de jeu</li>
-    </ul>
-
-    <h3>Procédure</h3>
-
-    <ol class="steps">
-      <li>Accéder à <strong>Super Admin &gt; CDBs</strong></li>
-      <li>Cliquer sur le bouton de suppression sur la ligne du CDB</li>
-      <li>Confirmer en saisissant le nom du CDB (sécurité anti-erreur)</li>
-      <li>La suppression est exécutée immédiatement</li>
-    </ol>
-  </section>
-
-  <!-- ========================================== -->
-  <!-- SECTION 8: DÉPANNAGE -->
-  <!-- ========================================== -->
-  <section id="depannage">
-    <h2>8. Dépannage</h2>
-
-    <table>
-      <thead>
-        <tr><th>Problème</th><th>Cause probable</th><th>Solution</th></tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td>Aucun CDB disponible dans la liste de création</td>
-          <td>Fichier FFB Clubs non importé, ou tous les CDB de la ligue sont déjà créés</td>
-          <td>Vérifier l'import FFB dans <strong>FFB Fichiers</strong>. Sélectionner une autre ligue.</td>
-        </tr>
-        <tr>
-          <td>0 joueur importé après la création</td>
-          <td>Fichier FFB Licences non importé, ou les clubs du CDB n'ont pas de licenciés dans le fichier</td>
-          <td>Importer le fichier Licences via <strong>FFB Fichiers</strong>, puis utiliser <strong>Sync FFB</strong> sur le CDB.</td>
-        </tr>
-        <tr>
-          <td>Le licencié recherché n'apparaît pas (recherche admin)</td>
-          <td>Le joueur n'est pas dans le fichier FFB Licences, ou la recherche ne correspond pas</td>
-          <td>Vérifier le fichier Licences. Essayer avec le numéro de licence exact.</td>
-        </tr>
-        <tr>
-          <td>Les emails ne sont pas reçus</td>
-          <td>Domaine email non vérifié dans Resend</td>
-          <td>Vérifier la configuration DNS (DKIM + SPF) du domaine dans <strong>Resend &gt; Domains</strong>. L'API retourne 200 même si le domaine n'est pas vérifié.</td>
-        </tr>
-        <tr>
-          <td>L'administrateur ne peut pas se connecter</td>
-          <td>Mauvaise URL de connexion, ou mot de passe incorrect</td>
-          <td>Vérifier l'URL : <code>https://[app]/login.html?org=[slug]</code>. Réinitialiser le mot de passe si nécessaire via <strong>Super Admin &gt; Utilisateurs</strong>.</td>
-        </tr>
-        <tr>
-          <td>Les couleurs/branding d'un autre CDB s'affichent</td>
-          <td>Cache navigateur avec les anciennes données</td>
-          <td>Vider le cache du navigateur ou forcer un rafraîchissement (Ctrl+Shift+R / Cmd+Shift+R).</td>
-        </tr>
-        <tr>
-          <td>Slug incorrect après création</td>
-          <td>Le slug a été validé avec une erreur</td>
-          <td>Le slug est <strong>permanent</strong>. La seule solution est de supprimer le CDB et de le recréer avec le bon slug.</td>
-        </tr>
-      </tbody>
-    </table>
-  </section>
-
-  <hr>
-
-  <!-- Footer -->
-  <div class="version-footer">
-    <p>Guide Super Admin &mdash; Plateforme de Gestion des Tournois de Billard &mdash; Version 1.0</p>
-    <p>JR &copy;</p>
-  </div>
-
-</div>
-
 </body>
 </html>
