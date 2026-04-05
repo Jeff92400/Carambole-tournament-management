@@ -62,7 +62,8 @@ router.get('/', authenticateToken, requireAdminOrLecteur, (req, res) => {
 
   if (endDate) {
     query += ` AND created_at <= $${paramIndex}`;
-    params.push(endDate + ' 23:59:59');
+    // Frontend already includes time portion (T23:59:59), don't add it again
+    params.push(endDate);
     paramIndex++;
   }
 
@@ -211,7 +212,8 @@ router.post('/preview-delete', authenticateToken, requireAdmin, (req, res) => {
 
   if (endDate) {
     query += ` AND created_at <= $${paramIndex}`;
-    params.push(endDate + ' 23:59:59');
+    // Frontend already includes time portion (T23:59:59), don't add it again
+    params.push(endDate);
     paramIndex++;
   }
 
@@ -280,7 +282,8 @@ router.delete('/', authenticateToken, requireAdmin, (req, res) => {
 
   if (endDate) {
     query += ` AND created_at <= $${paramIndex}`;
-    params.push(endDate + ' 23:59:59');
+    // Frontend already includes time portion (T23:59:59), don't add it again
+    params.push(endDate);
     paramIndex++;
   }
 
