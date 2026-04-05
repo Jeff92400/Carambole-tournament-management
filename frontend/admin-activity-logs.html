@@ -271,8 +271,8 @@
       </div>
 
       <div style="display: flex; gap: 10px; align-items: center;">
-        <button onclick="previewDelete()" style="background: #ffc107; color: #000; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: bold;">
-          👁️ Prévisualiser
+        <button onclick="previewAndShow()" style="background: #ffc107; color: #000; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: bold;">
+          👁️ Prévisualiser + Afficher
         </button>
         <button onclick="executeDeleteWithFilters()" style="background: #dc3545; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: bold;">
           🗑️ Supprimer les logs
@@ -570,6 +570,33 @@
         previewSpan.textContent = 'Erreur de prévisualisation';
         previewSpan.style.color = '#dc3545';
       }
+    }
+
+    // Preview delete + sync filters and show in table
+    async function previewAndShow() {
+      // First, get the preview count
+      await previewDelete();
+
+      // Then sync the top filters to match danger zone
+      const deleteStartDate = document.getElementById('deleteStartDate').value;
+      const deleteEndDate = document.getElementById('deleteEndDate').value;
+      const deleteActionType = document.getElementById('deleteActionType').value;
+      const deleteUsername = document.getElementById('deleteUsername').value;
+
+      document.getElementById('filterStartDate').value = deleteStartDate;
+      document.getElementById('filterEndDate').value = deleteEndDate;
+      document.getElementById('filterActionType').value = deleteActionType;
+      document.getElementById('filterUsername').value = deleteUsername;
+
+      // Save synced filters to localStorage
+      saveFilters();
+
+      // Reload table with synced filters
+      currentPage = 0;
+      await loadLogs();
+
+      // Scroll to table so user can see the filtered results
+      document.getElementById('logsContainer').scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
     // Execute delete with filters (no automatic backup)
