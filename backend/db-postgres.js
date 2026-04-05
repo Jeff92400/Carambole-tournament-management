@@ -1544,6 +1544,19 @@ async function initializeDatabase() {
     `);
     console.log('[Migration] Cleaned up super admin logs - set organization_id to NULL');
 
+    // CRITICAL FIX (April 2026): Fix contaminated regular user logs
+    // Regular users' logs should match their user.organization_id
+    // This fixes cases like admin94 (org 6) having logs in org 1
+    await client.query(`
+      UPDATE admin_activity_logs aal
+      SET organization_id = u.organization_id
+      FROM users u
+      WHERE aal.user_id = u.id
+        AND u.is_super_admin = false
+        AND aal.organization_id != u.organization_id
+    `);
+    console.log('[Migration] Fixed contaminated regular user logs - aligned with user org_id');
+
     // Assign enrollment_requests org from player's org
     await client.query(`
       UPDATE enrollment_requests er
