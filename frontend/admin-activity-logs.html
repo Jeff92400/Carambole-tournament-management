@@ -233,6 +233,12 @@
             <option value="">Tous</option>
           </select>
         </div>
+        <div class="filter-group super-admin-only" style="display: none;">
+          <label>CDB (Super Admin)</label>
+          <select id="filterOrgId">
+            <option value="">Tous les CDBs</option>
+          </select>
+        </div>
         <div class="filter-group">
           <button class="btn" onclick="loadLogs()">Filtrer</button>
           <button class="btn btn-secondary" onclick="resetFilters()" style="margin-left: 5px;">Reset</button>
@@ -344,11 +350,13 @@
       const savedEndDate = localStorage.getItem('adminLogs_endDate');
       const savedActionType = localStorage.getItem('adminLogs_actionType');
       const savedUsername = localStorage.getItem('adminLogs_username');
+      const savedOrgId = localStorage.getItem('adminLogs_orgId');
 
       if (savedStartDate) document.getElementById('filterStartDate').value = savedStartDate;
       if (savedEndDate) document.getElementById('filterEndDate').value = savedEndDate;
       if (savedActionType) document.getElementById('filterActionType').value = savedActionType;
       if (savedUsername) document.getElementById('filterUsername').value = savedUsername;
+      if (savedOrgId && document.getElementById('filterOrgId')) document.getElementById('filterOrgId').value = savedOrgId;
     }
 
     // Save filters to localStorage
@@ -357,6 +365,7 @@
       const endDate = document.getElementById('filterEndDate').value;
       const actionType = document.getElementById('filterActionType').value;
       const username = document.getElementById('filterUsername').value;
+      const orgId = document.getElementById('filterOrgId')?.value || '';
 
       if (startDate) localStorage.setItem('adminLogs_startDate', startDate);
       else localStorage.removeItem('adminLogs_startDate');
@@ -366,6 +375,8 @@
       else localStorage.removeItem('adminLogs_actionType');
       if (username) localStorage.setItem('adminLogs_username', username);
       else localStorage.removeItem('adminLogs_username');
+      if (orgId) localStorage.setItem('adminLogs_orgId', orgId);
+      else localStorage.removeItem('adminLogs_orgId');
     }
 
     // Initialize page
@@ -383,7 +394,17 @@
       document.getElementById('filterStartDate').addEventListener('change', saveFilters);
       document.getElementById('filterEndDate').addEventListener('change', saveFilters);
       document.getElementById('filterActionType').addEventListener('change', saveFilters);
-      document.getElementById('filterUsername').addEventListener('change', saveFilters); // Changed from 'input' to 'change'
+      document.getElementById('filterUsername').addEventListener('change', saveFilters);
+
+      // When super admin changes CDB in main filter, reload usernames and save
+      const filterOrgSelect = document.getElementById('filterOrgId');
+      if (filterOrgSelect) {
+        filterOrgSelect.addEventListener('change', (e) => {
+          const orgId = e.target.value;
+          loadUsernames(orgId || null);
+          saveFilters();
+        });
+      }
 
       // When super admin changes CDB in danger zone, reload usernames
       document.getElementById('deleteOrgId').addEventListener('change', (e) => {
@@ -453,12 +474,14 @@
       const endDate = document.getElementById('filterEndDate').value;
       const actionType = document.getElementById('filterActionType').value;
       const username = document.getElementById('filterUsername').value;
+      const orgId = document.getElementById('filterOrgId')?.value || '';
 
       const params = new URLSearchParams();
       if (startDate) params.append('startDate', startDate);
       if (endDate) params.append('endDate', endDate);
       if (actionType) params.append('actionType', actionType);
       if (username) params.append('username', username);
+      if (orgId) params.append('organizationId', orgId);
       params.append('limit', pageSize);
       params.append('offset', currentPage * pageSize);
 
@@ -535,11 +558,15 @@
       document.getElementById('filterEndDate').value = '';
       document.getElementById('filterActionType').value = '';
       document.getElementById('filterUsername').value = '';
+      if (document.getElementById('filterOrgId')) {
+        document.getElementById('filterOrgId').value = '';
+      }
       // Clear localStorage
       localStorage.removeItem('adminLogs_startDate');
       localStorage.removeItem('adminLogs_endDate');
       localStorage.removeItem('adminLogs_actionType');
       localStorage.removeItem('adminLogs_username');
+      localStorage.removeItem('adminLogs_orgId');
       currentPage = 0;
       loadLogs();
     }
@@ -595,11 +622,15 @@
       const deleteEndDate = document.getElementById('deleteEndDate').value;
       const deleteActionType = document.getElementById('deleteActionType').value;
       const deleteUsername = document.getElementById('deleteUsername').value;
+      const deleteOrgId = document.getElementById('deleteOrgId')?.value || '';
 
       document.getElementById('filterStartDate').value = deleteStartDate;
       document.getElementById('filterEndDate').value = deleteEndDate;
       document.getElementById('filterActionType').value = deleteActionType;
       document.getElementById('filterUsername').value = deleteUsername;
+      if (document.getElementById('filterOrgId')) {
+        document.getElementById('filterOrgId').value = deleteOrgId;
+      }
 
       // Save synced filters to localStorage
       saveFilters();
@@ -719,7 +750,7 @@
       }
     }
 
-    // Load organizations for super admin CDB selector
+    // Load organizations for super admin CDB selectors (both main filter and danger zone)
     async function loadOrganizations() {
       try {
         const response = await fetch(`${API_URL}/super-admin/organizations`, {
@@ -729,13 +760,23 @@
         if (!response.ok) return; // Not super admin or error
 
         const orgs = await response.json();
-        const select = document.getElementById('deleteOrgId');
+
+        // Populate both selectors
+        const deleteSelect = document.getElementById('deleteOrgId');
+        const filterSelect = document.getElementById('filterOrgId');
 
         orgs.forEach(org => {
-          const option = document.createElement('option');
-          option.value = org.id;
-          option.textContent = `${org.short_name || org.name} (${org.name})`;
-          select.appendChild(option);
+          // Danger zone selector
+          const deleteOption = document.createElement('option');
+          deleteOption.value = org.id;
+          deleteOption.textContent = `${org.short_name || org.name} (${org.name})`;
+          deleteSelect.appendChild(deleteOption);
+
+          // Main filter selector
+          const filterOption = document.createElement('option');
+          filterOption.value = org.id;
+          filterOption.textContent = `${org.short_name || org.name}`;
+          filterSelect.appendChild(filterOption);
         });
 
         // Show super admin elements
