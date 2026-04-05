@@ -53,6 +53,11 @@ router.get('/', authenticateToken, requireAdminOrLecteur, (req, res) => {
 
   const isSuperAdmin = req.user.isSuperAdmin;
 
+  // DEBUG: Log full user object
+  console.log('[ADMIN-LOGS DEBUG] req.user:', JSON.stringify(req.user, null, 2));
+  console.log('[ADMIN-LOGS DEBUG] isSuperAdmin:', isSuperAdmin);
+  console.log('[ADMIN-LOGS DEBUG] organizationId query param:', organizationId);
+
   // Super admin can specify org via query param, regular admin always uses their own
   let targetOrgId;
   if (isSuperAdmin && organizationId !== undefined) {
@@ -68,6 +73,8 @@ router.get('/', authenticateToken, requireAdminOrLecteur, (req, res) => {
     // Super admin without filter = show all (null)
     targetOrgId = null;
   }
+
+  console.log('[ADMIN-LOGS DEBUG] targetOrgId:', targetOrgId);
 
   let query = `
     SELECT
@@ -120,6 +127,9 @@ router.get('/', authenticateToken, requireAdminOrLecteur, (req, res) => {
     'SELECT COUNT(*) as total FROM'
   );
 
+  console.log('[ADMIN-LOGS DEBUG] Count query:', countQuery);
+  console.log('[ADMIN-LOGS DEBUG] Count params:', JSON.stringify(params));
+
   db.get(countQuery, params, (err, countResult) => {
     if (err) {
       console.error('Error counting admin logs:', err);
@@ -127,16 +137,23 @@ router.get('/', authenticateToken, requireAdminOrLecteur, (req, res) => {
     }
 
     const total = parseInt(countResult?.total || 0);
+    console.log('[ADMIN-LOGS DEBUG] Total count:', total);
 
     // Add ordering and pagination
     const finalQuery = query + ` ORDER BY created_at DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
     const finalParams = [...params, parseInt(limit), parseInt(offset)];
+
+    console.log('[ADMIN-LOGS DEBUG] Final query:', finalQuery);
+    console.log('[ADMIN-LOGS DEBUG] Final params:', JSON.stringify(finalParams));
 
     db.all(finalQuery, finalParams, (err, logs) => {
       if (err) {
         console.error('Error fetching admin logs:', err);
         return res.status(500).json({ error: 'Erreur lors de la récupération des logs' });
       }
+
+      console.log('[ADMIN-LOGS DEBUG] Returned logs count:', logs?.length);
+      console.log('[ADMIN-LOGS DEBUG] First 3 logs org_ids:', logs?.slice(0, 3).map(l => ({ username: l.username, user_id: l.user_id })));
 
       res.json({
         logs: logs || [],
