@@ -324,6 +324,11 @@
       throw new Error('Admin access required');
     }
 
+    // Show admin-only elements (including danger zone)
+    document.querySelectorAll('.admin-only').forEach(el => {
+      el.style.display = '';
+    });
+
     let currentPage = 0;
     const pageSize = 50;
     let totalLogs = 0;
