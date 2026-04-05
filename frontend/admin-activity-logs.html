@@ -229,7 +229,9 @@
         </div>
         <div class="filter-group">
           <label>Utilisateur</label>
-          <input type="text" id="filterUsername" placeholder="Rechercher...">
+          <select id="filterUsername">
+            <option value="">Tous</option>
+          </select>
         </div>
         <div class="filter-group">
           <button class="btn" onclick="loadLogs()">Filtrer</button>
@@ -261,7 +263,9 @@
         </div>
         <div class="filter-group">
           <label>Utilisateur</label>
-          <input type="text" id="deleteUsername" placeholder="Ex: admin92">
+          <select id="deleteUsername">
+            <option value="">Tous</option>
+          </select>
         </div>
         <div class="filter-group super-admin-only" style="display: none;">
           <label>CDB (Super Admin)</label>
@@ -369,15 +373,23 @@
       restoreFilters();
       loadStats();
       loadActionTypes();
+      loadUsernames(); // Load usernames for main filter
       loadLogs();
       loadOrganizations(); // Load CDB selector for super admin
       populateDeleteActionTypes(); // Populate delete action type filter
+      populateDeleteUsernames(); // Populate delete username filter
 
       // Save filters when they change
       document.getElementById('filterStartDate').addEventListener('change', saveFilters);
       document.getElementById('filterEndDate').addEventListener('change', saveFilters);
       document.getElementById('filterActionType').addEventListener('change', saveFilters);
-      document.getElementById('filterUsername').addEventListener('input', saveFilters);
+      document.getElementById('filterUsername').addEventListener('change', saveFilters); // Changed from 'input' to 'change'
+
+      // When super admin changes CDB in danger zone, reload usernames
+      document.getElementById('deleteOrgId').addEventListener('change', (e) => {
+        const orgId = e.target.value;
+        populateDeleteUsernames(orgId || null);
+      });
 
       document.getElementById('logoutBtn').addEventListener('click', (e) => {
         e.preventDefault();
@@ -634,6 +646,7 @@
         if (endDate) params.append('endDate', endDate);
         if (actionType) params.append('actionType', actionType);
         if (username) params.append('username', username);
+        if (orgId) params.append('organizationId', orgId);
 
         const fetchResponse = await fetch(`${API_URL}/admin-logs?${params}`, {
           headers: { 'Authorization': `Bearer ${token}` }
@@ -645,7 +658,7 @@
         const logsToDelete = data.logs || [];
 
         if (logsToDelete.length === 0) {
-          alert('Aucun log à supprimer avec ces critères.');
+          alert('Aucun enregistrement à sauvegarder. Aucune suppression ne sera effectuée.');
           return;
         }
 
@@ -751,6 +764,62 @@
         });
       } catch (error) {
         console.error('Error loading action types for delete:', error);
+      }
+    }
+
+    // Load usernames for main filter dropdown (with org support for super admin)
+    async function loadUsernames(orgId = null) {
+      try {
+        const params = new URLSearchParams();
+        if (orgId) params.append('organizationId', orgId);
+
+        const response = await fetch(`${API_URL}/admin-logs/usernames?${params}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!response.ok) throw new Error('Failed to load usernames');
+
+        const usernames = await response.json();
+        const select = document.getElementById('filterUsername');
+
+        // Clear existing options except "Tous"
+        select.innerHTML = '<option value="">Tous</option>';
+
+        usernames.forEach(u => {
+          const option = document.createElement('option');
+          option.value = u.username;
+          option.textContent = `${u.username} (${u.count})`;
+          select.appendChild(option);
+        });
+      } catch (error) {
+        console.error('Error loading usernames:', error);
+      }
+    }
+
+    // Populate deleteUsername selector with available usernames (with org support)
+    async function populateDeleteUsernames(orgId = null) {
+      try {
+        const params = new URLSearchParams();
+        if (orgId) params.append('organizationId', orgId);
+
+        const response = await fetch(`${API_URL}/admin-logs/usernames?${params}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!response.ok) return;
+
+        const usernames = await response.json();
+        const select = document.getElementById('deleteUsername');
+
+        // Clear existing options except "Tous"
+        select.innerHTML = '<option value="">Tous</option>';
+
+        usernames.forEach(u => {
+          const option = document.createElement('option');
+          option.value = u.username;
+          option.textContent = u.username;
+          select.appendChild(option);
+        });
+      } catch (error) {
+        console.error('Error loading usernames for delete:', error);
       }
     }
 

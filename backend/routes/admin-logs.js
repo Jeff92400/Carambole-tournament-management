@@ -25,15 +25,22 @@ function requireAdminOrLecteur(req, res, next) {
  * Get admin activity logs with optional filters
  */
 router.get('/', authenticateToken, requireAdminOrLecteur, (req, res) => {
-  const orgId = req.user.organizationId || null;
   const {
     startDate,
     endDate,
     actionType,
     username,
+    organizationId,
     limit = 100,
     offset = 0
   } = req.query;
+
+  const isSuperAdmin = req.user.isSuperAdmin;
+
+  // Super admin can specify org via query param, regular admin always uses their own
+  const targetOrgId = isSuperAdmin && organizationId !== undefined
+    ? (organizationId === '' ? null : parseInt(organizationId))
+    : (req.user.organizationId || null);
 
   let query = `
     SELECT
@@ -51,7 +58,7 @@ router.get('/', authenticateToken, requireAdminOrLecteur, (req, res) => {
     FROM admin_activity_logs
     WHERE ($1::int IS NULL OR organization_id = $1)
   `;
-  const params = [orgId];
+  const params = [targetOrgId];
   let paramIndex = 2;
 
   if (startDate) {
@@ -179,6 +186,37 @@ router.get('/action-types', authenticateToken, requireAdminOrLecteur, (req, res)
     }
 
     res.json(actionTypes || []);
+  });
+});
+
+/**
+ * GET /api/admin-logs/usernames
+ * Get list of distinct usernames for filtering
+ */
+router.get('/usernames', authenticateToken, requireAdminOrLecteur, (req, res) => {
+  const { organizationId } = req.query;
+  const isSuperAdmin = req.user.isSuperAdmin;
+
+  // Super admin can specify org, regular admin always uses their own
+  const targetOrgId = isSuperAdmin && organizationId !== undefined
+    ? (organizationId === '' ? null : parseInt(organizationId))
+    : (req.user.organizationId || null);
+
+  db.all(`
+    SELECT DISTINCT username, COUNT(*) as count
+    FROM admin_activity_logs
+    WHERE ($1::int IS NULL OR organization_id = $1)
+      AND username IS NOT NULL
+      AND username != ''
+    GROUP BY username
+    ORDER BY username ASC
+  `, [targetOrgId], (err, usernames) => {
+    if (err) {
+      console.error('Error fetching usernames:', err);
+      return res.status(500).json({ error: 'Erreur lors de la récupération des utilisateurs' });
+    }
+
+    res.json(usernames || []);
   });
 });
 
