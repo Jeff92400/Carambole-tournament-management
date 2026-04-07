@@ -23,14 +23,14 @@ const NOTIFICATION_MESSAGES = {
   REMINDER_LAST_DAY: {
     titre: (variables) => `🚨 Dernière chance !`,
     corps: (variables) =>
-      `Les inscriptions pour le ${variables.tournoiName} ferment demain. Inscrivez-vous vite !`,
+      `Les inscriptions pour le ${variables.tournoiName} ferment demain. Inscrivez-vous vite si vous souhaitez participer`,
     url: '/tournaments'
   },
 
   NEW_TOURNAMENT: {
     titre: (variables) => `🎯 Nouveau tournoi disponible`,
     corps: (variables) =>
-      `Les inscriptions pour le ${variables.tournoiName} sont ouvertes jusqu'au ${variables.closingDate}.`,
+      `Les inscriptions pour le ${variables.tournoiName} sont ouvertes jusqu'au ${variables.closingDate}. Ne le manquez pas!`,
     url: '/tournaments'
   },
 
@@ -45,7 +45,7 @@ const NOTIFICATION_MESSAGES = {
   RESULTS_FINALE: {
     titre: (variables) => `🏆 Résultats Finale — ${variables.tournoiName}`,
     corps: (variables) =>
-      `Les résultats sont publiés ! Vous êtes classé(e) ${variables.position}e. Bravo !`,
+      `Les résultats sont publiés ! Vous êtes classé(e) ${variables.position}e. Félicitations !`,
     url: '/stats'
   },
 
@@ -60,7 +60,7 @@ const NOTIFICATION_MESSAGES = {
   TOURNAMENT_DATE_CHANGED: {
     titre: (variables) => `📝 Modification — ${variables.tournoiName}`,
     corps: (variables) =>
-      `Le tournoi du ${variables.oldDate} a été modifié. Nouvelle date : ${variables.newDate}.`,
+      `Le tournoi du ${variables.oldDate} a été modifié. Nouvelle date : ${variables.newDate} - Merci d'en prendre note.`,
     url: '/inscriptions'
   },
 
@@ -74,7 +74,7 @@ const NOTIFICATION_MESSAGES = {
   TOURNAMENT_LOCATION_CHANGED: {
     titre: (variables) => `📍 Changement de lieu — ${variables.tournoiName}`,
     corps: (variables) =>
-      `Le tournoi du ${variables.date} aura lieu à ${variables.newLocation} au lieu de ${variables.oldLocation}.`,
+      `Le tournoi du ${variables.date} aura lieu à ${variables.newLocation} au lieu de ${variables.oldLocation}. Ne vous trompez pas !!`,
     url: '/inscriptions'
   },
 
@@ -91,7 +91,7 @@ const NOTIFICATION_MESSAGES = {
     titre: (variables) => `⚠️ Forfait enregistré`,
     corps: (variables) =>
       `Votre forfait pour le ${variables.tournoiName} a été pris en compte. Le comité a été informé. ` +
-      `Il vous est impossible de repostuler à cette compétition`,
+      `Il vous est toujours impossible de repostuler à cette compétition si vous étiez à nouveau disponible.`,
     url: '/inscriptions'
   },
 
@@ -99,7 +99,7 @@ const NOTIFICATION_MESSAGES = {
   WELCOME: {
     titre: () => `🎉 Bienvenue sur l'Espace Joueur`,
     corps: () =>
-      `Votre compte a été créé avec succès. Découvrez les compétitions disponibles et vos statistiques !`,
+      `Votre compte a été créé avec succès. Découvrez les compétitions disponibles, vos statistiques et beaucoup d'informations concernant votre CDB!`,
     url: '/tournaments'
   },
 
