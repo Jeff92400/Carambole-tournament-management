@@ -502,6 +502,9 @@
     <a href="#glossaire" class="section-title">Référence</a>
     <a href="#glossaire">Glossaire</a>
     <a href="#screenshots-checklist">Checklist captures</a>
+
+    <a href="#annexes" class="section-title">Annexes</a>
+    <a href="#notifications-detail">Détail notifications push</a>
   </nav>
 </aside>
 
@@ -3483,6 +3486,122 @@
     <div class="info-card">
       <strong>Activation des images :</strong> Une fois les captures placées dans le dossier <code>screenshots/</code>, ouvrez ce fichier HTML et pour chaque placeholder, décommentez la ligne <code>&lt;img src="screenshots/XX-nom.png"&gt;</code>. Le placeholder gris sera alors remplacé par la vraie capture.
     </div>
+  </section>
+
+  <!-- ======================== ANNEXES ======================== -->
+  <section id="annexes">
+    <h2>Annexes</h2>
+
+    <h3 id="notifications-detail">Détail du contenu des notifications push</h3>
+
+    <p>Cette section liste le contenu exact de toutes les notifications push automatiques envoyées aux joueurs par le système.</p>
+
+    <div class="info-card">
+      <strong>📱 Note :</strong> Ces messages sont prédéfinis dans le code de l'application et ne peuvent pas être modifiés par les administrateurs. Seules les notifications manuelles (via Com joueurs > Notifs) permettent de personnaliser le contenu.
+    </div>
+
+    <h4>1. Convocation</h4>
+    <div class="example-box">
+      <p><strong>Titre :</strong> 📢 Convocation — [Nom du Tournoi]</p>
+      <p><strong>Message :</strong> Vous êtes convoqué(e) le [date] à [heure] à [lieu]. Poule [numéro]. Bonne compétition !</p>
+      <p><strong>Destination :</strong> Page "Vos compétitions" (onglet inscriptions)</p>
+    </div>
+
+    <h4>2. Rappel — Dernier jour pour s'inscrire</h4>
+    <div class="example-box">
+      <p><strong>Titre :</strong> 🚨 Dernière chance !</p>
+      <p><strong>Message :</strong> Les inscriptions pour le [Tournoi] ferment demain. Inscrivez-vous vite si vous souhaitez participer</p>
+      <p><strong>Destination :</strong> Page "Tournois disponibles"</p>
+    </div>
+
+    <h4>3. Nouveau tournoi disponible</h4>
+    <div class="example-box">
+      <p><strong>Titre :</strong> 🎯 Nouveau tournoi disponible</p>
+      <p><strong>Message :</strong> Les inscriptions pour le [Tournoi] sont ouvertes jusqu'au [date de clôture]. Ne le manquez pas!</p>
+      <p><strong>Destination :</strong> Page "Tournois disponibles"</p>
+    </div>
+
+    <h4>4. Résultats publiés (tournoi normal)</h4>
+    <div class="example-box">
+      <p><strong>Titre :</strong> 📊 Résultats — [Nom du Tournoi]</p>
+      <p><strong>Message :</strong> Les résultats sont publiés ! Vous êtes classé(e) [position]e. Bravo !</p>
+      <p><strong>Destination :</strong> Page "Statistiques"</p>
+    </div>
+
+    <h4>5. Résultats publiés (finale)</h4>
+    <div class="example-box">
+      <p><strong>Titre :</strong> 🏆 Résultats Finale — [Nom du Tournoi]</p>
+      <p><strong>Message :</strong> Les résultats sont publiés ! Vous êtes classé(e) [position]e. Félicitations !</p>
+      <p><strong>Destination :</strong> Page "Statistiques"</p>
+    </div>
+
+    <h4>6. Annonce urgente</h4>
+    <div class="example-box">
+      <p><strong>Titre :</strong> ⚠️ [Titre de l'annonce]</p>
+      <p><strong>Message :</strong> [Texte de l'annonce] (tronqué à 150 caractères)</p>
+      <p><strong>Destination :</strong> Page d'accueil</p>
+    </div>
+
+    <h4>7. Date du tournoi modifiée</h4>
+    <div class="example-box">
+      <p><strong>Titre :</strong> 📝 Modification — [Nom du Tournoi]</p>
+      <p><strong>Message :</strong> Le tournoi du [ancienne date] a été modifié. Nouvelle date : [nouvelle date] - Merci d'en prendre note.</p>
+      <p><strong>Destination :</strong> Page "Vos compétitions" (onglet inscriptions)</p>
+    </div>
+
+    <h4>8. Tournoi annulé</h4>
+    <div class="example-box">
+      <p><strong>Titre :</strong> ❌ Tournoi annulé</p>
+      <p><strong>Message :</strong> Le [Nom du Tournoi] prévu le [date] est annulé. Consultez vos inscriptions.</p>
+      <p><strong>Destination :</strong> Page "Vos compétitions" (onglet inscriptions)</p>
+    </div>
+
+    <h4>9. Lieu du tournoi modifié</h4>
+    <div class="example-box">
+      <p><strong>Titre :</strong> 📍 Changement de lieu — [Nom du Tournoi]</p>
+      <p><strong>Message :</strong> Le tournoi du [date] aura lieu à [nouveau lieu] au lieu de [ancien lieu]. Ne vous trompez pas !!</p>
+      <p><strong>Destination :</strong> Page "Vos compétitions" (onglet inscriptions)</p>
+    </div>
+
+    <h4>10. Inscription confirmée</h4>
+    <div class="example-box">
+      <p><strong>Titre :</strong> ✅ Inscription enregistrée</p>
+      <p><strong>Message :</strong> Vous êtes inscrit(e) au [Nom du Tournoi] le [date].</p>
+      <p><strong>Destination :</strong> Page "Vos compétitions" (onglet inscriptions)</p>
+    </div>
+
+    <h4>11. Forfait enregistré</h4>
+    <div class="example-box">
+      <p><strong>Titre :</strong> ⚠️ Forfait enregistré</p>
+      <p><strong>Message :</strong> Votre forfait pour le [Nom du Tournoi] a été pris en compte. Le comité a été informé. Il vous est toujours impossible de repostuler à cette compétition si vous étiez à nouveau disponible.</p>
+      <p><strong>Destination :</strong> Page "Vos compétitions" (onglet inscriptions)</p>
+    </div>
+
+    <h4>12. Bienvenue (création de compte)</h4>
+    <div class="example-box">
+      <p><strong>Titre :</strong> 🎉 Bienvenue sur l'Espace Joueur</p>
+      <p><strong>Message :</strong> Votre compte a été créé avec succès. Découvrez les compétitions disponibles, vos statistiques et beaucoup d'informations concernant votre CDB!</p>
+      <p><strong>Destination :</strong> Page "Tournois disponibles"</p>
+    </div>
+
+    <h4>13. Article WordPress publié</h4>
+    <div class="example-box">
+      <p><strong>Titre :</strong> 📰 Article publié — [Nom du Tournoi]</p>
+      <p><strong>Message :</strong> Les résultats du [Nom du Tournoi] sont maintenant disponibles sur le site de votre comité. Appuyez pour consulter l'article !</p>
+      <p><strong>Destination :</strong> URL externe (article WordPress)</p>
+    </div>
+
+    <h4>14. Qualification pour la Finale</h4>
+    <div class="example-box">
+      <p><strong>Titre :</strong> 🏆 Qualification Finale !</p>
+      <p><strong>Message :</strong> Félicitations ! Vous êtes qualifié(e) pour la Finale [Nom du Tournoi]. Rendez-vous le [date de la finale].</p>
+      <p><strong>Destination :</strong> Page "Statistiques"</p>
+    </div>
+
+    <div class="info-card green">
+      <strong>💡 Variables dynamiques :</strong> Les éléments entre crochets [comme ceci] sont remplacés automatiquement par les données réelles : nom du tournoi, dates, lieux, positions, etc.
+    </div>
+
   </section>
 
   <hr>
