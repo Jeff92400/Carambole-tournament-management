@@ -1,7 +1,7 @@
 # Guide Utilisateur Complet
 
 > **Note:** Ce document est généré automatiquement depuis le guide HTML.
-> **Dernière mise à jour:** 05/04/2026
+> **Dernière mise à jour:** 07/04/2026 - Ajout de la section "Notifications automatiques du système"
 
 ---
 

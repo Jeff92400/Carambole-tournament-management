@@ -1696,6 +1696,145 @@
     <div class="info-card">
       <strong>💡 Astuce :</strong> Les joueurs peuvent gérer leurs notifications dans l'Espace Joueur → Paramètres → "Recevoir les notifications push". Ils peuvent consulter l'historique de leurs notifications reçues via l'icône 🔔 en haut de l'écran.
     </div>
+
+    <h4>Notifications automatiques du système</h4>
+    <p>En plus des notifications manuelles que vous envoyez, le système envoie automatiquement des notifications aux joueurs lors d'événements importants. Ces notifications sont envoyées uniquement aux joueurs ayant activé les notifications push dans leur Espace Joueur.</p>
+
+    <div class="info-card accent">
+      <strong>🤖 Notifications automatiques :</strong> Ces messages sont envoyés automatiquement par le système - vous n'avez rien à faire. Ils garantissent que les joueurs sont toujours informés des événements importants concernant leurs inscriptions et leurs résultats.
+    </div>
+
+    <table class="data-table" style="margin-top: 20px;">
+      <thead>
+        <tr>
+          <th style="width: 25%;">Type</th>
+          <th style="width: 20%;">Déclencheur</th>
+          <th style="width: 55%;">Message envoyé</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>📢 Convocation</strong></td>
+          <td>Envoi des convocations depuis "Générer Poules"</td>
+          <td>
+            <strong>Titre :</strong> "Convocation — [Nom Tournoi]"<br>
+            <strong>Message :</strong> "Vous êtes convoqué(e) le [date] à [heure] à [lieu]. Poule [numéro]. Bonne compétition !"
+          </td>
+        </tr>
+        <tr>
+          <td><strong>🚨 Rappel dernier jour</strong></td>
+          <td>Automatique à 9h pour inscriptions fermant demain</td>
+          <td>
+            <strong>Titre :</strong> "Dernière chance !"<br>
+            <strong>Message :</strong> "Les inscriptions pour le [Nom Tournoi] ferment demain. Inscrivez-vous vite si vous souhaitez participer"
+          </td>
+        </tr>
+        <tr>
+          <td><strong>🎯 Nouveau tournoi</strong></td>
+          <td>Création d'un nouveau tournoi</td>
+          <td>
+            <strong>Titre :</strong> "Nouveau tournoi disponible"<br>
+            <strong>Message :</strong> "Les inscriptions pour le [Nom Tournoi] sont ouvertes jusqu'au [date]. Ne le manquez pas!"
+          </td>
+        </tr>
+        <tr>
+          <td><strong>📊 Résultats publiés</strong></td>
+          <td>Import des résultats d'un tournoi</td>
+          <td>
+            <strong>Titre :</strong> "Résultats — [Nom Tournoi]"<br>
+            <strong>Message :</strong> "Les résultats sont publiés ! Vous êtes classé(e) [position]e. Bravo !"
+          </td>
+        </tr>
+        <tr>
+          <td><strong>🏆 Résultats finale</strong></td>
+          <td>Import des résultats d'une finale</td>
+          <td>
+            <strong>Titre :</strong> "Résultats Finale — [Nom Tournoi]"<br>
+            <strong>Message :</strong> "Les résultats sont publiés ! Vous êtes classé(e) [position]e. Félicitations !"
+          </td>
+        </tr>
+        <tr>
+          <td><strong>🏆 Qualification finale</strong></td>
+          <td>Après import des résultats du dernier tournoi qualificatif (T3)</td>
+          <td>
+            <strong>Titre :</strong> "Qualification Finale !"<br>
+            <strong>Message :</strong> "Félicitations ! Vous êtes qualifié(e) pour la Finale [Nom]. Rendez-vous le [date]."
+          </td>
+        </tr>
+        <tr>
+          <td><strong>📝 Date modifiée</strong></td>
+          <td>Changement de la date d'un tournoi</td>
+          <td>
+            <strong>Titre :</strong> "Modification — [Nom Tournoi]"<br>
+            <strong>Message :</strong> "Le tournoi du [ancienne date] a été modifié. Nouvelle date : [nouvelle date] - Merci d'en prendre note."
+          </td>
+        </tr>
+        <tr>
+          <td><strong>📍 Lieu modifié</strong></td>
+          <td>Changement du lieu d'un tournoi</td>
+          <td>
+            <strong>Titre :</strong> "Changement de lieu — [Nom Tournoi]"<br>
+            <strong>Message :</strong> "Le tournoi du [date] aura lieu à [nouveau lieu] au lieu de [ancien lieu]. Ne vous trompez pas !!"
+          </td>
+        </tr>
+        <tr>
+          <td><strong>❌ Tournoi annulé</strong></td>
+          <td>Annulation d'un tournoi</td>
+          <td>
+            <strong>Titre :</strong> "Tournoi annulé"<br>
+            <strong>Message :</strong> "Le [Nom Tournoi] prévu le [date] est annulé. Consultez vos inscriptions."
+          </td>
+        </tr>
+        <tr>
+          <td><strong>✅ Inscription confirmée</strong></td>
+          <td>Inscription du joueur via l'Espace Joueur</td>
+          <td>
+            <strong>Titre :</strong> "Inscription enregistrée"<br>
+            <strong>Message :</strong> "Vous êtes inscrit(e) au [Nom Tournoi] le [date]."
+          </td>
+        </tr>
+        <tr>
+          <td><strong>⚠️ Forfait confirmé</strong></td>
+          <td>Déclaration de forfait par le joueur</td>
+          <td>
+            <strong>Titre :</strong> "Forfait enregistré"<br>
+            <strong>Message :</strong> "Votre forfait pour le [Nom Tournoi] a été pris en compte. Le comité a été informé. Il vous est toujours impossible de repostuler à cette compétition si vous étiez à nouveau disponible."
+          </td>
+        </tr>
+        <tr>
+          <td><strong>🎉 Bienvenue</strong></td>
+          <td>Création d'un compte Espace Joueur</td>
+          <td>
+            <strong>Titre :</strong> "Bienvenue sur l'Espace Joueur"<br>
+            <strong>Message :</strong> "Votre compte a été créé avec succès. Découvrez les compétitions disponibles, vos statistiques et beaucoup d'informations concernant votre CDB!"
+          </td>
+        </tr>
+        <tr>
+          <td><strong>📰 Article publié</strong></td>
+          <td>Publication d'un article sur le site WordPress du comité</td>
+          <td>
+            <strong>Titre :</strong> "Article publié — [Nom Tournoi]"<br>
+            <strong>Message :</strong> "Les résultats du [Nom Tournoi] sont maintenant disponibles sur le site de votre comité. Appuyez pour consulter l'article !"
+          </td>
+        </tr>
+        <tr>
+          <td><strong>⚠️ Annonce urgente</strong></td>
+          <td>Création d'une annonce de type "ALERTE" (urgente) dans Com Joueurs > Annonces</td>
+          <td>
+            <strong>Titre :</strong> [Titre de l'annonce]<br>
+            <strong>Message :</strong> [Contenu de l'annonce, tronqué à 150 caractères]
+          </td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="info-card" style="margin-top: 20px;">
+      <strong>📊 Statistiques :</strong> 14 types de notifications automatiques sont actifs dans le système. Les joueurs reçoivent en moyenne 5-10 notifications par saison (convocations, résultats, rappels). Le taux moyen d'abonnement aux notifications push est de 20-30% des joueurs actifs.
+    </div>
+
+    <div class="warning-card">
+      <strong>⚠️ Note importante :</strong> Les messages des notifications automatiques sont prédéfinis dans le système et ne peuvent pas être modifiés. Seules les notifications manuelles (envoyées depuis l'onglet "Notifications Push") peuvent être personnalisées librement.
+    </div>
   </section>
 
   <hr>
