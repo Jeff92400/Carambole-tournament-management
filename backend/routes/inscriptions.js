@@ -3482,11 +3482,15 @@ router.get('/tournoi/:id/simulation', authenticateToken, async (req, res) => {
           : qualificationSettings.small;
         const finalistLicences = rankings.slice(0, numFinalists).map(r => r.licence?.replace(/\s/g, ''));
 
-        // Filter inscriptions to only include finalists
-        activeInscriptions = activeInscriptions.filter(i => {
-          const licenceNorm = i.licence?.replace(/\s/g, '');
-          return finalistLicences.includes(licenceNorm);
-        });
+        // CHANGED: Don't filter out non-finalist inscriptions
+        // Rationale: Once last-minute players are added to inscriptions, the simulation
+        // should show ALL inscribed players (qualified finalists + last-minute additions)
+        // not just the theoretical qualified finalists from rankings.
+        // The simulation is meant to preview what will be sent in the convocation,
+        // which includes all inscriptions regardless of qualification status.
+
+        // Note: Keep the finalistLicences calculation above for potential future use
+        // (e.g., highlighting who is a qualified finalist vs. last-minute in the UI)
       }
     }
 
