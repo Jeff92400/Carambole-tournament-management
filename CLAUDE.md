@@ -101,7 +101,7 @@ git push origin main
 
 ## Versioning
 
-**Current Version:** V 2.0.314 03/26
+**Current Version:** V 2.0.333 04/26
 
 Version is displayed at the bottom of the login screen (`frontend/login.html`).
 
@@ -235,6 +235,7 @@ To give each CDB a branded sender domain (e.g., `cdb9493@ffbcarambole-gestion.fr
 ## Development Notes
 
 - **User Guide Maintenance:** The source of truth is `frontend/guide-utilisateur.html` (served in the app). It MUST be updated whenever a **new feature** is implemented (new page, new setting, changed functionality). Add/update the relevant sections, update the glossary if new terms are introduced, and keep the same structure and writing style (French, formal, step-by-step). Include the guide update in the same commit as the feature. Bug fixes do NOT require guide updates. **After every guide update, sync the two other copies:** copy `frontend/guide-utilisateur.html` → `GUIDE-UTILISATEUR-COMPLET.html` (root), and regenerate `GUIDE-UTILISATEUR-COMPLET.md` from the HTML content. Always include these synced files in the same commit.
+- **User Guide Search Feature:** The guide includes a keyword search feature (`frontend/guide-utilisateur.html` lines 108-222 CSS, lines 539-561 HTML, lines 1474-1679 JavaScript). Search is accent-insensitive (e.g., "résultats" matches "resultats"), debounced (300ms), and builds an index on page load covering h2, h3, and h4 headings. Results show section paths (e.g., "Compétitions → Générer les poules → Forfaits") and click to scroll. Minimum 2 characters required to search.
 - All text is in **French**
 - Dates: Paris timezone, displayed as DD/MM/YYYY
 - Season format: `YYYY-YYYY+1` (e.g., "2024-2025"), configurable start month via `app_settings.season_start_month` (default: 9 = September)
@@ -256,6 +257,55 @@ To give each CDB a branded sender domain (e.g., `cdb9493@ffbcarambole-gestion.fr
 - `'manual'` - Admin added via dashboard
 
 **Note:** IONOS will be decommissioned next year; Player App will become the sole source.
+
+## Inscription Statuses
+
+- `'inscrit'` - Active registration (player is registered)
+- `'indisponible'` - Player unavailable/renounced qualification (for finales)
+- `'désinscrit'` - Player cancelled registration
+- `'forfait'` - Last-minute withdrawal (no-show)
+
+### Marking Finalists as Indisponible
+
+Admins can mark qualified finalists as indisponible when they renounce their qualification but don't have the Player App to do it themselves.
+
+**Endpoint:** `POST /api/inscriptions/mark-indisponible`
+
+**Location:** `backend/routes/inscriptions.js` (lines 1342-1437)
+
+**Request body:**
+```json
+{
+  "tournoiId": 123,
+  "licence": "12345678",
+  "playerName": "Jean DUPONT",
+  "email": "jean@example.com"
+}
+```
+
+**Safety checks:**
+1. **Prevents overriding active inscriptions** (lines 1369-1383):
+   - Rejects if player status is `'inscrit'` (already registered)
+   - Prevents admin from accidentally marking a player indisponible when they've already registered via Player App
+
+2. **Idempotent behavior:**
+   - If player is already `'indisponible'`, returns success without error
+   - Safe to call multiple times
+
+3. **Source tracking:**
+   - Sets `source = 'manual'` to differentiate from Player App renunciations
+   - Used for source-based messaging (see below)
+
+**Frontend integration:** `frontend/generate-poules.html` (lines 2736, 2908-2950)
+- "Indisponible" button appears next to "Non inscrit" badge for qualified finalists
+- Only shown for finales when player has no active inscription
+
+**Source-based messaging:**
+Players see different messages in the Player App based on who initiated the renunciation:
+- `source = 'player_app'`: "⚠️ Renonciation définitive - votre place a été attribuée à un joueur de réserve"
+- `source = 'manual'`: "⚠️ Vous avez été marqué indisponible par le CDB"
+
+This clarifies whether the player renounced themselves or was marked unavailable by admin.
 
 ## Branding System
 
@@ -1502,3 +1552,68 @@ Every change in V3.0 must improve the user experience by making the app more int
   - Conversation retention duration (before deletion)?
   - Multiple admins can respond or one per CDB?
   - Email notification to admin when player requests human support?
+
+- **AI POST-TOURNAMENT SUMMARIES - PLAYER APP (REMINDER: July-August 2026):** Automatic encouraging French summaries after each tournament in Player App. "Invisible AI" UX principle for non-tech-savvy billiard players.
+
+  **Core Principle: Invisible AI**
+  - Appears automatically after results import - no button to click
+  - 2-3 short sentences in simple French (no markdown, no lists)
+  - Warm and encouraging tone, even for defeats
+  - Player benefits from AI without feeling like interacting with a machine
+
+  **Where:** Player App (`cdbhs-player-app` repo) → "Mes Résultats" page
+  - New panel "📊 Votre performance" under each tournament result
+  - Automatically displayed, no user action needed
+
+  **AI Context (via prompt caching):**
+  - Player rank (R2, N3, etc.)
+  - Game mode (Libre, Cadre, 3 Bandes)
+  - Tournament result (points, reprises, moyenne, position)
+  - Player's historical average in this mode
+  - Comparison with other players in the poule
+
+  **Example outputs:**
+  - **Good result:** "Très belle performance ! Votre moyenne de 2,10 est excellente pour un joueur R2. Vous avez bien résisté face à des adversaires plus classés."
+  - **Average result:** "Bonne participation au tournoi 3 Bandes R3. Votre moyenne de 0,65 est dans votre niveau habituel. Continuez à jouer régulièrement pour progresser."
+  - **Tough day:** "Ce tournoi Cadre 47/2 était relevé. Même si votre moyenne est en dessous de votre niveau habituel, l'important est de participer. Le prochain tournoi sera l'occasion de rebondir !"
+
+  **Cost Analysis at Scale:**
+
+  | Deployment | Summaries/Season | Cost/Season | Cost/Month |
+  |------------|-----------------|-------------|------------|
+  | 1 CDB (CDBHS) | ~450 | €1.80 | €0.20 |
+  | 12 CDBs | ~5,400 | €5.40 | €0.60 |
+  | 90 CDBs (France) | ~40,500 | €40.50 | €4.50 |
+
+  **With full AI suite** (rules assistant + coach + summaries):
+  - 12 CDBs: €10-15/month
+  - 90 CDBs: €70-90/month
+
+  **⚠️ Important:** AI costs = 3-5% of Railway hosting costs - negligible at scale.
+
+  **Anthropic Dependency:**
+  - **API dependency:** API call for each AI interaction
+  - **Cost dependency:** Recurring monthly cost (but minimal with Haiku + caching)
+  - **Data flow:** Player data sent to Anthropic servers (EU/US)
+  - **Mitigation:** Code as pluggable service, graceful degradation (app works without AI), budget cap in Anthropic console
+
+  **Implementation (Player App repo):**
+  - **Backend:** New `backend/routes/ai.js` - post-tournament summary endpoints
+  - **Frontend:** Integration in `results.html` - automatic summary panel
+  - **Configuration:** Anthropic API key (`ANTHROPIC_API_KEY`) in Railway env vars
+  - **Prompt caching:** Billiard rules + org context cached (60-80% cost savings)
+  - **Degradation:** If API fails, show results without summary
+
+  **Prerequisites:**
+  - Create Anthropic account (`console.anthropic.com`)
+  - Generate API key (starts with `sk-ant-...`)
+  - Set monthly budget cap (suggested: €10/month to start)
+  - Add `ANTHROPIC_API_KEY` to Railway env vars (Player App service)
+
+  **Estimated effort:** 1-2 days
+
+  **Future Phases (optional):**
+  - **Phase 2:** Rules assistant - players ask questions about rules
+  - **Phase 3:** "Que faire maintenant?" - contextual answers (next table, schedule, opponent)
+  - **Phase 4:** Personalized performance analysis - stats breakdown with strengths and improvement areas
+  - **Phase 5:** Light virtual coach - game advice based on discipline and player level

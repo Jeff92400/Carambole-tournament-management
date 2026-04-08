@@ -1,7 +1,7 @@
 # Guide Utilisateur Complet
 
 > **Note:** Ce document est généré automatiquement depuis le guide HTML.
-> **Dernière mise à jour:** 07/04/2026 - Ajout section "Annexes" avec détail complet des 14 notifications push
+> **Dernière mise à jour:** 08/04/2026 - Ajout fonction "Marquer indisponible" + recherche par mots-clés dans le guide HTML (accents insensibles, debouncing 300ms)
 
 ---
 
