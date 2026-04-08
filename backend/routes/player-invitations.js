@@ -1349,14 +1349,15 @@ router.get('/players-without-notifications', authenticateToken, async (req, res)
         p.email,
         pa.created_at as account_created_at,
         pa.push_enabled,
-        COUNT(DISTINCT ps.id) as device_count
+        COUNT(ps.id) as device_count,
+        CASE WHEN COUNT(ps.id) > 0 THEN true ELSE false END as has_push_subscription
       FROM player_accounts pa
       INNER JOIN players p ON REPLACE(p.licence, ' ', '') = REPLACE(pa.licence, ' ', '')
       LEFT JOIN push_subscriptions ps ON pa.id = ps.player_account_id
       WHERE UPPER(pa.licence) NOT LIKE 'TEST%'
         AND ($1::int IS NULL OR pa.organization_id = $1)
       GROUP BY pa.licence, p.first_name, p.last_name, p.club, p.email, pa.created_at, pa.push_enabled
-      HAVING pa.push_enabled = false OR COUNT(DISTINCT ps.id) = 0
+      HAVING NOT (COUNT(ps.id) > 0 AND pa.push_enabled IS DISTINCT FROM false)
       ORDER BY pa.created_at DESC
     `;
 
