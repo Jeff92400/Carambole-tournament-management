@@ -1280,7 +1280,7 @@ router.get('/competitors-without-app', authenticateToken, async (req, res) => {
     const orgId = req.user.organizationId || null;
 
     // Get current season
-    const seasonStartMonth = await appSettings.getOrgSetting('season_start_month', orgId) || 9;
+    const seasonStartMonth = parseInt(await appSettings.getOrgSetting(orgId, 'season_start_month') || '9');
     const now = new Date();
     const currentYear = now.getFullYear();
     const seasonYear = now.getMonth() + 1 >= seasonStartMonth ? currentYear : currentYear - 1;
