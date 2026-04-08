@@ -1366,7 +1366,23 @@ router.post('/mark-indisponible', authenticateToken, async (req, res) => {
     });
 
     if (existing) {
-      // Update existing inscription to indisponible
+      // Don't override active registrations
+      if (existing.statut === 'inscrit' || !existing.statut) {
+        return res.status(400).json({
+          error: 'Ce joueur est déjà inscrit à cette finale. Impossible de le marquer indisponible.'
+        });
+      }
+
+      // Already indisponible? Idempotent success
+      if (existing.statut === 'indisponible') {
+        return res.json({
+          success: true,
+          message: 'Ce joueur est déjà marqué indisponible',
+          inscription_id: existing.inscription_id
+        });
+      }
+
+      // For other statuses (e.g., désinscrit), update to indisponible
       await new Promise((resolve, reject) => {
         db.run(
           `UPDATE inscriptions SET statut = 'indisponible' WHERE inscription_id = $1`,
