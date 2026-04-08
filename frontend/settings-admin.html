@@ -340,6 +340,72 @@
       </div>
     </div>
 
+    <!-- Invitation Email Templates -->
+    <div class="accordion-panel admin-only" id="invitationTemplatesSection" data-settings-tab="espace-joueur">
+      <div class="accordion-header" onclick="toggleAccordion('invitationTemplatesSection')">
+        <div class="accordion-title"><span class="accordion-icon">&#9654;</span><strong>📧 Templates d'invitation</strong></div>
+        <span class="accordion-summary">3 templates personnalisables</span>
+      </div>
+      <div class="accordion-body">
+        <p style="margin-bottom: 20px; color: #666;">
+          Personnalisez les 3 templates d'emails d'invitation en fonction du contexte.
+        </p>
+
+        <!-- Template Selector -->
+        <div style="margin-bottom: 20px;">
+          <label style="display: block; font-weight: 600; margin-bottom: 8px;">Sélectionner un template :</label>
+          <select id="invitationTemplateSelector" onchange="loadSelectedInvitationTemplate()" style="width: 100%; max-width: 500px; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
+            <option value="urgency">📢 Urgence fin de saison</option>
+            <option value="welcome">👋 Bienvenue nouvelle saison</option>
+            <option value="reminder">🔄 Rappel en cours de saison</option>
+          </select>
+        </div>
+
+        <!-- Template Editor -->
+        <div id="invitationTemplateEditor">
+          <div style="margin-bottom: 20px;">
+            <label style="display: block; font-weight: 600; margin-bottom: 8px;">Objet de l'email :</label>
+            <input type="text" id="invitationTemplateSubject" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;" />
+          </div>
+
+          <div style="margin-bottom: 20px;">
+            <label style="display: block; font-weight: 600; margin-bottom: 8px;">Corps de l'email :</label>
+            <textarea id="invitationTemplateBody" rows="15" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-family: monospace; font-size: 13px;"></textarea>
+          </div>
+
+          <div style="margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-left: 4px solid #1F4788; border-radius: 4px;">
+            <strong>Variables disponibles :</strong>
+            <div style="margin-top: 10px; display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; font-size: 13px; color: #666;">
+              <code>{first_name}</code>
+              <code>{last_name}</code>
+              <code>{player_name}</code>
+              <code>{licence}</code>
+              <code>{club}</code>
+              <code>{organisation_name}</code>
+              <code>{organisation_short_name}</code>
+              <code>{player_app_url}</code>
+              <code>{next_season}</code>
+              <code>{participation_count}</code>
+            </div>
+          </div>
+
+          <button onclick="saveInvitationTemplate()" class="btn" style="background: #28a745; padding: 12px 24px;">
+            💾 Enregistrer ce template
+          </button>
+          <div id="invitationTemplateSaveMessage" style="display: none; margin-top: 10px; padding: 10px; border-radius: 4px;"></div>
+        </div>
+
+        <div style="margin-top: 30px; padding: 15px; background: #fff3cd; border-left: 4px solid #ffc107; border-radius: 4px;">
+          <strong>💡 Contextes d'utilisation :</strong>
+          <ul style="margin: 10px 0 0 20px; color: #666;">
+            <li><strong>📢 Urgence fin de saison</strong> : Annoncer que l'app devient obligatoire dès la saison prochaine</li>
+            <li><strong>👋 Bienvenue nouvelle saison</strong> : Accueillir les joueurs en début de saison</li>
+            <li><strong>🔄 Rappel en cours de saison</strong> : Encourager les compétiteurs réguliers à installer l'app</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
     <!-- Player App Adoption Analytics - Competitors Without App -->
     <div class="accordion-panel admin-only" id="competitorsWithoutAppSection" data-settings-tab="espace-joueur">
       <div class="accordion-header" onclick="toggleAccordion('competitorsWithoutAppSection')">
@@ -3133,12 +3199,102 @@
       }
     }
 
+    // Load invitation templates
+    let currentInvitationTemplates = null;
+
+    async function loadInvitationTemplates() {
+      try {
+        const response = await authFetch(`${API_URL}/player-invitations/templates`);
+        if (!response.ok) throw new Error('Erreur lors du chargement');
+        currentInvitationTemplates = await response.json();
+        loadSelectedInvitationTemplate();
+      } catch (error) {
+        console.error('Error loading invitation templates:', error);
+        alert('Erreur lors du chargement des templates');
+      }
+    }
+
+    function loadSelectedInvitationTemplate() {
+      const selector = document.getElementById('invitationTemplateSelector');
+      const subjectInput = document.getElementById('invitationTemplateSubject');
+      const bodyTextarea = document.getElementById('invitationTemplateBody');
+
+      if (!selector || !currentInvitationTemplates) return;
+
+      const selectedType = selector.value;
+      const template = currentInvitationTemplates[selectedType];
+
+      if (template) {
+        subjectInput.value = template.subject;
+        bodyTextarea.value = template.body;
+      }
+    }
+
+    async function saveInvitationTemplate() {
+      const selector = document.getElementById('invitationTemplateSelector');
+      const subjectInput = document.getElementById('invitationTemplateSubject');
+      const bodyTextarea = document.getElementById('invitationTemplateBody');
+      const msgDiv = document.getElementById('invitationTemplateSaveMessage');
+
+      const templateType = selector.value;
+      const subject = subjectInput.value;
+      const body = bodyTextarea.value;
+
+      try {
+        const response = await authFetch(`${API_URL}/player-invitations/templates/${templateType}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ subject, body })
+        });
+
+        if (!response.ok) throw new Error('Erreur lors de la sauvegarde');
+
+        msgDiv.textContent = '✅ Template enregistré avec succès';
+        msgDiv.style.background = '#d4edda';
+        msgDiv.style.color = '#155724';
+        msgDiv.style.display = 'block';
+
+        // Reload templates
+        await loadInvitationTemplates();
+
+        setTimeout(() => {
+          msgDiv.style.display = 'none';
+        }, 3000);
+      } catch (error) {
+        console.error('Error saving template:', error);
+        msgDiv.textContent = '❌ ' + error.message;
+        msgDiv.style.background = '#f8d7da';
+        msgDiv.style.color = '#721c24';
+        msgDiv.style.display = 'block';
+      }
+    }
+
     // Invite all competitors
     async function inviteAllCompetitors() {
       const btn = document.getElementById('inviteAllBtn');
       const msgDiv = document.getElementById('inviteAllMessage');
 
-      if (!confirm('Voulez-vous envoyer une invitation à tous les joueurs listés ?')) {
+      // Ask for template selection
+      const templateChoice = prompt(
+        'Quel template utiliser ?\n\n' +
+        '1 = 📢 Urgence fin de saison\n' +
+        '2 = 👋 Bienvenue nouvelle saison\n' +
+        '3 = 🔄 Rappel en cours de saison\n\n' +
+        'Entrez 1, 2 ou 3 :',
+        '1'
+      );
+
+      if (!templateChoice) return;
+
+      const templateMap = { '1': 'urgency', '2': 'welcome', '3': 'reminder' };
+      const template = templateMap[templateChoice];
+
+      if (!template) {
+        alert('Choix invalide. Veuillez entrer 1, 2 ou 3.');
+        return;
+      }
+
+      if (!confirm(`Confirmer l'envoi avec le template sélectionné à tous les joueurs listés ?`)) {
         return;
       }
 
@@ -3158,7 +3314,7 @@
         const inviteResponse = await authFetch(`${API_URL}/player-invitations/bulk-invite`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ licences })
+          body: JSON.stringify({ licences, template })
         });
 
         if (!inviteResponse.ok) {
@@ -3249,7 +3405,8 @@
       }
     }
 
-    // Load analytics on page load
+    // Load analytics and templates on page load
+    loadInvitationTemplates();
     loadCompetitorsWithoutApp();
     loadPlayersWithoutNotifications();
 

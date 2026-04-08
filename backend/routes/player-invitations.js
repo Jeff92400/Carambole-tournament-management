@@ -29,24 +29,90 @@ const pdfUpload = multer({
 // Helper function to add delay between emails
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-// Default email template
-const DEFAULT_EMAIL_SUBJECT = "Invitation à l'application joueurs Comité Départemental {organisation_short_name}";
-const DEFAULT_EMAIL_BODY = `Cher {first_name}
+// Default email templates for 3 contexts
 
-Merci d'avoir accepté d'utiliser l'application destinée aux joueurs du 92. Elle fait partie de la refonte totale que nous avons effectuée pour remplacer l'existant, c'est-à-dire le site web du {organisation_name}.
+// Template 1: Urgence fin de saison (mandatory app announcement)
+const TEMPLATE_URGENCY_SUBJECT = "{organisation_short_name} - Espace Joueur : inscription obligatoire dès la saison prochaine";
+const TEMPLATE_URGENCY_BODY = `Bonjour {first_name},
 
-Nous sommes en cours de diffusion progressive durant cette saison pour un usage généralisé au début de la saison prochaine.
+La saison touche à sa fin et nous souhaitons vous informer d'un changement important pour la saison prochaine.
 
-Tu trouveras ci-joint un document décrivant rapidement les fonctionnalités de cette application (qui fonctionne sur PC/Mac ou mobile iOS/Android) et la manière de l'installer. Si tu rencontres la moindre difficulté, n'hésite pas à m'envoyer un email directement ou via l'application qui dispose d'une fonction « contact ».
+À compter de la saison {next_season}, l'application Espace Joueur deviendra le seul moyen de s'inscrire aux compétitions du {organisation_name}.
 
-Nous sommes bien sûr preneurs de toute anomalie que tu pourrais découvrir, mais aussi de suggestions qui contribueraient à une meilleure expérience pour les utilisateurs.
+Pour être prêt dès la rentrée, nous vous invitons à installer l'application dès maintenant :
 
-Bon usage de ce nouvel outil et nous restons à disposition pour toute demande de support.
+🎯 Pourquoi s'inscrire maintenant ?
+• Familiarisez-vous avec l'outil avant la rentrée
+• Recevez vos convocations directement sur votre téléphone
+• Consultez vos résultats et classements en temps réel
+• Ne manquez aucune échéance d'inscription
 
-Bien cordialement
-Le comité sportif du {organisation_name}
+📱 Comment installer l'application ?
+1. Rendez-vous sur : {player_app_url}
+2. Suivez les instructions d'installation (fonctionne sur PC, Mac, iOS et Android)
+3. Créez votre compte avec votre numéro de licence FFB
 
-{player_app_url}`;
+Si vous rencontrez la moindre difficulté, n'hésitez pas à nous contacter via l'application (fonction "Contact") ou par email.
+
+Sportivement,
+Le comité sportif du {organisation_name}`;
+
+// Template 2: Bienvenue nouvelle saison (new CDB season start)
+const TEMPLATE_WELCOME_SUBJECT = "{organisation_short_name} - Bienvenue ! Inscrivez-vous via l'Espace Joueur";
+const TEMPLATE_WELCOME_BODY = `Bonjour {first_name},
+
+Bienvenue pour cette nouvelle saison au sein du {organisation_name} !
+
+Les inscriptions pour les premiers tournois sont ouvertes. Pour vous inscrire et suivre la saison, nous utilisons l'Espace Joueur, une application dédiée aux compétiteurs.
+
+🎯 Vos avantages avec l'Espace Joueur :
+• Inscriptions aux tournois en quelques clics
+• Réception de vos convocations avec le détail de votre poule
+• Consultation de vos résultats et classements en temps réel
+• Notifications push pour ne rien manquer
+• Accès aux annonces et actualités du comité
+
+📱 Comment vous inscrire ?
+1. Rendez-vous sur : {player_app_url}
+2. Créez votre compte avec votre numéro de licence FFB
+3. Complétez votre profil
+4. Inscrivez-vous aux tournois dès maintenant !
+
+La saison commence bientôt, ne tardez pas !
+
+Si vous avez des questions, contactez-nous via l'application (fonction "Contact").
+
+Bonne saison à vous !
+Le comité sportif du {organisation_name}`;
+
+// Template 3: Rappel en cours de saison (in-season reminder)
+const TEMPLATE_REMINDER_SUBJECT = "{organisation_short_name} - Suivez vos résultats sur l'Espace Joueur";
+const TEMPLATE_REMINDER_BODY = `Bonjour {first_name},
+
+Nous avons remarqué que vous participez régulièrement aux compétitions du {organisation_name}, mais que vous n'avez pas encore installé l'application Espace Joueur.
+
+🎯 Pourquoi installer l'application maintenant ?
+• Consultez vos résultats et votre classement de la saison en cours
+• Recevez vos prochaines convocations directement sur votre téléphone
+• Inscrivez-vous plus facilement aux prochains tournois
+• Notifications push pour les annonces importantes
+• Accès à l'historique de vos performances
+
+📱 Installation en 2 minutes :
+1. Rendez-vous sur : {player_app_url}
+2. Créez votre compte avec votre numéro de licence FFB ({licence})
+3. Découvrez immédiatement vos statistiques de la saison
+
+Vous avez déjà participé à {participation_count} tournoi(s) cette saison. Suivez votre progression en temps réel !
+
+Si vous rencontrez la moindre difficulté, contactez-nous via l'application (fonction "Contact") ou par email.
+
+Sportivement,
+Le comité sportif du {organisation_name}`;
+
+// Legacy default (kept for backward compatibility)
+const DEFAULT_EMAIL_SUBJECT = TEMPLATE_URGENCY_SUBJECT;
+const DEFAULT_EMAIL_BODY = TEMPLATE_URGENCY_BODY;
 
 // Get invitation statistics
 router.get('/stats', authenticateToken, async (req, res) => {
@@ -1390,16 +1456,40 @@ router.get('/players-without-notifications', authenticateToken, async (req, res)
  */
 router.post('/bulk-invite', authenticateToken, async (req, res) => {
   try {
-    const { licences } = req.body;
+    const { licences, template = 'urgency' } = req.body;
     const orgId = req.user.organizationId || null;
 
     if (!licences || !Array.isArray(licences) || licences.length === 0) {
       return res.status(400).json({ error: 'Licences array required' });
     }
 
+    // Map template type to settings keys and defaults
+    const templateMap = {
+      urgency: {
+        subjectKey: 'invitation_urgency_subject',
+        bodyKey: 'invitation_urgency_body',
+        defaultSubject: TEMPLATE_URGENCY_SUBJECT,
+        defaultBody: TEMPLATE_URGENCY_BODY
+      },
+      welcome: {
+        subjectKey: 'invitation_welcome_subject',
+        bodyKey: 'invitation_welcome_body',
+        defaultSubject: TEMPLATE_WELCOME_SUBJECT,
+        defaultBody: TEMPLATE_WELCOME_BODY
+      },
+      reminder: {
+        subjectKey: 'invitation_reminder_subject',
+        bodyKey: 'invitation_reminder_body',
+        defaultSubject: TEMPLATE_REMINDER_SUBJECT,
+        defaultBody: TEMPLATE_REMINDER_BODY
+      }
+    };
+
+    const selectedTemplate = templateMap[template] || templateMap.urgency;
+
     // Get email template
-    const emailSubject = await appSettings.getOrgSetting('player_invitation_subject', orgId) || DEFAULT_EMAIL_SUBJECT;
-    const emailBody = await appSettings.getOrgSetting('player_invitation_body', orgId) || DEFAULT_EMAIL_BODY;
+    const emailSubject = await appSettings.getOrgSetting(selectedTemplate.subjectKey, orgId) || selectedTemplate.defaultSubject;
+    const emailBody = await appSettings.getOrgSetting(selectedTemplate.bodyKey, orgId) || selectedTemplate.defaultBody;
     const orgShortName = await appSettings.getOrgSetting('organization_short_name', orgId) || 'CDB';
     const orgFullName = await appSettings.getOrgSetting('organization_name', orgId) || 'Comité Départemental de Billard';
     const playerAppUrl = await appSettings.getOrgSetting('player_app_url', orgId) || '';
@@ -1458,6 +1548,39 @@ router.post('/bulk-invite', authenticateToken, async (req, res) => {
           continue;
         }
 
+        // Calculate additional variables
+        const seasonStartMonth = parseInt(await appSettings.getOrgSetting(orgId, 'season_start_month') || '9');
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        const seasonYear = now.getMonth() + 1 >= seasonStartMonth ? currentYear : currentYear - 1;
+        const nextSeasonYear = seasonYear + 1;
+        const nextSeason = `${nextSeasonYear}-${nextSeasonYear + 1}`;
+
+        // Get participation count for reminder template
+        let participationCount = 0;
+        if (template === 'reminder') {
+          const seasonStartDate = `${seasonYear}-${String(seasonStartMonth).padStart(2, '0')}-01`;
+          const seasonEndDate = `${seasonYear + 1}-${String(seasonStartMonth).padStart(2, '0')}-01`;
+
+          const countResult = await new Promise((resolve, reject) => {
+            db.get(
+              `SELECT COUNT(DISTINCT i.tournoi_id) as count
+               FROM inscriptions i
+               INNER JOIN tournoi_ext te ON i.tournoi_id = te.tournoi_id
+               WHERE REPLACE(i.licence, ' ', '') = REPLACE($1, ' ', '')
+                 AND te.debut >= $2::date
+                 AND te.debut < $3::date
+                 AND i.statut IN ('inscrit', 'forfait')`,
+              [licence, seasonStartDate, seasonEndDate],
+              (err, row) => {
+                if (err) reject(err);
+                else resolve(row || { count: 0 });
+              }
+            );
+          });
+          participationCount = countResult.count || 0;
+        }
+
         // Replace variables in email
         const personalizedSubject = emailSubject
           .replace(/{organisation_short_name}/g, orgShortName);
@@ -1468,7 +1591,10 @@ router.post('/bulk-invite', authenticateToken, async (req, res) => {
           .replace(/{player_name}/g, `${player.first_name || ''} ${player.last_name || ''}`.trim())
           .replace(/{organisation_name}/g, orgFullName)
           .replace(/{organisation_short_name}/g, orgShortName)
-          .replace(/{player_app_url}/g, playerAppUrl);
+          .replace(/{player_app_url}/g, playerAppUrl)
+          .replace(/{next_season}/g, nextSeason)
+          .replace(/{licence}/g, player.licence || '')
+          .replace(/{participation_count}/g, participationCount.toString());
 
         // Build HTML email
         const htmlBody = `
@@ -1721,6 +1847,80 @@ router.post('/send-notification-reminder', authenticateToken, async (req, res) =
   } catch (error) {
     console.error('Error in send notification reminder:', error);
     res.status(500).json({ error: 'Failed to send reminders' });
+  }
+});
+
+/**
+ * GET /api/player-invitations/templates
+ * Get all invitation templates (or specific template)
+ */
+router.get('/templates', authenticateToken, async (req, res) => {
+  try {
+    const { type } = req.query;
+    const orgId = req.user.organizationId || null;
+
+    // Template defaults
+    const templates = {
+      urgency: {
+        name: 'Urgence fin de saison',
+        icon: '📢',
+        subject: await appSettings.getOrgSetting(orgId, 'invitation_urgency_subject') || TEMPLATE_URGENCY_SUBJECT,
+        body: await appSettings.getOrgSetting(orgId, 'invitation_urgency_body') || TEMPLATE_URGENCY_BODY
+      },
+      welcome: {
+        name: 'Bienvenue nouvelle saison',
+        icon: '👋',
+        subject: await appSettings.getOrgSetting(orgId, 'invitation_welcome_subject') || TEMPLATE_WELCOME_SUBJECT,
+        body: await appSettings.getOrgSetting(orgId, 'invitation_welcome_body') || TEMPLATE_WELCOME_BODY
+      },
+      reminder: {
+        name: 'Rappel en cours de saison',
+        icon: '🔄',
+        subject: await appSettings.getOrgSetting(orgId, 'invitation_reminder_subject') || TEMPLATE_REMINDER_SUBJECT,
+        body: await appSettings.getOrgSetting(orgId, 'invitation_reminder_body') || TEMPLATE_REMINDER_BODY
+      }
+    };
+
+    if (type && templates[type]) {
+      return res.json(templates[type]);
+    }
+
+    res.json(templates);
+  } catch (error) {
+    console.error('Error fetching invitation templates:', error);
+    res.status(500).json({ error: 'Failed to fetch templates' });
+  }
+});
+
+/**
+ * PUT /api/player-invitations/templates/:type
+ * Update a specific invitation template
+ */
+router.put('/templates/:type', authenticateToken, async (req, res) => {
+  try {
+    const { type } = req.params;
+    const { subject, body } = req.body;
+    const orgId = req.user.organizationId || null;
+
+    const validTypes = ['urgency', 'welcome', 'reminder'];
+    if (!validTypes.includes(type)) {
+      return res.status(400).json({ error: 'Invalid template type' });
+    }
+
+    // Update settings
+    await appSettings.setOrgSetting(orgId, `invitation_${type}_subject`, subject);
+    await appSettings.setOrgSetting(orgId, `invitation_${type}_body`, body);
+
+    // Log action
+    await logAdminAction(req.user.username, ACTION_TYPES.UPDATE_SETTINGS, {
+      setting: `invitation_${type}_template`,
+      orgId
+    });
+
+    res.json({ success: true, message: 'Template updated successfully' });
+  } catch (error) {
+    console.error('Error updating invitation template:', error);
+    res.status(500).json({ error: 'Failed to update template' });
   }
 });
 
