@@ -1656,7 +1656,7 @@ router.post('/send-notification-reminder', authenticateToken, async (req, res) =
     <div class="content">
       <p>Bonjour ${player.first_name},</p>
 
-      <p>Nous avons remarqué que vous avez installé l'Espace Joueur mais que les notifications push ne sont pas encore activées sur votre appareil.</p>
+      <p>Sauf erreur de notre part, nous avons remarqué que vous avez installé l'Espace Joueur mais que les notifications push ne sont pas encore activées sur votre appareil.</p>
 
       <p><strong>Pourquoi activer les notifications ?</strong></p>
       <ul>
@@ -1675,6 +1675,8 @@ router.post('/send-notification-reminder', authenticateToken, async (req, res) =
       </div>
 
       <p>Si vous rencontrez des difficultés, n'hésitez pas à contacter l'équipe ${orgShortName}.</p>
+
+      <p>Si, effectivement, vous avez bien activé totalement les notifications, merci de nous faire un message rapide via l'onglet "Contact", ce dont nous vous remercions.</p>
 
       <p>Bien cordialement,<br>
       Le comité sportif du ${orgFullName}</p>
