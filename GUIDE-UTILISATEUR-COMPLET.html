@@ -2503,12 +2503,60 @@
 
     <p><strong>Actions en lot :</strong> Cocher plusieurs joueurs "En attente" et cliquer sur "Renvoyer la sélection" pour envoyer un rappel à tous.</p>
 
-    <h4>Onglet "Paramètres"</h4>
-    <ul>
-      <li><strong>Template de l'email :</strong> Modifier le sujet et le corps du message d'invitation (éditeur riche)</li>
-      <li><strong>Variables disponibles :</strong> <code>{first_name}</code>, <code>{organization_name}</code>, <code>{organization_short_name}</code>, <code>{organization_email}</code></li>
-      <li><strong>Guide PDF :</strong> Télécharger un PDF joint automatiquement à chaque invitation</li>
-    </ul>
+    <h4>Gestion des templates d'invitation</h4>
+    <p><strong>Accès :</strong> Paramètres > Espace Joueur > 📧 Templates d'invitation</p>
+
+    <p>L'application propose <strong>3 templates d'email personnalisables</strong> pour s'adapter à différents contextes d'invitation :</p>
+
+    <table>
+      <thead>
+        <tr><th>Template</th><th>Contexte d'utilisation</th><th>Particularités</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>📢 Urgence fin de saison</strong></td>
+          <td>Annoncer que l'app devient obligatoire dès la saison prochaine</td>
+          <td>Ton ferme, encourage l'inscription immédiate, utilise <code>{next_season}</code></td>
+        </tr>
+        <tr>
+          <td><strong>👋 Bienvenue nouvelle saison</strong></td>
+          <td>Accueillir les joueurs en début de saison</td>
+          <td>Ton chaleureux, rappelle les avantages de l'app</td>
+        </tr>
+        <tr>
+          <td><strong>🔄 Rappel en cours de saison</strong></td>
+          <td>Encourager les compétiteurs réguliers à installer l'app</td>
+          <td>Personnalisation avec <code>{participation_count}</code> (nombre de tournois joués)</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h5>Personnaliser un template</h5>
+    <ol>
+      <li>Aller dans <strong>Paramètres > Espace Joueur > 📧 Templates d'invitation</strong></li>
+      <li>Sélectionner le template à modifier dans le menu déroulant</li>
+      <li>Modifier l'<strong>objet</strong> et le <strong>corps</strong> de l'email</li>
+      <li>Utiliser les <strong>variables disponibles</strong> (voir ci-dessous)</li>
+      <li>Cliquer sur <strong>💾 Enregistrer ce template</strong></li>
+    </ol>
+
+    <h5>Variables disponibles dans les templates</h5>
+    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; margin: 15px 0; font-size: 14px;">
+      <code>{first_name}</code>
+      <code>{last_name}</code>
+      <code>{player_name}</code>
+      <code>{licence}</code>
+      <code>{club}</code>
+      <code>{organisation_name}</code>
+      <code>{organisation_short_name}</code>
+      <code>{player_app_url}</code>
+      <code>{next_season}</code>
+      <code>{participation_count}</code>
+    </div>
+
+    <div class="info-card">
+      <strong>💡 Sélection du template lors de l'envoi :</strong> Quand vous cliquez sur "📧 Inviter tous" depuis <strong>Paramètres > Espace Joueur > 📊 Compétiteurs sans l'app</strong>, le système vous demande quel template utiliser (1, 2 ou 3). Choisissez celui qui correspond le mieux au contexte.
+    </div>
 
     <div class="info-card">
       <strong>Lien avec l'Application Joueur :</strong> Quand un joueur crée son compte sur l'Application Joueur, son statut passe automatiquement de "En attente" à "Inscrit". Le bouton "Synchroniser statuts" force cette vérification.

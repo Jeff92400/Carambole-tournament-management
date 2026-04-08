@@ -1,7 +1,7 @@
 # Guide Utilisateur Complet
 
 > **Note:** Ce document est généré automatiquement depuis le guide HTML.
-> **Dernière mise à jour:** 08/04/2026 - Ajout fonction "Marquer indisponible" + recherche par mots-clés dans le guide HTML (accents insensibles, debouncing 300ms)
+> **Dernière mise à jour:** 08/04/2026 - Ajout de 3 templates d'invitation personnalisables (urgence, bienvenue, rappel) avec variables dynamiques
 
 ---
 
