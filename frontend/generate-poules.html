@@ -2733,7 +2733,7 @@
               (p.indisponible ? '<span class="badge" style="background: #9e9e9e; color: white;">Indisponible</span>' :
               (p.desinscrit ? '<span class="badge" style="background: #6c757d; color: white;">Désinscrit</span><button class="btn-reinscription" data-inscription-id="' + p.inscription_id + '" title="Rétablir inscription" style="margin-left: 5px; padding: 2px 8px; font-size: 11px; background: #28a745; color: white; border: none; border-radius: 3px; cursor: pointer;">Réinscrire</button>' :
                 (p.isInscribed ? '<span class="badge badge-inscrit">Inscrit</span><button class="btn-desinscription" data-inscription-id="' + p.inscription_id + '" title="Désinscrire ce joueur" style="margin-left: 5px; padding: 2px 6px; font-size: 11px; background: #dc3545; color: white; border: none; border-radius: 3px; cursor: pointer;">✕</button>' :
-                  (isFinaleCompetition ? '<span class="badge" style="background: #dc3545; color: white;">Non inscrit</span>' : ''))))}
+                  (isFinaleCompetition ? '<span class="badge" style="background: #dc3545; color: white;">Non inscrit</span><button class="btn-mark-indisponible" data-licence="' + p.licence + '" data-player-name="' + (p.last_name + ' ' + p.first_name).trim() + '" data-email="' + (p.email || '') + '" title="Marquer comme indisponible (renonciation)" style="margin-left: 5px; padding: 2px 8px; font-size: 11px; background: #9e9e9e; color: white; border: none; border-radius: 3px; cursor: pointer;">Indisponible</button>' : ''))))}
           </div>
         `).join('');
       }
@@ -2901,6 +2901,50 @@
           } catch (error) {
             console.error('Error:', error);
             alert('Erreur lors du rétablissement');
+          }
+        });
+      });
+
+      // Add mark indisponible button handlers (for non-inscribed finalists)
+      document.querySelectorAll('.btn-mark-indisponible').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const licence = btn.dataset.licence;
+          const playerName = btn.dataset.playerName;
+          const email = btn.dataset.email;
+
+          if (!confirm(`Confirmer que ${playerName} renonce à sa qualification pour cette finale ?`)) return;
+
+          try {
+            const response = await fetch(`${API_URL}/inscriptions/mark-indisponible`, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                tournoi_id: matchingTournoi.tournoi_id,
+                licence: licence,
+                player_name: playerName,
+                email: email
+              })
+            });
+
+            if (response.ok) {
+              // Reload player list to show updated status
+              await loadStep2Data();
+              // Show success message
+              const msgEl = document.getElementById('successMessage');
+              msgEl.textContent = `✓ ${playerName} a été marqué indisponible (renonciation enregistrée)`;
+              msgEl.style.display = 'block';
+              setTimeout(() => msgEl.style.display = 'none', 3000);
+            } else {
+              const error = await response.json();
+              alert(error.error || 'Erreur lors de l\'enregistrement');
+            }
+          } catch (error) {
+            console.error('Error:', error);
+            alert('Erreur lors de l\'enregistrement de la renonciation');
           }
         });
       });

@@ -1339,6 +1339,103 @@ router.post('/save-last-minute', authenticateToken, async (req, res) => {
   }
 });
 
+// Mark finalist as indisponible (renounce qualification)
+router.post('/mark-indisponible', authenticateToken, async (req, res) => {
+  // No admin role check - any authenticated user can mark finalists as indisponible
+  const orgId = req.user.organizationId || null;
+  const { tournoi_id, licence, player_name, email } = req.body;
+
+  if (!tournoi_id || !licence) {
+    return res.status(400).json({ error: 'tournoi_id and licence are required' });
+  }
+
+  try {
+    // Check if inscription already exists
+    const existing = await new Promise((resolve, reject) => {
+      db.get(
+        `SELECT inscription_id, statut FROM inscriptions
+         WHERE tournoi_id = $1
+         AND REPLACE(UPPER(licence), ' ', '') = REPLACE(UPPER($2), ' ', '')
+         AND ($3::int IS NULL OR organization_id = $3)`,
+        [tournoi_id, licence, orgId],
+        (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        }
+      );
+    });
+
+    if (existing) {
+      // Update existing inscription to indisponible
+      await new Promise((resolve, reject) => {
+        db.run(
+          `UPDATE inscriptions SET statut = 'indisponible' WHERE inscription_id = $1`,
+          [existing.inscription_id],
+          (err) => {
+            if (err) reject(err);
+            else resolve();
+          }
+        );
+      });
+
+      logAdminAction({
+        req,
+        action: ACTION_TYPES.UPDATE_INSCRIPTION || 'update_inscription',
+        details: `Finaliste marqué indisponible: ${player_name || licence}`,
+        targetType: 'inscription',
+        targetId: existing.inscription_id,
+        targetName: player_name || licence
+      });
+
+      return res.json({
+        success: true,
+        message: 'Finaliste marqué indisponible (inscription mise à jour)',
+        inscription_id: existing.inscription_id
+      });
+    }
+
+    // Create new inscription with statut='indisponible'
+    const maxIdResult = await new Promise((resolve, reject) => {
+      db.get('SELECT MAX(inscription_id) as max_id FROM inscriptions WHERE ($1::int IS NULL OR organization_id = $1)', [orgId], (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
+
+    const nextId = (maxIdResult?.max_id || 0) + 1;
+    const cleanLicence = (licence || '').replace(/\s+/g, '').trim();
+
+    await new Promise((resolve, reject) => {
+      db.run(`
+        INSERT INTO inscriptions (inscription_id, tournoi_id, licence, email, timestamp, source, statut, organization_id)
+        VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, 'manual', 'indisponible', $5)
+      `, [nextId, tournoi_id, cleanLicence, email || null, orgId], function(err) {
+        if (err) reject(err);
+        else resolve({ id: nextId, changes: this.changes });
+      });
+    });
+
+    logAdminAction({
+      req,
+      action: ACTION_TYPES.ADD_INSCRIPTION || 'add_inscription',
+      details: `Finaliste marqué indisponible (renonciation): ${player_name || licence}`,
+      targetType: 'inscription',
+      targetId: nextId,
+      targetName: player_name || licence
+    });
+
+    res.json({
+      success: true,
+      message: 'Finaliste marqué indisponible (renonciation enregistrée)',
+      inscription_id: nextId
+    });
+
+  } catch (error) {
+    console.error('Error marking finalist as indisponible:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ==================== Excel Import for Inscriptions ====================
 
 /**
