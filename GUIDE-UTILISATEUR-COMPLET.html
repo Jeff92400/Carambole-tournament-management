@@ -544,10 +544,18 @@
       border: none;
       border-radius: 8px;
       padding: 10px 14px;
-      font-size: 24px;
+      font-size: 15px;
+      font-weight: 500;
       cursor: pointer;
       box-shadow: 0 2px 8px rgba(0,0,0,0.3);
       transition: transform 0.2s;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .mobile-menu-btn .icon {
+      font-size: 20px;
+      line-height: 1;
     }
 
     .mobile-menu-btn:active {
@@ -571,7 +579,7 @@
 
     /* Responsive */
     @media (max-width: 900px) {
-      .mobile-menu-btn { display: block; }
+      .mobile-menu-btn { display: flex; }
 
       .sidebar {
         transform: translateX(-100%);
@@ -593,7 +601,10 @@
 <body>
 
 <!-- Mobile Menu Button -->
-<button class="mobile-menu-btn" id="mobileMenuBtn" aria-label="Ouvrir le menu">☰</button>
+<button class="mobile-menu-btn" id="mobileMenuBtn" aria-label="Ouvrir le menu">
+  <span class="icon">☰</span>
+  <span>Recherche dans le guide</span>
+</button>
 
 <!-- Mobile Overlay (tap to close menu) -->
 <div class="mobile-overlay" id="mobileOverlay"></div>
