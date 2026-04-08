@@ -1269,4 +1269,446 @@ router.get('/clubs', authenticateToken, async (req, res) => {
   }
 });
 
+// ==================== PLAYER APP ADOPTION ANALYTICS ====================
+
+/**
+ * GET /api/player-invitations/competitors-without-app
+ * Returns list of players who competed this season but don't have Player App account
+ */
+router.get('/competitors-without-app', authenticateToken, async (req, res) => {
+  try {
+    const orgId = req.user.organizationId || null;
+
+    // Get current season
+    const seasonStartMonth = await appSettings.getOrgSetting('season_start_month', orgId) || 9;
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const seasonYear = now.getMonth() + 1 >= seasonStartMonth ? currentYear : currentYear - 1;
+    const currentSeason = `${seasonYear}-${seasonYear + 1}`;
+
+    const query = `
+      SELECT DISTINCT
+        p.licence,
+        p.first_name,
+        p.last_name,
+        p.club,
+        p.email,
+        p.phone,
+        COUNT(DISTINCT i.tournoi_id) as competition_count
+      FROM players p
+      INNER JOIN inscriptions i ON REPLACE(i.licence, ' ', '') = REPLACE(p.licence, ' ', '')
+      INNER JOIN tournoi_ext te ON i.tournoi_id = te.id
+      LEFT JOIN player_accounts pa ON REPLACE(pa.licence, ' ', '') = REPLACE(p.licence, ' ', '')
+      WHERE te.season = $1
+        AND i.statut IN ('inscrit', 'forfait')
+        AND UPPER(p.licence) NOT LIKE 'TEST%'
+        AND pa.id IS NULL
+        AND ($2::int IS NULL OR p.organization_id = $2)
+      GROUP BY p.licence, p.first_name, p.last_name, p.club, p.email, p.phone
+      ORDER BY competition_count DESC, p.last_name, p.first_name
+    `;
+
+    const players = await new Promise((resolve, reject) => {
+      db.all(query, [currentSeason, orgId], (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows || []);
+      });
+    });
+
+    res.json({
+      season: currentSeason,
+      count: players.length,
+      players
+    });
+
+  } catch (error) {
+    console.error('Error fetching competitors without app:', error);
+    res.status(500).json({ error: 'Failed to fetch analytics' });
+  }
+});
+
+/**
+ * GET /api/player-invitations/players-without-notifications
+ * Returns list of players who have Player App but haven't activated push notifications
+ */
+router.get('/players-without-notifications', authenticateToken, async (req, res) => {
+  try {
+    const orgId = req.user.organizationId || null;
+
+    const query = `
+      SELECT
+        pa.licence,
+        p.first_name,
+        p.last_name,
+        p.club,
+        p.email,
+        pa.created_at as account_created_at,
+        pa.push_enabled,
+        COUNT(DISTINCT ps.id) as device_count
+      FROM player_accounts pa
+      INNER JOIN players p ON REPLACE(p.licence, ' ', '') = REPLACE(pa.licence, ' ', '')
+      LEFT JOIN push_subscriptions ps ON pa.id = ps.player_account_id
+      WHERE UPPER(pa.licence) NOT LIKE 'TEST%'
+        AND ($1::int IS NULL OR pa.organization_id = $1)
+        AND (pa.push_enabled = false OR ps.id IS NULL)
+      GROUP BY pa.licence, p.first_name, p.last_name, p.club, p.email, pa.created_at, pa.push_enabled
+      ORDER BY pa.created_at DESC
+    `;
+
+    const players = await new Promise((resolve, reject) => {
+      db.all(query, [orgId], (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows || []);
+      });
+    });
+
+    res.json({
+      count: players.length,
+      players
+    });
+
+  } catch (error) {
+    console.error('Error fetching players without notifications:', error);
+    res.status(500).json({ error: 'Failed to fetch analytics' });
+  }
+});
+
+/**
+ * POST /api/player-invitations/bulk-invite
+ * Send invitations to multiple players at once
+ */
+router.post('/bulk-invite', authenticateToken, async (req, res) => {
+  try {
+    const { licences } = req.body;
+    const orgId = req.user.organizationId || null;
+
+    if (!licences || !Array.isArray(licences) || licences.length === 0) {
+      return res.status(400).json({ error: 'Licences array required' });
+    }
+
+    // Get email template
+    const emailSubject = await appSettings.getOrgSetting('player_invitation_subject', orgId) || DEFAULT_EMAIL_SUBJECT;
+    const emailBody = await appSettings.getOrgSetting('player_invitation_body', orgId) || DEFAULT_EMAIL_BODY;
+    const orgShortName = await appSettings.getOrgSetting('organization_short_name', orgId) || 'CDB';
+    const orgFullName = await appSettings.getOrgSetting('organization_name', orgId) || 'Comité Départemental de Billard';
+    const playerAppUrl = await appSettings.getOrgSetting('player_app_url', orgId) || '';
+    const primaryColor = await appSettings.getOrgSetting('primary_color', orgId) || '#1F4788';
+    const senderName = await appSettings.getOrgSetting('organization_short_name', orgId) || 'CDB';
+    const emailFrom = await appSettings.getOrgSetting('email_noreply', orgId) || 'noreply@cdbhs.net';
+    const replyToEmail = await appSettings.getOrgSetting('email_communication', orgId) || emailFrom;
+
+    const resend = new Resend(process.env.RESEND_API_KEY);
+
+    let successCount = 0;
+    let failureCount = 0;
+    const results = [];
+
+    // Get PDF attachment if available
+    let pdfAttachment = null;
+    const pdfData = await new Promise((resolve, reject) => {
+      db.get(
+        'SELECT filename, pdf_data FROM player_invitation_pdfs WHERE organization_id = $1 ORDER BY uploaded_at DESC LIMIT 1',
+        [orgId],
+        (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        }
+      );
+    });
+
+    if (pdfData && pdfData.pdf_data) {
+      pdfAttachment = {
+        filename: pdfData.filename,
+        content: pdfData.pdf_data
+      };
+    }
+
+    for (const licence of licences) {
+      try {
+        // Get player info
+        const player = await new Promise((resolve, reject) => {
+          db.get(
+            `SELECT p.*, pc.id as contact_id
+             FROM players p
+             LEFT JOIN player_contacts pc ON REPLACE(pc.licence, ' ', '') = REPLACE(p.licence, ' ', '')
+             WHERE REPLACE(p.licence, ' ', '') = REPLACE($1, ' ', '')
+               AND ($2::int IS NULL OR p.organization_id = $2)`,
+            [licence, orgId],
+            (err, row) => {
+              if (err) reject(err);
+              else resolve(row);
+            }
+          );
+        });
+
+        if (!player || !player.email) {
+          results.push({ licence, success: false, error: 'No email' });
+          failureCount++;
+          continue;
+        }
+
+        // Replace variables in email
+        const personalizedSubject = emailSubject
+          .replace(/{organisation_short_name}/g, orgShortName);
+
+        const personalizedBody = emailBody
+          .replace(/{first_name}/g, player.first_name || '')
+          .replace(/{last_name}/g, player.last_name || '')
+          .replace(/{player_name}/g, `${player.first_name || ''} ${player.last_name || ''}`.trim())
+          .replace(/{organisation_name}/g, orgFullName)
+          .replace(/{organisation_short_name}/g, orgShortName)
+          .replace(/{player_app_url}/g, playerAppUrl);
+
+        // Build HTML email
+        const htmlBody = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body { font-family: 'Segoe UI', Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
+    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+    .header { background: linear-gradient(135deg, ${primaryColor}, #667eea); color: white; padding: 30px 20px; text-align: center; border-radius: 8px 8px 0 0; }
+    .content { background: white; padding: 30px; border: 1px solid #e0e0e0; border-top: none; }
+    .footer { text-align: center; padding: 20px; color: #999; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1 style="margin: 0; font-size: 24px;">${orgShortName}</h1>
+      <p style="margin: 10px 0 0; opacity: 0.9;">Invitation Espace Joueur</p>
+    </div>
+    <div class="content">
+      ${personalizedBody.replace(/\n/g, '<br>')}
+    </div>
+    <div class="footer">
+      ${orgFullName}<br>
+      Cet email a été envoyé automatiquement, merci de ne pas y répondre.
+    </div>
+  </div>
+</body>
+</html>`;
+
+        await resend.emails.send({
+          from: `${senderName} <${emailFrom}>`,
+          replyTo: replyToEmail,
+          to: [player.email],
+          subject: personalizedSubject,
+          html: htmlBody,
+          ...(pdfAttachment && {
+            attachments: [{
+              filename: pdfAttachment.filename,
+              content: pdfAttachment.content
+            }]
+          })
+        });
+
+        // Record invitation
+        if (player.contact_id) {
+          const existing = await new Promise((resolve, reject) => {
+            db.get(
+              'SELECT id FROM player_invitations WHERE player_contact_id = $1',
+              [player.contact_id],
+              (err, row) => {
+                if (err) reject(err);
+                else resolve(row);
+              }
+            );
+          });
+
+          if (existing) {
+            await new Promise((resolve, reject) => {
+              db.run(
+                `UPDATE player_invitations
+                 SET resend_count = resend_count + 1, last_resent_at = NOW()
+                 WHERE id = $1`,
+                [existing.id],
+                (err) => {
+                  if (err) reject(err);
+                  else resolve();
+                }
+              );
+            });
+          } else {
+            await new Promise((resolve, reject) => {
+              db.run(
+                `INSERT INTO player_invitations
+                 (player_contact_id, licence, email, first_name, last_name, club, sent_by_user_id, sent_by_username, organization_id)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+                [player.contact_id, player.licence, player.email, player.first_name, player.last_name, player.club, req.user.userId, req.user.username, orgId],
+                (err) => {
+                  if (err) reject(err);
+                  else resolve();
+                }
+              );
+            });
+          }
+        }
+
+        results.push({ licence, success: true });
+        successCount++;
+
+        // Small delay between emails
+        await delay(100);
+
+      } catch (error) {
+        console.error(`Failed to send to ${licence}:`, error);
+        results.push({ licence, success: false, error: error.message });
+        failureCount++;
+      }
+    }
+
+    res.json({
+      success: true,
+      total: licences.length,
+      successCount,
+      failureCount,
+      results
+    });
+
+  } catch (error) {
+    console.error('Error in bulk invite:', error);
+    res.status(500).json({ error: 'Failed to send bulk invitations' });
+  }
+});
+
+/**
+ * POST /api/player-invitations/send-notification-reminder
+ * Send reminder to players to enable push notifications
+ */
+router.post('/send-notification-reminder', authenticateToken, async (req, res) => {
+  try {
+    const { licences } = req.body;
+    const orgId = req.user.organizationId || null;
+
+    if (!licences || !Array.isArray(licences) || licences.length === 0) {
+      return res.status(400).json({ error: 'Licences array required' });
+    }
+
+    const orgShortName = await appSettings.getOrgSetting('organization_short_name', orgId) || 'CDB';
+    const orgFullName = await appSettings.getOrgSetting('organization_name', orgId) || 'Comité Départemental de Billard';
+    const primaryColor = await appSettings.getOrgSetting('primary_color', orgId) || '#1F4788';
+    const senderName = await appSettings.getOrgSetting('organization_short_name', orgId) || 'CDB';
+    const emailFrom = await appSettings.getOrgSetting('email_communication', orgId) || 'communication@cdbhs.net';
+    const replyToEmail = emailFrom;
+
+    const resend = new Resend(process.env.RESEND_API_KEY);
+
+    let successCount = 0;
+    let failureCount = 0;
+    const results = [];
+
+    for (const licence of licences) {
+      try {
+        // Get player info
+        const player = await new Promise((resolve, reject) => {
+          db.get(
+            `SELECT p.first_name, p.last_name, p.email
+             FROM players p
+             WHERE REPLACE(p.licence, ' ', '') = REPLACE($1, ' ', '')
+               AND ($2::int IS NULL OR p.organization_id = $2)`,
+            [licence, orgId],
+            (err, row) => {
+              if (err) reject(err);
+              else resolve(row);
+            }
+          );
+        });
+
+        if (!player || !player.email) {
+          results.push({ licence, success: false, error: 'No email' });
+          failureCount++;
+          continue;
+        }
+
+        const htmlBody = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body { font-family: 'Segoe UI', Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
+    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+    .header { background: linear-gradient(135deg, ${primaryColor}, #667eea); color: white; padding: 30px 20px; text-align: center; border-radius: 8px 8px 0 0; }
+    .content { background: white; padding: 30px; border: 1px solid #e0e0e0; border-top: none; }
+    .tip-box { background: #e3f2fd; border-left: 4px solid ${primaryColor}; padding: 15px; margin: 20px 0; border-radius: 4px; }
+    .footer { text-align: center; padding: 20px; color: #999; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1 style="margin: 0; font-size: 24px;">🔔 ${orgShortName}</h1>
+      <p style="margin: 10px 0 0; opacity: 0.9;">Activez les notifications push</p>
+    </div>
+    <div class="content">
+      <p>Bonjour ${player.first_name},</p>
+
+      <p>Nous avons remarqué que vous avez installé l'Espace Joueur mais que les notifications push ne sont pas encore activées sur votre appareil.</p>
+
+      <p><strong>Pourquoi activer les notifications ?</strong></p>
+      <ul>
+        <li>📨 Recevoir vos convocations en temps réel</li>
+        <li>🏆 Être alerté de la publication des résultats</li>
+        <li>📅 Ne plus manquer les rappels d'inscription</li>
+        <li>📢 Rester informé des annonces importantes</li>
+      </ul>
+
+      <div class="tip-box">
+        <strong>Comment activer les notifications ?</strong><br><br>
+        1. Ouvrez l'Espace Joueur sur votre téléphone<br>
+        2. Allez dans <strong>Profil & FAQ</strong> (icône 👤 en bas)<br>
+        3. Activez <strong>"Recevoir les notifications push"</strong><br>
+        4. Acceptez la demande d'autorisation de votre navigateur
+      </div>
+
+      <p>Si vous rencontrez la moindre difficulté, n'hésitez pas à nous contacter via la fonction Contact de l'application.</p>
+
+      <p>Sportivement,<br>
+      Le comité sportif du ${orgFullName}</p>
+    </div>
+    <div class="footer">
+      ${orgFullName}<br>
+      Cet email a été envoyé automatiquement, merci de ne pas y répondre.
+    </div>
+  </div>
+</body>
+</html>`;
+
+        await resend.emails.send({
+          from: `${senderName} <${emailFrom}>`,
+          replyTo: replyToEmail,
+          to: [player.email],
+          subject: `${orgShortName} - Activez les notifications push pour ne rien manquer`,
+          html: htmlBody
+        });
+
+        results.push({ licence, success: true });
+        successCount++;
+
+        // Small delay between emails
+        await delay(100);
+
+      } catch (error) {
+        console.error(`Failed to send reminder to ${licence}:`, error);
+        results.push({ licence, success: false, error: error.message });
+        failureCount++;
+      }
+    }
+
+    res.json({
+      success: true,
+      total: licences.length,
+      successCount,
+      failureCount,
+      results
+    });
+
+  } catch (error) {
+    console.error('Error in send notification reminder:', error);
+    res.status(500).json({ error: 'Failed to send reminders' });
+  }
+});
+
 module.exports = router;

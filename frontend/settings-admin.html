@@ -340,6 +340,106 @@
       </div>
     </div>
 
+    <!-- Player App Adoption Analytics - Competitors Without App -->
+    <div class="accordion-panel admin-only" id="competitorsWithoutAppSection" data-settings-tab="espace-joueur">
+      <div class="accordion-header" onclick="toggleAccordion('competitorsWithoutAppSection')">
+        <div class="accordion-title"><span class="accordion-icon">&#9654;</span><strong>📊 Compétiteurs sans l'app</strong></div>
+        <span class="accordion-summary" id="summary-competitorsWithoutApp">Chargement...</span>
+      </div>
+      <div class="accordion-body">
+        <p style="margin-bottom: 20px; color: #666;">
+          Joueurs ayant participé à au moins un tournoi cette saison mais n'ayant pas encore créé de compte Espace Joueur.
+        </p>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
+          <div style="color: #666;">
+            <span id="competitorsWithoutAppCount">0</span> joueur(s) sans l'app
+          </div>
+          <button id="inviteAllBtn" onclick="inviteAllCompetitors()" class="btn" style="background: #28a745; padding: 10px 20px; display: none;">
+            📧 Inviter tous
+          </button>
+        </div>
+
+        <div id="competitorsWithoutAppTable" style="overflow-x: auto;">
+          <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+            <thead>
+              <tr style="background: #1F4788; color: white;">
+                <th style="padding: 12px; text-align: left;">Licence</th>
+                <th style="padding: 12px; text-align: left;">Nom</th>
+                <th style="padding: 12px; text-align: left;">Club</th>
+                <th style="padding: 12px; text-align: left;">Email</th>
+                <th style="padding: 12px; text-align: left;">Téléphone</th>
+                <th style="padding: 12px; text-align: center;">Tournois</th>
+              </tr>
+            </thead>
+            <tbody id="competitorsWithoutAppBody">
+              <tr><td colspan="6" style="text-align: center; padding: 20px; color: #666;">Chargement...</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div id="inviteAllMessage" style="display: none; margin-top: 15px; padding: 10px; border-radius: 4px;"></div>
+
+        <div style="margin-top: 20px; padding: 15px; background: #e7f3ff; border-left: 4px solid #1F4788; border-radius: 4px;">
+          <strong>Information :</strong>
+          <p style="margin: 10px 0 0 0; color: #666;">
+            L'invitation enverra un email personnalisé à chaque joueur avec un lien pour créer leur compte Espace Joueur.
+            L'email utilise le modèle configuré dans Com joueurs → Invitations.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Player App Adoption Analytics - Players Without Notifications -->
+    <div class="accordion-panel admin-only" id="playersWithoutNotificationsSection" data-settings-tab="espace-joueur">
+      <div class="accordion-header" onclick="toggleAccordion('playersWithoutNotificationsSection')">
+        <div class="accordion-title"><span class="accordion-icon">&#9654;</span><strong>📊 App installée - Notifications désactivées</strong></div>
+        <span class="accordion-summary" id="summary-playersWithoutNotifications">Chargement...</span>
+      </div>
+      <div class="accordion-body">
+        <p style="margin-bottom: 20px; color: #666;">
+          Joueurs ayant l'application Espace Joueur mais n'ayant pas activé les notifications push.
+        </p>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
+          <div style="color: #666;">
+            <span id="playersWithoutNotificationsCount">0</span> joueur(s) sans notifications
+          </div>
+          <button id="sendReminderAllBtn" onclick="sendReminderToAll()" class="btn" style="background: #ffc107; padding: 10px 20px; display: none;">
+            🔔 Envoyer un rappel à tous
+          </button>
+        </div>
+
+        <div id="playersWithoutNotificationsTable" style="overflow-x: auto;">
+          <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+            <thead>
+              <tr style="background: #1F4788; color: white;">
+                <th style="padding: 12px; text-align: left;">Licence</th>
+                <th style="padding: 12px; text-align: left;">Nom</th>
+                <th style="padding: 12px; text-align: left;">Club</th>
+                <th style="padding: 12px; text-align: left;">Email</th>
+                <th style="padding: 12px; text-align: center;">Compte créé le</th>
+                <th style="padding: 12px; text-align: center;">Appareils</th>
+              </tr>
+            </thead>
+            <tbody id="playersWithoutNotificationsBody">
+              <tr><td colspan="6" style="text-align: center; padding: 20px; color: #666;">Chargement...</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div id="sendReminderMessage" style="display: none; margin-top: 15px; padding: 10px; border-radius: 4px;"></div>
+
+        <div style="margin-top: 20px; padding: 15px; background: #e7f3ff; border-left: 4px solid #1F4788; border-radius: 4px;">
+          <strong>Information :</strong>
+          <p style="margin: 10px 0 0 0; color: #666;">
+            Le rappel enverra un email expliquant les avantages des notifications push et comment les activer.
+            Les joueurs recevront des instructions détaillées pour activer les notifications depuis l'Espace Joueur.
+          </p>
+        </div>
+      </div>
+    </div>
+
     <!-- Game Parameters Section - Admin Only -->
     <div class="accordion-panel admin-only" id="gameParametersSection" data-settings-tab="competitions">
       <div class="accordion-header" onclick="toggleAccordion('gameParametersSection')">
@@ -2947,6 +3047,209 @@
     loadReglementUrl();
 
     // ============= END PLAYER APP SETTINGS =============
+
+    // ============= PLAYER APP ADOPTION ANALYTICS =============
+
+    // Load competitors without app
+    async function loadCompetitorsWithoutApp() {
+      try {
+        const response = await authFetch(`${API_URL}/player-invitations/competitors-without-app`);
+        if (!response.ok) throw new Error('Erreur lors du chargement');
+
+        const data = await response.json();
+        const tbody = document.getElementById('competitorsWithoutAppBody');
+        const countSpan = document.getElementById('competitorsWithoutAppCount');
+        const inviteBtn = document.getElementById('inviteAllBtn');
+        const summaryEl = document.getElementById('summary-competitorsWithoutApp');
+
+        countSpan.textContent = data.length;
+
+        if (data.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 20px; color: #666;">Aucun joueur trouvé</td></tr>';
+          inviteBtn.style.display = 'none';
+          if (summaryEl) summaryEl.textContent = 'Aucun compétiteur sans l\'app';
+        } else {
+          tbody.innerHTML = data.map(p => `
+            <tr>
+              <td style="padding: 12px;">${p.licence || '-'}</td>
+              <td style="padding: 12px;">${p.first_name} ${p.last_name}</td>
+              <td style="padding: 12px;">${p.club || '-'}</td>
+              <td style="padding: 12px;">${p.email || '-'}</td>
+              <td style="padding: 12px;">${p.phone || '-'}</td>
+              <td style="padding: 12px; text-align: center;">${p.competition_count}</td>
+            </tr>
+          `).join('');
+          inviteBtn.style.display = 'block';
+          if (summaryEl) summaryEl.textContent = `${data.length} joueur(s) sans l'app`;
+        }
+      } catch (error) {
+        console.error('Error loading competitors without app:', error);
+        const tbody = document.getElementById('competitorsWithoutAppBody');
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 20px; color: #dc3545;">Erreur de chargement</td></tr>';
+      }
+    }
+
+    // Load players without notifications
+    async function loadPlayersWithoutNotifications() {
+      try {
+        const response = await authFetch(`${API_URL}/player-invitations/players-without-notifications`);
+        if (!response.ok) throw new Error('Erreur lors du chargement');
+
+        const data = await response.json();
+        const tbody = document.getElementById('playersWithoutNotificationsBody');
+        const countSpan = document.getElementById('playersWithoutNotificationsCount');
+        const reminderBtn = document.getElementById('sendReminderAllBtn');
+        const summaryEl = document.getElementById('summary-playersWithoutNotifications');
+
+        countSpan.textContent = data.length;
+
+        if (data.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 20px; color: #666;">Tous les joueurs ont activé les notifications</td></tr>';
+          reminderBtn.style.display = 'none';
+          if (summaryEl) summaryEl.textContent = 'Tous ont les notifications';
+        } else {
+          tbody.innerHTML = data.map(p => {
+            const accountDate = p.account_created_at ? new Date(p.account_created_at).toLocaleDateString('fr-FR') : '-';
+            return `
+              <tr>
+                <td style="padding: 12px;">${p.licence || '-'}</td>
+                <td style="padding: 12px;">${p.first_name} ${p.last_name}</td>
+                <td style="padding: 12px;">${p.club || '-'}</td>
+                <td style="padding: 12px;">${p.email || '-'}</td>
+                <td style="padding: 12px; text-align: center;">${accountDate}</td>
+                <td style="padding: 12px; text-align: center;">${p.device_count || 0}</td>
+              </tr>
+            `;
+          }).join('');
+          reminderBtn.style.display = 'block';
+          if (summaryEl) summaryEl.textContent = `${data.length} joueur(s) sans notifications`;
+        }
+      } catch (error) {
+        console.error('Error loading players without notifications:', error);
+        const tbody = document.getElementById('playersWithoutNotificationsBody');
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 20px; color: #dc3545;">Erreur de chargement</td></tr>';
+      }
+    }
+
+    // Invite all competitors
+    async function inviteAllCompetitors() {
+      const btn = document.getElementById('inviteAllBtn');
+      const msgDiv = document.getElementById('inviteAllMessage');
+
+      if (!confirm('Voulez-vous envoyer une invitation à tous les joueurs listés ?')) {
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = 'Envoi en cours...';
+
+      try {
+        const response = await authFetch(`${API_URL}/player-invitations/competitors-without-app`);
+        const data = await response.json();
+        const licences = data.map(p => p.licence).filter(l => l);
+
+        if (licences.length === 0) {
+          throw new Error('Aucune licence à inviter');
+        }
+
+        const inviteResponse = await authFetch(`${API_URL}/player-invitations/bulk-invite`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ licences })
+        });
+
+        if (!inviteResponse.ok) {
+          const errorData = await inviteResponse.json();
+          throw new Error(errorData.error || 'Erreur lors de l\'envoi');
+        }
+
+        const result = await inviteResponse.json();
+
+        msgDiv.textContent = `✅ ${result.sent} invitation(s) envoyée(s) avec succès. ${result.failed > 0 ? result.failed + ' échec(s).' : ''}`;
+        msgDiv.style.background = '#d4edda';
+        msgDiv.style.color = '#155724';
+        msgDiv.style.display = 'block';
+
+        // Reload the list after sending
+        setTimeout(() => {
+          loadCompetitorsWithoutApp();
+          msgDiv.style.display = 'none';
+        }, 3000);
+
+      } catch (error) {
+        console.error('Error inviting all competitors:', error);
+        msgDiv.textContent = '❌ ' + error.message;
+        msgDiv.style.background = '#f8d7da';
+        msgDiv.style.color = '#721c24';
+        msgDiv.style.display = 'block';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '📧 Inviter tous';
+      }
+    }
+
+    // Send reminder to all players without notifications
+    async function sendReminderToAll() {
+      const btn = document.getElementById('sendReminderAllBtn');
+      const msgDiv = document.getElementById('sendReminderMessage');
+
+      if (!confirm('Voulez-vous envoyer un rappel à tous les joueurs listés ?')) {
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = 'Envoi en cours...';
+
+      try {
+        const response = await authFetch(`${API_URL}/player-invitations/players-without-notifications`);
+        const data = await response.json();
+        const licences = data.map(p => p.licence).filter(l => l);
+
+        if (licences.length === 0) {
+          throw new Error('Aucune licence à contacter');
+        }
+
+        const reminderResponse = await authFetch(`${API_URL}/player-invitations/send-notification-reminder`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ licences })
+        });
+
+        if (!reminderResponse.ok) {
+          const errorData = await reminderResponse.json();
+          throw new Error(errorData.error || 'Erreur lors de l\'envoi');
+        }
+
+        const result = await reminderResponse.json();
+
+        msgDiv.textContent = `✅ ${result.sent} rappel(s) envoyé(s) avec succès. ${result.failed > 0 ? result.failed + ' échec(s).' : ''}`;
+        msgDiv.style.background = '#d4edda';
+        msgDiv.style.color = '#155724';
+        msgDiv.style.display = 'block';
+
+        // Reload the list after sending
+        setTimeout(() => {
+          loadPlayersWithoutNotifications();
+          msgDiv.style.display = 'none';
+        }, 3000);
+
+      } catch (error) {
+        console.error('Error sending reminders:', error);
+        msgDiv.textContent = '❌ ' + error.message;
+        msgDiv.style.background = '#f8d7da';
+        msgDiv.style.color = '#721c24';
+        msgDiv.style.display = 'block';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '🔔 Envoyer un rappel à tous';
+      }
+    }
+
+    // Load analytics on page load
+    loadCompetitorsWithoutApp();
+    loadPlayersWithoutNotifications();
+
+    // ============= END PLAYER APP ADOPTION ANALYTICS =============
 
     // ============= CLUB ALIASES MANAGEMENT =============
 
