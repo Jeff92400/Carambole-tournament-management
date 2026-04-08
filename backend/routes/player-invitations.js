@@ -1355,8 +1355,8 @@ router.get('/players-without-notifications', authenticateToken, async (req, res)
       LEFT JOIN push_subscriptions ps ON pa.id = ps.player_account_id
       WHERE UPPER(pa.licence) NOT LIKE 'TEST%'
         AND ($1::int IS NULL OR pa.organization_id = $1)
-        AND (pa.push_enabled = false OR ps.id IS NULL)
       GROUP BY pa.licence, p.first_name, p.last_name, p.club, p.email, pa.created_at, pa.push_enabled
+      HAVING COUNT(DISTINCT ps.id) = 0
       ORDER BY pa.created_at DESC
     `;
 
