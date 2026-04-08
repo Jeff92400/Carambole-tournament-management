@@ -1286,6 +1286,10 @@ router.get('/competitors-without-app', authenticateToken, async (req, res) => {
     const seasonYear = now.getMonth() + 1 >= seasonStartMonth ? currentYear : currentYear - 1;
     const currentSeason = `${seasonYear}-${seasonYear + 1}`;
 
+    // Calculate season date range
+    const seasonStartDate = `${seasonYear}-${String(seasonStartMonth).padStart(2, '0')}-01`;
+    const seasonEndDate = `${seasonYear + 1}-${String(seasonStartMonth).padStart(2, '0')}-01`;
+
     const query = `
       SELECT DISTINCT
         p.licence,
@@ -1299,17 +1303,18 @@ router.get('/competitors-without-app', authenticateToken, async (req, res) => {
       INNER JOIN inscriptions i ON REPLACE(i.licence, ' ', '') = REPLACE(p.licence, ' ', '')
       INNER JOIN tournoi_ext te ON i.tournoi_id = te.tournoi_id
       LEFT JOIN player_accounts pa ON REPLACE(pa.licence, ' ', '') = REPLACE(p.licence, ' ', '')
-      WHERE te.season = $1
+      WHERE te.debut >= $1::date
+        AND te.debut < $2::date
         AND i.statut IN ('inscrit', 'forfait')
         AND UPPER(p.licence) NOT LIKE 'TEST%'
         AND pa.id IS NULL
-        AND ($2::int IS NULL OR p.organization_id = $2)
+        AND ($3::int IS NULL OR p.organization_id = $3)
       GROUP BY p.licence, p.first_name, p.last_name, p.club, p.email, p.telephone
       ORDER BY competition_count DESC, p.last_name, p.first_name
     `;
 
     const players = await new Promise((resolve, reject) => {
-      db.all(query, [currentSeason, orgId], (err, rows) => {
+      db.all(query, [seasonStartDate, seasonEndDate, orgId], (err, rows) => {
         if (err) reject(err);
         else resolve(rows || []);
       });
