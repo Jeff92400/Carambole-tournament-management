@@ -1250,10 +1250,8 @@ router.post('/create', authenticateToken, async (req, res) => {
 
 // Save last-minute players as inscriptions (bulk create)
 router.post('/save-last-minute', authenticateToken, async (req, res) => {
-  if (req.user?.role !== 'admin') {
-    return res.status(403).json({ error: 'Admin access required' });
-  }
-
+  // No admin role check - consistent with /send-convocations and /save-poules
+  // Any authenticated user who can generate poules should be able to add last-minute players
   const orgId = req.user.organizationId || null;
   const { tournoi_id, players } = req.body;
 
