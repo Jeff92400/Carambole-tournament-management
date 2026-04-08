@@ -1293,7 +1293,7 @@ router.get('/competitors-without-app', authenticateToken, async (req, res) => {
         p.last_name,
         p.club,
         p.email,
-        p.phone,
+        p.telephone as phone,
         COUNT(DISTINCT i.tournoi_id) as competition_count
       FROM players p
       INNER JOIN inscriptions i ON REPLACE(i.licence, ' ', '') = REPLACE(p.licence, ' ', '')
@@ -1304,7 +1304,7 @@ router.get('/competitors-without-app', authenticateToken, async (req, res) => {
         AND UPPER(p.licence) NOT LIKE 'TEST%'
         AND pa.id IS NULL
         AND ($2::int IS NULL OR p.organization_id = $2)
-      GROUP BY p.licence, p.first_name, p.last_name, p.club, p.email, p.phone
+      GROUP BY p.licence, p.first_name, p.last_name, p.club, p.email, p.telephone
       ORDER BY competition_count DESC, p.last_name, p.first_name
     `;
 
