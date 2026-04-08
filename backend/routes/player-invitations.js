@@ -1357,7 +1357,7 @@ router.get('/players-without-notifications', authenticateToken, async (req, res)
       WHERE UPPER(pa.licence) NOT LIKE 'TEST%'
         AND ($1::int IS NULL OR pa.organization_id = $1)
       GROUP BY pa.licence, p.first_name, p.last_name, p.club, p.email, pa.created_at, pa.push_enabled
-      HAVING NOT (COUNT(ps.id) > 0 AND pa.push_enabled IS DISTINCT FROM false)
+      HAVING COUNT(ps.id) = 0 OR COALESCE(pa.push_enabled, true) = false
       ORDER BY pa.created_at DESC
     `;
 
@@ -1366,6 +1366,11 @@ router.get('/players-without-notifications', authenticateToken, async (req, res)
         if (err) reject(err);
         else resolve(rows || []);
       });
+    });
+
+    console.log('[Players without notifications] Found:', players.length);
+    players.forEach(p => {
+      console.log(`  - ${p.first_name} ${p.last_name}: device_count=${p.device_count}, push_enabled=${p.push_enabled}, has_subscription=${p.has_push_subscription}`);
     });
 
     res.json({
