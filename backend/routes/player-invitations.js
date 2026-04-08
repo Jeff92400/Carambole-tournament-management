@@ -1356,7 +1356,7 @@ router.get('/players-without-notifications', authenticateToken, async (req, res)
       WHERE UPPER(pa.licence) NOT LIKE 'TEST%'
         AND ($1::int IS NULL OR pa.organization_id = $1)
       GROUP BY pa.licence, p.first_name, p.last_name, p.club, p.email, pa.created_at, pa.push_enabled
-      HAVING COUNT(DISTINCT ps.id) = 0
+      HAVING pa.push_enabled = false OR COUNT(DISTINCT ps.id) = 0
       ORDER BY pa.created_at DESC
     `;
 
@@ -1668,9 +1668,9 @@ router.post('/send-notification-reminder', authenticateToken, async (req, res) =
         4. Acceptez la demande d'autorisation de votre navigateur
       </div>
 
-      <p>Si vous rencontrez la moindre difficulté, n'hésitez pas à nous contacter via la fonction Contact de l'application.</p>
+      <p>Si vous rencontrez des difficultés, n'hésitez pas à contacter l'équipe ${orgShortName}.</p>
 
-      <p>Sportivement,<br>
+      <p>Bien cordialement,<br>
       Le comité sportif du ${orgFullName}</p>
     </div>
     <div class="footer">
