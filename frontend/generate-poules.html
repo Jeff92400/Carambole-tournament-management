@@ -3103,6 +3103,18 @@
             });
 
             console.log(`✅ Added ${lastMinuteInscriptions.length} last-minute players to selection list`);
+
+            // Update the finale inscription counter
+            if (window.selectedUpcomingTournament && result.savedPlayers.length > 0) {
+              window.selectedUpcomingTournament.inscribed_finalist_count =
+                (window.selectedUpcomingTournament.inscribed_finalist_count || 0) + result.savedPlayers.length;
+
+              // Update the displayed counter
+              const fc = window.selectedUpcomingTournament.finalist_count || 0;
+              const ifc = window.selectedUpcomingTournament.inscribed_finalist_count;
+              document.getElementById('tournamentInfoInscrits').textContent = `${ifc}/${fc} inscrits`;
+              console.log(`✅ Updated finale counter: ${ifc}/${fc} inscrits`);
+            }
           }
         } catch (error) {
           console.error('Error saving last-minute players:', error);
