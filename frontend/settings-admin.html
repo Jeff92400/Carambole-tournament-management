@@ -3056,7 +3056,8 @@
         const response = await authFetch(`${API_URL}/player-invitations/competitors-without-app`);
         if (!response.ok) throw new Error('Erreur lors du chargement');
 
-        const data = await response.json();
+        const result = await response.json();
+        const data = result.players || [];
         const tbody = document.getElementById('competitorsWithoutAppBody');
         const countSpan = document.getElementById('competitorsWithoutAppCount');
         const inviteBtn = document.getElementById('inviteAllBtn');
@@ -3095,7 +3096,8 @@
         const response = await authFetch(`${API_URL}/player-invitations/players-without-notifications`);
         if (!response.ok) throw new Error('Erreur lors du chargement');
 
-        const data = await response.json();
+        const result = await response.json();
+        const data = result.players || [];
         const tbody = document.getElementById('playersWithoutNotificationsBody');
         const countSpan = document.getElementById('playersWithoutNotificationsCount');
         const reminderBtn = document.getElementById('sendReminderAllBtn');
@@ -3145,7 +3147,8 @@
 
       try {
         const response = await authFetch(`${API_URL}/player-invitations/competitors-without-app`);
-        const data = await response.json();
+        const result = await response.json();
+        const data = result.players || [];
         const licences = data.map(p => p.licence).filter(l => l);
 
         if (licences.length === 0) {
@@ -3163,9 +3166,9 @@
           throw new Error(errorData.error || 'Erreur lors de l\'envoi');
         }
 
-        const result = await inviteResponse.json();
+        const inviteResult = await inviteResponse.json();
 
-        msgDiv.textContent = `✅ ${result.sent} invitation(s) envoyée(s) avec succès. ${result.failed > 0 ? result.failed + ' échec(s).' : ''}`;
+        msgDiv.textContent = `✅ ${inviteResult.sent} invitation(s) envoyée(s) avec succès. ${inviteResult.failed > 0 ? inviteResult.failed + ' échec(s).' : ''}`;
         msgDiv.style.background = '#d4edda';
         msgDiv.style.color = '#155724';
         msgDiv.style.display = 'block';
@@ -3202,7 +3205,8 @@
 
       try {
         const response = await authFetch(`${API_URL}/player-invitations/players-without-notifications`);
-        const data = await response.json();
+        const result = await response.json();
+        const data = result.players || [];
         const licences = data.map(p => p.licence).filter(l => l);
 
         if (licences.length === 0) {
@@ -3220,9 +3224,9 @@
           throw new Error(errorData.error || 'Erreur lors de l\'envoi');
         }
 
-        const result = await reminderResponse.json();
+        const reminderResult = await reminderResponse.json();
 
-        msgDiv.textContent = `✅ ${result.sent} rappel(s) envoyé(s) avec succès. ${result.failed > 0 ? result.failed + ' échec(s).' : ''}`;
+        msgDiv.textContent = `✅ ${reminderResult.sent} rappel(s) envoyé(s) avec succès. ${reminderResult.failed > 0 ? reminderResult.failed + ' échec(s).' : ''}`;
         msgDiv.style.background = '#d4edda';
         msgDiv.style.color = '#155724';
         msgDiv.style.display = 'block';
