@@ -532,14 +532,71 @@
       h2:first-of-type { page-break-before: auto; }
     }
 
+    /* Mobile Menu Button */
+    .mobile-menu-btn {
+      display: none;
+      position: fixed;
+      top: 15px;
+      left: 15px;
+      z-index: 1001;
+      background: var(--primary);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 24px;
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+      transition: transform 0.2s;
+    }
+
+    .mobile-menu-btn:active {
+      transform: scale(0.95);
+    }
+
+    .mobile-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 999;
+    }
+
+    .mobile-overlay.active {
+      display: block;
+    }
+
     /* Responsive */
     @media (max-width: 900px) {
-      .sidebar { display: none; }
-      .main { margin-left: 0; padding: 20px; }
+      .mobile-menu-btn { display: block; }
+
+      .sidebar {
+        transform: translateX(-100%);
+        transition: transform 0.3s ease;
+        box-shadow: 2px 0 10px rgba(0,0,0,0.3);
+      }
+
+      .sidebar.mobile-open {
+        transform: translateX(0);
+      }
+
+      .main {
+        margin-left: 0;
+        padding: 70px 20px 20px;
+      }
     }
   </style>
 </head>
 <body>
+
+<!-- Mobile Menu Button -->
+<button class="mobile-menu-btn" id="mobileMenuBtn" aria-label="Ouvrir le menu">☰</button>
+
+<!-- Mobile Overlay (tap to close menu) -->
+<div class="mobile-overlay" id="mobileOverlay"></div>
 
 <!-- Sidebar Navigation -->
 <aside class="sidebar">
@@ -4036,6 +4093,35 @@
     if (e.key === 'Escape') {
       clearSearch();
     }
+  });
+
+  // ============ MOBILE MENU FUNCTIONALITY ============
+
+  const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+  const mobileOverlay = document.getElementById('mobileOverlay');
+  const sidebar = document.querySelector('.sidebar');
+
+  // Toggle mobile menu
+  function toggleMobileMenu() {
+    sidebar.classList.toggle('mobile-open');
+    mobileOverlay.classList.toggle('active');
+  }
+
+  // Close mobile menu
+  function closeMobileMenu() {
+    sidebar.classList.remove('mobile-open');
+    mobileOverlay.classList.remove('active');
+  }
+
+  // Event listeners
+  mobileMenuBtn.addEventListener('click', toggleMobileMenu);
+  mobileOverlay.addEventListener('click', closeMobileMenu);
+
+  // Close menu when clicking a navigation link
+  document.querySelectorAll('.sidebar nav a, .search-result-item').forEach(link => {
+    link.addEventListener('click', () => {
+      setTimeout(closeMobileMenu, 300); // Delay to allow smooth scroll
+    });
   });
 </script>
 
