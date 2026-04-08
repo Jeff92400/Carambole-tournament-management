@@ -1297,7 +1297,7 @@ router.get('/competitors-without-app', authenticateToken, async (req, res) => {
         COUNT(DISTINCT i.tournoi_id) as competition_count
       FROM players p
       INNER JOIN inscriptions i ON REPLACE(i.licence, ' ', '') = REPLACE(p.licence, ' ', '')
-      INNER JOIN tournoi_ext te ON i.tournoi_id = te.id
+      INNER JOIN tournoi_ext te ON i.tournoi_id = te.tournoi_id
       LEFT JOIN player_accounts pa ON REPLACE(pa.licence, ' ', '') = REPLACE(p.licence, ' ', '')
       WHERE te.season = $1
         AND i.statut IN ('inscrit', 'forfait')
