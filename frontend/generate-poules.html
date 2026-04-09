@@ -470,6 +470,10 @@
       <h3>Étape 2: Sélectionner les Joueurs</h3>
 
       <div class="summary-box">
+        <div class="summary-row" style="border-bottom: 1px solid #ddd; padding-bottom: 10px; margin-bottom: 10px;">
+          <span>Compétition:</span>
+          <strong id="competitionLabel" style="color: var(--color-primary);">-</strong>
+        </div>
         <div class="summary-row">
           <span>Joueurs sélectionnés:</span>
           <strong id="selectedCount">0</strong>
@@ -2676,6 +2680,14 @@
         cameFromForfait = false;
 
         renderPlayerLists();
+
+        // Update competition label in step 2
+        const competitionLabel = document.getElementById('competitionLabel');
+        if (competitionLabel && currentCategory) {
+          const tournamentLabel = isFinaleCompetition ? 'Finale départementale' : `T${currentTournament}`;
+          competitionLabel.textContent = `${currentCategory.game_type} - ${currentCategory.name} - ${tournamentLabel}`;
+        }
+
         goToStep(2);
 
       } catch (error) {
