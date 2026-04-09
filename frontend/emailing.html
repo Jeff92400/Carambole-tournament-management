@@ -1102,6 +1102,20 @@
                   <tbody id="relanceParticipantsBody"></tbody>
                 </table>
               </div>
+
+              <!-- Last Minute Players (Finale only) -->
+              <div id="relanceLastMinuteSection" style="display: none; margin-top: 20px;">
+                <h4>Joueurs de remplacement (du classement)</h4>
+                <div style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; padding: 15px;">
+                  <p style="color: #666; font-size: 0.9em; margin-bottom: 10px;">Ajouter un joueur non qualifié du classement final pour remplacer un finaliste indisponible</p>
+                  <div style="display: flex; gap: 10px; align-items: center;">
+                    <input type="text" id="relanceLastMinuteSearch" placeholder="Rechercher par nom ou classement..."
+                           style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                    <button class="btn" id="relanceAddLastMinuteBtn" style="background: #dc3545;" disabled>Ajouter</button>
+                  </div>
+                  <div id="relanceLastMinuteResults" style="display: none; max-height: 200px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px; margin-top: 10px; background: white;"></div>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -5219,6 +5233,15 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
         document.getElementById('sendRelanceBtn').disabled = selectedRelanceIds.size === 0;
         document.getElementById('scheduleRelanceBtn').disabled = false;
 
+        // Show last minute section for finales
+        const lastMinuteSection = document.getElementById('relanceLastMinuteSection');
+        if (relanceType === 'finale' && relanceData.nonQualifiedRanked && relanceData.nonQualifiedRanked.length > 0) {
+          window.relanceNonQualified = relanceData.nonQualifiedRanked;
+          lastMinuteSection.style.display = 'block';
+        } else {
+          lastMinuteSection.style.display = 'none';
+        }
+
       } catch (error) {
         console.error('Error loading relance participants:', error);
         showError('Erreur: ' + error.message);
@@ -5504,6 +5527,161 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
         selectedRelanceIds.delete(idx);
         cb.closest('tr').classList.remove('selected');
       });
+      updateRelanceSelectedCount();
+    });
+
+    // Last minute player search for finales
+    let selectedLastMinutePlayer = null;
+    const relanceLastMinuteSearch = document.getElementById('relanceLastMinuteSearch');
+    const relanceLastMinuteResults = document.getElementById('relanceLastMinuteResults');
+    const relanceAddLastMinuteBtn = document.getElementById('relanceAddLastMinuteBtn');
+
+    relanceLastMinuteSearch.addEventListener('input', () => {
+      const query = relanceLastMinuteSearch.value.trim().toLowerCase();
+
+      if (query.length < 2) {
+        relanceLastMinuteResults.style.display = 'none';
+        selectedLastMinutePlayer = null;
+        relanceAddLastMinuteBtn.disabled = true;
+        return;
+      }
+
+      if (!window.relanceNonQualified || window.relanceNonQualified.length === 0) {
+        relanceLastMinuteResults.style.display = 'none';
+        return;
+      }
+
+      // Get already selected licences from participants
+      const selectedLicences = new Set(relanceParticipants.map(p => p.licence?.replace(/\s/g, '').toUpperCase()));
+
+      // Search in non-qualified ranked players
+      const results = window.relanceNonQualified
+        .filter(p => {
+          const fullName = `${p.last_name} ${p.first_name}`.toLowerCase();
+          const licence = (p.licence || '').toLowerCase();
+          const position = (p.rank_position || '').toString();
+          const normLicence = p.licence?.replace(/\s/g, '').toUpperCase();
+          return (fullName.includes(query) || licence.includes(query) || position.includes(query)) &&
+                 !selectedLicences.has(normLicence);
+        })
+        .slice(0, 10);
+
+      if (results.length === 0) {
+        relanceLastMinuteResults.innerHTML = '<div style="padding: 10px; color: #999;">Aucun résultat</div>';
+      } else {
+        relanceLastMinuteResults.innerHTML = results.map(p => `
+          <div class="search-result-item" data-licence="${p.licence}" style="padding: 10px; cursor: pointer; border-bottom: 1px solid #eee;">
+            <strong>${p.player_name || (p.first_name + ' ' + p.last_name)}</strong> - ${p.club || 'Sans club'}
+            <div style="font-size: 11px; color: #666;">Position: ${p.rank_position}${p.rank_position <= 10 ? 'ème' : ''} - ${p.total_points || 0} pts${p.email ? ' - ✅ Email' : ' - ❌ Pas d\'email'}</div>
+          </div>
+        `).join('');
+      }
+
+      relanceLastMinuteResults.style.display = 'block';
+
+      // Add click handlers to search results
+      relanceLastMinuteResults.querySelectorAll('.search-result-item').forEach(item => {
+        item.addEventListener('mouseover', () => item.style.background = '#f5f5f5');
+        item.addEventListener('mouseout', () => {
+          if (selectedLastMinutePlayer?.licence !== item.dataset.licence) {
+            item.style.background = '';
+          }
+        });
+        item.addEventListener('click', () => {
+          // Deselect previous
+          relanceLastMinuteResults.querySelectorAll('.search-result-item').forEach(i => i.style.background = '');
+
+          // Select this one
+          item.style.background = '#e3f2fd';
+          selectedLastMinutePlayer = window.relanceNonQualified.find(p => p.licence === item.dataset.licence);
+          relanceAddLastMinuteBtn.disabled = false;
+        });
+      });
+    });
+
+    relanceAddLastMinuteBtn.addEventListener('click', () => {
+      if (!selectedLastMinutePlayer) return;
+
+      // Check if player already in list
+      const alreadyAdded = relanceParticipants.some(p =>
+        p.licence?.replace(/\s/g, '').toUpperCase() === selectedLastMinutePlayer.licence?.replace(/\s/g, '').toUpperCase()
+      );
+
+      if (alreadyAdded) {
+        alert('Ce joueur est déjà dans la liste des destinataires.');
+        return;
+      }
+
+      // Add to relanceParticipants array
+      relanceParticipants.push({
+        licence: selectedLastMinutePlayer.licence,
+        first_name: selectedLastMinutePlayer.first_name,
+        last_name: selectedLastMinutePlayer.last_name,
+        player_name: selectedLastMinutePlayer.player_name,
+        club: selectedLastMinutePlayer.club || '',
+        email: selectedLastMinutePlayer.email || '',
+        rank_position: selectedLastMinutePlayer.rank_position,
+        total_points: selectedLastMinutePlayer.total_points,
+        email_optin: selectedLastMinutePlayer.email_optin,
+        isLastMinute: true,
+        already_inscribed: false
+      });
+
+      // Reset search
+      relanceLastMinuteSearch.value = '';
+      relanceLastMinuteResults.style.display = 'none';
+      selectedLastMinutePlayer = null;
+      relanceAddLastMinuteBtn.disabled = true;
+
+      // Refresh the participants table to show the new player
+      const tbody = document.getElementById('relanceParticipantsBody');
+      const idx = relanceParticipants.length - 1;
+      const p = relanceParticipants[idx];
+      const hasEmail = p.email && p.email.includes('@');
+      const shouldBeSelected = hasEmail;
+
+      const tr = document.createElement('tr');
+      tr.className = shouldBeSelected ? 'relance-participant selected' : 'relance-participant';
+      tr.dataset.idx = idx;
+      tr.style.background = '#fff3cd'; // Highlight last minute additions
+
+      if (shouldBeSelected) {
+        selectedRelanceIds.add(idx);
+      }
+
+      tr.innerHTML = `
+        <td style="padding: 8px; text-align: center;">
+          <input type="checkbox" class="relance-checkbox" data-idx="${idx}" ${shouldBeSelected ? 'checked' : ''} ${!hasEmail ? 'disabled' : ''}>
+        </td>
+        <td style="padding: 8px;">${p.rank_position}</td>
+        <td style="padding: 8px;">${p.player_name || (p.first_name + ' ' + p.last_name)} <span style="background: #dc3545; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px; margin-left: 5px;">Remplacement</span></td>
+        <td style="padding: 8px;">${p.club || '-'}</td>
+        <td style="padding: 8px; text-align: center;">${hasEmail ? '✅' : '❌'}</td>
+      `;
+
+      // Add checkbox event listener
+      const checkbox = tr.querySelector('.relance-checkbox');
+      if (checkbox && !checkbox.disabled) {
+        checkbox.addEventListener('change', () => {
+          if (checkbox.checked) {
+            selectedRelanceIds.add(idx);
+            tr.classList.add('selected');
+          } else {
+            selectedRelanceIds.delete(idx);
+            tr.classList.remove('selected');
+          }
+          updateRelanceSelectedCount();
+        });
+      }
+
+      tbody.appendChild(tr);
+
+      // Update counts
+      document.getElementById('relanceParticipantCount').textContent = relanceParticipants.length;
+      if (hasEmail) {
+        const emailCount = parseInt(document.getElementById('relanceEmailCount').textContent) + 1;
+        document.getElementById('relanceEmailCount').textContent = emailCount;
+      }
       updateRelanceSelectedCount();
     });
 

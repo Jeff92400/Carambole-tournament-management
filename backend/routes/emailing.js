@@ -4783,6 +4783,7 @@ router.get('/finale-qualified', authenticateToken, async (req, res) => {
     // Determine qualified count: <9 players → 4 qualified, >=9 players → 6 qualified
     const qualifiedCount = rankings.length < 9 ? 4 : 6;
     const qualified = rankings.filter(r => r.rank_position <= qualifiedCount);
+    const nonQualified = rankings.filter(r => r.rank_position > qualifiedCount);
 
     // Get inscriptions for finale tournament to mark already inscribed/indisponible players
     let inscribedLicences = new Set();
@@ -4846,6 +4847,22 @@ router.get('/finale-qualified', authenticateToken, async (req, res) => {
           email_optin: r.email_optin,
           already_inscribed: inscribedLicences.has(normLicence),
           inscription_statut: inscriptionStatuts[normLicence] || null
+        };
+      }),
+      nonQualifiedRanked: nonQualified.map(r => {
+        const normLicence = r.licence?.replace(/\s/g, '').toUpperCase();
+        return {
+          licence: r.licence,
+          player_name: r.player_name,
+          first_name: r.first_name,
+          last_name: r.last_name,
+          email: r.email,
+          club: r.club,
+          contact_id: r.contact_id,
+          rank_position: r.rank_position,
+          total_points: r.total_match_points,
+          avg_moyenne: r.avg_moyenne,
+          email_optin: r.email_optin
         };
       }),
       emailCount: qualified.filter(r => r.email && r.email.includes('@')).length,
