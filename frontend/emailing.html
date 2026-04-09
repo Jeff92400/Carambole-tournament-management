@@ -9178,7 +9178,7 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
                 data-url="${escapeHtml(item.url || '')}">
               <td style="padding: 12px;">${new Date(item.sent_at).toLocaleString('fr-FR')}</td>
               <td style="padding: 12px; font-weight: 500;">${escapeHtml(item.title)}</td>
-              <td style="padding: 12px; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(item.body)}</td>
+              <td style="padding: 12px; white-space: pre-wrap; word-wrap: break-word;">${escapeHtml(item.body)}</td>
               <td style="padding: 12px; text-align: center;">${item.recipient_type === 'all' ? 'Tous' : item.recipient_count + ' joueurs'}</td>
               <td style="padding: 12px; text-align: center;">
                 <span style="background: #4caf50; color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600;">
