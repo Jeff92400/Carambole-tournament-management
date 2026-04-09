@@ -1176,40 +1176,40 @@
         <div>
           <label style="display: block; margin-bottom: 8px; font-weight: 500;">Couleur principale :</label>
           <div style="display: flex; gap: 10px; align-items: center;">
-            <input type="color" id="primaryColor" value="#1F4788" style="width: 50px; height: 40px; border: 1px solid #ddd; border-radius: 4px; cursor: pointer;" onchange="document.getElementById('primaryColorText').value = this.value">
-            <input type="text" id="primaryColorText" value="#1F4788" style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-family: monospace;" onchange="document.getElementById('primaryColor').value = this.value">
+            <input type="color" id="primaryColor" value="#1F4788" style="width: 50px; height: 40px; border: 1px solid #ddd; border-radius: 4px; cursor: pointer;">
+            <input type="text" id="primaryColorText" value="#1F4788" style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-family: monospace;">
           </div>
           <p style="font-size: 11px; font-style: italic; color: #666; margin: 6px 0 0 0;">En-têtes emails, navbar, boutons, liens</p>
         </div>
         <div>
           <label style="display: block; margin-bottom: 8px; font-weight: 500;">Couleur secondaire :</label>
           <div style="display: flex; gap: 10px; align-items: center;">
-            <input type="color" id="secondaryColor" value="#667EEA" style="width: 50px; height: 40px; border: 1px solid #ddd; border-radius: 4px; cursor: pointer;" onchange="document.getElementById('secondaryColorText').value = this.value">
-            <input type="text" id="secondaryColorText" value="#667EEA" style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-family: monospace;" onchange="document.getElementById('secondaryColor').value = this.value">
+            <input type="color" id="secondaryColor" value="#667EEA" style="width: 50px; height: 40px; border: 1px solid #ddd; border-radius: 4px; cursor: pointer;">
+            <input type="text" id="secondaryColorText" value="#667EEA" style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-family: monospace;">
           </div>
           <p style="font-size: 11px; font-style: italic; color: #666; margin: 6px 0 0 0;">Dégradés, survols, boutons secondaires</p>
         </div>
         <div>
           <label style="display: block; margin-bottom: 8px; font-weight: 500;">Couleur d'accent :</label>
           <div style="display: flex; gap: 10px; align-items: center;">
-            <input type="color" id="accentColor" value="#FFC107" style="width: 50px; height: 40px; border: 1px solid #ddd; border-radius: 4px; cursor: pointer;" onchange="document.getElementById('accentColorText').value = this.value">
-            <input type="text" id="accentColorText" value="#FFC107" style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-family: monospace;" onchange="document.getElementById('accentColor').value = this.value">
+            <input type="color" id="accentColor" value="#FFC107" style="width: 50px; height: 40px; border: 1px solid #ddd; border-radius: 4px; cursor: pointer;">
+            <input type="text" id="accentColorText" value="#FFC107" style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-family: monospace;">
           </div>
           <p style="font-size: 11px; font-style: italic; color: #666; margin: 6px 0 0 0;">Alertes, avertissements, badges</p>
         </div>
         <div>
           <label style="display: block; margin-bottom: 8px; font-weight: 500;">Fond principal :</label>
           <div style="display: flex; gap: 10px; align-items: center;">
-            <input type="color" id="backgroundColor" value="#FFFFFF" style="width: 50px; height: 40px; border: 1px solid #ddd; border-radius: 4px; cursor: pointer;" onchange="document.getElementById('backgroundColorText').value = this.value">
-            <input type="text" id="backgroundColorText" value="#FFFFFF" style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-family: monospace;" onchange="document.getElementById('backgroundColor').value = this.value">
+            <input type="color" id="backgroundColor" value="#FFFFFF" style="width: 50px; height: 40px; border: 1px solid #ddd; border-radius: 4px; cursor: pointer;">
+            <input type="text" id="backgroundColorText" value="#FFFFFF" style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-family: monospace;">
           </div>
           <p style="font-size: 11px; font-style: italic; color: #666; margin: 6px 0 0 0;">Corps des emails, arrière-plan pages</p>
         </div>
         <div>
           <label style="display: block; margin-bottom: 8px; font-weight: 500;">Fond secondaire :</label>
           <div style="display: flex; gap: 10px; align-items: center;">
-            <input type="color" id="backgroundSecondaryColor" value="#F5F5F5" style="width: 50px; height: 40px; border: 1px solid #ddd; border-radius: 4px; cursor: pointer;" onchange="document.getElementById('backgroundSecondaryColorText').value = this.value">
-            <input type="text" id="backgroundSecondaryColorText" value="#F5F5F5" style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-family: monospace;" onchange="document.getElementById('backgroundSecondaryColor').value = this.value">
+            <input type="color" id="backgroundSecondaryColor" value="#F5F5F5" style="width: 50px; height: 40px; border: 1px solid #ddd; border-radius: 4px; cursor: pointer;">
+            <input type="text" id="backgroundSecondaryColorText" value="#F5F5F5" style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-family: monospace;">
           </div>
           <p style="font-size: 11px; font-style: italic; color: #666; margin: 6px 0 0 0;">Lignes alternées, sections, cartes</p>
         </div>
@@ -4380,14 +4380,16 @@
       const colorInput = document.getElementById(colorId);
       const textInput = document.getElementById(colorId + 'Text');
 
-      colorInput.addEventListener('input', () => {
+      // Color picker -> text input (fires when user changes color)
+      colorInput.addEventListener('change', () => {
         textInput.value = colorInput.value.toUpperCase();
       });
 
-      textInput.addEventListener('change', () => {
+      // Text input -> color picker (fires when user types)
+      textInput.addEventListener('input', () => {
         const value = textInput.value.trim();
-        if (/^#[0-9A-Fa-f]{6}$/.test(value)) {
-          colorInput.value = value;
+        if (/^#[0-9A-Fa-f]{6}$/i.test(value)) {
+          colorInput.value = value.toLowerCase();
         }
       });
     }
