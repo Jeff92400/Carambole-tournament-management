@@ -4807,6 +4807,21 @@ router.get('/finale-qualified', authenticateToken, async (req, res) => {
       inscribedLicences.has(r.licence?.replace(/\s/g, '').toUpperCase())
     ).length;
 
+    // Count only 'inscrit' status (not indisponible) to determine if spots are available
+    const inscritCount = qualified.filter(r => {
+      const normLicence = r.licence?.replace(/\s/g, '').toUpperCase();
+      return inscribedLicences.has(normLicence) && inscriptionStatuts[normLicence] === 'inscrit';
+    }).length;
+
+    // Filter nonQualified to exclude already-inscribed players (including those added as replacements)
+    const nonQualifiedAvailable = nonQualified.filter(r => {
+      const normLicence = r.licence?.replace(/\s/g, '').toUpperCase();
+      return !inscribedLicences.has(normLicence);
+    });
+
+    // Only show replacements if there are available spots (inscrit < qualified count)
+    const showReplacements = inscritCount < qualifiedCount && nonQualifiedAvailable.length > 0;
+
     // Calculate deadline date (7 days before finale)
     let deadlineDate = null;
     let finaleFormattedDate = null;
@@ -4849,7 +4864,7 @@ router.get('/finale-qualified', authenticateToken, async (req, res) => {
           inscription_statut: inscriptionStatuts[normLicence] || null
         };
       }),
-      nonQualifiedRanked: nonQualified.map(r => {
+      nonQualifiedRanked: showReplacements ? nonQualifiedAvailable.map(r => {
         const normLicence = r.licence?.replace(/\s/g, '').toUpperCase();
         return {
           licence: r.licence,
@@ -4864,9 +4879,11 @@ router.get('/finale-qualified', authenticateToken, async (req, res) => {
           avg_moyenne: r.avg_moyenne,
           email_optin: r.email_optin
         };
-      }),
+      }) : [],
       emailCount: qualified.filter(r => r.email && r.email.includes('@')).length,
-      alreadyInscribedCount
+      alreadyInscribedCount,
+      inscritCount,
+      availableSpots: qualifiedCount - inscritCount
     });
 
   } catch (error) {
