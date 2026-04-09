@@ -2685,7 +2685,7 @@
         const competitionLabel = document.getElementById('competitionLabel');
         if (competitionLabel && currentCategory) {
           const tournamentLabel = isFinaleCompetition ? 'Finale départementale' : `T${currentTournament}`;
-          competitionLabel.textContent = `${currentCategory.game_type} - ${currentCategory.name} - ${tournamentLabel}`;
+          competitionLabel.textContent = `${currentCategory.game_type} - ${currentCategory.display_name} - ${tournamentLabel}`;
         }
 
         goToStep(2);
