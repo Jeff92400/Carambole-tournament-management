@@ -827,6 +827,344 @@ router.post('/send', authenticateToken, async (req, res) => {
   }
 });
 
+/**
+ * POST /api/player-invitations/send-with-template
+ * Send invitations using one of the 3 customizable templates (urgence, bienvenue, rappel)
+ */
+router.post('/send-with-template', authenticateToken, async (req, res) => {
+  const { template_key, player_contact_ids, test_email } = req.body;
+
+  if (!template_key || !['urgence', 'bienvenue', 'rappel'].includes(template_key)) {
+    return res.status(400).json({ error: 'template_key requis (urgence, bienvenue, ou rappel)' });
+  }
+
+  if (!player_contact_ids || !Array.isArray(player_contact_ids) || player_contact_ids.length === 0) {
+    return res.status(400).json({ error: 'Aucun joueur sélectionné' });
+  }
+
+  if (!process.env.RESEND_API_KEY) {
+    return res.status(500).json({ error: 'Configuration email manquante (RESEND_API_KEY)' });
+  }
+
+  // Check if PDF guide is uploaded
+  const pdfExists = await new Promise((resolve, reject) => {
+    db.get('SELECT id FROM invitation_pdf LIMIT 1', [], (err, row) => {
+      if (err) reject(err);
+      else resolve(!!row);
+    });
+  });
+
+  if (!pdfExists) {
+    return res.status(400).json({ error: 'Veuillez d\'abord télécharger un guide PDF dans les paramètres avant d\'envoyer des invitations.' });
+  }
+
+  const resend = new Resend(process.env.RESEND_API_KEY);
+  const isTestMode = !!test_email;
+
+  try {
+    // Get email settings
+    const emailSettings = await req.getOrgSettingsBatch([
+      'primary_color', 'email_communication', 'email_sender_name',
+      'organization_name', 'organization_short_name', 'summary_email',
+      'player_app_url'
+    ]);
+
+    // Get custom email template from email_templates table
+    const template = await new Promise((resolve, reject) => {
+      db.get(
+        "SELECT subject_template, body_template, outro_template FROM email_templates WHERE template_key = $1",
+        [template_key],
+        (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        }
+      );
+    });
+
+    if (!template) {
+      return res.status(404).json({ error: `Template "${template_key}" non trouvé` });
+    }
+
+    // Get players to invite
+    const orgId = req.user.organizationId || null;
+    const placeholders = player_contact_ids.map((_, i) => `$${i + 1}`).join(',');
+    const orgParamIdx = player_contact_ids.length + 1;
+    const players = await new Promise((resolve, reject) => {
+      db.all(
+        `SELECT * FROM player_contacts WHERE id IN (${placeholders}) AND ($${orgParamIdx}::int IS NULL OR organization_id = $${orgParamIdx})`,
+        [...player_contact_ids, orgId],
+        (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows || []);
+        }
+      );
+    });
+
+    if (players.length === 0) {
+      return res.status(400).json({ error: 'Aucun joueur trouvé' });
+    }
+
+    // Check for PDF attachment (from database)
+    let pdfAttachment = null;
+    const pdfRow = await new Promise((resolve, reject) => {
+      db.get('SELECT filename, file_data FROM invitation_pdf ORDER BY created_at DESC LIMIT 1', [], (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
+
+    if (pdfRow) {
+      const pdfContent = Buffer.isBuffer(pdfRow.file_data) ? pdfRow.file_data : Buffer.from(pdfRow.file_data);
+      pdfAttachment = {
+        filename: pdfRow.filename || 'Guide-Application-Joueur.pdf',
+        content: pdfContent
+      };
+      console.log('[Player Invitations Template] PDF found in DB, size:', pdfContent.length, 'bytes');
+    } else {
+      console.log('[Player Invitations Template] No PDF in database');
+    }
+
+    const senderName = emailSettings.email_sender_name || 'CDBHS';
+    const senderEmail = emailSettings.email_communication || 'communication@cdbhs.net';
+    const primaryColor = emailSettings.primary_color || '#1F4788';
+    const orgName = emailSettings.organization_name || 'Comité Départemental Billard Hauts-de-Seine';
+    const orgShortName = emailSettings.organization_short_name || 'CDBHS';
+    const replyToEmail = emailSettings.summary_email || '';
+    const playerAppUrl = emailSettings.player_app_url || 'https://cdbhs-player-app-production.up.railway.app';
+    const baseUrl = process.env.BASE_URL || 'https://cdbhs-tournament-management-production.up.railway.app';
+
+    // Logo URL - org-specific, onerror will hide if not found
+    const orgSlug = await appSettings.getOrgSlug(orgId);
+    const logoUrl = appSettings.buildLogoUrl(baseUrl, orgSlug);
+    console.log('[Player Invitations Template] Using logo URL:', logoUrl, 'template:', template_key);
+
+    let sentCount = 0;
+    let failedCount = 0;
+    const errors = [];
+    const sentPlayers = [];
+
+    for (const player of players) {
+      try {
+        const recipientEmail = isTestMode ? test_email : player.email;
+        const firstName = player.first_name || 'Joueur';
+
+        // Replace template variables in subject, body, and outro
+        const replaceVars = (text) => {
+          if (!text) return '';
+          return text
+            .replace(/\{first_name\}/g, firstName)
+            .replace(/\{organisation_name\}/g, orgName)
+            .replace(/\{organization_name\}/g, orgName)
+            .replace(/\{organisation_short_name\}/g, orgShortName)
+            .replace(/\{organization_short_name\}/g, orgShortName)
+            .replace(/\{organisation_email\}/g, replyToEmail)
+            .replace(/\{organization_email\}/g, replyToEmail)
+            .replace(/\{player_app_url\}/g, playerAppUrl);
+        };
+
+        const emailSubject = replaceVars(template.subject_template);
+        const emailBody = replaceVars(template.body_template);
+        const emailOutro = replaceVars(template.outro_template || '');
+
+        // Build HTML email
+        const logoHtml = `<img src="${logoUrl}" alt="${orgShortName}" style="height: 60px; max-width: 80%; width: auto; margin-bottom: 10px;" onerror="this.style.display='none'">`;
+
+        const htmlBody = `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <div style="background: ${primaryColor}; color: white; padding: 20px; text-align: center;">
+              ${logoHtml}
+              <h1 style="margin: 0; font-size: 24px;">${orgName}</h1>
+            </div>
+            <div style="padding: 20px; background: #f8f9fa;">
+              ${emailBody}
+            </div>
+            ${emailOutro ? `<div style="padding: 20px; background: #e9ecef; border-top: 1px solid #ddd;">${emailOutro}</div>` : ''}
+            <div style="padding: 15px; text-align: center; color: #999; font-size: 12px;">
+              ${orgName}<br>
+              ${replyToEmail ? `Contact : ${replyToEmail}` : ''}
+            </div>
+          </div>
+        `;
+
+        // Send email
+        const emailOptions = {
+          from: `${senderName} <${senderEmail}>`,
+          to: recipientEmail,
+          subject: emailSubject,
+          html: htmlBody
+        };
+
+        if (replyToEmail) {
+          emailOptions.reply_to = replyToEmail;
+        }
+
+        if (pdfAttachment && !isTestMode) {
+          emailOptions.attachments = [pdfAttachment];
+        }
+
+        await resend.emails.send(emailOptions);
+
+        // Update or create invitation record (same logic as /send endpoint)
+        if (!isTestMode) {
+          const existing = await new Promise((resolve, reject) => {
+            db.get(
+              'SELECT id, resend_count FROM player_invitations WHERE player_contact_id = $1 AND ($2::int IS NULL OR organization_id = $2)',
+              [player.id, orgId],
+              (err, row) => {
+                if (err) reject(err);
+                else resolve(row);
+              }
+            );
+          });
+
+          if (existing) {
+            // Update existing invitation
+            await new Promise((resolve, reject) => {
+              db.run(
+                `UPDATE player_invitations
+                 SET resend_count = resend_count + 1, last_resent_at = NOW()
+                 WHERE id = $1`,
+                [existing.id],
+                (err) => {
+                  if (err) reject(err);
+                  else resolve();
+                }
+              );
+            });
+          } else {
+            // Create new invitation record
+            await new Promise((resolve, reject) => {
+              db.run(
+                `INSERT INTO player_invitations
+                 (player_contact_id, licence, email, first_name, last_name, club, sent_by_user_id, sent_by_username, organization_id)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+                [player.id, player.licence, player.email, player.first_name, player.last_name, player.club, req.user?.userId, req.user?.username, orgId],
+                (err) => {
+                  if (err) reject(err);
+                  else resolve();
+                }
+              );
+            });
+          }
+        }
+
+        sentCount++;
+        sentPlayers.push(player);
+        await delay(1500); // Rate limiting
+      } catch (error) {
+        console.error(`Error sending template to ${player.email}:`, error.message);
+        failedCount++;
+        errors.push({ player: `${player.first_name} ${player.last_name}`, error: error.message });
+      }
+    }
+
+    // Send summary email to organization (only if not test mode and at least one sent)
+    if (!isTestMode && sentCount > 0) {
+      try {
+        const recipientListHtml = sentPlayers.map((p, idx) => `
+          <tr style="background: ${idx % 2 === 0 ? '#fff' : '#f8f9fa'};">
+            <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${idx + 1}</td>
+            <td style="padding: 8px; border: 1px solid #ddd;">${p.first_name} ${p.last_name}</td>
+            <td style="padding: 8px; border: 1px solid #ddd;">${p.club || '-'}</td>
+            <td style="padding: 8px; border: 1px solid #ddd;">${p.email}</td>
+          </tr>
+        `).join('');
+
+        const templateLabels = {
+          urgence: '🏁 Urgence fin de saison',
+          bienvenue: '👋 Bienvenue nouvelle saison',
+          rappel: '⏰ Rappel en cours de saison'
+        };
+
+        const summaryHtml = `
+          <div style="font-family: Arial, sans-serif; max-width: 700px; margin: 0 auto;">
+            <div style="background: ${primaryColor}; color: white; padding: 20px; text-align: center;">
+              <img src="${logoUrl}" alt="${orgShortName}" style="height: 60px; max-width: 80%; width: auto; margin-bottom: 10px;" onerror="this.style.display='none'">
+              <h1 style="margin: 0; font-size: 24px;">📋 Récapitulatif Invitations Player App</h1>
+            </div>
+            <div style="padding: 20px; background: #f8f9fa; line-height: 1.6;">
+              <div style="background: #d4edda; border-left: 4px solid #28a745; padding: 15px; margin-bottom: 20px;">
+                <strong>✅ Envoi terminé avec succès</strong><br>
+                Template : ${templateLabels[template_key]}<br>
+                ${sentCount} invitation(s) envoyée(s) sur ${players.length} joueur(s)
+                ${failedCount > 0 ? `<br><span style="color: #dc3545;">${failedCount} échec(s)</span>` : ''}
+              </div>
+
+              <h3 style="color: ${primaryColor};">📧 Invitations Envoyées (${sentCount})</h3>
+              <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 13px;">
+                <thead>
+                  <tr style="background: ${primaryColor}; color: white;">
+                    <th style="padding: 10px; border: 1px solid #ddd;">#</th>
+                    <th style="padding: 10px; border: 1px solid #ddd; text-align: left;">Joueur</th>
+                    <th style="padding: 10px; border: 1px solid #ddd; text-align: left;">Club</th>
+                    <th style="padding: 10px; border: 1px solid #ddd; text-align: left;">Email</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${recipientListHtml}
+                </tbody>
+              </table>
+
+              ${errors.length > 0 ? `
+                <h3 style="color: #dc3545;">❌ Échecs (${errors.length})</h3>
+                <ul style="color: #dc3545;">
+                  ${errors.map(e => `<li>${e.player}: ${e.error}</li>`).join('')}
+                </ul>
+              ` : ''}
+            </div>
+            <div style="padding: 15px; text-align: center; color: #999; font-size: 12px;">
+              ${orgName}<br>
+              Envoi effectué depuis l'application de gestion des tournois
+            </div>
+          </div>
+        `;
+
+        if (replyToEmail) {
+          await resend.emails.send({
+            from: `${senderName} <${senderEmail}>`,
+            to: replyToEmail,
+            subject: `Récapitulatif Invitations Player App - ${templateLabels[template_key]}`,
+            html: summaryHtml
+          });
+          console.log('[Player Invitations Template] Summary email sent to', replyToEmail);
+        }
+      } catch (summaryError) {
+        console.error('Error sending summary email:', summaryError);
+        // Don't fail the whole operation if summary email fails
+      }
+    }
+
+    // Log the action
+    if (!isTestMode && sentCount > 0) {
+      const templateLabels = {
+        urgence: 'Urgence',
+        bienvenue: 'Bienvenue',
+        rappel: 'Rappel'
+      };
+      logAdminAction({
+        req,
+        action: ACTION_TYPES.SEND_INVITATION,
+        details: `Invitations Player App (${templateLabels[template_key]}): ${sentCount} envoyées, ${failedCount} échecs`,
+        targetType: 'invitation',
+        targetId: null,
+        targetName: `${sentCount} invitations`
+      });
+    }
+
+    res.json({
+      success: true,
+      sent: sentCount,
+      failed: failedCount,
+      test_mode: isTestMode,
+      template_used: template_key,
+      errors: errors.length > 0 ? errors : undefined
+    });
+  } catch (error) {
+    console.error('Error sending template invitations:', error);
+    res.status(500).json({ error: 'Erreur lors de l\'envoi des invitations' });
+  }
+});
+
 // Resend invitation to a specific player
 router.post('/resend/:id', authenticateToken, async (req, res) => {
   const { id } = req.params;
