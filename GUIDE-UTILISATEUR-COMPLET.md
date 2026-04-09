@@ -1,7 +1,7 @@
 # Guide Utilisateur Complet
 
 > **Note:** Ce document est généré automatiquement depuis le guide HTML.
-> **Dernière mise à jour:** 08/04/2026 - Ajout de 3 templates d'invitation personnalisables (urgence, bienvenue, rappel) avec variables dynamiques
+> **Dernière mise à jour:** 09/04/2026 - Documentation des badges de statut (Inscrit → Convoqué) et de la gestion des joueurs de remplacement pour les finales
 
 ---
 

@@ -1159,8 +1159,20 @@
       <li>Nom et prénom</li>
       <li>Club</li>
       <li>Licence</li>
-      <li>Badge de statut (<span class="badge badge-green">Inscrit</span> <span class="badge badge-yellow">Forfait</span> <span class="badge" style="background: #e0e0e0; color: #616161;">Indisponible</span> <span class="badge badge-red">Désinscrit</span>)</li>
+      <li>Badge de statut :
+        <ul>
+          <li><span class="badge badge-green">Inscrit</span> — joueur inscrit, convocations non encore envoyées</li>
+          <li><span class="badge" style="background: #28a745; color: white;">Convoqué</span> — joueur inscrit et convocation envoyée</li>
+          <li><span class="badge badge-yellow">Forfait</span> — joueur déclaré forfait</li>
+          <li><span class="badge" style="background: #9e9e9e; color: white;">Indisponible</span> — finaliste ayant renoncé à sa qualification</li>
+          <li><span class="badge badge-red">Désinscrit</span> — inscription annulée</li>
+          <li><span class="badge" style="background: #dc3545; color: white;">Non inscrit</span> — finaliste qualifié non inscrit (finales uniquement)</li>
+        </ul>
+      </li>
     </ul>
+    <div class="info-card">
+      <strong>Note :</strong> Le badge passe automatiquement de "Inscrit" à "Convoqué" après l'envoi des convocations. Cela permet de visualiser l'avancement du processus.
+    </div>
     <p><strong>Boutons d'action :</strong></p>
     <ul>
       <li><strong>Sélectionner les inscrits</strong> : Coche uniquement les joueurs ayant une inscription</li>
@@ -2217,6 +2229,35 @@
       <li>Confirmer l'envoi</li>
       <li>Message de confirmation avec le nombre d'emails envoyés</li>
     </ol>
+
+    <h3>Cas particulier : Relances pour les finales</h3>
+    <p>Les relances pour les <strong>finales départementales</strong> disposent d'une fonctionnalité spécifique pour gérer les joueurs de remplacement.</p>
+
+    <h4>Joueurs affichés dans la relance</h4>
+    <p>Lors de l'envoi d'une relance pour une finale, deux catégories de joueurs apparaissent :</p>
+    <ul>
+      <li><strong>Finalistes qualifiés</strong> — Les joueurs qualifiés selon le classement final (top 4 ou top 6 selon l'effectif)</li>
+      <li><strong>Joueurs additionnels (hors finalistes)</strong> — Les joueurs non qualifiés mais inscrits à la finale (joueurs de remplacement ajoutés manuellement)</li>
+    </ul>
+
+    <div class="info-card">
+      <strong>Important :</strong> Les joueurs ajoutés en tant que "last minute" dans la page "Générer les poules" apparaissent automatiquement dans la liste des participants de la relance, même s'ils ne font pas partie des finalistes qualifiés. Leur badge passe à <span class="badge" style="background: #28a745; color: white;">Convoqué</span> après l'envoi des convocations.
+    </div>
+
+    <h4>Section Joueurs de remplacement</h4>
+    <p>Si certains finalistes sont indisponibles (statut "Indisponible"), une section <strong>"Joueurs de remplacement (du classement final)"</strong> s'affiche :</p>
+    <ul>
+      <li>Liste tous les joueurs non qualifiés du classement final (positions 7, 8, 9, etc.)</li>
+      <li>Chaque joueur peut être coché pour l'inclure dans la relance</li>
+      <li>Les joueurs déjà inscrits n'apparaissent pas dans cette liste (pour éviter les doublons)</li>
+    </ul>
+
+    <p><strong>Comportement :</strong></p>
+    <ul>
+      <li>Si tous les finalistes qualifiés sont inscrits (6/6 ou 4/4), la section "Joueurs de remplacement" est masquée</li>
+      <li>Si des places sont disponibles (ex : 5/6 inscrits), la section s'affiche avec les joueurs de réserve disponibles</li>
+      <li>Cocher un joueur de remplacement l'ajoute automatiquement à la liste principale des participants</li>
+    </ul>
   </section>
 
   <hr>
