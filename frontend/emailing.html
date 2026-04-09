@@ -1105,15 +1105,22 @@
 
               <!-- Last Minute Players (Finale only) -->
               <div id="relanceLastMinuteSection" style="display: none; margin-top: 20px;">
-                <h4>Joueurs de remplacement (du classement)</h4>
-                <div style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; padding: 15px;">
-                  <p style="color: #666; font-size: 0.9em; margin-bottom: 10px;">Ajouter un joueur non qualifié du classement final pour remplacer un finaliste indisponible</p>
-                  <div style="display: flex; gap: 10px; align-items: center;">
-                    <input type="text" id="relanceLastMinuteSearch" placeholder="Rechercher par nom ou classement..."
-                           style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
-                    <button class="btn" id="relanceAddLastMinuteBtn" style="background: #dc3545;" disabled>Ajouter</button>
-                  </div>
-                  <div id="relanceLastMinuteResults" style="display: none; max-height: 200px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px; margin-top: 10px; background: white;"></div>
+                <h4>Joueurs de remplacement (du classement final)</h4>
+                <p style="color: #666; font-size: 0.9em; margin-bottom: 10px;">Sélectionner les joueurs non qualifiés à inviter en remplacement des finalistes indisponibles</p>
+                <div style="max-height: 250px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px; background: #fffbf0;">
+                  <table style="width: 100%; font-size: 13px;">
+                    <thead style="background: #fff3cd; position: sticky; top: 0;">
+                      <tr>
+                        <th style="padding: 10px; text-align: center; width: 40px;"></th>
+                        <th style="padding: 10px; text-align: left;">Pos</th>
+                        <th style="padding: 10px; text-align: left;">Joueur</th>
+                        <th style="padding: 10px; text-align: left;">Club</th>
+                        <th style="padding: 10px; text-align: center;">Pts</th>
+                        <th style="padding: 10px; text-align: center;">Email</th>
+                      </tr>
+                    </thead>
+                    <tbody id="relanceNonQualifiedBody"></tbody>
+                  </table>
                 </div>
               </div>
             </div>
@@ -5233,10 +5240,139 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
         document.getElementById('sendRelanceBtn').disabled = selectedRelanceIds.size === 0;
         document.getElementById('scheduleRelanceBtn').disabled = false;
 
-        // Show last minute section for finales
+        // Show last minute section for finales and populate table
         const lastMinuteSection = document.getElementById('relanceLastMinuteSection');
         if (relanceType === 'finale' && relanceData.nonQualifiedRanked && relanceData.nonQualifiedRanked.length > 0) {
-          window.relanceNonQualified = relanceData.nonQualifiedRanked;
+          const nonQualifiedBody = document.getElementById('relanceNonQualifiedBody');
+          nonQualifiedBody.innerHTML = '';
+
+          relanceData.nonQualifiedRanked.forEach((p, idx) => {
+            const hasEmail = p.email && p.email.includes('@');
+            const globalIdx = relanceParticipants.length + idx; // Global index for tracking selections
+
+            const tr = document.createElement('tr');
+            tr.style.background = idx % 2 === 0 ? '#fffef5' : '#fff9e6';
+
+            tr.innerHTML = `
+              <td style="padding: 8px; text-align: center;">
+                <input type="checkbox" class="relance-nonqualified-checkbox" data-idx="${globalIdx}" data-player-idx="${idx}" ${!hasEmail ? 'disabled' : ''}>
+              </td>
+              <td style="padding: 8px;">${p.rank_position}</td>
+              <td style="padding: 8px;">${p.player_name || (p.first_name + ' ' + p.last_name)}</td>
+              <td style="padding: 8px;">${p.club || '-'}</td>
+              <td style="padding: 8px; text-align: center;">${p.total_points || 0}</td>
+              <td style="padding: 8px; text-align: center;">${hasEmail ? '✅' : '❌'}</td>
+            `;
+
+            // Add checkbox event listener
+            const checkbox = tr.querySelector('.relance-nonqualified-checkbox');
+            if (checkbox && !checkbox.disabled) {
+              checkbox.addEventListener('change', () => {
+                const playerIdx = parseInt(checkbox.dataset.playerIdx);
+                const player = relanceData.nonQualifiedRanked[playerIdx];
+
+                if (checkbox.checked) {
+                  // Add to relanceParticipants
+                  relanceParticipants.push({
+                    licence: player.licence,
+                    first_name: player.first_name,
+                    last_name: player.last_name,
+                    player_name: player.player_name,
+                    club: player.club || '',
+                    email: player.email || '',
+                    rank_position: player.rank_position,
+                    total_points: player.total_points,
+                    email_optin: player.email_optin,
+                    isReplacement: true,
+                    already_inscribed: false
+                  });
+
+                  const newIdx = relanceParticipants.length - 1;
+                  selectedRelanceIds.add(newIdx);
+                  tr.style.background = '#d4edda'; // Green highlight when selected
+
+                  // Add to main table
+                  const mainTbody = document.getElementById('relanceParticipantsBody');
+                  const mainTr = document.createElement('tr');
+                  mainTr.className = 'relance-participant selected';
+                  mainTr.dataset.idx = newIdx;
+                  mainTr.dataset.replacementCheckbox = checkbox.dataset.playerIdx;
+
+                  mainTr.innerHTML = `
+                    <td style="padding: 8px; text-align: center;">
+                      <input type="checkbox" class="relance-checkbox" data-idx="${newIdx}" checked>
+                    </td>
+                    <td style="padding: 8px;">${player.rank_position}</td>
+                    <td style="padding: 8px;">${player.player_name || (player.first_name + ' ' + player.last_name)} <span style="background: #dc3545; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px; margin-left: 5px;">Remplacement</span></td>
+                    <td style="padding: 8px;">${player.club || '-'}</td>
+                    <td style="padding: 8px; text-align: center;">✅</td>
+                  `;
+
+                  // Add checkbox event listener for main table
+                  const mainCheckbox = mainTr.querySelector('.relance-checkbox');
+                  mainCheckbox.addEventListener('change', () => {
+                    if (mainCheckbox.checked) {
+                      selectedRelanceIds.add(newIdx);
+                      mainTr.classList.add('selected');
+                    } else {
+                      selectedRelanceIds.delete(newIdx);
+                      mainTr.classList.remove('selected');
+                      // Also uncheck in replacement table
+                      checkbox.checked = false;
+                      tr.style.background = playerIdx % 2 === 0 ? '#fffef5' : '#fff9e6';
+                    }
+                    updateRelanceSelectedCount();
+                  });
+
+                  mainTbody.appendChild(mainTr);
+
+                } else {
+                  // Remove from relanceParticipants and main table
+                  const playerLicence = player.licence?.replace(/\s/g, '').toUpperCase();
+                  const indexToRemove = relanceParticipants.findIndex(rp =>
+                    rp.licence?.replace(/\s/g, '').toUpperCase() === playerLicence && rp.isReplacement
+                  );
+
+                  if (indexToRemove !== -1) {
+                    relanceParticipants.splice(indexToRemove, 1);
+                    selectedRelanceIds.delete(indexToRemove);
+
+                    // Remove from main table
+                    const mainTbody = document.getElementById('relanceParticipantsBody');
+                    const rowToRemove = mainTbody.querySelector(`tr[data-replacement-checkbox="${playerIdx}"]`);
+                    if (rowToRemove) {
+                      rowToRemove.remove();
+                    }
+
+                    // Reindex remaining players
+                    document.querySelectorAll('.relance-checkbox').forEach((cb, i) => {
+                      cb.dataset.idx = i;
+                      cb.closest('tr').dataset.idx = i;
+                    });
+
+                    // Rebuild selectedRelanceIds
+                    const newSelectedIds = new Set();
+                    document.querySelectorAll('.relance-checkbox:checked').forEach(cb => {
+                      newSelectedIds.add(parseInt(cb.dataset.idx));
+                    });
+                    selectedRelanceIds.clear();
+                    newSelectedIds.forEach(id => selectedRelanceIds.add(id));
+                  }
+
+                  tr.style.background = playerIdx % 2 === 0 ? '#fffef5' : '#fff9e6';
+                }
+
+                // Update counts
+                document.getElementById('relanceParticipantCount').textContent = relanceParticipants.length;
+                const emailCount = relanceParticipants.filter(p => p.email && p.email.includes('@')).length;
+                document.getElementById('relanceEmailCount').textContent = emailCount;
+                updateRelanceSelectedCount();
+              });
+            }
+
+            nonQualifiedBody.appendChild(tr);
+          });
+
           lastMinuteSection.style.display = 'block';
         } else {
           lastMinuteSection.style.display = 'none';
@@ -5527,161 +5663,6 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
         selectedRelanceIds.delete(idx);
         cb.closest('tr').classList.remove('selected');
       });
-      updateRelanceSelectedCount();
-    });
-
-    // Last minute player search for finales
-    let selectedLastMinutePlayer = null;
-    const relanceLastMinuteSearch = document.getElementById('relanceLastMinuteSearch');
-    const relanceLastMinuteResults = document.getElementById('relanceLastMinuteResults');
-    const relanceAddLastMinuteBtn = document.getElementById('relanceAddLastMinuteBtn');
-
-    relanceLastMinuteSearch.addEventListener('input', () => {
-      const query = relanceLastMinuteSearch.value.trim().toLowerCase();
-
-      if (query.length < 2) {
-        relanceLastMinuteResults.style.display = 'none';
-        selectedLastMinutePlayer = null;
-        relanceAddLastMinuteBtn.disabled = true;
-        return;
-      }
-
-      if (!window.relanceNonQualified || window.relanceNonQualified.length === 0) {
-        relanceLastMinuteResults.style.display = 'none';
-        return;
-      }
-
-      // Get already selected licences from participants
-      const selectedLicences = new Set(relanceParticipants.map(p => p.licence?.replace(/\s/g, '').toUpperCase()));
-
-      // Search in non-qualified ranked players
-      const results = window.relanceNonQualified
-        .filter(p => {
-          const fullName = `${p.last_name} ${p.first_name}`.toLowerCase();
-          const licence = (p.licence || '').toLowerCase();
-          const position = (p.rank_position || '').toString();
-          const normLicence = p.licence?.replace(/\s/g, '').toUpperCase();
-          return (fullName.includes(query) || licence.includes(query) || position.includes(query)) &&
-                 !selectedLicences.has(normLicence);
-        })
-        .slice(0, 10);
-
-      if (results.length === 0) {
-        relanceLastMinuteResults.innerHTML = '<div style="padding: 10px; color: #999;">Aucun résultat</div>';
-      } else {
-        relanceLastMinuteResults.innerHTML = results.map(p => `
-          <div class="search-result-item" data-licence="${p.licence}" style="padding: 10px; cursor: pointer; border-bottom: 1px solid #eee;">
-            <strong>${p.player_name || (p.first_name + ' ' + p.last_name)}</strong> - ${p.club || 'Sans club'}
-            <div style="font-size: 11px; color: #666;">Position: ${p.rank_position}${p.rank_position <= 10 ? 'ème' : ''} - ${p.total_points || 0} pts${p.email ? ' - ✅ Email' : ' - ❌ Pas d\'email'}</div>
-          </div>
-        `).join('');
-      }
-
-      relanceLastMinuteResults.style.display = 'block';
-
-      // Add click handlers to search results
-      relanceLastMinuteResults.querySelectorAll('.search-result-item').forEach(item => {
-        item.addEventListener('mouseover', () => item.style.background = '#f5f5f5');
-        item.addEventListener('mouseout', () => {
-          if (selectedLastMinutePlayer?.licence !== item.dataset.licence) {
-            item.style.background = '';
-          }
-        });
-        item.addEventListener('click', () => {
-          // Deselect previous
-          relanceLastMinuteResults.querySelectorAll('.search-result-item').forEach(i => i.style.background = '');
-
-          // Select this one
-          item.style.background = '#e3f2fd';
-          selectedLastMinutePlayer = window.relanceNonQualified.find(p => p.licence === item.dataset.licence);
-          relanceAddLastMinuteBtn.disabled = false;
-        });
-      });
-    });
-
-    relanceAddLastMinuteBtn.addEventListener('click', () => {
-      if (!selectedLastMinutePlayer) return;
-
-      // Check if player already in list
-      const alreadyAdded = relanceParticipants.some(p =>
-        p.licence?.replace(/\s/g, '').toUpperCase() === selectedLastMinutePlayer.licence?.replace(/\s/g, '').toUpperCase()
-      );
-
-      if (alreadyAdded) {
-        alert('Ce joueur est déjà dans la liste des destinataires.');
-        return;
-      }
-
-      // Add to relanceParticipants array
-      relanceParticipants.push({
-        licence: selectedLastMinutePlayer.licence,
-        first_name: selectedLastMinutePlayer.first_name,
-        last_name: selectedLastMinutePlayer.last_name,
-        player_name: selectedLastMinutePlayer.player_name,
-        club: selectedLastMinutePlayer.club || '',
-        email: selectedLastMinutePlayer.email || '',
-        rank_position: selectedLastMinutePlayer.rank_position,
-        total_points: selectedLastMinutePlayer.total_points,
-        email_optin: selectedLastMinutePlayer.email_optin,
-        isLastMinute: true,
-        already_inscribed: false
-      });
-
-      // Reset search
-      relanceLastMinuteSearch.value = '';
-      relanceLastMinuteResults.style.display = 'none';
-      selectedLastMinutePlayer = null;
-      relanceAddLastMinuteBtn.disabled = true;
-
-      // Refresh the participants table to show the new player
-      const tbody = document.getElementById('relanceParticipantsBody');
-      const idx = relanceParticipants.length - 1;
-      const p = relanceParticipants[idx];
-      const hasEmail = p.email && p.email.includes('@');
-      const shouldBeSelected = hasEmail;
-
-      const tr = document.createElement('tr');
-      tr.className = shouldBeSelected ? 'relance-participant selected' : 'relance-participant';
-      tr.dataset.idx = idx;
-      tr.style.background = '#fff3cd'; // Highlight last minute additions
-
-      if (shouldBeSelected) {
-        selectedRelanceIds.add(idx);
-      }
-
-      tr.innerHTML = `
-        <td style="padding: 8px; text-align: center;">
-          <input type="checkbox" class="relance-checkbox" data-idx="${idx}" ${shouldBeSelected ? 'checked' : ''} ${!hasEmail ? 'disabled' : ''}>
-        </td>
-        <td style="padding: 8px;">${p.rank_position}</td>
-        <td style="padding: 8px;">${p.player_name || (p.first_name + ' ' + p.last_name)} <span style="background: #dc3545; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px; margin-left: 5px;">Remplacement</span></td>
-        <td style="padding: 8px;">${p.club || '-'}</td>
-        <td style="padding: 8px; text-align: center;">${hasEmail ? '✅' : '❌'}</td>
-      `;
-
-      // Add checkbox event listener
-      const checkbox = tr.querySelector('.relance-checkbox');
-      if (checkbox && !checkbox.disabled) {
-        checkbox.addEventListener('change', () => {
-          if (checkbox.checked) {
-            selectedRelanceIds.add(idx);
-            tr.classList.add('selected');
-          } else {
-            selectedRelanceIds.delete(idx);
-            tr.classList.remove('selected');
-          }
-          updateRelanceSelectedCount();
-        });
-      }
-
-      tbody.appendChild(tr);
-
-      // Update counts
-      document.getElementById('relanceParticipantCount').textContent = relanceParticipants.length;
-      if (hasEmail) {
-        const emailCount = parseInt(document.getElementById('relanceEmailCount').textContent) + 1;
-        document.getElementById('relanceEmailCount').textContent = emailCount;
-      }
       updateRelanceSelectedCount();
     });
 
