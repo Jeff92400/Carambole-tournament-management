@@ -1679,8 +1679,10 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
             </table>
             ` : ''}
 
+            ${!isFinale ? `
             <h3 style="color: #28a745;">🎯 Composition des Poules (${poules.length})</h3>
             ${poulesSummaryHtml}
+            ` : ''}
           </div>
           <div style="background: ${primaryColor}; color: white; padding: 10px; text-align: center; font-size: 12px;">
             <p style="margin: 0;">${orgShortName} - ${summaryEmailAddress}</p>
