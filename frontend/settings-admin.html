@@ -4380,12 +4380,17 @@
       const colorInput = document.getElementById(colorId);
       const textInput = document.getElementById(colorId + 'Text');
 
-      // Color picker -> text input (fires when user changes color)
-      colorInput.addEventListener('change', () => {
+      if (!colorInput || !textInput) {
+        console.error('Color sync elements not found for', colorId);
+        return;
+      }
+
+      // Color picker -> text input (use input for real-time updates while dragging)
+      colorInput.addEventListener('input', () => {
         textInput.value = colorInput.value.toUpperCase();
       });
 
-      // Text input -> color picker (fires when user types)
+      // Text input -> color picker (fires as user types)
       textInput.addEventListener('input', () => {
         const value = textInput.value.trim();
         if (/^#[0-9A-Fa-f]{6}$/i.test(value)) {
@@ -4394,8 +4399,10 @@
       });
     }
 
-    // Setup all color pickers
-    ['primaryColor', 'secondaryColor', 'accentColor', 'backgroundColor', 'backgroundSecondaryColor'].forEach(setupColorSync);
+    // Setup all color pickers after DOM is ready
+    document.addEventListener('DOMContentLoaded', () => {
+      ['primaryColor', 'secondaryColor', 'accentColor', 'backgroundColor', 'backgroundSecondaryColor'].forEach(setupColorSync);
+    });
 
     async function loadBrandingSettings() {
       try {
