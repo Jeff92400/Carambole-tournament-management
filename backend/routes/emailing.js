@@ -4803,12 +4803,20 @@ router.get('/finale-qualified', authenticateToken, async (req, res) => {
       inscriptions.forEach(i => { inscriptionStatuts[i.normalized_licence] = i.statut || 'inscrit'; });
     }
 
-    const alreadyInscribedCount = qualified.filter(r =>
+    // Build participants list: qualified players + any inscribed non-qualified players (replacements)
+    const inscribedNonQualified = nonQualified.filter(r => {
+      const normLicence = r.licence?.replace(/\s/g, '').toUpperCase();
+      return inscribedLicences.has(normLicence);
+    });
+
+    const allParticipants = [...qualified, ...inscribedNonQualified];
+
+    const alreadyInscribedCount = allParticipants.filter(r =>
       inscribedLicences.has(r.licence?.replace(/\s/g, '').toUpperCase())
     ).length;
 
     // Count only 'inscrit' status (not indisponible) to determine if spots are available
-    const inscritCount = qualified.filter(r => {
+    const inscritCount = allParticipants.filter(r => {
       const normLicence = r.licence?.replace(/\s/g, '').toUpperCase();
       return inscribedLicences.has(normLicence) && inscriptionStatuts[normLicence] === 'inscrit';
     }).length;
@@ -4846,7 +4854,7 @@ router.get('/finale-qualified', authenticateToken, async (req, res) => {
       qualifiedCount,
       totalInRanking: rankings.length,
       convocationRequired: !convocationSent,
-      participants: qualified.map(r => {
+      participants: allParticipants.map(r => {
         const normLicence = r.licence?.replace(/\s/g, '').toUpperCase();
         return {
           licence: r.licence,
@@ -4880,7 +4888,7 @@ router.get('/finale-qualified', authenticateToken, async (req, res) => {
           email_optin: r.email_optin
         };
       }) : [],
-      emailCount: qualified.filter(r => r.email && r.email.includes('@')).length,
+      emailCount: allParticipants.filter(r => r.email && r.email.includes('@')).length,
       alreadyInscribedCount,
       inscritCount,
       availableSpots: qualifiedCount - inscritCount
