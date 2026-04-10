@@ -2043,7 +2043,7 @@ router.put('/org-settings-batch', authenticateToken, requireAdmin, async (req, r
       if (key === 'organization_short_name' && orgId) {
         await new Promise((resolve, reject) => {
           db.run(
-            `UPDATE organizations SET short_name = $1 WHERE id = $2`,
+            `UPDATE organizations SET short_name = ? WHERE id = ?`,
             [stringValue, orgId],
             (err) => {
               if (err) {
@@ -2097,7 +2097,7 @@ router.post('/sync-org-short-name', authenticateToken, requireAdmin, async (req,
     // Update organizations table
     await new Promise((resolve, reject) => {
       db.run(
-        `UPDATE organizations SET short_name = $1 WHERE id = $2`,
+        `UPDATE organizations SET short_name = ? WHERE id = ?`,
         [shortName, orgId],
         (err) => {
           if (err) reject(err);
