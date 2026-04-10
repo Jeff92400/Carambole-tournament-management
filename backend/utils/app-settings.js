@@ -330,7 +330,7 @@ async function loadOrgSettings(orgId) {
 
   return new Promise((resolve) => {
     db.all(
-      'SELECT key, value FROM organization_settings WHERE organization_id = $1',
+      'SELECT key, value FROM organization_settings WHERE organization_id = ?',
       [orgId],
       (err, orgRows) => {
         if (err) {
@@ -415,7 +415,7 @@ async function setOrgSetting(orgId, key, value) {
   return new Promise((resolve, reject) => {
     db.run(
       `INSERT INTO organization_settings (organization_id, key, value, updated_at)
-       VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
+       VALUES (?, ?, ?, CURRENT_TIMESTAMP)
        ON CONFLICT (organization_id, key) DO UPDATE SET value = EXCLUDED.value, updated_at = CURRENT_TIMESTAMP`,
       [orgId, key, value],
       function(err) {
@@ -449,7 +449,7 @@ async function getOrgSlug(orgId) {
   if (!orgId) return '';
   const db = require('../db-loader');
   return new Promise((resolve) => {
-    db.get('SELECT slug FROM organizations WHERE id = $1', [orgId], (err, row) => {
+    db.get('SELECT slug FROM organizations WHERE id = ?', [orgId], (err, row) => {
       resolve(row?.slug || '');
     });
   });
