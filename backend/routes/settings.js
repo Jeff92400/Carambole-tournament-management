@@ -875,7 +875,7 @@ router.put('/app-bulk', authenticateToken, requireAdmin, async (req, res) => {
       if (key === 'organization_short_name') {
         await new Promise((resolve, reject) => {
           db.run(
-            `UPDATE organizations SET short_name = $1 WHERE id = $2`,
+            `UPDATE organizations SET short_name = ? WHERE id = ?`,
             [value, orgId],
             (err) => {
               if (err) {
