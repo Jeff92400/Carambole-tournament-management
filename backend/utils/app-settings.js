@@ -78,7 +78,16 @@ const defaults = {
   external_inscription_url: '',
 
   // Privacy policy
-  privacy_policy: ''
+  privacy_policy: '',
+
+  // Timeline parameters (NEW - April 2026)
+  inscription_opens_days_before: '28',
+  inscription_closes_days_before: '7',
+  relance_window_start: '7',
+  relance_window_end: '14',
+  auto_reminder_enabled: 'true',
+  auto_reminder_days_before_deadline: '3',
+  poule_simulation_lock_days: '7'
 };
 
 /**
@@ -202,6 +211,35 @@ async function getQualificationSettings(orgId) {
     threshold: parseInt(settings.qualification_threshold, 10) || 9,
     small: parseInt(settings.qualification_small, 10) || 4,
     large: parseInt(settings.qualification_large, 10) || 6
+  };
+}
+
+/**
+ * Get timeline settings bundle (NEW - April 2026)
+ */
+async function getTimelineSettings(orgId) {
+  const keys = [
+    'inscription_opens_days_before',
+    'inscription_closes_days_before',
+    'relance_window_start',
+    'relance_window_end',
+    'auto_reminder_enabled',
+    'auto_reminder_days_before_deadline',
+    'poule_simulation_lock_days'
+  ];
+  const settings = orgId
+    ? await getOrgSettingsBatch(orgId, keys)
+    : await getSettingsBatch(keys);
+
+  // Convert to numbers for easier use
+  return {
+    inscriptionOpensDaysBefore: parseInt(settings.inscription_opens_days_before, 10) || 28,
+    inscriptionClosesDaysBefore: parseInt(settings.inscription_closes_days_before, 10) || 7,
+    relanceWindowStart: parseInt(settings.relance_window_start, 10) || 7,
+    relanceWindowEnd: parseInt(settings.relance_window_end, 10) || 14,
+    autoReminderEnabled: settings.auto_reminder_enabled === 'true',
+    autoReminderDaysBeforeDeadline: parseInt(settings.auto_reminder_days_before_deadline, 10) || 3,
+    pouleSimulationLockDays: parseInt(settings.poule_simulation_lock_days, 10) || 7
   };
 }
 
@@ -475,6 +513,7 @@ module.exports = {
   getEmailSettings,
   getBrandingSettings,
   getQualificationSettings,
+  getTimelineSettings, // NEW - April 2026
   // Org-aware settings
   getOrgSettings,
   getOrgSetting,

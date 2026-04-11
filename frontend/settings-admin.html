@@ -1546,6 +1546,29 @@
           <input type="number" id="thresholdDisplayCompetitions" min="7" max="90" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
           <small style="color: #666;">Les competitions apparaissent dans "Competitions a venir" X jours avant</small>
         </div>
+        <div>
+          <label style="display: block; margin-bottom: 8px; font-weight: 500;">Ouverture inscriptions (jours avant) :</label>
+          <input type="number" id="inscriptionOpensDaysBefore" min="14" max="60" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+          <small style="color: #666;">Les inscriptions s'ouvrent X jours avant le tournoi (Player App)</small>
+        </div>
+        <div>
+          <label style="display: block; margin-bottom: 8px; font-weight: 500;">Fermeture inscriptions (jours avant) :</label>
+          <input type="number" id="inscriptionClosesDaysBefore" min="1" max="14" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+          <small style="color: #666;">Les inscriptions se ferment X jours avant le tournoi (Player App)</small>
+        </div>
+        <div>
+          <label style="display: block; margin-bottom: 8px; font-weight: 500;">Rappels automatiques activés :</label>
+          <select id="autoReminderEnabled" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+            <option value="true">Oui</option>
+            <option value="false">Non</option>
+          </select>
+          <small style="color: #666;">Envoyer des rappels push automatiques aux joueurs non inscrits</small>
+        </div>
+        <div>
+          <label style="display: block; margin-bottom: 8px; font-weight: 500;">Rappels automatiques (jours avant) :</label>
+          <input type="number" id="autoReminderDaysBeforeDeadline" min="1" max="7" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+          <small style="color: #666;">Envoyer le rappel X jours avant la fermeture des inscriptions</small>
+        </div>
       </div>
 
       <button onclick="saveTimeThresholds()" class="btn" style="background: #28a745; padding: 12px 25px; margin-top: 20px;">
@@ -4994,6 +5017,10 @@
           document.getElementById('thresholdStaleImportWarning').value = settings.threshold_stale_import_warning || '7';
           document.getElementById('thresholdUrgentAlert').value = settings.threshold_urgent_alert || '7';
           document.getElementById('thresholdDisplayCompetitions').value = settings.threshold_display_competitions || '28';
+          document.getElementById('inscriptionOpensDaysBefore').value = settings.inscription_opens_days_before || '28';
+          document.getElementById('inscriptionClosesDaysBefore').value = settings.inscription_closes_days_before || '7';
+          document.getElementById('autoReminderEnabled').value = settings.auto_reminder_enabled || 'true';
+          document.getElementById('autoReminderDaysBeforeDeadline').value = settings.auto_reminder_days_before_deadline || '3';
           updateAccordionSummaries();
         }
       } catch (error) {
@@ -5012,12 +5039,26 @@
         threshold_registration_deadline: document.getElementById('thresholdRegistrationDeadline').value,
         threshold_stale_import_warning: document.getElementById('thresholdStaleImportWarning').value,
         threshold_urgent_alert: document.getElementById('thresholdUrgentAlert').value,
-        threshold_display_competitions: document.getElementById('thresholdDisplayCompetitions').value
+        threshold_display_competitions: document.getElementById('thresholdDisplayCompetitions').value,
+        inscription_opens_days_before: document.getElementById('inscriptionOpensDaysBefore').value,
+        inscription_closes_days_before: document.getElementById('inscriptionClosesDaysBefore').value,
+        auto_reminder_enabled: document.getElementById('autoReminderEnabled').value,
+        auto_reminder_days_before_deadline: document.getElementById('autoReminderDaysBeforeDeadline').value
       };
 
       // Validate relance window (start should be less than end)
       if (parseInt(thresholds.threshold_relance_start) >= parseInt(thresholds.threshold_relance_end)) {
         msgDiv.textContent = 'Erreur : le debut de la fenetre de relance doit etre inferieur a la fin';
+        msgDiv.style.background = '#f8d7da';
+        msgDiv.style.color = '#721c24';
+        msgDiv.style.display = 'block';
+        setTimeout(() => { msgDiv.style.display = 'none'; }, 4000);
+        return;
+      }
+
+      // Validate inscription window (closing should be less than opening)
+      if (parseInt(thresholds.inscription_closes_days_before) >= parseInt(thresholds.inscription_opens_days_before)) {
+        msgDiv.textContent = 'Erreur : la fermeture des inscriptions doit etre inferieure a l\'ouverture';
         msgDiv.style.background = '#f8d7da';
         msgDiv.style.color = '#721c24';
         msgDiv.style.display = 'block';
