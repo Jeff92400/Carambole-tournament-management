@@ -423,32 +423,28 @@ async function getOrCreateTestTournament(db, orgId, category) {
           return resolve(existing.tournoi_id);
         }
 
-        // Create new test tournament
+        // Create new test tournament - need to generate tournoi_id first
         const tomorrow = new Date();
         tomorrow.setDate(tomorrow.getDate() + 1);
         const dateStr = tomorrow.toISOString().split('T')[0];
 
-        db.run(
-          `INSERT INTO tournoi_ext (nom, mode, categorie, taille, debut, lieu, organization_id, status)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, 'active')
-           RETURNING tournoi_id`,
-          ['TEST - Mode Test', 'LIBRE', 'N2', 10, dateStr, 'Salle de test', orgId],
-          function(err) {
+        // Get next tournoi_id
+        db.get(
+          'SELECT MAX(tournoi_id) as max_id FROM tournoi_ext WHERE ($1::int IS NULL OR organization_id = $1)',
+          [orgId],
+          (err, maxIdResult) => {
             if (err) return reject(err);
 
-            // Get the inserted ID
-            db.get(
-              `SELECT tournoi_id FROM tournoi_ext
-               WHERE nom = 'TEST - Mode Test'
-                 AND ($1::int IS NULL OR organization_id = $1)
-               ORDER BY tournoi_id DESC LIMIT 1`,
-              [orgId],
-              (err, row) => {
+            const nextId = (maxIdResult?.max_id || 0) + 1;
+
+            // Insert with explicit tournoi_id
+            db.run(
+              `INSERT INTO tournoi_ext (tournoi_id, nom, mode, categorie, taille, debut, lieu, organization_id, status)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'active')`,
+              [nextId, 'TEST - Mode Test', 'LIBRE', 'N2', 10, dateStr, 'Salle de test', orgId],
+              function(err) {
                 if (err) return reject(err);
-                if (!row || !row.tournoi_id) {
-                  return reject(new Error('Impossible de créer le tournoi de test'));
-                }
-                resolve(row.tournoi_id);
+                resolve(nextId);
               }
             );
           }
