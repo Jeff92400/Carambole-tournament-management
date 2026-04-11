@@ -1503,67 +1503,130 @@
       <div class="accordion-body">
       <p style="margin-bottom: 20px; color: #666;">
         Configurez les délais (en jours) utilisés pour les fonctionnalités liées aux compétitions.
+        <strong>Toutes les dates sont calculées à partir de la date du tournoi.</strong>
       </p>
 
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px;">
-        <div>
-          <label style="display: block; margin-bottom: 8px; font-weight: 500;">Desactivation simulation (jours) :</label>
-          <input type="number" id="thresholdSimulationDisabled" min="1" max="30" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
-          <small style="color: #666;">La simulation des poules est desactivee X jours avant le tournoi</small>
-        </div>
-        <div>
-          <label style="display: block; margin-bottom: 8px; font-weight: 500;">Debut fenetre relance (jours) :</label>
-          <input type="number" id="thresholdRelanceStart" min="1" max="30" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
-          <small style="color: #666;">Les tournois apparaissent dans la fenetre de relance X jours avant</small>
-        </div>
-        <div>
-          <label style="display: block; margin-bottom: 8px; font-weight: 500;">Fin fenetre relance (jours) :</label>
-          <input type="number" id="thresholdRelanceEnd" min="1" max="60" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
-          <small style="color: #666;">Les tournois disparaissent de la fenetre de relance X jours avant</small>
-        </div>
-        <div>
-          <label style="display: block; margin-bottom: 8px; font-weight: 500;">Recherche relances (jours) :</label>
-          <input type="number" id="thresholdRelanceSearch" min="7" max="90" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
-          <small style="color: #666;">Fenetre de recherche pour marquer les relances par type (T2, T3, Finale)</small>
-        </div>
-        <div>
-          <label style="display: block; margin-bottom: 8px; font-weight: 500;">Delai inscription emails (jours) :</label>
-          <input type="number" id="thresholdRegistrationDeadline" min="1" max="30" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
-          <small style="color: #666;">Date limite d'inscription = date tournoi - X jours (affichee dans les emails)</small>
-        </div>
-        <div>
-          <label style="display: block; margin-bottom: 8px; font-weight: 500;">Alerte urgente (jours) :</label>
-          <input type="number" id="thresholdUrgentAlert" min="1" max="14" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
-          <small style="color: #666;">Les alertes de tournois passent en rouge X jours avant le tournoi</small>
-        </div>
-        <div>
-          <label style="display: block; margin-bottom: 8px; font-weight: 500;">Affichage competitions (jours) :</label>
-          <input type="number" id="thresholdDisplayCompetitions" min="7" max="90" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
-          <small style="color: #666;">Les competitions apparaissent dans "Competitions a venir" X jours avant</small>
-        </div>
-        <div>
-          <label style="display: block; margin-bottom: 8px; font-weight: 500;">Ouverture inscriptions (jours avant) :</label>
-          <input type="number" id="inscriptionOpensDaysBefore" min="14" max="60" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
-          <small style="color: #666;">Les inscriptions s'ouvrent X jours avant le tournoi (Player App)</small>
-        </div>
-        <div>
-          <label style="display: block; margin-bottom: 8px; font-weight: 500;">Fermeture inscriptions (jours avant) :</label>
-          <input type="number" id="inscriptionClosesDaysBefore" min="1" max="14" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
-          <small style="color: #666;">Les inscriptions se ferment X jours avant le tournoi (Player App)</small>
-        </div>
-        <div>
-          <label style="display: block; margin-bottom: 8px; font-weight: 500;">Rappels automatiques activés :</label>
-          <select id="autoReminderEnabled" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
-            <option value="true">Oui</option>
-            <option value="false">Non</option>
-          </select>
-          <small style="color: #666;">Envoyer des rappels push automatiques aux joueurs non inscrits</small>
-        </div>
-        <div>
-          <label style="display: block; margin-bottom: 8px; font-weight: 500;">Rappels automatiques (jours avant) :</label>
-          <input type="number" id="autoReminderDaysBeforeDeadline" min="1" max="7" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
-          <small style="color: #666;">Envoyer le rappel X jours avant la fermeture des inscriptions</small>
-        </div>
+      <!-- Timeline Parameters Table -->
+      <div style="overflow-x: auto; margin-bottom: 25px;">
+        <table style="width: 100%; border-collapse: collapse; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.1); border-radius: 8px; overflow: hidden;">
+          <thead>
+            <tr style="background: linear-gradient(135deg, #1F4788 0%, #2d5aa8 100%); color: white;">
+              <th style="padding: 15px; text-align: left; font-weight: 600; font-size: 14px; border-right: 1px solid rgba(255,255,255,0.1);">Événement</th>
+              <th style="padding: 15px; text-align: center; font-weight: 600; font-size: 14px; width: 120px; border-right: 1px solid rgba(255,255,255,0.1);">Jours avant</th>
+              <th style="padding: 15px; text-align: left; font-weight: 600; font-size: 14px; border-right: 1px solid rgba(255,255,255,0.1);">App Gestion</th>
+              <th style="padding: 15px; text-align: left; font-weight: 600; font-size: 14px;">Espace Joueur</th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- Affichage competitions -->
+            <tr style="border-bottom: 1px solid #e9ecef; background: #f8f9fa;">
+              <td style="padding: 15px; font-weight: 500; color: #1F4788;">📋 Affichage compétitions</td>
+              <td style="padding: 15px; text-align: center;">
+                <input type="number" id="thresholdDisplayCompetitions" min="7" max="90" style="width: 80px; padding: 8px; border: 2px solid #1F4788; border-radius: 6px; text-align: center; font-weight: bold; font-size: 14px;">
+              </td>
+              <td style="padding: 15px; color: #495057; font-size: 13px;">Compétitions visibles dans "Compétitions à venir"</td>
+              <td style="padding: 15px; color: #999; font-size: 13px; font-style: italic;">—</td>
+            </tr>
+
+            <!-- Ouverture inscriptions -->
+            <tr style="border-bottom: 1px solid #e9ecef;">
+              <td style="padding: 15px; font-weight: 500; color: #28a745;">📢 Ouverture inscriptions</td>
+              <td style="padding: 15px; text-align: center;">
+                <input type="number" id="inscriptionOpensDaysBefore" min="14" max="60" style="width: 80px; padding: 8px; border: 2px solid #28a745; border-radius: 6px; text-align: center; font-weight: bold; font-size: 14px;">
+              </td>
+              <td style="padding: 15px; color: #999; font-size: 13px; font-style: italic;">—</td>
+              <td style="padding: 15px; color: #495057; font-size: 13px;">Les joueurs peuvent s'inscrire au tournoi</td>
+            </tr>
+
+            <!-- Recherche relances -->
+            <tr style="border-bottom: 1px solid #e9ecef; background: #f8f9fa;">
+              <td style="padding: 15px; font-weight: 500; color: #1F4788;">🔍 Recherche relances</td>
+              <td style="padding: 15px; text-align: center;">
+                <input type="number" id="thresholdRelanceSearch" min="7" max="90" style="width: 80px; padding: 8px; border: 2px solid #1F4788; border-radius: 6px; text-align: center; font-weight: bold; font-size: 14px;">
+              </td>
+              <td style="padding: 15px; color: #495057; font-size: 13px;">Fenêtre de recherche pour marquer les relances (T2, T3, Finale)</td>
+              <td style="padding: 15px; color: #999; font-size: 13px; font-style: italic;">—</td>
+            </tr>
+
+            <!-- Debut fenetre relance -->
+            <tr style="border-bottom: 1px solid #e9ecef;">
+              <td style="padding: 15px; font-weight: 500; color: #17a2b8;">📨 Début fenêtre relance</td>
+              <td style="padding: 15px; text-align: center;">
+                <input type="number" id="thresholdRelanceStart" min="1" max="30" style="width: 80px; padding: 8px; border: 2px solid #17a2b8; border-radius: 6px; text-align: center; font-weight: bold; font-size: 14px;">
+              </td>
+              <td style="padding: 15px; color: #495057; font-size: 13px;">Les tournois apparaissent dans la page Relances</td>
+              <td style="padding: 15px; color: #999; font-size: 13px; font-style: italic;">—</td>
+            </tr>
+
+            <!-- Fin fenetre relance -->
+            <tr style="border-bottom: 1px solid #e9ecef; background: #f8f9fa;">
+              <td style="padding: 15px; font-weight: 500; color: #17a2b8;">📭 Fin fenêtre relance</td>
+              <td style="padding: 15px; text-align: center;">
+                <input type="number" id="thresholdRelanceEnd" min="1" max="60" style="width: 80px; padding: 8px; border: 2px solid #17a2b8; border-radius: 6px; text-align: center; font-weight: bold; font-size: 14px;">
+              </td>
+              <td style="padding: 15px; color: #495057; font-size: 13px;">Les tournois disparaissent de la page Relances</td>
+              <td style="padding: 15px; color: #999; font-size: 13px; font-style: italic;">—</td>
+            </tr>
+
+            <!-- Rappel automatique -->
+            <tr style="border-bottom: 1px solid #e9ecef;">
+              <td style="padding: 15px; font-weight: 500; color: #ffc107;">⚠️ Rappel automatique</td>
+              <td style="padding: 15px; text-align: center;">
+                <input type="number" id="autoReminderDaysBeforeDeadline" min="1" max="7" style="width: 80px; padding: 8px; border: 2px solid #ffc107; border-radius: 6px; text-align: center; font-weight: bold; font-size: 14px;">
+              </td>
+              <td style="padding: 15px; color: #495057; font-size: 13px;" colspan="2">
+                <div style="display: flex; align-items: center; gap: 15px;">
+                  <span>Rappels activés :</span>
+                  <select id="autoReminderEnabled" style="padding: 8px 12px; border: 2px solid #ffc107; border-radius: 6px; font-weight: 500;">
+                    <option value="true">Oui</option>
+                    <option value="false">Non</option>
+                  </select>
+                  <span style="flex: 1; color: #666;">→ Notification push X jours avant la fermeture des inscriptions (aux joueurs non inscrits)</span>
+                </div>
+              </td>
+            </tr>
+
+            <!-- Delai inscription emails -->
+            <tr style="border-bottom: 1px solid #e9ecef; background: #f8f9fa;">
+              <td style="padding: 15px; font-weight: 500; color: #6c757d;">📧 Délai inscription emails</td>
+              <td style="padding: 15px; text-align: center;">
+                <input type="number" id="thresholdRegistrationDeadline" min="1" max="30" style="width: 80px; padding: 8px; border: 2px solid #6c757d; border-radius: 6px; text-align: center; font-weight: bold; font-size: 14px;">
+              </td>
+              <td style="padding: 15px; color: #495057; font-size: 13px;">Date limite affichée dans les emails de convocations</td>
+              <td style="padding: 15px; color: #999; font-size: 13px; font-style: italic;">—</td>
+            </tr>
+
+            <!-- Fermeture inscriptions -->
+            <tr style="border-bottom: 1px solid #e9ecef;">
+              <td style="padding: 15px; font-weight: 500; color: #dc3545;">🔒 Fermeture inscriptions</td>
+              <td style="padding: 15px; text-align: center;">
+                <input type="number" id="inscriptionClosesDaysBefore" min="1" max="14" style="width: 80px; padding: 8px; border: 2px solid #dc3545; border-radius: 6px; text-align: center; font-weight: bold; font-size: 14px;">
+              </td>
+              <td style="padding: 15px; color: #999; font-size: 13px; font-style: italic;">—</td>
+              <td style="padding: 15px; color: #495057; font-size: 13px;">Les joueurs ne peuvent plus s'inscrire</td>
+            </tr>
+
+            <!-- Alerte urgente -->
+            <tr style="border-bottom: 1px solid #e9ecef; background: #f8f9fa;">
+              <td style="padding: 15px; font-weight: 500; color: #dc3545;">🚨 Alerte urgente</td>
+              <td style="padding: 15px; text-align: center;">
+                <input type="number" id="thresholdUrgentAlert" min="1" max="14" style="width: 80px; padding: 8px; border: 2px solid #dc3545; border-radius: 6px; text-align: center; font-weight: bold; font-size: 14px;">
+              </td>
+              <td style="padding: 15px; color: #495057; font-size: 13px;">Les alertes du tableau de bord passent en rouge</td>
+              <td style="padding: 15px; color: #999; font-size: 13px; font-style: italic;">—</td>
+            </tr>
+
+            <!-- Desactivation simulation -->
+            <tr>
+              <td style="padding: 15px; font-weight: 500; color: #6c757d;">🔧 Désactivation simulation</td>
+              <td style="padding: 15px; text-align: center;">
+                <input type="number" id="thresholdSimulationDisabled" min="1" max="30" style="width: 80px; padding: 8px; border: 2px solid #6c757d; border-radius: 6px; text-align: center; font-weight: bold; font-size: 14px;">
+              </td>
+              <td style="padding: 15px; color: #495057; font-size: 13px;">La génération de poules de test est désactivée</td>
+              <td style="padding: 15px; color: #999; font-size: 13px; font-style: italic;">—</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
 
       <!-- Timeline Explanation Box -->
