@@ -282,9 +282,9 @@ async function sendTestConvocations(db, appSettings, playerLicences, overrideEma
       for (const player of players) {
         await new Promise((res, rej) => {
           db.run(
-            `INSERT INTO inscriptions (tournoi_id, licence, nom, prenom, club, source, statut)
-             VALUES ($1, $2, $3, $4, $5, 'manual', 'inscrit')`,
-            [tournamentId, player.licence, player.last_name, player.first_name, player.club],
+            `INSERT INTO inscriptions (inscription_id, tournoi_id, licence, timestamp, source, statut, organization_id)
+             VALUES ((SELECT COALESCE(MAX(inscription_id), 0) + 1 FROM inscriptions WHERE ($1::int IS NULL OR organization_id = $1)), $2, $3, CURRENT_TIMESTAMP, 'manual', 'inscrit', $4)`,
+            [orgId, tournamentId, player.licence, orgId],
             (err) => err ? rej(err) : res()
           );
         });
