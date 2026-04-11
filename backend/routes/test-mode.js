@@ -1117,12 +1117,12 @@ router.post('/send-template', authenticateToken, async (req, res) => {
 </div>`;
 
     // Determine from address based on template type
-    let fromType = 'noreply';
+    // NOTE: For test emails, always use verified sender addresses
+    let fromType = 'communication'; // Default to communication (always verified)
     if (templateKey.includes('convocation')) {
-      fromType = 'convocations';
-    } else if (templateKey.includes('results') || templateKey.includes('relance')) {
-      fromType = 'communication';
+      fromType = 'convocations'; // convocations@cdbhs.net (verified)
     }
+    // All other templates use communication@cdbhs.net to avoid unverified sender rejections
     const fromAddress = buildFromAddress(settings, fromType);
 
     // Send email via Resend
