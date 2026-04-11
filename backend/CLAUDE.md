@@ -90,6 +90,111 @@ npm run backup
 - Scheduled emails processed by `processScheduledEmails()` in server.js
 - **CRITICAL - Variable ordering in email routes:** When modifying email routes in `emailing.js` or `email.js`, always define `primaryColor`, `senderName`, `emailFrom` and other settings variables BEFORE using them in helper functions like `buildContactPhraseHtml(contactEmail, primaryColor)`. The async `appSettings.getSetting()` calls must complete before their values are used. This bug has caused email failures multiple times - always verify variable declaration order when touching email code.
 
+## Common Pitfalls & Verification Checklist
+
+### JWT Token Structure (routes/auth.js)
+
+**CRITICAL:** The JWT payload does NOT contain all user fields. Before using `req.user.*`, verify the field exists.
+
+**JWT contains:**
+```javascript
+{
+  userId: user.id,
+  username: user.username,
+  role: user.role,
+  clubId: user.club_id || null,
+  isSuperAdmin: user.is_super_admin || false,
+  organizationId: targetOrgId,
+  ligueNumero: user.ffb_ligue_numero || null
+}
+```
+
+**JWT does NOT contain:**
+- ❌ `email` - Must query database: `SELECT email FROM users WHERE id = req.user.userId`
+- ❌ `club_name` - Must query database or use `clubId` to lookup
+- ❌ `first_name`, `last_name` - Not stored in users table
+
+**Common mistake:**
+```javascript
+// WRONG - email is not in JWT
+const adminEmail = req.user.email;
+
+// CORRECT - query database
+db.get('SELECT email FROM users WHERE id = $1', [req.user.userId], (err, user) => {
+  const adminEmail = user.email;
+});
+```
+
+### Frontend Helper Functions by File
+
+Different frontend files have different helper functions. **Always check before calling:**
+
+| File | Available Helpers | NOT Available |
+|------|------------------|---------------|
+| `settings-admin.html` | `showMessage(type, text)` | N/A |
+| `emailing.html` | `showError(msg)`, `showSuccess(msg)` | ❌ `showMessage()` |
+| `dashboard.html` | `showMessage(type, text)` | N/A |
+| `generate-poules.html` | `showError(msg)`, `showSuccess(msg)` | ❌ `showMessage()` |
+
+**Common mistake:**
+```javascript
+// WRONG - showMessage doesn't exist in emailing.html
+showMessage('success', 'Email sent');
+
+// CORRECT - use file-specific helpers
+showSuccess('Email sent');
+showError('Error occurred');
+```
+
+**Verification pattern:**
+```bash
+# Before calling a function, grep for it:
+grep "function showMessage\|const showMessage" frontend/emailing.html
+```
+
+### Pre-Deployment Verification
+
+**Before deploying any feature that touches authentication or frontend:**
+
+1. **Check JWT structure** - Grep for `jwt.sign` in `routes/auth.js` to see payload
+2. **Check helper functions** - Grep for function definitions in target frontend file
+3. **Check database schema** - Verify column names exist in `db-postgres.js` or via `\d table_name` in psql
+4. **Test locally first** - Start server, test endpoint with curl or Postman
+5. **Check console errors** - Open browser console after deployment to catch runtime errors
+
+**Example verification workflow:**
+```bash
+# Adding feature that uses req.user.email
+# Step 1: Verify JWT contains email
+grep "jwt.sign" backend/routes/auth.js
+# Result: email NOT in JWT → need to query database
+
+# Step 2: Verify helper function exists
+grep "showMessage\|showError\|showSuccess" frontend/target-file.html
+# Result: only showError and showSuccess → use those, not showMessage
+
+# Step 3: Test locally
+npm start
+curl -X POST http://localhost:3000/api/endpoint -H "Authorization: Bearer $TOKEN"
+```
+
+### Database Column Name Verification
+
+**Common mistakes:**
+- Using `club` instead of `club_name`
+- Using `name` instead of `first_name` + `last_name`
+- Using `template_type` instead of `template_key`
+
+**Verification pattern:**
+```bash
+# Check actual column names in schema:
+grep "CREATE TABLE email_templates" backend/db-postgres.js
+# Or in PostgreSQL:
+\d email_templates
+```
+
+**Always use exact column names from schema** - assumptions cause 90% of bugs.
+
 ## Environment Variables
 
 Required:
