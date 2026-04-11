@@ -611,7 +611,6 @@ const initAppSettings = async () => {
         ['threshold_relance_end', '14'],             // Days before tournament when relance window ends
         ['threshold_relance_search', '28'],          // Days window for searching tournaments to relance
         ['threshold_registration_deadline', '7'],    // Days before tournament for registration deadline in emails
-        ['threshold_stale_import_warning', '7'],     // Days after which import data is considered stale
         ['threshold_urgent_alert', '7'],             // Days threshold for urgent (red) alerts on dashboard
         ['threshold_display_competitions', '28'],    // Days ahead to display competitions in "Compétitions à venir"
 

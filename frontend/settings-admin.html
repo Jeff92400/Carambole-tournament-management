@@ -1532,11 +1532,6 @@
           <small style="color: #666;">Date limite d'inscription = date tournoi - X jours (affichee dans les emails)</small>
         </div>
         <div>
-          <label style="display: block; margin-bottom: 8px; font-weight: 500;">Alerte import obsolete (jours) :</label>
-          <input type="number" id="thresholdStaleImportWarning" min="1" max="30" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
-          <small style="color: #666;">Affiche un avertissement si le dernier import date de plus de X jours</small>
-        </div>
-        <div>
           <label style="display: block; margin-bottom: 8px; font-weight: 500;">Alerte urgente (jours) :</label>
           <input type="number" id="thresholdUrgentAlert" min="1" max="14" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
           <small style="color: #666;">Les alertes de tournois passent en rouge X jours avant le tournoi</small>
@@ -5014,7 +5009,6 @@
           document.getElementById('thresholdRelanceEnd').value = settings.threshold_relance_end || '14';
           document.getElementById('thresholdRelanceSearch').value = settings.threshold_relance_search || '28';
           document.getElementById('thresholdRegistrationDeadline').value = settings.threshold_registration_deadline || '7';
-          document.getElementById('thresholdStaleImportWarning').value = settings.threshold_stale_import_warning || '7';
           document.getElementById('thresholdUrgentAlert').value = settings.threshold_urgent_alert || '7';
           document.getElementById('thresholdDisplayCompetitions').value = settings.threshold_display_competitions || '28';
           document.getElementById('inscriptionOpensDaysBefore').value = settings.inscription_opens_days_before || '28';
@@ -5037,7 +5031,6 @@
         threshold_relance_end: document.getElementById('thresholdRelanceEnd').value,
         threshold_relance_search: document.getElementById('thresholdRelanceSearch').value,
         threshold_registration_deadline: document.getElementById('thresholdRegistrationDeadline').value,
-        threshold_stale_import_warning: document.getElementById('thresholdStaleImportWarning').value,
         threshold_urgent_alert: document.getElementById('thresholdUrgentAlert').value,
         threshold_display_competitions: document.getElementById('thresholdDisplayCompetitions').value,
         inscription_opens_days_before: document.getElementById('inscriptionOpensDaysBefore').value,
