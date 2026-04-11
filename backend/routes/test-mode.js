@@ -3,6 +3,86 @@ const router = express.Router();
 const { authenticateToken } = require('./auth');
 const db = require('../db-loader');
 const appSettings = require('../utils/app-settings');
+const { Resend } = require('resend');
+
+// Initialize Resend
+const resend = new Resend(process.env.RESEND_API_KEY);
+
+// ==================== HELPER FUNCTIONS ====================
+
+// Get email template from database
+async function getEmailTemplate(templateType, orgId) {
+  return new Promise((resolve, reject) => {
+    db.get(
+      `SELECT subject, body FROM email_templates
+       WHERE template_type = $1
+         AND ($2::int IS NULL OR organization_id = $2)
+       LIMIT 1`,
+      [templateType, orgId],
+      (err, row) => {
+        if (err) reject(err);
+        else if (!row) {
+          // Fallback to default template
+          resolve({
+            subject: '[TEST] Convocation - {player_name} - {category}',
+            body: 'Bonjour {first_name} {last_name},\n\nVous êtes convoqué(e) pour le {tournament} en {category}.\n\nDate : {date}\nHeure : {time}\nLieu : {location}\nVotre poule : {poule}\n\nMerci de confirmer votre présence.'
+          });
+        } else {
+          resolve(row);
+        }
+      }
+    );
+  });
+}
+
+// Replace template variables
+function replaceTemplateVariables(text, variables) {
+  let result = text;
+  for (const [key, value] of Object.entries(variables)) {
+    const regex = new RegExp(`\\{${key}\\}`, 'g');
+    result = result.replace(regex, value || '');
+  }
+  return result;
+}
+
+// Build "from" address for emails
+function buildFromAddress(settings, type = 'noreply') {
+  const senderName = settings.email_sender_name || 'CDB';
+  let email;
+  switch (type) {
+    case 'convocations':
+      email = settings.email_convocations || 'convocations@cdbhs.net';
+      break;
+    case 'communication':
+      email = settings.email_communication || 'communication@cdbhs.net';
+      break;
+    default:
+      email = settings.email_noreply || 'noreply@cdbhs.net';
+  }
+  return `${senderName} <${email}>`;
+}
+
+// Get contact email
+async function getContactEmail(orgId) {
+  return appSettings.getOrgSetting(orgId, 'summary_email');
+}
+
+// Get email template settings
+async function getEmailTemplateSettings(orgId) {
+  const settings = await appSettings.getOrgSettingsBatch(orgId, [
+    'primary_color',
+    'secondary_color',
+    'accent_color',
+    'email_noreply',
+    'email_convocations',
+    'email_communication',
+    'email_sender_name',
+    'organization_name',
+    'organization_short_name',
+    'summary_email'
+  ]);
+  return settings;
+}
 
   // ==================== VERIFY TEST ENVIRONMENT ====================
 
@@ -249,65 +329,9 @@ const appSettings = require('../utils/app-settings');
     }
   });
 
-// ==================== HELPER FUNCTIONS ====================
+// ==================== TOURNAMENT-SPECIFIC FUNCTIONS ====================
 
-// Build HTML preview for convocation email
-function buildConvocationPreview(player, pouleNum, primaryColor, orgName) {
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  const dateStr = tomorrow.toLocaleDateString('fr-FR');
-
-  return `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <style>
-    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 20px; background: #f4f4f4; }
-    .container { max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-    .header { background: ${primaryColor}; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; margin: -30px -30px 20px -30px; }
-    .header h1 { margin: 0; font-size: 24px; }
-    .poule-box { background: #f8f9fa; border-left: 4px solid ${primaryColor}; padding: 15px; margin: 20px 0; }
-    .info-row { margin: 10px 0; }
-    .label { font-weight: bold; color: ${primaryColor}; }
-    .footer { margin-top: 30px; padding-top: 20px; border-top: 2px solid #eee; font-size: 12px; color: #666; }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <div class="header">
-      <h1>🎱 Convocation Tournoi</h1>
-      <p>${orgName}</p>
-    </div>
-
-    <p>Bonjour <strong>${player.first_name} ${player.last_name}</strong>,</p>
-
-    <p>Vous êtes convoqué(e) pour le tournoi suivant :</p>
-
-    <div class="poule-box">
-      <div class="info-row"><span class="label">Mode :</span> Libre N2</div>
-      <div class="info-row"><span class="label">Date :</span> ${dateStr}</div>
-      <div class="info-row"><span class="label">Heure :</span> 14H00</div>
-      <div class="info-row"><span class="label">Lieu :</span> Salle de test</div>
-      <div class="info-row"><span class="label">Votre poule :</span> Poule ${pouleNum}</div>
-    </div>
-
-    <p><strong>Distance :</strong> 80 points<br>
-    <strong>Reprises :</strong> 25</p>
-
-    <p>Merci de confirmer votre présence.</p>
-
-    <div class="footer">
-      <p>Ceci est un email de test généré par le Mode Test.<br>
-      Aucun email réel n'a été envoyé.</p>
-    </div>
-  </div>
-</body>
-</html>
-  `;
-}
-
-// Send test convocations
+// Send test convocations with REAL email template and sending
 async function sendTestConvocations(db, appSettings, playerLicences, overrideEmail, orgId) {
   return new Promise(async (resolve, reject) => {
     try {
@@ -355,23 +379,126 @@ async function sendTestConvocations(db, appSettings, playerLicences, overrideEma
         poules[pouleNum].push(players[i]);
       }
 
-      // 6. Build email HTML previews
-      const primaryColor = await appSettings.getOrgSetting('primary_color', orgId) || '#1F4788';
-      const orgName = await appSettings.getOrgSetting('organization_short_name', orgId) || 'CDB';
+      // 6. Load REAL email template from database
+      const emailTemplate = await getEmailTemplate('convocation', orgId);
 
-      const emails = players.map((player, index) => {
+      // 7. Get branding settings
+      const emailSettings = await getEmailTemplateSettings(orgId);
+      const primaryColor = emailSettings.primary_color || '#1F4788';
+      const orgShortName = emailSettings.organization_short_name || 'CDB';
+      const contactEmail = await getContactEmail(orgId);
+      const baseUrl = process.env.BASE_URL || 'https://cdbhs-tournament-management-production.up.railway.app';
+      const orgSlug = await appSettings.getOrgSlug(orgId);
+      const logoUrl = appSettings.buildLogoUrl(baseUrl, orgSlug);
+
+      // 8. Prepare tournament info
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const dateStr = tomorrow.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+
+      // 9. Send REAL emails via Resend
+      const emails = [];
+      for (let index = 0; index < players.length; index++) {
+        const player = players[index];
         const pouleNum = Math.floor(index / pouleSize) + 1;
-        const html = buildConvocationPreview(player, pouleNum, primaryColor, orgName);
 
-        return {
-          type: 'convocation',
-          to: overrideEmail,
-          originalRecipient: `${player.first_name} ${player.last_name}`,
-          subject: `[PREVIEW] Convocation - ${player.first_name} ${player.last_name} - Libre N2`,
-          status: 'preview',
-          html: html
+        // Prepare template variables
+        const templateVariables = {
+          player_name: `${player.first_name} ${player.last_name}`,
+          first_name: player.first_name,
+          last_name: player.last_name,
+          club: player.club || '',
+          category: 'Libre N2',
+          tournament: 'TEST - Mode Test',
+          date: dateStr,
+          tournament_date: dateStr,
+          time: '14H00',
+          tournament_lieu: 'Salle de test',
+          location: 'Salle de test',
+          poule: pouleNum,
+          distance: '80',
+          reprises: '25',
+          organization_name: emailSettings.organization_name || 'Comité Départemental de Billard',
+          organization_short_name: orgShortName,
+          organization_email: contactEmail
         };
-      });
+
+        // Generate subject and body from template
+        const emailSubject = '[TEST] ' + replaceTemplateVariables(emailTemplate.subject, templateVariables);
+        const emailBodyText = replaceTemplateVariables(emailTemplate.body, templateVariables);
+        const emailBodyHtml = emailBodyText.replace(/\n/g, '<br>');
+
+        // Build HTML email with real branding
+        const htmlContent = `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <div style="background: ${primaryColor}; color: white; padding: 20px; text-align: center;">
+              <img src="${logoUrl}" alt="${orgShortName}" style="height: 60px; max-width: 80%; width: auto; margin-bottom: 10px;" onerror="this.style.display='none'">
+              <h1 style="margin: 0; font-size: 24px;">${orgShortName}</h1>
+              <p style="margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">CONVOCATION - MODE TEST</p>
+            </div>
+
+            <div style="padding: 20px; background: #f8f9fa;">
+              <div style="margin-bottom: 20px; padding: 15px; background: #fff3cd; border: 2px solid #ffc107; border-radius: 4px;">
+                <p style="margin: 0; color: #856404; font-weight: 600;">🧪 Ceci est un email de TEST</p>
+                <p style="margin: 5px 0 0 0; color: #856404; font-size: 13px;">Généré par le Mode Test pour vérifier le rendu des emails.</p>
+              </div>
+
+              <div style="margin-bottom: 20px; padding: 15px; background: white; border-radius: 4px; border-left: 4px solid ${primaryColor};">
+                <p style="margin: 5px 0;"><strong>Catégorie :</strong> Libre N2</p>
+                <p style="margin: 5px 0;"><strong>Compétition :</strong> TEST - Mode Test</p>
+                <p style="margin: 5px 0;"><strong>Date :</strong> ${dateStr}</p>
+                <p style="margin: 5px 0;"><strong>Heure :</strong> 14H00</p>
+                <p style="margin: 5px 0;"><strong>Lieu :</strong> Salle de test</p>
+                <p style="margin: 5px 0;"><strong>Votre poule :</strong> ${pouleNum}</p>
+              </div>
+
+              <div style="line-height: 1.6;">
+                ${emailBodyHtml}
+              </div>
+
+              <p style="margin-top: 20px; padding: 10px; background: #fff3cd; border-left: 4px solid #ffc107; font-size: 13px;">
+                📧 <strong>Contact :</strong> Pour toute question, contactez-nous à
+                <a href="mailto:${contactEmail}" style="color: ${primaryColor};">${contactEmail}</a>
+              </p>
+            </div>
+
+            <div style="background: ${primaryColor}; color: white; padding: 10px; text-align: center; font-size: 12px;">
+              <p style="margin: 0;">${orgShortName} - <a href="mailto:${contactEmail}" style="color: white;">${contactEmail}</a></p>
+            </div>
+          </div>
+        `;
+
+        // Send via Resend
+        try {
+          const emailResult = await resend.emails.send({
+            from: buildFromAddress(emailSettings, 'convocations'),
+            replyTo: contactEmail,
+            to: [overrideEmail],
+            subject: emailSubject,
+            html: htmlContent
+          });
+
+          console.log('[Test Mode] Email sent:', emailResult);
+
+          emails.push({
+            type: 'convocation',
+            to: overrideEmail,
+            originalRecipient: `${player.first_name} ${player.last_name}`,
+            subject: emailSubject,
+            status: 'sent'
+          });
+        } catch (error) {
+          console.error('[Test Mode] Email error:', error);
+          emails.push({
+            type: 'convocation',
+            to: overrideEmail,
+            originalRecipient: `${player.first_name} ${player.last_name}`,
+            subject: emailSubject,
+            status: 'failed',
+            error: error.message
+          });
+        }
+      }
 
       resolve({ emails, tournamentId });
 

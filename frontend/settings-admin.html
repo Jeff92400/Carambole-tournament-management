@@ -1282,20 +1282,6 @@
         <div id="testModeResultsContent"></div>
       </div>
 
-      <!-- Email Preview Modal -->
-      <div id="emailPreviewModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 10000; overflow: auto;">
-        <div style="position: relative; max-width: 800px; margin: 40px auto; background: white; border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.3);">
-          <div style="display: flex; justify-content: space-between; align-items: center; padding: 20px; border-bottom: 2px solid #e0e0e0;">
-            <h3 style="margin: 0; color: #1F4788;">📧 Aperçu de l'email</h3>
-            <button onclick="closeEmailPreview()" style="background: #dc3545; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600;">✕ Fermer</button>
-          </div>
-          <div style="padding: 20px; background: #f8f9fa;">
-            <div id="emailPreviewSubject" style="margin-bottom: 12px; padding: 12px; background: white; border-left: 4px solid #2196f3; font-weight: 600;"></div>
-            <div id="emailPreviewContent" style="background: white; border: 1px solid #dee2e6; border-radius: 8px; overflow: hidden;"></div>
-          </div>
-        </div>
-      </div>
-
       </div>
     </div>
 
@@ -4976,19 +4962,23 @@
         let html = '';
 
         if (result.emailsSent && result.emailsSent.length > 0) {
-          html += '<div style="margin-bottom: 15px; padding: 12px; background: #e7f3ff; border: 2px solid #2196f3; border-radius: 6px;">';
-          html += `<div style="font-weight: 600; color: #0d47a1; margin-bottom: 8px;">📧 ${result.emailsSent.length} aperçu(s) généré(s)</div>`;
-          html += '<div style="font-size: 13px; color: #0d47a1;">';
-          result.emailsSent.forEach((email, index) => {
-            html += `<div style="padding: 8px 0; border-bottom: 1px solid rgba(13,71,161,0.1); display: flex; justify-content: space-between; align-items: center;">`;
-            html += `  <div><strong>${email.type}</strong> → ${email.originalRecipient}</div>`;
-            html += `  <button onclick="showEmailPreview(${index})" style="background: #2196f3; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">👁️ Voir l'aperçu</button>`;
+          html += '<div style="margin-bottom: 15px; padding: 12px; background: #d4edda; border: 2px solid #28a745; border-radius: 6px;">';
+          html += `<div style="font-weight: 600; color: #155724; margin-bottom: 8px;">✅ ${result.emailsSent.length} email(s) envoyé(s)</div>`;
+          html += '<div style="font-size: 13px; color: #155724;">';
+          html += `<p style="margin: 5px 0;">Les emails de test ont été envoyés à <strong>${result.emailsSent[0].to}</strong></p>`;
+          html += '<p style="margin: 5px 0;">Vérifiez votre boîte de réception pour voir le rendu réel des emails.</p>';
+          html += '<div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(21,87,36,0.2);">';
+          result.emailsSent.forEach(email => {
+            const statusIcon = email.status === 'sent' ? '✅' : '❌';
+            const statusColor = email.status === 'sent' ? '#155724' : '#721c24';
+            html += `<div style="padding: 4px 0; color: ${statusColor};">`;
+            html += `  ${statusIcon} <strong>${email.type}</strong> → ${email.originalRecipient}`;
+            if (email.error) {
+              html += ` <span style="font-size: 11px;">(Erreur : ${email.error})</span>`;
+            }
             html += `</div>`;
           });
-          html += '</div></div>';
-
-          // Store email previews for later access
-          window.testEmailPreviews = result.emailsSent;
+          html += '</div></div></div>';
         }
 
         if (result.errors && result.errors.length > 0) {
@@ -5039,50 +5029,6 @@
         loadTestModeData();
       }
     }, 1000);
-
-    // Show email preview modal
-    function showEmailPreview(index) {
-      const email = window.testEmailPreviews[index];
-      if (!email) {
-        alert('Aperçu non disponible');
-        return;
-      }
-
-      const modal = document.getElementById('emailPreviewModal');
-      const subjectDiv = document.getElementById('emailPreviewSubject');
-      const contentDiv = document.getElementById('emailPreviewContent');
-
-      subjectDiv.textContent = email.subject || 'Pas de sujet';
-      contentDiv.innerHTML = email.html || '<p style="padding: 20px; text-align: center; color: #999;">Aucun contenu disponible</p>';
-
-      modal.style.display = 'block';
-      document.body.style.overflow = 'hidden'; // Prevent background scroll
-    }
-
-    // Close email preview modal
-    function closeEmailPreview() {
-      const modal = document.getElementById('emailPreviewModal');
-      modal.style.display = 'none';
-      document.body.style.overflow = ''; // Restore scroll
-    }
-
-    // Close modal on background click
-    document.addEventListener('click', (e) => {
-      const modal = document.getElementById('emailPreviewModal');
-      if (e.target === modal) {
-        closeEmailPreview();
-      }
-    });
-
-    // Close modal on Escape key
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') {
-        const modal = document.getElementById('emailPreviewModal');
-        if (modal && modal.style.display === 'block') {
-          closeEmailPreview();
-        }
-      }
-    });
 
     // ============= END TEST MODE =============
 
