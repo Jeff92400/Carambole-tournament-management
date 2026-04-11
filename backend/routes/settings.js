@@ -867,33 +867,50 @@ router.put('/app-bulk', authenticateToken, requireAdmin, async (req, res) => {
       return res.status(403).json({ error: 'Organisation requise pour modifier les paramètres' });
     }
 
+    console.log(`[SETTINGS] Saving ${Object.keys(settings).length} settings for org ${orgId}:`, Object.keys(settings));
+
     for (const [key, value] of Object.entries(settings)) {
-      await appSettings.setOrgSetting(orgId, key, value);
+      console.log(`[SETTINGS] Processing key: ${key}, value: ${value}`);
+
+      try {
+        await appSettings.setOrgSetting(orgId, key, value);
+        console.log(`[SETTINGS] Successfully saved ${key} to organization_settings`);
+      } catch (settingErr) {
+        console.error(`[SETTINGS] Failed to save ${key}:`, settingErr);
+        throw new Error(`Erreur lors de la sauvegarde de ${key}: ${settingErr.message}`);
+      }
 
       // CRITICAL: If organization_short_name is being updated, also update the organizations table
       // The branding endpoint reads from organizations.short_name (authoritative source)
       if (key === 'organization_short_name') {
-        await new Promise((resolve, reject) => {
-          db.run(
-            `UPDATE organizations SET short_name = ? WHERE id = ?`,
-            [value, orgId],
-            (err) => {
-              if (err) {
-                console.error('[SETTINGS] Error updating organizations.short_name:', err);
-                reject(err);
-              } else {
-                console.log(`[SETTINGS] Updated organizations.short_name to "${value}" for org ${orgId}`);
-                resolve();
+        console.log(`[SETTINGS] Updating organizations table with short_name="${value}" for org ${orgId}`);
+        try {
+          await new Promise((resolve, reject) => {
+            db.run(
+              `UPDATE organizations SET short_name = ? WHERE id = ?`,
+              [value, orgId],
+              (err) => {
+                if (err) {
+                  console.error('[SETTINGS] Error updating organizations.short_name:', err);
+                  reject(err);
+                } else {
+                  console.log(`[SETTINGS] Updated organizations.short_name to "${value}" for org ${orgId}`);
+                  resolve();
+                }
               }
-            }
-          );
-        });
+            );
+          });
+        } catch (orgErr) {
+          console.error('[SETTINGS] Failed to update organizations table:', orgErr);
+          throw new Error(`Erreur lors de la mise à jour de la table organizations: ${orgErr.message}`);
+        }
       }
     }
+    console.log('[SETTINGS] All settings saved successfully');
     res.json({ success: true, message: 'Settings updated' });
   } catch (err) {
-    console.error('Error updating settings:', err);
-    res.status(500).json({ error: err.message });
+    console.error('[SETTINGS] app-bulk error:', err);
+    res.status(500).json({ error: err.message || 'Erreur lors de la sauvegarde' });
   }
 });
 
