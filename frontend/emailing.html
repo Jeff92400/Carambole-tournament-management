@@ -1695,6 +1695,24 @@
 
     <!-- TAB: Templates -->
     <div id="tab-templates" class="tab-content">
+      <!-- Test Email Input -->
+      <div style="max-width: 600px; margin: 0 auto 30px auto; padding: 20px; background: #f8f9fa; border-radius: 12px; border-left: 4px solid var(--color-primary);">
+        <div style="display: flex; align-items: center; gap: 15px;">
+          <label for="testEmailInput" style="font-weight: 600; font-size: 14px; color: #333; white-space: nowrap;">📧 Email de test :</label>
+          <input
+            type="email"
+            id="testEmailInput"
+            placeholder="Entrez l'email de destination..."
+            style="flex: 1; padding: 10px 14px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 14px; transition: border-color 0.2s;"
+            onfocus="this.style.borderColor='var(--color-primary)'"
+            onblur="this.style.borderColor='#e0e0e0'"
+          >
+        </div>
+        <div style="margin-top: 8px; font-size: 12px; color: #666;">
+          Les emails de test seront envoyés à cette adresse. Par défaut, votre email de compte est utilisé.
+        </div>
+      </div>
+
       <!-- Template Card Grid -->
       <div class="template-grid">
         <div class="template-card" data-template="convocation">
@@ -2476,6 +2494,8 @@
           // Reset to grid view when switching to templates tab
           hideAllTemplateEditors();
           document.querySelector('.template-grid').style.display = 'grid';
+          // Pre-fill test email input with user's email
+          loadUserEmailForTest();
           // Pre-load all templates in background
           loadConvocationTemplate();
           loadFinaleConvocationTemplate();
@@ -2498,6 +2518,26 @@
 
     // ==================== TEMPLATE CARD GRID HANDLERS ====================
 
+    // Load user's email to pre-fill test email input
+    async function loadUserEmailForTest() {
+      const testEmailInput = document.getElementById('testEmailInput');
+      if (!testEmailInput) return;
+
+      try {
+        const response = await authFetch(`${API_URL}/auth/me`);
+        const data = await response.json();
+
+        if (data.email) {
+          testEmailInput.value = data.email;
+        } else {
+          testEmailInput.placeholder = 'Aucun email configuré pour votre compte';
+        }
+      } catch (error) {
+        console.error('Failed to load user email:', error);
+        testEmailInput.placeholder = 'Entrez l\'email de destination...';
+      }
+    }
+
     function hideAllTemplateEditors() {
       document.querySelectorAll('.template-editor-section').forEach(section => {
         section.style.display = 'none';
@@ -2514,13 +2554,23 @@
       }
     }
 
-    // Test template by sending one email to admin
+    // Test template by sending one email to specified address
     async function testTemplate(event, templateKey) {
       // Stop propagation to prevent card click
       event.stopPropagation();
 
       const button = event.target;
       const originalText = button.textContent;
+
+      // Get email from input field
+      const testEmailInput = document.getElementById('testEmailInput');
+      const testEmail = testEmailInput.value.trim();
+
+      // Validate email
+      if (!testEmail || !testEmail.includes('@')) {
+        showError('Veuillez entrer une adresse email valide dans le champ "Email de test"');
+        return;
+      }
 
       try {
         button.disabled = true;
@@ -2529,7 +2579,7 @@
         const response = await authFetch(`${API_URL}/test-mode/send-template`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ templateKey })
+          body: JSON.stringify({ templateKey, testEmail })
         });
 
         const result = await response.json();

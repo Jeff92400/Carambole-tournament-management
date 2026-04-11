@@ -1022,10 +1022,10 @@ function generateFakeTemplateData(templateKey) {
 }
 
 // POST /api/test-mode/send-template - Simplified template testing
-// Sends ONE test email to the logged-in admin for the specified template
+// Sends ONE test email to the specified email address (or logged-in admin's email as fallback)
 router.post('/send-template', authenticateToken, async (req, res) => {
   try {
-    const { templateKey } = req.body;
+    const { templateKey, testEmail } = req.body;
     const orgId = req.user.organizationId || null;
     const userId = req.user.userId;
 
@@ -1033,25 +1033,32 @@ router.post('/send-template', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Template key is required' });
     }
 
-    // Get admin email from database (uses logged-in user's email from users table)
-    // This is the email associated with the current admin's account
-    const adminUser = await new Promise((resolve, reject) => {
-      db.get(
-        'SELECT email FROM users WHERE id = $1',
-        [userId],
-        (err, row) => {
-          if (err) reject(err);
-          else resolve(row);
-        }
-      );
-    });
+    // Use provided testEmail, or fall back to user's email from database
+    let recipientEmail = testEmail;
 
-    if (!adminUser || !adminUser.email) {
-      return res.status(400).json({ error: 'Email non trouvé pour cet utilisateur. Vérifiez votre profil dans Paramètres → Utilisateurs.' });
+    if (!recipientEmail || !recipientEmail.includes('@')) {
+      // Fallback: get admin email from database
+      const adminUser = await new Promise((resolve, reject) => {
+        db.get(
+          'SELECT email FROM users WHERE id = $1',
+          [userId],
+          (err, row) => {
+            if (err) reject(err);
+            else resolve(row);
+          }
+        );
+      });
+
+      if (!adminUser || !adminUser.email) {
+        return res.status(400).json({
+          error: 'Aucune adresse email fournie et aucun email configuré pour votre compte. Veuillez entrer une adresse email dans le champ "Email de test".'
+        });
+      }
+
+      recipientEmail = adminUser.email;
     }
 
-    const adminEmail = adminUser.email;
-    console.log(`[TEST MODE] Sending test email for template "${templateKey}" to ${adminEmail}`);
+    console.log(`[TEST MODE] Sending test email for template "${templateKey}" to ${recipientEmail}`);
 
     // Generate fake template data
     const fakeData = generateFakeTemplateData(templateKey);
@@ -1121,17 +1128,17 @@ router.post('/send-template', authenticateToken, async (req, res) => {
     // Send email via Resend
     const emailResult = await resend.emails.send({
       from: fromAddress,
-      to: adminEmail,
+      to: recipientEmail,
       subject: subject,
       html: htmlBody
     });
 
     res.json({
       success: true,
-      message: `Email de test envoyé à ${adminEmail}`,
+      message: `Email de test envoyé à ${recipientEmail}`,
       templateKey: templateKey,
       emailId: emailResult.id,
-      to: adminEmail
+      to: recipientEmail
     });
 
   } catch (error) {
