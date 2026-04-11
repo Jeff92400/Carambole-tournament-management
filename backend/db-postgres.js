@@ -564,6 +564,17 @@ async function initializeDatabase() {
     // WordPress publication tracking (migration - March 2026)
     await client.query(`ALTER TABLE tournoi_ext ADD COLUMN IF NOT EXISTS wp_post_id INTEGER`);
 
+    // Drop redundant fin column (migration - April 2026)
+    // The fin column was always equal to debut, causing confusion in timeline calculations
+    // All code references removed in V 2.0.334-335
+    try {
+      await client.query(`ALTER TABLE tournoi_ext DROP COLUMN IF EXISTS fin`);
+      console.log('Migration: Dropped tournoi_ext.fin column');
+    } catch (err) {
+      // Column might not exist or already dropped - safe to ignore
+      console.log('Migration: tournoi_ext.fin column already dropped or does not exist');
+    }
+
     // Tournament parameter overrides table (migration - February 2026)
     // Allows per-tournament customization of Distance and Reprises values
     await client.query(`
