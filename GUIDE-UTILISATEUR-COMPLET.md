@@ -1,7 +1,7 @@
 # Guide Utilisateur Complet
 
 > **Note:** Ce document est généré automatiquement depuis le guide HTML.
-> **Dernière mise à jour:** 09/04/2026 - Documentation des badges de statut (Inscrit → Convoqué) et de la gestion des joueurs de remplacement pour les finales
+> **Dernière mise à jour:** 11/04/2026 - Ajout du Mode Test (Paramètres > Organisation > Mode Test) pour tester les emails sans contacter de vrais joueurs
 
 ---
 
