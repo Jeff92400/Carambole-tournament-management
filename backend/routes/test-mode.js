@@ -10,7 +10,7 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 
 // ==================== HELPER FUNCTIONS ====================
 
-// Get email template from database
+// Get email template from database with type-specific fallbacks
 async function getEmailTemplate(templateKey, orgId) {
   return new Promise((resolve, reject) => {
     db.get(
@@ -22,11 +22,48 @@ async function getEmailTemplate(templateKey, orgId) {
       (err, row) => {
         if (err) reject(err);
         else if (!row) {
-          // Fallback to default template
-          resolve({
-            subject: '[TEST] Convocation - {player_name} - {category}',
-            body: 'Bonjour {first_name} {last_name},\n\nVous êtes convoqué(e) pour le {tournament} en {category}.\n\nDate : {date}\nHeure : {time}\nLieu : {location}\nVotre poule : {poule}\n\nMerci de confirmer votre présence.'
-          });
+          // Fallback to type-specific default templates
+          const fallbacks = {
+            'convocation': {
+              subject: 'Convocation {category} - {tournament} - {date}',
+              body: 'Bonjour {first_name} {last_name},\n\nVous êtes convoqué(e) pour le {tournament} en {category}.\n\nDate : {date}\nHeure : {time}\nLieu : {location}\nVotre poule : {poule}\n\nMerci de confirmer votre présence.'
+            },
+            'convocation-finale': {
+              subject: 'Convocation Finale {category} - {date}',
+              body: 'Bonjour {first_name} {last_name},\n\nVous êtes convoqué(e) pour la Finale Départementale en {category}.\n\nDate : {date}\nHeure : {time}\nLieu : {location}\nVotre poule : {poule}\n\nNous comptons sur votre présence.'
+            },
+            'results': {
+              subject: 'Résultats {category} - {tournament}',
+              body: 'Bonjour {first_name},\n\nLes résultats du tournoi {tournament_name} sont disponibles.\n\nVous avez terminé à la {position}.\n\nFélicitations à tous les participants !'
+            },
+            'results-finale': {
+              subject: 'Résultats Finale {category}',
+              body: 'Bonjour {first_name},\n\nLes résultats de la Finale Départementale {category} sont disponibles.\n\nVous avez terminé à la {position}.\n\nBravo à tous !'
+            },
+            'relance_t2': {
+              subject: 'Inscription T2 {category} - Confirmez votre participation',
+              body: 'Bonjour {first_name},\n\nLe deuxième tournoi de la saison aura lieu le {tournament_date} à {tournament_lieu}.\n\nNous vous rappelons que la compétition se jouera en {distance} points avec un maximum de {reprises} reprises.\n\nPour participer, merci de confirmer votre inscription avant le {deadline_date}.'
+            },
+            'rappel': {
+              subject: 'Rappel - {organization_short_name}',
+              body: 'Bonjour,\n\nCeci est un rappel concernant la compétition à venir.\n\nMerci de votre attention.\n\nCordialement,\n{organization_name}'
+            },
+            'inscription-confirmation': {
+              subject: 'Confirmation d\'inscription - {tournament_name}',
+              body: 'Bonjour {player_name},\n\nVotre inscription a bien été enregistrée pour la compétition suivante :\n\n📅 Compétition : {tournament_name}\n🎯 Mode : {category}\n📆 Date : {date}\n📍 Lieu : {location}\n\nVous recevrez une convocation avec les détails quelques jours avant la compétition.\n\nSportivement,\n{organization_name}'
+            },
+            'inscription-cancellation': {
+              subject: 'Confirmation de désinscription - {category}',
+              body: 'Bonjour {player_name},\n\nNous avons bien pris en compte votre désinscription du tournoi {tournament_name}.\n\nDate : {date}\nLieu : {location}\n\nSi cette désinscription est une erreur, veuillez nous contacter.\n\nSportivement,\n{organization_name}'
+            }
+          };
+
+          const fallback = fallbacks[templateKey] || {
+            subject: 'Email de test - {category}',
+            body: 'Bonjour {first_name} {last_name},\n\nCeci est un email de test.\n\nTemplate key: ' + templateKey
+          };
+
+          resolve(fallback);
         } else {
           // Return subject_template and body_template as subject and body
           resolve({
