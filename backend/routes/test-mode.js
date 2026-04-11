@@ -521,20 +521,113 @@ async function sendTestResults(db, appSettings, playerLicences, overrideEmail, o
       // Get player details
       const players = await new Promise((res, rej) => {
         db.all(
-          `SELECT licence, first_name, last_name FROM players
+          `SELECT licence, first_name, last_name, club FROM players
            WHERE licence IN (${playerLicences.map(() => '?').join(',')})`,
           playerLicences,
           (err, rows) => err ? rej(err) : res(rows || [])
         );
       });
 
-      const emails = players.map(player => ({
-        type: 'results',
-        to: overrideEmail,
-        originalRecipient: `${player.first_name} ${player.last_name}`,
-        subject: `[TEST - ${player.first_name} ${player.last_name}] Résultats - Libre N2`,
-        status: 'sent'
-      }));
+      // Load email template
+      const emailTemplate = await getEmailTemplate('results', orgId);
+
+      // Get branding settings
+      const emailSettings = await getEmailTemplateSettings(orgId);
+      const primaryColor = emailSettings.primary_color || '#1F4788';
+      const orgShortName = emailSettings.organization_short_name || 'CDB';
+      const contactEmail = await getContactEmail(orgId);
+      const baseUrl = process.env.BASE_URL || 'https://cdbhs-tournament-management-production.up.railway.app';
+      const orgSlug = await appSettings.getOrgSlug(orgId);
+      const logoUrl = appSettings.buildLogoUrl(baseUrl, orgSlug);
+
+      // Tournament info
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const dateStr = tomorrow.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+
+      // Send emails
+      const emails = [];
+      for (let index = 0; index < players.length; index++) {
+        const player = players[index];
+        const position = index + 1;
+
+        // Template variables
+        const templateVariables = {
+          player_name: `${player.first_name} ${player.last_name}`,
+          first_name: player.first_name,
+          last_name: player.last_name,
+          club: player.club || '',
+          category: 'Libre N2',
+          tournament: 'TEST - Mode Test',
+          date: dateStr,
+          tournament_date: dateStr,
+          position: position,
+          organization_name: emailSettings.organization_name || 'Comité Départemental de Billard',
+          organization_short_name: orgShortName,
+          organization_email: contactEmail
+        };
+
+        const emailSubject = '[TEST] ' + replaceTemplateVariables(emailTemplate.subject, templateVariables);
+        const emailBodyText = replaceTemplateVariables(emailTemplate.body, templateVariables);
+        const emailBodyHtml = emailBodyText.replace(/\n/g, '<br>');
+
+        const htmlContent = `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <div style="background: ${primaryColor}; color: white; padding: 20px; text-align: center;">
+              <img src="${logoUrl}" alt="${orgShortName}" style="height: 60px; max-width: 80%; width: auto; margin-bottom: 10px;" onerror="this.style.display='none'">
+              <h1 style="margin: 0; font-size: 24px;">${orgShortName}</h1>
+              <p style="margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">RÉSULTATS - MODE TEST</p>
+            </div>
+
+            <div style="padding: 20px; background: #f8f9fa;">
+              <div style="margin-bottom: 20px; padding: 15px; background: #fff3cd; border: 2px solid #ffc107; border-radius: 4px;">
+                <p style="margin: 0; color: #856404; font-weight: 600;">🧪 Ceci est un email de TEST</p>
+                <p style="margin: 5px 0 0 0; color: #856404; font-size: 13px;">Généré par le Mode Test pour vérifier le rendu des emails.</p>
+              </div>
+
+              <div style="line-height: 1.6;">
+                ${emailBodyHtml}
+              </div>
+
+              <p style="margin-top: 20px; padding: 10px; background: #fff3cd; border-left: 4px solid #ffc107; font-size: 13px;">
+                📧 <strong>Contact :</strong> Pour toute question, contactez-nous à
+                <a href="mailto:${contactEmail}" style="color: ${primaryColor};">${contactEmail}</a>
+              </p>
+            </div>
+
+            <div style="background: ${primaryColor}; color: white; padding: 10px; text-align: center; font-size: 12px;">
+              <p style="margin: 0;">${orgShortName} - <a href="mailto:${contactEmail}" style="color: white;">${contactEmail}</a></p>
+            </div>
+          </div>
+        `;
+
+        try {
+          await resend.emails.send({
+            from: buildFromAddress(emailSettings, 'communication'),
+            replyTo: contactEmail,
+            to: [overrideEmail],
+            subject: emailSubject,
+            html: htmlContent
+          });
+
+          emails.push({
+            type: 'results',
+            to: overrideEmail,
+            originalRecipient: `${player.first_name} ${player.last_name}`,
+            subject: emailSubject,
+            status: 'sent'
+          });
+        } catch (error) {
+          emails.push({
+            type: 'results',
+            to: overrideEmail,
+            originalRecipient: `${player.first_name} ${player.last_name}`,
+            subject: emailSubject,
+            status: 'failed',
+            error: error.message
+          });
+        }
+      }
 
       resolve({ emails, tournamentId });
 
@@ -550,20 +643,106 @@ async function sendTestRelance(db, appSettings, playerLicences, overrideEmail, o
     try {
       const players = await new Promise((res, rej) => {
         db.all(
-          `SELECT licence, first_name, last_name FROM players
+          `SELECT licence, first_name, last_name, club FROM players
            WHERE licence IN (${playerLicences.map(() => '?').join(',')})`,
           playerLicences,
           (err, rows) => err ? rej(err) : res(rows || [])
         );
       });
 
-      const emails = players.map(player => ({
-        type: 'relance',
-        to: overrideEmail,
-        originalRecipient: `${player.first_name} ${player.last_name}`,
-        subject: `[TEST - ${player.first_name} ${player.last_name}] Relance - Tournois à venir`,
-        status: 'sent'
-      }));
+      // Load email template
+      const emailTemplate = await getEmailTemplate('relance', orgId);
+
+      // Get branding settings
+      const emailSettings = await getEmailTemplateSettings(orgId);
+      const primaryColor = emailSettings.primary_color || '#1F4788';
+      const orgShortName = emailSettings.organization_short_name || 'CDB';
+      const contactEmail = await getContactEmail(orgId);
+      const baseUrl = process.env.BASE_URL || 'https://cdbhs-tournament-management-production.up.railway.app';
+      const orgSlug = await appSettings.getOrgSlug(orgId);
+      const logoUrl = appSettings.buildLogoUrl(baseUrl, orgSlug);
+
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 7);
+      const closingDate = tomorrow.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+
+      const emails = [];
+      for (const player of players) {
+        const templateVariables = {
+          player_name: `${player.first_name} ${player.last_name}`,
+          first_name: player.first_name,
+          last_name: player.last_name,
+          club: player.club || '',
+          category: 'Libre N2',
+          tournament: 'TEST - Mode Test',
+          tournament_date: closingDate,
+          deadline_date: closingDate,
+          organization_name: emailSettings.organization_name || 'Comité Départemental de Billard',
+          organization_short_name: orgShortName,
+          organization_email: contactEmail
+        };
+
+        const emailSubject = '[TEST] ' + replaceTemplateVariables(emailTemplate.subject, templateVariables);
+        const emailBodyText = replaceTemplateVariables(emailTemplate.body, templateVariables);
+        const emailBodyHtml = emailBodyText.replace(/\n/g, '<br>');
+
+        const htmlContent = `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <div style="background: ${primaryColor}; color: white; padding: 20px; text-align: center;">
+              <img src="${logoUrl}" alt="${orgShortName}" style="height: 60px; max-width: 80%; width: auto; margin-bottom: 10px;" onerror="this.style.display='none'">
+              <h1 style="margin: 0; font-size: 24px;">${orgShortName}</h1>
+              <p style="margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">RELANCE - MODE TEST</p>
+            </div>
+
+            <div style="padding: 20px; background: #f8f9fa;">
+              <div style="margin-bottom: 20px; padding: 15px; background: #fff3cd; border: 2px solid #ffc107; border-radius: 4px;">
+                <p style="margin: 0; color: #856404; font-weight: 600;">🧪 Ceci est un email de TEST</p>
+                <p style="margin: 5px 0 0 0; color: #856404; font-size: 13px;">Généré par le Mode Test pour vérifier le rendu des emails.</p>
+              </div>
+
+              <div style="line-height: 1.6;">
+                ${emailBodyHtml}
+              </div>
+
+              <p style="margin-top: 20px; padding: 10px; background: #fff3cd; border-left: 4px solid #ffc107; font-size: 13px;">
+                📧 <strong>Contact :</strong> Pour toute question, contactez-nous à
+                <a href="mailto:${contactEmail}" style="color: ${primaryColor};">${contactEmail}</a>
+              </p>
+            </div>
+
+            <div style="background: ${primaryColor}; color: white; padding: 10px; text-align: center; font-size: 12px;">
+              <p style="margin: 0;">${orgShortName} - <a href="mailto:${contactEmail}" style="color: white;">${contactEmail}</a></p>
+            </div>
+          </div>
+        `;
+
+        try {
+          await resend.emails.send({
+            from: buildFromAddress(emailSettings, 'communication'),
+            replyTo: contactEmail,
+            to: [overrideEmail],
+            subject: emailSubject,
+            html: htmlContent
+          });
+
+          emails.push({
+            type: 'relance',
+            to: overrideEmail,
+            originalRecipient: `${player.first_name} ${player.last_name}`,
+            subject: emailSubject,
+            status: 'sent'
+          });
+        } catch (error) {
+          emails.push({
+            type: 'relance',
+            to: overrideEmail,
+            originalRecipient: `${player.first_name} ${player.last_name}`,
+            subject: emailSubject,
+            status: 'failed',
+            error: error.message
+          });
+        }
+      }
 
       resolve({ emails });
 
@@ -579,20 +758,98 @@ async function sendTestInvitations(db, appSettings, playerLicences, overrideEmai
     try {
       const players = await new Promise((res, rej) => {
         db.all(
-          `SELECT licence, first_name, last_name FROM players
+          `SELECT licence, first_name, last_name, club FROM players
            WHERE licence IN (${playerLicences.map(() => '?').join(',')})`,
           playerLicences,
           (err, rows) => err ? rej(err) : res(rows || [])
         );
       });
 
-      const emails = players.map(player => ({
-        type: 'invitation',
-        to: overrideEmail,
-        originalRecipient: `${player.first_name} ${player.last_name}`,
-        subject: `[TEST - ${player.first_name} ${player.last_name}] Invitation - Espace Joueur`,
-        status: 'sent'
-      }));
+      // Load email template
+      const emailTemplate = await getEmailTemplate('invitation', orgId);
+
+      // Get branding settings
+      const emailSettings = await getEmailTemplateSettings(orgId);
+      const primaryColor = emailSettings.primary_color || '#1F4788';
+      const orgShortName = emailSettings.organization_short_name || 'CDB';
+      const contactEmail = await getContactEmail(orgId);
+      const baseUrl = process.env.BASE_URL || 'https://cdbhs-tournament-management-production.up.railway.app';
+      const orgSlug = await appSettings.getOrgSlug(orgId);
+      const logoUrl = appSettings.buildLogoUrl(baseUrl, orgSlug);
+
+      const emails = [];
+      for (const player of players) {
+        const templateVariables = {
+          player_name: `${player.first_name} ${player.last_name}`,
+          first_name: player.first_name,
+          last_name: player.last_name,
+          club: player.club || '',
+          organization_name: emailSettings.organization_name || 'Comité Départemental de Billard',
+          organization_short_name: orgShortName,
+          organization_email: contactEmail
+        };
+
+        const emailSubject = '[TEST] ' + replaceTemplateVariables(emailTemplate.subject, templateVariables);
+        const emailBodyText = replaceTemplateVariables(emailTemplate.body, templateVariables);
+        const emailBodyHtml = emailBodyText.replace(/\n/g, '<br>');
+
+        const htmlContent = `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <div style="background: ${primaryColor}; color: white; padding: 20px; text-align: center;">
+              <img src="${logoUrl}" alt="${orgShortName}" style="height: 60px; max-width: 80%; width: auto; margin-bottom: 10px;" onerror="this.style.display='none'">
+              <h1 style="margin: 0; font-size: 24px;">${orgShortName}</h1>
+              <p style="margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">INVITATION - MODE TEST</p>
+            </div>
+
+            <div style="padding: 20px; background: #f8f9fa;">
+              <div style="margin-bottom: 20px; padding: 15px; background: #fff3cd; border: 2px solid #ffc107; border-radius: 4px;">
+                <p style="margin: 0; color: #856404; font-weight: 600;">🧪 Ceci est un email de TEST</p>
+                <p style="margin: 5px 0 0 0; color: #856404; font-size: 13px;">Généré par le Mode Test pour vérifier le rendu des emails.</p>
+              </div>
+
+              <div style="line-height: 1.6;">
+                ${emailBodyHtml}
+              </div>
+
+              <p style="margin-top: 20px; padding: 10px; background: #fff3cd; border-left: 4px solid #ffc107; font-size: 13px;">
+                📧 <strong>Contact :</strong> Pour toute question, contactez-nous à
+                <a href="mailto:${contactEmail}" style="color: ${primaryColor};">${contactEmail}</a>
+              </p>
+            </div>
+
+            <div style="background: ${primaryColor}; color: white; padding: 10px; text-align: center; font-size: 12px;">
+              <p style="margin: 0;">${orgShortName} - <a href="mailto:${contactEmail}" style="color: white;">${contactEmail}</a></p>
+            </div>
+          </div>
+        `;
+
+        try {
+          await resend.emails.send({
+            from: buildFromAddress(emailSettings, 'communication'),
+            replyTo: contactEmail,
+            to: [overrideEmail],
+            subject: emailSubject,
+            html: htmlContent
+          });
+
+          emails.push({
+            type: 'invitation',
+            to: overrideEmail,
+            originalRecipient: `${player.first_name} ${player.last_name}`,
+            subject: emailSubject,
+            status: 'sent'
+          });
+        } catch (error) {
+          emails.push({
+            type: 'invitation',
+            to: overrideEmail,
+            originalRecipient: `${player.first_name} ${player.last_name}`,
+            subject: emailSubject,
+            status: 'failed',
+            error: error.message
+          });
+        }
+      }
 
       resolve({ emails });
 
