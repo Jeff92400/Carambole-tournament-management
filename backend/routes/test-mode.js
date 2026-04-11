@@ -996,7 +996,8 @@ router.post('/send-template', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Template key is required' });
     }
 
-    // Get admin email from database
+    // Get admin email from database (uses logged-in user's email from users table)
+    // This is the email associated with the current admin's account
     const adminUser = await new Promise((resolve, reject) => {
       db.get(
         'SELECT email FROM users WHERE id = $1',
@@ -1009,10 +1010,11 @@ router.post('/send-template', authenticateToken, async (req, res) => {
     });
 
     if (!adminUser || !adminUser.email) {
-      return res.status(400).json({ error: 'Admin email not found' });
+      return res.status(400).json({ error: 'Email non trouvé pour cet utilisateur. Vérifiez votre profil dans Paramètres → Utilisateurs.' });
     }
 
     const adminEmail = adminUser.email;
+    console.log(`[TEST MODE] Sending test email for template "${templateKey}" to ${adminEmail}`);
 
     // Generate fake template data
     const fakeData = generateFakeTemplateData(templateKey);
@@ -1034,25 +1036,9 @@ router.post('/send-template', authenticateToken, async (req, res) => {
     const fullOrgName = settings.organization_name || 'Comité Départemental de Billard';
     const baseUrl = process.env.BASE_URL || 'https://cdbhs-tournament-management-production.up.railway.app';
 
-    // Build logo URL
-    let logoUrl = '';
-    try {
-      const orgSlugResult = await new Promise((resolve, reject) => {
-        db.get(
-          'SELECT slug FROM organizations WHERE id = $1',
-          [orgId],
-          (err, row) => {
-            if (err) reject(err);
-            else resolve(row?.slug);
-          }
-        );
-      });
-      if (orgSlugResult) {
-        logoUrl = `${baseUrl}/images/clubs/${orgSlugResult}/logo.png`;
-      }
-    } catch (e) {
-      console.error('Error getting org slug for logo:', e);
-    }
+    // Build logo URL using appSettings helper (same as real emails)
+    const orgSlug = orgId ? await appSettings.getOrgSlug(orgId) : null;
+    const logoUrl = appSettings.buildLogoUrl(baseUrl, orgSlug);
 
     const htmlBody = `
 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
