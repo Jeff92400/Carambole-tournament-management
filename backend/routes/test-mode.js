@@ -1028,60 +1028,63 @@ router.post('/send-template', authenticateToken, async (req, res) => {
     const subject = '[TEST] ' + replaceTemplateVariables(template.subject, fakeData);
     const bodyText = replaceTemplateVariables(template.body, fakeData);
 
-    // Build HTML email
+    // Build HTML email matching REAL email format
     const primaryColor = settings.primary_color || '#1F4788';
-    const secondaryColor = settings.secondary_color || '#667eea';
-    const backgroundColor = settings.background_color || '#ffffff';
     const orgName = settings.organization_short_name || 'CDB';
+    const fullOrgName = settings.organization_name || 'Comité Départemental de Billard';
+    const baseUrl = process.env.BASE_URL || 'https://cdbhs-tournament-management-production.up.railway.app';
+
+    // Build logo URL
+    let logoUrl = '';
+    try {
+      const orgSlugResult = await new Promise((resolve, reject) => {
+        db.get(
+          'SELECT slug FROM organizations WHERE id = $1',
+          [orgId],
+          (err, row) => {
+            if (err) reject(err);
+            else resolve(row?.slug);
+          }
+        );
+      });
+      if (orgSlugResult) {
+        logoUrl = `${baseUrl}/images/clubs/${orgSlugResult}/logo.png`;
+      }
+    } catch (e) {
+      console.error('Error getting org slug for logo:', e);
+    }
 
     const htmlBody = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-</head>
-<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f5f5f5;">
+<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
   <!-- Test Mode Warning -->
   <div style="background: #fff3cd; border-bottom: 3px solid #ffc107; padding: 12px; text-align: center;">
     <strong style="color: #856404; font-size: 14px;">🧪 MODE TEST - Cet email est un test et ne correspond à aucune vraie compétition</strong>
   </div>
 
-  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: #f5f5f5;">
-    <tr>
-      <td style="padding: 20px 0;">
-        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="600" style="margin: 0 auto; background-color: ${backgroundColor}; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-          <!-- Header -->
-          <tr>
-            <td style="background: linear-gradient(135deg, ${primaryColor} 0%, ${secondaryColor} 100%); padding: 30px; text-align: center; border-radius: 8px 8px 0 0;">
-              <h1 style="margin: 0; color: white; font-size: 24px; font-weight: 700;">${orgName}</h1>
-              <p style="margin: 8px 0 0 0; color: rgba(255,255,255,0.9); font-size: 14px;">Gestion des compétitions départementales FFB</p>
-            </td>
-          </tr>
+  <!-- Header -->
+  <div style="background: ${primaryColor}; color: white; padding: 20px; text-align: center;">
+    ${logoUrl ? `<img src="${logoUrl}" alt="${orgName}" style="height: 60px; max-width: 80%; width: auto; margin-bottom: 10px;" onerror="this.style.display='none'">` : ''}
+    <h1 style="margin: 0; font-size: 24px;">${orgName}</h1>
+    <p style="margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">${templateKey.includes('convocation') ? 'CONVOCATION' : templateKey.includes('results') ? 'RÉSULTATS' : 'COMMUNICATION'}</p>
+  </div>
 
-          <!-- Body -->
-          <tr>
-            <td style="padding: 40px 30px;">
-              <div style="white-space: pre-wrap; line-height: 1.6; color: #333; font-size: 15px;">
-${bodyText}
-              </div>
-            </td>
-          </tr>
+  <!-- Body -->
+  <div style="padding: 20px; background: #f8f9fa;">
+    <div style="line-height: 1.6;">
+      ${bodyText.replace(/\n/g, '<br>')}
+    </div>
 
-          <!-- Footer -->
-          <tr>
-            <td style="padding: 20px 30px; background-color: #f8f9fa; border-radius: 0 0 8px 8px; text-align: center; border-top: 1px solid #e9ecef;">
-              <p style="margin: 0; color: #6c757d; font-size: 13px;">
-                Pour toute question, contactez-nous à <a href="mailto:${contactEmail}" style="color: ${primaryColor}; text-decoration: none;">${contactEmail}</a>
-              </p>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>`;
+    <p style="margin-top: 20px; padding: 10px; background: #fff3cd; border-left: 4px solid #ffc107; font-size: 13px;">
+      📧 <strong>Contact :</strong> Pour toute question, contactez-nous à
+      <a href="mailto:${contactEmail}" style="color: ${primaryColor};">${contactEmail}</a>
+    </p>
+  </div>
+
+  <!-- Footer -->
+  <div style="background: ${primaryColor}; color: white; padding: 10px; text-align: center; font-size: 12px;">
+    <p style="margin: 0;">${orgName} - <a href="mailto:${contactEmail}" style="color: white;">${contactEmail}</a></p>
+  </div>
+</div>`;
 
     // Determine from address based on template type
     let fromType = 'noreply';
