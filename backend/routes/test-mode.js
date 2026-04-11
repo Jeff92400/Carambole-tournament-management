@@ -11,14 +11,14 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 // ==================== HELPER FUNCTIONS ====================
 
 // Get email template from database
-async function getEmailTemplate(templateType, orgId) {
+async function getEmailTemplate(templateKey, orgId) {
   return new Promise((resolve, reject) => {
     db.get(
-      `SELECT subject, body FROM email_templates
-       WHERE template_type = $1
+      `SELECT * FROM email_templates
+       WHERE template_key = $1
          AND ($2::int IS NULL OR organization_id = $2)
        LIMIT 1`,
-      [templateType, orgId],
+      [templateKey, orgId],
       (err, row) => {
         if (err) reject(err);
         else if (!row) {
@@ -28,7 +28,11 @@ async function getEmailTemplate(templateType, orgId) {
             body: 'Bonjour {first_name} {last_name},\n\nVous êtes convoqué(e) pour le {tournament} en {category}.\n\nDate : {date}\nHeure : {time}\nLieu : {location}\nVotre poule : {poule}\n\nMerci de confirmer votre présence.'
           });
         } else {
-          resolve(row);
+          // Return subject_template and body_template as subject and body
+          resolve({
+            subject: row.subject_template,
+            body: row.body_template
+          });
         }
       }
     );
