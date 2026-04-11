@@ -51,6 +51,9 @@ async function initializeDatabase() {
       )
     `);
 
+    // Migration: increase short_name column size from 20 to 100 characters (April 2026)
+    await client.query(`ALTER TABLE organizations ALTER COLUMN short_name TYPE VARCHAR(100)`);
+
     // Migration: add welcome_email_sent_at column
     await client.query(`ALTER TABLE organizations ADD COLUMN IF NOT EXISTS welcome_email_sent_at TIMESTAMP`);
 
