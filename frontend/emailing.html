@@ -1703,12 +1703,13 @@
             type="email"
             id="testEmailInput"
             placeholder="Entrez l'email de destination..."
-            style="flex: 1; padding: 10px 14px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 14px; transition: border-color 0.2s;"
+            required
+            style="flex: 1; padding: 10px 14px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 14px; transition: all 0.2s;"
             onfocus="this.style.borderColor='var(--color-primary)'"
             onblur="this.style.borderColor='#e0e0e0'"
           >
         </div>
-        <div style="margin-top: 8px; font-size: 12px; color: #666;">
+        <div id="testEmailStatus" style="margin-top: 8px; font-size: 12px; color: #666;">
           Les emails de test seront envoyés à cette adresse. Par défaut, votre email de compte est utilisé.
         </div>
       </div>
@@ -2521,6 +2522,7 @@
     // Load user's email to pre-fill test email input
     async function loadUserEmailForTest() {
       const testEmailInput = document.getElementById('testEmailInput');
+      const statusDiv = document.getElementById('testEmailStatus');
       if (!testEmailInput) return;
 
       try {
@@ -2529,12 +2531,27 @@
 
         if (data.email) {
           testEmailInput.value = data.email;
+          testEmailInput.style.background = '#e8f5e9';
+          testEmailInput.style.borderColor = '#4CAF50';
+          if (statusDiv) {
+            statusDiv.innerHTML = `✅ <strong>Email pré-rempli:</strong> ${data.email} (depuis votre compte)`;
+            statusDiv.style.color = '#2e7d32';
+          }
         } else {
-          testEmailInput.placeholder = 'Aucun email configuré pour votre compte';
+          testEmailInput.placeholder = 'Aucun email configuré - veuillez saisir une adresse';
+          testEmailInput.style.background = '#fff3cd';
+          testEmailInput.style.borderColor = '#ffc107';
+          if (statusDiv) {
+            statusDiv.innerHTML = '⚠️ <strong>Aucun email configuré</strong> sur votre compte - veuillez saisir l\'adresse manuellement';
+            statusDiv.style.color = '#856404';
+          }
         }
       } catch (error) {
         console.error('Failed to load user email:', error);
         testEmailInput.placeholder = 'Entrez l\'email de destination...';
+        if (statusDiv) {
+          statusDiv.innerHTML = 'Veuillez entrer l\'adresse email où recevoir les tests';
+        }
       }
     }
 
@@ -2566,9 +2583,21 @@
       const testEmailInput = document.getElementById('testEmailInput');
       const testEmail = testEmailInput.value.trim();
 
-      // Validate email
-      if (!testEmail || !testEmail.includes('@')) {
-        showError('Veuillez entrer une adresse email valide dans le champ "Email de test"');
+      // Validate email - STRICT validation
+      if (!testEmail || !testEmail.includes('@') || testEmail.length < 5) {
+        // Highlight the input field
+        testEmailInput.style.borderColor = '#dc3545';
+        testEmailInput.style.background = '#f8d7da';
+        testEmailInput.focus();
+
+        showError('⚠️ Veuillez entrer une adresse email valide dans le champ "Email de test" ci-dessus');
+
+        // Reset styling after 3 seconds
+        setTimeout(() => {
+          testEmailInput.style.borderColor = '#e0e0e0';
+          testEmailInput.style.background = testEmailInput.value ? '#e8f5e9' : 'white';
+        }, 3000);
+
         return;
       }
 
