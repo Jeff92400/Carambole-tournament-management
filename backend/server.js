@@ -1434,21 +1434,21 @@ app.listen(PORT, '0.0.0.0', () => {
     }
   }
 
-  // Run automatic reminders check daily at 9 AM Paris time
-  setInterval(async () => {
-    const now = new Date();
-    const parisNow = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
-    const hour = parisNow.getHours();
+  // DISABLED TEMPORARILY - Scheduler needs fixes (category filtering + deduplication)
+  // TODO: Re-enable after adding:
+  // 1. Category filtering (only send to players in the tournament's category)
+  // 2. Deduplication tracking (notification_log table)
+  // 3. Remove startup trigger (causes spam on redeploys)
 
-    // Only run at 9 AM (hour === 9)
-    if (hour === 9) {
-      await checkAutomaticReminders();
-    }
-  }, 3600000); // Check every hour (but only run at 9 AM)
-  console.log('[Automatic Reminders] Started - will run daily at 9 AM Paris time');
-
-  // Also run once on startup (after 90 seconds) for testing
-  setTimeout(() => checkAutomaticReminders(), 90000);
+  // setInterval(async () => {
+  //   const now = new Date();
+  //   const parisNow = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
+  //   const hour = parisNow.getHours();
+  //   if (hour === 9) {
+  //     await checkAutomaticReminders();
+  //   }
+  // }, 3600000);
+  console.log('[Automatic Reminders] DISABLED - scheduler under maintenance');
 
   // Survey scheduler - auto-activate scheduled surveys and auto-close expired ones
   async function processSurveySchedule() {
