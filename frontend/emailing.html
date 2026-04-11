@@ -374,6 +374,26 @@
       color: #999;
       letter-spacing: 0.5px;
     }
+    .template-test-btn {
+      margin-top: 8px;
+      padding: 8px 14px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      box-shadow: 0 2px 6px rgba(102, 126, 234, 0.3);
+    }
+    .template-test-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 10px rgba(102, 126, 234, 0.4);
+    }
+    .template-test-btn:active {
+      transform: translateY(0);
+    }
 
     /* Template Modal */
     .template-modal {
@@ -1682,48 +1702,56 @@
           <div class="template-card-icon">📨</div>
           <div class="template-card-title">Convocation Tournoi</div>
           <div class="template-card-desc">Email envoyé aux joueurs pour les tournois T1, T2, T3</div>
+          <button class="template-test-btn" onclick="testTemplate(event, 'convocation')">🧪 Tester ce template</button>
         </div>
         <div class="template-card" data-template="convocation-finale">
           <div class="template-card-category">Convocations</div>
           <div class="template-card-icon">🏆</div>
           <div class="template-card-title">Convocation Finale</div>
           <div class="template-card-desc">Email envoyé aux qualifiés pour la finale départementale</div>
+          <button class="template-test-btn" onclick="testTemplate(event, 'convocation-finale')">🧪 Tester ce template</button>
         </div>
         <div class="template-card" data-template="results">
           <div class="template-card-category">Résultats</div>
           <div class="template-card-icon">📊</div>
           <div class="template-card-title">Résultats Tournoi</div>
           <div class="template-card-desc">Email avec classement après chaque tournoi</div>
+          <button class="template-test-btn" onclick="testTemplate(event, 'results')">🧪 Tester ce template</button>
         </div>
         <div class="template-card" data-template="finale-results">
           <div class="template-card-category">Résultats</div>
           <div class="template-card-icon">🥇</div>
           <div class="template-card-title">Résultats Finale</div>
           <div class="template-card-desc">Email avec podium après la finale</div>
+          <button class="template-test-btn" onclick="testTemplate(event, 'results-finale')">🧪 Tester ce template</button>
         </div>
         <div class="template-card" data-template="relances">
           <div class="template-card-category">Relances</div>
           <div class="template-card-icon">🔔</div>
           <div class="template-card-title">Relances Inscriptions</div>
           <div class="template-card-desc">Rappels pour T1, T2, T3 et Finale</div>
+          <button class="template-test-btn" onclick="testTemplate(event, 'relance')">🧪 Tester ce template</button>
         </div>
         <div class="template-card" data-template="club-reminder">
           <div class="template-card-category">Clubs</div>
           <div class="template-card-icon">🏠</div>
           <div class="template-card-title">Rappel Club</div>
           <div class="template-card-desc">Email aux clubs hébergeant les compétitions</div>
+          <button class="template-test-btn" onclick="testTemplate(event, 'rappel-club')">🧪 Tester ce template</button>
         </div>
         <div class="template-card" data-template="inscription-confirmation">
           <div class="template-card-category">App Joueur</div>
           <div class="template-card-icon">✅</div>
           <div class="template-card-title">Confirmation Inscription</div>
           <div class="template-card-desc">Email automatique après inscription</div>
+          <button class="template-test-btn" onclick="testTemplate(event, 'confirmation')">🧪 Tester ce template</button>
         </div>
         <div class="template-card" data-template="inscription-cancellation">
           <div class="template-card-category">App Joueur</div>
           <div class="template-card-icon">❌</div>
           <div class="template-card-title">Désinscription</div>
           <div class="template-card-desc">Email automatique après désinscription</div>
+          <button class="template-test-btn" onclick="testTemplate(event, 'desinscription')">🧪 Tester ce template</button>
         </div>
         <div class="template-card" data-template="custom">
           <div class="template-card-category">Personnalisé</div>
@@ -2483,6 +2511,55 @@
       if (editor) {
         editor.style.display = 'block';
         editor.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }
+
+    // Test template by sending one email to admin
+    async function testTemplate(event, templateKey) {
+      // Stop propagation to prevent card click
+      event.stopPropagation();
+
+      const button = event.target;
+      const originalText = button.textContent;
+
+      try {
+        button.disabled = true;
+        button.textContent = '⏳ Envoi...';
+
+        const response = await authFetch(`${API_URL}/test-mode/send-template`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ templateKey })
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+          button.textContent = '✅ Envoyé !';
+          button.style.background = '#28a745';
+          showMessage('success', `Email de test envoyé à ${result.to}. Vérifiez votre boîte de réception.`);
+
+          // Reset button after 3 seconds
+          setTimeout(() => {
+            button.textContent = originalText;
+            button.style.background = '';
+            button.disabled = false;
+          }, 3000);
+        } else {
+          throw new Error(result.error || 'Erreur lors de l\'envoi');
+        }
+      } catch (error) {
+        console.error('Error testing template:', error);
+        button.textContent = '❌ Erreur';
+        button.style.background = '#dc3545';
+        showMessage('error', error.message || 'Erreur lors de l\'envoi du test');
+
+        // Reset button after 3 seconds
+        setTimeout(() => {
+          button.textContent = originalText;
+          button.style.background = '';
+          button.disabled = false;
+        }, 3000);
       }
     }
 

@@ -926,4 +926,181 @@ async function deleteTestTournament(db, tournamentId) {
   });
 }
 
+// ==================== SIMPLIFIED TEMPLATE TESTING ====================
+
+// Generate fake template variables based on template key
+function generateFakeTemplateData(templateKey) {
+  const baseData = {
+    first_name: 'Jean',
+    last_name: 'Dupont',
+    player_name: 'Jean Dupont',
+    club: 'BC Paris',
+    category: 'Libre N2',
+    tournament: 'T1',
+    tournament_name: 'Tournoi Qualificatif 1 - Libre N2',
+    date: '15/03/2026',
+    tournament_date: '15/03/2026',
+    time: '14H00',
+    tournament_lieu: 'Salle Charenton',
+    location: 'Salle Charenton',
+    poule: '1',
+    distance: '80',
+    reprises: '25',
+    deadline_date: '08/03/2026',
+    closing_date: '08/03/2026',
+    position: '3e',
+    organization_name: 'Comité Départemental de Billard',
+    organization_short_name: 'CDB',
+    organization_email: 'contact@cdbhs.net'
+  };
+
+  // Template-specific additions
+  switch (templateKey) {
+    case 'results':
+    case 'results-finale':
+      baseData.position = '3e';
+      baseData.tournament_name = templateKey === 'results-finale'
+        ? 'Finale Départementale - Libre N2'
+        : 'Tournoi Qualificatif 1 - Libre N2';
+      break;
+
+    case 'relance':
+    case 'rappel-club':
+      baseData.deadline_date = '08/03/2026';
+      baseData.closing_date = '08/03/2026';
+      break;
+
+    case 'convocation-finale':
+      baseData.tournament = 'Finale';
+      baseData.tournament_name = 'Finale Départementale - Libre N2';
+      break;
+
+    case 'confirmation':
+    case 'desinscription':
+      // Use base data as is
+      break;
+  }
+
+  return baseData;
+}
+
+// POST /api/test-mode/send-template - Simplified template testing
+// Sends ONE test email to the logged-in admin for the specified template
+router.post('/send-template', authenticateToken, async (req, res) => {
+  try {
+    const { templateKey } = req.body;
+    const orgId = req.user.organizationId || null;
+    const adminEmail = req.user.email; // Get admin email from JWT
+
+    if (!templateKey) {
+      return res.status(400).json({ error: 'Template key is required' });
+    }
+
+    if (!adminEmail) {
+      return res.status(400).json({ error: 'Admin email not found in session' });
+    }
+
+    // Generate fake template data
+    const fakeData = generateFakeTemplateData(templateKey);
+
+    // Load template from database
+    const template = await getEmailTemplate(templateKey, orgId);
+
+    // Get email settings
+    const settings = await getEmailTemplateSettings(orgId);
+    const contactEmail = await getContactEmail(orgId);
+
+    // Replace variables in subject and body
+    const subject = '[TEST] ' + replaceTemplateVariables(template.subject, fakeData);
+    const bodyText = replaceTemplateVariables(template.body, fakeData);
+
+    // Build HTML email
+    const primaryColor = settings.primary_color || '#1F4788';
+    const secondaryColor = settings.secondary_color || '#667eea';
+    const backgroundColor = settings.background_color || '#ffffff';
+    const orgName = settings.organization_short_name || 'CDB';
+
+    const htmlBody = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f5f5f5;">
+  <!-- Test Mode Warning -->
+  <div style="background: #fff3cd; border-bottom: 3px solid #ffc107; padding: 12px; text-align: center;">
+    <strong style="color: #856404; font-size: 14px;">🧪 MODE TEST - Cet email est un test et ne correspond à aucune vraie compétition</strong>
+  </div>
+
+  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: #f5f5f5;">
+    <tr>
+      <td style="padding: 20px 0;">
+        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="600" style="margin: 0 auto; background-color: ${backgroundColor}; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+          <!-- Header -->
+          <tr>
+            <td style="background: linear-gradient(135deg, ${primaryColor} 0%, ${secondaryColor} 100%); padding: 30px; text-align: center; border-radius: 8px 8px 0 0;">
+              <h1 style="margin: 0; color: white; font-size: 24px; font-weight: 700;">${orgName}</h1>
+              <p style="margin: 8px 0 0 0; color: rgba(255,255,255,0.9); font-size: 14px;">Gestion des compétitions départementales FFB</p>
+            </td>
+          </tr>
+
+          <!-- Body -->
+          <tr>
+            <td style="padding: 40px 30px;">
+              <div style="white-space: pre-wrap; line-height: 1.6; color: #333; font-size: 15px;">
+${bodyText}
+              </div>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="padding: 20px 30px; background-color: #f8f9fa; border-radius: 0 0 8px 8px; text-align: center; border-top: 1px solid #e9ecef;">
+              <p style="margin: 0; color: #6c757d; font-size: 13px;">
+                Pour toute question, contactez-nous à <a href="mailto:${contactEmail}" style="color: ${primaryColor}; text-decoration: none;">${contactEmail}</a>
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+    // Determine from address based on template type
+    let fromType = 'noreply';
+    if (templateKey.includes('convocation')) {
+      fromType = 'convocations';
+    } else if (templateKey.includes('results') || templateKey.includes('relance')) {
+      fromType = 'communication';
+    }
+    const fromAddress = buildFromAddress(settings, fromType);
+
+    // Send email via Resend
+    const emailResult = await resend.emails.send({
+      from: fromAddress,
+      to: adminEmail,
+      subject: subject,
+      html: htmlBody
+    });
+
+    res.json({
+      success: true,
+      message: `Email de test envoyé à ${adminEmail}`,
+      templateKey: templateKey,
+      emailId: emailResult.id,
+      to: adminEmail
+    });
+
+  } catch (error) {
+    console.error('Error sending test template:', error);
+    res.status(500).json({
+      error: 'Erreur lors de l\'envoi du test',
+      details: error.message
+    });
+  }
+});
+
 module.exports = router;
