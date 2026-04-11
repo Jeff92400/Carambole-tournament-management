@@ -1166,8 +1166,8 @@
     </div>
 
     <!-- Test Mode Section - Admin Only -->
-    <div class="accordion-panel admin-only" id="testModeSection" data-settings-tab="organisation">
-      <div class="accordion-header" onclick="toggleAccordion('testModeSection')">
+    <div class="accordion-panel admin-only" id="emailTestModeSection" data-settings-tab="organisation">
+      <div class="accordion-header" onclick="toggleAccordion('emailTestModeSection')">
         <div class="accordion-title"><span class="accordion-icon">&#9654;</span><strong>🧪 Mode Test</strong></div>
         <span class="accordion-summary" id="summary-testMode">Tester les emails et notifications</span>
       </div>
@@ -5017,7 +5017,7 @@
 
     // Load test mode data when page loads
     setTimeout(() => {
-      if (document.getElementById('testModeSection')) {
+      if (document.getElementById('emailTestModeSection')) {
         loadTestModeData();
       }
     }, 1000);
