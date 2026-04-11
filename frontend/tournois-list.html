@@ -163,8 +163,7 @@
                 <th>Tournoi</th>
                 <th>Mode</th>
                 <th>Categorie</th>
-                <th>Date debut</th>
-                <th>Date fin</th>
+                <th>Date</th>
                 <th>Lieu</th>
                 <th>Taille</th>
                 <th class="admin-only">Actions</th>
@@ -210,14 +209,9 @@
               </select>
             </div>
 
-            <div>
-              <label style="display: block; margin-bottom: 5px; font-weight: bold;">Date debut</label>
+            <div style="grid-column: 1 / -1;">
+              <label style="display: block; margin-bottom: 5px; font-weight: bold;">Date</label>
               <input type="date" id="edit_debut" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-            </div>
-
-            <div>
-              <label style="display: block; margin-bottom: 5px; font-weight: bold;">Date fin</label>
-              <input type="date" id="edit_fin" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
             </div>
 
             <div style="grid-column: 1 / -1;">
@@ -300,14 +294,9 @@
               </select>
             </div>
 
-            <div>
-              <label style="display: block; margin-bottom: 5px; font-weight: bold;">Date debut *</label>
+            <div style="grid-column: 1 / -1;">
+              <label style="display: block; margin-bottom: 5px; font-weight: bold;">Date *</label>
               <input type="date" id="create_debut" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-            </div>
-
-            <div>
-              <label style="display: block; margin-bottom: 5px; font-weight: bold;">Date fin</label>
-              <input type="date" id="create_fin" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
             </div>
 
             <div style="grid-column: 1 / -1;">
@@ -791,7 +780,6 @@
           <td><span class="badge ${getModeBadgeClass(tournoi.mode)}">${tournoi.mode || '-'}</span></td>
           <td>${tournoi.categorie || '-'}</td>
           <td class="${getDateClass(tournoi.debut)}">${formatDate(tournoi.debut)}</td>
-          <td class="${getDateClass(tournoi.fin)}">${formatDate(tournoi.fin)}</td>
           <td>${tournoi.lieu || '-'}${tournoi.lieu_2 ? ' + ' + tournoi.lieu_2 : ''}</td>
           <td style="text-align: center;">${tournoi.taille || '-'}</td>
           ${canSeeAdminUI ? `<td style="text-align: center; white-space: nowrap;">${actionButtons}</td>` : ''}
@@ -943,23 +931,22 @@
       }
 
       // CSV headers
-      const headers = ['ID', 'Nom', 'Mode', 'Categorie', 'Date debut', 'Date fin', 'Lieu', 'Taille'];
+      const headers = ['ID', 'Nom', 'Mode', 'Categorie', 'Date', 'Lieu', 'Taille'];
 
       // Build CSV content
       let csvContent = headers.join(';') + '\n';
 
       rows.forEach(row => {
         const cells = row.querySelectorAll('td');
-        if (cells.length >= 8) {
+        if (cells.length >= 7) {
           const rowData = [
             cells[0].textContent.trim(), // ID
             cells[1].textContent.trim(), // Nom
             cells[2].textContent.trim(), // Mode
             cells[3].textContent.trim(), // Categorie
-            cells[4].textContent.trim(), // Date debut
-            cells[5].textContent.trim(), // Date fin
-            cells[6].textContent.trim(), // Lieu
-            cells[7].textContent.trim()  // Taille
+            cells[4].textContent.trim(), // Date
+            cells[5].textContent.trim(), // Lieu
+            cells[6].textContent.trim()  // Taille
           ];
           csvContent += rowData.join(';') + '\n';
         }
@@ -988,11 +975,7 @@
       document.getElementById('edit_categorie').value = tournoi.categorie || '';
 
       const debutVal = tournoi.debut ? tournoi.debut.split('T')[0] : '';
-      const finVal = tournoi.fin ? tournoi.fin.split('T')[0] : '';
       document.getElementById('edit_debut').value = debutVal;
-      document.getElementById('edit_fin').value = finVal;
-      // If debut === fin (same-day tournament), mark fin as auto-fillable so changing debut syncs fin
-      window._autoFilledEditFin = (debutVal && debutVal === finVal) ? finVal : null;
       document.getElementById('edit_lieu').value = tournoi.lieu || '';
       document.getElementById('edit_lieu_2').value = tournoi.lieu_2 || '';
       document.getElementById('edit_tournament_number').value = tournoi.tournament_number || '';
@@ -1065,7 +1048,6 @@
           categorie: document.getElementById('edit_categorie').value,
           tournament_number: parseInt(document.getElementById('edit_tournament_number').value) || null,
           debut: document.getElementById('edit_debut').value || null,
-          fin: document.getElementById('edit_fin').value || null,
           lieu: document.getElementById('edit_lieu').value || null,
           lieu_2: document.getElementById('edit_lieu_2').value || null,
           taille: parseInt(document.getElementById('edit_taille').value) || null,
@@ -1138,7 +1120,6 @@
         categorie: document.getElementById('create_categorie').value,
         tournament_number: parseInt(document.getElementById('create_tournament_number').value) || null,
         debut: document.getElementById('create_debut').value || null,
-        fin: document.getElementById('create_fin').value || null,
         lieu: document.getElementById('create_lieu').value || null,
         lieu_2: document.getElementById('create_lieu_2').value || null,
         taille: parseInt(document.getElementById('create_taille').value) || null,

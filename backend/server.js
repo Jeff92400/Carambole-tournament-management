@@ -327,7 +327,7 @@ app.get('/api/public/:orgSlug/tournament/:id', async (req, res) => {
     // Fetch tournament
     const tournament = await new Promise((resolve, reject) => {
       dbLoader.get(
-        `SELECT tournoi_id, nom, mode, categorie, debut, fin, lieu, lieu_2, status,
+        `SELECT tournoi_id, nom, mode, categorie, debut, lieu, lieu_2, status,
                 tournament_number, is_split, split_label
          FROM tournoi_ext
          WHERE tournoi_id = $1 AND organization_id = $2`,
@@ -1350,12 +1350,12 @@ app.listen(PORT, '0.0.0.0', () => {
       const tomorrowStr = tomorrow.toISOString().split('T')[0]; // YYYY-MM-DD
       console.log(`[Automatic Reminders] Checking for tournaments with deadline: ${tomorrowStr}`);
 
-      // Find all tournaments with deadline (fin) = tomorrow
+      // Find all tournaments with deadline (debut) = tomorrow
       const tournaments = await new Promise((resolve, reject) => {
         db.all(
-          `SELECT tournoi_id, nom, mode, categorie, debut, fin, organization_id
+          `SELECT tournoi_id, nom, mode, categorie, debut, organization_id
            FROM tournoi_ext
-           WHERE DATE(fin) = $1
+           WHERE DATE(debut) = $1
              AND (status IS NULL OR status = 'active')`,
           [tomorrowStr],
           (err, rows) => err ? reject(err) : resolve(rows || [])
@@ -1372,7 +1372,7 @@ app.listen(PORT, '0.0.0.0', () => {
       for (const tournament of tournaments) {
         try {
           const tournamentName = `${tournament.nom} - ${tournament.mode} ${tournament.categorie}`;
-          const closingDate = new Date(tournament.fin).toLocaleDateString('fr-FR', {
+          const closingDate = new Date(tournament.debut).toLocaleDateString('fr-FR', {
             day: 'numeric',
             month: 'long',
             year: 'numeric'

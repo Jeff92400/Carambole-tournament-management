@@ -1,0 +1,1049 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Audit Complet des Timelines - Tournament & Player App</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      background: #f5f5f5;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+      overflow: hidden;
+    }
+
+    header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 40px;
+      text-align: center;
+    }
+
+    header h1 {
+      font-size: 32px;
+      margin-bottom: 10px;
+    }
+
+    header p {
+      font-size: 16px;
+      opacity: 0.9;
+    }
+
+    nav {
+      background: #f8f9fa;
+      padding: 20px 40px;
+      border-bottom: 2px solid #e9ecef;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    nav h3 {
+      margin-bottom: 10px;
+      color: #495057;
+    }
+
+    nav ul {
+      list-style: none;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 15px;
+    }
+
+    nav a {
+      color: #667eea;
+      text-decoration: none;
+      padding: 8px 16px;
+      border-radius: 6px;
+      background: white;
+      border: 1px solid #dee2e6;
+      font-size: 14px;
+      transition: all 0.2s;
+    }
+
+    nav a:hover {
+      background: #667eea;
+      color: white;
+      border-color: #667eea;
+    }
+
+    main {
+      padding: 40px;
+    }
+
+    section {
+      margin-bottom: 60px;
+    }
+
+    h2 {
+      font-size: 28px;
+      color: #212529;
+      margin-bottom: 20px;
+      padding-bottom: 10px;
+      border-bottom: 3px solid #667eea;
+    }
+
+    h3 {
+      font-size: 22px;
+      color: #495057;
+      margin-top: 30px;
+      margin-bottom: 15px;
+    }
+
+    h4 {
+      font-size: 18px;
+      color: #6c757d;
+      margin-top: 20px;
+      margin-bottom: 10px;
+    }
+
+    p {
+      margin-bottom: 15px;
+      color: #495057;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 20px 0;
+      background: white;
+      border: 1px solid #dee2e6;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    thead {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+
+    th {
+      padding: 15px;
+      text-align: left;
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    td {
+      padding: 12px 15px;
+      border-bottom: 1px solid #e9ecef;
+    }
+
+    tbody tr:hover {
+      background: #f8f9fa;
+    }
+
+    tbody tr:last-child td {
+      border-bottom: none;
+    }
+
+    code {
+      background: #f8f9fa;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      color: #e83e8c;
+    }
+
+    pre {
+      background: #282c34;
+      color: #abb2bf;
+      padding: 20px;
+      border-radius: 8px;
+      overflow-x: auto;
+      margin: 20px 0;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    pre code {
+      background: transparent;
+      color: inherit;
+      padding: 0;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-right: 8px;
+    }
+
+    .badge-success {
+      background: #d4edda;
+      color: #155724;
+    }
+
+    .badge-danger {
+      background: #f8d7da;
+      color: #721c24;
+    }
+
+    .badge-warning {
+      background: #fff3cd;
+      color: #856404;
+    }
+
+    .badge-info {
+      background: #d1ecf1;
+      color: #0c5460;
+    }
+
+    .alert {
+      padding: 15px 20px;
+      border-radius: 8px;
+      margin: 20px 0;
+      border-left: 4px solid;
+    }
+
+    .alert-success {
+      background: #d4edda;
+      border-color: #28a745;
+      color: #155724;
+    }
+
+    .alert-danger {
+      background: #f8d7da;
+      border-color: #dc3545;
+      color: #721c24;
+    }
+
+    .alert-warning {
+      background: #fff3cd;
+      border-color: #ffc107;
+      color: #856404;
+    }
+
+    .alert-info {
+      background: #d1ecf1;
+      border-color: #17a2b8;
+      color: #0c5460;
+    }
+
+    .timeline {
+      background: #f8f9fa;
+      padding: 30px;
+      border-radius: 8px;
+      margin: 20px 0;
+      overflow-x: auto;
+    }
+
+    .timeline pre {
+      background: #212529;
+      color: #f8f9fa;
+      font-size: 12px;
+      white-space: pre;
+    }
+
+    ul {
+      margin-left: 20px;
+      margin-bottom: 15px;
+    }
+
+    li {
+      margin-bottom: 8px;
+      color: #495057;
+    }
+
+    .collapsible {
+      background: #f8f9fa;
+      border: 1px solid #dee2e6;
+      border-radius: 8px;
+      margin: 15px 0;
+      overflow: hidden;
+    }
+
+    .collapsible-header {
+      padding: 15px 20px;
+      cursor: pointer;
+      font-weight: 600;
+      color: #495057;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: background 0.2s;
+    }
+
+    .collapsible-header:hover {
+      background: #e9ecef;
+    }
+
+    .collapsible-header::after {
+      content: '▼';
+      font-size: 12px;
+      transition: transform 0.2s;
+    }
+
+    .collapsible.active .collapsible-header::after {
+      transform: rotate(-180deg);
+    }
+
+    .collapsible-content {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.3s ease;
+    }
+
+    .collapsible.active .collapsible-content {
+      max-height: 2000px;
+    }
+
+    .collapsible-inner {
+      padding: 20px;
+      border-top: 1px solid #dee2e6;
+    }
+
+    .checklist {
+      list-style: none;
+      margin-left: 0;
+    }
+
+    .checklist li {
+      padding: 8px 0;
+      padding-left: 30px;
+      position: relative;
+    }
+
+    .checklist li::before {
+      content: '☐';
+      position: absolute;
+      left: 0;
+      font-size: 18px;
+      color: #6c757d;
+    }
+
+    .flow-item {
+      background: white;
+      border: 1px solid #dee2e6;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 15px;
+    }
+
+    .flow-item h4 {
+      margin-top: 0;
+      color: #667eea;
+    }
+
+    .highlight {
+      background: #fff3cd;
+      padding: 20px;
+      border-left: 4px solid #ffc107;
+      border-radius: 4px;
+      margin: 20px 0;
+    }
+
+    .highlight strong {
+      color: #856404;
+    }
+
+    @media (max-width: 768px) {
+      body {
+        padding: 10px;
+      }
+
+      header {
+        padding: 30px 20px;
+      }
+
+      header h1 {
+        font-size: 24px;
+      }
+
+      main {
+        padding: 20px;
+      }
+
+      nav ul {
+        flex-direction: column;
+      }
+
+      table {
+        font-size: 13px;
+      }
+
+      th, td {
+        padding: 10px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>📊 Audit Complet des Timelines</h1>
+      <p>Tournament Management & Player App</p>
+      <p style="margin-top: 10px; font-size: 14px;">Date: 11 avril 2026</p>
+    </header>
+
+    <nav>
+      <h3>Navigation rapide</h3>
+      <ul>
+        <li><a href="#vue-ensemble">Vue d'ensemble</a></li>
+        <li><a href="#parametres">Paramètres actuels</a></li>
+        <li><a href="#player-app">Player App</a></li>
+        <li><a href="#tournament-app">Tournament App</a></li>
+        <li><a href="#flows-email">Flows Email</a></li>
+        <li><a href="#usages-fin">Usages de fin</a></li>
+        <li><a href="#plan-cleanup">Plan de cleanup</a></li>
+        <li><a href="#checklist">Checklist</a></li>
+      </ul>
+    </nav>
+
+    <main>
+      <!-- VUE D'ENSEMBLE -->
+      <section id="vue-ensemble">
+        <h2>📊 Vue d'ensemble - Cycle de vie d'un tournoi</h2>
+        <div class="timeline">
+          <pre>CRÉATION → INSCRIPTIONS OUVERTES → INSCRIPTIONS FERMÉES → CONVOCATIONS → JOUR J
+   │              │                        │                    │            │
+   │              │                        │                    │            │
+ J-28j          J-28j                    J-7j                J-3/5j        J-0
+   │              │                        │                    │            │
+   │        [Player App]              [Player App]         [Admin]      [Tournoi]
+   │       visible dans               inscriptions          envoie       se joue
+   │      "Compétitions"               ferment            poules
+   │
+[Admin crée]</pre>
+        </div>
+      </section>
+
+      <!-- PARAMÈTRES TEMPORELS -->
+      <section id="parametres">
+        <h2>🎯 Paramètres temporels actuels (organization_settings)</h2>
+
+        <h3>✅ Paramètres UTILISÉS</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Paramètre</th>
+              <th>Valeur</th>
+              <th>Où utilisé</th>
+              <th>Impact</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td colspan="4" style="text-align: center; font-weight: 600; color: #dc3545;">
+                <span class="badge badge-danger">AUCUN ACTUELLEMENT</span>
+                Les délais sont codés en dur !
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>❌ Paramètres DÉFINIS mais NON UTILISÉS</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Paramètre</th>
+              <th>Valeur</th>
+              <th>Usage prévu</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>threshold_simulation_disabled</code></td>
+              <td>7j</td>
+              <td>Verrouiller simulation X jours avant</td>
+              <td><span class="badge badge-danger">❌ Jamais vérifié</span></td>
+            </tr>
+            <tr>
+              <td><code>threshold_relance_start</code></td>
+              <td>7j</td>
+              <td>Début fenêtre relances manuelles</td>
+              <td><span class="badge badge-danger">❌ Pas appliqué</span></td>
+            </tr>
+            <tr>
+              <td><code>threshold_relance_end</code></td>
+              <td>14j</td>
+              <td>Fin fenêtre relances manuelles</td>
+              <td><span class="badge badge-danger">❌ Pas appliqué</span></td>
+            </tr>
+            <tr>
+              <td><code>threshold_relance_search</code></td>
+              <td>28j</td>
+              <td>Recherche tournois à relancer</td>
+              <td><span class="badge badge-danger">❌ Pas appliqué</span></td>
+            </tr>
+            <tr>
+              <td><code>threshold_registration_deadline</code></td>
+              <td>7j</td>
+              <td>Calcul auto de fin</td>
+              <td><span class="badge badge-danger">❌ Jamais calculé</span></td>
+            </tr>
+            <tr>
+              <td><code>threshold_stale_import_warning</code></td>
+              <td>7j</td>
+              <td>Alerte import obsolète</td>
+              <td><span class="badge badge-danger">❌ Jamais affiché</span></td>
+            </tr>
+            <tr>
+              <td><code>threshold_urgent_alert</code></td>
+              <td>7j</td>
+              <td>Alertes rouges dashboard</td>
+              <td><span class="badge badge-danger">❌ Pas implémenté</span></td>
+            </tr>
+            <tr>
+              <td><code>threshold_display_competitions</code></td>
+              <td>28j</td>
+              <td>Fenêtre "Compétitions à venir"</td>
+              <td><span class="badge badge-danger">❌ Pas appliqué</span></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="alert alert-danger">
+          <strong>Résultat:</strong> 8 paramètres configurables mais 0 utilisés = confusion totale !
+        </div>
+      </section>
+
+      <!-- PLAYER APP -->
+      <section id="player-app">
+        <h2>📱 Player App - Affichage des tournois</h2>
+
+        <h3>Onglet "Vos compétitions" (tournaments)</h3>
+        <p><strong>Filtrage actuel</strong> (codé en dur dans <code>postgresql-adapter.js</code> ligne 81-97) :</p>
+        <pre><code>const inscriptionOpenDate = new Date(Date.now() + 28 * 24 * 60 * 60 * 1000);
+// SQL: WHERE t.debut >= today AND t.debut <= inscriptionOpenDate
+// SQL: CASE WHEN t.debut <= inscriptionOpenDate THEN true ELSE false END as inscription_open</code></pre>
+
+        <p><strong>Affichage:</strong></p>
+        <ul>
+          <li>Tournois <strong>dans les 28 prochains jours</strong></li>
+          <li>Filtrés par catégorie du joueur (rankings)</li>
+          <li>Status: "Inscriptions ouvertes dans X jours" si > 28j</li>
+          <li>Status: "Inscriptions fermées" si < 7j</li>
+          <li>Bouton "S'inscrire" si entre 7j et 28j</li>
+        </ul>
+
+        <h3>Onglet "Compétitions CDB" (calendar)</h3>
+        <p><strong>Affichage:</strong></p>
+        <ul>
+          <li>TOUS les tournois de la saison (non filtrés par catégorie)</li>
+          <li>Même logique 28j/7j</li>
+          <li>Lien "📄 convocation" si PDF disponible</li>
+        </ul>
+
+        <h3>Logique de clôture</h3>
+        <pre><code>function getInscriptionStatus(tournament) {
+  const daysUntil = (tournamentDate - now) / (1000 * 60 * 60 * 24);
+
+  if (daysUntil < 7) {
+    return { open: false, status: 'closed' };           // Fermé
+  } else if (!tournament.inscription_open) {
+    return { open: false, status: 'not_yet_open' };     // Pas encore ouvert
+  } else {
+    return { open: true, status: 'open' };              // Ouvert
+  }
+}</code></pre>
+
+        <div class="alert alert-info">
+          <strong>Résultat:</strong> Fenêtre d'inscription = <strong>28 jours à 7 jours avant</strong> le tournoi (codé en dur)
+        </div>
+      </section>
+
+      <!-- TOURNAMENT APP -->
+      <section id="tournament-app">
+        <h2>🖥️ Tournament App - Affichage des tournois</h2>
+
+        <h3>Dashboard (dashboard.html)</h3>
+        <p><strong>Alertes de tournois</strong> :</p>
+        <ul>
+          <li>DEVRAIT afficher alertes rouges X jours avant (<code>threshold_urgent_alert = 7j</code>)</li>
+          <li><span class="badge badge-danger">❌ Pas implémenté</span></li>
+        </ul>
+
+        <h3>Générer les poules (generate-poules.html)</h3>
+        <p><strong>Cartes "Upcoming tournaments"</strong> :</p>
+        <ul>
+          <li>Affiche TOUS les tournois à venir (<code>WHERE debut >= today</code>)</li>
+          <li>Pas de filtre temporel appliqué</li>
+          <li>Simulation de poules disponible jusqu'à J-? (<code>threshold_simulation_disabled = 7j</code> NON appliqué)</li>
+        </ul>
+        <div class="highlight">
+          <strong>IMPORTANT:</strong> Ces cartes doivent <strong>rester visibles</strong> même si inscription fermée !
+        </div>
+
+        <h3>Com joueurs → Relances (emailing.html)</h3>
+        <p><strong>Fenêtre de relance actuelle</strong> :</p>
+        <ul>
+          <li>DEVRAIT filtrer entre <code>threshold_relance_start (7j)</code> et <code>threshold_relance_end (14j)</code></li>
+          <li><span class="badge badge-danger">❌ Affiche TOUS les tournois futurs</span> (pas de filtre appliqué)</li>
+        </ul>
+      </section>
+
+      <!-- FLOWS EMAIL -->
+      <section id="flows-email">
+        <h2>📧 Flows Email/Notification utilisant des dates</h2>
+
+        <div class="flow-item">
+          <h4>1. Convocations (email.js - manuel)</h4>
+          <p><strong>Déclencheur:</strong> Admin clique "Envoyer les convocations" dans generate-poules.html</p>
+          <p><strong>Variables de date:</strong></p>
+          <ul>
+            <li><code>{date}</code> - Date du tournoi (<code>tournoi_ext.debut</code>)</li>
+            <li><code>{deadline_date}</code> - <span class="badge badge-danger">❌ PAS UTILISÉ</span> (devrait être <code>debut - 7j</code>)</li>
+          </ul>
+          <p><strong>Impact suppression <code>fin</code>:</strong> <span class="badge badge-success">✅ AUCUN</span> - n'utilise que <code>debut</code></p>
+        </div>
+
+        <div class="flow-item">
+          <h4>2. Résultats tournoi (emailing.js - manuel)</h4>
+          <p><strong>Déclencheur:</strong> Admin clique "Envoyer les résultats" après import CSV</p>
+          <p><strong>Variables de date:</strong></p>
+          <ul>
+            <li><code>{tournament_date}</code> - Date du tournoi (<code>tournoi_ext.debut</code>)</li>
+          </ul>
+          <p><strong>Impact suppression <code>fin</code>:</strong> <span class="badge badge-success">✅ AUCUN</span></p>
+        </div>
+
+        <div class="flow-item">
+          <h4>3. Relances manuelles (emailing.js - manuel)</h4>
+          <p><strong>Déclencheur:</strong> Admin sélectionne joueurs et envoie relance</p>
+          <p><strong>Variables de date:</strong></p>
+          <ul>
+            <li><code>{tournament_date}</code> - Date du tournoi (<code>debut</code>)</li>
+            <li><code>{deadline_date}</code> - <span class="badge badge-danger">❌ PAS UTILISÉ</span></li>
+          </ul>
+          <p><strong>Requête SQL actuelle</strong> (ligne 2913) :</p>
+          <pre><code>SELECT t.tournoi_id, t.nom, t.mode, t.categorie, t.debut, t.fin, t.lieu, ...</code></pre>
+          <p><strong>Impact suppression <code>fin</code>:</strong> <span class="badge badge-warning">⚠️ Colonne sélectionnée mais jamais utilisée</span> - retirer de SELECT</p>
+        </div>
+
+        <div class="flow-item">
+          <h4>4. Relances AUTOMATIQUES (server.js - scheduler DÉSACTIVÉ)</h4>
+          <p><strong>Déclencheur:</strong> Tous les jours à 9h AM, si <code>DATE(fin) = tomorrow</code></p>
+          <p><strong>Variables de date:</strong></p>
+          <ul>
+            <li><code>closingDate</code> = <code>new Date(tournament.fin)</code> (ligne 1375)</li>
+          </ul>
+          <p><strong>Message:</strong> "Les inscriptions pour {tournoi} ferment demain. Inscrivez-vous vite !"</p>
+          <p><strong>Problèmes identifiés:</strong></p>
+          <ul>
+            <li>❌ Utilise <code>fin</code> qui est actuellement = <code>debut</code> → message absurde</li>
+            <li>❌ Pas de filtrage par catégorie</li>
+            <li>❌ Pas de déduplication (envoie en boucle)</li>
+            <li>❌ S'exécute au redémarrage (90s après startup)</li>
+          </ul>
+          <p><strong>Impact suppression <code>fin</code>:</strong> <span class="badge badge-danger">🔴 BLOQUE</span> - Le scheduler doit être réécrit de toute façon</p>
+        </div>
+
+        <div class="flow-item">
+          <h4>5. Notifications automatiques (autres types)</h4>
+          <ul>
+            <li><strong>Tournoi annulé</strong> (inscriptions.js ligne 2258) : Utilise <code>debut</code> uniquement <span class="badge badge-success">✅</span></li>
+            <li><strong>Tournoi modifié</strong> (inscriptions.js ligne 2456) : Utilise <code>debut</code> uniquement <span class="badge badge-success">✅</span></li>
+            <li><strong>Nouveau tournoi</strong> (inscriptions.js ligne 2133) : Utilise <code>debut</code> uniquement <span class="badge badge-success">✅</span></li>
+            <li><strong>Finale qualification</strong> (tournaments.js ligne 902) : Utilise <code>debut</code> uniquement <span class="badge badge-success">✅</span></li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- USAGES DE FIN -->
+      <section id="usages-fin">
+        <h2>🗂️ Usages de <code>tournoi_ext.fin</code> dans le code</h2>
+
+        <h3>Backend - Tournament App</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Fichier</th>
+              <th>Ligne</th>
+              <th>Usage</th>
+              <th>Critique ?</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>server.js</code></td>
+              <td>1356</td>
+              <td>SELECT fin FROM tournoi_ext (scheduler)</td>
+              <td><span class="badge badge-danger">🔴 OUI</span></td>
+            </tr>
+            <tr>
+              <td><code>server.js</code></td>
+              <td>1375</td>
+              <td>new Date(tournament.fin)</td>
+              <td><span class="badge badge-danger">🔴 OUI</span></td>
+            </tr>
+            <tr>
+              <td><code>inscriptions.js</code></td>
+              <td>203-214</td>
+              <td>INSERT/UPDATE fin depuis CSV import</td>
+              <td><span class="badge badge-warning">⚠️ Migration</span></td>
+            </tr>
+            <tr>
+              <td><code>inscriptions.js</code></td>
+              <td>2236-2374</td>
+              <td>INSERT/UPDATE fin (création/modification)</td>
+              <td><span class="badge badge-warning">⚠️ Migration</span></td>
+            </tr>
+            <tr>
+              <td><code>inscriptions.js</code></td>
+              <td>2987-4043</td>
+              <td>INSERT fin (création test/split)</td>
+              <td><span class="badge badge-warning">⚠️ Migration</span></td>
+            </tr>
+            <tr>
+              <td><code>calendar.js</code></td>
+              <td>353-372</td>
+              <td>INSERT fin depuis Excel (= debut)</td>
+              <td><span class="badge badge-warning">⚠️ Migration</span></td>
+            </tr>
+            <tr>
+              <td><code>emailing.js</code></td>
+              <td>2913</td>
+              <td>SELECT fin (jamais utilisé)</td>
+              <td><span class="badge badge-success">✅ Retirer</span></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>Backend - Player App</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Fichier</th>
+              <th>Ligne</th>
+              <th>Usage</th>
+              <th>Critique ?</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td colspan="4" style="text-align: center; font-weight: 600;">
+                <span class="badge badge-success">✅ AUCUN</span>
+                Player App n'utilise PAS la colonne fin
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="alert alert-success">
+          <strong>Résultat:</strong> La suppression de <code>fin</code> ne casse RIEN dans le Player App ✅
+        </div>
+      </section>
+
+      <!-- PLAN DE CLEANUP -->
+      <section id="plan-cleanup">
+        <h2>🎯 Plan de cleanup</h2>
+
+        <div class="collapsible active">
+          <div class="collapsible-header">Phase 1 : Nouveaux paramètres configurables</div>
+          <div class="collapsible-content">
+            <div class="collapsible-inner">
+              <p><strong>Ajouter dans <code>organization_settings</code></strong> (defaults dans app-settings.js) :</p>
+              <pre><code>// Fenêtre d'inscription (Player App)
+inscription_opens_days_before: '28',      // Tournois apparaissent 28j avant
+inscription_closes_days_before: '7',      // Inscriptions ferment 7j avant
+
+// Relances manuelles (Tournament App)
+relance_window_start: '7',                // Fenêtre de relance commence
+relance_window_end: '14',                 // Fenêtre de relance se termine
+
+// Relances automatiques (scheduler)
+auto_reminder_enabled: 'true',            // On/off
+auto_reminder_days_before_deadline: '3',  // Envoyer 3j avant clôture
+
+// Simulation poules
+poule_simulation_lock_days: '7',          // Verrouiller simulation 7j avant</code></pre>
+
+              <p><strong>Supprimer:</strong></p>
+              <ul>
+                <li><code>threshold_stale_import_warning</code> (jamais utilisé, hors scope)</li>
+              </ul>
+
+              <p><strong>Garder mais renommer pour clarté:</strong></p>
+              <ul>
+                <li><code>threshold_urgent_alert</code> → <code>dashboard_alert_days</code> (pour future implémentation)</li>
+                <li><code>threshold_display_competitions</code> → <code>dashboard_competitions_window</code> (idem)</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <div class="collapsible active">
+          <div class="collapsible-header">Phase 2 : Supprimer tournoi_ext.fin</div>
+          <div class="collapsible-content">
+            <div class="collapsible-inner">
+              <p><strong>Migration SQL:</strong></p>
+              <pre><code>ALTER TABLE tournoi_ext DROP COLUMN fin;</code></pre>
+
+              <p><strong>Fichiers à modifier:</strong></p>
+              <ol>
+                <li><strong>Backend - Tournament App</strong>
+                  <ul>
+                    <li><code>routes/inscriptions.js</code> : Retirer <code>fin</code> de tous les INSERT/UPDATE</li>
+                    <li><code>routes/calendar.js</code> : Retirer <code>fin = debut</code></li>
+                    <li><code>routes/emailing.js</code> : Retirer <code>fin</code> du SELECT (ligne 2913)</li>
+                    <li><code>server.js</code> : Scheduler réécrit (n'utilisera plus <code>fin</code>)</li>
+                  </ul>
+                </li>
+                <li><strong>Backend - Player App</strong>
+                  <ul>
+                    <li><span class="badge badge-success">✅ AUCUNE MODIFICATION</span> - n'utilise pas <code>fin</code></li>
+                  </ul>
+                </li>
+                <li><strong>Frontend - Tournament App</strong>
+                  <ul>
+                    <li>Vérifier si formulaires de création/modification de tournoi ont un champ <code>fin</code> à retirer</li>
+                  </ul>
+                </li>
+              </ol>
+            </div>
+          </div>
+        </div>
+
+        <div class="collapsible active">
+          <div class="collapsible-header">Phase 3 : Implémenter les paramètres</div>
+          <div class="collapsible-content">
+            <div class="collapsible-inner">
+              <p><strong>Player App</strong> (<code>postgresql-adapter.js</code>) :</p>
+              <pre><code>// Ligne 81 - AVANT (codé en dur)
+const inscriptionOpenDate = new Date(Date.now() + 28 * 24 * 60 * 60 * 1000);
+
+// APRÈS (configurable)
+const opensDays = await getSetting('inscription_opens_days_before') || 28;
+const inscriptionOpenDate = new Date(Date.now() + opensDays * 24 * 60 * 60 * 1000);</code></pre>
+
+              <p><strong>Tournament App</strong> (<code>emailing.js</code>) :</p>
+              <ul>
+                <li>Appliquer <code>relance_window_start/end</code> au SELECT des tournois à relancer</li>
+              </ul>
+
+              <p><strong>Simulation poules</strong> (<code>generate-poules.html</code>) :</p>
+              <ul>
+                <li>Vérifier <code>poule_simulation_lock_days</code> avant d'afficher bouton "Simuler"</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <div class="collapsible active">
+          <div class="collapsible-header">Phase 4 : Corriger le scheduler automatique</div>
+          <div class="collapsible-content">
+            <div class="collapsible-inner">
+              <p><strong>Nouveau comportement</strong> (server.js) :</p>
+              <pre><code>// Condition: tournoi commence dans (inscription_closes_days_before + auto_reminder_days_before_deadline) jours
+// Exemple: inscription ferme 7j avant, rappel 3j avant clôture = envoyer 10j avant le tournoi
+
+const closesDays = await getSetting('inscription_closes_days_before') || 7;
+const reminderDays = await getSetting('auto_reminder_days_before_deadline') || 3;
+const targetDays = closesDays + reminderDays; // = 10j
+
+const targetDate = new Date(Date.now() + targetDays * 24 * 60 * 60 * 1000);
+
+// SELECT tournoi WHERE debut = targetDate
+// + Filtrer par catégorie du tournoi
+// + Vérifier déduplication (notification_log table)</code></pre>
+
+              <p><strong>Ajout table <code>notification_log</code>:</strong></p>
+              <pre><code>CREATE TABLE notification_log (
+  id SERIAL PRIMARY KEY,
+  tournoi_id INTEGER,
+  notification_type VARCHAR(50),
+  sent_at TIMESTAMP DEFAULT NOW(),
+  UNIQUE(tournoi_id, notification_type, DATE(sent_at))
+);</code></pre>
+            </div>
+          </div>
+        </div>
+
+        <div class="collapsible active">
+          <div class="collapsible-header">Phase 5 : Page paramètres - Tableau récapitulatif</div>
+          <div class="collapsible-content">
+            <div class="collapsible-inner">
+              <p><strong>Ajouter section "📅 Chronologie des compétitions"</strong> dans <code>settings-admin.html</code> :</p>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Événement</th>
+                    <th>Délai</th>
+                    <th>Paramètre</th>
+                    <th>Valeur</th>
+                    <th>Impact</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><strong>Création tournoi</strong></td>
+                    <td>J-28+</td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td>Tournoi créé par admin</td>
+                  </tr>
+                  <tr>
+                    <td><strong>Inscriptions s'ouvrent (Player App)</strong></td>
+                    <td>J-28</td>
+                    <td><code>inscription_opens_days_before</code></td>
+                    <td>28j</td>
+                    <td>Tournoi visible dans "Vos compétitions"</td>
+                  </tr>
+                  <tr>
+                    <td><strong>Fenêtre relance commence</strong></td>
+                    <td>J-14</td>
+                    <td><code>relance_window_end</code></td>
+                    <td>14j</td>
+                    <td>Admin peut envoyer relances manuelles</td>
+                  </tr>
+                  <tr>
+                    <td><strong>Rappel automatique</strong></td>
+                    <td>J-10</td>
+                    <td><code>auto_reminder_days_before_deadline</code></td>
+                    <td>3j</td>
+                    <td>Notification auto aux non-inscrits</td>
+                  </tr>
+                  <tr>
+                    <td><strong>Fenêtre relance se termine</strong></td>
+                    <td>J-7</td>
+                    <td><code>relance_window_start</code></td>
+                    <td>7j</td>
+                    <td>Tournoi disparaît de la fenêtre relances</td>
+                  </tr>
+                  <tr>
+                    <td><strong>Inscriptions ferment (Player App)</strong></td>
+                    <td>J-7</td>
+                    <td><code>inscription_closes_days_before</code></td>
+                    <td>7j</td>
+                    <td>Plus possible de s'inscrire</td>
+                  </tr>
+                  <tr>
+                    <td><strong>Simulation poules verrouillée</strong></td>
+                    <td>J-7</td>
+                    <td><code>poule_simulation_lock_days</code></td>
+                    <td>7j</td>
+                    <td>Admin ne peut plus modifier poules</td>
+                  </tr>
+                  <tr>
+                    <td><strong>Convocations envoyées</strong></td>
+                    <td>J-3/5</td>
+                    <td>-</td>
+                    <td>Manuel</td>
+                    <td>Admin envoie via "Générer les poules"</td>
+                  </tr>
+                  <tr>
+                    <td><strong>Jour du tournoi</strong></td>
+                    <td>J-0</td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td>Compétition a lieu</td>
+                  </tr>
+                </tbody>
+              </table>
+              <p><strong>Format visuel:</strong> Timeline horizontale avec icônes 🗓️📧🔔📊</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- POINTS DE VIGILANCE -->
+      <section>
+        <h2>⚠️ Points de vigilance (VOTRE CRAINTE)</h2>
+
+        <h3>Flows email/notification à NE PAS CASSER</h3>
+        <ul>
+          <li><span class="badge badge-success">✅</span> <strong>Convocations manuelles</strong> - Utilisent <code>debut</code> uniquement</li>
+          <li><span class="badge badge-success">✅</span> <strong>Résultats tournoi</strong> - Utilisent <code>debut</code> uniquement</li>
+          <li><span class="badge badge-success">✅</span> <strong>Relances manuelles</strong> - Utilisent <code>debut</code> (retirer <code>fin</code> du SELECT)</li>
+          <li><span class="badge badge-success">✅</span> <strong>Notifications automatiques</strong> - Utilisent <code>debut</code> uniquement</li>
+          <li><span class="badge badge-danger">🔴</span> <strong>Scheduler relances auto</strong> - NÉCESSITE réécriture complète</li>
+        </ul>
+
+        <h3>Stratégie de sécurité</h3>
+        <ol>
+          <li><span class="badge badge-success">✅</span> Ne jamais toucher aux routes d'envoi d'emails existantes (<code>/send-convocations</code>, <code>/send-results</code>, etc.)</li>
+          <li><span class="badge badge-success">✅</span> Supprimer <code>fin</code> uniquement des SELECT/INSERT (pas de logique métier)</li>
+          <li><span class="badge badge-danger">🔴</span> Réactiver scheduler SEULEMENT après tests complets</li>
+          <li><span class="badge badge-success">✅</span> Garder les cartes de tournois dans generate-poules.html exactement comme aujourd'hui</li>
+        </ol>
+      </section>
+
+      <!-- CHECKLIST -->
+      <section id="checklist">
+        <h2>📋 Checklist de validation</h2>
+        <p><strong>Avant de déployer :</strong></p>
+        <ul class="checklist">
+          <li>Player App - Vérifier "Vos compétitions" affiche tournois J-28 à J-7</li>
+          <li>Player App - Vérifier "Compétitions CDB" affiche tous les tournois</li>
+          <li>Player App - Vérifier message "Inscriptions ouvertes dans X jours"</li>
+          <li>Player App - Vérifier bouton "S'inscrire" désactivé si < J-7</li>
+          <li>Tournament App - Vérifier cartes tournois dans generate-poules.html</li>
+          <li>Tournament App - Vérifier convocations s'envoient normalement</li>
+          <li>Tournament App - Vérifier relances manuelles s'envoient normalement</li>
+          <li>Tournament App - Vérifier résultats s'envoient normalement</li>
+          <li>Tournament App - Vérifier fenêtre relances filtre J-14 à J-7</li>
+          <li>Scheduler - Vérifier filtrage par catégorie</li>
+          <li>Scheduler - Vérifier déduplication (pas de doublons)</li>
+          <li>Scheduler - Vérifier n'envoie PAS au startup</li>
+        </ul>
+      </section>
+
+      <!-- ORDRE D'EXÉCUTION -->
+      <section>
+        <h2>🔄 Ordre d'exécution (pour éviter de casser)</h2>
+        <ol>
+          <li><strong>Ajouter</strong> les nouveaux paramètres (sans les utiliser encore)</li>
+          <li><strong>Créer</strong> <code>notification_log</code> table</li>
+          <li><strong>Retirer</strong> <code>threshold_stale_import_warning</code> des settings</li>
+          <li><strong>Modifier</strong> Player App pour lire paramètres (backward compatible avec valeurs en dur)</li>
+          <li><strong>Retirer</strong> <code>fin</code> des SELECT qui ne l'utilisent pas</li>
+          <li><strong>Supprimer</strong> colonne <code>fin</code> de la BDD</li>
+          <li><strong>Réécrire</strong> scheduler automatique avec nouvelle logique</li>
+          <li><strong>Appliquer</strong> filtres relances manuelles</li>
+          <li><strong>Tester</strong> tous les flows email un par un</li>
+          <li><strong>Réactiver</strong> scheduler si tests OK</li>
+        </ol>
+
+        <div class="alert alert-info">
+          <strong>Durée estimée:</strong> 1-2 jours (en faisant attention)
+        </div>
+      </section>
+
+      <div class="alert alert-warning" style="margin-top: 40px;">
+        <strong>IMPORTANT:</strong> Ce document est la source de vérité. Toute modification doit être validée contre cette spec.
+      </div>
+    </main>
+  </div>
+
+  <script>
+    // Collapsible sections
+    document.querySelectorAll('.collapsible-header').forEach(header => {
+      header.addEventListener('click', () => {
+        header.parentElement.classList.toggle('active');
+      });
+    });
+
+    // Smooth scroll for navigation
+    document.querySelectorAll('nav a').forEach(link => {
+      link.addEventListener('click', (e) => {
+        e.preventDefault();
+        const target = document.querySelector(link.getAttribute('href'));
+        if (target) {
+          target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      });
+    });
+  </script>
+</body>
+</html>

@@ -350,15 +350,14 @@ router.post('/import-season/execute', authenticateToken, requireAdmin, importUpl
       try {
         await new Promise((resolve, reject) => {
           db.run(`
-            INSERT INTO tournoi_ext (tournoi_id, nom, mode, categorie, taille, debut, fin, lieu, tournament_number, organization_id)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+            INSERT INTO tournoi_ext (tournoi_id, nom, mode, categorie, taille, debut, lieu, tournament_number, organization_id)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             ON CONFLICT(tournoi_id) DO UPDATE SET
               nom = EXCLUDED.nom,
               mode = EXCLUDED.mode,
               categorie = EXCLUDED.categorie,
               taille = EXCLUDED.taille,
               debut = EXCLUDED.debut,
-              fin = EXCLUDED.fin,
               lieu = EXCLUDED.lieu,
               tournament_number = EXCLUDED.tournament_number,
               organization_id = EXCLUDED.organization_id
@@ -369,7 +368,6 @@ router.post('/import-season/execute', authenticateToken, requireAdmin, importUpl
             tournament.categorie,
             tournament.taille,
             tournament.debut,
-            tournament.fin,
             tournament.lieu,
             tournament.tournament_number,
             orgId
@@ -632,7 +630,6 @@ async function parseExcelCalendar(buffer, season, seasonPrefix, clubMapping) {
         categorie: category,
         taille,
         debut,
-        fin: debut,
         lieu,
         tournament_number: TOURNAMENT_NUMBER_MAPPING[tournamentType] || null,
         _type: tournamentType,

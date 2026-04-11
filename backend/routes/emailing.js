@@ -2910,7 +2910,7 @@ router.get('/finales', authenticateToken, async (req, res) => {
   }
 
   db.all(
-    `SELECT t.tournoi_id, t.nom, t.mode, t.categorie, t.debut, t.fin, t.lieu,
+    `SELECT t.tournoi_id, t.nom, t.mode, t.categorie, t.debut, t.lieu,
             (SELECT COUNT(*) FROM inscriptions i WHERE i.tournoi_id = t.tournoi_id AND i.forfait != 1 AND (i.statut IS NULL OR i.statut NOT IN ('désinscrit', 'indisponible')) AND ($3::int IS NULL OR i.organization_id = $3)) as nb_inscrits
      FROM tournoi_ext t
      WHERE (t.debut >= $1 AND t.debut <= $2)

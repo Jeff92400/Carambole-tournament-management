@@ -200,7 +200,6 @@ router.post('/tournoi/import', authenticateToken, upload.single('file'), async (
         const categorie = record.CATEGORIE || record.categorie || '';
         const taille = parseInt(record.TAILLE || record.taille) || null;
         const debut = parseDate(record.DEBUT || record.debut);
-        const fin = parseDate(record.FIN || record.fin);
         const grandCoin = parseInt(record.GRAND_COIN || record.grand_coin) || 0;
         const tailleCadre = record.TAILLE_CADRE || record.taille_cadre || null;
         const lieu = record.LIEU || record.lieu || '';
@@ -211,22 +210,21 @@ router.post('/tournoi/import', authenticateToken, upload.single('file'), async (
         }
 
         const query = `
-          INSERT INTO tournoi_ext (tournoi_id, nom, mode, categorie, taille, debut, fin, grand_coin, taille_cadre, lieu, organization_id)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+          INSERT INTO tournoi_ext (tournoi_id, nom, mode, categorie, taille, debut, grand_coin, taille_cadre, lieu, organization_id)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
           ON CONFLICT(tournoi_id) DO UPDATE SET
             nom = EXCLUDED.nom,
             mode = EXCLUDED.mode,
             categorie = EXCLUDED.categorie,
             taille = EXCLUDED.taille,
             debut = EXCLUDED.debut,
-            fin = EXCLUDED.fin,
             grand_coin = EXCLUDED.grand_coin,
             taille_cadre = EXCLUDED.taille_cadre,
             lieu = EXCLUDED.lieu
         `;
 
         await new Promise((resolve, reject) => {
-          db.run(query, [tournoiId, nom, mode, categorie, taille, debut || null, fin || null, grandCoin, tailleCadre, lieu, orgId], function(err) {
+          db.run(query, [tournoiId, nom, mode, categorie, taille, debut || null, grandCoin, tailleCadre, lieu, orgId], function(err) {
             if (err) {
               reject(err);
             } else {
@@ -2213,7 +2211,7 @@ router.post('/tournoi', authenticateToken, async (req, res) => {
   }
 
   const orgId = req.user.organizationId || null;
-  const { nom, mode, categorie, taille, debut, fin, grand_coin, taille_cadre, lieu, lieu_2, tournament_number } = req.body;
+  const { nom, mode, categorie, taille, debut, grand_coin, taille_cadre, lieu, lieu_2, tournament_number } = req.body;
 
   if (!nom || !mode || !categorie) {
     return res.status(400).json({ error: 'nom, mode, and categorie are required' });
@@ -2233,9 +2231,9 @@ router.post('/tournoi', authenticateToken, async (req, res) => {
     // Insert the new tournament
     await new Promise((resolve, reject) => {
       db.run(`
-        INSERT INTO tournoi_ext (tournoi_id, nom, mode, categorie, taille, debut, fin, grand_coin, taille_cadre, lieu, lieu_2, tournament_number, organization_id)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-      `, [nextId, nom, mode, categorie, taille || null, debut || null, fin || null, grand_coin || 0, taille_cadre || null, lieu || null, lieu_2 || null, tournament_number || null, orgId], function(err) {
+        INSERT INTO tournoi_ext (tournoi_id, nom, mode, categorie, taille, debut, grand_coin, taille_cadre, lieu, lieu_2, tournament_number, organization_id)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      `, [nextId, nom, mode, categorie, taille || null, debut || null, grand_coin || 0, taille_cadre || null, lieu || null, lieu_2 || null, tournament_number || null, orgId], function(err) {
         if (err) reject(err);
         else resolve({ id: nextId, changes: this.changes });
       });
@@ -2263,7 +2261,7 @@ router.post('/tournoi', authenticateToken, async (req, res) => {
 
         if (eligiblePlayers.length > 0) {
           const tournamentName = `${nom} - ${mode} ${categorie}`;
-          const closingDate = fin ? new Date(fin).toLocaleDateString('fr-FR', {
+          const closingDate = debut ? new Date(debut).toLocaleDateString('fr-FR', {
             day: 'numeric',
             month: 'long',
             year: 'numeric'
@@ -2305,7 +2303,7 @@ router.put('/tournoi/:id', authenticateToken, async (req, res) => {
 
   const orgId = req.user.organizationId || null;
   const { id } = req.params;
-  const { nom, mode, categorie, taille, debut, fin, grand_coin, taille_cadre, lieu, lieu_2, status, notify_on_changes, tournament_number } = req.body;
+  const { nom, mode, categorie, taille, debut, grand_coin, taille_cadre, lieu, lieu_2, status, notify_on_changes, tournament_number } = req.body;
 
   try {
     // Get current tournament data to detect date change
@@ -2343,16 +2341,15 @@ router.put('/tournoi/:id', authenticateToken, async (req, res) => {
         categorie = $3,
         taille = $4,
         debut = $5,
-        fin = $6,
-        grand_coin = $7,
-        taille_cadre = $8,
-        lieu = $9,
-        lieu_2 = $10,
-        status = $11,
-        notify_on_changes = $12,
-        tournament_number = $13
-      WHERE tournoi_id = $14
-      AND ($15::int IS NULL OR organization_id = $15)
+        grand_coin = $6,
+        taille_cadre = $7,
+        lieu = $8,
+        lieu_2 = $9,
+        status = $10,
+        notify_on_changes = $11,
+        tournament_number = $12
+      WHERE tournoi_id = $13
+      AND ($14::int IS NULL OR organization_id = $14)
     `;
 
     // Determine new status and notify_on_changes values
@@ -2361,7 +2358,7 @@ router.put('/tournoi/:id', authenticateToken, async (req, res) => {
     const newTournamentNumber = tournament_number !== undefined ? (tournament_number || null) : (currentTournament.tournament_number || null);
 
     await new Promise((resolve, reject) => {
-      db.run(query, [nom, mode, categorie, taille || null, debut || null, fin || null, grand_coin || 0, taille_cadre, lieu, lieu_2 || null, newStatus, newNotifyOnChanges, newTournamentNumber, id, orgId], function(err) {
+      db.run(query, [nom, mode, categorie, taille || null, debut || null, grand_coin || 0, taille_cadre, lieu, lieu_2 || null, newStatus, newNotifyOnChanges, newTournamentNumber, id, orgId], function(err) {
         if (err) reject(err);
         else resolve(this.changes);
       });
@@ -2371,8 +2368,8 @@ router.put('/tournoi/:id', authenticateToken, async (req, res) => {
     if (dateChanged) {
       await new Promise((resolve, reject) => {
         db.run(
-          'UPDATE tournoi_ext SET debut = $1, fin = $2 WHERE parent_tournoi_id = $3',
-          [debut || null, fin || null, id],
+          'UPDATE tournoi_ext SET debut = $1 WHERE parent_tournoi_id = $2',
+          [debut || null, id],
           function(err) { if (err) reject(err); else resolve(this.changes); }
         );
       });
@@ -2984,8 +2981,8 @@ router.post('/create-test-finale', authenticateToken, async (req, res) => {
     // Create test finale tournament
     await new Promise((resolve, reject) => {
       db.run(`
-        INSERT INTO tournoi_ext (tournoi_id, nom, mode, categorie, debut, fin, lieu, taille, organization_id)
-        VALUES (99901, 'Finale Départementale', 'LIBRE', 'R2', '2025-12-15', '2025-12-15', 'Courbevoie', 280, $1)
+        INSERT INTO tournoi_ext (tournoi_id, nom, mode, categorie, debut, lieu, taille, organization_id)
+        VALUES (99901, 'Finale Départementale', 'LIBRE', 'R2', '2025-12-15', 'Courbevoie', 280, $1)
         ON CONFLICT (tournoi_id) DO UPDATE SET
           nom = EXCLUDED.nom,
           mode = EXCLUDED.mode,
@@ -4024,11 +4021,11 @@ router.post('/tournoi/:id/split', authenticateToken, async (req, res) => {
     // Create child A
     const childAId = baseId;
     await new Promise((resolve, reject) => {
-      db.run(`INSERT INTO tournoi_ext (tournoi_id, nom, mode, categorie, taille, debut, fin, grand_coin, taille_cadre,
+      db.run(`INSERT INTO tournoi_ext (tournoi_id, nom, mode, categorie, taille, debut, grand_coin, taille_cadre,
               lieu, tournament_number, organization_id, is_split, parent_tournoi_id, split_label, status)
-              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, FALSE, $13, $14, $15)`,
+              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, FALSE, $12, $13, $14)`,
         [childAId, `${parent.nom} - A`, parent.mode, parent.categorie, parent.taille,
-         parent.debut, parent.fin, parent.grand_coin, parent.taille_cadre,
+         parent.debut, parent.grand_coin, parent.taille_cadre,
          lieuA, parent.tournament_number, orgId, parentId, 'A', parent.status || 'active'],
         function(err) { if (err) reject(err); else resolve(); });
     });
@@ -4036,11 +4033,11 @@ router.post('/tournoi/:id/split', authenticateToken, async (req, res) => {
     // Create child B
     const childBId = baseId + 1;
     await new Promise((resolve, reject) => {
-      db.run(`INSERT INTO tournoi_ext (tournoi_id, nom, mode, categorie, taille, debut, fin, grand_coin, taille_cadre,
+      db.run(`INSERT INTO tournoi_ext (tournoi_id, nom, mode, categorie, taille, debut, grand_coin, taille_cadre,
               lieu, tournament_number, organization_id, is_split, parent_tournoi_id, split_label, status)
-              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, FALSE, $13, $14, $15)`,
+              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, FALSE, $12, $13, $14)`,
         [childBId, `${parent.nom} - B`, parent.mode, parent.categorie, parent.taille,
-         parent.debut, parent.fin, parent.grand_coin, parent.taille_cadre,
+         parent.debut, parent.grand_coin, parent.taille_cadre,
          lieuB, parent.tournament_number, orgId, parentId, 'B', parent.status || 'active'],
         function(err) { if (err) reject(err); else resolve(); });
     });
