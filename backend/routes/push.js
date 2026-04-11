@@ -3,6 +3,7 @@ const router = express.Router();
 const webPush = require('web-push');
 const jwt = require('jsonwebtoken');
 const db = require('../db-loader');
+const { authenticateToken } = require('./auth'); // Admin authentication
 
 // Player App URL for proxying push notification requests
 const PLAYER_APP_URL = process.env.PLAYER_APP_URL || 'https://cdbhs-player-app-production.up.railway.app';
@@ -714,10 +715,10 @@ router.get('/debug/:licence', async (req, res) => {
  * Body: { licences: [], title, body, url }
  * IMPORTANT: Respects test mode - if push_notification_test_licences is non-empty, only those licences receive notifications
  */
-router.post('/bulk', async (req, res) => {
+router.post('/bulk', authenticateToken, async (req, res) => {
   try {
     let { licences, title, body, url } = req.body;
-    const orgId = req.user?.organizationId || 1;
+    const orgId = req.user.organizationId || null;
 
     // Validation
     if (!Array.isArray(licences) || licences.length === 0) {
@@ -831,9 +832,9 @@ router.post('/bulk', async (req, res) => {
  * Get subscription statistics for the organization
  * Returns: { total_players, subscribed_players, subscription_rate }
  */
-router.get('/subscription-status', async (req, res) => {
+router.get('/subscription-status', authenticateToken, async (req, res) => {
   try {
-    const orgId = req.user?.organizationId || 1;
+    const orgId = req.user.organizationId || null;
 
     // Count total player accounts for this org
     const totalPlayersResult = await new Promise((resolve, reject) => {
@@ -887,9 +888,9 @@ router.get('/subscription-status', async (req, res) => {
  * Get list of players with active push subscriptions
  * Returns: array of { licence, first_name, last_name, subscription_count }
  */
-router.get('/subscribed-players', async (req, res) => {
+router.get('/subscribed-players', authenticateToken, async (req, res) => {
   try {
-    const orgId = req.user?.organizationId || 1;
+    const orgId = req.user.organizationId || null;
 
     // Get list of players with active push subscriptions
     const subscribedPlayers = await new Promise((resolve, reject) => {
@@ -931,9 +932,9 @@ router.get('/subscribed-players', async (req, res) => {
  * GET /api/push/history
  * Get notification history for admin view (Tournament Management app)
  */
-router.get('/history', async (req, res) => {
+router.get('/history', authenticateToken, async (req, res) => {
   try {
-    const orgId = req.user?.organizationId || 1;
+    const orgId = req.user.organizationId || null;
     const limit = parseInt(req.query.limit) || 50;
 
     // Get recent notifications from history table
@@ -974,9 +975,9 @@ router.get('/history', async (req, res) => {
  * Delete notification(s) from history by title, body, and url
  * Deletes all entries matching the group (same notification sent to multiple players)
  */
-router.delete('/history', async (req, res) => {
+router.delete('/history', authenticateToken, async (req, res) => {
   try {
-    const orgId = req.user?.organizationId || 1;
+    const orgId = req.user.organizationId || null;
     const { title, body, url } = req.body;
 
     if (!title || !body) {
