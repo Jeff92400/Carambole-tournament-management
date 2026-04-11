@@ -55,7 +55,7 @@ const appSettings = require('../utils/app-settings');
            licence,
            first_name,
            last_name,
-           club_name,
+           club,
            rank_libre,
            rank_cadre,
            rank_bande,
