@@ -676,6 +676,7 @@
     <a href="#parametres" class="section-title">Paramètres</a>
     <a href="#param-generer-saison">Générer les tournois de la saison</a>
     <a href="#param-organisation">Organisation</a>
+    <a href="#param-test-mode">🧪 Mode Test</a>
     <a href="#param-utilisateurs">Utilisateurs</a>
     <a href="#param-types-tournoi">Types de Tournoi</a>
     <a href="#param-jeu">Paramètres des épreuves</a>
@@ -2800,6 +2801,147 @@
         <tr><td>Couleur d'accent</td><td>Couleur des alertes, badges</td></tr>
       </tbody>
     </table>
+  </section>
+
+  <hr>
+
+  <!-- Paramètres > Mode Test -->
+  <section id="param-test-mode">
+    <h2>Paramètres > 🧪 Mode Test</h2>
+
+    <h3>Accès</h3>
+    <p>Onglet <strong>Organisation</strong> des Paramètres &gt; panneau <strong>"🧪 Mode Test"</strong></p>
+
+    <h3>Description</h3>
+    <p>Le Mode Test permet de vérifier le fonctionnement des emails et templates sans contacter de vrais joueurs. Tous les emails seront envoyés à l'adresse de l'administrateur sélectionné, mais contiendront les données personnalisées des joueurs TEST.</p>
+
+    <div class="info-card accent">
+      <strong>💡 Cas d'usage :</strong>
+      <ul style="margin: 8px 0 0 20px;">
+        <li>Vérifier vos templates d'emails après modification</li>
+        <li>Tester le système avant le début de la saison</li>
+        <li>Valider la configuration des paramètres de timeline</li>
+        <li>Former de nouveaux administrateurs sans risque</li>
+        <li>Prévisualiser les emails pour un nouveau CDB avant go-live</li>
+      </ul>
+    </div>
+
+    <h3>Prérequis</h3>
+    <p>Avant d'utiliser le Mode Test, vous devez créer au moins <strong>6 joueurs TEST</strong> dans la base de données :</p>
+    <ol class="steps">
+      <li>Menu <strong>Fichier joueurs</strong> &gt; <strong>+ Ajouter</strong></li>
+      <li>Créer des joueurs avec des licences commençant par <code>TEST</code> (ex: TEST001, TEST002, TEST003, etc.)</li>
+      <li>Remplir les données : nom, prénom, club, classements (au moins dans une discipline)</li>
+      <li>Répéter jusqu'à avoir au moins 6 joueurs TEST</li>
+    </ol>
+
+    <div class="warning-card">
+      <strong>⚠️ Important :</strong> Le système vérifie automatiquement la présence d'au moins 6 joueurs TEST. Si le nombre est insuffisant, un message d'erreur s'affiche avec la marche à suivre.
+    </div>
+
+    <h3>Procédure d'envoi de tests</h3>
+    <ol class="steps">
+      <li><strong>Sélectionner un administrateur destinataire</strong>
+        <ul>
+          <li>Choisir dans la liste déroulante l'admin qui recevra les emails de test</li>
+          <li>Tous les emails seront envoyés à cette adresse unique</li>
+          <li>Le sujet de chaque email indiquera le joueur destinataire original : <code>[TEST - Jean DUPONT] Convocation...</code></li>
+        </ul>
+      </li>
+      <li><strong>Sélectionner les joueurs de test</strong>
+        <ul>
+          <li>Cocher les joueurs TEST à utiliser dans la liste</li>
+          <li>Boutons <strong>"✓ Tout sélectionner"</strong> / <strong>"✗ Tout désélectionner"</strong> pour aller plus vite</li>
+          <li>Un compteur indique le nombre de joueurs sélectionnés</li>
+        </ul>
+      </li>
+      <li><strong>Choisir les types d'emails à tester</strong>
+        <ul>
+          <li><strong>📢 Convocations</strong> — Min. 6 joueurs (génère des poules et envoie les convocations)</li>
+          <li><strong>🏆 Résultats</strong> — Min. 3 joueurs (génère un tournoi avec résultats fictifs)</li>
+          <li><strong>📨 Relances</strong> — Min. 1 joueur (relance pour tournois à venir)</li>
+          <li><strong>✉️ Invitations</strong> — Min. 1 joueur (invitation Espace Joueur)</li>
+        </ul>
+      </li>
+      <li><strong>Options de nettoyage</strong>
+        <ul>
+          <li>Cocher <strong>"🗑️ Supprimer le tournoi de test après envoi"</strong> si vous ne voulez pas garder de traces</li>
+          <li>Si décoché, le tournoi TEST restera visible dans la liste pour inspection</li>
+        </ul>
+      </li>
+      <li><strong>Envoyer</strong>
+        <ul>
+          <li>Cliquer sur <strong>"🧪 Envoyer les emails de test"</strong></li>
+          <li>Le bouton est désactivé tant que les conditions ne sont pas remplies (admin sélectionné, types cochés, nombre de joueurs suffisant)</li>
+          <li>Un message dynamique sur le bouton indique quelle condition manque</li>
+        </ul>
+      </li>
+    </ol>
+
+    <h3>Journal des tests</h3>
+    <p>Après l'envoi, un journal détaillé s'affiche automatiquement :</p>
+    <ul>
+      <li><strong>✅ Emails envoyés</strong> — Liste des emails envoyés avec type, destinataire et joueur original</li>
+      <li><strong>⚠️ Erreurs</strong> — Si certains tests ont échoué, les erreurs sont listées</li>
+      <li><strong>ℹ️ Tournoi de test</strong> — ID du tournoi créé et statut (conservé ou supprimé)</li>
+    </ul>
+
+    <h3>Validation du formulaire</h3>
+    <p>Le bouton d'envoi est intelligent et indique en temps réel pourquoi il est désactivé :</p>
+    <table>
+      <thead>
+        <tr>
+          <th>Message sur le bouton</th>
+          <th>Signification</th>
+          <th>Action requise</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>Sélectionnez un administrateur</code></td>
+          <td>Aucun destinataire choisi</td>
+          <td>Choisir un admin dans la liste</td>
+        </tr>
+        <tr>
+          <td><code>Sélectionnez au moins un type d'email</code></td>
+          <td>Aucun type d'email coché</td>
+          <td>Cocher au moins une checkbox</td>
+        </tr>
+        <tr>
+          <td><code>Minimum 6 joueurs requis (convocation)</code></td>
+          <td>Pas assez de joueurs sélectionnés pour les convocations</td>
+          <td>Sélectionner plus de joueurs</td>
+        </tr>
+        <tr>
+          <td><code>Minimum 3 joueurs requis (results)</code></td>
+          <td>Pas assez de joueurs sélectionnés pour les résultats</td>
+          <td>Sélectionner plus de joueurs</td>
+        </tr>
+        <tr>
+          <td><code>🧪 Envoyer les emails de test</code></td>
+          <td>Tout est prêt</td>
+          <td>Cliquer pour lancer les tests</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>Format des emails de test</h3>
+    <p>Chaque email reçu a un format spécial pour identifier le destinataire original :</p>
+    <ul>
+      <li><strong>Sujet :</strong> <code>[TEST - Jean DUPONT] Convocation - Libre N2 - 18/04/2026</code></li>
+      <li><strong>Bannière jaune en haut du corps :</strong> <code>🧪 EMAIL DE TEST - Destinataire original: Jean DUPONT (TEST001)</code></li>
+      <li><strong>Contenu :</strong> Template réel avec toutes les variables remplacées par les données du joueur TEST</li>
+    </ul>
+
+    <p>Si vous testez avec 6 joueurs, vous recevrez 6 emails distincts, chacun personnalisé pour un joueur différent.</p>
+
+    <div class="info-card">
+      <strong>💡 Astuce :</strong> Pour tester les timeline parameters (ouverture/fermeture inscriptions, rappels automatiques), utilisez le Mode Test après avoir modifié les paramètres dans <strong>Paramètres > Compétitions > Délais des compétitions</strong>. Vérifiez ensuite les dates calculées dans les emails reçus.
+    </div>
+
+    <div class="warning-card">
+      <strong>⚠️ Limitation :</strong> Le Mode Test ne déclenche PAS les notifications push automatiques (rappels planifiés). Il simule uniquement les envois d'emails manuels. Pour tester les notifications push, utilisez la fonctionnalité "Envoyer une notification" dans <strong>Com joueurs > Notifs</strong>.
+    </div>
   </section>
 
   <hr>
