@@ -1566,6 +1566,101 @@
         </div>
       </div>
 
+      <!-- Timeline Explanation Box -->
+      <div style="margin-top: 30px; padding: 20px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border: 2px solid #dee2e6; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+          <span style="font-size: 24px;">📅</span>
+          <strong style="font-size: 16px; color: #1F4788;">Calendrier des inscriptions</strong>
+        </div>
+
+        <p style="margin: 0 0 15px 0; color: #495057; line-height: 1.6;">
+          Toutes les dates sont calculées à partir de la <strong>date du tournoi</strong> (colonne "Date" dans la liste des tournois).
+          Voici comment fonctionnent les différents paramètres :
+        </p>
+
+        <div style="background: white; padding: 15px; border-radius: 6px; margin-bottom: 15px;">
+          <div style="font-family: monospace; font-size: 13px; line-height: 2;">
+            <div style="display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center;">
+              <span style="color: #28a745; font-weight: bold;">📢 Ouverture</span>
+              <span style="border-top: 2px dashed #28a745; margin: 0 5px;"></span>
+              <span style="color: #666;">Date tournoi − <strong id="timeline-opens">28</strong> jours</span>
+
+              <span></span>
+              <span style="color: #999; font-size: 11px; margin-left: 20px;">↓ Fenêtre d'inscription (Player App)</span>
+              <span></span>
+
+              <span style="color: #ffc107; font-weight: bold;">⚠️ Rappel auto</span>
+              <span style="border-top: 2px dashed #ffc107; margin: 0 5px;"></span>
+              <span style="color: #666;">Date tournoi − <strong id="timeline-reminder-calc">10</strong> jours</span>
+
+              <span></span>
+              <span style="color: #999; font-size: 11px; margin-left: 20px;">↓</span>
+              <span></span>
+
+              <span style="color: #dc3545; font-weight: bold;">🔒 Fermeture</span>
+              <span style="border-top: 2px dashed #dc3545; margin: 0 5px;"></span>
+              <span style="color: #666;">Date tournoi − <strong id="timeline-closes">7</strong> jours</span>
+
+              <span></span>
+              <span style="color: #999; font-size: 11px; margin-left: 20px;">↓</span>
+              <span></span>
+
+              <span style="color: #1F4788; font-weight: bold;">🎱 Tournoi</span>
+              <span style="border-top: 3px solid #1F4788; margin: 0 5px;"></span>
+              <span style="color: #1F4788; font-weight: bold;">Date du tournoi</span>
+            </div>
+          </div>
+        </div>
+
+        <div style="background: #fff3cd; padding: 12px; border-left: 4px solid #ffc107; border-radius: 4px; margin-bottom: 10px;">
+          <strong style="color: #856404;">💡 Calcul du rappel automatique :</strong>
+          <p style="margin: 8px 0 0 0; color: #856404; font-size: 14px;">
+            Le rappel est envoyé <strong id="timeline-reminder-days">3</strong> jours avant la <strong>fermeture des inscriptions</strong><br>
+            → Calcul : (Date tournoi − <span id="timeline-closes-2">7</span> jours) − <span id="timeline-reminder-days-2">3</span> jours
+            = Date tournoi − <strong id="timeline-reminder-total">10</strong> jours
+          </p>
+        </div>
+
+        <div style="font-size: 13px; color: #6c757d; line-height: 1.6;">
+          <strong>Exemple concret :</strong> Tournoi le 15 mars
+          <ul style="margin: 8px 0 0 20px; padding: 0;">
+            <li>Ouverture : 15 mars − <span id="timeline-example-opens">28</span> jours = <strong>15 février</strong> (les joueurs peuvent s'inscrire)</li>
+            <li>Rappel auto : 15 mars − <span id="timeline-example-reminder">10</span> jours = <strong>5 mars</strong> (notification push aux non-inscrits)</li>
+            <li>Fermeture : 15 mars − <span id="timeline-example-closes">7</span> jours = <strong>8 mars</strong> (inscriptions fermées)</li>
+            <li>Tournoi : <strong>15 mars</strong></li>
+          </ul>
+        </div>
+      </div>
+
+      <script>
+        // Update timeline display when parameters change
+        function updateTimelineDisplay() {
+          const opens = document.getElementById('inscriptionOpensDaysBefore')?.value || '28';
+          const closes = document.getElementById('inscriptionClosesDaysBefore')?.value || '7';
+          const reminderDays = document.getElementById('autoReminderDaysBeforeDeadline')?.value || '3';
+          const reminderTotal = parseInt(closes) + parseInt(reminderDays);
+
+          // Update all timeline values
+          document.querySelectorAll('#timeline-opens, #timeline-example-opens').forEach(el => el.textContent = opens);
+          document.querySelectorAll('#timeline-closes, #timeline-closes-2, #timeline-example-closes').forEach(el => el.textContent = closes);
+          document.querySelectorAll('#timeline-reminder-days, #timeline-reminder-days-2').forEach(el => el.textContent = reminderDays);
+          document.querySelectorAll('#timeline-reminder-calc, #timeline-reminder-total, #timeline-example-reminder').forEach(el => el.textContent = reminderTotal);
+        }
+
+        // Add event listeners when inputs change
+        document.addEventListener('DOMContentLoaded', function() {
+          ['inscriptionOpensDaysBefore', 'inscriptionClosesDaysBefore', 'autoReminderDaysBeforeDeadline'].forEach(id => {
+            const input = document.getElementById(id);
+            if (input) {
+              input.addEventListener('input', updateTimelineDisplay);
+              input.addEventListener('change', updateTimelineDisplay);
+            }
+          });
+          // Initial update
+          setTimeout(updateTimelineDisplay, 500);
+        });
+      </script>
+
       <button onclick="saveTimeThresholds()" class="btn" style="background: #28a745; padding: 12px 25px; margin-top: 20px;">
         Enregistrer
       </button>
@@ -1574,9 +1669,9 @@
       <div style="margin-top: 20px; padding: 15px; background: #e7f3ff; border-left: 4px solid #1F4788; border-radius: 4px;">
         <strong>Information :</strong>
         <p style="margin: 10px 0 0 0; color: #666;">
-          Ces delais controlent le comportement de l'application pour les competitions :<br>
-          - <strong>Simulation</strong> : la generation de poules de test est desactivee a l'approche du tournoi<br>
-          - <strong>Relances</strong> : fenetre pendant laquelle les tournois apparaissent pour les relances<br>
+          Ces délais contrôlent le comportement de l'application pour les compétitions :<br>
+          - <strong>Simulation</strong> : la génération de poules de test est désactivée à l'approche du tournoi<br>
+          - <strong>Relances</strong> : fenêtre pendant laquelle les tournois apparaissent pour les relances<br>
           - <strong>Alertes</strong> : seuil de passage en mode urgent (rouge) sur le tableau de bord<br>
           - <strong>Affichage</strong> : délai d'apparition des compétitions sur la page Compétitions
         </p>
