@@ -36,7 +36,7 @@ async function getEmailTemplate(templateKey, orgId) {
               subject: 'Résultats {category} - {tournament}',
               body: 'Bonjour {first_name},\n\nLes résultats du tournoi {tournament_name} sont disponibles.\n\nVous avez terminé à la {position}.\n\nFélicitations à tous les participants !'
             },
-            'results-finale': {
+            'finale_results': {
               subject: 'Résultats Finale {category}',
               body: 'Bonjour {first_name},\n\nLes résultats de la Finale Départementale {category} sont disponibles.\n\nVous avez terminé à la {position}.\n\nBravo à tous !'
             },
@@ -44,15 +44,15 @@ async function getEmailTemplate(templateKey, orgId) {
               subject: 'Inscription T2 {category} - Confirmez votre participation',
               body: 'Bonjour {first_name},\n\nLe deuxième tournoi de la saison aura lieu le {tournament_date} à {tournament_lieu}.\n\nNous vous rappelons que la compétition se jouera en {distance} points avec un maximum de {reprises} reprises.\n\nPour participer, merci de confirmer votre inscription avant le {deadline_date}.'
             },
-            'rappel': {
+            'club_reminder': {
               subject: 'Rappel - {organization_short_name}',
               body: 'Bonjour,\n\nCeci est un rappel concernant la compétition à venir.\n\nMerci de votre attention.\n\nCordialement,\n{organization_name}'
             },
-            'inscription-confirmation': {
+            'inscription_confirmation': {
               subject: 'Confirmation d\'inscription - {tournament_name}',
               body: 'Bonjour {player_name},\n\nVotre inscription a bien été enregistrée pour la compétition suivante :\n\n📅 Compétition : {tournament_name}\n🎯 Mode : {category}\n📆 Date : {date}\n📍 Lieu : {location}\n\nVous recevrez une convocation avec les détails quelques jours avant la compétition.\n\nSportivement,\n{organization_name}'
             },
-            'inscription-cancellation': {
+            'inscription_cancellation': {
               subject: 'Confirmation de désinscription - {category}',
               body: 'Bonjour {player_name},\n\nNous avons bien pris en compte votre désinscription du tournoi {tournament_name}.\n\nDate : {date}\nLieu : {location}\n\nSi cette désinscription est une erreur, veuillez nous contacter.\n\nSportivement,\n{organization_name}'
             }
