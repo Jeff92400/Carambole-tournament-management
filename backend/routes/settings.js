@@ -869,6 +869,13 @@ router.put('/app-bulk', authenticateToken, requireAdmin, async (req, res) => {
 
     console.log(`[SETTINGS] Saving ${Object.keys(settings).length} settings for org ${orgId}:`, Object.keys(settings));
 
+    // Validate field lengths before saving
+    if (settings.organization_short_name && settings.organization_short_name.length > 100) {
+      return res.status(400).json({
+        error: `Le nom court ne peut pas dépasser 100 caractères (actuellement ${settings.organization_short_name.length} caractères)`
+      });
+    }
+
     for (const [key, value] of Object.entries(settings)) {
       console.log(`[SETTINGS] Processing key: ${key}, value: ${value}`);
 
@@ -877,7 +884,16 @@ router.put('/app-bulk', authenticateToken, requireAdmin, async (req, res) => {
         console.log(`[SETTINGS] Successfully saved ${key} to organization_settings`);
       } catch (settingErr) {
         console.error(`[SETTINGS] Failed to save ${key}:`, settingErr);
-        throw new Error(`Erreur lors de la sauvegarde de ${key}: ${settingErr.message}`);
+
+        // Provide user-friendly error messages
+        let errorMsg = settingErr.message;
+        if (errorMsg.includes('too long')) {
+          errorMsg = `Le champ "${key}" est trop long. Veuillez le raccourcir.`;
+        } else if (errorMsg.includes('unique')) {
+          errorMsg = `La valeur du champ "${key}" est déjà utilisée. Veuillez en choisir une autre.`;
+        }
+
+        throw new Error(`Erreur lors de la sauvegarde de ${key}: ${errorMsg}`);
       }
 
       // CRITICAL: If organization_short_name is being updated, also update the organizations table
@@ -892,7 +908,16 @@ router.put('/app-bulk', authenticateToken, requireAdmin, async (req, res) => {
               (err) => {
                 if (err) {
                   console.error('[SETTINGS] Error updating organizations.short_name:', err);
-                  reject(err);
+
+                  // Provide user-friendly error message
+                  let errorMsg = err.message;
+                  if (errorMsg.includes('too long') || errorMsg.includes('character varying')) {
+                    errorMsg = `Le nom court ne peut pas dépasser 100 caractères (actuellement ${value.length} caractères)`;
+                  } else if (errorMsg.includes('unique')) {
+                    errorMsg = 'Ce nom court est déjà utilisé par une autre organisation. Veuillez en choisir un autre.';
+                  }
+
+                  reject(new Error(errorMsg));
                 } else {
                   console.log(`[SETTINGS] Updated organizations.short_name to "${value}" for org ${orgId}`);
                   resolve();
@@ -902,7 +927,7 @@ router.put('/app-bulk', authenticateToken, requireAdmin, async (req, res) => {
           });
         } catch (orgErr) {
           console.error('[SETTINGS] Failed to update organizations table:', orgErr);
-          throw new Error(`Erreur lors de la mise à jour de la table organizations: ${orgErr.message}`);
+          throw new Error(orgErr.message);
         }
       }
     }
@@ -910,7 +935,10 @@ router.put('/app-bulk', authenticateToken, requireAdmin, async (req, res) => {
     res.json({ success: true, message: 'Settings updated' });
   } catch (err) {
     console.error('[SETTINGS] app-bulk error:', err);
-    res.status(500).json({ error: err.message || 'Erreur lors de la sauvegarde' });
+
+    // Return detailed error message to frontend
+    const errorMsg = err.message || 'Erreur lors de la sauvegarde';
+    res.status(500).json({ error: errorMsg });
   }
 });
 

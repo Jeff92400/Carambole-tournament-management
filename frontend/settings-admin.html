@@ -1081,7 +1081,11 @@
         </div>
         <div>
           <label style="display: block; margin-bottom: 8px; font-weight: 500;">Nom court / Sigle :</label>
-          <input type="text" id="organizationShortName" placeholder="ex: CDB92" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+          <input type="text" id="organizationShortName" placeholder="ex: CDB92" maxlength="100" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+          <div style="margin-top: 4px; font-size: 12px; color: #666;">
+            <span id="shortNameCharCount">0</span>/100 caractères
+            <span id="shortNameWarning" style="color: #dc3545; font-weight: 500; display: none; margin-left: 10px;">⚠ Trop long</span>
+          </div>
         </div>
         <div>
           <label style="display: block; margin-bottom: 8px; font-weight: 500;">Email de notification :</label>
@@ -4227,6 +4231,9 @@
           document.getElementById('logoSizePreview').style.width = logoSize + 'px';
           document.getElementById('logoSizePreview').style.height = logoSize + 'px';
           updateAccordionSummaries();
+
+          // Update character counter after loading
+          updateShortNameCounter();
         }
 
         // Load logo info
@@ -4235,6 +4242,14 @@
         console.error('Error loading organisation settings:', error);
       }
     }
+
+    // Initialize event listener for character counter
+    document.addEventListener('DOMContentLoaded', () => {
+      const shortNameInput = document.getElementById('organizationShortName');
+      if (shortNameInput) {
+        shortNameInput.addEventListener('input', updateShortNameCounter);
+      }
+    });
 
     async function loadLogoInfo() {
       try {
@@ -4332,6 +4347,17 @@
         return;
       }
 
+      // Validate short name length
+      const shortName = document.getElementById('organizationShortName').value.trim();
+      if (shortName.length > 100) {
+        msgDiv.textContent = 'Le nom court ne peut pas dépasser 100 caractères (actuellement ' + shortName.length + ' caractères)';
+        msgDiv.style.background = '#f8d7da';
+        msgDiv.style.color = '#721c24';
+        msgDiv.style.display = 'block';
+        setTimeout(() => { msgDiv.style.display = 'none'; }, 5000);
+        return;
+      }
+
       try {
         const response = await fetch(`${API_URL}/settings/app-bulk`, {
           method: 'PUT',
@@ -4341,7 +4367,7 @@
           },
           body: JSON.stringify({
             organization_name: document.getElementById('organizationName').value.trim(),
-            organization_short_name: document.getElementById('organizationShortName').value.trim(),
+            organization_short_name: shortName,
             summary_email: email,
             header_logo_size: document.getElementById('headerLogoSize').value,
             enable_csv_imports: document.getElementById('enableCsvImports').checked ? '1' : '0',
@@ -4356,7 +4382,21 @@
           msgDiv.style.background = '#d4edda';
           msgDiv.style.color = '#155724';
         } else {
-          throw new Error('Erreur lors de la sauvegarde');
+          // Try to get detailed error message from server
+          const errorData = await response.json().catch(() => null);
+          let errorMsg = 'Erreur lors de la sauvegarde';
+
+          if (errorData && errorData.error) {
+            // Extract useful information from error message
+            if (errorData.error.includes('too long')) {
+              errorMsg = 'Un des champs est trop long. Veuillez réduire la longueur du nom court.';
+            } else if (errorData.error.includes('unique')) {
+              errorMsg = 'Ce nom court est déjà utilisé. Veuillez en choisir un autre.';
+            } else {
+              errorMsg = errorData.error;
+            }
+          }
+          throw new Error(errorMsg);
         }
       } catch (error) {
         console.error('Error saving organisation settings:', error);
@@ -4366,7 +4406,29 @@
       }
 
       msgDiv.style.display = 'block';
-      setTimeout(() => { msgDiv.style.display = 'none'; }, 3000);
+      setTimeout(() => { msgDiv.style.display = 'none'; }, 5000);
+    }
+
+    // Update character counter for short name
+    function updateShortNameCounter() {
+      const input = document.getElementById('organizationShortName');
+      const counter = document.getElementById('shortNameCharCount');
+      const warning = document.getElementById('shortNameWarning');
+
+      if (!input || !counter) return;
+
+      const length = input.value.length;
+      counter.textContent = length;
+
+      if (warning) {
+        if (length > 100) {
+          warning.style.display = 'inline';
+          input.style.borderColor = '#dc3545';
+        } else {
+          warning.style.display = 'none';
+          input.style.borderColor = '#ddd';
+        }
+      }
     }
 
     loadOrganisationSettings();
