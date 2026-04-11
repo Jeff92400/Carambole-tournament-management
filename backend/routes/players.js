@@ -833,6 +833,177 @@ router.get('/ffb-classifications-overview', authenticateToken, async (req, res) 
   }
 });
 
+// Duplicate TEST player (must be before /:licence to avoid being caught by it)
+router.post('/:licence/duplicate', authenticateToken, async (req, res) => {
+  const { licence } = req.params;
+  const orgId = req.user.organizationId || null;
+
+  // Admin-only feature
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Réservé aux administrateurs' });
+  }
+
+  try {
+    const normalizedLicence = licence.replace(/\s+/g, '').toUpperCase();
+
+    // Validate player is TEST
+    if (!normalizedLicence.startsWith('TEST')) {
+      return res.status(400).json({ error: 'Cette fonction est réservée aux joueurs TEST' });
+    }
+
+    // Get original player
+    const originalPlayer = await new Promise((resolve, reject) => {
+      db.get(
+        'SELECT * FROM players WHERE REPLACE(licence, \' \', \'\') = $1 AND ($2::int IS NULL OR organization_id = $2)',
+        [normalizedLicence, orgId],
+        (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        }
+      );
+    });
+
+    if (!originalPlayer) {
+      return res.status(404).json({ error: 'Joueur non trouvé' });
+    }
+
+    // Get player rankings from player_rankings table
+    const rankings = await getPlayerRankings(originalPlayer.licence);
+
+    // Generate new licence number by incrementing
+    const newLicence = await generateIncrementedLicence(normalizedLicence, orgId);
+
+    // Copy player with new licence
+    const baseCols = ['licence', 'first_name', 'last_name', 'club', 'email', 'telephone', 'organization_id'];
+    const baseValues = [
+      newLicence,
+      originalPlayer.first_name,
+      originalPlayer.last_name,
+      originalPlayer.club,
+      originalPlayer.email || null,
+      originalPlayer.telephone || null,
+      orgId
+    ];
+
+    const rankCols = ['rank_libre', 'rank_cadre', 'rank_bande', 'rank_3bandes'];
+    const rankValues = rankCols.map(col => originalPlayer[col] || 'NC');
+
+    const endCols = ['player_app_role', 'player_app_user', 'is_active'];
+    const endValues = [
+      originalPlayer.player_app_role || null,
+      originalPlayer.player_app_user || false,
+      originalPlayer.is_active !== 0 ? 1 : 0
+    ];
+
+    const allCols = [...baseCols, ...rankCols, ...endCols];
+    const allValues = [...baseValues, ...rankValues, ...endValues];
+    const placeholders = allValues.map((_, i) => `$${i + 1}`);
+
+    await new Promise((resolve, reject) => {
+      db.run(`
+        INSERT INTO players (${allCols.join(', ')})
+        VALUES (${placeholders.join(', ')})
+      `, allValues, function(err) {
+        if (err) reject(err);
+        else resolve(this);
+      });
+    });
+
+    // Also save to player_rankings table if original had rankings
+    if (Object.keys(rankings).length > 0) {
+      const rankingsToSave = {};
+      for (const [gameModeId, rankData] of Object.entries(rankings)) {
+        rankingsToSave[gameModeId] = rankData.ranking;
+      }
+      await savePlayerRankings(newLicence, rankingsToSave);
+    }
+
+    console.log(`TEST player duplicated: ${normalizedLicence} → ${newLicence}`);
+    res.status(201).json({ success: true, newLicence });
+
+  } catch (error) {
+    console.error('Duplicate player error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Helper: Generate incremented licence number for TEST players
+async function generateIncrementedLicence(originalLicence, orgId) {
+  // Extract prefix and suffix parts
+  // TEST001 → prefix=TEST, suffix=001
+  // TEST001A → prefix=TEST, suffix=001A
+  const match = originalLicence.match(/^(TEST)(.+)$/);
+  if (!match) {
+    throw new Error('Format de licence TEST invalide');
+  }
+
+  const prefix = match[1]; // "TEST"
+  let suffix = match[2];    // "001" or "001A" or "99Z"
+
+  // Try to increment until we find an unused licence
+  let attempts = 0;
+  const maxAttempts = 1000;
+
+  while (attempts < maxAttempts) {
+    const newSuffix = incrementSuffix(suffix);
+    const newLicence = prefix + newSuffix;
+
+    // Check if this licence already exists
+    const exists = await new Promise((resolve, reject) => {
+      db.get(
+        'SELECT licence FROM players WHERE REPLACE(licence, \' \', \'\') = $1 AND ($2::int IS NULL OR organization_id = $2)',
+        [newLicence, orgId],
+        (err, row) => {
+          if (err) reject(err);
+          else resolve(!!row);
+        }
+      );
+    });
+
+    if (!exists) {
+      return newLicence;
+    }
+
+    // Try next increment
+    suffix = newSuffix;
+    attempts++;
+  }
+
+  throw new Error('Impossible de générer un numéro de licence unique');
+}
+
+// Helper: Increment suffix (numeric or alphanumeric)
+function incrementSuffix(suffix) {
+  // Check if purely numeric (e.g., "001", "042")
+  if (/^\d+$/.test(suffix)) {
+    const num = parseInt(suffix, 10);
+    const incremented = num + 1;
+    // Preserve leading zeros
+    return String(incremented).padStart(suffix.length, '0');
+  }
+
+  // Check if alphanumeric (e.g., "001A", "042Z")
+  const match = suffix.match(/^(\d+)([A-Z])$/);
+  if (match) {
+    const numPart = match[1];
+    const alphaPart = match[2];
+
+    // Increment letter first
+    if (alphaPart < 'Z') {
+      const nextLetter = String.fromCharCode(alphaPart.charCodeAt(0) + 1);
+      return numPart + nextLetter;
+    } else {
+      // Z → overflow to next number with A
+      const num = parseInt(numPart, 10);
+      const incremented = num + 1;
+      return String(incremented).padStart(numPart.length, '0') + 'A';
+    }
+  }
+
+  // Fallback: just append A
+  return suffix + 'A';
+}
+
 // Get player by licence
 router.get('/:licence', authenticateToken, async (req, res) => {
   const orgId = req.user.organizationId || null;

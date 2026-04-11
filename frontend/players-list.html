@@ -1199,6 +1199,36 @@
       }
     }
 
+    // Duplicate TEST player
+    async function duplicatePlayer(player) {
+      const confirmDuplicate = confirm(`Dupliquer le joueur TEST ${player.first_name} ${player.last_name} (${player.licence}) ?`);
+      if (!confirmDuplicate) return;
+
+      try {
+        const response = await fetch(`${API_URL}/players/${player.licence}/duplicate`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || 'Failed to duplicate player');
+        }
+
+        const result = await response.json();
+
+        // Reload players
+        await loadPlayers();
+        alert(`Joueur dupliqué avec succès!\nNouvelle licence: ${result.newLicence}`);
+      } catch (error) {
+        console.error('Error duplicating player:', error);
+        alert('Erreur lors de la duplication: ' + error.message);
+      }
+    }
+
     // Display players in table
     function displayPlayers(players) {
       const tbody = document.getElementById('playersBody');
@@ -1257,6 +1287,7 @@
           <td style="text-align: center;">
             <button class="btn btn-small edit-player-btn" style="background: #4CAF50; padding: 5px 10px; font-size: 12px;">✏️</button>
             ${isAdmin ? `<button class="btn btn-small reset-pwd-btn" style="background: #ff9800; padding: 5px 10px; font-size: 12px; display: none;" title="Réinitialiser le mot de passe">🔑</button>
+            ${player.licence.toUpperCase().startsWith('TEST') ? `<button class="btn btn-small duplicate-player-btn" style="background: #17a2b8; padding: 5px 10px; font-size: 12px;" title="Dupliquer ce joueur TEST">📋</button>` : ''}
             <button class="btn btn-small delete-player-btn" style="background: #dc3545; padding: 5px 10px; font-size: 12px;">🗑️</button>` : ''}
           </td>
           ` : ''}
@@ -1279,6 +1310,14 @@
             deleteBtn.onclick = (e) => {
               e.stopPropagation();
               deletePlayer(player);
+            };
+          }
+
+          const duplicateBtn = row.querySelector('.duplicate-player-btn');
+          if (duplicateBtn) {
+            duplicateBtn.onclick = (e) => {
+              e.stopPropagation();
+              duplicatePlayer(player);
             };
           }
 
