@@ -270,7 +270,7 @@ async function sendTestConvocations(db, appSettings, playerLicences, overrideEma
       // 3. Get player details
       const players = await new Promise((res, rej) => {
         db.all(
-          `SELECT licence, first_name, last_name, club_name
+          `SELECT licence, first_name, last_name, club
            FROM players
            WHERE licence IN (${playerLicences.map(() => '?').join(',')})`,
           playerLicences,
@@ -284,7 +284,7 @@ async function sendTestConvocations(db, appSettings, playerLicences, overrideEma
           db.run(
             `INSERT INTO inscriptions (tournoi_id, licence, nom, prenom, club, source, statut)
              VALUES ($1, $2, $3, $4, $5, 'manual', 'inscrit')`,
-            [tournamentId, player.licence, player.last_name, player.first_name, player.club_name],
+            [tournamentId, player.licence, player.last_name, player.first_name, player.club],
             (err) => err ? rej(err) : res()
           );
         });
@@ -445,6 +445,9 @@ async function getOrCreateTestTournament(db, orgId, category) {
               [orgId],
               (err, row) => {
                 if (err) return reject(err);
+                if (!row || !row.tournoi_id) {
+                  return reject(new Error('Impossible de créer le tournoi de test'));
+                }
                 resolve(row.tournoi_id);
               }
             );
