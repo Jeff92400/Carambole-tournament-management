@@ -990,15 +990,29 @@ router.post('/send-template', authenticateToken, async (req, res) => {
   try {
     const { templateKey } = req.body;
     const orgId = req.user.organizationId || null;
-    const adminEmail = req.user.email; // Get admin email from JWT
+    const userId = req.user.userId;
 
     if (!templateKey) {
       return res.status(400).json({ error: 'Template key is required' });
     }
 
-    if (!adminEmail) {
-      return res.status(400).json({ error: 'Admin email not found in session' });
+    // Get admin email from database
+    const adminUser = await new Promise((resolve, reject) => {
+      db.get(
+        'SELECT email FROM users WHERE id = $1',
+        [userId],
+        (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        }
+      );
+    });
+
+    if (!adminUser || !adminUser.email) {
+      return res.status(400).json({ error: 'Admin email not found' });
     }
+
+    const adminEmail = adminUser.email;
 
     // Generate fake template data
     const fakeData = generateFakeTemplateData(templateKey);

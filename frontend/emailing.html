@@ -2537,7 +2537,7 @@
         if (response.ok) {
           button.textContent = '✅ Envoyé !';
           button.style.background = '#28a745';
-          showMessage('success', `Email de test envoyé à ${result.to}. Vérifiez votre boîte de réception.`);
+          showSuccess(`Email de test envoyé à ${result.to}. Vérifiez votre boîte de réception.`);
 
           // Reset button after 3 seconds
           setTimeout(() => {
@@ -2552,7 +2552,7 @@
         console.error('Error testing template:', error);
         button.textContent = '❌ Erreur';
         button.style.background = '#dc3545';
-        showMessage('error', error.message || 'Erreur lors de l\'envoi du test');
+        showError(error.message || 'Erreur lors de l\'envoi du test');
 
         // Reset button after 3 seconds
         setTimeout(() => {
