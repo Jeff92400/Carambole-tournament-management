@@ -251,6 +251,62 @@ const appSettings = require('../utils/app-settings');
 
 // ==================== HELPER FUNCTIONS ====================
 
+// Build HTML preview for convocation email
+function buildConvocationPreview(player, pouleNum, primaryColor, orgName) {
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const dateStr = tomorrow.toLocaleDateString('fr-FR');
+
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 20px; background: #f4f4f4; }
+    .container { max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .header { background: ${primaryColor}; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; margin: -30px -30px 20px -30px; }
+    .header h1 { margin: 0; font-size: 24px; }
+    .poule-box { background: #f8f9fa; border-left: 4px solid ${primaryColor}; padding: 15px; margin: 20px 0; }
+    .info-row { margin: 10px 0; }
+    .label { font-weight: bold; color: ${primaryColor}; }
+    .footer { margin-top: 30px; padding-top: 20px; border-top: 2px solid #eee; font-size: 12px; color: #666; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🎱 Convocation Tournoi</h1>
+      <p>${orgName}</p>
+    </div>
+
+    <p>Bonjour <strong>${player.first_name} ${player.last_name}</strong>,</p>
+
+    <p>Vous êtes convoqué(e) pour le tournoi suivant :</p>
+
+    <div class="poule-box">
+      <div class="info-row"><span class="label">Mode :</span> Libre N2</div>
+      <div class="info-row"><span class="label">Date :</span> ${dateStr}</div>
+      <div class="info-row"><span class="label">Heure :</span> 14H00</div>
+      <div class="info-row"><span class="label">Lieu :</span> Salle de test</div>
+      <div class="info-row"><span class="label">Votre poule :</span> Poule ${pouleNum}</div>
+    </div>
+
+    <p><strong>Distance :</strong> 80 points<br>
+    <strong>Reprises :</strong> 25</p>
+
+    <p>Merci de confirmer votre présence.</p>
+
+    <div class="footer">
+      <p>Ceci est un email de test généré par le Mode Test.<br>
+      Aucun email réel n'a été envoyé.</p>
+    </div>
+  </div>
+</body>
+</html>
+  `;
+}
+
 // Send test convocations
 async function sendTestConvocations(db, appSettings, playerLicences, overrideEmail, orgId) {
   return new Promise(async (resolve, reject) => {
@@ -299,14 +355,23 @@ async function sendTestConvocations(db, appSettings, playerLicences, overrideEma
         poules[pouleNum].push(players[i]);
       }
 
-      // 6. Build and send emails (mocked - actual implementation would call email routes)
-      const emails = players.map(player => ({
-        type: 'convocation',
-        to: overrideEmail,
-        originalRecipient: `${player.first_name} ${player.last_name}`,
-        subject: `[TEST - ${player.first_name} ${player.last_name}] Convocation - Libre N2`,
-        status: 'sent'
-      }));
+      // 6. Build email HTML previews
+      const primaryColor = await appSettings.getOrgSetting('primary_color', orgId) || '#1F4788';
+      const orgName = await appSettings.getOrgSetting('organization_short_name', orgId) || 'CDB';
+
+      const emails = players.map((player, index) => {
+        const pouleNum = Math.floor(index / pouleSize) + 1;
+        const html = buildConvocationPreview(player, pouleNum, primaryColor, orgName);
+
+        return {
+          type: 'convocation',
+          to: overrideEmail,
+          originalRecipient: `${player.first_name} ${player.last_name}`,
+          subject: `[PREVIEW] Convocation - ${player.first_name} ${player.last_name} - Libre N2`,
+          status: 'preview',
+          html: html
+        };
+      });
 
       resolve({ emails, tournamentId });
 
