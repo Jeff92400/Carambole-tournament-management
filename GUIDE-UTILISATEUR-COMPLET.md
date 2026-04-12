@@ -1,7 +1,10 @@
 # Guide Utilisateur Complet
 
 > **Note:** Ce document est généré automatiquement depuis le guide HTML.
-> **Dernière mise à jour:** 11/04/2026 - Ajout du Mode Test (Paramètres > Organisation > Mode Test) pour tester les emails sans contacter de vrais joueurs
+> **Dernière mise à jour:** 12/04/2026 - Clarifications terminologiques :
+> - "Types de tournoi" → "Typologie des tournois" avec explication détaillée du lien avec le mode de qualification
+> - "Barème des points" → "Barème des points de match" pour distinguer des bonus
+> - Mode "Tournois Qualificatifs" affiche désormais le nombre dynamique de tournois configurés
 
 ---
 

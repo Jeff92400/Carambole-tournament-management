@@ -774,6 +774,65 @@
       </tbody>
     </table>
     <p>Le mode de qualification se configure dans <strong>Paramètres > Types de Tournoi</strong>.</p>
+
+    <h3 id="timelines">Calendrier des Tournois et Délais d'Inscription</h3>
+    <p>Chaque tournoi suit un calendrier précis pour les inscriptions et les convocations. Comprendre ces délais est essentiel pour la gestion efficace des compétitions.</p>
+
+    <h4>Cycle de Vie d'un Tournoi</h4>
+    <table>
+      <thead>
+        <tr>
+          <th>Moment</th>
+          <th>Événement</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>J-28</strong></td>
+          <td>Ouverture des inscriptions (Espace Joueur)</td>
+          <td>Les joueurs peuvent s'inscrire via l'Application Joueur. Le tournoi apparaît dans leur liste "Vos compétitions".</td>
+        </tr>
+        <tr>
+          <td><strong>J-7</strong></td>
+          <td>Clôture des inscriptions (Espace Joueur)</td>
+          <td>Dernier jour pour s'inscrire via l'Application Joueur. Après cette date, seul l'administrateur peut inscrire des joueurs manuellement.</td>
+        </tr>
+        <tr>
+          <td><strong>J-3 à J-5</strong></td>
+          <td>Envoi des convocations</td>
+          <td>L'administrateur génère les poules et envoie les convocations par email (avec PDF). Moment recommandé : 3 à 5 jours avant le tournoi.</td>
+        </tr>
+        <tr>
+          <td><strong>J-0</strong></td>
+          <td>Jour du tournoi</td>
+          <td>Compétition. Les résultats sont importés ensuite via CSV et les classements mis à jour automatiquement.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h4>Notifications Automatiques</h4>
+    <p>L'application envoie automatiquement des notifications push aux joueurs à des moments clés :</p>
+    <ul>
+      <li><strong>Création d'un tournoi :</strong> Notification à tous les joueurs éligibles (inscriptions ouvertes jusqu'au [date])</li>
+      <li><strong>Rappel J-1 avant clôture :</strong> Notification aux joueurs éligibles non inscrits (vérification quotidienne à 9h, Paris)</li>
+      <li><strong>Convocation envoyée :</strong> Notification aux joueurs convoqués (poule, date, heure, lieu)</li>
+      <li><strong>Résultats publiés :</strong> Notification aux participants (avec leur position)</li>
+      <li><strong>Modification de tournoi :</strong> Notification en cas de changement de date ou de lieu</li>
+      <li><strong>Qualification finale :</strong> Notification aux joueurs qualifiés après le T3</li>
+    </ul>
+    <p class="note"><strong>Note :</strong> Ces notifications nécessitent que les joueurs aient activé les notifications push dans l'Application Joueur et qu'ils aient installé l'application sur leur écran d'accueil (PWA).</p>
+
+    <h4>⚠️ Délais Configurables (Paramètres Avancés)</h4>
+    <p>Les délais suivants sont configurables dans <strong>Paramètres > Délais et Seuils</strong> :</p>
+    <ul>
+      <li><strong>Ouverture des inscriptions :</strong> Par défaut J-28, modifiable via <code>inscription_opens_days_before</code></li>
+      <li><strong>Clôture des inscriptions :</strong> Actuellement fixé à J-7 (codé en dur dans l'Application Joueur)</li>
+    </ul>
+    <p class="warning"><strong>⚠️ Important :</strong> La modification de ces délais nécessite une coordination entre l'Application Tournois et l'Application Joueur. Contactez le support technique avant tout changement.</p>
+
+    <h4>Problème Connu : Rappel Automatique J-1</h4>
+    <p class="warning"><strong>⚠️ Bug connu (Avril 2026) :</strong> Le rappel automatique J-1 vérifie actuellement les tournois dont la <em>date de compétition</em> est demain, au lieu de vérifier les tournois dont la <em>clôture des inscriptions</em> est demain. Résultat : les rappels sont envoyés trop tard (la veille du tournoi au lieu de la veille de la clôture). Ce bug sera corrigé dans une prochaine version. Pour l'instant, les relances manuelles (via Com joueurs) sont recommandées.</p>
   </section>
 
   <hr>
@@ -2680,7 +2739,7 @@
     <ul>
       <li><strong>Organisation</strong> — Organisation, Identité Visuelle, Configuration des Emails, Configuration de la Saison, Politique de Confidentialité</li>
       <li><strong>Utilisateurs</strong> — Mon compte, mot de passe, gestion des utilisateurs</li>
-      <li><strong>Compétitions</strong> — Paramètres des épreuves, Délais des compétitions, Qualification pour la finale, Mode de qualification, Types de tournoi, Bonus Moyenne, Barème des points, Classement saisonnier</li>
+      <li><strong>Compétitions</strong> — Paramètres des épreuves, Délais des compétitions, Qualification pour la finale, Mode de qualification, Typologie des tournois, Bonus Moyenne, Barème des points de match, Classement saisonnier</li>
       <li><strong>Espace Joueur</strong> — Comptes Espace Joueur, Planification des emails, Paramètres Espace Joueur</li>
       <li><strong>Maintenance</strong> — Outils de maintenance, Logs d'activité</li>
     </ul>
@@ -3052,7 +3111,7 @@
       <span class="screenshot-id">IMG-17</span>
       <span class="screenshot-icon">&#128247;</span>
       <span class="screenshot-label">Paramètres — Types de Tournoi</span>
-      <span class="screenshot-desc">Capture de l'onglet Compétitions avec les panneaux repliables : Mode de qualification, Types de tournoi, Bonus Moyenne, Barème des points, Classement saisonnier</span>
+      <span class="screenshot-desc">Capture de l'onglet Compétitions avec les panneaux repliables : Mode de qualification, Typologie des tournois, Bonus Moyenne, Barème des points de match, Classement saisonnier</span>
       <img src="screenshots/17-param-types-tournoi.png" alt="Types de tournoi et mode de qualification">
     </div>
 
@@ -3064,8 +3123,8 @@
       </thead>
       <tbody>
         <tr>
-          <td><strong>3 Tournois Qualificatifs</strong></td>
-          <td>3 tournois (T1, T2, T3) avec cumul des points. Les meilleurs joueurs accèdent à la Finale Départementale.</td>
+          <td><strong>Tournois Qualificatifs (cumul de points)</strong></td>
+          <td>Tournois qualificatifs avec cumul des points. Les meilleurs joueurs accèdent à la Finale Départementale. Le nombre de tournois est configurable dans le panneau "Typologie des tournois" (par exemple : T1, T2, T3 = 3 tournois).</td>
         </tr>
         <tr>
           <td><strong>Journées Qualificatives</strong></td>
@@ -3074,8 +3133,16 @@
       </tbody>
     </table>
 
-    <h4>Types de Tournoi</h4>
-    <p>Tableau listant les types de tournoi définis (T1, T2, T3, Finale, etc.) avec code, nom d'affichage, et options (compte pour le classement, est une finale). Il est possible d'ajouter de nouveaux types via le formulaire en bas du tableau.</p>
+    <h4>Typologie des tournois</h4>
+    <p>Définit les différents types de tournois de votre saison (T1, T2, T3, Finale, etc.). Pour chaque type :</p>
+    <ul>
+      <li><strong>N°</strong> : Numéro du tournoi (ordre chronologique)</li>
+      <li><strong>Code</strong> : Code court affiché dans l'application (ex: T1, T2, FINALE)</li>
+      <li><strong>Nom d'affichage</strong> : Libellé complet (ex: Tournoi 1, Finale Départementale)</li>
+      <li><strong>Classement</strong> : Cochez pour que ce tournoi compte dans le classement de saison. Les tournois avec cette case cochée apparaissent dans la configuration du mode "Tournois Qualificatifs"</li>
+      <li><strong>Finale</strong> : Cochez pour marquer le tournoi de fin de saison</li>
+    </ul>
+    <p>Vous pouvez ajouter autant de types que nécessaire (par exemple : ajouter un T4 pour une saison à 4 tournois qualificatifs). La configuration actuelle s'affiche dynamiquement dans la carte du mode de qualification.</p>
 
     <h4>Bonus Moyenne</h4>
     <p>(Visible dans les deux modes : Standard et Journées)</p>
@@ -3198,13 +3265,13 @@
 
   <!-- Paramètres > Barème -->
   <section id="param-bareme">
-    <h2>Paramètres > Barème de Points</h2>
+    <h2>Paramètres > Barème des Points de Match</h2>
 
     <h3>Accès</h3>
-    <p>Paramètres &gt; onglet Compétitions &gt; panneau <strong>"Barème des points"</strong></p>
+    <p>Paramètres &gt; onglet Compétitions &gt; panneau <strong>"Barème des points de match"</strong></p>
 
     <h3>Description</h3>
-    <p>Configuration des règles de calcul des points de match et des bonus. Le barème est visible dans les deux modes (Standard et Journées), dans un panneau repliable dédié.</p>
+    <p>Configuration des points attribués pour les résultats de match (victoire, match nul, défaite) et des éventuels bonus. Le barème est visible dans les deux modes (Standard et Journées), dans un panneau repliable dédié.</p>
 
     <div class="screenshot-placeholder">
       <span class="screenshot-id">IMG-19</span>
@@ -3709,16 +3776,16 @@
   <hr>
 
   <section id="workflow-bareme">
-    <h3>Configurer le barème de points</h3>
+    <h3>Configurer le barème de points de match</h3>
     <ol class="steps">
-      <li>Menu Paramètres > Types de tournois</li>
-      <li>Faire défiler jusqu'à la section "Configuration du scoring par phase"</li>
-      <li>Sous la grille, les blocs de barème sont affichés (Victoire/Nul/Défaite, Bonus Moyenne, etc.)</li>
-      <li>Cliquer sur "Modifier" pour ajuster les points d'une condition</li>
+      <li>Menu Paramètres > onglet Compétitions > panneau "Barème des points de match"</li>
+      <li>Section "Barème de base" : ajuster les points pour Victoire, Match nul, Défaite (par défaut : 2/1/0)</li>
+      <li>Section "Blocs de bonus" : les bonus configurés sont affichés (Bonus Moyenne, etc.)</li>
+      <li>Cliquer sur "Modifier" pour ajuster les points d'une condition de bonus</li>
       <li>(Optionnel) Ajouter un bloc de bonus : saisir un nom de bloc et un libellé de colonne, cliquer sur "Ajouter le bloc"</li>
-      <li>Ajouter des conditions avec le formulaire structuré</li>
+      <li>Ajouter des conditions avec le formulaire structuré (champ, opérateur, valeur)</li>
       <li>Activer ou désactiver les blocs selon les besoins</li>
-      <li>Les bonus sont appliqués automatiquement lors de l'import des résultats</li>
+      <li>Les points de match et bonus sont appliqués automatiquement lors de l'import des résultats</li>
     </ol>
   </section>
 
@@ -3727,7 +3794,7 @@
   <section id="workflow-journees">
     <h3>Passer en mode Journées Qualificatives</h3>
     <ol class="steps">
-      <li>Menu Paramètres > Types de Tournoi</li>
+      <li>Menu Paramètres > onglet Compétitions > panneau "Mode de qualification"</li>
       <li>Cliquer sur la carte "Journées Qualificatives"</li>
       <li>Configurer : nombre de journées</li>
       <li>Configurer les points par position (tableau en bas)</li>
