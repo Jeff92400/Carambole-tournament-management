@@ -507,17 +507,22 @@ router.put('/users/:id/toggle-active', async (req, res) => {
   }
 });
 
-// POST /api/super-admin/users — Create new CDB user (admin/viewer/lecteur)
+// POST /api/super-admin/users — Create new CDB user (admin/viewer/lecteur) or Super Admin
 router.post('/users', async (req, res) => {
-  const { username, email, password, role, organization_id } = req.body;
+  const { username, email, password, role, organization_id, is_super_admin } = req.body;
 
-  if (!username || !password || !role || !organization_id) {
-    return res.status(400).json({ error: 'Champs requis: username, password, role, organization_id' });
+  if (!username || !password || !role) {
+    return res.status(400).json({ error: 'Champs requis: username, password, role' });
   }
 
-  const validRoles = ['admin', 'viewer', 'lecteur'];
+  // For Super Admin, organization_id is optional
+  if (!is_super_admin && !organization_id) {
+    return res.status(400).json({ error: 'organization_id requis pour les utilisateurs CDB' });
+  }
+
+  const validRoles = ['admin', 'viewer', 'lecteur', 'super_admin'];
   if (!validRoles.includes(role)) {
-    return res.status(400).json({ error: 'Rôle invalide pour un utilisateur CDB. Valeurs: admin, viewer, lecteur' });
+    return res.status(400).json({ error: 'Rôle invalide. Valeurs: admin, viewer, lecteur, super_admin' });
   }
 
   if (password.length < 6) {
@@ -531,31 +536,45 @@ router.post('/users', async (req, res) => {
       return res.status(409).json({ error: 'Ce nom d\'utilisateur existe déjà' });
     }
 
-    // Validate organization exists
-    const org = await dbGet(`SELECT id, short_name FROM organizations WHERE id = $1`, [organization_id]);
-    if (!org) {
-      return res.status(404).json({ error: 'Organisation introuvable' });
+    // Validate organization exists (for non-SA users)
+    let org = null;
+    if (!is_super_admin) {
+      org = await dbGet(`SELECT id, short_name FROM organizations WHERE id = $1`, [organization_id]);
+      if (!org) {
+        return res.status(404).json({ error: 'Organisation introuvable' });
+      }
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
     const result = await dbRun(
-      `INSERT INTO users (username, password_hash, email, role, is_active, organization_id, last_password_change)
-       VALUES ($1, $2, $3, $4, 1, $5, CURRENT_TIMESTAMP)`,
-      [username, passwordHash, email || null, role, organization_id]
+      `INSERT INTO users (username, password_hash, email, role, is_active, organization_id, is_super_admin, last_password_change)
+       VALUES ($1, $2, $3, $4, 1, $5, $6, CURRENT_TIMESTAMP)`,
+      [username, passwordHash, email || null, role === 'super_admin' ? 'admin' : role, organization_id || null, is_super_admin ? 1 : 0]
     );
+
+    const details = is_super_admin
+      ? `Super Admin créé: ${username}`
+      : `Utilisateur créé: ${username} (${role}) pour ${org.short_name}`;
 
     logAdminAction({
       req,
       action: ACTION_TYPES.USER_CREATED,
       targetType: 'user',
       targetId: result.lastID,
-      details: `Utilisateur créé: ${username} (${role}) pour ${org.short_name}`
+      details
     });
 
     res.status(201).json({
       success: true,
       message: 'Utilisateur créé avec succès',
-      user: { id: result.lastID, username, role, organization_id, organization_name: org.short_name }
+      user: {
+        id: result.lastID,
+        username,
+        role,
+        is_super_admin: is_super_admin || false,
+        organization_id: organization_id || null,
+        organization_name: org ? org.short_name : 'Plateforme'
+      }
     });
   } catch (error) {
     console.error('Error creating user:', error);

@@ -390,14 +390,15 @@
         <div class="form-row">
           <div class="form-group">
             <label>Rôle <span class="required">*</span></label>
-            <select id="createRole">
+            <select id="createRole" onchange="toggleCDBField()">
               <option value="admin">Admin</option>
               <option value="viewer">Viewer</option>
               <option value="lecteur">Lecteur</option>
+              <option value="super_admin">Super Admin</option>
             </select>
           </div>
 
-          <div class="form-group">
+          <div class="form-group" id="createCDBGroup">
             <label>CDB <span class="required">*</span></label>
             <select id="createOrganization">
               <option value="">-- Sélectionner un CDB --</option>
@@ -799,6 +800,21 @@
       document.getElementById('createModal').classList.remove('show');
     }
 
+    function toggleCDBField() {
+      const role = document.getElementById('createRole').value;
+      const cdbGroup = document.getElementById('createCDBGroup');
+      const cdbSelect = document.getElementById('createOrganization');
+
+      if (role === 'super_admin') {
+        // Hide CDB field for Super Admin
+        cdbGroup.style.display = 'none';
+        cdbSelect.value = ''; // Clear selection
+      } else {
+        // Show CDB field for regular roles
+        cdbGroup.style.display = 'block';
+      }
+    }
+
     async function createUser() {
       const username = document.getElementById('createUsername').value.trim();
       const email = document.getElementById('createEmail').value.trim();
@@ -808,8 +824,14 @@
       const passwordConfirm = document.getElementById('createPasswordConfirm').value;
 
       // Validation
-      if (!username || !role || !organizationId || !password) {
+      if (!username || !role || !password) {
         showToast('Veuillez remplir tous les champs requis', 'error');
+        return;
+      }
+
+      // CDB required for non-SA roles
+      if (role !== 'super_admin' && !organizationId) {
+        showToast('Veuillez sélectionner un CDB', 'error');
         return;
       }
 
@@ -824,16 +846,23 @@
       }
 
       try {
+        const payload = {
+          username,
+          email: email || null,
+          password,
+          role,
+          is_super_admin: role === 'super_admin'
+        };
+
+        // Only include organization_id for non-SA roles
+        if (role !== 'super_admin') {
+          payload.organization_id = parseInt(organizationId);
+        }
+
         const response = await authFetch(`${API_URL}/super-admin/users`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            username,
-            email: email || null,
-            password,
-            role,
-            organization_id: parseInt(organizationId)
-          })
+          body: JSON.stringify(payload)
         });
 
         const data = await response.json();
