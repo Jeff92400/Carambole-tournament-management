@@ -1750,6 +1750,31 @@ router.post('/snapshot-season-stats', authenticateToken, requireAdmin, async (re
     }
 
     console.log(`[Snapshot] Done: ${snapshotCount}/${clubs.length} clubs snapshotted for ${season}`);
+
+    // Mark season as archived in organization settings
+    const orgId = req.user.organizationId || null;
+    try {
+      const archivedSeasonsStr = await appSettings.getOrgSetting(orgId, 'archived_seasons');
+      let archivedSeasons = [];
+      if (archivedSeasonsStr) {
+        try {
+          archivedSeasons = JSON.parse(archivedSeasonsStr);
+        } catch (e) {
+          console.warn('[Snapshot] Failed to parse archived_seasons, resetting:', e.message);
+        }
+      }
+
+      // Add current season if not already in list
+      if (!archivedSeasons.includes(season)) {
+        archivedSeasons.push(season);
+        await appSettings.setOrgSetting(orgId, 'archived_seasons', JSON.stringify(archivedSeasons));
+        console.log(`[Snapshot] Marked ${season} as archived for org ${orgId}`);
+      }
+    } catch (settingErr) {
+      console.error('[Snapshot] Failed to update archived_seasons setting:', settingErr.message);
+      // Non-fatal - snapshot already succeeded
+    }
+
     res.json({
       success: true,
       season,
@@ -1759,6 +1784,36 @@ router.post('/snapshot-season-stats', authenticateToken, requireAdmin, async (re
     });
   } catch (error) {
     console.error('[Snapshot] Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /archive-status
+ * Check if current season (or specified season) has been archived
+ */
+router.get('/archive-status', authenticateToken, async (req, res) => {
+  try {
+    const orgId = req.user.organizationId || null;
+    const season = req.query.season || await appSettings.getCurrentSeason();
+
+    const archivedSeasonsStr = await appSettings.getOrgSetting(orgId, 'archived_seasons');
+    let archivedSeasons = [];
+    if (archivedSeasonsStr) {
+      try {
+        archivedSeasons = JSON.parse(archivedSeasonsStr);
+      } catch (e) {
+        console.warn('[Archive Status] Failed to parse archived_seasons:', e.message);
+      }
+    }
+
+    res.json({
+      season,
+      is_archived: archivedSeasons.includes(season),
+      archived_seasons: archivedSeasons
+    });
+  } catch (error) {
+    console.error('[Archive Status] Error:', error);
     res.status(500).json({ error: error.message });
   }
 });

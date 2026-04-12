@@ -1434,8 +1434,20 @@
       <details style="margin-bottom: 20px; border: 1px solid #ddd; border-radius: 6px; padding: 15px;">
         <summary style="cursor: pointer; font-weight: 600; font-size: 15px; color: #1F4788; user-select: none;">
           📊 Archiver les statistiques des clubs (fin de saison)
+          <span id="archiveStatusBadge" style="margin-left: 10px; font-size: 12px; font-weight: normal;"></span>
         </summary>
         <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #eee;">
+          <!-- Archive Status Display -->
+          <div id="archiveStatusDisplay" style="margin-bottom: 15px; padding: 12px; border-radius: 6px; display: none;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span id="archiveStatusIcon" style="font-size: 18px;"></span>
+              <div>
+                <div id="archiveStatusText" style="font-weight: 600; margin-bottom: 3px;"></div>
+                <div id="archiveStatusDetails" style="font-size: 12px; color: #666;"></div>
+              </div>
+            </div>
+          </div>
+
           <p style="color: #666; font-size: 14px; margin-bottom: 15px;">
             <strong>À faire en juin</strong>, juste avant la fin de la saison.<br>
             Cela sauvegarde les statistiques de participation de chaque club pour permettre la comparaison l'année suivante dans l'application joueur (Vue Club).
@@ -5121,6 +5133,61 @@
 
     populateSnapshotSeasons();
 
+    // Load and display archive status for current season
+    async function loadArchiveStatus() {
+      try {
+        const response = await authFetch(`${API_URL}/settings/archive-status`);
+        const data = await response.json();
+
+        const badge = document.getElementById('archiveStatusBadge');
+        const display = document.getElementById('archiveStatusDisplay');
+        const icon = document.getElementById('archiveStatusIcon');
+        const text = document.getElementById('archiveStatusText');
+        const details = document.getElementById('archiveStatusDetails');
+
+        if (data.is_archived) {
+          // Season is archived
+          badge.textContent = '✅ Archivé';
+          badge.style.color = '#28a745';
+          display.style.display = 'block';
+          display.style.background = '#d4edda';
+          display.style.border = '1px solid #c3e6cb';
+          icon.textContent = '✅';
+          text.textContent = `Saison ${data.season} archivée`;
+          text.style.color = '#155724';
+          details.textContent = 'Les statistiques des clubs ont été sauvegardées avec succès.';
+        } else {
+          // Season not archived yet
+          badge.textContent = '⚠️ Pas encore archivé';
+          badge.style.color = '#ffc107';
+          display.style.display = 'block';
+          display.style.background = '#fff3cd';
+          display.style.border = '1px solid #ffeaa7';
+          icon.textContent = '⚠️';
+          text.textContent = `Saison ${data.season} - Archivage en attente`;
+          text.style.color = '#856404';
+          details.textContent = 'Pensez à archiver avant septembre pour permettre les comparaisons N vs N-1.';
+        }
+
+        // Show all archived seasons
+        if (data.archived_seasons && data.archived_seasons.length > 0) {
+          const archiveList = data.archived_seasons.join(', ');
+          const listEl = document.createElement('div');
+          listEl.style.marginTop = '8px';
+          listEl.style.paddingTop = '8px';
+          listEl.style.borderTop = '1px solid #ddd';
+          listEl.style.fontSize = '11px';
+          listEl.style.color = '#666';
+          listEl.textContent = `Saisons archivées : ${archiveList}`;
+          display.querySelector('div').appendChild(listEl);
+        }
+      } catch (error) {
+        console.error('Error loading archive status:', error);
+      }
+    }
+
+    loadArchiveStatus();
+
     async function takeSeasonSnapshot() {
       const season = document.getElementById('snapshotSeason').value;
       const msgEl = document.getElementById('snapshotMessage');
@@ -5149,6 +5216,8 @@
           if (data.errors && data.errors.length > 0) {
             msgEl.textContent += ` (${data.errors.length} erreur(s))`;
           }
+          // Reload archive status to show updated badge
+          loadArchiveStatus();
         } else {
           throw new Error(data.error || 'Erreur inconnue');
         }

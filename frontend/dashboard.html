@@ -55,6 +55,27 @@
       </div>
     </div>
 
+    <!-- Season Archive Reminder - Admin Only (June-August only) -->
+    <div id="archiveReminderCard" class="admin-only" style="display: none; background: #e7f3ff; border-left: 3px solid #1F4788; margin-bottom: 10px; padding: 12px 15px; border-radius: 4px;">
+      <div style="display: flex; align-items: flex-start; gap: 10px;">
+        <span style="font-size: 20px; flex-shrink: 0;">📊</span>
+        <div style="flex: 1;">
+          <div style="font-weight: 600; color: #1F4788; margin-bottom: 5px;">Fin de saison proche</div>
+          <p style="margin: 0 0 10px 0; font-size: 13px; color: #555; line-height: 1.5;">
+            La saison <strong id="archiveSeasonName"></strong> se termine bientôt. Pensez à archiver les statistiques des clubs avant septembre pour permettre les comparaisons N vs N-1 dans l'Application Joueur.
+          </p>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <button onclick="window.location.href='settings-admin.html#saisonSection'" class="btn" style="background: #1F4788; padding: 6px 14px; font-size: 13px;">
+              📊 Archiver maintenant
+            </button>
+            <button onclick="dismissArchiveReminder()" class="btn" style="background: #6c757d; padding: 6px 14px; font-size: 13px;">
+              Me le rappeler plus tard
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Actions Rapides -->
     <div class="card" style="margin-bottom: 15px; padding: 15px;">
       <h3 style="margin-top: 0; margin-bottom: 12px;">Actions Rapides</h3>
@@ -233,6 +254,7 @@
     if (userRole === 'admin' || userRole === 'lecteur') {
       document.querySelectorAll('.admin-only').forEach(el => el.style.display = '');
       loadTournamentAlerts();
+      checkArchiveReminder();
       if (userRole === 'lecteur') document.body.classList.add('role-lecteur');
     } else {
       document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');
@@ -768,6 +790,50 @@
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
+    }
+
+    // Check if archive reminder should be shown (June-August only)
+    async function checkArchiveReminder() {
+      try {
+        // Check if we're in June-August (months 5-7, 0-indexed)
+        const currentMonth = new Date().getMonth();
+        if (currentMonth < 5 || currentMonth > 7) {
+          return; // Not in reminder period
+        }
+
+        // Check if reminder was dismissed this session
+        if (sessionStorage.getItem('archive_reminder_dismissed')) {
+          return;
+        }
+
+        // Check archive status from backend
+        const response = await fetch(`${API_URL}/settings/archive-status`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (!response.ok) return;
+
+        const data = await response.json();
+
+        // Show reminder if current season is not archived
+        if (!data.is_archived) {
+          const card = document.getElementById('archiveReminderCard');
+          const seasonName = document.getElementById('archiveSeasonName');
+
+          if (card && seasonName) {
+            seasonName.textContent = data.season;
+            card.style.display = 'block';
+          }
+        }
+      } catch (error) {
+        console.error('Error checking archive reminder:', error);
+      }
+    }
+
+    // Dismiss archive reminder for this session
+    function dismissArchiveReminder() {
+      sessionStorage.setItem('archive_reminder_dismissed', 'true');
+      document.getElementById('archiveReminderCard').style.display = 'none';
     }
 
     loadDashboard();
