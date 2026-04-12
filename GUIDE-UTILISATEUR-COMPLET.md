@@ -1,7 +1,15 @@
 # Guide Utilisateur Complet
 
 > **Note:** Ce document est généré automatiquement depuis le guide HTML.
-> **Dernière mise à jour:** 12/04/2026 - Clarifications terminologiques :
+> **Dernière mise à jour:** 12/04/2026
+>
+> **Nouvelles fonctionnalités documentées (Avril 2026):**
+> - **Push Notifications** : Sélection "🔔 Joueurs avec notifications actives" pour cibler uniquement les joueurs abonnés
+> - **Annonces** : Sélection "📱 Joueurs avec l'app installée" pour cibler uniquement les utilisateurs de l'Espace Joueur
+> - **Annonces** : Filtrage par catégorie/club (🎯 Par catégorie/club)
+> - **Notifications admin** : Notification résumé de confirmation après envoi groupé
+>
+> **Clarifications terminologiques (12/04/2026):**
 > - "Types de tournoi" → "Typologie des tournois" avec explication détaillée du lien avec le mode de qualification
 > - "Barème des points" → "Barème des points de match" pour distinguer des bonus
 > - Mode "Tournois Qualificatifs" affiche désormais le nombre dynamique de tournois configurés

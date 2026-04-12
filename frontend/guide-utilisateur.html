@@ -1946,9 +1946,14 @@
 
     <p><strong>Étape 1 : Sélectionner les destinataires</strong></p>
     <ul>
-      <li><strong>Tous les joueurs</strong> : Envoie à tous les joueurs ayant activé les notifications</li>
+      <li><strong>Tous les joueurs</strong> : Envoie à tous les joueurs inscrits dans la base</li>
+      <li><strong>🔔 Joueurs avec notifications actives</strong> : Envoie uniquement aux joueurs ayant activé les notifications push dans l'Espace Joueur (affiche le nombre entre parenthèses, ex: "21")</li>
       <li><strong>Liste de licences</strong> : Envoie uniquement aux licences spécifiées (une par ligne, maximum 15)</li>
     </ul>
+
+    <div class="info-card">
+      <strong>💡 Conseil :</strong> Utilisez l'option "🔔 Joueurs avec notifications actives" pour cibler efficacement les joueurs qui recevront réellement les notifications. Cela évite d'envoyer à des joueurs n'ayant pas activé les notifications.
+    </div>
 
     <p><strong>Étape 2 : Composer la notification</strong></p>
     <ul>
@@ -1977,7 +1982,15 @@
       <li>Vérifiez l'aperçu de la notification (affichage comme sur le téléphone)</li>
       <li>Cliquez sur <strong>📤 Envoyer la notification</strong></li>
       <li>La notification est envoyée instantanément aux joueurs abonnés</li>
+      <li>Vous recevez une <strong>notification de confirmation</strong> sur votre propre téléphone (si vos notifications sont activées)</li>
     </ul>
+
+    <div class="info-card">
+      <strong>📬 Notification de confirmation administrateur :</strong> Après chaque envoi groupé, vous recevez une notification résumé du type :<br>
+      <em>"📬 Notification envoyée"<br>
+      "✅ 21 joueur(s) ont reçu : [Titre de votre notification]"</em><br><br>
+      Cette confirmation vous permet de vérifier que l'envoi a bien eu lieu, sans recevoir de copie du message lui-même.
+    </div>
 
     <h4>Statut des abonnements</h4>
     <p>En haut à droite du formulaire, vous voyez le nombre de joueurs abonnés aux notifications push :</p>
@@ -2196,11 +2209,27 @@
       <strong>📲 Notification push automatique :</strong> Lorsque vous créez une annonce de type <span class="badge badge-red">ALERTE</span> (urgente), une notification push est automatiquement envoyée à tous les joueurs ayant activé les notifications dans l'Espace Joueur. Cela garantit que les messages importants sont reçus instantanément, en complément de l'affichage dans l'application.
     </div>
 
+    <p><strong>Destinataires :</strong></p>
+    <ul>
+      <li><strong>👥 Tous les joueurs</strong> : L'annonce est visible par tous les joueurs inscrits dans la base</li>
+      <li><strong>📱 Joueurs avec l'app installée</strong> : L'annonce n'apparaît que pour les joueurs ayant installé l'Espace Joueur (affiche le nombre entre parenthèses, ex: "62")</li>
+      <li><strong>🎯 Par catégorie/club</strong> : Filtrer les destinataires par mode de jeu, classement FFB et/ou club
+        <ul>
+          <li>Vous pouvez combiner plusieurs critères (ex: Libre + R1 + BC Paris)</li>
+          <li>Le compteur affiche le nombre de joueurs correspondants</li>
+        </ul>
+      </li>
+      <li><strong>👤 Un joueur</strong> : Annonce personnelle visible uniquement par un joueur spécifique (saisir son nom ou sa licence)</li>
+    </ul>
+
+    <div class="info-card">
+      <strong>💡 Conseil :</strong> Utilisez l'option "📱 Joueurs avec l'app installée" pour les annonces importantes que seuls les utilisateurs actifs de l'Espace Joueur doivent voir (ex: nouvelles fonctionnalités, changements dans l'application).
+    </div>
+
     <p><strong>Options avancées :</strong></p>
     <ul>
       <li><strong>Date d'expiration</strong> : L'annonce disparaît automatiquement après cette date</li>
       <li><strong>Mode Test</strong> : Envoie l'annonce uniquement à une licence spécifique pour test</li>
-      <li><strong>Destinataire</strong> : Tous les joueurs ou un joueur spécifique (saisir la licence)</li>
     </ul>
 
     <h4>Gérer les annonces existantes</h4>
