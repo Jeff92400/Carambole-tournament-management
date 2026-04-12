@@ -104,7 +104,17 @@
         <a href="inscriptions-viewer.html" class="nav-tooltip" data-tooltip="Liste des inscriptions">Inscriptions</a>
         <a href="calendar.html" class="nav-tooltip" data-tooltip="Calendrier de la saison">Calendrier</a>
         <a href="emailing.html" class="nav-tooltip" data-tooltip="Annonces, relances, résultats, convocation">Com joueurs</a>
-        <a href="settings.html" class="active">Paramètres</a>
+        <div class="nav-dropdown admin-only">
+          <a href="settings.html" class="nav-dropdown-btn">Paramètres</a>
+          <div class="nav-dropdown-content">
+            <a href="settings-admin.html#organisation"><span class="nav-icon">🏢</span>Organisation</a>
+            <a href="settings-admin.html#utilisateurs"><span class="nav-icon">👥</span>Utilisateurs</a>
+            <a href="settings-admin.html#competitions"><span class="nav-icon">🏆</span>Compétitions</a>
+            <a href="settings-admin.html#espace-joueur"><span class="nav-icon">📱</span>Espace Joueur</a>
+            <a href="settings-admin.html#maintenance"><span class="nav-icon">🔧</span>Maintenance</a>
+            <a href="settings-admin.html#outils"><span class="nav-icon">🛠️</span>Outils</a>
+          </div>
+        </div>
         <a href="#" id="logoutBtn" class="nav-logout">Déconnexion</a>
       </div>
     </div>
