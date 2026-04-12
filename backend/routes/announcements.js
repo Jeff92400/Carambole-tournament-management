@@ -187,6 +187,7 @@ router.get('/active', async (req, res) => {
 
     // First, get player data if licence provided (for filter matching)
     let playerData = null;
+    let playerHasApp = false;
     if (normalizedLicence) {
       playerData = await new Promise((resolve, reject) => {
         db.get(
@@ -199,13 +200,26 @@ router.get('/active', async (req, res) => {
           }
         );
       });
+
+      // Check if player has the app installed (has account in player_accounts table)
+      playerHasApp = await new Promise((resolve, reject) => {
+        db.get(
+          `SELECT id FROM player_accounts
+           WHERE REPLACE(licence, ' ', '') = $1 AND ($2::int IS NULL OR organization_id = $2)`,
+          [normalizedLicence, orgIdFilter],
+          (err, row) => {
+            if (err) reject(err);
+            else resolve(!!row);
+          }
+        );
+      });
     }
 
     // Get all active announcements (filtered by org if provided)
     const announcements = await new Promise((resolve, reject) => {
       db.all(
         `SELECT id, title, message, type, created_at, test_licence, target_licence,
-                target_modes, target_rankings, target_clubs
+                target_modes, target_rankings, target_clubs, target_type
          FROM announcements
          WHERE is_active = TRUE
            AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
@@ -221,6 +235,12 @@ router.get('/active', async (req, res) => {
 
     // Filter announcements based on targeting
     const filteredAnnouncements = announcements.filter(ann => {
+      // Filter by target_type (requires app installed)
+      if (ann.target_type === 'with_app') {
+        // Only show to players with the app installed
+        if (!playerHasApp) return false;
+      }
+
       // Test announcement - only show to test licence
       if (ann.test_licence) {
         return normalizedLicence && ann.test_licence.replace(/\s+/g, '') === normalizedLicence;
@@ -304,7 +324,7 @@ router.get('/active', async (req, res) => {
 // Create announcement
 router.post('/', authenticateToken, (req, res) => {
   const db = getDb();
-  const { title, message, type, expires_at, test_licence, target_licence, target_modes, target_rankings, target_clubs } = req.body;
+  const { title, message, type, expires_at, test_licence, target_licence, target_modes, target_rankings, target_clubs, target_type } = req.body;
   const created_by = req.user?.username || 'admin';
 
   if (!title || !message) {
@@ -312,6 +332,8 @@ router.post('/', authenticateToken, (req, res) => {
   }
 
   const announcementType = type || 'info';
+  const announcementTargetType = target_type || 'all'; // 'all' = tous les joueurs, 'with_app' = joueurs avec l'app installée
+
   // Normalize licences if provided
   const normalizedTestLicence = test_licence ? test_licence.replace(/\s+/g, '') : null;
   const normalizedTargetLicence = target_licence ? target_licence.replace(/\s+/g, '') : null;
@@ -324,10 +346,10 @@ router.post('/', authenticateToken, (req, res) => {
   const orgId = req.user.organizationId || null;
 
   db.run(
-    `INSERT INTO announcements (title, message, type, expires_at, created_by, test_licence, target_licence, target_modes, target_rankings, target_clubs, organization_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+    `INSERT INTO announcements (title, message, type, expires_at, created_by, test_licence, target_licence, target_modes, target_rankings, target_clubs, target_type, organization_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
      RETURNING id`,
-    [title, message, announcementType, expires_at || null, created_by, normalizedTestLicence, normalizedTargetLicence, modesJson, rankingsJson, clubsJson, orgId],
+    [title, message, announcementType, expires_at || null, created_by, normalizedTestLicence, normalizedTargetLicence, modesJson, rankingsJson, clubsJson, announcementTargetType, orgId],
     function(err) {
       if (err) {
         console.error('Error creating announcement:', err);

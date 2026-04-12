@@ -999,6 +999,9 @@ async function initializeDatabase() {
     await client.query(`ALTER TABLE announcements ADD COLUMN IF NOT EXISTS target_rankings TEXT`);
     await client.query(`ALTER TABLE announcements ADD COLUMN IF NOT EXISTS target_clubs TEXT`);
 
+    // Add target_type column for announcements (filtering by player app installation)
+    await client.query(`ALTER TABLE announcements ADD COLUMN IF NOT EXISTS target_type VARCHAR(20) DEFAULT 'all'`);
+
     // Survey campaigns table (satisfaction surveys for Player App)
     await client.query(`
       CREATE TABLE IF NOT EXISTS survey_campaigns (

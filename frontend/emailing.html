@@ -522,6 +522,10 @@
                 <input type="radio" name="notifRecipient" value="all" style="width: 16px; height: 16px;" onchange="toggleNotifLicenceInput()">
                 <span style="font-size: 14px;">👥 Tous les joueurs</span>
               </label>
+              <label style="display: flex; align-items: center; gap: 8px; padding: 10px 15px; background: white; border: 2px solid #ddd; border-radius: 8px; cursor: pointer; transition: all 0.2s;" class="notif-recipient-option">
+                <input type="radio" name="notifRecipient" value="subscribed" style="width: 16px; height: 16px;" onchange="toggleNotifLicenceInput()">
+                <span style="font-size: 14px;">🔔 Joueurs avec notifications actives <span id="subscribedPlayerCount" style="color: #666;">(-)</span></span>
+              </label>
               <label style="display: flex; align-items: center; gap: 8px; padding: 10px 15px; background: white; border: 2px solid #1F4788; border-radius: 8px; cursor: pointer; transition: all 0.2s;" class="notif-recipient-option selected">
                 <input type="radio" name="notifRecipient" value="specific" checked style="width: 16px; height: 16px;" onchange="toggleNotifLicenceInput()">
                 <span style="font-size: 14px;">📋 Liste de licences</span>
@@ -729,6 +733,10 @@
               <label style="display: flex; align-items: center; gap: 8px; padding: 10px 15px; background: white; border: 2px solid #1F4788; border-radius: 8px; cursor: pointer; transition: all 0.2s;" class="recipient-option selected">
                 <input type="radio" name="announcementRecipient" value="all" checked style="width: 16px; height: 16px;">
                 <span style="font-size: 14px;">👥 Tous les joueurs</span>
+              </label>
+              <label style="display: flex; align-items: center; gap: 8px; padding: 10px 15px; background: white; border: 2px solid #ddd; border-radius: 8px; cursor: pointer; transition: all 0.2s;" class="recipient-option">
+                <input type="radio" name="announcementRecipient" value="with_app" style="width: 16px; height: 16px;">
+                <span style="font-size: 14px;">📱 Joueurs avec l'app installée <span id="audienceWithAppCount" style="color: #666;">(-)</span></span>
               </label>
               <label style="display: flex; align-items: center; gap: 8px; padding: 10px 15px; background: white; border: 2px solid #ddd; border-radius: 8px; cursor: pointer; transition: all 0.2s;" class="recipient-option">
                 <input type="radio" name="announcementRecipient" value="filter" style="width: 16px; height: 16px;">
@@ -8310,6 +8318,14 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
         }
       }
 
+      // Determine target_type based on recipient selection
+      let target_type = 'all'; // default
+      if (recipientType === 'with_app') {
+        target_type = 'with_app';
+      } else if (recipientType === 'filter' || recipientType === 'one') {
+        target_type = 'all'; // filtered or single player still shows to all who match
+      }
+
       const data = {
         title: document.getElementById('announcementTitle').value,
         message: document.getElementById('announcementMessage').value,
@@ -8319,7 +8335,8 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
         target_licence: recipientType === 'one' ? targetLicence : null,
         target_modes: recipientType === 'filter' && target_modes.length > 0 ? target_modes : null,
         target_rankings: recipientType === 'filter' && target_rankings.length > 0 ? target_rankings : null,
-        target_clubs: recipientType === 'filter' && target_clubs.length > 0 ? target_clubs : null
+        target_clubs: recipientType === 'filter' && target_clubs.length > 0 ? target_clubs : null,
+        target_type: target_type
       };
 
       try {
@@ -8347,6 +8364,9 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
         } else if (recipientType === 'filter') {
           const filteredCount = document.getElementById('filteredCount').textContent;
           successMsg = `Annonce publiée pour ${filteredCount} joueur(s) correspondant aux critères !`;
+        } else if (recipientType === 'with_app') {
+          const withAppCount = document.getElementById('audienceCount').textContent;
+          successMsg = `Annonce publiée pour les ${withAppCount} joueur(s) avec l'app installée !`;
         }
         showSuccess(successMsg);
 
@@ -8537,7 +8557,7 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
       });
     }
 
-    // Load announcements on tab switch
+    // Load announcements and counts on tab switch
     const originalTabHandler = document.querySelectorAll('.tab')[0]?.onclick;
     document.querySelectorAll('.tab').forEach(tab => {
       const originalClick = tab.onclick;
@@ -8545,6 +8565,8 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
         if (tab.dataset.tab === 'announcements') {
           loadAnnouncements();
           loadAudienceCount(); // Load player count
+        } else if (tab.dataset.tab === 'notifications') {
+          loadSubscribedPlayersCount(); // Load subscribed players count
         }
       });
     });
@@ -8558,9 +8580,26 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
         if (response.ok) {
           const data = await response.json();
           document.getElementById('audienceCount').textContent = data.count || 0;
+          // Also update the "with app" count for announcements
+          document.getElementById('audienceWithAppCount').textContent = `(${data.count || 0})`;
         }
       } catch (error) {
         console.error('Error loading audience count:', error);
+      }
+    }
+
+    // Load subscribed players count for push notifications
+    async function loadSubscribedPlayersCount() {
+      try {
+        const response = await fetch(`${API_URL}/push/subscribed-licences`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          document.getElementById('subscribedPlayerCount').textContent = `(${data.count || 0})`;
+        }
+      } catch (error) {
+        console.error('Error loading subscribed players count:', error);
       }
     }
 
@@ -9126,6 +9165,23 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
           console.error(error);
           return;
         }
+      } else if (recipientType === 'subscribed') {
+        // Get licences of players with push notifications enabled
+        try {
+          const response = await authFetch(`${API_URL}/push/subscribed-licences`);
+          if (!response.ok) throw new Error('Failed to fetch subscribed players');
+          const data = await response.json();
+          licences = data.licences || [];
+
+          if (licences.length === 0) {
+            alert('Aucun joueur n\'a activé les notifications push');
+            return;
+          }
+        } catch (error) {
+          alert('Erreur lors de la récupération des joueurs avec notifications actives');
+          console.error(error);
+          return;
+        }
       } else {
         // Parse licences from textarea
         const licencesText = document.getElementById('notifLicences').value;
@@ -9145,9 +9201,14 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
       }
 
       // Confirmation
-      const confirmMsg = recipientType === 'all'
-        ? `Envoyer la notification à TOUS les joueurs (${licences.length}) ?`
-        : `Envoyer la notification à ${licences.length} joueur(s) ?`;
+      let confirmMsg;
+      if (recipientType === 'all') {
+        confirmMsg = `Envoyer la notification à TOUS les joueurs (${licences.length}) ?`;
+      } else if (recipientType === 'subscribed') {
+        confirmMsg = `Envoyer la notification aux ${licences.length} joueur(s) avec notifications actives ?`;
+      } else {
+        confirmMsg = `Envoyer la notification à ${licences.length} joueur(s) ?`;
+      }
 
       if (!confirm(confirmMsg)) return;
 
@@ -9489,6 +9550,7 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
     // Initial load - notifications is now the default tab
     loadPushSubscriptionStatus();
     loadNotificationHistory();
+    loadSubscribedPlayersCount();
 
     initialize();
   </script>

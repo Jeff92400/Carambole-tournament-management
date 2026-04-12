@@ -998,6 +998,66 @@ Once Kayros-branded domains are in place, consider renaming Railway projects for
 
 **Note:** Renaming Railway projects does NOT affect deployment or URLs. Internal naming only.
 
+## Known Issues & Critical Bugs
+
+### 🚨 CRITICAL: Automatic Reminder Scheduler Uses Wrong Date Logic (April 12, 2026)
+
+**Status:** ACTIVE BUG in production (server.js lines 1339-1495)
+
+**Problem:**
+The `checkAutomaticReminders()` scheduler is checking for tournaments where **tournament day** (`debut`) = tomorrow, instead of checking for tournaments where the **inscription deadline** is tomorrow.
+
+**Current (WRONG) logic:**
+```javascript
+// Line 1361 in server.js
+WHERE DATE(debut) = $1  // Finds tournaments happening TOMORROW
+```
+
+This sends "Last day to register!" push notifications the day before the tournament starts, when inscriptions should already be closed (7 days before tournament day).
+
+**Correct logic should be:**
+```javascript
+// Tournament in 8 days = deadline in 7 days = reminder sent 1 day before deadline
+WHERE DATE(debut) = DATE('now', '+8 days')
+```
+
+**Why it hasn't caused major issues:**
+- Scheduler only triggers for tournaments happening tomorrow
+- Players are usually already registered (or not) by then
+- Query filters for unregistered players → often returns 0 results
+
+**Timeline context (from Player App):**
+- Inscriptions open: `debut - 28 days` (configurable via `inscription_opens_days_before` setting)
+- Inscriptions close: `debut - 7 days` (hardcoded in Player App adapters)
+- Tournament day: `debut`
+- Reminder should be sent: 1 day before deadline = `debut - 8 days`
+
+**Impact:**
+- LOW immediate risk (scheduler runs but likely sends few/no notifications)
+- Defeats the purpose of the automatic reminder feature
+- Must be fixed before documenting timelines in user guide
+
+**Recommended fix:**
+```javascript
+// Get the deadline date (7 days before tournament)
+const deadlineTomorrow = new Date(parisNow);
+deadlineTomorrow.setDate(deadlineTomorrow.getDate() + 8); // Tournament in 8 days = deadline tomorrow
+const deadlineTomorrowStr = deadlineTomorrow.toISOString().split('T')[0];
+
+// Find tournaments where inscription deadline = tomorrow
+WHERE DATE(debut) = $1  // Change to use deadlineTomorrowStr instead of tomorrowStr
+```
+
+**Also needs:**
+- Category filtering verification (currently works correctly via lines 1381-1420)
+- Finale exclusion (add `AND LOWER(t.nom) NOT LIKE '%finale%'` similar to line 990)
+- Test with actual tournament data before/after fix
+
+**Related:**
+- Tournament alert system (lines 983-997) correctly excludes finales as of V 2.0.363
+- All manual email flows (convocations, relances, results) use `debut` correctly
+- TIMELINES-AUDIT.html identified unused `tournoi_ext.fin` column (technical debt)
+
 ## Future Work / Roadmap
 
 ### 🎯 V3.0 Release — Off-Season 2026 (June-August)

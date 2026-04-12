@@ -390,14 +390,15 @@
 <body>
   <div class="container">
     <header>
-      <h1>📊 Audit Complet des Timelines</h1>
+      <h1>📊 Audit Complet des Timelines V2</h1>
       <p>Tournament Management & Player App</p>
-      <p style="margin-top: 10px; font-size: 14px;">Date: 11 avril 2026</p>
+      <p style="margin-top: 10px; font-size: 14px;">Version initiale: 11 avril 2026 | <strong>Mise à jour V2: 12 avril 2026</strong></p>
     </header>
 
     <nav>
       <h3>Navigation rapide</h3>
       <ul>
+        <li><a href="#updates-v2">🆕 Mises à jour V2</a></li>
         <li><a href="#vue-ensemble">Vue d'ensemble</a></li>
         <li><a href="#parametres">Paramètres actuels</a></li>
         <li><a href="#player-app">Player App</a></li>
@@ -410,6 +411,95 @@
     </nav>
 
     <main>
+      <!-- MISES À JOUR V2 -->
+      <section id="updates-v2">
+        <h2>🆕 Mises à jour V2 (12 avril 2026)</h2>
+
+        <div class="alert alert-success">
+          <h3>✅ État actuel : Timelines PROPRES pour la production</h3>
+          <p>Après analyse approfondie, les timelines sont fonctionnelles en production. Les flows manuels (convocations, relances, résultats) utilisent tous <code>debut</code> correctement.</p>
+        </div>
+
+        <h3>🚨 Bug critique identifié : Scheduler automatique de rappels</h3>
+        <div class="alert alert-danger">
+          <p><strong>Status:</strong> BUG ACTIF en production (server.js lignes 1339-1495)</p>
+          <p><strong>Fonction:</strong> <code>checkAutomaticReminders()</code></p>
+
+          <h4>Problème :</h4>
+          <p>Le scheduler vérifie les tournois où <strong>le jour du tournoi</strong> (<code>debut</code>) = demain, au lieu de vérifier les tournois où <strong>la clôture des inscriptions</strong> = demain.</p>
+
+          <pre style="background: #f8f9fa; padding: 15px; border-radius: 6px; border-left: 4px solid #dc3545;">
+// ACTUEL (INCORRECT) - Ligne 1361
+WHERE DATE(debut) = $1  // Trouve les tournois qui ont lieu DEMAIN
+
+// DEVRAIT ÊTRE
+WHERE DATE(debut) = DATE('now', '+8 days')
+// Tournoi dans 8 jours = deadline dans 7 jours = rappel J-1 avant deadline</pre>
+
+          <h4>Impact :</h4>
+          <ul>
+            <li>❌ Envoie "Dernier jour pour s'inscrire !" la veille du tournoi</li>
+            <li>❌ Les inscriptions devraient déjà être fermées (J-7 avant tournoi)</li>
+            <li>✅ Impact FAIBLE : scheduler retourne probablement 0 résultats (joueurs déjà inscrits)</li>
+            <li>⚠️ Annule l'intérêt de la fonctionnalité de rappel automatique</li>
+          </ul>
+
+          <h4>Contexte timeline (Player App) :</h4>
+          <ul>
+            <li><strong>J-28 :</strong> Inscriptions ouvertes (configurable via <code>inscription_opens_days_before</code>)</li>
+            <li><strong>J-7 :</strong> Inscriptions fermées (codé en dur dans Player App adapters)</li>
+            <li><strong>J-0 :</strong> Jour du tournoi</li>
+            <li><strong>Rappel devrait être envoyé :</strong> J-8 (1 jour avant deadline = 8 jours avant tournoi)</li>
+          </ul>
+        </div>
+
+        <h3>✅ Ce qui fonctionne correctement</h3>
+        <ul>
+          <li><span class="badge badge-success">✅</span> Convocations manuelles (utilisent <code>debut</code>)</li>
+          <li><span class="badge badge-success">✅</span> Résultats tournoi (utilisent <code>debut</code>)</li>
+          <li><span class="badge badge-success">✅</span> Relances manuelles (utilisent <code>debut</code>)</li>
+          <li><span class="badge badge-success">✅</span> Toutes les notifications automatiques (création, modification, annulation, qualification)</li>
+          <li><span class="badge badge-success">✅</span> Tournament alerts (V 2.0.363 - exclut les finales correctement)</li>
+          <li><span class="badge badge-success">✅</span> Filtrage par catégorie dans le scheduler (lignes 1381-1420)</li>
+        </ul>
+
+        <h3>⚠️ Dette technique identifiée</h3>
+        <ul>
+          <li><span class="badge badge-warning">⚠️</span> Colonne <code>tournoi_ext.fin</code> existe mais inutilisée (pollution)</li>
+          <li><span class="badge badge-warning">⚠️</span> 8 paramètres de seuils définis mais non utilisés (tous les délais sont codés en dur)</li>
+          <li><span class="badge badge-warning">⚠️</span> Pas de scheduler d'emails automatiques cassé actif (contrairement à l'hypothèse initiale)</li>
+        </ul>
+
+        <h3>📝 Actions recommandées</h3>
+        <ol>
+          <li><strong>Priorité HAUTE :</strong> Corriger le scheduler de rappels automatiques
+            <pre style="background: #f8f9fa; padding: 15px; border-radius: 6px; margin-top: 10px;">
+// Calculer la date de deadline (7 jours avant tournoi)
+const deadlineTomorrow = new Date(parisNow);
+deadlineTomorrow.setDate(deadlineTomorrow.getDate() + 8);
+const deadlineTomorrowStr = deadlineTomorrow.toISOString().split('T')[0];
+
+// Trouver tournois où deadline = demain
+WHERE DATE(debut) = $1  // Utiliser deadlineTomorrowStr au lieu de tomorrowStr
+  AND LOWER(t.nom) NOT LIKE '%finale%'  // Exclure finales (comme ligne 990)</pre>
+          </li>
+          <li><strong>Priorité MOYENNE :</strong> Supprimer colonne <code>fin</code> (cleanup technique)</li>
+          <li><strong>Priorité BASSE :</strong> Implémenter les paramètres de seuils configurables (V3.0)</li>
+        </ol>
+
+        <div class="alert alert-info">
+          <strong>Documentation mise à jour :</strong>
+          <ul>
+            <li>✅ CLAUDE.md - Section "Known Issues & Critical Bugs" ajoutée</li>
+            <li>✅ Guide Utilisateur - Section "Calendrier des Tournois et Délais d'Inscription" ajoutée</li>
+            <li>✅ TIMELINES-AUDIT.html V2 - Ce document</li>
+          </ul>
+        </div>
+      </section>
+
+      <hr style="margin: 60px 0; border: none; border-top: 2px solid #e9ecef;">
+
+      <!-- VUE D'ENSEMBLE -->
       <!-- VUE D'ENSEMBLE -->
       <section id="vue-ensemble">
         <h2>📊 Vue d'ensemble - Cycle de vie d'un tournoi</h2>

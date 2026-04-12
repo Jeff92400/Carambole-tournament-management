@@ -894,6 +894,45 @@ router.get('/subscription-status', authenticateToken, async (req, res) => {
 });
 
 /**
+ * GET /api/push/subscribed-licences
+ * Get array of licences with active push subscriptions (for bulk send selector)
+ * Returns: { count, licences: ['170229G', '123456A', ...] }
+ */
+router.get('/subscribed-licences', authenticateToken, async (req, res) => {
+  try {
+    const orgId = req.user.organizationId || null;
+
+    // Get licences of players with active push subscriptions
+    const subscribedPlayers = await new Promise((resolve, reject) => {
+      db.all(
+        `SELECT DISTINCT pa.licence
+         FROM player_accounts pa
+         INNER JOIN push_subscriptions ps ON ps.player_account_id = pa.id
+         WHERE ($1::int IS NULL OR pa.organization_id = $1)
+           AND pa.push_enabled = true
+         ORDER BY pa.licence ASC`,
+        [orgId],
+        (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows || []);
+        }
+      );
+    });
+
+    const licences = subscribedPlayers.map(p => p.licence);
+
+    res.json({
+      count: licences.length,
+      licences: licences
+    });
+
+  } catch (error) {
+    console.error('[Push Subscribed Licences] Error:', error);
+    res.status(500).json({ error: 'Erreur lors de la récupération des licences' });
+  }
+});
+
+/**
  * GET /api/push/subscribed-players
  * Get list of players with active push subscriptions
  * Returns: array of { licence, first_name, last_name, subscription_count }
