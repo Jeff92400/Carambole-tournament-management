@@ -1824,9 +1824,12 @@
             <div id="modeCard-standard" onclick="selectQualificationMode('standard')" style="flex: 1; min-width: 220px; padding: 20px; border: 2px solid #ddd; border-radius: 10px; cursor: pointer; transition: all 0.2s ease; background: white;">
               <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
                 <span style="font-size: 24px;">🏆</span>
-                <strong style="font-size: 16px;">3 Tournois Qualificatifs</strong>
+                <strong style="font-size: 16px;">Tournois Qualificatifs (cumul de points)</strong>
               </div>
-              <p style="margin: 0; color: #666; font-size: 13px;">3 tournois (T1, T2, T3) avec cumul des points. Les meilleurs joueurs accèdent à la Finale Départementale.</p>
+              <p id="modeCard-standard-desc" style="margin: 0 0 10px 0; color: #666; font-size: 13px;">Tournois qualificatifs avec cumul des points. Les meilleurs joueurs accèdent à la Finale Départementale.</p>
+              <div id="modeCard-standard-config" style="margin-top: 10px; padding: 8px 10px; background: #f0f4f8; border-radius: 4px; font-size: 12px; color: #555;">
+                <strong>✓ Configuration actuelle :</strong> <span id="rankingTournamentsDisplay">Chargement...</span>
+              </div>
             </div>
             <div id="modeCard-journees" onclick="selectQualificationMode('journees')" style="flex: 1; min-width: 220px; padding: 20px; border: 2px solid #ddd; border-radius: 10px; cursor: pointer; transition: all 0.2s ease; background: white;">
               <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
@@ -1851,13 +1854,18 @@
         </div>
       </div>
 
-      <!-- Accordion 2: Types de tournoi -->
+      <!-- Accordion 2: Typologie des tournois -->
       <div class="accordion-panel" id="accordion-types">
         <div class="accordion-header" onclick="toggleAccordion('accordion-types')">
-          <div class="accordion-title"><span class="accordion-icon">&#9654;</span><strong>Types de tournoi</strong></div>
+          <div class="accordion-title"><span class="accordion-icon">&#9654;</span><strong>Typologie des tournois</strong></div>
           <span class="accordion-summary" id="summary-types">Chargement...</span>
         </div>
         <div class="accordion-body">
+          <p style="margin-bottom: 15px; color: #666;">
+            Définissez les différents types de tournois de votre saison (T1, T2, T3, Finale, etc.).
+            Cochez <strong>"Classement"</strong> pour les tournois qui comptent dans le classement de saison,
+            et <strong>"Finale"</strong> pour le tournoi de fin de saison.
+          </p>
           <div id="tournamentTypesTable" style="overflow-x: auto;">
             <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
               <thead>
@@ -5414,12 +5422,33 @@
         if (response.ok) {
           const types = await response.json();
           renderTournamentTypes(types);
+          updateRankingTournamentsDisplay(types);
         }
       } catch (error) {
         console.error('Error loading tournament types:', error);
         document.getElementById('tournamentTypesBody').innerHTML =
           '<tr><td colspan="6" style="text-align: center; padding: 20px; color: #dc3545;">Erreur de chargement</td></tr>';
       }
+    }
+
+    function updateRankingTournamentsDisplay(types) {
+      const displayEl = document.getElementById('rankingTournamentsDisplay');
+      if (!displayEl) return;
+
+      const rankingTournaments = types.filter(t => t.include_in_ranking);
+
+      if (rankingTournaments.length === 0) {
+        displayEl.innerHTML = '<span style="color: #dc3545;">Aucun tournoi configuré pour le classement</span>';
+        return;
+      }
+
+      // Sort by tournament number
+      rankingTournaments.sort((a, b) => a.tournament_number - b.tournament_number);
+
+      // Build display string: "T1, T2, T3 (3 tournois comptant pour le classement)"
+      const codes = rankingTournaments.map(t => t.code).join(', ');
+      const count = rankingTournaments.length;
+      displayEl.textContent = `${codes} (${count} tournoi${count > 1 ? 's' : ''} comptant pour le classement)`;
     }
 
     function renderTournamentTypes(types) {
@@ -5485,6 +5514,7 @@
           msgDiv.textContent = 'Type de tournoi mis à jour';
           msgDiv.style.background = '#d4edda';
           msgDiv.style.color = '#155724';
+          loadTournamentTypes(); // Refresh to update ranking tournaments display
         } else {
           const data = await response.json().catch(() => ({}));
           throw new Error(data.error || 'Erreur lors de la sauvegarde');
