@@ -247,7 +247,8 @@ body {
   box-shadow: 0 4px 12px color-mix(in srgb, var(--color-secondary) 35%, transparent);
 }
 
-.navbar .nav-links > a.active {
+.navbar .nav-links > a.active,
+.navbar .nav-links > .nav-dropdown > .nav-dropdown-btn.active {
   background: linear-gradient(135deg, var(--color-secondary) 0%, var(--color-secondary-dark) 100%);
   color: white;
   box-shadow:
@@ -304,9 +305,15 @@ body {
   background: transparent;
 }
 
-.nav-dropdown:hover .nav-dropdown-content {
+.nav-dropdown:hover .nav-dropdown-content,
+.nav-dropdown:focus-within .nav-dropdown-content {
   display: block;
   animation: dropdownFade 0.2s ease;
+}
+
+/* Ensure dropdown works even when button has active class */
+.nav-dropdown > .nav-dropdown-btn.active {
+  pointer-events: auto;
 }
 
 @keyframes dropdownFade {
