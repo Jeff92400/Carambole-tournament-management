@@ -1353,12 +1353,12 @@
       <div style="margin-bottom: 30px; padding: 20px; background: #e8f5e9; border-left: 4px solid #28a745; border-radius: 6px;">
         <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 10px;">
           <span style="font-size: 24px;">✅</span>
-          <strong style="font-size: 16px; color: #2e7d32;">Fonctionnement normal (rien à faire)</strong>
+          <strong style="font-size: 16px; color: #2e7d32;">Fonctionnement automatique - Aucune action requise</strong>
         </div>
         <p style="margin: 0; color: #555; line-height: 1.6;">
-          <strong>La saison est gérée automatiquement.</strong><br>
-          En septembre, l'application passe automatiquement à la saison suivante (ex: septembre 2026 → saison 2026-2027).<br>
-          Tous les tableaux de bord, classements et rapports utilisent automatiquement la bonne saison.
+          <strong>La saison est détectée automatiquement chaque 1er septembre.</strong><br>
+          Le système passe automatiquement à la saison suivante (ex: septembre 2026 → saison 2026-2027).<br>
+          Tous les tableaux de bord, classements et rapports s'ajustent automatiquement. <strong>Vous n'avez rien à faire.</strong>
         </p>
       </div>
 
@@ -1372,21 +1372,25 @@
         </div>
       </div>
 
-      <!-- When to intervene manually -->
+      <!-- Optional advanced functions -->
       <hr style="margin: 30px 0; border: none; border-top: 2px solid #ddd;">
 
-      <div style="margin-bottom: 20px; padding: 20px; background: #fff3cd; border-left: 4px solid #ffc107; border-radius: 6px;">
+      <div style="margin-bottom: 20px; padding: 20px; background: #e7f3ff; border-left: 4px solid #1F4788; border-radius: 6px;">
         <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 10px;">
-          <span style="font-size: 24px;">⚠️</span>
-          <strong style="font-size: 16px; color: #856404;">Situations nécessitant une intervention manuelle</strong>
+          <span style="font-size: 24px;">ℹ️</span>
+          <strong style="font-size: 16px; color: #1F4788;">Fonctions optionnelles (usage avancé)</strong>
         </div>
         <p style="margin: 0; color: #555; line-height: 1.6;">
-          <strong>Vous devez intervenir uniquement dans ces cas :</strong>
+          Les sections ci-dessous sont <strong>optionnelles</strong> et destinées à des cas d'usage spécifiques :
         </p>
         <ul style="margin: 10px 0 0 0; padding-left: 20px; color: #555; line-height: 1.8;">
-          <li><strong>Transition de saison (juin-août)</strong> : Pour commencer la préparation de la prochaine saison (créer des tournois, faire des tests) avant septembre</li>
-          <li><strong>Fin de saison (juin)</strong> : Pour archiver les statistiques des clubs avant de passer à la saison suivante</li>
+          <li><strong>Changer manuellement la saison</strong> : Uniquement si vous voulez préparer la prochaine saison en avance (juin-août)</li>
+          <li><strong>Archiver les statistiques</strong> : Uniquement si vous utilisez la vue Club dans l'app joueur (juin)</li>
+          <li><strong>Mois de début de saison</strong> : Uniquement si votre saison ne commence PAS en septembre</li>
         </ul>
+        <p style="margin: 10px 0 0 0; color: #666; font-size: 13px; font-style: italic;">
+          💡 La plupart des CDBs n'utilisent jamais ces fonctions.
+        </p>
       </div>
 
       <!-- Manual Season Override (collapsible, advanced) -->
@@ -1395,6 +1399,9 @@
           🔧 Changer manuellement la saison en cours (avancé)
         </summary>
         <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #eee;">
+          <div style="margin-bottom: 15px; padding: 12px; background: #fff3cd; border-left: 3px solid #ffc107; border-radius: 4px; font-size: 13px;">
+            <strong>⚠️ Attention :</strong> Cette fonction est <strong>rarement nécessaire</strong>. N'utilisez-la que si vous devez créer des tournois pour la saison suivante avant septembre.
+          </div>
           <p style="color: #666; font-size: 14px; margin-bottom: 15px;">
             Utilisez ceci <strong>uniquement pendant la période de transition (juin-août)</strong> pour forcer le passage à la saison suivante avant septembre.
             Par exemple, pour préparer la saison 2026-2027 dès le mois de juillet.
