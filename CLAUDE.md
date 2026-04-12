@@ -101,7 +101,7 @@ git push origin main
 
 ## Versioning
 
-**Current Version:** V 2.0.333 04/26
+**Current Version:** V 2.0.367 04/26
 
 Version is displayed at the bottom of the login screen (`frontend/login.html`).
 
@@ -160,13 +160,14 @@ cdbhs-tournament-management/
 | `tournaments.js` | Tournament results, CSV import |
 | `inscriptions.js` | Player registrations (IONOS + Player App sources) |
 | `email.js` | Convocations, results emails via Resend |
-| `emailing.js` | Mass campaigns, scheduled emails |
+| `emailing.js` | Mass campaigns, scheduled emails, push notifications |
 | `rankings.js` | Season rankings calculation |
 | `clubs.js` | Club management with aliases |
 | `player-accounts.js` | Player App account management |
-| `announcements.js` | Global announcements for Player App |
+| `announcements.js` | Global announcements for Player App (with app-installed filtering) |
 | `player-invitations.js` | Invitation emails for Player App registration |
 | `wordpress.js` | WordPress XML-RPC connector for publishing convocations |
+| `push.js` | Push notification sending, subscription management, player targeting |
 
 ## Key Frontend Pages
 
@@ -180,6 +181,42 @@ cdbhs-tournament-management/
 | `player-invitations.html` | Player App invitation management |
 | `settings-admin.html` | System administration |
 | `public-tournament.html` | Public tournament page (no auth, org-branded) |
+
+## Player Filtering for Communications
+
+The app supports targeted communications via push notifications and announcements with player filtering capabilities.
+
+### Push Notifications (emailing.html → Notifs tab)
+**Selector: "Joueurs avec notifications actives"**
+- Sends push notifications only to players who have enabled push notifications in the Player App
+- Backend endpoint: `GET /api/push/subscribed-licences` returns list of licences with active push subscriptions
+- Frontend displays real-time count: "🔔 Joueurs avec notifications actives (21)"
+- Filters by `player_accounts.push_enabled = true` AND active `push_subscriptions`
+
+**Admin Summary Notification:**
+- When admin sends a push notification, they receive a summary (not full copy)
+- Format: "📬 Notification envoyée" + "✅ X joueur(s) ont reçu: [titre]"
+- Implemented in `backend/routes/push.js` (lines 1156-1161)
+
+### Announcements (emailing.html → Annonces tab)
+**Selector: "Joueurs avec l'app installée"**
+- Shows announcements only to players who have created a Player App account
+- Backend filters announcements in `/api/player/announcements/active` based on `target_type` column
+- `target_type = 'all'` → visible to everyone (default)
+- `target_type = 'with_app'` → visible only to players with Player App account
+- Player app check: queries `player_accounts` table for matching licence number (case-insensitive)
+
+**Implementation Details:**
+- `announcements` table column: `target_type VARCHAR(20) DEFAULT 'all'`
+- Filtering happens server-side in `backend/routes/announcements.js` (lines 205-242)
+- Transparent to Player App (receives pre-filtered list via `/active` endpoint)
+- Frontend displays count: "📱 Joueurs avec l'app installée (57)"
+
+**Files Modified (April 2026):**
+- `backend/routes/push.js` - Added `/subscribed-licences` endpoint, admin summary notification
+- `backend/routes/announcements.js` - Added `target_type` filtering logic, player app check
+- `backend/db-postgres.js` - Added `target_type` column to announcements table
+- `frontend/emailing.html` - Added radio selectors for both tabs with dynamic counts
 
 ## Database
 
@@ -195,6 +232,8 @@ Key tables:
 - `player_invitations` - Tracks invitations sent to players for Player App registration
 - `game_parameters` - Default Distance/Reprises per mode+category for the season
 - `tournament_parameter_overrides` - Per-tournament overrides for Distance/Reprises
+- `announcements` - Global announcements with target_type filtering ('all' or 'with_app')
+- `push_subscriptions` - Web push subscription endpoints for player notifications
 
 ## Environment Variables
 
