@@ -323,13 +323,6 @@ body {
   opacity: 1 !important;
 }
 
-/* DEBUG: Make dropdown always visible temporarily to test */
-.nav-dropdown .nav-dropdown-content {
-  display: block !important;
-  visibility: visible !important;
-  opacity: 1 !important;
-}
-
 @keyframes dropdownFade {
   from {
     opacity: 0;
