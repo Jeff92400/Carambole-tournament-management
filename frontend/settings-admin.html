@@ -1981,7 +1981,27 @@
           <span class="accordion-summary" id="summary-bareme">Chargement...</span>
         </div>
         <div class="accordion-body">
+          <p style="margin-bottom: 15px; color: #666;">
+            Configurez les points attribués pour chaque résultat de match (victoire, match nul, défaite).
+          </p>
           <div id="scoringRuleBlocks" style="margin-top: 10px;">
+            <div style="text-align: center; padding: 20px; color: #666;">Chargement...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Accordion 5: Bonus sur mesure -->
+      <div class="accordion-panel" id="accordion-bonus-custom">
+        <div class="accordion-header" onclick="toggleAccordion('accordion-bonus-custom')">
+          <div class="accordion-title"><span class="accordion-icon">&#9654;</span><strong>Bonus sur mesure</strong></div>
+          <span class="accordion-summary" id="summary-bonus-custom">Chargement...</span>
+        </div>
+        <div class="accordion-body">
+          <p style="margin-bottom: 15px; color: #666;">
+            Créez des bonus personnalisés avec des conditions basées sur la moyenne, le nombre de joueurs, la série, etc.
+            Chaque bonus apparaîtra comme une colonne distincte dans les résultats.
+          </p>
+          <div id="customBonusBlocks" style="margin-top: 10px;">
             <div style="text-align: center; padding: 20px; color: #666;">Chargement...</div>
           </div>
           <div style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
@@ -1997,7 +2017,7 @@
         </div>
       </div>
 
-      <!-- Accordion 5: Classement saisonnier -->
+      <!-- Accordion 6: Classement saisonnier -->
       <div class="accordion-panel" id="accordion-ranking">
         <div class="accordion-header" onclick="toggleAccordion('accordion-ranking')">
           <div class="accordion-title"><span class="accordion-icon">&#9654;</span><strong>Classement saisonnier</strong></div>
@@ -2224,7 +2244,16 @@
       const baremeEl = document.getElementById('summary-bareme');
       if (baremeEl) {
         const blocks = document.querySelectorAll('#scoringRuleBlocks .scoring-block');
-        baremeEl.textContent = blocks.length > 0 ? blocks.length + ' bloc(s)' : 'Aucun bloc';
+        baremeEl.textContent = blocks.length > 0 ? 'Victoire/Nul/Défaite' : 'Non configuré';
+      }
+      // Bonus sur mesure
+      const bonusCustomEl = document.getElementById('summary-bonus-custom');
+      if (bonusCustomEl) {
+        const customBlocks = document.querySelectorAll('#customBonusBlocks .scoring-block');
+        const activeBlocks = document.querySelectorAll('#customBonusBlocks .scoring-block:not(.inactive)');
+        bonusCustomEl.textContent = customBlocks.length > 0
+          ? `${activeBlocks.length} actif(s) sur ${customBlocks.length}`
+          : 'Aucun';
       }
       // Classement saisonnier
       const rankEl = document.getElementById('summary-ranking');
@@ -5985,6 +6014,7 @@
           // Filter out MOYENNE_BONUS — handled by the dedicated Bonus Moyenne section
           allScoringRules = rules.filter(r => r.rule_type !== 'MOYENNE_BONUS');
           renderScoringBlocks(allScoringRules);
+          renderCustomBonusBlocks(allScoringRules);
         }
       } catch (error) {
         console.error('Error loading scoring rules:', error);
@@ -5993,17 +6023,41 @@
 
     function renderScoringBlocks(rules) {
       const container = document.getElementById('scoringRuleBlocks');
+
+      // Only show BASE_VDL (match points) in this section
+      const baseRules = rules.filter(r => r.rule_type === 'BASE_VDL');
+
+      if (baseRules.length === 0) {
+        container.innerHTML = '<div style="text-align: center; padding: 20px; color: #666;">Aucun barème configuré</div>';
+        return;
+      }
+
+      renderBlocksHTML(container, ['BASE_VDL'], rules, false);
+    }
+
+    function renderCustomBonusBlocks(rules) {
+      const container = document.getElementById('customBonusBlocks');
+
+      // Get all custom bonus blocks (everything except BASE_VDL)
       const blocks = [];
       const seen = new Set();
       rules.forEach(r => {
-        if (!seen.has(r.rule_type)) {
+        if (r.rule_type !== 'BASE_VDL' && !seen.has(r.rule_type)) {
           seen.add(r.rule_type);
           blocks.push(r.rule_type);
         }
       });
 
       if (blocks.length === 0) {
-        container.innerHTML = '<div style="text-align: center; padding: 20px; color: #666;">Aucun barème configuré</div>';
+        container.innerHTML = '<div style="text-align: center; padding: 20px; color: #666;">Aucun bonus personnalisé configuré</div>';
+        return;
+      }
+
+      renderBlocksHTML(container, blocks, rules, true);
+    }
+
+    function renderBlocksHTML(container, blocks, rules, showToggle) {
+      if (blocks.length === 0) {
         return;
       }
 
