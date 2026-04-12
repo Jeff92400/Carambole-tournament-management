@@ -8544,6 +8544,7 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
       tab.addEventListener('click', () => {
         if (tab.dataset.tab === 'announcements') {
           loadAnnouncements();
+          loadAudienceCount(); // Load player count
         }
       });
     });
