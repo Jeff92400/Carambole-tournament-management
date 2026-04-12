@@ -307,13 +307,20 @@ body {
 
 .nav-dropdown:hover .nav-dropdown-content,
 .nav-dropdown:focus-within .nav-dropdown-content {
-  display: block;
+  display: block !important;
   animation: dropdownFade 0.2s ease;
 }
 
 /* Ensure dropdown works even when button has active class */
 .nav-dropdown > .nav-dropdown-btn.active {
   pointer-events: auto;
+}
+
+/* Force dropdown to show on hover even when button is active */
+.nav-dropdown:hover > .nav-dropdown-content {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
 }
 
 @keyframes dropdownFade {
