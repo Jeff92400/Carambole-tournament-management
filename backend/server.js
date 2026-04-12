@@ -980,13 +980,14 @@ async function checkTournamentAlerts() {
             'organization_short_name', 'summary_email'
           ]);
 
-      // Get upcoming tournaments for this org only
+      // Get upcoming tournaments for this org only (exclude finales - they have their own relance system)
       const tournamentsNeeding = await new Promise((resolve, reject) => {
         db.all(`
           SELECT t.*
           FROM tournoi_ext t
           LEFT JOIN tournament_relances r ON t.tournoi_id = r.tournoi_id
           WHERE t.debut >= $1 AND t.debut <= $2 AND r.tournoi_id IS NULL
+            AND LOWER(t.nom) NOT LIKE '%finale%'
             AND ($3::int IS NULL OR t.organization_id = $3)
           ORDER BY t.debut ASC
         `, [today.toISOString().split('T')[0], twoWeeksFromNow.toISOString().split('T')[0], orgIdNum], (err, rows) => {
