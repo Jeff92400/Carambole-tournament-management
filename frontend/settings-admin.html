@@ -5433,12 +5433,17 @@
 
     function updateRankingTournamentsDisplay(types) {
       const displayEl = document.getElementById('rankingTournamentsDisplay');
+      const descEl = document.getElementById('modeCard-standard-desc');
+
       if (!displayEl) return;
 
       const rankingTournaments = types.filter(t => t.include_in_ranking);
 
       if (rankingTournaments.length === 0) {
         displayEl.innerHTML = '<span style="color: #dc3545;">Aucun tournoi configuré pour le classement</span>';
+        if (descEl) {
+          descEl.textContent = 'Tournois qualificatifs avec cumul des points. Les meilleurs joueurs accèdent à la Finale Départementale.';
+        }
         return;
       }
 
@@ -5449,6 +5454,11 @@
       const codes = rankingTournaments.map(t => t.code).join(', ');
       const count = rankingTournaments.length;
       displayEl.textContent = `${codes} (${count} tournoi${count > 1 ? 's' : ''} comptant pour le classement)`;
+
+      // Update description text to include count
+      if (descEl) {
+        descEl.textContent = `${count} tournoi${count > 1 ? 's' : ''} qualificatif${count > 1 ? 's' : ''} avec cumul des points. Les meilleurs joueurs accèdent à la Finale Départementale.`;
+      }
     }
 
     function renderTournamentTypes(types) {
