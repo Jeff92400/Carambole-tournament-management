@@ -1153,10 +1153,10 @@ async function sendAdminCopyForBulk(orgId, playerCount, notification, recipientL
       return;
     }
 
-    // Create admin notification with player count
+    // Create admin summary notification (just the count, not the full message)
     const adminNotification = {
-      title: `[Copie Admin] ${notification.title}`,
-      body: `📬 Notification envoyée à ${playerCount} joueur(s)\n\n${notification.body}`,
+      title: `📬 Notification envoyée`,
+      body: `✅ ${playerCount} joueur(s) ont reçu:\n"${notification.title}"`,
       url: notification.url
     };
 
