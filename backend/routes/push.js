@@ -570,10 +570,18 @@ async function sendPushToPlayers(licences, orgId, notification) {
   let totalSent = 0;
   let totalFailed = 0;
 
+  // Send to all players with skipAdminCopy flag to prevent spam
   for (const licence of licences) {
-    const result = await sendPushToPlayer(licence, orgId, notification);
+    const result = await sendPushToPlayer(licence, orgId, notification, { skipAdminCopy: true });
     totalSent += result.sent;
     totalFailed += result.failed;
+  }
+
+  // Send ONE admin copy after all players have been notified
+  if (totalSent > 0) {
+    sendAdminCopyForBulk(orgId, totalSent, notification).catch(err => {
+      console.error('[ADMIN COPY BULK] Failed to send admin copy:', err.message);
+    });
   }
 
   return {
@@ -785,7 +793,8 @@ router.post('/bulk', authenticateToken, async (req, res) => {
     // Construct full URL - if url starts with #, prepend Player App base URL
     let fullUrl = url || '/';
     if (fullUrl.startsWith('#')) {
-      fullUrl = `${PLAYER_APP_URL}/${fullUrl}`;
+      // Remove the leading # and construct proper hash URL
+      fullUrl = `${PLAYER_APP_URL}${fullUrl}`;
     } else if (fullUrl === '') {
       fullUrl = PLAYER_APP_URL;
     }
@@ -1065,6 +1074,48 @@ async function sendAdminCopyIfEnabled(orgId, playerLicence, notification) {
 
   } catch (error) {
     console.error('[ADMIN COPY] Error:', error.message);
+    // Don't throw - this is fire-and-forget
+  }
+}
+
+/**
+ * HELPER FUNCTION: Send ONE admin copy for bulk notifications
+ * @param {number} orgId - Organization ID
+ * @param {number} playerCount - Number of players who received the notification
+ * @param {object} notification - { title, body, url }
+ */
+async function sendAdminCopyForBulk(orgId, playerCount, notification) {
+  try {
+    const appSettings = require('../utils/app-settings');
+
+    // Check if admin copy is enabled
+    const isEnabled = await appSettings.getOrgSetting(orgId, 'push_admin_copy_enabled');
+
+    if (isEnabled !== 'true' && isEnabled !== true) {
+      return; // Feature disabled
+    }
+
+    // Get the admin's licence from organization settings
+    const adminLicence = await appSettings.getOrgSetting(orgId, 'push_admin_licence');
+
+    if (!adminLicence) {
+      console.log('[ADMIN COPY BULK] No admin licence configured for org', orgId);
+      return;
+    }
+
+    // Create admin notification with player count
+    const adminNotification = {
+      title: `[Copie Admin] ${notification.title}`,
+      body: `📬 Notification envoyée à ${playerCount} joueur(s)\n\n${notification.body}`,
+      url: notification.url
+    };
+
+    // Send to admin with skipAdminCopy flag to prevent infinite loop
+    console.log(`[ADMIN COPY BULK] Sending copy to admin (licence: ${adminLicence}) for ${playerCount} player(s)`);
+    await sendPushToPlayer(adminLicence, orgId, adminNotification, { skipAdminCopy: true });
+
+  } catch (error) {
+    console.error('[ADMIN COPY BULK] Error:', error.message);
     // Don't throw - this is fire-and-forget
   }
 }
