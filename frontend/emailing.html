@@ -1698,10 +1698,10 @@
       <!-- Test Email Input -->
       <div style="max-width: 600px; margin: 0 auto 30px auto; padding: 20px; background: #f8f9fa; border-radius: 12px; border-left: 4px solid var(--color-primary);">
         <div style="display: flex; align-items: center; gap: 15px;">
-          <label for="testEmailInput" style="font-weight: 600; font-size: 14px; color: #333; white-space: nowrap;">📧 Email de test :</label>
+          <label for="templateTestEmail" style="font-weight: 600; font-size: 14px; color: #333; white-space: nowrap;">📧 Email de test :</label>
           <input
             type="email"
-            id="testEmailInput"
+            id="templateTestEmail"
             placeholder="Entrez l'email de destination..."
             required
             style="flex: 1; padding: 10px 14px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 14px; transition: all 0.2s;"
@@ -2521,23 +2521,30 @@
 
     // Load user's email to pre-fill test email input
     async function loadUserEmailForTest() {
-      const testEmailInput = document.getElementById('testEmailInput');
+      const testEmailInput = document.getElementById('templateTestEmail');
       const statusDiv = document.getElementById('testEmailStatus');
-      if (!testEmailInput) return;
+      if (!testEmailInput) {
+        console.error('[loadUserEmailForTest] templateTestEmail input not found!');
+        return;
+      }
 
       try {
         const response = await authFetch(`${API_URL}/auth/me`);
         const data = await response.json();
 
+        console.log('[loadUserEmailForTest] Response data:', data);
+
         if (data.email) {
           testEmailInput.value = data.email;
           testEmailInput.style.background = '#e8f5e9';
           testEmailInput.style.borderColor = '#4CAF50';
+          console.log(`[loadUserEmailForTest] Email pre-filled: ${data.email}`);
           if (statusDiv) {
             statusDiv.innerHTML = `✅ <strong>Email pré-rempli:</strong> ${data.email} (depuis votre compte)`;
             statusDiv.style.color = '#2e7d32';
           }
         } else {
+          console.log('[loadUserEmailForTest] No email in /auth/me response');
           testEmailInput.placeholder = 'Aucun email configuré - veuillez saisir une adresse';
           testEmailInput.style.background = '#fff3cd';
           testEmailInput.style.borderColor = '#ffc107';
@@ -2547,7 +2554,7 @@
           }
         }
       } catch (error) {
-        console.error('Failed to load user email:', error);
+        console.error('[loadUserEmailForTest] Error fetching email:', error);
         testEmailInput.placeholder = 'Entrez l\'email de destination...';
         if (statusDiv) {
           statusDiv.innerHTML = 'Veuillez entrer l\'adresse email où recevoir les tests';
@@ -2580,7 +2587,7 @@
       const originalText = button.textContent;
 
       // Get email from input field
-      const testEmailInput = document.getElementById('testEmailInput');
+      const testEmailInput = document.getElementById('templateTestEmail');
       const testEmail = testEmailInput.value.trim();
 
       // Validate email - STRICT validation
