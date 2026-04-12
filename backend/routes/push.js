@@ -578,8 +578,9 @@ async function sendPushToPlayers(licences, orgId, notification) {
   }
 
   // Send ONE admin copy after all players have been notified
+  // BUT: skip if admin is already in the recipient list (normalize licences for comparison)
   if (totalSent > 0) {
-    sendAdminCopyForBulk(orgId, totalSent, notification).catch(err => {
+    sendAdminCopyForBulk(orgId, totalSent, notification, licences).catch(err => {
       console.error('[ADMIN COPY BULK] Failed to send admin copy:', err.message);
     });
   }
@@ -1083,8 +1084,9 @@ async function sendAdminCopyIfEnabled(orgId, playerLicence, notification) {
  * @param {number} orgId - Organization ID
  * @param {number} playerCount - Number of players who received the notification
  * @param {object} notification - { title, body, url }
+ * @param {string[]} recipientLicences - Array of licences who received the notification
  */
-async function sendAdminCopyForBulk(orgId, playerCount, notification) {
+async function sendAdminCopyForBulk(orgId, playerCount, notification, recipientLicences = []) {
   try {
     const appSettings = require('../utils/app-settings');
 
@@ -1100,6 +1102,15 @@ async function sendAdminCopyForBulk(orgId, playerCount, notification) {
 
     if (!adminLicence) {
       console.log('[ADMIN COPY BULK] No admin licence configured for org', orgId);
+      return;
+    }
+
+    // Skip admin copy if admin is already in the recipient list
+    const normalizedAdminLicence = adminLicence.replace(/\s/g, '').toUpperCase();
+    const normalizedRecipients = recipientLicences.map(l => l.replace(/\s/g, '').toUpperCase());
+
+    if (normalizedRecipients.includes(normalizedAdminLicence)) {
+      console.log(`[ADMIN COPY BULK] Admin (${adminLicence}) is in recipient list - skipping admin copy to avoid duplicate`);
       return;
     }
 
