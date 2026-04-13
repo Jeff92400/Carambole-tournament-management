@@ -160,14 +160,15 @@
 
     .ddj-empty-state {
       text-align: center;
-      padding: 60px 20px;
+      padding: 80px 20px;
       color: #999;
     }
-    .ddj-empty-state img {
-      height: 64px;
-      width: 64px;
-      opacity: 0.4;
-      margin-bottom: 16px;
+    .ddj-empty-state .empty-logo {
+      height: 160px;
+      width: 160px;
+      opacity: 0.12;
+      margin-bottom: 24px;
+      filter: grayscale(30%);
     }
     .ddj-empty-state p {
       font-size: 1.1em;
@@ -213,7 +214,7 @@
 
       <!-- Empty state -->
       <div id="ddj-empty-state" class="ddj-empty-state" style="display: none;">
-        <img src="images/FrenchBillard-Icon-small.png" alt="">
+        <img id="ddj-empty-logo" class="empty-logo" src="images/FrenchBillard-Icon-small.png" alt="">
         <p>Aucune compétition programmée aujourd'hui</p>
       </div>
     </div>
@@ -252,6 +253,15 @@
     // Capitalize first letter
     document.getElementById('ddj-today-date').textContent =
       todayFormatted.charAt(0).toUpperCase() + todayFormatted.slice(1);
+
+    // Set org logo on empty state (reuse the header icon loaded by app-branding.js)
+    setTimeout(() => {
+      const headerIcon = document.getElementById('app-header-icon');
+      const emptyLogo = document.getElementById('ddj-empty-logo');
+      if (headerIcon && emptyLogo && headerIcon.src) {
+        emptyLogo.src = headerIcon.src;
+      }
+    }, 1000);
 
     // Logout
     document.getElementById('logoutBtn').addEventListener('click', (e) => {
