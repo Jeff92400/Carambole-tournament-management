@@ -282,7 +282,7 @@
       navBtn.style.padding = '8px 16px';
       navBtn.addEventListener('click', (e) => {
         e.preventDefault();
-        window.location.href = 'super-admin.html';
+        returnToSuperAdmin();
       });
     } else if (isAdmin) {
       navBtn.textContent = '← Retour';
