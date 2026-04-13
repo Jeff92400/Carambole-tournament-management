@@ -1,0 +1,19 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "tournament-app",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["start"],
+      "port": 3000,
+      "cwd": "/Users/jeffrallet/Personal App/Carambole-tournament-management"
+    },
+    {
+      "name": "player-app",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "port": 3001,
+      "cwd": "/Users/jeffrallet/Personal App/cdbhs-player-app"
+    }
+  ]
+}
