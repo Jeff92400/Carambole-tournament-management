@@ -266,15 +266,44 @@
       } catch (e) { /* keep default icon */ }
     })();
 
-    // Logout — redirect to CDB login page (not SA platform)
-    document.getElementById('logoutBtn').addEventListener('click', (e) => {
-      e.preventDefault();
-      // Build the CDB-specific login URL
-      const orgSlug = sessionStorage.getItem('orgSlug') || '';
-      sessionStorage.clear();
-      const loginUrl = orgSlug ? 'login.html?org=' + orgSlug : 'login.html';
-      window.location.href = loginUrl;
-    });
+    // Navigation button: depends on role
+    // - DdJ user: real logout → CDB login screen
+    // - Admin: back to CDB dashboard
+    // - Super Admin: back to SA dashboard (FFB level)
+    const navBtn = document.getElementById('logoutBtn');
+    const isSA = sessionStorage.getItem('isSuperAdmin') === 'true';
+    const isAdmin = userRole === 'admin';
+
+    if (isSA) {
+      navBtn.textContent = '← Retour Plateforme';
+      navBtn.style.background = 'linear-gradient(135deg, #6c757d, #495057)';
+      navBtn.style.color = 'white';
+      navBtn.style.borderRadius = '8px';
+      navBtn.style.padding = '8px 16px';
+      navBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        window.location.href = 'super-admin.html';
+      });
+    } else if (isAdmin) {
+      navBtn.textContent = '← Retour';
+      navBtn.style.background = 'linear-gradient(135deg, var(--color-primary, #1F4788), var(--color-secondary, #667eea))';
+      navBtn.style.color = 'white';
+      navBtn.style.borderRadius = '8px';
+      navBtn.style.padding = '8px 16px';
+      navBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        window.location.href = 'dashboard.html';
+      });
+    } else {
+      // DdJ user: real logout
+      navBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const orgSlug = sessionStorage.getItem('orgSlug') || '';
+        sessionStorage.clear();
+        const loginUrl = orgSlug ? 'login.html?org=' + orgSlug : 'login.html';
+        window.location.href = loginUrl;
+      });
+    }
 
     // Format date as DD/MM/YYYY
     function formatDate(dateStr) {
