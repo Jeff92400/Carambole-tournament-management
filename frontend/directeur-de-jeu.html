@@ -183,7 +183,7 @@
         <h2 style="margin-bottom: 0;"><img id="app-header-icon" src="images/FrenchBillard-Icon-small.png" alt="" style="height: 48px; width: 48px; vertical-align: middle; margin-right: 8px;"><span id="app-org-name" data-page-title="Directeur de Jeu">CDB</span></h2>
       </div>
       <div class="nav-links">
-        <a href="#" id="logoutBtn" class="nav-logout">Déconnexion</a>
+        <a href="#" id="ddjNavBtn" style="cursor: pointer;">Déconnexion</a>
       </div>
     </div>
 
@@ -270,7 +270,7 @@
     // - DdJ user: real logout → CDB login screen
     // - Admin: back to CDB dashboard
     // - Super Admin: back to SA dashboard (FFB level)
-    const navBtn = document.getElementById('logoutBtn');
+    const navBtn = document.getElementById('ddjNavBtn');
     const isSAImpersonating = !!sessionStorage.getItem('sa_token');  // SA impersonating a CDB
     const isAdmin = userRole === 'admin';
 
