@@ -271,10 +271,10 @@
     // - Admin: back to CDB dashboard
     // - Super Admin: back to SA dashboard (FFB level)
     const navBtn = document.getElementById('logoutBtn');
-    const isSA = sessionStorage.getItem('isSuperAdmin') === 'true';
+    const isSAImpersonating = !!sessionStorage.getItem('sa_token');  // SA impersonating a CDB
     const isAdmin = userRole === 'admin';
 
-    if (isSA) {
+    if (isSAImpersonating) {
       navBtn.textContent = '← Retour Plateforme';
       navBtn.style.background = 'linear-gradient(135deg, #6c757d, #495057)';
       navBtn.style.color = 'white';
