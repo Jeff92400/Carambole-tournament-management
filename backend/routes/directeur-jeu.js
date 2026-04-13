@@ -19,7 +19,7 @@ router.get('/competitions', authenticateToken, requireDdJ, (req, res) => {
 
   const query = `
     SELECT t.tournoi_id, t.nom, t.mode, t.categorie, t.debut, t.lieu, t.lieu_2,
-           t.is_split, t.tournament_number, t.status, t.heure,
+           t.is_split, t.tournament_number, t.status,
            COUNT(DISTINCT cp.licence) as convoque_count,
            COUNT(DISTINCT CASE WHEN i.forfait = 1 THEN i.licence END) as forfait_count,
            COUNT(DISTINCT CASE WHEN i.inscription_id IS NOT NULL
@@ -34,7 +34,7 @@ router.get('/competitions', authenticateToken, requireDdJ, (req, res) => {
       AND t.parent_tournoi_id IS NULL
       AND LOWER(COALESCE(t.status, 'active')) != 'cancelled'
     GROUP BY t.tournoi_id, t.nom, t.mode, t.categorie, t.debut, t.lieu, t.lieu_2,
-             t.is_split, t.tournament_number, t.status, t.heure
+             t.is_split, t.tournament_number, t.status
     ORDER BY t.debut DESC, t.mode, t.categorie
   `;
 
