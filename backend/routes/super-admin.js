@@ -414,9 +414,9 @@ router.put('/users/:id/role', async (req, res) => {
   const { id } = req.params;
   const { role } = req.body;
 
-  const validRoles = ['admin', 'viewer', 'lecteur', 'ligue_admin'];
+  const validRoles = ['admin', 'viewer', 'lecteur', 'ligue_admin', 'directeur_jeu'];
   if (!validRoles.includes(role)) {
-    return res.status(400).json({ error: 'Rôle invalide. Valeurs: admin, viewer, lecteur, ligue_admin' });
+    return res.status(400).json({ error: 'Rôle invalide. Valeurs: admin, viewer, lecteur, ligue_admin, directeur_jeu' });
   }
 
   try {
@@ -520,9 +520,9 @@ router.post('/users', async (req, res) => {
     return res.status(400).json({ error: 'organization_id requis pour les utilisateurs CDB' });
   }
 
-  const validRoles = ['admin', 'viewer', 'lecteur', 'super_admin'];
+  const validRoles = ['admin', 'viewer', 'lecteur', 'super_admin', 'directeur_jeu'];
   if (!validRoles.includes(role)) {
-    return res.status(400).json({ error: 'Rôle invalide. Valeurs: admin, viewer, lecteur, super_admin' });
+    return res.status(400).json({ error: 'Rôle invalide. Valeurs: admin, viewer, lecteur, super_admin, directeur_jeu' });
   }
 
   if (password.length < 6) {

@@ -697,7 +697,7 @@ router.post('/users', authenticateToken, requireAdmin, (req, res) => {
     return res.status(400).json({ error: 'Password must be at least 6 characters' });
   }
 
-  const validRoles = ['admin', 'viewer', 'lecteur', 'club', 'ligue_admin'];
+  const validRoles = ['admin', 'viewer', 'lecteur', 'club', 'ligue_admin', 'directeur_jeu'];
   const userRole = validRoles.includes(role) ? role : 'viewer';
   const userEmail = email ? email.toLowerCase().trim() : null;
   const userClubId = (userRole === 'club' && club_id) ? parseInt(club_id) : null;
@@ -795,7 +795,7 @@ router.put('/users/:id', authenticateToken, requireAdmin, (req, res) => {
       params.push(username);
     }
 
-    if (role && ['admin', 'viewer', 'lecteur', 'club', 'ligue_admin'].includes(role)) {
+    if (role && ['admin', 'viewer', 'lecteur', 'club', 'ligue_admin', 'directeur_jeu'].includes(role)) {
       updates.push(`role = $${paramIndex++}`);
       params.push(role);
     }
@@ -1000,6 +1000,14 @@ function requireLigueAdmin(req, res, next) {
   return res.status(403).json({ error: 'Accès réservé aux administrateurs de ligue' });
 }
 
+// Middleware to require Directeur de Jeu or admin access
+function requireDdJ(req, res, next) {
+  if (req.user.role === 'directeur_jeu' || req.user.role === 'admin' || req.user.admin) {
+    return next();
+  }
+  return res.status(403).json({ error: 'Accès réservé au Directeur de Jeu' });
+}
+
 module.exports = router;
 module.exports.authenticateToken = authenticateToken;
 module.exports.requireAdmin = requireAdmin;
@@ -1008,4 +1016,5 @@ module.exports.requireViewer = requireViewer;
 module.exports.requireViewerWrite = requireViewerWrite;
 module.exports.requireSuperAdmin = requireSuperAdmin;
 module.exports.requireLigueAdmin = requireLigueAdmin;
+module.exports.requireDdJ = requireDdJ;
 module.exports.JWT_SECRET = JWT_SECRET;

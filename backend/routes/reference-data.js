@@ -659,6 +659,7 @@ router.get('/user-roles', authenticateToken, (req, res) => {
     { code: 'lecteur', display_name: 'Lecteur (consultation uniquement)' },
     { code: 'viewer', display_name: 'Viewer (lecture + actions)' },
     { code: 'club', display_name: 'Responsable Club' },
+    { code: 'directeur_jeu', display_name: 'Directeur de Jeu' },
     { code: 'admin', display_name: 'Administrateur' }
   ];
   res.json(roles);

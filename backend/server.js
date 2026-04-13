@@ -58,6 +58,7 @@ const surveysRoutes = require('./routes/surveys');
 const wordpressRoutes = require('./routes/wordpress');
 const pushRoutes = require('./routes/push');
 const testModeRoutes = require('./routes/test-mode');
+const directeurJeuRoutes = require('./routes/directeur-jeu');
 
 
 const app = express();
@@ -287,6 +288,7 @@ app.use('/api/wordpress', apiLimiter, wordpressRoutes);
 app.use('/api/player/push', apiLimiter, pushRoutes);
 app.use('/api/push', apiLimiter, pushRoutes); // Admin test endpoint
 app.use('/api/test-mode', apiLimiter, testModeRoutes);
+app.use('/api/directeur-jeu', apiLimiter, directeurJeuRoutes);
 
 
 // App version endpoint (for automatic update detection)

@@ -1851,6 +1851,17 @@
               </div>
             </label>
           </div>
+          <div style="padding: 15px; background: #e8f4fd; border-radius: 8px; border-left: 4px solid #2e86c1; margin-top: 15px;">
+            <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
+              <input type="checkbox" id="enableDdjModule" style="width: 20px; height: 20px; cursor: pointer; accent-color: var(--primary-color, #1F4788);">
+              <div>
+                <strong style="font-size: 14px;">Activer le module Directeur de Jeu</strong>
+                <p style="margin: 4px 0 0; color: #666; font-size: 12px;">
+                  Permet aux utilisateurs avec le rôle "Directeur de Jeu" d'accéder à une page dédiée pour gérer les compétitions du jour (saisie des scores, génération des matchs).
+                </p>
+              </div>
+            </label>
+          </div>
         </div>
       </div>
 
@@ -2563,14 +2574,14 @@
       container.innerHTML = users.map(user => `
         <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 15px; background: white; border: 1px solid #ddd; border-radius: 8px; flex-wrap: wrap; gap: 10px;">
           <div style="display: flex; align-items: center; gap: 12px; flex: 1; min-width: 250px;">
-            <div style="width: 36px; height: 36px; border-radius: 50%; background: ${user.role === 'admin' ? '#1F4788' : user.role === 'club' ? '#28a745' : '#6c757d'}; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px;">
+            <div style="width: 36px; height: 36px; border-radius: 50%; background: ${user.role === 'admin' ? '#1F4788' : user.role === 'directeur_jeu' ? '#2e86c1' : user.role === 'club' ? '#28a745' : '#6c757d'}; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px;">
               ${user.username.charAt(0).toUpperCase()}
             </div>
             <div>
               <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                 <strong>${user.username}</strong>
-                <span style="padding: 2px 6px; border-radius: 10px; font-size: 11px; background: ${user.role === 'admin' ? '#d4edda' : user.role === 'club' ? '#d1ecf1' : '#e2e3e5'}; color: ${user.role === 'admin' ? '#155724' : user.role === 'club' ? '#0c5460' : '#383d41'};">
-                  ${user.role === 'admin' ? 'Admin' : user.role === 'club' ? 'Club' : 'Viewer'}
+                <span style="padding: 2px 6px; border-radius: 10px; font-size: 11px; background: ${user.role === 'admin' ? '#d4edda' : user.role === 'directeur_jeu' ? '#d6eaf8' : user.role === 'club' ? '#d1ecf1' : '#e2e3e5'}; color: ${user.role === 'admin' ? '#155724' : user.role === 'directeur_jeu' ? '#1a5276' : user.role === 'club' ? '#0c5460' : '#383d41'};">
+                  ${user.role === 'admin' ? 'Admin' : user.role === 'directeur_jeu' ? 'DdJ' : user.role === 'club' ? 'Club' : 'Viewer'}
                 </span>
                 ${user.club_name ? `<span style="padding: 2px 6px; border-radius: 10px; font-size: 11px; background: #fff3cd; color: #856404;">${user.club_name}</span>` : ''}
                 ${user.is_active === false ? '<span style="padding: 2px 6px; border-radius: 10px; font-size: 11px; background: #f8d7da; color: #721c24;">Inactif</span>' : ''}
@@ -6401,6 +6412,12 @@
             splitCheckbox.checked = settings.enable_split_tournaments === 'true';
           }
 
+          // Load DdJ module toggle
+          const ddjCheckbox = document.getElementById('enableDdjModule');
+          if (ddjCheckbox) {
+            ddjCheckbox.checked = settings.enable_ddj_module === 'true';
+          }
+
           // Load degradation setting
           const degradationCheckbox = document.getElementById('positionPointsDegradation');
           if (degradationCheckbox) {
@@ -6470,7 +6487,8 @@
             scoring_avg_tier_2: document.getElementById('bonusTier2') ? document.getElementById('bonusTier2').value : '2',
             scoring_avg_tier_3: document.getElementById('bonusTier3') ? document.getElementById('bonusTier3').value : '3',
             position_points_degradation: document.getElementById('positionPointsDegradation').checked ? 'last_player' : 'none',
-            enable_split_tournaments: document.getElementById('enableSplitTournaments').checked ? 'true' : 'false'
+            enable_split_tournaments: document.getElementById('enableSplitTournaments').checked ? 'true' : 'false',
+            enable_ddj_module: document.getElementById('enableDdjModule') ? (document.getElementById('enableDdjModule').checked ? 'true' : 'false') : undefined
           })
         });
 

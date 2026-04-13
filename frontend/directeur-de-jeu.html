@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Directeur de Jeu - Gestion Tournois</title>
+  <link rel="icon" type="image/png" href="images/FrenchBillard-Icon-small.png">
+  <link rel="stylesheet" href="css/styles.css?v=357">
+  <script src="js/branding.js?v=197"></script>
+  <style>
+    .ddj-welcome-bar {
+      background: linear-gradient(135deg, var(--color-primary, #1F4788) 0%, var(--color-secondary, #667eea) 100%);
+      color: white;
+      padding: 15px 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .ddj-welcome-bar .welcome-name {
+      font-size: 1.1em;
+      font-weight: 600;
+    }
+    .ddj-welcome-bar .welcome-date {
+      font-size: 0.95em;
+      opacity: 0.9;
+    }
+
+    .ddj-section-title {
+      font-size: 1.15em;
+      font-weight: 700;
+      color: var(--color-primary, #1F4788);
+      margin: 20px 0 12px 0;
+      padding-bottom: 6px;
+      border-bottom: 2px solid var(--color-primary, #1F4788);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .ddj-cards-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 14px;
+      margin-bottom: 24px;
+    }
+    @media (min-width: 640px) {
+      .ddj-cards-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+    @media (min-width: 960px) {
+      .ddj-cards-grid {
+        grid-template-columns: repeat(3, 1fr);
+      }
+    }
+
+    .ddj-comp-card {
+      background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+      border: 2px solid #dee2e6;
+      border-radius: 12px;
+      padding: 16px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      border-left: 5px solid #6c757d;
+      position: relative;
+    }
+    .ddj-comp-card:hover {
+      border-color: var(--color-primary, #1F4788);
+      box-shadow: 0 4px 12px rgba(31, 71, 136, 0.15);
+      transform: translateY(-2px);
+    }
+    .ddj-comp-card.status-a-preparer {
+      border-left-color: #ff9800;
+    }
+    .ddj-comp-card.status-en-attente {
+      border-left-color: #6c757d;
+    }
+
+    .ddj-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 8px;
+    }
+    .ddj-card-mode {
+      font-size: 0.85em;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .ddj-card-title {
+      font-size: 1.1em;
+      font-weight: bold;
+      color: var(--color-primary, #1F4788);
+      margin-bottom: 10px;
+    }
+
+    .ddj-card-details {
+      font-size: 0.9em;
+      color: #555;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin-bottom: 10px;
+    }
+    .ddj-card-details span {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .ddj-card-stats {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+      padding-top: 10px;
+      border-top: 1px solid #eee;
+      font-size: 0.9em;
+    }
+    .ddj-stat-convoques {
+      font-weight: 600;
+      color: #17a2b8;
+    }
+    .ddj-stat-forfaits {
+      font-weight: 600;
+      color: #dc3545;
+    }
+    .ddj-stat-params {
+      color: #666;
+      font-style: italic;
+    }
+
+    .ddj-status-badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-size: 0.75em;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      white-space: nowrap;
+    }
+    .ddj-status-badge.a-preparer {
+      background: #fff3e0;
+      color: #e65100;
+    }
+    .ddj-status-badge.en-attente {
+      background: #f0f0f0;
+      color: #666;
+    }
+
+    .ddj-section-past {
+      opacity: 0.6;
+    }
+
+    .ddj-empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: #999;
+    }
+    .ddj-empty-state img {
+      height: 64px;
+      width: 64px;
+      opacity: 0.4;
+      margin-bottom: 16px;
+    }
+    .ddj-empty-state p {
+      font-size: 1.1em;
+      margin: 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="navbar">
+      <div>
+        <h2 style="margin-bottom: 0;"><img id="app-header-icon" src="images/FrenchBillard-Icon-small.png" alt="" style="height: 48px; width: 48px; vertical-align: middle; margin-right: 8px;"><span id="app-org-name" data-page-title="Directeur de Jeu">CDB</span></h2>
+      </div>
+      <div class="nav-links">
+        <a href="#" id="logoutBtn" class="nav-logout">Déconnexion</a>
+      </div>
+    </div>
+
+    <div id="errorMessage" class="error" style="display: none;"></div>
+
+    <div class="ddj-welcome-bar">
+      <span class="welcome-name">Bienvenue, <span id="ddj-username"></span></span>
+      <span class="welcome-date" id="ddj-today-date"></span>
+    </div>
+
+    <div id="ddj-content">
+      <!-- Today's competitions -->
+      <div id="ddj-today-section" style="display: none;">
+        <div class="ddj-section-title">
+          <img src="images/FrenchBillard-Icon-small.png" alt="" style="height: 22px; width: 22px; vertical-align: middle;">
+          Compétitions du jour
+        </div>
+        <div id="ddj-today-cards" class="ddj-cards-grid"></div>
+      </div>
+
+      <!-- Past competitions -->
+      <div id="ddj-past-section" class="ddj-section-past" style="display: none;">
+        <div class="ddj-section-title">
+          Journées précédentes
+        </div>
+        <div id="ddj-past-cards" class="ddj-cards-grid"></div>
+      </div>
+
+      <!-- Empty state -->
+      <div id="ddj-empty-state" class="ddj-empty-state" style="display: none;">
+        <img src="images/FrenchBillard-Icon-small.png" alt="">
+        <p>Aucune compétition programmée aujourd'hui</p>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/auth-utils.js?v=197"></script>
+  <script src="js/app-branding.js?v=215"></script>
+  <script>
+    const API_URL = '/api';
+
+    // Auth guard
+    if (!requireAuth()) {
+      throw new Error('Not authenticated');
+    }
+
+    // Role guard: only directeur_jeu and admin
+    const userRole = sessionStorage.getItem('userRole');
+    if (userRole !== 'directeur_jeu' && userRole !== 'admin') {
+      window.location.href = 'dashboard.html';
+      throw new Error('Access denied');
+    }
+
+    const token = sessionStorage.getItem('token');
+    const username = sessionStorage.getItem('username');
+
+    // Display welcome
+    document.getElementById('ddj-username').textContent = username || 'Directeur de Jeu';
+
+    // Display today's date in French
+    const todayFormatted = new Date().toLocaleDateString('fr-FR', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+    // Capitalize first letter
+    document.getElementById('ddj-today-date').textContent =
+      todayFormatted.charAt(0).toUpperCase() + todayFormatted.slice(1);
+
+    // Logout
+    document.getElementById('logoutBtn').addEventListener('click', (e) => {
+      e.preventDefault();
+      logout();
+    });
+
+    // Format date as DD/MM/YYYY
+    function formatDate(dateStr) {
+      if (!dateStr) return '';
+      const d = new Date(dateStr);
+      const day = String(d.getDate()).padStart(2, '0');
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const year = d.getFullYear();
+      return `${day}/${month}/${year}`;
+    }
+
+    // Build a competition card HTML
+    function buildCompCard(comp) {
+      const hasConvoques = (comp.convoque_count || 0) > 0;
+      const statusClass = hasConvoques ? 'status-a-preparer' : 'status-en-attente';
+      const badgeClass = hasConvoques ? 'a-preparer' : 'en-attente';
+      const badgeLabel = hasConvoques ? 'À préparer' : 'En attente';
+
+      const forfaitHtml = (comp.forfait_count || 0) > 0
+        ? `<span class="ddj-stat-forfaits">&#9888;&#65039; ${comp.forfait_count} forfait(s)</span>`
+        : '';
+
+      const paramsHtml = (comp.distance || comp.reprises)
+        ? `<span class="ddj-stat-params">${comp.distance || '?'} pts / ${comp.reprises || '?'} rep</span>`
+        : '';
+
+      return `
+        <div class="ddj-comp-card ${statusClass}" data-comp-id="${comp.id || ''}">
+          <div class="ddj-card-header">
+            <span class="ddj-card-mode">${comp.mode || ''} ${comp.categorie || ''}</span>
+            <span class="ddj-status-badge ${badgeClass}">${badgeLabel}</span>
+          </div>
+          <div class="ddj-card-title">${comp.nom || comp.tournament_name || ''}</div>
+          <div class="ddj-card-details">
+            <span>&#128197; ${formatDate(comp.debut || comp.date)}</span>
+            <span>&#128205; ${comp.lieu || 'Lieu non défini'}</span>
+          </div>
+          <div class="ddj-card-stats">
+            <span class="ddj-stat-convoques">&#128101; ${comp.convoque_count || 0} convoqué(s)</span>
+            ${forfaitHtml}
+            ${paramsHtml}
+          </div>
+        </div>
+      `;
+    }
+
+    // Load competitions
+    async function loadCompetitions() {
+      try {
+        const fetchFn = typeof authFetch === 'function' ? authFetch : (url, opts) => {
+          opts = opts || {};
+          opts.headers = Object.assign({}, opts.headers, { 'Authorization': 'Bearer ' + token });
+          return fetch(url, opts);
+        };
+
+        const response = await fetchFn(`${API_URL}/directeur-jeu/competitions`);
+
+        if (!response.ok) {
+          throw new Error(`Erreur serveur (${response.status})`);
+        }
+
+        const data = await response.json();
+        const competitions = Array.isArray(data) ? data : (data.competitions || []);
+
+        const todayComps = competitions.filter(c => c.is_today === true);
+        const pastComps = competitions.filter(c => c.is_today === false);
+
+        const todaySection = document.getElementById('ddj-today-section');
+        const pastSection = document.getElementById('ddj-past-section');
+        const emptyState = document.getElementById('ddj-empty-state');
+
+        if (todayComps.length > 0) {
+          document.getElementById('ddj-today-cards').innerHTML = todayComps.map(buildCompCard).join('');
+          todaySection.style.display = 'block';
+        }
+
+        if (pastComps.length > 0) {
+          document.getElementById('ddj-past-cards').innerHTML = pastComps.map(buildCompCard).join('');
+          pastSection.style.display = 'block';
+        }
+
+        if (todayComps.length === 0 && pastComps.length === 0) {
+          emptyState.style.display = 'block';
+        }
+
+      } catch (error) {
+        console.error('Erreur chargement compétitions:', error);
+        const errEl = document.getElementById('errorMessage');
+        errEl.textContent = 'Impossible de charger les compétitions. ' + error.message;
+        errEl.style.display = 'block';
+      }
+    }
+
+    // Init
+    loadCompetitions();
+  </script>
+</body>
+</html>

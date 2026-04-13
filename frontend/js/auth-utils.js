@@ -355,4 +355,13 @@ function applyRoleBasedNav() {
       return;
     }
   }
+
+  // Directeur de Jeu: restrict to DdJ page only
+  if (userRole === 'directeur_jeu') {
+    const currentPage = window.location.pathname.split('/').pop();
+    if (currentPage !== 'directeur-de-jeu.html' && currentPage !== 'login.html' && currentPage !== '') {
+      window.location.href = 'directeur-de-jeu.html';
+      return;
+    }
+  }
 }

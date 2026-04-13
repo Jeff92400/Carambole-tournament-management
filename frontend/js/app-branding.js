@@ -45,6 +45,12 @@ async function initAppBranding() {
     if (sessionStorage.getItem('sa_token')) {
       injectSAReturnButton();
     }
+
+    // Inject DdJ nav link for admins if module is enabled
+    const userRole = sessionStorage.getItem('userRole');
+    if (userRole === 'admin') {
+      injectDdJNavLink();
+    }
   } catch (error) {
     console.log('[Branding] Error loading branding, using defaults:', error);
     updateFavicon(DEFAULT_LOGO_PATH);
@@ -71,6 +77,42 @@ function injectSAReturnButton() {
     </button>
   `;
   document.body.appendChild(btn);
+}
+
+/**
+ * Inject "DdJ" nav link next to Compétitions for admins (if module enabled)
+ */
+async function injectDdJNavLink() {
+  try {
+    // Check if DdJ module is enabled for this org
+    const token = sessionStorage.getItem('token');
+    if (!token) return;
+    const resp = await fetch('/api/settings/org-settings-batch?keys=enable_ddj_module', {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+    if (!resp.ok) return;
+    const data = await resp.json();
+    if (data.enable_ddj_module !== 'true') return;
+
+    // Find the Compétitions link in navbar
+    const navLinks = document.querySelector('.nav-links');
+    if (!navLinks) return;
+    const compLink = navLinks.querySelector('a[href="generate-poules.html"]');
+    if (!compLink) return;
+
+    // Don't inject if already present
+    if (navLinks.querySelector('a[href="directeur-de-jeu.html"]')) return;
+
+    // Create DdJ link and insert after Compétitions
+    const ddjLink = document.createElement('a');
+    ddjLink.href = 'directeur-de-jeu.html';
+    ddjLink.className = 'admin-only nav-tooltip';
+    ddjLink.setAttribute('data-tooltip', 'Gestion des compétitions du jour (Directeur de Jeu)');
+    ddjLink.textContent = 'DdJ';
+    compLink.insertAdjacentElement('afterend', ddjLink);
+  } catch (e) {
+    // Silently fail — DdJ link is optional
+  }
 }
 
 /**
