@@ -254,19 +254,26 @@
     document.getElementById('ddj-today-date').textContent =
       todayFormatted.charAt(0).toUpperCase() + todayFormatted.slice(1);
 
-    // Set org logo on empty state (reuse the header icon loaded by app-branding.js)
-    setTimeout(() => {
-      const headerIcon = document.getElementById('app-header-icon');
-      const emptyLogo = document.getElementById('ddj-empty-logo');
-      if (headerIcon && emptyLogo && headerIcon.src) {
-        emptyLogo.src = headerIcon.src;
-      }
-    }, 1000);
+    // Set org logo on empty state (use getOrganizationLogoUrl from app-branding.js)
+    (async () => {
+      try {
+        const logoUrl = await getOrganizationLogoUrl();
+        const emptyLogo = document.getElementById('ddj-empty-logo');
+        if (emptyLogo && logoUrl) {
+          emptyLogo.src = logoUrl;
+          emptyLogo.onerror = function() { this.src = 'images/FrenchBillard-Icon-small.png'; };
+        }
+      } catch (e) { /* keep default icon */ }
+    })();
 
-    // Logout
+    // Logout — redirect to CDB login page (not SA platform)
     document.getElementById('logoutBtn').addEventListener('click', (e) => {
       e.preventDefault();
-      logout();
+      // Build the CDB-specific login URL
+      const orgSlug = sessionStorage.getItem('orgSlug') || '';
+      sessionStorage.clear();
+      const loginUrl = orgSlug ? 'login.html?org=' + orgSlug : 'login.html';
+      window.location.href = loginUrl;
     });
 
     // Format date as DD/MM/YYYY
