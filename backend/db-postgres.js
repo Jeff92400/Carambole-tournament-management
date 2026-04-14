@@ -1002,6 +1002,83 @@ async function initializeDatabase() {
     // Add target_type column for announcements (filtering by player app installation)
     await client.query(`ALTER TABLE announcements ADD COLUMN IF NOT EXISTS target_type VARCHAR(20) DEFAULT 'all'`);
 
+    // ============================================================
+    // Player App News / Communication Module (April 2026)
+    // For CDBs without a WordPress site — integrated CMS in Player App
+    // Activated per-org via organization_settings.news_delivery_mode = 'player_app'
+    // ============================================================
+
+    // Content sections — hierarchical menus/sub-menus tree
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS content_sections (
+        id SERIAL PRIMARY KEY,
+        organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        name VARCHAR(100) NOT NULL,
+        parent_id INTEGER REFERENCES content_sections(id) ON DELETE CASCADE,
+        sort_order INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_content_sections_org ON content_sections(organization_id)
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_content_sections_parent ON content_sections(parent_id)
+    `);
+
+    // Content pages — articles (news, events, results, documents)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS content_pages (
+        id SERIAL PRIMARY KEY,
+        organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        section_id INTEGER REFERENCES content_sections(id) ON DELETE SET NULL,
+        title VARCHAR(255) NOT NULL,
+        content_html TEXT NOT NULL DEFAULT '',
+        excerpt VARCHAR(500),
+        content_type VARCHAR(20) DEFAULT 'actualite',
+        status VARCHAR(20) DEFAULT 'draft',
+        is_featured BOOLEAN DEFAULT FALSE,
+        is_pinned BOOLEAN DEFAULT FALSE,
+        author_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        published_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_content_pages_org ON content_pages(organization_id)
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_content_pages_section ON content_pages(section_id)
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_content_pages_status ON content_pages(status)
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_content_pages_featured ON content_pages(is_featured) WHERE is_featured = TRUE
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_content_pages_pinned ON content_pages(is_pinned) WHERE is_pinned = TRUE
+    `);
+
+    // Content links — cross-links between articles (related content)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS content_links (
+        id SERIAL PRIMARY KEY,
+        source_page_id INTEGER NOT NULL REFERENCES content_pages(id) ON DELETE CASCADE,
+        target_page_id INTEGER NOT NULL REFERENCES content_pages(id) ON DELETE CASCADE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(source_page_id, target_page_id)
+      )
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_content_links_source ON content_links(source_page_id)
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_content_links_target ON content_links(target_page_id)
+    `);
+
     // Survey campaigns table (satisfaction surveys for Player App)
     await client.query(`
       CREATE TABLE IF NOT EXISTS survey_campaigns (

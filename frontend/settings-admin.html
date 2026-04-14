@@ -1273,13 +1273,37 @@
       </div>
     </div>
 
-    <!-- WordPress / Site Web Section - Admin Only -->
+    <!-- Option de communication News - Admin Only -->
     <div class="accordion-panel admin-only" id="wordpressSection" data-settings-tab="organisation">
       <div class="accordion-header" onclick="toggleAccordion('wordpressSection')">
-        <div class="accordion-title"><span class="accordion-icon">&#9654;</span><strong>Site Web / WordPress</strong></div>
+        <div class="accordion-title"><span class="accordion-icon">&#9654;</span><strong>Option de communication News</strong></div>
         <span class="accordion-summary" id="summary-wordpress">Chargement...</span>
       </div>
       <div class="accordion-body">
+
+      <!-- News delivery mode selector -->
+      <div style="margin-bottom: 25px; padding: 20px; background: #f8f9fa; border: 1px solid #e1e8ed; border-radius: 8px;">
+        <div style="font-weight: 600; color: #1F4788; margin-bottom: 12px;">Choisissez le mode de diffusion des news aux joueurs :</div>
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <label style="display: flex; align-items: flex-start; gap: 10px; padding: 12px; background: white; border: 2px solid #e1e8ed; border-radius: 6px; cursor: pointer;" id="newsModeWpLabel">
+            <input type="radio" name="newsDeliveryMode" id="newsModeWp" value="wordpress" style="margin-top: 3px;" onchange="updateNewsDeliveryMode()">
+            <div>
+              <div style="font-weight: 600; color: #333;">Site Web / WordPress</div>
+              <div style="font-size: 13px; color: #666; margin-top: 2px;">Publiez les convocations et résultats sur votre site WordPress existant.</div>
+            </div>
+          </label>
+          <label style="display: flex; align-items: flex-start; gap: 10px; padding: 12px; background: white; border: 2px solid #e1e8ed; border-radius: 6px; cursor: pointer;" id="newsModePlayerAppLabel">
+            <input type="radio" name="newsDeliveryMode" id="newsModePlayerApp" value="player_app" style="margin-top: 3px;" onchange="updateNewsDeliveryMode()">
+            <div>
+              <div style="font-weight: 600; color: #333;">Module News intégré à l'App Joueur <span style="display: inline-block; padding: 2px 8px; background: #fff3cd; color: #856404; border-radius: 10px; font-size: 11px; font-weight: 600; margin-left: 6px;">À VENIR</span></div>
+              <div style="font-size: 13px; color: #666; margin-top: 2px;">Pour les comités sans site web : publiez directement dans l'Espace Joueur (articles, sections, mise en avant).</div>
+            </div>
+          </label>
+        </div>
+      </div>
+
+      <!-- WordPress configuration block (shown only when mode = wordpress) -->
+      <div id="newsOptionWordpress">
       <p style="margin-bottom: 15px; color: #666;">
         Connectez votre site WordPress pour publier automatiquement les convocations et résultats.
         Vous pouvez utiliser un <strong>mot de passe application</strong> ou votre mot de passe WordPress habituel.
@@ -1338,6 +1362,21 @@
         </button>
       </div>
       <div id="wordpressMessage" style="display: none; margin-top: 15px; padding: 10px; border-radius: 4px;"></div>
+      </div>
+      <!-- /newsOptionWordpress -->
+
+      <!-- Player App News module (placeholder — à venir) -->
+      <div id="newsOptionPlayerApp" style="display: none;">
+        <div style="padding: 30px; background: #e8f4fd; border: 2px dashed #3498db; border-radius: 10px; text-align: center;">
+          <div style="font-size: 40px; margin-bottom: 12px;">📰</div>
+          <div style="font-size: 18px; font-weight: 600; color: #1F4788; margin-bottom: 8px;">Module News intégré à l'App Joueur</div>
+          <p style="color: #555; max-width: 560px; margin: 0 auto 12px; line-height: 1.6;">
+            Ce module permettra aux comités sans site web de publier directement des articles (actualités, événements, documents) dans l'Espace Joueur, organisés en sections hiérarchiques avec options "À la une" et "Punaise".
+          </p>
+          <p style="color: #856404; font-weight: 600; margin: 12px 0 0;">⏳ Fonctionnalité en cours de développement — disponible avant fin mai 2026.</p>
+        </div>
+      </div>
+
       </div>
     </div>
 
@@ -4854,6 +4893,16 @@
           document.getElementById('wpAppPassword').value = settings.wp_app_password || '';
           document.getElementById('wpDefaultStatus').value = settings.wp_default_status || 'draft';
 
+          // News delivery mode (default: wordpress — preserves existing behavior)
+          const newsMode = settings.news_delivery_mode || 'wordpress';
+          const wpRadio = document.getElementById('newsModeWp');
+          const paRadio = document.getElementById('newsModePlayerApp');
+          if (wpRadio && paRadio) {
+            wpRadio.checked = (newsMode === 'wordpress');
+            paRadio.checked = (newsMode === 'player_app');
+            updateNewsDeliveryMode();
+          }
+
           const enabled = settings.wp_enabled === 'true';
           document.getElementById('wpEnabled').checked = enabled;
           // Update toggle visual
@@ -4877,6 +4926,30 @@
       }
     }
 
+    // Toggle visibility of WordPress vs Player App News blocks based on selected mode
+    function updateNewsDeliveryMode() {
+      const wpRadio = document.getElementById('newsModeWp');
+      const paRadio = document.getElementById('newsModePlayerApp');
+      const wpBlock = document.getElementById('newsOptionWordpress');
+      const paBlock = document.getElementById('newsOptionPlayerApp');
+      const wpLabel = document.getElementById('newsModeWpLabel');
+      const paLabel = document.getElementById('newsModePlayerAppLabel');
+      if (!wpRadio || !paRadio || !wpBlock || !paBlock) return;
+
+      const isWp = wpRadio.checked;
+      wpBlock.style.display = isWp ? '' : 'none';
+      paBlock.style.display = isWp ? 'none' : '';
+
+      // Highlight selected card
+      if (wpLabel) wpLabel.style.borderColor = isWp ? '#1F4788' : '#e1e8ed';
+      if (paLabel) paLabel.style.borderColor = isWp ? '#e1e8ed' : '#1F4788';
+    }
+
+    function getSelectedNewsDeliveryMode() {
+      const paRadio = document.getElementById('newsModePlayerApp');
+      return (paRadio && paRadio.checked) ? 'player_app' : 'wordpress';
+    }
+
     async function saveWordpressSettings() {
       const msgDiv = document.getElementById('wordpressMessage');
 
@@ -4892,7 +4965,8 @@
             wp_username: document.getElementById('wpUsername').value.trim(),
             wp_app_password: document.getElementById('wpAppPassword').value.trim(),
             wp_default_status: document.getElementById('wpDefaultStatus').value,
-            wp_enabled: document.getElementById('wpEnabled').checked ? 'true' : 'false'
+            wp_enabled: document.getElementById('wpEnabled').checked ? 'true' : 'false',
+            news_delivery_mode: getSelectedNewsDeliveryMode()
           })
         });
 
@@ -4935,7 +5009,8 @@
             wp_username: document.getElementById('wpUsername').value.trim(),
             wp_app_password: document.getElementById('wpAppPassword').value.trim(),
             wp_default_status: document.getElementById('wpDefaultStatus').value,
-            wp_enabled: document.getElementById('wpEnabled').checked ? 'true' : 'false'
+            wp_enabled: document.getElementById('wpEnabled').checked ? 'true' : 'false',
+            news_delivery_mode: getSelectedNewsDeliveryMode()
           })
         });
       } catch (e) {
