@@ -1365,15 +1365,30 @@
       </div>
       <!-- /newsOptionWordpress -->
 
-      <!-- Player App News module (placeholder — à venir) -->
+      <!-- Player App News module — admin entry point -->
       <div id="newsOptionPlayerApp" style="display: none;">
-        <div style="padding: 30px; background: #e8f4fd; border: 2px dashed #3498db; border-radius: 10px; text-align: center;">
-          <div style="font-size: 40px; margin-bottom: 12px;">📰</div>
-          <div style="font-size: 18px; font-weight: 600; color: #1F4788; margin-bottom: 8px;">Module News intégré à l'App Joueur</div>
-          <p style="color: #555; max-width: 560px; margin: 0 auto 12px; line-height: 1.6;">
-            Ce module permettra aux comités sans site web de publier directement des articles (actualités, événements, documents) dans l'Espace Joueur, organisés en sections hiérarchiques avec options "À la une" et "Punaise".
+        <div style="padding: 25px; background: #e8f4fd; border: 1px solid #3498db; border-radius: 10px;">
+          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+            <span style="font-size: 32px;">📰</span>
+            <div>
+              <div style="font-size: 16px; font-weight: 600; color: #1F4788;">Module News intégré à l'App Joueur</div>
+              <div style="font-size: 13px; color: #666;">Publiez articles, événements et documents directement dans l'Espace Joueur.</div>
+            </div>
+          </div>
+          <p style="color: #555; margin: 0 0 16px; line-height: 1.6; font-size: 14px;">
+            Organisez vos contenus en sections hiérarchiques (menus / sous-menus) et mettez en avant les articles les plus importants avec les options <strong>À la une</strong> et <strong>Punaise</strong>. Les joueurs verront ces informations directement dans leur app.
           </p>
-          <p style="color: #856404; font-weight: 600; margin: 12px 0 0;">⏳ Fonctionnalité en cours de développement — disponible avant fin mai 2026.</p>
+          <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+            <a href="content-admin.html" class="btn" style="background: #1F4788; color: white; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: 500;">
+              📝 Gérer les articles et sections
+            </a>
+            <button onclick="saveWordpressSettings()" class="btn" style="background: #28a745; padding: 10px 20px;">
+              Activer ce mode
+            </button>
+          </div>
+          <p style="color: #666; margin: 14px 0 0; font-size: 12px;">
+            💡 Cliquez sur <strong>Activer ce mode</strong> pour enregistrer votre choix, puis sur <strong>Gérer les articles</strong> pour commencer à publier.
+          </p>
         </div>
       </div>
 

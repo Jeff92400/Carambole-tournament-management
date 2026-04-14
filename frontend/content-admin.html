@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>News - Gestion des articles - CDB</title>
+  <link rel="icon" type="image/png" href="images/FrenchBillard-Icon-small.png">
+  <link rel="stylesheet" href="css/styles.css?v=2">
+  <script src="js/branding.js?v=197"></script>
+  <!-- Quill Rich Text Editor -->
+  <link href="https://cdn.jsdelivr.net/npm/quill@1.3.7/dist/quill.snow.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/quill@1.3.7/dist/quill.min.js"></script>
+  <style>
+    .layout {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      gap: 20px;
+      margin-top: 20px;
+    }
+    @media (max-width: 768px) {
+      .layout { grid-template-columns: 1fr; }
+    }
+    .panel {
+      background: white;
+      border-radius: 12px;
+      padding: 18px 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      border: 1px solid #e0e0e0;
+    }
+    .panel h3 {
+      margin: 0 0 14px 0;
+      font-size: 14px;
+      color: #1F4788;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .section-tree { list-style: none; padding: 0; margin: 0; }
+    .section-tree li {
+      padding: 8px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      color: #333;
+      margin-bottom: 2px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .section-tree li:hover { background: #f0f4ff; }
+    .section-tree li.active { background: #1F4788; color: white; }
+    .section-tree li.child { padding-left: 24px; font-size: 13px; }
+    .section-tree .sect-actions { display: none; gap: 4px; }
+    .section-tree li:hover .sect-actions { display: flex; }
+    .section-tree li.active .sect-actions { display: flex; }
+    .sect-actions button {
+      background: transparent;
+      border: none;
+      color: inherit;
+      cursor: pointer;
+      font-size: 12px;
+      padding: 2px 4px;
+    }
+    .btn-sm {
+      padding: 6px 12px;
+      font-size: 12px;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+      background: #1F4788;
+      color: white;
+      font-weight: 500;
+    }
+    .btn-sm:hover { background: #163560; }
+    .btn-sm.secondary { background: #e9ecef; color: #333; }
+    .btn-sm.secondary:hover { background: #dee2e6; }
+    .btn-sm.danger { background: #dc3545; }
+    .btn-sm.danger:hover { background: #b52a37; }
+
+    .articles-toolbar {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 15px;
+      flex-wrap: wrap;
+    }
+    .articles-toolbar select, .articles-toolbar input {
+      padding: 8px 12px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 13px;
+    }
+
+    table.articles-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    table.articles-table th {
+      background: #f8f9fa;
+      padding: 10px 12px;
+      text-align: left;
+      font-size: 12px;
+      color: #555;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      border-bottom: 2px solid #dee2e6;
+    }
+    table.articles-table td {
+      padding: 12px;
+      border-bottom: 1px solid #e9ecef;
+      font-size: 14px;
+    }
+    table.articles-table tr:hover td { background: #fafbfc; }
+
+    .badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .badge-draft { background: #fff3cd; color: #856404; }
+    .badge-published { background: #d4edda; color: #155724; }
+    .badge-actualite { background: #e3f2fd; color: #1976d2; }
+    .badge-evenement { background: #fce4ec; color: #c2185b; }
+    .badge-resultat { background: #e8f5e9; color: #2e7d32; }
+    .badge-document { background: #fff8e1; color: #f57f17; }
+    .badge-featured { background: #667eea; color: white; }
+    .badge-pinned { background: #f39c12; color: white; }
+
+    /* Modal */
+    .modal-backdrop {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .modal-backdrop.visible { display: flex; }
+    .modal {
+      background: white;
+      border-radius: 12px;
+      width: 100%;
+      max-width: 900px;
+      max-height: 92vh;
+      overflow-y: auto;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    }
+    .modal-header {
+      padding: 20px 24px;
+      border-bottom: 1px solid #e9ecef;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .modal-header h2 { margin: 0; font-size: 18px; color: #1F4788; }
+    .modal-close {
+      background: transparent;
+      border: none;
+      font-size: 24px;
+      cursor: pointer;
+      color: #999;
+      line-height: 1;
+    }
+    .modal-body { padding: 24px; }
+    .modal-footer {
+      padding: 16px 24px;
+      border-top: 1px solid #e9ecef;
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+    .form-row { margin-bottom: 16px; }
+    .form-row label {
+      display: block;
+      margin-bottom: 6px;
+      font-weight: 600;
+      color: #333;
+      font-size: 13px;
+    }
+    .form-row input[type="text"],
+    .form-row textarea,
+    .form-row select {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 14px;
+      font-family: inherit;
+    }
+    .form-row-inline {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    .form-checkbox {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      background: #f8f9fa;
+      border: 1px solid #e9ecef;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .form-checkbox input { margin: 0; }
+    .ql-editor { min-height: 250px; font-size: 14px; }
+    .ql-container { font-family: inherit; font-size: 14px; }
+    .ql-toolbar { background: #f8f9fa; border-top-left-radius: 6px; border-top-right-radius: 6px; }
+    .ql-container.ql-snow { border-bottom-left-radius: 6px; border-bottom-right-radius: 6px; }
+
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: #999;
+    }
+    .empty-state-icon { font-size: 48px; margin-bottom: 10px; }
+
+    .toast {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 12px 24px;
+      border-radius: 8px;
+      color: white;
+      font-size: 14px;
+      z-index: 10000;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      display: none;
+    }
+    .toast.success { background: #28a745; }
+    .toast.error { background: #dc3545; }
+    .toast.visible { display: block; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="navbar">
+      <h2><img id="app-header-icon" src="images/FrenchBillard-Icon-small.png" alt="" style="height: 48px; width: 48px; vertical-align: middle; margin-right: 8px;"><span id="app-org-name" data-page-title="News - Gestion des articles">CDB</span></h2>
+      <div class="nav-links">
+        <a href="dashboard.html">Accueil</a>
+        <a href="settings-admin.html" class="admin-only">Paramètres</a>
+        <a href="#" id="logoutBtn" class="nav-logout">Deconnexion</a>
+      </div>
+    </div>
+
+    <div class="layout">
+      <!-- Sections sidebar -->
+      <div class="panel">
+        <h3>
+          Sections
+          <button class="btn-sm" onclick="openSectionModal()">+</button>
+        </h3>
+        <ul class="section-tree" id="sectionsList">
+          <li class="active" data-section-id="">Toutes les sections</li>
+        </ul>
+      </div>
+
+      <!-- Articles panel -->
+      <div class="panel">
+        <h3>
+          Articles
+          <button class="btn-sm" onclick="openArticleModal()">+ Nouvel article</button>
+        </h3>
+
+        <div class="articles-toolbar">
+          <select id="filterStatus" onchange="loadArticles()">
+            <option value="">Tous les statuts</option>
+            <option value="draft">Brouillons</option>
+            <option value="published">Publiés</option>
+          </select>
+          <select id="filterType" onchange="loadArticles()">
+            <option value="">Tous les types</option>
+            <option value="actualite">Actualité</option>
+            <option value="evenement">Événement</option>
+            <option value="resultat">Résultat</option>
+            <option value="document">Document</option>
+          </select>
+        </div>
+
+        <div id="articlesContainer">
+          <div class="empty-state">
+            <div class="empty-state-icon">📰</div>
+            <p>Chargement...</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Article modal -->
+  <div class="modal-backdrop" id="articleModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 id="articleModalTitle">Nouvel article</h2>
+        <button class="modal-close" onclick="closeArticleModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row">
+          <label>Titre *</label>
+          <input type="text" id="articleTitle" placeholder="Titre de l'article">
+        </div>
+        <div class="form-row-inline">
+          <div class="form-row">
+            <label>Section</label>
+            <select id="articleSection">
+              <option value="">(Aucune section)</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label>Type</label>
+            <select id="articleType">
+              <option value="actualite">Actualité</option>
+              <option value="evenement">Événement</option>
+              <option value="resultat">Résultat</option>
+              <option value="document">Document</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <label>Chapô (résumé court, optionnel)</label>
+          <textarea id="articleExcerpt" rows="2" placeholder="Phrase d'accroche affichée dans la liste"></textarea>
+        </div>
+        <div class="form-row">
+          <label>Contenu</label>
+          <div id="articleEditor"></div>
+        </div>
+        <div class="form-row-inline">
+          <label class="form-checkbox">
+            <input type="checkbox" id="articleFeatured">
+            <span><strong>À la une</strong> — affiché dans la zone vedette</span>
+          </label>
+          <label class="form-checkbox">
+            <input type="checkbox" id="articlePinned">
+            <span><strong>Punaise</strong> — épinglé en haut du fil</span>
+          </label>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-sm danger" id="articleDeleteBtn" style="display:none; margin-right: auto;" onclick="deleteArticle()">Supprimer</button>
+        <button class="btn-sm secondary" onclick="closeArticleModal()">Annuler</button>
+        <button class="btn-sm secondary" onclick="saveArticle('draft')">Enregistrer en brouillon</button>
+        <button class="btn-sm" onclick="saveArticle('published')">Publier</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section modal -->
+  <div class="modal-backdrop" id="sectionModal">
+    <div class="modal" style="max-width: 500px;">
+      <div class="modal-header">
+        <h2 id="sectionModalTitle">Nouvelle section</h2>
+        <button class="modal-close" onclick="closeSectionModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row">
+          <label>Nom de la section *</label>
+          <input type="text" id="sectionName" placeholder="ex: Actualités, Événements, Résultats">
+        </div>
+        <div class="form-row">
+          <label>Section parente (optionnel)</label>
+          <select id="sectionParent">
+            <option value="">(Aucune — section racine)</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label>Ordre d'affichage</label>
+          <input type="text" id="sectionSortOrder" value="0" inputmode="numeric">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-sm danger" id="sectionDeleteBtn" style="display:none; margin-right: auto;" onclick="deleteSection()">Supprimer</button>
+        <button class="btn-sm secondary" onclick="closeSectionModal()">Annuler</button>
+        <button class="btn-sm" onclick="saveSection()">Enregistrer</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="js/auth-utils.js?v=197"></script>
+  <script src="js/app-branding.js?v=216"></script>
+  <script>
+    const API_URL = '/api';
+
+    if (!requireAuth()) { throw new Error('Not authenticated'); }
+    const token = sessionStorage.getItem('token');
+
+    // Page guard: this page is only available when the CDB has activated
+    // the "player_app" communication mode in Paramètres.
+    async function enforceNewsMode() {
+      try {
+        const resp = await fetch(`${API_URL}/settings/app-all`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!resp.ok) return; // settings not reachable, stay on page
+        const settings = await resp.json();
+        const mode = settings.news_delivery_mode || 'wordpress';
+        if (mode !== 'player_app') {
+          alert("Le module News intégré n'est pas activé pour votre CDB.\n\nPour l'activer, allez dans Paramètres → Option de communication News.");
+          window.location.href = 'dashboard.html';
+        }
+      } catch (e) {
+        console.error('enforceNewsMode error:', e);
+      }
+    }
+
+    // ---------- State ----------
+    let currentSectionFilter = '';
+    let editingArticleId = null;
+    let editingSectionId = null;
+    let sectionsCache = [];
+    let quillEditor = null;
+
+    // ---------- Toast ----------
+    function toast(msg, type = 'success') {
+      const el = document.getElementById('toast');
+      el.textContent = msg;
+      el.className = 'toast visible ' + type;
+      setTimeout(() => { el.className = 'toast ' + type; }, 3000);
+    }
+
+    // ---------- Sections ----------
+    async function loadSections() {
+      try {
+        const resp = await fetch(`${API_URL}/content/sections`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!resp.ok) throw new Error('Erreur de chargement des sections');
+        sectionsCache = await resp.json();
+        renderSections();
+        populateSectionDropdowns();
+      } catch (err) {
+        console.error(err);
+        toast(err.message, 'error');
+      }
+    }
+
+    function renderSections() {
+      const ul = document.getElementById('sectionsList');
+      const roots = sectionsCache.filter(s => !s.parent_id);
+      const childrenByParent = {};
+      sectionsCache.filter(s => s.parent_id).forEach(s => {
+        if (!childrenByParent[s.parent_id]) childrenByParent[s.parent_id] = [];
+        childrenByParent[s.parent_id].push(s);
+      });
+
+      let html = `<li class="${currentSectionFilter === '' ? 'active' : ''}" onclick="filterBySection('')">Toutes les sections</li>`;
+      roots.forEach(root => {
+        html += renderSectionLi(root, false, childrenByParent);
+        (childrenByParent[root.id] || []).forEach(child => {
+          html += renderSectionLi(child, true, childrenByParent);
+        });
+      });
+      ul.innerHTML = html;
+    }
+
+    function renderSectionLi(section, isChild, childrenByParent) {
+      const active = String(currentSectionFilter) === String(section.id) ? 'active' : '';
+      return `
+        <li class="${active} ${isChild ? 'child' : ''}" onclick="filterBySection(${section.id}, event)">
+          <span>${escapeHtml(section.name)}</span>
+          <span class="sect-actions">
+            <button onclick="event.stopPropagation(); openSectionModal(${section.id})" title="Modifier">✎</button>
+          </span>
+        </li>`;
+    }
+
+    function filterBySection(id, event) {
+      currentSectionFilter = id || '';
+      renderSections();
+      loadArticles();
+    }
+
+    function populateSectionDropdowns() {
+      const articleSel = document.getElementById('articleSection');
+      const parentSel = document.getElementById('sectionParent');
+      articleSel.innerHTML = '<option value="">(Aucune section)</option>';
+      parentSel.innerHTML = '<option value="">(Aucune — section racine)</option>';
+      sectionsCache.forEach(s => {
+        const label = s.parent_id
+          ? '— ' + s.name
+          : s.name;
+        articleSel.innerHTML += `<option value="${s.id}">${escapeHtml(label)}</option>`;
+        // Only root sections can be parents (keep the tree 2 levels deep for MVP)
+        if (!s.parent_id) {
+          parentSel.innerHTML += `<option value="${s.id}">${escapeHtml(s.name)}</option>`;
+        }
+      });
+    }
+
+    function openSectionModal(id = null) {
+      editingSectionId = id;
+      const modal = document.getElementById('sectionModal');
+      const title = document.getElementById('sectionModalTitle');
+      const deleteBtn = document.getElementById('sectionDeleteBtn');
+      if (id) {
+        const s = sectionsCache.find(x => x.id === id);
+        if (!s) return;
+        title.textContent = 'Modifier la section';
+        document.getElementById('sectionName').value = s.name;
+        document.getElementById('sectionParent').value = s.parent_id || '';
+        document.getElementById('sectionSortOrder').value = s.sort_order || 0;
+        deleteBtn.style.display = '';
+      } else {
+        title.textContent = 'Nouvelle section';
+        document.getElementById('sectionName').value = '';
+        document.getElementById('sectionParent').value = '';
+        document.getElementById('sectionSortOrder').value = '0';
+        deleteBtn.style.display = 'none';
+      }
+      modal.classList.add('visible');
+    }
+
+    function closeSectionModal() {
+      document.getElementById('sectionModal').classList.remove('visible');
+    }
+
+    async function saveSection() {
+      const name = document.getElementById('sectionName').value.trim();
+      if (!name) { toast('Le nom est requis', 'error'); return; }
+      const parent_id = document.getElementById('sectionParent').value || null;
+      const sort_order = parseInt(document.getElementById('sectionSortOrder').value, 10) || 0;
+
+      try {
+        const url = editingSectionId
+          ? `${API_URL}/content/sections/${editingSectionId}`
+          : `${API_URL}/content/sections`;
+        const method = editingSectionId ? 'PUT' : 'POST';
+        const resp = await fetch(url, {
+          method,
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, parent_id: parent_id ? parseInt(parent_id, 10) : null, sort_order })
+        });
+        if (!resp.ok) {
+          const err = await resp.json();
+          throw new Error(err.error || 'Erreur');
+        }
+        toast('Section enregistrée');
+        closeSectionModal();
+        await loadSections();
+      } catch (err) {
+        toast(err.message, 'error');
+      }
+    }
+
+    async function deleteSection() {
+      if (!editingSectionId) return;
+      if (!confirm('Supprimer cette section ? Les sous-sections seront aussi supprimées et les articles resteront (sans section).')) return;
+      try {
+        const resp = await fetch(`${API_URL}/content/sections/${editingSectionId}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!resp.ok) throw new Error('Erreur de suppression');
+        toast('Section supprimée');
+        closeSectionModal();
+        if (String(currentSectionFilter) === String(editingSectionId)) currentSectionFilter = '';
+        await loadSections();
+        await loadArticles();
+      } catch (err) {
+        toast(err.message, 'error');
+      }
+    }
+
+    // ---------- Articles ----------
+    async function loadArticles() {
+      const container = document.getElementById('articlesContainer');
+      const status = document.getElementById('filterStatus').value;
+      const content_type = document.getElementById('filterType').value;
+
+      const params = new URLSearchParams();
+      if (currentSectionFilter) params.set('section_id', currentSectionFilter);
+      if (status) params.set('status', status);
+      if (content_type) params.set('content_type', content_type);
+
+      try {
+        const resp = await fetch(`${API_URL}/content/pages?${params.toString()}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!resp.ok) throw new Error('Erreur de chargement');
+        const articles = await resp.json();
+        renderArticles(articles);
+      } catch (err) {
+        container.innerHTML = `<div class="empty-state"><p>${escapeHtml(err.message)}</p></div>`;
+      }
+    }
+
+    function renderArticles(articles) {
+      const container = document.getElementById('articlesContainer');
+      if (!articles.length) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">📰</div>
+            <p>Aucun article pour le moment.</p>
+            <p style="font-size: 13px; color: #aaa;">Cliquez sur "+ Nouvel article" pour commencer.</p>
+          </div>`;
+        return;
+      }
+
+      const rows = articles.map(a => `
+        <tr onclick="openArticleModal(${a.id})" style="cursor: pointer;">
+          <td>
+            <strong>${escapeHtml(a.title)}</strong>
+            ${a.is_featured ? '<span class="badge badge-featured" style="margin-left: 6px;">À la une</span>' : ''}
+            ${a.is_pinned ? '<span class="badge badge-pinned" style="margin-left: 6px;">Punaise</span>' : ''}
+            ${a.excerpt ? `<div style="color: #888; font-size: 12px; margin-top: 4px;">${escapeHtml(a.excerpt)}</div>` : ''}
+          </td>
+          <td>${a.section_name ? escapeHtml(a.section_name) : '<em style="color:#bbb;">—</em>'}</td>
+          <td><span class="badge badge-${a.content_type}">${contentTypeLabel(a.content_type)}</span></td>
+          <td><span class="badge badge-${a.status}">${a.status === 'published' ? 'Publié' : 'Brouillon'}</span></td>
+          <td style="font-size: 12px; color: #888;">${formatDate(a.published_at || a.created_at)}</td>
+        </tr>
+      `).join('');
+
+      container.innerHTML = `
+        <table class="articles-table">
+          <thead>
+            <tr>
+              <th>Titre</th>
+              <th>Section</th>
+              <th>Type</th>
+              <th>Statut</th>
+              <th>Date</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>`;
+    }
+
+    function initEditor() {
+      if (quillEditor) return;
+      quillEditor = new Quill('#articleEditor', {
+        theme: 'snow',
+        placeholder: "Contenu de l'article...",
+        modules: {
+          toolbar: [
+            [{ 'header': [1, 2, 3, false] }],
+            ['bold', 'italic', 'underline'],
+            [{ 'color': [] }, { 'background': [] }],
+            [{ 'list': 'ordered' }, { 'list': 'bullet' }],
+            ['link', 'image'],
+            ['clean']
+          ]
+        }
+      });
+    }
+
+    async function openArticleModal(id = null) {
+      editingArticleId = id;
+      const modal = document.getElementById('articleModal');
+      const title = document.getElementById('articleModalTitle');
+      const deleteBtn = document.getElementById('articleDeleteBtn');
+
+      modal.classList.add('visible');
+      initEditor();
+
+      if (id) {
+        title.textContent = "Modifier l'article";
+        deleteBtn.style.display = '';
+        try {
+          const resp = await fetch(`${API_URL}/content/pages/${id}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (!resp.ok) throw new Error('Erreur de chargement');
+          const a = await resp.json();
+          document.getElementById('articleTitle').value = a.title || '';
+          document.getElementById('articleSection').value = a.section_id || '';
+          document.getElementById('articleType').value = a.content_type || 'actualite';
+          document.getElementById('articleExcerpt').value = a.excerpt || '';
+          document.getElementById('articleFeatured').checked = !!a.is_featured;
+          document.getElementById('articlePinned').checked = !!a.is_pinned;
+          quillEditor.root.innerHTML = a.content_html || '';
+        } catch (err) {
+          toast(err.message, 'error');
+        }
+      } else {
+        title.textContent = 'Nouvel article';
+        deleteBtn.style.display = 'none';
+        document.getElementById('articleTitle').value = '';
+        document.getElementById('articleSection').value = currentSectionFilter || '';
+        document.getElementById('articleType').value = 'actualite';
+        document.getElementById('articleExcerpt').value = '';
+        document.getElementById('articleFeatured').checked = false;
+        document.getElementById('articlePinned').checked = false;
+        quillEditor.root.innerHTML = '';
+      }
+    }
+
+    function closeArticleModal() {
+      document.getElementById('articleModal').classList.remove('visible');
+    }
+
+    async function saveArticle(status) {
+      const title = document.getElementById('articleTitle').value.trim();
+      if (!title) { toast('Le titre est requis', 'error'); return; }
+
+      const payload = {
+        title,
+        section_id: parseInt(document.getElementById('articleSection').value, 10) || null,
+        content_type: document.getElementById('articleType').value,
+        excerpt: document.getElementById('articleExcerpt').value.trim() || null,
+        content_html: quillEditor.root.innerHTML,
+        is_featured: document.getElementById('articleFeatured').checked,
+        is_pinned: document.getElementById('articlePinned').checked,
+        status
+      };
+
+      try {
+        const url = editingArticleId
+          ? `${API_URL}/content/pages/${editingArticleId}`
+          : `${API_URL}/content/pages`;
+        const method = editingArticleId ? 'PUT' : 'POST';
+        const resp = await fetch(url, {
+          method,
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (!resp.ok) {
+          const err = await resp.json();
+          throw new Error(err.error || 'Erreur');
+        }
+        toast(status === 'published' ? 'Article publié' : 'Brouillon enregistré');
+        closeArticleModal();
+        await loadArticles();
+      } catch (err) {
+        toast(err.message, 'error');
+      }
+    }
+
+    async function deleteArticle() {
+      if (!editingArticleId) return;
+      if (!confirm("Supprimer cet article définitivement ?")) return;
+      try {
+        const resp = await fetch(`${API_URL}/content/pages/${editingArticleId}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!resp.ok) throw new Error('Erreur de suppression');
+        toast('Article supprimé');
+        closeArticleModal();
+        await loadArticles();
+      } catch (err) {
+        toast(err.message, 'error');
+      }
+    }
+
+    // ---------- Helpers ----------
+    function escapeHtml(str) {
+      if (str == null) return '';
+      return String(str).replace(/[&<>"']/g, c => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[c]));
+    }
+    function contentTypeLabel(t) {
+      return ({ actualite: 'Actualité', evenement: 'Événement', resultat: 'Résultat', document: 'Document' }[t]) || t;
+    }
+    function formatDate(iso) {
+      if (!iso) return '';
+      try {
+        return new Date(iso).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+      } catch (e) { return ''; }
+    }
+
+    // ---------- Init ----------
+    enforceNewsMode().then(() => {
+      loadSections();
+      loadArticles();
+    });
+  </script>
+</body>
+</html>
