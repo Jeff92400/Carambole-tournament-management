@@ -679,30 +679,52 @@
       // with a simple prompt-based handler that works in all cases:
       //  - If text is selected → prompt for URL, wrap the selection
       //  - If no selection → prompt for both the link text and the URL
+      //
+      // IMPORTANT: the native prompt() dialog blurs the editor, so we must
+      // capture the insertion point BEFORE prompting and re-focus the
+      // editor AFTER, otherwise the insert silently fails.
       const toolbar = quillEditor.getModule('toolbar');
       toolbar.addHandler('link', function () {
         const quill = this.quill;
-        const range = quill.getSelection(true);
-        const hasSelection = range && range.length > 0;
 
-        if (hasSelection) {
-          const currentUrl = quill.getFormat(range).link || '';
-          const url = prompt('URL du lien (laisser vide pour retirer le lien) :', currentUrl);
-          if (url === null) return; // user cancelled
-          if (url.trim() === '') {
-            quill.format('link', false);
+        // Capture the current cursor/selection BEFORE the prompt steals focus
+        const rangeBefore = quill.getSelection(true) || { index: quill.getLength(), length: 0 };
+        const hasSelection = rangeBefore.length > 0;
+
+        try {
+          if (hasSelection) {
+            const currentUrl = quill.getFormat(rangeBefore).link || '';
+            const url = prompt('URL du lien (laisser vide pour retirer le lien) :', currentUrl);
+            if (url === null) return; // user cancelled
+
+            // Restore focus and selection, then apply the format
+            quill.focus();
+            quill.setSelection(rangeBefore.index, rangeBefore.length, 'user');
+            if (url.trim() === '') {
+              quill.format('link', false, 'user');
+            } else {
+              quill.format('link', url.trim(), 'user');
+            }
           } else {
-            quill.format('link', url.trim());
+            const linkText = prompt('Texte du lien à insérer :');
+            if (!linkText || !linkText.trim()) return;
+            const url = prompt('URL du lien :');
+            if (!url || !url.trim()) return;
+
+            const text = linkText.trim();
+            const href = url.trim();
+            const insertAt = rangeBefore.index;
+
+            // Restore focus BEFORE inserting (prompt() blurred it)
+            quill.focus();
+            // Use the object form of insertText — more reliable than the
+            // legacy (index, text, formatName, value) positional form
+            quill.insertText(insertAt, text, { link: href }, 'user');
+            quill.setSelection(insertAt + text.length, 0, 'user');
           }
-        } else {
-          const linkText = prompt('Texte du lien à insérer :');
-          if (!linkText || !linkText.trim()) return;
-          const url = prompt('URL du lien :');
-          if (!url || !url.trim()) return;
-          const insertAt = range ? range.index : quill.getLength();
-          quill.insertText(insertAt, linkText.trim(), 'link', url.trim());
-          // Move the cursor to the end of the inserted text
-          quill.setSelection(insertAt + linkText.trim().length, 0);
+        } catch (err) {
+          console.error('[content-admin] link handler error:', err);
+          alert('Erreur lors de l\'insertion du lien : ' + (err?.message || err));
         }
       });
     }
