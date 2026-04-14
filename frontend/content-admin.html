@@ -651,6 +651,38 @@
           ]
         }
       });
+
+      // Quill's built-in link handler uses a Snow theme tooltip that gets
+      // clipped when the editor is inside a scrollable modal. Replace it
+      // with a simple prompt-based handler that works in all cases:
+      //  - If text is selected → prompt for URL, wrap the selection
+      //  - If no selection → prompt for both the link text and the URL
+      const toolbar = quillEditor.getModule('toolbar');
+      toolbar.addHandler('link', function () {
+        const quill = this.quill;
+        const range = quill.getSelection(true);
+        const hasSelection = range && range.length > 0;
+
+        if (hasSelection) {
+          const currentUrl = quill.getFormat(range).link || '';
+          const url = prompt('URL du lien (laisser vide pour retirer le lien) :', currentUrl);
+          if (url === null) return; // user cancelled
+          if (url.trim() === '') {
+            quill.format('link', false);
+          } else {
+            quill.format('link', url.trim());
+          }
+        } else {
+          const linkText = prompt('Texte du lien à insérer :');
+          if (!linkText || !linkText.trim()) return;
+          const url = prompt('URL du lien :');
+          if (!url || !url.trim()) return;
+          const insertAt = range ? range.index : quill.getLength();
+          quill.insertText(insertAt, linkText.trim(), 'link', url.trim());
+          // Move the cursor to the end of the inserted text
+          quill.setSelection(insertAt + linkText.trim().length, 0);
+        }
+      });
     }
 
     async function openArticleModal(id = null) {
