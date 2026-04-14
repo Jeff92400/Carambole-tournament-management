@@ -1281,21 +1281,24 @@
       </div>
       <div class="accordion-body">
 
+      <!-- Mode-agnostic feedback message (visible regardless of selected mode) -->
+      <div id="newsDeliveryMessage" style="display: none; margin-bottom: 15px; padding: 12px 16px; border-radius: 6px; font-weight: 500;"></div>
+
       <!-- News delivery mode selector -->
       <div style="margin-bottom: 25px; padding: 20px; background: #f8f9fa; border: 1px solid #e1e8ed; border-radius: 8px;">
         <div style="font-weight: 600; color: #1F4788; margin-bottom: 12px;">Choisissez le mode de diffusion des news aux joueurs :</div>
         <div style="display: flex; flex-direction: column; gap: 10px;">
           <label style="display: flex; align-items: flex-start; gap: 10px; padding: 12px; background: white; border: 2px solid #e1e8ed; border-radius: 6px; cursor: pointer;" id="newsModeWpLabel">
             <input type="radio" name="newsDeliveryMode" id="newsModeWp" value="wordpress" style="margin-top: 3px;" onchange="updateNewsDeliveryMode()">
-            <div>
-              <div style="font-weight: 600; color: #333;">Site Web / WordPress</div>
+            <div style="flex: 1;">
+              <div style="font-weight: 600; color: #333;">Site Web / WordPress <span id="newsModeWpActiveBadge" style="display: none; padding: 2px 8px; background: #28a745; color: white; border-radius: 10px; font-size: 11px; font-weight: 600; margin-left: 6px;">✓ ACTIF</span></div>
               <div style="font-size: 13px; color: #666; margin-top: 2px;">Publiez les convocations et résultats sur votre site WordPress existant.</div>
             </div>
           </label>
           <label style="display: flex; align-items: flex-start; gap: 10px; padding: 12px; background: white; border: 2px solid #e1e8ed; border-radius: 6px; cursor: pointer;" id="newsModePlayerAppLabel">
             <input type="radio" name="newsDeliveryMode" id="newsModePlayerApp" value="player_app" style="margin-top: 3px;" onchange="updateNewsDeliveryMode()">
-            <div>
-              <div style="font-weight: 600; color: #333;">Module News intégré à l'App Joueur <span style="display: inline-block; padding: 2px 8px; background: #fff3cd; color: #856404; border-radius: 10px; font-size: 11px; font-weight: 600; margin-left: 6px;">À VENIR</span></div>
+            <div style="flex: 1;">
+              <div style="font-weight: 600; color: #333;">Module News intégré à l'App Joueur <span id="newsModePlayerAppActiveBadge" style="display: none; padding: 2px 8px; background: #28a745; color: white; border-radius: 10px; font-size: 11px; font-weight: 600; margin-left: 6px;">✓ ACTIF</span></div>
               <div style="font-size: 13px; color: #666; margin-top: 2px;">Pour les comités sans site web : publiez directement dans l'Espace Joueur (articles, sections, mise en avant).</div>
             </div>
           </label>
@@ -4916,6 +4919,7 @@
             wpRadio.checked = (newsMode === 'wordpress');
             paRadio.checked = (newsMode === 'player_app');
             updateNewsDeliveryMode();
+            updateNewsDeliveryActiveBadge(newsMode);
           }
 
           const enabled = settings.wp_enabled === 'true';
@@ -4965,6 +4969,37 @@
       return (paRadio && paRadio.checked) ? 'player_app' : 'wordpress';
     }
 
+    // Show "✓ ACTIF" badge on whichever mode is currently saved in the DB
+    function updateNewsDeliveryActiveBadge(savedMode) {
+      const wpBadge = document.getElementById('newsModeWpActiveBadge');
+      const paBadge = document.getElementById('newsModePlayerAppActiveBadge');
+      if (wpBadge) wpBadge.style.display = (savedMode === 'wordpress') ? '' : 'none';
+      if (paBadge) paBadge.style.display = (savedMode === 'player_app') ? '' : 'none';
+    }
+
+    // Feedback writer that works regardless of which mode block is visible
+    function showNewsDeliveryMessage(text, type) {
+      const el = document.getElementById('newsDeliveryMessage');
+      if (!el) return;
+      el.textContent = text;
+      if (type === 'success') {
+        el.style.background = '#d4edda';
+        el.style.color = '#155724';
+        el.style.border = '1px solid #c3e6cb';
+      } else if (type === 'error') {
+        el.style.background = '#f8d7da';
+        el.style.color = '#721c24';
+        el.style.border = '1px solid #f5c6cb';
+      } else {
+        el.style.background = '#fff3cd';
+        el.style.color = '#856404';
+        el.style.border = '1px solid #ffeeba';
+      }
+      el.style.display = 'block';
+      clearTimeout(el._hideTimer);
+      el._hideTimer = setTimeout(() => { el.style.display = 'none'; }, 4000);
+    }
+
     async function saveWordpressSettings() {
       const msgDiv = document.getElementById('wordpressMessage');
 
@@ -4986,22 +5021,38 @@
         });
 
         if (response.ok) {
-          msgDiv.textContent = 'Paramètres WordPress enregistrés';
+          const mode = getSelectedNewsDeliveryMode();
+          const successText = mode === 'player_app'
+            ? '✅ Mode "Module News intégré" activé — vous pouvez maintenant gérer vos articles et sections.'
+            : '✅ Paramètres WordPress enregistrés';
+
+          // Write to mode-agnostic message div (always visible)
+          showNewsDeliveryMessage(successText, 'success');
+
+          // Also update the legacy WP-only message div so behavior is preserved
+          // when the WP block is the one currently shown
+          msgDiv.textContent = successText;
           msgDiv.style.background = '#d4edda';
           msgDiv.style.color = '#155724';
-          loadWordpressSettings(); // Refresh summary
+          msgDiv.style.display = 'block';
+          setTimeout(() => { msgDiv.style.display = 'none'; }, 3000);
+
+          // Refresh the "ACTIF" badge + summary
+          updateNewsDeliveryActiveBadge(mode);
+          loadWordpressSettings();
+          return;
         } else {
           throw new Error('Erreur lors de la sauvegarde');
         }
       } catch (error) {
         console.error('Error saving WordPress settings:', error);
+        showNewsDeliveryMessage('❌ ' + error.message, 'error');
         msgDiv.textContent = error.message;
         msgDiv.style.background = '#f8d7da';
         msgDiv.style.color = '#721c24';
+        msgDiv.style.display = 'block';
+        setTimeout(() => { msgDiv.style.display = 'none'; }, 3000);
       }
-
-      msgDiv.style.display = 'block';
-      setTimeout(() => { msgDiv.style.display = 'none'; }, 3000);
     }
 
     async function testWordpressConnection() {
