@@ -891,10 +891,12 @@
       const contentHtml = quillEditor.root.innerHTML;
       console.log(`[cover] content_html length: ${contentHtml.length} chars`);
 
-      // Generate a small thumbnail from the first image in the article
-      // body. Runs entirely client-side and resolves to null if there
-      // is no image — the card then falls back to the text-only layout.
-      const coverImage = await generateCoverImageFromHtml(contentHtml, 400, 0.75);
+      // Generate a thumbnail from the first image in the article body.
+      // 800 px wide covers mobile (2x) + tablet display without visible
+      // upscaling; JPEG quality 0.75 keeps payload around 50-90 KB.
+      // Resolves to null if there is no image — the card then falls
+      // back to the text-only layout.
+      const coverImage = await generateCoverImageFromHtml(contentHtml, 800, 0.75);
       console.log(`[cover] will send cover_image: ${coverImage ? (coverImage.length / 1024).toFixed(1) + ' KB' : 'null'}`);
 
       const payload = {
