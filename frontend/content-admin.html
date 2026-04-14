@@ -674,30 +674,37 @@
         }
       });
 
-      // Quill's built-in link handler uses a Snow theme tooltip that gets
-      // clipped when the editor is inside a scrollable modal. Replace it
-      // with a simple prompt-based handler that works in all cases:
-      //  - If text is selected → prompt for URL, wrap the selection
-      //  - If no selection → prompt for both the link text and the URL
-      //
-      // IMPORTANT: the native prompt() dialog blurs the editor, so we must
-      // capture the insertion point BEFORE prompting and re-focus the
-      // editor AFTER, otherwise the insert silently fails.
+      // Custom link handler. Two code paths:
+      //   A) Text is already selected → prompt for URL, wrap the selection
+      //      (uses quill.format which requires the editor to be re-focused
+      //       after the prompt closes — handled explicitly).
+      //   B) No selection → prompt for link label, then URL, then insert
+      //      using clipboard.dangerouslyPasteHTML. This path does NOT
+      //      depend on editor focus, which is the root cause of the
+      //      "click OK, nothing appears" bug we were hitting before.
       const toolbar = quillEditor.getModule('toolbar');
       toolbar.addHandler('link', function () {
         const quill = this.quill;
 
-        // Capture the current cursor/selection BEFORE the prompt steals focus
-        const rangeBefore = quill.getSelection(true) || { index: quill.getLength(), length: 0 };
+        // Capture the current cursor/selection BEFORE the prompt steals focus.
+        // Fallback to index 0 for a fresh editor (safer than getLength, which
+        // includes the trailing newline and causes weird insert positions).
+        const rangeBefore = quill.getSelection(true) || { index: 0, length: 0 };
         const hasSelection = rangeBefore.length > 0;
+
+        // Escape helper — prevents HTML injection when we paste the link
+        const escHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({
+          '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+        }[c]));
 
         try {
           if (hasSelection) {
+            // ----- Path A: apply URL to the selected text -----
             const currentUrl = quill.getFormat(rangeBefore).link || '';
             const url = prompt('URL du lien (laisser vide pour retirer le lien) :', currentUrl);
             if (url === null) return; // user cancelled
 
-            // Restore focus and selection, then apply the format
+            // Restore focus + selection then apply the format
             quill.focus();
             quill.setSelection(rangeBefore.index, rangeBefore.length, 'user');
             if (url.trim() === '') {
@@ -706,21 +713,30 @@
               quill.format('link', url.trim(), 'user');
             }
           } else {
-            const linkText = prompt('Texte du lien à insérer :');
+            // ----- Path B: insert a brand new link -----
+            // Make the prompt messages very explicit so users don't paste
+            // the URL into the wrong field.
+            const linkText = prompt('Étape 1/2 — Texte visible du lien\n(ce que les joueurs verront, ex: "Télécharger le règlement")');
             if (!linkText || !linkText.trim()) return;
-            const url = prompt('URL du lien :');
+
+            const url = prompt('Étape 2/2 — Adresse du lien (URL)\nex: https://exemple.com/document.pdf');
             if (!url || !url.trim()) return;
 
             const text = linkText.trim();
             const href = url.trim();
-            const insertAt = rangeBefore.index;
+            const insertAt = Math.max(0, Math.min(rangeBefore.index, quill.getLength() - 1));
 
-            // Restore focus BEFORE inserting (prompt() blurred it)
-            quill.focus();
-            // Use the object form of insertText — more reliable than the
-            // legacy (index, text, formatName, value) positional form
-            quill.insertText(insertAt, text, { link: href }, 'user');
-            quill.setSelection(insertAt + text.length, 0, 'user');
+            // dangerouslyPasteHTML works even when the editor is not
+            // focused — it operates directly on the Quill Delta model
+            // rather than relying on the browser's selection API.
+            const linkHtml = `<a href="${escHtml(href)}" target="_blank" rel="noopener">${escHtml(text)}</a>`;
+            quill.clipboard.dangerouslyPasteHTML(insertAt, linkHtml, 'user');
+
+            // Best-effort: move cursor to just after the inserted text
+            try {
+              quill.focus();
+              quill.setSelection(insertAt + text.length, 0, 'user');
+            } catch (_e) { /* non-critical */ }
           }
         } catch (err) {
           console.error('[content-admin] link handler error:', err);
