@@ -796,21 +796,50 @@
     // Returns null if no image is found or the resize fails (caller
     // simply omits cover_image and the Player App falls back to the
     // text-only card layout).
+    //
+    // Diagnostic logging uses [cover] prefix so failures are easy to
+    // spot in the browser console when debugging.
     async function generateCoverImageFromHtml(html, maxWidth = 400, quality = 0.75) {
-      if (!html) return null;
+      if (!html) {
+        console.log('[cover] no html, skipping');
+        return null;
+      }
       try {
         // Parse the HTML fragment and find the first img element
         const tmp = document.createElement('div');
         tmp.innerHTML = html;
-        const img = tmp.querySelector('img');
-        if (!img || !img.src) return null;
+        const allImgs = tmp.querySelectorAll('img');
+        console.log(`[cover] found ${allImgs.length} <img> tag(s) in article`);
+        if (allImgs.length === 0) return null;
 
-        // Load the source image (supports data: URIs and regular URLs)
+        const img = allImgs[0];
+        if (!img.src) {
+          console.log('[cover] first img has no src attribute');
+          return null;
+        }
+
+        // Identify the source type so we know how to load it safely
+        const srcType = img.src.startsWith('data:')
+          ? 'data-uri'
+          : img.src.startsWith('blob:')
+            ? 'blob'
+            : 'url';
+        console.log(`[cover] first img source type: ${srcType}, length: ${img.src.length}`);
+
+        // Load the source image into a probe Image element.
+        // IMPORTANT: do NOT set crossOrigin. For data: URIs it is
+        // irrelevant. For cross-origin URLs, setting 'anonymous' would
+        // require the remote server to send CORS headers, which most
+        // don't, so the load silently fails. Without crossOrigin we
+        // load fine; the canvas will taint only for cross-origin URLs,
+        // and we catch that at the toDataURL step.
         const loaded = await new Promise((resolve, reject) => {
           const probe = new Image();
-          probe.crossOrigin = 'anonymous';
           probe.onload = () => resolve(probe);
-          probe.onerror = (e) => reject(e);
+          probe.onerror = (e) => {
+            console.warn('[cover] probe image failed to load');
+            reject(new Error('Image load failed'));
+          };
           probe.src = img.src;
         });
 
@@ -818,28 +847,39 @@
         // at maxWidth. Never upscale tiny source images.
         const srcW = loaded.naturalWidth || loaded.width || maxWidth;
         const srcH = loaded.naturalHeight || loaded.height || maxWidth;
+        console.log(`[cover] source dimensions: ${srcW}x${srcH}`);
         const ratio = Math.min(1, maxWidth / srcW);
         const dstW = Math.max(1, Math.round(srcW * ratio));
         const dstH = Math.max(1, Math.round(srcH * ratio));
+        console.log(`[cover] thumbnail dimensions: ${dstW}x${dstH}`);
 
         // Draw to an offscreen canvas and export as JPEG base64.
-        // JPEG gives the smallest payload for photos; quality 0.75 is
-        // a good visual/size compromise.
         const canvas = document.createElement('canvas');
         canvas.width = dstW;
         canvas.height = dstH;
         const ctx = canvas.getContext('2d');
-        // White background in case the source has transparency (JPEG has no alpha)
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, dstW, dstH);
         ctx.drawImage(loaded, 0, 0, dstW, dstH);
 
-        const dataUrl = canvas.toDataURL('image/jpeg', quality);
-        // Guard against pathological outputs (e.g. blank canvas)
-        if (!dataUrl || dataUrl.length < 200) return null;
+        let dataUrl;
+        try {
+          dataUrl = canvas.toDataURL('image/jpeg', quality);
+        } catch (taintErr) {
+          // Canvas was tainted — source was a cross-origin URL without CORS
+          console.warn('[cover] canvas tainted (cross-origin source), cannot export:', taintErr?.message);
+          return null;
+        }
+
+        if (!dataUrl || dataUrl.length < 200) {
+          console.warn('[cover] toDataURL returned suspiciously empty output');
+          return null;
+        }
+
+        console.log(`[cover] ✅ generated thumbnail: ${(dataUrl.length / 1024).toFixed(1)} KB`);
         return dataUrl;
       } catch (err) {
-        console.warn('[content-admin] cover image generation failed:', err?.message || err);
+        console.warn('[cover] cover image generation failed:', err?.message || err);
         return null;
       }
     }
@@ -849,11 +889,13 @@
       if (!title) { toast('Le titre est requis', 'error'); return; }
 
       const contentHtml = quillEditor.root.innerHTML;
+      console.log(`[cover] content_html length: ${contentHtml.length} chars`);
 
       // Generate a small thumbnail from the first image in the article
       // body. Runs entirely client-side and resolves to null if there
       // is no image — the card then falls back to the text-only layout.
       const coverImage = await generateCoverImageFromHtml(contentHtml, 400, 0.75);
+      console.log(`[cover] will send cover_image: ${coverImage ? (coverImage.length / 1024).toFixed(1) + ' KB' : 'null'}`);
 
       const payload = {
         title,
