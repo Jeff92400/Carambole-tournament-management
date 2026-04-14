@@ -1062,6 +1062,12 @@ async function initializeDatabase() {
       CREATE INDEX IF NOT EXISTS idx_content_pages_pinned ON content_pages(is_pinned) WHERE is_pinned = TRUE
     `);
 
+    // Migration (April 2026): add cover_image column for thumbnail previews
+    // in the Player App news feed. The thumbnail is generated client-side
+    // at save time (~400px wide JPEG base64) so it stays small and no
+    // server-side image processing is needed.
+    await client.query(`ALTER TABLE content_pages ADD COLUMN IF NOT EXISTS cover_image TEXT`);
+
     // Content links — cross-links between articles (related content)
     await client.query(`
       CREATE TABLE IF NOT EXISTS content_links (

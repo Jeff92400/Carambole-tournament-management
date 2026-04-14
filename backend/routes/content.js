@@ -223,7 +223,7 @@ router.get('/pages/:id', authenticateToken, async (req, res) => {
     const page = await dbGet(
       `SELECT p.id, p.section_id, s.name AS section_name,
               p.title, p.excerpt, p.content_html, p.content_type, p.status,
-              p.is_featured, p.is_pinned,
+              p.is_featured, p.is_pinned, p.cover_image,
               p.author_user_id, u.username AS author_name,
               p.published_at, p.created_at, p.updated_at
          FROM content_pages p
@@ -265,6 +265,7 @@ router.post('/pages', authenticateToken, requireAdmin, async (req, res) => {
       status = 'draft',
       is_featured = false,
       is_pinned = false,
+      cover_image = null,
       related_page_ids = []
     } = req.body || {};
 
@@ -283,8 +284,9 @@ router.post('/pages', authenticateToken, requireAdmin, async (req, res) => {
     const created = await dbGet(
       `INSERT INTO content_pages
          (organization_id, section_id, title, content_html, excerpt,
-          content_type, status, is_featured, is_pinned, author_user_id, published_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+          content_type, status, is_featured, is_pinned, author_user_id,
+          published_at, cover_image)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
        RETURNING id, section_id, title, excerpt, content_type, status,
                  is_featured, is_pinned, published_at, created_at, updated_at`,
       [
@@ -298,7 +300,8 @@ router.post('/pages', authenticateToken, requireAdmin, async (req, res) => {
         !!is_featured,
         !!is_pinned,
         req.user.userId || null,
-        publishedAt
+        publishedAt,
+        cover_image
       ]
     );
 
@@ -350,6 +353,7 @@ router.put('/pages/:id', authenticateToken, requireAdmin, async (req, res) => {
       status,
       is_featured,
       is_pinned,
+      cover_image,
       related_page_ids
     } = req.body || {};
 
@@ -379,6 +383,7 @@ router.put('/pages/:id', authenticateToken, requireAdmin, async (req, res) => {
     }
     if (is_featured !== undefined) { sets.push(`is_featured = $${idx++}`); params.push(!!is_featured); }
     if (is_pinned !== undefined)   { sets.push(`is_pinned = $${idx++}`); params.push(!!is_pinned); }
+    if (cover_image !== undefined) { sets.push(`cover_image = $${idx++}`); params.push(cover_image); }
 
     sets.push(`published_at = ${publishedAtExpr}`);
     sets.push(`updated_at = CURRENT_TIMESTAMP`);

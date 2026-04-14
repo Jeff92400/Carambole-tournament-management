@@ -790,16 +790,78 @@
       document.getElementById('articleModal').classList.remove('visible');
     }
 
+    // Extract the first <img> from HTML, load it, draw it to a canvas
+    // at a capped width, and return a JPEG base64 data URI. Runs entirely
+    // in the admin's browser at save time — no server-side image library.
+    // Returns null if no image is found or the resize fails (caller
+    // simply omits cover_image and the Player App falls back to the
+    // text-only card layout).
+    async function generateCoverImageFromHtml(html, maxWidth = 400, quality = 0.75) {
+      if (!html) return null;
+      try {
+        // Parse the HTML fragment and find the first img element
+        const tmp = document.createElement('div');
+        tmp.innerHTML = html;
+        const img = tmp.querySelector('img');
+        if (!img || !img.src) return null;
+
+        // Load the source image (supports data: URIs and regular URLs)
+        const loaded = await new Promise((resolve, reject) => {
+          const probe = new Image();
+          probe.crossOrigin = 'anonymous';
+          probe.onload = () => resolve(probe);
+          probe.onerror = (e) => reject(e);
+          probe.src = img.src;
+        });
+
+        // Compute a thumbnail size that preserves aspect ratio, capped
+        // at maxWidth. Never upscale tiny source images.
+        const srcW = loaded.naturalWidth || loaded.width || maxWidth;
+        const srcH = loaded.naturalHeight || loaded.height || maxWidth;
+        const ratio = Math.min(1, maxWidth / srcW);
+        const dstW = Math.max(1, Math.round(srcW * ratio));
+        const dstH = Math.max(1, Math.round(srcH * ratio));
+
+        // Draw to an offscreen canvas and export as JPEG base64.
+        // JPEG gives the smallest payload for photos; quality 0.75 is
+        // a good visual/size compromise.
+        const canvas = document.createElement('canvas');
+        canvas.width = dstW;
+        canvas.height = dstH;
+        const ctx = canvas.getContext('2d');
+        // White background in case the source has transparency (JPEG has no alpha)
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, dstW, dstH);
+        ctx.drawImage(loaded, 0, 0, dstW, dstH);
+
+        const dataUrl = canvas.toDataURL('image/jpeg', quality);
+        // Guard against pathological outputs (e.g. blank canvas)
+        if (!dataUrl || dataUrl.length < 200) return null;
+        return dataUrl;
+      } catch (err) {
+        console.warn('[content-admin] cover image generation failed:', err?.message || err);
+        return null;
+      }
+    }
+
     async function saveArticle(status) {
       const title = document.getElementById('articleTitle').value.trim();
       if (!title) { toast('Le titre est requis', 'error'); return; }
+
+      const contentHtml = quillEditor.root.innerHTML;
+
+      // Generate a small thumbnail from the first image in the article
+      // body. Runs entirely client-side and resolves to null if there
+      // is no image — the card then falls back to the text-only layout.
+      const coverImage = await generateCoverImageFromHtml(contentHtml, 400, 0.75);
 
       const payload = {
         title,
         section_id: parseInt(document.getElementById('articleSection').value, 10) || null,
         content_type: document.getElementById('articleType').value,
         excerpt: document.getElementById('articleExcerpt').value.trim() || null,
-        content_html: quillEditor.root.innerHTML,
+        content_html: contentHtml,
+        cover_image: coverImage,
         is_featured: document.getElementById('articleFeatured').checked,
         is_pinned: document.getElementById('articlePinned').checked,
         status
