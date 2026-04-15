@@ -5150,11 +5150,150 @@ router.post('/import-matches', authenticateToken, upload.array('files', 20), asy
           }
         }
         console.log(`[RESULTS] Sent ${notifType} notifications to ${participants.length} players`);
+
+        // News auto-publisher — create a single article for this tournament
+        // in the Player App news feed. Fire-and-forget; idempotent via
+        // (org, source_type, source_ref_id) unique index.
+        (async () => {
+          try {
+            const { publishAutoArticle } = require('../utils/news-auto-publisher');
+            const tournamentLabel = tournamentInfo.tournament_number
+              ? `T${tournamentInfo.tournament_number}`
+              : 'Tournoi';
+            let tournamentDateStr = '';
+            try {
+              const dateRow = await dbGetAsync(
+                `SELECT tournament_date FROM tournaments WHERE id = $1`,
+                [tournamentId]
+              );
+              if (dateRow?.tournament_date) {
+                tournamentDateStr = new Date(dateRow.tournament_date).toLocaleDateString('fr-FR', {
+                  day: 'numeric', month: 'long', year: 'numeric'
+                });
+              }
+            } catch (dateErr) { /* non-blocking */ }
+            await publishAutoArticle('RESULTS', orgId, {
+              sourceRefId: tournamentId,
+              tournamentId,
+              tournamentLabel,
+              categoryName: tournamentInfo.category_name,
+              tournamentDate: tournamentDateStr
+            });
+          } catch (autoArticleErr) {
+            console.error('[RESULTS] auto-publisher error (E2i):', autoArticleErr.message);
+          }
+        })();
       }
     } catch (notifError) {
       console.error('[RESULTS] Failed to send push notifications:', notifError.message);
       // Don't fail import if push notification fails
     }
+
+    // FINALE_QUALIFICATION detection (fire-and-forget). The E2i path was
+    // missing this — only the legacy CSV import path had it. Mirrors
+    // the logic at the top of this file, adapted to the dbGetAsync style.
+    (async () => {
+      try {
+        const rankingNumbers = await getRankingTournamentNumbers(orgId);
+        const tNum = parseInt(tournamentNumber, 10);
+        const isLastQualifyingTournament = rankingNumbers && rankingNumbers.length > 0 &&
+          tNum === Math.max(...rankingNumbers);
+
+        if (!isLastQualifyingTournament) return;
+
+        console.log(`[FINALE_QUALIFICATION] (E2i) T${tNum} is the last qualifying tournament, checking qualified players`);
+
+        const rankings = await dbAllAsync(
+          `SELECT r.licence, r.rank_position, r.total_match_points, p.first_name, p.last_name
+             FROM rankings r
+             JOIN players p ON r.licence = p.licence
+            WHERE r.category_id = $1 AND r.season = $2
+              AND ($3::int IS NULL OR r.organization_id = $3)
+            ORDER BY r.rank_position ASC`,
+          [categoryId, season, orgId]
+        );
+
+        if (!rankings || rankings.length === 0) return;
+
+        const qualificationThreshold = orgId
+          ? (await appSettings.getOrgSetting(orgId, 'qualification_threshold'))
+          : '9';
+        const qualificationSmall = orgId
+          ? (await appSettings.getOrgSetting(orgId, 'qualification_small'))
+          : '4';
+        const qualificationLarge = orgId
+          ? (await appSettings.getOrgSetting(orgId, 'qualification_large'))
+          : '6';
+
+        const threshold = parseInt(qualificationThreshold) || 9;
+        const smallCount = parseInt(qualificationSmall) || 4;
+        const largeCount = parseInt(qualificationLarge) || 6;
+
+        const qualifiedCount = rankings.length < threshold ? smallCount : largeCount;
+        const qualifiedPlayers = rankings.filter(r => r.rank_position <= qualifiedCount);
+
+        console.log(`[FINALE_QUALIFICATION] (E2i) ${qualifiedPlayers.length} players qualified (threshold: ${qualifiedCount})`);
+
+        if (qualifiedPlayers.length === 0) return;
+
+        const finaleNumber = await getFinaleTournamentNumber(orgId);
+        const categoryInfo = await dbGetAsync(
+          'SELECT display_name, game_type, level FROM categories WHERE id = $1',
+          [categoryId]
+        );
+        const finaleTournament = await dbGetAsync(
+          `SELECT debut FROM tournoi_ext
+            WHERE UPPER(mode) = UPPER($1)
+              AND UPPER(categorie) LIKE '%' || UPPER($2) || '%'
+              AND tournament_number = $3
+              AND ($4::int IS NULL OR organization_id = $4)
+              AND (status IS NULL OR status = 'active')
+            ORDER BY debut DESC
+            LIMIT 1`,
+          [categoryInfo?.game_type || '', categoryInfo?.level || '', finaleNumber, orgId]
+        );
+
+        const finaleDate = finaleTournament?.debut
+          ? new Date(finaleTournament.debut).toLocaleDateString('fr-FR', {
+              weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+            })
+          : 'Date à confirmer';
+
+        // Push notifications to qualified players
+        const licences = qualifiedPlayers.map(p => p.licence);
+        const notification = buildNotification('FINALE_QUALIFICATION', {
+          tournoiName: categoryInfo?.display_name || 'Finale',
+          finaleDate
+        });
+        try {
+          const result = await sendPushToPlayers(licences, orgId, notification);
+          console.log(`[FINALE_QUALIFICATION] (E2i) Sent notification to ${result.total_sent} qualified player(s)`);
+        } catch (pushErr) {
+          console.error('[FINALE_QUALIFICATION] (E2i) push failed:', pushErr.message);
+        }
+
+        // News auto-publisher — idempotent on (categoryId, season) hash.
+        try {
+          const { publishAutoArticle } = require('../utils/news-auto-publisher');
+          const seasonHash = String(season).split('').reduce((a, c) => a + c.charCodeAt(0), 0);
+          const qualifSourceRefId = (categoryId * 10000) + (seasonHash % 10000);
+          await publishAutoArticle('FINALE_QUALIFICATION', orgId, {
+            sourceRefId: qualifSourceRefId,
+            categoryName: categoryInfo?.display_name || 'Finale',
+            qualifiedPlayers: qualifiedPlayers.map(p => ({
+              licence: p.licence,
+              first_name: p.first_name,
+              last_name: p.last_name
+            })),
+            finaleDate
+          });
+        } catch (autoArticleErr) {
+          console.error('[FINALE_QUALIFICATION] (E2i) auto-publisher error:', autoArticleErr.message);
+        }
+      } catch (qualifError) {
+        console.error('[FINALE_QUALIFICATION] (E2i) Failed:', qualifError.message);
+      }
+    })();
 
     res.json({
       message: 'Import des matchs réussi',
