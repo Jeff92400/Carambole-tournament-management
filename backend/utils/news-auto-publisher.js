@@ -151,6 +151,20 @@ async function getPlayerAppBaseUrl(orgId) {
   }
 }
 
+// Build a Player App deeplink for a specific page. The Player App
+// deep-link mechanism is a ?page=<name> query parameter consumed by
+// the handleDeepLink IIFE at startup — NOT a hash fragment (the app
+// has no hashchange listener, so #foo does nothing). The base URL
+// stored in organization_settings typically already contains
+// ?org=<slug>, so we must detect that and use & instead of ? for the
+// second parameter. Valid pages: tournaments, inscriptions, stats,
+// calendar, profile, contact.
+function buildPlayerAppDeeplink(baseUrl, page) {
+  if (!baseUrl) return `?page=${page}`;
+  const separator = baseUrl.includes('?') ? '&' : '?';
+  return `${baseUrl}${separator}page=${page}`;
+}
+
 // Minimal HTML escaping for the few fields we interpolate into the
 // article body (player names, club names, tournament labels). The rest
 // of the body is template-authored and trusted.
@@ -312,7 +326,7 @@ function renderFinaleQualificationArticle(ctx) {
     <h3>Qualifiés</h3>
     ${listHtml}
     ${dateLine}
-    <p>Félicitations à tous les qualifiés et bonne chance pour la finale ! 🎱</p>
+    <p>Félicitations à tous les qualifiés et bonne chance pour la finale !</p>
     ${ctaButton(deeplink, 'Voir le classement')}
     <p style="color:#9ca3af;font-size:12px;text-align:center;margin-top:20px;">
       Article généré automatiquement par l'application.
@@ -425,14 +439,14 @@ async function publishAutoArticle(eventType, orgId, payload, options = {}) {
           tournamentDate: payload.tournamentDate || '',
           podium,
           totalPlayers,
-          deeplink: `${playerAppUrl}#stats`
+          deeplink: buildPlayerAppDeeplink(playerAppUrl, 'stats')
         });
       } else if (eventType === 'FINALE_QUALIFICATION') {
         rendered = renderFinaleQualificationArticle({
           categoryName: payload.categoryName || '',
           qualifiedPlayers: payload.qualifiedPlayers || [],
           finaleDate: payload.finaleDate || '',
-          deeplink: `${playerAppUrl}#stats`
+          deeplink: buildPlayerAppDeeplink(playerAppUrl, 'stats')
         });
       } else if (eventType === 'NEW_TOURNAMENT') {
         rendered = renderNewTournamentArticle({
@@ -441,7 +455,7 @@ async function publishAutoArticle(eventType, orgId, payload, options = {}) {
           tournamentDate: payload.tournamentDate || '',
           location: payload.location || '',
           closingDate: payload.closingDate || '',
-          deeplink: `${playerAppUrl}#tournaments`
+          deeplink: buildPlayerAppDeeplink(playerAppUrl, 'tournaments')
         });
       } else {
         return { skipped: 'unknown_event_type' };
