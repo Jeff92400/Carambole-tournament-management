@@ -1068,6 +1068,33 @@ async function initializeDatabase() {
     // server-side image processing is needed.
     await client.query(`ALTER TABLE content_pages ADD COLUMN IF NOT EXISTS cover_image TEXT`);
 
+    // Migration (April 2026): auto-generated article tracking.
+    // These columns let us distinguish articles created by the admin (manual)
+    // from articles produced by the auto-publisher service, and give us a
+    // stable key to detect duplicates — so a results re-import, a tournament
+    // UPDATE replay, or a scheduler retry never creates a second copy of the
+    // same article for the same source event.
+    //
+    // source_type  — event family (e.g. 'RESULTS', 'FINALE_QUALIFICATION',
+    //                'NEW_TOURNAMENT'). Free-form string so new event types
+    //                can be added without a schema change.
+    // source_ref_id — numeric id of the originating row (tournament id for
+    //                RESULTS / FINALE_QUALIFICATION, tournoi_ext.tournoi_id
+    //                for NEW_TOURNAMENT). NULL for manual articles.
+    await client.query(`ALTER TABLE content_pages ADD COLUMN IF NOT EXISTS auto_generated BOOLEAN DEFAULT FALSE`);
+    await client.query(`ALTER TABLE content_pages ADD COLUMN IF NOT EXISTS source_type VARCHAR(50)`);
+    await client.query(`ALTER TABLE content_pages ADD COLUMN IF NOT EXISTS source_ref_id INTEGER`);
+
+    // Partial unique index: enforces idempotency for auto-generated articles
+    // only. Manual articles are unaffected (they leave source_type NULL and
+    // are filtered out by the WHERE clause). The triple (org, type, ref) is
+    // what we look up in the auto-publisher before inserting.
+    await client.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_content_pages_auto_source
+        ON content_pages(organization_id, source_type, source_ref_id)
+        WHERE auto_generated = TRUE
+    `);
+
     // Content links — cross-links between articles (related content)
     await client.query(`
       CREATE TABLE IF NOT EXISTS content_links (

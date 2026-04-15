@@ -893,6 +893,47 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
                               }
                             }
                             console.log(`[RESULTS] Sent ${notifType} notifications to ${participants.length} players`);
+
+                            // News auto-publisher — create a single article for this
+                            // tournament in the Player App news feed. Fire-and-forget;
+                            // idempotent via (org, source_type, source_ref_id) unique
+                            // index, so a re-import produces no duplicate.
+                            (async () => {
+                              try {
+                                const { publishAutoArticle } = require('../utils/news-auto-publisher');
+                                const tournamentLabel = tournamentInfo.tournament_number
+                                  ? `T${tournamentInfo.tournament_number}`
+                                  : 'Tournoi';
+                                // Best-effort date lookup — the import flow doesn't
+                                // keep it in scope, so we fetch it here.
+                                let tournamentDate = '';
+                                try {
+                                  const dateRow = await new Promise((resolve, reject) => {
+                                    db.get(
+                                      `SELECT tournament_date FROM tournaments WHERE id = $1`,
+                                      [finalTournamentId],
+                                      (e, r) => e ? reject(e) : resolve(r)
+                                    );
+                                  });
+                                  if (dateRow?.tournament_date) {
+                                    tournamentDate = new Date(dateRow.tournament_date).toLocaleDateString('fr-FR', {
+                                      day: 'numeric', month: 'long', year: 'numeric'
+                                    });
+                                  }
+                                } catch (dateErr) {
+                                  // Non-blocking — template handles empty dates.
+                                }
+                                await publishAutoArticle('RESULTS', orgId, {
+                                  sourceRefId: finalTournamentId,
+                                  tournamentId: finalTournamentId,
+                                  tournamentLabel,
+                                  categoryName: tournamentInfo.category_name,
+                                  tournamentDate
+                                });
+                              } catch (autoArticleErr) {
+                                console.error('[RESULTS] auto-publisher error:', autoArticleErr.message);
+                              }
+                            })();
                           }
                         } catch (notifError) {
                           console.error('[RESULTS] Failed to send push notifications:', notifError.message);
@@ -992,6 +1033,35 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
 
                                   const result = await sendPushToPlayers(licences, orgId, notification);
                                   console.log(`[FINALE_QUALIFICATION] Sent notification to ${result.total_sent} qualified player(s)`);
+
+                                  // News auto-publisher — create a single article
+                                  // listing the qualified players. Idempotent on
+                                  // (category_id + 'T' + tournamentNumber) so a
+                                  // T3 re-import doesn't duplicate the article.
+                                  try {
+                                    const { publishAutoArticle } = require('../utils/news-auto-publisher');
+                                    // Build a stable source_ref_id from the
+                                    // category + season so re-imports of the same
+                                    // T3 never produce a second article. We fold
+                                    // categoryId and season into one integer by
+                                    // concatenating categoryId * 10000 + a hash
+                                    // of season — good enough for uniqueness
+                                    // within an org over the app's lifetime.
+                                    const seasonHash = String(season).split('').reduce((a, c) => a + c.charCodeAt(0), 0);
+                                    const qualifSourceRefId = (categoryId * 10000) + (seasonHash % 10000);
+                                    await publishAutoArticle('FINALE_QUALIFICATION', orgId, {
+                                      sourceRefId: qualifSourceRefId,
+                                      categoryName: categoryInfo?.display_name || 'Finale',
+                                      qualifiedPlayers: qualifiedPlayers.map(p => ({
+                                        licence: p.licence,
+                                        first_name: p.first_name,
+                                        last_name: p.last_name
+                                      })),
+                                      finaleDate
+                                    });
+                                  } catch (autoArticleErr) {
+                                    console.error('[FINALE_QUALIFICATION] auto-publisher error:', autoArticleErr.message);
+                                  }
                                 }
                               }
                             }

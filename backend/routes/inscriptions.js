@@ -2275,6 +2275,25 @@ router.post('/tournoi', authenticateToken, async (req, res) => {
           const licences = eligiblePlayers.map(p => p.licence);
           const result = await sendPushToPlayers(licences, orgId, notification);
           console.log(`[NEW_TOURNAMENT] Sent notification to ${result.total_sent} player(s) for tournament ${nextId}`);
+
+          // News auto-publisher — also create a news article announcing
+          // the tournament. Idempotent via tournoi_id as source_ref_id.
+          try {
+            const { publishAutoArticle } = require('../utils/news-auto-publisher');
+            const tournamentDateStr = debut ? new Date(debut).toLocaleDateString('fr-FR', {
+              weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+            }) : '';
+            await publishAutoArticle('NEW_TOURNAMENT', orgId, {
+              sourceRefId: nextId,
+              tournamentName: tournamentName,
+              categoryLabel: `${mode} ${categorie}`.trim(),
+              tournamentDate: tournamentDateStr,
+              location: lieu || '',
+              closingDate: closingDate
+            });
+          } catch (autoArticleErr) {
+            console.error('[NEW_TOURNAMENT] auto-publisher error:', autoArticleErr.message);
+          }
         }
       } catch (pushError) {
         console.error('[NEW_TOURNAMENT] Failed to send push notification:', pushError.message);

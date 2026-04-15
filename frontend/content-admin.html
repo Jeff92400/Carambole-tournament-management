@@ -260,6 +260,63 @@
     .toast.success { background: #28a745; }
     .toast.error { background: #dc3545; }
     .toast.visible { display: block; }
+
+    /* Auto-publish settings panel */
+    .auto-publish-panel {
+      background: linear-gradient(135deg, #f0f7ff 0%, #fef6e4 100%);
+      border-radius: 12px;
+      padding: 18px 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      border: 1px solid #d0e0f5;
+      margin-top: 20px;
+    }
+    .auto-publish-panel h3 {
+      margin: 0 0 6px 0;
+      font-size: 14px;
+      color: #1F4788;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .auto-publish-panel .subtitle {
+      font-size: 12px;
+      color: #6b7280;
+      margin-bottom: 14px;
+    }
+    .auto-publish-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+    }
+    @media (max-width: 768px) {
+      .auto-publish-grid { grid-template-columns: 1fr; }
+    }
+    .auto-publish-item {
+      background: white;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 12px 14px;
+    }
+    .auto-publish-item label {
+      display: block;
+      font-weight: 600;
+      font-size: 13px;
+      color: #1F4788;
+      margin-bottom: 4px;
+    }
+    .auto-publish-item .desc {
+      font-size: 11px;
+      color: #6b7280;
+      margin-bottom: 8px;
+      line-height: 1.4;
+    }
+    .auto-publish-item select {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 13px;
+      background: white;
+    }
   </style>
 </head>
 <body>
@@ -270,6 +327,43 @@
         <a href="dashboard.html">Accueil</a>
         <a href="settings-admin.html" class="admin-only">Paramètres</a>
         <a href="#" id="logoutBtn" class="nav-logout">Deconnexion</a>
+      </div>
+    </div>
+
+    <!-- Auto-publish settings panel -->
+    <div class="auto-publish-panel" id="autoPublishPanel">
+      <h3>🤖 Articles automatiques</h3>
+      <div class="subtitle">
+        Publiez automatiquement un article dans le fil d'actualités lorsque certains évènements se produisent. Les articles sont idempotents (aucun doublon) et peuvent être créés en brouillon pour relecture avant publication.
+      </div>
+      <div class="auto-publish-grid">
+        <div class="auto-publish-item">
+          <label>Résultats de tournoi</label>
+          <div class="desc">Déclenché après l'import des résultats d'un tournoi (avec podium et nombre de participants).</div>
+          <select id="autoPubResults" onchange="saveAutoPublishSetting('news_auto_publish_results', this.value)">
+            <option value="auto">Publication immédiate</option>
+            <option value="draft">Créer en brouillon</option>
+            <option value="off">Désactivé</option>
+          </select>
+        </div>
+        <div class="auto-publish-item">
+          <label>Qualifiés pour la Finale</label>
+          <div class="desc">Déclenché après l'import du dernier tournoi qualificatif (liste des qualifiés et date de la finale).</div>
+          <select id="autoPubQualification" onchange="saveAutoPublishSetting('news_auto_publish_qualification', this.value)">
+            <option value="auto">Publication immédiate</option>
+            <option value="draft">Créer en brouillon</option>
+            <option value="off">Désactivé</option>
+          </select>
+        </div>
+        <div class="auto-publish-item">
+          <label>Nouveau tournoi ouvert</label>
+          <div class="desc">Déclenché à la création d'un nouveau tournoi (dates, lieu, date limite d'inscription).</div>
+          <select id="autoPubNewTournament" onchange="saveAutoPublishSetting('news_auto_publish_new_tournament', this.value)">
+            <option value="auto">Publication immédiate</option>
+            <option value="draft">Créer en brouillon</option>
+            <option value="off">Désactivé</option>
+          </select>
+        </div>
       </div>
     </div>
 
@@ -967,10 +1061,62 @@
       } catch (e) { return ''; }
     }
 
+    // ---------- Auto-publish settings ----------
+    const AUTO_PUBLISH_DEFAULTS = {
+      news_auto_publish_results: 'auto',
+      news_auto_publish_qualification: 'auto',
+      news_auto_publish_new_tournament: 'draft'
+    };
+    const AUTO_PUBLISH_SELECT_IDS = {
+      news_auto_publish_results: 'autoPubResults',
+      news_auto_publish_qualification: 'autoPubQualification',
+      news_auto_publish_new_tournament: 'autoPubNewTournament'
+    };
+
+    async function loadAutoPublishSettings() {
+      try {
+        const resp = await fetch(`${API_URL}/settings/app-all`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!resp.ok) return;
+        const settings = await resp.json();
+        Object.entries(AUTO_PUBLISH_SELECT_IDS).forEach(([key, selectId]) => {
+          const select = document.getElementById(selectId);
+          if (!select) return;
+          const value = settings[key];
+          const valid = ['auto', 'draft', 'off'].includes(value);
+          select.value = valid ? value : AUTO_PUBLISH_DEFAULTS[key];
+        });
+      } catch (err) {
+        console.error('loadAutoPublishSettings error:', err);
+      }
+    }
+
+    async function saveAutoPublishSetting(key, value) {
+      try {
+        const resp = await fetch(`${API_URL}/settings/app-bulk`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ [key]: value })
+        });
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({}));
+          throw new Error(err.error || 'Erreur de sauvegarde');
+        }
+        toast('Réglage enregistré');
+      } catch (err) {
+        toast(err.message, 'error');
+      }
+    }
+
     // ---------- Init ----------
     enforceNewsMode().then(() => {
       loadSections();
       loadArticles();
+      loadAutoPublishSettings();
     });
   </script>
 </body>
