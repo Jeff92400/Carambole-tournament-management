@@ -178,6 +178,13 @@
               <span class="link-icon">🚀</span> Ouvrir l'Espace Joueur
             </a>
             <a href="player-accounts.html" class="card-link"><span class="link-icon">📱</span> Comptes Espace Joueur</a>
+            <!-- News module shortcut — only visible when the CDB has activated
+                 the "Module News intégré à l'App Joueur" mode in settings-admin.
+                 Hidden by default; unhidden by initNewsModuleShortcut() after
+                 checking the saved news_delivery_mode for this org. -->
+            <a href="content-admin.html" id="newsModuleShortcutLink" class="card-link" style="display: none;">
+              <span class="link-icon">📰</span> Gérer les articles (News)
+            </a>
           </div>
         </div>
 
@@ -544,6 +551,27 @@
 
       window.open(playerAppUrl, '_blank');
     });
+
+    // ---------- News module shortcut visibility ----------
+    // Show the "Gérer les articles (News)" link in the Espace Joueur card
+    // only when the CDB has selected "Module News intégré à l'App Joueur"
+    // as its news delivery mode. CDBHS (wordpress mode) never sees it.
+    async function initNewsModuleShortcut() {
+      const link = document.getElementById('newsModuleShortcutLink');
+      if (!link) return;
+      try {
+        const resp = await authFetch(`${API_URL}/settings/app-all`);
+        if (!resp.ok) return;
+        const settings = await resp.json();
+        if (settings?.news_delivery_mode === 'player_app') {
+          link.style.display = '';
+        }
+      } catch (err) {
+        // Silent fallback: stay hidden. Admins can still reach content-admin
+        // via settings-admin → Option de communication News.
+      }
+    }
+    initNewsModuleShortcut();
 
     // ============================================================
     // SEASON IMPORT FUNCTIONALITY
