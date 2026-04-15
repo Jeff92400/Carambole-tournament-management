@@ -2861,6 +2861,45 @@ router.post('/send-results', authenticateToken, async (req, res) => {
           () => resolve()
         );
       });
+
+      // News auto-publisher — promote the draft article created at results
+      // save time to 'published', now that the participants have been
+      // informed via email + push. This preserves correct causality:
+      // players are notified first, the public news feed is updated
+      // second. If the article doesn't exist yet (e.g. org setting was
+      // 'off' at save time), it is created fresh as 'published'.
+      //
+      // Gated internally by news_delivery_mode === 'player_app' — safe
+      // for WordPress-only orgs like CDBHS, which will see the call
+      // short-circuit with 'news_mode_not_player_app'.
+      //
+      // Fire-and-forget: a failure here must not fail the /send-results
+      // response, which has already done its real work.
+      (async () => {
+        try {
+          const { promoteDraftOrCreate } = require('../utils/news-auto-publisher');
+          const tournamentLabel = tournament.tournament_number
+            ? `T${tournament.tournament_number}`
+            : 'Tournoi';
+          let tournamentDateStr = '';
+          if (tournament.tournament_date) {
+            try {
+              tournamentDateStr = new Date(tournament.tournament_date).toLocaleDateString('fr-FR', {
+                day: 'numeric', month: 'long', year: 'numeric'
+              });
+            } catch (dateErr) { /* non-blocking */ }
+          }
+          await promoteDraftOrCreate('RESULTS', orgId, {
+            sourceRefId: tournamentId,
+            tournamentId,
+            tournamentLabel,
+            categoryName: tournament.display_name,
+            tournamentDate: tournamentDateStr
+          });
+        } catch (promoteErr) {
+          console.error('[RESULTS] news-auto-publisher promote error:', promoteErr.message);
+        }
+      })();
     }
 
     // Log results email send

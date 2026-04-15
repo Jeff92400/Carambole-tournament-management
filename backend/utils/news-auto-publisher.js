@@ -359,14 +359,19 @@ function renderNewTournamentArticle(ctx) {
 
 // ---------- Main entry point ----------
 
-// publishAutoArticle(eventType, orgId, payload) — safe, idempotent,
-// fire-and-forget. Returns a small diagnostic object; callers can
-// ignore it entirely.
+// publishAutoArticle(eventType, orgId, payload, options) — safe,
+// idempotent, fire-and-forget. Returns a small diagnostic object;
+// callers can ignore it entirely.
 //
 // eventType  : 'RESULTS' | 'FINALE_QUALIFICATION' | 'NEW_TOURNAMENT'
 // orgId      : organization id (nullable — if null, nothing happens)
 // payload    : shape depends on eventType, see switch below
-async function publishAutoArticle(eventType, orgId, payload) {
+// options    : { forceStatus: 'draft' | 'published' } — override the
+//              resolved per-event mode. Used by callers that need to
+//              decouple the "create the article" moment from the
+//              "publish it" moment (e.g. results save creates a draft,
+//              player-com send promotes it to published).
+async function publishAutoArticle(eventType, orgId, payload, options = {}) {
   try {
     if (!orgId) return { skipped: 'no_org' };
     if (!EVENT_SECTION_MAP[eventType]) return { skipped: 'unknown_event_type' };
@@ -446,8 +451,19 @@ async function publishAutoArticle(eventType, orgId, payload) {
       return { error: 'render_failed', message: renderErr.message };
     }
 
-    const shouldPublish = mode === 'auto';
-    const status = shouldPublish ? 'published' : 'draft';
+    // forceStatus (if provided) overrides the resolved mode — this is
+    // how /import-matches asks for a draft even when the org setting
+    // says 'auto', so that the player-com send step can flip it to
+    // published later (correct causality: participants notified first,
+    // public news published after).
+    let resolvedStatus;
+    if (options.forceStatus === 'draft' || options.forceStatus === 'published') {
+      resolvedStatus = options.forceStatus;
+    } else {
+      resolvedStatus = mode === 'auto' ? 'published' : 'draft';
+    }
+    const shouldPublish = resolvedStatus === 'published';
+    const status = resolvedStatus;
     const publishedAt = shouldPublish ? new Date() : null;
 
     // INSERT. The partial unique index on (org, source_type, source_ref_id)
@@ -491,8 +507,78 @@ async function publishAutoArticle(eventType, orgId, payload) {
   }
 }
 
+// promoteDraftOrCreate(eventType, orgId, payload) — called by the
+// player-com send step (emailing.js /send-results). Semantics:
+//
+//   1. If the org is not in 'player_app' news mode, skip (safe for
+//      WordPress-only orgs like CDBHS).
+//   2. If per-event mode is 'off', skip. 'draft' means the admin wants
+//      manual control — do not auto-promote, just leave the existing
+//      draft alone.
+//   3. If per-event mode is 'auto', promote: look up the existing
+//      auto_generated article for (org, eventType, sourceRefId). If
+//      found in draft status, UPDATE to 'published'. If found already
+//      published, no-op (idempotent). If not found at all, create it
+//      fresh as 'published' — this handles the edge case where the
+//      setting was 'off' when results were saved but is now 'auto'.
+//
+// Returns a diagnostic object; never throws.
+async function promoteDraftOrCreate(eventType, orgId, payload) {
+  try {
+    if (!orgId) return { skipped: 'no_org' };
+    if (!EVENT_SECTION_MAP[eventType]) return { skipped: 'unknown_event_type' };
+
+    const deliveryMode = await getNewsDeliveryMode(orgId);
+    if (deliveryMode !== 'player_app') return { skipped: 'news_mode_not_player_app' };
+
+    const mode = await resolveEventMode(orgId, eventType);
+    if (mode === 'off') return { skipped: 'event_disabled' };
+    if (mode === 'draft') return { skipped: 'manual_publish_mode' };
+
+    const sourceRefId = payload?.sourceRefId || null;
+    if (sourceRefId == null) return { skipped: 'no_source_ref_id' };
+
+    // Look for an existing draft from the save-step hook.
+    const existing = await db.query(
+      `SELECT id, status FROM content_pages
+        WHERE organization_id = $1
+          AND auto_generated = TRUE
+          AND source_type = $2
+          AND source_ref_id = $3
+        LIMIT 1`,
+      [orgId, eventType, sourceRefId]
+    );
+
+    if (existing.rows[0]) {
+      const row = existing.rows[0];
+      if (row.status === 'published') {
+        return { skipped: 'already_published', articleId: row.id };
+      }
+      // Flip draft -> published.
+      await db.query(
+        `UPDATE content_pages
+            SET status = 'published', published_at = $1
+          WHERE id = $2`,
+        [new Date(), row.id]
+      );
+      console.log(`[news-auto-publisher] promoted article id=${row.id} to published (${eventType}, org=${orgId}, ref=${sourceRefId})`);
+      return { promoted: true, articleId: row.id };
+    }
+
+    // No existing draft — fall back to creating the article fresh as
+    // 'published'. Reuses the main entry point with forceStatus so the
+    // template + section + idempotency logic stays in one place.
+    console.log(`[news-auto-publisher] no draft found, creating fresh published article (${eventType}, org=${orgId}, ref=${sourceRefId})`);
+    return await publishAutoArticle(eventType, orgId, payload, { forceStatus: 'published' });
+  } catch (err) {
+    console.error(`[news-auto-publisher] promoteDraftOrCreate error for ${eventType}:`, err.message);
+    return { error: 'unexpected', message: err.message };
+  }
+}
+
 module.exports = {
   publishAutoArticle,
+  promoteDraftOrCreate,
   // Exported for tests / admin UI preview only.
   _internals: {
     EVENT_SECTION_MAP,

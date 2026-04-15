@@ -339,10 +339,10 @@
       <div class="auto-publish-grid">
         <div class="auto-publish-item">
           <label>Résultats de tournoi</label>
-          <div class="desc">Déclenché après l'import des résultats d'un tournoi (avec podium et nombre de participants).</div>
+          <div class="desc">Déclenché après l'import des résultats d'un tournoi (avec podium et nombre de participants). L'article est créé en brouillon à l'import, puis publié automatiquement après l'envoi des emails + notifications aux participants (Com joueurs → Résultats Tournoi) — pour que les joueurs soient informés avant le grand public.</div>
           <select id="autoPubResults" onchange="saveAutoPublishSetting('news_auto_publish_results', this.value)">
-            <option value="auto">Publication immédiate</option>
-            <option value="draft">Créer en brouillon</option>
+            <option value="auto">Activé (publié après envoi aux joueurs)</option>
+            <option value="draft">Brouillon uniquement (publication manuelle)</option>
             <option value="off">Désactivé</option>
           </select>
         </div>

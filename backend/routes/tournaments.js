@@ -923,13 +923,17 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
                                 } catch (dateErr) {
                                   // Non-blocking — template handles empty dates.
                                 }
+                                // Force draft — see comment in /import-matches hook.
+                                // Article is promoted to 'published' by the
+                                // /send-results endpoint after emails + push
+                                // have been sent to participants.
                                 await publishAutoArticle('RESULTS', orgId, {
                                   sourceRefId: finalTournamentId,
                                   tournamentId: finalTournamentId,
                                   tournamentLabel,
                                   categoryName: tournamentInfo.category_name,
                                   tournamentDate
-                                });
+                                }, { forceStatus: 'draft' });
                               } catch (autoArticleErr) {
                                 console.error('[RESULTS] auto-publisher error:', autoArticleErr.message);
                               }
@@ -5172,13 +5176,19 @@ router.post('/import-matches', authenticateToken, upload.array('files', 20), asy
                 });
               }
             } catch (dateErr) { /* non-blocking */ }
+            // Force draft: the article must not be visible in the public
+            // news feed until the admin has sent individual emails + push
+            // notifications to the participants via /send-results. That
+            // step calls promoteDraftOrCreate() to flip this draft to
+            // published, preserving correct causality (participants
+            // informed first, public news published second).
             await publishAutoArticle('RESULTS', orgId, {
               sourceRefId: tournamentId,
               tournamentId,
               tournamentLabel,
               categoryName: tournamentInfo.category_name,
               tournamentDate: tournamentDateStr
-            });
+            }, { forceStatus: 'draft' });
           } catch (autoArticleErr) {
             console.error('[RESULTS] auto-publisher error (E2i):', autoArticleErr.message);
           }
