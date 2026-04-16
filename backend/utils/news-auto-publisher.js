@@ -590,9 +590,48 @@ async function promoteDraftOrCreate(eventType, orgId, payload) {
   }
 }
 
+// fireResultsArticleDraft(orgId, tournamentId, tournamentInfo, fetchDateFn)
+//
+// Convenience wrapper used by BOTH the legacy CSV /import and the E2i
+// /import-matches endpoints. Eliminates the copy-pasted IIFE blocks
+// that previously lived in each import handler (with only cosmetic
+// differences — variable names and async patterns).
+//
+// fetchDateFn(tournamentId) → Promise<string|null>  is provided by
+// the caller so this module doesn't depend on any specific database
+// helper (legacy uses callback-wrapped db.get, E2i uses dbGetAsync).
+//
+// Returns a diagnostic object; never throws.
+async function fireResultsArticleDraft(orgId, tournamentId, tournamentInfo, fetchDateFn) {
+  try {
+    const tournamentLabel = tournamentInfo.tournament_number
+      ? `T${tournamentInfo.tournament_number}`
+      : 'Tournoi';
+
+    let tournamentDate = '';
+    if (typeof fetchDateFn === 'function') {
+      try {
+        tournamentDate = (await fetchDateFn(tournamentId)) || '';
+      } catch (_e) { /* non-blocking */ }
+    }
+
+    return await publishAutoArticle('RESULTS', orgId, {
+      sourceRefId: tournamentId,
+      tournamentId,
+      tournamentLabel,
+      categoryName: tournamentInfo.category_name,
+      tournamentDate
+    }, { forceStatus: 'draft' });
+  } catch (err) {
+    console.error('[RESULTS] auto-publisher error:', err.message);
+    return { error: 'fire_results_draft', message: err.message };
+  }
+}
+
 module.exports = {
   publishAutoArticle,
   promoteDraftOrCreate,
+  fireResultsArticleDraft,
   // Exported for tests / admin UI preview only.
   _internals: {
     EVENT_SECTION_MAP,

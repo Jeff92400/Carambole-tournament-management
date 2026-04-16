@@ -894,46 +894,21 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
                             }
                             console.log(`[RESULTS] Sent ${notifType} notifications to ${participants.length} players`);
 
-                            // News auto-publisher — create a single article for this
-                            // tournament in the Player App news feed. Fire-and-forget;
-                            // idempotent via (org, source_type, source_ref_id) unique
-                            // index, so a re-import produces no duplicate.
+                            // News auto-publisher — create a draft article for this
+                            // tournament in the Player App news feed. Uses the shared
+                            // helper so template/logic stays in one place.
                             (async () => {
                               try {
-                                const { publishAutoArticle } = require('../utils/news-auto-publisher');
-                                const tournamentLabel = tournamentInfo.tournament_number
-                                  ? `T${tournamentInfo.tournament_number}`
-                                  : 'Tournoi';
-                                // Best-effort date lookup — the import flow doesn't
-                                // keep it in scope, so we fetch it here.
-                                let tournamentDate = '';
-                                try {
-                                  const dateRow = await new Promise((resolve, reject) => {
-                                    db.get(
-                                      `SELECT tournament_date FROM tournaments WHERE id = $1`,
-                                      [finalTournamentId],
-                                      (e, r) => e ? reject(e) : resolve(r)
-                                    );
+                                const { fireResultsArticleDraft } = require('../utils/news-auto-publisher');
+                                await fireResultsArticleDraft(orgId, finalTournamentId, tournamentInfo, async (tId) => {
+                                  const row = await new Promise((resolve, reject) => {
+                                    db.get(`SELECT tournament_date FROM tournaments WHERE id = $1`, [tId], (e, r) => e ? reject(e) : resolve(r));
                                   });
-                                  if (dateRow?.tournament_date) {
-                                    tournamentDate = new Date(dateRow.tournament_date).toLocaleDateString('fr-FR', {
-                                      day: 'numeric', month: 'long', year: 'numeric'
-                                    });
+                                  if (row?.tournament_date) {
+                                    return new Date(row.tournament_date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
                                   }
-                                } catch (dateErr) {
-                                  // Non-blocking — template handles empty dates.
-                                }
-                                // Force draft — see comment in /import-matches hook.
-                                // Article is promoted to 'published' by the
-                                // /send-results endpoint after emails + push
-                                // have been sent to participants.
-                                await publishAutoArticle('RESULTS', orgId, {
-                                  sourceRefId: finalTournamentId,
-                                  tournamentId: finalTournamentId,
-                                  tournamentLabel,
-                                  categoryName: tournamentInfo.category_name,
-                                  tournamentDate
-                                }, { forceStatus: 'draft' });
+                                  return null;
+                                });
                               } catch (autoArticleErr) {
                                 console.error('[RESULTS] auto-publisher error:', autoArticleErr.message);
                               }
@@ -5155,40 +5130,19 @@ router.post('/import-matches', authenticateToken, upload.array('files', 20), asy
         }
         console.log(`[RESULTS] Sent ${notifType} notifications to ${participants.length} players`);
 
-        // News auto-publisher — create a single article for this tournament
-        // in the Player App news feed. Fire-and-forget; idempotent via
-        // (org, source_type, source_ref_id) unique index.
+        // News auto-publisher — create a draft article for this tournament
+        // in the Player App news feed. Uses the shared helper so template
+        // and logic stay in one place.
         (async () => {
           try {
-            const { publishAutoArticle } = require('../utils/news-auto-publisher');
-            const tournamentLabel = tournamentInfo.tournament_number
-              ? `T${tournamentInfo.tournament_number}`
-              : 'Tournoi';
-            let tournamentDateStr = '';
-            try {
-              const dateRow = await dbGetAsync(
-                `SELECT tournament_date FROM tournaments WHERE id = $1`,
-                [tournamentId]
-              );
-              if (dateRow?.tournament_date) {
-                tournamentDateStr = new Date(dateRow.tournament_date).toLocaleDateString('fr-FR', {
-                  day: 'numeric', month: 'long', year: 'numeric'
-                });
+            const { fireResultsArticleDraft } = require('../utils/news-auto-publisher');
+            await fireResultsArticleDraft(orgId, tournamentId, tournamentInfo, async (tId) => {
+              const row = await dbGetAsync(`SELECT tournament_date FROM tournaments WHERE id = $1`, [tId]);
+              if (row?.tournament_date) {
+                return new Date(row.tournament_date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
               }
-            } catch (dateErr) { /* non-blocking */ }
-            // Force draft: the article must not be visible in the public
-            // news feed until the admin has sent individual emails + push
-            // notifications to the participants via /send-results. That
-            // step calls promoteDraftOrCreate() to flip this draft to
-            // published, preserving correct causality (participants
-            // informed first, public news published second).
-            await publishAutoArticle('RESULTS', orgId, {
-              sourceRefId: tournamentId,
-              tournamentId,
-              tournamentLabel,
-              categoryName: tournamentInfo.category_name,
-              tournamentDate: tournamentDateStr
-            }, { forceStatus: 'draft' });
+              return null;
+            });
           } catch (autoArticleErr) {
             console.error('[RESULTS] auto-publisher error (E2i):', autoArticleErr.message);
           }

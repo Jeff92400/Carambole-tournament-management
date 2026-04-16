@@ -686,7 +686,73 @@
       }
     }
 
-    // ---------- Articles ----------
+    // ---------- Articles (with auto-refresh) ----------
+
+    // Track article statuses so we can detect external promotions
+    // (e.g. a brouillon promoted to published by the /send-results
+    // endpoint while this page is open). Polling every 30 s is
+    // lightweight and avoids the need for WebSockets.
+    let _lastArticleStatuses = {};  // { id: status }
+    let _articlePollTimer = null;
+    const ARTICLE_POLL_INTERVAL_MS = 30000;
+
+    function _startArticlePoll() {
+      if (_articlePollTimer) return;
+      _articlePollTimer = setInterval(() => _pollArticleStatuses(), ARTICLE_POLL_INTERVAL_MS);
+    }
+
+    function _stopArticlePoll() {
+      if (_articlePollTimer) { clearInterval(_articlePollTimer); _articlePollTimer = null; }
+    }
+
+    async function _pollArticleStatuses() {
+      try {
+        const params = new URLSearchParams();
+        if (currentSectionFilter) params.set('section_id', currentSectionFilter);
+        // Fetch all statuses (no filter) so we can detect draft→published
+        const resp = await fetch(`${API_URL}/content/pages?${params.toString()}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!resp.ok) return;
+        const articles = await resp.json();
+
+        // Build new status map
+        const newMap = {};
+        articles.forEach(a => { newMap[a.id] = a.status; });
+
+        // Detect promotions (draft → published)
+        let promoted = 0;
+        for (const [id, oldStatus] of Object.entries(_lastArticleStatuses)) {
+          if (oldStatus === 'draft' && newMap[id] === 'published') promoted++;
+        }
+        // Also detect new articles that appeared
+        let newArticles = 0;
+        for (const id of Object.keys(newMap)) {
+          if (!_lastArticleStatuses[id]) newArticles++;
+        }
+
+        if (promoted > 0 || newArticles > 0) {
+          // Re-render silently, then toast
+          renderArticles(articles);
+          _lastArticleStatuses = newMap;
+          if (promoted > 0) {
+            toast(`${promoted} article${promoted > 1 ? 's' : ''} promu${promoted > 1 ? 's' : ''} en "Publié" (publication automatique).`, 'success');
+          }
+          if (newArticles > 0) {
+            toast(`${newArticles} nouvel${newArticles > 1 ? 'les' : ''} article${newArticles > 1 ? 's' : ''} généré${newArticles > 1 ? 's' : ''} automatiquement.`, 'success');
+          }
+        }
+      } catch (_e) { /* silent — best effort polling */ }
+    }
+
+    // Record statuses whenever the list is loaded normally, and kick
+    // off the poll timer if not already running.
+    function _recordStatuses(articles) {
+      _lastArticleStatuses = {};
+      articles.forEach(a => { _lastArticleStatuses[a.id] = a.status; });
+      _startArticlePoll();
+    }
+
     async function loadArticles() {
       const container = document.getElementById('articlesContainer');
       const status = document.getElementById('filterStatus').value;
@@ -704,6 +770,7 @@
         if (!resp.ok) throw new Error('Erreur de chargement');
         const articles = await resp.json();
         renderArticles(articles);
+        _recordStatuses(articles);
       } catch (err) {
         container.innerHTML = `<div class="empty-state"><p>${escapeHtml(err.message)}</p></div>`;
       }
