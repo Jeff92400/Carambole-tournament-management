@@ -2510,9 +2510,11 @@ router.put('/tournoi/:id', authenticateToken, async (req, res) => {
 
 // ============================================================================
 // Helper: resolve the pool of players for a given mode + categorie (+ season)
-// within an org. Returns { category, season, players } or throws.
+// within an org. Optional scope by tournoi_id to restrict to players inscribed
+// in that specific tournament only.
+// Returns { category, season, players, scope } or throws.
 // ============================================================================
-async function resolveCategoryPool(mode, categorie, orgId) {
+async function resolveCategoryPool(mode, categorie, orgId, scopeTournoiId = null) {
   if (!mode || !categorie) {
     const err = new Error('Mode et catégorie requis');
     err.status = 400;
@@ -2539,6 +2541,31 @@ async function resolveCategoryPool(mode, categorie, orgId) {
 
   const currentSeason = await appSettings.getCurrentSeason();
 
+  // Scope 1: specific tournament — only players inscribed in that tournoi_id
+  //   (excludes forfait/désinscrit, matches exact mode+categorie as a safety net
+  //    against the scopeTournoiId being from another category)
+  if (scopeTournoiId) {
+    const players = await new Promise((resolve, reject) => {
+      db.all(`
+        SELECT DISTINCT p.licence, p.first_name, p.last_name, p.club, p.email AS player_email
+        FROM players p
+        JOIN inscriptions i ON REPLACE(i.licence, ' ', '') = REPLACE(p.licence, ' ', '')
+        JOIN tournoi_ext te ON te.tournoi_id = i.tournoi_id
+        WHERE i.tournoi_id = $1
+          AND ($2::int IS NULL OR p.organization_id = $2)
+          AND ($2::int IS NULL OR i.organization_id = $2)
+          AND UPPER(p.licence) NOT LIKE 'TEST%'
+          AND (i.statut IS NULL OR i.statut NOT IN ('désinscrit', 'forfait'))
+          AND UPPER(REPLACE(te.mode, ' ', '')) = UPPER(REPLACE($3, ' ', ''))
+          AND UPPER(te.categorie) = UPPER($4)
+        ORDER BY p.last_name, p.first_name
+      `, [scopeTournoiId, orgId, mode, categorie], (e, rows) => e ? reject(e) : resolve(rows || []));
+    });
+    return { category, season: currentSeason, players, scope: { type: 'tournoi', tournoiId: scopeTournoiId } };
+  }
+
+  // Scope 2: full category (player file) — all players whose category matches
+  //   via rankings row OR inscription in any tournoi_ext of this mode+categorie
   const players = await new Promise((resolve, reject) => {
     db.all(`
       SELECT DISTINCT p.licence, p.first_name, p.last_name, p.club, p.email AS player_email
@@ -2567,7 +2594,7 @@ async function resolveCategoryPool(mode, categorie, orgId) {
     `, [orgId, category.id, currentSeason, mode, categorie], (e, rows) => e ? reject(e) : resolve(rows || []));
   });
 
-  return { category, season: currentSeason, players };
+  return { category, season: currentSeason, players, scope: { type: 'category' } };
 }
 
 // ============================================================================
@@ -2579,10 +2606,11 @@ router.get('/category-pool-count', authenticateToken, async (req, res) => {
     return res.status(403).json({ error: 'Admin access required' });
   }
   const orgId = req.user.organizationId || null;
-  const { mode, categorie } = req.query;
+  const { mode, categorie, scopeTournoiId } = req.query;
   try {
-    const { season, players } = await resolveCategoryPool(mode, categorie, orgId);
-    return res.json({ count: players.length, season, mode, categorie });
+    const scopeId = scopeTournoiId ? parseInt(scopeTournoiId, 10) : null;
+    const { season, players, scope } = await resolveCategoryPool(mode, categorie, orgId, scopeId || null);
+    return res.json({ count: players.length, season, mode, categorie, scope });
   } catch (err) {
     return res.status(err.status || 500).json({ error: err.message });
   }
@@ -2600,7 +2628,12 @@ router.post('/tournoi/:id/notify', authenticateToken, async (req, res) => {
 
   const orgId = req.user.organizationId || null;
   const { id } = req.params;
-  const { title, body, channels = {}, mode: modeOverride, categorie: categorieOverride } = req.body || {};
+  const {
+    title, body, channels = {},
+    mode: modeOverride, categorie: categorieOverride,
+    scopeTournoiId: scopeTournoiIdRaw
+  } = req.body || {};
+  const scopeTournoiId = scopeTournoiIdRaw ? parseInt(scopeTournoiIdRaw, 10) : null;
 
   // Validation
   if (!title || typeof title !== 'string' || !title.trim()) {
@@ -2636,31 +2669,36 @@ router.post('/tournoi/:id/notify', authenticateToken, async (req, res) => {
     const tournamentLabel = `${tournament.nom || 'Tournoi'} — ${targetMode} ${targetCategorie}`.trim();
 
     // Resolve the pool via the shared helper (same logic as the live-count endpoint).
-    // rank_cadre is shared across ALL cadre variants (42/2, 47/2, 47/1, 71/2),
-    // so we look up the exact category row (game_type + level) and pull players
-    // who have a ranking in THAT category for the current season, OR are inscribed
-    // in any tournoi_ext of that exact mode+level.
-    let category, currentSeason, inscriptions;
+    // When scopeTournoiId is provided, only players inscribed in that specific
+    // tournament are targeted. Otherwise the full category pool is used.
+    let category, currentSeason, inscriptions, scope;
     try {
-      const pool = await resolveCategoryPool(targetMode, targetCategorie, orgId);
+      const pool = await resolveCategoryPool(targetMode, targetCategorie, orgId, scopeTournoiId);
       category = pool.category;
       currentSeason = pool.season;
       inscriptions = pool.players;
+      scope = pool.scope;
     } catch (err) {
       return res.status(err.status || 500).json({ error: err.message });
     }
 
     if (inscriptions.length === 0) {
+      const scopeLabel = scope?.type === 'tournoi'
+        ? `inscrits au tournoi ${scopeTournoiId} (${targetMode} ${targetCategorie})`
+        : `dans la catégorie ${targetMode} ${targetCategorie} pour la saison ${currentSeason}`;
       return res.json({
         success: true,
-        message: `Aucun joueur dans la catégorie ${targetMode} ${targetCategorie} pour la saison ${currentSeason}`,
+        message: `Aucun joueur ${scopeLabel}`,
         totalPlayers: 0,
         pushSent: 0,
         emailSent: 0
       });
     }
 
-    console.log(`[Admin Message] Target: ${inscriptions.length} players in ${targetMode} ${targetCategorie} (season ${currentSeason}, category_id=${category.id})`);
+    const scopeDescription = scope?.type === 'tournoi'
+      ? `inscribed in tournoi_id=${scopeTournoiId}`
+      : `in category pool`;
+    console.log(`[Admin Message] Target: ${inscriptions.length} players ${scopeDescription} — ${targetMode} ${targetCategorie} (season ${currentSeason}, category_id=${category.id})`);
 
     // Org settings for email
     const emailSettings = await appSettings.getOrgSettingsBatch(orgId, [
@@ -2796,7 +2834,9 @@ router.post('/tournoi/:id/notify', authenticateToken, async (req, res) => {
               </div>
               <div style="background: white; border-left: 4px solid #28a745; padding: 15px; margin-bottom: 20px;">
                 <h4 style="margin: 0 0 10px 0; color: #28a745;">Résultat de l'envoi</h4>
-                <p style="margin: 5px 0;">👥 <strong>Cible :</strong> joueurs de la catégorie ${escapeHtml(targetMode)} ${escapeHtml(targetCategorie)} (saison ${escapeHtml(currentSeason)})</p>
+                <p style="margin: 5px 0;">👥 <strong>Cible :</strong> ${scope?.type === 'tournoi'
+                  ? `joueurs inscrits au <strong>${escapeHtml(tournament.nom || ('tournoi ' + id))}</strong> (${escapeHtml(targetMode)} ${escapeHtml(targetCategorie)})`
+                  : `tous les joueurs de la catégorie ${escapeHtml(targetMode)} ${escapeHtml(targetCategorie)} (saison ${escapeHtml(currentSeason)}, fichier joueurs)`}</p>
                 <p style="margin: 5px 0;">👥 <strong>Total :</strong> ${inscriptions.length} joueur(s)</p>
                 ${wantPush ? `<p style="margin: 5px 0;">📲 <strong>Push :</strong> ${pushSent} envoyé(s)${pushFailed > 0 ? `, ${pushFailed} échec(s)` : ''}</p>` : '<p style="margin: 5px 0; color: #999;">📲 Push : non demandé</p>'}
                 ${wantEmail ? `<p style="margin: 5px 0;">✉️ <strong>Emails :</strong> ${emailSent} envoyé(s)${emailFailed > 0 ? `, ${emailFailed} échec(s)` : ''}</p>` : '<p style="margin: 5px 0; color: #999;">✉️ Email : non demandé</p>'}

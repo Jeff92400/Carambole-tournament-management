@@ -357,6 +357,13 @@
             </select>
           </div>
         </div>
+        <div style="margin-top: 10px;">
+          <label style="display: block; margin-bottom: 4px; font-size: 12px; font-weight: 600;">Tournoi</label>
+          <select id="notify_scope_tournoi" style="width: 100%; padding: 7px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+            <option value="">— Toute la catégorie (fichier joueurs) —</option>
+          </select>
+          <small style="color: #78350f; font-size: 11px;">Sélectionnez un tournoi pour cibler uniquement ses joueurs inscrits, ou laissez "Toute la catégorie" pour cibler tous les joueurs de la catégorie.</small>
+        </div>
         <div id="notify_count_wrapper" style="margin-top: 10px; font-size: 13px; color: #78350f;">
           <span id="notify_count_label">Sélectionnez mode et catégorie pour voir le nombre de joueurs ciblés.</span>
         </div>
@@ -1130,11 +1137,60 @@
       }
     }
 
-    // Fetch the live count of players in the selected (mode, categorie)
+    // Populate the tournoi scope selector based on current mode+categorie.
+    // Lists tournaments of this season matching mode+cat. Adds a "Toute la
+    // catégorie" option on top.
+    function populateNotifyScopeTournoiSelect(preselectTournoiId) {
+      const sel = document.getElementById('notify_scope_tournoi');
+      if (!sel) return;
+      const mode = (document.getElementById('notify_mode').value || '').trim();
+      const categorie = (document.getElementById('notify_categorie').value || '').trim();
+
+      // Base: always keep "Toute la catégorie" as the first option
+      sel.innerHTML = '<option value="">— Toute la catégorie (fichier joueurs) —</option>';
+      if (!mode || !categorie) return;
+
+      // Current season for filtering (match format used elsewhere: "YYYY-YYYY+1")
+      // We simply filter client-side against allTournois based on mode/cat match.
+      const modeU = mode.toUpperCase().replace(/\s+/g, '');
+      const catU = categorie.toUpperCase();
+
+      const matching = (allTournois || [])
+        .filter(t => (t.mode || '').toUpperCase().replace(/\s+/g, '') === modeU
+                  && (t.categorie || '').toUpperCase() === catU)
+        .filter(t => (t.status || 'active') !== 'cancelled')
+        // Sort by tournament_number, then by date asc, finales last
+        .sort((a, b) => {
+          const aNum = parseInt(a.tournament_number || '99', 10);
+          const bNum = parseInt(b.tournament_number || '99', 10);
+          if (aNum !== bNum) return aNum - bNum;
+          return (a.debut || '').localeCompare(b.debut || '');
+        });
+
+      matching.forEach(t => {
+        const label = t.tournament_number
+          ? (typeof tournamentRoundsMap !== 'undefined' && tournamentRoundsMap[t.tournament_number]
+              ? tournamentRoundsMap[t.tournament_number]
+              : 'T' + t.tournament_number)
+          : ((t.nom || '').toLowerCase().includes('finale') ? 'Finale' : (t.nom || 'Tournoi'));
+        const dateFr = t.debut ? new Date(t.debut).toLocaleDateString('fr-FR') : '';
+        const opt = document.createElement('option');
+        opt.value = String(t.tournoi_id);
+        opt.textContent = `${label}${dateFr ? ' — ' + dateFr : ''}${t.lieu ? ' — ' + t.lieu : ''}`;
+        sel.appendChild(opt);
+      });
+
+      if (preselectTournoiId) {
+        sel.value = String(preselectTournoiId);
+      }
+    }
+
+    // Fetch the live count of players in the selected (mode, categorie, scope)
     let _notifyCountAbort = null;
     async function refreshNotifyCount() {
       const mode = document.getElementById('notify_mode').value;
       const categorie = document.getElementById('notify_categorie').value;
+      const scopeTournoiId = document.getElementById('notify_scope_tournoi').value;
       const label = document.getElementById('notify_count_label');
       if (!mode || !categorie) {
         label.textContent = 'Sélectionnez mode et catégorie pour voir le nombre de joueurs ciblés.';
@@ -1144,10 +1200,12 @@
       try {
         if (_notifyCountAbort) _notifyCountAbort.abort();
         _notifyCountAbort = new AbortController();
-        const res = await fetch(
-          `${API_URL}/inscriptions/category-pool-count?mode=${encodeURIComponent(mode)}&categorie=${encodeURIComponent(categorie)}`,
-          { headers: { 'Authorization': `Bearer ${token}` }, signal: _notifyCountAbort.signal }
-        );
+        let url = `${API_URL}/inscriptions/category-pool-count?mode=${encodeURIComponent(mode)}&categorie=${encodeURIComponent(categorie)}`;
+        if (scopeTournoiId) url += `&scopeTournoiId=${encodeURIComponent(scopeTournoiId)}`;
+        const res = await fetch(url, {
+          headers: { 'Authorization': `Bearer ${token}` },
+          signal: _notifyCountAbort.signal
+        });
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
           label.textContent = `⚠️ ${err.error || 'Impossible de calculer la cible.'}`;
@@ -1155,9 +1213,19 @@
         }
         const data = await res.json();
         const n = data.count || 0;
-        label.innerHTML = n === 0
-          ? `⚠️ <strong>Aucun joueur</strong> dans cette catégorie pour la saison en cours.`
-          : `👥 <strong>${n} joueur${n > 1 ? 's' : ''}</strong> dans la catégorie ${mode} ${categorie} (saison ${data.season || 'en cours'}).`;
+        const isScoped = !!scopeTournoiId;
+        if (n === 0) {
+          label.innerHTML = isScoped
+            ? `⚠️ <strong>Aucun joueur inscrit</strong> à ce tournoi.`
+            : `⚠️ <strong>Aucun joueur</strong> dans cette catégorie pour la saison en cours.`;
+        } else {
+          if (isScoped) {
+            const tournoiLabel = document.getElementById('notify_scope_tournoi').selectedOptions[0]?.textContent || 'ce tournoi';
+            label.innerHTML = `👥 <strong>${n} joueur${n > 1 ? 's' : ''}</strong> inscrit${n > 1 ? 's' : ''} à <em>${tournoiLabel}</em>.`;
+          } else {
+            label.innerHTML = `👥 <strong>${n} joueur${n > 1 ? 's' : ''}</strong> dans la catégorie ${mode} ${categorie} (saison ${data.season || 'en cours'}, fichier joueurs).`;
+          }
+        }
       } catch (e) {
         if (e.name !== 'AbortError') label.textContent = `⚠️ ${e.message}`;
       }
@@ -1174,6 +1242,8 @@
       const modePrefill = (tournoi.mode || '').toUpperCase();
       document.getElementById('notify_mode').value = modePrefill;
       updateNotifyCategorieDropdown(tournoi.categorie || '');
+      // Populate Tournoi selector and pre-select the clicked tournament
+      populateNotifyScopeTournoiSelect(tournoi.tournoi_id);
       // Live count
       refreshNotifyCount();
 
@@ -1221,12 +1291,19 @@
       document.getElementById('notify_title').addEventListener('input', updateNotifyPreview);
       document.getElementById('notify_body').addEventListener('input', updateNotifyPreview);
 
-      // Mode change -> refresh categorie + live count
+      // Mode change -> refresh categorie + repopulate tournoi scope + live count
       document.getElementById('notify_mode').addEventListener('change', () => {
         updateNotifyCategorieDropdown();
+        populateNotifyScopeTournoiSelect(null);
         refreshNotifyCount();
       });
-      document.getElementById('notify_categorie').addEventListener('change', refreshNotifyCount);
+      // Categorie change -> repopulate tournoi scope + live count
+      document.getElementById('notify_categorie').addEventListener('change', () => {
+        populateNotifyScopeTournoiSelect(null);
+        refreshNotifyCount();
+      });
+      // Tournoi scope change -> live count
+      document.getElementById('notify_scope_tournoi').addEventListener('change', refreshNotifyCount);
 
       document.getElementById('cancelNotifyBtn').addEventListener('click', closeNotifyModal);
 
@@ -1236,6 +1313,7 @@
         const body = document.getElementById('notify_body').value.trim();
         const mode = document.getElementById('notify_mode').value;
         const categorie = document.getElementById('notify_categorie').value;
+        const scopeTournoiId = document.getElementById('notify_scope_tournoi').value || null;
         const wantPush = document.getElementById('notify_push').checked;
         const wantEmail = document.getElementById('notify_email').checked;
 
@@ -1245,27 +1323,32 @@
 
         // Confirmation with explicit target
         const countLabel = (document.getElementById('notify_count_label').textContent || '').trim();
-        if (!confirm(`Envoyer le message à la catégorie ${mode} ${categorie} ?\n\n${countLabel}`)) return;
+        const scopeLabel = scopeTournoiId
+          ? `au ${(document.getElementById('notify_scope_tournoi').selectedOptions[0]?.textContent || 'tournoi sélectionné')}`
+          : `à toute la catégorie ${mode} ${categorie}`;
+        if (!confirm(`Envoyer le message ${scopeLabel} ?\n\n${countLabel}`)) return;
 
         const btn = document.getElementById('sendNotifyBtn');
         const originalText = btn.textContent;
         btn.disabled = true;
         btn.textContent = 'Envoi en cours...';
         try {
+          const payload = { title, body, mode, categorie, channels: { push: wantPush, email: wantEmail } };
+          if (scopeTournoiId) payload.scopeTournoiId = scopeTournoiId;
           const res = await fetch(`${API_URL}/inscriptions/tournoi/${tournoiId}/notify`, {
             method: 'POST',
             headers: {
               'Authorization': `Bearer ${token}`,
               'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ title, body, mode, categorie, channels: { push: wantPush, email: wantEmail } })
+            body: JSON.stringify(payload)
           });
           const data = await res.json();
           if (!res.ok) throw new Error(data.error || 'Erreur lors de l\'envoi');
           const parts = [];
           if (wantPush) parts.push(`📲 Push : ${data.pushSent || 0}/${data.totalPlayers || 0}`);
           if (wantEmail) parts.push(`✉️ Email : ${data.emailSent || 0}/${data.totalPlayers || 0}`);
-          alert(`Message envoyé à la catégorie ${mode} ${categorie}.\n\n${parts.join('\n')}\n\nRécapitulatif envoyé à l'administrateur.`);
+          alert(`Message envoyé ${scopeLabel}.\n\n${parts.join('\n')}\n\nRécapitulatif envoyé à l'administrateur.`);
           closeNotifyModal();
         } catch (err) {
           alert('Erreur : ' + err.message);
