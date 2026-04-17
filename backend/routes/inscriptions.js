@@ -2509,8 +2509,89 @@ router.put('/tournoi/:id', authenticateToken, async (req, res) => {
 });
 
 // ============================================================================
-// Send a free-form notification (push + email) to all inscribed players of a tournament
-// Admin only. Body: { title, body, channels: { push, email } }
+// Helper: resolve the pool of players for a given mode + categorie (+ season)
+// within an org. Returns { category, season, players } or throws.
+// ============================================================================
+async function resolveCategoryPool(mode, categorie, orgId) {
+  if (!mode || !categorie) {
+    const err = new Error('Mode et catégorie requis');
+    err.status = 400;
+    throw err;
+  }
+
+  const category = await new Promise((resolve, reject) => {
+    db.get(
+      `SELECT id FROM categories
+       WHERE UPPER(REPLACE(game_type, ' ', '')) = UPPER(REPLACE($1, ' ', ''))
+         AND UPPER(level) = UPPER($2)
+         AND ($3::int IS NULL OR organization_id = $3)
+       LIMIT 1`,
+      [mode, categorie, orgId],
+      (e, row) => e ? reject(e) : resolve(row)
+    );
+  });
+
+  if (!category) {
+    const err = new Error(`Catégorie introuvable (mode="${mode}", niveau="${categorie}")`);
+    err.status = 400;
+    throw err;
+  }
+
+  const currentSeason = await appSettings.getCurrentSeason();
+
+  const players = await new Promise((resolve, reject) => {
+    db.all(`
+      SELECT DISTINCT p.licence, p.first_name, p.last_name, p.club, p.email AS player_email
+      FROM players p
+      WHERE ($1::int IS NULL OR p.organization_id = $1)
+        AND UPPER(p.licence) NOT LIKE 'TEST%'
+        AND (
+          EXISTS (
+            SELECT 1 FROM rankings r
+            WHERE REPLACE(r.licence, ' ', '') = REPLACE(p.licence, ' ', '')
+              AND r.category_id = $2
+              AND r.season = $3
+              AND ($1::int IS NULL OR r.organization_id = $1)
+          )
+          OR EXISTS (
+            SELECT 1 FROM inscriptions i
+            JOIN tournoi_ext te ON te.tournoi_id = i.tournoi_id
+            WHERE REPLACE(i.licence, ' ', '') = REPLACE(p.licence, ' ', '')
+              AND UPPER(REPLACE(te.mode, ' ', '')) = UPPER(REPLACE($4, ' ', ''))
+              AND UPPER(te.categorie) = UPPER($5)
+              AND ($1::int IS NULL OR i.organization_id = $1)
+              AND (i.statut IS NULL OR i.statut NOT IN ('désinscrit'))
+          )
+        )
+      ORDER BY p.last_name, p.first_name
+    `, [orgId, category.id, currentSeason, mode, categorie], (e, rows) => e ? reject(e) : resolve(rows || []));
+  });
+
+  return { category, season: currentSeason, players };
+}
+
+// ============================================================================
+// Live count of players in a category pool (used by the notify modal)
+// GET /api/inscriptions/category-pool-count?mode=X&categorie=Y
+// ============================================================================
+router.get('/category-pool-count', authenticateToken, async (req, res) => {
+  if (req.user?.role !== 'admin') {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  const orgId = req.user.organizationId || null;
+  const { mode, categorie } = req.query;
+  try {
+    const { season, players } = await resolveCategoryPool(mode, categorie, orgId);
+    return res.json({ count: players.length, season, mode, categorie });
+  } catch (err) {
+    return res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
+// ============================================================================
+// Send a free-form notification (push + email) to all players of a category
+// (defaults to the tournament's mode+categorie, can be overridden in the body)
+// Admin only. Body: { title, body, channels: { push, email }, mode?, categorie? }
 // ============================================================================
 router.post('/tournoi/:id/notify', authenticateToken, async (req, res) => {
   if (req.user?.role !== 'admin') {
@@ -2519,7 +2600,7 @@ router.post('/tournoi/:id/notify', authenticateToken, async (req, res) => {
 
   const orgId = req.user.organizationId || null;
   const { id } = req.params;
-  const { title, body, channels = {} } = req.body || {};
+  const { title, body, channels = {}, mode: modeOverride, categorie: categorieOverride } = req.body || {};
 
   // Validation
   if (!title || typeof title !== 'string' || !title.trim()) {
@@ -2547,45 +2628,39 @@ router.post('/tournoi/:id/notify', authenticateToken, async (req, res) => {
     });
     if (!tournament) return res.status(404).json({ error: 'Tournoi non trouvé' });
 
-    const tournamentLabel = `${tournament.nom || 'Tournoi'} — ${tournament.mode || ''} ${tournament.categorie || ''}`.trim();
+    // Effective mode / categorie: explicit override from the body takes precedence
+    // over the tournament's own mode/categorie. This lets the admin retarget the
+    // message to a different category while keeping the tournament context.
+    const targetMode = (modeOverride && String(modeOverride).trim()) || tournament.mode || '';
+    const targetCategorie = (categorieOverride && String(categorieOverride).trim()) || tournament.categorie || '';
+    const tournamentLabel = `${tournament.nom || 'Tournoi'} — ${targetMode} ${targetCategorie}`.trim();
 
-    // Resolve the rank column from the tournament mode (e.g. "CADRE 42/2" → rank_cadre)
-    const modeUpper = (tournament.mode || '').toUpperCase().replace(/\s+/g, '');
-    let rankColumn = null;
-    if (modeUpper === 'LIBRE') rankColumn = 'rank_libre';
-    else if (modeUpper === '3BANDES') rankColumn = 'rank_3bandes';
-    else if (modeUpper === 'BANDE') rankColumn = 'rank_bande';
-    else if (modeUpper.startsWith('CADRE')) rankColumn = 'rank_cadre';
-
-    if (!rankColumn) {
-      return res.status(400).json({ error: `Mode de tournoi non reconnu : ${tournament.mode}` });
+    // Resolve the pool via the shared helper (same logic as the live-count endpoint).
+    // rank_cadre is shared across ALL cadre variants (42/2, 47/2, 47/1, 71/2),
+    // so we look up the exact category row (game_type + level) and pull players
+    // who have a ranking in THAT category for the current season, OR are inscribed
+    // in any tournoi_ext of that exact mode+level.
+    let category, currentSeason, inscriptions;
+    try {
+      const pool = await resolveCategoryPool(targetMode, targetCategorie, orgId);
+      category = pool.category;
+      currentSeason = pool.season;
+      inscriptions = pool.players;
+    } catch (err) {
+      return res.status(err.status || 500).json({ error: err.message });
     }
-
-    // Target audience = ALL players in the category pool (global ranking)
-    // i.e. players with the matching rank in this mode, within the org, excluding test accounts
-    // Column name is whitelisted above, safe to interpolate into the query.
-    const targetCategorie = tournament.categorie || '';
-    const inscriptions = await new Promise((resolve, reject) => {
-      db.all(`
-        SELECT p.licence, p.first_name, p.last_name, p.email AS player_email
-        FROM players p
-        WHERE UPPER(COALESCE(p.${rankColumn}, '')) = UPPER($1)
-          AND ($2::int IS NULL OR p.organization_id = $2)
-          AND UPPER(p.licence) NOT LIKE 'TEST%'
-      `, [targetCategorie, orgId], (err, rows) => err ? reject(err) : resolve(rows || []));
-    });
 
     if (inscriptions.length === 0) {
       return res.json({
         success: true,
-        message: `Aucun joueur trouvé dans la catégorie ${tournament.mode} ${targetCategorie}`,
+        message: `Aucun joueur dans la catégorie ${targetMode} ${targetCategorie} pour la saison ${currentSeason}`,
         totalPlayers: 0,
         pushSent: 0,
         emailSent: 0
       });
     }
 
-    console.log(`[Admin Message] Target audience: ${inscriptions.length} players in ${tournament.mode} ${targetCategorie} (category pool, not just inscribed)`);
+    console.log(`[Admin Message] Target: ${inscriptions.length} players in ${targetMode} ${targetCategorie} (season ${currentSeason}, category_id=${category.id})`);
 
     // Org settings for email
     const emailSettings = await appSettings.getOrgSettingsBatch(orgId, [
@@ -2595,6 +2670,19 @@ router.post('/tournoi/:id/notify', authenticateToken, async (req, res) => {
     const senderEmail = emailSettings.email_convocations || 'noreply@cdbhs.net';
     const contactEmail = emailSettings.summary_email || undefined;
     const primaryColor = emailSettings.primary_color || '#1F4788';
+
+    // Per-player delivery tracking for the admin recap
+    const delivery = new Map(); // licence → { name, email, club, pushStatus, emailStatus }
+    for (const insc of inscriptions) {
+      const fullName = `${insc.first_name || ''} ${insc.last_name || ''}`.trim() || insc.nom || 'Joueur';
+      delivery.set(insc.licence, {
+        name: fullName,
+        email: insc.player_email || '',
+        club: insc.club || '',
+        pushStatus: wantPush ? 'pending' : 'skipped',
+        emailStatus: wantEmail ? 'pending' : 'skipped'
+      });
+    }
 
     // ---- PUSH ----
     let pushSent = 0, pushFailed = 0;
@@ -2606,11 +2694,18 @@ router.post('/tournoi/:id/notify', authenticateToken, async (req, res) => {
         url: '/?page=inscriptions'
       };
       for (const insc of inscriptions) {
+        const d = delivery.get(insc.licence);
         try {
           const r = await sendPushToPlayer(insc.licence, orgId, pushNotification, { skipAdminCopy: true });
-          if (r && r.success && (r.sent || 0) > 0) pushSent++;
+          if (r && r.success && (r.sent || 0) > 0) {
+            pushSent++;
+            if (d) d.pushStatus = 'sent';
+          } else {
+            if (d) d.pushStatus = (r && r.error) ? `not_delivered (${r.error})` : 'not_delivered';
+          }
         } catch (e) {
           pushFailed++;
+          if (d) d.pushStatus = `failed (${e.message})`;
           console.error(`[Admin Message] Push failed for ${insc.licence}: ${e.message}`);
         }
       }
@@ -2657,6 +2752,7 @@ router.post('/tournoi/:id/notify', authenticateToken, async (req, res) => {
               </div>
             </div>
           `;
+          const d = delivery.get(insc.licence);
           try {
             await resend.emails.send({
               from: `${senderName} <${senderEmail}>`,
@@ -2666,9 +2762,11 @@ router.post('/tournoi/:id/notify', authenticateToken, async (req, res) => {
               html: emailHtml
             });
             emailSent++;
+            if (d) d.emailStatus = 'sent';
             await new Promise(r => setTimeout(r, 100));
           } catch (emailError) {
             emailFailed++;
+            if (d) d.emailStatus = `failed (${emailError.message})`;
             console.error(`[Admin Message] Email failed for ${insc.player_email}: ${emailError.message}`);
           }
         }
@@ -2696,12 +2794,53 @@ router.post('/tournoi/:id/notify', authenticateToken, async (req, res) => {
                 <p style="margin: 5px 0;"><strong>Message :</strong></p>
                 <p style="margin: 5px 0 5px 15px; white-space: pre-wrap;">${escapeHtml(body)}</p>
               </div>
-              <div style="background: white; border-left: 4px solid #28a745; padding: 15px;">
+              <div style="background: white; border-left: 4px solid #28a745; padding: 15px; margin-bottom: 20px;">
                 <h4 style="margin: 0 0 10px 0; color: #28a745;">Résultat de l'envoi</h4>
-                <p style="margin: 5px 0;">👥 <strong>Cible :</strong> tous les joueurs de la catégorie ${escapeHtml(tournament.mode)} ${escapeHtml(targetCategorie)} (pool de classement)</p>
+                <p style="margin: 5px 0;">👥 <strong>Cible :</strong> joueurs de la catégorie ${escapeHtml(targetMode)} ${escapeHtml(targetCategorie)} (saison ${escapeHtml(currentSeason)})</p>
                 <p style="margin: 5px 0;">👥 <strong>Total :</strong> ${inscriptions.length} joueur(s)</p>
                 ${wantPush ? `<p style="margin: 5px 0;">📲 <strong>Push :</strong> ${pushSent} envoyé(s)${pushFailed > 0 ? `, ${pushFailed} échec(s)` : ''}</p>` : '<p style="margin: 5px 0; color: #999;">📲 Push : non demandé</p>'}
                 ${wantEmail ? `<p style="margin: 5px 0;">✉️ <strong>Emails :</strong> ${emailSent} envoyé(s)${emailFailed > 0 ? `, ${emailFailed} échec(s)` : ''}</p>` : '<p style="margin: 5px 0; color: #999;">✉️ Email : non demandé</p>'}
+              </div>
+
+              <div style="background: white; border-left: 4px solid ${primaryColor}; padding: 15px;">
+                <h4 style="margin: 0 0 10px 0; color: ${primaryColor};">Liste des destinataires</h4>
+                <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+                  <thead>
+                    <tr style="background: #f1f5f9;">
+                      <th style="text-align: left; padding: 6px 8px; border-bottom: 1px solid #e2e8f0;">Joueur</th>
+                      <th style="text-align: left; padding: 6px 8px; border-bottom: 1px solid #e2e8f0;">Club</th>
+                      <th style="text-align: left; padding: 6px 8px; border-bottom: 1px solid #e2e8f0;">Email</th>
+                      <th style="text-align: center; padding: 6px 8px; border-bottom: 1px solid #e2e8f0;">Push</th>
+                      <th style="text-align: center; padding: 6px 8px; border-bottom: 1px solid #e2e8f0;">Email</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${Array.from(delivery.values()).map(d => {
+                      const badge = (status) => {
+                        if (status === 'sent') return '<span style="color: #059669; font-weight: 600;">✓</span>';
+                        if (status === 'skipped') return '<span style="color: #94a3b8;">—</span>';
+                        if (status === 'not_delivered' || String(status).startsWith('not_delivered')) return '<span style="color: #d97706;" title="' + escapeHtml(String(status)) + '">○</span>';
+                        return '<span style="color: #dc2626;" title="' + escapeHtml(String(status)) + '">✗</span>';
+                      };
+                      return `
+                        <tr>
+                          <td style="padding: 6px 8px; border-bottom: 1px solid #f1f5f9;">${escapeHtml(d.name)}</td>
+                          <td style="padding: 6px 8px; border-bottom: 1px solid #f1f5f9; color: #64748b;">${escapeHtml(d.club || '—')}</td>
+                          <td style="padding: 6px 8px; border-bottom: 1px solid #f1f5f9; color: #475569; font-family: monospace; font-size: 11px;">${escapeHtml(d.email || '—')}</td>
+                          <td style="padding: 6px 8px; border-bottom: 1px solid #f1f5f9; text-align: center;">${badge(d.pushStatus)}</td>
+                          <td style="padding: 6px 8px; border-bottom: 1px solid #f1f5f9; text-align: center;">${badge(d.emailStatus)}</td>
+                        </tr>
+                      `;
+                    }).join('')}
+                  </tbody>
+                </table>
+                <p style="margin-top: 12px; font-size: 11px; color: #64748b;">
+                  <strong>Légende :</strong>
+                  <span style="color: #059669;">✓</span> envoyé ·
+                  <span style="color: #d97706;">○</span> non délivré (push désactivé ou non inscrit) ·
+                  <span style="color: #dc2626;">✗</span> échec ·
+                  <span style="color: #94a3b8;">—</span> canal non demandé
+                </p>
               </div>
             </div>
           </div>

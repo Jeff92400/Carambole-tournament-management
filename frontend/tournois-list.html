@@ -333,12 +333,34 @@
     </div>
   </div>
 
-  <!-- Notify Tournament Modal (Message aux joueurs inscrits) -->
+  <!-- Notify Tournament Modal (Message à une catégorie) -->
   <div id="notifyModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
     <div style="background: white; padding: 28px; border-radius: 12px; max-width: 620px; width: 92%; max-height: 92vh; overflow-y: auto; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
-      <h3 style="margin-top: 0; color: #f59e0b;">📣 Message aux joueurs inscrits</h3>
-      <p id="notifyTournoiLabel" style="color: #666; margin-bottom: 18px; font-size: 14px;"></p>
+      <h3 style="margin-top: 0; color: #f59e0b;">📣 Message à une catégorie</h3>
+      <p id="notifyTournoiLabel" style="color: #666; margin-bottom: 16px; font-size: 13px;"></p>
       <input type="hidden" id="notify_tournoi_id">
+
+      <!-- Target selectors -->
+      <div style="margin-bottom: 16px; padding: 12px 14px; background: #fff8e1; border-left: 3px solid #f59e0b; border-radius: 6px;">
+        <div style="font-weight: 600; font-size: 13px; margin-bottom: 10px; color: #92400e;">🎯 Cible</div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+          <div>
+            <label style="display: block; margin-bottom: 4px; font-size: 12px; font-weight: 600;">Mode de jeu</label>
+            <select id="notify_mode" style="width: 100%; padding: 7px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+              <option value="">-- Sélectionner --</option>
+            </select>
+          </div>
+          <div>
+            <label style="display: block; margin-bottom: 4px; font-size: 12px; font-weight: 600;">Catégorie FFB</label>
+            <select id="notify_categorie" style="width: 100%; padding: 7px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+              <option value="">-- Sélectionner --</option>
+            </select>
+          </div>
+        </div>
+        <div id="notify_count_wrapper" style="margin-top: 10px; font-size: 13px; color: #78350f;">
+          <span id="notify_count_label">Sélectionnez mode et catégorie pour voir le nombre de joueurs ciblés.</span>
+        </div>
+      </div>
 
       <div style="margin-bottom: 14px;">
         <label style="display: block; margin-bottom: 6px; font-weight: 600; font-size: 13px;">Modèle</label>
@@ -1077,12 +1099,83 @@
       document.getElementById('notify_body_count').textContent = `${body.length} / 2000`;
     }
 
+    // Populate the notify-modal Mode selector from the already-loaded gameModesList
+    function populateNotifyModeSelect() {
+      const sel = document.getElementById('notify_mode');
+      if (!sel) return;
+      sel.innerHTML = '<option value="">-- Sélectionner --</option>' +
+        (gameModesList || []).map(gm => `<option value="${gm.display_name.toUpperCase()}">${gm.display_name.toUpperCase()}</option>`).join('');
+    }
+
+    // Populate categorie selector based on current mode (uses same logic as edit modal)
+    function updateNotifyCategorieDropdown(preservedValue) {
+      const selectedMode = document.getElementById('notify_mode').value;
+      const categorieSelect = document.getElementById('notify_categorie');
+      categorieSelect.innerHTML = '<option value="">-- Sélectionner --</option>';
+      if (!selectedMode) return;
+      const modeUpper = selectedMode.toUpperCase().replace(/ /g, '');
+      const matchingLevels = (categories || [])
+        .filter(c => modeUpper === (c.game_type || '').toUpperCase().replace(/ /g, ''))
+        .map(c => c.level)
+        .filter((v, i, a) => a.indexOf(v) === i)
+        .sort();
+      matchingLevels.forEach(level => {
+        const opt = document.createElement('option');
+        opt.value = level;
+        opt.textContent = level;
+        categorieSelect.appendChild(opt);
+      });
+      if (preservedValue && matchingLevels.includes(preservedValue)) {
+        categorieSelect.value = preservedValue;
+      }
+    }
+
+    // Fetch the live count of players in the selected (mode, categorie)
+    let _notifyCountAbort = null;
+    async function refreshNotifyCount() {
+      const mode = document.getElementById('notify_mode').value;
+      const categorie = document.getElementById('notify_categorie').value;
+      const label = document.getElementById('notify_count_label');
+      if (!mode || !categorie) {
+        label.textContent = 'Sélectionnez mode et catégorie pour voir le nombre de joueurs ciblés.';
+        return;
+      }
+      label.textContent = '⏳ Calcul en cours...';
+      try {
+        if (_notifyCountAbort) _notifyCountAbort.abort();
+        _notifyCountAbort = new AbortController();
+        const res = await fetch(
+          `${API_URL}/inscriptions/category-pool-count?mode=${encodeURIComponent(mode)}&categorie=${encodeURIComponent(categorie)}`,
+          { headers: { 'Authorization': `Bearer ${token}` }, signal: _notifyCountAbort.signal }
+        );
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          label.textContent = `⚠️ ${err.error || 'Impossible de calculer la cible.'}`;
+          return;
+        }
+        const data = await res.json();
+        const n = data.count || 0;
+        label.innerHTML = n === 0
+          ? `⚠️ <strong>Aucun joueur</strong> dans cette catégorie pour la saison en cours.`
+          : `👥 <strong>${n} joueur${n > 1 ? 's' : ''}</strong> dans la catégorie ${mode} ${categorie} (saison ${data.season || 'en cours'}).`;
+      } catch (e) {
+        if (e.name !== 'AbortError') label.textContent = `⚠️ ${e.message}`;
+      }
+    }
+
     function openNotifyModal(tournoi) {
       document.getElementById('notify_tournoi_id').value = tournoi.tournoi_id;
       const round = getRoundLabel(tournoi);
-      const label = `${tournoi.mode || ''} ${tournoi.categorie || ''}${round ? ' ' + round : ''}`.trim();
       const dateFr = formatDateFr(tournoi.debut);
-      document.getElementById('notifyTournoiLabel').textContent = `Cible : tous les joueurs de la catégorie ${tournoi.mode || ''} ${tournoi.categorie || ''}${round ? ` — ${round}` : ''}${dateFr ? ` — ${dateFr}` : ''}`;
+      document.getElementById('notifyTournoiLabel').textContent = `Contexte : ${tournoi.nom || 'Tournoi'}${round ? ' — ' + round : ''}${dateFr ? ' — ' + dateFr : ''}${tournoi.lieu ? ' — ' + tournoi.lieu : ''}`;
+
+      // Populate + pre-fill Mode/Catégorie from the tournament
+      populateNotifyModeSelect();
+      const modePrefill = (tournoi.mode || '').toUpperCase();
+      document.getElementById('notify_mode').value = modePrefill;
+      updateNotifyCategorieDropdown(tournoi.categorie || '');
+      // Live count
+      refreshNotifyCount();
 
       // Reset form
       document.getElementById('notify_template').value = 'libre';
@@ -1110,13 +1203,16 @@
       document.getElementById('notifyModal').style.display = 'none';
     }
 
-    // Bind template dropdown + live preview once at init
+    // Bind template dropdown + live preview + target selectors once at init
     (function initNotifyModalBindings() {
       const tpl = document.getElementById('notify_template');
       if (!tpl) return; // page still loading
 
       tpl.addEventListener('change', () => {
         const ctx = JSON.parse(document.getElementById('notifyModal').dataset.tournoi || '{}');
+        // Use current selector values for template label (allows retargeting)
+        ctx.mode = document.getElementById('notify_mode').value || ctx.mode;
+        ctx.categorie = document.getElementById('notify_categorie').value || ctx.categorie;
         const filled = buildNotifyTemplate(tpl.value, ctx);
         document.getElementById('notify_title').value = filled.title;
         document.getElementById('notify_body').value = filled.body;
@@ -1125,17 +1221,31 @@
       document.getElementById('notify_title').addEventListener('input', updateNotifyPreview);
       document.getElementById('notify_body').addEventListener('input', updateNotifyPreview);
 
+      // Mode change -> refresh categorie + live count
+      document.getElementById('notify_mode').addEventListener('change', () => {
+        updateNotifyCategorieDropdown();
+        refreshNotifyCount();
+      });
+      document.getElementById('notify_categorie').addEventListener('change', refreshNotifyCount);
+
       document.getElementById('cancelNotifyBtn').addEventListener('click', closeNotifyModal);
 
       document.getElementById('sendNotifyBtn').addEventListener('click', async () => {
         const tournoiId = document.getElementById('notify_tournoi_id').value;
         const title = document.getElementById('notify_title').value.trim();
         const body = document.getElementById('notify_body').value.trim();
+        const mode = document.getElementById('notify_mode').value;
+        const categorie = document.getElementById('notify_categorie').value;
         const wantPush = document.getElementById('notify_push').checked;
         const wantEmail = document.getElementById('notify_email').checked;
 
         if (!title || !body) { alert('Titre et message sont obligatoires.'); return; }
+        if (!mode || !categorie) { alert('Mode et catégorie sont obligatoires.'); return; }
         if (!wantPush && !wantEmail) { alert('Sélectionnez au moins un canal (push ou email).'); return; }
+
+        // Confirmation with explicit target
+        const countLabel = (document.getElementById('notify_count_label').textContent || '').trim();
+        if (!confirm(`Envoyer le message à la catégorie ${mode} ${categorie} ?\n\n${countLabel}`)) return;
 
         const btn = document.getElementById('sendNotifyBtn');
         const originalText = btn.textContent;
@@ -1148,14 +1258,14 @@
               'Authorization': `Bearer ${token}`,
               'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ title, body, channels: { push: wantPush, email: wantEmail } })
+            body: JSON.stringify({ title, body, mode, categorie, channels: { push: wantPush, email: wantEmail } })
           });
           const data = await res.json();
           if (!res.ok) throw new Error(data.error || 'Erreur lors de l\'envoi');
           const parts = [];
           if (wantPush) parts.push(`📲 Push : ${data.pushSent || 0}/${data.totalPlayers || 0}`);
           if (wantEmail) parts.push(`✉️ Email : ${data.emailSent || 0}/${data.totalPlayers || 0}`);
-          alert(`Message envoyé.\n\n${parts.join('\n')}\n\nRécapitulatif envoyé à l'administrateur.`);
+          alert(`Message envoyé à la catégorie ${mode} ${categorie}.\n\n${parts.join('\n')}\n\nRécapitulatif envoyé à l'administrateur.`);
           closeNotifyModal();
         } catch (err) {
           alert('Erreur : ' + err.message);
