@@ -2152,6 +2152,8 @@
           <input type="date" id="inscriptionDateFrom" title="Date début" onchange="saveInscriptionDateFilters()">
           <input type="date" id="inscriptionDateTo" title="Date fin" onchange="saveInscriptionDateFilters()">
           <button class="btn" onclick="loadInscriptionEmailLogs()" style="background: #1F4788;">Filtrer</button>
+          <button class="btn" onclick="exportInscriptionLogs()" style="background: #28a745;" title="Exporter les résultats filtrés en Excel">📥 Exporter</button>
+          <button class="btn admin-only" onclick="purgeInscriptionLogs()" style="background: #dc3545; display: none;" title="Supprimer les enregistrements correspondant aux filtres (plage de dates obligatoire)">🗑️ Purger</button>
         </div>
 
         <div id="loadingInscriptionLogs" class="loading" style="display: none;">
@@ -6493,6 +6495,107 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
         if (!response.ok) throw new Error('Failed to delete log');
 
         showSuccess('Enregistrement supprimé');
+        loadInscriptionEmailLogs();
+      } catch (error) {
+        showError('Erreur: ' + error.message);
+      }
+    }
+
+    // Build filter query string from the filter bar (shared between list / export / purge)
+    function buildInscriptionLogsQueryString() {
+      const params = new URLSearchParams();
+      const type = document.getElementById('inscriptionTypeFilter').value;
+      const status = document.getElementById('inscriptionStatusFilter').value;
+      const playerEl = document.getElementById('inscriptionPlayerFilter');
+      const player = playerEl ? playerEl.value.trim() : '';
+      const dateFrom = document.getElementById('inscriptionDateFrom').value;
+      const dateTo = document.getElementById('inscriptionDateTo').value;
+      if (type) params.append('type', type);
+      if (status) params.append('status', status);
+      if (player) params.append('player', player);
+      if (dateFrom) params.append('from', dateFrom);
+      if (dateTo) params.append('to', dateTo);
+      return params.toString();
+    }
+
+    // Export current filtered view as XLSX (downloads via browser)
+    async function exportInscriptionLogs() {
+      const qs = buildInscriptionLogsQueryString();
+      try {
+        const response = await fetch(`${API_URL}/email/inscription-logs/export?${qs}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!response.ok) {
+          const err = await response.json().catch(() => ({}));
+          throw new Error(err.error || 'Export failed');
+        }
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const stamp = new Date().toISOString().slice(0, 10);
+        a.download = `historique-inscriptions-${stamp}.xlsx`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+        showSuccess('Export XLSX téléchargé');
+      } catch (error) {
+        showError('Erreur export: ' + error.message);
+      }
+    }
+
+    // Purge inscription logs matching the current filters.
+    // Requires a date range (from + to) — safety net to avoid accidental full wipe.
+    async function purgeInscriptionLogs() {
+      const type = document.getElementById('inscriptionTypeFilter').value;
+      const status = document.getElementById('inscriptionStatusFilter').value;
+      const playerEl = document.getElementById('inscriptionPlayerFilter');
+      const player = playerEl ? playerEl.value.trim() : '';
+      const dateFrom = document.getElementById('inscriptionDateFrom').value;
+      const dateTo = document.getElementById('inscriptionDateTo').value;
+
+      if (!dateFrom || !dateTo) {
+        alert('Veuillez renseigner les deux dates (Du / Au) avant de purger.\n\nAstuce : pensez à exporter d\'abord en XLSX pour archiver.');
+        return;
+      }
+
+      const fromFmt = new Date(dateFrom).toLocaleDateString('fr-FR');
+      const toFmt = new Date(dateTo).toLocaleDateString('fr-FR');
+      const filterSummary = [];
+      if (type) filterSummary.push(`type=${type}`);
+      if (status) filterSummary.push(`statut=${status}`);
+      if (player) filterSummary.push(`joueur=${player}`);
+      const filtersDesc = filterSummary.length ? `\nFiltres : ${filterSummary.join(', ')}` : '';
+
+      const exportFirst = confirm(
+        `⚠️ Vous êtes sur le point de supprimer les enregistrements entre le ${fromFmt} et le ${toFmt}.${filtersDesc}\n\n` +
+        'Souhaitez-vous EXPORTER d\'abord ces données en Excel avant la suppression ?\n\n' +
+        '- OK = exporter, puis revenir confirmer la suppression\n' +
+        '- Annuler = aller directement à la confirmation de suppression (sans export)'
+      );
+
+      if (exportFirst) {
+        await exportInscriptionLogs();
+        return; // User must click Purger again after reviewing the export
+      }
+
+      if (!confirm(`Confirmer la suppression définitive des enregistrements entre le ${fromFmt} et le ${toFmt} ?${filtersDesc}\n\nCette action est IRRÉVERSIBLE.`)) {
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API_URL}/email/inscription-logs/purge`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ type, status, player, from: dateFrom, to: dateTo })
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Purge failed');
+        showSuccess(`${data.deleted} enregistrement(s) supprimé(s)`);
         loadInscriptionEmailLogs();
       } catch (error) {
         showError('Erreur: ' + error.message);

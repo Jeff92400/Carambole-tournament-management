@@ -2684,6 +2684,121 @@ router.get('/inscription-logs', authenticateToken, async (req, res) => {
   }
 });
 
+// Shared query builder for inscription-logs list/export/purge.
+// Returns { whereClause, params, nextParamIndex } given the query/body filters.
+function buildInscriptionLogsFilter({ orgId, type, status, from, to, player }, startIndex = 1) {
+  let where = '($' + startIndex + '::int IS NULL OR organization_id = $' + startIndex + ')';
+  const params = [orgId];
+  let idx = startIndex + 1;
+  if (type) { where += ' AND email_type = $' + idx++; params.push(type); }
+  if (status) { where += ' AND status = $' + idx++; params.push(status); }
+  if (from) { where += ' AND created_at >= $' + idx++; params.push(from); }
+  if (to) { where += ' AND created_at <= $' + idx++; params.push(to + ' 23:59:59'); }
+  if (player) {
+    where += ' AND (LOWER(player_name) LIKE LOWER($' + idx + ') OR LOWER(player_email) LIKE LOWER($' + (idx + 1) + '))';
+    params.push('%' + player + '%', '%' + player + '%');
+    idx += 2;
+  }
+  return { where, params, nextParamIndex: idx };
+}
+
+// Export inscription email logs as XLSX, with the same filters as GET
+// /inscription-logs. Useful to archive data before a purge.
+router.get('/inscription-logs/export', authenticateToken, async (req, res) => {
+  const db = require('../db-loader');
+  const ExcelJS = require('exceljs');
+  const orgId = req.user.organizationId || null;
+  const { type, status, from, to, player } = req.query;
+
+  const { where, params } = buildInscriptionLogsFilter({ orgId, type, status, from, to, player });
+  const sql = 'SELECT * FROM inscription_email_logs WHERE ' + where + ' ORDER BY created_at DESC';
+
+  try {
+    const rows = await new Promise((resolve, reject) => {
+      db.all(sql, params, (err, result) => err ? reject(err) : resolve(result || []));
+    });
+
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Historique Inscriptions');
+
+    worksheet.columns = [
+      { header: 'Date', key: 'created_at', width: 22 },
+      { header: 'Type', key: 'email_type', width: 16 },
+      { header: 'Joueur', key: 'player_name', width: 28 },
+      { header: 'Email', key: 'player_email', width: 34 },
+      { header: 'Tournoi', key: 'tournament_name', width: 28 },
+      { header: 'Mode', key: 'mode', width: 14 },
+      { header: 'Catégorie', key: 'category', width: 14 },
+      { header: 'Date tournoi', key: 'tournament_date', width: 18 },
+      { header: 'Lieu', key: 'location', width: 24 },
+      { header: 'Statut', key: 'status', width: 12 },
+      { header: 'Erreur', key: 'error_message', width: 30 }
+    ];
+
+    const headerRow = worksheet.getRow(1);
+    headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1F4788' } };
+
+    for (const r of rows) {
+      worksheet.addRow({
+        created_at: r.created_at ? new Date(r.created_at).toLocaleString('fr-FR') : '',
+        email_type: r.email_type || '',
+        player_name: r.player_name || '',
+        player_email: r.player_email || '',
+        tournament_name: r.tournament_name || '',
+        mode: r.mode || '',
+        category: r.category || '',
+        tournament_date: r.tournament_date ? new Date(r.tournament_date).toLocaleDateString('fr-FR') : '',
+        location: r.location || '',
+        status: r.status || '',
+        error_message: r.error_message || ''
+      });
+    }
+
+    const stamp = new Date().toISOString().slice(0, 10);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="historique-inscriptions-${stamp}.xlsx"`);
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (error) {
+    console.error('Error exporting inscription email logs:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Purge inscription email logs in bulk (admin only). Requires a date range
+// (from / to) to avoid accidentally wiping all history. Optional filters:
+// type, status, player — same semantics as the list endpoint.
+router.delete('/inscription-logs/purge', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  const db = require('../db-loader');
+  const orgId = req.user.organizationId || null;
+  const { type, status, from, to, player } = req.body || {};
+
+  if (!from || !to) {
+    return res.status(400).json({ error: 'Plage de dates obligatoire (from et to)' });
+  }
+
+  const { where, params } = buildInscriptionLogsFilter({ orgId, type, status, from, to, player });
+  const sql = 'DELETE FROM inscription_email_logs WHERE ' + where;
+
+  try {
+    const result = await new Promise((resolve, reject) => {
+      db.run(sql, params, function(err) {
+        if (err) reject(err);
+        else resolve({ deleted: this.changes });
+      });
+    });
+    console.log(`[Purge] Deleted ${result.deleted} inscription_email_logs between ${from} and ${to} (type=${type || 'all'}, status=${status || 'all'}, player=${player || 'all'})`);
+    res.json({ success: true, deleted: result.deleted });
+  } catch (error) {
+    console.error('Error purging inscription email logs:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Delete inscription email log (admin only)
 router.delete('/inscription-logs/:id', authenticateToken, async (req, res) => {
   // Check if user is admin
