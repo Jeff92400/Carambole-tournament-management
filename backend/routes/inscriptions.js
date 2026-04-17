@@ -2508,6 +2508,209 @@ router.put('/tournoi/:id', authenticateToken, async (req, res) => {
   }
 });
 
+// ============================================================================
+// Send a free-form notification (push + email) to all inscribed players of a tournament
+// Admin only. Body: { title, body, channels: { push, email } }
+// ============================================================================
+router.post('/tournoi/:id/notify', authenticateToken, async (req, res) => {
+  if (req.user?.role !== 'admin') {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  const orgId = req.user.organizationId || null;
+  const { id } = req.params;
+  const { title, body, channels = {} } = req.body || {};
+
+  // Validation
+  if (!title || typeof title !== 'string' || !title.trim()) {
+    return res.status(400).json({ error: 'Le titre est obligatoire' });
+  }
+  if (!body || typeof body !== 'string' || !body.trim()) {
+    return res.status(400).json({ error: 'Le message est obligatoire' });
+  }
+  const wantPush = channels.push !== false; // default true
+  const wantEmail = channels.email !== false; // default true
+  if (!wantPush && !wantEmail) {
+    return res.status(400).json({ error: 'Au moins un canal (push ou email) doit être sélectionné' });
+  }
+  if (title.length > 200) return res.status(400).json({ error: 'Titre trop long (max 200 caractères)' });
+  if (body.length > 2000) return res.status(400).json({ error: 'Message trop long (max 2000 caractères)' });
+
+  try {
+    // Load tournament
+    const tournament = await new Promise((resolve, reject) => {
+      db.get(
+        'SELECT * FROM tournoi_ext WHERE tournoi_id = $1 AND ($2::int IS NULL OR organization_id = $2)',
+        [id, orgId],
+        (err, row) => err ? reject(err) : resolve(row)
+      );
+    });
+    if (!tournament) return res.status(404).json({ error: 'Tournoi non trouvé' });
+
+    const tournamentLabel = `${tournament.nom || 'Tournoi'} — ${tournament.mode || ''} ${tournament.categorie || ''}`.trim();
+
+    // Load inscribed players
+    const inscriptions = await new Promise((resolve, reject) => {
+      db.all(`
+        SELECT i.*, p.first_name, p.last_name,
+               COALESCE(i.email, p.email) AS player_email
+        FROM inscriptions i
+        LEFT JOIN players p ON REPLACE(i.licence, ' ', '') = REPLACE(p.licence, ' ', '')
+        WHERE i.tournoi_id = $1
+          AND ($2::int IS NULL OR i.organization_id = $2)
+          AND (i.statut IS NULL OR i.statut NOT IN ('désinscrit', 'forfait'))
+      `, [id, orgId], (err, rows) => err ? reject(err) : resolve(rows || []));
+    });
+
+    if (inscriptions.length === 0) {
+      return res.json({ success: true, message: 'Aucun joueur inscrit à ce tournoi', totalPlayers: 0, pushSent: 0, emailSent: 0 });
+    }
+
+    // Org settings for email
+    const emailSettings = await appSettings.getOrgSettingsBatch(orgId, [
+      'email_convocations', 'email_sender_name', 'summary_email', 'organization_name', 'primary_color'
+    ]);
+    const senderName = emailSettings.email_sender_name || 'CDB';
+    const senderEmail = emailSettings.email_convocations || 'noreply@cdbhs.net';
+    const contactEmail = emailSettings.summary_email || undefined;
+    const primaryColor = emailSettings.primary_color || '#1F4788';
+
+    // ---- PUSH ----
+    let pushSent = 0, pushFailed = 0;
+    if (wantPush) {
+      const { sendPushToPlayer } = require('./push');
+      const pushNotification = {
+        title: title.trim(),
+        body: body.trim(),
+        url: '/?page=inscriptions'
+      };
+      for (const insc of inscriptions) {
+        try {
+          const r = await sendPushToPlayer(insc.licence, orgId, pushNotification, { skipAdminCopy: true });
+          if (r && r.success && (r.sent || 0) > 0) pushSent++;
+        } catch (e) {
+          pushFailed++;
+          console.error(`[Admin Message] Push failed for ${insc.licence}: ${e.message}`);
+        }
+      }
+    }
+
+    // ---- EMAIL ----
+    let emailSent = 0, emailFailed = 0;
+    if (wantEmail) {
+      const resend = getResend();
+      if (!resend) {
+        console.log('[Admin Message] Resend not configured — skipping email sends');
+      } else {
+        // Convert plain-text body to safe HTML (escape + paragraph breaks)
+        const escapeHtml = (s) => s
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#039;');
+        const htmlBody = escapeHtml(body.trim())
+          .split(/\n\s*\n/)
+          .map(p => `<p style="margin: 10px 0; line-height: 1.6;">${p.replace(/\n/g, '<br>')}</p>`)
+          .join('');
+
+        for (const insc of inscriptions) {
+          const playerName = insc.first_name && insc.last_name
+            ? `${insc.first_name} ${insc.last_name}`
+            : insc.nom || 'Joueur';
+          const emailHtml = `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <div style="background: ${primaryColor}; color: white; padding: 20px; text-align: center;">
+                <h1 style="color: white; margin: 0; font-size: 20px;">${escapeHtml(title.trim())}</h1>
+              </div>
+              <div style="padding: 25px; background: #f8f9fa;">
+                <p style="margin-bottom: 15px;">Bonjour ${escapeHtml(playerName)},</p>
+                <div style="background: white; border-left: 4px solid ${primaryColor}; padding: 15px; margin: 15px 0;">
+                  <div style="font-weight: 600; color: ${primaryColor}; margin-bottom: 8px;">📢 ${escapeHtml(tournamentLabel)}</div>
+                  ${htmlBody}
+                </div>
+                <p style="margin-top: 20px;">Sportivement,<br><strong>${escapeHtml(emailSettings.organization_name || senderName)}</strong></p>
+              </div>
+              <div style="background: ${primaryColor}; color: white; padding: 12px; text-align: center; font-size: 11px;">
+                <p style="margin: 0;">Message envoyé par l'administrateur aux joueurs inscrits.</p>
+              </div>
+            </div>
+          `;
+          try {
+            await resend.emails.send({
+              from: `${senderName} <${senderEmail}>`,
+              to: insc.player_email,
+              replyTo: contactEmail,
+              subject: `📢 ${title.trim()} — ${tournamentLabel}`,
+              html: emailHtml
+            });
+            emailSent++;
+            await new Promise(r => setTimeout(r, 100));
+          } catch (emailError) {
+            emailFailed++;
+            console.error(`[Admin Message] Email failed for ${insc.player_email}: ${emailError.message}`);
+          }
+        }
+      }
+    }
+
+    console.log(`[Admin Message] Tournament ${id} (${tournamentLabel}) — push:${pushSent} OK/${pushFailed} fail, email:${emailSent} OK/${emailFailed} fail, total players:${inscriptions.length}`);
+
+    // ---- ADMIN RECAP EMAIL ----
+    const adminEmail = emailSettings.summary_email;
+    if (adminEmail && getResend()) {
+      try {
+        const escapeHtml = (s) => String(s || '')
+          .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const recapHtml = `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <div style="background: ${primaryColor}; color: white; padding: 20px; text-align: center;">
+              <h1 style="margin: 0; font-size: 20px;">📬 Récapitulatif administrateur</h1>
+              <p style="margin: 5px 0 0 0; font-size: 13px; opacity: 0.9;">Message aux joueurs</p>
+            </div>
+            <div style="padding: 25px; background: #f8f9fa;">
+              <div style="background: white; border-left: 4px solid ${primaryColor}; padding: 15px; margin-bottom: 20px;">
+                <h3 style="margin: 0 0 10px 0; color: ${primaryColor};">${escapeHtml(tournamentLabel)}</h3>
+                <p style="margin: 5px 0;"><strong>Titre :</strong> ${escapeHtml(title)}</p>
+                <p style="margin: 5px 0;"><strong>Message :</strong></p>
+                <p style="margin: 5px 0 5px 15px; white-space: pre-wrap;">${escapeHtml(body)}</p>
+              </div>
+              <div style="background: white; border-left: 4px solid #28a745; padding: 15px;">
+                <h4 style="margin: 0 0 10px 0; color: #28a745;">Résultat de l'envoi</h4>
+                <p style="margin: 5px 0;">👥 <strong>Total inscrits :</strong> ${inscriptions.length}</p>
+                ${wantPush ? `<p style="margin: 5px 0;">📲 <strong>Push :</strong> ${pushSent} envoyé(s)${pushFailed > 0 ? `, ${pushFailed} échec(s)` : ''}</p>` : '<p style="margin: 5px 0; color: #999;">📲 Push : non demandé</p>'}
+                ${wantEmail ? `<p style="margin: 5px 0;">✉️ <strong>Emails :</strong> ${emailSent} envoyé(s)${emailFailed > 0 ? `, ${emailFailed} échec(s)` : ''}</p>` : '<p style="margin: 5px 0; color: #999;">✉️ Email : non demandé</p>'}
+              </div>
+            </div>
+          </div>
+        `;
+        await getResend().emails.send({
+          from: `${senderName} <${senderEmail}>`,
+          to: adminEmail,
+          subject: `📬 ${emailSettings.organization_name || senderName} — Récap message joueurs — ${tournamentLabel}`,
+          html: recapHtml
+        });
+        console.log(`[Admin Message] Admin recap sent to ${adminEmail}`);
+      } catch (adminErr) {
+        console.error('[Admin Message] Failed to send admin recap:', adminErr.message);
+      }
+    }
+
+    return res.json({
+      success: true,
+      totalPlayers: inscriptions.length,
+      pushSent,
+      pushFailed,
+      emailSent,
+      emailFailed
+    });
+
+  } catch (error) {
+    console.error('[Admin Message] Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 /**
  * Send email notifications to inscribed players when tournament date or location changes
  */

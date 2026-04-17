@@ -333,6 +333,62 @@
     </div>
   </div>
 
+  <!-- Notify Tournament Modal (Message aux joueurs inscrits) -->
+  <div id="notifyModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
+    <div style="background: white; padding: 28px; border-radius: 12px; max-width: 620px; width: 92%; max-height: 92vh; overflow-y: auto; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
+      <h3 style="margin-top: 0; color: #f59e0b;">📣 Message aux joueurs inscrits</h3>
+      <p id="notifyTournoiLabel" style="color: #666; margin-bottom: 18px; font-size: 14px;"></p>
+      <input type="hidden" id="notify_tournoi_id">
+
+      <div style="margin-bottom: 14px;">
+        <label style="display: block; margin-bottom: 6px; font-weight: 600; font-size: 13px;">Modèle</label>
+        <select id="notify_template" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+          <option value="libre">Message libre</option>
+          <option value="rappel">Rappel convocation</option>
+          <option value="changement">Changement de date / lieu</option>
+        </select>
+        <small style="color: #888; font-size: 11px;">Sélectionnez un modèle pour pré-remplir titre et message. Vous pouvez ensuite les modifier.</small>
+      </div>
+
+      <div style="margin-bottom: 14px;">
+        <label style="display: block; margin-bottom: 6px; font-weight: 600; font-size: 13px;">Titre <span style="color: #dc3545;">*</span></label>
+        <input type="text" id="notify_title" maxlength="200" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" placeholder="Ex. Rappel convocation – Cadre 42/2">
+        <small id="notify_title_count" style="color: #888; font-size: 11px;">0 / 200</small>
+      </div>
+
+      <div style="margin-bottom: 14px;">
+        <label style="display: block; margin-bottom: 6px; font-weight: 600; font-size: 13px;">Message <span style="color: #dc3545;">*</span></label>
+        <textarea id="notify_body" rows="5" maxlength="2000" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; resize: vertical;" placeholder="Votre message aux joueurs inscrits..."></textarea>
+        <small id="notify_body_count" style="color: #888; font-size: 11px;">0 / 2000</small>
+      </div>
+
+      <div style="margin-bottom: 14px; padding: 12px; background: #f8f9fa; border-radius: 6px;">
+        <div style="font-weight: 600; font-size: 13px; margin-bottom: 8px;">Canaux d'envoi</div>
+        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 6px;">
+          <input type="checkbox" id="notify_push" checked style="width: 16px; height: 16px;">
+          <span>📲 Push notification (joueurs avec l'app)</span>
+        </label>
+        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+          <input type="checkbox" id="notify_email" checked style="width: 16px; height: 16px;">
+          <span>✉️ Email</span>
+        </label>
+      </div>
+
+      <div style="margin-bottom: 16px; padding: 12px; background: #fff8e1; border-left: 3px solid #f59e0b; border-radius: 4px;">
+        <div style="font-weight: 600; font-size: 13px; margin-bottom: 6px; color: #92400e;">Aperçu push</div>
+        <div style="background: white; padding: 10px 12px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+          <div id="notify_preview_title" style="font-weight: 700; font-size: 13px; color: #1a202c;">—</div>
+          <div id="notify_preview_body" style="font-size: 12px; color: #4a5568; margin-top: 4px; white-space: pre-wrap;">—</div>
+        </div>
+      </div>
+
+      <div style="display: flex; gap: 10px;">
+        <button type="button" id="sendNotifyBtn" class="btn" style="flex: 1; background: #f59e0b; color: white; font-weight: 600;">Envoyer</button>
+        <button type="button" id="cancelNotifyBtn" class="btn" style="flex: 1; background: #999;">Annuler</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Split Tournament Modal (Dédoubler) -->
   <div id="splitModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
     <div style="background: white; padding: 30px; border-radius: 12px; max-width: 500px; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
@@ -769,6 +825,9 @@
           }
           if (canEdit) {
             actionButtons += `<button class="btn btn-small edit-tournoi-btn" style="background: #4CAF50; padding: 5px 10px; font-size: 12px; margin-right: 5px;">Modifier</button>`;
+            if (!isCancelled) {
+              actionButtons += `<button class="btn btn-small notify-tournoi-btn" data-tournoi-id="${tournoi.tournoi_id}" data-tournoi-name="${(tournoi.nom || '').replace(/"/g, '&quot;')}" data-tournoi-mode="${(tournoi.mode || '').replace(/"/g, '&quot;')}" data-tournoi-categorie="${(tournoi.categorie || '').replace(/"/g, '&quot;')}" data-tournoi-debut="${tournoi.debut || ''}" data-tournoi-lieu="${(tournoi.lieu || '').replace(/"/g, '&quot;')}" style="background: #f59e0b; color: white; padding: 5px 10px; font-size: 12px; margin-right: 5px;" title="Envoyer un message aux joueurs inscrits">📣 Message</button>`;
+            }
             actionButtons += `<button class="btn btn-small delete-tournoi-btn" data-tournoi-id="${tournoi.tournoi_id}" data-tournoi-name="${(tournoi.nom || '').replace(/"/g, '&quot;')}" style="background: #dc3545; padding: 5px 10px; font-size: 12px;">Supprimer</button>`;
           }
         }
@@ -801,6 +860,8 @@
           if (distributeBtn) distributeBtn.onclick = (e) => { e.stopPropagation(); openDistributionModal(tournoi); };
           const unsplitBtn = row.querySelector('.unsplit-btn');
           if (unsplitBtn) unsplitBtn.onclick = (e) => { e.stopPropagation(); unsplitTournoi(tournoi.tournoi_id); };
+          const notifyBtn = row.querySelector('.notify-tournoi-btn');
+          if (notifyBtn) notifyBtn.onclick = (e) => { e.stopPropagation(); openNotifyModal(tournoi); };
         }
 
         // Render child rows for split tournaments
@@ -963,6 +1024,136 @@
       link.click();
       document.body.removeChild(link);
     }
+
+    // ------------ Notify modal (message aux joueurs inscrits) ------------
+    function formatDateFr(dateStr) {
+      if (!dateStr) return '';
+      try {
+        return new Date(dateStr).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+      } catch (_e) { return dateStr; }
+    }
+
+    function buildNotifyTemplate(key, tournoi) {
+      const label = `${tournoi.mode || ''} ${tournoi.categorie || ''}`.trim();
+      const dateFr = formatDateFr(tournoi.debut);
+      const lieu = tournoi.lieu || 'lieu à confirmer';
+      switch (key) {
+        case 'rappel':
+          return {
+            title: `Rappel convocation — ${label}`,
+            body: `Bonjour,\n\nN'oubliez pas votre convocation pour le tournoi ${label}${dateFr ? ` du ${dateFr}` : ''}${lieu ? `, à ${lieu}` : ''}.\n\nMerci de vérifier votre horaire de début de match dans l'application.\n\nSportivement.`
+          };
+        case 'changement':
+          return {
+            title: `📝 Modification — ${label}`,
+            body: `Bonjour,\n\nUne information importante concernant le tournoi ${label} :\n\n[à compléter : nouvelle date, nouveau lieu, etc.]\n\nMerci de prendre note de ce changement.\n\nSportivement.`
+          };
+        case 'libre':
+        default:
+          return { title: '', body: '' };
+      }
+    }
+
+    function updateNotifyPreview() {
+      const title = (document.getElementById('notify_title').value || '').trim();
+      const body = (document.getElementById('notify_body').value || '').trim();
+      document.getElementById('notify_preview_title').textContent = title || '—';
+      document.getElementById('notify_preview_body').textContent = body || '—';
+      document.getElementById('notify_title_count').textContent = `${title.length} / 200`;
+      document.getElementById('notify_body_count').textContent = `${body.length} / 2000`;
+    }
+
+    function openNotifyModal(tournoi) {
+      document.getElementById('notify_tournoi_id').value = tournoi.tournoi_id;
+      const label = `${tournoi.nom || 'Tournoi'} — ${tournoi.mode || ''} ${tournoi.categorie || ''}`.trim();
+      const dateFr = formatDateFr(tournoi.debut);
+      document.getElementById('notifyTournoiLabel').textContent = `${label}${dateFr ? ' — ' + dateFr : ''}`;
+
+      // Reset form
+      document.getElementById('notify_template').value = 'libre';
+      document.getElementById('notify_title').value = '';
+      document.getElementById('notify_body').value = '';
+      document.getElementById('notify_push').checked = true;
+      document.getElementById('notify_email').checked = true;
+      updateNotifyPreview();
+
+      // Save context for template generation
+      document.getElementById('notifyModal').dataset.tournoi = JSON.stringify({
+        tournoi_id: tournoi.tournoi_id,
+        nom: tournoi.nom,
+        mode: tournoi.mode,
+        categorie: tournoi.categorie,
+        debut: tournoi.debut,
+        lieu: tournoi.lieu
+      });
+
+      document.getElementById('notifyModal').style.display = 'flex';
+    }
+
+    function closeNotifyModal() {
+      document.getElementById('notifyModal').style.display = 'none';
+    }
+
+    // Bind template dropdown + live preview once at init
+    (function initNotifyModalBindings() {
+      const tpl = document.getElementById('notify_template');
+      if (!tpl) return; // page still loading
+
+      tpl.addEventListener('change', () => {
+        const ctx = JSON.parse(document.getElementById('notifyModal').dataset.tournoi || '{}');
+        const filled = buildNotifyTemplate(tpl.value, ctx);
+        document.getElementById('notify_title').value = filled.title;
+        document.getElementById('notify_body').value = filled.body;
+        updateNotifyPreview();
+      });
+      document.getElementById('notify_title').addEventListener('input', updateNotifyPreview);
+      document.getElementById('notify_body').addEventListener('input', updateNotifyPreview);
+
+      document.getElementById('cancelNotifyBtn').addEventListener('click', closeNotifyModal);
+
+      document.getElementById('sendNotifyBtn').addEventListener('click', async () => {
+        const tournoiId = document.getElementById('notify_tournoi_id').value;
+        const title = document.getElementById('notify_title').value.trim();
+        const body = document.getElementById('notify_body').value.trim();
+        const wantPush = document.getElementById('notify_push').checked;
+        const wantEmail = document.getElementById('notify_email').checked;
+
+        if (!title || !body) { alert('Titre et message sont obligatoires.'); return; }
+        if (!wantPush && !wantEmail) { alert('Sélectionnez au moins un canal (push ou email).'); return; }
+
+        const btn = document.getElementById('sendNotifyBtn');
+        const originalText = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = 'Envoi en cours...';
+        try {
+          const res = await fetch(`${API_URL}/inscriptions/tournoi/${tournoiId}/notify`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ title, body, channels: { push: wantPush, email: wantEmail } })
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Erreur lors de l\'envoi');
+          const parts = [];
+          if (wantPush) parts.push(`📲 Push : ${data.pushSent || 0}/${data.totalPlayers || 0}`);
+          if (wantEmail) parts.push(`✉️ Email : ${data.emailSent || 0}/${data.totalPlayers || 0}`);
+          alert(`Message envoyé.\n\n${parts.join('\n')}\n\nRécapitulatif envoyé à l'administrateur.`);
+          closeNotifyModal();
+        } catch (err) {
+          alert('Erreur : ' + err.message);
+        } finally {
+          btn.disabled = false;
+          btn.textContent = originalText;
+        }
+      });
+
+      // Close on background click
+      document.getElementById('notifyModal').addEventListener('click', (e) => {
+        if (e.target.id === 'notifyModal') closeNotifyModal();
+      });
+    })();
 
     // Open edit modal
     function openEditModal(tournoi) {
