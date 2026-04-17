@@ -2549,22 +2549,43 @@ router.post('/tournoi/:id/notify', authenticateToken, async (req, res) => {
 
     const tournamentLabel = `${tournament.nom || 'Tournoi'} — ${tournament.mode || ''} ${tournament.categorie || ''}`.trim();
 
-    // Load inscribed players
+    // Resolve the rank column from the tournament mode (e.g. "CADRE 42/2" → rank_cadre)
+    const modeUpper = (tournament.mode || '').toUpperCase().replace(/\s+/g, '');
+    let rankColumn = null;
+    if (modeUpper === 'LIBRE') rankColumn = 'rank_libre';
+    else if (modeUpper === '3BANDES') rankColumn = 'rank_3bandes';
+    else if (modeUpper === 'BANDE') rankColumn = 'rank_bande';
+    else if (modeUpper.startsWith('CADRE')) rankColumn = 'rank_cadre';
+
+    if (!rankColumn) {
+      return res.status(400).json({ error: `Mode de tournoi non reconnu : ${tournament.mode}` });
+    }
+
+    // Target audience = ALL players in the category pool (global ranking)
+    // i.e. players with the matching rank in this mode, within the org, excluding test accounts
+    // Column name is whitelisted above, safe to interpolate into the query.
+    const targetCategorie = tournament.categorie || '';
     const inscriptions = await new Promise((resolve, reject) => {
       db.all(`
-        SELECT i.*, p.first_name, p.last_name,
-               COALESCE(i.email, p.email) AS player_email
-        FROM inscriptions i
-        LEFT JOIN players p ON REPLACE(i.licence, ' ', '') = REPLACE(p.licence, ' ', '')
-        WHERE i.tournoi_id = $1
-          AND ($2::int IS NULL OR i.organization_id = $2)
-          AND (i.statut IS NULL OR i.statut NOT IN ('désinscrit', 'forfait'))
-      `, [id, orgId], (err, rows) => err ? reject(err) : resolve(rows || []));
+        SELECT p.licence, p.first_name, p.last_name, p.email AS player_email
+        FROM players p
+        WHERE UPPER(COALESCE(p.${rankColumn}, '')) = UPPER($1)
+          AND ($2::int IS NULL OR p.organization_id = $2)
+          AND UPPER(p.licence) NOT LIKE 'TEST%'
+      `, [targetCategorie, orgId], (err, rows) => err ? reject(err) : resolve(rows || []));
     });
 
     if (inscriptions.length === 0) {
-      return res.json({ success: true, message: 'Aucun joueur inscrit à ce tournoi', totalPlayers: 0, pushSent: 0, emailSent: 0 });
+      return res.json({
+        success: true,
+        message: `Aucun joueur trouvé dans la catégorie ${tournament.mode} ${targetCategorie}`,
+        totalPlayers: 0,
+        pushSent: 0,
+        emailSent: 0
+      });
     }
+
+    console.log(`[Admin Message] Target audience: ${inscriptions.length} players in ${tournament.mode} ${targetCategorie} (category pool, not just inscribed)`);
 
     // Org settings for email
     const emailSettings = await appSettings.getOrgSettingsBatch(orgId, [
@@ -2677,7 +2698,8 @@ router.post('/tournoi/:id/notify', authenticateToken, async (req, res) => {
               </div>
               <div style="background: white; border-left: 4px solid #28a745; padding: 15px;">
                 <h4 style="margin: 0 0 10px 0; color: #28a745;">Résultat de l'envoi</h4>
-                <p style="margin: 5px 0;">👥 <strong>Total inscrits :</strong> ${inscriptions.length}</p>
+                <p style="margin: 5px 0;">👥 <strong>Cible :</strong> tous les joueurs de la catégorie ${escapeHtml(tournament.mode)} ${escapeHtml(targetCategorie)} (pool de classement)</p>
+                <p style="margin: 5px 0;">👥 <strong>Total :</strong> ${inscriptions.length} joueur(s)</p>
                 ${wantPush ? `<p style="margin: 5px 0;">📲 <strong>Push :</strong> ${pushSent} envoyé(s)${pushFailed > 0 ? `, ${pushFailed} échec(s)` : ''}</p>` : '<p style="margin: 5px 0; color: #999;">📲 Push : non demandé</p>'}
                 ${wantEmail ? `<p style="margin: 5px 0;">✉️ <strong>Emails :</strong> ${emailSent} envoyé(s)${emailFailed > 0 ? `, ${emailFailed} échec(s)` : ''}</p>` : '<p style="margin: 5px 0; color: #999;">✉️ Email : non demandé</p>'}
               </div>

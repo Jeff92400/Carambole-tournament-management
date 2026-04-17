@@ -1033,8 +1033,22 @@
       } catch (_e) { return dateStr; }
     }
 
+    function getRoundLabel(tournoi) {
+      // Prefer explicit tournament_number via the page-loaded map, else use tournoi.nom if it mentions Finale/Tournoi
+      if (tournoi.tournament_number) {
+        if (typeof tournamentRoundsMap !== 'undefined' && tournamentRoundsMap[tournoi.tournament_number]) {
+          return tournamentRoundsMap[tournoi.tournament_number];
+        }
+        return 'T' + tournoi.tournament_number;
+      }
+      const nom = (tournoi.nom || '').toLowerCase();
+      if (nom.includes('finale')) return 'Finale';
+      return '';
+    }
+
     function buildNotifyTemplate(key, tournoi) {
-      const label = `${tournoi.mode || ''} ${tournoi.categorie || ''}`.trim();
+      const round = getRoundLabel(tournoi);
+      const label = `${tournoi.mode || ''} ${tournoi.categorie || ''}${round ? ' ' + round : ''}`.trim();
       const dateFr = formatDateFr(tournoi.debut);
       const lieu = tournoi.lieu || 'lieu à confirmer';
       switch (key) {
@@ -1065,9 +1079,10 @@
 
     function openNotifyModal(tournoi) {
       document.getElementById('notify_tournoi_id').value = tournoi.tournoi_id;
-      const label = `${tournoi.nom || 'Tournoi'} — ${tournoi.mode || ''} ${tournoi.categorie || ''}`.trim();
+      const round = getRoundLabel(tournoi);
+      const label = `${tournoi.mode || ''} ${tournoi.categorie || ''}${round ? ' ' + round : ''}`.trim();
       const dateFr = formatDateFr(tournoi.debut);
-      document.getElementById('notifyTournoiLabel').textContent = `${label}${dateFr ? ' — ' + dateFr : ''}`;
+      document.getElementById('notifyTournoiLabel').textContent = `Cible : tous les joueurs de la catégorie ${tournoi.mode || ''} ${tournoi.categorie || ''}${round ? ` — ${round}` : ''}${dateFr ? ` — ${dateFr}` : ''}`;
 
       // Reset form
       document.getElementById('notify_template').value = 'libre';
@@ -1084,7 +1099,8 @@
         mode: tournoi.mode,
         categorie: tournoi.categorie,
         debut: tournoi.debut,
-        lieu: tournoi.lieu
+        lieu: tournoi.lieu,
+        tournament_number: tournoi.tournament_number || null
       });
 
       document.getElementById('notifyModal').style.display = 'flex';
