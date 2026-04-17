@@ -339,9 +339,42 @@ router.get('/campaigns/purge-count', authenticateToken, async (req, res) => {
   }
 });
 
+// List distinct campaign_type values for the org, with counts, so the purge UI
+// can offer a dropdown. Blank/null types are reported under the sentinel value
+// "__blank__" so the client can explicitly target them.
+router.get('/campaigns/types', authenticateToken, async (req, res) => {
+  const db = require('../db-loader');
+  const orgId = req.user.organizationId || null;
+
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  try {
+    const rows = await new Promise((resolve, reject) => {
+      db.all(
+        `SELECT COALESCE(NULLIF(TRIM(campaign_type), ''), '__blank__') AS type,
+                COUNT(*) AS count
+           FROM email_campaigns
+          WHERE ($1::int IS NULL OR organization_id = $1)
+          GROUP BY COALESCE(NULLIF(TRIM(campaign_type), ''), '__blank__')
+          ORDER BY COUNT(*) DESC`,
+        [orgId],
+        (err, result) => err ? reject(err) : resolve(result || [])
+      );
+    });
+    res.json({ types: rows });
+  } catch (error) {
+    console.error('Error listing campaign types:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Purge campaigns - Admin only
 // Supports: purgeAll=true OR date range (startDate/endDate)
 // Optional: testOnly=true to only purge TEST campaigns
+// Optional: campaignType (string) — filters by campaign_type. Special value
+//   "__blank__" targets rows where campaign_type IS NULL or empty string.
 router.delete('/campaigns/purge', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
   const orgId = req.user.organizationId || null;
@@ -351,7 +384,7 @@ router.delete('/campaigns/purge', authenticateToken, async (req, res) => {
     return res.status(403).json({ error: 'Admin access required' });
   }
 
-  const { startDate, endDate, purgeAll, testOnly } = req.body;
+  const { startDate, endDate, purgeAll, testOnly, campaignType } = req.body;
 
   // Validate parameters - require either purgeAll OR valid date range
   if (!purgeAll && (!startDate || !endDate)) {
@@ -364,40 +397,67 @@ router.delete('/campaigns/purge', authenticateToken, async (req, res) => {
   const testFilter = testOnly ? ' AND test_mode = TRUE' : '';
   const testLabel = testOnly ? ' TEST' : '';
 
+  // Build campaign_type filter clause. Special value "__blank__" targets rows
+  // where campaign_type IS NULL or empty/whitespace. Empty/undefined skips the filter.
+  let typeFilter = '';
+  const typeParams = [];
+  let typeLabel = '';
+  if (campaignType && typeof campaignType === 'string' && campaignType.trim() !== '') {
+    if (campaignType === '__blank__') {
+      typeFilter = ` AND (campaign_type IS NULL OR TRIM(campaign_type) = '')`;
+      typeLabel = ' (sans type)';
+    } else {
+      // Use $N placeholder with dynamic index appended later (see below)
+      typeFilter = ` AND campaign_type = $__TYPE__`; // placeholder to be replaced
+      typeParams.push(campaignType);
+      typeLabel = ` (type=${campaignType})`;
+    }
+  }
+
   try {
     let result;
     let logMessage;
 
     if (purgeAll) {
-      // Purge ALL campaigns (optionally only TEST)
+      // Purge ALL campaigns (optionally only TEST, optionally filtered by type)
+      // Param order: $1 = orgId, $2 = campaignType (if typed filter)
+      let sql = `DELETE FROM email_campaigns WHERE ($1::int IS NULL OR organization_id = $1)${testFilter}`;
+      const params = [orgId];
+      if (typeFilter.includes('$__TYPE__')) {
+        sql += typeFilter.replace('$__TYPE__', '$2');
+        params.push(typeParams[0]);
+      } else {
+        sql += typeFilter;
+      }
       result = await new Promise((resolve, reject) => {
-        db.run(
-          `DELETE FROM email_campaigns WHERE ($1::int IS NULL OR organization_id = $1)${testFilter}`,
-          [orgId],
-          function(err) {
-            if (err) reject(err);
-            else resolve({ deleted: this.changes });
-          }
-        );
+        db.run(sql, params, function(err) {
+          if (err) reject(err);
+          else resolve({ deleted: this.changes });
+        });
       });
-      logMessage = `[Purge] Deleted ALL ${result.deleted}${testLabel} email campaigns (purgeAll)`;
+      logMessage = `[Purge] Deleted ALL ${result.deleted}${testLabel}${typeLabel} email campaigns (purgeAll)`;
     } else {
       // Purge by date range (inclusive)
       // Delete campaigns where sent_at is within the range, or if sent_at is null, where created_at is within the range
+      // Param order: $1 = start, $2 = end, $3 = orgId, $4 = campaignType (if typed filter)
+      let sql = `DELETE FROM email_campaigns
+         WHERE ((sent_at >= $1 AND sent_at <= $2)
+            OR (sent_at IS NULL AND created_at >= $1 AND created_at <= $2))
+            AND ($3::int IS NULL OR organization_id = $3)${testFilter}`;
+      const params = [startDate, endDate, orgId];
+      if (typeFilter.includes('$__TYPE__')) {
+        sql += typeFilter.replace('$__TYPE__', '$4');
+        params.push(typeParams[0]);
+      } else {
+        sql += typeFilter;
+      }
       result = await new Promise((resolve, reject) => {
-        db.run(
-          `DELETE FROM email_campaigns
-           WHERE ((sent_at >= $1 AND sent_at <= $2)
-              OR (sent_at IS NULL AND created_at >= $1 AND created_at <= $2))
-              AND ($3::int IS NULL OR organization_id = $3)${testFilter}`,
-          [startDate, endDate, orgId],
-          function(err) {
-            if (err) reject(err);
-            else resolve({ deleted: this.changes });
-          }
-        );
+        db.run(sql, params, function(err) {
+          if (err) reject(err);
+          else resolve({ deleted: this.changes });
+        });
       });
-      logMessage = `[Purge] Deleted ${result.deleted}${testLabel} email campaigns between ${startDate} and ${endDate}`;
+      logMessage = `[Purge] Deleted ${result.deleted}${testLabel}${typeLabel} email campaigns between ${startDate} and ${endDate}`;
     }
 
     console.log(logMessage);

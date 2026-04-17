@@ -2195,15 +2195,22 @@
         <!-- Purge Options Panel -->
         <div id="purgeOptionsPanel" style="display: none; background: #fff3cd; border: 1px solid #ffc107; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
           <div style="display: flex; gap: 30px; flex-wrap: wrap;">
-            <!-- Option 1: Purge by date range -->
+            <!-- Option 1: Purge by date range (+ optional type) -->
             <div style="flex: 1; min-width: 280px;">
               <h4 style="margin: 0 0 10px 0; color: #856404;">📅 Purger par plage de dates</h4>
-              <p style="margin: 0 0 15px 0; font-size: 13px; color: #666;">Supprimer les campagnes entre deux dates</p>
+              <p style="margin: 0 0 15px 0; font-size: 13px; color: #666;">Supprimer les campagnes entre deux dates, éventuellement filtrées par type.</p>
               <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
                 <label style="font-size: 13px;">Du:</label>
                 <input type="date" id="purgeStartDate" style="padding: 6px 10px; border: 1px solid #ccc; border-radius: 4px;">
                 <label style="font-size: 13px;">Au:</label>
                 <input type="date" id="purgeEndDate" style="padding: 6px 10px; border: 1px solid #ccc; border-radius: 4px;">
+              </div>
+              <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 10px;">
+                <label style="font-size: 13px;">Type :</label>
+                <select id="purgeByDateType" style="padding: 6px 10px; border: 1px solid #ccc; border-radius: 4px; min-width: 220px;">
+                  <option value="">Tous les types</option>
+                  <!-- populated dynamically -->
+                </select>
                 <button id="purgeByDateBtn" class="btn" style="background: #dc3545; padding: 6px 15px; font-size: 13px;">
                   Supprimer
                 </button>
@@ -2213,12 +2220,19 @@
               </label>
             </div>
 
-            <!-- Option 2: Purge all -->
+            <!-- Option 2: Purge all (+ optional type) -->
             <div style="flex: 1; min-width: 280px; border-left: 2px solid #ffc107; padding-left: 30px;">
               <h4 style="margin: 0 0 10px 0; color: #856404;">⚠️ Purger TOUT l'historique</h4>
               <p id="purgeAllWarning" style="margin: 0 0 15px 0; font-size: 13px; color: #dc3545; font-weight: bold;">
                 Cette action supprimera TOUTES les campagnes - IRRÉVERSIBLE
               </p>
+              <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 10px;">
+                <label style="font-size: 13px;">Type :</label>
+                <select id="purgeAllType" onchange="updatePurgeAllWarning()" style="padding: 6px 10px; border: 1px solid #ccc; border-radius: 4px; min-width: 220px;">
+                  <option value="">Tous les types</option>
+                  <!-- populated dynamically -->
+                </select>
+              </div>
               <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
                 <input type="text" id="confirmPurgeAllInput" placeholder="Tapez SUPPRIMER pour confirmer" style="padding: 6px 10px; border: 1px solid #ccc; border-radius: 4px; width: 220px;">
                 <button id="purgeAllBtn" class="btn" style="background: #dc3545; padding: 6px 15px; font-size: 13px;" disabled>
@@ -6050,10 +6064,50 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
       }
     }
 
-    // Toggle purge options panel
-    function togglePurgeOptions() {
+    // Toggle purge options panel. When opening, (re)load the list of campaign
+    // types so the admin can filter purges by type. The "__blank__" sentinel
+    // lets them target rows with no campaign_type (historic ghost entries).
+    async function togglePurgeOptions() {
       const panel = document.getElementById('purgeOptionsPanel');
-      panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+      const isOpening = panel.style.display === 'none';
+      panel.style.display = isOpening ? 'block' : 'none';
+      if (isOpening) {
+        await loadCampaignTypesForPurge();
+      }
+    }
+
+    async function loadCampaignTypesForPurge() {
+      const byDate = document.getElementById('purgeByDateType');
+      const byAll = document.getElementById('purgeAllType');
+      if (!byDate || !byAll) return;
+
+      // Preserve selected value across reloads
+      const prevByDate = byDate.value;
+      const prevByAll = byAll.value;
+
+      try {
+        const res = await fetch(`${API_URL}/emailing/campaigns/types`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!res.ok) throw new Error('Failed to load campaign types');
+        const data = await res.json();
+        const types = Array.isArray(data.types) ? data.types : [];
+
+        const optionHtml = ['<option value="">Tous les types</option>']
+          .concat(types.map(t => {
+            const label = t.type === '__blank__' ? '(sans type)' : t.type;
+            return `<option value="${t.type}">${label} (${t.count})</option>`;
+          }))
+          .join('');
+        byDate.innerHTML = optionHtml;
+        byAll.innerHTML = optionHtml;
+
+        // Restore selection if still present
+        if ([...byDate.options].some(o => o.value === prevByDate)) byDate.value = prevByDate;
+        if ([...byAll.options].some(o => o.value === prevByAll)) byAll.value = prevByAll;
+      } catch (e) {
+        console.error('Campaign types load error:', e);
+      }
     }
 
     // Purge by date range
@@ -6075,8 +6129,14 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
       const startFormatted = new Date(startDate).toLocaleDateString('fr-FR');
       const endFormatted = new Date(endDate).toLocaleDateString('fr-FR');
       const testLabel = testOnly ? ' TEST' : '';
+      const campaignType = document.getElementById('purgeByDateType').value || '';
+      const typeLabel = !campaignType
+        ? ''
+        : campaignType === '__blank__'
+          ? ' (sans type)'
+          : ` (type: ${campaignType})`;
 
-      if (!confirm(`Êtes-vous sûr de vouloir supprimer les campagnes${testLabel} entre le ${startFormatted} et le ${endFormatted} ?\n\nCette action est irréversible.`)) {
+      if (!confirm(`Êtes-vous sûr de vouloir supprimer les campagnes${testLabel}${typeLabel} entre le ${startFormatted} et le ${endFormatted} ?\n\nCette action est irréversible.`)) {
         return;
       }
 
@@ -6087,7 +6147,7 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({ startDate, endDate, testOnly })
+          body: JSON.stringify({ startDate, endDate, testOnly, campaignType })
         });
 
         if (!response.ok) {
@@ -6107,13 +6167,23 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
       }
     }
 
-    // Update warning text based on testOnly checkbox
+    // Update warning text based on testOnly checkbox + selected type
     function updatePurgeAllWarning() {
       const testOnly = document.getElementById('purgeAllTestOnly').checked;
+      const typeSelect = document.getElementById('purgeAllType');
+      const type = typeSelect ? typeSelect.value : '';
       const warning = document.getElementById('purgeAllWarning');
+      const typeSuffix = !type
+        ? ''
+        : type === '__blank__'
+          ? ' (type: sans type)'
+          : ` (type: ${type})`;
       if (testOnly) {
-        warning.textContent = 'Cette action supprimera TOUS les emails TEST - IRRÉVERSIBLE';
+        warning.textContent = `Cette action supprimera TOUS les emails TEST${typeSuffix} - IRRÉVERSIBLE`;
         warning.style.color = '#FF9800';
+      } else if (type) {
+        warning.textContent = `Cette action supprimera toutes les campagnes${typeSuffix} - IRRÉVERSIBLE`;
+        warning.style.color = '#dc3545';
       } else {
         warning.textContent = 'Cette action supprimera TOUTES les campagnes - IRRÉVERSIBLE';
         warning.style.color = '#dc3545';
@@ -6124,12 +6194,21 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
     async function purgeAllCampaigns() {
       const testOnly = document.getElementById('purgeAllTestOnly').checked;
       const testLabel = testOnly ? ' TEST' : '';
+      const campaignType = document.getElementById('purgeAllType').value || '';
+      const typeLabel = !campaignType
+        ? ''
+        : campaignType === '__blank__'
+          ? ' (sans type)'
+          : ` (type: ${campaignType})`;
 
       // First confirmation already done via typing "SUPPRIMER"
       // Second confirmation via confirm dialog
+      const scopeLabel = campaignType
+        ? `TOUTES les campagnes${typeLabel}`
+        : 'TOUTES les campagnes';
       const confirmMsg = testOnly
-        ? 'Êtes-vous sûr ?\n\nCette action supprimera TOUS les emails TEST de l\'historique.\n\nCliquez OK pour confirmer.'
-        : 'Êtes-vous ABSOLUMENT sûr ?\n\nCette action est IRRÉVERSIBLE et supprimera TOUTES les campagnes email de l\'historique.\n\nCliquez OK pour confirmer la suppression définitive.';
+        ? `Êtes-vous sûr ?\n\nCette action supprimera TOUS les emails TEST${typeLabel} de l'historique.\n\nCliquez OK pour confirmer.`
+        : `Êtes-vous ABSOLUMENT sûr ?\n\nCette action est IRRÉVERSIBLE et supprimera ${scopeLabel} de l'historique.\n\nCliquez OK pour confirmer la suppression définitive.`;
 
       if (!confirm(confirmMsg)) {
         return;
@@ -6142,7 +6221,7 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({ purgeAll: true, testOnly })
+          body: JSON.stringify({ purgeAll: true, testOnly, campaignType })
         });
 
         if (!response.ok) {
