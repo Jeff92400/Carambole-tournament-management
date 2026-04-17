@@ -2401,7 +2401,11 @@ router.put('/tournoi/:id', authenticateToken, async (req, res) => {
     let emailsSent = 0;
     const shouldNotify = currentTournament.notify_on_changes !== false; // Default to true if null/undefined
 
+    // Diagnostic log — always log the decision, so a silent skip is never invisible
+    console.log(`[Tournament Update] id=${id} org=${orgId} dateChanged=${dateChanged} locationChanged=${locationChanged} shouldNotify=${shouldNotify} statusChangedToCancelled=${statusChangedToCancelled}`);
+
     if ((dateChanged || locationChanged) && shouldNotify && !statusChangedToCancelled) {
+      console.log(`[Tournament Update] Triggering notifications for tournament ${id}`);
       emailsSent = await sendTournamentChangeNotifications(id, currentTournament, {
         nom, mode, categorie, debut, lieu
       }, {
@@ -2412,6 +2416,12 @@ router.put('/tournoi/:id', authenticateToken, async (req, res) => {
         oldLieu,
         newLieu
       }, orgId);
+    } else if (dateChanged || locationChanged) {
+      // A change happened but notifications were skipped — log the reason explicitly
+      const reasons = [];
+      if (!shouldNotify) reasons.push('notify_on_changes=false');
+      if (statusChangedToCancelled) reasons.push('tournament cancelled');
+      console.log(`[Tournament Update] Date/location changed but notifications SKIPPED for tournament ${id}: ${reasons.join(', ')}`);
     }
 
     // Log if tournament was cancelled
@@ -2588,12 +2598,49 @@ async function sendTournamentChangeNotifications(tournoiId, oldTournament, newDa
     introText += ' :';
 
     let sentCount = 0;
+    let pushSent = 0;
+    let pushFailed = 0;
+
+    // ---- Pre-compute push notification type and variables (same for all players) ----
+    // This is independent of individual player iteration
+    const { buildNotification } = require('../notification-messages');
+    const { sendPushToPlayer } = require('./push');
+
+    let notificationType = null;
+    const notifVariables = { tournoiName: tournamentName };
+
+    if (dateChanged) {
+      // Date change takes priority (whether or not location also changed)
+      notificationType = 'TOURNAMENT_DATE_CHANGED';
+      notifVariables.oldDate = formatDate(oldDate);
+      notifVariables.newDate = formatDate(newDate);
+    } else if (locationChanged) {
+      notificationType = 'TOURNAMENT_LOCATION_CHANGED';
+      notifVariables.date = formatDate(newData.debut || oldTournament.debut);
+      notifVariables.oldLocation = oldLieu || 'Non défini';
+      notifVariables.newLocation = newLieu;
+    }
+
+    const pushNotification = notificationType ? buildNotification(notificationType, notifVariables) : null;
 
     for (const inscription of inscriptions) {
       const playerName = inscription.first_name && inscription.last_name
         ? `${inscription.first_name} ${inscription.last_name}`
         : inscription.nom || 'Joueur';
 
+      // -------- PUSH NOTIFICATION (INDEPENDENT of email) --------
+      // Push must fire for every inscribed player whether or not the email succeeds
+      if (pushNotification) {
+        try {
+          await sendPushToPlayer(inscription.licence, orgId, pushNotification);
+          pushSent++;
+        } catch (notifError) {
+          pushFailed++;
+          console.error(`[Tournament Change] Push failed for licence ${inscription.licence}: ${notifError.message}`);
+        }
+      }
+
+      // -------- EMAIL NOTIFICATION (independent of push) --------
       // Build the changes section
       let changesHtml = '';
 
@@ -2666,37 +2713,6 @@ async function sendTournamentChangeNotifications(tournoiId, oldTournament, newDa
         sentCount++;
         console.log(`[Tournament Change] Email sent to ${inscription.player_email}`);
 
-        // Send push notification (fire-and-forget)
-        try {
-          const { buildNotification } = require('../notification-messages');
-          const { sendPushToPlayer } = require('./push');
-
-          let notificationType;
-          let notifVariables = { tournoiName: tournamentName };
-
-          if (dateChanged && locationChanged) {
-            // For both changes, prioritize date change notification
-            notificationType = 'TOURNAMENT_DATE_CHANGED';
-            notifVariables.oldDate = formatDate(oldDate);
-            notifVariables.newDate = formatDate(newDate);
-          } else if (dateChanged) {
-            notificationType = 'TOURNAMENT_DATE_CHANGED';
-            notifVariables.oldDate = formatDate(oldDate);
-            notifVariables.newDate = formatDate(newDate);
-          } else if (locationChanged) {
-            notificationType = 'TOURNAMENT_LOCATION_CHANGED';
-            notifVariables.date = formatDate(newData.debut || oldTournament.debut);
-            notifVariables.oldLocation = oldLieu || 'Non défini';
-            notifVariables.newLocation = newLieu;
-          }
-
-          const notification = buildNotification(notificationType, notifVariables);
-          await sendPushToPlayer(inscription.licence, orgId, notification);
-        } catch (notifError) {
-          console.error('[Tournament Change] Failed to send push notification:', notifError.message);
-          // Don't fail email if push notification fails
-        }
-
         // Small delay to avoid rate limiting
         await new Promise(resolve => setTimeout(resolve, 100));
       } catch (emailError) {
@@ -2704,7 +2720,79 @@ async function sendTournamentChangeNotifications(tournoiId, oldTournament, newDa
       }
     }
 
-    console.log(`[Tournament Change] Sent ${sentCount}/${inscriptions.length} notifications for tournament ${tournoiId}`);
+    console.log(`[Tournament Change] Emails sent: ${sentCount}/${inscriptions.length}, Push: ${pushSent} OK / ${pushFailed} failed for tournament ${tournoiId}`);
+
+    // -------- ADMIN SUMMARY EMAIL --------
+    // Send a recap email to the admin (summary_email) with what was changed and to how many players
+    const adminEmail = emailSettings.summary_email;
+    if (adminEmail) {
+      try {
+        const orgDisplayName = emailSettings.organization_name || senderName;
+        const subjectPrefix = dateChanged && locationChanged
+          ? 'Changement de date et lieu'
+          : dateChanged
+            ? 'Changement de date'
+            : 'Changement de lieu';
+        const adminSubject = `📬 ${orgDisplayName} — ${subjectPrefix} (récap admin) — ${tournamentName}`;
+
+        let adminChangesHtml = '';
+        if (dateChanged) {
+          adminChangesHtml += `
+            <p style="margin: 5px 0;"><strong>📅 Date :</strong></p>
+            <p style="margin: 5px 0 5px 20px; color: #dc3545;">Ancienne : ${formatDate(oldDate)}</p>
+            <p style="margin: 5px 0 5px 20px; color: #28a745;">Nouvelle : ${formatDate(newDate)}</p>
+          `;
+        }
+        if (locationChanged) {
+          adminChangesHtml += `
+            <p style="margin: 5px 0;"><strong>📍 Lieu :</strong></p>
+            <p style="margin: 5px 0 5px 20px; color: #dc3545;">Ancien : ${oldLieu || 'Non défini'}</p>
+            <p style="margin: 5px 0 5px 20px; color: #28a745;">Nouveau : ${newLieu}</p>
+          `;
+        }
+        if (!dateChanged && locationChanged === false) {
+          adminChangesHtml = '<p>Aucun changement détecté.</p>';
+        }
+
+        const adminHtml = `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <div style="background: linear-gradient(135deg, #1F4788 0%, #667eea 100%); padding: 20px; text-align: center;">
+              <h1 style="color: white; margin: 0; font-size: 20px;">📬 Récapitulatif administrateur</h1>
+              <p style="color: rgba(255,255,255,0.9); margin: 5px 0 0 0; font-size: 13px;">${subjectPrefix}</p>
+            </div>
+
+            <div style="padding: 25px; background: #f8f9fa;">
+              <div style="background: white; border-left: 4px solid #1F4788; padding: 15px; margin-bottom: 20px;">
+                <h3 style="margin: 0 0 10px 0; color: #1F4788;">${tournamentName}</h3>
+                ${adminChangesHtml}
+              </div>
+
+              <div style="background: white; border-left: 4px solid #28a745; padding: 15px;">
+                <h4 style="margin: 0 0 10px 0; color: #28a745;">Notifications envoyées aux joueurs</h4>
+                <p style="margin: 5px 0;">✉️ <strong>Emails :</strong> ${sentCount} / ${inscriptions.length}</p>
+                <p style="margin: 5px 0;">📲 <strong>Push :</strong> ${pushSent} envoyé(s)${pushFailed > 0 ? `, ${pushFailed} échec(s)` : ''}</p>
+              </div>
+
+              <p style="margin-top: 20px; font-size: 12px; color: #6c757d;">Ce récapitulatif est automatique. Il est envoyé à l'administrateur à chaque modification de date ou de lieu d'un tournoi.</p>
+            </div>
+          </div>
+        `;
+
+        await resend.emails.send({
+          from: `${senderName} <${senderEmail}>`,
+          to: adminEmail,
+          subject: adminSubject,
+          html: adminHtml
+        });
+        console.log(`[Tournament Change] Admin summary sent to ${adminEmail}`);
+      } catch (adminErr) {
+        console.error('[Tournament Change] Failed to send admin summary:', adminErr.message);
+        // Do not break the main flow
+      }
+    } else {
+      console.log('[Tournament Change] No summary_email configured for org', orgId, '— skipping admin recap');
+    }
+
     return sentCount;
 
   } catch (error) {
