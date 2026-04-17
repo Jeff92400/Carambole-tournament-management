@@ -1,9 +1,11 @@
 # Guide Utilisateur Complet
 
 > **Note:** Ce document est généré automatiquement depuis le guide HTML.
-> **Dernière mise à jour:** 12/04/2026
+> **Dernière mise à jour:** 17/04/2026
 >
 > **Nouvelles fonctionnalités documentées (Avril 2026):**
+> - **📣 Message à une catégorie** (17/04/2026) : Nouveau bouton ambre sur la liste des tournois externes. Permet d'envoyer push + email à une catégorie entière OU uniquement aux joueurs inscrits à un tournoi (T1/T2/T3/Finale). 3 sélecteurs (Mode / Catégorie / Tournoi), compteur temps réel, 3 modèles pré-définis, récap admin avec liste détaillée des destinataires
+> - **Notifications changement date/lieu** (12/04/2026) : Push découplé de l'email (envoi indépendant), récap admin automatique envoyé sur summary_email
 > - **Push Notifications** : Sélection "🔔 Joueurs avec notifications actives" pour cibler uniquement les joueurs abonnés
 > - **Annonces** : Sélection "📱 Joueurs avec l'app installée" pour cibler uniquement les utilisateurs de l'Espace Joueur
 > - **Annonces** : Filtrage par catégorie/club (🎯 Par catégorie/club)
@@ -1027,7 +1029,90 @@ Dans l'Application Joueur :
 
 ---
 
-## **⚠️ iOS (iPhone/iPad) : **Les notifications push ne fonctionnent que si le joueur a ajouté l'Application Joueur sur son écran d'accueil (via Partager > Ajouter à l'écran d'accueil). Sur Android, les notifications fonctionnent directement depuis le navigateur. Com Joueurs > Historique
+## **⚠️ iOS (iPhone/iPad) : **Les notifications push ne fonctionnent que si le joueur a ajouté l'Application Joueur sur son écran d'accueil (via Partager > Ajouter à l'écran d'accueil). Sur Android, les notifications fonctionnent directement depuis le navigateur.
+
+---
+
+## Compétitions > 📣 Message à une catégorie
+
+### Description
+
+Outil de communication ciblée permettant à l'administrateur d'envoyer simultanément une notification push et/ou un email à tous les joueurs d'une catégorie de jeu (ex. Cadre 42/2 R1), ou uniquement aux joueurs inscrits à un tournoi spécifique (T1, T2, T3, Finale). Le contexte du tournoi sélectionné est pré-rempli dans le modal pour un envoi rapide.
+
+### Accès
+
+1. Menu principal : **Compétitions**
+2. Sous-menu : **Liste des tournois externes** (`tournois-list.html`)
+3. Sur la ligne du tournoi concerné, colonne **Actions**, cliquer sur le bouton ambre **📣 Message**
+
+### Les 3 sélecteurs de cible
+
+- **Mode de jeu** : pré-rempli depuis le tournoi cliqué, modifiable
+- **Catégorie FFB** : pré-remplie, liste dynamique liée au mode
+- **Tournoi** : pré-sélectionné sur le tournoi cliqué, permet de choisir :
+  - **— Toute la catégorie (fichier joueurs) —** : tous les joueurs de la catégorie pour la saison (classement + inscriptions)
+  - **T1 / T2 / T3 / Finale** : uniquement les joueurs inscrits à ce tournoi spécifique (hors forfait et désinscrit)
+
+### Compteur temps réel
+
+Affiche le nombre exact de joueurs concernés dès que mode + catégorie + tournoi sont renseignés. Exemple : *« 👥 11 joueurs inscrits à T3 — 16/05/2026 — Bois-Colombes »*
+
+**💡 Vérifiez toujours ce compteur avant d'envoyer.**
+
+### Modèles pré-définis
+
+- **Message libre** (vide, par défaut)
+- **Rappel convocation** (pré-remplit titre + message avec infos tournoi)
+- **Changement de date / lieu** (squelette à compléter)
+
+### Titre + Message + Aperçu
+
+- Titre : max 200 caractères, compteur en temps réel
+- Message : max 2000 caractères, retours à la ligne conservés
+- Aperçu push en temps réel dans encadré ambre
+
+### Canaux
+
+- **📲 Push** : joueurs ayant activé les notifications dans l'App Joueur
+- **✉️ Email** : tous les joueurs de la cible
+
+Au moins un canal doit être coché. Les deux le sont par défaut.
+
+### Confirmation avant envoi
+
+Dialog explicite rappelant la cible et le nombre de destinataires.
+
+### Récapitulatif administrateur
+
+Après chaque envoi, un email est envoyé à `summary_email` avec :
+- Titre et message envoyés
+- Cible (tournoi spécifique ou catégorie)
+- Compteurs (total / push / emails)
+- **Tableau détaillé des destinataires** (nom, club, email, statut par canal : ✓ envoyé / ○ non délivré / ✗ échec / — canal non demandé)
+
+### Cas d'usage typiques
+
+| Situation | Cible | Modèle |
+|---|---|---|
+| Rappel convocation avant TQ | Tournoi spécifique | Rappel convocation |
+| Changement de date / lieu TQ | Tournoi spécifique | Changement |
+| Communication aux finalistes | Finale | Message libre |
+| Ouverture inscriptions saison | Toute la catégorie | Message libre |
+
+### Notes techniques
+
+- Comptes test (licence `TEST*`) exclus automatiquement
+- Joueurs désinscrit/forfait exclus des cibles « Tournoi spécifique »
+- Envoi instantané (léger délai 100 ms entre emails pour respecter Resend)
+- Fonction réservée aux administrateurs
+
+### Distinction avec « Com Joueurs > Notifs »
+
+L'onglet **Notifs** de Com Joueurs = notifications push génériques (liste de licences ou tous les abonnés). La fonction **📣 Message** = contextuelle à un tournoi/catégorie, avec pré-remplissage automatique, envoie push ET email simultanément.
+
+---
+
+## Com Joueurs > Historique
 
 ### Description
 

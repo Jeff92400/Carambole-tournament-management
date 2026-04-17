@@ -670,6 +670,7 @@
     <a href="#annonces">Annonces</a>
     <a href="#composer-email">Composer un email</a>
     <a href="#notifications-push">Notifications Push</a>
+    <a href="#message-categorie">Message à une catégorie</a>
     <a href="#historique-emails">Historique emails</a>
     <a href="#invitations">Invitations Espace Joueur</a>
 
@@ -2568,6 +2569,173 @@
 
     <div class="warning-card">
       <strong>⚠️ iOS (iPhone/iPad) :</strong> Les notifications push ne fonctionnent que si le joueur a ajouté l'Application Joueur sur son écran d'accueil (via Partager > Ajouter à l'écran d'accueil). Sur Android, les notifications fonctionnent directement depuis le navigateur.
+    </div>
+  </section>
+
+  <hr>
+
+  <!-- Message à une catégorie (feature ajoutée avril 2026) -->
+  <section id="message-categorie">
+    <h2>Compétitions > 📣 Message à une catégorie</h2>
+
+    <h3>Description</h3>
+    <p>Outil de communication ciblée permettant à l'administrateur d'envoyer simultanément une notification push et/ou un email à tous les joueurs d'une catégorie de jeu (ex. Cadre 42/2 R1), ou uniquement aux joueurs inscrits à un tournoi spécifique (T1, T2, T3, Finale). Le contexte du tournoi sélectionné est pré-rempli dans le modal, ce qui permet un envoi rapide en quelques clics.</p>
+
+    <div class="info-card accent">
+      <strong>📣 Quand utiliser cette fonction ?</strong> Pour tout message contextuel lié à un tournoi ou une catégorie : rappel de convocation avant un TQ, annonce d'un changement de date/lieu, information sur l'ouverture des inscriptions, communication spécifique aux finalistes. La cible est précise (catégorie FFB exacte) et évite les envois trop larges.
+    </div>
+
+    <h3>Accès</h3>
+    <ol class="steps">
+      <li>Menu principal : <strong>Compétitions</strong></li>
+      <li>Sous-menu : <strong>Liste des tournois externes</strong> (<code>tournois-list.html</code>)</li>
+      <li>Sur la ligne du tournoi concerné, colonne <strong>Actions</strong>, cliquer sur le bouton ambre <strong>📣 Message</strong></li>
+    </ol>
+
+    <div class="info-card">
+      <strong>Disponibilité du bouton :</strong> Le bouton <strong>📣 Message</strong> apparaît sur toutes les lignes de tournois non annulés. Pour les tournois dédoublés, utilisez le bouton sur la ligne parente.
+    </div>
+
+    <div class="screenshot-placeholder">
+      <span class="screenshot-id">IMG-MSG-01</span>
+      <span class="screenshot-icon">&#128247;</span>
+      <span class="screenshot-label">Bouton 📣 Message dans la liste des tournois</span>
+      <span class="screenshot-desc">Capture de la liste des tournois externes avec le bouton ambre « 📣 Message » dans la colonne Actions, entre « Modifier » et « Supprimer »</span>
+    </div>
+
+    <h3>Étape 1 : Définir la cible (3 sélecteurs)</h3>
+    <p>Un encadré jaune <strong>🎯 Cible</strong> en haut du modal regroupe les trois sélecteurs qui déterminent qui recevra le message.</p>
+
+    <ul>
+      <li><strong>Mode de jeu</strong> : pré-rempli avec le mode du tournoi cliqué (ex. CADRE 42/2). Modifiable pour cibler une autre discipline.</li>
+      <li><strong>Catégorie FFB</strong> : pré-remplie avec la catégorie du tournoi cliqué (ex. R1). La liste des catégories disponibles se met à jour automatiquement selon le mode sélectionné.</li>
+      <li><strong>Tournoi</strong> : pré-sélectionné sur le tournoi cliqué. Permet de choisir parmi :
+        <ul>
+          <li><strong>— Toute la catégorie (fichier joueurs) —</strong> : cible <em>tous les joueurs</em> de la catégorie pour la saison en cours, qu'ils soient inscrits ou non à un tournoi précis.</li>
+          <li><strong>T1, T2, T3, Finale</strong> : cible uniquement les joueurs <em>inscrits</em> à ce tournoi spécifique (hors forfait et désinscrit).</li>
+        </ul>
+      </li>
+    </ul>
+
+    <div class="info-card warning">
+      <strong>⚠️ Différence clé entre les deux portées :</strong>
+      <ul style="margin-top: 8px;">
+        <li><strong>Tournoi spécifique</strong> : envoie uniquement aux joueurs déjà inscrits à ce tournoi. Idéal pour un rappel de convocation ou un changement concernant un TQ précis.</li>
+        <li><strong>Toute la catégorie</strong> : envoie à tous les joueurs de la catégorie présents dans le fichier joueurs (classement saison en cours + inscriptions de la saison). Idéal pour annoncer une ouverture d'inscriptions ou une information saisonnière.</li>
+      </ul>
+    </div>
+
+    <h3>Étape 2 : Vérifier le compteur temps réel</h3>
+    <p>Dès que les 3 sélecteurs sont renseignés, une ligne d'information affiche le nombre exact de joueurs concernés :</p>
+    <ul>
+      <li>Pour un tournoi spécifique : <em>« 👥 11 joueurs inscrits à T3 — 16/05/2026 — Bois-Colombes »</em></li>
+      <li>Pour toute la catégorie : <em>« 👥 11 joueurs dans la catégorie CADRE 42/2 R1 (saison 2025-2026, fichier joueurs) »</em></li>
+    </ul>
+
+    <div class="info-card">
+      <strong>💡 Vérifiez toujours ce compteur avant d'envoyer.</strong> Si le nombre vous semble incohérent (trop élevé ou trop faible), ajustez les sélecteurs. Un compteur à 0 signifie qu'aucun joueur ne recevra le message.
+    </div>
+
+    <h3>Étape 3 : Choisir un modèle (optionnel)</h3>
+    <p>Trois modèles pré-définis permettent de gagner du temps. Ils pré-remplissent le titre et le message, que vous pouvez ensuite modifier librement.</p>
+
+    <ul>
+      <li><strong>Message libre</strong> (par défaut) : champs vides, à compléter intégralement.</li>
+      <li><strong>Rappel convocation</strong> : pré-remplit un message type pour rappeler aux joueurs leur convocation avec date, lieu et tournoi.
+        <br><em>Exemple de titre : « Rappel convocation — CADRE 42/2 R1 T3 »</em>
+      </li>
+      <li><strong>Changement de date / lieu</strong> : pré-remplit un squelette à compléter avec la nouvelle date ou le nouveau lieu.
+        <br><em>Exemple de titre : « 📝 Modification — CADRE 42/2 R1 T3 »</em>
+      </li>
+    </ul>
+
+    <h3>Étape 4 : Rédiger titre et message</h3>
+    <ul>
+      <li><strong>Titre</strong> (obligatoire, 200 caractères maximum) : ce que le joueur voit en premier dans la notification push et comme objet de l'email.</li>
+      <li><strong>Message</strong> (obligatoire, 2000 caractères maximum) : le corps du message. Les retours à la ligne sont conservés dans le push et dans l'email.</li>
+    </ul>
+    <p>Un compteur de caractères s'affiche sous chaque champ. Un <strong>aperçu push</strong> en temps réel, encadré en ambre, montre exactement comment la notification apparaîtra sur le téléphone du joueur.</p>
+
+    <h3>Étape 5 : Sélectionner les canaux</h3>
+    <p>Les deux canaux sont cochés par défaut. Au moins un canal doit être sélectionné pour envoyer.</p>
+    <ul>
+      <li><strong>📲 Push notification</strong> : envoyée uniquement aux joueurs ayant activé les notifications dans l'Application Joueur. Idéal pour l'immédiateté.</li>
+      <li><strong>✉️ Email</strong> : envoyé à tous les joueurs de la cible. Permet un message plus long, formaté, et conservé dans la boîte mail du destinataire.</li>
+    </ul>
+
+    <div class="info-card accent">
+      <strong>💡 Recommandation :</strong> Laissez les deux canaux cochés pour une portée maximale. Le push attire l'attention immédiatement, l'email sert de référence pérenne.
+    </div>
+
+    <h3>Étape 6 : Confirmer l'envoi</h3>
+    <p>Cliquer sur <strong>Envoyer</strong> affiche une boîte de dialogue de confirmation explicite :</p>
+    <ul>
+      <li>Si cible = tournoi spécifique : <em>« Envoyer le message au T3 — 16/05/2026 — Bois-Colombes ? 👥 11 joueurs inscrits à ce tournoi. »</em></li>
+      <li>Si cible = toute la catégorie : <em>« Envoyer le message à toute la catégorie CADRE 42/2 R1 ? 👥 11 joueurs dans la catégorie... »</em></li>
+    </ul>
+    <p>C'est la dernière étape avant envoi réel. En cas de doute, annulez et ajustez les sélecteurs.</p>
+
+    <h3>Récapitulatif administrateur (reçu par email)</h3>
+    <p>Après chaque envoi réussi, un email de récapitulatif est automatiquement envoyé à l'adresse configurée dans <strong>Paramètres > Organisation > Email récapitulatifs administrateur</strong> (<code>summary_email</code>).</p>
+
+    <p>Le récap contient :</p>
+    <ul>
+      <li><strong>En-tête :</strong> tournoi concerné, mode, catégorie</li>
+      <li><strong>Contenu envoyé :</strong> titre + texte complet du message</li>
+      <li><strong>Cible :</strong> indique si c'était un tournoi spécifique ou toute la catégorie, avec la saison</li>
+      <li><strong>Compteurs :</strong> nombre total de joueurs ciblés / push envoyés / emails envoyés, avec échecs éventuels</li>
+      <li><strong>Tableau détaillé des destinataires :</strong> pour chaque joueur, son nom, son club, son adresse email, et le statut de livraison par canal (✓ envoyé / ○ non délivré / ✗ échec / — canal non demandé)</li>
+    </ul>
+
+    <div class="info-card">
+      <strong>🔍 Utilité du tableau détaillé :</strong> Permet d'auditer les envois en cas de retour d'un joueur (« je n'ai rien reçu ») et de diagnostiquer les échecs (email invalide, push désactivé par le joueur, appareil non abonné, etc.).
+    </div>
+
+    <h3>Cas d'usage typiques</h3>
+    <table>
+      <thead>
+        <tr><th>Situation</th><th>Cible recommandée</th><th>Modèle</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Rappel de convocation 1-2 jours avant un TQ</td>
+          <td>Tournoi spécifique (T1/T2/T3)</td>
+          <td>Rappel convocation</td>
+        </tr>
+        <tr>
+          <td>Changement de date ou de lieu d'un TQ</td>
+          <td>Tournoi spécifique</td>
+          <td>Changement de date / lieu</td>
+        </tr>
+        <tr>
+          <td>Communication spécifique aux finalistes</td>
+          <td>Finale</td>
+          <td>Message libre</td>
+        </tr>
+        <tr>
+          <td>Annonce d'ouverture des inscriptions en début de saison</td>
+          <td>Toute la catégorie</td>
+          <td>Message libre</td>
+        </tr>
+        <tr>
+          <td>Information saisonnière (barèmes, règles, calendrier)</td>
+          <td>Toute la catégorie</td>
+          <td>Message libre</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>Notes techniques</h3>
+    <ul>
+      <li>Les joueurs ayant désactivé les notifications push recevront uniquement l'email (si ce canal est coché).</li>
+      <li>Les comptes de test (licence commençant par <code>TEST</code>) sont automatiquement exclus de toutes les cibles.</li>
+      <li>Les joueurs avec statut <em>désinscrit</em> ou <em>forfait</em> sont exclus des cibles de type « Tournoi spécifique ».</li>
+      <li>L'envoi est instantané : il n'y a pas de file d'attente ni de planification différée. Les emails partent avec un léger délai (100 ms entre chaque) pour respecter les limites Resend.</li>
+      <li>Cette fonction est <strong>réservée aux administrateurs</strong>. Un utilisateur avec rôle <em>editor</em> ou <em>viewer</em> ne voit pas le bouton.</li>
+    </ul>
+
+    <div class="info-card warning">
+      <strong>🔔 Distinction avec « Com Joueurs > Notifs » :</strong> L'onglet <strong>Notifs</strong> de Com Joueurs envoie des notifications push génériques (liste de licences saisie à la main ou tous les joueurs abonnés). La fonction <strong>📣 Message</strong> est contextuelle à un tournoi ou une catégorie, avec pré-remplissage automatique, et envoie simultanément push ET email.
     </div>
   </section>
 
