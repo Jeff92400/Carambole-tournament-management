@@ -384,7 +384,7 @@ router.delete('/campaigns/purge', authenticateToken, async (req, res) => {
     return res.status(403).json({ error: 'Admin access required' });
   }
 
-  const { startDate, endDate, purgeAll, testOnly, campaignType } = req.body;
+  const { startDate, endDate, purgeAll, testOnly, campaignType, emptyOnly } = req.body;
 
   // Validate parameters - require either purgeAll OR valid date range
   if (!purgeAll && (!startDate || !endDate)) {
@@ -396,6 +396,11 @@ router.delete('/campaigns/purge', authenticateToken, async (req, res) => {
   // Build test_mode filter clause
   const testFilter = testOnly ? ' AND test_mode = TRUE' : '';
   const testLabel = testOnly ? ' TEST' : '';
+
+  // Build "empty only" filter — rows where recipients_count = 0 (ghost entries).
+  // Useful for cleaning scheduler no-op rows without touching real history.
+  const emptyFilter = emptyOnly ? ' AND (recipients_count IS NULL OR recipients_count = 0)' : '';
+  const emptyLabel = emptyOnly ? ' (vides)' : '';
 
   // Build campaign_type filter clause. Special value "__blank__" targets rows
   // where campaign_type IS NULL or empty/whitespace. Empty/undefined skips the filter.
@@ -419,9 +424,9 @@ router.delete('/campaigns/purge', authenticateToken, async (req, res) => {
     let logMessage;
 
     if (purgeAll) {
-      // Purge ALL campaigns (optionally only TEST, optionally filtered by type)
+      // Purge ALL campaigns (optionally only TEST, optionally filtered by type, optionally empty only)
       // Param order: $1 = orgId, $2 = campaignType (if typed filter)
-      let sql = `DELETE FROM email_campaigns WHERE ($1::int IS NULL OR organization_id = $1)${testFilter}`;
+      let sql = `DELETE FROM email_campaigns WHERE ($1::int IS NULL OR organization_id = $1)${testFilter}${emptyFilter}`;
       const params = [orgId];
       if (typeFilter.includes('$__TYPE__')) {
         sql += typeFilter.replace('$__TYPE__', '$2');
@@ -435,7 +440,7 @@ router.delete('/campaigns/purge', authenticateToken, async (req, res) => {
           else resolve({ deleted: this.changes });
         });
       });
-      logMessage = `[Purge] Deleted ALL ${result.deleted}${testLabel}${typeLabel} email campaigns (purgeAll)`;
+      logMessage = `[Purge] Deleted ALL ${result.deleted}${testLabel}${typeLabel}${emptyLabel} email campaigns (purgeAll)`;
     } else {
       // Purge by date range (inclusive)
       // Delete campaigns where sent_at is within the range, or if sent_at is null, where created_at is within the range
@@ -443,7 +448,7 @@ router.delete('/campaigns/purge', authenticateToken, async (req, res) => {
       let sql = `DELETE FROM email_campaigns
          WHERE ((sent_at >= $1 AND sent_at <= $2)
             OR (sent_at IS NULL AND created_at >= $1 AND created_at <= $2))
-            AND ($3::int IS NULL OR organization_id = $3)${testFilter}`;
+            AND ($3::int IS NULL OR organization_id = $3)${testFilter}${emptyFilter}`;
       const params = [startDate, endDate, orgId];
       if (typeFilter.includes('$__TYPE__')) {
         sql += typeFilter.replace('$__TYPE__', '$4');
@@ -457,7 +462,7 @@ router.delete('/campaigns/purge', authenticateToken, async (req, res) => {
           else resolve({ deleted: this.changes });
         });
       });
-      logMessage = `[Purge] Deleted ${result.deleted}${testLabel}${typeLabel} email campaigns between ${startDate} and ${endDate}`;
+      logMessage = `[Purge] Deleted ${result.deleted}${testLabel}${typeLabel}${emptyLabel} email campaigns between ${startDate} and ${endDate}`;
     }
 
     console.log(logMessage);

@@ -2218,6 +2218,9 @@
               <label style="display: flex; align-items: center; gap: 6px; margin-top: 10px; font-size: 13px; color: #FF9800; cursor: pointer;">
                 <input type="checkbox" id="purgeByDateTestOnly"> Emails TEST uniquement
               </label>
+              <label style="display: flex; align-items: center; gap: 6px; margin-top: 6px; font-size: 13px; color: #6c757d; cursor: pointer;" title="Ne supprime que les enregistrements fantômes (0 destinataire), typiquement créés par le scheduler lorsqu'il n'y a rien à envoyer.">
+                <input type="checkbox" id="purgeByDateEmptyOnly"> Uniquement les enregistrements vides (0 destinataire)
+              </label>
             </div>
 
             <!-- Option 2: Purge all (+ optional type) -->
@@ -2241,6 +2244,9 @@
               </div>
               <label style="display: flex; align-items: center; gap: 6px; margin-top: 10px; font-size: 13px; color: #FF9800; cursor: pointer;">
                 <input type="checkbox" id="purgeAllTestOnly" onchange="updatePurgeAllWarning()"> Emails TEST uniquement
+              </label>
+              <label style="display: flex; align-items: center; gap: 6px; margin-top: 6px; font-size: 13px; color: #6c757d; cursor: pointer;" title="Ne supprime que les enregistrements fantômes (0 destinataire), typiquement créés par le scheduler lorsqu'il n'y a rien à envoyer.">
+                <input type="checkbox" id="purgeAllEmptyOnly" onchange="updatePurgeAllWarning()"> Uniquement les enregistrements vides (0 destinataire)
               </label>
             </div>
           </div>
@@ -6130,13 +6136,15 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
       const endFormatted = new Date(endDate).toLocaleDateString('fr-FR');
       const testLabel = testOnly ? ' TEST' : '';
       const campaignType = document.getElementById('purgeByDateType').value || '';
+      const emptyOnly = document.getElementById('purgeByDateEmptyOnly').checked;
       const typeLabel = !campaignType
         ? ''
         : campaignType === '__blank__'
           ? ' (sans type)'
           : ` (type: ${campaignType})`;
+      const emptyLabel = emptyOnly ? ' (enregistrements vides)' : '';
 
-      if (!confirm(`Êtes-vous sûr de vouloir supprimer les campagnes${testLabel}${typeLabel} entre le ${startFormatted} et le ${endFormatted} ?\n\nCette action est irréversible.`)) {
+      if (!confirm(`Êtes-vous sûr de vouloir supprimer les campagnes${testLabel}${typeLabel}${emptyLabel} entre le ${startFormatted} et le ${endFormatted} ?\n\nCette action est irréversible.`)) {
         return;
       }
 
@@ -6147,7 +6155,7 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({ startDate, endDate, testOnly, campaignType })
+          body: JSON.stringify({ startDate, endDate, testOnly, campaignType, emptyOnly })
         });
 
         if (!response.ok) {
@@ -6167,9 +6175,10 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
       }
     }
 
-    // Update warning text based on testOnly checkbox + selected type
+    // Update warning text based on testOnly checkbox + selected type + emptyOnly
     function updatePurgeAllWarning() {
       const testOnly = document.getElementById('purgeAllTestOnly').checked;
+      const emptyOnly = document.getElementById('purgeAllEmptyOnly')?.checked || false;
       const typeSelect = document.getElementById('purgeAllType');
       const type = typeSelect ? typeSelect.value : '';
       const warning = document.getElementById('purgeAllWarning');
@@ -6178,11 +6187,15 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
         : type === '__blank__'
           ? ' (type: sans type)'
           : ` (type: ${type})`;
-      if (testOnly) {
-        warning.textContent = `Cette action supprimera TOUS les emails TEST${typeSuffix} - IRRÉVERSIBLE`;
+      const emptySuffix = emptyOnly ? ' (enregistrements vides uniquement)' : '';
+      if (emptyOnly) {
+        warning.textContent = `Cette action supprimera les enregistrements vides (0 destinataire)${typeSuffix}${testOnly ? ' parmi les TEST' : ''} - IRRÉVERSIBLE`;
+        warning.style.color = '#6c757d';
+      } else if (testOnly) {
+        warning.textContent = `Cette action supprimera TOUS les emails TEST${typeSuffix}${emptySuffix} - IRRÉVERSIBLE`;
         warning.style.color = '#FF9800';
       } else if (type) {
-        warning.textContent = `Cette action supprimera toutes les campagnes${typeSuffix} - IRRÉVERSIBLE`;
+        warning.textContent = `Cette action supprimera toutes les campagnes${typeSuffix}${emptySuffix} - IRRÉVERSIBLE`;
         warning.style.color = '#dc3545';
       } else {
         warning.textContent = 'Cette action supprimera TOUTES les campagnes - IRRÉVERSIBLE';
@@ -6195,20 +6208,26 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
       const testOnly = document.getElementById('purgeAllTestOnly').checked;
       const testLabel = testOnly ? ' TEST' : '';
       const campaignType = document.getElementById('purgeAllType').value || '';
+      const emptyOnly = document.getElementById('purgeAllEmptyOnly').checked;
       const typeLabel = !campaignType
         ? ''
         : campaignType === '__blank__'
           ? ' (sans type)'
           : ` (type: ${campaignType})`;
+      const emptyLabel = emptyOnly ? ' (enregistrements vides)' : '';
 
       // First confirmation already done via typing "SUPPRIMER"
       // Second confirmation via confirm dialog
-      const scopeLabel = campaignType
-        ? `TOUTES les campagnes${typeLabel}`
-        : 'TOUTES les campagnes';
-      const confirmMsg = testOnly
-        ? `Êtes-vous sûr ?\n\nCette action supprimera TOUS les emails TEST${typeLabel} de l'historique.\n\nCliquez OK pour confirmer.`
-        : `Êtes-vous ABSOLUMENT sûr ?\n\nCette action est IRRÉVERSIBLE et supprimera ${scopeLabel} de l'historique.\n\nCliquez OK pour confirmer la suppression définitive.`;
+      const scopeLabel = emptyOnly
+        ? `les enregistrements vides${typeLabel}${testOnly ? ' parmi les TEST' : ''}`
+        : campaignType
+          ? `TOUTES les campagnes${typeLabel}`
+          : 'TOUTES les campagnes';
+      const confirmMsg = emptyOnly
+        ? `Confirmer la suppression ?\n\nCette action supprimera ${scopeLabel} (0 destinataire) de l'historique.\n\nCliquez OK pour confirmer.`
+        : testOnly
+          ? `Êtes-vous sûr ?\n\nCette action supprimera TOUS les emails TEST${typeLabel} de l'historique.\n\nCliquez OK pour confirmer.`
+          : `Êtes-vous ABSOLUMENT sûr ?\n\nCette action est IRRÉVERSIBLE et supprimera ${scopeLabel} de l'historique.\n\nCliquez OK pour confirmer la suppression définitive.`;
 
       if (!confirm(confirmMsg)) {
         return;
@@ -6221,7 +6240,7 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({ purgeAll: true, testOnly, campaignType })
+          body: JSON.stringify({ purgeAll: true, testOnly, campaignType, emptyOnly })
         });
 
         if (!response.ok) {
@@ -6259,14 +6278,21 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
     document.getElementById('purgeAllBtn').addEventListener('click', purgeAllCampaigns);
     document.getElementById('confirmPurgeAllInput').addEventListener('input', handlePurgeAllConfirmInput);
 
+    // Known campaign_type values — must stay in sync with every INSERT INTO
+    // email_campaigns in the backend (routes/email.js, emailing.js, server.js).
+    // Any type missing from this map displays as "-" in the history Type column,
+    // which is misleading. When adding a new campaign_type server-side, update
+    // this map too (see CLAUDE.md note on twin-app SQL drift for rationale).
     const CAMPAIGN_TYPES = {
       'tournament_results': 'Résultats',
+      'finale_results': 'Résultats Finale',
       'finale_convocation': 'Convoc. Finale',
+      'convocation': 'Convocation',
       'relance_t1': 'Relance T1',
       'relance_t2': 'Relance T2',
       'relance_t3': 'Relance T3',
       'relance_finale': 'Relance Finale',
-      'convocation': 'Convocation',
+      'tournament_alert': 'Rappel Tournois',
       'club_reminder': 'Rappel Club',
       'composer': 'Composer',
       'scheduled': 'Programmé',
