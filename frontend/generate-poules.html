@@ -996,6 +996,34 @@
     }
     const token = sessionStorage.getItem('token');
 
+    /**
+     * Build a precise human-readable label describing inscription counts.
+     * Example outputs: "3 inscrit(s)", "3 inscrit(s) / 1 renonciation",
+     *   "0 inscrit(s) / 1 renonciation / 2 forfaits"
+     * Categories are only shown when count > 0 (except "inscrit" always shown).
+     */
+    function buildInscriptionCountsLabel(inscriptions) {
+      if (!Array.isArray(inscriptions)) return '0 inscrit(s)';
+      // Count per category. A player is:
+      //   - "forfait" if forfait=1 OR statut='forfait'
+      //   - "renonciation" if statut='indisponible' (regardless of forfait)
+      //   - "désinscrit" if statut='désinscrit'
+      //   - "inscrit" otherwise (default / statut='inscrit')
+      let inscrit = 0, renonciation = 0, forfait = 0, desinscrit = 0;
+      for (const i of inscriptions) {
+        const statut = (i.statut || '').toLowerCase();
+        if (statut === 'désinscrit' || statut === 'desinscrit') desinscrit++;
+        else if (statut === 'indisponible') renonciation++;
+        else if (i.forfait === 1 || statut === 'forfait') forfait++;
+        else inscrit++;
+      }
+      const parts = [`${inscrit} inscrit(s)`];
+      if (renonciation > 0) parts.push(`${renonciation} renonciation${renonciation > 1 ? 's' : ''}`);
+      if (forfait > 0) parts.push(`${forfait} forfait${forfait > 1 ? 's' : ''}`);
+      if (desinscrit > 0) parts.push(`${desinscrit} désinscrit${desinscrit > 1 ? 's' : ''}`);
+      return parts.join(' / ');
+    }
+
     // Check user role and show/hide admin elements
     const userRole = sessionStorage.getItem('userRole');
     if (userRole === 'admin' || userRole === 'lecteur') {
@@ -2150,14 +2178,18 @@
             // Assign to global for use by later steps (player loading, poule generation)
             matchingTournoi = foundTournoi;
 
-            // Load inscription count
+            // Load inscription count — broken down by status for a precise display
             const inscResponse = await fetch(`${API_URL}/inscriptions/tournoi/${foundTournoi.tournoi_id}/inscriptions`, {
               headers: { 'Authorization': `Bearer ${token}` }
             });
             let inscCount = 0;
+            let inscriptionCountsLabel = '';
             if (inscResponse.ok) {
               const inscriptions = await inscResponse.json();
-              inscCount = inscriptions.filter(i => i.forfait !== 1).length;
+              inscCount = inscriptions.filter(i =>
+                i.forfait !== 1 && !['indisponible', 'désinscrit', 'forfait'].includes(i.statut)
+              ).length;
+              inscriptionCountsLabel = buildInscriptionCountsLabel(inscriptions);
             }
 
             // Format date
@@ -2169,14 +2201,19 @@
               `${category.display_name} - ${foundTournoi.nom}`;
             document.getElementById('tournamentInfoDate').textContent = dateStr;
             document.getElementById('tournamentInfoLieu').textContent = foundTournoi.lieu || 'Non défini';
-            // For finals, show "X/Y inscrits" (inscribed finalists / total finalists)
+            // For finals, show "X/Y inscrits" (inscribed finalists / total finalists),
+            // with renonciation / forfait breakdown appended when applicable.
             const isFinaleTournoi = foundTournoi.nom?.toUpperCase().includes('FINALE') || tournamentNum === 'Finale' || isFinale;
             if (isFinaleTournoi && window.selectedUpcomingTournament) {
               const fc = window.selectedUpcomingTournament.finalist_count || 0;
               const ifc = window.selectedUpcomingTournament.inscribed_finalist_count || 0;
-              document.getElementById('tournamentInfoInscrits').textContent = `${ifc}/${fc} inscrits`;
+              // Append renonciation / forfait counts if any (computed from raw inscriptions)
+              const extra = inscriptionCountsLabel && !inscriptionCountsLabel.startsWith(`${ifc} inscrit`)
+                ? ` (${inscriptionCountsLabel})`
+                : '';
+              document.getElementById('tournamentInfoInscrits').textContent = `${ifc}/${fc} inscrits${extra}`;
             } else {
-              document.getElementById('tournamentInfoInscrits').textContent = `${inscCount} joueurs`;
+              document.getElementById('tournamentInfoInscrits').textContent = inscriptionCountsLabel || `${inscCount} inscrit(s)`;
             }
             document.getElementById('tournamentInfo').style.display = 'block';
 
@@ -2199,15 +2236,19 @@
               isFinale: true
             };
 
-            // Load inscription count
+            // Load inscription count with breakdown by status
             let inscCount = 0;
+            let inscriptionCountsLabel = '';
             if (upcomingData.tournoiId) {
               const inscResponse = await fetch(`${API_URL}/inscriptions/tournoi/${upcomingData.tournoiId}/inscriptions`, {
                 headers: { 'Authorization': `Bearer ${token}` }
               });
               if (inscResponse.ok) {
                 const inscriptions = await inscResponse.json();
-                inscCount = inscriptions.filter(i => i.forfait !== 1).length;
+                inscCount = inscriptions.filter(i =>
+                  i.forfait !== 1 && !['indisponible', 'désinscrit', 'forfait'].includes(i.statut)
+                ).length;
+                inscriptionCountsLabel = buildInscriptionCountsLabel(inscriptions);
               }
             }
 
@@ -2220,10 +2261,14 @@
               `${category.display_name} - Finale Départementale`;
             document.getElementById('tournamentInfoDate').textContent = dateStr;
             document.getElementById('tournamentInfoLieu').textContent = upcomingData.lieu || 'Non défini';
-            // For finals, show "X/Y inscrits" (inscribed finalists / total finalists)
+            // For finals, show "X/Y inscrits" (inscribed finalists / total finalists),
+            // with renonciation / forfait breakdown appended when applicable.
             const fc = upcomingData.finalist_count || 0;
             const ifc = upcomingData.inscribed_finalist_count || 0;
-            document.getElementById('tournamentInfoInscrits').textContent = `${ifc}/${fc} inscrits`;
+            const extra = inscriptionCountsLabel && !inscriptionCountsLabel.startsWith(`${ifc} inscrit`)
+              ? ` (${inscriptionCountsLabel})`
+              : '';
+            document.getElementById('tournamentInfoInscrits').textContent = `${ifc}/${fc} inscrits${extra}`;
             document.getElementById('tournamentInfo').style.display = 'block';
             hideSplitChildSelector();
           } else {

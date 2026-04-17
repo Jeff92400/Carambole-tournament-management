@@ -1071,16 +1071,28 @@ async function checkTournamentAlerts() {
       }
     }
 
-    // Update the pending record to completed
+    // Clean up the pending record:
+    //   - If at least one alert email was sent, UPDATE it to 'completed' for auditability
+    //   - If nothing was sent (no tournaments in window, or no eligible recipients), DELETE
+    //     it so the history is not polluted with zero-count ghost entries.
+    // The pending row is still useful as a concurrency lock during execution — it only
+    // becomes noise after the run is over with no actual sends.
     await new Promise((resolve) => {
-      db.run(`
-        UPDATE email_campaigns
-        SET subject = $1, body = $2, recipients_count = $3, sent_count = $3, status = 'completed'
-        WHERE campaign_type = 'tournament_alert' AND status = 'pending'
-      `, [`Rappel Tournois - multi-org`, 'Auto-generated tournament alert', totalSent], () => resolve());
+      if (totalSent > 0) {
+        db.run(`
+          UPDATE email_campaigns
+          SET subject = $1, body = $2, recipients_count = $3, sent_count = $3, status = 'completed'
+          WHERE campaign_type = 'tournament_alert' AND status = 'pending'
+        `, [`Rappel Tournois - multi-org`, 'Auto-generated tournament alert', totalSent], () => resolve());
+      } else {
+        db.run(`
+          DELETE FROM email_campaigns
+          WHERE campaign_type = 'tournament_alert' AND status = 'pending'
+        `, [], () => resolve());
+      }
     });
 
-    console.log(`[Tournament Alerts] Completed - ${totalSent} email(s) sent`);
+    console.log(`[Tournament Alerts] Completed - ${totalSent} email(s) sent${totalSent === 0 ? ' (pending record deleted to avoid ghost entry)' : ''}`);
 
   } catch (error) {
     console.error('[Tournament Alerts] Error:', error.message);
@@ -1348,29 +1360,38 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log('[Automatic Reminders] Starting daily check...');
 
     try {
-      // Get tomorrow's date (Paris timezone)
+      // The inscription deadline for a tournament is `debut - 7 days` (hardcoded in
+      // the Player App adapters). A reminder should fire the day BEFORE the deadline,
+      // so we need to look at tournaments whose `debut` is in 8 days from today.
+      //
+      // Before the V2.0.395 fix, this scheduler was looking at `debut = tomorrow`
+      // (tournament day, not deadline day), so it was effectively a no-op most of
+      // the time — players are already registered or not by then, and the deadline
+      // has already passed. See CLAUDE.md "Known Issues" for history.
       const now = new Date();
       const parisNow = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
-      const tomorrow = new Date(parisNow);
-      tomorrow.setDate(tomorrow.getDate() + 1);
+      const deadlineTomorrow = new Date(parisNow);
+      deadlineTomorrow.setDate(deadlineTomorrow.getDate() + 8); // 7 days before tournament + 1
 
-      const tomorrowStr = tomorrow.toISOString().split('T')[0]; // YYYY-MM-DD
-      console.log(`[Automatic Reminders] Checking for tournaments with deadline: ${tomorrowStr}`);
+      const targetDateStr = deadlineTomorrow.toISOString().split('T')[0]; // YYYY-MM-DD
+      console.log(`[Automatic Reminders] Checking for tournaments with inscription deadline tomorrow (tournament date: ${targetDateStr})`);
 
-      // Find all tournaments with deadline (debut) = tomorrow
+      // Find all tournaments starting in 8 days (inscription closes tomorrow),
+      // excluding finales (they have their own relance system).
       const tournaments = await new Promise((resolve, reject) => {
         db.all(
           `SELECT tournoi_id, nom, mode, categorie, debut, organization_id
            FROM tournoi_ext
            WHERE DATE(debut) = $1
-             AND (status IS NULL OR status = 'active')`,
-          [tomorrowStr],
+             AND (status IS NULL OR status = 'active')
+             AND LOWER(nom) NOT LIKE '%finale%'`,
+          [targetDateStr],
           (err, rows) => err ? reject(err) : resolve(rows || [])
         );
       });
 
       if (tournaments.length === 0) {
-        console.log('[Automatic Reminders] No tournaments with deadline tomorrow');
+        console.log('[Automatic Reminders] No tournaments with inscription deadline tomorrow');
         return;
       }
 
