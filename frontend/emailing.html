@@ -6342,6 +6342,18 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
       }
     }
 
+    // Toggle a campaign-history month group (separate namespace from inscription
+    // logs so both tables can coexist on the page without ID clashes).
+    function toggleCampaignMonth(monthKey) {
+      const rows = document.querySelectorAll(`tr[data-campaign-month="${monthKey}"]`);
+      const chevron = document.querySelector(`span[data-campaign-chevron="${monthKey}"]`);
+      if (!rows.length || !chevron) return;
+      const isExpanded = chevron.dataset.expanded === 'true';
+      rows.forEach(r => { r.style.display = isExpanded ? 'none' : ''; });
+      chevron.dataset.expanded = isExpanded ? 'false' : 'true';
+      chevron.textContent = isExpanded ? '▶' : '▼';
+    }
+
     function displayHistory(history) {
       const tbody = document.getElementById('historyBody');
       tbody.innerHTML = '';
@@ -6351,23 +6363,72 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
         return;
       }
 
-      history.forEach(h => {
-        const row = document.createElement('tr');
-        const date = h.sent_at ? new Date(h.sent_at).toLocaleString('fr-FR') : new Date(h.created_at).toLocaleString('fr-FR');
-        const typeDropdown = createTypeDropdown(h.id, h.campaign_type, h.test_mode);
-        const sentBy = h.sent_by || '-';
-        row.innerHTML = `
-          <td>${date}</td>
-          <td>${typeDropdown}</td>
-          <td>${h.subject}</td>
-          <td>${sentBy}</td>
-          <td>${h.recipients_count}</td>
-          <td style="color: green;">${h.sent_count}</td>
-          <td style="color: ${h.failed_count > 0 ? 'red' : 'inherit'};">${h.failed_count}</td>
-          <td><span class="badge badge-${h.status === 'completed' ? 'actif' : 'inactif'}">${h.status}</span></td>
+      // Group by YYYY-MM using the effective campaign date (sent_at or created_at).
+      // Server returns history sorted DESC, Map preserves that ordering -> newest month first.
+      const getCampaignDate = (h) => h.sent_at || h.created_at;
+      const groups = new Map();
+      for (const h of history) {
+        const key = monthKeyOf(getCampaignDate(h));
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(h);
+      }
+
+      const firstGroupKey = groups.keys().next().value;
+
+      for (const [monthKey, groupItems] of groups.entries()) {
+        // Per-month aggregates for the header
+        const total = groupItems.length;
+        const completed = groupItems.filter(h => h.status === 'completed').length;
+        const ghosts = groupItems.filter(h => (h.recipients_count || 0) === 0).length;
+        const totalRecipients = groupItems.reduce((s, h) => s + (h.recipients_count || 0), 0);
+        const totalSent = groupItems.reduce((s, h) => s + (h.sent_count || 0), 0);
+        const totalFailed = groupItems.reduce((s, h) => s + (h.failed_count || 0), 0);
+
+        const summaryParts = [`${total} campagne${total > 1 ? 's' : ''}`];
+        summaryParts.push(`${totalSent}/${totalRecipients} envois`);
+        if (totalFailed > 0) summaryParts.push(`${totalFailed} échec${totalFailed > 1 ? 's' : ''}`);
+        if (ghosts > 0) summaryParts.push(`${ghosts} vide${ghosts > 1 ? 's' : ''}`);
+        const summary = summaryParts.join(', ');
+
+        const isFirstGroup = monthKey === firstGroupKey;
+        const chevron = isFirstGroup ? '▼' : '▶';
+        const expanded = isFirstGroup ? 'true' : 'false';
+
+        // Group header row (clickable, spans all 8 columns)
+        const headerRow = document.createElement('tr');
+        headerRow.style.cursor = 'pointer';
+        headerRow.style.background = '#e3f2fd';
+        headerRow.style.fontWeight = '600';
+        headerRow.addEventListener('click', () => toggleCampaignMonth(monthKey));
+        headerRow.innerHTML = `
+          <td colspan="8" style="padding: 10px 14px; color: #1F4788; font-size: 0.95rem;">
+            <span data-campaign-chevron="${monthKey}" data-expanded="${expanded}" style="display: inline-block; width: 16px; text-align: center; margin-right: 8px;">${chevron}</span>
+            ${monthLabelFromKey(monthKey)} — ${summary}
+          </td>
         `;
-        tbody.appendChild(row);
-      });
+        tbody.appendChild(headerRow);
+
+        for (const h of groupItems) {
+          const row = document.createElement('tr');
+          row.setAttribute('data-campaign-month', monthKey);
+          if (!isFirstGroup) row.style.display = 'none';
+
+          const date = new Date(getCampaignDate(h)).toLocaleString('fr-FR');
+          const typeDropdown = createTypeDropdown(h.id, h.campaign_type, h.test_mode);
+          const sentBy = h.sent_by || '-';
+          row.innerHTML = `
+            <td>${date}</td>
+            <td>${typeDropdown}</td>
+            <td>${h.subject}</td>
+            <td>${sentBy}</td>
+            <td>${h.recipients_count}</td>
+            <td style="color: green;">${h.sent_count}</td>
+            <td style="color: ${h.failed_count > 0 ? 'red' : 'inherit'};">${h.failed_count}</td>
+            <td><span class="badge badge-${h.status === 'completed' ? 'actif' : 'inactif'}">${h.status}</span></td>
+          `;
+          tbody.appendChild(row);
+        }
+      }
 
       // Add event listeners for type dropdowns
       document.querySelectorAll('.campaign-type-select').forEach(select => {
