@@ -6437,6 +6437,29 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
       }
     }
 
+    // Human-readable month key helpers
+    function monthKeyOf(dateStr) {
+      const d = new Date(dateStr);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; // YYYY-MM
+    }
+    function monthLabelFromKey(key) {
+      const [y, m] = key.split('-').map(Number);
+      const date = new Date(y, m - 1, 1);
+      const label = date.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+      return label.charAt(0).toUpperCase() + label.slice(1); // "Avril 2026"
+    }
+
+    // Toggle a month group: collapses/expands all rows sharing a data-month-group attribute
+    function toggleInscriptionMonth(monthKey) {
+      const rows = document.querySelectorAll(`tr[data-month-group="${monthKey}"]`);
+      const chevron = document.querySelector(`span[data-chevron="${monthKey}"]`);
+      if (!rows.length || !chevron) return;
+      const isExpanded = chevron.dataset.expanded === 'true';
+      rows.forEach(r => { r.style.display = isExpanded ? 'none' : ''; });
+      chevron.dataset.expanded = isExpanded ? 'false' : 'true';
+      chevron.textContent = isExpanded ? '▶' : '▼';
+    }
+
     function displayInscriptionLogs(logs) {
       const tbody = document.getElementById('inscriptionLogsBody');
       const noLogsEl = document.getElementById('noInscriptionLogs');
@@ -6455,32 +6478,79 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
 
       noLogsEl.style.display = 'none';
 
-      logs.forEach(log => {
-        const row = document.createElement('tr');
-        const date = new Date(log.created_at).toLocaleString('fr-FR');
-        const typeLabel = log.email_type === 'inscription' ? 'Inscription' : 'Désinscription';
-        const typeColor = log.email_type === 'inscription' ? '#28a745' : '#dc3545';
-        const statusBadge = log.status === 'sent'
-          ? '<span class="badge badge-actif">Envoyé</span>'
-          : `<span class="badge badge-inactif" title="${log.error_message || ''}">Échec</span>`;
+      // Group logs by YYYY-MM (logs arrive already sorted created_at DESC).
+      // Using a Map preserves insertion order so groups render newest-first.
+      const groups = new Map();
+      for (const log of logs) {
+        const key = monthKeyOf(log.created_at);
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(log);
+      }
 
-        const deleteBtn = (userRole === 'admin')
-          ? `<td><button class="btn" style="background: #dc3545; color: white; padding: 4px 8px; font-size: 0.75rem;" onclick="deleteInscriptionLog(${log.id})">🗑️</button></td>`
-          : (isAdminOrLecteur ? '<td>-</td>' : '');
+      // Total columns in the table — used for colspan on the group header row.
+      // Columns: Date, Type, Joueur, Email, Tournoi, Mode, Catégorie, Statut, (Actions for admin/lecteur) = 8 or 9
+      const totalCols = isAdminOrLecteur ? 9 : 8;
 
-        row.innerHTML = `
-          <td>${date}</td>
-          <td><span style="color: ${typeColor}; font-weight: 500;">${typeLabel}</span></td>
-          <td>${log.player_name || '-'}</td>
-          <td style="font-size: 0.85rem;">${log.player_email || '-'}</td>
-          <td>${log.tournament_name || '-'}</td>
-          <td>${log.mode || '-'}</td>
-          <td>${log.category || '-'}</td>
-          <td>${statusBadge}</td>
-          ${deleteBtn}
+      const firstGroupKey = groups.keys().next().value; // most recent month
+
+      for (const [monthKey, groupLogs] of groups.entries()) {
+        const inscCount = groupLogs.filter(l => l.email_type === 'inscription').length;
+        const desincCount = groupLogs.filter(l => l.email_type === 'desinscription').length;
+        const total = groupLogs.length;
+        const breakdown = [];
+        if (inscCount > 0) breakdown.push(`${inscCount} inscription${inscCount > 1 ? 's' : ''}`);
+        if (desincCount > 0) breakdown.push(`${desincCount} désinscription${desincCount > 1 ? 's' : ''}`);
+        const breakdownText = breakdown.length ? ` (${breakdown.join(', ')})` : '';
+
+        const isFirstGroup = monthKey === firstGroupKey;
+        const chevron = isFirstGroup ? '▼' : '▶';
+        const expanded = isFirstGroup ? 'true' : 'false';
+
+        // Group header row — clickable, spans all columns
+        const headerRow = document.createElement('tr');
+        headerRow.style.cursor = 'pointer';
+        headerRow.style.background = '#e3f2fd';
+        headerRow.style.fontWeight = '600';
+        headerRow.addEventListener('click', () => toggleInscriptionMonth(monthKey));
+        headerRow.innerHTML = `
+          <td colspan="${totalCols}" style="padding: 10px 14px; color: #1F4788; font-size: 0.95rem;">
+            <span data-chevron="${monthKey}" data-expanded="${expanded}" style="display: inline-block; width: 16px; text-align: center; margin-right: 8px;">${chevron}</span>
+            ${monthLabelFromKey(monthKey)} — ${total} entrée${total > 1 ? 's' : ''}${breakdownText}
+          </td>
         `;
-        tbody.appendChild(row);
-      });
+        tbody.appendChild(headerRow);
+
+        // Data rows for this group — hidden by default except for the first (most recent) group
+        for (const log of groupLogs) {
+          const row = document.createElement('tr');
+          row.setAttribute('data-month-group', monthKey);
+          if (!isFirstGroup) row.style.display = 'none';
+
+          const date = new Date(log.created_at).toLocaleString('fr-FR');
+          const typeLabel = log.email_type === 'inscription' ? 'Inscription' : 'Désinscription';
+          const typeColor = log.email_type === 'inscription' ? '#28a745' : '#dc3545';
+          const statusBadge = log.status === 'sent'
+            ? '<span class="badge badge-actif">Envoyé</span>'
+            : `<span class="badge badge-inactif" title="${log.error_message || ''}">Échec</span>`;
+
+          const deleteBtn = (userRole === 'admin')
+            ? `<td><button class="btn" style="background: #dc3545; color: white; padding: 4px 8px; font-size: 0.75rem;" onclick="deleteInscriptionLog(${log.id})">🗑️</button></td>`
+            : (isAdminOrLecteur ? '<td>-</td>' : '');
+
+          row.innerHTML = `
+            <td>${date}</td>
+            <td><span style="color: ${typeColor}; font-weight: 500;">${typeLabel}</span></td>
+            <td>${log.player_name || '-'}</td>
+            <td style="font-size: 0.85rem;">${log.player_email || '-'}</td>
+            <td>${log.tournament_name || '-'}</td>
+            <td>${log.mode || '-'}</td>
+            <td>${log.category || '-'}</td>
+            <td>${statusBadge}</td>
+            ${deleteBtn}
+          `;
+          tbody.appendChild(row);
+        }
+      }
     }
 
     async function deleteInscriptionLog(logId) {
