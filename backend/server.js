@@ -1360,20 +1360,38 @@ app.listen(PORT, '0.0.0.0', () => {
 ╚════════════════════════════════════════════╝
   `);
 
+  // Mutex helper: prevents a scheduler from overlapping with itself.
+  // Audit Phase 4 finding W7 — without this, a long-running batch (e.g. 8 min
+  // email send) triggered again at the next tick would duplicate effects.
+  // Usage: guardedScheduler('name', fn, intervalMs)
+  const schedulerLocks = {};
+  function guardedScheduler(name, fn, intervalMs) {
+    return setInterval(async () => {
+      if (schedulerLocks[name]) {
+        console.warn(`[${name}] Skipped — previous run still in progress`);
+        return;
+      }
+      schedulerLocks[name] = true;
+      try {
+        await fn();
+      } catch (err) {
+        console.error(`[${name}] Error:`, err.message);
+      } finally {
+        schedulerLocks[name] = false;
+      }
+    }, intervalMs);
+  }
+
   // Start email scheduler - check every 5 minutes and process any past-due emails
-  setInterval(async () => {
-    await processScheduledEmails();
-  }, 300000); // Check every 5 minutes (300000ms)
-  console.log('[Email Scheduler] Started - checking for scheduled emails every 5 minutes');
+  guardedScheduler('Email Scheduler', processScheduledEmails, 300000);
+  console.log('[Email Scheduler] Started - checking for scheduled emails every 5 minutes (mutex-guarded)');
 
   // Also run once immediately on startup (after 30 seconds to let DB settle)
   setTimeout(() => processScheduledEmails(), 30000);
 
   // Tournament alerts scheduler - check every hour for upcoming tournaments
-  setInterval(async () => {
-    await checkTournamentAlerts();
-  }, 3600000); // Check every hour (3600000ms)
-  console.log('[Tournament Alerts] Started - checking for upcoming tournaments every hour');
+  guardedScheduler('Tournament Alerts', checkTournamentAlerts, 3600000);
+  console.log('[Tournament Alerts] Started - checking for upcoming tournaments every hour (mutex-guarded)');
 
   // Also run tournament alerts check on startup (after 60 seconds)
   setTimeout(() => checkTournamentAlerts(), 60000);

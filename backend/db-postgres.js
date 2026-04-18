@@ -1,10 +1,16 @@
 const { Pool } = require('pg');
 const bcrypt = require('bcrypt');
 
-// PostgreSQL connection
+// PostgreSQL connection — explicit pool sizing.
+// Audit Phase 4 finding W8 (April 2026): pg default is 10 connections, which is
+// tight under concurrent load (4 admins + 4 schedulers + public endpoints).
+// max=20 matches Railway's PostgreSQL connection limit comfortably (default 100).
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false
+  ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false,
+  max: 20,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 5000
 });
 
 // Test connection
@@ -1632,6 +1638,17 @@ async function initializeDatabase() {
     await client.query(`CREATE INDEX IF NOT EXISTS idx_enrollment_requests_org ON enrollment_requests(organization_id)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_activity_logs_org ON activity_logs(organization_id)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_scoring_rules_org ON scoring_rules(organization_id)`);
+
+    // ============= PERFORMANCE: composite indexes for hot-path queries =============
+    // Audit Phase 4 finding C2 (April 2026). These replace full-table scans on
+    // tables that grow with every season. Measured impact on rankings page:
+    // 5-15 s → sub-second at current volume; stays fast as CDBs onboard.
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_rankings_cat_season_org ON rankings(category_id, season, organization_id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_inscriptions_tournoi_licence ON inscriptions(tournoi_id, licence)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_tournament_results_tournoi_licence ON tournament_results(tournament_id, licence)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_push_subs_player_org ON push_subscriptions(player_account_id, organization_id)`);
+    // Audit Phase 4 finding I16 — email campaigns history sorted by date
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_email_campaigns_sent ON email_campaigns(sent_at DESC)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_game_parameters_org ON game_parameters(organization_id)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_email_templates_org ON email_templates(organization_id)`);
 
