@@ -1116,6 +1116,7 @@
               <div class="selection-actions" style="margin-bottom: 10px;">
                 <button class="btn" id="relanceSelectAllBtn" style="background: #4CAF50; padding: 8px 15px; font-size: 12px;">Tout sélectionner</button>
                 <button class="btn" id="relanceDeselectAllBtn" style="background: #999; padding: 8px 15px; font-size: 12px;">Tout désélectionner</button>
+                <button class="btn" id="relanceSelectNonInscribedBtn" style="background: #f59e0b; padding: 8px 15px; font-size: 12px;" title="Ne sélectionner que les joueurs qui n'ont pas encore confirmé leur inscription (avec email valide). Pratique pour les relances finale ciblées sur les qualifiés en attente.">⏳ Uniquement non-inscrits</button>
               </div>
               <div style="max-height: 300px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px;">
                 <table style="width: 100%; font-size: 13px;">
@@ -5858,6 +5859,32 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
         cb.closest('tr').classList.remove('selected');
       });
       updateRelanceSelectedCount();
+    });
+
+    // Select only the qualified-but-not-inscribed players — the natural target
+    // for a relance. A player is considered "inscribed" when their entry in
+    // relanceParticipants has already_inscribed=true (computed server-side).
+    document.getElementById('relanceSelectNonInscribedBtn').addEventListener('click', () => {
+      const participants = relanceParticipants || [];
+      let selectedCount = 0;
+      document.querySelectorAll('.relance-checkbox').forEach(cb => {
+        if (cb.disabled) return; // keep emails-less rows disabled
+        const idx = parseInt(cb.dataset.idx);
+        const p = participants[idx];
+        const isInscribed = p && p.already_inscribed === true;
+        if (!isInscribed) {
+          cb.checked = true;
+          selectedRelanceIds.add(idx);
+          cb.closest('tr').classList.add('selected');
+          selectedCount++;
+        } else {
+          cb.checked = false;
+          selectedRelanceIds.delete(idx);
+          cb.closest('tr').classList.remove('selected');
+        }
+      });
+      updateRelanceSelectedCount();
+      showSuccess(`${selectedCount} joueur(s) non-inscrit(s) sélectionné(s).`);
     });
 
     document.getElementById('relanceTestModeCheck').addEventListener('change', (e) => {

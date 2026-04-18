@@ -999,17 +999,21 @@ router.get('/finales/upcoming', authenticateToken, async (req, res) => {
           return { ...final, finalist_count: 0, inscribed_finalist_count: 0 };
         }
 
-        // Get rankings for this category to determine finalists
+        // Get rankings for this category to determine finalists — include
+        // player identity so we can surface names of qualified-but-not-inscribed.
         const rankings = await new Promise((resolve, reject) => {
           db.all(
-            `SELECT r.licence FROM rankings r WHERE r.category_id = $1 AND r.season = $2 AND ($3::int IS NULL OR r.organization_id = $3) ORDER BY r.rank_position ASC`,
+            `SELECT r.licence, r.rank_position, p.first_name, p.last_name, p.email
+             FROM rankings r
+             LEFT JOIN players p ON REPLACE(r.licence, ' ', '') = REPLACE(p.licence, ' ', '')
+             WHERE r.category_id = $1 AND r.season = $2 AND ($3::int IS NULL OR r.organization_id = $3)
+             ORDER BY r.rank_position ASC`,
             [category.id, season, orgId],
             (err, rows) => {
               if (err) {
                 console.error(`Rankings query error:`, err);
                 reject(err);
               } else {
-                console.log(`Rankings found: ${(rows || []).length} players for category_id=${category.id}, season=${season}`);
                 resolve(rows || []);
               }
             }
@@ -1020,8 +1024,8 @@ router.get('/finales/upcoming', authenticateToken, async (req, res) => {
         const numFinalists = rankings.length >= qualificationSettings.threshold
           ? qualificationSettings.large
           : qualificationSettings.small;
-        const finalistLicences = rankings.slice(0, numFinalists).map(r => r.licence?.replace(/\s/g, ''));
-        console.log(`Finalists: ${finalistLicences.length} (top ${numFinalists} of ${rankings.length})`);
+        const finalists = rankings.slice(0, numFinalists);
+        const finalistLicences = finalists.map(r => r.licence?.replace(/\s/g, ''));
 
         // Get inscriptions for this tournament
         const inscriptions = await new Promise((resolve, reject) => {
@@ -1032,30 +1036,31 @@ router.get('/finales/upcoming', authenticateToken, async (req, res) => {
              AND (statut IS NULL OR statut NOT IN ('désinscrit', 'indisponible'))
              AND ($2::int IS NULL OR organization_id = $2)`,
             [final.tournoi_id, orgId],
-            (err, rows) => {
-              if (err) {
-                console.error(`Inscriptions query error:`, err);
-                reject(err);
-              } else {
-                console.log(`Inscriptions found: ${(rows || []).length} for tournoi_id=${final.tournoi_id}`);
-                resolve(rows || []);
-              }
-            }
+            (err, rows) => err ? reject(err) : resolve(rows || [])
           );
         });
 
-        // Count total active inscriptions (excluding forfait)
         const totalInscriptions = inscriptions.length;
-
-        // Also count how many finalists are inscribed (for reference)
         const inscribedLicences = inscriptions.map(i => i.licence?.replace(/\s/g, ''));
-        const inscribedFinalistCount = finalistLicences.filter(l => inscribedLicences.includes(l)).length;
-        console.log(`Result: ${totalInscriptions} total inscriptions (${inscribedFinalistCount}/${finalistLicences.length} finalists)`);
+
+        // Identify qualified finalists who have NOT yet registered — neither
+        // inscribed nor explicitly renounced. These are the "silent absentees"
+        // the admin needs to chase (or mark as indisponible) before the finale.
+        const pendingFinalists = finalists
+          .filter(r => !inscribedLicences.includes(r.licence?.replace(/\s/g, '')))
+          .map(r => ({
+            licence: (r.licence || '').replace(/\s/g, ''),
+            name: `${r.first_name || ''} ${r.last_name || ''}`.trim() || r.licence,
+            rank_position: r.rank_position,
+            email: r.email || null
+          }));
 
         return {
           ...final,
           finalist_count: finalistLicences.length,
-          inscribed_finalist_count: totalInscriptions  // Changed to show total inscriptions instead of just finalists
+          inscribed_finalist_count: totalInscriptions,
+          pending_finalists: pendingFinalists,
+          pending_finalist_count: pendingFinalists.length
         };
       } catch (err) {
         console.error(`Error processing final ${final.tournoi_id}:`, err);
@@ -3803,15 +3808,16 @@ router.get('/upcoming-relances', authenticateToken, async (req, res) => {
           return { ...t, isFinale: true, finalist_count: 0, inscribed_finalist_count: 0 };
         }
 
-        // Get rankings for this category
+        // Get rankings for this category (with player identity for pending list)
         const rankings = await new Promise((resolve, reject) => {
           db.all(
-            `SELECT r.licence FROM rankings r WHERE r.category_id = $1 AND r.season = $2 AND ($3::int IS NULL OR r.organization_id = $3) ORDER BY r.rank_position ASC`,
+            `SELECT r.licence, r.rank_position, p.first_name, p.last_name, p.email
+             FROM rankings r
+             LEFT JOIN players p ON REPLACE(r.licence, ' ', '') = REPLACE(p.licence, ' ', '')
+             WHERE r.category_id = $1 AND r.season = $2 AND ($3::int IS NULL OR r.organization_id = $3)
+             ORDER BY r.rank_position ASC`,
             [category.id, season, orgId],
-            (err, rows) => {
-              if (err) reject(err);
-              else resolve(rows || []);
-            }
+            (err, rows) => err ? reject(err) : resolve(rows || [])
           );
         });
 
@@ -3819,29 +3825,42 @@ router.get('/upcoming-relances', authenticateToken, async (req, res) => {
         const numFinalists = rankings.length >= qualificationSettings.threshold
           ? qualificationSettings.large
           : qualificationSettings.small;
-        const finalistLicences = rankings.slice(0, numFinalists).map(r => r.licence?.replace(/\s/g, ''));
+        const finalists = rankings.slice(0, numFinalists);
+        const finalistLicences = finalists.map(r => r.licence?.replace(/\s/g, ''));
 
-        // Get inscriptions for this tournament (non-forfait)
+        // Get inscriptions for this tournament (non-forfait, not désinscrit/indisponible)
         const inscriptions = await new Promise((resolve, reject) => {
           db.all(
-            `SELECT licence FROM inscriptions WHERE tournoi_id = $1 AND (forfait IS NULL OR forfait != 1) AND ($2::int IS NULL OR organization_id = $2)`,
+            `SELECT licence FROM inscriptions
+             WHERE tournoi_id = $1
+               AND (forfait IS NULL OR forfait != 1)
+               AND (statut IS NULL OR statut NOT IN ('désinscrit', 'indisponible'))
+               AND ($2::int IS NULL OR organization_id = $2)`,
             [t.tournoi_id, orgId],
-            (err, rows) => {
-              if (err) reject(err);
-              else resolve(rows || []);
-            }
+            (err, rows) => err ? reject(err) : resolve(rows || [])
           );
         });
 
-        // Count how many finalists are inscribed
         const inscribedLicences = inscriptions.map(i => i.licence?.replace(/\s/g, ''));
         const inscribedFinalistCount = finalistLicences.filter(l => inscribedLicences.includes(l)).length;
+
+        // Pending = qualified but not registered — the ones who need a relance.
+        const pendingFinalists = finalists
+          .filter(r => !inscribedLicences.includes((r.licence || '').replace(/\s/g, '')))
+          .map(r => ({
+            licence: (r.licence || '').replace(/\s/g, ''),
+            name: `${r.first_name || ''} ${r.last_name || ''}`.trim() || r.licence,
+            rank_position: r.rank_position,
+            email: r.email || null
+          }));
 
         return {
           ...t,
           isFinale: true,
           finalist_count: finalistLicences.length,
-          inscribed_finalist_count: inscribedFinalistCount
+          inscribed_finalist_count: inscribedFinalistCount,
+          pending_finalists: pendingFinalists,
+          pending_finalist_count: pendingFinalists.length
         };
       } catch (err) {
         console.error(`Error enriching finale ${t.tournoi_id}:`, err);
@@ -4062,7 +4081,11 @@ router.get('/tournoi/:id/simulation', authenticateToken, async (req, res) => {
     // Filter out forfaits, désinscrit and indisponible players
     let activeInscriptions = inscriptions.filter(i => i.forfait !== 1 && i.statut !== 'désinscrit' && i.statut !== 'indisponible');
 
-    // For Finales, filter to only include qualified finalists
+    // For Finales, filter to only include qualified finalists. Also build a
+    // "pending finalists" list (qualified but not yet inscribed) to surface in
+    // the simulation response — the admin can then reminder-chase them.
+    let pendingFinalists = [];
+    let qualifiedFinalistsTotal = 0;
     const isFinale = tournament.nom && tournament.nom.toUpperCase().includes('FINALE');
     if (isFinale) {
       // Get season from tournament date (uses configurable start month)
@@ -4085,15 +4108,17 @@ router.get('/tournoi/:id/simulation', authenticateToken, async (req, res) => {
       });
 
       if (category) {
-        // Get rankings for this category to determine finalists
+        // Get rankings for this category to determine finalists (with identity
+        // so we can list pending = qualified but not inscribed).
         const rankings = await new Promise((resolve, reject) => {
           db.all(
-            `SELECT r.licence FROM rankings r WHERE r.category_id = $1 AND r.season = $2 AND ($3::int IS NULL OR r.organization_id = $3) ORDER BY r.rank_position ASC`,
+            `SELECT r.licence, r.rank_position, p.first_name, p.last_name, p.email
+             FROM rankings r
+             LEFT JOIN players p ON REPLACE(r.licence, ' ', '') = REPLACE(p.licence, ' ', '')
+             WHERE r.category_id = $1 AND r.season = $2 AND ($3::int IS NULL OR r.organization_id = $3)
+             ORDER BY r.rank_position ASC`,
             [category.id, season, orgId],
-            (err, rows) => {
-              if (err) reject(err);
-              else resolve(rows || []);
-            }
+            (err, rows) => err ? reject(err) : resolve(rows || [])
           );
         });
 
@@ -4101,17 +4126,26 @@ router.get('/tournoi/:id/simulation', authenticateToken, async (req, res) => {
         const numFinalists = rankings.length >= qualificationSettings.threshold
           ? qualificationSettings.large
           : qualificationSettings.small;
-        const finalistLicences = rankings.slice(0, numFinalists).map(r => r.licence?.replace(/\s/g, ''));
+        const finalists = rankings.slice(0, numFinalists);
+        const finalistLicences = finalists.map(r => r.licence?.replace(/\s/g, ''));
+
+        // Build the list of qualified finalists who haven't yet registered.
+        // Surfaced in the simulation response so the UI can flag them clearly.
+        const activeLicences = activeInscriptions.map(i => (i.licence || '').replace(/\s/g, ''));
+        pendingFinalists = finalists
+          .filter(r => !activeLicences.includes((r.licence || '').replace(/\s/g, '')))
+          .map(r => ({
+            licence: (r.licence || '').replace(/\s/g, ''),
+            name: `${r.first_name || ''} ${r.last_name || ''}`.trim() || r.licence,
+            rank_position: r.rank_position,
+            email: r.email || null
+          }));
+        qualifiedFinalistsTotal = finalistLicences.length;
 
         // CHANGED: Don't filter out non-finalist inscriptions
         // Rationale: Once last-minute players are added to inscriptions, the simulation
         // should show ALL inscribed players (qualified finalists + last-minute additions)
         // not just the theoretical qualified finalists from rankings.
-        // The simulation is meant to preview what will be sent in the convocation,
-        // which includes all inscriptions regardless of qualification status.
-
-        // Note: Keep the finalistLicences calculation above for potential future use
-        // (e.g., highlighting who is a qualified finalist vs. last-minute in the UI)
       }
     }
 
@@ -4318,6 +4352,12 @@ router.get('/tournoi/:id/simulation', authenticateToken, async (req, res) => {
         config_description: configDescription,
         is_finale: isFinale,
         finale_matches: finaleMatches,
+        // Finale qualification context (only meaningful when is_finale=true):
+        // list of qualified finalists who have not yet registered. Allows the
+        // admin UI to surface "X qualifiés en attente" and chase them.
+        qualified_finalists_total: qualifiedFinalistsTotal,
+        pending_finalists: pendingFinalists,
+        pending_finalist_count: pendingFinalists.length,
         poules: poules.map(p => ({
           number: p.number,
           players: p.players.map(player => ({
@@ -4364,7 +4404,23 @@ function distributeSimulationSerpentine(players, pouleSizes) {
  * Same logic as email.js buildFinaleMatches — single source of truth for match ordering.
  * Returns { tables: string, matches: [{p1, p2, p1_name, p2_name, p1_club, p2_club}], byTable?: [...] }
  */
+/**
+ * Build a round-robin match schedule for a finale.
+ *
+ * Handles ANY number of players from 2 upwards using the "circle method"
+ * (Berger-table style) round-robin generator. Output format differs based
+ * on player count for UI compactness:
+ *   - N = 2, 3, 4 → flat format { tables, matches: [...] }
+ *   - N >= 5      → rounds format { tables, rounds: [{number, matches, has_same_club}] }
+ *
+ * Both formats are rendered correctly by frontend/generate-poules.html
+ * (renderFinaleMatchListHtml).
+ *
+ * Returns null only if numPlayers < 2 (nothing to schedule).
+ */
 function buildFinaleMatchSchedule(numPlayers, players) {
+  if (numPlayers < 2) return null;
+
   const getName = (pos) => {
     const p = players[pos - 1];
     return p ? `${p.first_name} ${p.last_name}` : `Joueur ${pos}`;
@@ -4386,40 +4442,62 @@ function buildFinaleMatchSchedule(numPlayers, players) {
     ...(tableNum !== undefined && { table: tableNum })
   });
 
-  if (numPlayers === 3) {
-    const matches = [{p1:1,p2:2},{p1:1,p2:3},{p1:2,p2:3}];
-    matches.sort((a, b) => (isSameClub(a) ? 0 : 1) - (isSameClub(b) ? 0 : 1));
-    return { tables: '1 table', matches: matches.map(m => enrich(m)) };
+  // ---- Generic round-robin via circle method -----------------------------
+  // For odd N, add a "dummy" player to make pairings even; matches involving
+  // the dummy are skipped (the real player has a bye that round).
+  // Produces exactly N*(N-1)/2 matches across (N-1) or N rounds.
+  const generateRoundRobin = (n) => {
+    const isOdd = n % 2 === 1;
+    const effective = isOdd ? n + 1 : n;
+    const numRounds = effective - 1;
+    const halfSize = effective / 2;
+    const seats = Array.from({ length: effective }, (_, i) => i + 1); // 1..effective
+    const rounds = [];
+    for (let r = 0; r < numRounds; r++) {
+      const roundMatches = [];
+      for (let i = 0; i < halfSize; i++) {
+        const p1 = seats[i];
+        const p2 = seats[effective - 1 - i];
+        // Skip pairings that include the dummy player (> n means dummy)
+        if (p1 <= n && p2 <= n) roundMatches.push({ p1, p2 });
+      }
+      rounds.push(roundMatches);
+      // Rotate: keep seat[0] fixed, rotate the rest clockwise
+      const rotated = [seats[0], seats[effective - 1], ...seats.slice(1, effective - 1)];
+      for (let i = 0; i < effective; i++) seats[i] = rotated[i];
+    }
+    return rounds;
+  };
+
+  const rounds = generateRoundRobin(numPlayers);
+  const matchesPerRound = Math.floor(numPlayers / 2);
+  const tables = matchesPerRound; // simultaneous tables = max matches in one round
+  const tablesLabel = tables === 1 ? '1 table' : `${tables} tables`;
+
+  // ---- Output format: flat for small finales (2–4 players) ---------------
+  // Keeps the UI simple when there are few players. A single bye for N=3 is
+  // fine since rounds collapse to a short flat list anyway.
+  if (numPlayers <= 4) {
+    const allMatches = rounds.flat();
+    // Keep same-club-conflict matches first (legacy sorting)
+    allMatches.sort((a, b) => (isSameClub(a) ? 0 : 1) - (isSameClub(b) ? 0 : 1));
+    return { tables: tablesLabel, matches: allMatches.map(m => enrich(m)) };
   }
-  if (numPlayers === 4) {
-    const matches = [{p1:2,p2:3},{p1:1,p2:4},{p1:3,p2:4},{p1:1,p2:2},{p1:1,p2:3},{p1:2,p2:4}];
-    matches.sort((a, b) => (isSameClub(a) ? 0 : 1) - (isSameClub(b) ? 0 : 1));
-    return { tables: '2 tables', matches: matches.map(m => enrich(m)) };
-  }
-  if (numPlayers >= 6) {
-    // 5 rounds, 3 simultaneous matches per round (one per table)
-    const rounds = [
-      [{p1:1,p2:6}, {p1:2,p2:5}, {p1:3,p2:4}],
-      [{p1:2,p2:3}, {p1:4,p2:6}, {p1:1,p2:5}],
-      [{p1:1,p2:4}, {p1:3,p2:5}, {p1:2,p2:6}],
-      [{p1:5,p2:6}, {p1:1,p2:3}, {p1:2,p2:4}],
-      [{p1:4,p2:5}, {p1:1,p2:2}, {p1:3,p2:6}]
-    ];
-    // Sort rounds: rounds with any same-club match first
-    rounds.sort((a, b) => {
-      const aHas = a.some(m => isSameClub(m)) ? 0 : 1;
-      const bHas = b.some(m => isSameClub(m)) ? 0 : 1;
-      return aHas - bHas;
-    });
-    // Return round-based format (Tour 1, Tour 2...) with table assignments
-    const roundsData = rounds.map((round, idx) => ({
-      number: idx + 1,
-      has_same_club: round.some(m => isSameClub(m)),
-      matches: round.map((m, tableIdx) => enrich(m, tableIdx + 1))
-    }));
-    return { tables: '3 tables', rounds: roundsData };
-  }
-  return null;
+
+  // ---- Output format: rounds-based for larger finales (5+ players) -------
+  // Sort rounds so those containing same-club conflicts come first, to give
+  // organisers a heads-up (matches the pre-existing hardcoded behaviour).
+  rounds.sort((a, b) => {
+    const aHas = a.some(m => isSameClub(m)) ? 0 : 1;
+    const bHas = b.some(m => isSameClub(m)) ? 0 : 1;
+    return aHas - bHas;
+  });
+  const roundsData = rounds.map((round, idx) => ({
+    number: idx + 1,
+    has_same_club: round.some(m => isSameClub(m)),
+    matches: round.map((m, tableIdx) => enrich(m, tableIdx + 1))
+  }));
+  return { tables: tablesLabel, rounds: roundsData };
 }
 
 // Update all past inscriptions to convoqué (admin only, one-time utility)

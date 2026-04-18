@@ -447,13 +447,21 @@
 
       <div id="tournamentInfo" style="display: none; margin-bottom: 20px; padding: 15px; background: #e3f2fd; border-radius: 8px; border-left: 4px solid #1F4788;">
         <div style="display: flex; justify-content: space-between; align-items: center;">
-          <div>
+          <div style="flex: 1;">
             <strong id="tournamentInfoName" style="color: #1F4788; font-size: 1.1em;">-</strong>
             <p style="margin: 5px 0 0 0; color: #666;">
               Date: <strong id="tournamentInfoDate">-</strong> |
               Lieu: <strong id="tournamentInfoLieu">-</strong> |
               Inscrits: <strong id="tournamentInfoInscrits">-</strong>
             </p>
+            <!-- Qualified-but-not-inscribed list (finales only). Hidden by default. -->
+            <div id="pendingFinalistsBlock" style="display: none; margin-top: 10px; padding: 10px 12px; background: #fff8e1; border-left: 3px solid #f9a825; border-radius: 4px; font-size: 0.9em;">
+              <strong id="pendingFinalistsTitle" style="color: #78350f;">⏳ Qualifiés en attente d'inscription</strong>
+              <ol id="pendingFinalistsList" style="margin: 6px 0 0 22px; padding: 0; color: #78350f;"></ol>
+              <div style="margin-top: 6px; font-size: 0.85em; color: #92400e;">
+                💡 Envoyer une relance ciblée via <strong>Com Joueurs → Relances</strong> (case "Uniquement les qualifiés non inscrits").
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -1002,6 +1010,36 @@
      *   "0 inscrit(s) / 1 renonciation / 2 forfaits"
      * Categories are only shown when count > 0 (except "inscrit" always shown).
      */
+    /**
+     * Show or hide the "qualifiés en attente" block for finales.
+     * pendingFinalists: [{licence, name, rank_position, email}]
+     */
+    function updatePendingFinalistsDisplay(pendingFinalists, qualifiedTotal) {
+      const block = document.getElementById('pendingFinalistsBlock');
+      const title = document.getElementById('pendingFinalistsTitle');
+      const list = document.getElementById('pendingFinalistsList');
+      if (!block || !title || !list) return;
+
+      if (!Array.isArray(pendingFinalists) || pendingFinalists.length === 0) {
+        block.style.display = 'none';
+        list.innerHTML = '';
+        return;
+      }
+
+      const totalSuffix = qualifiedTotal ? ` (sur ${qualifiedTotal} qualifiés)` : '';
+      title.textContent = `⏳ ${pendingFinalists.length} qualifié${pendingFinalists.length > 1 ? 's' : ''} en attente d'inscription${totalSuffix}`;
+
+      list.innerHTML = pendingFinalists
+        .sort((a, b) => (a.rank_position || 99) - (b.rank_position || 99))
+        .map(p => {
+          const rank = p.rank_position ? `${p.rank_position}<sup>${p.rank_position === 1 ? 'er' : 'ème'}</sup>` : '-';
+          const emailBadge = p.email ? '' : ' <span style="color:#b91c1c; font-size: 0.8em;">(pas d\'email)</span>';
+          return `<li><strong>${p.name || p.licence}</strong> — ${rank}${emailBadge}</li>`;
+        })
+        .join('');
+      block.style.display = 'block';
+    }
+
     function buildInscriptionCountsLabel(inscriptions) {
       if (!Array.isArray(inscriptions)) return '0 inscrit(s)';
       // Count per category. A player is:
@@ -1763,7 +1801,8 @@
                    data-date="${t.debut || ''}"
                    data-is-finale="${t.isFinale}"
                    data-finalist-count="${t.finalist_count || 0}"
-                   data-inscribed-finalist-count="${t.inscribed_finalist_count || 0}">
+                   data-inscribed-finalist-count="${t.inscribed_finalist_count || 0}"
+                   data-pending-finalists='${JSON.stringify(t.pending_finalists || []).replace(/'/g, "&#39;")}'>
                 <div class="tournament-mode">${t.mode} - ${t.categorie}${badgeHtml}${splitBadge}</div>
                 <div class="tournament-name">${t.isFinale ? 'Finale Départementale' : t.nom}</div>
                 <div class="tournament-details">
@@ -1897,6 +1936,10 @@
         document.getElementById('tournamentSelect').value = isFinale ? 'Finale' : tournamentNum;
 
         // Store the selected tournament info for later use (including finalist counts from card data)
+        let pendingFinalists = [];
+        try {
+          pendingFinalists = JSON.parse(card.dataset.pendingFinalists || '[]');
+        } catch (_e) { pendingFinalists = []; }
         window.selectedUpcomingTournament = {
           tournoiId,
           lieu,
@@ -1906,7 +1949,8 @@
           tournamentNum: isFinale ? 'Finale' : tournamentNum,
           isFinale,
           finalist_count: parseInt(card.dataset.finalistCount) || 0,
-          inscribed_finalist_count: parseInt(card.dataset.inscribedFinalistCount) || 0
+          inscribed_finalist_count: parseInt(card.dataset.inscribedFinalistCount) || 0,
+          pending_finalists: pendingFinalists
         };
 
         // Trigger change event to load tournament info
@@ -2212,8 +2256,14 @@
                 ? ` (${inscriptionCountsLabel})`
                 : '';
               document.getElementById('tournamentInfoInscrits').textContent = `${ifc}/${fc} inscrits${extra}`;
+              // Surface qualified-but-not-inscribed finalists for the admin
+              updatePendingFinalistsDisplay(
+                window.selectedUpcomingTournament.pending_finalists || [],
+                fc
+              );
             } else {
               document.getElementById('tournamentInfoInscrits').textContent = inscriptionCountsLabel || `${inscCount} inscrit(s)`;
+              updatePendingFinalistsDisplay([], 0);
             }
             document.getElementById('tournamentInfo').style.display = 'block';
 
@@ -2269,6 +2319,7 @@
               ? ` (${inscriptionCountsLabel})`
               : '';
             document.getElementById('tournamentInfoInscrits').textContent = `${ifc}/${fc} inscrits${extra}`;
+            updatePendingFinalistsDisplay(upcomingData.pending_finalists || [], fc);
             document.getElementById('tournamentInfo').style.display = 'block';
             hideSplitChildSelector();
           } else {

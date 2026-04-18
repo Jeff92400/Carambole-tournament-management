@@ -1519,6 +1519,292 @@ app.listen(PORT, '0.0.0.0', () => {
   }, 3600000); // Check every hour
   console.log('[Automatic Reminders] Scheduler enabled - runs daily at 9 AM Paris time');
 
+  // =========================================================================
+  // Auto-indisponible scheduler for finale qualifiers (opt-in per org)
+  // =========================================================================
+  // When enabled, N days before a finale the system marks every qualified
+  // player who hasn't registered (neither inscribed nor explicitly renounced)
+  // as 'indisponible' with source='auto'. This closes the "silent absentees"
+  // gap and gives the admin a deterministic roster before the finale day.
+  //
+  // Opt-in via per-org settings:
+  //   - finale_auto_indisponible_enabled (bool, default false)
+  //   - finale_auto_indisponible_days_before (int, default 3)
+  //
+  // A recap email is sent to summary_email after each run.
+  // =========================================================================
+  async function checkFinaleAutoIndisponible() {
+    const db = require('./db-loader');
+    try {
+      const now = new Date();
+      const parisNow = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
+      console.log('[Finale Auto-Indisponible] Daily check started');
+
+      // Get list of organizations with this feature enabled
+      const enabledOrgs = await new Promise((resolve, reject) => {
+        db.all(
+          `SELECT DISTINCT organization_id
+             FROM organization_settings
+            WHERE setting_key = 'finale_auto_indisponible_enabled'
+              AND LOWER(setting_value) = 'true'`,
+          [],
+          (err, rows) => err ? reject(err) : resolve(rows || [])
+        );
+      });
+
+      if (enabledOrgs.length === 0) {
+        console.log('[Finale Auto-Indisponible] No org opted in, skipping');
+        return;
+      }
+
+      for (const { organization_id: orgId } of enabledOrgs) {
+        try {
+          // Read per-org target J-N (how many days before finale to trigger)
+          const daysBeforeRow = await new Promise((resolve) => {
+            db.get(
+              `SELECT setting_value FROM organization_settings
+                WHERE organization_id = $1 AND setting_key = 'finale_auto_indisponible_days_before'`,
+              [orgId],
+              (err, row) => resolve(row)
+            );
+          });
+          const daysBefore = parseInt(daysBeforeRow?.setting_value, 10) || 3;
+
+          const target = new Date(parisNow);
+          target.setDate(target.getDate() + daysBefore);
+          const targetDateStr = target.toISOString().split('T')[0];
+
+          // Find all finales for this org happening exactly in N days
+          const finales = await new Promise((resolve, reject) => {
+            db.all(
+              `SELECT tournoi_id, nom, mode, categorie, debut, organization_id
+                 FROM tournoi_ext
+                WHERE DATE(debut) = $1
+                  AND (status IS NULL OR status = 'active')
+                  AND LOWER(nom) LIKE '%finale%'
+                  AND organization_id = $2`,
+              [targetDateStr, orgId],
+              (err, rows) => err ? reject(err) : resolve(rows || [])
+            );
+          });
+
+          if (finales.length === 0) {
+            console.log(`[Finale Auto-Indisponible] org=${orgId}: no finale on ${targetDateStr}, skipping`);
+            continue;
+          }
+
+          // Read qualification thresholds for this org
+          const qRows = await new Promise((resolve) => {
+            db.all(
+              `SELECT setting_key, setting_value FROM organization_settings
+                WHERE organization_id = $1 AND setting_key IN ('qualification_threshold', 'qualification_small', 'qualification_large')`,
+              [orgId],
+              (err, rows) => resolve(rows || [])
+            );
+          });
+          const qMap = Object.fromEntries(qRows.map(r => [r.setting_key, r.setting_value]));
+          const qThreshold = parseInt(qMap.qualification_threshold, 10) || 9;
+          const qSmall = parseInt(qMap.qualification_small, 10) || 4;
+          const qLarge = parseInt(qMap.qualification_large, 10) || 6;
+
+          const markedPerFinale = [];
+
+          for (const finale of finales) {
+            // Resolve category
+            const mode = (finale.mode || '').toUpperCase().replace(/\s+/g, '');
+            const level = (finale.categorie || '').toUpperCase();
+            const category = await new Promise((resolve) => {
+              db.get(
+                `SELECT id FROM categories
+                  WHERE UPPER(REPLACE(game_type, ' ', '')) = $1
+                    AND UPPER(level) = $2
+                    AND ($3::int IS NULL OR organization_id = $3)
+                  LIMIT 1`,
+                [mode, level, orgId],
+                (err, row) => resolve(row)
+              );
+            });
+            if (!category) continue;
+
+            // Derive season from finale date
+            const finaleDate = new Date(finale.debut);
+            const year = finaleDate.getFullYear();
+            const month = finaleDate.getMonth();
+            const season = month >= 8 ? `${year}-${year + 1}` : `${year - 1}-${year}`;
+
+            // Get rankings for this category + season
+            const rankings = await new Promise((resolve) => {
+              db.all(
+                `SELECT r.licence, r.rank_position, p.first_name, p.last_name
+                   FROM rankings r
+                   LEFT JOIN players p ON REPLACE(r.licence, ' ', '') = REPLACE(p.licence, ' ', '')
+                  WHERE r.category_id = $1 AND r.season = $2 AND r.organization_id = $3
+                  ORDER BY r.rank_position ASC`,
+                [category.id, season, orgId],
+                (err, rows) => resolve(rows || [])
+              );
+            });
+            const numFinalists = rankings.length >= qThreshold ? qLarge : qSmall;
+            const finalists = rankings.slice(0, numFinalists);
+
+            // Get active inscriptions for this finale
+            const active = await new Promise((resolve) => {
+              db.all(
+                `SELECT licence FROM inscriptions
+                  WHERE tournoi_id = $1
+                    AND (forfait IS NULL OR forfait != 1)
+                    AND (statut IS NULL OR statut NOT IN ('désinscrit', 'indisponible'))
+                    AND organization_id = $2`,
+                [finale.tournoi_id, orgId],
+                (err, rows) => resolve(rows || [])
+              );
+            });
+            const activeLicences = new Set(active.map(i => (i.licence || '').replace(/\s/g, '')));
+
+            // Pending = qualified - active
+            const pending = finalists
+              .filter(r => !activeLicences.has((r.licence || '').replace(/\s/g, '')))
+              .map(r => ({
+                licence: (r.licence || '').replace(/\s/g, ''),
+                name: `${r.first_name || ''} ${r.last_name || ''}`.trim() || r.licence,
+                rank_position: r.rank_position
+              }));
+
+            if (pending.length === 0) {
+              console.log(`[Finale Auto-Indisponible] org=${orgId} finale=${finale.tournoi_id}: no pending finalists, nothing to do`);
+              continue;
+            }
+
+            // Mark each pending player as indisponible (UPSERT pattern: if they
+            // have any inscription row for this finale, update it; otherwise
+            // INSERT a new one with statut='indisponible').
+            for (const p of pending) {
+              try {
+                const existing = await new Promise((resolve) => {
+                  db.get(
+                    `SELECT inscription_id, statut FROM inscriptions
+                      WHERE tournoi_id = $1
+                        AND REPLACE(licence, ' ', '') = $2
+                        AND organization_id = $3
+                      LIMIT 1`,
+                    [finale.tournoi_id, p.licence, orgId],
+                    (err, row) => resolve(row)
+                  );
+                });
+                if (existing) {
+                  await new Promise((resolve) => {
+                    db.run(
+                      `UPDATE inscriptions
+                          SET statut = 'indisponible', source = 'auto'
+                        WHERE inscription_id = $1`,
+                      [existing.inscription_id],
+                      () => resolve()
+                    );
+                  });
+                } else {
+                  await new Promise((resolve) => {
+                    db.run(
+                      `INSERT INTO inscriptions (inscription_id, tournoi_id, licence, timestamp, source, statut, organization_id)
+                       VALUES ((SELECT COALESCE(MAX(inscription_id), 0) + 1 FROM inscriptions), $1, $2, CURRENT_TIMESTAMP, 'auto', 'indisponible', $3)`,
+                      [finale.tournoi_id, p.licence, orgId],
+                      () => resolve()
+                    );
+                  });
+                }
+              } catch (e) {
+                console.error(`[Finale Auto-Indisponible] Failed to mark ${p.licence}:`, e.message);
+              }
+            }
+
+            markedPerFinale.push({
+              finale,
+              players: pending
+            });
+          }
+
+          // Send admin recap email
+          if (markedPerFinale.length > 0) {
+            try {
+              const appSettings = require('./utils/app-settings');
+              const emailSettings = await appSettings.getOrgSettingsBatch(orgId, [
+                'email_convocations', 'email_sender_name', 'summary_email', 'organization_name', 'primary_color'
+              ]);
+              const adminEmail = emailSettings.summary_email;
+              if (adminEmail) {
+                const { Resend } = require('resend');
+                const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
+                if (resend) {
+                  const primaryColor = emailSettings.primary_color || '#1F4788';
+                  const orgName = emailSettings.organization_name || emailSettings.email_sender_name || 'CDB';
+                  const senderName = emailSettings.email_sender_name || 'CDB';
+                  const senderEmail = emailSettings.email_convocations || 'noreply@cdbhs.net';
+
+                  const esc = (s) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                  const blocks = markedPerFinale.map(entry => {
+                    const f = entry.finale;
+                    const dateStr = new Date(f.debut).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+                    const rows = entry.players
+                      .sort((a, b) => (a.rank_position || 99) - (b.rank_position || 99))
+                      .map(p => `<li><strong>${esc(p.name)}</strong> (${p.rank_position}${p.rank_position === 1 ? 'er' : 'ème'}) — licence ${esc(p.licence)}</li>`)
+                      .join('');
+                    return `
+                      <div style="background: white; border-left: 4px solid ${primaryColor}; padding: 12px 16px; margin-bottom: 14px;">
+                        <h3 style="margin: 0 0 6px 0; color: ${primaryColor};">${esc(f.nom)} — ${esc(f.mode)} ${esc(f.categorie)}</h3>
+                        <p style="margin: 0 0 8px 0; color: #666; font-size: 13px;">📅 ${dateStr}</p>
+                        <p style="margin: 0 0 4px 0;"><strong>${entry.players.length}</strong> qualifié(s) marqué(s) indisponibles (pas d'inscription avant J-${daysBefore}) :</p>
+                        <ul style="margin: 4px 0 0 20px; padding: 0;">${rows}</ul>
+                      </div>`;
+                  }).join('');
+
+                  await resend.emails.send({
+                    from: `${senderName} <${senderEmail}>`,
+                    to: adminEmail,
+                    subject: `📬 ${orgName} — Finalistes marqués indisponibles (J-${daysBefore})`,
+                    html: `
+                      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                        <div style="background: ${primaryColor}; color: white; padding: 18px; text-align: center;">
+                          <h1 style="margin: 0; font-size: 20px;">📬 Récapitulatif administrateur</h1>
+                          <p style="margin: 5px 0 0 0; font-size: 13px; opacity: 0.9;">Finalistes auto-marqués indisponibles</p>
+                        </div>
+                        <div style="padding: 20px; background: #f8f9fa;">
+                          <p>Les joueurs ci-dessous étaient qualifiés pour une finale dans ${daysBefore} jour(s) mais ne s'étaient pas inscrits. Ils ont été automatiquement marqués comme <strong>indisponibles</strong> (source : <code>auto</code>).</p>
+                          ${blocks}
+                          <p style="font-size: 12px; color: #666; margin-top: 16px;">Paramètre : <code>finale_auto_indisponible_enabled=true</code>, <code>finale_auto_indisponible_days_before=${daysBefore}</code>. Modifiable dans Paramètres &gt; Organisation.</p>
+                        </div>
+                      </div>
+                    `
+                  });
+                  console.log(`[Finale Auto-Indisponible] Admin recap sent to ${adminEmail} for org=${orgId}`);
+                }
+              }
+            } catch (mailErr) {
+              console.error('[Finale Auto-Indisponible] Admin recap email failed:', mailErr.message);
+            }
+          }
+
+          const totalMarked = markedPerFinale.reduce((s, e) => s + e.players.length, 0);
+          console.log(`[Finale Auto-Indisponible] org=${orgId}: marked ${totalMarked} player(s) across ${markedPerFinale.length} finale(s)`);
+        } catch (orgErr) {
+          console.error(`[Finale Auto-Indisponible] org=${orgId} error:`, orgErr.message);
+        }
+      }
+
+      console.log('[Finale Auto-Indisponible] Daily check completed');
+    } catch (error) {
+      console.error('[Finale Auto-Indisponible] Fatal error:', error.message);
+    }
+  }
+
+  // Scheduler: runs daily at 9 AM Paris time (same cadence as other schedulers)
+  setInterval(async () => {
+    const now = new Date();
+    const parisNow = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
+    if (parisNow.getHours() === 9) {
+      await checkFinaleAutoIndisponible();
+    }
+  }, 3600000); // Check every hour
+  console.log('[Finale Auto-Indisponible] Scheduler enabled - runs daily at 9 AM Paris time (opt-in per org)');
+
   // Survey scheduler - auto-activate scheduled surveys and auto-close expired ones
   async function processSurveySchedule() {
     try {
