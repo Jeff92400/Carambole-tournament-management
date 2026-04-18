@@ -682,7 +682,48 @@ Pour supprimer définitivement une compétition (et toutes ses inscriptions asso
 > 
 ---
 
-## **Attention : **La suppression est irréversible. Toutes les inscriptions liées à cette compétition seront également supprimées. Cette action est réservée aux administrateurs. **Lien avec l'Application Joueur : **Le calendrier est visible par les joueurs dans l'Application Joueur. Les joueurs peuvent s'inscrire directement aux compétitions à venir depuis leur application. Les inscriptions apparaissent automatiquement dans l'application de gestion. Calendrier > Dédoubler un tournoi
+## **Attention : **La suppression est irréversible. Toutes les inscriptions liées à cette compétition seront également supprimées. Cette action est réservée aux administrateurs. **Lien avec l'Application Joueur : **Le calendrier est visible par les joueurs dans l'Application Joueur. Les joueurs peuvent s'inscrire directement aux compétitions à venir depuis leur application. Les inscriptions apparaissent automatiquement dans l'application de gestion.
+
+---
+
+## Calendrier > Téléverser le fichier calendrier (PDF ou Excel)
+
+### Description
+
+Cette fonctionnalité permet à l'administrateur de téléverser le **fichier calendrier officiel de la saison** (PDF ou Excel) pour le rendre consultable et téléchargeable par l'ensemble des utilisateurs de l'application — administrateurs, éditeurs, lecteurs, et joueurs via l'Espace Joueur.
+
+Il ne s'agit pas du même écran que la vue calendrier mensuelle (qui affiche les compétitions saisies dans l'application) : ici, il s'agit du **document de référence** de la saison (souvent un Excel édité par le comité, ou sa version PDF).
+
+### Accès
+
+Depuis la barre de navigation, cliquer sur **"Calendrier"**. Seuls les administrateurs voient le bloc "Téléverser le calendrier" en haut de page.
+
+### Étapes
+
+1. **Sélectionner la saison** dans le menu déroulant (par défaut : la prochaine saison à partir d'avril, sinon la saison courante).
+2. **Choisir le fichier** (format accepté : `.pdf`, `.xlsx`, `.xls`) depuis votre ordinateur. Le nom du fichier n'a pas d'importance.
+3. **Cliquer sur "Téléverser"**. Le fichier remplace immédiatement le précédent (un seul calendrier actif par CDB).
+
+> **Renommage automatique :** lors du téléversement, le fichier est automatiquement renommé par le serveur selon le format `Calendrier {SIGLE DU CDB} {saison}.{extension}` (exemple : `Calendrier CDBHS 2026-2027.xlsx`). Vous pouvez donc envoyer votre fichier sous n'importe quel nom — le système garantit un nommage cohérent et lisible.
+
+> **Alerte "calendrier de la saison précédente" :** si la saison encodée dans le nom du fichier ne correspond plus à la saison courante (par exemple, si nous sommes en septembre et que le calendrier affiché est encore celui de l'année dernière), un bandeau orange s'affiche sous "Calendrier actuel" pour inviter l'administrateur à téléverser le nouveau calendrier. Ce bandeau disparaît automatiquement dès qu'un fichier à jour est téléversé.
+
+### Qui peut voir le calendrier ?
+
+- **Administrateurs, éditeurs, lecteurs** — le calendrier s'affiche dans la page "Calendrier" (avec bouton "Télécharger").
+- **Joueurs via l'Espace Joueur** — accessible depuis l'onglet "Compétitions CDB", bouton "Voir le calendrier".
+
+### Durée de conservation
+
+Un seul calendrier est conservé en base par CDB : **le plus récent**. Lorsqu'un nouveau fichier est téléversé, l'ancien est automatiquement supprimé. Il n'est donc pas nécessaire de faire un nettoyage manuel entre deux saisons.
+
+> **Bonnes pratiques :**
+> - Téléversez le calendrier de la prochaine saison **avant le 1er septembre** pour éviter l'alerte "saison précédente".
+> - Une fois le fichier Excel téléversé, vous pouvez enchaîner avec la fonction "Générer les tournois de la saison" pour créer automatiquement toutes les compétitions.
+
+---
+
+## Calendrier > Dédoubler un tournoi
 
 ### Quand utiliser le dédoublement ?
 

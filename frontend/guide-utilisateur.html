@@ -661,6 +661,7 @@
 
     <a href="#calendrier" class="section-title">Calendrier</a>
     <a href="#calendrier">Calendrier</a>
+    <a href="#calendrier-fichier" class="sub">Téléverser le fichier calendrier</a>
     <a href="#dedoublement" class="sub">Dédoubler un tournoi</a>
     <a href="#repartition-joueurs" class="sub">Répartir les joueurs</a>
     <a href="#import-dedouble" class="sub">Import résultats (dédoublé)</a>
@@ -1774,6 +1775,69 @@
 
     <div class="info-card">
       <strong>Lien avec l'Application Joueur :</strong> Le calendrier est visible par les joueurs dans l'Application Joueur. Les joueurs peuvent s'inscrire directement aux compétitions à venir depuis leur application. Les inscriptions apparaissent automatiquement dans l'application de gestion.
+    </div>
+  </section>
+
+  <hr>
+
+  <!-- ======================== TÉLÉVERSEMENT DU FICHIER CALENDRIER ======================== -->
+  <section id="calendrier-fichier">
+    <h2>Calendrier &gt; Téléverser le fichier calendrier (PDF ou Excel)</h2>
+
+    <h3>Description</h3>
+    <p>
+      Cette fonctionnalité permet à l'administrateur de téléverser le <strong>fichier calendrier officiel de la saison</strong>
+      (PDF ou Excel) pour le rendre consultable et téléchargeable par l'ensemble des utilisateurs de l'application —
+      administrateurs, éditeurs, lecteurs, et joueurs via l'Espace Joueur.
+    </p>
+    <p>
+      Il ne s'agit pas du même écran que la <a href="#calendrier">vue calendrier mensuelle</a> (qui affiche les compétitions
+      saisies dans l'application) : ici, il s'agit du <strong>document de référence</strong> de la saison
+      (souvent un Excel édité par le comité, ou sa version PDF).
+    </p>
+
+    <h3>Accès</h3>
+    <p>Depuis la barre de navigation, cliquer sur <strong>"Calendrier"</strong>. Seuls les administrateurs voient le bloc "Téléverser le calendrier" en haut de page.</p>
+
+    <h3>Étapes</h3>
+    <ol class="steps">
+      <li><strong>Sélectionner la saison</strong> dans le menu déroulant (par défaut : la prochaine saison à partir d'avril, sinon la saison courante).</li>
+      <li><strong>Choisir le fichier</strong> (format accepté : <code>.pdf</code>, <code>.xlsx</code>, <code>.xls</code>) depuis votre ordinateur. Le nom du fichier n'a pas d'importance.</li>
+      <li><strong>Cliquer sur "Téléverser"</strong>. Le fichier remplace immédiatement le précédent (un seul calendrier actif par CDB).</li>
+    </ol>
+
+    <div class="info-card">
+      <strong>Renommage automatique :</strong> lors du téléversement, le fichier est automatiquement renommé par le serveur
+      selon le format <code>Calendrier {SIGLE DU CDB} {saison}.{extension}</code>
+      (exemple : <code>Calendrier CDBHS 2026-2027.xlsx</code>).
+      Vous pouvez donc envoyer votre fichier sous n'importe quel nom — le système garantit un nommage cohérent et lisible.
+    </div>
+
+    <div class="info-card">
+      <strong>Alerte "calendrier de la saison précédente" :</strong> si la saison encodée dans le nom du fichier ne correspond plus
+      à la saison courante (par exemple, si nous sommes en septembre et que le calendrier affiché est encore celui de l'année dernière),
+      un bandeau orange s'affiche sous "Calendrier actuel" pour inviter l'administrateur à téléverser le nouveau calendrier.
+      Ce bandeau disparaît automatiquement dès qu'un fichier à jour est téléversé.
+    </div>
+
+    <h3>Qui peut voir le calendrier ?</h3>
+    <ul>
+      <li><strong>Administrateurs, éditeurs, lecteurs</strong> — le calendrier s'affiche dans la page "Calendrier" (avec bouton "Télécharger").</li>
+      <li><strong>Joueurs via l'Espace Joueur</strong> — accessible depuis l'onglet "Compétitions CDB", bouton "Voir le calendrier".</li>
+    </ul>
+
+    <h3>Durée de conservation</h3>
+    <p>
+      Un seul calendrier est conservé en base par CDB : <strong>le plus récent</strong>. Lorsqu'un nouveau fichier est téléversé,
+      l'ancien est automatiquement supprimé. Il n'est donc pas nécessaire de faire un nettoyage manuel entre deux saisons.
+    </p>
+
+    <div class="info-card warning">
+      <strong>Bonnes pratiques :</strong>
+      <ul style="margin-top: 8px;">
+        <li>Téléversez le calendrier de la prochaine saison <strong>avant le 1er septembre</strong> pour éviter l'alerte "saison précédente".</li>
+        <li>Une fois le fichier Excel téléversé, vous pouvez enchaîner avec la fonction <a href="#param-generer-saison">Générer les tournois de la saison</a> pour créer automatiquement toutes les compétitions.</li>
+      </ul>
     </div>
   </section>
 
