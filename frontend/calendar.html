@@ -79,6 +79,10 @@
       <div id="currentCalendarInfo" style="display: none; margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-left: 4px solid #28a745; border-radius: 4px;">
         <strong>Calendrier actuel :</strong>
         <div id="calendarDetails" style="margin-top: 8px; color: #666;"></div>
+        <div id="calendarStaleWarning" style="display: none; margin-top: 10px; padding: 10px 12px; background: #fff4e6; border-left: 3px solid #e67e22; border-radius: 3px; color: #7a4f12; font-size: 14px;">
+          ⚠️ <strong>Calendrier de la saison précédente.</strong>
+          <span id="calendarStaleWarningDetail"></span>
+        </div>
       </div>
 
       <form id="calendarUploadForm" style="display: flex; gap: 15px; align-items: flex-end; flex-wrap: wrap;">
@@ -129,6 +133,7 @@
 
   <script src="js/auth-utils.js?v=197"></script>
   <script src="js/app-branding.js?v=216"></script>
+  <script src="js/season-utils.js?v=1"></script>
   <script>
     const API_URL = '/api';
 
@@ -159,24 +164,47 @@
     const viewUrl = `${API_URL}/calendar/view`;
     const downloadUrl = `${API_URL}/calendar/download`;
 
-    // Set dynamic calendar title with org name and season
-    (async function setCalendarTitle() {
+    // Cached org name (resolved once)
+    let cachedOrgName = null;
+    async function getOrgName() {
+      if (cachedOrgName) return cachedOrgName;
       try {
         const res = await fetch(`${API_URL}/settings/app/organization_short_name`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await res.json();
-        const orgName = data.value || 'CDB';
-        const now = new Date();
-        const year = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
-        const season = `${year}-${year + 1}`;
-        document.querySelectorAll('.calendar-title').forEach(el => {
-          el.textContent = `Calendrier ${orgName} ${season}`;
-        });
-      } catch (e) { /* keep fallback "Calendrier" */ }
-    })();
+        cachedOrgName = data.value || 'CDB';
+      } catch (e) {
+        cachedOrgName = 'CDB';
+      }
+      return cachedOrgName;
+    }
 
-    // Load current calendar info
+    // Extract season string (YYYY-YYYY) from a filename, or null if not found.
+    function extractSeasonFromFilename(filename) {
+      if (!filename) return null;
+      const match = filename.match(/(\d{4}-\d{4})/);
+      return match ? match[1] : null;
+    }
+
+    // Set the calendar section titles. Prefers season extracted from the
+    // filename (reflects the actual content), falls back to the current
+    // season computed by SeasonUtils (respects org override + start month).
+    async function setCalendarTitleFromInfo(filename) {
+      const orgName = await getOrgName();
+      const fileSeason = extractSeasonFromFilename(filename);
+      const season = fileSeason || await SeasonUtils.getCurrentSeason();
+      document.querySelectorAll('.calendar-title').forEach(el => {
+        el.textContent = `Calendrier ${orgName} ${season}`;
+      });
+      return { fileSeason, currentSeason: await SeasonUtils.getCurrentSeason() };
+    }
+
+    // Initial title pass (runs before we know the filename — uses current season).
+    setCalendarTitleFromInfo(null);
+
+    // Load current calendar info (for the upload card) AND update the title
+    // from the filename. Called for everyone so the title matches file content.
     async function loadCalendarInfo() {
       try {
         const response = await fetch(`${API_URL}/calendar/info`, {
@@ -186,26 +214,46 @@
         if (response.ok) {
           const data = await response.json();
           if (data.exists) {
-            const uploadDate = new Date(data.uploadedAt);
-            const formattedDate = uploadDate.toLocaleDateString('fr-FR', {
-              year: 'numeric', month: 'long', day: 'numeric'
-            });
-            const formattedTime = uploadDate.toLocaleTimeString('fr-FR', {
-              hour: '2-digit', minute: '2-digit'
-            });
+            // Update the page title based on the filename's season.
+            const { fileSeason, currentSeason } = await setCalendarTitleFromInfo(data.filename);
 
-            document.getElementById('calendarDetails').innerHTML = `
-              <strong>${data.filename}</strong><br>
-              Téléversé le ${formattedDate} à ${formattedTime}<br>
-              Par: ${data.uploadedBy || 'admin'}
-            `;
-            document.getElementById('currentCalendarInfo').style.display = 'block';
+            // Admin-only upload card rendering
+            const detailsEl = document.getElementById('calendarDetails');
+            if (detailsEl) {
+              const uploadDate = new Date(data.uploadedAt);
+              const formattedDate = uploadDate.toLocaleDateString('fr-FR', {
+                year: 'numeric', month: 'long', day: 'numeric'
+              });
+              const formattedTime = uploadDate.toLocaleTimeString('fr-FR', {
+                hour: '2-digit', minute: '2-digit'
+              });
+              detailsEl.innerHTML = `
+                <strong>${data.filename}</strong><br>
+                Téléversé le ${formattedDate} à ${formattedTime}<br>
+                Par: ${data.uploadedBy || 'admin'}
+              `;
+              document.getElementById('currentCalendarInfo').style.display = 'block';
+
+              // Warn admin if the file looks outdated (season mismatch).
+              const warnEl = document.getElementById('calendarStaleWarning');
+              const warnDetailEl = document.getElementById('calendarStaleWarningDetail');
+              if (warnEl && warnDetailEl && fileSeason && fileSeason !== currentSeason) {
+                warnDetailEl.textContent =
+                  ` Veuillez téléverser le calendrier ${currentSeason} (fichier actuel : ${fileSeason}).`;
+                warnEl.style.display = 'block';
+              } else if (warnEl) {
+                warnEl.style.display = 'none';
+              }
+            }
           }
         }
       } catch (error) {
         console.error('Error loading calendar info:', error);
       }
     }
+
+    // Ensure everyone (not just admins) gets the filename-based title.
+    loadCalendarInfo();
 
     // Calendar upload form
     document.getElementById('calendarUploadForm').addEventListener('submit', async (e) => {
@@ -268,10 +316,7 @@
       }
     });
 
-    // Load calendar info on page load (for admins and lecteur)
-    if (userRole === 'admin' || userRole === 'lecteur') {
-      loadCalendarInfo();
-    }
+    // (loadCalendarInfo is now called unconditionally above — title needs it for all users.)
 
     // Check what type of calendar file is available
     async function initializeCalendar() {
