@@ -167,8 +167,8 @@ router.put('/game-modes/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// Delete game mode
-router.delete('/game-modes/:id', authenticateToken, (req, res) => {
+// Delete game mode (admin only — destructive action)
+router.delete('/game-modes/:id', authenticateToken, requireAdmin, (req, res) => {
   const db = getDb();
   const { id } = req.params;
 
@@ -317,8 +317,8 @@ router.put('/ffb-rankings/:id', authenticateToken, (req, res) => {
   );
 });
 
-// Delete FFB ranking
-router.delete('/ffb-rankings/:id', authenticateToken, (req, res) => {
+// Delete FFB ranking (admin only — destructive action)
+router.delete('/ffb-rankings/:id', authenticateToken, requireAdmin, (req, res) => {
   const db = getDb();
   const { id } = req.params;
 
@@ -470,8 +470,8 @@ router.put('/categories/:id', authenticateToken, (req, res) => {
   );
 });
 
-// Delete category
-router.delete('/categories/:id', authenticateToken, (req, res) => {
+// Delete category (admin only — destructive action)
+router.delete('/categories/:id', authenticateToken, requireAdmin, (req, res) => {
   try {
     const db = getDb();
     const id = parseInt(req.params.id, 10);
@@ -860,8 +860,8 @@ router.put('/scoring-rules/:id', authenticateToken, (req, res) => {
   );
 });
 
-// Delete a scoring rule
-router.delete('/scoring-rules/:id', authenticateToken, (req, res) => {
+// Delete a scoring rule (admin only — destructive action)
+router.delete('/scoring-rules/:id', authenticateToken, requireAdmin, (req, res) => {
   const db = getDb();
   const { id } = req.params;
   const orgId = req.user.organizationId || null;

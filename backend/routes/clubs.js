@@ -3,7 +3,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const db = require('../db-loader');
-const { authenticateToken } = require('./auth');
+const { authenticateToken, requireAdmin } = require('./auth');
 
 const router = express.Router();
 
@@ -311,8 +311,8 @@ router.put('/:id', authenticateToken, upload.single('logo'), (req, res) => {
   });
 });
 
-// Delete club
-router.delete('/:id', authenticateToken, (req, res) => {
+// Delete club (admin only — destructive action)
+router.delete('/:id', authenticateToken, requireAdmin, (req, res) => {
   const clubId = req.params.id;
 
   // Get club data to delete logo file

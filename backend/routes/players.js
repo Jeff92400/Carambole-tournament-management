@@ -3,7 +3,7 @@ const multer = require('multer');
 const { parse } = require('csv-parse');
 const fs = require('fs');
 const db = require('../db-loader');
-const { authenticateToken, requireClubOrAdmin } = require('./auth');
+const { authenticateToken, requireClubOrAdmin, requireAdmin } = require('./auth');
 const { getColumnMapping } = require('./import-config');
 const appSettings = require('../utils/app-settings');
 
@@ -1423,7 +1423,7 @@ router.put('/:licence/club', authenticateToken, (req, res) => {
 });
 
 // Delete all players (admin only - requires password confirmation)
-router.delete('/all', authenticateToken, (req, res) => {
+router.delete('/all', authenticateToken, requireAdmin, (req, res) => {
   const orgId = req.user.organizationId || null;
   db.run('DELETE FROM players WHERE ($1::int IS NULL OR organization_id = $1)', [orgId], function(err) {
     if (err) {
@@ -1437,8 +1437,8 @@ router.delete('/all', authenticateToken, (req, res) => {
   });
 });
 
-// Delete individual player
-router.delete('/:licence', authenticateToken, (req, res) => {
+// Delete individual player (admin only — destructive action)
+router.delete('/:licence', authenticateToken, requireAdmin, (req, res) => {
   const licence = req.params.licence.replace(/\s+/g, '');
   const orgId = req.user.organizationId || null;
 
