@@ -1899,6 +1899,41 @@ app.listen(PORT, '0.0.0.0', () => {
   setTimeout(cleanupExpiredResetTokens, 60000); // run once 60s after startup
   console.log('[Reset Token Cleanup] Scheduler enabled - runs daily at 3 AM Paris time');
 
+  // Notification history cleanup scheduler — removes push notification history
+  // older than 90 days. Keeps the table size bounded and respects data-minimization
+  // principles (notifications older than 90 days have no practical value).
+  // Runs weekly on Sunday at 3 AM Paris time.
+  async function cleanupOldNotificationHistory() {
+    try {
+      const db = require('./db-loader');
+      await new Promise((resolve, reject) => {
+        db.run(
+          `DELETE FROM push_notification_history
+           WHERE sent_at < NOW() - INTERVAL '90 days'`,
+          [],
+          function (err) {
+            if (err) return reject(err);
+            if (this.changes > 0) {
+              console.log(`[Notification History Cleanup] Deleted ${this.changes} notification(s) older than 90 days`);
+            }
+            resolve();
+          }
+        );
+      });
+    } catch (error) {
+      console.error('[Notification History Cleanup] Error:', error.message);
+    }
+  }
+  setInterval(async () => {
+    const now = new Date();
+    const parisNow = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
+    // Sunday = 0, 3 AM
+    if (parisNow.getDay() === 0 && parisNow.getHours() === 3) {
+      await cleanupOldNotificationHistory();
+    }
+  }, 3600000); // check every hour
+  console.log('[Notification History Cleanup] Scheduler enabled - runs weekly on Sunday 3 AM Paris time (90-day retention)');
+
   // Auto-sync contacts on startup (after a short delay to ensure DB is ready)
   setTimeout(async () => {
     try {
