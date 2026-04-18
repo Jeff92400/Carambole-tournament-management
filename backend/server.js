@@ -1442,22 +1442,33 @@ app.listen(PORT, '0.0.0.0', () => {
 
       console.log(`[Automatic Reminders] Found ${tournaments.length} tournament(s) with deadline tomorrow`);
 
+      // Perf optimization (audit Phase 4 finding I18, April 2026):
+      // Pre-fetch ALL categories once into a Map, rather than running a
+      // per-tournament SELECT inside the loop. With ~130 categories total
+      // and up to dozens of tournaments per day, this replaces N SQL queries
+      // with a single one + in-memory lookups.
+      const allCategories = await new Promise((resolve, reject) => {
+        db.all(
+          `SELECT id, game_type, level, organization_id FROM categories`,
+          [],
+          (err, rows) => err ? reject(err) : resolve(rows || [])
+        );
+      });
+      // Index by (UPPER(game_type)|level|organization_id) for O(1) lookup.
+      const categoryMap = new Map();
+      for (const c of allCategories) {
+        const key = `${(c.game_type || '').toUpperCase()}|${c.level}|${c.organization_id ?? 'null'}`;
+        categoryMap.set(key, c);
+      }
+
       // Build player-to-tournaments map (deduplicated)
       const playerTournaments = new Map(); // licence → [tournaments]
 
       for (const tournament of tournaments) {
         try {
-          // Get category to determine eligible players
-          const category = await new Promise((resolve, reject) => {
-            db.get(
-              `SELECT id, game_type, level FROM categories
-               WHERE UPPER(game_type) = UPPER($1) AND level = $2
-                 AND ($3::int IS NULL OR organization_id = $3)
-               LIMIT 1`,
-              [tournament.mode, tournament.categorie, tournament.organization_id],
-              (err, row) => err ? reject(err) : resolve(row)
-            );
-          });
+          // Category lookup from the pre-fetched map (in-memory, no SQL).
+          const cacheKey = `${(tournament.mode || '').toUpperCase()}|${tournament.categorie}|${tournament.organization_id ?? 'null'}`;
+          const category = categoryMap.get(cacheKey);
 
           if (!category) {
             console.log(`[Automatic Reminders] Tournament ${tournament.tournoi_id}: category not found, skipping`);
