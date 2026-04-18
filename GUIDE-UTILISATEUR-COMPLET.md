@@ -1,9 +1,12 @@
 # Guide Utilisateur Complet
 
 > **Note:** Ce document est généré automatiquement depuis le guide HTML.
-> **Dernière mise à jour:** 17/04/2026
+> **Dernière mise à jour:** 18/04/2026
 >
 > **Nouvelles fonctionnalités documentées (Avril 2026):**
+> - **Historique Inscriptions — Export XLSX + Purge** (18/04/2026, V 2.0.398) : Bouton "📥 Exporter" (XLSX avec filtres actifs) et bouton "🗑️ Purger" (admin, plage de dates obligatoire, flux en deux étapes avec export recommandé avant suppression)
+> - **Purge historique campagnes — filtres enrichis** (18/04/2026, V 2.0.396/397) : Sélecteur Type (avec option « sans type » et compteurs par type), case "Uniquement les enregistrements vides (0 destinataire)" pour cibler les fantômes
+> - **Décompte précis inscriptions** (17/04/2026, V 2.0.395) : Générer les poules affiche maintenant la ventilation précise (ex. "0 inscrit(s) / 1 renonciation" au lieu d'un compte agrégé flou)
 > - **📣 Message à une catégorie** (17/04/2026) : Nouveau bouton ambre sur la liste des tournois externes. Permet d'envoyer push + email à une catégorie entière OU uniquement aux joueurs inscrits à un tournoi (T1/T2/T3/Finale). 3 sélecteurs (Mode / Catégorie / Tournoi), compteur temps réel, 3 modèles pré-définis, récap admin avec liste détaillée des destinataires
 > - **Notifications changement date/lieu** (12/04/2026) : Push découplé de l'email (envoi indépendant), récap admin automatique envoyé sur summary_email
 > - **Push Notifications** : Sélection "🔔 Joueurs avec notifications actives" pour cibler uniquement les joueurs abonnés
@@ -316,7 +319,10 @@ Fonction principale pour préparer un tournoi : sélection des joueurs, généra
 **Informations affichées après chargement : **
 - Nom de la compétition
 - Date et lieu (possibilité de double lieu pour les tournois répartis sur 2 salles)
-- Nombre de joueurs inscrits
+- **Décompte précis des joueurs** (depuis V 2.0.395) :
+  - *Tournois standards* : "N inscrit(s)" éventuellement complété par les autres statuts non nuls, par exemple *"3 inscrit(s) / 1 renonciation / 1 forfait"*
+  - *Finales* : "X/Y inscrits" (inscrits sur total de finalistes qualifiés), suivi entre parenthèses de la ventilation si applicable, par exemple *"0/6 inscrits (0 inscrit(s) / 1 renonciation)"*
+  - Statuts comptés séparément : renonciation (statut "indisponible"), forfait, désinscription — les catégories à zéro sont masquées pour plus de lisibilité
 
 ![Sélection des joueurs](screenshots/07-poules-joueurs.png)
 
@@ -1116,13 +1122,62 @@ L'onglet **Notifs** de Com Joueurs = notifications push génériques (liste de l
 
 ### Description
 
-Historique des emails envoyés.
+L'onglet **Historique** regroupe deux blocs distincts : l'historique des **campagnes d'emails** envoyées par l'administrateur (convocations, relances, résultats, etc.) et l'historique des **inscriptions / désinscriptions automatiques** déclenchées par l'Application Joueur.
 
-### Informations affichées
-  - Date d'envoi
-  - Objet de l'email
-  - Nombre de destinataires
-  - Statut (Envoyé, En cours, Erreur)
+### Bloc 1 — Historique des campagnes
+
+Trace tous les envois groupés initiés par l'administrateur ou par les automatismes (rappels, alertes).
+
+**Colonnes affichées :**
+- Date d'envoi
+- Type — catégorie de la campagne (Convocation, Résultats, Rappel Tournois, Composer, etc.). Depuis V 2.0.397, tous les types utilisés côté serveur sont correctement libellés (auparavant certains apparaissaient en "-").
+- Sujet de l'email
+- Par — utilisateur ayant déclenché l'envoi
+- Dest. / Env. / Ech. — destinataires ciblés / envois réussis / échecs
+- Statut (completed, sending, pending, error)
+
+**Purger l'historique des campagnes** — bouton rouge 🗑️ *Purger l'historique* (admin uniquement). Ouvre un panneau avec deux options :
+
+**Option A — Purger par plage de dates**
+1. Renseigner les dates **Du** et **Au**
+2. **Type** (depuis V 2.0.396) : filtrer sur un type précis (ex. "Rappel Tournois", "Convocation") ou laisser "Tous les types". Option spéciale *"(sans type)"* pour cibler les enregistrements dont `campaign_type` est vide. Chaque type affiche son nombre entre parenthèses.
+3. ☑ **Emails TEST uniquement** : ne supprime que les lignes marquées comme TEST
+4. ☑ **Uniquement les enregistrements vides (0 destinataire)** (depuis V 2.0.397) : ne supprime que les lignes fantômes à 0 destinataire — pratique pour nettoyer sans toucher à l'historique légitime
+5. Cliquer sur **Supprimer** — une confirmation résume le périmètre
+
+**Option B — Purger TOUT l'historique** (action irréversible)
+1. Sélectionner éventuellement un **Type** pour limiter la portée
+2. Cocher éventuellement **Emails TEST uniquement** ou **Uniquement les enregistrements vides**
+3. Taper `SUPPRIMER` dans le champ de confirmation pour activer le bouton
+4. Cliquer sur **Supprimer tout** puis confirmer
+
+**Astuce pour nettoyer les entrées fantômes** : Les schedulers automatiques créaient parfois des lignes 0/0/0 en historique lorsqu'il n'y avait rien à envoyer. Bug corrigé en V 2.0.395, mais les anciennes lignes restent. Pour les nettoyer : *option A, plage de dates large, case "Uniquement les enregistrements vides" cochée*.
+
+### Bloc 2 — Historique Inscriptions (App Joueur)
+
+Trace les emails automatiques envoyés lors des inscriptions et désinscriptions effectuées par les joueurs via leur Application Joueur.
+
+**Filtres :**
+- Type : Inscriptions, Désinscriptions, ou tous
+- Statut : Envoyé, Échec, ou tous
+- Joueur : recherche libre sur le nom ou l'email
+- Plage de dates : Du / Au
+
+**Exporter en Excel** (depuis V 2.0.398) — bouton vert 📥 *Exporter*. Télécharge un fichier `historique-inscriptions-YYYY-MM-DD.xlsx` contenant toutes les lignes correspondant aux filtres actuels (sans la limite d'affichage de 200 lignes). 11 colonnes : Date, Type, Joueur, Email, Tournoi, Mode, Catégorie, Date tournoi, Lieu, Statut, Erreur. Cas d'usage : archive de fin de saison, analyse des échecs d'envoi, audit des désinscriptions par catégorie.
+
+**Purger** (admin uniquement, depuis V 2.0.398) — bouton rouge 🗑️ *Purger*. Flux sécurisé :
+1. Les deux dates sont **obligatoires** (filet de sécurité contre les suppressions totales accidentelles)
+2. Premier dialogue : l'application propose d'**exporter d'abord** les données en XLSX avant suppression (recommandé)
+   - "OK" : l'export se télécharge, puis l'utilisateur doit re-cliquer Purger pour passer à la confirmation finale
+   - "Annuler" : passe directement à la confirmation sans export
+3. Second dialogue : confirmation définitive avec rappel des dates et filtres actifs
+4. Au succès : toast *"N enregistrement(s) supprimé(s)"* et la liste se recharge
+
+**Workflow recommandé fin de saison :**
+1. Régler *Du* au 1er septembre de la saison précédente, *Au* au 30 juin
+2. Cliquer 🗑️ Purger → choisir **OK** (exporter d'abord)
+3. Vérifier l'XLSX téléchargé, le classer dans l'archive du comité
+4. Re-cliquer 🗑️ Purger → **Annuler** (sauter l'export) → confirmer la suppression
 
 ---
 
