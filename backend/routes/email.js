@@ -2826,8 +2826,10 @@ router.delete('/inscription-logs/:id', authenticateToken, async (req, res) => {
 
 // ============ INSCRIPTION CONFIRMATION EMAILS (for Player App) ============
 
-// Helper function to look up club phone by location name (accent-insensitive)
-async function getClubPhoneByLocation(locationName) {
+// Helper function to look up club phone by location name (accent-insensitive).
+// IMPORTANT: orgId is REQUIRED for multi-CDB data isolation. Without it, the
+// query would leak phone numbers from clubs belonging to other organizations.
+async function getClubPhoneByLocation(locationName, orgId = null) {
   if (!locationName) return null;
 
   const db = require('../db-loader');
@@ -2837,7 +2839,12 @@ async function getClubPhoneByLocation(locationName) {
     const normalizedLocation = locationName.toLowerCase()
       .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
-    db.all('SELECT name, city, phone FROM clubs WHERE phone IS NOT NULL AND phone != \'\'', [], (err, clubs) => {
+    db.all(
+      `SELECT name, city, phone FROM clubs
+       WHERE phone IS NOT NULL AND phone != ''
+         AND ($1::int IS NULL OR organization_id = $1)`,
+      [orgId],
+      (err, clubs) => {
       if (err || !clubs) {
         resolve(null);
         return;
@@ -2905,12 +2912,15 @@ Sportivement,
 
 // Send inscription confirmation email (called by Player App)
 router.post('/inscription-confirmation', async (req, res) => {
-  const { player_email, player_name, tournament_name, tournament_number, mode, category, tournament_date, location, api_key } = req.body;
+  const { player_email, player_name, tournament_name, tournament_number, mode, category, tournament_date, location, organization_id, api_key } = req.body;
 
   // Verify API key (shared secret between apps)
   if (api_key !== process.env.PLAYER_APP_API_KEY) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
+
+  // organization_id is required for multi-CDB data isolation (club phone lookup, template, etc.)
+  const callerOrgId = (organization_id !== undefined && organization_id !== null) ? parseInt(organization_id, 10) : null;
 
   const resend = getResend();
   if (!resend) {
@@ -2951,8 +2961,8 @@ router.post('/inscription-confirmation', async (req, res) => {
       );
     });
 
-    // Look up club phone from location name
-    const locationPhone = await getClubPhoneByLocation(location);
+    // Look up club phone from location name — scoped to caller's org
+    const locationPhone = await getClubPhoneByLocation(location, callerOrgId);
 
     // Format date for display
     const dateStr = tournament_date
@@ -3062,12 +3072,15 @@ router.post('/inscription-confirmation', async (req, res) => {
 
 // Send inscription cancellation email (called by Player App)
 router.post('/inscription-cancellation', async (req, res) => {
-  const { player_email, player_name, tournament_name, tournament_number, mode, category, tournament_date, location, api_key } = req.body;
+  const { player_email, player_name, tournament_name, tournament_number, mode, category, tournament_date, location, organization_id, api_key } = req.body;
 
   // Verify API key (shared secret between apps)
   if (api_key !== process.env.PLAYER_APP_API_KEY) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
+
+  // organization_id is required for multi-CDB data isolation (club phone lookup, template, etc.)
+  const callerOrgId = (organization_id !== undefined && organization_id !== null) ? parseInt(organization_id, 10) : null;
 
   const resend = getResend();
   if (!resend) {
@@ -3108,8 +3121,8 @@ router.post('/inscription-cancellation', async (req, res) => {
       );
     });
 
-    // Look up club phone from location name
-    const locationPhone = await getClubPhoneByLocation(location);
+    // Look up club phone from location name — scoped to caller's org
+    const locationPhone = await getClubPhoneByLocation(location, callerOrgId);
 
     // Format date for display
     const dateStr = tournament_date

@@ -468,8 +468,8 @@ router.patch('/:id/toggle', authenticateToken, (req, res) => {
   );
 });
 
-// Delete announcement
-router.delete('/:id', authenticateToken, (req, res) => {
+// Delete announcement (admin only — destructive action)
+router.delete('/:id', authenticateToken, requireAdmin, (req, res) => {
   const db = getDb();
   const { id } = req.params;
   const orgId = req.user.organizationId || null;
@@ -490,8 +490,8 @@ router.delete('/:id', authenticateToken, (req, res) => {
   );
 });
 
-// Purge announcements (bulk delete based on criteria)
-router.post('/purge', authenticateToken, async (req, res) => {
+// Purge announcements (bulk delete based on criteria — admin only)
+router.post('/purge', authenticateToken, requireAdmin, async (req, res) => {
   const db = getDb();
   const { criteria, dateFrom, dateTo } = req.body;
 
