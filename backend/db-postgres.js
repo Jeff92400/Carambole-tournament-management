@@ -1742,6 +1742,18 @@ async function initializeDatabase() {
     await client.query(`ALTER TABLE email_templates DROP CONSTRAINT IF EXISTS email_templates_template_key_key`);
     await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS email_templates_template_key_org_key ON email_templates(template_key, organization_id)`);
 
+    // ============= PLAYER ACCOUNTS: composite UNIQUE with organization_id =============
+    // Original schema (db-postgres.js:936-937) declared licence and email as column-level
+    // UNIQUE, which is GLOBAL across all organizations. This prevents a player who is
+    // licensed in two CDBs (e.g. CDBHS + CDB9394) from creating an account in each one.
+    // We drop those global constraints and replace them with composite UNIQUE indexes
+    // keyed on (licence, organization_id) and (LOWER(email), organization_id).
+    // organization_id is already backfilled to 1 for all historical CDBHS accounts above.
+    await client.query(`ALTER TABLE player_accounts DROP CONSTRAINT IF EXISTS player_accounts_licence_key`);
+    await client.query(`ALTER TABLE player_accounts DROP CONSTRAINT IF EXISTS player_accounts_email_key`);
+    await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_player_accounts_licence_org ON player_accounts(licence, organization_id)`);
+    await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_player_accounts_email_org ON player_accounts(LOWER(email), organization_id)`);
+
     // ============= TOURNAMENT TYPES ORG-SCOPING =============
     // Add organization_id and is_finale columns
     await client.query(`ALTER TABLE tournament_types ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)`);

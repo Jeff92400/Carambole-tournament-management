@@ -1496,17 +1496,20 @@ router.get('/:licence/account', authenticateToken, (req, res) => {
 router.post('/:licence/reset-password', authenticateToken, async (req, res) => {
   const licence = req.params.licence.replace(/\s+/g, '');
   const { newPassword } = req.body;
+  const orgId = req.user.organizationId || null;
 
   if (!newPassword || newPassword.length < 8) {
     return res.status(400).json({ error: 'Le mot de passe doit contenir au moins 8 caractères' });
   }
 
   try {
-    // Check if account exists
+    // Check if account exists — scoped to the admin's organization so that
+    // after composite UNIQUE (licence, organization_id) is enabled, the admin
+    // only resets the account belonging to their own CDB, not another org's.
     const account = await new Promise((resolve, reject) => {
       db.get(
-        `SELECT id FROM player_accounts WHERE REPLACE(licence, ' ', '') = $1`,
-        [licence],
+        `SELECT id FROM player_accounts WHERE REPLACE(licence, ' ', '') = $1 AND ($2::int IS NULL OR organization_id = $2)`,
+        [licence, orgId],
         (err, row) => {
           if (err) reject(err);
           else resolve(row);
