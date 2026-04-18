@@ -86,6 +86,12 @@
       </div>
 
       <form id="calendarUploadForm" style="display: flex; gap: 15px; align-items: flex-end; flex-wrap: wrap;">
+        <div class="form-group" style="min-width: 160px; margin-bottom: 0;">
+          <label for="calendarSeasonSelect">Saison :</label>
+          <select id="calendarSeasonSelect" required style="padding: 10px; border: 1px solid #ddd; border-radius: 4px; width: 100%;">
+            <!-- Options populated dynamically by SeasonUtils -->
+          </select>
+        </div>
         <div class="form-group" style="flex: 1; min-width: 200px; margin-bottom: 0;">
           <label for="calendarFile">Fichier calendrier (PDF ou Excel) :</label>
           <input type="file" id="calendarFile" accept=".pdf,.xlsx,.xls" required style="padding: 10px; border: 1px solid #ddd; border-radius: 4px; width: 100%;">
@@ -94,6 +100,10 @@
           Téléverser
         </button>
       </form>
+      <p style="margin-top: 10px; font-size: 13px; color: #888;">
+        💡 Le fichier sera renommé automatiquement en <code>Calendrier {CDB} {saison}.{ext}</code>.
+        Vous pouvez téléverser votre fichier sous n'importe quel nom.
+      </p>
 
       <div id="calendarUploadStatus" style="display: none; margin-top: 15px; padding: 10px; border-radius: 4px;"></div>
     </div>
@@ -255,6 +265,32 @@
     // Ensure everyone (not just admins) gets the filename-based title.
     loadCalendarInfo();
 
+    // Populate the season dropdown in the upload form.
+    // Default selection: upcoming season (if we are past March = preparing next
+    // season), otherwise current season. Window: previous / current / next /
+    // next+1 — should cover all realistic upload scenarios.
+    (async function populateUploadSeasonSelect() {
+      const select = document.getElementById('calendarSeasonSelect');
+      if (!select) return;
+      try {
+        const current = await SeasonUtils.getCurrentSeason();
+        const [currentStartYear] = current.split('-').map(Number);
+        const now = new Date();
+        const month = now.getMonth() + 1;
+        // After March, the admin is typically preparing the upcoming season
+        const defaultSeason = month >= 4
+          ? `${currentStartYear + 1}-${currentStartYear + 2}`
+          : current;
+        SeasonUtils.populateSeasonSelect(select, current, {
+          yearsBack: 1,
+          yearsForward: 2,
+          selected: defaultSeason
+        });
+      } catch (e) {
+        console.error('Failed to populate upload season select:', e);
+      }
+    })();
+
     // Calendar upload form
     document.getElementById('calendarUploadForm').addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -279,9 +315,22 @@
       statusDiv.style.color = '#004085';
       statusDiv.style.display = 'block';
 
+      const seasonSelect = document.getElementById('calendarSeasonSelect');
+      const selectedSeason = seasonSelect ? seasonSelect.value : '';
+      if (!selectedSeason) {
+        statusDiv.textContent = 'Veuillez sélectionner une saison';
+        statusDiv.style.background = '#f8d7da';
+        statusDiv.style.color = '#721c24';
+        statusDiv.style.display = 'block';
+        uploadBtn.disabled = false;
+        uploadBtn.textContent = 'Téléverser';
+        return;
+      }
+
       try {
         const formData = new FormData();
         formData.append('calendar', file);
+        formData.append('season', selectedSeason);
 
         const response = await fetch(`${API_URL}/calendar/upload`, {
           method: 'POST',

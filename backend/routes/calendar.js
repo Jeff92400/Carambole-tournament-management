@@ -4,6 +4,7 @@ const jwt = require('jsonwebtoken');
 const ExcelJS = require('exceljs');
 const db = require('../db-loader');
 const { authenticateToken, requireAdmin, JWT_SECRET } = require('./auth');
+const appSettings = require('../utils/app-settings');
 
 // Club code mapping - loaded dynamically from database
 // Fallback hardcoded values (used if DB not available)
@@ -103,15 +104,53 @@ function authenticateTokenFlexible(req, res, next) {
   });
 }
 
-// Upload calendar (admin only)
-router.post('/upload', authenticateToken, requireAdmin, upload.single('calendar'), (req, res) => {
+// Upload calendar (admin only).
+// The server ALWAYS renames the file to a normalized name:
+//   Calendrier {organization_short_name} {season}.{ext}
+// This guarantees that the frontend's filename-based season detection and
+// stale-calendar warning work reliably regardless of how the admin named
+// their source file.
+router.post('/upload', authenticateToken, requireAdmin, upload.single('calendar'), async (req, res) => {
   if (!req.file) {
-    return res.status(400).json({ error: 'No file uploaded' });
+    return res.status(400).json({ error: 'Aucun fichier téléversé' });
   }
 
   const { originalname, mimetype, buffer } = req.file;
   const uploadedBy = req.user.username || 'admin';
   const orgId = req.user.organizationId || null;
+
+  // Validate season (required, must match YYYY-YYYY with a 1-year gap)
+  const rawSeason = (req.body.season || '').trim();
+  const seasonMatch = rawSeason.match(/^(\d{4})-(\d{4})$/);
+  if (!seasonMatch) {
+    return res.status(400).json({ error: 'Saison invalide (format attendu : YYYY-YYYY, ex : 2026-2027)' });
+  }
+  const startYear = parseInt(seasonMatch[1], 10);
+  const endYear = parseInt(seasonMatch[2], 10);
+  if (endYear !== startYear + 1) {
+    return res.status(400).json({ error: 'Saison invalide (les deux années doivent se suivre, ex : 2026-2027)' });
+  }
+  const season = rawSeason;
+
+  // Extract extension from the original filename (preserve .xlsx / .pdf / .xls)
+  const extMatch = originalname.match(/\.(pdf|xlsx|xls)$/i);
+  const ext = extMatch ? extMatch[1].toLowerCase() : 'xlsx';
+
+  // Resolve organization short name for the normalized filename
+  let orgShortName = 'CDB';
+  try {
+    const shortName = orgId
+      ? await appSettings.getOrgSetting(orgId, 'organization_short_name')
+      : await appSettings.getSetting('organization_short_name');
+    if (shortName && shortName.trim()) {
+      orgShortName = shortName.trim();
+    }
+  } catch (e) {
+    console.warn('[Calendar upload] Could not resolve organization_short_name, using fallback "CDB"');
+  }
+
+  // Build normalized filename
+  const normalizedFilename = `Calendrier ${orgShortName} ${season}.${ext}`;
 
   // Delete existing calendar for this org and insert new one
   db.run('DELETE FROM calendar WHERE ($1::int IS NULL OR organization_id = $1)', [orgId], (err) => {
@@ -121,16 +160,18 @@ router.post('/upload', authenticateToken, requireAdmin, upload.single('calendar'
 
     db.run(
       'INSERT INTO calendar (filename, content_type, file_data, uploaded_by, organization_id) VALUES ($1, $2, $3, $4, $5)',
-      [originalname, mimetype, buffer, uploadedBy, orgId],
+      [normalizedFilename, mimetype, buffer, uploadedBy, orgId],
       function(err) {
         if (err) {
           console.error('Error saving calendar:', err);
-          return res.status(500).json({ error: 'Error saving calendar file' });
+          return res.status(500).json({ error: 'Erreur lors de l\'enregistrement du calendrier' });
         }
 
+        console.log(`[Calendar upload] Stored as "${normalizedFilename}" (source: "${originalname}") for org ${orgId}`);
         res.json({
           message: 'Calendar uploaded successfully',
-          filename: originalname
+          filename: normalizedFilename,
+          originalFilename: originalname
         });
       }
     );
