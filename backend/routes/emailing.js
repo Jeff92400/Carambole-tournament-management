@@ -2664,9 +2664,9 @@ router.post('/send-results', authenticateToken, async (req, res) => {
         const playerRanking = rankings.find(r => r.licence === participant.licence);
         const playerRankingPosition = playerRanking ? playerRanking.rank_position : '-';
 
-        // Determine qualification status for the final
-        // Rule: < 9 players → 4 qualified, >= 9 players → 6 qualified
-        const qualifiedCount = rankings.length < 9 ? 4 : 6;
+        // Determine qualification status for the final — uses per-org settings
+        // (qualification_threshold / qualification_small / qualification_large)
+        const qualifiedCount = await appSettings.getQualifiedCount(orgId, rankings.length);
         const isQualified = playerRanking && playerRanking.rank_position <= qualifiedCount;
         const lastRankingNumber = Math.max(...(await getRankingTournamentNumbers(orgId)));
         const isFinalTournament = tournament.tournament_number === lastRankingNumber;
@@ -3182,9 +3182,9 @@ router.get('/finalists/:finaleId', authenticateToken, async (req, res) => {
       );
     });
 
-    // Determine qualified count: <9 players → 4 qualified, >=9 players → 6 qualified
+    // Determine qualified count from per-org settings (threshold/small/large)
     const totalPlayers = rankings.length;
-    const qualifiedCount = totalPlayers < 9 ? 4 : 6;
+    const qualifiedCount = await appSettings.getQualifiedCount(orgId, totalPlayers);
 
     // Get only qualified players (top N)
     const finalists = rankings
@@ -3315,7 +3315,7 @@ router.post('/send-finale-convocation', authenticateToken, async (req, res) => {
       );
     });
 
-    const qualifiedCount = rankings.length < 9 ? 4 : 6;
+    const qualifiedCount = await appSettings.getQualifiedCount(orgId, rankings.length);
     const finalists = rankings.filter(r => r.rank_position <= qualifiedCount);
 
     if (finalists.length === 0) {
@@ -4884,8 +4884,8 @@ router.get('/finale-qualified', authenticateToken, async (req, res) => {
       );
     });
 
-    // Determine qualified count: <9 players → 4 qualified, >=9 players → 6 qualified
-    const qualifiedCount = rankings.length < 9 ? 4 : 6;
+    // Determine qualified count from per-org settings (threshold/small/large)
+    const qualifiedCount = await appSettings.getQualifiedCount(orgId, rankings.length);
     const qualified = rankings.filter(r => r.rank_position <= qualifiedCount);
     const nonQualified = rankings.filter(r => r.rank_position > qualifiedCount);
 
@@ -5368,7 +5368,7 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
         );
       });
 
-      const qualifiedCount = allRankings.length < 9 ? 4 : 6;
+      const qualifiedCount = await appSettings.getQualifiedCount(orgId, allRankings.length);
       participants = allRankings.filter(r => r.rank_position <= qualifiedCount);
 
       // Try to get finale info from tournoi_ext if not provided in customData

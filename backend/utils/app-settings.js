@@ -215,6 +215,24 @@ async function getQualificationSettings(orgId) {
 }
 
 /**
+ * Compute the number of finalists that qualify based on the size of the
+ * ranked pool and the org's qualification settings.
+ *
+ * Rule: if at least `qualification_threshold` players are ranked, the "large"
+ * quota applies; otherwise the "small" quota. Defaults: threshold=9, small=4,
+ * large=6 — but these are all per-org configurable in organization_settings.
+ *
+ * This helper exists specifically to eradicate the hardcoded pattern
+ *   rankings.length < 9 ? 4 : 6
+ * that was scattered across emailing.js, rankings.js, wordpress.js, etc.
+ * All new code must use this helper instead of hardcoded numbers.
+ */
+async function getQualifiedCount(orgId, rankingsLength) {
+  const q = await getQualificationSettings(orgId);
+  return (rankingsLength || 0) < q.threshold ? q.small : q.large;
+}
+
+/**
  * Get timeline settings bundle (NEW - April 2026)
  */
 async function getTimelineSettings(orgId) {
@@ -513,6 +531,7 @@ module.exports = {
   getEmailSettings,
   getBrandingSettings,
   getQualificationSettings,
+  getQualifiedCount,
   getTimelineSettings, // NEW - April 2026
   // Org-aware settings
   getOrgSettings,

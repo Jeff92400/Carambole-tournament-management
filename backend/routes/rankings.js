@@ -506,10 +506,10 @@ router.get('/export', authenticateToken, async (req, res) => {
         worksheet.getCell('A3').alignment = { horizontal: 'left', vertical: 'middle' };
       }
 
-      // Calculate number of qualified players for the final
-      // Rule: < 9 players → 4 qualified, >= 9 players → 6 qualified
+      // Calculate number of qualified players for the final using per-org
+      // settings (qualification_threshold / qualification_small / qualification_large)
       const totalPlayers = rows.length;
-      const qualifiedCount = totalPlayers < 9 ? 4 : 6;
+      const qualifiedCount = await appSettings.getQualifiedCount(orgId, totalPlayers);
 
       // Data
       rows.forEach((row, index) => {

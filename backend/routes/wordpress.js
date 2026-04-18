@@ -1131,10 +1131,10 @@ router.post('/publish-results', authenticateToken, async (req, res) => {
       nextTournament = nextTournamentRow || null;
     }
 
-    // Determine qualified players (after T3)
+    // Determine qualified players (after T3) using per-org settings
     let qualifiedPlayers = [];
     if (isLastQualifying && rankings.length > 0) {
-      const qualifiedCount = rankings.length < 9 ? 4 : 6;
+      const qualifiedCount = await appSettings.getQualifiedCount(orgId, rankings.length);
       qualifiedPlayers = rankings.filter(r => r.rank_position <= qualifiedCount);
     }
 
