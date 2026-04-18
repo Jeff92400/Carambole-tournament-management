@@ -4646,9 +4646,48 @@
         return;
       }
 
-      // Confirm
-      if (!confirm(`Envoyer les convocations à ${checkedLicences.length} joueur(s) sélectionné(s) ?`)) {
-        return;
+      // Detect finale convocation — uses name pattern OR the upcoming-card flag
+      const isFinaleConvocation =
+        !!(matchingTournoi?.nom?.toUpperCase().includes('FINALE')) ||
+        !!(window.selectedUpcomingTournament && window.selectedUpcomingTournament.isFinale);
+
+      // For finales, warn if the number of convoked players is below the expected
+      // quota (top-4 or top-6 qualified). The expected count comes from the card
+      // data when the admin arrived via the upcoming tournament panel. Silent
+      // absentees (no renunciation, no inscription) would otherwise cause the
+      // convocation to be sent for an under-attended finale without any prompt.
+      const expectedFinalists =
+        (window.selectedUpcomingTournament && window.selectedUpcomingTournament.finalist_count) || 0;
+      const selectedCount = checkedLicences.length;
+
+      if (isFinaleConvocation && expectedFinalists > 0 && selectedCount < expectedFinalists) {
+        const missing = expectedFinalists - selectedCount;
+        const pending = (window.selectedUpcomingTournament && window.selectedUpcomingTournament.pending_finalists) || [];
+        const pendingList = pending
+          .sort((a, b) => (a.rank_position || 99) - (b.rank_position || 99))
+          .map(p => {
+            const rank = p.rank_position ? `${p.rank_position}${p.rank_position === 1 ? 'er' : 'ème'}` : '-';
+            return `  • ${p.name || p.licence} (${rank})`;
+          })
+          .join('\n');
+
+        const warningMsg =
+          `⚠️ Nombre de finalistes inférieur au quota habituel\n\n` +
+          `Cette finale attend normalement ${expectedFinalists} qualifié(s), mais vous êtes sur le point d'envoyer la convocation à ${selectedCount} joueur(s).\n` +
+          `Manquent : ${missing} joueur(s).\n` +
+          (pendingList ? `\nQualifiés non inscrits :\n${pendingList}\n` : '') +
+          `\nEst-ce normal ? Voulez-vous continuer ?`;
+
+        if (!confirm(warningMsg)) {
+          return;
+        }
+        // If admin confirmed the warning, skip the generic confirm below to
+        // avoid prompt-stacking.
+      } else {
+        // Standard confirmation (non-finale, or finale at full quota)
+        if (!confirm(`Envoyer les convocations à ${checkedLicences.length} joueur(s) sélectionné(s) ?`)) {
+          return;
+        }
       }
 
       // Disable button and show progress
