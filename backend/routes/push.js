@@ -567,14 +567,31 @@ async function sendPushToPlayer(licence, orgId, notification, options = {}) {
  * @returns {Promise<{success: boolean, total_sent: number, total_failed: number}>}
  */
 async function sendPushToPlayers(licences, orgId, notification) {
+  // Perf optimization (audit Phase 4 finding C1, April 2026):
+  // Send pushes in parallel batches instead of sequentially. Web-push is I/O-bound
+  // (each call is an HTTPS round-trip to the browser's push endpoint — FCM/Mozilla/etc.),
+  // so serial send was O(N * latency). With 57 players × ~200ms average latency, the
+  // old loop took ~11s. Batches of 10 parallel calls drop that to ~1s while staying
+  // well under open-file/socket limits.
+  const BATCH_SIZE = 10;
   let totalSent = 0;
   let totalFailed = 0;
 
-  // Send to all players with skipAdminCopy flag to prevent spam
-  for (const licence of licences) {
-    const result = await sendPushToPlayer(licence, orgId, notification, { skipAdminCopy: true });
-    totalSent += result.sent;
-    totalFailed += result.failed;
+  for (let i = 0; i < licences.length; i += BATCH_SIZE) {
+    const batch = licences.slice(i, i + BATCH_SIZE);
+    const results = await Promise.all(
+      batch.map(licence =>
+        sendPushToPlayer(licence, orgId, notification, { skipAdminCopy: true })
+          .catch(err => {
+            console.error(`[Push Batch] Send to ${licence} failed:`, err.message);
+            return { sent: 0, failed: 1 };
+          })
+      )
+    );
+    for (const r of results) {
+      totalSent += r.sent || 0;
+      totalFailed += r.failed || 0;
+    }
   }
 
   // Send ONE admin copy after all players have been notified
