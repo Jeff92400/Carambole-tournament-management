@@ -86,7 +86,7 @@ router.get('/', async (req, res) => {
 
   let decoded;
   try {
-    decoded = jwt.verify(token, process.env.JWT_SECRET);
+    decoded = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ['HS256'] });
     if (decoded.type !== 'rsvp') throw new Error('Invalid token type');
   } catch (err) {
     if (err.name === 'TokenExpiredError') {

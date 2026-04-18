@@ -159,7 +159,7 @@ router.post('/', authenticateToken, async (req, res) => {
             }
 
             // Hash password
-            const passwordHash = await bcrypt.hash(password, 10);
+            const passwordHash = await bcrypt.hash(password, 12);
 
             // Create account
             const orgId = req.user.organizationId || null;
@@ -222,7 +222,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
         return res.status(400).json({ error: 'Le mot de passe doit contenir au moins un caractere special' });
       }
 
-      const passwordHash = await bcrypt.hash(password, 10);
+      const passwordHash = await bcrypt.hash(password, 12);
 
       db.run(
         `UPDATE player_accounts SET password_hash = $1 WHERE id = $2 AND ($3::int IS NULL OR organization_id = $3)`,

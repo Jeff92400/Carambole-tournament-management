@@ -1838,6 +1838,40 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log('[Survey Scheduler] Started - checking every 5 minutes');
   setTimeout(processSurveySchedule, 35000); // Run on startup after 35s
 
+  // Reset token cleanup scheduler — wipes expired password-reset tokens from
+  // the users table so they don't accumulate indefinitely (security hygiene).
+  // Runs daily at 3 AM Paris time (low-traffic window).
+  async function cleanupExpiredResetTokens() {
+    try {
+      const db = require('./db-loader');
+      await new Promise((resolve, reject) => {
+        db.run(
+          `UPDATE users SET reset_token = NULL, reset_token_expiry = NULL
+           WHERE reset_token IS NOT NULL AND reset_token_expiry < NOW()`,
+          [],
+          function (err) {
+            if (err) return reject(err);
+            if (this.changes > 0) {
+              console.log(`[Reset Token Cleanup] Wiped ${this.changes} expired token(s) from users`);
+            }
+            resolve();
+          }
+        );
+      });
+    } catch (error) {
+      console.error('[Reset Token Cleanup] Error:', error.message);
+    }
+  }
+  setInterval(async () => {
+    const now = new Date();
+    const parisNow = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
+    if (parisNow.getHours() === 3) {
+      await cleanupExpiredResetTokens();
+    }
+  }, 3600000); // check every hour, execute only at 3 AM
+  setTimeout(cleanupExpiredResetTokens, 60000); // run once 60s after startup
+  console.log('[Reset Token Cleanup] Scheduler enabled - runs daily at 3 AM Paris time');
+
   // Auto-sync contacts on startup (after a short delay to ensure DB is ready)
   setTimeout(async () => {
     try {

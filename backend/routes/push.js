@@ -19,7 +19,7 @@ function authenticatePlayerToken(req, res, next) {
     return res.status(401).json({ error: 'Access token required' });
   }
 
-  jwt.verify(token, process.env.JWT_SECRET, (err, player) => {
+  jwt.verify(token, process.env.JWT_SECRET, { algorithms: ['HS256'] }, (err, player) => {
     if (err) {
       return res.status(403).json({ error: 'Invalid or expired token' });
     }
@@ -46,10 +46,10 @@ if (!vapidPublicKey || !vapidPrivateKey) {
     );
     console.log('✅ Web Push configured with VAPID keys');
   } catch (error) {
+    // Do NOT log any fragment of the keys (even truncated). If debugging is
+    // required, add a temporary log locally — never commit key material to stdout.
     console.error('❌ Failed to configure VAPID keys:', error.message);
     console.error(`   Public key length: ${vapidPublicKey.length} chars`);
-    console.error(`   Public key starts with: ${vapidPublicKey.substring(0, 20)}...`);
-    console.error(`   Public key ends with: ...${vapidPublicKey.substring(vapidPublicKey.length - 20)}`);
     console.error('   Push notifications will not work until VAPID keys are fixed');
   }
 }

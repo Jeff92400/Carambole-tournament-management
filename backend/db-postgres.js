@@ -2009,7 +2009,7 @@ async function initializeDatabase() {
     const adminResult = await client.query('SELECT COUNT(*) as count FROM admin');
     if (adminResult.rows[0].count == 0) {
       const defaultPassword = 'admin123';
-      const hash = await bcrypt.hash(defaultPassword, 10);
+      const hash = await bcrypt.hash(defaultPassword, 12);
       await client.query('INSERT INTO admin (password_hash) VALUES ($1)', [hash]);
       console.log('Default admin password created');
       console.log('Please change it after first login!');
@@ -2019,7 +2019,7 @@ async function initializeDatabase() {
     const usersResult = await client.query('SELECT COUNT(*) as count FROM users');
     if (usersResult.rows[0].count == 0) {
       const defaultPassword = 'admin123';
-      const hash = await bcrypt.hash(defaultPassword, 10);
+      const hash = await bcrypt.hash(defaultPassword, 12);
       await client.query(
         'INSERT INTO users (username, password_hash, role) VALUES ($1, $2, $3)',
         ['admin', hash, 'admin']

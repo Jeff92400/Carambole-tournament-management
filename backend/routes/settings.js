@@ -104,7 +104,7 @@ router.get('/branding/csv-imports', async (req, res) => {
     if (authHeader && authHeader.startsWith('Bearer ')) {
       try {
         const jwt = require('jsonwebtoken');
-        const decoded = jwt.verify(authHeader.split(' ')[1], process.env.JWT_SECRET);
+        const decoded = jwt.verify(authHeader.split(' ')[1], process.env.JWT_SECRET, { algorithms: ['HS256'] });
         orgId = decoded.organizationId || null;
       } catch (e) { /* ignore invalid token — fall back to global */ }
     }
@@ -1438,7 +1438,7 @@ router.get('/organization-logo/download', (req, res) => {
   if (authHeader && authHeader.startsWith('Bearer ')) {
     try {
       const jwt = require('jsonwebtoken');
-      const decoded = jwt.verify(authHeader.split(' ')[1], process.env.JWT_SECRET);
+      const decoded = jwt.verify(authHeader.split(' ')[1], process.env.JWT_SECRET, { algorithms: ['HS256'] });
       orgId = decoded.organizationId || null;
     } catch (e) {
       // Token invalid or expired — fall through to default

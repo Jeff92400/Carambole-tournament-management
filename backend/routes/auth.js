@@ -324,7 +324,7 @@ router.post('/change-password', authenticateToken, (req, res) => {
         return res.status(401).json({ error: 'Mot de passe actuel incorrect' });
       }
 
-      bcrypt.hash(newPassword, 10, (err, hash) => {
+      bcrypt.hash(newPassword, 12, (err, hash) => {
         if (err) {
           return res.status(500).json({ error: 'Erreur lors du changement de mot de passe' });
         }
@@ -472,7 +472,7 @@ router.post('/reset-password-token', (req, res) => {
         return res.status(400).json({ error: 'Lien invalide ou expiré' });
       }
 
-      bcrypt.hash(newPassword, 10, (err, hash) => {
+      bcrypt.hash(newPassword, 12, (err, hash) => {
         if (err) {
           return res.status(500).json({ error: 'Erreur lors du changement de mot de passe' });
         }
@@ -649,7 +649,7 @@ router.post('/reset-with-code', async (req, res) => {
       return res.status(404).json({ error: 'Compte introuvable' });
     }
 
-    bcrypt.hash(password, 10, (err, hash) => {
+    bcrypt.hash(password, 12, (err, hash) => {
       if (err) {
         return res.status(500).json({ error: 'Erreur lors du changement de mot de passe' });
       }
@@ -719,7 +719,7 @@ router.post('/users', authenticateToken, requireAdmin, (req, res) => {
 
     // If club role, validate club exists
     const proceed = () => {
-      bcrypt.hash(password, 10, (err, hash) => {
+      bcrypt.hash(password, 12, (err, hash) => {
         if (err) {
           return res.status(500).json({ error: 'Error hashing password' });
         }
@@ -824,7 +824,7 @@ router.put('/users/:id', authenticateToken, requireAdmin, (req, res) => {
     }
 
     if (password && password.length >= 6) {
-      bcrypt.hash(password, 10, (err, hash) => {
+      bcrypt.hash(password, 12, (err, hash) => {
         if (err) {
           return res.status(500).json({ error: 'Error hashing password' });
         }
@@ -937,7 +937,7 @@ function authenticateToken(req, res, next) {
     return res.status(401).json({ error: 'Access token required' });
   }
 
-  jwt.verify(token, JWT_SECRET, (err, user) => {
+  jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] }, (err, user) => {
     if (err) {
       return res.status(403).json({ error: 'Invalid or expired token' });
     }

@@ -320,7 +320,7 @@ router.put('/users/:id', async (req, res) => {
     if (email !== undefined) { updates.push(`email = $${idx++}`); params.push(email || null); }
     if (password) {
       if (password.length < 6) return res.status(400).json({ error: 'Mot de passe: 6 caractères minimum' });
-      const hash = await bcrypt.hash(password, 10);
+      const hash = await bcrypt.hash(password, 12);
       updates.push(`password_hash = $${idx++}`); params.push(hash);
       updates.push(`last_password_change = CURRENT_TIMESTAMP`);
     }
@@ -383,7 +383,7 @@ router.post('/ligue-admins', async (req, res) => {
       return res.status(409).json({ error: 'Ce nom d\'utilisateur existe déjà' });
     }
 
-    const passwordHash = await bcrypt.hash(password, 10);
+    const passwordHash = await bcrypt.hash(password, 12);
     const result = await dbRun(
       `INSERT INTO users (username, password_hash, email, role, is_active, ffb_ligue_numero, last_password_change)
        VALUES ($1, $2, $3, 'ligue_admin', 1, $4, CURRENT_TIMESTAMP)`,
@@ -545,7 +545,7 @@ router.post('/users', async (req, res) => {
       }
     }
 
-    const passwordHash = await bcrypt.hash(password, 10);
+    const passwordHash = await bcrypt.hash(password, 12);
     const result = await dbRun(
       `INSERT INTO users (username, password_hash, email, role, is_active, organization_id, is_super_admin, last_password_change)
        VALUES ($1, $2, $3, $4, 1, $5, $6, CURRENT_TIMESTAMP)`,
@@ -939,7 +939,7 @@ router.post('/organizations', async (req, res) => {
     }
 
     // Create admin user
-    const passwordHash = await bcrypt.hash(admin_password, 10);
+    const passwordHash = await bcrypt.hash(admin_password, 12);
     await dbRun(
       `INSERT INTO users (username, password_hash, email, role, is_active, organization_id, last_password_change)
        VALUES ($1, $2, $3, 'admin', 1, $4, CURRENT_TIMESTAMP)`,
