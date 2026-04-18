@@ -341,12 +341,41 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
     // Track last generated ID for collision handling within this import session
     let lastGeneratedId = 0;
 
+    // Perf optimization (audit Phase 4, user request April 2026):
+    // (1) Pre-fetch MAX(inscription_id) ONCE instead of per-collision query inside
+    //     the loop. Collisions are rare but the query ran up to N times before.
+    // (2) Filter out records whose tournament's season is not the current season.
+    //     IONOS CSV contains all seasons historically — no reason to re-process
+    //     ~4-5 years of past data on every import. We log how many were skipped.
+    const maxIdResult = await new Promise((resolve, reject) => {
+      db.get(
+        `SELECT MAX(inscription_id) as max_id FROM inscriptions WHERE ($1::int IS NULL OR organization_id = $1)`,
+        [orgId],
+        (err, row) => { if (err) reject(err); else resolve(row); }
+      );
+    });
+    let maxInscriptionId = maxIdResult?.max_id || 10000;
+
+    const totalRecords = records.length;
+    let skippedPastSeason = 0;
+
     for (const record of records) {
       try {
         // Map CSV columns to database fields using configurable mapping
         const inscriptionId = getMappedValue(record, columnMapping, 'inscription_id', null);
         const joueurId = getMappedValue(record, columnMapping, 'joueur_id', null);
         const tournoiId = getMappedValue(record, columnMapping, 'tournoi_id', null);
+
+        // Early skip: if the record belongs to a past season, don't waste
+        // SQL queries on it. The tournament is known (pre-fetched), so the
+        // season check is in-memory and essentially free.
+        if (tournoiId) {
+          const recordSeason = getSeasonForTournoi(tournoiId);
+          if (recordSeason && recordSeason !== currentSeason) {
+            skippedPastSeason++;
+            continue;
+          }
+        }
         const timestampRaw = getMappedValue(record, columnMapping, 'timestamp', null);
         const timestamp = parseDateTime(timestampRaw);
         const email = getMappedValue(record, columnMapping, 'email', '');
@@ -421,18 +450,14 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
             });
             updated++;
           } else {
-            // ID collision with protected source - insert with a new generated ID
-            // Find max inscription_id and add offset to generate unique ID within INTEGER range
-            const maxIdResult = await new Promise((resolve, reject) => {
-              db.get(`SELECT MAX(inscription_id) as max_id FROM inscriptions WHERE ($1::int IS NULL OR organization_id = $1)`, [orgId], (err, row) => {
-                if (err) reject(err);
-                else resolve(row);
-              });
-            });
-            // Use the higher of: max from DB, or last generated in this session (for multiple collisions)
-            const baseId = Math.max(maxIdResult?.max_id || 10000, lastGeneratedId);
+            // ID collision with protected source - insert with a new generated ID.
+            // maxInscriptionId was pre-fetched once outside the loop; we keep
+            // incrementing it locally to handle consecutive collisions within
+            // the same import session.
+            const baseId = Math.max(maxInscriptionId, lastGeneratedId);
             const newId = baseId + 1;
             lastGeneratedId = newId;
+            maxInscriptionId = newId;
             console.log(`[IONOS Import] ID collision with protected source ${idCollision.source}, inserting with new ID: ${newId}`);
             const insertWithNewIdQuery = `
               INSERT INTO inscriptions (inscription_id, joueur_id, tournoi_id, timestamp, email, telephone, licence, convoque, forfait, commentaire, source, organization_id)
@@ -565,6 +590,8 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
       if (err) console.error('Error recording import history:', err);
     });
 
+    console.log(`[IONOS Import] ${totalRecords} CSV rows → ${skippedPastSeason} past-season skipped, ${imported} imported, ${updated} updated, ${skipped} already-present (Current season: ${currentSeason})`);
+
     res.json({
       message: 'Import completed',
       imported,
@@ -572,6 +599,8 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
       skipped,
       skippedDetails: skippedDetails.length > 0 ? skippedDetails : undefined,
       total: records.length,
+      totalRecords,
+      skippedPastSeason,
       seasonImported,
       currentSeason,
       errors: errors.length > 0 ? errors : undefined
