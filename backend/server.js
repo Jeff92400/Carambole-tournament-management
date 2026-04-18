@@ -99,12 +99,21 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
       'https://cdbhs-tournament-management-production.up.railway.app'
     ];
 
+// CORS — fails closed. We only allow any-origin in explicitly-marked
+// development environments (NODE_ENV === 'development'). If NODE_ENV is unset
+// or set to anything else (including 'production' or undefined), only the
+// explicit allowlist applies. Prevents an accidentally-unset env var from
+// opening CORS wide in a production deployment.
+const isDevEnv = process.env.NODE_ENV === 'development';
+if (isDevEnv) {
+  console.warn('[CORS] Development mode: any origin is allowed. Do NOT use NODE_ENV=development in production.');
+}
 app.use(cors({
   origin: function(origin, callback) {
     // Allow requests with no origin (mobile apps, Postman, etc.)
     if (!origin) return callback(null, true);
-    
-    if (allowedOrigins.indexOf(origin) !== -1 || process.env.NODE_ENV !== 'production') {
+
+    if (allowedOrigins.indexOf(origin) !== -1 || isDevEnv) {
       callback(null, true);
     } else {
       callback(new Error('Not allowed by CORS'));
@@ -134,6 +143,18 @@ const apiLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   validate: { trustProxy: false } // Disable validation - we trust Railway's proxy
+});
+
+// Bulk email / mass-send limiter — defends Resend's daily quota (free plan = 100/day
+// per domain) from being burned by a compromised admin session or a runaway UI.
+// Applies to bulk-invite, batch resend, mass campaign send, etc.
+const bulkEmailLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 20, // 20 bulk triggers per hour per IP — each bulk can still fan out to many recipients
+  message: { error: 'Trop d\'envois groupés. Veuillez patienter une heure avant de réessayer.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  validate: { trustProxy: false }
 });
 
 // Body parsing middleware
@@ -277,6 +298,12 @@ app.use('/api/announcements', apiLimiter, announcementsRoutes);
 app.use('/api/content', apiLimiter, contentRoutes);
 app.use('/api/reference-data', apiLimiter, referenceDataRoutes);
 app.use('/api/admin-logs', apiLimiter, adminLogsRoutes);
+// Bulk/mass-send endpoints within player-invitations get the stricter bulkEmailLimiter
+// on top of the general apiLimiter. Triggers that fan out to many recipients are
+// capped at 20/hour per IP to protect the Resend quota.
+app.use('/api/player-invitations/bulk-invite', bulkEmailLimiter);
+app.use('/api/player-invitations/resend-batch', bulkEmailLimiter);
+app.use('/api/player-invitations/send-notification-reminder', bulkEmailLimiter);
 app.use('/api/player-invitations', apiLimiter, playerInvitationsRoutes);
 app.use('/api/import-config', apiLimiter, importConfigRoutes);
 app.use('/api/enrollment-requests', apiLimiter, enrollmentRequestsRoutes);
