@@ -109,7 +109,7 @@
       <div style="margin-bottom: 20px;">
         <label for="seasonSelect" style="font-weight: 600; margin-right: 10px;">Saison :</label>
         <select id="seasonSelect" style="padding: 8px 15px; border: 1px solid #ddd; border-radius: 8px;">
-          <option value="2025-2026">2025-2026</option>
+          <!-- Options populated dynamically -->
         </select>
         <button onclick="loadDebugData()" class="btn" style="margin-left: 10px;">Analyser</button>
       </div>
@@ -139,6 +139,7 @@
   </div>
 
   <script src="js/auth-utils.js?v=197"></script>
+  <script src="js/season-utils.js?v=1"></script>
   <script>
     const API_URL = '/api';
 
@@ -146,6 +147,13 @@
       throw new Error('Not authenticated');
     }
     const token = sessionStorage.getItem('token');
+
+    // Populate the season dropdown on page load
+    (async function () {
+      const select = document.getElementById('seasonSelect');
+      const current = await SeasonUtils.getCurrentSeason();
+      SeasonUtils.populateSeasonSelect(select, current, { yearsBack: 2, yearsForward: 0 });
+    })();
 
     async function loadDebugData() {
       const season = document.getElementById('seasonSelect').value;

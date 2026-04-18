@@ -3510,18 +3510,19 @@ router.post('/create-test-finale', authenticateToken, async (req, res) => {
       });
     });
 
-    // Get 6 players - try players with rankings in LIBRE R2 first, then any active players
+    // Get 6 players - try players with rankings in current season first, then any active players
+    const currentSeason = await appSettings.getCurrentSeason(new Date(), orgId);
     let players = await new Promise((resolve, reject) => {
       db.all(`
         SELECT DISTINCT p.licence, p.first_name, p.last_name, p.club, r.rank_position
         FROM players p
         INNER JOIN rankings r ON REPLACE(p.licence, ' ', '') = REPLACE(r.licence, ' ', '')
-        WHERE r.category_id = $1 AND r.season = '2025-2026'
-        AND ($2::int IS NULL OR p.organization_id = $2)
-        AND ($2::int IS NULL OR r.organization_id = $2)
+        WHERE r.category_id = $1 AND r.season = $2
+        AND ($3::int IS NULL OR p.organization_id = $3)
+        AND ($3::int IS NULL OR r.organization_id = $3)
         ORDER BY r.rank_position ASC
         LIMIT 6
-      `, [categoryId, orgId], (err, rows) => {
+      `, [categoryId, currentSeason, orgId], (err, rows) => {
         if (err) reject(err);
         else resolve(rows || []);
       });

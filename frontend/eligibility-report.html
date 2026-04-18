@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="css/styles.css?v=2">
   <script src="js/branding.js?v=197"></script>
   <script src="js/auth-utils.js"></script>
+  <script src="js/season-utils.js?v=1"></script>
   <script src="js/app-branding.js?v=216"></script>
   <style>
     /* Override body centering for this page */
@@ -240,28 +241,27 @@
     let allData = [];
     let filteredData = [];
 
-    // Get current season
+    // Current season — resolved asynchronously (respects org override + season_start_month)
+    // Synchronous fallback = SeasonUtils.computeLocalSeason() for code paths that run before async resolution
     const now = new Date();
-    const year = now.getFullYear();
     const month = now.getMonth() + 1;
-    const currentSeason = month >= 9 ? `${year}-${year + 1}` : `${year - 1}-${year}`;
+    let currentSeason = SeasonUtils.computeLocalSeason(now);
     let selectedSeason = currentSeason;
     document.getElementById('currentSeason').textContent = currentSeason;
 
-    // Populate season dropdown (starting from 2025-2026)
-    function populateSeasonDropdown() {
+    // Populate season dropdown — rolling window: last 2 seasons back through current
+    async function populateSeasonDropdown() {
+      // Refresh currentSeason from backend (may differ from client-side if org overrides)
+      currentSeason = await SeasonUtils.getCurrentSeason();
+      selectedSeason = currentSeason;
+      document.getElementById('currentSeason').textContent = currentSeason;
+
       const seasonFilter = document.getElementById('seasonFilter');
-      const startYear = 2025;
-      const currentYear = parseInt(currentSeason.split('-')[0]);
-      const seasons = [];
-
-      for (let year = currentYear; year >= startYear; year--) {
-        seasons.push(`${year}-${year + 1}`);
-      }
-
-      seasonFilter.innerHTML = seasons.map(s =>
-        `<option value="${s}" ${s === currentSeason ? 'selected' : ''}>${s}</option>`
-      ).join('');
+      SeasonUtils.populateSeasonSelect(seasonFilter, currentSeason, {
+        yearsBack: 2,
+        yearsForward: 0,
+        selected: currentSeason
+      });
     }
 
     // Check if season is ongoing (before June 30)
@@ -509,9 +509,11 @@
     });
 
     // Initialize
-    populateSeasonDropdown();
-    updateWarningBanner();
-    loadEligibilityData();
+    (async () => {
+      await populateSeasonDropdown();
+      updateWarningBanner();
+      loadEligibilityData();
+    })();
   </script>
 </body>
 </html>

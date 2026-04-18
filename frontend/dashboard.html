@@ -198,7 +198,7 @@
     </div>
 
     <!-- Inscriptions saison en cours (green) -->
-    <div class="compact-section-title" id="inscSectionTitle">Inscriptions saison 2025-2026</div>
+    <div class="compact-section-title" id="inscSectionTitle">Inscriptions saison en cours</div>
     <div class="compact-stats">
       <div class="compact-stat" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
         <h5>Total</h5>
@@ -215,7 +215,7 @@
     </div>
 
     <!-- Compétitions saison en cours (green) -->
-    <div class="compact-section-title" id="tournoiSectionTitle">Compétitions saison 2025-2026</div>
+    <div class="compact-section-title" id="tournoiSectionTitle">Compétitions saison en cours</div>
     <div class="compact-stats">
       <div class="compact-stat" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
         <h5>Total</h5>
@@ -234,6 +234,7 @@
   </div>
 
   <script src="js/auth-utils.js?v=197"></script>
+  <script src="js/season-utils.js?v=1"></script>
   <script src="js/app-branding.js?v=216"></script>
   <script>
     const API_URL = '/api';
@@ -439,9 +440,23 @@
     // Load dashboard data
     async function loadDashboard() {
       await loadSeasons();
+      await updateSeasonTitles();
       await loadDashboardStats();
       await loadUnsentResults();
       await loadPendingEnrollmentRequests();
+    }
+
+    // Inject the current season into section titles (avoids hardcoding)
+    async function updateSeasonTitles() {
+      try {
+        const season = await SeasonUtils.getCurrentSeason();
+        const inscEl = document.getElementById('inscSectionTitle');
+        const tournoiEl = document.getElementById('tournoiSectionTitle');
+        if (inscEl) inscEl.textContent = `Inscriptions saison ${season}`;
+        if (tournoiEl) tournoiEl.textContent = `Compétitions saison ${season}`;
+      } catch (e) {
+        // Fallback: leave "saison en cours" label
+      }
     }
 
     // Load pending enrollment requests count (admin and lecteur)

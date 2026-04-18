@@ -100,6 +100,7 @@
   </div>
 
   <script src="js/auth-utils.js?v=197"></script>
+  <script src="js/season-utils.js?v=1"></script>
   <script src="js/app-branding.js?v=216"></script>
   <script>
     const API_URL = '/api';
@@ -185,8 +186,8 @@
         if (response.ok) {
           allTournaments = await response.json();
 
-          // Populate season filter (only current season 2025-2026 and future, no past data)
-          const currentSeason = '2025-2026';
+          // Populate season filter (only current season and future, no past data)
+          const currentSeason = await SeasonUtils.getCurrentSeason();
           const seasons = [...new Set(allTournaments.map(t => t.season))]
             .filter(season => season >= currentSeason)
             .sort().reverse();
