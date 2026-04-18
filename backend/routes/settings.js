@@ -1484,6 +1484,16 @@ router.post('/organization-logo', authenticateToken, requireAdmin, logoUpload.si
 
   const orgId = req.user?.organizationId || null;
 
+  // Sanitize the stored filename: strip path separators, control chars, and any
+  // characters outside a safe whitelist. Prevents displayed-filename XSS and
+  // shell-unsafe names if the filename is ever echoed in logs or UI.
+  const safeFilename = (originalname || 'logo')
+    .replace(/^.*[\\/]/, '')                   // drop any path components
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\x00-\x1f\x7f]/g, '')           // drop control chars
+    .replace(/[^\w\-. ]+/g, '_')               // keep only [A-Za-z0-9_-. ]
+    .slice(0, 120) || 'logo';                  // cap length
+
   // Delete existing logo for this org and insert new one
   db.run('DELETE FROM organization_logo WHERE ($1::int IS NULL OR organization_id = $1)', [orgId], (err) => {
     if (err) {
@@ -1492,7 +1502,7 @@ router.post('/organization-logo', authenticateToken, requireAdmin, logoUpload.si
 
     db.run(
       'INSERT INTO organization_logo (filename, content_type, file_data, uploaded_by, organization_id) VALUES ($1, $2, $3, $4, $5)',
-      [originalname, mimetype, buffer, uploadedBy, orgId],
+      [safeFilename, mimetype, buffer, uploadedBy, orgId],
       function(err) {
         if (err) {
           console.error('Error saving logo:', err);
@@ -1504,7 +1514,7 @@ router.post('/organization-logo', authenticateToken, requireAdmin, logoUpload.si
         res.json({
           success: true,
           message: 'Logo téléversé avec succès',
-          filename: originalname,
+          filename: safeFilename,
           size: req.file.size
         });
       }
