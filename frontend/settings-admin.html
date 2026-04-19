@@ -602,67 +602,6 @@
       </div>
     </div>
 
-    <!-- Category Mappings Section - Hidden (deprecated: IONOS decommissioned, remove for 2025-2026 season) -->
-    <div class="card admin-only" id="categoryMappingsSection" data-settings-tab="maintenance" style="display: none;">
-      <h3>Correspondances de catégories IONOS</h3>
-      <p style="margin-bottom: 20px; color: #666;">
-        Gérez les correspondances entre les noms de catégories dans les fichiers IONOS et les catégories internes du système.
-        Cela permet de reconnaître automatiquement les variations d'écriture (ex: "N3", "N 3", "NATIONALE 3").
-      </p>
-
-      <!-- Add New Mapping Form -->
-      <div style="margin-bottom: 25px; padding: 20px; background: #f8f9fa; border-radius: 8px;">
-        <h4 style="margin-top: 0; margin-bottom: 15px; color: #1F4788;">Ajouter une correspondance</h4>
-        <form id="addMappingForm" style="display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 15px; align-items: end;">
-          <div class="form-group" style="margin-bottom: 0;">
-            <label for="newIonosCategorie">Valeur IONOS :</label>
-            <input type="text" id="newIonosCategorie" required placeholder="exemple : N 3, NATIONALE 3">
-          </div>
-          <div class="form-group" style="margin-bottom: 0;">
-            <label for="newMappingGameType">Mode :</label>
-            <select id="newMappingGameType" required style="padding: 10px; border: 1px solid #ddd; border-radius: 4px; width: 100%;">
-              <option value="">Chargement...</option>
-            </select>
-          </div>
-          <div class="form-group" style="margin-bottom: 0;">
-            <label for="newMappingCategory">Catégorie interne :</label>
-            <select id="newMappingCategory" required style="padding: 10px; border: 1px solid #ddd; border-radius: 4px; width: 100%;">
-              <option value="">Sélectionner...</option>
-            </select>
-          </div>
-          <button type="submit" class="btn" style="background: #28a745; padding: 10px 20px;">
-            Ajouter
-          </button>
-        </form>
-      </div>
-
-      <!-- Mappings Table -->
-      <div id="categoryMappingsTable" style="overflow-x: auto;">
-        <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
-          <thead>
-            <tr style="background: #1F4788; color: white;">
-              <th style="padding: 12px; text-align: left;">Mode</th>
-              <th style="padding: 12px; text-align: left;">Catégorie interne</th>
-              <th style="padding: 12px; text-align: left;">Variations IONOS acceptées</th>
-              <th style="padding: 12px; text-align: center; width: 100px;">Actions</th>
-            </tr>
-          </thead>
-          <tbody id="categoryMappingsBody">
-            <tr><td colspan="4" style="text-align: center; padding: 20px; color: #666;">Chargement...</td></tr>
-          </tbody>
-        </table>
-      </div>
-
-      <div id="categoryMappingsMessage" style="display: none; margin-top: 15px; padding: 10px; border-radius: 4px;"></div>
-
-      <div style="margin-top: 20px; padding: 15px; background: #fff3cd; border-left: 4px solid #ffc107; border-radius: 4px;">
-        <strong>Note :</strong>
-        <p style="margin: 10px 0 0 0; color: #666;">
-          Les correspondances permettent au système de reconnaître automatiquement les catégories lors de l'import des fichiers IONOS,
-          même si l'orthographe varie. Par exemple, "N3", "N 3" et "NATIONALE 3" peuvent tous correspondre à la même catégorie interne.
-        </p>
-      </div>
-    </div>
 
     <!-- Email Scheduler Settings - Admin Only -->
     <div class="accordion-panel admin-only" id="emailSchedulerSection" data-settings-tab="espace-joueur">
@@ -892,52 +831,6 @@
       </div>
     </div>
 
-    <!-- Club Aliases Section - Hidden (deprecated: club names now standardized in player file) -->
-    <div class="card admin-only" id="clubAliasesSection" data-settings-tab="maintenance" style="display: none;">
-      <h3>Alias des Clubs</h3>
-      <p style="margin-bottom: 20px; color: #666;">
-        Gérez les correspondances entre les différentes variantes de noms de clubs.
-        Cela permet d'afficher le bon logo même si le nom du club varie selon les sources.
-      </p>
-
-      <!-- Add New Alias Form -->
-      <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
-        <h4 style="margin: 0 0 15px 0; color: #1F4788;">Ajouter un alias</h4>
-        <div style="display: flex; gap: 15px; flex-wrap: wrap; align-items: flex-end;">
-          <div style="flex: 1; min-width: 200px;">
-            <label style="display: block; margin-bottom: 5px; font-weight: 500;">Variante (alias) :</label>
-            <input type="text" id="newAliasName" placeholder="Exemple : A DE BILLARD COURBEVOIE LA DEFENSE" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
-          </div>
-          <div style="flex: 1; min-width: 200px;">
-            <label style="display: block; margin-bottom: 5px; font-weight: 500;">Nom canonique (officiel) :</label>
-            <select id="newAliasCanonical" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
-              <option value="">-- Sélectionner un club --</option>
-            </select>
-          </div>
-          <button onclick="addClubAlias()" class="btn" style="background: #28a745; padding: 10px 20px;">
-            + Ajouter
-          </button>
-        </div>
-      </div>
-
-      <!-- Existing Aliases Table -->
-      <div id="aliasesTableContainer" style="overflow-x: auto;">
-        <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
-          <thead>
-            <tr style="background: #1F4788; color: white;">
-              <th style="padding: 12px; text-align: left;">Variante (alias)</th>
-              <th style="padding: 12px; text-align: left;">Nom Canonique</th>
-              <th style="padding: 12px; text-align: center; width: 100px;">Actions</th>
-            </tr>
-          </thead>
-          <tbody id="aliasesTableBody">
-            <tr><td colspan="3" style="text-align: center; padding: 20px; color: #666;">Chargement...</td></tr>
-          </tbody>
-        </table>
-      </div>
-
-      <div id="aliasesMessage" style="display: none; margin-top: 15px; padding: 10px; border-radius: 4px;"></div>
-    </div>
 
     <!-- Maintenance Section - Admin Only -->
     <div class="accordion-panel admin-only" id="maintenanceSection" data-settings-tab="maintenance">
@@ -2401,8 +2294,6 @@
       });
       // Show sections for the active tab (restoring original display)
       document.querySelectorAll(`[data-settings-tab="${tabName}"]`).forEach(el => {
-        // Respect original display:none for deprecated sections
-        if (el.id === 'categoryMappingsSection' || el.id === 'clubAliasesSection') return;
         el.style.display = el._originalDisplay || '';
       });
       // Update tab bar active state
