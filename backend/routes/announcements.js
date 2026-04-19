@@ -370,7 +370,9 @@ router.post('/', authenticateToken, (req, res) => {
 
         (async () => {
           try {
-            // Get all active player licences (filtered by target if specified)
+            // Get all active player licences. When the admin targets specific modes,
+            // rankings or clubs, push only goes to matching players — consistent
+            // with the in-app /active filtering logic.
             const licences = await new Promise((resolve, reject) => {
               let query = `
                 SELECT DISTINCT pa.licence
@@ -380,9 +382,47 @@ router.post('/', authenticateToken, (req, res) => {
                   AND ($1::int IS NULL OR p.organization_id = $1)
               `;
               const params = [orgId];
+              let paramIndex = 2;
 
-              // TODO: Apply filtering if target_modes, target_rankings, or target_clubs specified
-              // For now, sending to all players for urgent announcements
+              // Category clauses (modes AND rankings — combined with AND because
+              // admin usually intersects them, e.g. "Bande R2 players").
+              const categoryClauses = [];
+
+              if (target_modes && target_modes.length > 0) {
+                const rankColumnByMode = { 'LIBRE': 'rank_libre', 'CADRE': 'rank_cadre', 'BANDE': 'rank_bande', '3 BANDES': 'rank_3bandes', '3BANDES': 'rank_3bandes' };
+                const modeClauses = target_modes
+                  .map(m => rankColumnByMode[String(m).toUpperCase()])
+                  .filter(Boolean)
+                  .map(col => `(p.${col} IS NOT NULL AND p.${col} != 'NC')`);
+                if (modeClauses.length > 0) {
+                  categoryClauses.push(`(${modeClauses.join(' OR ')})`);
+                }
+              }
+
+              if (target_rankings && target_rankings.length > 0) {
+                const columns = ['rank_libre', 'rank_cadre', 'rank_bande', 'rank_3bandes'];
+                const colClauses = columns.map(col => {
+                  const ph = target_rankings.map(() => `$${paramIndex++}`).join(', ');
+                  params.push(...target_rankings);
+                  return `p.${col} IN (${ph})`;
+                });
+                categoryClauses.push(`(${colClauses.join(' OR ')})`);
+              }
+
+              // Club clause — OR combined with the category group.
+              let clubClause = null;
+              if (target_clubs && target_clubs.length > 0) {
+                const cs = target_clubs.map(() => `UPPER(p.club) LIKE UPPER($${paramIndex++})`);
+                clubClause = `(${cs.join(' OR ')})`;
+                params.push(...target_clubs.map(c => `%${c}%`));
+              }
+
+              const filters = [];
+              if (categoryClauses.length > 0) filters.push(categoryClauses.join(' AND '));
+              if (clubClause) filters.push(clubClause);
+              if (filters.length > 0) {
+                query += ` AND (${filters.join(' OR ')})`;
+              }
 
               db.all(query, params, (err, rows) => {
                 if (err) reject(err);

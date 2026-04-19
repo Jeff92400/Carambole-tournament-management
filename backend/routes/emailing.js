@@ -58,51 +58,8 @@ function convertEmailsToMailtoLinks(text, primaryColor = '#1F4788') {
   );
 }
 
-// Get contact email from app_settings (with fallback to summary_email, org-aware)
-async function getContactEmail(orgId) {
-  return appSettings.getOrgSetting(orgId, 'summary_email');
-}
-
-// Get all email-related settings at once (for templates, org-aware)
-async function getEmailTemplateSettings(orgId) {
-  const settings = await appSettings.getOrgSettingsBatch(orgId, [
-    'primary_color',
-    'secondary_color',
-    'accent_color',
-    'email_noreply',
-    'email_convocations',
-    'email_communication',
-    'email_sender_name',
-    'organization_name',
-    'organization_short_name',
-    'summary_email'
-  ]);
-  return settings;
-}
-
-// Build "from" address for emails
-function buildFromAddress(settings, type = 'noreply') {
-  const senderName = settings.email_sender_name || 'CDBHS';
-  let email;
-  switch (type) {
-    case 'convocations':
-      email = settings.email_convocations || 'convocations@cdbhs.net';
-      break;
-    case 'communication':
-      email = settings.email_communication || 'communication@cdbhs.net';
-      break;
-    default:
-      email = settings.email_noreply || 'noreply@cdbhs.net';
-  }
-  return `${senderName} <${email}>`;
-}
-
-// Build contact phrase HTML with configurable email and color
-function buildContactPhraseHtml(email, primaryColor = '#1F4788') {
-  return `<p style="margin-top: 20px; padding: 10px; background: #e8f4f8; border-left: 3px solid ${primaryColor}; font-size: 14px;">
-  Pour toute question ou information, écrivez à <a href="mailto:${email}" style="color: ${primaryColor};">${email}</a>
-</p>`;
-}
+// Email helpers shared with routes/email.js — single source of truth.
+const { getContactEmail, getEmailTemplateSettings, buildFromAddress, buildContactPhraseHtml, getSummaryEmail } = require('../utils/email-helpers');
 
 // Helper function to parse dates that might be in French format (DD/MM/YYYY)
 function parseDateSafe(dateStr) {
@@ -125,12 +82,6 @@ function parseDateSafe(dateStr) {
   }
 
   return null;
-}
-
-// Get summary email from app_settings (with fallback, org-aware)
-async function getSummaryEmail(orgId) {
-  const value = await appSettings.getOrgSetting(orgId, 'summary_email');
-  return value || null;
 }
 
 // Upload image for email (supports pasted screenshots)

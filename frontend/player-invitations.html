@@ -1223,7 +1223,7 @@
         const data = await response.json();
 
         if (response.ok) {
-          showSuccess(data.message || 'Contacts synchronises avec succes');
+          showSuccess(data.message || 'Contacts synchronises avec succès');
           // Reload candidates and stats
           await loadCandidates();
           await loadStats();
@@ -1537,7 +1537,7 @@ Le comite sportif du {organization_name}`;
         const data = await response.json();
 
         if (response.ok) {
-          showSuccess('PDF televerse avec succes');
+          showSuccess('PDF televerse avec succès');
           loadPdfInfo();
         } else {
           showError(data.error || 'Erreur lors du telechargement');

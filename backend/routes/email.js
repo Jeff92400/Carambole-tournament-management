@@ -24,31 +24,8 @@ const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 // Organization logo buffer loader — shared helper in utils/logo-loader.js
 const { getOrganizationLogoBuffer } = require('../utils/logo-loader');
 
-// Get summary email from app_settings (with fallback, org-aware)
-async function getSummaryEmail(orgId) {
-  return appSettings.getOrgSetting(orgId, 'summary_email');
-}
-
-// Get contact email from app_settings (with fallback, org-aware)
-async function getContactEmail(orgId) {
-  return appSettings.getOrgSetting(orgId, 'summary_email');
-}
-
-// Get all email-related settings at once (for templates, org-aware)
-async function getEmailTemplateSettings(orgId) {
-  const settings = await appSettings.getOrgSettingsBatch(orgId, [
-    'primary_color',
-    'secondary_color',
-    'accent_color',
-    'email_noreply',
-    'email_convocations',
-    'email_sender_name',
-    'organization_name',
-    'organization_short_name',
-    'summary_email'
-  ]);
-  return settings;
-}
+// Email helpers shared with routes/emailing.js — single source of truth.
+const { getSummaryEmail, getContactEmail, getEmailTemplateSettings, buildFromAddress } = require('../utils/email-helpers');
 
 // Build universal variables object for all email templates
 // This provides ALL common variables - unused ones become empty strings
@@ -252,20 +229,6 @@ function buildEmailFooter(settings) {
   return `<div style="background: ${primaryColor}; color: white; padding: 10px; text-align: center; font-size: 12px;">
     <p style="margin: 0;">${shortName} - ${orgName}</p>
   </div>`;
-}
-
-// Build "from" address for emails
-function buildFromAddress(settings, type = 'noreply') {
-  const senderName = settings.email_sender_name || 'CDBHS';
-  let email;
-  switch (type) {
-    case 'convocations':
-      email = settings.email_convocations || 'convocations@cdbhs.net';
-      break;
-    default:
-      email = settings.email_noreply || 'noreply@cdbhs.net';
-  }
-  return `${senderName} <${email}>`;
 }
 
 // Initialize Resend

@@ -1084,7 +1084,7 @@
         return true;
       } catch (error) {
         console.error('Error updating inscription:', error);
-        alert('Erreur lors de la mise a jour: ' + error.message);
+        alert('Erreur lors de la mise à jour: ' + error.message);
         return false;
       }
     }
@@ -1118,7 +1118,7 @@
         const savedSearch = document.getElementById('searchInput').value;
 
         await loadInscriptionsKeepFilters(savedSeason, savedMode, savedCategorie, savedTournoi, savedStatus, savedSource, savedSearch);
-        alert('Inscription mise a jour avec succes!');
+        alert('Inscription mise à jour avec succès!');
       }
     });
 
