@@ -279,7 +279,7 @@ To give each CDB a branded sender domain (e.g., `cdb9493@ffbcarambole-gestion.fr
 - Dates: Paris timezone, displayed as DD/MM/YYYY
 - Season format: `YYYY-YYYY+1` (e.g., "2024-2025"), configurable start month via `app_settings.season_start_month` (default: 9 = September)
 - **Dynamic branding colors:** Colors are loaded from `app_settings` table and applied via CSS variables. See "Branding System" section below.
-- Licence numbers normalized by removing spaces
+- Licence numbers normalized by removing spaces. **Always use the shared helper `normalizeLicence(value, { upper? })` from `backend/utils/licence.js`** — never re-implement the pattern. The helper handles null/undefined, returns an empty string for falsy input, and has an `{ upper: true }` option for case-insensitive comparisons. `licencesEqual(a, b)` is also available for direct comparison.
 - CSV imports use semicolon delimiter
 - **Billiard icon:** Never use the American 8-ball emoji (🎱). Always use the French billiard icon image instead: `<img src="images/FrenchBillard-Icon-small.png" alt="" style="height: 24px; width: 24px; vertical-align: middle;">`
 - **Test data exclusion:** ALWAYS exclude test accounts from counts and lists. Test accounts have licences starting with "TEST" (case-insensitive). Use `WHERE UPPER(licence) NOT LIKE 'TEST%'` in queries.

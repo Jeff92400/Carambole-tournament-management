@@ -4,6 +4,7 @@ const fs = require('fs');
 const { Resend } = require('resend');
 const PDFDocument = require('pdfkit');
 const { authenticateToken } = require('./auth');
+const { normalizeLicence } = require('../utils/licence');
 const appSettings = require('../utils/app-settings');
 const { getPouleConfigForOrg } = require('../utils/poule-config');
 const { logAdminAction, ACTION_TYPES } = require('../utils/admin-logger');
@@ -20,30 +21,8 @@ const FRENCH_BILLARD_ICON_IMG = `<img src="${FRENCH_BILLARD_ICON_BASE64}" alt="ð
 // Helper function to add delay between emails (avoid rate limiting)
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-// Get organization logo as buffer from database (for PDFs)
-async function getOrganizationLogoBuffer(orgId) {
-  const db = require('../db-loader');
-  return new Promise((resolve) => {
-    const query = orgId
-      ? 'SELECT file_data, content_type FROM organization_logo WHERE organization_id = $1 ORDER BY created_at DESC LIMIT 1'
-      : 'SELECT file_data, content_type FROM organization_logo ORDER BY created_at DESC LIMIT 1';
-    const params = orgId ? [orgId] : [];
-    db.get(query, params, (err, row) => {
-      if (err || !row) {
-        // Fallback to static French billiard icon
-        const fallbackPath = path.join(__dirname, '../../frontend/images/FrenchBillard-Icon-small.png');
-        if (fs.existsSync(fallbackPath)) {
-          resolve(fs.readFileSync(fallbackPath));
-        } else {
-          resolve(null);
-        }
-        return;
-      }
-      const buffer = Buffer.isBuffer(row.file_data) ? row.file_data : Buffer.from(row.file_data);
-      resolve(buffer);
-    });
-  });
-}
+// Organization logo buffer loader â€” shared helper in utils/logo-loader.js
+const { getOrganizationLogoBuffer } = require('../utils/logo-loader');
 
 // Get summary email from app_settings (with fallback, org-aware)
 async function getSummaryEmail(orgId) {
@@ -333,7 +312,7 @@ async function getRankingDataForCategory(categoryId, season, orgId) {
         // Build a map by licence (normalized)
         const rankingMap = {};
         (rows || []).forEach(r => {
-          const normLicence = (r.licence || '').replace(/\s+/g, '');
+          const normLicence = normalizeLicence(r.licence);
           const moyenne = r.cumulated_reprises > 0
             ? (r.cumulated_points / r.cumulated_reprises).toFixed(3)
             : null;
@@ -645,7 +624,7 @@ async function generatePlayerConvocationPDF(player, tournamentInfo, allPoules, l
           const rowColor = isCurrentPlayer ? '#E3F2FD' : (isEven ? '#FFFFFF' : lightGray);
 
           // Get ranking info for this player
-          const normLicence = (p.licence || '').replace(/\s+/g, '');
+          const normLicence = normalizeLicence(p.licence);
           const playerRanking = rankingData[normLicence] || {};
 
           doc.rect(40, y, pageWidth, 20).fill(rowColor);
@@ -981,7 +960,7 @@ async function generateSummaryConvocationPDF(tournamentInfo, allPoules, location
           const rowColor = isEven ? '#FFFFFF' : lightGray;
 
           // Get ranking info for this player
-          const normLicence = (p.licence || '').replace(/\s+/g, '');
+          const normLicence = normalizeLicence(p.licence);
           const playerRanking = rankingData[normLicence] || {};
 
           doc.rect(40, y, pageWidth, 20).fill(rowColor);
@@ -1752,10 +1731,10 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
         let playerLocation = null;
 
         // Normalize licence for comparison (remove spaces)
-        const playerLicenceNorm = (player.licence || '').replace(/\s+/g, '');
+        const playerLicenceNorm = normalizeLicence(player.licence);
 
         for (const poule of poules) {
-          const found = poule.players.find(p => (p.licence || '').replace(/\s+/g, '') === playerLicenceNorm);
+          const found = poule.players.find(p => normalizeLicence(p.licence) === playerLicenceNorm);
           if (found) {
             playerPouleNumber = poule.number;
             const locNum = poule.locationNum || '1';
@@ -3956,7 +3935,7 @@ router.get('/poules/:tournoiId', authenticateToken, async (req, res) => {
       });
     });
 
-    const forfaitLicences = new Set(forfaits.map(f => f.licence?.replace(/\s/g, '')));
+    const forfaitLicences = new Set(forfaits.map(f => normalizeLicence(f.licence)));
 
     // Group by poule number and add forfait status
     const poulesGrouped = {};
@@ -3972,7 +3951,7 @@ router.get('/poules/:tournoiId', authenticateToken, async (req, res) => {
       }
       poulesGrouped[p.poule_number].players.push({
         ...p,
-        isForfait: forfaitLicences.has(p.licence?.replace(/\s/g, ''))
+        isForfait: forfaitLicences.has(normalizeLicence(p.licence))
       });
     });
 
@@ -4066,7 +4045,7 @@ router.post('/poules/:tournoiId/regenerate', authenticateToken, async (req, res)
     // Create a map of licence -> rank_position for quick lookup
     const rankingMap = new Map();
     rankings.forEach(r => {
-      const normLicence = r.licence?.replace(/\s/g, '');
+      const normLicence = normalizeLicence(r.licence);
       rankingMap.set(normLicence, r.rank_position);
     });
 
@@ -4118,7 +4097,7 @@ router.post('/poules/:tournoiId/regenerate', authenticateToken, async (req, res)
 
     // Transform to expected format and filter out newly selected forfaits
     let activePlayers = inscribedPlayers
-      .filter(p => !forfaitSet.has(p.licence?.replace(/\s/g, '')))
+      .filter(p => !forfaitSet.has(normalizeLicence(p.licence)))
       .map(p => ({
         licence: p.licence,
         player_name: `${p.first_name || ''} ${p.last_name || ''}`.trim() || p.licence,
@@ -4128,7 +4107,7 @@ router.post('/poules/:tournoiId/regenerate', authenticateToken, async (req, res)
     // Remove duplicates (same player might appear in list)
     const seenLicences = new Set();
     activePlayers = activePlayers.filter(p => {
-      const normLicence = p.licence?.replace(/\s/g, '');
+      const normLicence = normalizeLicence(p.licence);
       if (seenLicences.has(normLicence)) return false;
       seenLicences.add(normLicence);
       return true;
@@ -4146,7 +4125,7 @@ router.post('/poules/:tournoiId/regenerate', authenticateToken, async (req, res)
     // Sort players by their ranking position
     // Ranked players first (sorted by rank), then nouveaux at the end
     activePlayers = activePlayers.map(p => {
-      const normLicence = p.licence?.replace(/\s/g, '');
+      const normLicence = normalizeLicence(p.licence);
       const rank = rankingMap.get(normLicence);
       return {
         ...p,

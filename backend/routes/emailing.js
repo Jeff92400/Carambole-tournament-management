@@ -4,6 +4,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const { authenticateToken } = require('./auth');
+const { normalizeLicence } = require('../utils/licence');
 const appSettings = require('../utils/app-settings');
 const { logAdminAction, ACTION_TYPES } = require('../utils/admin-logger');
 const { getRankingTournamentNumbers, getFinaleTournamentNumber, getTournamentLabel } = require('./settings');
@@ -4371,7 +4372,7 @@ router.get('/t1-participants', authenticateToken, async (req, res) => {
     }
 
     const alreadyInscribedCount = participants.filter(p =>
-      inscribedLicences.has(p.licence?.replace(/\s/g, '').toUpperCase())
+      inscribedLicences.has(normalizeLicence(p.licence, { upper: true }))
     ).length;
 
     res.json({
@@ -4387,7 +4388,7 @@ router.get('/t1-participants', authenticateToken, async (req, res) => {
         tournoi_id: t2TournoiId
       } : null,
       participants: participants.map(p => {
-        const normLicence = p.licence?.replace(/\s/g, '').toUpperCase();
+        const normLicence = normalizeLicence(p.licence, { upper: true });
         return {
           licence: p.licence,
           player_name: p.player_name,
@@ -4550,7 +4551,7 @@ router.get('/ranking-for-relance', authenticateToken, async (req, res) => {
     }
 
     const alreadyInscribedCount = rankings.filter(r =>
-      inscribedLicences.has(r.licence?.replace(/\s/g, '').toUpperCase())
+      inscribedLicences.has(normalizeLicence(r.licence, { upper: true }))
     ).length;
 
     res.json({
@@ -4561,7 +4562,7 @@ router.get('/ranking-for-relance', authenticateToken, async (req, res) => {
         tournoi_id: t3TournoiId
       } : null,
       participants: rankings.map(r => {
-        const normLicence = r.licence?.replace(/\s/g, '').toUpperCase();
+        const normLicence = normalizeLicence(r.licence, { upper: true });
         return {
           licence: r.licence,
           player_name: r.player_name,
@@ -4737,7 +4738,7 @@ router.get('/t1-players', authenticateToken, async (req, res) => {
     }
 
     const alreadyInscribedCount = players.filter(p =>
-      inscribedLicences.has(p.licence?.replace(/\s/g, '').toUpperCase())
+      inscribedLicences.has(normalizeLicence(p.licence, { upper: true }))
     ).length;
 
     res.json({
@@ -4750,7 +4751,7 @@ router.get('/t1-players', authenticateToken, async (req, res) => {
         tournoi_id: t1TournoiId
       } : null,
       participants: players.map(p => {
-        const normLicence = p.licence?.replace(/\s/g, '').toUpperCase();
+        const normLicence = normalizeLicence(p.licence, { upper: true });
         return {
           licence: p.licence,
           player_name: `${p.first_name || ''} ${p.last_name || ''}`.trim() || p.licence,
@@ -4913,25 +4914,25 @@ router.get('/finale-qualified', authenticateToken, async (req, res) => {
 
     // Build participants list: qualified players + any inscribed non-qualified players (replacements)
     const inscribedNonQualified = nonQualified.filter(r => {
-      const normLicence = r.licence?.replace(/\s/g, '').toUpperCase();
+      const normLicence = normalizeLicence(r.licence, { upper: true });
       return inscribedLicences.has(normLicence);
     });
 
     const allParticipants = [...qualified, ...inscribedNonQualified];
 
     const alreadyInscribedCount = allParticipants.filter(r =>
-      inscribedLicences.has(r.licence?.replace(/\s/g, '').toUpperCase())
+      inscribedLicences.has(normalizeLicence(r.licence, { upper: true }))
     ).length;
 
     // Count only 'inscrit' status (not indisponible) to determine if spots are available
     const inscritCount = allParticipants.filter(r => {
-      const normLicence = r.licence?.replace(/\s/g, '').toUpperCase();
+      const normLicence = normalizeLicence(r.licence, { upper: true });
       return inscribedLicences.has(normLicence) && inscriptionStatuts[normLicence] === 'inscrit';
     }).length;
 
     // Filter nonQualified to exclude already-inscribed players (including those added as replacements)
     const nonQualifiedAvailable = nonQualified.filter(r => {
-      const normLicence = r.licence?.replace(/\s/g, '').toUpperCase();
+      const normLicence = normalizeLicence(r.licence, { upper: true });
       return !inscribedLicences.has(normLicence);
     });
 
@@ -4963,7 +4964,7 @@ router.get('/finale-qualified', authenticateToken, async (req, res) => {
       totalInRanking: rankings.length,
       convocationRequired: !convocationSent,
       participants: allParticipants.map(r => {
-        const normLicence = r.licence?.replace(/\s/g, '').toUpperCase();
+        const normLicence = normalizeLicence(r.licence, { upper: true });
         return {
           licence: r.licence,
           player_name: r.player_name,
@@ -4981,7 +4982,7 @@ router.get('/finale-qualified', authenticateToken, async (req, res) => {
         };
       }),
       nonQualifiedRanked: showReplacements ? nonQualifiedAvailable.map(r => {
-        const normLicence = r.licence?.replace(/\s/g, '').toUpperCase();
+        const normLicence = normalizeLicence(r.licence, { upper: true });
         return {
           licence: r.licence,
           player_name: r.player_name,
@@ -5459,7 +5460,7 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
     // Filter participants by selectedLicences if provided (not in test mode)
     if (!testMode && selectedLicences && Array.isArray(selectedLicences) && selectedLicences.length > 0) {
       participants = participants.filter(p => {
-        const participantLicence = (p.licence || '').replace(/\s/g, '');
+        const participantLicence = normalizeLicence(p.licence);
         return selectedLicences.some(sl => (sl || '').replace(/\s/g, '') === participantLicence);
       });
 

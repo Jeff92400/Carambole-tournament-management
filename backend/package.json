@@ -1,6 +1,6 @@
 {
   "name": "billard-ranking-app",
-  "version": "1.0.0",
+  "version": "2.0.420",
   "description": "French Billiard Tournament Ranking System",
   "main": "server.js",
   "scripts": {

@@ -1,5 +1,6 @@
 const express = require('express');
 const { authenticateToken, requireAdmin } = require('./auth');
+const { normalizeLicence } = require('../utils/licence');
 
 const router = express.Router();
 
@@ -170,7 +171,7 @@ router.get('/active', async (req, res) => {
   const orgIdFilter = org_id ? parseInt(org_id) : null;
 
   // Normalize licence (remove spaces)
-  const normalizedLicence = licence ? licence.replace(/\s+/g, '') : null;
+  const normalizedLicence = licence ? normalizeLicence(licence) : null;
 
   try {
     // Load game modes mapping (code -> rank_column)
@@ -243,12 +244,12 @@ router.get('/active', async (req, res) => {
 
       // Test announcement - only show to test licence
       if (ann.test_licence) {
-        return normalizedLicence && ann.test_licence.replace(/\s+/g, '') === normalizedLicence;
+        return normalizedLicence && normalizeLicence(ann.test_licence) === normalizedLicence;
       }
 
       // Single player target
       if (ann.target_licence) {
-        return normalizedLicence && ann.target_licence.replace(/\s+/g, '') === normalizedLicence;
+        return normalizedLicence && normalizeLicence(ann.target_licence) === normalizedLicence;
       }
 
       // Filter by mode/ranking/club
@@ -335,8 +336,8 @@ router.post('/', authenticateToken, (req, res) => {
   const announcementTargetType = target_type || 'all'; // 'all' = tous les joueurs, 'with_app' = joueurs avec l'app installée
 
   // Normalize licences if provided
-  const normalizedTestLicence = test_licence ? test_licence.replace(/\s+/g, '') : null;
-  const normalizedTargetLicence = target_licence ? target_licence.replace(/\s+/g, '') : null;
+  const normalizedTestLicence = test_licence ? normalizeLicence(test_licence) : null;
+  const normalizedTargetLicence = target_licence ? normalizeLicence(target_licence) : null;
 
   // Store filter arrays as JSON strings
   const modesJson = target_modes && target_modes.length > 0 ? JSON.stringify(target_modes) : null;

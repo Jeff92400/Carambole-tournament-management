@@ -10,29 +10,8 @@ const { getRankingTournamentNumbers } = require('./settings');
 
 const router = express.Router();
 
-// Get organization logo as buffer from database (for Excel exports)
-async function getOrganizationLogoBuffer(orgId) {
-  return new Promise((resolve) => {
-    const query = orgId
-      ? 'SELECT file_data, content_type FROM organization_logo WHERE organization_id = $1 ORDER BY created_at DESC LIMIT 1'
-      : 'SELECT file_data, content_type FROM organization_logo ORDER BY created_at DESC LIMIT 1';
-    const params = orgId ? [orgId] : [];
-    db.get(query, params, (err, row) => {
-      if (err || !row) {
-        // Fallback to static French billiard icon
-        const fallbackPath = path.join(__dirname, '../../frontend/images/FrenchBillard-Icon-small.png');
-        if (fs.existsSync(fallbackPath)) {
-          resolve(fs.readFileSync(fallbackPath));
-        } else {
-          resolve(null);
-        }
-        return;
-      }
-      const buffer = Buffer.isBuffer(row.file_data) ? row.file_data : Buffer.from(row.file_data);
-      resolve(buffer);
-    });
-  });
-}
+// Organization logo buffer loader — shared helper in utils/logo-loader.js
+const { getOrganizationLogoBuffer } = require('../utils/logo-loader');
 
 // Get rankings by category and season
 router.get('/', authenticateToken, async (req, res) => {
