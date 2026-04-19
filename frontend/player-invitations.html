@@ -523,7 +523,7 @@
 
         <div class="pdf-upload" onclick="document.getElementById('pdfInput').click()">
           <input type="file" id="pdfInput" accept="application/pdf" onchange="uploadPdf(this)">
-          <p style="margin: 0; color: #666;">Cliquez pour telecharger un nouveau PDF</p>
+          <p style="margin: 0; color: #666;">Cliquez pour télécharger un nouveau PDF</p>
           <p style="margin: 5px 0 0 0; font-size: 12px; color: #999;">Taille max: 10 MB</p>
         </div>
       </div>
@@ -1084,7 +1084,7 @@
         if (response.ok) {
           const pdfInfo = await response.json();
           if (!pdfInfo.exists) {
-            showError('Veuillez d\'abord telecharger un guide PDF dans l\'onglet "Parametres" avant d\'envoyer des invitations.');
+            showError('Veuillez d\'abord télécharger un guide PDF dans l\'onglet "Paramètres" avant d\'envoyer des invitations.');
             return;
           }
         }
@@ -1422,7 +1422,7 @@
         });
 
         if (response.ok) {
-          showSuccess('Template enregistre');
+          showSuccess('Template enregistré');
         } else {
           const data = await response.json();
           showError(data.error || 'Erreur lors de la sauvegarde');
@@ -1476,7 +1476,7 @@ Le comite sportif du {organization_name}`;
                   <strong>${data.filename}</strong><br>
                   <small style="color: #666;">${size} KB - Modifie le ${date}</small>
                 </div>
-                <button onclick="downloadPdf('${data.filename}')" class="btn btn-secondary" style="margin-left: auto;">Telecharger</button>
+                <button onclick="downloadPdf('${data.filename}')" class="btn btn-secondary" style="margin-left: auto;">Télécharger</button>
               </div>
             `;
           } else {
