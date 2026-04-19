@@ -430,11 +430,11 @@
           if (currentProfile.column_mappings && Object.keys(currentProfile.column_mappings).length > 0) {
             statusBadge.textContent = 'Configure';
             statusBadge.className = 'status-badge configured';
-            description.textContent = `Delimiteur: ${currentProfile.delimiter || ';'}, En-tete: ${currentProfile.has_header !== false ? 'Oui' : 'Non'}`;
+            description.textContent = `Délimiteur: ${currentProfile.delimiter || ';'}, En-tête: ${currentProfile.has_header !== false ? 'Oui' : 'Non'}`;
           } else {
-            statusBadge.textContent = 'Configuration par defaut';
+            statusBadge.textContent = 'Configuration par défaut';
             statusBadge.className = 'status-badge default';
-            description.textContent = 'Utilise la configuration par defaut. Chargez un fichier exemple pour personnaliser.';
+            description.textContent = 'Utilise la configuration par défaut. Chargez un fichier exemple pour personnaliser.';
           }
         }
       } catch (error) {
@@ -612,7 +612,7 @@
 
     // Reset mapping
     function resetMapping() {
-      if (confirm('Reinitialiser la configuration aux valeurs par defaut ?')) {
+      if (confirm('Réinitialiser la configuration aux valeurs par défaut ?')) {
         // Reset selects
         document.querySelectorAll('.mapping-item select').forEach(select => {
           select.value = '';

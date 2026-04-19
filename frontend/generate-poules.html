@@ -3610,13 +3610,13 @@
           document.getElementById('distanceDefaultHint').textContent =
             `Par defaut: ${currentGameParams.distance_normale} (normale)${currentGameParams.distance_reduite ? ' / ' + currentGameParams.distance_reduite + ' (reduite)' : ''}`;
         } else {
-          document.getElementById('distanceDefaultHint').textContent = 'Aucune valeur par defaut - saisie manuelle requise';
+          document.getElementById('distanceDefaultHint').textContent = 'Aucune valeur par défaut - saisie manuelle requise';
         }
         if (currentGameParams.reprises) {
           document.getElementById('reprisesDefaultHint').textContent =
             `Par defaut: ${currentGameParams.reprises}`;
         } else {
-          document.getElementById('reprisesDefaultHint').textContent = 'Aucune valeur par defaut - saisie manuelle requise';
+          document.getElementById('reprisesDefaultHint').textContent = 'Aucune valeur par défaut - saisie manuelle requise';
         }
 
         // Update coin display (read-only)
@@ -3683,7 +3683,7 @@
     document.getElementById('validateGameParamsBtn').addEventListener('click', async () => {
       const tournoiId = matchingTournoi?.tournoi_id;
       if (!tournoiId) {
-        alert('Aucun tournoi selectionne');
+        alert('Aucun tournoi sélectionné');
         return;
       }
 
@@ -4689,7 +4689,7 @@
           // Update lastGeneratedData with validated status
           lastGeneratedData.gameParamsValidated = gameParamsValidated;
           if (!gameParamsValidated) {
-            alert('La validation a echoue. Veuillez reessayer.');
+            alert('La validation a échoué. Veuillez réessayer.');
             return;
           }
         } else {
