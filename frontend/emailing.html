@@ -558,7 +558,7 @@
               type="text"
               id="notifTitle"
               maxlength="50"
-              placeholder="Ex: Rappel Important"
+              placeholder="Exemple : Rappel Important"
               style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;"
               required
             >
@@ -575,7 +575,7 @@
               id="notifBody"
               maxlength="150"
               rows="3"
-              placeholder="Ex: N'oubliez pas de vous inscrire avant le 15 mars pour le tournoi Libre N2"
+              placeholder="Exemple : N'oubliez pas de vous inscrire avant le 15 mars pour le tournoi Libre N2"
               style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; resize: vertical;"
               required
             ></textarea>
@@ -812,7 +812,7 @@
 
           <div class="form-group">
             <label for="announcementTitle">Titre :</label>
-            <input type="text" id="announcementTitle" required placeholder="Ex: Nouveau calendrier disponible" style="width: 100%; max-width: 500px;">
+            <input type="text" id="announcementTitle" required placeholder="Exemple : Nouveau calendrier disponible" style="width: 100%; max-width: 500px;">
           </div>
           <div class="form-group">
             <label for="announcementMessage">Message :</label>
@@ -849,7 +849,7 @@
               </div>
               <div id="announcementTestFields" style="display: none;">
                 <label for="announcementTestLicence" style="font-size: 13px; color: #666;">Licence du testeur :</label>
-                <input type="text" id="announcementTestLicence" placeholder="Ex: 123456A" style="width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #ddd; border-radius: 4px;">
+                <input type="text" id="announcementTestLicence" placeholder="Exemple : 123456A" style="width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #ddd; border-radius: 4px;">
                 <p style="font-size: 11px; color: #888; margin: 5px 0 0 0;">L'annonce sera visible uniquement par ce joueur pour validation</p>
               </div>
             </div>
@@ -2329,7 +2329,7 @@
           <input type="hidden" id="surveyEditId">
           <div style="margin-bottom: 12px;">
             <label style="font-weight: 500; display: block; margin-bottom: 4px;">Titre du sondage</label>
-            <input type="text" id="surveyTitle" class="form-control" placeholder="Ex : Votre avis sur l'Espace Joueur" style="width: 100%;">
+            <input type="text" id="surveyTitle" class="form-control" placeholder="Exemple : Votre avis sur l'Espace Joueur" style="width: 100%;">
           </div>
           <div style="margin-bottom: 12px;">
             <label style="font-weight: 500; display: block; margin-bottom: 4px;">Description (optionnel)</label>
@@ -6253,10 +6253,10 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
           ? `TOUTES les campagnes${typeLabel}`
           : 'TOUTES les campagnes';
       const confirmMsg = emptyOnly
-        ? `Confirmer la suppression ?\n\nCette action supprimera ${scopeLabel} (0 destinataire) de l'historique.\n\nCliquez OK pour confirmer.`
+        ? `Confirmer la suppression ?\n\nCette action supprimera ${scopeLabel} (0 destinataire) de l'historique.\n\nValidez pour confirmer.`
         : testOnly
-          ? `Êtes-vous sûr ?\n\nCette action supprimera TOUS les emails TEST${typeLabel} de l'historique.\n\nCliquez OK pour confirmer.`
-          : `Êtes-vous ABSOLUMENT sûr ?\n\nCette action est IRRÉVERSIBLE et supprimera ${scopeLabel} de l'historique.\n\nCliquez OK pour confirmer la suppression définitive.`;
+          ? `Êtes-vous sûr ?\n\nCette action supprimera TOUS les emails TEST${typeLabel} de l'historique.\n\nValidez pour confirmer.`
+          : `Êtes-vous ABSOLUMENT sûr ?\n\nCette action est IRRÉVERSIBLE et supprimera ${scopeLabel} de l'historique.\n\nValidez pour confirmer la suppression définitive.`;
 
       if (!confirm(confirmMsg)) {
         return;
@@ -8349,7 +8349,7 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
                 </h4>
                 <div class="announcement-actions">
                   <button class="btn-toggle ${a.is_active ? 'active' : ''}" onclick="toggleAnnouncement(${a.id})">
-                    ${a.is_active ? 'Desactiver' : 'Activer'}
+                    ${a.is_active ? 'Désactiver' : 'Activer'}
                   </button>
                   <button class="btn-delete" onclick="deleteAnnouncement(${a.id})">Supprimer</button>
                 </div>

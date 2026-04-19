@@ -1,6 +1,7 @@
 const express = require('express');
 const multer = require('multer');
 const { authenticateToken, requireAdmin } = require('./auth');
+const { normalizeLicence } = require('../utils/licence');
 const appSettings = require('../utils/app-settings');
 
 const router = express.Router();
@@ -1586,7 +1587,7 @@ router.post('/snapshot-season-stats', authenticateToken, requireAdmin, async (re
           [club.display_name]
         );
         const totalPlayers = playersRows.length;
-        const playerLicences = playersRows.map(p => p.licence?.replace(/\s/g, ''));
+        const playerLicences = playersRows.map(p => normalizeLicence(p.licence));
 
         // 2. Count inscriptions per player
         const inscRows = await dbAll(db,
@@ -1663,7 +1664,7 @@ router.post('/snapshot-season-stats', authenticateToken, requireAdmin, async (re
         const snapshotFinaleNum = await getFinaleTournamentNumber(req.user?.organizationId || null);
         const playerResults = {};
         resultsRows.forEach(r => {
-          const lic = r.licence?.replace(/\s/g, '');
+          const lic = normalizeLicence(r.licence);
           if (!playerResults[lic]) playerResults[lic] = [];
           playerResults[lic].push({
             position: r.position,

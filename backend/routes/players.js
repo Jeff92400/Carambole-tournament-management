@@ -4,6 +4,7 @@ const { parse } = require('csv-parse');
 const fs = require('fs');
 const db = require('../db-loader');
 const { authenticateToken, requireClubOrAdmin, requireAdmin } = require('./auth');
+const { normalizeLicence } = require('../utils/licence');
 const { getColumnMapping } = require('./import-config');
 const appSettings = require('../utils/app-settings');
 
@@ -362,7 +363,7 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
     for (const record of records) {
       try {
         // Use configurable column mapping
-        const licence = getMappedValue(record, columnMapping, 'licence', '')?.replace(/\s+/g, '');
+        const licence = normalizeLicence(getMappedValue(record, columnMapping, 'licence', ''));
 
         // Skip header row (detect by checking if first column looks like a header)
         if (!licence || licence.toUpperCase() === 'LICENCE' || licence.toUpperCase() === 'LICENSE') continue;
@@ -743,7 +744,7 @@ router.get('/', authenticateToken, async (req, res) => {
     // Group rankings by normalized licence
     const rankingsByLicence = {};
     allRankings.forEach(row => {
-      const normLicence = (row.licence || '').replace(/\s+/g, '');
+      const normLicence = normalizeLicence(row.licence);
       if (!rankingsByLicence[normLicence]) {
         rankingsByLicence[normLicence] = {};
       }
@@ -757,7 +758,7 @@ router.get('/', authenticateToken, async (req, res) => {
 
     // Attach player_rankings to each player
     const playersWithRankings = players.map(player => {
-      const normLicence = (player.licence || '').replace(/\s+/g, '');
+      const normLicence = normalizeLicence(player.licence);
       return {
         ...player,
         player_rankings: rankingsByLicence[normLicence] || {}
@@ -1439,7 +1440,7 @@ router.delete('/all', authenticateToken, requireAdmin, (req, res) => {
 
 // Delete individual player (admin only — destructive action)
 router.delete('/:licence', authenticateToken, requireAdmin, (req, res) => {
-  const licence = req.params.licence.replace(/\s+/g, '');
+  const licence = normalizeLicence(req.params.licence);
   const orgId = req.user.organizationId || null;
 
   db.run(
@@ -1463,7 +1464,7 @@ router.delete('/:licence', authenticateToken, requireAdmin, (req, res) => {
 
 // Get player account info (for Player App)
 router.get('/:licence/account', authenticateToken, (req, res) => {
-  const licence = req.params.licence.replace(/\s+/g, '');
+  const licence = normalizeLicence(req.params.licence);
   const orgId = req.user.organizationId || null;
 
   db.get(
@@ -1494,7 +1495,7 @@ router.get('/:licence/account', authenticateToken, (req, res) => {
 
 // Reset player account password (admin only)
 router.post('/:licence/reset-password', authenticateToken, async (req, res) => {
-  const licence = req.params.licence.replace(/\s+/g, '');
+  const licence = normalizeLicence(req.params.licence);
   const { newPassword } = req.body;
   const orgId = req.user.organizationId || null;
 

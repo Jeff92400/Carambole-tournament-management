@@ -6,6 +6,7 @@ const ExcelJS = require('exceljs');
 const { Resend } = require('resend');
 const db = require('../db-loader');
 const { authenticateToken } = require('./auth');
+const { normalizeLicence } = require('../utils/licence');
 const appSettings = require('../utils/app-settings');
 const { getPouleConfigForOrg } = require('../utils/poule-config');
 const { logAdminAction, ACTION_TYPES } = require('../utils/admin-logger');
@@ -381,7 +382,7 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
         const email = getMappedValue(record, columnMapping, 'email', '');
         const telephone = getMappedValue(record, columnMapping, 'telephone', '');
         const licenceRaw = getMappedValue(record, columnMapping, 'licence', '');
-        const licence = licenceRaw ? licenceRaw.replace(/\s+/g, '').trim() : '';
+        const licence = normalizeLicence(licenceRaw);
         const convoque = getMappedValue(record, columnMapping, 'convoque', 0);
         const forfait = getMappedValue(record, columnMapping, 'forfait', 0);
         const commentaire = getMappedValue(record, columnMapping, 'commentaire', '');
@@ -1054,7 +1055,7 @@ router.get('/finales/upcoming', authenticateToken, async (req, res) => {
           ? qualificationSettings.large
           : qualificationSettings.small;
         const finalists = rankings.slice(0, numFinalists);
-        const finalistLicences = finalists.map(r => r.licence?.replace(/\s/g, ''));
+        const finalistLicences = finalists.map(r => normalizeLicence(r.licence));
 
         // Get inscriptions for this tournament
         const inscriptions = await new Promise((resolve, reject) => {
@@ -1070,15 +1071,15 @@ router.get('/finales/upcoming', authenticateToken, async (req, res) => {
         });
 
         const totalInscriptions = inscriptions.length;
-        const inscribedLicences = inscriptions.map(i => i.licence?.replace(/\s/g, ''));
+        const inscribedLicences = inscriptions.map(i => normalizeLicence(i.licence));
 
         // Identify qualified finalists who have NOT yet registered — neither
         // inscribed nor explicitly renounced. These are the "silent absentees"
         // the admin needs to chase (or mark as indisponible) before the finale.
         const pendingFinalists = finalists
-          .filter(r => !inscribedLicences.includes(r.licence?.replace(/\s/g, '')))
+          .filter(r => !inscribedLicences.includes(normalizeLicence(r.licence)))
           .map(r => ({
-            licence: (r.licence || '').replace(/\s/g, ''),
+            licence: normalizeLicence(r.licence),
             name: `${r.first_name || ''} ${r.last_name || ''}`.trim() || r.licence,
             rank_position: r.rank_position,
             email: r.email || null
@@ -1242,7 +1243,7 @@ router.post('/create', authenticateToken, async (req, res) => {
     const nextId = (maxIdResult?.max_id || 0) + 1;
 
     // Clean up licence (remove spaces)
-    const cleanLicence = (licence || '').replace(/\s+/g, '').trim();
+    const cleanLicence = normalizeLicence(licence);
 
     // Insert the new inscription
     await new Promise((resolve, reject) => {
@@ -1302,7 +1303,7 @@ router.post('/save-last-minute', authenticateToken, async (req, res) => {
       }
 
       // Clean up licence (remove spaces)
-      const cleanLicence = (player.licence || '').replace(/\s+/g, '').trim();
+      const cleanLicence = normalizeLicence(player.licence);
 
       // Check if inscription already exists
       const existing = await new Promise((resolve, reject) => {
@@ -1451,7 +1452,7 @@ router.post('/mark-indisponible', authenticateToken, async (req, res) => {
     });
 
     const nextId = (maxIdResult?.max_id || 0) + 1;
-    const cleanLicence = (licence || '').replace(/\s+/g, '').trim();
+    const cleanLicence = normalizeLicence(licence);
 
     await new Promise((resolve, reject) => {
       db.run(`
@@ -1637,7 +1638,7 @@ router.post('/import-excel', authenticateToken, excelUpload.single('file'), asyn
       if (!tournoiIdRaw && !licenceRaw) continue;
 
       const tournoiId = parseInt(tournoiIdRaw);
-      const licence = (licenceRaw || '').toString().replace(/\s+/g, '').trim();
+      const licence = normalizeLicence(licenceRaw);
       const email = colMap['email'] ? (row.getCell(colMap['email']).value || '').toString().trim() : null;
       const telephone = colMap['telephone'] ? (row.getCell(colMap['telephone']).value || '').toString().trim() : null;
       const commentaire = colMap['commentaire'] ? (row.getCell(colMap['commentaire']).value || '').toString().trim() : null;
@@ -1661,7 +1662,7 @@ router.post('/import-excel', authenticateToken, excelUpload.single('file'), asyn
       }
 
       // Validate licence exists in players table
-      const normalizedLicence = licence.toUpperCase().replace(/\s+/g, '');
+      const normalizedLicence = normalizeLicence(licence, { upper: true });
       if (!validLicences.has(normalizedLicence)) {
         errors.push({ row: rowNum, licence, tournoiId, error: `Licence ${licence} inconnue` });
         continue;
@@ -2147,7 +2148,7 @@ router.post('/generate-poules', authenticateToken, async (req, res) => {
 
       // Players in poule
       poule.players.forEach((player, idx) => {
-        const licenceKey = (player.licence || '').replace(/\s/g, '');
+        const licenceKey = normalizeLicence(player.licence);
         const playerRanking = rankingData[licenceKey] || {};
 
         convocationSheet.getCell(`A${convRow}`).value = idx + 1;
@@ -3856,7 +3857,7 @@ router.get('/upcoming-relances', authenticateToken, async (req, res) => {
           ? qualificationSettings.large
           : qualificationSettings.small;
         const finalists = rankings.slice(0, numFinalists);
-        const finalistLicences = finalists.map(r => r.licence?.replace(/\s/g, ''));
+        const finalistLicences = finalists.map(r => normalizeLicence(r.licence));
 
         // Get inscriptions for this tournament (non-forfait, not désinscrit/indisponible)
         const inscriptions = await new Promise((resolve, reject) => {
@@ -3871,14 +3872,14 @@ router.get('/upcoming-relances', authenticateToken, async (req, res) => {
           );
         });
 
-        const inscribedLicences = inscriptions.map(i => i.licence?.replace(/\s/g, ''));
+        const inscribedLicences = inscriptions.map(i => normalizeLicence(i.licence));
         const inscribedFinalistCount = finalistLicences.filter(l => inscribedLicences.includes(l)).length;
 
         // Pending = qualified but not registered — the ones who need a relance.
         const pendingFinalists = finalists
-          .filter(r => !inscribedLicences.includes((r.licence || '').replace(/\s/g, '')))
+          .filter(r => !inscribedLicences.includes(normalizeLicence(r.licence)))
           .map(r => ({
-            licence: (r.licence || '').replace(/\s/g, ''),
+            licence: normalizeLicence(r.licence),
             name: `${r.first_name || ''} ${r.last_name || ''}`.trim() || r.licence,
             rank_position: r.rank_position,
             email: r.email || null
@@ -4157,15 +4158,15 @@ router.get('/tournoi/:id/simulation', authenticateToken, async (req, res) => {
           ? qualificationSettings.large
           : qualificationSettings.small;
         const finalists = rankings.slice(0, numFinalists);
-        const finalistLicences = finalists.map(r => r.licence?.replace(/\s/g, ''));
+        const finalistLicences = finalists.map(r => normalizeLicence(r.licence));
 
         // Build the list of qualified finalists who haven't yet registered.
         // Surfaced in the simulation response so the UI can flag them clearly.
-        const activeLicences = activeInscriptions.map(i => (i.licence || '').replace(/\s/g, ''));
+        const activeLicences = activeInscriptions.map(i => normalizeLicence(i.licence));
         pendingFinalists = finalists
-          .filter(r => !activeLicences.includes((r.licence || '').replace(/\s/g, '')))
+          .filter(r => !activeLicences.includes(normalizeLicence(r.licence)))
           .map(r => ({
-            licence: (r.licence || '').replace(/\s/g, ''),
+            licence: normalizeLicence(r.licence),
             name: `${r.first_name || ''} ${r.last_name || ''}`.trim() || r.licence,
             rank_position: r.rank_position,
             email: r.email || null
@@ -4271,7 +4272,7 @@ router.get('/tournoi/:id/simulation', authenticateToken, async (req, res) => {
 
         // Assign rank positions based on moyenne_ffb ordering
         ffbClassifications.forEach((r, idx) => {
-          const licNorm = r.licence?.replace(/\s/g, '');
+          const licNorm = normalizeLicence(r.licence);
           if (licNorm) cdbhsRankMap[licNorm] = idx + 1;
         });
         console.log(`Simulation (journées TQ1): using moyenne_ffb for ${ffbClassifications.length} players, game_mode_id=${gameModeRow.id}`);
@@ -4293,7 +4294,7 @@ router.get('/tournoi/:id/simulation', authenticateToken, async (req, res) => {
         );
       });
       cdbhsRankings.forEach(r => {
-        const licNorm = r.licence?.replace(/\s/g, '');
+        const licNorm = normalizeLicence(r.licence);
         if (licNorm) cdbhsRankMap[licNorm] = r.rank_position;
       });
       console.log(`Simulation: category_id=${simCategory.id}, found ${cdbhsRankings.length} rankings`);
@@ -4306,7 +4307,7 @@ router.get('/tournoi/:id/simulation', authenticateToken, async (req, res) => {
     const newPlayers = [];
 
     activeInscriptions.forEach(insc => {
-      const licNorm = insc.licence?.replace(/\s/g, '');
+      const licNorm = normalizeLicence(insc.licence);
       const cdbhsPosition = cdbhsRankMap[licNorm];
 
       const playerData = {
@@ -4776,7 +4777,7 @@ router.get('/tournoi/:id/split-distribution', authenticateToken, async (req, res
 
     // Enrich inscriptions with ranking
     const players = inscriptions.map(insc => {
-      const licNorm = insc.licence?.replace(/\s/g, '');
+      const licNorm = normalizeLicence(insc.licence);
       const rank = rankMap[licNorm] || null;
       return {
         inscription_id: insc.inscription_id,
@@ -4851,7 +4852,7 @@ router.post('/tournoi/:id/distribute-split', authenticateToken, async (req, res)
     const newPlayers = [];
 
     inscriptions.forEach(insc => {
-      const licNorm = insc.licence?.replace(/\s/g, '');
+      const licNorm = normalizeLicence(insc.licence);
       const rank = rankMap[licNorm];
       const playerData = {
         inscription_id: insc.inscription_id,
@@ -4992,7 +4993,7 @@ async function getSplitRankingData(tournament, orgId) {
           [gameModeRow.id, currentSeason], (err, rows) => { if (err) reject(err); else resolve(rows || []); });
       });
       ffbRows.forEach((r, idx) => {
-        const licNorm = r.licence?.replace(/\s/g, '');
+        const licNorm = normalizeLicence(r.licence);
         if (licNorm) rankMap[licNorm] = idx + 1;
       });
     }
@@ -5003,7 +5004,7 @@ async function getSplitRankingData(tournament, orgId) {
         [category.id, currentSeason], (err, rows) => { if (err) reject(err); else resolve(rows || []); });
     });
     rankings.forEach(r => {
-      const licNorm = r.licence?.replace(/\s/g, '');
+      const licNorm = normalizeLicence(r.licence);
       if (licNorm) rankMap[licNorm] = r.rank_position;
     });
   }

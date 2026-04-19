@@ -15,6 +15,7 @@ const router = express.Router();
 const db = require('../db-loader');
 const appSettings = require('../utils/app-settings');
 const { authenticateToken } = require('./auth');
+const { normalizeLicence } = require('../utils/licence');
 
 /**
  * Load game modes with rank_column mapping from database
@@ -298,7 +299,7 @@ router.delete('/:id', authenticateToken, (req, res) => {
  */
 router.get('/:licence/calendar.ics', async (req, res) => {
   const { licence } = req.params;
-  const normalizedLicence = (licence || '').replace(/\s+/g, '');
+  const normalizedLicence = normalizeLicence(licence);
 
   // Resolve org from query param for public access
   let orgId = null;
