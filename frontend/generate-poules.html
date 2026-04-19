@@ -634,7 +634,7 @@
         <!-- Validation Buttons -->
         <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #ccc;">
           <button class="btn" id="validateGameParamsBtn" style="background: #28a745; padding: 10px 20px;">
-            Valider les parametres
+            Valider les paramètres
           </button>
           <button class="btn" id="resetGameParamsBtn" style="background: #6c757d; padding: 10px 20px; margin-left: 10px;">
             Reinitialiser
@@ -3674,7 +3674,7 @@
         statusEl.style.background = '#fff3cd';
         statusEl.style.color = '#856404';
         statusEl.style.display = 'inline-block';
-        validateBtn.textContent = 'Valider les parametres';
+        validateBtn.textContent = 'Valider les paramètres';
         validateBtn.style.background = '#28a745';
       }
     }
@@ -3718,7 +3718,7 @@
         }
       } catch (error) {
         console.error('Error validating parameters:', error);
-        alert('Erreur lors de la validation des parametres');
+        alert('Erreur lors de la validation des paramètres');
       }
     });
 
@@ -3726,11 +3726,11 @@
     document.getElementById('resetGameParamsBtn').addEventListener('click', async () => {
       const tournoiId = matchingTournoi?.tournoi_id;
       if (!tournoiId || !currentGameParams) {
-        alert('Aucun tournoi selectionne');
+        alert('Aucun tournoi sélectionné');
         return;
       }
 
-      if (!confirm('Reinitialiser les parametres aux valeurs par defaut ?')) return;
+      if (!confirm('Réinitialiser les paramètres aux valeurs par défaut ?')) return;
 
       try {
         await fetch(`${API_URL}/settings/tournament-overrides/${tournoiId}`, {
@@ -4680,7 +4680,7 @@
 
       // Check if game parameters are validated
       if (!lastGeneratedData.gameParamsValidated) {
-        const proceed = confirm('Les parametres de jeu n\'ont pas ete valides.\n\nVoulez-vous les valider avec les valeurs actuelles et continuer ?');
+        const proceed = confirm('Les paramètres de jeu n\'ont pas été validés.\n\nVoulez-vous les valider avec les valeurs actuelles et continuer ?');
         if (proceed) {
           // Trigger validation
           document.getElementById('validateGameParamsBtn').click();

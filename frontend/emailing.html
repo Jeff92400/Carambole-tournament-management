@@ -5610,11 +5610,11 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
 
       // For all relances, check game params validation
       if (!window.relanceGameParamsValidated) {
-        const proceed = confirm('Les parametres de jeu n\'ont pas ete valides.\n\nVoulez-vous les valider avec les valeurs actuelles et continuer ?');
+        const proceed = confirm('Les paramètres de jeu n\'ont pas été validés.\n\nVoulez-vous les valider avec les valeurs actuelles et continuer ?');
         if (proceed) {
           document.getElementById('validateRelanceGameParamsBtn').click();
           if (!window.relanceGameParamsValidated) {
-            showError('La validation des parametres a echoue.');
+            showError('La validation des paramètres a échoué.');
             return;
           }
         } else {
@@ -8777,7 +8777,7 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
 
     // Delete announcement
     async function deleteAnnouncement(id) {
-      if (!confirm('Etes-vous sur de vouloir supprimer cette annonce ?')) return;
+      if (!confirm('Êtes-vous sûr de vouloir supprimer cette annonce ?')) return;
 
       try {
         const response = await fetch(`${API_URL}/announcements/${id}`, {
