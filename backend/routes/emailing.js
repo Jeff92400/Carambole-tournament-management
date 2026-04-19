@@ -1694,7 +1694,11 @@ router.post('/send-finale-results', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Tournoi non trouvé' });
     }
 
-    // Get results with player contacts
+    // Get results with player contacts.
+    // IMPORTANT: tiebreaker is AVG (moyenne) then best SERIES — not total points.
+    // A player with fewer total points but a better per-innings average outranks
+    // one who scored more points over more innings. Must match the canonical
+    // sort used elsewhere in the codebase (tournaments.js, wordpress.js, bracket.js).
     const results = await new Promise((resolve, reject) => {
       db.all(
         `SELECT tr.*,
@@ -1703,7 +1707,7 @@ router.post('/send-finale-results', authenticateToken, async (req, res) => {
          FROM tournament_results tr
          LEFT JOIN player_contacts pc ON REPLACE(tr.licence, ' ', '') = REPLACE(pc.licence, ' ', '')
          WHERE tr.tournament_id = $1
-         ORDER BY tr.match_points DESC, tr.points DESC`,
+         ORDER BY tr.match_points DESC, tr.moyenne DESC, tr.serie DESC`,
         [tournamentId],
         (err, rows) => {
           if (err) reject(err);
