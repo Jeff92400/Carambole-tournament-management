@@ -281,8 +281,8 @@
       <h3>Gestion des Donnees de Reference</h3>
 
       <div class="section-description">
-        <strong>Information :</strong> Ces fichiers definissent les modes de jeu, classements FFB et categories disponibles dans l'application.
-        Les modifications ici seront utilisees dans toute l'application a terme.
+        <strong>Information :</strong> Ces fichiers définissent les modes de jeu, classements FFB et catégories disponibles dans l'application.
+        Les modifications ici seront utilisées dans toute l'application à terme.
       </div>
 
       <!-- Tabs -->
@@ -436,8 +436,8 @@
         <div style="margin-bottom: 16px; padding: 12px 16px; background: #e7f3ff; border-left: 4px solid var(--color-primary, #1F4788); border-radius: 4px;">
           <strong>Configuration automatique</strong>
           <p style="margin: 4px 0 0; color: #555; font-size: 13px;">
-            Les compositions de poules sont calculees automatiquement. Toutes les poules font 3 joueurs par defaut.
-            Les joueurs supplementaires sont repartis dans la derniere poule (4 ou 5), sauf si les poules de 2 sont autorisees.
+            Les compositions de poules sont calculées automatiquement. Toutes les poules font 3 joueurs par défaut.
+            Les joueurs supplémentaires sont répartis dans la dernière poule (4 ou 5), sauf si les poules de 2 sont autorisées.
           </p>
         </div>
 
@@ -674,7 +674,7 @@
         const result = await response.json();
 
         if (response.ok) {
-          showMessage('success', 'Mode de jeu ajoute');
+          showMessage('success', 'Mode de jeu ajouté');
           document.getElementById('addGameModeForm').reset();
           document.getElementById('gmColor').value = '#1F4788';
           loadGameModes();
@@ -761,7 +761,7 @@
         const result = await response.json();
 
         if (response.ok) {
-          showMessage('success', 'Mode de jeu supprime');
+          showMessage('success', 'Mode de jeu supprimé');
           loadGameModes();
           loadCategoryDropdowns(); // Refresh category dropdown
         } else {
@@ -869,7 +869,7 @@
         const result = await response.json();
 
         if (response.ok) {
-          showMessage('success', 'Classement ajoute');
+          showMessage('success', 'Classement ajouté');
           document.getElementById('addRankingForm').reset();
           loadRankings();
           loadTiers();
@@ -953,7 +953,7 @@
         const result = await response.json();
 
         if (response.ok) {
-          showMessage('success', 'Classement supprime');
+          showMessage('success', 'Classement supprimé');
           loadRankings();
         } else {
           showMessage('error', result.error || 'Erreur lors de la suppression');
@@ -1257,7 +1257,7 @@
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
           body: JSON.stringify({ allow_poule_of_2: checked ? 'true' : 'false' })
         });
-        showMessage('success', checked ? 'Poules de 2 autorisees' : 'Poules de 2 desactivees');
+        showMessage('success', checked ? 'Poules de 2 autorisées' : 'Poules de 2 désactivées');
         loadPouleConfigPreview();
       } catch (error) {
         console.error('Error toggling allow_poule_of_2:', error);
