@@ -454,12 +454,20 @@
               Lieu: <strong id="tournamentInfoLieu">-</strong> |
               Inscrits: <strong id="tournamentInfoInscrits">-</strong>
             </p>
-            <!-- Qualified-but-not-inscribed list (finales only). Hidden by default. -->
+            <!-- Qualified-but-silent finalists (finales only) — to chase via relance. Hidden by default. -->
             <div id="pendingFinalistsBlock" style="display: none; margin-top: 10px; padding: 10px 12px; background: #fff8e1; border-left: 3px solid #f9a825; border-radius: 4px; font-size: 0.9em;">
               <strong id="pendingFinalistsTitle" style="color: #78350f;">⏳ Qualifiés en attente d'inscription</strong>
               <ol id="pendingFinalistsList" style="margin: 6px 0 0 22px; padding: 0; color: #78350f;"></ol>
               <div style="margin-top: 6px; font-size: 0.85em; color: #92400e;">
                 💡 Envoyer une relance ciblée via <strong>Com Joueurs → Relances</strong> (case "Uniquement les qualifiés non inscrits").
+              </div>
+            </div>
+            <!-- Declared-unavailable finalists — suggest substitutes from next ranks. Hidden by default. -->
+            <div id="unavailableFinalistsBlock" style="display: none; margin-top: 10px; padding: 10px 12px; background: #fef2f2; border-left: 3px solid #b91c1c; border-radius: 4px; font-size: 0.9em;">
+              <strong id="unavailableFinalistsTitle" style="color: #7f1d1d;">🚫 Qualifiés indisponibles (renonciations déclarées)</strong>
+              <ol id="unavailableFinalistsList" style="margin: 6px 0 0 22px; padding: 0; color: #7f1d1d;"></ol>
+              <div id="nextRankedHint" style="margin-top: 6px; font-size: 0.85em; color: #991b1b; display: none;">
+                💡 Ces joueurs se sont déclarés indisponibles. Vous pouvez proposer la finale aux joueurs suivants du classement : <span id="nextRankedList" style="font-weight: 600;"></span>.
               </div>
             </div>
           </div>
@@ -1011,33 +1019,78 @@
      * Categories are only shown when count > 0 (except "inscrit" always shown).
      */
     /**
-     * Show or hide the "qualifiés en attente" block for finales.
-     * pendingFinalists: [{licence, name, rank_position, email}]
+     * Show or hide the two finale status blocks.
+     *
+     * Pending = qualified players who haven't yet registered AND haven't declared
+     * anything (silent non-responders). These are the legitimate chase targets
+     * via a relance.
+     *
+     * Unavailable = qualified players who have explicitly declared indisponible
+     * (or forfait/désinscrit). Chasing them is pointless — the UX suggests
+     * reaching out to the next-ranked players in the ranking instead.
+     *
+     * @param {Array} pendingFinalists     - silent non-responders
+     * @param {number} qualifiedTotal      - total finalists expected (N)
+     * @param {Array} [unavailableFinalists] - declared unavailable
+     * @param {Array} [nextRanked]         - next N+1..N+3 players in the ranking
      */
-    function updatePendingFinalistsDisplay(pendingFinalists, qualifiedTotal) {
-      const block = document.getElementById('pendingFinalistsBlock');
-      const title = document.getElementById('pendingFinalistsTitle');
-      const list = document.getElementById('pendingFinalistsList');
-      if (!block || !title || !list) return;
+    function updatePendingFinalistsDisplay(pendingFinalists, qualifiedTotal, unavailableFinalists, nextRanked) {
+      const pendingBlock = document.getElementById('pendingFinalistsBlock');
+      const pendingTitle = document.getElementById('pendingFinalistsTitle');
+      const pendingList = document.getElementById('pendingFinalistsList');
+      const unavBlock = document.getElementById('unavailableFinalistsBlock');
+      const unavTitle = document.getElementById('unavailableFinalistsTitle');
+      const unavList = document.getElementById('unavailableFinalistsList');
+      const nextHint = document.getElementById('nextRankedHint');
+      const nextList = document.getElementById('nextRankedList');
+      if (!pendingBlock || !pendingTitle || !pendingList) return;
 
-      if (!Array.isArray(pendingFinalists) || pendingFinalists.length === 0) {
-        block.style.display = 'none';
-        list.innerHTML = '';
-        return;
+      const renderItem = (p) => {
+        const rank = p.rank_position ? `${p.rank_position}<sup>${p.rank_position === 1 ? 'er' : 'ème'}</sup>` : '-';
+        const emailBadge = p.email ? '' : ' <span style="color:#b91c1c; font-size: 0.8em;">(pas d\'email)</span>';
+        return `<li><strong>${p.name || p.licence}</strong> — ${rank}${emailBadge}</li>`;
+      };
+
+      // Block 1: silent pending — chase via relance
+      if (Array.isArray(pendingFinalists) && pendingFinalists.length > 0) {
+        const totalSuffix = qualifiedTotal ? ` (sur ${qualifiedTotal} qualifiés)` : '';
+        pendingTitle.textContent = `⏳ ${pendingFinalists.length} qualifié${pendingFinalists.length > 1 ? 's' : ''} en attente d'inscription${totalSuffix}`;
+        pendingList.innerHTML = pendingFinalists
+          .slice()
+          .sort((a, b) => (a.rank_position || 99) - (b.rank_position || 99))
+          .map(renderItem).join('');
+        pendingBlock.style.display = 'block';
+      } else {
+        pendingBlock.style.display = 'none';
+        pendingList.innerHTML = '';
       }
 
-      const totalSuffix = qualifiedTotal ? ` (sur ${qualifiedTotal} qualifiés)` : '';
-      title.textContent = `⏳ ${pendingFinalists.length} qualifié${pendingFinalists.length > 1 ? 's' : ''} en attente d'inscription${totalSuffix}`;
+      // Block 2: declared unavailable — suggest substitutes
+      if (unavBlock && unavList) {
+        if (Array.isArray(unavailableFinalists) && unavailableFinalists.length > 0) {
+          unavTitle.textContent = `🚫 ${unavailableFinalists.length} qualifié${unavailableFinalists.length > 1 ? 's' : ''} indisponible${unavailableFinalists.length > 1 ? 's' : ''} (renonciation${unavailableFinalists.length > 1 ? 's' : ''} déclarée${unavailableFinalists.length > 1 ? 's' : ''})`;
+          unavList.innerHTML = unavailableFinalists
+            .slice()
+            .sort((a, b) => (a.rank_position || 99) - (b.rank_position || 99))
+            .map(renderItem).join('');
 
-      list.innerHTML = pendingFinalists
-        .sort((a, b) => (a.rank_position || 99) - (b.rank_position || 99))
-        .map(p => {
-          const rank = p.rank_position ? `${p.rank_position}<sup>${p.rank_position === 1 ? 'er' : 'ème'}</sup>` : '-';
-          const emailBadge = p.email ? '' : ' <span style="color:#b91c1c; font-size: 0.8em;">(pas d\'email)</span>';
-          return `<li><strong>${p.name || p.licence}</strong> — ${rank}${emailBadge}</li>`;
-        })
-        .join('');
-      block.style.display = 'block';
+          if (nextHint && nextList) {
+            if (Array.isArray(nextRanked) && nextRanked.length > 0) {
+              nextList.innerHTML = nextRanked
+                .map(p => `${p.name}<sup>${p.rank_position}ème</sup>`)
+                .join(', ');
+              nextHint.style.display = 'block';
+            } else {
+              nextHint.style.display = 'none';
+            }
+          }
+          unavBlock.style.display = 'block';
+        } else {
+          unavBlock.style.display = 'none';
+          unavList.innerHTML = '';
+          if (nextHint) nextHint.style.display = 'none';
+        }
+      }
     }
 
     function buildInscriptionCountsLabel(inscriptions) {
@@ -1802,7 +1855,9 @@
                    data-is-finale="${t.isFinale}"
                    data-finalist-count="${t.finalist_count || 0}"
                    data-inscribed-finalist-count="${t.inscribed_finalist_count || 0}"
-                   data-pending-finalists='${JSON.stringify(t.pending_finalists || []).replace(/'/g, "&#39;")}'>
+                   data-pending-finalists='${JSON.stringify(t.pending_finalists || []).replace(/'/g, "&#39;")}'
+                   data-unavailable-finalists='${JSON.stringify(t.unavailable_finalists || []).replace(/'/g, "&#39;")}'
+                   data-next-ranked='${JSON.stringify(t.next_ranked || []).replace(/'/g, "&#39;")}'>
                 <div class="tournament-mode">${t.mode} - ${t.categorie}${badgeHtml}${splitBadge}</div>
                 <div class="tournament-name">${t.isFinale ? 'Finale Départementale' : t.nom}</div>
                 <div class="tournament-details">
@@ -1937,9 +1992,11 @@
 
         // Store the selected tournament info for later use (including finalist counts from card data)
         let pendingFinalists = [];
-        try {
-          pendingFinalists = JSON.parse(card.dataset.pendingFinalists || '[]');
-        } catch (_e) { pendingFinalists = []; }
+        let unavailableFinalists = [];
+        let nextRanked = [];
+        try { pendingFinalists = JSON.parse(card.dataset.pendingFinalists || '[]'); } catch (_e) {}
+        try { unavailableFinalists = JSON.parse(card.dataset.unavailableFinalists || '[]'); } catch (_e) {}
+        try { nextRanked = JSON.parse(card.dataset.nextRanked || '[]'); } catch (_e) {}
         window.selectedUpcomingTournament = {
           tournoiId,
           lieu,
@@ -1950,7 +2007,9 @@
           isFinale,
           finalist_count: parseInt(card.dataset.finalistCount) || 0,
           inscribed_finalist_count: parseInt(card.dataset.inscribedFinalistCount) || 0,
-          pending_finalists: pendingFinalists
+          pending_finalists: pendingFinalists,
+          unavailable_finalists: unavailableFinalists,
+          next_ranked: nextRanked
         };
 
         // Trigger change event to load tournament info
@@ -2256,14 +2315,18 @@
                 ? ` (${inscriptionCountsLabel})`
                 : '';
               document.getElementById('tournamentInfoInscrits').textContent = `${ifc}/${fc} inscrits${extra}`;
-              // Surface qualified-but-not-inscribed finalists for the admin
+              // Surface qualified-but-not-inscribed finalists for the admin,
+              // separating silent pending (to chase) from declared unavailable
+              // (for whom we suggest next-ranked substitutes).
               updatePendingFinalistsDisplay(
                 window.selectedUpcomingTournament.pending_finalists || [],
-                fc
+                fc,
+                window.selectedUpcomingTournament.unavailable_finalists || [],
+                window.selectedUpcomingTournament.next_ranked || []
               );
             } else {
               document.getElementById('tournamentInfoInscrits').textContent = inscriptionCountsLabel || `${inscCount} inscrit(s)`;
-              updatePendingFinalistsDisplay([], 0);
+              updatePendingFinalistsDisplay([], 0, [], []);
             }
             document.getElementById('tournamentInfo').style.display = 'block';
 
@@ -2319,7 +2382,12 @@
               ? ` (${inscriptionCountsLabel})`
               : '';
             document.getElementById('tournamentInfoInscrits').textContent = `${ifc}/${fc} inscrits${extra}`;
-            updatePendingFinalistsDisplay(upcomingData.pending_finalists || [], fc);
+            updatePendingFinalistsDisplay(
+              upcomingData.pending_finalists || [],
+              fc,
+              upcomingData.unavailable_finalists || [],
+              upcomingData.next_ranked || []
+            );
             document.getElementById('tournamentInfo').style.display = 'block';
             hideSplitChildSelector();
           } else {

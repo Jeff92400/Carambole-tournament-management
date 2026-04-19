@@ -1057,40 +1057,75 @@ router.get('/finales/upcoming', authenticateToken, async (req, res) => {
         const finalists = rankings.slice(0, numFinalists);
         const finalistLicences = finalists.map(r => normalizeLicence(r.licence));
 
-        // Get inscriptions for this tournament
-        const inscriptions = await new Promise((resolve, reject) => {
+        // Get ALL inscription records for this tournament (including indisponible,
+        // désinscrit, forfait) so we can distinguish "silent" non-responders
+        // from those who have explicitly declared unavailable.
+        const allInscriptions = await new Promise((resolve, reject) => {
           db.all(
-            `SELECT licence FROM inscriptions
+            `SELECT licence, statut, forfait FROM inscriptions
              WHERE tournoi_id = $1
-             AND (forfait IS NULL OR forfait != 1)
-             AND (statut IS NULL OR statut NOT IN ('désinscrit', 'indisponible'))
              AND ($2::int IS NULL OR organization_id = $2)`,
             [final.tournoi_id, orgId],
             (err, rows) => err ? reject(err) : resolve(rows || [])
           );
         });
 
-        const totalInscriptions = inscriptions.length;
-        const inscribedLicences = inscriptions.map(i => normalizeLicence(i.licence));
+        // Build a status map: normalized licence → declared status.
+        // Status values: 'inscrit' (active), 'indisponible', 'forfait', 'désinscrit'.
+        const statusByLicence = {};
+        for (const i of allInscriptions) {
+          const statut = (i.statut || '').toLowerCase();
+          let resolvedStatus;
+          if (statut === 'désinscrit' || statut === 'desinscrit') resolvedStatus = 'désinscrit';
+          else if (statut === 'indisponible') resolvedStatus = 'indisponible';
+          else if (i.forfait === 1 || statut === 'forfait') resolvedStatus = 'forfait';
+          else resolvedStatus = 'inscrit';
+          statusByLicence[normalizeLicence(i.licence)] = resolvedStatus;
+        }
 
-        // Identify qualified finalists who have NOT yet registered — neither
-        // inscribed nor explicitly renounced. These are the "silent absentees"
-        // the admin needs to chase (or mark as indisponible) before the finale.
-        const pendingFinalists = finalists
-          .filter(r => !inscribedLicences.includes(normalizeLicence(r.licence)))
-          .map(r => ({
-            licence: normalizeLicence(r.licence),
+        const totalInscriptions = Object.values(statusByLicence).filter(s => s === 'inscrit').length;
+
+        // Classify each finalist: inscribed, unavailable, or silent (no record).
+        // Only "silent" finalists are chase targets via relance. "Unavailable"
+        // finalists justify reaching out to the next-ranked players instead.
+        const pendingFinalists = [];       // silent — not responded at all
+        const unavailableFinalists = [];   // declared indisponible/désinscrit/forfait
+        for (const r of finalists) {
+          const key = normalizeLicence(r.licence);
+          const status = statusByLicence[key];
+          if (status === 'inscrit') continue; // already registered, skip
+          const entry = {
+            licence: key,
             name: `${r.first_name || ''} ${r.last_name || ''}`.trim() || r.licence,
             rank_position: r.rank_position,
-            email: r.email || null
-          }));
+            email: r.email || null,
+            status: status || 'silent' // 'silent' | 'indisponible' | 'désinscrit' | 'forfait'
+          };
+          if (!status) {
+            pendingFinalists.push(entry);
+          } else {
+            unavailableFinalists.push(entry);
+          }
+        }
+
+        // Next-ranked players (outside the top N finalists) the admin could
+        // approach if unavailable finalists need substitutes. Show up to 3.
+        const nextRanked = rankings.slice(numFinalists, numFinalists + 3).map(r => ({
+          licence: normalizeLicence(r.licence),
+          name: `${r.first_name || ''} ${r.last_name || ''}`.trim() || r.licence,
+          rank_position: r.rank_position,
+          email: r.email || null
+        }));
 
         return {
           ...final,
           finalist_count: finalistLicences.length,
           inscribed_finalist_count: totalInscriptions,
           pending_finalists: pendingFinalists,
-          pending_finalist_count: pendingFinalists.length
+          pending_finalist_count: pendingFinalists.length,
+          unavailable_finalists: unavailableFinalists,
+          unavailable_finalist_count: unavailableFinalists.length,
+          next_ranked: nextRanked
         };
       } catch (err) {
         console.error(`Error processing final ${final.tournoi_id}:`, err);
@@ -3859,31 +3894,57 @@ router.get('/upcoming-relances', authenticateToken, async (req, res) => {
         const finalists = rankings.slice(0, numFinalists);
         const finalistLicences = finalists.map(r => normalizeLicence(r.licence));
 
-        // Get inscriptions for this tournament (non-forfait, not désinscrit/indisponible)
-        const inscriptions = await new Promise((resolve, reject) => {
+        // Fetch ALL inscription records — we need the declared status (indisponible,
+        // désinscrit, forfait) to separate "silent pending" from "declared unavailable".
+        const allInscriptions = await new Promise((resolve, reject) => {
           db.all(
-            `SELECT licence FROM inscriptions
+            `SELECT licence, statut, forfait FROM inscriptions
              WHERE tournoi_id = $1
-               AND (forfait IS NULL OR forfait != 1)
-               AND (statut IS NULL OR statut NOT IN ('désinscrit', 'indisponible'))
                AND ($2::int IS NULL OR organization_id = $2)`,
             [t.tournoi_id, orgId],
             (err, rows) => err ? reject(err) : resolve(rows || [])
           );
         });
 
-        const inscribedLicences = inscriptions.map(i => normalizeLicence(i.licence));
-        const inscribedFinalistCount = finalistLicences.filter(l => inscribedLicences.includes(l)).length;
+        const statusByLicence = {};
+        for (const i of allInscriptions) {
+          const statut = (i.statut || '').toLowerCase();
+          let resolvedStatus;
+          if (statut === 'désinscrit' || statut === 'desinscrit') resolvedStatus = 'désinscrit';
+          else if (statut === 'indisponible') resolvedStatus = 'indisponible';
+          else if (i.forfait === 1 || statut === 'forfait') resolvedStatus = 'forfait';
+          else resolvedStatus = 'inscrit';
+          statusByLicence[normalizeLicence(i.licence)] = resolvedStatus;
+        }
 
-        // Pending = qualified but not registered — the ones who need a relance.
-        const pendingFinalists = finalists
-          .filter(r => !inscribedLicences.includes(normalizeLicence(r.licence)))
-          .map(r => ({
-            licence: normalizeLicence(r.licence),
+        const inscribedFinalistCount = finalistLicences.filter(l => statusByLicence[l] === 'inscrit').length;
+
+        // Split pending finalists into two buckets:
+        //   - pending (silent, no record at all): the ones to chase via relance
+        //   - unavailable (declared indisponible/désinscrit/forfait): suggest substitutes
+        const pendingFinalists = [];
+        const unavailableFinalists = [];
+        for (const r of finalists) {
+          const key = normalizeLicence(r.licence);
+          const status = statusByLicence[key];
+          if (status === 'inscrit') continue;
+          const entry = {
+            licence: key,
             name: `${r.first_name || ''} ${r.last_name || ''}`.trim() || r.licence,
             rank_position: r.rank_position,
-            email: r.email || null
-          }));
+            email: r.email || null,
+            status: status || 'silent'
+          };
+          if (!status) pendingFinalists.push(entry);
+          else unavailableFinalists.push(entry);
+        }
+
+        const nextRanked = rankings.slice(numFinalists, numFinalists + 3).map(r => ({
+          licence: normalizeLicence(r.licence),
+          name: `${r.first_name || ''} ${r.last_name || ''}`.trim() || r.licence,
+          rank_position: r.rank_position,
+          email: r.email || null
+        }));
 
         return {
           ...t,
@@ -3891,7 +3952,10 @@ router.get('/upcoming-relances', authenticateToken, async (req, res) => {
           finalist_count: finalistLicences.length,
           inscribed_finalist_count: inscribedFinalistCount,
           pending_finalists: pendingFinalists,
-          pending_finalist_count: pendingFinalists.length
+          pending_finalist_count: pendingFinalists.length,
+          unavailable_finalists: unavailableFinalists,
+          unavailable_finalist_count: unavailableFinalists.length,
+          next_ranked: nextRanked
         };
       } catch (err) {
         console.error(`Error enriching finale ${t.tournoi_id}:`, err);
