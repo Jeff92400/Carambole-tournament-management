@@ -503,7 +503,31 @@
       return '<span class="badge badge-manual">Manuel</span>';
     }
 
-    // Display inscriptions in table
+    // Month-grouping helpers (same pattern as emailing.html — V 2.0.400/401)
+    function monthKeyOf(dateStr) {
+      if (!dateStr) return 'unknown';
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return 'unknown';
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    }
+    function monthLabelFromKey(key) {
+      if (key === 'unknown') return 'Date inconnue';
+      const [y, m] = key.split('-').map(Number);
+      const date = new Date(y, m - 1, 1);
+      const label = date.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+      return label.charAt(0).toUpperCase() + label.slice(1); // "Avril 2026"
+    }
+    function toggleInscriptionListMonth(monthKey) {
+      const rows = document.querySelectorAll(`tr[data-insc-month="${monthKey}"]`);
+      const chevron = document.querySelector(`span[data-insc-chevron="${monthKey}"]`);
+      if (!rows.length || !chevron) return;
+      const isExpanded = chevron.dataset.expanded === 'true';
+      rows.forEach(r => { r.style.display = isExpanded ? 'none' : ''; });
+      chevron.dataset.expanded = isExpanded ? 'false' : 'true';
+      chevron.textContent = isExpanded ? '▶' : '▼';
+    }
+
+    // Display inscriptions in table (grouped by month, most recent first expanded)
     function displayInscriptions(inscriptions) {
       const tbody = document.getElementById('inscriptionsBody');
       tbody.innerHTML = '';
@@ -523,34 +547,81 @@
         return dateB - dateA;
       });
 
-      inscriptions.forEach(inscription => {
-        const tournoi = getTournoiById(inscription.tournoi_id);
-        const row = document.createElement('tr');
+      // Group by YYYY-MM (list is already sorted DESC, Map preserves order → newest month first)
+      const groups = new Map();
+      for (const insc of inscriptions) {
+        const key = monthKeyOf(insc.timestamp);
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(insc);
+      }
 
-        if (inscription.forfait === 1) {
-          row.style.opacity = '0.6';
-          row.style.textDecoration = 'line-through';
-        } else if (inscription.statut === 'indisponible') {
-          row.style.opacity = '0.6';
-        } else if (inscription.statut === 'désinscrit') {
-          row.style.opacity = '0.5';
-          row.style.fontStyle = 'italic';
-        }
+      const firstGroupKey = groups.keys().next().value; // most recent month
+      const totalCols = 9;
 
-        row.innerHTML = `
-          <td><strong>${inscription.licence || '-'}</strong></td>
-          <td>${inscription.tournoi_nom || tournoi.nom || `Tournoi #${inscription.tournoi_id}`}${inscription.assigned_split ? `<span style="background: ${inscription.assigned_split === 'A' ? '#1976d2' : '#e65100'}; color: white; padding: 1px 6px; border-radius: 8px; font-size: 10px; margin-left: 6px; font-weight: bold;">${inscription.assigned_split}</span>` : ''}</td>
-          <td><span class="badge ${getModeBadgeClass(inscription.mode || tournoi.mode)}">${inscription.mode || tournoi.mode || '-'}</span></td>
-          <td>${inscription.categorie || tournoi.categorie || '-'}</td>
-          <td>${inscription.email || '-'}</td>
-          <td>${inscription.telephone || '-'}</td>
-          <td>${getStatusBadge(inscription)}</td>
-          <td>${getSourceBadge(inscription.source)}</td>
-          <td>${formatDateTime(inscription.timestamp)}</td>
+      for (const [monthKey, groupInscs] of groups.entries()) {
+        // Per-month breakdown for the header (Inscrits / Forfaits / Indisponibles / Désinscrits)
+        const inscrit = groupInscs.filter(i => (i.statut === 'inscrit' || !i.statut) && i.forfait !== 1).length;
+        const forfait = groupInscs.filter(i => i.forfait === 1).length;
+        const indisp  = groupInscs.filter(i => i.statut === 'indisponible').length;
+        const desinsc = groupInscs.filter(i => i.statut === 'désinscrit').length;
+        const breakdown = [];
+        if (inscrit > 0) breakdown.push(`${inscrit} inscrit${inscrit > 1 ? 's' : ''}`);
+        if (forfait > 0) breakdown.push(`${forfait} forfait${forfait > 1 ? 's' : ''}`);
+        if (indisp > 0)  breakdown.push(`${indisp} indisponible${indisp > 1 ? 's' : ''}`);
+        if (desinsc > 0) breakdown.push(`${desinsc} désinscrit${desinsc > 1 ? 's' : ''}`);
+        const breakdownText = breakdown.length ? ` (${breakdown.join(', ')})` : '';
+
+        const total = groupInscs.length;
+        const isFirstGroup = monthKey === firstGroupKey;
+        const chevron = isFirstGroup ? '▼' : '▶';
+        const expanded = isFirstGroup ? 'true' : 'false';
+
+        // Group header row (clickable, spans all columns)
+        const headerRow = document.createElement('tr');
+        headerRow.style.cursor = 'pointer';
+        headerRow.style.background = '#e3f2fd';
+        headerRow.style.fontWeight = '600';
+        headerRow.addEventListener('click', () => toggleInscriptionListMonth(monthKey));
+        headerRow.innerHTML = `
+          <td colspan="${totalCols}" style="padding: 10px 14px; color: #1F4788; font-size: 0.95rem;">
+            <span data-insc-chevron="${monthKey}" data-expanded="${expanded}" style="display: inline-block; width: 16px; text-align: center; margin-right: 8px;">${chevron}</span>
+            ${monthLabelFromKey(monthKey)} — ${total} inscription${total > 1 ? 's' : ''}${breakdownText}
+          </td>
         `;
+        tbody.appendChild(headerRow);
 
-        tbody.appendChild(row);
-      });
+        // Data rows for this group — hidden by default except for the first (most recent) group
+        for (const inscription of groupInscs) {
+          const tournoi = getTournoiById(inscription.tournoi_id);
+          const row = document.createElement('tr');
+          row.setAttribute('data-insc-month', monthKey);
+          if (!isFirstGroup) row.style.display = 'none';
+
+          if (inscription.forfait === 1) {
+            row.style.opacity = '0.6';
+            row.style.textDecoration = 'line-through';
+          } else if (inscription.statut === 'indisponible') {
+            row.style.opacity = '0.6';
+          } else if (inscription.statut === 'désinscrit') {
+            row.style.opacity = '0.5';
+            row.style.fontStyle = 'italic';
+          }
+
+          row.innerHTML = `
+            <td><strong>${inscription.licence || '-'}</strong></td>
+            <td>${inscription.tournoi_nom || tournoi.nom || `Tournoi #${inscription.tournoi_id}`}${inscription.assigned_split ? `<span style="background: ${inscription.assigned_split === 'A' ? '#1976d2' : '#e65100'}; color: white; padding: 1px 6px; border-radius: 8px; font-size: 10px; margin-left: 6px; font-weight: bold;">${inscription.assigned_split}</span>` : ''}</td>
+            <td><span class="badge ${getModeBadgeClass(inscription.mode || tournoi.mode)}">${inscription.mode || tournoi.mode || '-'}</span></td>
+            <td>${inscription.categorie || tournoi.categorie || '-'}</td>
+            <td>${inscription.email || '-'}</td>
+            <td>${inscription.telephone || '-'}</td>
+            <td>${getStatusBadge(inscription)}</td>
+            <td>${getSourceBadge(inscription.source)}</td>
+            <td>${formatDateTime(inscription.timestamp)}</td>
+          `;
+
+          tbody.appendChild(row);
+        }
+      }
     }
 
     // Apply filters
