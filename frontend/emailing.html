@@ -9763,33 +9763,87 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
           empty.style.display = 'block';
         } else {
           table.style.display = 'block';
-          tbody.innerHTML = history.map(item => `
-            <tr class="notif-history-row" style="border-bottom: 1px solid #eee; position: relative; transition: transform 0.3s ease;"
-                data-title="${escapeHtml(item.title)}"
-                data-body="${escapeHtml(item.body)}"
-                data-url="${escapeHtml(item.url || '')}">
-              <td style="padding: 12px;">${new Date(item.sent_at).toLocaleString('fr-FR')}</td>
-              <td style="padding: 12px; font-weight: 500;">${escapeHtml(item.title)}</td>
-              <td style="padding: 12px; white-space: pre-wrap; word-wrap: break-word;">${escapeHtml(item.body)}</td>
-              <td style="padding: 12px; text-align: center;">${item.recipient_type === 'all' ? 'Tous' : item.recipient_count + ' joueurs'}</td>
-              <td style="padding: 12px; text-align: center;">
-                <span style="background: #4caf50; color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600;">
-                  ${item.sent_count}
-                </span>
-              </td>
-              <td style="padding: 12px; text-align: center;">
-                <button
-                  class="btn-danger delete-notif-btn"
-                  style="padding: 6px 12px; font-size: 12px; border: none; border-radius: 4px; cursor: pointer;"
-                  data-title="${escapeHtml(item.title)}"
-                  data-body="${escapeHtml(item.body)}"
-                  data-url="${escapeHtml(item.url || '')}"
-                  title="Supprimer cette notification de l'historique">
-                  🗑️
-                </button>
-              </td>
-            </tr>
-          `).join('');
+
+          // Group by YYYY-MM (history arrives sorted DESC, Map preserves insertion order)
+          // Reuses monthKeyOf / monthLabelFromKey helpers defined earlier in this file.
+          const groups = new Map();
+          for (const item of history) {
+            const key = monthKeyOf(item.sent_at);
+            if (!groups.has(key)) groups.set(key, []);
+            groups.get(key).push(item);
+          }
+
+          const firstGroupKey = groups.keys().next().value; // most recent month
+          const totalCols = 6;
+          let html = '';
+
+          for (const [monthKey, groupItems] of groups.entries()) {
+            // Per-month aggregate: total notifications + total destinataires reached
+            const total = groupItems.length;
+            const totalSent = groupItems.reduce((sum, it) => sum + (parseInt(it.sent_count) || 0), 0);
+            const isFirstGroup = monthKey === firstGroupKey;
+            const chevron = isFirstGroup ? '▼' : '▶';
+            const expanded = isFirstGroup ? 'true' : 'false';
+
+            // Group header row — clickable, spans all columns
+            html += `
+              <tr class="notif-month-header" data-notif-month-key="${monthKey}"
+                  style="cursor: pointer; background: #e3f2fd; font-weight: 600;">
+                <td colspan="${totalCols}" style="padding: 10px 14px; color: #1F4788; font-size: 0.95rem;">
+                  <span data-notif-chevron="${monthKey}" data-expanded="${expanded}" style="display: inline-block; width: 16px; text-align: center; margin-right: 8px;">${chevron}</span>
+                  ${monthLabelFromKey(monthKey)} — ${total} notification${total > 1 ? 's' : ''}${totalSent > 0 ? ` (${totalSent} envoi${totalSent > 1 ? 's' : ''} au total)` : ''}
+                </td>
+              </tr>
+            `;
+
+            // Data rows for this group — hidden by default except for the first (most recent) group
+            for (const item of groupItems) {
+              html += `
+                <tr class="notif-history-row" data-notif-month="${monthKey}"
+                    style="border-bottom: 1px solid #eee; position: relative; transition: transform 0.3s ease;${isFirstGroup ? '' : ' display: none;'}"
+                    data-title="${escapeHtml(item.title)}"
+                    data-body="${escapeHtml(item.body)}"
+                    data-url="${escapeHtml(item.url || '')}">
+                  <td style="padding: 12px;">${new Date(item.sent_at).toLocaleString('fr-FR')}</td>
+                  <td style="padding: 12px; font-weight: 500;">${escapeHtml(item.title)}</td>
+                  <td style="padding: 12px; white-space: pre-wrap; word-wrap: break-word;">${escapeHtml(item.body)}</td>
+                  <td style="padding: 12px; text-align: center;">${item.recipient_type === 'all' ? 'Tous' : item.recipient_count + ' joueurs'}</td>
+                  <td style="padding: 12px; text-align: center;">
+                    <span style="background: #4caf50; color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600;">
+                      ${item.sent_count}
+                    </span>
+                  </td>
+                  <td style="padding: 12px; text-align: center;">
+                    <button
+                      class="btn-danger delete-notif-btn"
+                      style="padding: 6px 12px; font-size: 12px; border: none; border-radius: 4px; cursor: pointer;"
+                      data-title="${escapeHtml(item.title)}"
+                      data-body="${escapeHtml(item.body)}"
+                      data-url="${escapeHtml(item.url || '')}"
+                      title="Supprimer cette notification de l'historique">
+                      🗑️
+                    </button>
+                  </td>
+                </tr>
+              `;
+            }
+          }
+
+          tbody.innerHTML = html;
+
+          // Wire up the month header click handlers
+          tbody.querySelectorAll('.notif-month-header').forEach(headerRow => {
+            headerRow.addEventListener('click', () => {
+              const monthKey = headerRow.dataset.notifMonthKey;
+              const rows = tbody.querySelectorAll(`tr[data-notif-month="${monthKey}"]`);
+              const chevron = tbody.querySelector(`span[data-notif-chevron="${monthKey}"]`);
+              if (!rows.length || !chevron) return;
+              const isExpanded = chevron.dataset.expanded === 'true';
+              rows.forEach(r => { r.style.display = isExpanded ? 'none' : ''; });
+              chevron.dataset.expanded = isExpanded ? 'false' : 'true';
+              chevron.textContent = isExpanded ? '▶' : '▼';
+            });
+          });
 
           // Initialize swipe-to-delete for mobile
           initSwipeToDelete();
