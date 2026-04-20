@@ -1571,32 +1571,53 @@ router.post('/snapshot-season-stats', authenticateToken, requireAdmin, async (re
     const season = req.body.season || await appSettings.getCurrentSeason();
     const { start: seasonStart, end: seasonEnd } = await appSettings.getSeasonDateRange(season);
 
-    logger.log(`[Snapshot] Starting season stats snapshot for ${season} (${seasonStart} → ${seasonEnd})`);
+    // Multi-CDB scoping: if the calling admin has an organization_id, scope
+    // the whole snapshot to that org. If null (super admin at platform level),
+    // snapshot all clubs but each per-club query still filters by the club's
+    // own organization_id — so each club's stats count only their own org's
+    // players / inscriptions / tournaments / results.
+    //
+    // Before this (pre V 2.0.441), the endpoint silently cross-contaminated
+    // CDBs: iterating clubs without filter + sub-queries without org-scoping
+    // meant that in a multi-CDB deployment, a club named 'X' in CDB A could
+    // count players of a same-named 'X' in CDB B. Harmless with a single
+    // active CDB, but a real data-integrity hazard as soon as a second CDB
+    // comes online.
+    const callerOrgId = req.user?.organizationId || null;
 
-    // Get all clubs
-    const clubs = await dbAll(db, 'SELECT id, name, display_name, city FROM clubs', []);
+    logger.log(`[Snapshot] Starting season stats snapshot for ${season} (${seasonStart} → ${seasonEnd}) — caller orgId=${callerOrgId ?? 'null (super admin)'}`);
+
+    // Get clubs — scoped to caller's org when set
+    const clubs = await dbAll(db,
+      `SELECT id, name, display_name, city, organization_id FROM clubs
+       WHERE ($1::int IS NULL OR organization_id = $1)`,
+      [callerOrgId]
+    );
 
     // Fetch per-org qualification settings once for the whole snapshot run
     // (fulfils V 2.0.404 'finalist quota never hardcoded' policy — twin of
-    // Player App V 2.0.190 and today's V 2.0.217 hotfix which fixed the
+    // Player App V 2.0.190 and V 2.0.217 hotfix which fixed the
     // typing bug on the same CASE WHEN pattern).
-    const qualif = await appSettings.getQualificationSettings(req.user?.organizationId || null);
+    const qualif = await appSettings.getQualificationSettings(callerOrgId);
 
     let snapshotCount = 0;
     const errors = [];
 
     for (const club of clubs) {
       try {
-        // 1. Count total players
+        const clubOrgId = club.organization_id || null;
+
+        // 1. Count total players — scoped by club's org
         const playersRows = await dbAll(db,
           `SELECT licence FROM players
-           WHERE UPPER(REPLACE(club, ' ', '')) LIKE UPPER(REPLACE($1, ' ', '')) || '%'`,
-          [club.display_name]
+           WHERE UPPER(REPLACE(club, ' ', '')) LIKE UPPER(REPLACE($1, ' ', '')) || '%'
+             AND ($2::int IS NULL OR organization_id = $2)`,
+          [club.display_name, clubOrgId]
         );
         const totalPlayers = playersRows.length;
         const playerLicences = playersRows.map(p => normalizeLicence(p.licence));
 
-        // 2. Count inscriptions per player
+        // 2. Count inscriptions per player — scoped on tournoi_ext.organization_id
         const inscRows = await dbAll(db,
           `SELECT REPLACE(i.licence, ' ', '') as licence, COUNT(*) as cnt
            FROM inscriptions i
@@ -1604,8 +1625,9 @@ router.post('/snapshot-season-stats', authenticateToken, requireAdmin, async (re
            WHERE t.debut >= $1 AND t.debut <= $2
              AND (i.statut IS NULL OR i.statut NOT IN ('désinscrit', 'indisponible'))
              AND (i.forfait IS NULL OR i.forfait = 0)
+             AND ($3::int IS NULL OR t.organization_id = $3)
            GROUP BY REPLACE(i.licence, ' ', '')`,
-          [seasonStart, seasonEnd]
+          [seasonStart, seasonEnd, clubOrgId]
         );
         const inscriptionCounts = {};
         inscRows.forEach(r => { inscriptionCounts[r.licence] = parseInt(r.cnt); });
@@ -1618,7 +1640,7 @@ router.post('/snapshot-season-stats', authenticateToken, requireAdmin, async (re
           totalInscriptions += cnt;
         });
 
-        // 3. Mode distribution
+        // 3. Mode distribution — scoped on tournoi_ext.organization_id and players.organization_id
         const modeRows = await dbAll(db,
           `SELECT UPPER(t.mode) as mode, COUNT(DISTINCT REPLACE(i.licence, ' ', '')) as player_count
            FROM inscriptions i
@@ -1626,17 +1648,19 @@ router.post('/snapshot-season-stats', authenticateToken, requireAdmin, async (re
            WHERE t.debut >= $1 AND t.debut <= $2
              AND (i.statut IS NULL OR i.statut NOT IN ('désinscrit', 'indisponible'))
              AND (i.forfait IS NULL OR i.forfait = 0)
+             AND ($4::int IS NULL OR t.organization_id = $4)
              AND REPLACE(i.licence, ' ', '') IN (
                SELECT REPLACE(p.licence, ' ', '') FROM players p
                WHERE UPPER(REPLACE(p.club, ' ', '')) LIKE UPPER(REPLACE($3, ' ', '')) || '%'
+                 AND ($4::int IS NULL OR p.organization_id = $4)
              )
            GROUP BY UPPER(t.mode)`,
-          [seasonStart, seasonEnd, club.display_name]
+          [seasonStart, seasonEnd, club.display_name, clubOrgId]
         );
         const modeDistribution = {};
         modeRows.forEach(r => { modeDistribution[r.mode] = parseInt(r.player_count); });
 
-        // 4. Competitions hosted (via club_aliases)
+        // 4. Competitions hosted (via club_aliases — shared table, not org-scoped)
         const clubMatchValues = [club.city, club.name, club.display_name].filter(Boolean).map(v => v.toUpperCase());
         const aliasRows = await dbAll(db,
           `SELECT UPPER(alias) as alias FROM club_aliases WHERE UPPER(canonical_name) = UPPER($1)`,
@@ -1647,28 +1671,35 @@ router.post('/snapshot-season-stats', authenticateToken, requireAdmin, async (re
 
         let competitionsHosted = 0;
         if (uniqueMatchValues.length > 0) {
+          // Placeholders start at $2; the org filter slot is placed AFTER the IN values.
           const placeholders = uniqueMatchValues.map((_, i) => `$${i + 2}`).join(', ');
+          const orgParamIndex = uniqueMatchValues.length + 2;
           const hostedRow = await dbGet(db,
             `SELECT COUNT(*) as count FROM tournaments
              WHERE season = $1
                AND (UPPER(location) IN (${placeholders})
-                    OR UPPER(location_2) IN (${placeholders}))`,
-            [season, ...uniqueMatchValues]
+                    OR UPPER(location_2) IN (${placeholders}))
+               AND ($${orgParamIndex}::int IS NULL OR organization_id = $${orgParamIndex})`,
+            [season, ...uniqueMatchValues, clubOrgId]
           );
           competitionsHosted = parseInt(hostedRow?.count || 0);
         }
 
-        // 5. Tournament results → podiums + finale medals
+        // 5. Tournament results → podiums + finale medals — scoped on tournaments.organization_id
         const resultsRows = await dbAll(db,
           `SELECT tr.licence, tr.position, t.tournament_number
            FROM tournament_results tr
            LEFT JOIN tournaments t ON tr.tournament_id = t.id
            WHERE t.season = $1
+             AND ($2::int IS NULL OR t.organization_id = $2)
            ORDER BY tr.position`,
-          [season]
+          [season, clubOrgId]
         );
 
-        const snapshotFinaleNum = await getFinaleTournamentNumber(req.user?.organizationId || null);
+        // Per-club finale tournament number — lets each org use its own setting
+        // (currently both orgs use 4 for finale, but Mode 2 'Journées Qualificatives'
+        // could differ in the future).
+        const snapshotFinaleNum = await getFinaleTournamentNumber(clubOrgId);
         const playerResults = {};
         resultsRows.forEach(r => {
           const lic = normalizeLicence(r.licence);
@@ -1687,7 +1718,7 @@ router.post('/snapshot-season-stats', authenticateToken, requireAdmin, async (re
           finaleMedals += results.filter(r => r.position <= 3 && r.isFinale).length;
         });
 
-        // 6. Finalists count (qualified + finale results, deduplicated by licence)
+        // 6. Finalists count (qualified + finale results, deduplicated by licence) — scoped on all nested org_id fields
         let finalistsCount = 0;
         try {
           const finaleResultsRows = await dbAll(db,
@@ -1695,11 +1726,13 @@ router.post('/snapshot-season-stats', authenticateToken, requireAdmin, async (re
              FROM tournament_results tr
              JOIN tournaments t ON tr.tournament_id = t.id
              WHERE t.season = $1 AND t.tournament_number = 4
+               AND ($3::int IS NULL OR t.organization_id = $3)
                AND REPLACE(tr.licence, ' ', '') IN (
                  SELECT REPLACE(p.licence, ' ', '') FROM players p
                  WHERE UPPER(REPLACE(p.club, ' ', '')) LIKE UPPER(REPLACE($2, ' ', '')) || '%'
+                   AND ($3::int IS NULL OR p.organization_id = $3)
                )`,
-            [season, club.display_name]
+            [season, club.display_name, clubOrgId]
           );
 
           const eligibleRows = await dbAll(db,
@@ -1708,12 +1741,14 @@ router.post('/snapshot-season-stats', authenticateToken, requireAdmin, async (re
                       CASE WHEN COUNT(*) < $3::int THEN $4::int ELSE $5::int END as qualified_count
                FROM rankings
                WHERE season = $1
+                 AND ($6::int IS NULL OR organization_id = $6)
                GROUP BY category_id
              )
              SELECT DISTINCT REPLACE(r.licence, ' ', '') as licence
              FROM rankings r
              JOIN category_counts cc ON cc.category_id = r.category_id
              WHERE r.season = $1
+               AND ($6::int IS NULL OR r.organization_id = $6)
                AND r.rank_position <= cc.qualified_count
                AND EXISTS (
                  SELECT 1 FROM tournaments t3
@@ -1721,12 +1756,14 @@ router.post('/snapshot-season-stats', authenticateToken, requireAdmin, async (re
                  WHERE t3.category_id = r.category_id
                    AND t3.season = $1
                    AND t3.tournament_number = 3
+                   AND ($6::int IS NULL OR t3.organization_id = $6)
                )
                AND REPLACE(r.licence, ' ', '') IN (
                  SELECT REPLACE(pl.licence, ' ', '') FROM players pl
                  WHERE UPPER(REPLACE(pl.club, ' ', '')) LIKE UPPER(REPLACE($2, ' ', '')) || '%'
+                   AND ($6::int IS NULL OR pl.organization_id = $6)
                )`,
-            [season, club.display_name, qualif.threshold, qualif.small, qualif.large]
+            [season, club.display_name, qualif.threshold, qualif.small, qualif.large, clubOrgId]
           );
 
           // Deduplicate: a player in both finale results and eligible counts once
@@ -1769,8 +1806,9 @@ router.post('/snapshot-season-stats', authenticateToken, requireAdmin, async (re
 
     logger.log(`[Snapshot] Done: ${snapshotCount}/${clubs.length} clubs snapshotted for ${season}`);
 
-    // Mark season as archived in organization settings
-    const orgId = req.user.organizationId || null;
+    // Mark season as archived in organization settings (uses callerOrgId
+    // defined at the top of this handler — reused for consistency)
+    const orgId = callerOrgId;
     try {
       const archivedSeasonsStr = await appSettings.getOrgSetting(orgId, 'archived_seasons');
       let archivedSeasons = [];
