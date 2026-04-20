@@ -12,6 +12,7 @@ const { getPouleConfigForOrg } = require('../utils/poule-config');
 const { logAdminAction, ACTION_TYPES } = require('../utils/admin-logger');
 const { getColumnMapping } = require('./import-config');
 const { getRankingTournamentNumbers } = require('./settings');
+const logger = require('../utils/logger');
 
 /**
  * Default column mapping for inscriptions imports (named columns)
@@ -283,9 +284,9 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
     try {
       const profileConfig = await getColumnMapping('inscriptions');
       columnMapping = profileConfig?.mappings || DEFAULT_INSCRIPTIONS_MAPPING;
-      console.log(`Using ${profileConfig ? 'configured' : 'default'} column mapping for inscriptions import`);
+      logger.log(`Using ${profileConfig ? 'configured' : 'default'} column mapping for inscriptions import`);
     } catch (err) {
-      console.log('Error loading inscriptions column mapping, using defaults:', err.message);
+      logger.log('Error loading inscriptions column mapping, using defaults:', err.message);
       columnMapping = DEFAULT_INSCRIPTIONS_MAPPING;
     }
 
@@ -428,7 +429,7 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
           // Update the existing record if it's from IONOS, otherwise skip
           if (idCollision.source === 'ionos') {
             // IONOS reassigned this ID - update the existing record with new data
-            console.log(`[IONOS Import] Updating ID collision record (source=ionos): ${inscriptionId}`);
+            logger.log(`[IONOS Import] Updating ID collision record (source=ionos): ${inscriptionId}`);
             const updateCollisionQuery = `
               UPDATE inscriptions SET
                 joueur_id = $1,
@@ -459,7 +460,7 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
             const newId = baseId + 1;
             lastGeneratedId = newId;
             maxInscriptionId = newId;
-            console.log(`[IONOS Import] ID collision with protected source ${idCollision.source}, inserting with new ID: ${newId}`);
+            logger.log(`[IONOS Import] ID collision with protected source ${idCollision.source}, inserting with new ID: ${newId}`);
             const insertWithNewIdQuery = `
               INSERT INTO inscriptions (inscription_id, joueur_id, tournoi_id, timestamp, email, telephone, licence, convoque, forfait, commentaire, source, organization_id)
               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'ionos', $11)
@@ -471,7 +472,7 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
                     console.error(`[IONOS Import] Insert with new ID failed: ${err.message}`);
                     reject(err);
                   } else {
-                    console.log(`[IONOS Import] Insert with new ID successful`);
+                    logger.log(`[IONOS Import] Insert with new ID successful`);
                     resolve();
                   }
                 });
@@ -530,7 +531,7 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
         } else {
           // New inscription - insert (or update if inscription_id already exists with different licence/tournoi)
           // Only update on conflict if existing record is from IONOS (protect manual and player_app)
-          console.log(`[IONOS Import] Inserting new inscription: id=${inscriptionId}, licence=${licence}, tournoi=${tournoiId}`);
+          logger.log(`[IONOS Import] Inserting new inscription: id=${inscriptionId}, licence=${licence}, tournoi=${tournoiId}`);
           const insertQuery = `
             INSERT INTO inscriptions (inscription_id, joueur_id, tournoi_id, timestamp, email, telephone, licence, convoque, forfait, commentaire, source, organization_id)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'ionos', $11)
@@ -554,7 +555,7 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
                   console.error(`[IONOS Import] Insert failed for id=${inscriptionId}: ${err.message}`);
                   reject(err);
                 } else {
-                  console.log(`[IONOS Import] Insert successful for id=${inscriptionId}, changes=${this.changes}`);
+                  logger.log(`[IONOS Import] Insert successful for id=${inscriptionId}, changes=${this.changes}`);
                   resolve();
                 }
               });
@@ -591,7 +592,7 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
       if (err) console.error('Error recording import history:', err);
     });
 
-    console.log(`[IONOS Import] ${totalRecords} CSV rows → ${skippedPastSeason} past-season skipped, ${imported} imported, ${updated} updated, ${skipped} already-present (Current season: ${currentSeason})`);
+    logger.log(`[IONOS Import] ${totalRecords} CSV rows → ${skippedPastSeason} past-season skipped, ${imported} imported, ${updated} updated, ${skipped} already-present (Current season: ${currentSeason})`);
 
     res.json({
       message: 'Import completed',
@@ -892,7 +893,7 @@ router.get('/tournoi/upcoming', authenticateToken, (req, res) => {
   const startDate = tomorrow.toISOString().split('T')[0];
   const endDate = nextSunday.toISOString().split('T')[0];
 
-  console.log(`Fetching upcoming tournaments from ${startDate} to ${endDate}`);
+  logger.log(`Fetching upcoming tournaments from ${startDate} to ${endDate}`);
 
   const query = `
     SELECT t.*,
@@ -914,7 +915,7 @@ router.get('/tournoi/upcoming', authenticateToken, (req, res) => {
       return res.status(500).json({ error: err.message });
     }
 
-    console.log(`Found ${(rows || []).length} upcoming tournaments`);
+    logger.log(`Found ${(rows || []).length} upcoming tournaments`);
     res.json(rows || []);
   });
 });
@@ -971,7 +972,7 @@ router.get('/finales/upcoming', authenticateToken, async (req, res) => {
     const startDate = today.toISOString().split('T')[0];
     const endDate = fourWeeksLater.toISOString().split('T')[0];
 
-    console.log(`Fetching upcoming finals from ${startDate} to ${endDate}`);
+    logger.log(`Fetching upcoming finals from ${startDate} to ${endDate}`);
 
     // Get current season
     const currentYear = new Date().getFullYear();
@@ -995,7 +996,7 @@ router.get('/finales/upcoming', authenticateToken, async (req, res) => {
       });
     });
 
-    console.log(`Found ${finals.length} upcoming finals`);
+    logger.log(`Found ${finals.length} upcoming finals`);
 
     // For each final, calculate finalist counts
     const enrichedFinals = await Promise.all(finals.map(async (final) => {
@@ -1005,7 +1006,7 @@ router.get('/finales/upcoming', authenticateToken, async (req, res) => {
         const gameType = final.mode?.toUpperCase();
         const categoryLevel = final.categorie?.toUpperCase(); // Use directly, e.g., "N3"
 
-        console.log(`Processing final: mode=${final.mode}, categorie=${final.categorie} -> gameType=${gameType}, categoryLevel=${categoryLevel}, season=${season}`);
+        logger.log(`Processing final: mode=${final.mode}, categorie=${final.categorie} -> gameType=${gameType}, categoryLevel=${categoryLevel}, season=${season}`);
 
         // Find matching category
         const category = await new Promise((resolve, reject) => {
@@ -1017,7 +1018,7 @@ router.get('/finales/upcoming', authenticateToken, async (req, res) => {
                 console.error(`Category query error:`, err);
                 reject(err);
               } else {
-                console.log(`Category found:`, row ? `id=${row.id}, game_type=${row.game_type}, level=${row.level}` : 'NONE');
+                logger.log(`Category found:`, row ? `id=${row.id}, game_type=${row.game_type}, level=${row.level}` : 'NONE');
                 resolve(row);
               }
             }
@@ -1025,7 +1026,7 @@ router.get('/finales/upcoming', authenticateToken, async (req, res) => {
         });
 
         if (!category) {
-          console.log(`No category found for ${gameType} - ${categoryLevel}`);
+          logger.log(`No category found for ${gameType} - ${categoryLevel}`);
           return { ...final, finalist_count: 0, inscribed_finalist_count: 0 };
         }
 
@@ -2055,7 +2056,7 @@ router.post('/generate-poules', authenticateToken, async (req, res) => {
           finalGameParams = gameParamsResult.rows[0];
         }
       } catch (e) {
-        console.log('Could not fetch game parameters:', e.message);
+        logger.log('Could not fetch game parameters:', e.message);
       }
     }
 
@@ -2092,7 +2093,7 @@ router.post('/generate-poules', authenticateToken, async (req, res) => {
           };
         });
       } catch (e) {
-        console.log('Could not fetch ranking data:', e.message);
+        logger.log('Could not fetch ranking data:', e.message);
       }
     }
 
@@ -2344,7 +2345,7 @@ router.post('/tournoi', authenticateToken, async (req, res) => {
 
           const licences = eligiblePlayers.map(p => p.licence);
           const result = await sendPushToPlayers(licences, orgId, notification);
-          console.log(`[NEW_TOURNAMENT] Sent notification to ${result.total_sent} player(s) for tournament ${nextId}`);
+          logger.log(`[NEW_TOURNAMENT] Sent notification to ${result.total_sent} player(s) for tournament ${nextId}`);
 
           // News auto-publisher — also create a news article announcing
           // the tournament. Idempotent via tournoi_id as source_ref_id.
@@ -2472,10 +2473,10 @@ router.put('/tournoi/:id', authenticateToken, async (req, res) => {
     const shouldNotify = currentTournament.notify_on_changes !== false; // Default to true if null/undefined
 
     // Diagnostic log — always log the decision, so a silent skip is never invisible
-    console.log(`[Tournament Update] id=${id} org=${orgId} dateChanged=${dateChanged} locationChanged=${locationChanged} shouldNotify=${shouldNotify} statusChangedToCancelled=${statusChangedToCancelled}`);
+    logger.log(`[Tournament Update] id=${id} org=${orgId} dateChanged=${dateChanged} locationChanged=${locationChanged} shouldNotify=${shouldNotify} statusChangedToCancelled=${statusChangedToCancelled}`);
 
     if ((dateChanged || locationChanged) && shouldNotify && !statusChangedToCancelled) {
-      console.log(`[Tournament Update] Triggering notifications for tournament ${id}`);
+      logger.log(`[Tournament Update] Triggering notifications for tournament ${id}`);
       emailsSent = await sendTournamentChangeNotifications(id, currentTournament, {
         nom, mode, categorie, debut, lieu
       }, {
@@ -2491,7 +2492,7 @@ router.put('/tournoi/:id', authenticateToken, async (req, res) => {
       const reasons = [];
       if (!shouldNotify) reasons.push('notify_on_changes=false');
       if (statusChangedToCancelled) reasons.push('tournament cancelled');
-      console.log(`[Tournament Update] Date/location changed but notifications SKIPPED for tournament ${id}: ${reasons.join(', ')}`);
+      logger.log(`[Tournament Update] Date/location changed but notifications SKIPPED for tournament ${id}: ${reasons.join(', ')}`);
     }
 
     // Log if tournament was cancelled
@@ -2540,7 +2541,7 @@ router.put('/tournoi/:id', authenticateToken, async (req, res) => {
 
             const licences = inscriptions.map(i => i.licence);
             const result = await sendPushToPlayers(licences, orgId, notification);
-            console.log(`[TOURNAMENT_CANCELLED] Sent notification to ${result.total_sent} player(s) for tournament ${id}`);
+            logger.log(`[TOURNAMENT_CANCELLED] Sent notification to ${result.total_sent} player(s) for tournament ${id}`);
           }
         } catch (pushError) {
           console.error('[TOURNAMENT_CANCELLED] Failed to send push notification:', pushError.message);
@@ -2768,7 +2769,7 @@ router.post('/tournoi/:id/notify', authenticateToken, async (req, res) => {
     const scopeDescription = scope?.type === 'tournoi'
       ? `inscribed in tournoi_id=${scopeTournoiId}`
       : `in category pool`;
-    console.log(`[Admin Message] Target: ${inscriptions.length} players ${scopeDescription} — ${targetMode} ${targetCategorie} (season ${currentSeason}, category_id=${category.id})`);
+    logger.log(`[Admin Message] Target: ${inscriptions.length} players ${scopeDescription} — ${targetMode} ${targetCategorie} (season ${currentSeason}, category_id=${category.id})`);
 
     // Org settings for email
     const emailSettings = await appSettings.getOrgSettingsBatch(orgId, [
@@ -2824,7 +2825,7 @@ router.post('/tournoi/:id/notify', authenticateToken, async (req, res) => {
     if (wantEmail) {
       const resend = getResend();
       if (!resend) {
-        console.log('[Admin Message] Resend not configured — skipping email sends');
+        logger.log('[Admin Message] Resend not configured — skipping email sends');
       } else {
         // Convert plain-text body to safe HTML (escape + paragraph breaks)
         const escapeHtml = (s) => s
@@ -2881,7 +2882,7 @@ router.post('/tournoi/:id/notify', authenticateToken, async (req, res) => {
       }
     }
 
-    console.log(`[Admin Message] Tournament ${id} (${tournamentLabel}) — push:${pushSent} OK/${pushFailed} fail, email:${emailSent} OK/${emailFailed} fail, total players:${inscriptions.length}`);
+    logger.log(`[Admin Message] Tournament ${id} (${tournamentLabel}) — push:${pushSent} OK/${pushFailed} fail, email:${emailSent} OK/${emailFailed} fail, total players:${inscriptions.length}`);
 
     // ---- ADMIN RECAP EMAIL ----
     const adminEmail = emailSettings.summary_email;
@@ -2961,7 +2962,7 @@ router.post('/tournoi/:id/notify', authenticateToken, async (req, res) => {
           subject: `📬 ${emailSettings.organization_name || senderName} — Récap message joueurs — ${tournamentLabel}`,
           html: recapHtml
         });
-        console.log(`[Admin Message] Admin recap sent to ${adminEmail}`);
+        logger.log(`[Admin Message] Admin recap sent to ${adminEmail}`);
       } catch (adminErr) {
         console.error('[Admin Message] Failed to send admin recap:', adminErr.message);
       }
@@ -2988,7 +2989,7 @@ router.post('/tournoi/:id/notify', authenticateToken, async (req, res) => {
 async function sendTournamentChangeNotifications(tournoiId, oldTournament, newData, changes, orgId) {
   const resend = getResend();
   if (!resend) {
-    console.log('[Tournament Change] Resend not configured, skipping notifications');
+    logger.log('[Tournament Change] Resend not configured, skipping notifications');
     return 0;
   }
 
@@ -3013,7 +3014,7 @@ async function sendTournamentChangeNotifications(tournoiId, oldTournament, newDa
     });
 
     if (inscriptions.length === 0) {
-      console.log('[Tournament Change] No players with email to notify');
+      logger.log('[Tournament Change] No players with email to notify');
       return 0;
     }
 
@@ -3185,7 +3186,7 @@ async function sendTournamentChangeNotifications(tournoiId, oldTournament, newDa
           html: emailHtml
         });
         sentCount++;
-        console.log(`[Tournament Change] Email sent to ${inscription.player_email}`);
+        logger.log(`[Tournament Change] Email sent to ${inscription.player_email}`);
 
         // Small delay to avoid rate limiting
         await new Promise(resolve => setTimeout(resolve, 100));
@@ -3194,7 +3195,7 @@ async function sendTournamentChangeNotifications(tournoiId, oldTournament, newDa
       }
     }
 
-    console.log(`[Tournament Change] Emails sent: ${sentCount}/${inscriptions.length}, Push: ${pushSent} OK / ${pushFailed} failed for tournament ${tournoiId}`);
+    logger.log(`[Tournament Change] Emails sent: ${sentCount}/${inscriptions.length}, Push: ${pushSent} OK / ${pushFailed} failed for tournament ${tournoiId}`);
 
     // -------- ADMIN SUMMARY EMAIL --------
     // Send a recap email to the admin (summary_email) with what was changed and to how many players
@@ -3258,13 +3259,13 @@ async function sendTournamentChangeNotifications(tournoiId, oldTournament, newDa
           subject: adminSubject,
           html: adminHtml
         });
-        console.log(`[Tournament Change] Admin summary sent to ${adminEmail}`);
+        logger.log(`[Tournament Change] Admin summary sent to ${adminEmail}`);
       } catch (adminErr) {
         console.error('[Tournament Change] Failed to send admin summary:', adminErr.message);
         // Do not break the main flow
       }
     } else {
-      console.log('[Tournament Change] No summary_email configured for org', orgId, '— skipping admin recap');
+      logger.log('[Tournament Change] No summary_email configured for org', orgId, '— skipping admin recap');
     }
 
     return sentCount;
@@ -3414,7 +3415,7 @@ ${orgName}`;
               </div>
             </div>`
           });
-          console.log(`Desinscription email sent to ${inscriptionDetails.email}`);
+          logger.log(`Desinscription email sent to ${inscriptionDetails.email}`);
         } catch (emailError) {
           console.error('Error sending desinscription email:', emailError);
           // Don't fail the desinscription if email fails
@@ -3472,7 +3473,7 @@ router.put('/:id/reintegrate', authenticateToken, async (req, res) => {
       );
     });
 
-    console.log(`Reintegrated player ${inscription.first_name} ${inscription.last_name} (${inscription.licence}) for tournament ${inscription.tournoi_id}`);
+    logger.log(`Reintegrated player ${inscription.first_name} ${inscription.last_name} (${inscription.licence}) for tournament ${inscription.tournoi_id}`);
 
     res.json({
       success: true,
@@ -4037,7 +4038,7 @@ router.post('/relances/mark-by-type', authenticateToken, async (req, res) => {
     });
 
     if (!tournament) {
-      console.log(`No matching tournament found for ${mode} ${category} ${relanceType}`);
+      logger.log(`No matching tournament found for ${mode} ${category} ${relanceType}`);
       return res.json({ success: true, message: 'No matching tournament found to mark', marked: false });
     }
 
@@ -4056,7 +4057,7 @@ router.post('/relances/mark-by-type', authenticateToken, async (req, res) => {
       });
     });
 
-    console.log(`Relance marked for tournament ${tournament.tournoi_id} (${mode} ${category} ${relanceType})`);
+    logger.log(`Relance marked for tournament ${tournament.tournoi_id} (${mode} ${category} ${relanceType})`);
     res.json({ success: true, message: 'Relance marked as sent', marked: true, tournoi_id: tournament.tournoi_id });
 
   } catch (error) {
@@ -4299,7 +4300,7 @@ router.get('/tournoi/:id/simulation', authenticateToken, async (req, res) => {
       );
     });
 
-    console.log(`Simulation: mode=${rawMode}->${gameType}, categorie=${rawLevel}->${categoryLevel}, season=${currentSeason}, category found=${!!simCategory}`);
+    logger.log(`Simulation: mode=${rawMode}->${gameType}, categorie=${rawLevel}->${categoryLevel}, season=${currentSeason}, category found=${!!simCategory}`);
 
     // Check qualification mode for this org
     const qualMode = orgId ? (await appSettings.getOrgSetting(orgId, 'qualification_mode') || 'standard') : 'standard';
@@ -4339,7 +4340,7 @@ router.get('/tournoi/:id/simulation', authenticateToken, async (req, res) => {
           const licNorm = normalizeLicence(r.licence);
           if (licNorm) cdbhsRankMap[licNorm] = idx + 1;
         });
-        console.log(`Simulation (journées TQ1): using moyenne_ffb for ${ffbClassifications.length} players, game_mode_id=${gameModeRow.id}`);
+        logger.log(`Simulation (journées TQ1): using moyenne_ffb for ${ffbClassifications.length} players, game_mode_id=${gameModeRow.id}`);
       }
     } else if (simCategory) {
       // Standard mode OR journées TQ2+: sort by seasonal ranking position
@@ -4361,9 +4362,9 @@ router.get('/tournoi/:id/simulation', authenticateToken, async (req, res) => {
         const licNorm = normalizeLicence(r.licence);
         if (licNorm) cdbhsRankMap[licNorm] = r.rank_position;
       });
-      console.log(`Simulation: category_id=${simCategory.id}, found ${cdbhsRankings.length} rankings`);
+      logger.log(`Simulation: category_id=${simCategory.id}, found ${cdbhsRankings.length} rankings`);
     } else {
-      console.log(`Simulation: No category found for ${gameType} ${categoryLevel}`);
+      logger.log(`Simulation: No category found for ${gameType} ${categoryLevel}`);
     }
 
     // Separate ranked and new players
@@ -4622,7 +4623,7 @@ router.post('/bulk-convoque-past', authenticateToken, async (req, res) => {
       });
     });
 
-    console.log(`Will update ${countResult.cnt} inscriptions to convoqué`);
+    logger.log(`Will update ${countResult.cnt} inscriptions to convoqué`);
 
     // Update all inscriptions for past tournaments
     const updateResult = await new Promise((resolve, reject) => {

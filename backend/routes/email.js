@@ -11,6 +11,7 @@ const { logAdminAction, ACTION_TYPES } = require('../utils/admin-logger');
 const { getFinaleTournamentNumber, getRankingTournamentNumbers } = require('./settings');
 const { buildNotification } = require('../notification-messages');
 const { sendPushToPlayer } = require('./push');
+const logger = require('../utils/logger');
 
 const router = express.Router();
 
@@ -309,16 +310,16 @@ async function getRankingDataByCategoryName(categoryDisplayName, season, orgId =
             [`%${normalizedName}%`, orgId],
             (err2, cat2) => {
               if (err2 || !cat2) {
-                console.log(`[Ranking] No category found for: ${normalizedName}`);
+                logger.log(`[Ranking] No category found for: ${normalizedName}`);
                 resolve({});
               } else {
-                console.log(`[Ranking] Found category by partial match: ${cat2.id}`);
+                logger.log(`[Ranking] Found category by partial match: ${cat2.id}`);
                 getRankingDataForCategory(cat2.id, season, orgId).then(resolve);
               }
             }
           );
         } else {
-          console.log(`[Ranking] Found category by exact match: ${cat.id}`);
+          logger.log(`[Ranking] Found category by exact match: ${cat.id}`);
           getRankingDataForCategory(cat.id, season, orgId).then(resolve);
         }
       }
@@ -407,7 +408,7 @@ async function generatePlayerConvocationPDF(player, tournamentInfo, allPoules, l
   try {
     logoBuffer = await getOrganizationLogoBuffer(brandingSettings.orgId);
   } catch (err) {
-    console.log('Logo not found for PDF:', err.message);
+    logger.log('Logo not found for PDF:', err.message);
   }
 
   return new Promise((resolve, reject) => {
@@ -463,7 +464,7 @@ async function generatePlayerConvocationPDF(player, tournamentInfo, allPoules, l
         try {
           doc.image(logoBuffer, 48, y + 5, { width: 35 });
         } catch (err) {
-          console.log('Error adding logo to PDF:', err.message);
+          logger.log('Error adding logo to PDF:', err.message);
         }
       }
 
@@ -768,7 +769,7 @@ async function generateSummaryConvocationPDF(tournamentInfo, allPoules, location
   try {
     logoBuffer = await getOrganizationLogoBuffer(brandingSettings.orgId);
   } catch (err) {
-    console.log('Logo not found for PDF:', err.message);
+    logger.log('Logo not found for PDF:', err.message);
   }
 
   return new Promise((resolve, reject) => {
@@ -814,7 +815,7 @@ async function generateSummaryConvocationPDF(tournamentInfo, allPoules, location
         try {
           doc.image(logoBuffer, 48, y + 5, { width: 35 });
         } catch (err) {
-          console.log('Error adding logo to PDF:', err.message);
+          logger.log('Error adding logo to PDF:', err.message);
         }
       }
 
@@ -1223,16 +1224,16 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
             requiresValidation: true
           });
         }
-        console.log(`Using validated parameter overrides for tournoi ${tournoiId}: distance=${override.distance}, reprises=${override.reprises}`);
+        logger.log(`Using validated parameter overrides for tournoi ${tournoiId}: distance=${override.distance}, reprises=${override.reprises}`);
       }
     } catch (error) {
       // Table might not exist yet, continue without validation
-      console.log('Note: tournament_parameter_overrides table not available, skipping validation');
+      logger.log('Note: tournament_parameter_overrides table not available, skipping validation');
     }
   }
 
-  console.log('Using Resend API for email sending');
-  console.log(`Competition type: ${isFinale ? 'FINALE' : 'TOURNAMENT'}`);
+  logger.log('Using Resend API for email sending');
+  logger.log(`Competition type: ${isFinale ? 'FINALE' : 'TOURNAMENT'}`);
 
   // Check if this is a split child tournament (has split_label and parent_tournoi_id)
   let splitLabel = null;
@@ -1245,11 +1246,11 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
       });
       if (splitRow?.split_label) {
         splitLabel = splitRow.split_label;
-        console.log(`Split tournament detected: Lieu ${splitLabel}`);
+        logger.log(`Split tournament detected: Lieu ${splitLabel}`);
       }
       if (splitRow?.parent_tournoi_id) {
         parentTournoiId = splitRow.parent_tournoi_id;
-        console.log(`Split child tournament — inscriptions are on parent tournoi_id=${parentTournoiId}`);
+        logger.log(`Split child tournament — inscriptions are on parent tournoi_id=${parentTournoiId}`);
       }
     } catch (e) { /* ignore */ }
   }
@@ -1267,16 +1268,16 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
   if (mockRankingData) {
     // Use provided mock data for testing
     rankingData = mockRankingData;
-    console.log('Using mock ranking data for testing');
+    logger.log('Using mock ranking data for testing');
   } else if (category.id) {
     // Fetch real ranking data by category ID
     rankingData = await getRankingDataForCategory(category.id, season, orgId);
-    console.log(`Fetched ranking data for ${Object.keys(rankingData).length} players by category ID`);
+    logger.log(`Fetched ranking data for ${Object.keys(rankingData).length} players by category ID`);
   } else if (category.display_name) {
     // Fallback: try to find category by name and fetch ranking data
-    console.log(`[Ranking] No category ID, trying to find by name: ${category.display_name}`);
+    logger.log(`[Ranking] No category ID, trying to find by name: ${category.display_name}`);
     rankingData = await getRankingDataByCategoryName(category.display_name, season, orgId);
-    console.log(`Fetched ranking data for ${Object.keys(rankingData).length} players by category name`);
+    logger.log(`Fetched ranking data for ${Object.keys(rankingData).length} players by category name`);
   }
 
   const results = {
@@ -1317,7 +1318,7 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
         }
       );
     });
-    console.log('Campaign record created with ID:', campaignId, 'type:', campaignType);
+    logger.log('Campaign record created with ID:', campaignId, 'type:', campaignType);
   } catch (campaignError) {
     console.error('Error creating campaign record:', campaignError);
     // Continue anyway - don't block email sending if campaign recording fails
@@ -1484,7 +1485,7 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
         }]
       });
 
-      console.log('Email sent:', emailResult);
+      logger.log('Email sent:', emailResult);
 
       results.sent.push({
         name: `${player.first_name} ${player.last_name}`,
@@ -1642,7 +1643,7 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
 
       results.summarySent = true;
       results.summaryEmail = summaryEmailAddress;
-      console.log(`Summary email sent to ${summaryEmailAddress}`);
+      logger.log(`Summary email sent to ${summaryEmailAddress}`);
     } catch (summaryError) {
       results.summarySent = false;
       results.summaryError = summaryError.message;
@@ -1668,7 +1669,7 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
               console.error('Database error updating campaign:', err);
               reject(err);
             } else {
-              console.log(`Campaign ${campaignId} updated: sent=${results.sent.length}, failed=${results.failed.length}, status=completed`);
+              logger.log(`Campaign ${campaignId} updated: sent=${results.sent.length}, failed=${results.failed.length}, status=completed`);
               resolve();
             }
           }
@@ -1793,7 +1794,7 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
         }
       }
 
-      console.log(`Updated convoque status and convocation details for ${sentPlayers.length} players in tournament ${inscriptionTournoiId}${parentTournoiId ? ` (parent of child ${tournoiId})` : ''}`);
+      logger.log(`Updated convoque status and convocation details for ${sentPlayers.length} players in tournament ${inscriptionTournoiId}${parentTournoiId ? ` (parent of child ${tournoiId})` : ''}`);
 
       // Skip saving poules in test mode
       if (!isTestMode && !skipSavePoules) {
@@ -1843,9 +1844,9 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
             });
           }
         }
-        console.log(`Saved ${poules.reduce((sum, p) => sum + p.players.length, 0)} players across ${poules.length} poules for tournament ${tournoiId}`);
+        logger.log(`Saved ${poules.reduce((sum, p) => sum + p.players.length, 0)} players across ${poules.length} poules for tournament ${tournoiId}`);
       } else {
-        console.log('Test mode - skipping poule save to database');
+        logger.log('Test mode - skipping poule save to database');
       }
 
       // Mark convocation as sent on tournoi_ext and write back locations (skip in test mode)
@@ -1866,7 +1867,7 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
             }
           );
         });
-        console.log(`Marked convocation_sent_at for tournament ${tournoiId}, lieu=${lieu1Name}, lieu_2=${lieu2Name}`);
+        logger.log(`Marked convocation_sent_at for tournament ${tournoiId}, lieu=${lieu1Name}, lieu_2=${lieu2Name}`);
       }
 
     } catch (convoqueError) {
@@ -1936,7 +1937,7 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
         );
       });
 
-      console.log(`[Convocation Archive] Saved PDF: ${filename}`);
+      logger.log(`[Convocation Archive] Saved PDF: ${filename}`);
     } catch (archiveErr) {
       console.error('Error archiving convocation PDF:', archiveErr);
       // Don't fail the whole operation if archiving fails
@@ -2026,7 +2027,7 @@ router.post('/save-poules', authenticateToken, async (req, res) => {
       }
     }
 
-    console.log(`[Save Poules] Saved ${totalPlayers} players across ${poules.length} poules for tournament ${tournoiId}`);
+    logger.log(`[Save Poules] Saved ${totalPlayers} players across ${poules.length} poules for tournament ${tournoiId}`);
 
     res.json({
       success: true,
@@ -2301,7 +2302,7 @@ router.post('/send-club-reminder', authenticateToken, async (req, res) => {
       });
 
       if (existingReminder) {
-        console.log(`[Club Reminder] Already sent to ${clubName} for tournament ${tournoiId}, skipping`);
+        logger.log(`[Club Reminder] Already sent to ${clubName} for tournament ${tournoiId}, skipping`);
         return res.json({
           success: false,
           skipped: true,
@@ -2489,7 +2490,7 @@ Le {organization_short_name}`;
       );
     });
 
-    console.log(`[Club Reminder] Sent to ${clubName} (${emailToSend}) for ${category} ${tournamentLabel}`);
+    logger.log(`[Club Reminder] Sent to ${clubName} (${emailToSend}) for ${category} ${tournamentLabel}`);
 
     res.json({
       success: true,
@@ -2733,7 +2734,7 @@ router.delete('/inscription-logs/purge', authenticateToken, async (req, res) => 
         else resolve({ deleted: this.changes });
       });
     });
-    console.log(`[Purge] Deleted ${result.deleted} inscription_email_logs between ${from} and ${to} (type=${type || 'all'}, status=${status || 'all'}, player=${player || 'all'})`);
+    logger.log(`[Purge] Deleted ${result.deleted} inscription_email_logs between ${from} and ${to} (type=${type || 'all'}, status=${status || 'all'}, player=${player || 'all'})`);
     res.json({ success: true, deleted: result.deleted });
   } catch (error) {
     console.error('Error purging inscription email logs:', error);
@@ -2928,7 +2929,7 @@ router.post('/inscription-confirmation', async (req, res) => {
           emailReprises = gameParams.reprises || '';
         }
       } catch (e) {
-        console.log('Could not look up game parameters for inscription email:', e.message);
+        logger.log('Could not look up game parameters for inscription email:', e.message);
       }
     }
 
@@ -2991,7 +2992,7 @@ router.post('/inscription-confirmation', async (req, res) => {
       (err) => { if (err) console.error('Error logging inscription email:', err); }
     );
 
-    console.log(`Inscription confirmation email sent to ${player_email} for ${tournament_name}`);
+    logger.log(`Inscription confirmation email sent to ${player_email} for ${tournament_name}`);
     res.json({ success: true, message: 'Confirmation email sent' });
 
   } catch (error) {
@@ -3088,7 +3089,7 @@ router.post('/inscription-cancellation', async (req, res) => {
           emailReprises2 = gameParams2.reprises || '';
         }
       } catch (e) {
-        console.log('Could not look up game parameters for cancellation email:', e.message);
+        logger.log('Could not look up game parameters for cancellation email:', e.message);
       }
     }
 
@@ -3151,7 +3152,7 @@ router.post('/inscription-cancellation', async (req, res) => {
       (err) => { if (err) console.error('Error logging desinscription email:', err); }
     );
 
-    console.log(`Inscription cancellation email sent to ${player_email} for ${tournament_name}`);
+    logger.log(`Inscription cancellation email sent to ${player_email} for ${tournament_name}`);
     res.json({ success: true, message: 'Cancellation email sent' });
 
   } catch (error) {
@@ -3196,7 +3197,7 @@ router.post('/unavailability-notification', async (req, res) => {
     const summaryEmail = await getSummaryEmail(orgId);
 
     if (!summaryEmail) {
-      console.log('No summary_email configured for org', orgId, '— skipping unavailability notification');
+      logger.log('No summary_email configured for org', orgId, '— skipping unavailability notification');
       return res.json({ success: true, message: 'No summary email configured, notification skipped' });
     }
 
@@ -3240,7 +3241,7 @@ router.post('/unavailability-notification', async (req, res) => {
       `
     });
 
-    console.log(`Unavailability notification sent to ${summaryEmail} for player ${player_name}`);
+    logger.log(`Unavailability notification sent to ${summaryEmail} for player ${player_name}`);
     res.json({ success: true, message: 'Notification sent' });
 
   } catch (error) {
@@ -3272,7 +3273,7 @@ router.post('/forfait-notification', async (req, res) => {
     const summaryEmail = await getSummaryEmail(orgId);
 
     if (!summaryEmail) {
-      console.log('No summary_email configured for org', orgId, '— skipping forfait notification');
+      logger.log('No summary_email configured for org', orgId, '— skipping forfait notification');
       return res.json({ success: true, message: 'No summary email configured, notification skipped' });
     }
 
@@ -3323,7 +3324,7 @@ router.post('/forfait-notification', async (req, res) => {
       `
     });
 
-    console.log(`Forfait notification sent to ${summaryEmail} for player ${player_name}`);
+    logger.log(`Forfait notification sent to ${summaryEmail} for player ${player_name}`);
     res.json({ success: true, message: 'Notification sent' });
 
   } catch (error) {
@@ -3404,7 +3405,7 @@ router.post('/forfait-confirmation', async (req, res) => {
       (err) => { if (err) console.error('Error logging forfait email:', err); }
     );
 
-    console.log(`Forfait confirmation sent to ${player_email} for ${player_name}`);
+    logger.log(`Forfait confirmation sent to ${player_email} for ${player_name}`);
     res.json({ success: true, message: 'Confirmation sent' });
 
   } catch (error) {
@@ -3436,7 +3437,7 @@ router.post('/finale-renunciation-notification', async (req, res) => {
     const summaryEmail = await getSummaryEmail(orgId);
 
     if (!summaryEmail) {
-      console.log('No summary_email configured for org', orgId, '— skipping finale renunciation notification');
+      logger.log('No summary_email configured for org', orgId, '— skipping finale renunciation notification');
       return res.json({ success: true, message: 'No summary email configured, notification skipped' });
     }
 
@@ -3481,7 +3482,7 @@ router.post('/finale-renunciation-notification', async (req, res) => {
       `
     });
 
-    console.log(`Finale renunciation notification sent to ${summaryEmail} for player ${player_name}`);
+    logger.log(`Finale renunciation notification sent to ${summaryEmail} for player ${player_name}`);
     res.json({ success: true, message: 'Notification sent' });
 
   } catch (error) {
@@ -3552,7 +3553,7 @@ router.post('/finale-renunciation-confirmation', async (req, res) => {
       `
     });
 
-    console.log(`Finale renunciation confirmation sent to ${player_email} for ${player_name}`);
+    logger.log(`Finale renunciation confirmation sent to ${player_email} for ${player_name}`);
     res.json({ success: true, message: 'Confirmation sent' });
 
   } catch (error) {
@@ -3655,7 +3656,7 @@ router.post('/contact', async (req, res) => {
       `
     });
 
-    console.log(`Contact email sent from ${player_email}: ${subject} (+ confirmation to player)`);
+    logger.log(`Contact email sent from ${player_email}: ${subject} (+ confirmation to player)`);
     res.json({ success: true, message: 'Contact email sent' });
 
   } catch (error) {
@@ -3829,7 +3830,7 @@ router.post('/fix-corrupted-names', authenticateToken, async (req, res) => {
       });
     });
 
-    console.log(`[Fix Names] Updated ${result.changes} corrupted player names`);
+    logger.log(`[Fix Names] Updated ${result.changes} corrupted player names`);
     res.json({ success: true, updated: result.changes });
   } catch (error) {
     console.error('Error fixing names:', error);
@@ -3961,7 +3962,7 @@ router.post('/poules/:tournoiId/regenerate', authenticateToken, async (req, res)
     // Normalize mode: '3 BANDES' -> '3BANDES', 'LIBRE' -> 'LIBRE', etc.
     const normalizedMode = (tournament.mode || '').replace(/\s+/g, '').toUpperCase();
     const normalizedCategorie = (tournament.categorie || '').toUpperCase();
-    console.log('Looking for category:', { mode: tournament.mode, normalizedMode, categorie: normalizedCategorie });
+    logger.log('Looking for category:', { mode: tournament.mode, normalizedMode, categorie: normalizedCategorie });
     const category = await new Promise((resolve, reject) => {
       db.get(`
         SELECT id, game_type, level FROM categories
@@ -3972,14 +3973,14 @@ router.post('/poules/:tournoiId/regenerate', authenticateToken, async (req, res)
         else resolve(row);
       });
     });
-    console.log('Found category:', category);
+    logger.log('Found category:', category);
 
     // Determine current season (September cutoff)
     const now = new Date();
     const year = now.getFullYear();
     const month = now.getMonth() + 1;
     const season = month >= 9 ? `${year}-${year + 1}` : `${year - 1}-${year}`;
-    console.log('Season:', season);
+    logger.log('Season:', season);
 
     // Fetch current rankings for this category
     let rankings = [];
@@ -4000,9 +4001,9 @@ router.post('/poules/:tournoiId/regenerate', authenticateToken, async (req, res)
           else resolve(rows || []);
         });
       });
-      console.log('Found rankings:', rankings.length);
+      logger.log('Found rankings:', rankings.length);
     } else {
-      console.log('No category found - cannot lookup rankings');
+      logger.log('No category found - cannot lookup rankings');
     }
 
     // Create a map of licence -> rank_position for quick lookup
@@ -4317,7 +4318,7 @@ router.post('/enrollment-acknowledgment', async (req, res) => {
       replyTo: contactEmail
     });
 
-    console.log(`Enrollment acknowledgment email sent to ${player_email}`);
+    logger.log(`Enrollment acknowledgment email sent to ${player_email}`);
     res.json({ success: true });
 
   } catch (error) {
@@ -4436,7 +4437,7 @@ router.post('/enrollment-notification', async (req, res) => {
       replyTo: contactEmail
     });
 
-    console.log(`Enrollment notification email sent to ${summaryEmail}`);
+    logger.log(`Enrollment notification email sent to ${summaryEmail}`);
     res.json({ success: true });
 
   } catch (error) {
@@ -4549,7 +4550,7 @@ router.post('/enrollment-approved', async (req, res) => {
       replyTo: contactEmail
     });
 
-    console.log(`Enrollment approved email sent to ${player_email}`);
+    logger.log(`Enrollment approved email sent to ${player_email}`);
     res.json({ success: true });
 
   } catch (error) {
@@ -4669,7 +4670,7 @@ router.post('/enrollment-rejected', async (req, res) => {
       replyTo: contactEmail
     });
 
-    console.log(`Enrollment rejected email sent to ${player_email}`);
+    logger.log(`Enrollment rejected email sent to ${player_email}`);
     res.json({ success: true });
 
   } catch (error) {

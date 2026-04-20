@@ -4,6 +4,7 @@ const webPush = require('web-push');
 const jwt = require('jsonwebtoken');
 const db = require('../db-loader');
 const { authenticateToken } = require('./auth'); // Admin authentication
+const logger = require('../utils/logger');
 
 // Player App URL for proxying push notification requests
 const PLAYER_APP_URL = process.env.PLAYER_APP_URL || 'https://cdbhs-player-app-production.up.railway.app';
@@ -44,7 +45,7 @@ if (!vapidPublicKey || !vapidPrivateKey) {
       vapidPublicKey,
       vapidPrivateKey
     );
-    console.log('✅ Web Push configured with VAPID keys');
+    logger.log('✅ Web Push configured with VAPID keys');
   } catch (error) {
     // Do NOT log any fragment of the keys (even truncated). If debugging is
     // required, add a temporary log locally — never commit key material to stdout.
@@ -363,7 +364,7 @@ router.get('/can-subscribe', authenticatePlayerToken, async (req, res) => {
 
     // If test mode is disabled (empty array or null), everyone can subscribe
     if (!Array.isArray(testLicences) || testLicences.length === 0) {
-      console.log(`[CAN-SUBSCRIBE] ✅ Test mode disabled - player ${licence} can subscribe`);
+      logger.log(`[CAN-SUBSCRIBE] ✅ Test mode disabled - player ${licence} can subscribe`);
       return res.json({
         can_subscribe: true,
         test_mode: false,
@@ -377,14 +378,14 @@ router.get('/can-subscribe', authenticatePlayerToken, async (req, res) => {
     const isInTestList = normalizedTestLicences.includes(normalizedPlayerLicence);
 
     if (isInTestList) {
-      console.log(`[CAN-SUBSCRIBE] ✅ Test mode active - player ${licence} IS in test list - can subscribe`);
+      logger.log(`[CAN-SUBSCRIBE] ✅ Test mode active - player ${licence} IS in test list - can subscribe`);
       return res.json({
         can_subscribe: true,
         test_mode: true,
         message: 'You are in the test group for push notifications'
       });
     } else {
-      console.log(`[CAN-SUBSCRIBE] ⚠️  Test mode active - player ${licence} NOT in test list - cannot subscribe`);
+      logger.log(`[CAN-SUBSCRIBE] ⚠️  Test mode active - player ${licence} NOT in test list - cannot subscribe`);
       return res.json({
         can_subscribe: false,
         test_mode: true,
@@ -482,9 +483,9 @@ async function sendPushToPlayer(licence, orgId, notification, options = {}) {
         const result = await webPush.sendNotification(pushSubscription, payload);
         sent++;
 
-        console.log(`✅ Push sent successfully to subscription ${sub.id}`);
-        console.log(`   FCM Response Status: ${result.statusCode}`);
-        console.log(`   FCM Response Body: ${result.body || 'empty'}`);
+        logger.log(`✅ Push sent successfully to subscription ${sub.id}`);
+        logger.log(`   FCM Response Status: ${result.statusCode}`);
+        logger.log(`   FCM Response Body: ${result.body || 'empty'}`);
 
         // Update last_used_at
         await new Promise((resolve, reject) => {
@@ -508,7 +509,7 @@ async function sendPushToPlayer(licence, orgId, notification, options = {}) {
 
         // If subscription is expired (410 Gone), delete it
         if (error.statusCode === 410) {
-          console.log(`🗑️ Removing expired subscription ${sub.id}`);
+          logger.log(`🗑️ Removing expired subscription ${sub.id}`);
           await new Promise((resolve, reject) => {
             db.run(
               'DELETE FROM push_subscriptions WHERE id = $1',
@@ -537,7 +538,7 @@ async function sendPushToPlayer(licence, orgId, notification, options = {}) {
             }
           );
         });
-        console.log(`[Push History] Stored notification for player ${licence}`);
+        logger.log(`[Push History] Stored notification for player ${licence}`);
       } catch (historyError) {
         console.error('[Push History] Failed to store notification:', historyError.message);
         // Don't fail the whole operation if history storage fails
@@ -679,8 +680,8 @@ router.post('/test', async (req, res) => {
   try {
     const { licence, title, body, url } = req.body;
 
-    console.log('[Push Proxy] Forwarding test notification to Player App');
-    console.log(`[Push Proxy] Licence: ${licence}, Title: ${title}`);
+    logger.log('[Push Proxy] Forwarding test notification to Player App');
+    logger.log(`[Push Proxy] Licence: ${licence}, Title: ${title}`);
 
     // Forward to Player App
     const response = await fetch(`${PLAYER_APP_URL}/api/player/push/test`, {
@@ -698,7 +699,7 @@ router.post('/test', async (req, res) => {
       return res.status(response.status).json(data);
     }
 
-    console.log('[Push Proxy] Success:', data);
+    logger.log('[Push Proxy] Success:', data);
     res.json(data);
 
   } catch (error) {
@@ -716,7 +717,7 @@ router.get('/debug/:licence', async (req, res) => {
   try {
     const { licence } = req.params;
 
-    console.log('[Push Proxy] Forwarding debug request to Player App for licence:', licence);
+    logger.log('[Push Proxy] Forwarding debug request to Player App for licence:', licence);
 
     // Forward to Player App
     const response = await fetch(`${PLAYER_APP_URL}/api/player/push/debug/${licence}`);
@@ -755,9 +756,9 @@ router.post('/bulk', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Titre et message requis' });
     }
 
-    console.log(`[BULK PUSH] Sending to ${licences.length} players for org ${orgId}`);
-    console.log(`[BULK PUSH] Title: ${title}`);
-    console.log(`[BULK PUSH] Body: ${body}`);
+    logger.log(`[BULK PUSH] Sending to ${licences.length} players for org ${orgId}`);
+    logger.log(`[BULK PUSH] Title: ${title}`);
+    logger.log(`[BULK PUSH] Body: ${body}`);
 
     // ==================== TEST MODE FILTERING ====================
     // Check if test mode is active (non-empty test licences list)
@@ -791,8 +792,8 @@ router.post('/bulk', authenticateToken, async (req, res) => {
         normalizedTestLicences.includes(l.replace(/\s/g, '').toUpperCase())
       );
 
-      console.log(`[PUSH-TEST] ⚠️  TEST MODE ACTIVE - ${testLicences.length} licence(s) autorisée(s)`);
-      console.log(`[PUSH-TEST] Filtered ${originalCount} licences → ${licences.length} test licences`);
+      logger.log(`[PUSH-TEST] ⚠️  TEST MODE ACTIVE - ${testLicences.length} licence(s) autorisée(s)`);
+      logger.log(`[PUSH-TEST] Filtered ${originalCount} licences → ${licences.length} test licences`);
 
       if (licences.length === 0) {
         return res.status(400).json({
@@ -804,7 +805,7 @@ router.post('/bulk', authenticateToken, async (req, res) => {
         });
       }
     } else {
-      console.log('[PUSH-TEST] ✅ Test mode disabled - sending to all selected players');
+      logger.log('[PUSH-TEST] ✅ Test mode disabled - sending to all selected players');
     }
     // ==================== END TEST MODE FILTERING ====================
 
@@ -817,7 +818,7 @@ router.post('/bulk', authenticateToken, async (req, res) => {
       fullUrl = PLAYER_APP_URL;
     }
 
-    console.log(`[BULK PUSH] Full URL: ${fullUrl}`);
+    logger.log(`[BULK PUSH] Full URL: ${fullUrl}`);
 
     // Send to all players
     const notification = {
@@ -828,7 +829,7 @@ router.post('/bulk', authenticateToken, async (req, res) => {
 
     const result = await sendPushToPlayers(licences, orgId, notification);
 
-    console.log(`[BULK PUSH] Sent: ${result.total_sent}, Failed: ${result.total_failed}`);
+    logger.log(`[BULK PUSH] Sent: ${result.total_sent}, Failed: ${result.total_failed}`);
 
     // If no notifications were sent, provide helpful error message
     if (result.total_sent === 0) {
@@ -1066,7 +1067,7 @@ router.delete('/history', authenticateToken, async (req, res) => {
       );
     });
 
-    console.log(`[PUSH HISTORY] Deleted ${result.deleted_count} notification(s) for org ${orgId}`);
+    logger.log(`[PUSH HISTORY] Deleted ${result.deleted_count} notification(s) for org ${orgId}`);
     res.json({
       success: true,
       deleted_count: result.deleted_count,
@@ -1100,7 +1101,7 @@ async function sendAdminCopyIfEnabled(orgId, playerLicence, notification) {
     const adminLicence = await appSettings.getOrgSetting(orgId, 'push_admin_licence');
 
     if (!adminLicence) {
-      console.log('[ADMIN COPY] No admin licence configured for org', orgId);
+      logger.log('[ADMIN COPY] No admin licence configured for org', orgId);
       return;
     }
 
@@ -1126,7 +1127,7 @@ async function sendAdminCopyIfEnabled(orgId, playerLicence, notification) {
     };
 
     // Send to admin with skipAdminCopy flag to prevent infinite loop
-    console.log(`[ADMIN COPY] Sending copy to admin (licence: ${adminLicence})`);
+    logger.log(`[ADMIN COPY] Sending copy to admin (licence: ${adminLicence})`);
     await sendPushToPlayer(adminLicence, orgId, adminNotification, { skipAdminCopy: true });
 
   } catch (error) {
@@ -1157,7 +1158,7 @@ async function sendAdminCopyForBulk(orgId, playerCount, notification, recipientL
     const adminLicence = await appSettings.getOrgSetting(orgId, 'push_admin_licence');
 
     if (!adminLicence) {
-      console.log('[ADMIN COPY BULK] No admin licence configured for org', orgId);
+      logger.log('[ADMIN COPY BULK] No admin licence configured for org', orgId);
       return;
     }
 
@@ -1166,7 +1167,7 @@ async function sendAdminCopyForBulk(orgId, playerCount, notification, recipientL
     const normalizedRecipients = recipientLicences.map(l => l.replace(/\s/g, '').toUpperCase());
 
     if (normalizedRecipients.includes(normalizedAdminLicence)) {
-      console.log(`[ADMIN COPY BULK] Admin (${adminLicence}) is in recipient list - skipping admin copy to avoid duplicate`);
+      logger.log(`[ADMIN COPY BULK] Admin (${adminLicence}) is in recipient list - skipping admin copy to avoid duplicate`);
       return;
     }
 
@@ -1178,7 +1179,7 @@ async function sendAdminCopyForBulk(orgId, playerCount, notification, recipientL
     };
 
     // Send to admin with skipAdminCopy flag to prevent infinite loop
-    console.log(`[ADMIN COPY BULK] Sending copy to admin (licence: ${adminLicence}) for ${playerCount} player(s)`);
+    logger.log(`[ADMIN COPY BULK] Sending copy to admin (licence: ${adminLicence}) for ${playerCount} player(s)`);
     await sendPushToPlayer(adminLicence, orgId, adminNotification, { skipAdminCopy: true });
 
   } catch (error) {

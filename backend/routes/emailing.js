@@ -10,6 +10,7 @@ const { logAdminAction, ACTION_TYPES } = require('../utils/admin-logger');
 const { getRankingTournamentNumbers, getFinaleTournamentNumber, getTournamentLabel } = require('./settings');
 const { buildNotification, getResultsNotificationType } = require('../notification-messages');
 const { sendPushToPlayer } = require('./push');
+const logger = require('../utils/logger');
 
 const { buildRsvpButtonsHtml } = require('./rsvp');
 
@@ -417,7 +418,7 @@ router.delete('/campaigns/purge', authenticateToken, async (req, res) => {
       logMessage = `[Purge] Deleted ${result.deleted}${testLabel}${typeLabel}${emptyLabel} email campaigns between ${startDate} and ${endDate}`;
     }
 
-    console.log(logMessage);
+    logger.log(logMessage);
     res.json({
       success: true,
       deleted: result.deleted,
@@ -879,7 +880,7 @@ router.put('/clubs/:clubName/email', authenticateToken, async (req, res) => {
       );
     });
 
-    console.log(`[Club Email] Updated email for ${clubName}: ${email || '(removed)'}`);
+    logger.log(`[Club Email] Updated email for ${clubName}: ${email || '(removed)'}`);
     res.json({ success: true, message: 'Email mis à jour' });
   } catch (error) {
     console.error('Error updating club email:', error);
@@ -1295,7 +1296,7 @@ router.post('/send', authenticateToken, async (req, res) => {
           html: summaryHtml
         });
         summarySent = true;
-        console.log(`Summary email sent to ${ccEmail}`);
+        logger.log(`Summary email sent to ${ccEmail}`);
       } catch (summaryError) {
         console.error('Error sending summary email:', summaryError);
       }
@@ -1716,7 +1717,7 @@ router.post('/send-finale-results', authenticateToken, async (req, res) => {
         subjectTemplate = templateRow.subject_template;
       }
     } catch (e) {
-      console.log('Using default subject template');
+      logger.log('Using default subject template');
     }
 
     // Helper function to replace template variables (handles HTML tags from Quill, preserves formatting)
@@ -1930,7 +1931,7 @@ router.post('/send-finale-results', authenticateToken, async (req, res) => {
         });
 
         summarySent = true;
-        console.log(`Finale summary email sent to ${ccEmail}`);
+        logger.log(`Finale summary email sent to ${ccEmail}`);
       } catch (summaryError) {
         console.error('Error sending finale summary email:', summaryError);
       }
@@ -2161,7 +2162,7 @@ router.post('/process-scheduled', async (req, res) => {
             );
           });
           blockedCount++;
-          console.log(`Blocked scheduled email ${scheduled.id} - already manually sent`);
+          logger.log(`Blocked scheduled email ${scheduled.id} - already manually sent`);
           continue;
         }
       }
@@ -2464,7 +2465,7 @@ router.post('/send-results', authenticateToken, async (req, res) => {
       });
     });
 
-    console.log('Matching tournoi_ext for results email:', matchingTournoi,
+    logger.log('Matching tournoi_ext for results email:', matchingTournoi,
                 'mode:', tournament.game_type, 'cat:', tournament.level, 'date:', tournament.tournament_date);
 
     // Get tournament results with emails
@@ -2862,7 +2863,7 @@ router.post('/send-results', authenticateToken, async (req, res) => {
           html: summaryHtml
         });
 
-        console.log(`Summary email sent to ${ccEmail}`);
+        logger.log(`Summary email sent to ${ccEmail}`);
       } catch (summaryError) {
         console.error('Error sending summary email:', summaryError);
         // Don't fail the whole operation if summary email fails
@@ -3550,7 +3551,7 @@ router.post('/send-finale-convocation', authenticateToken, async (req, res) => {
           html: summaryHtml
         });
 
-        console.log(`Summary email sent to ${ccEmail}`);
+        logger.log(`Summary email sent to ${ccEmail}`);
       } catch (summaryError) {
         console.error('Error sending summary email:', summaryError);
       }
@@ -4990,7 +4991,7 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
   }
 
   // Log game parameters usage
-  console.log(`Relance ${relanceType} using validated game params: distance=${customData.game_params.distance}, reprises=${customData.game_params.reprises}`);
+  logger.log(`Relance ${relanceType} using validated game params: distance=${customData.game_params.distance}, reprises=${customData.game_params.reprises}`);
 
   try {
     const baseUrl = process.env.BASE_URL || 'https://cdbhs-tournament-management-production.up.railway.app';
@@ -5222,7 +5223,7 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
       }
 
       // Debug: Log customData for t3
-      console.log('[Relance T3] customData received:', JSON.stringify(customData));
+      logger.log('[Relance T3] customData received:', JSON.stringify(customData));
 
       tournamentInfo = {
         category: categoryRow.display_name,
@@ -5232,7 +5233,7 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
         tournoi_id: customData?.tournoi_id || null
       };
 
-      console.log('[Relance T3] tournamentInfo:', JSON.stringify(tournamentInfo));
+      logger.log('[Relance T3] tournamentInfo:', JSON.stringify(tournamentInfo));
 
     } else if (relanceType === 'finale') {
       // Fetch finale qualified
@@ -5373,7 +5374,7 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
                   // Don't fail the whole operation for this
                   resolve();
                 } else {
-                  console.log(`[Relance Finale] Updated tournoi_ext.lieu for tournoi_id ${finale.tournoi_id} to: ${customData.finale_lieu}`);
+                  logger.log(`[Relance Finale] Updated tournoi_ext.lieu for tournoi_id ${finale.tournoi_id} to: ${customData.finale_lieu}`);
                   resolve();
                 }
               }
@@ -5466,8 +5467,8 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
 
         // Debug log for first participant
         if (participant === recipientsToEmail[0]) {
-          console.log('[Relance] tournamentInfo:', JSON.stringify(tournamentInfo));
-          console.log('[Relance] Intro before replacement (first 300 chars):', emailIntro.substring(0, 300));
+          logger.log('[Relance] tournamentInfo:', JSON.stringify(tournamentInfo));
+          logger.log('[Relance] Intro before replacement (first 300 chars):', emailIntro.substring(0, 300));
         }
 
         // Replace all variables explicitly (same pattern as Results template)
@@ -5644,7 +5645,7 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
 
         // Debug log after replacement
         if (participant === recipientsToEmail[0]) {
-          console.log('[Relance] Intro after replacement (first 300 chars):', emailIntro.substring(0, 300));
+          logger.log('[Relance] Intro after replacement (first 300 chars):', emailIntro.substring(0, 300));
         }
 
         const imageHtml = imageUrl ? `<div style="text-align: center; margin: 20px 0;"><img src="${imageUrl}" alt="Image" style="max-width: 100%; height: auto; border-radius: 8px;"></div>` : '';
@@ -5717,13 +5718,13 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
 
     // Update campaign
     await new Promise((resolve) => {
-      console.log(`[Relance] Updating campaign ${campaignId}: sent=${results.sent.length}, failed=${results.failed.length}`);
+      logger.log(`[Relance] Updating campaign ${campaignId}: sent=${results.sent.length}, failed=${results.failed.length}`);
       db.run(
         `UPDATE email_campaigns SET sent_count = $1, failed_count = $2, status = 'completed', sent_at = CURRENT_TIMESTAMP WHERE id = $3 AND ($4::int IS NULL OR organization_id = $4)`,
         [results.sent.length, results.failed.length, campaignId, orgId],
         (err) => {
           if (err) console.error('[Relance] Error updating campaign status:', err);
-          else console.log(`[Relance] Campaign ${campaignId} marked as completed`);
+          else logger.log(`[Relance] Campaign ${campaignId} marked as completed`);
           resolve();
         }
       );

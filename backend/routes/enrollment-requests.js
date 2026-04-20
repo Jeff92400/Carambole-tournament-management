@@ -13,6 +13,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db-loader');
 const { authenticateToken, requireAdmin, requireViewer, requireViewerWrite } = require('./auth');
+const logger = require('../utils/logger');
 const { logAdminAction, ACTION_TYPES } = require('../utils/admin-logger');
 const { Resend } = require('resend');
 const appSettings = require('../utils/app-settings');
@@ -20,7 +21,7 @@ const appSettings = require('../utils/app-settings');
 // Initialize Resend for direct email sending
 const getResend = () => {
   if (!process.env.RESEND_API_KEY) {
-    console.log('[EMAIL] RESEND_API_KEY not configured');
+    logger.log('[EMAIL] RESEND_API_KEY not configured');
     return null;
   }
   return new Resend(process.env.RESEND_API_KEY);
@@ -45,17 +46,17 @@ router.use(requireViewer);
 
 // Helper function to send approval email directly via Resend
 async function sendApprovalEmail(request, req) {
-  console.log(`[APPROVAL EMAIL] Starting email send to ${request.player_email}`);
+  logger.log(`[APPROVAL EMAIL] Starting email send to ${request.player_email}`);
 
   const resend = getResend();
   if (!resend) {
-    console.log('[APPROVAL EMAIL] Resend not configured, skipping email');
+    logger.log('[APPROVAL EMAIL] Resend not configured, skipping email');
     return { success: false, reason: 'resend_not_configured' };
   }
 
   try {
     const settings = await getEmailSettings(req);
-    console.log(`[APPROVAL EMAIL] Using sender: ${settings.sender_name} <${settings.email_from}>`);
+    logger.log(`[APPROVAL EMAIL] Using sender: ${settings.sender_name} <${settings.email_from}>`);
 
     const emailHtml = `
       <!DOCTYPE html>
@@ -128,7 +129,7 @@ async function sendApprovalEmail(request, req) {
       html: emailHtml
     });
 
-    console.log(`[APPROVAL EMAIL] Email sent successfully to ${request.player_email}`);
+    logger.log(`[APPROVAL EMAIL] Email sent successfully to ${request.player_email}`);
     return { success: true };
   } catch (error) {
     console.error('[APPROVAL EMAIL] Error sending email:', error.message);
@@ -138,17 +139,17 @@ async function sendApprovalEmail(request, req) {
 
 // Helper function to send rejection email directly via Resend
 async function sendRejectionEmail(request, reason, req) {
-  console.log(`[REJECTION EMAIL] Starting email send to ${request.player_email}`);
+  logger.log(`[REJECTION EMAIL] Starting email send to ${request.player_email}`);
 
   const resend = getResend();
   if (!resend) {
-    console.log('[REJECTION EMAIL] Resend not configured, skipping email');
+    logger.log('[REJECTION EMAIL] Resend not configured, skipping email');
     return { success: false, reason: 'resend_not_configured' };
   }
 
   try {
     const settings = await getEmailSettings(req);
-    console.log(`[REJECTION EMAIL] Using sender: ${settings.sender_name} <${settings.email_from}>`);
+    logger.log(`[REJECTION EMAIL] Using sender: ${settings.sender_name} <${settings.email_from}>`);
 
     const emailHtml = `
       <!DOCTYPE html>
@@ -222,7 +223,7 @@ async function sendRejectionEmail(request, reason, req) {
       html: emailHtml
     });
 
-    console.log(`[REJECTION EMAIL] Email sent successfully to ${request.player_email}`);
+    logger.log(`[REJECTION EMAIL] Email sent successfully to ${request.player_email}`);
     return { success: true };
   } catch (error) {
     console.error('[REJECTION EMAIL] Error sending email:', error.message);
@@ -323,11 +324,11 @@ router.get('/', async (req, res) => {
  * Permanently delete all 'deleted' enrollment requests for a season
  */
 router.delete('/purge', requireAdmin, async (req, res) => {
-  console.log('[PURGE] Purge endpoint called');
+  logger.log('[PURGE] Purge endpoint called');
   try {
     const orgId = req.user.organizationId || null;
     const { season } = req.query;
-    console.log(`[PURGE] Season: ${season}`);
+    logger.log(`[PURGE] Season: ${season}`);
 
     if (!season) {
       return res.status(400).json({ error: 'Season is required' });
@@ -337,7 +338,7 @@ router.delete('/purge', requireAdmin, async (req, res) => {
     const [startYear] = season.split('-').map(Number);
     const seasonStart = `${startYear}-09-01`;
     const seasonEnd = `${startYear + 1}-08-31`;
-    console.log(`[PURGE] Date range: ${seasonStart} to ${seasonEnd}`);
+    logger.log(`[PURGE] Date range: ${seasonStart} to ${seasonEnd}`);
 
     // Count before purging
     const countResult = await db.query(`
@@ -349,7 +350,7 @@ router.delete('/purge', requireAdmin, async (req, res) => {
     `, [seasonStart, seasonEnd, orgId]);
 
     const countToPurge = parseInt(countResult.rows[0]?.count || 0);
-    console.log(`[PURGE] Count to purge: ${countToPurge}`);
+    logger.log(`[PURGE] Count to purge: ${countToPurge}`);
 
     if (countToPurge === 0) {
       return res.json({ success: true, purged: 0, message: 'Aucune demande à purger' });
@@ -377,7 +378,7 @@ router.delete('/purge', requireAdmin, async (req, res) => {
       console.error('[PURGE] Failed to log admin action:', logErr.message);
     }
 
-    console.log(`[PURGE] Successfully purged ${countToPurge} deleted enrollment requests for season ${season}`);
+    logger.log(`[PURGE] Successfully purged ${countToPurge} deleted enrollment requests for season ${season}`);
 
     res.json({
       success: true,
@@ -479,7 +480,7 @@ router.put('/:id/approve', requireViewerWrite, async (req, res) => {
           VALUES ($1, $2, $3, $4, NOW(), 'player_app', 'inscrit')
         `, [nextId, request.licence, tournamentId, request.player_email]);
 
-        console.log(`Created inscription for ${request.player_name} in tournament ${tournamentId}`);
+        logger.log(`Created inscription for ${request.player_name} in tournament ${tournamentId}`);
       }
     }
 
@@ -534,10 +535,10 @@ router.put('/:id/approve', requireViewerWrite, async (req, res) => {
               VALUES ($1, $2, $3, 0, 0, 0, $4, NULL, NULL, NULL, $5)
             `, [categoryId, currentSeason, actualLicence, newRankPosition, orgId]);
 
-            console.log(`Added ${request.player_name} to rankings for category ${categoryId} (${request.game_mode_name} ${request.requested_ranking}) at position ${newRankPosition}`);
+            logger.log(`Added ${request.player_name} to rankings for category ${categoryId} (${request.game_mode_name} ${request.requested_ranking}) at position ${newRankPosition}`);
           }
         } else {
-          console.log(`Player ${request.licence} not found in players table - skipping ranking creation`);
+          logger.log(`Player ${request.licence} not found in players table - skipping ranking creation`);
         }
       }
     } catch (rankingError) {
@@ -560,7 +561,7 @@ router.put('/:id/approve', requireViewerWrite, async (req, res) => {
           VALUES ($1, $2, $3)
         `, [request.licence, request.game_mode_id, request.requested_ranking]);
 
-        console.log(`Added player_ranking for ${request.player_name}: ${request.game_mode_name} ${request.requested_ranking}`);
+        logger.log(`Added player_ranking for ${request.player_name}: ${request.game_mode_name} ${request.requested_ranking}`);
       } else {
         // Update existing ranking if it's different (shouldn't happen normally)
         await db.query(`
@@ -570,7 +571,7 @@ router.put('/:id/approve', requireViewerWrite, async (req, res) => {
           AND game_mode_id = $3
         `, [request.requested_ranking, request.licence, request.game_mode_id]);
 
-        console.log(`Updated player_ranking for ${request.player_name}: ${request.game_mode_name} ${request.requested_ranking}`);
+        logger.log(`Updated player_ranking for ${request.player_name}: ${request.game_mode_name} ${request.requested_ranking}`);
       }
     } catch (playerRankingError) {
       console.error('Error adding player_ranking (non-blocking):', playerRankingError.message);
@@ -598,7 +599,7 @@ router.put('/:id/approve', requireViewerWrite, async (req, res) => {
     // Create in-app notification for the player
     // IMPORTANT: Must match Player App normalization: remove spaces AND uppercase
     const normalizedLicence = request.licence.replace(/\s+/g, '').toUpperCase();
-    console.log(`[APPROVAL] Creating announcement for licence: ${normalizedLicence}`);
+    logger.log(`[APPROVAL] Creating announcement for licence: ${normalizedLicence}`);
 
     let announcementCreated = false;
     let announcementError = null;
@@ -617,7 +618,7 @@ router.put('/:id/approve', requireViewerWrite, async (req, res) => {
         ]
       );
       announcementCreated = true;
-      console.log(`[APPROVAL] Announcement created with id=${annResult.rows[0]?.id} for ${normalizedLicence}`);
+      logger.log(`[APPROVAL] Announcement created with id=${annResult.rows[0]?.id} for ${normalizedLicence}`);
     } catch (annErr) {
       announcementError = annErr.message;
       console.error('[APPROVAL] Failed to create announcement:', annErr.message, annErr.stack);
@@ -697,7 +698,7 @@ router.put('/:id/reject', requireViewerWrite, async (req, res) => {
 
     // Create in-app notification for the player
     const normalizedLicence = request.licence.replace(/\s+/g, '');
-    console.log(`[REJECTION] Creating announcement for licence: ${normalizedLicence}`);
+    logger.log(`[REJECTION] Creating announcement for licence: ${normalizedLicence}`);
 
     const rejectionMessage = reason
       ? `Votre demande d'inscription en ${request.game_mode_name} ${request.requested_ranking} (Tournoi ${request.tournament_number}) a été refusée. Raison : ${reason}`
@@ -716,7 +717,7 @@ router.put('/:id/reject', requireViewerWrite, async (req, res) => {
           orgId
         ]
       );
-      console.log(`[REJECTION] Announcement created successfully for ${normalizedLicence}`);
+      logger.log(`[REJECTION] Announcement created successfully for ${normalizedLicence}`);
     } catch (annErr) {
       console.error('[REJECTION] Failed to create announcement:', annErr.message);
     }
@@ -745,7 +746,7 @@ router.delete('/:id', requireViewerWrite, async (req, res) => {
   try {
     const { id } = req.params;
     const orgId = req.user.organizationId || null;
-    console.log(`[DELETE] Starting delete for enrollment request ${id}`);
+    logger.log(`[DELETE] Starting delete for enrollment request ${id}`);
 
     // Get the request for logging (verify it belongs to this org)
     const requestResult = await db.query(
@@ -758,11 +759,11 @@ router.delete('/:id', requireViewerWrite, async (req, res) => {
     }
 
     const request = requestResult.rows[0];
-    console.log(`[DELETE] Found request:`, JSON.stringify(request, null, 2));
+    logger.log(`[DELETE] Found request:`, JSON.stringify(request, null, 2));
 
     // If the request was approved, we need to also delete the inscription and ranking
     if (request.status === 'approved') {
-      console.log(`[DELETE] Request was approved, cleaning up inscriptions and rankings...`);
+      logger.log(`[DELETE] Request was approved, cleaning up inscriptions and rankings...`);
 
       // Find and delete the inscription that was created (uses configurable start month)
       const currentSeason = await appSettings.getCurrentSeason();
@@ -771,7 +772,7 @@ router.delete('/:id', requireViewerWrite, async (req, res) => {
       // Find the tournament that matches (same logic as approve)
       // Use parameterized query for tournament_number
       const tournamentNum = request.tournament_number;
-      console.log(`[DELETE] Looking for tournament: mode=${request.game_mode_name}, ranking=${request.requested_ranking}, T${tournamentNum}`);
+      logger.log(`[DELETE] Looking for tournament: mode=${request.game_mode_name}, ranking=${request.requested_ranking}, T${tournamentNum}`);
 
       const tournamentResult = await db.query(`
         SELECT tournoi_id
@@ -800,7 +801,7 @@ router.delete('/:id', requireViewerWrite, async (req, res) => {
 
       if (tournamentResult.rows.length > 0) {
         const tournamentId = tournamentResult.rows[0].tournoi_id;
-        console.log(`[DELETE] Found tournament ${tournamentId}, deleting inscription...`);
+        logger.log(`[DELETE] Found tournament ${tournamentId}, deleting inscription...`);
 
         // Delete the inscription
         await db.query(`
@@ -810,13 +811,13 @@ router.delete('/:id', requireViewerWrite, async (req, res) => {
             AND source = 'player_app'
         `, [request.licence, tournamentId]);
 
-        console.log(`[DELETE] Deleted inscription for ${request.player_name} from tournament ${tournamentId}`);
+        logger.log(`[DELETE] Deleted inscription for ${request.player_name} from tournament ${tournamentId}`);
       } else {
-        console.log(`[DELETE] No matching tournament found`);
+        logger.log(`[DELETE] No matching tournament found`);
       }
 
       // Delete the ranking record if it exists
-      console.log(`[DELETE] Looking for category: game_type=${request.game_mode_name}, level=${request.requested_ranking}`);
+      logger.log(`[DELETE] Looking for category: game_type=${request.game_mode_name}, level=${request.requested_ranking}`);
       const categoryResult = await db.query(`
         SELECT id FROM categories
         WHERE UPPER(game_type) = UPPER($1)
@@ -828,7 +829,7 @@ router.delete('/:id', requireViewerWrite, async (req, res) => {
         const categoryId = categoryResult.rows[0].id;
         // currentSeason already defined above
 
-        console.log(`[DELETE] Found category ${categoryId}, deleting ranking for season ${currentSeason}...`);
+        logger.log(`[DELETE] Found category ${categoryId}, deleting ranking for season ${currentSeason}...`);
         await db.query(`
           DELETE FROM rankings
           WHERE REPLACE(UPPER(licence), ' ', '') = REPLACE(UPPER($1), ' ', '')
@@ -838,24 +839,24 @@ router.delete('/:id', requireViewerWrite, async (req, res) => {
             AND ($4::int IS NULL OR organization_id = $4)
         `, [request.licence, categoryId, currentSeason, orgId]);
 
-        console.log(`[DELETE] Deleted ranking for ${request.player_name} in category ${categoryId}`);
+        logger.log(`[DELETE] Deleted ranking for ${request.player_name} in category ${categoryId}`);
       } else {
-        console.log(`[DELETE] No matching category found`);
+        logger.log(`[DELETE] No matching category found`);
       }
 
       // Also delete the player_ranking record
-      console.log(`[DELETE] Deleting player_ranking for game_mode_id=${request.game_mode_id}...`);
+      logger.log(`[DELETE] Deleting player_ranking for game_mode_id=${request.game_mode_id}...`);
       await db.query(`
         DELETE FROM player_rankings
         WHERE REPLACE(licence, ' ', '') = REPLACE($1, ' ', '')
         AND game_mode_id = $2
       `, [request.licence, request.game_mode_id]);
 
-      console.log(`[DELETE] Deleted player_ranking for ${request.player_name} in game mode ${request.game_mode_id}`);
+      logger.log(`[DELETE] Deleted player_ranking for ${request.player_name} in game mode ${request.game_mode_id}`);
     }
 
     // Soft delete - mark as deleted instead of removing
-    console.log(`[DELETE] Marking request as deleted...`);
+    logger.log(`[DELETE] Marking request as deleted...`);
     await db.query(`
       UPDATE enrollment_requests
       SET status = 'deleted',
@@ -874,7 +875,7 @@ router.delete('/:id', requireViewerWrite, async (req, res) => {
       targetName: `${request.player_name} - ${request.game_mode_name} ${request.requested_ranking}`
     });
 
-    console.log(`[DELETE] Successfully deleted enrollment request ${id}`);
+    logger.log(`[DELETE] Successfully deleted enrollment request ${id}`);
     res.json({
       success: true,
       message: 'Demande supprimée'

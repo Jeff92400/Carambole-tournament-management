@@ -3,6 +3,7 @@ const multer = require('multer');
 const { authenticateToken, requireAdmin } = require('./auth');
 const { normalizeLicence } = require('../utils/licence');
 const appSettings = require('../utils/app-settings');
+const logger = require('../utils/logger');
 
 const router = express.Router();
 
@@ -373,7 +374,7 @@ router.post('/game-parameters/fix-cadre', authenticateToken, requireAdmin, (req,
         console.error('Error fixing CADRE mode:', err);
         return res.status(500).json({ error: err.message });
       }
-      console.log(`Updated ${this.changes} CADRE rows to 'Cadre 42/2'`);
+      logger.log(`Updated ${this.changes} CADRE rows to 'Cadre 42/2'`);
       res.json({
         success: true,
         message: `Fixed ${this.changes} CADRE parameters`,
@@ -867,7 +868,7 @@ router.put('/app-bulk', authenticateToken, requireAdmin, async (req, res) => {
       return res.status(403).json({ error: 'Organisation requise pour modifier les paramètres' });
     }
 
-    console.log(`[SETTINGS] Saving ${Object.keys(settings).length} settings for org ${orgId}:`, Object.keys(settings));
+    logger.log(`[SETTINGS] Saving ${Object.keys(settings).length} settings for org ${orgId}:`, Object.keys(settings));
 
     // Validate field lengths before saving
     if (settings.organization_short_name && settings.organization_short_name.length > 100) {
@@ -877,11 +878,11 @@ router.put('/app-bulk', authenticateToken, requireAdmin, async (req, res) => {
     }
 
     for (const [key, value] of Object.entries(settings)) {
-      console.log(`[SETTINGS] Processing key: ${key}, value: ${value}`);
+      logger.log(`[SETTINGS] Processing key: ${key}, value: ${value}`);
 
       try {
         await appSettings.setOrgSetting(orgId, key, value);
-        console.log(`[SETTINGS] Successfully saved ${key} to organization_settings`);
+        logger.log(`[SETTINGS] Successfully saved ${key} to organization_settings`);
       } catch (settingErr) {
         console.error(`[SETTINGS] Failed to save ${key}:`, settingErr);
 
@@ -899,7 +900,7 @@ router.put('/app-bulk', authenticateToken, requireAdmin, async (req, res) => {
       // CRITICAL: If organization_short_name is being updated, also update the organizations table
       // The branding endpoint reads from organizations.short_name (authoritative source)
       if (key === 'organization_short_name') {
-        console.log(`[SETTINGS] Updating organizations table with short_name="${value}" for org ${orgId}`);
+        logger.log(`[SETTINGS] Updating organizations table with short_name="${value}" for org ${orgId}`);
         try {
           await new Promise((resolve, reject) => {
             db.run(
@@ -919,7 +920,7 @@ router.put('/app-bulk', authenticateToken, requireAdmin, async (req, res) => {
 
                   reject(new Error(errorMsg));
                 } else {
-                  console.log(`[SETTINGS] Updated organizations.short_name to "${value}" for org ${orgId}`);
+                  logger.log(`[SETTINGS] Updated organizations.short_name to "${value}" for org ${orgId}`);
                   resolve();
                 }
               }
@@ -931,7 +932,7 @@ router.put('/app-bulk', authenticateToken, requireAdmin, async (req, res) => {
         }
       }
     }
-    console.log('[SETTINGS] All settings saved successfully');
+    logger.log('[SETTINGS] All settings saved successfully');
     res.json({ success: true, message: 'Settings updated' });
   } catch (err) {
     console.error('[SETTINGS] app-bulk error:', err);
@@ -1570,7 +1571,7 @@ router.post('/snapshot-season-stats', authenticateToken, requireAdmin, async (re
     const season = req.body.season || await appSettings.getCurrentSeason();
     const { start: seasonStart, end: seasonEnd } = await appSettings.getSeasonDateRange(season);
 
-    console.log(`[Snapshot] Starting season stats snapshot for ${season} (${seasonStart} → ${seasonEnd})`);
+    logger.log(`[Snapshot] Starting season stats snapshot for ${season} (${seasonStart} → ${seasonEnd})`);
 
     // Get all clubs
     const clubs = await dbAll(db, 'SELECT id, name, display_name, city FROM clubs', []);
@@ -1766,7 +1767,7 @@ router.post('/snapshot-season-stats', authenticateToken, requireAdmin, async (re
       }
     }
 
-    console.log(`[Snapshot] Done: ${snapshotCount}/${clubs.length} clubs snapshotted for ${season}`);
+    logger.log(`[Snapshot] Done: ${snapshotCount}/${clubs.length} clubs snapshotted for ${season}`);
 
     // Mark season as archived in organization settings
     const orgId = req.user.organizationId || null;
@@ -1785,7 +1786,7 @@ router.post('/snapshot-season-stats', authenticateToken, requireAdmin, async (re
       if (!archivedSeasons.includes(season)) {
         archivedSeasons.push(season);
         await appSettings.setOrgSetting(orgId, 'archived_seasons', JSON.stringify(archivedSeasons));
-        console.log(`[Snapshot] Marked ${season} as archived for org ${orgId}`);
+        logger.log(`[Snapshot] Marked ${season} as archived for org ${orgId}`);
       }
     } catch (settingErr) {
       console.error('[Snapshot] Failed to update archived_seasons setting:', settingErr.message);
@@ -2076,7 +2077,7 @@ router.put('/push-test-licences', authenticateToken, requireAdmin, async (req, r
       );
     });
 
-    console.log(`[PUSH-TEST] Updated test licences for org ${orgId}: ${licences.length} licences`);
+    logger.log(`[PUSH-TEST] Updated test licences for org ${orgId}: ${licences.length} licences`);
 
     res.json({ success: true, licences });
   } catch (error) {
@@ -2166,7 +2167,7 @@ router.put('/org-settings-batch', authenticateToken, requireAdmin, async (req, r
                 console.error('[ORG-SETTINGS] Error updating organizations.short_name:', err);
                 reject(err);
               } else {
-                console.log(`[ORG-SETTINGS] Updated organizations.short_name to "${stringValue}" for org ${orgId}`);
+                logger.log(`[ORG-SETTINGS] Updated organizations.short_name to "${stringValue}" for org ${orgId}`);
                 resolve();
               }
             }
@@ -2175,7 +2176,7 @@ router.put('/org-settings-batch', authenticateToken, requireAdmin, async (req, r
       }
     }
 
-    console.log(`[ORG-SETTINGS] Updated ${Object.keys(settings).length} settings for org ${orgId}`);
+    logger.log(`[ORG-SETTINGS] Updated ${Object.keys(settings).length} settings for org ${orgId}`);
 
     res.json({ success: true });
   } catch (error) {
@@ -2222,7 +2223,7 @@ router.post('/sync-org-short-name', authenticateToken, requireAdmin, async (req,
       );
     });
 
-    console.log(`[SYNC] Synced organizations.short_name to "${shortName}" for org ${orgId}`);
+    logger.log(`[SYNC] Synced organizations.short_name to "${shortName}" for org ${orgId}`);
     res.json({
       success: true,
       message: `Organization short name synced to: ${shortName}`,
@@ -2253,7 +2254,7 @@ router.post('/enable-push-notifications', authenticateToken, requireAdmin, async
       );
     });
 
-    console.log(`[PUSH] Enabled push notifications for all players in org ${orgId}`);
+    logger.log(`[PUSH] Enabled push notifications for all players in org ${orgId}`);
     res.json({ success: true, message: 'Push notifications enabled for all players' });
   } catch (error) {
     console.error('[PUSH] Error enabling push notifications:', error);
@@ -2297,7 +2298,7 @@ router.put('/current-season', authenticateToken, requireAdmin, async (req, res) 
     await appSettings.setOrgSetting(orgId, 'current_season_override', override || '');
     const newCurrent = await appSettings.getCurrentSeason(new Date(), orgId);
 
-    console.log(`[SEASON] Season override ${override ? 'set to ' + override : 'cleared'} for org ${orgId}`);
+    logger.log(`[SEASON] Season override ${override ? 'set to ' + override : 'cleared'} for org ${orgId}`);
 
     res.json({
       success: true,

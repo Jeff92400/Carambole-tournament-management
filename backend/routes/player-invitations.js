@@ -11,6 +11,7 @@ const { authenticateToken, requireAdmin } = require('./auth');
 const db = require('../db-loader');
 const appSettings = require('../utils/app-settings');
 const { logAdminAction, ACTION_TYPES } = require('../utils/admin-logger');
+const logger = require('../utils/logger');
 
 const router = express.Router();
 
@@ -594,9 +595,9 @@ router.post('/send', authenticateToken, async (req, res) => {
         filename: pdfRow.filename || 'Guide-Application-Joueur.pdf',
         content: pdfContent
       };
-      console.log('[Player Invitations] PDF found in DB, size:', pdfContent.length, 'bytes');
+      logger.log('[Player Invitations] PDF found in DB, size:', pdfContent.length, 'bytes');
     } else {
-      console.log('[Player Invitations] No PDF in database');
+      logger.log('[Player Invitations] No PDF in database');
     }
 
     const senderName = emailSettings.email_sender_name || 'CDBHS';
@@ -611,7 +612,7 @@ router.post('/send', authenticateToken, async (req, res) => {
     // Logo URL - org-specific, onerror will hide if not found
     const orgSlug = await appSettings.getOrgSlug(orgId);
     const logoUrl = appSettings.buildLogoUrl(baseUrl, orgSlug);
-    console.log('[Player Invitations] Using logo URL:', logoUrl);
+    logger.log('[Player Invitations] Using logo URL:', logoUrl);
 
     let sentCount = 0;
     let failedCount = 0;
@@ -795,7 +796,7 @@ router.post('/send', authenticateToken, async (req, res) => {
           html: summaryHtml
         });
 
-        console.log(`Summary email sent to ${replyToEmail}`);
+        logger.log(`Summary email sent to ${replyToEmail}`);
       } catch (summaryError) {
         console.error('Error sending summary email:', summaryError);
         // Don't fail the whole operation if summary email fails
@@ -919,9 +920,9 @@ router.post('/send-with-template', authenticateToken, async (req, res) => {
         filename: pdfRow.filename || 'Guide-Application-Joueur.pdf',
         content: pdfContent
       };
-      console.log('[Player Invitations Template] PDF found in DB, size:', pdfContent.length, 'bytes');
+      logger.log('[Player Invitations Template] PDF found in DB, size:', pdfContent.length, 'bytes');
     } else {
-      console.log('[Player Invitations Template] No PDF in database');
+      logger.log('[Player Invitations Template] No PDF in database');
     }
 
     const senderName = emailSettings.email_sender_name || 'CDBHS';
@@ -936,7 +937,7 @@ router.post('/send-with-template', authenticateToken, async (req, res) => {
     // Logo URL - org-specific, onerror will hide if not found
     const orgSlug = await appSettings.getOrgSlug(orgId);
     const logoUrl = appSettings.buildLogoUrl(baseUrl, orgSlug);
-    console.log('[Player Invitations Template] Using logo URL:', logoUrl, 'template:', template_key);
+    logger.log('[Player Invitations Template] Using logo URL:', logoUrl, 'template:', template_key);
 
     let sentCount = 0;
     let failedCount = 0;
@@ -1126,7 +1127,7 @@ router.post('/send-with-template', authenticateToken, async (req, res) => {
             subject: `Récapitulatif Invitations Player App - ${templateLabels[template_key]}`,
             html: summaryHtml
           });
-          console.log('[Player Invitations Template] Summary email sent to', replyToEmail);
+          logger.log('[Player Invitations Template] Summary email sent to', replyToEmail);
         }
       } catch (summaryError) {
         console.error('Error sending summary email:', summaryError);
@@ -1518,7 +1519,7 @@ router.post('/resend-batch', authenticateToken, async (req, res) => {
       }
     }
 
-    console.log(`Batch resend: ${sentCount}/${invitations.length} reminders sent`);
+    logger.log(`Batch resend: ${sentCount}/${invitations.length} reminders sent`);
 
     res.json({
       success: true,
@@ -1555,7 +1556,7 @@ router.post('/sync-signups', authenticateToken, async (req, res) => {
       );
     });
 
-    console.log(`Found ${pendingInvitations.length} pending invitations`);
+    logger.log(`Found ${pendingInvitations.length} pending invitations`);
 
     // Get all player accounts (filtered by org)
     const playerAccounts = await new Promise((resolve, reject) => {
@@ -1573,7 +1574,7 @@ router.post('/sync-signups', authenticateToken, async (req, res) => {
       );
     });
 
-    console.log(`Found ${playerAccounts.length} player accounts`);
+    logger.log(`Found ${playerAccounts.length} player accounts`);
 
     // Create a map of normalized licences to created_at
     const accountMap = new Map();
@@ -1593,7 +1594,7 @@ router.post('/sync-signups', authenticateToken, async (req, res) => {
       const signedUpAt = accountMap.get(normalizedLicence);
 
       if (signedUpAt) {
-        console.log(`Updating invitation ${inv.id} for licence ${inv.licence}`);
+        logger.log(`Updating invitation ${inv.id} for licence ${inv.licence}`);
         await new Promise((resolve, reject) => {
           db.run(
             `UPDATE player_invitations SET has_signed_up = TRUE, signed_up_at = $1 WHERE id = $2`,
@@ -1772,9 +1773,9 @@ router.get('/players-without-notifications', authenticateToken, async (req, res)
       });
     });
 
-    console.log('[Players without notifications] Found:', players.length);
+    logger.log('[Players without notifications] Found:', players.length);
     players.forEach(p => {
-      console.log(`  - ${p.first_name} ${p.last_name}: device_count=${p.device_count}, push_enabled=${p.push_enabled}, has_subscription=${p.has_push_subscription}`);
+      logger.log(`  - ${p.first_name} ${p.last_name}: device_count=${p.device_count}, push_enabled=${p.push_enabled}, has_subscription=${p.has_push_subscription}`);
     });
 
     res.json({

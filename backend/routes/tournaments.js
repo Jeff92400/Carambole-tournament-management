@@ -11,6 +11,7 @@ const appSettings = require('../utils/app-settings');
 const { getRankingTournamentNumbers, getFinaleTournamentNumber, getTournamentLabel } = require('./settings');
 const { buildNotification, getResultsNotificationType } = require('../notification-messages');
 const { sendPushToPlayers } = require('./push');
+const logger = require('../utils/logger');
 
 /**
  * Default column mapping for tournament results imports
@@ -51,7 +52,7 @@ function recalculatePositions(tournamentId, orgId, callback) {
       console.error('[RECALC-POSITIONS] Error recalculating positions:', err);
       return callback(err);
     }
-    console.log(`[RECALC-POSITIONS] Positions recalculated for tournament ${tournamentId}`);
+    logger.log(`[RECALC-POSITIONS] Positions recalculated for tournament ${tournamentId}`);
     callback(null);
   });
 }
@@ -269,7 +270,7 @@ async function assignPositionPointsIfJournees(tournamentId, orgId) {
       'SELECT id, position FROM tournament_results WHERE tournament_id = $1 ORDER BY position ASC',
       [tournamentId]
     );
-    console.log(`[POS-PTS] Tournament ${tournamentId}: bracket data detected, preserving ${results.length} existing positions`);
+    logger.log(`[POS-PTS] Tournament ${tournamentId}: bracket data detected, preserving ${results.length} existing positions`);
   } else {
     // Simple import: compute position from match_points sort (existing logic)
     results = await dbAllAsync(
@@ -285,7 +286,7 @@ async function assignPositionPointsIfJournees(tournamentId, orgId) {
     });
     // Assign positions from sort order
     results.forEach((r, i) => { r.position = i + 1; });
-    console.log(`[POS-PTS] Tournament ${tournamentId}: no bracket data, computed positions from match_points sort for ${results.length} players`);
+    logger.log(`[POS-PTS] Tournament ${tournamentId}: no bracket data, computed positions from match_points sort for ${results.length} players`);
   }
 
   const nbPlayers = results.length;
@@ -294,7 +295,7 @@ async function assignPositionPointsIfJournees(tournamentId, orgId) {
     console.warn(`[POS-PTS] No position_points configured for org ${orgId} (players=${nbPlayers}), skipping assignment for tournament ${tournamentId}`);
     return;
   }
-  console.log(`[POS-PTS] Assigning position points for tournament ${tournamentId}, players=${nbPlayers}, lookup keys: [${Object.keys(lookup).join(',')}]`);
+  logger.log(`[POS-PTS] Assigning position points for tournament ${tournamentId}, players=${nbPlayers}, lookup keys: [${Object.keys(lookup).join(',')}]`);
 
   // Check degradation setting: last player gets points of position N+1
   const degradation = await appSettings.getOrgSetting(orgId, 'position_points_degradation');
@@ -349,7 +350,7 @@ try {
       }
     }
   });
-  console.log('Multer configured successfully, uploads dir:', uploadsDir);
+  logger.log('Multer configured successfully, uploads dir:', uploadsDir);
 } catch (error) {
   console.error('Error configuring multer:', error);
   // Create a dummy upload middleware
@@ -586,9 +587,9 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
     try {
       const profileConfig = await getColumnMapping('tournaments');
       columnMapping = profileConfig?.mappings || DEFAULT_TOURNAMENT_MAPPING;
-      console.log(`Using ${profileConfig ? 'configured' : 'default'} column mapping for tournaments import`);
+      logger.log(`Using ${profileConfig ? 'configured' : 'default'} column mapping for tournaments import`);
     } catch (err) {
-      console.log('Error loading tournament column mapping, using defaults:', err.message);
+      logger.log('Error loading tournament column mapping, using defaults:', err.message);
       columnMapping = DEFAULT_TOURNAMENT_MAPPING;
     }
 
@@ -871,7 +872,7 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
                                 console.error(`[RESULTS] Failed to send to ${participant.licence}:`, playerNotifError.message);
                               }
                             }
-                            console.log(`[RESULTS] Sent ${notifType} notifications to ${participants.length} players`);
+                            logger.log(`[RESULTS] Sent ${notifType} notifications to ${participants.length} players`);
 
                             // News auto-publisher — create a draft article for this
                             // tournament in the Player App news feed. Uses the shared
@@ -907,7 +908,7 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
                               tournamentNumber === Math.max(...rankingNumbers);
 
                             if (isLastQualifyingTournament) {
-                              console.log(`[FINALE_QUALIFICATION] Tournament ${tournamentNumber} is the last qualifying tournament, checking for qualified players`);
+                              logger.log(`[FINALE_QUALIFICATION] Tournament ${tournamentNumber} is the last qualifying tournament, checking for qualified players`);
 
                               // Get current rankings for this category
                               const rankings = await new Promise((resolve, reject) => {
@@ -942,7 +943,7 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
                                 const qualifiedCount = rankings.length < threshold ? smallCount : largeCount;
                                 const qualifiedPlayers = rankings.filter(r => r.rank_position <= qualifiedCount);
 
-                                console.log(`[FINALE_QUALIFICATION] ${qualifiedPlayers.length} players qualified (threshold: ${qualifiedCount})`);
+                                logger.log(`[FINALE_QUALIFICATION] ${qualifiedPlayers.length} players qualified (threshold: ${qualifiedCount})`);
 
                                 if (qualifiedPlayers.length > 0) {
                                   // Get finale tournament details if it exists
@@ -990,7 +991,7 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
                                   });
 
                                   const result = await sendPushToPlayers(licences, orgId, notification);
-                                  console.log(`[FINALE_QUALIFICATION] Sent notification to ${result.total_sent} qualified player(s)`);
+                                  logger.log(`[FINALE_QUALIFICATION] Sent notification to ${result.total_sent} qualified player(s)`);
 
                                   // News auto-publisher — create a single article
                                   // listing the qualified players. Idempotent on
@@ -1320,7 +1321,7 @@ async function computeBonusMoyenne(tournamentId, categoryId, orgId, callback) {
   try {
     const rawSetting = orgId ? (await appSettings.getOrgSetting(orgId, 'bonus_moyenne_enabled')) : '';
     const enabled = rawSetting === 'true';
-    console.log(`[BONUS-MOY] computeBonusMoyenne called: tournamentId=${tournamentId}, categoryId=${categoryId}, orgId=${orgId}, setting='${rawSetting}', enabled=${enabled}`);
+    logger.log(`[BONUS-MOY] computeBonusMoyenne called: tournamentId=${tournamentId}, categoryId=${categoryId}, orgId=${orgId}, setting='${rawSetting}', enabled=${enabled}`);
 
     // Get all player results with existing bonus_detail
     const results = await dbAllAsync(
@@ -1329,7 +1330,7 @@ async function computeBonusMoyenne(tournamentId, categoryId, orgId, callback) {
     );
 
     if (!results || results.length === 0) {
-      console.log(`[BONUS-MOY] No results for tournament ${tournamentId}, skipping`);
+      logger.log(`[BONUS-MOY] No results for tournament ${tournamentId}, skipping`);
       return callback(null);
     }
 
@@ -1347,21 +1348,21 @@ async function computeBonusMoyenne(tournamentId, categoryId, orgId, callback) {
         'SELECT id, game_type, level, organization_id FROM categories WHERE id = $1',
         [categoryId]
       );
-      console.log(`[BONUS-MOY] Category: id=${categoryId}, game_type=${category?.game_type}, level=${category?.level}, org_id=${category?.organization_id}`);
+      logger.log(`[BONUS-MOY] Category: id=${categoryId}, game_type=${category?.game_type}, level=${category?.level}, org_id=${category?.organization_id}`);
 
       if (category) {
         const gp = await dbGetAsync(
           'SELECT moyenne_mini, moyenne_maxi FROM game_parameters WHERE UPPER(REPLACE(mode, \' \', \'\')) = UPPER(REPLACE($1, \' \', \'\')) AND UPPER(categorie) = UPPER($2) AND ($3::int IS NULL OR organization_id = $3)',
           [category.game_type, category.level, category.organization_id || orgId]
         );
-        console.log(`[BONUS-MOY] game_parameters query result: ${JSON.stringify(gp)}`);
+        logger.log(`[BONUS-MOY] game_parameters query result: ${JSON.stringify(gp)}`);
 
         if (gp && gp.moyenne_mini != null) moyenneMini = parseFloat(gp.moyenne_mini);
         if (gp && gp.moyenne_maxi != null) moyenneMaxi = parseFloat(gp.moyenne_maxi);
         moyenneMiddle = Math.round((moyenneMini + moyenneMaxi) / 2 * 100) / 100;
-        console.log(`[BONUS-MOY] Thresholds: type=${bonusType}, mini=${moyenneMini}, middle=${moyenneMiddle.toFixed(3)}, maxi=${moyenneMaxi}, tiers=[${tier1},${tier2},${tier3}]`);
+        logger.log(`[BONUS-MOY] Thresholds: type=${bonusType}, mini=${moyenneMini}, middle=${moyenneMiddle.toFixed(3)}, maxi=${moyenneMaxi}, tiers=[${tier1},${tier2},${tier3}]`);
       } else {
-        console.log(`[BONUS-MOY] Category ${categoryId} not found`);
+        logger.log(`[BONUS-MOY] Category ${categoryId} not found`);
         return callback(null);
       }
     }
@@ -1396,11 +1397,11 @@ async function computeBonusMoyenne(tournamentId, categoryId, orgId, callback) {
         for (const [licence, stats] of Object.entries(pouleStats)) {
           pouleOnlyMoyennes[licence.replace(/ /g, '')] = stats.reprises > 0 ? stats.points / stats.reprises : 0;
         }
-        console.log(`[BONUS-MOY] Using poule-only moyennes for ${Object.keys(pouleOnlyMoyennes).length} players (tournament ${tournamentId})`);
+        logger.log(`[BONUS-MOY] Using poule-only moyennes for ${Object.keys(pouleOnlyMoyennes).length} players (tournament ${tournamentId})`);
       }
     } catch (e) { /* tournament_matches may not exist */ }
     if (bonusScope === 'journee') {
-      console.log(`[BONUS-MOY] Using full-day (journée) moyennes for tournament ${tournamentId} (scope=${bonusScope})`);
+      logger.log(`[BONUS-MOY] Using full-day (journée) moyennes for tournament ${tournamentId} (scope=${bonusScope})`);
     }
 
     let updateCount = 0;
@@ -1454,7 +1455,7 @@ async function computeBonusMoyenne(tournamentId, categoryId, orgId, callback) {
       if (detail.MOYENNE_BONUS && detail.MOYENNE_BONUS > 0) updateCount++;
     }
 
-    console.log(`[BONUS-MOY] Applied bonus moyenne to ${updateCount}/${results.length} results for tournament ${tournamentId}`);
+    logger.log(`[BONUS-MOY] Applied bonus moyenne to ${updateCount}/${results.length} results for tournament ${tournamentId}`);
     callback(null);
   } catch (error) {
     console.error('[BONUS-MOY] Error computing bonus moyenne:', error);
@@ -1476,7 +1477,7 @@ function computeBonusPoints(tournamentId, categoryId, orgId, callback) {
 
       // Skip if all points are 0
       if (rules.every(r => r.points === 0)) {
-        console.log('[BONUS] All scoring rule points are 0, skipping barème');
+        logger.log('[BONUS] All scoring rule points are 0, skipping barème');
         computeBonusMoyenne(tournamentId, categoryId, orgId, callback);
         return;
       }
@@ -1503,7 +1504,7 @@ function computeBonusPoints(tournamentId, categoryId, orgId, callback) {
               referenceValues.MOYENNE_MAXI = parseFloat(catInfo.moyenne_maxi);
           }
 
-          console.log(`[BONUS] Category ${catInfo ? catInfo.category_name : categoryId}: refs=${JSON.stringify(referenceValues)}, ${rules.length} rules`);
+          logger.log(`[BONUS] Category ${catInfo ? catInfo.category_name : categoryId}: refs=${JSON.stringify(referenceValues)}, ${rules.length} rules`);
 
           // Warn if rules reference thresholds that are not configured
           if (Object.keys(referenceValues).length === 0) {
@@ -1528,7 +1529,7 @@ function computeBonusPoints(tournamentId, categoryId, orgId, callback) {
                 [tournamentId],
                 (err, results) => {
                   if (err || !results || results.length === 0) {
-                    console.log('[BONUS] No results to process');
+                    logger.log('[BONUS] No results to process');
                     return computeBonusMoyenne(tournamentId, categoryId, orgId, callback);
                   }
 
@@ -1556,7 +1557,7 @@ function computeBonusPoints(tournamentId, categoryId, orgId, callback) {
                           if (rule.points > 0) {
                             bonusDetail[ruleType] = (bonusDetail[ruleType] || 0) + rule.points;
                             totalBonus += rule.points;
-                            console.log(`[BONUS] ${result.licence}: ${ruleType} matched → +${rule.points}`);
+                            logger.log(`[BONUS] ${result.licence}: ${ruleType} matched → +${rule.points}`);
                           }
                           break; // First match wins
                         }
@@ -1570,7 +1571,7 @@ function computeBonusPoints(tournamentId, categoryId, orgId, callback) {
                         completed++;
                         if (!err && totalBonus > 0) updateCount++;
                         if (completed === results.length) {
-                          console.log(`[BONUS] Applied barème bonus to ${updateCount}/${results.length} results for tournament ${tournamentId}`);
+                          logger.log(`[BONUS] Applied barème bonus to ${updateCount}/${results.length} results for tournament ${tournamentId}`);
                           // Chain bonus moyenne (merges into existing bonus_detail)
                           computeBonusMoyenne(tournamentId, categoryId, orgId, callback);
                         }
@@ -1632,7 +1633,7 @@ function dbRunAsync(query, params = []) {
 // ==================== JOURNÉES QUALIFICATIVES RANKING ====================
 async function recalculateRankingsJournees(categoryId, season, callback, orgId) {
   try {
-    console.log(`[RANKING-J] Starting journées recalculation for category ${categoryId}, season ${season}, org ${orgId}`);
+    logger.log(`[RANKING-J] Starting journées recalculation for category ${categoryId}, season ${season}, org ${orgId}`);
 
     // Get org settings
     const bestOfCount = parseInt(await appSettings.getOrgSetting(orgId, 'best_of_count')) || 2;
@@ -1658,7 +1659,7 @@ async function recalculateRankingsJournees(categoryId, season, callback, orgId) 
     );
 
     if (tournaments.length === 0) {
-      console.log(`[RANKING-J] No tournaments found, skipping`);
+      logger.log(`[RANKING-J] No tournaments found, skipping`);
       return callback(null);
     }
 
@@ -1683,7 +1684,7 @@ async function recalculateRankingsJournees(categoryId, season, callback, orgId) 
     );
 
     if (results.length === 0) {
-      console.log(`[RANKING-J] No results found`);
+      logger.log(`[RANKING-J] No results found`);
       return callback(null);
     }
 
@@ -1874,7 +1875,7 @@ async function recalculateRankingsJournees(categoryId, season, callback, orgId) 
       );
     }
 
-    console.log(`[RANKING-J] Completed: ${rankings.length} players ranked`);
+    logger.log(`[RANKING-J] Completed: ${rankings.length} players ranked`);
     callback(null);
   } catch (error) {
     console.error(`[RANKING-J] Error:`, error);
@@ -1884,7 +1885,7 @@ async function recalculateRankingsJournees(categoryId, season, callback, orgId) 
 
 // ==================== STANDARD RANKING (3 Tournois) ====================
 async function recalculateRankingsStandard(categoryId, season, callback, orgId) {
-  console.log(`[RANKING] Starting recalculation for category ${categoryId}, season ${season}`);
+  logger.log(`[RANKING] Starting recalculation for category ${categoryId}, season ${season}`);
 
   // Get ranking tournament numbers dynamically (excludes finale)
   const rankingNumbers = await getRankingTournamentNumbers(orgId);
@@ -1930,16 +1931,16 @@ async function recalculateRankingsStandard(categoryId, season, callback, orgId) 
       return callback(err);
     }
 
-    console.log(`[RANKING] Found ${results.length} players to rank for category ${categoryId}`);
+    logger.log(`[RANKING] Found ${results.length} players to rank for category ${categoryId}`);
 
     if (results.length === 0) {
-      console.log(`[RANKING] No players found, skipping ranking update`);
+      logger.log(`[RANKING] No players found, skipping ranking update`);
       return callback(null);
     }
 
     // Best-of post-processing: keep only best N tournament match point scores
     if (bestOfCount > 0 && bestOfCount < rankingNumbers.length && results.length > 0) {
-      console.log(`[RANKING] Applying best ${bestOfCount} of ${rankingNumbers.length} tournaments`);
+      logger.log(`[RANKING] Applying best ${bestOfCount} of ${rankingNumbers.length} tournaments`);
       results.forEach(r => {
         // Collect per-tournament scores
         const scores = rankingNumbers.map((num, i) => ({
@@ -1976,7 +1977,7 @@ async function recalculateRankingsStandard(categoryId, season, callback, orgId) 
     }
 
     // Log top 3 for verification
-    console.log(`[RANKING] Top 3: ${results.slice(0, 3).map(r => `${r.licence}(${r.total_match_points}pts)`).join(', ')}`);
+    logger.log(`[RANKING] Top 3: ${results.slice(0, 3).map(r => `${r.licence}(${r.total_match_points}pts)`).join(', ')}`);
 
     // Delete existing rankings
     db.run('DELETE FROM rankings WHERE category_id = ? AND season = ? AND ($3::int IS NULL OR organization_id = $3)', [categoryId, season, orgId], function(err) {
@@ -1985,7 +1986,7 @@ async function recalculateRankingsStandard(categoryId, season, callback, orgId) 
         return callback(err);
       }
 
-      console.log(`[RANKING] Deleted ${this.changes} old ranking entries`);
+      logger.log(`[RANKING] Deleted ${this.changes} old ranking entries`);
 
       // Insert new rankings with positions
       const stmt = db.prepare(`
@@ -2032,7 +2033,7 @@ async function recalculateRankingsStandard(categoryId, season, callback, orgId) 
                 }
 
                 // Verification log
-                console.log(`[RANKING] Completed: ${successCount}/${results.length} players inserted successfully`);
+                logger.log(`[RANKING] Completed: ${successCount}/${results.length} players inserted successfully`);
 
                 if (insertErrors.length > 0) {
                   console.error(`[RANKING] Failed insertions:`, insertErrors);
@@ -2042,7 +2043,7 @@ async function recalculateRankingsStandard(categoryId, season, callback, orgId) 
                 db.get('SELECT COUNT(*) as count FROM rankings WHERE category_id = ? AND season = ? AND ($3::int IS NULL OR organization_id = $3)',
                   [categoryId, season, orgId], (err, row) => {
                     if (!err && row) {
-                      console.log(`[RANKING] Verification: ${row.count} entries in rankings table`);
+                      logger.log(`[RANKING] Verification: ${row.count} entries in rankings table`);
                       if (row.count !== results.length) {
                         console.error(`[RANKING] WARNING: Expected ${results.length} but found ${row.count} in database!`);
                       }
@@ -2083,7 +2084,7 @@ async function recalculateRankingsStandard(categoryId, season, callback, orgId) 
                               () => {
                                 detailUpdates++;
                                 if (detailUpdates === entries.length) {
-                                  console.log(`[RANKING] Updated bonus_detail for ${detailUpdates} players`);
+                                  logger.log(`[RANKING] Updated bonus_detail for ${detailUpdates} players`);
                                   callback(insertErrors.length > 0 ? new Error(`${insertErrors.length} insertions failed`) : finalizeErr);
                                 }
                               }
@@ -2110,10 +2111,10 @@ async function recomputeAllBonuses(categoryId, season, orgId, callback) {
   try {
     const rankingNumbers = await getRankingTournamentNumbers(orgId);
     if (!rankingNumbers || rankingNumbers.length === 0) {
-      console.log(`[BONUS] No ranking tournament numbers for org ${orgId}, skipping recompute`);
+      logger.log(`[BONUS] No ranking tournament numbers for org ${orgId}, skipping recompute`);
       return callback(null);
     }
-    console.log(`[BONUS] Recomputing bonuses for category ${categoryId}, season ${season}, org ${orgId}, tournamentNumbers=[${rankingNumbers.join(',')}]`);
+    logger.log(`[BONUS] Recomputing bonuses for category ${categoryId}, season ${season}, org ${orgId}, tournamentNumbers=[${rankingNumbers.join(',')}]`);
 
     const tournaments = await dbAllAsync(
       `SELECT id FROM tournaments WHERE category_id = $1 AND season = $2 AND tournament_number IN (${rankingNumbers.join(',')}) AND ($3::int IS NULL OR organization_id = $3)`,
@@ -2121,10 +2122,10 @@ async function recomputeAllBonuses(categoryId, season, orgId, callback) {
     );
 
     if (!tournaments || tournaments.length === 0) {
-      console.log(`[BONUS] No tournaments found for category ${categoryId}, season ${season}`);
+      logger.log(`[BONUS] No tournaments found for category ${categoryId}, season ${season}`);
       return callback(null);
     }
-    console.log(`[BONUS] Found ${tournaments.length} tournaments to recompute: [${tournaments.map(t => t.id).join(',')}]`);
+    logger.log(`[BONUS] Found ${tournaments.length} tournaments to recompute: [${tournaments.map(t => t.id).join(',')}]`);
 
     // Step 1: Re-assign position points for each tournament (fixes TQs imported before settings were configured)
     for (const t of tournaments) {
@@ -2160,10 +2161,10 @@ async function recomputeAllBonuses(categoryId, season, orgId, callback) {
       if (sample) {
         try {
           const detail = JSON.parse(sample.bonus_detail);
-          console.log(`[BONUS] Verification for tournament ${t.id}: bonus_detail=${JSON.stringify(detail)}`);
+          logger.log(`[BONUS] Verification for tournament ${t.id}: bonus_detail=${JSON.stringify(detail)}`);
         } catch (e) {}
       } else {
-        console.log(`[BONUS] Verification for tournament ${t.id}: no bonus_detail found`);
+        logger.log(`[BONUS] Verification for tournament ${t.id}: no bonus_detail found`);
       }
     }
 
@@ -2219,7 +2220,7 @@ router.post('/recalculate-rankings', authenticateToken, async (req, res) => {
 
 // Get all tournaments
 router.get('/', authenticateToken, (req, res) => {
-  console.log('GET /api/tournaments called, season:', req.query.season);
+  logger.log('GET /api/tournaments called, season:', req.query.season);
   const { season } = req.query;
   const orgId = req.user.organizationId || null;
 
@@ -2262,7 +2263,7 @@ router.get('/', authenticateToken, (req, res) => {
       console.error('Error fetching tournaments:', err);
       return res.status(500).json({ error: err.message });
     }
-    console.log('Tournaments fetched successfully:', rows.length, 'tournaments');
+    logger.log('Tournaments fetched successfully:', rows.length, 'tournaments');
     res.json(rows);
   });
 });
@@ -2642,7 +2643,7 @@ router.get('/:id/results', authenticateToken, async (req, res) => {
                 [r.poule_rank || 0, r.parties_menees || 0, r.meilleure_partie || 0, r.id]
               ).catch(() => {});
             }
-            console.log(`[RESULTS] Recomputed match-level fields for ${Object.keys(pouleRankMap).length} players from ${matches.length} matches`);
+            logger.log(`[RESULTS] Recomputed match-level fields for ${Object.keys(pouleRankMap).length} players from ${matches.length} matches`);
           }
         } catch (recomputeErr) {
           console.error('[RESULTS] Error recomputing match-level fields:', recomputeErr);
@@ -2900,7 +2901,7 @@ router.get('/:id/export', authenticateToken, async (req, res) => {
                 });
               }
             } catch (err) {
-              console.log('Logo not found for Excel:', err.message);
+              logger.log('Logo not found for Excel:', err.message);
             }
 
             // Title - Row 1
@@ -3112,7 +3113,7 @@ router.get('/:id/export', authenticateToken, async (req, res) => {
                       ext: { width: 18, height: 18 }
                     });
                   } catch (err) {
-                    console.log(`Could not add club logo for ${result.player_name}:`, err.message);
+                    logger.log(`Could not add club logo for ${result.player_name}:`, err.message);
                   }
                 }
               }
@@ -3644,7 +3645,7 @@ async function recomputePositionsFromMatches(tournamentId) {
       );
     }
   }
-  console.log(`[RECOMPUTE-POS] Recomputed ${rankedStats.length} positions for tournament ${tournamentId} from ${allMatches.length} matches`);
+  logger.log(`[RECOMPUTE-POS] Recomputed ${rankedStats.length} positions for tournament ${tournamentId} from ${allMatches.length} matches`);
   return true;
 }
 
@@ -3693,7 +3694,7 @@ router.post('/:id/recompute', authenticateToken, async (req, res) => {
       });
     });
 
-    console.log(`[RECOMPUTE] Tournament ${tournamentId} recomputed successfully (cat=${tournament.category_id}, season=${tournament.season})`);
+    logger.log(`[RECOMPUTE] Tournament ${tournamentId} recomputed successfully (cat=${tournament.category_id}, season=${tournament.season})`);
     res.json({ success: true, message: 'Recalcul terminé (points de position + bonus + classements)' });
   } catch (error) {
     console.error('[RECOMPUTE] Error:', error);
@@ -4352,7 +4353,7 @@ function applyHeadToHead(players, allMatches) {
  * @returns {Array} globalPlayerStats with final_position set
  */
 function computeSplitMerge(globalPlayerStats, allMatches, subTags) {
-  console.log(`[SPLIT-MERGE] Merging ${subTags.length} sub-tournaments: ${subTags.join(', ')}`);
+  logger.log(`[SPLIT-MERGE] Merging ${subTags.length} sub-tournaments: ${subTags.join(', ')}`);
 
   // Step 1: Compute positions independently per sub-tournament
   const subPositions = new Map(); // licence → { position, subTag, poule_rank }
@@ -4364,14 +4365,14 @@ function computeSplitMerge(globalPlayerStats, allMatches, subTags) {
     const cleanMatches = subMatches.map(m => ({ ...m, sub_tournament: null }));
     const ranked = computeMatchRankings(subStats, cleanMatches);
 
-    console.log(`[SPLIT-MERGE] Sub-tournament ${tag}: ${ranked.length} players`);
+    logger.log(`[SPLIT-MERGE] Sub-tournament ${tag}: ${ranked.length} players`);
     for (const player of ranked) {
       subPositions.set(player.licence, {
         position: player.final_position,
         subTag: tag,
         poule_rank: player.poule_rank
       });
-      console.log(`[SPLIT-MERGE]   ${tag}#${player.final_position}: ${player.name} (PM=${player.total_match_points}, Moy=${player.total_reprises > 0 ? (player.total_points / player.total_reprises).toFixed(3) : 0}, MS=${player.max_serie})`);
+      logger.log(`[SPLIT-MERGE]   ${tag}#${player.final_position}: ${player.name} (PM=${player.total_match_points}, Moy=${player.total_reprises > 0 ? (player.total_points / player.total_reprises).toFixed(3) : 0}, MS=${player.max_serie})`);
     }
   }
 
@@ -4391,7 +4392,7 @@ function computeSplitMerge(globalPlayerStats, allMatches, subTags) {
     // Sort by tiebreaker: PM DESC → moyenne DESC → série DESC
     sortByPerformance(playersAtPos);
 
-    console.log(`[SPLIT-MERGE] Position ${pos} → merged ${globalPosition}-${globalPosition + playersAtPos.length - 1}: ${playersAtPos.map(p => p.name + '(PM=' + p.total_match_points + ')').join(' vs ')}`);
+    logger.log(`[SPLIT-MERGE] Position ${pos} → merged ${globalPosition}-${globalPosition + playersAtPos.length - 1}: ${playersAtPos.map(p => p.name + '(PM=' + p.total_match_points + ')').join(' vs ')}`);
 
     for (const player of playersAtPos) {
       player.final_position = globalPosition++;
@@ -4705,7 +4706,7 @@ function resolveCascadingClassification(numericPairNames, gpNames, classificatio
   for (let i = 0; i < losers.length; i++) {
     result.push({ licence: losers[i], position: firstPos + winners.length + i });
   }
-  console.log(`[CASCADING] Resolved ${pairs.length} pairs + ${gpNames.length} G-P matches → ${result.map(r => r.position + ':' + r.licence).join(', ')}`);
+  logger.log(`[CASCADING] Resolved ${pairs.length} pairs + ${gpNames.length} G-P matches → ${result.map(r => r.position + ':' + r.licence).join(', ')}`);
   return result;
 }
 
@@ -4912,7 +4913,7 @@ router.post('/import-matches', authenticateToken, upload.array('files', 20), asy
       return res.status(400).json({ error: 'Aucun match trouvé dans les fichiers CSV' });
     }
 
-    console.log(`[IMPORT-MATCHES] Parsed ${allMatches.length} matches from ${files.length} files for category ${categoryId}, T${tournamentNumber}, season ${season}`);
+    logger.log(`[IMPORT-MATCHES] Parsed ${allMatches.length} matches from ${files.length} files for category ${categoryId}, T${tournamentNumber}, season ${season}`);
 
     // 2. Create or get tournament
     const upsertResult = await dbRunAsync(
@@ -4993,9 +4994,9 @@ router.post('/import-matches', authenticateToken, upload.array('files', 20), asy
 
     // 6. Aggregate matches into per-player stats
     const playerStats = aggregateMatchResults(allMatches);
-    console.log(`[IMPORT-MATCHES] Total matches parsed: ${allMatches.length}`);
+    logger.log(`[IMPORT-MATCHES] Total matches parsed: ${allMatches.length}`);
     for (const p of playerStats) {
-      console.log(`[IMPORT-MATCHES] Player ${p.licence} (${p.name}): PM=${p.total_match_points}, Pts=${p.total_points}, Rep=${p.total_reprises}, MS=${p.max_serie}, Matches=${p.parties_menees}, MaxPhase=${p.max_phase}`);
+      logger.log(`[IMPORT-MATCHES] Player ${p.licence} (${p.name}): PM=${p.total_match_points}, Pts=${p.total_points}, Rep=${p.total_reprises}, MS=${p.max_serie}, Matches=${p.parties_menees}, MaxPhase=${p.max_phase}`);
     }
     const rankedStats = computeMatchRankings(playerStats, allMatches);
 
@@ -5024,7 +5025,7 @@ router.post('/import-matches', authenticateToken, upload.array('files', 20), asy
       );
     }
 
-    console.log(`[IMPORT-MATCHES] Inserted ${rankedStats.length} player results for tournament ${tournamentId}`);
+    logger.log(`[IMPORT-MATCHES] Inserted ${rankedStats.length} player results for tournament ${tournamentId}`);
 
     // 7.5. Recalculate positions to ensure correct sorting
     await new Promise((resolve, reject) => {
@@ -5107,7 +5108,7 @@ router.post('/import-matches', authenticateToken, upload.array('files', 20), asy
             console.error(`[RESULTS] Failed to send to ${participant.licence}:`, playerNotifError.message);
           }
         }
-        console.log(`[RESULTS] Sent ${notifType} notifications to ${participants.length} players`);
+        logger.log(`[RESULTS] Sent ${notifType} notifications to ${participants.length} players`);
 
         // News auto-publisher — create a draft article for this tournament
         // in the Player App news feed. Uses the shared helper so template
@@ -5144,7 +5145,7 @@ router.post('/import-matches', authenticateToken, upload.array('files', 20), asy
 
         if (!isLastQualifyingTournament) return;
 
-        console.log(`[FINALE_QUALIFICATION] (E2i) T${tNum} is the last qualifying tournament, checking qualified players`);
+        logger.log(`[FINALE_QUALIFICATION] (E2i) T${tNum} is the last qualifying tournament, checking qualified players`);
 
         const rankings = await dbAllAsync(
           `SELECT r.licence, r.rank_position, r.total_match_points, p.first_name, p.last_name
@@ -5175,7 +5176,7 @@ router.post('/import-matches', authenticateToken, upload.array('files', 20), asy
         const qualifiedCount = rankings.length < threshold ? smallCount : largeCount;
         const qualifiedPlayers = rankings.filter(r => r.rank_position <= qualifiedCount);
 
-        console.log(`[FINALE_QUALIFICATION] (E2i) ${qualifiedPlayers.length} players qualified (threshold: ${qualifiedCount})`);
+        logger.log(`[FINALE_QUALIFICATION] (E2i) ${qualifiedPlayers.length} players qualified (threshold: ${qualifiedCount})`);
 
         if (qualifiedPlayers.length === 0) return;
 
@@ -5210,7 +5211,7 @@ router.post('/import-matches', authenticateToken, upload.array('files', 20), asy
         });
         try {
           const result = await sendPushToPlayers(licences, orgId, notification);
-          console.log(`[FINALE_QUALIFICATION] (E2i) Sent notification to ${result.total_sent} qualified player(s)`);
+          logger.log(`[FINALE_QUALIFICATION] (E2i) Sent notification to ${result.total_sent} qualified player(s)`);
         } catch (pushErr) {
           console.error('[FINALE_QUALIFICATION] (E2i) push failed:', pushErr.message);
         }
