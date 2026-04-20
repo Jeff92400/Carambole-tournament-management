@@ -4857,29 +4857,82 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
           return;
         }
 
-        tbody.innerHTML = relances.map(r => {
-          const sentDate = new Date(r.relance_sent_at);
-          const tournamentDate = r.debut ? new Date(r.debut) : null;
+        // Sort by sent_at DESC (defensive — backend may already sort)
+        const sortedRelances = [...relances].sort((a, b) => {
+          return new Date(b.relance_sent_at).getTime() - new Date(a.relance_sent_at).getTime();
+        });
 
-          return `
-            <tr style="border-bottom: 1px solid #eee;">
-              <td style="padding: 10px;">${r.nom || '-'}</td>
-              <td style="padding: 10px; text-align: center;">${r.mode || '-'}</td>
-              <td style="padding: 10px; text-align: center;">${r.categorie || '-'}</td>
-              <td style="padding: 10px; text-align: center;">${tournamentDate ? tournamentDate.toLocaleDateString('fr-FR') : '-'}</td>
-              <td style="padding: 10px; text-align: center;">
-                ${sentDate.toLocaleDateString('fr-FR')}
-                <span style="color: #666; font-size: 11px;">${sentDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>
-              </td>
-              <td style="padding: 10px; text-align: center;">${r.sent_by || '-'}</td>
-              <td style="padding: 10px; text-align: center;">
-                <span style="background: #e7f3ff; padding: 3px 8px; border-radius: 12px; font-weight: bold;">
-                  ${r.recipients_count || 0}
-                </span>
+        // Group by YYYY-MM of relance_sent_at (reuses monthKeyOf / monthLabelFromKey helpers)
+        const groups = new Map();
+        for (const r of sortedRelances) {
+          const key = monthKeyOf(r.relance_sent_at);
+          if (!groups.has(key)) groups.set(key, []);
+          groups.get(key).push(r);
+        }
+
+        const firstGroupKey = groups.keys().next().value;
+        const totalCols = 7;
+        let html = '';
+
+        for (const [monthKey, groupRelances] of groups.entries()) {
+          const total = groupRelances.length;
+          const totalRecipients = groupRelances.reduce((sum, r) => sum + (parseInt(r.recipients_count) || 0), 0);
+          const isFirstGroup = monthKey === firstGroupKey;
+          const chevron = isFirstGroup ? '▼' : '▶';
+          const expanded = isFirstGroup ? 'true' : 'false';
+
+          // Group header row — clickable, spans all columns
+          html += `
+            <tr class="relance-month-header" data-relance-month-key="${monthKey}"
+                style="cursor: pointer; background: #e3f2fd; font-weight: 600;">
+              <td colspan="${totalCols}" style="padding: 10px 14px; color: #1F4788; font-size: 0.95rem;">
+                <span data-relance-chevron="${monthKey}" data-expanded="${expanded}" style="display: inline-block; width: 16px; text-align: center; margin-right: 8px;">${chevron}</span>
+                ${monthLabelFromKey(monthKey)} — ${total} relance${total > 1 ? 's' : ''}${totalRecipients > 0 ? ` (${totalRecipients} destinataire${totalRecipients > 1 ? 's' : ''} au total)` : ''}
               </td>
             </tr>
           `;
-        }).join('');
+
+          for (const r of groupRelances) {
+            const sentDate = new Date(r.relance_sent_at);
+            const tournamentDate = r.debut ? new Date(r.debut) : null;
+            const rowStyle = isFirstGroup ? '' : ' display: none;';
+
+            html += `
+              <tr data-relance-month="${monthKey}" style="border-bottom: 1px solid #eee;${rowStyle}">
+                <td style="padding: 10px;">${r.nom || '-'}</td>
+                <td style="padding: 10px; text-align: center;">${r.mode || '-'}</td>
+                <td style="padding: 10px; text-align: center;">${r.categorie || '-'}</td>
+                <td style="padding: 10px; text-align: center;">${tournamentDate ? tournamentDate.toLocaleDateString('fr-FR') : '-'}</td>
+                <td style="padding: 10px; text-align: center;">
+                  ${sentDate.toLocaleDateString('fr-FR')}
+                  <span style="color: #666; font-size: 11px;">${sentDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>
+                </td>
+                <td style="padding: 10px; text-align: center;">${r.sent_by || '-'}</td>
+                <td style="padding: 10px; text-align: center;">
+                  <span style="background: #e7f3ff; padding: 3px 8px; border-radius: 12px; font-weight: bold;">
+                    ${r.recipients_count || 0}
+                  </span>
+                </td>
+              </tr>
+            `;
+          }
+        }
+
+        tbody.innerHTML = html;
+
+        // Wire up the month header click handlers
+        tbody.querySelectorAll('.relance-month-header').forEach(headerRow => {
+          headerRow.addEventListener('click', () => {
+            const monthKey = headerRow.dataset.relanceMonthKey;
+            const rows = tbody.querySelectorAll(`tr[data-relance-month="${monthKey}"]`);
+            const chevron = tbody.querySelector(`span[data-relance-chevron="${monthKey}"]`);
+            if (!rows.length || !chevron) return;
+            const isExpanded = chevron.dataset.expanded === 'true';
+            rows.forEach(row => { row.style.display = isExpanded ? 'none' : ''; });
+            chevron.dataset.expanded = isExpanded ? 'false' : 'true';
+            chevron.textContent = isExpanded ? '▶' : '▼';
+          });
+        });
 
       } catch (error) {
         console.error('Error loading relance history:', error);

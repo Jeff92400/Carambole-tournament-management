@@ -928,6 +928,30 @@
     // Track selected invitation IDs for batch operations
     let batchSelectedIds = new Set();
 
+    // Month-grouping helpers (same pattern as emailing.html / inscriptions-viewer.html — V 2.0.400/401/437/438)
+    function invitationMonthKeyOf(dateStr) {
+      if (!dateStr) return 'unknown';
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return 'unknown';
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    }
+    function invitationMonthLabelFromKey(key) {
+      if (key === 'unknown') return 'Date inconnue';
+      const [y, m] = key.split('-').map(Number);
+      const date = new Date(y, m - 1, 1);
+      const label = date.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+      return label.charAt(0).toUpperCase() + label.slice(1);
+    }
+    function toggleInvitationMonth(monthKey) {
+      const rows = document.querySelectorAll(`tr[data-inv-month="${monthKey}"]`);
+      const chevron = document.querySelector(`span[data-inv-chevron="${monthKey}"]`);
+      if (!rows.length || !chevron) return;
+      const isExpanded = chevron.dataset.expanded === 'true';
+      rows.forEach(r => { r.style.display = isExpanded ? 'none' : ''; });
+      chevron.dataset.expanded = isExpanded ? 'false' : 'true';
+      chevron.textContent = isExpanded ? '▶' : '▼';
+    }
+
     function renderTracking(invitations) {
       const tbody = document.getElementById('trackingTable');
       batchSelectedIds.clear();
@@ -948,40 +972,85 @@
       // Store invitations for later use
       window.trackingInvitations = invitations;
 
-      tbody.innerHTML = invitations.map(inv => {
-        const statusHtml = inv.has_signed_up
-          ? '<span class="status-badge signed-up">Inscrit</span>'
-          : '<span class="status-badge pending">En attente</span>';
+      // Sort by sent_at DESC so groups appear newest-first
+      const sortedInvitations = [...invitations].sort((a, b) => {
+        const dA = a.sent_at ? new Date(a.sent_at).getTime() : 0;
+        const dB = b.sent_at ? new Date(b.sent_at).getTime() : 0;
+        return dB - dA;
+      });
 
-        const sentDate = inv.sent_at ? new Date(inv.sent_at).toLocaleDateString('fr-FR', {
-          day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
-        }) : '-';
+      // Group by YYYY-MM of sent_at
+      const groups = new Map();
+      for (const inv of sortedInvitations) {
+        const key = invitationMonthKeyOf(inv.sent_at);
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(inv);
+      }
 
-        // Number of sends: 1 (initial) + resend_count
-        const totalSends = 1 + (inv.resend_count || 0);
+      const firstGroupKey = groups.keys().next().value; // most recent month
+      const totalCols = 9;
+      let html = '';
 
-        // Only show checkbox for pending invitations
-        const checkboxHtml = !inv.has_signed_up
-          ? `<input type="checkbox" class="batch-checkbox" data-id="${inv.id}" onchange="toggleBatchSelection(${inv.id}, this.checked)">`
-          : '<span style="color: #ccc;">-</span>';
+      for (const [monthKey, groupInvs] of groups.entries()) {
+        const total = groupInvs.length;
+        const signedUp = groupInvs.filter(i => i.has_signed_up).length;
+        const pending = total - signedUp;
+        const breakdown = [];
+        if (signedUp > 0) breakdown.push(`${signedUp} inscrit${signedUp > 1 ? 's' : ''}`);
+        if (pending > 0) breakdown.push(`${pending} en attente`);
+        const breakdownText = breakdown.length ? ` (${breakdown.join(', ')})` : '';
 
-        return `
-          <tr>
-            <td style="text-align: center;">${checkboxHtml}</td>
-            <td><strong>${inv.first_name || ''} ${inv.last_name || ''}</strong><br><small style="color:#666">${inv.licence || ''}</small></td>
-            <td>${inv.club || '-'}</td>
-            <td>${inv.email}</td>
-            <td>${sentDate}</td>
-            <td style="text-align: center;"><span style="background: ${totalSends > 1 ? '#fff3cd' : '#e8f5e9'}; padding: 3px 10px; border-radius: 12px; font-weight: 600;">${totalSends}</span></td>
-            <td>${inv.sent_by_username || '-'}</td>
-            <td>${statusHtml}</td>
-            <td style="white-space: nowrap;">
-              ${!inv.has_signed_up ? `<button class="btn btn-secondary" style="padding: 5px 10px; font-size: 12px;" onclick="resendInvitation(${inv.id})">Renvoyer</button>` : ''}
-              <button class="btn btn-danger" style="padding: 5px 10px; font-size: 12px; margin-left: 5px;" onclick="deleteInvitation(${inv.id})">Supprimer</button>
+        const isFirstGroup = monthKey === firstGroupKey;
+        const chevron = isFirstGroup ? '▼' : '▶';
+        const expanded = isFirstGroup ? 'true' : 'false';
+
+        // Group header row — clickable, spans all columns
+        html += `
+          <tr style="cursor: pointer; background: #e3f2fd; font-weight: 600;" onclick="toggleInvitationMonth('${monthKey}')">
+            <td colspan="${totalCols}" style="padding: 10px 14px; color: #1F4788; font-size: 0.95rem;">
+              <span data-inv-chevron="${monthKey}" data-expanded="${expanded}" style="display: inline-block; width: 16px; text-align: center; margin-right: 8px;">${chevron}</span>
+              ${invitationMonthLabelFromKey(monthKey)} — ${total} invitation${total > 1 ? 's' : ''}${breakdownText}
             </td>
           </tr>
         `;
-      }).join('');
+
+        // Data rows for this group — hidden by default except for first (most recent) group
+        for (const inv of groupInvs) {
+          const statusHtml = inv.has_signed_up
+            ? '<span class="status-badge signed-up">Inscrit</span>'
+            : '<span class="status-badge pending">En attente</span>';
+
+          const sentDate = inv.sent_at ? new Date(inv.sent_at).toLocaleDateString('fr-FR', {
+            day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
+          }) : '-';
+
+          const totalSends = 1 + (inv.resend_count || 0);
+
+          const checkboxHtml = !inv.has_signed_up
+            ? `<input type="checkbox" class="batch-checkbox" data-id="${inv.id}" onchange="toggleBatchSelection(${inv.id}, this.checked)">`
+            : '<span style="color: #ccc;">-</span>';
+
+          const rowStyle = isFirstGroup ? '' : ' display: none;';
+          html += `
+            <tr data-inv-month="${monthKey}" style="${rowStyle}">
+              <td style="text-align: center;">${checkboxHtml}</td>
+              <td><strong>${inv.first_name || ''} ${inv.last_name || ''}</strong><br><small style="color:#666">${inv.licence || ''}</small></td>
+              <td>${inv.club || '-'}</td>
+              <td>${inv.email}</td>
+              <td>${sentDate}</td>
+              <td style="text-align: center;"><span style="background: ${totalSends > 1 ? '#fff3cd' : '#e8f5e9'}; padding: 3px 10px; border-radius: 12px; font-weight: 600;">${totalSends}</span></td>
+              <td>${inv.sent_by_username || '-'}</td>
+              <td>${statusHtml}</td>
+              <td style="white-space: nowrap;">
+                ${!inv.has_signed_up ? `<button class="btn btn-secondary" style="padding: 5px 10px; font-size: 12px;" onclick="resendInvitation(${inv.id})">Renvoyer</button>` : ''}
+                <button class="btn btn-danger" style="padding: 5px 10px; font-size: 12px; margin-left: 5px;" onclick="deleteInvitation(${inv.id})">Supprimer</button>
+              </td>
+            </tr>
+          `;
+        }
+      }
+
+      tbody.innerHTML = html;
     }
 
     function toggleBatchSelection(id, checked) {
