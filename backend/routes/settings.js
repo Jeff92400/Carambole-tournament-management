@@ -1575,6 +1575,12 @@ router.post('/snapshot-season-stats', authenticateToken, requireAdmin, async (re
     // Get all clubs
     const clubs = await dbAll(db, 'SELECT id, name, display_name, city FROM clubs', []);
 
+    // Fetch per-org qualification settings once for the whole snapshot run
+    // (fulfils V 2.0.404 'finalist quota never hardcoded' policy — twin of
+    // Player App V 2.0.190 and today's V 2.0.217 hotfix which fixed the
+    // typing bug on the same CASE WHEN pattern).
+    const qualif = await appSettings.getQualificationSettings(req.user?.organizationId || null);
+
     let snapshotCount = 0;
     const errors = [];
 
@@ -1698,7 +1704,7 @@ router.post('/snapshot-season-stats', authenticateToken, requireAdmin, async (re
           const eligibleRows = await dbAll(db,
             `WITH category_counts AS (
                SELECT category_id, COUNT(*) as total_players,
-                      CASE WHEN COUNT(*) < 9 THEN 4 ELSE 6 END as qualified_count
+                      CASE WHEN COUNT(*) < $3::int THEN $4::int ELSE $5::int END as qualified_count
                FROM rankings
                WHERE season = $1
                GROUP BY category_id
@@ -1719,7 +1725,7 @@ router.post('/snapshot-season-stats', authenticateToken, requireAdmin, async (re
                  SELECT REPLACE(pl.licence, ' ', '') FROM players pl
                  WHERE UPPER(REPLACE(pl.club, ' ', '')) LIKE UPPER(REPLACE($2, ' ', '')) || '%'
                )`,
-            [season, club.display_name]
+            [season, club.display_name, qualif.threshold, qualif.small, qualif.large]
           );
 
           // Deduplicate: a player in both finale results and eligible counts once
