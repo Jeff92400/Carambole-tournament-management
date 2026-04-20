@@ -5,6 +5,7 @@ const ExcelJS = require('exceljs');
 const db = require('../db-loader');
 const { authenticateToken, requireAdmin, JWT_SECRET } = require('./auth');
 const appSettings = require('../utils/app-settings');
+const logger = require('../utils/logger');
 
 // Club code mapping - loaded dynamically from database
 // Fallback hardcoded values (used if DB not available)
@@ -22,7 +23,7 @@ async function loadClubMapping(orgId) {
   return new Promise((resolve) => {
     db.all(`SELECT calendar_code, display_name FROM clubs WHERE calendar_code IS NOT NULL AND calendar_code != '' AND ($1::int IS NULL OR organization_id = $1)`, [orgId || null], (err, rows) => {
       if (err || !rows || rows.length === 0) {
-        console.log('[Calendar] Using fallback club mapping');
+        logger.log('[Calendar] Using fallback club mapping');
         resolve(FALLBACK_CLUB_MAPPING);
         return;
       }
@@ -31,7 +32,7 @@ async function loadClubMapping(orgId) {
       for (const row of rows) {
         mapping[row.calendar_code.toUpperCase()] = row.display_name;
       }
-      console.log('[Calendar] Loaded club mapping from DB:', Object.keys(mapping).filter(k => k !== '?').join(', '));
+      logger.log('[Calendar] Loaded club mapping from DB:', Object.keys(mapping).filter(k => k !== '?').join(', '));
       resolve(mapping);
     });
   });
@@ -167,7 +168,7 @@ router.post('/upload', authenticateToken, requireAdmin, upload.single('calendar'
           return res.status(500).json({ error: 'Erreur lors de l\'enregistrement du calendrier' });
         }
 
-        console.log(`[Calendar upload] Stored as "${normalizedFilename}" (source: "${originalname}") for org ${orgId}`);
+        logger.log(`[Calendar upload] Stored as "${normalizedFilename}" (source: "${originalname}") for org ${orgId}`);
         res.json({
           message: 'Calendar uploaded successfully',
           filename: normalizedFilename,
