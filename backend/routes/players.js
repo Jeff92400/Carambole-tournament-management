@@ -774,6 +774,77 @@ router.get('/', authenticateToken, async (req, res) => {
 
 // Note: Duplicate POST route removed - use the main POST / endpoint above
 
+/**
+ * GET /players/ffb-moyennes?game_mode_id=X&season=Y
+ *
+ * Returns FFB averages (moyenne_ffb) for all players having a classification
+ * for the given game mode and season. Used as a fallback seeding source when
+ * the serpentine generator needs to seed players but no seasonal ranking
+ * exists yet (typical case: T2 with no T1 played, or TQ1 in Journées mode).
+ *
+ * Works identically for both qualification modes (3 Tournois / Journées) —
+ * the caller decides when to ask for it based on `tournament_number > 1` and
+ * an empty `rankings` query result.
+ *
+ * Response: { "licence1": 2.345, "licence2": 1.876, ... }
+ *           (normalised licences, keyed without spaces)
+ *
+ * Multi-CDB: scoped by joining players.organization_id to the caller's org.
+ */
+router.get('/ffb-moyennes', authenticateToken, async (req, res) => {
+  const { game_mode_id, game_type, season } = req.query;
+  const orgId = req.user.organizationId || null;
+
+  if ((!game_mode_id && !game_type) || !season) {
+    return res.status(400).json({ error: 'season and (game_mode_id OR game_type) are required' });
+  }
+
+  try {
+    // If game_type was given (e.g. "CADRE 42/2"), resolve game_mode_id from game_modes table.
+    let gmid = game_mode_id ? parseInt(game_mode_id, 10) : null;
+    if (!gmid && game_type) {
+      const modeRow = await new Promise((resolve, reject) => {
+        db.get(
+          `SELECT id FROM game_modes
+           WHERE UPPER(REPLACE(display_name, ' ', '')) = UPPER(REPLACE($1, ' ', ''))
+              OR UPPER(REPLACE(code, ' ', '')) = UPPER(REPLACE($1, ' ', ''))
+           LIMIT 1`,
+          [game_type],
+          (err, row) => err ? reject(err) : resolve(row)
+        );
+      });
+      gmid = modeRow?.id || null;
+    }
+
+    if (!gmid) {
+      // Unknown game mode → empty map (caller will fall back gracefully)
+      return res.json({});
+    }
+
+    const rows = await new Promise((resolve, reject) => {
+      db.all(
+        `SELECT REPLACE(pfc.licence, ' ', '') as licence, pfc.moyenne_ffb
+         FROM player_ffb_classifications pfc
+         JOIN players p ON REPLACE(p.licence, ' ', '') = REPLACE(pfc.licence, ' ', '')
+         WHERE pfc.game_mode_id = $1
+           AND pfc.season = $2
+           AND ($3::int IS NULL OR p.organization_id = $3)
+           AND pfc.moyenne_ffb IS NOT NULL
+           AND pfc.moyenne_ffb > 0`,
+        [gmid, season, orgId],
+        (err, result) => err ? reject(err) : resolve(result || [])
+      );
+    });
+
+    const map = {};
+    rows.forEach(r => { map[r.licence] = parseFloat(r.moyenne_ffb); });
+    res.json(map);
+  } catch (err) {
+    console.error('Get FFB moyennes error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Find duplicate players (same first_name + last_name)
 // MUST be before /:licence route to avoid being caught by it
 router.get('/duplicates', authenticateToken, async (req, res) => {

@@ -3428,6 +3428,90 @@
 
       document.getElementById('summaryPlayers').textContent = selectedPlayers.length;
 
+      // -------------------------------------------------------------------
+      // Fallback seeding for "Tournoi N > 1" without prior seasonal ranking.
+      //
+      // Works identically for both qualification modes (3 Tournois /
+      // Journées Qualificatives) — we detect the situation by checking
+      // tournament_number > 1 AND rankedPlayers is empty AND it's not a
+      // finale. Mode-specific labels come from the tournament_types table
+      // (display_name = "T2", "TQ2", etc.).
+      //
+      // Flow:
+      //   1) Show an explicit warning with mode-aware labels
+      //   2) If confirmed, fetch moyenne_ffb (from
+      //      player_ffb_classifications) for the current category's game
+      //      mode and current season, then sort selectedPlayers by
+      //      moyenne_ffb DESC so the serpentine seeds the strongest FFB
+      //      averages first — same logic Journées mode uses for its TQ1
+      //      seed.
+      //   3) If the moyennes map is empty (new CDB, no FFB data imported
+      //      yet), the existing order (inscription timestamp / add order)
+      //      is kept — still deterministic, just not skill-ordered.
+      //   4) If the user cancels, abort the generation (return).
+      //
+      // Introduced in V 2.0.448 after a CDB Démo test on 21 April 2026
+      // produced a 6-poules-of-3 result for 9 last-minute-only players on a
+      // T2 with no T1 played. Paired with V 2.0.446 (dedup fix) to make the
+      // whole flow robust.
+      // -------------------------------------------------------------------
+      const tournamentNum = parseInt(currentTournament, 10);
+      const needsFallbackWarning = !isFinale
+        && Number.isFinite(tournamentNum)
+        && tournamentNum > 1
+        && rankedPlayers.length === 0
+        && selectedPlayers.length > 0;
+
+      if (needsFallbackWarning) {
+        const currentLabel = tournamentTypeLabel || `Tournoi ${tournamentNum}`;
+        const prevType = tournamentTypes.find(tt => tt.tournament_number === tournamentNum - 1);
+        const prevLabel = prevType?.display_name || `Tournoi ${tournamentNum - 1}`;
+        const firstType = tournamentTypes.find(tt => tt.tournament_number === 1);
+        const firstLabel = firstType?.display_name || 'T1';
+
+        const message =
+          `⚠️ Vous organisez un ${currentLabel} alors qu'aucun ${prevLabel} n'a encore eu lieu ` +
+          `(ou ses résultats ne sont pas encore importés).\n\n` +
+          `Le tirage serpentine ne peut donc pas utiliser le classement saisonnier habituel.\n\n` +
+          `Si vous continuez, les joueurs seront seedés selon leur moyenne FFB du début de saison ` +
+          `(comme pour un ${firstLabel}).\n\n` +
+          `Voulez-vous continuer ?`;
+
+        if (!confirm(message)) {
+          return; // user cancelled — abort the poule generation
+        }
+
+        // Fetch FFB moyennes and re-sort selectedPlayers by moyenne DESC.
+        try {
+          const gameTypeParam = encodeURIComponent(currentCategory.game_type || '');
+          const seasonParam = encodeURIComponent(currentSeason || '');
+          const moyennesResp = await fetch(
+            `${API_URL}/players/ffb-moyennes?game_type=${gameTypeParam}&season=${seasonParam}`,
+            { headers: { 'Authorization': `Bearer ${token}` } }
+          );
+          if (moyennesResp.ok) {
+            const moyennes = await moyennesResp.json();
+            const count = Object.keys(moyennes).length;
+            if (count > 0) {
+              selectedPlayers.sort((a, b) => {
+                const normA = (a.licence || '').replace(/\s/g, '');
+                const normB = (b.licence || '').replace(/\s/g, '');
+                return (moyennes[normB] || 0) - (moyennes[normA] || 0); // DESC
+              });
+              // Re-assign finalRank after the sort so the UI shows the new order.
+              selectedPlayers.forEach((p, idx) => { p.finalRank = idx + 1; });
+              console.log(`[Fallback seed] Sorted ${selectedPlayers.length} players by moyenne_ffb (${count} had an FFB moyenne)`);
+            } else {
+              console.warn('[Fallback seed] No moyenne_ffb available for this game_mode/season — keeping insertion order');
+            }
+          } else {
+            console.warn('[Fallback seed] /players/ffb-moyennes returned', moyennesResp.status);
+          }
+        } catch (e) {
+          console.warn('[Fallback seed] Error fetching moyennes:', e.message);
+        }
+      }
+
       let poules;
       let configDescription;
       let tablesNeeded;
