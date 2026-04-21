@@ -2289,9 +2289,15 @@ router.post('/tournoi', authenticateToken, async (req, res) => {
   }
 
   try {
-    // Get the next tournoi_id
+    // Get the next tournoi_id — GLOBAL MAX, not org-scoped.
+    // tournoi_ext.tournoi_id is the primary key, therefore globally unique across
+    // all orgs. A bug introduced earlier used `WHERE org = $1` here which could
+    // return a max that is lower than another org's max, producing an INSERT
+    // with a tournoi_id already used elsewhere → duplicate key violation.
+    // Reported 21 April 2026 while manually creating a tournament on CDB Demo
+    // (the demo org's max was behind CDBHS's max, so nextId collided).
     const maxIdResult = await new Promise((resolve, reject) => {
-      db.get('SELECT MAX(tournoi_id) as max_id FROM tournoi_ext WHERE ($1::int IS NULL OR organization_id = $1)', [orgId], (err, row) => {
+      db.get('SELECT MAX(tournoi_id) as max_id FROM tournoi_ext', [], (err, row) => {
         if (err) reject(err);
         else resolve(row);
       });
@@ -4690,10 +4696,12 @@ router.post('/tournoi/:id/split', authenticateToken, async (req, res) => {
     if (parent.is_split) return res.status(400).json({ error: 'Ce tournoi est déjà dédoublé' });
     if (parent.parent_tournoi_id) return res.status(400).json({ error: 'Impossible de dédoubler un sous-tournoi' });
 
-    // Get next IDs
+    // Get next IDs — GLOBAL MAX (tournoi_id is globally unique, see rationale
+    // at the create-tournament endpoint). Split creates TWO child tournaments
+    // so we need baseId and baseId+1 both free across all orgs.
     const maxIdResult = await new Promise((resolve, reject) => {
-      db.get('SELECT MAX(tournoi_id) as max_id FROM tournoi_ext WHERE ($1::int IS NULL OR organization_id = $1)',
-        [orgId], (err, row) => { if (err) reject(err); else resolve(row); });
+      db.get('SELECT MAX(tournoi_id) as max_id FROM tournoi_ext', [],
+        (err, row) => { if (err) reject(err); else resolve(row); });
     });
     const baseId = (maxIdResult?.max_id || 0) + 1;
 

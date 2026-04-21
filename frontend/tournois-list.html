@@ -1554,25 +1554,38 @@
     });
 
     // Auto-fill date fin when date debut is set (if fin is empty or was auto-filled)
+    // Defensive null checks: the 'create_fin' / 'edit_fin' fields were removed
+    // from the tournament form at some point (only 'create_debut' / 'edit_debut'
+    // remain — the tournament_ext schema still has a `fin` column but it's no
+    // longer edited via this form). Without the null guards, every date pick
+    // triggered an 'Cannot read properties of null' TypeError in the console.
     (function() {
       let autoFilledFin = { create: null, edit: null };
 
-      document.getElementById('create_debut').addEventListener('change', function() {
-        const finInput = document.getElementById('create_fin');
-        if (!finInput.value || finInput.value === autoFilledFin.create || finInput.value < this.value) {
-          finInput.value = this.value;
-          autoFilledFin.create = this.value;
-        }
-      });
+      const createDebut = document.getElementById('create_debut');
+      if (createDebut) {
+        createDebut.addEventListener('change', function() {
+          const finInput = document.getElementById('create_fin');
+          if (!finInput) return; // field not present, nothing to auto-fill
+          if (!finInput.value || finInput.value === autoFilledFin.create || finInput.value < this.value) {
+            finInput.value = this.value;
+            autoFilledFin.create = this.value;
+          }
+        });
+      }
 
-      document.getElementById('edit_debut').addEventListener('change', function() {
-        const finInput = document.getElementById('edit_fin');
-        if (!finInput.value || finInput.value === autoFilledFin.edit || finInput.value === window._autoFilledEditFin || finInput.value < this.value) {
-          finInput.value = this.value;
-          autoFilledFin.edit = this.value;
-          window._autoFilledEditFin = this.value;
-        }
-      });
+      const editDebut = document.getElementById('edit_debut');
+      if (editDebut) {
+        editDebut.addEventListener('change', function() {
+          const finInput = document.getElementById('edit_fin');
+          if (!finInput) return; // field not present, nothing to auto-fill
+          if (!finInput.value || finInput.value === autoFilledFin.edit || finInput.value === window._autoFilledEditFin || finInput.value < this.value) {
+            finInput.value = this.value;
+            autoFilledFin.edit = this.value;
+            window._autoFilledEditFin = this.value;
+          }
+        });
+      }
     })();
 
     // Update season-specific stats (consistent with dashboard)
