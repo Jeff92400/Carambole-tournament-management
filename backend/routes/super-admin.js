@@ -6,7 +6,7 @@ const db = require('../db-loader');
 const appSettings = require('../utils/app-settings');
 const { authenticateToken, requireSuperAdmin, JWT_SECRET } = require('./auth');
 const { logAdminAction, ACTION_TYPES } = require('../utils/admin-logger');
-const { Resend } = require('resend');
+const { sendEmail } = require('../utils/email-helpers');
 
 // Logo upload config (memory storage, same pattern as settings.js)
 const logoUpload = multer({
@@ -1773,15 +1773,19 @@ router.post('/email-templates/cdb_welcome/test', async (req, res) => {
       body = body.replace(htmlRegex, value);
     }
 
-    const resend = new Resend(process.env.RESEND_API_KEY);
     const senderEmail = await appSettings.getSetting('email_noreply') || 'noreply@cdbhs.net';
     const senderName = await appSettings.getSetting('email_sender_name') || 'CDB Tournois';
 
-    await resend.emails.send({
+    await sendEmail({
       from: `${senderName} <${senderEmail}>`,
       to: [recipientEmail],
       subject: `[TEST] ${subject}`,
       html: body
+    }, {
+      recipientKind: 'admin',  // Test email sent to super admin's chosen test address
+      orgId: null,  // super-admin-level
+      emailType: 'cdb_welcome_test',
+      triggeredByUserId: req.user.userId
     });
 
     res.json({ success: true, message: `Email de test envoyé à ${recipientEmail}` });
@@ -1852,15 +1856,20 @@ router.post('/organizations/:id/send-welcome-test', async (req, res) => {
     }
 
     // Send test email
-    const resend = new Resend(process.env.RESEND_API_KEY);
     const senderEmail = await appSettings.getSetting('email_noreply') || 'noreply@cdbhs.net';
     const senderName = await appSettings.getSetting('email_sender_name') || 'CDB Tournois';
 
-    await resend.emails.send({
+    await sendEmail({
       from: `${senderName} <${senderEmail}>`,
       to: [recipientEmail],
       subject: `[TEST] ${subject}`,
       html: body
+    }, {
+      recipientKind: 'admin',  // Test email to super admin's test address
+      orgId: parseInt(id),
+      emailType: 'cdb_welcome_test',
+      triggeredByUserId: req.user.userId,
+      context: { target_org_id: parseInt(id) }
     });
 
     res.json({ success: true, message: `Email de test envoyé à ${recipientEmail}` });
@@ -1924,15 +1933,21 @@ router.post('/organizations/:id/send-welcome', async (req, res) => {
     }
 
     // Send email to CDB admin
-    const resend = new Resend(process.env.RESEND_API_KEY);
     const senderEmail = await appSettings.getSetting('email_noreply') || 'noreply@cdbhs.net';
     const senderName = await appSettings.getSetting('email_sender_name') || 'CDB Tournois';
 
-    await resend.emails.send({
+    await sendEmail({
       from: `${senderName} <${senderEmail}>`,
       to: [orgAdmin.email],
       subject,
       html: body
+    }, {
+      recipientKind: 'admin',  // Welcome email to newly-created CDB admin
+      orgId: parseInt(id),
+      recipientName: orgAdmin.username,
+      emailType: 'cdb_welcome',
+      triggeredByUserId: req.user.userId,
+      context: { target_org_id: parseInt(id), org_short_name: org.short_name }
     });
 
     // Record that welcome email was sent

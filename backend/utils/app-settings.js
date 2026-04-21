@@ -87,7 +87,14 @@ const defaults = {
   relance_window_end: '14',
   auto_reminder_enabled: 'true',
   auto_reminder_days_before_deadline: '3',
-  poule_simulation_lock_days: '7'
+  poule_simulation_lock_days: '7',
+
+  // Test mode (per-org kill switch for player-facing communications)
+  // When 'true', emails AND push notifications aimed at players (recipient_kind='player')
+  // are blocked and logged to email_test_mode_log. Admin-facing communications
+  // (recipient_kind='admin') are still sent. Used during CDB onboarding to let
+  // the admin exercise every flow without spamming real competitors.
+  email_test_mode_enabled: 'false'
 };
 
 /**

@@ -3,11 +3,11 @@ const multer = require('multer');
 const { parse } = require('csv-parse');
 const fs = require('fs');
 const ExcelJS = require('exceljs');
-const { Resend } = require('resend');
 const db = require('../db-loader');
 const { authenticateToken } = require('./auth');
 const { normalizeLicence } = require('../utils/licence');
 const appSettings = require('../utils/app-settings');
+const { sendEmail } = require('../utils/email-helpers');
 const { getPouleConfigForOrg } = require('../utils/poule-config');
 const { logAdminAction, ACTION_TYPES } = require('../utils/admin-logger');
 const { getColumnMapping } = require('./import-config');
@@ -88,9 +88,11 @@ function getMappedValue(record, mapping, fieldName, defaultValue = null) {
 }
 
 // Initialize Resend for email notifications
+// Historical helper retained as a cheap feature-flag check. The actual Resend
+// instance is owned by utils/email-helpers.js (sendEmail chokepoint).
 const getResend = () => {
   if (!process.env.RESEND_API_KEY) return null;
-  return new Resend(process.env.RESEND_API_KEY);
+  return true; // truthy — callers use it as an "is Resend configured" check
 };
 
 const router = express.Router();
@@ -2873,12 +2875,19 @@ router.post('/tournoi/:id/notify', authenticateToken, async (req, res) => {
           `;
           const d = delivery.get(insc.licence);
           try {
-            await resend.emails.send({
+            await sendEmail({
               from: `${senderName} <${senderEmail}>`,
               to: insc.player_email,
               replyTo: contactEmail,
               subject: `📢 ${title.trim()} — ${tournamentLabel}`,
               html: emailHtml
+            }, {
+              recipientKind: 'player',  // Admin-initiated bulk message to inscribed players
+              orgId,
+              recipientName: `${insc.first_name || ''} ${insc.last_name || ''}`.trim() || null,
+              emailType: 'admin_message_to_inscribed',
+              triggeredByUserId: req.user?.userId,
+              context: { tournoi_id: req.params?.id, licence: insc.licence }
             });
             emailSent++;
             if (d) d.emailStatus = 'sent';
@@ -3188,12 +3197,18 @@ async function sendTournamentChangeNotifications(tournoiId, oldTournament, newDa
       `;
 
       try {
-        await resend.emails.send({
+        await sendEmail({
           from: `${senderName} <${senderEmail}>`,
           to: inscription.player_email,
           replyTo: contactEmail,
           subject: emailSubject,
           html: emailHtml
+        }, {
+          recipientKind: 'player',  // Date/location change notification to inscribed player
+          orgId,
+          recipientName: `${inscription.first_name || ''} ${inscription.last_name || ''}`.trim() || null,
+          emailType: 'tournament_change_notification',
+          context: { tournoi_id: tournoiId, licence: inscription.licence }
         });
         sentCount++;
         logger.log(`[Tournament Change] Email sent to ${inscription.player_email}`);
@@ -3263,11 +3278,16 @@ async function sendTournamentChangeNotifications(tournoiId, oldTournament, newDa
           </div>
         `;
 
-        await resend.emails.send({
+        await sendEmail({
           from: `${senderName} <${senderEmail}>`,
           to: adminEmail,
           subject: adminSubject,
           html: adminHtml
+        }, {
+          recipientKind: 'admin',  // Admin recap of tournament change + player notification stats
+          orgId,
+          emailType: 'tournament_change_admin_recap',
+          context: { tournoi_id: tournoiId, sent_count: sentCount, total_inscriptions: inscriptions.length }
         });
         logger.log(`[Tournament Change] Admin summary sent to ${adminEmail}`);
       } catch (adminErr) {
@@ -3411,7 +3431,7 @@ Si cette désinscription est une erreur, veuillez contacter le comité via "Cont
 Sportivement,
 ${orgName}`;
 
-          await resend.emails.send({
+          await sendEmail({
             from: `${senderName} <${senderEmail}>`,
             replyTo: contactEmail || undefined,
             to: [inscriptionDetails.email],
@@ -3424,6 +3444,13 @@ ${orgName}`;
                 ${emailBody.replace(/\n/g, '<br>')}
               </div>
             </div>`
+          }, {
+            recipientKind: 'player',  // Désinscription confirmation to the player
+            orgId,
+            recipientName: playerName,
+            emailType: 'inscription_cancellation',
+            triggeredByUserId: req.user?.userId,
+            context: { tournoi_id: inscriptionDetails.tournoi_id, licence: inscriptionDetails.licence }
           });
           logger.log(`Desinscription email sent to ${inscriptionDetails.email}`);
         } catch (emailError) {

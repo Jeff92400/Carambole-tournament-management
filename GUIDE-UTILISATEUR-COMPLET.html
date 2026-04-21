@@ -3338,6 +3338,89 @@
     <div class="warning-card">
       <strong>⚠️ Limitation :</strong> Le Mode Test ne déclenche PAS les notifications push automatiques (rappels planifiés). Il simule uniquement les envois d'emails manuels. Pour tester les notifications push, utilisez la fonctionnalité "Envoyer une notification" dans <strong>Com joueurs > Notifs</strong>.
     </div>
+
+    <div class="info-card" style="margin-top: 16px;">
+      <strong>ℹ️ À ne pas confondre :</strong> le « Mode Test » ci-dessus permet d'envoyer des emails à une adresse d'override avec des joueurs fictifs (licences TEST%). Pour bloquer <em>tous</em> les emails et notifications push destinés aux joueurs réels (utile lors de l'onboarding d'un nouveau CDB), voir la section <a href="#param-mode-silencieux"><strong>Mode Test — Blocage des communications joueurs</strong></a>.
+    </div>
+  </section>
+
+  <hr>
+
+  <!-- Paramètres > Mode Test — Blocage des communications joueurs -->
+  <section id="param-mode-silencieux">
+    <h2>Paramètres &gt; Mode Test — Blocage des communications joueurs</h2>
+
+    <h3>Accès</h3>
+    <p>Onglet <strong>Organisation</strong> des Paramètres &gt; panneau <strong>« 🧪 Mode Test — Communications joueurs »</strong> (tout en haut de l'onglet)</p>
+
+    <h3>À quoi ça sert</h3>
+    <p>Ce mode est un <strong>interrupteur global par CDB</strong> qui bloque intégralement les emails et les notifications push <em>destinés aux joueurs</em>. Les communications destinées aux administrateurs (réinitialisation de mot de passe, récapitulatifs admin, emails de bienvenue CDB, notifications entre admins...) continuent de circuler normalement.</p>
+    <p>Il est conçu pour être utilisé :</p>
+    <ul>
+      <li><strong>Lors de l'onboarding d'un nouveau CDB</strong> — l'administrateur peut exercer tous les flux (envoi de convocations, relances, notifications push, publication de résultats...) sans perturber les joueurs réels.</li>
+      <li><strong>Avant une campagne de validation</strong> — pour vérifier que les templates d'emails et les notifications sont correctement configurés avant l'envoi en production.</li>
+      <li><strong>Pour auditer le trafic sortant</strong> — chaque envoi bloqué est archivé dans un journal consultable.</li>
+    </ul>
+
+    <h3>Ce qui est bloqué quand le mode est activé</h3>
+    <table class="ref-table">
+      <thead>
+        <tr>
+          <th>Catégorie</th>
+          <th>Canal</th>
+          <th>Destinataires</th>
+          <th>Bloqué ?</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>Convocations</td><td>Email + Push</td><td>Joueurs convoqués</td><td>✅ Bloqué</td></tr>
+        <tr><td>Résultats de tournoi</td><td>Email + Push</td><td>Participants</td><td>✅ Bloqué</td></tr>
+        <tr><td>Relances manuelles et automatiques</td><td>Email + Push</td><td>Joueurs non inscrits / qualifiés</td><td>✅ Bloqué</td></tr>
+        <tr><td>Invitations Player App</td><td>Email</td><td>Joueurs invités</td><td>✅ Bloqué</td></tr>
+        <tr><td>Confirmations d'inscription / forfait / désinscription</td><td>Email + Push</td><td>Joueur concerné</td><td>✅ Bloqué</td></tr>
+        <tr><td>Annonces urgentes</td><td>Push</td><td>Tous les joueurs abonnés</td><td>✅ Bloqué</td></tr>
+        <tr><td>Qualification finale, changement de date/lieu, annulation tournoi</td><td>Email + Push</td><td>Joueurs concernés</td><td>✅ Bloqué</td></tr>
+        <tr><td>Campagnes de masse (Com joueurs &gt; Composer)</td><td>Email</td><td>Joueurs sélectionnés</td><td>✅ Bloqué</td></tr>
+        <tr><td>Réinitialisation de mot de passe</td><td>Email</td><td>Administrateurs CDB</td><td>➡️ Autorisé</td></tr>
+        <tr><td>Emails de bienvenue CDB (super admin)</td><td>Email</td><td>Administrateurs CDB</td><td>➡️ Autorisé</td></tr>
+        <tr><td>Alertes tournois aux admins</td><td>Email</td><td>Admins opted-in</td><td>➡️ Autorisé</td></tr>
+        <tr><td>Récapitulatifs administrateurs (après convocation / résultats)</td><td>Email</td><td>Admins CDB</td><td>➡️ Autorisé</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Utilisation</h3>
+    <ol>
+      <li>Aller dans <strong>Paramètres &gt; Organisation &gt; 🧪 Mode Test — Communications joueurs</strong></li>
+      <li>Activer le commutateur — un <strong>bandeau rouge hachuré</strong> apparaît immédiatement en haut de toutes les pages admin pour rappeler que le mode est actif</li>
+      <li>Exercer les flux à tester (envoyer une convocation, créer une annonce urgente, déclencher une relance...)</li>
+      <li>Consulter le journal en bas du panneau pour vérifier que les envois ont bien été interceptés</li>
+      <li><strong>Désactiver le mode</strong> avant la prochaine campagne en production (le bandeau rouge disparaît)</li>
+    </ol>
+
+    <h3>Journal des envois bloqués</h3>
+    <p>Chaque email ou notification push bloqué est archivé dans un journal propre à votre CDB, avec :</p>
+    <ul>
+      <li><strong>Date et heure</strong> de la tentative</li>
+      <li><strong>Canal</strong> : ✉️ Email ou 📲 Push</li>
+      <li><strong>Type</strong> : convocation, results, relance, invitation, push_notification, etc.</li>
+      <li><strong>Destinataire</strong> : adresse email (ou numéro de licence pour les push)</li>
+      <li><strong>Sujet / titre</strong> du message</li>
+    </ul>
+    <p>Le journal peut être filtré par canal (emails uniquement, push uniquement) et vidé à tout moment avec le bouton <strong>« Vider le journal »</strong> — pratique avant de lancer une nouvelle série de tests pour obtenir un récapitulatif propre.</p>
+
+    <h3>Bandeau persistant</h3>
+    <p>Tant que le mode est activé, un <strong>bandeau rouge hachuré</strong> est affiché en permanence en haut de <em>toutes</em> les pages administrateur (tableau de bord, générer poules, Com joueurs, classements, paramètres...). Ce bandeau indique :</p>
+    <div style="background: repeating-linear-gradient(45deg, #c62828, #c62828 12px, #b71c1c 12px, #b71c1c 24px); color: white; padding: 8px 16px; font-size: 13px; font-weight: 600; text-align: center; border-radius: 4px; margin: 10px 0;">
+      🧪 MODE TEST ACTIVÉ — Aucun email ni notification push n'est envoyé aux joueurs
+    </div>
+    <p>Il est volontairement visuellement bruyant pour éviter qu'un administrateur n'oublie que le mode est actif au moment d'envoyer une vraie convocation.</p>
+
+    <h3>Isolation par CDB</h3>
+    <p>Le Mode Test est <strong>indépendant pour chaque CDB</strong>. L'activer dans un CDB n'a aucun impact sur les autres CDBs partageant la même plateforme. Chaque administrateur ne voit et ne contrôle que le réglage de son propre CDB.</p>
+
+    <div class="warning-card">
+      <strong>⚠️ Vigilance :</strong> Pensez à désactiver le Mode Test avant de reprendre des activités normales. Tant qu'il est actif, <em>aucune</em> convocation, relance ou résultat ne sera envoyé aux joueurs, même si vous cliquez sur « Envoyer ». Le bandeau rouge en haut de page est votre garde-fou visuel.
+    </div>
   </section>
 
   <hr>

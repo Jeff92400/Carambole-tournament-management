@@ -4,6 +4,7 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const db = require('../db-loader');
 const appSettings = require('../utils/app-settings');
+const { sendEmail } = require('../utils/email-helpers');
 const { logAdminAction, ACTION_TYPES } = require('../utils/admin-logger');
 
 const router = express.Router();
@@ -400,9 +401,6 @@ router.post('/forgot-password', async (req, res) => {
 
         // Send email with reset link
         try {
-          const { Resend } = require('resend');
-          const resend = new Resend(process.env.RESEND_API_KEY);
-
           // Get dynamic settings for email branding (org-aware)
           const emailSettings = await appSettings.getOrgSettingsBatch(user.organization_id, [
             'primary_color', 'email_convocations', 'email_sender_name',
@@ -417,7 +415,7 @@ router.post('/forgot-password', async (req, res) => {
           const baseUrl = process.env.BASE_URL || 'https://cdbhs-tournament-management-production.up.railway.app';
           const resetLink = `${baseUrl}/reset-password.html?token=${resetToken}${orgSlug ? '&org=' + encodeURIComponent(orgSlug) : ''}`;
 
-          await resend.emails.send({
+          await sendEmail({
             from: `${senderName} <${senderEmail}>`,
             to: user.email,
             subject: `Réinitialisation de votre mot de passe ${orgShortName}`,
@@ -438,6 +436,10 @@ router.post('/forgot-password', async (req, res) => {
                 <p style="color: #999; font-size: 12px;">${orgShortName} - ${orgName}</p>
               </div>
             `
+          }, {
+            recipientKind: 'admin',  // Password reset is always for CDB/platform users
+            orgId: user.organization_id,
+            emailType: 'reset_password'
           });
 
           console.log(`Password reset email sent to ${user.email}`);
@@ -547,9 +549,6 @@ router.post('/forgot', async (req, res) => {
 
     // Send email with code
     try {
-      const { Resend } = require('resend');
-      const resend = new Resend(process.env.RESEND_API_KEY);
-
       // Get dynamic settings for email branding (org-aware)
       const emailSettings = await appSettings.getOrgSettingsBatch(user.organization_id, [
         'primary_color', 'email_noreply', 'email_sender_name',
@@ -562,8 +561,8 @@ router.post('/forgot', async (req, res) => {
       const orgShortName = emailSettings.organization_short_name || 'CDBHS';
       const replyToEmail = emailSettings.summary_email || '';
 
-      if (resend) {
-        await resend.emails.send({
+      {
+        await sendEmail({
           from: `${senderName} <${senderEmail}>`,
           replyTo: replyToEmail,
           to: [normalizedEmail],
@@ -588,6 +587,10 @@ router.post('/forgot', async (req, res) => {
               </div>
             </div>
           `
+        }, {
+          recipientKind: 'admin',  // Password reset code is for CDB/platform users
+          orgId: user.organization_id,
+          emailType: 'reset_password'
         });
         console.log(`Reset code email sent to ${normalizedEmail}`);
       }

@@ -15,17 +15,8 @@ const db = require('../db-loader');
 const { authenticateToken, requireAdmin, requireViewer, requireViewerWrite } = require('./auth');
 const logger = require('../utils/logger');
 const { logAdminAction, ACTION_TYPES } = require('../utils/admin-logger');
-const { Resend } = require('resend');
 const appSettings = require('../utils/app-settings');
-
-// Initialize Resend for direct email sending
-const getResend = () => {
-  if (!process.env.RESEND_API_KEY) {
-    logger.log('[EMAIL] RESEND_API_KEY not configured');
-    return null;
-  }
-  return new Resend(process.env.RESEND_API_KEY);
-};
+const { sendEmail } = require('../utils/email-helpers');
 
 // Get email settings from database (org-aware via req or orgId)
 async function getEmailSettings(reqOrOrgId) {
@@ -44,13 +35,12 @@ async function getEmailSettings(reqOrOrgId) {
 router.use(authenticateToken);
 router.use(requireViewer);
 
-// Helper function to send approval email directly via Resend
+// Helper function to send approval email via sendEmail() chokepoint
 async function sendApprovalEmail(request, req) {
   logger.log(`[APPROVAL EMAIL] Starting email send to ${request.player_email}`);
 
-  const resend = getResend();
-  if (!resend) {
-    logger.log('[APPROVAL EMAIL] Resend not configured, skipping email');
+  if (!process.env.RESEND_API_KEY) {
+    logger.log('[APPROVAL EMAIL] RESEND_API_KEY not configured, skipping email');
     return { success: false, reason: 'resend_not_configured' };
   }
 
@@ -122,12 +112,24 @@ async function sendApprovalEmail(request, req) {
       </html>
     `;
 
-    await resend.emails.send({
+    const result = await sendEmail({
       from: `${settings.sender_name} <${settings.email_from}>`,
       to: request.player_email,
       subject: `Demande acceptée - ${request.game_mode_name} ${request.requested_ranking} T${request.tournament_number}`,
       html: emailHtml
+    }, {
+      recipientKind: 'player',  // Enrollment approval goes to the player who requested it
+      orgId: req?.user?.organizationId || null,
+      recipientName: request.player_name,
+      emailType: 'enrollment_approved',
+      triggeredByUserId: req?.user?.userId || null,
+      context: { request_id: request.id, tournament_number: request.tournament_number }
     });
+
+    if (result?.skipped) {
+      logger.log(`[APPROVAL EMAIL] Blocked by test mode for ${request.player_email}`);
+      return { success: true, skipped: true };
+    }
 
     logger.log(`[APPROVAL EMAIL] Email sent successfully to ${request.player_email}`);
     return { success: true };
@@ -141,9 +143,8 @@ async function sendApprovalEmail(request, req) {
 async function sendRejectionEmail(request, reason, req) {
   logger.log(`[REJECTION EMAIL] Starting email send to ${request.player_email}`);
 
-  const resend = getResend();
-  if (!resend) {
-    logger.log('[REJECTION EMAIL] Resend not configured, skipping email');
+  if (!process.env.RESEND_API_KEY) {
+    logger.log('[REJECTION EMAIL] RESEND_API_KEY not configured, skipping email');
     return { success: false, reason: 'resend_not_configured' };
   }
 
@@ -216,12 +217,24 @@ async function sendRejectionEmail(request, reason, req) {
       </html>
     `;
 
-    await resend.emails.send({
+    const result = await sendEmail({
       from: `${settings.sender_name} <${settings.email_from}>`,
       to: request.player_email,
       subject: `Demande refusée - ${request.game_mode_name} ${request.requested_ranking} T${request.tournament_number}`,
       html: emailHtml
+    }, {
+      recipientKind: 'player',  // Enrollment rejection goes to the player who requested it
+      orgId: req?.user?.organizationId || null,
+      recipientName: request.player_name,
+      emailType: 'enrollment_rejected',
+      triggeredByUserId: req?.user?.userId || null,
+      context: { request_id: request.id, reason, tournament_number: request.tournament_number }
     });
+
+    if (result?.skipped) {
+      logger.log(`[REJECTION EMAIL] Blocked by test mode for ${request.player_email}`);
+      return { success: true, skipped: true };
+    }
 
     logger.log(`[REJECTION EMAIL] Email sent successfully to ${request.player_email}`);
     return { success: true };

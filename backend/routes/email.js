@@ -1,7 +1,6 @@
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
-const { Resend } = require('resend');
 const PDFDocument = require('pdfkit');
 const { authenticateToken } = require('./auth');
 const { normalizeLicence } = require('../utils/licence');
@@ -26,7 +25,7 @@ const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 const { getOrganizationLogoBuffer } = require('../utils/logo-loader');
 
 // Email helpers shared with routes/emailing.js — single source of truth.
-const { getSummaryEmail, getContactEmail, getEmailTemplateSettings, buildFromAddress } = require('../utils/email-helpers');
+const { getSummaryEmail, getContactEmail, getEmailTemplateSettings, buildFromAddress, sendEmail } = require('../utils/email-helpers');
 
 // Build universal variables object for all email templates
 // This provides ALL common variables - unused ones become empty strings
@@ -232,12 +231,11 @@ function buildEmailFooter(settings) {
   </div>`;
 }
 
-// Initialize Resend
+// Historical helper retained as a cheap feature-flag check. The actual Resend
+// instance is owned by utils/email-helpers.js (sendEmail chokepoint).
 const getResend = () => {
-  if (!process.env.RESEND_API_KEY) {
-    return null;
-  }
-  return new Resend(process.env.RESEND_API_KEY);
+  if (!process.env.RESEND_API_KEY) return null;
+  return true; // truthy — callers use it as an "is Resend configured" check
 };
 
 // Fetch ranking data for players in a category/season
@@ -1435,7 +1433,7 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
       const emailBodyHtml = emailBodyText.replace(/\n/g, '<br>');
 
       // Send email using Resend (no CC - summary email sent at the end)
-      const emailResult = await resend.emails.send({
+      const emailResult = await sendEmail({
         from: buildFromAddress(emailSettings, 'noreply'),
         replyTo: contactEmail,
         to: [player.email],
@@ -1483,7 +1481,12 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
           filename: `Convocation_${player.last_name}_${player.first_name}_${category.display_name.replace(/\s+/g, '_')}_T${tournament}.pdf`,
           content: base64Content
         }]
-      });
+      }, {
+      recipientKind: 'player',
+      orgId: (typeof orgId !== 'undefined' ? orgId : (req?.user?.organizationId || null)),
+      emailType: 'convocation',
+      triggeredByUserId: (req?.user?.userId)
+    });
 
       logger.log('Email sent:', emailResult);
 
@@ -1633,13 +1636,18 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
         </div>
       `;
 
-      await resend.emails.send({
+      await sendEmail({
         from: buildFromAddress(emailSettings, 'noreply'),
         replyTo: contactEmail,
         to: [summaryEmailAddress],
         subject: `📋 Récapitulatif - Convocations ${category.display_name} - ${tournamentLabel} - ${dateStr}`,
         html: summaryHtml
-      });
+      }, {
+      recipientKind: 'admin',
+      orgId: (typeof orgId !== 'undefined' ? orgId : (req?.user?.organizationId || null)),
+      emailType: 'convocation_admin_recap',
+      triggeredByUserId: (req?.user?.userId)
+    });
 
       results.summarySent = true;
       results.summaryEmail = summaryEmailAddress;
@@ -2475,7 +2483,12 @@ Le {organization_short_name}`;
       emailPayload.attachments = attachments;
     }
 
-    await resend.emails.send(emailPayload);
+    await sendEmail(emailPayload, {
+      recipientKind: 'admin',
+      orgId: (typeof orgId !== 'undefined' ? orgId : (req?.user?.organizationId || null)),
+      emailType: 'club_reminder',
+      triggeredByUserId: (req?.user?.userId)
+    });
 
     // Log to email_campaigns (include tournament_id for duplicate tracking)
     await new Promise((resolve, reject) => {
@@ -2953,7 +2966,7 @@ router.post('/inscription-confirmation', async (req, res) => {
     const bodyText = replaceTemplateVariables(template.body, variables);
     const bodyHtml = bodyText.replace(/\n/g, '<br>').replace(/🎯/g, FRENCH_BILLARD_ICON_IMG);
 
-    await resend.emails.send({
+    await sendEmail({
       from: buildFromAddress(emailSettings, 'noreply'),
       replyTo: contactEmail,
       to: [player_email],
@@ -2981,6 +2994,11 @@ router.post('/inscription-confirmation', async (req, res) => {
           ${buildEmailFooter(emailSettings)}
         </div>
       `
+    }, {
+      recipientKind: 'player',
+      orgId: (typeof orgId !== 'undefined' ? orgId : (req?.user?.organizationId || null)),
+      emailType: 'inscription_confirmation',
+      triggeredByUserId: (req?.user?.userId)
     });
 
     // Log email to database
@@ -3113,7 +3131,7 @@ router.post('/inscription-cancellation', async (req, res) => {
     const bodyText = replaceTemplateVariables(template.body, variables);
     const bodyHtml = bodyText.replace(/\n/g, '<br>').replace(/🎯/g, FRENCH_BILLARD_ICON_IMG);
 
-    await resend.emails.send({
+    await sendEmail({
       from: buildFromAddress(emailSettings, 'noreply'),
       replyTo: contactEmail,
       to: [player_email],
@@ -3141,6 +3159,11 @@ router.post('/inscription-cancellation', async (req, res) => {
           ${buildEmailFooter(emailSettings)}
         </div>
       `
+    }, {
+      recipientKind: 'player',
+      orgId: (typeof orgId !== 'undefined' ? orgId : (req?.user?.organizationId || null)),
+      emailType: 'inscription_cancellation',
+      triggeredByUserId: (req?.user?.userId)
     });
 
     // Log email to database
@@ -3214,7 +3237,7 @@ router.post('/unavailability-notification', async (req, res) => {
 
     const subject = `${orgShortName} — Indisponibilité déclarée : ${player_name}`;
 
-    await resend.emails.send({
+    await sendEmail({
       from: buildFromAddress(emailSettings, 'noreply'),
       to: [summaryEmail],
       subject: subject,
@@ -3239,6 +3262,11 @@ router.post('/unavailability-notification', async (req, res) => {
           ${buildEmailFooter(emailSettings)}
         </div>
       `
+    }, {
+      recipientKind: 'admin',
+      orgId: (typeof orgId !== 'undefined' ? orgId : (req?.user?.organizationId || null)),
+      emailType: 'indisponibility_admin_notification',
+      triggeredByUserId: (req?.user?.userId)
     });
 
     logger.log(`Unavailability notification sent to ${summaryEmail} for player ${player_name}`);
@@ -3291,7 +3319,7 @@ router.post('/forfait-notification', async (req, res) => {
 
     const forfaitLink = `${baseUrl}/generate-poules.html`;
 
-    await resend.emails.send({
+    await sendEmail({
       from: buildFromAddress(emailSettings, 'noreply'),
       to: [summaryEmail],
       subject: subject,
@@ -3322,6 +3350,11 @@ router.post('/forfait-notification', async (req, res) => {
           ${buildEmailFooter(emailSettings)}
         </div>
       `
+    }, {
+      recipientKind: 'admin',
+      orgId: (typeof orgId !== 'undefined' ? orgId : (req?.user?.organizationId || null)),
+      emailType: 'forfait_admin_notification',
+      triggeredByUserId: (req?.user?.userId)
     });
 
     logger.log(`Forfait notification sent to ${summaryEmail} for player ${player_name}`);
@@ -3366,7 +3399,7 @@ router.post('/forfait-confirmation', async (req, res) => {
 
     const subject = `${orgShortName} — Forfait confirmé`;
 
-    await resend.emails.send({
+    await sendEmail({
       from: buildFromAddress(emailSettings, 'noreply'),
       replyTo: contactEmail,
       to: [player_email],
@@ -3394,6 +3427,11 @@ router.post('/forfait-confirmation', async (req, res) => {
           ${buildEmailFooter(emailSettings)}
         </div>
       `
+    }, {
+      recipientKind: 'player',
+      orgId: (typeof orgId !== 'undefined' ? orgId : (req?.user?.organizationId || null)),
+      emailType: 'forfait_confirmation',
+      triggeredByUserId: (req?.user?.userId)
     });
 
     // Log the email
@@ -3453,7 +3491,7 @@ router.post('/finale-renunciation-notification', async (req, res) => {
 
     const subject = `${orgShortName} — Renoncement à une finale : ${player_name}`;
 
-    await resend.emails.send({
+    await sendEmail({
       from: buildFromAddress(emailSettings, 'noreply'),
       to: [summaryEmail],
       subject: subject,
@@ -3480,6 +3518,11 @@ router.post('/finale-renunciation-notification', async (req, res) => {
           ${buildEmailFooter(emailSettings)}
         </div>
       `
+    }, {
+      recipientKind: 'admin',
+      orgId: (typeof orgId !== 'undefined' ? orgId : (req?.user?.organizationId || null)),
+      emailType: 'finale_renunciation_admin_notification',
+      triggeredByUserId: (req?.user?.userId)
     });
 
     logger.log(`Finale renunciation notification sent to ${summaryEmail} for player ${player_name}`);
@@ -3524,7 +3567,7 @@ router.post('/finale-renunciation-confirmation', async (req, res) => {
 
     const subject = `${orgShortName} — Renoncement à la finale confirmé`;
 
-    await resend.emails.send({
+    await sendEmail({
       from: buildFromAddress(emailSettings, 'noreply'),
       replyTo: contactEmail,
       to: [player_email],
@@ -3551,6 +3594,11 @@ router.post('/finale-renunciation-confirmation', async (req, res) => {
           ${buildEmailFooter(emailSettings)}
         </div>
       `
+    }, {
+      recipientKind: 'player',
+      orgId: (typeof orgId !== 'undefined' ? orgId : (req?.user?.organizationId || null)),
+      emailType: 'finale_renunciation_confirmation',
+      triggeredByUserId: (req?.user?.userId)
     });
 
     logger.log(`Finale renunciation confirmation sent to ${player_email} for ${player_name}`);
@@ -3600,7 +3648,7 @@ router.post('/contact', async (req, res) => {
       : '';
 
     // Send email to organization
-    await resend.emails.send({
+    await sendEmail({
       from: `${shortName} Espace Joueur <${emailSettings.email_noreply || 'noreply@cdbhs.net'}>`,
       replyTo: player_email,
       to: [contactEmail],
@@ -3628,10 +3676,15 @@ router.post('/contact', async (req, res) => {
           ${buildEmailFooter(emailSettings)}
         </div>
       `
+    }, {
+      recipientKind: 'admin',
+      orgId: (typeof orgId !== 'undefined' ? orgId : (req?.user?.organizationId || null)),
+      emailType: 'player_app_contact_message',
+      triggeredByUserId: (req?.user?.userId)
     });
 
     // Send confirmation email to player
-    await resend.emails.send({
+    await sendEmail({
       from: buildFromAddress(emailSettings, 'noreply'),
       replyTo: contactEmail,
       to: [player_email],
@@ -3654,6 +3707,11 @@ router.post('/contact', async (req, res) => {
           ${buildEmailFooter(emailSettings)}
         </div>
       `
+    }, {
+      recipientKind: 'player',
+      orgId: (typeof orgId !== 'undefined' ? orgId : (req?.user?.organizationId || null)),
+      emailType: 'player_app_contact_confirmation',
+      triggeredByUserId: (req?.user?.userId)
     });
 
     logger.log(`Contact email sent from ${player_email}: ${subject} (+ confirmation to player)`);
@@ -4310,12 +4368,17 @@ router.post('/enrollment-acknowledgment', async (req, res) => {
       </html>
     `;
 
-    await resend.emails.send({
+    await sendEmail({
       from: `${senderName} <${emailFrom}>`,
       to: player_email,
       subject: `Confirmation de votre demande d'inscription - ${orgShortName}`,
       html: emailHtml,
       replyTo: contactEmail
+    }, {
+      recipientKind: 'player',
+      orgId: (typeof orgId !== 'undefined' ? orgId : (req?.user?.organizationId || null)),
+      emailType: 'enrollment_request_confirmation',
+      triggeredByUserId: (req?.user?.userId)
     });
 
     logger.log(`Enrollment acknowledgment email sent to ${player_email}`);
@@ -4429,12 +4492,17 @@ router.post('/enrollment-notification', async (req, res) => {
       </html>
     `;
 
-    await resend.emails.send({
+    await sendEmail({
       from: `${senderName} <${emailFrom}>`,
       to: summaryEmail,
       subject: `Nouvelle demande d'inscription - ${player_name}`,
       html: emailHtml,
       replyTo: contactEmail
+    }, {
+      recipientKind: 'admin',
+      orgId: (typeof orgId !== 'undefined' ? orgId : (req?.user?.organizationId || null)),
+      emailType: 'enrollment_request_admin_notification',
+      triggeredByUserId: (req?.user?.userId)
     });
 
     logger.log(`Enrollment notification email sent to ${summaryEmail}`);
@@ -4542,12 +4610,17 @@ router.post('/enrollment-approved', async (req, res) => {
       </html>
     `;
 
-    await resend.emails.send({
+    await sendEmail({
       from: `${senderName} <${emailFrom}>`,
       to: player_email,
       subject: `Demande acceptée - ${game_mode} ${requested_ranking} T${tournament_number}`,
       html: emailHtml,
       replyTo: contactEmail
+    }, {
+      recipientKind: 'player',
+      orgId: (typeof orgId !== 'undefined' ? orgId : (req?.user?.organizationId || null)),
+      emailType: 'enrollment_approved_email',
+      triggeredByUserId: (req?.user?.userId)
     });
 
     logger.log(`Enrollment approved email sent to ${player_email}`);
@@ -4662,12 +4735,17 @@ router.post('/enrollment-rejected', async (req, res) => {
       </html>
     `;
 
-    await resend.emails.send({
+    await sendEmail({
       from: `${senderName} <${emailFrom}>`,
       to: player_email,
       subject: `Demande refusée - ${game_mode} ${requested_ranking} T${tournament_number}`,
       html: emailHtml,
       replyTo: contactEmail
+    }, {
+      recipientKind: 'player',
+      orgId: (typeof orgId !== 'undefined' ? orgId : (req?.user?.organizationId || null)),
+      emailType: 'enrollment_rejected_email',
+      triggeredByUserId: (req?.user?.userId)
     });
 
     logger.log(`Enrollment rejected email sent to ${player_email}`);

@@ -2349,6 +2349,86 @@ router.put('/current-season', authenticateToken, requireAdmin, async (req, res) 
   }
 });
 
+// ============================================================================
+// TEST MODE — audit log viewer
+// ============================================================================
+//
+// Surfaces the rows that the sendEmail() / push chokepoints write to
+// email_test_mode_log when a CDB runs with email_test_mode_enabled='true'.
+// Used by the Phase 4 UI panel in settings-admin.html to let admins audit
+// "what would have been sent" during a validation campaign.
+
+// GET /api/settings/test-mode-log?limit=100&channel=email|push
+// Returns the most recent blocked sends for the caller's org.
+router.get('/test-mode-log', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const db = getDb();
+    const orgId = req.user.organizationId || null;
+    const limit = Math.min(parseInt(req.query.limit) || 100, 500);
+    const channelFilter = req.query.channel || null; // 'email' | 'push' | null
+
+    const useChannel = (channelFilter === 'email' || channelFilter === 'push');
+    const params = useChannel ? [orgId, channelFilter, limit] : [orgId, limit];
+    const sql = useChannel
+      ? `SELECT id, organization_id, channel, recipient, recipient_kind,
+                recipient_name, subject, email_type, triggered_by_user_id,
+                context, created_at
+         FROM email_test_mode_log
+         WHERE ($1::int IS NULL OR organization_id = $1) AND channel = $2
+         ORDER BY created_at DESC, id DESC
+         LIMIT $3`
+      : `SELECT id, organization_id, channel, recipient, recipient_kind,
+                recipient_name, subject, email_type, triggered_by_user_id,
+                context, created_at
+         FROM email_test_mode_log
+         WHERE ($1::int IS NULL OR organization_id = $1)
+         ORDER BY created_at DESC, id DESC
+         LIMIT $2`;
+
+    const rows = await new Promise((resolve, reject) => {
+      db.all(sql, params, (err, rows) => err ? reject(err) : resolve(rows || []));
+    });
+
+    // Also compute aggregates for the current org
+    const agg = await new Promise((resolve) => {
+      db.all(
+        `SELECT channel, email_type, COUNT(*) as n
+         FROM email_test_mode_log
+         WHERE ($1::int IS NULL OR organization_id = $1)
+         GROUP BY channel, email_type
+         ORDER BY n DESC`,
+        [orgId],
+        (err, rows) => resolve(err ? [] : (rows || []))
+      );
+    });
+
+    res.json({ entries: rows, aggregates: agg });
+  } catch (error) {
+    console.error('[test-mode-log] Error:', error);
+    res.status(500).json({ error: 'Erreur lors du chargement du journal' });
+  }
+});
+
+// DELETE /api/settings/test-mode-log — wipe the log for the caller's org.
+// Useful before starting a fresh test campaign so the log only shows the new run.
+router.delete('/test-mode-log', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const db = getDb();
+    const orgId = req.user.organizationId || null;
+    await new Promise((resolve, reject) => {
+      db.run(
+        `DELETE FROM email_test_mode_log WHERE ($1::int IS NULL OR organization_id = $1)`,
+        [orgId],
+        (err) => err ? reject(err) : resolve()
+      );
+    });
+    res.json({ success: true });
+  } catch (error) {
+    console.error('[test-mode-log] Error wiping:', error);
+    res.status(500).json({ error: 'Erreur lors de la purge du journal' });
+  }
+});
+
 module.exports = router;
 module.exports.getRankingTournamentNumbers = getRankingTournamentNumbers;
 module.exports.getFinaleTournamentNumber = getFinaleTournamentNumber;

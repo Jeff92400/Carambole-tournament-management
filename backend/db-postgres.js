@@ -1352,6 +1352,30 @@ async function initializeDatabase() {
     await client.query(`CREATE INDEX IF NOT EXISTS idx_activity_logs_action ON activity_logs(action_type)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_activity_logs_created ON activity_logs(created_at DESC)`);
 
+    // Test mode log — records every email/push that was blocked by the per-org
+    // test mode toggle (organization_settings.email_test_mode_enabled='true').
+    // Purpose: during CDB onboarding / validation campaigns, admins can audit
+    // "what *would* have been sent" without actually disturbing players.
+    // Admin-facing communications are never logged here — only player-bound
+    // traffic that was suppressed.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS email_test_mode_log (
+        id SERIAL PRIMARY KEY,
+        organization_id INTEGER REFERENCES organizations(id) ON DELETE CASCADE,
+        channel VARCHAR(20) NOT NULL,             -- 'email' | 'push'
+        recipient VARCHAR(255),                   -- email address or licence
+        recipient_kind VARCHAR(20) NOT NULL,      -- 'player' (always, for now)
+        recipient_name VARCHAR(255),              -- display name when available
+        subject TEXT,                             -- email subject / push title
+        email_type VARCHAR(50),                   -- convocation | results | relance | ...
+        triggered_by_user_id INTEGER,             -- admin who initiated the action
+        context JSONB,                            -- {tournoi_id, template_key, ...}
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_email_test_mode_log_org ON email_test_mode_log(organization_id, created_at DESC)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_email_test_mode_log_type ON email_test_mode_log(email_type)`);
+
     // Player invitations table - tracks invitations sent to players to join the Player App
     await client.query(`
       CREATE TABLE IF NOT EXISTS player_invitations (

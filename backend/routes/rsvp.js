@@ -2,6 +2,7 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 const db = require('../db-loader');
 const appSettings = require('../utils/app-settings');
+const { sendEmail } = require('../utils/email-helpers');
 
 const router = express.Router();
 
@@ -261,9 +262,7 @@ async function notifyAdmin(orgId, licence, playerName, tournamentName, responseT
   if (!adminEmail) return;
 
   try {
-    const { Resend } = require('resend');
     if (!process.env.RESEND_API_KEY) return;
-    const resend = new Resend(process.env.RESEND_API_KEY);
 
     const senderEmail = orgId
       ? (await appSettings.getOrgSetting(orgId, 'email_noreply') || 'noreply@carambole-gestion.fr')
@@ -277,7 +276,7 @@ async function notifyAdmin(orgId, licence, playerName, tournamentName, responseT
     const statusEmoji = isInscription ? '✅' : '❌';
     const displayName = playerName || licence;
 
-    await resend.emails.send({
+    await sendEmail({
       from: `${senderName} <${senderEmail}>`,
       to: [adminEmail],
       subject: `${statusEmoji} ${statusLabel} par email - ${displayName} - ${tournamentName}`,
@@ -296,6 +295,11 @@ async function notifyAdmin(orgId, licence, playerName, tournamentName, responseT
             <p style="font-size: 12px; color: #888; margin-top: 20px;">Réponse enregistrée via le lien RSVP dans l'email de relance.</p>
           </div>
         </div>`
+    }, {
+      recipientKind: 'admin',  // RSVP notification summary to CDB admin
+      orgId,
+      emailType: 'rsvp_admin_notification',
+      context: { licence, tournament_name: tournamentName, response_type: responseType }
     });
   } catch (error) {
     console.error('[RSVP] Error sending admin notification:', error.message);
@@ -306,9 +310,7 @@ async function notifyPlayer(orgId, playerEmail, playerName, tournamentLabel, res
   if (!playerEmail) return;
 
   try {
-    const { Resend } = require('resend');
     if (!process.env.RESEND_API_KEY) return;
-    const resend = new Resend(process.env.RESEND_API_KEY);
 
     const senderEmail = orgSettings?.email_noreply || 'noreply@carambole-gestion.fr';
     const replyTo = orgSettings?.email_communication || orgSettings?.summary_email || undefined;
@@ -347,7 +349,13 @@ async function notifyPlayer(orgId, playerEmail, playerName, tournamentLabel, res
     };
     if (replyTo) emailOptions.replyTo = replyTo;
 
-    await resend.emails.send(emailOptions);
+    await sendEmail(emailOptions, {
+      recipientKind: 'player',  // Confirmation email to the player who RSVP'd
+      orgId,
+      recipientName: playerName,
+      emailType: 'rsvp_player_confirmation',
+      context: { tournament_label: tournamentLabel, response_type: responseType }
+    });
   } catch (error) {
     console.error('[RSVP] Error sending player confirmation:', error.message);
   }

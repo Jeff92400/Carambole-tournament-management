@@ -3,10 +3,7 @@ const router = express.Router();
 const { authenticateToken } = require('./auth');
 const db = require('../db-loader');
 const appSettings = require('../utils/app-settings');
-const { Resend } = require('resend');
-
-// Initialize Resend
-const resend = new Resend(process.env.RESEND_API_KEY);
+const { sendEmail } = require('../utils/email-helpers');
 
 // ==================== HELPER FUNCTIONS ====================
 
@@ -513,12 +510,17 @@ async function sendTestConvocations(db, appSettings, playerLicences, overrideEma
 
         // Send via Resend
         try {
-          const emailResult = await resend.emails.send({
+          const emailResult = await sendEmail({
             from: buildFromAddress(emailSettings, 'convocations'),
             replyTo: contactEmail,
             to: [overrideEmail],
             subject: emailSubject,
             html: htmlContent
+          }, {
+            recipientKind: 'admin',  // Test tool always sends to admin-supplied override address
+            orgId,
+            emailType: 'test_convocation',
+            context: { test_player_licence: player.licence }
           });
 
           console.log('[Test Mode] Email sent:', emailResult);
@@ -641,12 +643,17 @@ async function sendTestResults(db, appSettings, playerLicences, overrideEmail, o
         `;
 
         try {
-          await resend.emails.send({
+          await sendEmail({
             from: buildFromAddress(emailSettings, 'communication'),
             replyTo: contactEmail,
             to: [overrideEmail],
             subject: emailSubject,
             html: htmlContent
+          }, {
+            recipientKind: 'admin',
+            orgId,
+            emailType: 'test_results',
+            context: { test_player_licence: player.licence }
           });
 
           emails.push({
@@ -756,12 +763,17 @@ async function sendTestRelance(db, appSettings, playerLicences, overrideEmail, o
         `;
 
         try {
-          await resend.emails.send({
+          await sendEmail({
             from: buildFromAddress(emailSettings, 'communication'),
             replyTo: contactEmail,
             to: [overrideEmail],
             subject: emailSubject,
             html: htmlContent
+          }, {
+            recipientKind: 'admin',
+            orgId,
+            emailType: 'test_relance',
+            context: { test_player_licence: player.licence }
           });
 
           emails.push({
@@ -863,12 +875,17 @@ async function sendTestInvitations(db, appSettings, playerLicences, overrideEmai
         `;
 
         try {
-          await resend.emails.send({
+          await sendEmail({
             from: buildFromAddress(emailSettings, 'communication'),
             replyTo: contactEmail,
             to: [overrideEmail],
             subject: emailSubject,
             html: htmlContent
+          }, {
+            recipientKind: 'admin',
+            orgId,
+            emailType: 'test_invitation',
+            context: { test_player_licence: player.licence }
           });
 
           emails.push({
@@ -1127,12 +1144,18 @@ router.post('/send-template', authenticateToken, async (req, res) => {
     // All other templates use communication@cdbhs.net to avoid unverified sender rejections
     const fromAddress = buildFromAddress(settings, fromType);
 
-    // Send email via Resend
-    const emailResult = await resend.emails.send({
+    // Send email via Resend (through chokepoint)
+    const emailResult = await sendEmail({
       from: fromAddress,
       to: recipientEmail,
       subject: subject,
       html: htmlBody
+    }, {
+      recipientKind: 'admin',  // Simplified template testing — always to admin-supplied address
+      orgId,
+      emailType: `test_template_${templateKey}`,
+      triggeredByUserId: userId,
+      context: { template_key: templateKey }
     });
 
     res.json({

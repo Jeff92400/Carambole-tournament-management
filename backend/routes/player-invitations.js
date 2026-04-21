@@ -5,11 +5,11 @@
  */
 
 const express = require('express');
-const { Resend } = require('resend');
 const multer = require('multer');
 const { authenticateToken, requireAdmin } = require('./auth');
 const db = require('../db-loader');
 const appSettings = require('../utils/app-settings');
+const { sendEmail } = require('../utils/email-helpers');
 const { logAdminAction, ACTION_TYPES } = require('../utils/admin-logger');
 const logger = require('../utils/logger');
 
@@ -527,7 +527,6 @@ router.post('/send', authenticateToken, async (req, res) => {
     return res.status(400).json({ error: 'Veuillez d\'abord télécharger un guide PDF dans les paramètres avant d\'envoyer des invitations.' });
   }
 
-  const resend = new Resend(process.env.RESEND_API_KEY);
   const isTestMode = !!test_email;
 
   try {
@@ -678,7 +677,14 @@ router.post('/send', authenticateToken, async (req, res) => {
           }];
         }
 
-        await resend.emails.send(emailOptions);
+        await sendEmail(emailOptions, {
+          recipientKind: 'player',  // Player App invitation sent to player
+          orgId: req.user.organizationId || null,
+          recipientName: `${contact.first_name || ''} ${contact.last_name || ''}`.trim() || null,
+          emailType: 'invitation_send',
+          triggeredByUserId: req.user?.userId,
+          context: { licence: contact.licence, is_test: isTestMode }
+        });
 
         // If not test mode, record the invitation
         if (!isTestMode) {
@@ -788,12 +794,18 @@ router.post('/send', authenticateToken, async (req, res) => {
           </div>
         `;
 
-        await resend.emails.send({
+        await sendEmail({
           from: `${senderName} <${senderEmail}>`,
           replyTo: replyToEmail,
           to: [replyToEmail],
           subject: `📋 Récapitulatif - ${sentCount} invitation(s) Player App envoyée(s)`,
           html: summaryHtml
+        }, {
+          recipientKind: 'admin',  // Admin recap of bulk invitation send
+          orgId: req.user.organizationId || null,
+          emailType: 'invitation_admin_recap',
+          triggeredByUserId: req.user?.userId,
+          context: { sent_count: sentCount }
         });
 
         logger.log(`Summary email sent to ${replyToEmail}`);
@@ -859,7 +871,6 @@ router.post('/send-with-template', authenticateToken, async (req, res) => {
     return res.status(400).json({ error: 'Veuillez d\'abord télécharger un guide PDF dans les paramètres avant d\'envoyer des invitations.' });
   }
 
-  const resend = new Resend(process.env.RESEND_API_KEY);
   const isTestMode = !!test_email;
 
   try {
@@ -1003,7 +1014,14 @@ router.post('/send-with-template', authenticateToken, async (req, res) => {
           emailOptions.attachments = [pdfAttachment];
         }
 
-        await resend.emails.send(emailOptions);
+        await sendEmail(emailOptions, {
+          recipientKind: 'player',  // Player App invitation (template variant)
+          orgId: req.user.organizationId || null,
+          recipientName: `${contact.first_name || ''} ${contact.last_name || ''}`.trim() || null,
+          emailType: 'invitation_send_template',
+          triggeredByUserId: req.user?.userId,
+          context: { licence: contact.licence, template_key, is_test: isTestMode }
+        });
 
         // Update or create invitation record (same logic as /send endpoint)
         if (!isTestMode) {
@@ -1121,11 +1139,17 @@ router.post('/send-with-template', authenticateToken, async (req, res) => {
         `;
 
         if (replyToEmail) {
-          await resend.emails.send({
+          await sendEmail({
             from: `${senderName} <${senderEmail}>`,
             to: replyToEmail,
             subject: `Récapitulatif Invitations Player App - ${templateLabels[template_key]}`,
             html: summaryHtml
+          }, {
+            recipientKind: 'admin',  // Admin recap of template-based invitation send
+            orgId: req.user.organizationId || null,
+            emailType: 'invitation_admin_recap_template',
+            triggeredByUserId: req.user?.userId,
+            context: { template_key, sent_count: sentCount }
           });
           logger.log('[Player Invitations Template] Summary email sent to', replyToEmail);
         }
@@ -1210,8 +1234,7 @@ router.post('/resend/:id', authenticateToken, async (req, res) => {
     });
 
     // Actually send the email using the logic from /send
-    const resend = new Resend(process.env.RESEND_API_KEY);
-
+  
     const emailSettings = await req.getOrgSettingsBatch([
       'primary_color', 'email_communication', 'email_sender_name',
       'organization_name', 'organization_short_name', 'summary_email',
@@ -1321,7 +1344,14 @@ router.post('/resend/:id', authenticateToken, async (req, res) => {
       }];
     }
 
-    await resend.emails.send(emailOptions);
+    await sendEmail(emailOptions, {
+      recipientKind: 'player',  // Resend of Player App invitation
+      orgId: req.user.organizationId || null,
+      recipientName: `${invitation.first_name || ''} ${invitation.last_name || ''}`.trim() || null,
+      emailType: 'invitation_resend',
+      triggeredByUserId: req.user?.userId,
+      context: { invitation_id: invitation.id, licence: invitation.licence }
+    });
 
     // Update resend count
     await new Promise((resolve, reject) => {
@@ -1356,7 +1386,6 @@ router.post('/resend-batch', authenticateToken, async (req, res) => {
     return res.status(500).json({ error: 'Configuration email manquante (RESEND_API_KEY)' });
   }
 
-  const resend = new Resend(process.env.RESEND_API_KEY);
 
   const orgId = req.user.organizationId || null;
 
@@ -1494,7 +1523,14 @@ router.post('/resend-batch', authenticateToken, async (req, res) => {
           }];
         }
 
-        await resend.emails.send(emailOptions);
+        await sendEmail(emailOptions, {
+          recipientKind: 'player',  // Batched resend of Player App invitation
+          orgId: req.user.organizationId || null,
+          recipientName: `${invitation.first_name || ''} ${invitation.last_name || ''}`.trim() || null,
+          emailType: 'invitation_resend_batch',
+          triggeredByUserId: req.user?.userId,
+          context: { invitation_id: invitation.id, licence: invitation.licence }
+        });
 
         // Update resend count
         await new Promise((resolve, reject) => {
@@ -1837,8 +1873,7 @@ router.post('/bulk-invite', authenticateToken, async (req, res) => {
     const emailFrom = await appSettings.getOrgSetting('email_noreply', orgId) || 'noreply@cdbhs.net';
     const replyToEmail = await appSettings.getOrgSetting('email_communication', orgId) || emailFrom;
 
-    const resend = new Resend(process.env.RESEND_API_KEY);
-
+  
     let successCount = 0;
     let failureCount = 0;
     const results = [];
@@ -1966,7 +2001,7 @@ router.post('/bulk-invite', authenticateToken, async (req, res) => {
 </body>
 </html>`;
 
-        await resend.emails.send({
+        await sendEmail({
           from: `${senderName} <${emailFrom}>`,
           replyTo: replyToEmail,
           to: [player.email],
@@ -1978,6 +2013,13 @@ router.post('/bulk-invite', authenticateToken, async (req, res) => {
               content: pdfAttachment.content
             }]
           })
+        }, {
+          recipientKind: 'player',  // Bulk Player App invitation
+          orgId: req.user.organizationId || null,
+          recipientName: `${player.first_name || ''} ${player.last_name || ''}`.trim() || null,
+          emailType: 'invitation_bulk',
+          triggeredByUserId: req.user?.userId,
+          context: { licence: player.licence }
         });
 
         // Record invitation
@@ -2069,8 +2111,7 @@ router.post('/send-notification-reminder', authenticateToken, async (req, res) =
     const emailFrom = await appSettings.getOrgSetting('email_communication', orgId) || 'communication@cdbhs.net';
     const replyToEmail = emailFrom;
 
-    const resend = new Resend(process.env.RESEND_API_KEY);
-
+  
     let successCount = 0;
     let failureCount = 0;
     const results = [];
@@ -2154,12 +2195,19 @@ router.post('/send-notification-reminder', authenticateToken, async (req, res) =
 </body>
 </html>`;
 
-        await resend.emails.send({
+        await sendEmail({
           from: `${senderName} <${emailFrom}>`,
           replyTo: replyToEmail,
           to: [player.email],
           subject: `${orgShortName} - Activez les notifications push pour ne rien manquer`,
           html: htmlBody
+        }, {
+          recipientKind: 'player',  // Push activation reminder to player with app
+          orgId: req.user.organizationId || null,
+          recipientName: `${player.first_name || ''} ${player.last_name || ''}`.trim() || null,
+          emailType: 'notification_reminder',
+          triggeredByUserId: req.user?.userId,
+          context: { licence: player.licence }
         });
 
         results.push({ licence, success: true });

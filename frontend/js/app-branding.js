@@ -51,10 +51,65 @@ async function initAppBranding() {
     if (userRole === 'admin') {
       injectDdJNavLink();
     }
+
+    // Show persistent test-mode banner if the org has communications test mode on.
+    // Important: this runs on every admin page (dashboard, emailing, generate-poules...)
+    // so admins cannot forget it's active while sending convocations.
+    injectTestModeBanner();
   } catch (error) {
     console.log('[Branding] Error loading branding, using defaults:', error);
     updateFavicon(DEFAULT_LOGO_PATH);
   }
+}
+
+/**
+ * Fetch the test-mode flag and show/hide the persistent banner.
+ * Exposed on window so settings-admin.html can refresh it after toggling.
+ */
+async function injectTestModeBanner() {
+  try {
+    const token = sessionStorage.getItem('token');
+    if (!token) return;
+    const resp = await fetch('/api/settings/org-settings-batch?keys=email_test_mode_enabled', {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+    if (!resp.ok) return;
+    const data = await resp.json();
+    const enabled = data.email_test_mode_enabled === 'true';
+    renderTestModeBanner(enabled);
+  } catch (e) {
+    // Non-fatal — banner is optional.
+  }
+}
+window.refreshTestModeBanner = injectTestModeBanner;
+
+function renderTestModeBanner(enabled) {
+  const existing = document.getElementById('test-mode-banner');
+  if (!enabled) {
+    if (existing) existing.remove();
+    document.body.style.paddingTop = '';
+    return;
+  }
+  if (existing) return; // already rendered
+
+  const banner = document.createElement('div');
+  banner.id = 'test-mode-banner';
+  banner.style.cssText = `
+    position: fixed; top: 0; left: 0; right: 0; z-index: 9998;
+    background: repeating-linear-gradient(45deg, #c62828, #c62828 12px, #b71c1c 12px, #b71c1c 24px);
+    color: white; padding: 8px 16px; font-size: 13px; font-weight: 600;
+    text-align: center; box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+    display: flex; align-items: center; justify-content: center; gap: 12px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+  `;
+  banner.innerHTML = `
+    <span style="font-size: 16px;">🧪</span>
+    <span>MODE TEST ACTIVÉ — Aucun email ni notification push n'est envoyé aux joueurs</span>
+    <a href="settings-admin.html#organisation" style="color: white; text-decoration: underline; margin-left: 8px;">Paramètres</a>
+  `;
+  document.body.appendChild(banner);
+  // Push page content down so the banner doesn't overlap the navbar.
+  document.body.style.paddingTop = '36px';
 }
 
 /**

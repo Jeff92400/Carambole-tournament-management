@@ -1,9 +1,10 @@
 # Guide Utilisateur Complet
 
 > **Note:** Ce document est généré automatiquement depuis le guide HTML.
-> **Dernière mise à jour:** 18/04/2026
+> **Dernière mise à jour:** 21/04/2026
 >
 > **Nouvelles fonctionnalités documentées (Avril 2026):**
+> - **🧪 Mode Test — Blocage des communications joueurs** (21/04/2026, V 2.0.450) : Interrupteur global par CDB qui bloque intégralement les emails et notifications push destinés aux joueurs, tout en laissant passer les communications administrateurs (reset password, récaps admin, emails onboarding CDB). Journal d'audit des envois bloqués + bandeau rouge persistant en haut de toutes les pages admin. Idéal pour l'onboarding d'un nouveau CDB sans déranger les vrais joueurs. Voir section « Paramètres > Mode Test — Blocage des communications joueurs ».
 > - **Historique Inscriptions — Export XLSX + Purge** (18/04/2026, V 2.0.398) : Bouton "📥 Exporter" (XLSX avec filtres actifs) et bouton "🗑️ Purger" (admin, plage de dates obligatoire, flux en deux étapes avec export recommandé avant suppression)
 > - **Purge historique campagnes — filtres enrichis** (18/04/2026, V 2.0.396/397) : Sélecteur Type (avec option « sans type » et compteurs par type), case "Uniquement les enregistrements vides (0 destinataire)" pour cibler les fantômes
 > - **Décompte précis inscriptions** (17/04/2026, V 2.0.395) : Générer les poules affiche maintenant la ventilation précise (ex. "0 inscrit(s) / 1 renonciation" au lieu d'un compte agrégé flou)

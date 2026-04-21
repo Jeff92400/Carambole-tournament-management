@@ -1,5 +1,4 @@
 const express = require('express');
-const { Resend } = require('resend');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
@@ -60,7 +59,7 @@ function convertEmailsToMailtoLinks(text, primaryColor = '#1F4788') {
 }
 
 // Email helpers shared with routes/email.js — single source of truth.
-const { getContactEmail, getEmailTemplateSettings, buildFromAddress, buildContactPhraseHtml, getSummaryEmail } = require('../utils/email-helpers');
+const { getContactEmail, getEmailTemplateSettings, buildFromAddress, buildContactPhraseHtml, getSummaryEmail, sendEmail } = require('../utils/email-helpers');
 
 // Helper function to parse dates that might be in French format (DD/MM/YYYY)
 function parseDateSafe(dateStr) {
@@ -435,7 +434,9 @@ const getResend = () => {
   if (!process.env.RESEND_API_KEY) {
     return null;
   }
-  return new Resend(process.env.RESEND_API_KEY);
+  // Historical helper retained as a cheap "is Resend configured" check.
+  // The actual Resend instance is owned by utils/email-helpers.js (sendEmail chokepoint).
+  return true;
 };
 
 // Default email template for general communications
@@ -1197,7 +1198,7 @@ router.post('/send', authenticateToken, async (req, res) => {
         // Build optional image HTML
         const imageHtml = imageUrl ? `<div style="text-align: center; margin: 20px 0;"><img src="${imageUrl}" alt="Image" style="max-width: 100%; height: auto; border-radius: 8px;"></div>` : '';
 
-        await resend.emails.send({
+        await sendEmail({
           from: emailFrom,
           replyTo: contactEmail,
           to: [recipient.email],
@@ -1218,7 +1219,12 @@ router.post('/send', authenticateToken, async (req, res) => {
               </div>
             </div>
           `
-        });
+        }, {
+      recipientKind: 'player',
+      orgId: (typeof orgId !== 'undefined' ? orgId : (req?.user?.organizationId || null)),
+      emailType: 'mass_campaign',
+      triggeredByUserId: (req?.user?.userId)
+    });
 
         results.sent.push({
           name: `${recipient.first_name} ${recipient.last_name}`,
@@ -1289,12 +1295,17 @@ router.post('/send', authenticateToken, async (req, res) => {
           </div>
         `;
 
-        await resend.emails.send({
+        await sendEmail({
           from: emailFrom,
           to: [ccEmail],
           subject: `[Récap] ${subject}`,
           html: summaryHtml
-        });
+        }, {
+      recipientKind: 'admin',
+      orgId: (typeof orgId !== 'undefined' ? orgId : (req?.user?.organizationId || null)),
+      emailType: 'mass_campaign_admin_recap',
+      triggeredByUserId: (req?.user?.userId)
+    });
         summarySent = true;
         logger.log(`Summary email sent to ${ccEmail}`);
       } catch (summaryError) {
@@ -1592,7 +1603,6 @@ router.post('/schedule-finale-convocation', authenticateToken, async (req, res) 
 // Send finale results email immediately
 router.post('/send-finale-results', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
-  const { Resend } = require('resend');
   const { tournamentId, introText, outroText, ccEmail, testMode, testEmail } = req.body;
   const orgId = req.user.organizationId || null;
 
@@ -1608,7 +1618,6 @@ router.post('/send-finale-results', authenticateToken, async (req, res) => {
     return res.status(500).json({ error: 'Configuration email manquante (RESEND_API_KEY)' });
   }
 
-  const resend = new Resend(process.env.RESEND_API_KEY);
   const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
   try {
@@ -1798,13 +1807,18 @@ router.post('/send-finale-results', authenticateToken, async (req, res) => {
 
     for (const recipient of recipients) {
       try {
-        await resend.emails.send({
+        await sendEmail({
           from: `${senderName} <${senderEmail}>`,
           replyTo: replyToEmail,
           to: [recipient.email],
           subject: subject,
           html: emailHtml
-        });
+        }, {
+      recipientKind: 'player',
+      orgId: (typeof orgId !== 'undefined' ? orgId : (req?.user?.organizationId || null)),
+      emailType: 'finale_results',
+      triggeredByUserId: (req?.user?.userId)
+    });
 
         sentResults.sent.push({ email: recipient.email, name: `${recipient.first_name || ''} ${recipient.last_name || ''}`.trim() });
         await delay(1500);
@@ -1922,13 +1936,18 @@ router.post('/send-finale-results', authenticateToken, async (req, res) => {
           </div>
         `;
 
-        await resend.emails.send({
+        await sendEmail({
           from: `${senderName} <${senderEmail}>`,
           replyTo: replyToEmail,
           to: [ccEmail],
           subject: `📋 Récapitulatif - Résultats Finale ${tournament.display_name} - ${tournamentDate}`,
           html: summaryHtml
-        });
+        }, {
+      recipientKind: 'admin',
+      orgId: (typeof orgId !== 'undefined' ? orgId : (req?.user?.organizationId || null)),
+      emailType: 'finale_results_admin_recap',
+      triggeredByUserId: (req?.user?.userId)
+    });
 
         summarySent = true;
         logger.log(`Finale summary email sent to ${ccEmail}`);
@@ -2212,7 +2231,7 @@ router.post('/process-scheduled', async (req, res) => {
           const emailBody = replaceTemplateVariables(scheduled.body, templateVariables);
           const emailBodyHtml = convertEmailsToMailtoLinks(textToHtml(emailBody), primaryColor);
 
-          await resend.emails.send({
+          await sendEmail({
             from: emailFrom,
             replyTo: contactEmail,
             to: [recipient.email],
@@ -2231,7 +2250,12 @@ router.post('/process-scheduled', async (req, res) => {
                 </div>
               </div>
             `
-          });
+          }, {
+      recipientKind: 'player',
+      orgId: (typeof orgId !== 'undefined' ? orgId : (req?.user?.organizationId || null)),
+      emailType: 'results',
+      triggeredByUserId: (req?.user?.userId)
+    });
 
           sentCount++;
 
@@ -2720,7 +2744,12 @@ router.post('/send-results', authenticateToken, async (req, res) => {
 
         // CC removed from individual emails - summary email sent at the end instead
 
-        await resend.emails.send(emailOptions);
+        await sendEmail(emailOptions, {
+      recipientKind: 'player',
+      orgId: (typeof orgId !== 'undefined' ? orgId : (req?.user?.organizationId || null)),
+      emailType: 'results',
+      triggeredByUserId: (req?.user?.userId)
+    });
 
         sentResults.sent.push({
           name: participant.player_name,
@@ -2855,13 +2884,18 @@ router.post('/send-results', authenticateToken, async (req, res) => {
           </div>
         `;
 
-        await resend.emails.send({
+        await sendEmail({
           from: emailFrom,
           replyTo: contactEmail,
           to: [ccEmail],
           subject: `📋 Récapitulatif - Résultats ${tournament.display_name} - ${tournamentDate}`,
           html: summaryHtml
-        });
+        }, {
+      recipientKind: 'admin',
+      orgId: (typeof orgId !== 'undefined' ? orgId : (req?.user?.organizationId || null)),
+      emailType: 'results_admin_recap',
+      triggeredByUserId: (req?.user?.userId)
+    });
 
         logger.log(`Summary email sent to ${ccEmail}`);
       } catch (summaryError) {
@@ -3425,7 +3459,12 @@ router.post('/send-finale-convocation', authenticateToken, async (req, res) => {
 
         // CC removed from individual emails - summary email sent at the end instead
 
-        await resend.emails.send(emailOptions);
+        await sendEmail(emailOptions, {
+      recipientKind: 'player',
+      orgId: (typeof orgId !== 'undefined' ? orgId : (req?.user?.organizationId || null)),
+      emailType: 'convocation_finale',
+      triggeredByUserId: (req?.user?.userId)
+    });
 
         sentResults.sent.push({
           name: finalist.player_name,
@@ -3543,13 +3582,18 @@ router.post('/send-finale-convocation', authenticateToken, async (req, res) => {
           </div>
         `;
 
-        await resend.emails.send({
+        await sendEmail({
           from: emailFrom,
           replyTo: contactEmail,
           to: [ccEmail],
           subject: `📋 Récapitulatif - Convocations Finale ${category.display_name} - ${finaleFormattedDate}`,
           html: summaryHtml
-        });
+        }, {
+      recipientKind: 'admin',
+      orgId: (typeof orgId !== 'undefined' ? orgId : (req?.user?.organizationId || null)),
+      emailType: 'convocation_finale_admin_recap',
+      triggeredByUserId: (req?.user?.userId)
+    });
 
         logger.log(`Summary email sent to ${ccEmail}`);
       } catch (summaryError) {
@@ -5669,13 +5713,18 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
           </div>
         `;
 
-        await resend.emails.send({
+        await sendEmail({
           from: emailFrom,
           replyTo: contactEmail,
           to: [participant.email],
           subject: emailSubject,
           html: emailHtml
-        });
+        }, {
+      recipientKind: 'player',
+      orgId: (typeof orgId !== 'undefined' ? orgId : (req?.user?.organizationId || null)),
+      emailType: 'relance',
+      triggeredByUserId: (req?.user?.userId)
+    });
 
         results.sent.push({
           name: participant.player_name || `${participant.first_name} ${participant.last_name}`,
@@ -5769,12 +5818,17 @@ router.post('/send-relance', authenticateToken, async (req, res) => {
           </div>
         `;
 
-        await resend.emails.send({
+        await sendEmail({
           from: emailFrom,
           to: [ccEmail],
           subject: `Récap Relance ${relanceTypeLabels[relanceType]} - ${mode} ${category}`,
           html: summaryHtml
-        });
+        }, {
+      recipientKind: 'admin',
+      orgId: (typeof orgId !== 'undefined' ? orgId : (req?.user?.organizationId || null)),
+      emailType: 'relance_admin_recap',
+      triggeredByUserId: (req?.user?.userId)
+    });
       } catch (summaryError) {
         console.error('Error sending summary:', summaryError);
       }

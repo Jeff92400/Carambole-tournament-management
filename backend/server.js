@@ -27,6 +27,7 @@ const db = require('./db-loader');
 
 // App settings helper for dynamic configuration
 const appSettings = require('./utils/app-settings');
+const { sendEmail } = require('./utils/email-helpers');
 
 const authRoutes = require('./routes/auth');
 const playersRoutes = require('./routes/players');
@@ -474,7 +475,7 @@ async function checkIfAlreadySentManually(db, emailType, mode, category, tournam
 }
 
 // Process templated scheduled emails (relance, results, finale)
-async function processTemplatedScheduledEmail(db, resend, scheduled, delay) {
+async function processTemplatedScheduledEmail(db, scheduled, delay) {
   const emailType = scheduled.email_type;
   console.log(`[Email Scheduler] Processing templated email ${scheduled.id} (${emailType})`);
 
@@ -848,7 +849,7 @@ async function processTemplatedScheduledEmail(db, resend, scheduled, delay) {
       const outroText = scheduled.outro_text || '';
       const imageHtml = scheduled.image_url ? `<div style="text-align: center; margin: 20px 0;"><img src="${scheduled.image_url}" alt="Image" style="max-width: 100%; height: auto; border-radius: 8px;"></div>` : '';
 
-      await resend.emails.send({
+      await sendEmail({
         from: `${senderName} <${senderEmail}>`,
         replyTo: replyToEmail,
         to: [recipient.email],
@@ -866,6 +867,12 @@ async function processTemplatedScheduledEmail(db, resend, scheduled, delay) {
           </div>
           <div style="background: ${primaryColor}; color: white; padding: 10px; text-align: center; font-size: 12px;">${orgShortName} - ${replyToEmail}</div>
         </div>`
+      }, {
+        recipientKind: 'player',  // Scheduled templated email (relance, finale qualification, etc.) sent to players
+        orgId: schedOrgId,
+        recipientName: `${recipient.first_name || ''} ${recipient.last_name || ''}`.trim() || null,
+        emailType: scheduled.email_type || 'scheduled_templated',
+        context: { scheduled_id: scheduled.id, tournament_id: scheduled.tournament_id || null }
       });
 
       sentCount++;
@@ -904,15 +911,12 @@ async function processTemplatedScheduledEmail(db, resend, scheduled, delay) {
 
 // Tournament alerts - check for upcoming tournaments and notify opted-in users
 async function checkTournamentAlerts() {
-  const { Resend } = require('resend');
   const db = require('./db-loader');
 
   if (!process.env.RESEND_API_KEY) {
     console.log('[Tournament Alerts] Skipped - no RESEND_API_KEY');
     return;
   }
-
-  const resend = new Resend(process.env.RESEND_API_KEY);
 
   try {
     console.log('[Tournament Alerts] Checking for upcoming tournaments...');
@@ -1060,7 +1064,7 @@ async function checkTournamentAlerts() {
 
       for (const user of orgUsers) {
         try {
-          await resend.emails.send({
+          await sendEmail({
             from: `${senderName} <${senderEmail}>`,
             to: user.email,
             replyTo: replyToEmail,
@@ -1088,6 +1092,12 @@ async function checkTournamentAlerts() {
                 </div>
               </div>
             `
+          }, {
+            recipientKind: 'admin',  // Tournament alert sent to CDB admin users
+            orgId,
+            recipientName: user.username,
+            emailType: 'tournament_alert_admin',
+            context: { tournaments_count: tournamentsNeeding.length }
           });
 
           console.log(`[Tournament Alerts] Email sent to ${user.email} (org ${orgId})`);
@@ -1129,7 +1139,6 @@ async function checkTournamentAlerts() {
 // Email scheduler - check and send scheduled emails
 // Exposed globally for manual triggering via API
 async function processScheduledEmails() {
-  const { Resend } = require('resend');
   const db = require('./db-loader');
 
   console.log('[Email Scheduler] Starting processScheduledEmails...');
@@ -1139,7 +1148,6 @@ async function processScheduledEmails() {
     return { status: 'error', message: 'No RESEND_API_KEY configured' };
   }
 
-  const resend = new Resend(process.env.RESEND_API_KEY);
   const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
   // Get dynamic settings for email branding
@@ -1229,7 +1237,7 @@ async function processScheduledEmails() {
       // For templated emails (relance, results, finale), recipients need to be fetched dynamically
       if (scheduled.email_type && recipientIds.length === 0) {
         try {
-          await processTemplatedScheduledEmail(db, resend, scheduled, delay);
+          await processTemplatedScheduledEmail(db, scheduled, delay);
         } catch (error) {
           console.error(`[Email Scheduler] Error processing templated email ${scheduled.id}:`, error.message);
           await new Promise((resolve) => {
@@ -1282,7 +1290,7 @@ async function processScheduledEmails() {
           const orgShortName = emailSettings.organization_short_name || 'CDBHS';
           const replyToEmail = emailSettings.summary_email || '';
 
-          await resend.emails.send({
+          await sendEmail({
             from: `${senderName} <${senderEmail}>`,
             to: [recipient.email],
             replyTo: replyToEmail,
@@ -1295,6 +1303,12 @@ async function processScheduledEmails() {
               <div style="padding: 20px; background: #f8f9fa;">${imageHtml}${emailBody.replace(/\n/g, '<br>')}</div>
               <div style="background: ${primaryColor}; color: white; padding: 10px; text-align: center; font-size: 12px;">${orgShortName} - ${replyToEmail}</div>
             </div>`
+          }, {
+            recipientKind: 'player',  // Scheduled custom email sent to player_contacts
+            orgId: scheduled.organization_id || null,
+            recipientName: `${recipient.first_name || ''} ${recipient.last_name || ''}`.trim() || null,
+            emailType: scheduled.email_type || 'scheduled_custom',
+            context: { scheduled_id: scheduled.id }
           });
 
           sentCount++;
@@ -1786,10 +1800,8 @@ app.listen(PORT, '0.0.0.0', () => {
                 'email_convocations', 'email_sender_name', 'summary_email', 'organization_name', 'primary_color'
               ]);
               const adminEmail = emailSettings.summary_email;
-              if (adminEmail) {
-                const { Resend } = require('resend');
-                const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
-                if (resend) {
+              if (adminEmail && process.env.RESEND_API_KEY) {
+                {
                   const primaryColor = emailSettings.primary_color || '#1F4788';
                   const orgName = emailSettings.organization_name || emailSettings.email_sender_name || 'CDB';
                   const senderName = emailSettings.email_sender_name || 'CDB';
@@ -1812,7 +1824,7 @@ app.listen(PORT, '0.0.0.0', () => {
                       </div>`;
                   }).join('');
 
-                  await resend.emails.send({
+                  await sendEmail({
                     from: `${senderName} <${senderEmail}>`,
                     to: adminEmail,
                     subject: `📬 ${orgName} — Finalistes marqués indisponibles (J-${daysBefore})`,
@@ -1829,6 +1841,15 @@ app.listen(PORT, '0.0.0.0', () => {
                         </div>
                       </div>
                     `
+                  }, {
+                    recipientKind: 'admin',  // Admin recap summary for auto-indisponible action
+                    orgId,
+                    emailType: 'finale_auto_indisponible_admin_recap',
+                    context: {
+                      days_before: daysBefore,
+                      finales_count: markedPerFinale.length,
+                      total_marked: markedPerFinale.reduce((s, e) => s + e.players.length, 0)
+                    }
                   });
                   console.log(`[Finale Auto-Indisponible] Admin recap sent to ${adminEmail} for org=${orgId}`);
                 }

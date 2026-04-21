@@ -5,6 +5,7 @@ const jwt = require('jsonwebtoken');
 const db = require('../db-loader');
 const { authenticateToken } = require('./auth'); // Admin authentication
 const logger = require('../utils/logger');
+const { isTestModeEnabled, logSkippedSend } = require('../utils/email-helpers');
 
 // Player App URL for proxying push notification requests
 const PLAYER_APP_URL = process.env.PLAYER_APP_URL || 'https://cdbhs-player-app-production.up.railway.app';
@@ -419,6 +420,31 @@ async function sendPushToPlayer(licence, orgId, notification, options = {}) {
     return { success: false, sent: 0, failed: 0, error: 'VAPID not configured' };
   }
 
+  // Test mode gate (per-org). When enabled, suppress ALL player-bound pushes
+  // — including admin "copy" pushes to admins' own player accounts, since
+  // those are only meaningful when the original player push was actually
+  // delivered. Admins can still inspect the notification history panel in
+  // the Tournament App during a test campaign.
+  if (await isTestModeEnabled(orgId)) {
+    await logSkippedSend({
+      orgId,
+      channel: 'push',
+      recipient: licence,
+      recipientKind: 'player',
+      recipientName: null,
+      subject: notification?.title || null,
+      emailType: options?.emailType || 'push_notification',
+      triggeredByUserId: options?.triggeredByUserId || null,
+      context: {
+        body: notification?.body || null,
+        url: notification?.url || null,
+        is_admin_copy: !!options?.skipAdminCopy === false ? null : true
+      }
+    });
+    console.log(`[TestMode] Blocked push (org=${orgId}, licence=${licence}, title="${notification?.title || ''}")`);
+    return { success: false, sent: 0, failed: 0, skipped: true, reason: 'test_mode_players_blocked' };
+  }
+
   try {
     // Get player account
     const playerAccount = await new Promise((resolve, reject) => {
@@ -568,6 +594,30 @@ async function sendPushToPlayer(licence, orgId, notification, options = {}) {
  * @returns {Promise<{success: boolean, total_sent: number, total_failed: number}>}
  */
 async function sendPushToPlayers(licences, orgId, notification) {
+  // Test mode fast-path: if the org is in test mode, log once per licence and
+  // bail out without touching web-push or the per-player DB lookups. This
+  // avoids waking up the browser-push network on every blocked bulk send
+  // during onboarding campaigns.
+  if (await isTestModeEnabled(orgId)) {
+    for (const licence of licences) {
+      await logSkippedSend({
+        orgId,
+        channel: 'push',
+        recipient: licence,
+        recipientKind: 'player',
+        subject: notification?.title || null,
+        emailType: 'push_notification_bulk',
+        context: {
+          body: notification?.body || null,
+          url: notification?.url || null,
+          bulk_size: licences.length
+        }
+      });
+    }
+    console.log(`[TestMode] Blocked bulk push (org=${orgId}, count=${licences.length}, title="${notification?.title || ''}")`);
+    return { success: false, total_sent: 0, total_failed: 0, skipped: true };
+  }
+
   // Perf optimization (audit Phase 4 finding C1, April 2026):
   // Send pushes in parallel batches instead of sequentially. Web-push is I/O-bound
   // (each call is an HTTPS round-trip to the browser's push endpoint — FCM/Mozilla/etc.),

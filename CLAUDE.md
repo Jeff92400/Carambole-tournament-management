@@ -101,7 +101,7 @@ git push origin main
 
 ## Versioning
 
-**Current Version:** V 2.0.367 04/26
+**Current Version:** V 2.0.450 04/26
 
 Version is displayed at the bottom of the login screen (`frontend/login.html`).
 
@@ -525,6 +525,61 @@ Convocation and results articles can be published directly to a CDB's WordPress 
 | `frontend/public-tournament.html` | Public tournament page (no auth) |
 | `backend/server.js` | Public page route + public API endpoint |
 
+## Email Sending Chokepoint (`utils/email-helpers.js`)
+
+**Policy:** Every outgoing email MUST go through `sendEmail()` in `backend/utils/email-helpers.js`. Direct calls to `resend.emails.send(...)` or `new Resend(process.env.RESEND_API_KEY)` are **forbidden** outside that file. Enforced by `scripts/check-email-chokepoint.sh` (a grep-based CI guard).
+
+### Signature
+
+```js
+const { sendEmail } = require('../utils/email-helpers');
+
+await sendEmail(payload, {
+  recipientKind: 'player' | 'admin',   // REQUIRED — no default
+  orgId: number | null,
+  recipientName: string | null,        // display name for audit log
+  emailType: string,                   // 'convocation' | 'results' | 'relance' | ...
+  triggeredByUserId: number | null,    // admin who initiated the action
+  context: object | null               // JSON stored in audit log (tournoi_id, etc.)
+});
+```
+
+### Classifying `recipientKind`
+
+- `'player'` — any email whose recipient is a licensed player acting as a competitor. Covers convocations, results, relances, Player App invitations, RSVP confirmations, enrollment approvals/rejections, registration confirmations, forfeit confirmations, urgent announcements (pushed via email), scheduled campaigns. **These are blocked when the org has test mode on.**
+- `'admin'` — any email whose recipient is a CDB/platform administrator. Covers password reset, super-admin CDB welcome, tournament alerts to admin users, all "récap admin" emails (summary_email), enrollment request notifications, admin RSVP summary. **Always sent, even in test mode.**
+
+### Test Mode (per-org kill switch) — V 2.0.450
+
+Per-org setting `email_test_mode_enabled` (in `organization_settings`, default `'false'`) blocks ALL player-bound email and push traffic when set to `'true'`. Admin traffic continues normally.
+
+- **Blocked sends are logged** to `email_test_mode_log` table (org-scoped, 90-day retention planned via future cleanup scheduler).
+- **UI toggle** at the top of Settings > Organisation tab (`frontend/settings-admin.html` section `#testModeSection`).
+- **Persistent red hatched banner** at the top of every admin page while active, injected by `frontend/js/app-branding.js` via `injectTestModeBanner()`. Exposed as `window.refreshTestModeBanner()` for instant UI update after toggling.
+- **Push notifications** are gated identically in `backend/routes/push.js` — both `sendPushToPlayer()` (individual) and `sendPushToPlayers()` (bulk fast-path) check `isTestModeEnabled(orgId)` and log to `email_test_mode_log` with `channel='push'`.
+- **API endpoints**:
+  - `GET /api/settings/org-settings-batch?keys=email_test_mode_enabled` — read flag
+  - `PUT /api/settings/org-settings-batch` body `{email_test_mode_enabled: 'true'}` — write flag
+  - `GET /api/settings/test-mode-log?limit=N&channel=email|push` — list blocked sends + aggregates
+  - `DELETE /api/settings/test-mode-log` — wipe log (per-org) before a fresh test campaign
+
+**Primary use case:** onboarding a new CDB. The new admin exercises every flow (convocations, relances, results, notifications) without disturbing real competitors, audits the log to confirm intent, then disables the mode before going live.
+
+**Terminology:** Do not confuse with the older `routes/test-mode.js` feature, which sends emails to TEST-prefixed licences with an admin-supplied override address. That feature is narrower (manual per-email tool) and orthogonal to this global kill switch.
+
+### Files
+
+| File | Role |
+|------|------|
+| `backend/utils/email-helpers.js` | Chokepoint: `sendEmail()`, `logSkippedSend()`, `isTestModeEnabled()`, `getResend()` |
+| `backend/routes/push.js` | Gates `sendPushToPlayer()` + `sendPushToPlayers()` with the same flag |
+| `backend/routes/settings.js` | `GET/DELETE /test-mode-log` endpoints |
+| `backend/db-postgres.js` | `email_test_mode_log` table migration |
+| `backend/utils/app-settings.js` | Default `email_test_mode_enabled: 'false'` |
+| `frontend/settings-admin.html` | Toggle UI + log viewer (top of Organisation tab) |
+| `frontend/js/app-branding.js` | Persistent red banner injected on every admin page |
+| `scripts/check-email-chokepoint.sh` | CI grep guard against direct Resend usage |
+
 ## Email Template Variables
 
 **Policy:** ALL template variables must be available for ALL email templates (convocations, relances, campaigns, results). When adding new variables, add them to every email template location.
@@ -764,7 +819,7 @@ All routes in `backend/routes/super-admin.js` under `/api/super-admin/`:
 
 ## Modes de Qualification pour les Finales
 
-> **STATUS: READY TO IMPLEMENT (V2)** — Specs revised after call with CDB 93+94 representative on Feb 18, 2026. Key correction: scoring is POSITION-BASED, not cumulative match points. Functional description V2 sent to CDB 93 & 94 for validation (`~/Documents/Mode-Journees-Qualificatives-Description.html`). Technical plan at `~/.claude/plans/structured-hugging-blossom.md`. **Do NOT implement until user gives explicit GO.**
+> **STATUS: ✅ SHIPPED — field validation phase (April 2026).** Both qualification modes are live in production. The Journées mode ships all 4 phases: infrastructure/settings, poules-of-2 + serpentine evolution, bracket & classification engine (`backend/routes/bracket.js` + `frontend/tournament-bracket.html`), and season ranking + Finale de District. Dual CSV/E2i import paths are available. The remaining work is **field validation with CDB 93-94 on the 2025-26 season** — surface bugs as they come, no further dev planned unless feedback demands it. Original plan: `~/.claude/plans/structured-hugging-blossom.md`.
 
 The app supports multiple qualification modes per CDB. Controlled by per-org setting `qualification_mode`.
 
@@ -803,11 +858,17 @@ The current and fully implemented model:
 - Used by serpentine when no season ranking exists yet (TQ1)
 - FFB standard files do NOT contain this field — CDB must provide it separately
 
-### Still TBD (waiting for CDB 93+94)
+### Resolved during implementation
 
-1. **Position-to-points lookup table** — What points does 1st, 2nd, 3rd... get?
-2. **Bracket qualification formula from poules** — "match points + something" — what is the something?
-3. **Serpentine seeding** — Exact field name for moyenne in player file?
+1. **Position-to-points lookup table** — ✅ Implemented with a `player_count` dimension on `position_points` (one lookup per poule size), seeded per org.
+2. **Bracket qualification formula from poules** — ✅ Implemented in `bracket.js` (sort by match points desc, moyenne desc as tiebreaker).
+3. **Serpentine seeding** — ✅ `players.moyenne_generale` column, used for TQ1; ongoing season ranking used for TQ2-3 (`inscriptions.js` ~4316, ~5055).
+
+### Still to verify in the field (CDB 93-94, 2025-26 season)
+
+- Finale de District end-to-end flow (single round-robin, no bracket) — confirm it reuses CDB92 finale path cleanly.
+- Real-world usage of dual import paths (E2i vs simplified CSV).
+- Any edge cases surfaced by actual tournaments.
 
 ### Configurable Settings (per organization)
 
@@ -861,33 +922,33 @@ CREATE TABLE bracket_matches (
 - `POST /api/bracket/:tournamentId/classement` — Saves classification results
 - `POST /api/bracket/:tournamentId/finalize` — Computes final positions, assigns position_points
 
-### Implementation Phases
+### Implementation Phases (all ✅ shipped)
 
-**Phase 1 — Infrastructure & Settings**
-1. Add `moyenne_generale` to `players`, `position_points` column to `tournament_results`
-2. Create `position_points` and `bracket_matches` tables
-3. Add all settings to `organization_settings` defaults
-4. UI: mode settings section + position-to-points editor in `settings-admin.html`
-5. Import `moyenne_generale` from player file during FFB seeding
+**Phase 1 — Infrastructure & Settings** ✅
+1. ✅ `moyenne_generale` on `players`, `position_points` column on `tournament_results`
+2. ✅ `position_points` table (with `player_count` dimension) and `bracket_matches` table
+3. ✅ All settings seeded in `organization_settings` defaults
+4. ✅ UI: mode settings section + position-to-points editor in `settings-admin.html`
+5. ✅ `moyenne_generale` imported from player file during FFB seeding
 
-**Phase 2 — Poules of 2 & Serpentine Evolution**
-1. Poule distribution: support 2-player poules in `inscriptions.js`
-2. Serpentine: use `moyenne_generale` for TQ1, ongoing ranking for TQ2-3
-3. No impact on Mode 1
+**Phase 2 — Poules of 2 & Serpentine Evolution** ✅
+1. ✅ 2-player poules supported in `inscriptions.js`
+2. ✅ TQ1 uses `moyenne_generale`, TQ2-3 uses ongoing ranking (`inscriptions.js` ~4316, ~5055)
+3. ✅ Mode 1 untouched
 
-**Phase 3 — Bracket & Classification Engine** (new `bracket.js`)
-1. Generic algorithmic engine for any N players
-2. Bracket qualification from poule results
-3. Classification pairing (bottom-up, optional R2)
-4. Position-to-points assignment + mixed-category bonus
-5. Frontend: results entry form
+**Phase 3 — Bracket & Classification Engine** ✅ (`routes/bracket.js`, 612 lines + `tournament-bracket.html`, 432 lines)
+1. ✅ Generic algorithmic engine for any N players
+2. ✅ Bracket qualification from poule results (match_points desc, moyenne desc tiebreaker)
+3. ✅ Classification pairing with optional CL2
+4. ✅ Position-to-points assignment + mixed-category bonus
+5. ✅ Results entry form
 
-**Phase 4 — Season Ranking & Finale**
-1. `recalculateRankings()` branches by `qualification_mode`
-2. Mode journées: best N position scores + tiered average bonus (0/1/2/3)
-3. Frontend: rankings with kept/dropped scores
-4. Finale de District: single round-robin poule (reuses existing finale logic from CDB92)
-5. Email labels: "Tournoi Qualificatif 1/2/3" + "Finale de District"
+**Phase 4 — Season Ranking & Finale** ✅
+1. ✅ `recalculateRankings()` branches by `qualification_mode`
+2. ✅ Best N position scores + tiered average bonus (0/1/2/3)
+3. ✅ Dual-view toggle on rankings page (journées mode)
+4. ✅ Finale de District reuses CDB92 finale path
+5. ✅ Email labels: "Tournoi Qualificatif 1/2/3" + "Finale de District"
 
 ### Files Impacted
 

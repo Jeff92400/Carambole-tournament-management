@@ -956,6 +956,71 @@
       </div>
     </div>
 
+    <!-- Test Mode Section (Admin Only) — per-org kill switch for player-facing communications.
+         Placed at the top of the Organisation tab because toggling it is a high-stakes
+         operational decision, not buried deep in an accordion. -->
+    <div class="accordion-panel admin-only" id="testModeSection" data-settings-tab="organisation">
+      <div class="accordion-header" onclick="toggleAccordion('testModeSection')">
+        <div class="accordion-title"><span class="accordion-icon">&#9654;</span><strong>🧪 Mode Test — Communications joueurs</strong></div>
+        <span class="accordion-summary" id="summary-test-mode">Chargement...</span>
+      </div>
+      <div class="accordion-body">
+        <div style="background: #fff8e1; border-left: 4px solid #f9a825; padding: 14px 16px; margin-bottom: 16px; border-radius: 4px;">
+          <p style="margin: 0 0 8px 0;"><strong>À quoi ça sert ?</strong></p>
+          <p style="margin: 0 0 8px 0;">Quand le mode est activé, <strong>tous les emails et toutes les notifications push à destination des joueurs</strong> sont <strong>bloqués et archivés</strong> au lieu d'être envoyés. Les communications destinées aux administrateurs (réinitialisation de mot de passe, récapitulatifs admin, onboarding CDB...) continuent de circuler normalement.</p>
+          <p style="margin: 0;">Utilisez ce mode pendant la phase d'onboarding d'un nouveau CDB pour tester tous les flux sans déranger les joueurs réels. Pensez à le désactiver avant d'envoyer des convocations en production.</p>
+        </div>
+
+        <div id="testModeToggleBlock" style="padding: 16px; background: #f8f9fa; border-radius: 8px; margin-bottom: 16px; border: 2px solid #dee2e6;">
+          <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+            <div>
+              <div style="font-size: 16px; font-weight: 600; margin-bottom: 4px;">
+                Mode Test activé pour ce CDB
+              </div>
+              <div id="testModeStatusLabel" style="font-size: 14px; color: #666;">Chargement…</div>
+            </div>
+            <label class="switch" style="display: inline-flex; align-items: center; gap: 10px; cursor: pointer;">
+              <input type="checkbox" id="testModeToggle" style="width: 22px; height: 22px; cursor: pointer;">
+              <span id="testModeToggleText" style="font-weight: 600; color: #666;">Désactivé</span>
+            </label>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px;">
+          <button type="button" class="btn" onclick="loadTestModeLog()" style="padding: 8px 16px;">
+            🔄 Rafraîchir le journal
+          </button>
+          <button type="button" class="btn btn-danger" onclick="purgeTestModeLog()" style="padding: 8px 16px;">
+            🗑️ Vider le journal (avant un nouveau test)
+          </button>
+          <select id="testModeChannelFilter" onchange="loadTestModeLog()" style="padding: 8px 12px; border-radius: 6px; border: 1px solid #ccc;">
+            <option value="">Tous les canaux</option>
+            <option value="email">Emails uniquement</option>
+            <option value="push">Notifications push uniquement</option>
+          </select>
+        </div>
+
+        <div id="testModeAggregates" style="margin-bottom: 16px; font-size: 14px; color: #555;"></div>
+
+        <div style="max-height: 500px; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 6px;">
+          <table id="testModeLogTable" style="width: 100%; border-collapse: collapse; background: white;">
+            <thead style="position: sticky; top: 0; background: #f8f9fa; z-index: 1;">
+              <tr>
+                <th style="padding: 10px; text-align: left; border-bottom: 2px solid #dee2e6; font-size: 13px;">Date</th>
+                <th style="padding: 10px; text-align: left; border-bottom: 2px solid #dee2e6; font-size: 13px;">Canal</th>
+                <th style="padding: 10px; text-align: left; border-bottom: 2px solid #dee2e6; font-size: 13px;">Type</th>
+                <th style="padding: 10px; text-align: left; border-bottom: 2px solid #dee2e6; font-size: 13px;">Destinataire</th>
+                <th style="padding: 10px; text-align: left; border-bottom: 2px solid #dee2e6; font-size: 13px;">Sujet / Titre</th>
+              </tr>
+            </thead>
+            <tbody id="testModeLogBody">
+              <tr><td colspan="5" style="padding: 20px; text-align: center; color: #999;">Chargement…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
     <!-- Organisation Section - Admin Only -->
     <div class="accordion-panel admin-only" id="organisationSection" data-settings-tab="organisation">
       <div class="accordion-header" onclick="toggleAccordion('organisationSection')">
@@ -6730,6 +6795,135 @@
     });
 
     // ============= END PUSH NOTIFICATIONS TEST MODE =============
+
+    // ============= COMMUNICATIONS TEST MODE (per-org kill switch) =============
+
+    async function loadTestModeStatus() {
+      try {
+        const resp = await authFetch(`${API_URL}/settings/org-settings-batch?keys=email_test_mode_enabled`);
+        const data = await resp.json();
+        const enabled = data.email_test_mode_enabled === 'true';
+        applyTestModeUi(enabled);
+      } catch (err) {
+        console.error('[TestMode] Failed to load status:', err);
+      }
+    }
+
+    function applyTestModeUi(enabled) {
+      const toggle = document.getElementById('testModeToggle');
+      const text = document.getElementById('testModeToggleText');
+      const label = document.getElementById('testModeStatusLabel');
+      const block = document.getElementById('testModeToggleBlock');
+      const summary = document.getElementById('summary-test-mode');
+      if (!toggle) return;
+      toggle.checked = enabled;
+      text.textContent = enabled ? 'Activé' : 'Désactivé';
+      text.style.color = enabled ? '#c62828' : '#666';
+      label.textContent = enabled
+        ? '⚠️ Les emails et notifications push aux joueurs sont actuellement BLOQUÉS. Seuls les admins reçoivent leurs messages.'
+        : 'Fonctionnement normal : tous les emails et notifications push sont envoyés.';
+      block.style.borderColor = enabled ? '#c62828' : '#dee2e6';
+      block.style.background = enabled ? '#ffebee' : '#f8f9fa';
+      if (summary) summary.textContent = enabled ? '🔴 ACTIVÉ' : 'Désactivé';
+    }
+
+    async function toggleTestMode(newValue) {
+      try {
+        const resp = await authFetch(`${API_URL}/settings/org-settings-batch`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email_test_mode_enabled: newValue ? 'true' : 'false' })
+        });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        applyTestModeUi(newValue);
+        // Refresh the persistent banner (app-branding.js reads this setting on page load,
+        // so we trigger a manual refresh here for immediate visual feedback).
+        if (typeof window.refreshTestModeBanner === 'function') {
+          window.refreshTestModeBanner();
+        }
+      } catch (err) {
+        console.error('[TestMode] Failed to toggle:', err);
+        alert('Erreur lors du changement de mode : ' + err.message);
+        // Revert UI
+        document.getElementById('testModeToggle').checked = !newValue;
+      }
+    }
+
+    async function loadTestModeLog() {
+      const body = document.getElementById('testModeLogBody');
+      const agg = document.getElementById('testModeAggregates');
+      const channel = document.getElementById('testModeChannelFilter').value;
+      body.innerHTML = '<tr><td colspan="5" style="padding: 20px; text-align: center; color: #999;">Chargement…</td></tr>';
+      try {
+        const url = `${API_URL}/settings/test-mode-log?limit=200${channel ? '&channel=' + channel : ''}`;
+        const resp = await authFetch(url);
+        const data = await resp.json();
+
+        // Aggregates line
+        if (data.aggregates && data.aggregates.length > 0) {
+          const totalByChannel = data.aggregates.reduce((acc, r) => {
+            acc[r.channel] = (acc[r.channel] || 0) + parseInt(r.n);
+            return acc;
+          }, {});
+          const total = Object.values(totalByChannel).reduce((a, b) => a + b, 0);
+          const byChannelText = Object.entries(totalByChannel)
+            .map(([c, n]) => `${c === 'email' ? '✉️ Emails' : '📲 Push'} : <strong>${n}</strong>`)
+            .join(' • ');
+          agg.innerHTML = `<strong>${total}</strong> envoi(s) bloqué(s) au total — ${byChannelText}`;
+        } else {
+          agg.textContent = 'Aucun envoi bloqué enregistré.';
+        }
+
+        // Table body
+        if (!data.entries || data.entries.length === 0) {
+          body.innerHTML = '<tr><td colspan="5" style="padding: 20px; text-align: center; color: #999;">Aucune entrée pour ces filtres.</td></tr>';
+          return;
+        }
+        body.innerHTML = data.entries.map(e => {
+          const d = new Date(e.created_at);
+          const dateStr = d.toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+          const channelIcon = e.channel === 'email' ? '✉️' : '📲';
+          const displayName = e.recipient_name ? `${e.recipient_name} <span style="color:#999; font-size:12px;">(${e.recipient})</span>` : e.recipient;
+          return `<tr style="border-bottom: 1px solid #eee;">
+            <td style="padding: 8px 10px; font-size: 13px; white-space: nowrap; color: #666;">${dateStr}</td>
+            <td style="padding: 8px 10px; font-size: 13px;">${channelIcon} ${e.channel}</td>
+            <td style="padding: 8px 10px; font-size: 13px;"><code style="background: #f0f0f0; padding: 2px 6px; border-radius: 3px; font-size: 12px;">${e.email_type || '-'}</code></td>
+            <td style="padding: 8px 10px; font-size: 13px;">${displayName}</td>
+            <td style="padding: 8px 10px; font-size: 13px; max-width: 400px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(e.subject || '-')}</td>
+          </tr>`;
+        }).join('');
+      } catch (err) {
+        console.error('[TestMode] Failed to load log:', err);
+        body.innerHTML = '<tr><td colspan="5" style="padding: 20px; text-align: center; color: #c62828;">Erreur lors du chargement du journal.</td></tr>';
+      }
+    }
+
+    async function purgeTestModeLog() {
+      if (!confirm('Vider le journal des envois bloqués ? Cette action est irréversible.')) return;
+      try {
+        const resp = await authFetch(`${API_URL}/settings/test-mode-log`, { method: 'DELETE' });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        loadTestModeLog();
+      } catch (err) {
+        alert('Erreur lors de la purge : ' + err.message);
+      }
+    }
+
+    // Minimal HTML escape to defend against unexpected values in subject/title strings.
+    function escapeHtml(s) {
+      return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const toggle = document.getElementById('testModeToggle');
+      if (toggle) {
+        toggle.addEventListener('change', (e) => toggleTestMode(e.target.checked));
+      }
+      loadTestModeStatus();
+      loadTestModeLog();
+    });
+
+    // ============= END COMMUNICATIONS TEST MODE =============
   </script>
 
   <!-- Edit Game Parameter Modal -->
