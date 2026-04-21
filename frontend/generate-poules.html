@@ -3862,9 +3862,11 @@
 
     // Generate Excel
     document.getElementById('generateExcelBtn').addEventListener('click', async () => {
-      // Check if game params are validated before generating Excel
-      const excelParamsValidated = document.getElementById('gameParamsValidationStatus')?.textContent?.includes('valides');
-      if (!excelParamsValidated) {
+      // Use the JS flag `gameParamsValidated` (updated by updateValidationStatus())
+      // instead of string-matching the label text. The label changed from
+      // 'Paramètres valides' to 'Paramètres validés' in V 2.0.442 (i18n pass),
+      // which silently broke the text-based check. V 2.0.447 makes it robust.
+      if (!gameParamsValidated) {
         alert('Veuillez valider les paramètres de jeu avant de générer le fichier Excel.');
         return;
       }
@@ -4125,9 +4127,10 @@
         };
       }
 
-      // Check if game params are validated before generating PDF
-      const pdfParamsValidated = document.getElementById('gameParamsValidationStatus')?.textContent?.includes('valides');
-      if (!pdfParamsValidated) {
+      // Use the JS flag `gameParamsValidated` (updated by updateValidationStatus())
+      // instead of string-matching the label text. See twin fix in the
+      // Excel-generation handler — same bug, same root cause (V 2.0.442 i18n).
+      if (!gameParamsValidated) {
         alert('Veuillez valider les paramètres de jeu avant de générer le PDF.');
         return;
       }
