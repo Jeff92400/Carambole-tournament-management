@@ -3338,6 +3338,16 @@
               }
             });
 
+            // CRITICAL: lastMinutePlayers is the TRANSIENT buffer that held the
+            // players between "Ajouter" (staged) and "Valider" (persisted + moved
+            // into newPlayers above). Once persisted, clearing it prevents the
+            // build step below from counting them twice (rankedPlayers +
+            // newPlayers + lastMinutePlayers). Pre-fix (V 2.0.446), every
+            // last-minute save produced duplicate entries in the final serpentine
+            // distribution — 9 players became 18 placements, 3 poules became 6.
+            // Reported 21 April 2026 on CDB Démo env.
+            lastMinutePlayers = [];
+
             console.log(`✅ Added ${lastMinuteInscriptions.length} last-minute players to selection list`);
 
             // Update the finale inscription counter
