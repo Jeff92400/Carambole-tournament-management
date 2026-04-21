@@ -4267,12 +4267,47 @@
       return mapping[gameType.toUpperCase()] || 'rank_libre';
     }
 
+    // Get player's ranking for a given game_type. Priority order:
+    //  1) player_rankings (new authoritative table, keyed by game_mode_id,
+    //     exposed as an object by /api/players — see players.js line 760)
+    //  2) legacy rank_* column on the players row (stale after migration)
+    //
+    // Context: before this patch (V 2.0.445), this function only read the
+    // legacy column, which caused a false-positive warning in the
+    // last-minute flow. Example: a player whose player_rankings says
+    // 'Cadre 42/2 → R1' but whose legacy rank_cadre still shows 'R4'
+    // triggered a 'Attention: classement R4' warning even though the
+    // players-list page (which reads player_rankings first) displays
+    // R1 correctly. Reported 21 April 2026 on CDB Demo.
+    function getPlayerRankForCategory(player, categoryGameType) {
+      if (!player || !categoryGameType) return 'NC';
+      const wantedGT = String(categoryGameType).toUpperCase().trim();
+
+      // 1) New source: player_rankings object keyed by game_mode_id
+      //    Each entry has { ranking, code, display_name, color }. We match
+      //    on display_name or code (case/space-insensitive) because we
+      //    don't carry the game_mode_id in `category` here.
+      if (player.player_rankings && typeof player.player_rankings === 'object') {
+        const norm = s => String(s || '').toUpperCase().replace(/\s+/g, '');
+        const wantedNorm = norm(wantedGT);
+        for (const entry of Object.values(player.player_rankings)) {
+          if (!entry || !entry.ranking) continue;
+          if (norm(entry.display_name) === wantedNorm || norm(entry.code) === wantedNorm) {
+            return entry.ranking;
+          }
+        }
+      }
+
+      // 2) Legacy fallback: rank_libre / rank_bande / rank_3bandes / rank_cadre
+      const rankField = getRankFieldForGameType(categoryGameType);
+      return player[rankField] || 'NC';
+    }
+
     // Check if player's rank matches the tournament category
     function checkPlayerCategory(player, category) {
       if (!category) return { matches: true };
 
-      const rankField = getRankFieldForGameType(category.game_type);
-      const playerRank = player[rankField] || 'NC';
+      const playerRank = getPlayerRankForCategory(player, category.game_type);
       const tournamentLevel = category.level.toUpperCase();
 
       // NC (Non Classé) is considered not matching any specific level
