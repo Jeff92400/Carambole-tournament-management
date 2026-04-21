@@ -399,13 +399,15 @@ async function sendTestConvocations(db, appSettings, playerLicences, overrideEma
         );
       });
 
-      // 4. Insert inscriptions
+      // 4. Insert inscriptions — inscription_id is the PK (globally unique),
+      // so the MAX lookup must span all orgs (not just the caller's org), to
+      // avoid PK collisions across CDBs. Same bug family as V 2.0.443/444.
       for (const player of players) {
         await new Promise((res, rej) => {
           db.run(
             `INSERT INTO inscriptions (inscription_id, tournoi_id, licence, timestamp, source, statut, organization_id)
-             VALUES ((SELECT COALESCE(MAX(inscription_id), 0) + 1 FROM inscriptions WHERE ($1::int IS NULL OR organization_id = $1)), $2, $3, CURRENT_TIMESTAMP, 'manual', 'inscrit', $4)`,
-            [orgId, tournamentId, player.licence, orgId],
+             VALUES ((SELECT COALESCE(MAX(inscription_id), 0) + 1 FROM inscriptions), $1, $2, CURRENT_TIMESTAMP, 'manual', 'inscrit', $3)`,
+            [tournamentId, player.licence, orgId],
             (err) => err ? rej(err) : res()
           );
         });
@@ -918,10 +920,10 @@ async function getOrCreateTestTournament(db, orgId, category) {
         tomorrow.setDate(tomorrow.getDate() + 1);
         const dateStr = tomorrow.toISOString().split('T')[0];
 
-        // Get next tournoi_id
+        // Get next tournoi_id — global MAX (PK is globally unique, same rule as V 2.0.443)
         db.get(
-          'SELECT MAX(tournoi_id) as max_id FROM tournoi_ext WHERE ($1::int IS NULL OR organization_id = $1)',
-          [orgId],
+          'SELECT MAX(tournoi_id) as max_id FROM tournoi_ext',
+          [],
           (err, maxIdResult) => {
             if (err) return reject(err);
 

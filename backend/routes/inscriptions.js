@@ -349,10 +349,14 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
     // (2) Filter out records whose tournament's season is not the current season.
     //     IONOS CSV contains all seasons historically — no reason to re-process
     //     ~4-5 years of past data on every import. We log how many were skipped.
+    // inscription_id is the PK of inscriptions — globally unique across orgs.
+    // Scoping the MAX by org would return a stale value and cause PK collisions
+    // when inserting (same bug family as the tournoi_ext fix in V 2.0.443 and
+    // the user-hit 'duplicate key ... inscriptions_pkey' on 21 April 2026).
     const maxIdResult = await new Promise((resolve, reject) => {
       db.get(
-        `SELECT MAX(inscription_id) as max_id FROM inscriptions WHERE ($1::int IS NULL OR organization_id = $1)`,
-        [orgId],
+        `SELECT MAX(inscription_id) as max_id FROM inscriptions`,
+        [],
         (err, row) => { if (err) reject(err); else resolve(row); }
       );
     });
@@ -1270,7 +1274,7 @@ router.post('/create', authenticateToken, async (req, res) => {
   try {
     // Get the next inscription_id
     const maxIdResult = await new Promise((resolve, reject) => {
-      db.get('SELECT MAX(inscription_id) as max_id FROM inscriptions WHERE ($1::int IS NULL OR organization_id = $1)', [orgId], (err, row) => {
+      db.get('SELECT MAX(inscription_id) as max_id FROM inscriptions', [], (err, row) => {
         if (err) reject(err);
         else resolve(row);
       });
@@ -1363,7 +1367,7 @@ router.post('/save-last-minute', authenticateToken, async (req, res) => {
 
       // Get the next inscription_id
       const maxIdResult = await new Promise((resolve, reject) => {
-        db.get('SELECT MAX(inscription_id) as max_id FROM inscriptions WHERE ($1::int IS NULL OR organization_id = $1)', [orgId], (err, row) => {
+        db.get('SELECT MAX(inscription_id) as max_id FROM inscriptions', [], (err, row) => {
           if (err) reject(err);
           else resolve(row);
         });
@@ -1481,7 +1485,7 @@ router.post('/mark-indisponible', authenticateToken, async (req, res) => {
 
     // Create new inscription with statut='indisponible'
     const maxIdResult = await new Promise((resolve, reject) => {
-      db.get('SELECT MAX(inscription_id) as max_id FROM inscriptions WHERE ($1::int IS NULL OR organization_id = $1)', [orgId], (err, row) => {
+      db.get('SELECT MAX(inscription_id) as max_id FROM inscriptions', [], (err, row) => {
         if (err) reject(err);
         else resolve(row);
       });
@@ -1648,11 +1652,11 @@ router.post('/import-excel', authenticateToken, excelUpload.single('file'), asyn
     });
     const validLicences = new Set(playerRows.map(p => p.normalized_licence));
 
-    // Get current max inscription_id for this org
+    // Get current max inscription_id (global — inscription_id is PK, not org-scoped)
     const maxIdResult = await new Promise((resolve, reject) => {
       db.get(
-        'SELECT COALESCE(MAX(inscription_id), 0) as max_id FROM inscriptions WHERE ($1::int IS NULL OR organization_id = $1)',
-        [orgId],
+        'SELECT COALESCE(MAX(inscription_id), 0) as max_id FROM inscriptions',
+        [],
         (err, row) => err ? reject(err) : resolve(row)
       );
     });
