@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { authenticateToken, requireDdJ } = require('./auth');
+const appSettings = require('../utils/app-settings');
 const getDb = () => require('../db-loader');
 
 // Helper: normalize licence for comparisons (removes spaces).
@@ -140,11 +141,12 @@ router.get('/competitions/:id/pointage', authenticateToken, requireDdJ, async (r
       // Non-fatal — DdJ screen works without distance/reprises
     }
 
-    // Resolve season from tournament date (Sept cutoff) — same rule as the
-    // dev seed endpoint so they use the same moyenne rows.
+    // Resolve season from tournament date. Uses the shared helper so it
+    // respects per-org overrides (current_season_override and the
+    // season_start_month setting — some CDBs use a non-September cutoff).
+    // Falls back to now() if the tournament has no debut date (defensive).
     const debutDate = tournament.debut ? new Date(tournament.debut) : new Date();
-    const yr = debutDate.getFullYear();
-    const season = debutDate.getMonth() >= 8 ? `${yr}-${yr + 1}` : `${yr - 1}-${yr}`;
+    const season = await appSettings.getCurrentSeason(debutDate, orgId);
 
     // 3. Convoked player list, joined with players for FFB rank, inscriptions
     // for forfait state, and player_ffb_classifications for the relevant
@@ -401,11 +403,11 @@ router.post('/dev/seed-moyennes/:id', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: `Mode de jeu introuvable : ${tournament.mode}` });
     }
 
-    // Determine the current season from the tournament date.
-    // Simple rule: September onwards = (Y)-(Y+1); otherwise (Y-1)-(Y).
-    const d = new Date(tournament.debut);
-    const y = d.getFullYear();
-    const season = d.getMonth() >= 8 ? `${y}-${y + 1}` : `${y - 1}-${y}`;
+    // Determine the current season from the tournament date. Use the shared
+    // helper so the seed writes to the same season the GET endpoint will read
+    // (respects per-org season_start_month and current_season_override).
+    const d = tournament.debut ? new Date(tournament.debut) : new Date();
+    const season = await appSettings.getCurrentSeason(d, orgId);
 
     // Pull the convoked licences in the canonical DdJ order
     const convoked = await new Promise((resolve, reject) => {
