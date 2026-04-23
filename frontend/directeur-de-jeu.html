@@ -389,6 +389,17 @@
           emptyState.style.display = 'block';
         }
 
+        // Wire card click → pointage screen (Step 1 of the DdJ workflow).
+        // Only today's cards are clickable for now; past competitions are
+        // read-only so we don't accidentally edit historical forfait state.
+        document.querySelectorAll('#ddj-today-cards .ddj-comp-card').forEach(card => {
+          card.addEventListener('click', () => {
+            const id = card.getAttribute('data-comp-id');
+            if (!id) return;
+            window.location.href = 'directeur-de-jeu-pointage.html?compId=' + encodeURIComponent(id);
+          });
+        });
+
       } catch (error) {
         console.error('Erreur chargement compétitions:', error);
         const errEl = document.getElementById('errorMessage');
