@@ -71,9 +71,37 @@ All authenticated pages include `auth-utils.js` and follow this pattern:
 **Session expired flow**: When any API returns 401/403, user sees "Votre session a expiré" on login page.
 
 ### Role-Based UI
-- Admin-only elements use class `admin-only`
-- JS checks `localStorage.getItem('userRole')` to show/hide
-- Roles: `admin`, `editor`, `viewer`
+
+**Two complementary mechanisms coexist:**
+
+1. **Element-class gating (legacy + ongoing)** — per-element visibility via CSS classes:
+   - `.admin-only` → shown only to `admin` (and historically `lecteur`). Hidden otherwise via inline JS in each page (`applyRoleBasedNav` in `js/auth-utils.js`).
+   - `.club-visible` → shown only to `club` role (starts `display:none`, JS reveals).
+   - `.not-club` / `.not-lecteur` → hidden for those specific roles.
+   - `.non-admin-only` → hidden when user IS admin. Used for e.g. the top-level Statistiques link that admins reach via the Settings page instead.
+
+2. **Body-role tagging (V 2.0.453+)** — `auth-utils.js` adds `body.role-<userRole>` on every authenticated page before `DOMContentLoaded`. CSS can then target role-specific rules without per-page JS:
+   ```css
+   body.role-admin .non-admin-only { display: none !important; }
+   body.role-lecteur .not-lecteur  { display: none !important; }
+   body.role-club   .club-hint      { display: block; }
+   ```
+   Prefer this for new role-specific styling — no flash of wrong content, no 30-file JS edits.
+
+**Actual roles in production** (see `backend/routes/auth.js:703`): `admin`, `viewer`, `lecteur`, `club`, `ligue_admin`, `directeur_jeu`. (The old list "admin / editor / viewer" was outdated.)
+
+### Mega-menu nav (V 2.0.457+)
+
+All 33 CDB admin pages share the same 5-bucket navbar structure:
+
+```
+🏠 Accueil  │  🏆 Compétitions ▾  │  📊 Données ▾  │  📧 Com joueurs  │  ⚙️ Paramètres ▾  │  🚪
+```
+
+- Dropdowns use the existing `.nav-dropdown` / `.nav-dropdown-btn` / `.nav-dropdown-content` CSS (in `css/styles.css`). No new styling.
+- Each page marks its bucket's dropdown button `.active` so users know where they are. See `/tmp/rollout-megamenu.js` (the one-shot script used for the rollout) for the page→bucket mapping.
+- Super Admin pages (`super-admin*.html`) and `ligue-dashboard.html` keep their own nav — do NOT apply the CDB mega-menu there.
+- The DdJ link is injected dynamically by `js/app-branding.js` (`injectDdJNavLink`) into the Compétitions dropdown panel when `enable_ddj_module=true` for the org.
 
 ### Shared Utilities (js/club-utils.js)
 - `loadClubsFromDatabase()` - Fetches clubs on page load

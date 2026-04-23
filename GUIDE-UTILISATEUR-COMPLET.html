@@ -893,6 +893,76 @@
 
   <hr>
 
+  <!-- ======================== NAVIGATION ======================== -->
+  <section id="navigation">
+    <h2>🧭 Naviguer dans l'application</h2>
+    <p>Depuis avril 2026, la barre de navigation en haut de chaque page est organisée en <strong>cinq groupes</strong> pour rester lisible même quand le nombre de pages augmente.</p>
+
+    <h3>Structure de la barre pour un administrateur</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Élément</th>
+          <th>Contenu du menu déroulant</th>
+          <th>Lien direct (clic sur le titre)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>🏠 Accueil</strong></td>
+          <td>—</td>
+          <td>Tableau de bord</td>
+        </tr>
+        <tr>
+          <td><strong>🏆 Compétitions</strong> ▾</td>
+          <td>Générer les poules / Convocations, Inscriptions, Tournois à venir, Calendrier <em>(+ Directeur de Jeu si le module est activé)</em></td>
+          <td>Générer les poules</td>
+        </tr>
+        <tr>
+          <td><strong>📊 Données</strong> ▾</td>
+          <td>Classements, Statistiques</td>
+          <td>Classements</td>
+        </tr>
+        <tr>
+          <td><strong>📧 Com joueurs</strong></td>
+          <td>—</td>
+          <td>Page de communication (Notifs, Annonces, Composer, Résultats, Relances, Invitations, Historique)</td>
+        </tr>
+        <tr>
+          <td><strong>⚙️ Paramètres</strong> ▾ <em>(admin uniquement)</em></td>
+          <td>Organisation, Utilisateurs, Compétitions, Espace Joueur, Maintenance, Outils</td>
+          <td>Page Paramètres</td>
+        </tr>
+        <tr>
+          <td><strong>🚪 Déconnexion</strong></td>
+          <td>—</td>
+          <td>Retour à l'écran de connexion</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>Comportement des menus déroulants</h3>
+    <ul>
+      <li><strong>Passer la souris</strong> sur un menu marqué ▾ fait apparaître la liste des pages du groupe.</li>
+      <li><strong>Cliquer sur le titre du menu</strong> (sans attendre l'ouverture) ouvre directement la page principale du groupe — par exemple cliquer sur « Compétitions » va directement à « Générer les poules ».</li>
+      <li><strong>Le menu actif</strong> (correspondant à la page ouverte) est mis en évidence pour que vous sachiez toujours où vous êtes.</li>
+    </ul>
+
+    <h3>Différences selon le rôle</h3>
+    <ul>
+      <li><strong>Administrateur</strong> : voit les 5 groupes.</li>
+      <li><strong>Visiteur / Lecteur</strong> : voit les groupes <em>Accueil, Compétitions, Données, Com joueurs</em> (Paramètres masqué).</li>
+      <li><strong>Représentant de club</strong> : voit uniquement <em>Accueil, Joueurs, Classements</em> (menus Compétitions et Com joueurs masqués).</li>
+      <li><strong>Directeur de Jeu</strong> : redirigé automatiquement vers la page Directeur de Jeu après connexion (voir section dédiée).</li>
+    </ul>
+
+    <div class="info-card">
+      <strong>💡 Bon à savoir :</strong> si vous veniez de l'ancienne interface avec une barre à 8-10 liens plats, toutes vos pages préférées sont toujours là. Elles sont simplement regroupées par thème pour éviter la surcharge visuelle.
+    </div>
+  </section>
+
+  <hr>
+
   <!-- ======================== BOUTON AIDE ======================== -->
   <section id="bouton-aide">
     <h2>Bouton d'aide (?)</h2>
@@ -1155,6 +1225,67 @@
 
   <hr>
 
+  <!-- ======================== STATISTIQUES ======================== -->
+  <section id="statistiques">
+    <h2>📈 Données &gt; Statistiques</h2>
+
+    <h3>Accès</h3>
+    <p>Menu <strong>Données &gt; Statistiques</strong> de la barre de navigation.</p>
+
+    <div class="info-card accent">
+      <strong>✅ Page accessible à tous les rôles</strong> depuis avril 2026. Administrateurs, visiteurs, lecteurs, représentants de clubs, responsables de ligue et directeurs de jeu peuvent tous consulter ces statistiques. Le contenu est en lecture seule — aucun risque de modification accidentelle.
+    </div>
+
+    <h3>Description</h3>
+    <p>Vue consolidée de l'activité de la saison : participation, répartition par club, statistiques joueurs et indicateurs généraux. Permet aux responsables (présidents de club, administrateurs) d'avoir une lecture rapide de la dynamique du comité.</p>
+
+    <h3>Sélection de la saison</h3>
+    <p>Un sélecteur en haut de page permet de changer la saison analysée. Toute la page se met à jour dynamiquement — aucun rechargement nécessaire.</p>
+
+    <h3>Indicateurs clés (en-tête)</h3>
+    <ul>
+      <li><strong>🏆 Compétitions jouées</strong> : nombre total de tournois terminés dans la saison sélectionnée</li>
+      <li><strong>👥 Joueurs uniques</strong> : nombre de licenciés distincts ayant participé à au moins un tournoi</li>
+      <li><strong>🎯 Participations totales</strong> : somme des inscriptions effectives (un joueur présent dans 3 tournois compte pour 3)</li>
+    </ul>
+
+    <h3>Onglets</h3>
+
+    <h4>🏢 Clubs</h4>
+    <p>Répartition de l'activité par club :</p>
+    <ul>
+      <li>Nombre de joueurs actifs par club</li>
+      <li>Nombre de participations cumulées</li>
+      <li>Classement des clubs les plus actifs de la saison</li>
+      <li>Identification rapide des clubs sous-représentés</li>
+    </ul>
+
+    <h4>👤 Joueurs</h4>
+    <p>Vue individuelle des licenciés :</p>
+    <ul>
+      <li>Top joueurs par nombre de participations</li>
+      <li>Liste des joueurs actifs avec leur club</li>
+      <li>Identification des joueurs nouveaux ou irréguliers</li>
+    </ul>
+
+    <h4>📊 Général</h4>
+    <p>Indicateurs transverses :</p>
+    <ul>
+      <li>Répartition des inscriptions par mode de jeu (Libre, Cadre, Bande, 3 Bandes)</li>
+      <li>Répartition par catégorie FFB</li>
+      <li>Tendances globales de la saison</li>
+    </ul>
+
+    <h3>Utilisation recommandée</h3>
+    <ul>
+      <li><strong>Présidents de club</strong> : suivre la participation de vos joueurs saison après saison</li>
+      <li><strong>Administrateurs</strong> : évaluer la santé du comité, repérer les tendances à la baisse</li>
+      <li><strong>Responsables de ligue</strong> : comparer l'activité des différents comités (via la plateforme Super Admin pour une vue cross-CDB)</li>
+    </ul>
+  </section>
+
+  <hr>
+
   <!-- ======================== COMPÉTITIONS ======================== -->
   <section id="competitions">
     <h2>Menu : Compétitions</h2>
@@ -1412,6 +1543,69 @@
       <li>Cliquer sur "Réintégrer" à côté du joueur</li>
       <li>Le joueur revient dans la liste des convoqués avec le statut "Convoqué"</li>
     </ol>
+  </section>
+
+  <hr>
+
+  <!-- ======================== DIRECTEUR DE JEU ======================== -->
+  <section id="directeur-de-jeu">
+    <h2>🎮 Compétitions &gt; Directeur de Jeu</h2>
+
+    <div class="info-card accent">
+      <strong>🎯 Module optionnel — activable par comité.</strong> Le Directeur de Jeu (DdJ) est un espace dédié à la personne qui dirige les compétitions sur site le jour J. L'écran d'accueil est disponible dès aujourd'hui. Le workflow complet de saisie (pointage → export E2i) est prévu pour la saison 2026-27 à la demande du District 93-94.
+    </div>
+
+    <h3>Qui est concerné ?</h3>
+    <ul>
+      <li><strong>Le directeur de jeu</strong> (bénévole ou arbitre) qui dirige les matchs le jour d'une compétition départementale. Il dispose d'un compte avec le rôle <code>directeur_jeu</code> et est redirigé automatiquement vers son écran dédié après connexion.</li>
+      <li><strong>L'administrateur du comité</strong> qui peut aussi accéder à cet espace (pour consulter ou prendre le relais) via le menu <strong>Compétitions &gt; Directeur de Jeu</strong>, lorsque le module est activé pour son CDB.</li>
+    </ul>
+
+    <h3>Activer le module pour votre CDB</h3>
+    <ol class="steps">
+      <li>Aller dans <strong>Paramètres &gt; Espace Joueur</strong></li>
+      <li>Activer l'option <strong>« Module Directeur de Jeu »</strong></li>
+      <li>Créer un compte utilisateur avec le rôle <strong>« Directeur de Jeu »</strong> dans <strong>Paramètres &gt; Utilisateurs</strong></li>
+    </ol>
+    <p>Une fois le module activé, un nouveau lien <strong>« Directeur de Jeu »</strong> apparaît dans le menu déroulant <strong>Compétitions ▾</strong> pour les administrateurs.</p>
+
+    <h3>Écran d'accueil du Directeur de Jeu</h3>
+    <p>Après connexion (ou depuis le menu Compétitions pour un administrateur), le DdJ arrive sur une page <strong>épurée et orientée « jour J »</strong> :</p>
+    <ul>
+      <li><strong>Bandeau de bienvenue</strong> avec le nom du DdJ et la date du jour en français</li>
+      <li><strong>Section « Compétitions du jour »</strong> — cartes listant les tournois programmés aujourd'hui avec :
+        <ul>
+          <li>Le nom et la catégorie (ex. « T2 Libre R3 »)</li>
+          <li>La date et le lieu</li>
+          <li>Le nombre de joueurs convoqués</li>
+          <li>Un badge de statut (« À préparer » si des convocations ont été envoyées, « En attente » sinon)</li>
+        </ul>
+      </li>
+      <li><strong>Section « Journées précédentes »</strong> (si applicable) — rappel des dernières compétitions passées</li>
+      <li><strong>État vide</strong> avec le logo du comité quand aucune compétition n'est programmée</li>
+    </ul>
+
+    <h3>Navigation et sécurité</h3>
+    <ul>
+      <li>Un DdJ connecté ne peut accéder qu'à sa page dédiée — il est automatiquement redirigé s'il tente d'accéder à d'autres pages de l'application admin.</li>
+      <li>Un administrateur accédant à la page conserve son rôle et peut naviguer librement via le bouton <strong>« ← Retour »</strong> en haut à droite.</li>
+      <li>Un super-administrateur qui impersonne un CDB voit un bouton <strong>« ← Retour Plateforme »</strong> pour revenir à l'espace SA.</li>
+    </ul>
+
+    <h3>Roadmap — saison 2026-27</h3>
+    <p>Le module sera progressivement enrichi avec le workflow complet demandé par le District 93-94, en <strong>6 étapes</strong> qui remplaceront la feuille de match Excel actuelle (40+ onglets) :</p>
+    <ol class="steps">
+      <li><strong>Pointage</strong> : marquage des présences le matin</li>
+      <li><strong>Poules</strong> : génération automatique des poules en serpentine</li>
+      <li><strong>Matchs</strong> : saisie des résultats de chaque rencontre avec calcul temps-réel</li>
+      <li><strong>Bracket</strong> : tableau de phase finale (demi-finales, finale, petite finale)</li>
+      <li><strong>Classement</strong> : calcul automatique des positions finales et des points</li>
+      <li><strong>Export E2i</strong> : génération du fichier CSV compatible avec le système fédéral</li>
+    </ol>
+
+    <div class="info-card">
+      <strong>💡 Bon à savoir :</strong> l'écran d'accueil actuel permet déjà au DdJ de consulter les compétitions du jour. Le clic sur une carte pour démarrer le pointage n'est pas encore actif — il arrivera avec la saison 2026-27.
+    </div>
   </section>
 
   <hr>
