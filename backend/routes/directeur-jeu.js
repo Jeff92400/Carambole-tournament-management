@@ -140,8 +140,15 @@ router.get('/competitions/:id/pointage', authenticateToken, requireDdJ, async (r
       // Non-fatal — DdJ screen works without distance/reprises
     }
 
-    // 3. Convoked player list, joined with players for FFB rank/moyenne
-    // and with inscriptions for current forfait state.
+    // Resolve season from tournament date (Sept cutoff) — same rule as the
+    // dev seed endpoint so they use the same moyenne rows.
+    const debutDate = tournament.debut ? new Date(tournament.debut) : new Date();
+    const yr = debutDate.getFullYear();
+    const season = debutDate.getMonth() >= 8 ? `${yr}-${yr + 1}` : `${yr - 1}-${yr}`;
+
+    // 3. Convoked player list, joined with players for FFB rank, inscriptions
+    // for forfait state, and player_ffb_classifications for the relevant
+    // moyenne_ffb (tournament mode + current season).
     const players = await new Promise((resolve, reject) => {
       db.all(
         `SELECT
@@ -155,7 +162,8 @@ router.get('/competitions/:id/pointage', authenticateToken, requireDdJ, async (r
            i.inscription_id,
            i.forfait,
            i.statut,
-           i.commentaire
+           i.commentaire,
+           pfc.moyenne_ffb
          FROM convocation_poules cp
          LEFT JOIN players p
            ON REPLACE(cp.licence, ' ', '') = REPLACE(p.licence, ' ', '')
@@ -163,10 +171,16 @@ router.get('/competitions/:id/pointage', authenticateToken, requireDdJ, async (r
          LEFT JOIN inscriptions i
            ON cp.tournoi_id = i.tournoi_id
            AND REPLACE(cp.licence, ' ', '') = REPLACE(i.licence, ' ', '')
+         LEFT JOIN game_modes gm
+           ON UPPER(REPLACE(gm.code, ' ', '')) = UPPER(REPLACE($3, ' ', ''))
+         LEFT JOIN player_ffb_classifications pfc
+           ON REPLACE(pfc.licence, ' ', '') = REPLACE(cp.licence, ' ', '')
+           AND pfc.game_mode_id = gm.id
+           AND pfc.season = $4
          WHERE cp.tournoi_id = $1
            AND UPPER(cp.licence) NOT LIKE 'TEST%'
          ORDER BY cp.player_order NULLS LAST, cp.licence`,
-        [tournoiId, orgId],
+        [tournoiId, orgId, tournament.mode || '', season],
         (err, rows) => err ? reject(err) : resolve(rows || [])
       );
     });
@@ -188,10 +202,12 @@ router.get('/competitions/:id/pointage', authenticateToken, requireDdJ, async (r
         rank_cadre: p.rank_cadre,
         rank_bande: p.rank_bande,
         rank_3bandes: p.rank_3bandes,
-        // moyenne_generale: future column from the journées-mode spec — not
-        // yet migrated into players. Exposed as null for now; the front-end
-        // displays "—" via formatMoyenne().
-        moyenne_generale: null,
+        // Moyenne exposed as moyenne_generale (legacy field name the front-
+        // end already renders). Actual value comes from the
+        // player_ffb_classifications table, joined on (licence, mode, season).
+        // Null when this player has no FFB classification for this mode+season
+        // yet — front end renders "—" via formatMoyenne().
+        moyenne_generale: p.moyenne_ffb,
         present: !isForfait,
         commentaire: p.commentaire || null
       };
