@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Directeur de Jeu — Matchs de poule</title>
+  <link rel="icon" type="image/png" href="images/FrenchBillard-Icon-small.png">
+  <link rel="stylesheet" href="css/styles.css?v=357">
+  <script src="js/branding.js?v=197"></script>
+  <style>
+    .ddj-welcome-bar {
+      background: linear-gradient(135deg, var(--color-primary, #1F4788) 0%, var(--color-secondary, #667eea) 100%);
+      color: white;
+      padding: 14px 18px;
+      border-radius: 8px;
+      margin-bottom: 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .ddj-welcome-bar .tournament-title { font-size: 1.1em; font-weight: 700; }
+    .ddj-welcome-bar .tournament-meta  { font-size: 0.9em; opacity: 0.92; }
+
+    .ddj-steps {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      margin: 0 0 18px 0;
+    }
+    .ddj-steps .dot { width: 14px; height: 14px; border-radius: 50%; background: #dee2e6; }
+    .ddj-steps .dot.done { background: #28a745; }
+    .ddj-steps .dot.active {
+      background: var(--color-primary, #1F4788);
+      box-shadow: 0 0 0 4px rgba(31,71,136,0.18);
+    }
+
+    /* Poule tabs */
+    .ddj-tabs {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 16px;
+      border-bottom: 2px solid #dee2e6;
+      flex-wrap: wrap;
+    }
+    .ddj-tab {
+      padding: 10px 18px;
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      font-size: 0.95em;
+      font-weight: 600;
+      color: #666;
+      border-bottom: 3px solid transparent;
+      margin-bottom: -2px;
+      transition: all 0.15s;
+    }
+    .ddj-tab:hover { color: #333; }
+    .ddj-tab.active {
+      color: var(--color-primary, #1F4788);
+      border-bottom-color: var(--color-primary, #1F4788);
+    }
+    .ddj-tab .pill {
+      display: inline-block;
+      margin-left: 6px;
+      padding: 2px 8px;
+      border-radius: 10px;
+      background: #e9ecef;
+      font-size: 0.75em;
+      color: #666;
+    }
+    .ddj-tab.active .pill { background: var(--color-primary, #1F4788); color: white; }
+    .ddj-tab.complete .pill { background: #28a745; color: white; }
+
+    /* Match cards */
+    .match-card {
+      border: 2px solid #e0e0e0;
+      border-radius: 10px;
+      background: white;
+      margin-bottom: 12px;
+      transition: all 0.15s;
+    }
+    .match-card.played { border-color: #28a745; background: #f8fff9; }
+    .match-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 14px;
+      background: #f8f9fa;
+      border-radius: 8px 8px 0 0;
+      border-bottom: 1px solid #e0e0e0;
+      font-size: 0.88em;
+      color: #555;
+    }
+    .match-card.played .match-card-header { background: #d4edda; }
+
+    .match-card-body {
+      padding: 14px;
+    }
+    .match-players {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 14px;
+    }
+    .match-player {
+      text-align: center;
+    }
+    .match-player .name {
+      font-weight: 700;
+      font-size: 1.05em;
+      color: #222;
+    }
+    .match-player .club {
+      font-size: 0.8em;
+      color: #666;
+      margin-top: 2px;
+    }
+    .match-vs {
+      font-size: 1.2em;
+      color: #888;
+      font-weight: bold;
+    }
+
+    /* Score inputs */
+    .score-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+    .score-col {
+      background: #f8f9fa;
+      border-radius: 8px;
+      padding: 10px;
+    }
+    .score-col.winner {
+      background: #d4edda;
+      box-shadow: inset 0 0 0 2px #28a745;
+    }
+    .score-col.loser {
+      background: #f8d7da;
+      opacity: 0.85;
+    }
+    .score-col.draw {
+      background: #fff3cd;
+      box-shadow: inset 0 0 0 2px #ffc107;
+    }
+    .score-col-header {
+      font-size: 0.85em;
+      font-weight: 600;
+      color: #666;
+      margin-bottom: 8px;
+      text-align: center;
+    }
+    .score-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+    .score-label {
+      font-size: 0.82em;
+      color: #555;
+      flex: 1;
+    }
+    .score-input {
+      width: 70px;
+      padding: 8px 10px;
+      border: 1.5px solid #ccc;
+      border-radius: 6px;
+      font-size: 1em;
+      font-weight: 700;
+      text-align: center;
+      -moz-appearance: textfield;
+    }
+    .score-input::-webkit-outer-spin-button,
+    .score-input::-webkit-inner-spin-button {
+      -webkit-appearance: none; margin: 0;
+    }
+    .score-input:focus {
+      outline: none;
+      border-color: var(--color-primary, #1F4788);
+      box-shadow: 0 0 0 3px rgba(31,71,136,0.15);
+    }
+
+    .match-actions {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 14px;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .match-status {
+      font-size: 0.85em;
+      color: #666;
+      font-weight: 600;
+    }
+    .match-status.played { color: #28a745; }
+
+    .btn-save {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 6px;
+      background: linear-gradient(135deg, var(--color-primary, #1F4788), var(--color-secondary, #667eea));
+      color: white;
+      font-weight: 700;
+      cursor: pointer;
+      font-size: 0.95em;
+    }
+    .btn-save:hover { transform: translateY(-1px); box-shadow: 0 4px 8px rgba(31,71,136,0.3); }
+    .btn-save:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-save:disabled:hover { transform: none; box-shadow: none; }
+
+    /* Classement */
+    .classement-card {
+      border: 2px solid #dee2e6;
+      border-radius: 10px;
+      background: white;
+      padding: 14px 18px;
+      margin-top: 20px;
+    }
+    .classement-header {
+      font-size: 1em;
+      font-weight: 700;
+      color: var(--color-primary, #1F4788);
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid var(--color-primary, #1F4788);
+    }
+    .classement-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.88em;
+    }
+    .classement-table th {
+      text-align: left;
+      padding: 6px 8px;
+      font-size: 0.78em;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      font-weight: 600;
+      border-bottom: 1px solid #dee2e6;
+      white-space: nowrap;
+    }
+    .classement-table td {
+      padding: 8px;
+      border-bottom: 1px solid #f0f0f0;
+    }
+    .classement-table tr:last-child td { border-bottom: none; }
+    .classement-table .rank {
+      font-weight: 700;
+      color: var(--color-primary, #1F4788);
+    }
+    .classement-table tr.rank-1 .rank { color: #d4a017; font-size: 1.1em; }
+    .classement-table .num {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+    .classement-table .num.primary {
+      font-weight: 700;
+      color: #222;
+    }
+
+    .ddj-action-bar {
+      display: flex;
+      gap: 10px;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      padding-top: 16px;
+      margin-top: 16px;
+      border-top: 1px solid #e0e0e0;
+    }
+    .ddj-btn {
+      padding: 12px 20px;
+      border-radius: 8px;
+      border: none;
+      font-size: 1em;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .ddj-btn-secondary { background: #6c757d; color: white; }
+    .ddj-btn-secondary:hover { background: #5a6268; }
+    .ddj-btn-primary {
+      background: linear-gradient(135deg, #28a745, #218838);
+      color: white;
+      flex: 1;
+      min-width: 240px;
+    }
+    .ddj-btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .ddj-loading, .ddj-empty {
+      text-align: center;
+      padding: 60px 20px;
+      color: #888;
+    }
+
+    .ddj-save-status {
+      position: fixed;
+      top: 20px; right: 20px;
+      padding: 8px 14px;
+      border-radius: 20px;
+      background: rgba(40,167,69,0.95);
+      color: white;
+      font-size: 0.85em;
+      font-weight: 600;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+      z-index: 1000;
+      opacity: 0;
+      transform: translateY(-10px);
+      transition: all 0.25s;
+      pointer-events: none;
+    }
+    .ddj-save-status.visible { opacity: 1; transform: translateY(0); }
+    .ddj-save-status.error { background: rgba(220,53,69,0.95); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="navbar">
+      <div>
+        <h2 style="margin-bottom: 0;"><img id="app-header-icon" src="images/FrenchBillard-Icon-small.png" alt="" style="height: 48px; width: 48px; vertical-align: middle; margin-right: 8px;"><span id="app-org-name" data-page-title="Matchs de poule (DdJ)">CDB</span></h2>
+      </div>
+      <div class="nav-links">
+        <a href="#" id="poulesBackBtn">← Poules</a>
+        <a href="#" id="logoutBtn" class="nav-logout">Déconnexion</a>
+      </div>
+    </div>
+
+    <div id="errorMessage" class="error" style="display: none;"></div>
+    <div id="saveStatus" class="ddj-save-status">Enregistré ✓</div>
+
+    <div class="ddj-welcome-bar">
+      <div>
+        <div class="tournament-title" id="tournamentTitle">Chargement…</div>
+        <div class="tournament-meta" id="tournamentMeta"></div>
+      </div>
+      <div class="tournament-meta" id="tournamentParams"></div>
+    </div>
+
+    <div class="ddj-steps" title="Étape 3 sur 7 : Matchs de poule">
+      <div class="dot done"></div>
+      <div class="dot done"></div>
+      <div class="dot done"></div>
+      <div class="dot active"></div>
+      <div class="dot"></div>
+      <div class="dot"></div>
+      <div class="dot"></div>
+    </div>
+
+    <div id="mainContent">
+      <div class="ddj-loading">Chargement des matchs…</div>
+    </div>
+  </div>
+
+  <script src="js/auth-utils.js?v=197"></script>
+  <script src="js/app-branding.js?v=216"></script>
+  <script>
+    const API_URL = '/api';
+
+    if (!requireAuth()) { throw new Error('Not authenticated'); }
+    const userRole = sessionStorage.getItem('userRole');
+    if (userRole !== 'directeur_jeu' && userRole !== 'admin') {
+      window.location.href = 'dashboard.html';
+      throw new Error('Access denied');
+    }
+    const token = sessionStorage.getItem('token');
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const compId = parseInt(urlParams.get('compId'), 10);
+    if (!Number.isFinite(compId)) {
+      document.getElementById('errorMessage').textContent = 'Aucune compétition sélectionnée.';
+      document.getElementById('errorMessage').style.display = 'block';
+      setTimeout(() => window.location.href = 'directeur-de-jeu.html', 2000);
+      throw new Error('No compId in URL');
+    }
+
+    document.getElementById('poulesBackBtn').addEventListener('click', (e) => {
+      e.preventDefault();
+      window.location.href = 'directeur-de-jeu-poules.html?compId=' + compId;
+    });
+    const navBtn = document.getElementById('logoutBtn');
+    if (userRole === 'directeur_jeu') {
+      navBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const orgSlug = sessionStorage.getItem('orgSlug') || '';
+        sessionStorage.clear();
+        window.location.href = orgSlug ? 'login.html?org=' + orgSlug : 'login.html';
+      });
+    } else {
+      navBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        window.location.href = 'dashboard.html';
+      });
+    }
+
+    let saveStatusTimer = null;
+    function showSaveStatus(msg, isError = false) {
+      const el = document.getElementById('saveStatus');
+      el.textContent = msg;
+      el.classList.toggle('error', isError);
+      el.classList.add('visible');
+      if (saveStatusTimer) clearTimeout(saveStatusTimer);
+      saveStatusTimer = setTimeout(() => el.classList.remove('visible'), 2000);
+    }
+
+    function escapeHtml(s) {
+      return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function formatDate(dateStr) {
+      if (!dateStr) return '';
+      const d = new Date(dateStr);
+      return d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    }
+
+    function formatMoyenne(n) {
+      if (n == null || isNaN(n) || n === 0) return '—';
+      return Number(n).toFixed(3).replace('.', ',');
+    }
+
+    // State
+    let state = {
+      tournament: null,
+      poules: [],
+      activeTab: 1 // poule number currently displayed
+    };
+
+    async function loadAll() {
+      try {
+        const resp = await authFetch(`${API_URL}/directeur-jeu/competitions/${compId}/poule-matches`);
+        if (!resp.ok) {
+          const body = await resp.json().catch(() => ({}));
+          throw new Error(body.error || `Erreur serveur (${resp.status})`);
+        }
+        const data = await resp.json();
+        state.tournament = data.tournament;
+        state.poules = data.poules;
+        // Default to first poule if activeTab isn't valid
+        if (!state.poules.find(p => p.number === state.activeTab)) {
+          state.activeTab = state.poules[0]?.number || 1;
+        }
+        render();
+      } catch (err) {
+        console.error('[Matchs] load error:', err);
+        document.getElementById('mainContent').innerHTML = `
+          <div class="ddj-empty">
+            <p>${escapeHtml(err.message)}</p>
+            <p style="margin-top: 12px;">
+              <a href="directeur-de-jeu-poules.html?compId=${compId}">← Retour aux poules</a>
+            </p>
+          </div>`;
+      }
+    }
+
+    function render() {
+      const t = state.tournament;
+      document.getElementById('tournamentTitle').textContent =
+        `${t.mode || ''} ${t.categorie || ''}${t.nom ? ' — ' + t.nom : ''}`.trim();
+      document.getElementById('tournamentMeta').textContent =
+        `${formatDate(t.debut)}${t.lieu ? ' · ' + t.lieu : ''}`;
+      document.getElementById('tournamentParams').textContent = 'Étape 3 : Matchs de poule';
+
+      const tabsHtml = state.poules.map(p => {
+        const playedCount = p.matches.filter(m => m.is_played).length;
+        const allPlayed = playedCount === p.matches.length && p.matches.length > 0;
+        const cls = ['ddj-tab'];
+        if (p.number === state.activeTab) cls.push('active');
+        if (allPlayed) cls.push('complete');
+        return `<button class="${cls.join(' ')}" data-poule="${p.number}">
+          Poule ${p.number}
+          <span class="pill">${playedCount}/${p.matches.length}</span>
+        </button>`;
+      }).join('');
+
+      const activePoule = state.poules.find(p => p.number === state.activeTab);
+      const contentHtml = activePoule ? renderPoule(activePoule) : '<p>Poule introuvable</p>';
+
+      document.getElementById('mainContent').innerHTML = `
+        <div class="ddj-tabs">${tabsHtml}</div>
+        ${contentHtml}
+        <div class="ddj-action-bar">
+          <button class="ddj-btn ddj-btn-secondary" onclick="window.location.href='directeur-de-jeu-poules.html?compId=${compId}'">
+            ← Retour aux poules
+          </button>
+          <button class="ddj-btn ddj-btn-primary" disabled title="Étape 4 (phase finale) — arrive prochainement">
+            Passer à la phase finale → (bientôt)
+          </button>
+        </div>
+      `;
+
+      // Wire tab clicks
+      document.querySelectorAll('.ddj-tab').forEach(btn => {
+        btn.addEventListener('click', () => {
+          state.activeTab = parseInt(btn.dataset.poule, 10);
+          render();
+        });
+      });
+      // Wire match save buttons
+      document.querySelectorAll('.btn-save').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const pn = parseInt(btn.dataset.poule, 10);
+          const mn = parseInt(btn.dataset.match, 10);
+          saveMatch(pn, mn);
+        });
+      });
+      // Live-highlight winner/draw as inputs change
+      document.querySelectorAll('.match-card').forEach(card => {
+        const inputs = card.querySelectorAll('.score-input');
+        inputs.forEach(i => i.addEventListener('input', () => updateMatchVisualState(card)));
+      });
+    }
+
+    function renderPoule(poule) {
+      const matchesHtml = poule.matches.map(m => renderMatch(poule.number, m)).join('');
+      const classementHtml = renderClassement(poule);
+      return `
+        ${matchesHtml}
+        ${classementHtml}
+      `;
+    }
+
+    function renderMatch(pouleNumber, m) {
+      const playedClass = m.is_played ? 'played' : '';
+      const tableLabel = m.table_number ? `Table ${m.table_number}` : '';
+      const statusLabel = m.is_played
+        ? (m.outcome === 'draw' ? `⚖️ Match nul` : `✓ Terminé`)
+        : 'À jouer';
+      const statusCls = m.is_played ? 'played' : '';
+
+      // Winner/draw shading on score columns
+      let col1Class = 'score-col';
+      let col2Class = 'score-col';
+      if (m.is_played) {
+        if (m.outcome === 'p1_win') { col1Class += ' winner'; col2Class += ' loser'; }
+        else if (m.outcome === 'p2_win') { col1Class += ' loser'; col2Class += ' winner'; }
+        else { col1Class += ' draw'; col2Class += ' draw'; }
+      }
+
+      return `
+        <div class="match-card ${playedClass}" data-match="${m.match_number}">
+          <div class="match-card-header">
+            <span><strong>Match ${m.match_number}</strong>${tableLabel ? ' · ' + tableLabel : ''}</span>
+            <span class="match-status ${statusCls}">${statusLabel}</span>
+          </div>
+          <div class="match-card-body">
+            <div class="match-players">
+              <div class="match-player">
+                <div class="name">${escapeHtml(m.p1_name)}</div>
+                <div class="club">${escapeHtml(m.p1_club || '')}</div>
+              </div>
+              <div class="match-vs">VS</div>
+              <div class="match-player">
+                <div class="name">${escapeHtml(m.p2_name)}</div>
+                <div class="club">${escapeHtml(m.p2_club || '')}</div>
+              </div>
+            </div>
+
+            <div class="score-grid">
+              <div class="${col1Class}" data-side="p1">
+                <div class="score-col-header">${escapeHtml(m.p1_name)}</div>
+                <div class="score-row">
+                  <span class="score-label">Points :</span>
+                  <input type="number" class="score-input" data-field="p1_points" inputmode="numeric" min="0"
+                         value="${m.p1_points != null ? m.p1_points : ''}">
+                </div>
+                <div class="score-row">
+                  <span class="score-label">Reprises :</span>
+                  <input type="number" class="score-input" data-field="p1_reprises" inputmode="numeric" min="0"
+                         value="${m.p1_reprises != null ? m.p1_reprises : ''}">
+                </div>
+                <div class="score-row">
+                  <span class="score-label">Meill. série :</span>
+                  <input type="number" class="score-input" data-field="p1_serie" inputmode="numeric" min="0"
+                         value="${m.p1_serie != null ? m.p1_serie : ''}">
+                </div>
+              </div>
+              <div class="${col2Class}" data-side="p2">
+                <div class="score-col-header">${escapeHtml(m.p2_name)}</div>
+                <div class="score-row">
+                  <span class="score-label">Points :</span>
+                  <input type="number" class="score-input" data-field="p2_points" inputmode="numeric" min="0"
+                         value="${m.p2_points != null ? m.p2_points : ''}">
+                </div>
+                <div class="score-row">
+                  <span class="score-label">Reprises :</span>
+                  <input type="number" class="score-input" data-field="p2_reprises" inputmode="numeric" min="0"
+                         value="${m.p2_reprises != null ? m.p2_reprises : ''}">
+                </div>
+                <div class="score-row">
+                  <span class="score-label">Meill. série :</span>
+                  <input type="number" class="score-input" data-field="p2_serie" inputmode="numeric" min="0"
+                         value="${m.p2_serie != null ? m.p2_serie : ''}">
+                </div>
+              </div>
+            </div>
+
+            <div class="match-actions">
+              <span class="match-status ${statusCls}" data-role="match-summary">${m.is_played
+                ? `PM : ${m.p1_match_points} - ${m.p2_match_points}`
+                : 'Saisissez les scores puis Enregistrer'}</span>
+              <button class="btn-save" data-poule="${pouleNumber}" data-match="${m.match_number}">
+                💾 Enregistrer
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function updateMatchVisualState(card) {
+      const p1p = parseFloat(card.querySelector('[data-field="p1_points"]').value);
+      const p2p = parseFloat(card.querySelector('[data-field="p2_points"]').value);
+      const c1 = card.querySelector('[data-side="p1"]');
+      const c2 = card.querySelector('[data-side="p2"]');
+      c1.classList.remove('winner', 'loser', 'draw');
+      c2.classList.remove('winner', 'loser', 'draw');
+      if (isNaN(p1p) || isNaN(p2p)) return;
+      if (p1p > p2p) { c1.classList.add('winner'); c2.classList.add('loser'); }
+      else if (p1p < p2p) { c1.classList.add('loser'); c2.classList.add('winner'); }
+      else { c1.classList.add('draw'); c2.classList.add('draw'); }
+    }
+
+    function renderClassement(poule) {
+      const allDone = poule.all_matches_played;
+      const title = allDone
+        ? '🏆 Classement final de la poule'
+        : '📊 Classement en cours';
+      const rowsHtml = poule.classement.map(r => `
+        <tr class="rank-${r.rank}">
+          <td class="rank">${r.rank}</td>
+          <td><strong>${escapeHtml(r.player_name)}</strong><br><span style="font-size: 0.78em; color: #666;">${escapeHtml(r.club || '')}</span></td>
+          <td class="num primary">${r.match_points}</td>
+          <td class="num">${r.wins}–${r.draws}–${r.losses}</td>
+          <td class="num">${formatMoyenne(r.moyenne)}</td>
+          <td class="num">${r.best_serie || '—'}</td>
+        </tr>
+      `).join('');
+      return `
+        <div class="classement-card">
+          <div class="classement-header">${title} — Poule ${poule.number}</div>
+          <table class="classement-table">
+            <thead>
+              <tr>
+                <th style="width: 30px;">#</th>
+                <th>Joueur</th>
+                <th style="text-align: right; width: 50px;">PM</th>
+                <th style="text-align: right; width: 70px;">V–N–D</th>
+                <th style="text-align: right; width: 70px;">Moy.</th>
+                <th style="text-align: right; width: 50px;">MS</th>
+              </tr>
+            </thead>
+            <tbody>${rowsHtml}</tbody>
+          </table>
+          <p style="font-size: 0.78em; color: #888; margin-top: 10px; margin-bottom: 0;">
+            Tie-break FFB : Points Match ↓ → Moyenne ↓ → Meilleure série ↓ → Victoire directe. Aucun arbitrage manuel requis.
+          </p>
+        </div>
+      `;
+    }
+
+    async function saveMatch(pouleNumber, matchNumber) {
+      const card = document.querySelector(`.match-card[data-match="${matchNumber}"]`);
+      if (!card) return;
+      const payload = {
+        poule_number: pouleNumber,
+        match_number: matchNumber
+      };
+      ['p1_points', 'p1_reprises', 'p1_serie', 'p2_points', 'p2_reprises', 'p2_serie'].forEach(f => {
+        const input = card.querySelector(`[data-field="${f}"]`);
+        payload[f] = input.value === '' ? null : parseInt(input.value, 10);
+      });
+
+      // Validation: either all six fields are filled or none are (allow saving a partial draft is useful,
+      // but for MVP we require at minimum that p1_points and p2_points both have values — reprises needed
+      // for moyenne). Partial entry is accepted: server stores nulls.
+      if ((payload.p1_points != null) !== (payload.p2_points != null)) {
+        showSaveStatus('Renseignez les points des deux joueurs', true);
+        return;
+      }
+
+      try {
+        const resp = await authFetch(`${API_URL}/directeur-jeu/competitions/${compId}/poule-matches`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (!resp.ok) {
+          const body = await resp.json().catch(() => ({}));
+          throw new Error(body.error || `Erreur ${resp.status}`);
+        }
+        const data = await resp.json();
+        // Merge the updated poule back into state
+        const idx = state.poules.findIndex(p => p.number === pouleNumber);
+        if (idx !== -1 && data.poule) {
+          state.poules[idx] = data.poule;
+        }
+        showSaveStatus('Match enregistré ✓');
+        render();
+      } catch (err) {
+        console.error('[Matchs] save error:', err);
+        showSaveStatus('Erreur — ' + err.message, true);
+      }
+    }
+
+    // Init
+    loadAll();
+  </script>
+</body>
+</html>

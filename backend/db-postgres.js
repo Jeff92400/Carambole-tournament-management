@@ -2305,6 +2305,47 @@ async function initializeDatabase() {
     // Split tournament: track which sub-tournament (A/B) a match came from
     await client.query(`ALTER TABLE tournament_matches ADD COLUMN IF NOT EXISTS sub_tournament TEXT`);
 
+    // ------------------------------------------------------------------
+    // DdJ Step 3 — per-poule match results, captured on tournament day
+    // by the Directeur de Jeu. Keyed to tournoi_ext (external tournament
+    // definition) rather than tournaments (internal post-import) because
+    // the DdJ operates BEFORE results land in the admin app — the E2i
+    // export generated from this table is what populates tournaments/
+    // tournament_results downstream.
+    //
+    // Full-score capture (per the v1 proposition): points, reprises,
+    // meilleure série. This gives the FFB auto-tiebreak rule
+    // (moyenne first, then best serie) instead of requiring DdJ manual
+    // arbitration, and produces a complete E2i file at step 6.
+    //
+    // NULL score columns = match scheduled but not yet played. The
+    // outcome (p1_win / p2_win / draw) is DERIVED from the points,
+    // not stored, so there's no way for a saved match to have
+    // inconsistent state.
+    // ------------------------------------------------------------------
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS ddj_poule_matches (
+        id SERIAL PRIMARY KEY,
+        tournoi_id INTEGER NOT NULL REFERENCES tournoi_ext(tournoi_id) ON DELETE CASCADE,
+        poule_number INTEGER NOT NULL,
+        match_number INTEGER NOT NULL,
+        table_number INTEGER,
+        p1_licence TEXT NOT NULL,
+        p2_licence TEXT NOT NULL,
+        p1_points INTEGER,
+        p1_reprises INTEGER,
+        p1_serie INTEGER,
+        p2_points INTEGER,
+        p2_reprises INTEGER,
+        p2_serie INTEGER,
+        entered_at TIMESTAMP,
+        entered_by INTEGER,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(tournoi_id, poule_number, match_number)
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_ddj_poule_matches_tournoi ON ddj_poule_matches(tournoi_id)`);
+
     // New columns on tournament_results for match-based imports
     await client.query(`ALTER TABLE tournament_results ADD COLUMN IF NOT EXISTS meilleure_partie REAL`);
     await client.query(`ALTER TABLE tournament_results ADD COLUMN IF NOT EXISTS poule_rank INTEGER`);

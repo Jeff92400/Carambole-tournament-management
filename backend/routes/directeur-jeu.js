@@ -697,6 +697,428 @@ router.put('/competitions/:id/poules', authenticateToken, requireDdJ, async (req
 });
 
 // ============================================================================
+// STEP 3 — MATCHS DE POULE
+// ============================================================================
+//
+// Workflow:
+//   1. On entry, GET /competitions/:id/poule-matches loads:
+//        - the current poule composition (from convocation_poules)
+//        - the scheduled match list (generated round-robin per poule size)
+//        - any already-saved results (from ddj_poule_matches)
+//        - the live classement for each poule with auto-tiebreak
+//   2. DdJ enters each match's scores (points / reprises / meilleure série
+//      per player). PUT /competitions/:id/poule-matches/:matchId persists.
+//   3. On each save, the live classement is recomputed and returned so the
+//      UI shows the updated standings without a second round-trip.
+//
+// Match point scoring (FFB convention, configurable via org settings
+// scoring_match_points_draw and scoring_match_points_loss):
+//   Default: win=2, draw=1, loss=0. Total per match = 2 for both players
+//   (1+1 if draw, 2+0 otherwise). Winner of the match is DERIVED from
+//   p1_points vs p2_points — no separate "outcome" column.
+//
+// Tiebreak (FFB rule, automatic — no manual arbitration):
+//   1. total_match_points desc
+//   2. moyenne (= sum(points) / sum(reprises)) desc
+//   3. best serie desc
+//   4. head-to-head (if exactly 2 tied, whoever won the direct match)
+//   5. licence asc (deterministic fallback)
+// ============================================================================
+
+/**
+ * Generate a round-robin match schedule for N players.
+ * Returns array of { match_number, p1_idx, p2_idx } where idx is 1-based
+ * into the poule's player order. Simple lexicographic order — fine for
+ * poules of 2-5 (which is the realistic range for a CDB competition).
+ */
+function roundRobinSchedule(numPlayers) {
+  const out = [];
+  let m = 1;
+  for (let i = 1; i <= numPlayers; i++) {
+    for (let j = i + 1; j <= numPlayers; j++) {
+      out.push({ match_number: m++, p1_idx: i, p2_idx: j });
+    }
+  }
+  return out;
+}
+
+/**
+ * Compute match points for a single match given player scores.
+ * Returns { p1_mp, p2_mp, outcome } where outcome ∈ 'p1_win' | 'p2_win' | 'draw'.
+ * Null scores ⇒ match not played ⇒ returns null.
+ */
+function computeMatchPoints(p1_points, p2_points, settings) {
+  if (p1_points == null || p2_points == null) return null;
+  const mpDraw = parseInt(settings.scoring_match_points_draw ?? '1', 10);
+  const mpLoss = parseInt(settings.scoring_match_points_loss ?? '0', 10);
+  const mpWin = 2; // FFB standard (with draws worth 1 each, a match always distributes 2 MP total)
+
+  if (p1_points > p2_points) return { p1_mp: mpWin, p2_mp: mpLoss, outcome: 'p1_win' };
+  if (p1_points < p2_points) return { p1_mp: mpLoss, p2_mp: mpWin, outcome: 'p2_win' };
+  return { p1_mp: mpDraw, p2_mp: mpDraw, outcome: 'draw' };
+}
+
+/**
+ * Build the live classement for a single poule given its player list and
+ * match results. Applies FFB auto-tiebreak rules. Returns an ordered array
+ * of { licence, player_name, club, wins, draws, losses, match_points,
+ * points_scored, reprises, moyenne, best_serie, rank, has_tie_below }.
+ */
+function buildPouleClassement(players, matches, settings) {
+  // Accumulate per-player stats
+  const statsByLic = new Map();
+  for (const p of players) {
+    statsByLic.set(p.licence_normalized, {
+      licence: p.licence,
+      licence_normalized: p.licence_normalized,
+      player_name: p.player_name,
+      club: p.club,
+      wins: 0, draws: 0, losses: 0,
+      match_points: 0,
+      points_scored: 0,
+      reprises: 0,
+      best_serie: 0,
+      h2h_wins: new Set() // whom this player beat head-to-head
+    });
+  }
+
+  for (const m of matches) {
+    if (m.p1_points == null || m.p2_points == null) continue;
+    const mp = computeMatchPoints(m.p1_points, m.p2_points, settings);
+    if (!mp) continue;
+    const s1 = statsByLic.get(m.p1_licence_normalized);
+    const s2 = statsByLic.get(m.p2_licence_normalized);
+    if (!s1 || !s2) continue;
+    s1.match_points += mp.p1_mp;
+    s2.match_points += mp.p2_mp;
+    s1.points_scored += m.p1_points;
+    s2.points_scored += m.p2_points;
+    s1.reprises += m.p1_reprises || 0;
+    s2.reprises += m.p2_reprises || 0;
+    s1.best_serie = Math.max(s1.best_serie, m.p1_serie || 0);
+    s2.best_serie = Math.max(s2.best_serie, m.p2_serie || 0);
+    if (mp.outcome === 'p1_win') { s1.wins++; s2.losses++; s1.h2h_wins.add(m.p2_licence_normalized); }
+    else if (mp.outcome === 'p2_win') { s2.wins++; s1.losses++; s2.h2h_wins.add(m.p1_licence_normalized); }
+    else { s1.draws++; s2.draws++; }
+  }
+
+  // Compute moyenne
+  const arr = Array.from(statsByLic.values()).map(s => ({
+    ...s,
+    moyenne: s.reprises > 0 ? s.points_scored / s.reprises : 0
+  }));
+
+  // FFB tiebreak chain
+  arr.sort((a, b) => {
+    if (b.match_points !== a.match_points) return b.match_points - a.match_points;
+    if (b.moyenne !== a.moyenne) return b.moyenne - a.moyenne;
+    if (b.best_serie !== a.best_serie) return b.best_serie - a.best_serie;
+    // Head-to-head (only resolves 2-way ties cleanly; if 3-way, fall through)
+    if (a.h2h_wins.has(b.licence_normalized) && !b.h2h_wins.has(a.licence_normalized)) return -1;
+    if (b.h2h_wins.has(a.licence_normalized) && !a.h2h_wins.has(b.licence_normalized)) return 1;
+    // Deterministic fallback
+    return String(a.licence).localeCompare(String(b.licence));
+  });
+
+  // Assign ranks + flag unresolved ties (players with equal MP/moyenne/serie
+  // that h2h didn't resolve — DdJ may want to flag this in UI later)
+  for (let i = 0; i < arr.length; i++) {
+    arr[i].rank = i + 1;
+    const next = arr[i + 1];
+    arr[i].has_tie_below = !!(next
+      && next.match_points === arr[i].match_points
+      && next.moyenne === arr[i].moyenne
+      && next.best_serie === arr[i].best_serie);
+    // Strip internal set before returning
+    delete arr[i].h2h_wins;
+  }
+
+  return arr;
+}
+
+/**
+ * Load everything Step 3 needs for a tournament:
+ *  - tournament header
+ *  - poules composition (from convocation_poules)
+ *  - scheduled matches (round-robin per poule size)
+ *  - saved results (from ddj_poule_matches)
+ *  - live classement per poule
+ */
+async function loadPouleMatches(db, orgId, tournoiId) {
+  const tournament = await new Promise((resolve, reject) => {
+    db.get(
+      `SELECT tournoi_id, nom, mode, categorie, debut, lieu
+       FROM tournoi_ext
+       WHERE tournoi_id = $1 AND ($2::int IS NULL OR organization_id = $2)`,
+      [tournoiId, orgId],
+      (err, row) => err ? reject(err) : resolve(row)
+    );
+  });
+  if (!tournament) return { error: 'not_found' };
+
+  // Load poule composition ordered canonically
+  const rows = await new Promise((resolve, reject) => {
+    db.all(
+      `SELECT cp.licence, cp.player_name, cp.club, cp.poule_number, cp.player_order,
+              p.first_name, p.last_name
+       FROM convocation_poules cp
+       LEFT JOIN players p
+         ON REPLACE(cp.licence, ' ', '') = REPLACE(p.licence, ' ', '')
+         AND ($2::int IS NULL OR p.organization_id = $2)
+       WHERE cp.tournoi_id = $1
+         AND UPPER(cp.licence) NOT LIKE 'TEST%'
+       ORDER BY cp.poule_number, cp.player_order NULLS LAST, cp.licence`,
+      [tournoiId, orgId],
+      (err, rs) => err ? reject(err) : resolve(rs || [])
+    );
+  });
+
+  // Saved matches (may be empty if DdJ hasn't entered anything yet)
+  const savedRows = await new Promise((resolve, reject) => {
+    db.all(
+      `SELECT id, poule_number, match_number, table_number,
+              p1_licence, p2_licence,
+              p1_points, p1_reprises, p1_serie,
+              p2_points, p2_reprises, p2_serie,
+              entered_at
+       FROM ddj_poule_matches
+       WHERE tournoi_id = $1
+       ORDER BY poule_number, match_number`,
+      [tournoiId],
+      (err, rs) => err ? reject(err) : resolve(rs || [])
+    );
+  });
+
+  // Settings for match point scoring
+  const settings = await appSettings.getOrgSettingsBatch(orgId, [
+    'scoring_match_points_draw',
+    'scoring_match_points_loss'
+  ]);
+
+  // Group by poule, build the schedule + merge saved data
+  const byPoule = new Map();
+  for (const r of rows) {
+    const pn = r.poule_number;
+    if (!byPoule.has(pn)) byPoule.set(pn, []);
+    byPoule.get(pn).push({
+      licence: r.licence,
+      licence_normalized: String(r.licence || '').replace(/\s+/g, ''),
+      player_name: r.player_name || `${r.last_name || ''} ${r.first_name || ''}`.trim() || r.licence,
+      club: r.club,
+      player_order: r.player_order
+    });
+  }
+
+  const savedByKey = new Map();
+  for (const s of savedRows) {
+    savedByKey.set(`${s.poule_number}:${s.match_number}`, s);
+  }
+
+  const poules = [];
+  for (const [pn, playersArr] of [...byPoule.entries()].sort((a, b) => a[0] - b[0])) {
+    const schedule = roundRobinSchedule(playersArr.length);
+    const matches = schedule.map(sch => {
+      const p1 = playersArr[sch.p1_idx - 1];
+      const p2 = playersArr[sch.p2_idx - 1];
+      const saved = savedByKey.get(`${pn}:${sch.match_number}`);
+      const m = {
+        id: saved ? saved.id : null,
+        match_number: sch.match_number,
+        table_number: saved ? saved.table_number : null,
+        p1_licence: p1.licence,
+        p1_licence_normalized: p1.licence_normalized,
+        p1_name: p1.player_name,
+        p1_club: p1.club,
+        p2_licence: p2.licence,
+        p2_licence_normalized: p2.licence_normalized,
+        p2_name: p2.player_name,
+        p2_club: p2.club,
+        p1_points: saved ? saved.p1_points : null,
+        p1_reprises: saved ? saved.p1_reprises : null,
+        p1_serie: saved ? saved.p1_serie : null,
+        p2_points: saved ? saved.p2_points : null,
+        p2_reprises: saved ? saved.p2_reprises : null,
+        p2_serie: saved ? saved.p2_serie : null,
+        entered_at: saved ? saved.entered_at : null,
+        is_played: saved && saved.p1_points != null && saved.p2_points != null
+      };
+      // Convenience: derive match points + outcome for UI
+      const mp = computeMatchPoints(m.p1_points, m.p2_points, settings);
+      m.p1_match_points = mp ? mp.p1_mp : null;
+      m.p2_match_points = mp ? mp.p2_mp : null;
+      m.outcome = mp ? mp.outcome : null;
+      return m;
+    });
+
+    const classement = buildPouleClassement(playersArr, matches, settings);
+
+    poules.push({
+      number: pn,
+      size: playersArr.length,
+      players: playersArr,
+      matches,
+      classement,
+      all_matches_played: matches.every(m => m.is_played),
+      ties_exist: classement.some(c => c.has_tie_below)
+    });
+  }
+
+  return { tournament, poules, settings };
+}
+
+// GET /api/directeur-jeu/competitions/:id/poule-matches
+router.get('/competitions/:id/poule-matches', authenticateToken, requireDdJ, async (req, res) => {
+  const db = getDb();
+  const orgId = req.user.organizationId || null;
+  const tournoiId = parseInt(req.params.id, 10);
+  if (!Number.isFinite(tournoiId)) {
+    return res.status(400).json({ error: 'ID tournoi invalide' });
+  }
+
+  try {
+    const result = await loadPouleMatches(db, orgId, tournoiId);
+    if (result.error === 'not_found') {
+      return res.status(404).json({ error: 'Tournoi introuvable' });
+    }
+    if (!result.poules || result.poules.length === 0) {
+      return res.status(400).json({
+        error: 'Aucune poule composée — retournez à l\'étape 2 pour générer et valider les poules'
+      });
+    }
+    res.json(result);
+  } catch (err) {
+    console.error('[DdJ] /poule-matches GET error:', err);
+    res.status(500).json({ error: 'Erreur lors du chargement des matchs' });
+  }
+});
+
+// PUT /api/directeur-jeu/competitions/:id/poule-matches
+// Body: { poule_number, match_number, p1_points, p1_reprises, p1_serie,
+//          p2_points, p2_reprises, p2_serie, table_number? }
+// Upserts the match and returns the updated classement for the poule.
+router.put('/competitions/:id/poule-matches', authenticateToken, requireDdJ, async (req, res) => {
+  const db = getDb();
+  const orgId = req.user.organizationId || null;
+  const tournoiId = parseInt(req.params.id, 10);
+  if (!Number.isFinite(tournoiId)) {
+    return res.status(400).json({ error: 'ID tournoi invalide' });
+  }
+
+  const b = req.body || {};
+  const pn = parseInt(b.poule_number, 10);
+  const mn = parseInt(b.match_number, 10);
+  if (!Number.isFinite(pn) || !Number.isFinite(mn)) {
+    return res.status(400).json({ error: 'poule_number et match_number requis' });
+  }
+
+  // Basic sanity checks on scores
+  const scoreFields = ['p1_points', 'p1_reprises', 'p1_serie', 'p2_points', 'p2_reprises', 'p2_serie'];
+  const parsed = {};
+  for (const f of scoreFields) {
+    const v = b[f];
+    if (v === null || v === undefined || v === '') {
+      parsed[f] = null;
+    } else {
+      const n = parseInt(v, 10);
+      if (!Number.isFinite(n) || n < 0) {
+        return res.status(400).json({ error: `${f} doit être un entier positif ou null` });
+      }
+      parsed[f] = n;
+    }
+  }
+
+  try {
+    // Verify tournament belongs to caller's org
+    const tournament = await new Promise((resolve, reject) => {
+      db.get(
+        `SELECT tournoi_id FROM tournoi_ext
+         WHERE tournoi_id = $1 AND ($2::int IS NULL OR organization_id = $2)`,
+        [tournoiId, orgId],
+        (err, row) => err ? reject(err) : resolve(row)
+      );
+    });
+    if (!tournament) {
+      return res.status(404).json({ error: 'Tournoi introuvable' });
+    }
+
+    // Reload the current poule composition so we can set p1/p2 licences
+    // from the actual state (defense against a stale client sending bogus
+    // matchNumber that doesn't match the current poule).
+    const ctx = await loadPouleMatches(db, orgId, tournoiId);
+    if (ctx.error) return res.status(404).json({ error: 'Tournoi introuvable' });
+    const poule = ctx.poules.find(p => p.number === pn);
+    if (!poule) return res.status(400).json({ error: 'Poule inconnue' });
+    const match = poule.matches.find(m => m.match_number === mn);
+    if (!match) return res.status(400).json({ error: 'Match inconnu dans cette poule' });
+
+    const tableNumber = b.table_number != null && b.table_number !== ''
+      ? parseInt(b.table_number, 10) || null
+      : null;
+
+    // UPSERT the match
+    await new Promise((resolve, reject) => {
+      db.run(
+        `INSERT INTO ddj_poule_matches
+           (tournoi_id, poule_number, match_number, table_number,
+            p1_licence, p2_licence,
+            p1_points, p1_reprises, p1_serie,
+            p2_points, p2_reprises, p2_serie,
+            entered_at, entered_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, CURRENT_TIMESTAMP, $13)
+         ON CONFLICT (tournoi_id, poule_number, match_number)
+         DO UPDATE SET
+           table_number = EXCLUDED.table_number,
+           p1_points = EXCLUDED.p1_points,
+           p1_reprises = EXCLUDED.p1_reprises,
+           p1_serie = EXCLUDED.p1_serie,
+           p2_points = EXCLUDED.p2_points,
+           p2_reprises = EXCLUDED.p2_reprises,
+           p2_serie = EXCLUDED.p2_serie,
+           entered_at = CURRENT_TIMESTAMP,
+           entered_by = EXCLUDED.entered_by`,
+        [
+          tournoiId, pn, mn, tableNumber,
+          match.p1_licence, match.p2_licence,
+          parsed.p1_points, parsed.p1_reprises, parsed.p1_serie,
+          parsed.p2_points, parsed.p2_reprises, parsed.p2_serie,
+          req.user.userId || null
+        ],
+        (err) => err ? reject(err) : resolve()
+      );
+    });
+
+    // Activity log
+    try {
+      await new Promise((resolve) => {
+        db.run(
+          `INSERT INTO activity_logs
+             (user_name, action_type, action_status, target_type, target_id, target_name, details, app_source)
+           VALUES ($1, 'ddj_match_saved', 'success', 'tournament', $2, $3, $4, 'directeur_jeu')`,
+          [
+            req.user.username || 'DdJ',
+            tournoiId,
+            `Tournoi ${tournoiId} / Poule ${pn} / Match ${mn}`,
+            JSON.stringify({ poule_number: pn, match_number: mn, ...parsed })
+          ],
+          () => resolve()
+        );
+      });
+    } catch (e) { /* non-fatal */ }
+
+    // Reload the poule so classement is correct after the new write
+    const reload = await loadPouleMatches(db, orgId, tournoiId);
+    const updatedPoule = reload.poules.find(p => p.number === pn);
+    res.json({
+      success: true,
+      poule: updatedPoule
+    });
+  } catch (err) {
+    console.error('[DdJ] /poule-matches PUT error:', err);
+    res.status(500).json({ error: 'Erreur lors de la sauvegarde du match' });
+  }
+});
+
+// ============================================================================
 // DEV-ONLY: seed spread moyennes for a tournament's convoked players
 // ============================================================================
 //

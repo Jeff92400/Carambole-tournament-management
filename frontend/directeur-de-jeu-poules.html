@@ -538,12 +538,12 @@
           const data = await resp.json().catch(() => ({}));
           throw new Error(data.error || `Erreur ${resp.status}`);
         }
-        showSaveStatus('Poules enregistrées ✓');
-        // Subtle UX: disable the Valider button post-save to signal "done"
-        document.querySelectorAll('.ddj-btn-primary').forEach(b => {
-          b.disabled = true;
-          b.textContent = '✓ Enregistré — prochaine étape saison 2026-27';
-        });
+        showSaveStatus('Poules enregistrées ✓ — redirection vers les matchs…');
+        // Navigate to Step 3 after a short delay (gives the user time to
+        // read the toast without feeling jerked around)
+        setTimeout(() => {
+          window.location.href = 'directeur-de-jeu-matchs.html?compId=' + compId;
+        }, 900);
       } catch (err) {
         console.error('[Poules] save error:', err);
         showSaveStatus('Erreur — ' + err.message, true);
