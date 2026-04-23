@@ -17,6 +17,13 @@
 /* Lecteur (read-only) role: hide write actions globally */
 body.role-lecteur .not-lecteur { display: none !important; }
 
+/* Hide elements tagged .non-admin-only when the current user IS an admin.
+   Conversely, non-admin users (viewer, lecteur, club, ligue_admin, directeur_jeu)
+   see these elements — typically top-level nav shortcuts (e.g. Statistiques)
+   that admins reach via the Settings page instead, to keep the admin navbar
+   uncrowded. The body.role-* class is set by auth-utils.js on DOMContentLoaded. */
+body.role-admin .non-admin-only { display: none !important; }
+
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   background: linear-gradient(135deg, var(--color-secondary) 0%, var(--color-secondary-dark) 100%);

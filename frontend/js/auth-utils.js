@@ -305,6 +305,20 @@ if (sessionStorage.getItem('token')) {
   setInterval(checkAppVersion, 60 * 60 * 1000); // 1 hour
 }
 
+// Tag <body> with role-<role> on every authenticated page so CSS can target
+// role-specific visibility without per-page JS. Pairs with rules like
+// `body.role-admin .non-admin-only { display: none !important; }` in styles.css.
+// Runs before DOMContentLoaded so there's no flash of hidden content.
+(function tagBodyWithRole() {
+  const role = sessionStorage.getItem('userRole');
+  if (!role) return;
+  const apply = () => {
+    if (document.body) document.body.classList.add('role-' + role);
+  };
+  if (document.body) apply();
+  else document.addEventListener('DOMContentLoaded', apply);
+})();
+
 // ============================================
 // Role-based navbar filtering
 // ============================================
@@ -347,8 +361,10 @@ function applyRoleBasedNav() {
       'import-tournament.html', 'import-tournois.html', 'import-external.html', 'import-config.html',
       'player-accounts.html', 'player-invitations.html', 'enrollment-requests.html',
       'activity-logs.html', 'admin-activity-logs.html', 'privacy-policy-editor.html',
-      'settings-reference.html', 'statistiques.html', 'clubs.html',
+      'settings-reference.html', 'clubs.html',
       'inscriptions-list.html'];
+    // Note: statistiques.html removed from club-restricted list (V 2.0.453) —
+    // stats are now accessible to all non-admin roles via a top-level nav link.
     const currentPage = window.location.pathname.split('/').pop();
     if (restrictedPages.includes(currentPage)) {
       window.location.href = 'dashboard.html';
