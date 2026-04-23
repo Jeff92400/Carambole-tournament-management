@@ -152,7 +152,6 @@ router.get('/competitions/:id/pointage', authenticateToken, requireDdJ, async (r
            cp.player_order,
            p.first_name, p.last_name,
            p.rank_libre, p.rank_cadre, p.rank_bande, p.rank_3bandes,
-           p.moyenne_generale,
            i.inscription_id,
            i.forfait,
            i.statut,
@@ -189,7 +188,10 @@ router.get('/competitions/:id/pointage', authenticateToken, requireDdJ, async (r
         rank_cadre: p.rank_cadre,
         rank_bande: p.rank_bande,
         rank_3bandes: p.rank_3bandes,
-        moyenne_generale: p.moyenne_generale,
+        // moyenne_generale: future column from the journées-mode spec — not
+        // yet migrated into players. Exposed as null for now; the front-end
+        // displays "—" via formatMoyenne().
+        moyenne_generale: null,
         present: !isForfait,
         commentaire: p.commentaire || null
       };
