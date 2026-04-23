@@ -109,8 +109,32 @@
       gap: 10px;
       padding: 8px 4px;
       border-bottom: 1px solid #eee;
+      cursor: pointer;
+      border-radius: 6px;
+      transition: all 0.15s;
+      user-select: none;
     }
     .ddj-poule-player:last-child { border-bottom: none; }
+    .ddj-poule-player:hover {
+      background: #f0f7ff;
+    }
+    .ddj-poule-player.selected {
+      background: linear-gradient(90deg, #fff3cd 0%, #ffe69c 100%);
+      border-left: 4px solid #ffc107;
+      box-shadow: 0 2px 6px rgba(255,193,7,0.3);
+    }
+    .ddj-poule-player.target-hint {
+      background: #e7f3ff;
+    }
+    .ddj-hint {
+      padding: 8px 12px;
+      background: #fff3cd;
+      border-left: 3px solid #ffc107;
+      border-radius: 4px;
+      font-size: 0.85em;
+      color: #856404;
+      margin-bottom: 10px;
+    }
     .ddj-poule-player .rank-pill {
       width: 24px; height: 24px;
       background: var(--color-secondary, #667eea);
@@ -324,6 +348,9 @@
 
     // State
     let currentProposal = null;
+    // Swap state: licence_normalized of the currently-selected player, or null.
+    // Tap to select, tap another to swap, tap same to deselect.
+    let selectedLicence = null;
 
     async function generateProposal() {
       document.getElementById('poulesContent').innerHTML = '<div class="ddj-loading">Génération des poules en cours…</div>';
@@ -365,15 +392,20 @@
       const poulesHtml = p.poules.map(pl => {
         const playersHtml = pl.players.map(pp => {
           const name = pp.player_name || `${pp.last_name || ''} ${pp.first_name || ''}`.trim();
-          const clubLine = [pp.club, /* rank would go here if we had it per-mode */].filter(Boolean).join(' · ');
+          const clubLine = [pp.club].filter(Boolean).join(' · ');
           let seedDisplay = '';
           if (p.seed_source === 'season_ranking' && pp.season_rank != null) {
             seedDisplay = `Classé ${pp.season_rank}<sup>${pp.season_rank === 1 ? 'er' : 'e'}</sup>`;
           } else if (p.seed_source === 'ffb_moyenne') {
             seedDisplay = `Moy. ${formatMoyenne(pp.moyenne_ffb)}`;
           }
+          const isSelected = selectedLicence === pp.licence_normalized;
+          const isTarget = selectedLicence && !isSelected;
+          const cls = ['ddj-poule-player'];
+          if (isSelected) cls.push('selected');
+          else if (isTarget) cls.push('target-hint');
           return `
-            <div class="ddj-poule-player">
+            <div class="${cls.join(' ')}" data-licence="${pp.licence_normalized}" role="button" tabindex="0">
               <div class="rank-pill">${pp.serpentine_rank}</div>
               <div style="flex: 1; min-width: 0;">
                 <div class="name">${escapeHtml(name)}</div>
@@ -395,6 +427,10 @@
         `;
       }).join('');
 
+      const swapHint = selectedLicence
+        ? '<div class="ddj-hint">👆 Touchez un autre joueur pour échanger leur position, ou touchez à nouveau le joueur sélectionné pour annuler.</div>'
+        : '<div class="ddj-hint" style="background:#f0f7ff;border-left-color:#1F4788;color:#1F4788;">💡 Touchez un joueur pour le sélectionner, puis touchez un autre pour les permuter (par ex. pour éviter de faire jouer deux joueurs du même club dans la même poule).</div>';
+
       document.getElementById('poulesContent').innerHTML = `
         <div class="ddj-info-strip">
           <span><strong>📋 ${p.total_players} joueur${p.total_players > 1 ? 's' : ''} présent${p.total_players > 1 ? 's' : ''}</strong> · ${escapeHtml(p.description)} · ${p.tables_needed} table${p.tables_needed > 1 ? 's' : ''}</span>
@@ -404,6 +440,8 @@
         <div style="background: #f0f7ff; border-left: 3px solid ${p.seed_source === 'insertion_order' ? '#dc3545' : '#1F4788'}; padding: 10px 14px; margin-bottom: 16px; border-radius: 4px; font-size: 0.88em; color: #333;">
           ${escapeHtml(seedExplain)}
         </div>
+
+        ${swapHint}
 
         <div class="ddj-poules-grid">${poulesHtml}</div>
 
@@ -419,6 +457,64 @@
           </button>
         </div>
       `;
+
+      // Wire swap clicks
+      document.querySelectorAll('.ddj-poule-player').forEach(el => {
+        el.addEventListener('click', () => onPlayerClick(el.dataset.licence));
+      });
+    }
+
+    /**
+     * Swap-two mechanism:
+     * - Tap a player → selected (highlighted)
+     * - Tap a different player → swap positions between their poules
+     * - Tap the same selected player → deselect (cancel)
+     *
+     * Sizes of each poule are preserved because we always swap 1-for-1.
+     */
+    function onPlayerClick(licence) {
+      if (!licence) return;
+      if (selectedLicence === licence) {
+        // Cancel selection
+        selectedLicence = null;
+        render();
+        return;
+      }
+      if (!selectedLicence) {
+        // First selection
+        selectedLicence = licence;
+        render();
+        return;
+      }
+      // Second selection → swap
+      performSwap(selectedLicence, licence);
+      selectedLicence = null;
+      render();
+    }
+
+    function findPlayerLocation(lic) {
+      for (let i = 0; i < currentProposal.poules.length; i++) {
+        const poule = currentProposal.poules[i];
+        for (let j = 0; j < poule.players.length; j++) {
+          if (poule.players[j].licence_normalized === lic) {
+            return { pouleIndex: i, playerIndex: j };
+          }
+        }
+      }
+      return null;
+    }
+
+    function performSwap(licA, licB) {
+      const a = findPlayerLocation(licA);
+      const b = findPlayerLocation(licB);
+      if (!a || !b) return;
+      const pouleA = currentProposal.poules[a.pouleIndex];
+      const pouleB = currentProposal.poules[b.pouleIndex];
+      // Swap the player objects
+      const tmp = pouleA.players[a.playerIndex];
+      pouleA.players[a.playerIndex] = pouleB.players[b.playerIndex];
+      pouleB.players[b.playerIndex] = tmp;
+      showSaveStatus('Joueurs permutés — n\'oubliez pas de valider');
     }
 
     async function saveProposal() {
