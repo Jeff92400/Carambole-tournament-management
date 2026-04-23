@@ -331,7 +331,7 @@
         : '';
 
       return `
-        <div class="ddj-comp-card ${statusClass}" data-comp-id="${comp.id || ''}">
+        <div class="ddj-comp-card ${statusClass}" data-comp-id="${comp.tournoi_id || comp.id || ''}">
           <div class="ddj-card-header">
             <span class="ddj-card-mode">${comp.mode || ''} ${comp.categorie || ''}</span>
             <span class="ddj-status-badge ${badgeClass}">${badgeLabel}</span>
