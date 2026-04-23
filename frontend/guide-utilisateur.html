@@ -1592,19 +1592,78 @@
       <li>Un super-administrateur qui impersonne un CDB voit un bouton <strong>« ← Retour Plateforme »</strong> pour revenir à l'espace SA.</li>
     </ul>
 
-    <h3>Roadmap — saison 2026-27</h3>
-    <p>Le module sera progressivement enrichi avec le workflow complet demandé par le District 93-94, en <strong>6 étapes</strong> qui remplaceront la feuille de match Excel actuelle (40+ onglets) :</p>
-    <ol class="steps">
-      <li><strong>Pointage</strong> : marquage des présences le matin</li>
-      <li><strong>Poules</strong> : génération automatique des poules en serpentine</li>
-      <li><strong>Matchs</strong> : saisie des résultats de chaque rencontre avec calcul temps-réel</li>
-      <li><strong>Bracket</strong> : tableau de phase finale (demi-finales, finale, petite finale)</li>
-      <li><strong>Classement</strong> : calcul automatique des positions finales et des points</li>
-      <li><strong>Export E2i</strong> : génération du fichier CSV compatible avec le système fédéral</li>
-    </ol>
+    <h3>Roadmap — workflow complet en 7 étapes</h3>
+    <p>Le module couvrira progressivement le parcours complet d'une journée de compétition, tel que demandé par le District 93-94. Il remplacera la feuille de match Excel actuelle (40+ onglets) par une interface tactile adaptée au téléphone et à la tablette.</p>
+
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Étape</th>
+          <th>Quand</th>
+          <th>Action du Directeur de Jeu</th>
+          <th>Statut</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>0</strong></td>
+          <td><strong>Sélection de la compétition</strong></td>
+          <td>Arrivée sur site</td>
+          <td>Le DdJ voit les compétitions du jour sous forme de cartes et sélectionne celle qu'il gère</td>
+          <td>✅ Disponible</td>
+        </tr>
+        <tr>
+          <td><strong>1</strong></td>
+          <td><strong>Pointage</strong></td>
+          <td>Avant le tournoi</td>
+          <td>Cocher les joueurs présents, marquer les forfaits</td>
+          <td>⏳ Saison 2026-27</td>
+        </tr>
+        <tr>
+          <td><strong>2</strong></td>
+          <td><strong>Génération des poules</strong></td>
+          <td>Avant le tournoi</td>
+          <td>Valider les poules proposées (serpentine auto), ajuster si besoin, affecter les tables</td>
+          <td>⏳ Saison 2026-27</td>
+        </tr>
+        <tr>
+          <td><strong>3</strong></td>
+          <td><strong>Matchs de poules</strong></td>
+          <td>Matin</td>
+          <td>Saisir les scores : Points J1 / J2, Reprises, Meilleures séries. PM / MGP / MPART calculés en temps réel</td>
+          <td>⏳ Saison 2026-27</td>
+        </tr>
+        <tr>
+          <td><strong>4</strong></td>
+          <td><strong>Phase finale</strong> (bracket)</td>
+          <td>Après-midi</td>
+          <td>Saisir les scores des demi-finales, finale, petite finale. Qualifiés et bracket pré-remplis automatiquement</td>
+          <td>⏳ Saison 2026-27</td>
+        </tr>
+        <tr>
+          <td><strong>5</strong></td>
+          <td><strong>Matchs de classement</strong></td>
+          <td>Après-midi</td>
+          <td>Saisir les scores des matchs de classement (tour 2 optionnel avec croisements)</td>
+          <td>⏳ Saison 2026-27</td>
+        </tr>
+        <tr>
+          <td><strong>6</strong></td>
+          <td><strong>Export E2i</strong></td>
+          <td>Fin de journée</td>
+          <td>Valider le classement final, générer le fichier CSV E2i automatiquement</td>
+          <td>⏳ Saison 2026-27</td>
+        </tr>
+      </tbody>
+    </table>
 
     <div class="info-card">
-      <strong>💡 Bon à savoir :</strong> l'écran d'accueil actuel permet déjà au DdJ de consulter les compétitions du jour. Le clic sur une carte pour démarrer le pointage n'est pas encore actif — il arrivera avec la saison 2026-27.
+      <strong>💡 Bon à savoir :</strong> l'étape 0 (sélection de la compétition) est déjà disponible aujourd'hui — le DdJ peut se connecter et consulter les compétitions du jour. Le clic sur une carte pour démarrer le pointage (étape 1) n'est pas encore actif : il arrivera avec les 6 étapes suivantes à la saison 2026-27.
+    </div>
+
+    <div class="info-card accent">
+      <strong>🔗 Parité avec Excel :</strong> toutes les données de sortie du fichier Excel actuel seront conservées — PM, Points, Reprises, Meilleure série, MGP, MPART, Classement poule, Points rang, Bonus, etc. Le Directeur de Jeu retrouvera exactement les mêmes résultats, générés automatiquement. L'export E2i à l'étape 6 produit les données brutes (matchs + positions) au format CSV ; le calcul des points saison, bonus moyenne et bonus catégorie mixte reste géré par le système d'import existant de l'App Tournois (aucune duplication de logique).
     </div>
   </section>
 
