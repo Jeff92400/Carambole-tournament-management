@@ -94,11 +94,47 @@
     <div class="navbar">
       <h2><img id="app-header-icon" src="images/FrenchBillard-Icon-small.png" alt="" style="height: 48px; width: 48px; vertical-align: middle; margin-right: 8px;" onerror="this.src='images/FrenchBillard-Icon-small.png';"><span id="app-org-name" data-page-title="Phase finale">CDB</span></h2>
       <div class="nav-links">
-        <a href="dashboard.html">Accueil</a>
-        <a href="rankings.html" class="nav-tooltip" data-tooltip="Classement par catégorie">Classements</a>
-        <a href="generate-poules.html" class="not-club nav-tooltip" data-tooltip="Compétitions / Convocations">Compétitions</a>
-        <a href="settings.html" class="admin-only">Paramètres</a>
-        <a href="statistiques.html" class="non-admin-only nav-tooltip" data-tooltip="Statistiques clubs et joueurs">&#128200; Statistiques</a>
+        <a href="dashboard.html" class="nav-tooltip" data-tooltip="Tableau de bord">🏠 Accueil</a>
+
+        <!-- Club-role only (legacy link, preserved) -->
+        <a href="players-list.html" class="club-visible" style="display:none;">Joueurs</a>
+
+        <!-- Compétitions mega-menu -->
+        <div class="nav-dropdown not-club">
+          <a href="generate-poules.html" class="nav-dropdown-btn active">🏆 Compétitions</a>
+          <div class="nav-dropdown-content">
+            <a href="generate-poules.html"><span class="nav-icon">🎯</span>Générer les poules / Convocations</a>
+            <a href="inscriptions-viewer.html"><span class="nav-icon">📝</span>Inscriptions</a>
+            <a href="tournois-list.html"><span class="nav-icon">📅</span>Tournois à venir</a>
+            <a href="calendar.html"><span class="nav-icon">🗓️</span>Calendrier</a>
+          </div>
+        </div>
+
+        <!-- Données mega-menu -->
+        <div class="nav-dropdown">
+          <a href="rankings.html" class="nav-dropdown-btn">📊 Données</a>
+          <div class="nav-dropdown-content">
+            <a href="rankings.html"><span class="nav-icon">🏅</span>Classements</a>
+            <a href="statistiques.html"><span class="nav-icon">📈</span>Statistiques</a>
+          </div>
+        </div>
+
+        <!-- Com joueurs -->
+        <a href="emailing.html" class="not-club nav-tooltip" data-tooltip="Annonces, relances, résultats, convocations">📧 Com joueurs</a>
+
+        <!-- Paramètres mega-menu (admin-only) -->
+        <div class="nav-dropdown admin-only">
+          <a href="settings-admin.html" class="nav-dropdown-btn">⚙️ Paramètres</a>
+          <div class="nav-dropdown-content">
+            <a href="settings-admin.html#organisation"><span class="nav-icon">🏢</span>Organisation</a>
+            <a href="settings-admin.html#utilisateurs"><span class="nav-icon">👥</span>Utilisateurs</a>
+            <a href="settings-admin.html#competitions"><span class="nav-icon">🏆</span>Compétitions</a>
+            <a href="settings-admin.html#espace-joueur"><span class="nav-icon">📱</span>Espace Joueur</a>
+            <a href="settings-admin.html#maintenance"><span class="nav-icon">🔧</span>Maintenance</a>
+            <a href="settings-admin.html#outils"><span class="nav-icon">🛠️</span>Outils</a>
+          </div>
+        </div>
+
         <a href="#" id="logoutBtn" class="nav-logout">Déconnexion</a>
       </div>
     </div>
