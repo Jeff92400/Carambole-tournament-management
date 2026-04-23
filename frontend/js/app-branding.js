@@ -135,7 +135,13 @@ function injectSAReturnButton() {
 }
 
 /**
- * Inject "DdJ" nav link next to Compétitions for admins (if module enabled)
+ * Inject "Directeur de Jeu" nav link (if module enabled).
+ *
+ * Placement rule: since V 2.0.457 the admin nav is a 5-bucket mega-menu,
+ * so DdJ goes INSIDE the Compétitions dropdown panel (semantically it's a
+ * tournament-day workflow). If the page hasn't been migrated to the mega-
+ * menu yet (very unlikely now), we fall back to the legacy flat-sibling
+ * placement to stay safe.
  */
 async function injectDdJNavLink() {
   try {
@@ -149,16 +155,31 @@ async function injectDdJNavLink() {
     const data = await resp.json();
     if (data.enable_ddj_module !== 'true') return;
 
-    // Find the Compétitions link in navbar
     const navLinks = document.querySelector('.nav-links');
     if (!navLinks) return;
-    const compLink = navLinks.querySelector('a[href="generate-poules.html"]');
-    if (!compLink) return;
 
-    // Don't inject if already present
+    // Don't inject if already present (idempotent)
     if (navLinks.querySelector('a[href="directeur-de-jeu.html"]')) return;
 
-    // Create DdJ link and insert after Compétitions
+    // Preferred placement (mega-menu, V 2.0.457+): inside the Compétitions
+    // dropdown panel, as the last sub-item.
+    const compBtn = navLinks.querySelector('.nav-dropdown-btn[href="generate-poules.html"]');
+    if (compBtn) {
+      const dropdown = compBtn.closest('.nav-dropdown');
+      const panel = dropdown && dropdown.querySelector('.nav-dropdown-content');
+      if (panel) {
+        const link = document.createElement('a');
+        link.href = 'directeur-de-jeu.html';
+        link.className = 'admin-only';
+        link.innerHTML = '<span class="nav-icon">🎮</span>Directeur de Jeu';
+        panel.appendChild(link);
+        return;
+      }
+    }
+
+    // Legacy fallback: flat sibling after the Compétitions link.
+    const compLink = navLinks.querySelector('a[href="generate-poules.html"]');
+    if (!compLink) return;
     const ddjLink = document.createElement('a');
     ddjLink.href = 'directeur-de-jeu.html';
     ddjLink.className = 'admin-only nav-tooltip';
