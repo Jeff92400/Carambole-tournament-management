@@ -315,4 +315,134 @@ router.put('/competitions/:id/pointage/:licence', authenticateToken, requireDdJ,
   }
 });
 
+// ============================================================================
+// DEV-ONLY: seed spread moyennes for a tournament's convoked players
+// ============================================================================
+//
+// Purpose: unblock Step 2 (Génération des poules) testing on a demo CDB where
+// the players were seeded without FFB classifications. Without moyennes, the
+// serpentine fallback from V 2.0.448 lands on "insertion order" which doesn't
+// let us visually verify the strong-vs-weak distribution across poules.
+//
+// Behavior: for the tournament :id, walk the convocation_poules list IN ORDER
+// and assign each player a linearly-descending moyenne (e.g. 9 players →
+// 2.50, 2.35, 2.20, ..., 1.30). UPSERT into player_ffb_classifications for
+// the given game_mode + current season so `/api/players/ffb-moyennes` can
+// consume it.
+//
+// Idempotent: re-running overwrites with the same values. Non-destructive on
+// tournaments that already had moyennes — but it DOES overwrite, so only use
+// on demo/test tournaments.
+//
+// Gate: admin-only + query-string secret. Delete this endpoint when demo
+// seeding is no longer needed (tracked as "temporary" per CLAUDE.md pattern).
+// ============================================================================
+router.post('/dev/seed-moyennes/:id', authenticateToken, async (req, res) => {
+  const db = getDb();
+  const orgId = req.user.organizationId || null;
+  const tournoiId = parseInt(req.params.id, 10);
+  const secret = req.query.secret;
+
+  // Soft-gate: require role=admin AND a secret. Not production-grade security
+  // (the secret is shared), but sufficient to deter accidental hits.
+  if (req.user.role !== 'admin' && !req.user.admin) {
+    return res.status(403).json({ error: 'Réservé aux administrateurs' });
+  }
+  if (secret !== 'seed-demo-moyennes-2026') {
+    return res.status(403).json({ error: 'Secret manquant ou invalide' });
+  }
+  if (!Number.isFinite(tournoiId)) {
+    return res.status(400).json({ error: 'ID tournoi invalide' });
+  }
+
+  try {
+    // Read the tournament + its mode + current season
+    const tournament = await new Promise((resolve, reject) => {
+      db.get(
+        `SELECT tournoi_id, nom, mode, categorie, debut
+         FROM tournoi_ext
+         WHERE tournoi_id = $1 AND ($2::int IS NULL OR organization_id = $2)`,
+        [tournoiId, orgId],
+        (err, row) => err ? reject(err) : resolve(row)
+      );
+    });
+    if (!tournament) {
+      return res.status(404).json({ error: 'Tournoi introuvable' });
+    }
+
+    // Resolve the game_mode_id from the tournament's mode string.
+    // Handles whitespace variants ("3 BANDES" vs "3BANDES") per the project rule.
+    const gameMode = await new Promise((resolve, reject) => {
+      db.get(
+        `SELECT id, code FROM game_modes
+         WHERE UPPER(REPLACE(code, ' ', '')) = UPPER(REPLACE($1, ' ', ''))
+         LIMIT 1`,
+        [tournament.mode],
+        (err, row) => err ? reject(err) : resolve(row)
+      );
+    });
+    if (!gameMode) {
+      return res.status(400).json({ error: `Mode de jeu introuvable : ${tournament.mode}` });
+    }
+
+    // Determine the current season from the tournament date.
+    // Simple rule: September onwards = (Y)-(Y+1); otherwise (Y-1)-(Y).
+    const d = new Date(tournament.debut);
+    const y = d.getFullYear();
+    const season = d.getMonth() >= 8 ? `${y}-${y + 1}` : `${y - 1}-${y}`;
+
+    // Pull the convoked licences in the canonical DdJ order
+    const convoked = await new Promise((resolve, reject) => {
+      db.all(
+        `SELECT licence, player_name
+         FROM convocation_poules
+         WHERE tournoi_id = $1
+         ORDER BY player_order NULLS LAST, licence`,
+        [tournoiId],
+        (err, rows) => err ? reject(err) : resolve(rows || [])
+      );
+    });
+    if (convoked.length === 0) {
+      return res.status(404).json({ error: 'Aucun joueur convoqué pour ce tournoi' });
+    }
+
+    // Generate linearly-descending moyennes from 2.50 down to 1.00.
+    // Clamped so even a single-player tournament still gets a sane value.
+    const top = 2.50;
+    const bottom = 1.00;
+    const n = convoked.length;
+    const step = n > 1 ? (top - bottom) / (n - 1) : 0;
+
+    const seeded = [];
+    for (let i = 0; i < n; i++) {
+      const moyenne = Number((top - step * i).toFixed(3));
+      const licence = convoked[i].licence;
+
+      await new Promise((resolve, reject) => {
+        db.run(
+          `INSERT INTO player_ffb_classifications (licence, game_mode_id, season, moyenne_ffb, updated_at)
+           VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
+           ON CONFLICT (licence, game_mode_id, season)
+           DO UPDATE SET moyenne_ffb = EXCLUDED.moyenne_ffb, updated_at = CURRENT_TIMESTAMP`,
+          [licence, gameMode.id, season, moyenne],
+          (err) => err ? reject(err) : resolve()
+        );
+      });
+
+      seeded.push({ licence, player_name: convoked[i].player_name, moyenne });
+    }
+
+    res.json({
+      success: true,
+      tournament: { id: tournoiId, nom: tournament.nom, mode: tournament.mode, season },
+      game_mode: gameMode.code,
+      seeded_count: seeded.length,
+      seeded
+    });
+  } catch (err) {
+    console.error('[DdJ dev/seed-moyennes] error:', err);
+    res.status(500).json({ error: 'Erreur lors du seeding' });
+  }
+});
+
 module.exports = router;
