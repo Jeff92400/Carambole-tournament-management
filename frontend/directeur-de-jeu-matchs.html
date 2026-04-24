@@ -184,6 +184,46 @@
       border-color: var(--color-primary, #1F4788);
       box-shadow: 0 0 0 3px rgba(31,71,136,0.15);
     }
+    .score-input.clamped {
+      animation: clamp-flash 0.35s ease;
+    }
+    @keyframes clamp-flash {
+      0%   { background: white; }
+      40%  { background: #ffd4d4; border-color: #dc3545; }
+      100% { background: white; }
+    }
+    .score-input.autofilled {
+      animation: autofill-flash 0.45s ease;
+    }
+    @keyframes autofill-flash {
+      0%   { background: white; }
+      30%  { background: #d4e9ff; border-color: #1F4788; }
+      100% { background: white; }
+    }
+    .match-params-strip {
+      background: #e9f0f8;
+      padding: 5px 10px;
+      border-radius: 6px;
+      font-size: 0.82em;
+      color: #1F4788;
+      font-weight: 600;
+      margin-bottom: 12px;
+      text-align: center;
+    }
+    .match-moyenne {
+      font-size: 0.82em;
+      color: #555;
+      font-weight: 600;
+      text-align: center;
+      margin-top: 6px;
+      padding: 4px 8px;
+      background: white;
+      border-radius: 4px;
+    }
+    .match-moyenne .val {
+      color: var(--color-primary, #1F4788);
+      font-weight: 700;
+    }
 
     .match-actions {
       display: flex;
@@ -427,6 +467,7 @@
     let state = {
       tournament: null,
       poules: [],
+      gameParams: { distance: null, distance_reduite: null, reprises: null, moyenne_mini: null, moyenne_maxi: null },
       activeTab: 1 // poule number currently displayed
     };
 
@@ -440,6 +481,7 @@
         const data = await resp.json();
         state.tournament = data.tournament;
         state.poules = data.poules;
+        state.gameParams = data.game_params || state.gameParams;
         // Default to first poule if activeTab isn't valid
         if (!state.poules.find(p => p.number === state.activeTab)) {
           state.activeTab = state.poules[0]?.number || 1;
@@ -508,10 +550,84 @@
           saveMatch(pn, mn);
         });
       });
-      // Live-highlight winner/draw as inputs change
+      // Per-match input wiring: clamping to max, auto-copy reprises between
+      // players, live moyenne update, and winner/draw shading.
       document.querySelectorAll('.match-card').forEach(card => {
         const inputs = card.querySelectorAll('.score-input');
-        inputs.forEach(i => i.addEventListener('input', () => updateMatchVisualState(card)));
+        inputs.forEach(i => {
+          i.addEventListener('input', () => {
+            clampInput(i);
+            autoCopyReprises(card, i);
+            updateMatchVisualState(card);
+            updateLiveMoyennes(card);
+          });
+        });
+      });
+    }
+
+    /**
+     * Clamp a numeric input's value against its own `max` attribute.
+     * Triggered on every keystroke so a typo like "65" in a 60-pt field
+     * gets snapped back to 60 immediately, with a short red flash to make
+     * the DdJ notice.
+     */
+    function clampInput(input) {
+      const raw = input.value;
+      if (raw === '') return;
+      const n = Number(raw);
+      if (!Number.isFinite(n)) return;
+      const max = input.max !== '' ? Number(input.max) : null;
+      const min = input.min !== '' ? Number(input.min) : 0;
+      let clamped = n;
+      if (max != null && clamped > max) clamped = max;
+      if (clamped < min) clamped = min;
+      if (clamped !== n) {
+        input.value = String(clamped);
+        input.classList.remove('clamped');
+        // force reflow to restart the animation
+        void input.offsetWidth;
+        input.classList.add('clamped');
+      }
+    }
+
+    /**
+     * Reprises are always shared between the two players in a billiard
+     * match (they alternate at the table). When the DdJ enters reprises
+     * for one player, copy the same value to the other IF the other's
+     * reprises field is empty. Don't overwrite a value the DdJ already
+     * typed — they might have a legitimate reason (abandoned match, etc.).
+     */
+    function autoCopyReprises(card, sourceInput) {
+      const f = sourceInput.dataset.field;
+      if (f !== 'p1_reprises' && f !== 'p2_reprises') return;
+      if (sourceInput.value === '') return;
+      const otherField = f === 'p1_reprises' ? 'p2_reprises' : 'p1_reprises';
+      const target = card.querySelector(`[data-field="${otherField}"]`);
+      if (!target || target.value !== '') return;
+      target.value = sourceInput.value;
+      target.classList.remove('autofilled');
+      void target.offsetWidth;
+      target.classList.add('autofilled');
+    }
+
+    /**
+     * Live moyenne per player: points / reprises. Updated on every
+     * keystroke so the DdJ sees the per-match average build up as they
+     * type. Shown under the MS input so the column stays tidy.
+     */
+    function updateLiveMoyennes(card) {
+      ['p1', 'p2'].forEach(side => {
+        const ptsEl = card.querySelector(`[data-field="${side}_points"]`);
+        const repEl = card.querySelector(`[data-field="${side}_reprises"]`);
+        const moyEl = card.querySelector(`[data-role="moyenne-${side}"] .val`);
+        if (!ptsEl || !repEl || !moyEl) return;
+        const pts = ptsEl.value === '' ? null : Number(ptsEl.value);
+        const rep = repEl.value === '' ? null : Number(repEl.value);
+        if (pts == null || rep == null || rep === 0 || !Number.isFinite(pts) || !Number.isFinite(rep)) {
+          moyEl.textContent = '—';
+          return;
+        }
+        moyEl.textContent = formatMoyenne(pts / rep);
       });
     }
 
@@ -541,6 +657,28 @@
         else { col1Class += ' draw'; col2Class += ' draw'; }
       }
 
+      // Reference strip — show category's target distance + reprises max so
+      // the DdJ sees "what the match is aiming for" at a glance. Same values
+      // are used for input clamping below.
+      const dist = state.gameParams.distance;
+      const rep = state.gameParams.reprises;
+      const paramStrip = (dist || rep)
+        ? `<div class="match-params-strip">🎯 Distance : ${dist ?? '?'} pts · Reprises max : ${rep ?? '?'}</div>`
+        : '';
+
+      // Compute live moyennes from the SAVED values (will be refreshed on-the-fly
+      // by input handlers). points_per_repris = points / reprises, 3 decimals.
+      const m1 = (m.p1_points != null && m.p1_reprises > 0) ? (m.p1_points / m.p1_reprises) : null;
+      const m2 = (m.p2_points != null && m.p2_reprises > 0) ? (m.p2_points / m.p2_reprises) : null;
+      const moyenneP1Html = `<div class="match-moyenne" data-role="moyenne-p1">Moyenne : <span class="val">${formatMoyenne(m1)}</span></div>`;
+      const moyenneP2Html = `<div class="match-moyenne" data-role="moyenne-p2">Moyenne : <span class="val">${formatMoyenne(m2)}</span></div>`;
+
+      // HTML max attributes for the number inputs so the browser AND our JS
+      // clamping agree on the ceiling. We still clamp in JS because the
+      // browser's native max isn't enforced on typing.
+      const maxPts = dist != null ? ` max="${dist}"` : '';
+      const maxRep = rep != null ? ` max="${rep}"` : '';
+
       return `
         <div class="match-card ${playedClass}" data-match="${m.match_number}">
           <div class="match-card-header">
@@ -548,6 +686,7 @@
             <span class="match-status ${statusCls}">${statusLabel}</span>
           </div>
           <div class="match-card-body">
+            ${paramStrip}
             <div class="match-players">
               <div class="match-player">
                 <div class="name">${escapeHtml(m.p1_name)}</div>
@@ -565,37 +704,39 @@
                 <div class="score-col-header">${escapeHtml(m.p1_name)}</div>
                 <div class="score-row">
                   <span class="score-label">Points :</span>
-                  <input type="number" class="score-input" data-field="p1_points" inputmode="numeric" min="0"
+                  <input type="number" class="score-input" data-field="p1_points" inputmode="numeric" min="0"${maxPts}
                          value="${m.p1_points != null ? m.p1_points : ''}">
                 </div>
                 <div class="score-row">
                   <span class="score-label">Reprises :</span>
-                  <input type="number" class="score-input" data-field="p1_reprises" inputmode="numeric" min="0"
+                  <input type="number" class="score-input" data-field="p1_reprises" inputmode="numeric" min="0"${maxRep}
                          value="${m.p1_reprises != null ? m.p1_reprises : ''}">
                 </div>
                 <div class="score-row">
                   <span class="score-label">Meill. série :</span>
-                  <input type="number" class="score-input" data-field="p1_serie" inputmode="numeric" min="0"
+                  <input type="number" class="score-input" data-field="p1_serie" inputmode="numeric" min="0"${maxPts}
                          value="${m.p1_serie != null ? m.p1_serie : ''}">
                 </div>
+                ${moyenneP1Html}
               </div>
               <div class="${col2Class}" data-side="p2">
                 <div class="score-col-header">${escapeHtml(m.p2_name)}</div>
                 <div class="score-row">
                   <span class="score-label">Points :</span>
-                  <input type="number" class="score-input" data-field="p2_points" inputmode="numeric" min="0"
+                  <input type="number" class="score-input" data-field="p2_points" inputmode="numeric" min="0"${maxPts}
                          value="${m.p2_points != null ? m.p2_points : ''}">
                 </div>
                 <div class="score-row">
                   <span class="score-label">Reprises :</span>
-                  <input type="number" class="score-input" data-field="p2_reprises" inputmode="numeric" min="0"
+                  <input type="number" class="score-input" data-field="p2_reprises" inputmode="numeric" min="0"${maxRep}
                          value="${m.p2_reprises != null ? m.p2_reprises : ''}">
                 </div>
                 <div class="score-row">
                   <span class="score-label">Meill. série :</span>
-                  <input type="number" class="score-input" data-field="p2_serie" inputmode="numeric" min="0"
+                  <input type="number" class="score-input" data-field="p2_serie" inputmode="numeric" min="0"${maxPts}
                          value="${m.p2_serie != null ? m.p2_serie : ''}">
                 </div>
+                ${moyenneP2Html}
               </div>
             </div>
 

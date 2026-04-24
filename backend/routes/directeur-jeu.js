@@ -856,6 +856,42 @@ async function loadPouleMatches(db, orgId, tournoiId) {
   });
   if (!tournament) return { error: 'not_found' };
 
+  // Game parameters for this tournament — needed so the DdJ match screen
+  // can (a) show the targets (distance, reprises), (b) hard-clamp inputs
+  // to those maxima so a typo can't produce 65 pts for a 60-pts game, and
+  // (c) display the moyenne range (for future in-range sanity check).
+  // Priority: per-tournament override > per-org default in game_parameters.
+  // Mode/categorie match uses the UPPER+REPLACE pattern for whitespace tolerance.
+  let gameParams = { distance: null, distance_reduite: null, reprises: null, moyenne_mini: null, moyenne_maxi: null };
+  try {
+    const override = await new Promise((resolve) => {
+      db.get(
+        `SELECT distance, reprises FROM tournament_parameter_overrides WHERE tournoi_id = $1`,
+        [tournoiId],
+        (err, row) => resolve(err ? null : row)
+      );
+    });
+    const defaults = await new Promise((resolve) => {
+      db.get(
+        `SELECT distance, distance_reduite, reprises, moyenne_mini, moyenne_maxi
+         FROM game_parameters
+         WHERE UPPER(REPLACE(mode, ' ', '')) = UPPER(REPLACE($1, ' ', ''))
+           AND UPPER(categorie) = UPPER($2)
+           AND ($3::int IS NULL OR organization_id = $3)
+         LIMIT 1`,
+        [tournament.mode || '', tournament.categorie || '', orgId],
+        (err, row) => resolve(err ? null : row)
+      );
+    });
+    if (defaults) gameParams = { ...defaults };
+    // Override wins for distance/reprises only (reduced distance + moyennes
+    // come from the category, not the per-tournament override)
+    if (override && override.distance != null) gameParams.distance = override.distance;
+    if (override && override.reprises != null) gameParams.reprises = override.reprises;
+  } catch (e) {
+    // Non-fatal — DdJ screen works without the reference strip, just no clamping
+  }
+
   // Load poule composition ordered canonically
   const rows = await new Promise((resolve, reject) => {
     db.all(
@@ -963,7 +999,7 @@ async function loadPouleMatches(db, orgId, tournoiId) {
     });
   }
 
-  return { tournament, poules, settings };
+  return { tournament, poules, settings, game_params: gameParams };
 }
 
 // GET /api/directeur-jeu/competitions/:id/poule-matches
@@ -1050,6 +1086,27 @@ router.put('/competitions/:id/poule-matches', authenticateToken, requireDdJ, asy
     if (!poule) return res.status(400).json({ error: 'Poule inconnue' });
     const match = poule.matches.find(m => m.match_number === mn);
     if (!match) return res.status(400).json({ error: 'Match inconnu dans cette poule' });
+
+    // Server-side max validation — defense in depth. Client clamps but a
+    // buggy / malicious client could still POST 999; we reject here so the
+    // DB never holds points > distance_max or reprises > reprises_max.
+    const gp = ctx.game_params || {};
+    if (gp.distance != null) {
+      if (parsed.p1_points != null && parsed.p1_points > gp.distance) {
+        return res.status(400).json({ error: `Points J1 supérieurs à la distance (${gp.distance})` });
+      }
+      if (parsed.p2_points != null && parsed.p2_points > gp.distance) {
+        return res.status(400).json({ error: `Points J2 supérieurs à la distance (${gp.distance})` });
+      }
+    }
+    if (gp.reprises != null) {
+      if (parsed.p1_reprises != null && parsed.p1_reprises > gp.reprises) {
+        return res.status(400).json({ error: `Reprises J1 supérieures au maximum (${gp.reprises})` });
+      }
+      if (parsed.p2_reprises != null && parsed.p2_reprises > gp.reprises) {
+        return res.status(400).json({ error: `Reprises J2 supérieures au maximum (${gp.reprises})` });
+      }
+    }
 
     const tableNumber = b.table_number != null && b.table_number !== ''
       ? parseInt(b.table_number, 10) || null
