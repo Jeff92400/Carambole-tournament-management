@@ -1923,6 +1923,82 @@ router.put('/competitions/:id/consolante', authenticateToken, requireDdJ, async 
 });
 
 // ============================================================================
+// Step 6 — Récapitulatif (consolidated read-only view)
+// ============================================================================
+//
+// Aggregates the outputs of Steps 3, 4 and 5 into a single payload so the
+// front-end can render a printable "feuille de competition" and feed the
+// eventual E2i export. All data comes from existing loaders — this endpoint
+// does not persist anything new.
+//
+// Response shape (all sections are always present; check can_start flags for
+// progress gating):
+//   {
+//     tournament, game_params,
+//     poules: [{ number, size, players, matches, classement, all_matches_played }, ...],
+//     bracket: { can_start, qualifiers, non_qualifiers, phases, final_places },
+//     consolante: { can_start, consolante_size, phases, final_places },
+//     overall_classement: [{ place, licence, name }, ...]  // 1 -> N combined
+//   }
+// ============================================================================
+router.get('/competitions/:id/recap', authenticateToken, requireDdJ, async (req, res) => {
+  const db = getDb();
+  const orgId = req.user.organizationId || null;
+  const tournoiId = parseInt(req.params.id, 10);
+  if (!Number.isFinite(tournoiId)) {
+    return res.status(400).json({ error: 'ID tournoi invalide' });
+  }
+  try {
+    // loadConsolante internally fetches bracket + poule data, but we also
+    // need the raw poule matches + classement that only loadPouleMatches
+    // exposes directly — so we call both. They hit the same tables, minimal
+    // overhead; cleaner than leaking intermediate state through loadBracket.
+    const pouleCtx = await loadPouleMatches(db, orgId, tournoiId);
+    if (pouleCtx.error) {
+      return res.status(pouleCtx.status || 500).json({ error: pouleCtx.error });
+    }
+    const bracketCtx = await loadBracket(db, orgId, tournoiId);
+    if (bracketCtx.error) {
+      return res.status(bracketCtx.status || 500).json({ error: bracketCtx.error });
+    }
+    const consolanteCtx = await loadConsolante(db, orgId, tournoiId);
+    if (consolanteCtx.error) {
+      return res.status(consolanteCtx.status || 500).json({ error: consolanteCtx.error });
+    }
+
+    // Overall classement: bracket 1-4 + consolante 5+
+    const overall = [
+      ...((bracketCtx.final_places) || []),
+      ...((consolanteCtx.final_places) || [])
+    ];
+
+    res.json({
+      tournament: pouleCtx.tournament,
+      game_params: pouleCtx.game_params,
+      poules: pouleCtx.poules || [],
+      bracket: {
+        can_start: bracketCtx.can_start,
+        bracket_size: bracketCtx.bracket_size,
+        qualifiers: bracketCtx.qualifiers || [],
+        non_qualifiers: bracketCtx.non_qualifiers || [],
+        phases: bracketCtx.phases || [],
+        final_places: bracketCtx.final_places || null
+      },
+      consolante: {
+        can_start: consolanteCtx.can_start,
+        consolante_size: consolanteCtx.consolante_size,
+        phases: consolanteCtx.phases || [],
+        final_places: consolanteCtx.final_places || null
+      },
+      overall_classement: overall
+    });
+  } catch (err) {
+    console.error('[DdJ] /recap error:', err);
+    res.status(500).json({ error: 'Erreur lors du chargement du récapitulatif' });
+  }
+});
+
+// ============================================================================
 // DEV-ONLY: seed spread moyennes for a tournament's convoked players
 // ============================================================================
 //

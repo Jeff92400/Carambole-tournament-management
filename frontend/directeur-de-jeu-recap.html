@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Directeur de Jeu — Récapitulatif</title>
+  <link rel="icon" type="image/png" href="images/FrenchBillard-Icon-small.png">
+  <link rel="stylesheet" href="css/styles.css?v=357">
+  <script src="js/branding.js?v=197"></script>
+  <style>
+    .ddj-welcome-bar {
+      background: linear-gradient(135deg, var(--color-primary, #1F4788) 0%, var(--color-secondary, #667eea) 100%);
+      color: white;
+      padding: 14px 18px;
+      border-radius: 8px;
+      margin-bottom: 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .ddj-welcome-bar .tournament-title { font-size: 1.1em; font-weight: 700; }
+    .ddj-welcome-bar .tournament-meta { font-size: 0.9em; opacity: 0.92; }
+
+    .ddj-steps { display: flex; gap: 8px; justify-content: center; margin: 0 0 18px 0; }
+    .ddj-steps .dot { width: 14px; height: 14px; border-radius: 50%; background: #dee2e6; }
+    .ddj-steps .dot.done { background: #28a745; }
+    .ddj-steps .dot.active {
+      background: var(--color-primary, #1F4788);
+      box-shadow: 0 0 0 4px rgba(31,71,136,0.18);
+    }
+
+    .recap-section {
+      background: white;
+      border: 1.5px solid #dee2e6;
+      border-radius: 10px;
+      padding: 16px;
+      margin-bottom: 18px;
+    }
+    .recap-section h3 {
+      margin: 0 0 12px 0;
+      font-size: 1.05em;
+      color: var(--color-primary, #1F4788);
+      padding-bottom: 8px;
+      border-bottom: 2px solid var(--color-primary, #1F4788);
+    }
+    .recap-subsection {
+      margin-top: 14px;
+      margin-bottom: 14px;
+    }
+    .recap-subsection h4 {
+      margin: 0 0 8px 0;
+      font-size: 0.95em;
+      color: #333;
+      font-weight: 700;
+    }
+    .recap-empty {
+      color: #888;
+      font-style: italic;
+      padding: 10px;
+      text-align: center;
+    }
+
+    /* Compact tables */
+    table.recap-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.88em;
+      margin-bottom: 8px;
+    }
+    table.recap-table th,
+    table.recap-table td {
+      padding: 6px 8px;
+      border-bottom: 1px solid #eee;
+      text-align: left;
+    }
+    table.recap-table th {
+      background: #f1f3f5;
+      font-weight: 700;
+      color: #333;
+      font-size: 0.82em;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+    table.recap-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+    table.recap-table td.center { text-align: center; }
+    table.recap-table tr.winner td:nth-child(3) { font-weight: 700; color: #1d7a3b; }
+    table.recap-table tr.loser td:nth-child(3) { color: #888; }
+
+    /* Classement badges in podium tables */
+    .place-badge {
+      display: inline-block;
+      width: 24px; height: 24px;
+      border-radius: 50%;
+      font-weight: 800;
+      font-size: 0.82em;
+      text-align: center;
+      line-height: 24px;
+      color: white;
+      flex-shrink: 0;
+    }
+    .place-badge.p1 { background: #d4a017; }
+    .place-badge.p2 { background: #9fa8b0; }
+    .place-badge.p3 { background: #cd7f32; }
+    .place-badge.p4 { background: #6c757d; }
+    .place-badge.p5 { background: #d4a017; }
+    .place-badge.p6 { background: #b48c14; }
+    .place-badge.p7, .place-badge.p8 { background: #6c757d; }
+    .place-badge.p9, .place-badge.p10, .place-badge.p11, .place-badge.p12 { background: #1F4788; }
+    .place-badge.p13, .place-badge.p14, .place-badge.p15, .place-badge.p16,
+    .place-badge.p17, .place-badge.p18, .place-badge.p19, .place-badge.p20 { background: #495057; }
+
+    .final-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 8px;
+    }
+    .final-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      background: #f8f9fa;
+      border-radius: 6px;
+    }
+    .final-row .final-name { font-weight: 600; font-size: 0.92em; }
+    .final-row .final-club { font-size: 0.78em; color: #666; }
+
+    .ddj-action-bar {
+      display: flex; gap: 10px; justify-content: space-between;
+      flex-wrap: wrap; padding-top: 16px; margin-top: 16px;
+      border-top: 1px solid #e0e0e0;
+    }
+    .ddj-btn {
+      padding: 12px 20px; border-radius: 8px; border: none;
+      font-size: 1em; font-weight: 700; cursor: pointer;
+      transition: all 0.15s;
+    }
+    .ddj-btn-secondary { background: #6c757d; color: white; }
+    .ddj-btn-secondary:hover { background: #5a6268; }
+    .ddj-btn-primary {
+      background: linear-gradient(135deg, #28a745, #218838);
+      color: white; flex: 1; min-width: 240px;
+    }
+    .ddj-btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+    .ddj-btn-print {
+      background: linear-gradient(135deg, var(--color-primary, #1F4788), var(--color-secondary, #667eea));
+      color: white;
+    }
+
+    .ddj-loading, .ddj-empty {
+      text-align: center; padding: 60px 20px; color: #888;
+    }
+
+    .progress-banner {
+      background: #fff3cd;
+      border-left: 3px solid #ffc107;
+      padding: 10px 14px;
+      border-radius: 6px;
+      margin-bottom: 14px;
+      font-size: 0.9em;
+      color: #856404;
+    }
+
+    /* Print styles — clean, paper-friendly */
+    @media print {
+      body { background: white; margin: 0; padding: 0; }
+      .navbar, .ddj-steps, .no-print { display: none !important; }
+      .container { max-width: 100%; margin: 0; padding: 10px; box-shadow: none; }
+      .ddj-welcome-bar {
+        background: #1F4788 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+        page-break-inside: avoid;
+        margin-bottom: 10px;
+      }
+      .recap-section {
+        page-break-inside: avoid;
+        box-shadow: none;
+        margin-bottom: 12px;
+        border: 1px solid #999;
+      }
+      .recap-section h3 { color: #1F4788 !important; }
+      table.recap-table th { background: #f1f3f5 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .place-badge { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      a[href]:after { content: ''; }  /* no trailing URLs */
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="navbar no-print">
+      <div>
+        <h2 style="margin-bottom: 0;"><img id="app-header-icon" src="images/FrenchBillard-Icon-small.png" alt="" style="height: 48px; width: 48px; vertical-align: middle; margin-right: 8px;"><span id="app-org-name" data-page-title="Récapitulatif (DdJ)">CDB</span></h2>
+      </div>
+      <div class="nav-links">
+        <a href="#" id="backBtn">← Classement</a>
+        <a href="#" id="logoutBtn" class="nav-logout">Déconnexion</a>
+      </div>
+    </div>
+
+    <div id="errorMessage" class="error" style="display: none;"></div>
+
+    <div class="ddj-welcome-bar">
+      <div>
+        <div class="tournament-title" id="tournamentTitle">Chargement…</div>
+        <div class="tournament-meta" id="tournamentMeta"></div>
+      </div>
+      <div class="tournament-meta" id="tournamentParams">Étape 6 : Récapitulatif</div>
+    </div>
+
+    <div class="ddj-steps no-print" title="Étape 6 sur 7 : Récapitulatif">
+      <div class="dot done" title="Sélection"></div>
+      <div class="dot done" title="Pointage"></div>
+      <div class="dot done" title="Poules"></div>
+      <div class="dot done" title="Matchs poules"></div>
+      <div class="dot done" title="Tableau final"></div>
+      <div class="dot done" title="Classement"></div>
+      <div class="dot active" title="Récapitulatif"></div>
+    </div>
+
+    <div id="mainContent">
+      <div class="ddj-loading">Chargement du récapitulatif…</div>
+    </div>
+  </div>
+
+  <script src="js/auth-utils.js?v=197"></script>
+  <script src="js/app-branding.js?v=216"></script>
+  <script src="js/ddj-step-nav.js?v=2"></script>
+  <script>
+    const API_URL = '/api';
+
+    if (!requireAuth()) { throw new Error('Not authenticated'); }
+    const userRole = sessionStorage.getItem('userRole');
+    if (userRole !== 'directeur_jeu' && userRole !== 'admin') {
+      window.location.href = 'dashboard.html';
+      throw new Error('Access denied');
+    }
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const compId = parseInt(urlParams.get('compId'), 10);
+    if (!Number.isFinite(compId)) {
+      document.getElementById('errorMessage').textContent = 'Aucune compétition sélectionnée.';
+      document.getElementById('errorMessage').style.display = 'block';
+      setTimeout(() => window.location.href = 'directeur-de-jeu.html', 2000);
+      throw new Error('No compId in URL');
+    }
+
+    document.getElementById('backBtn').addEventListener('click', (e) => {
+      e.preventDefault();
+      window.location.href = 'directeur-de-jeu-classement.html?compId=' + compId;
+    });
+    const navBtn = document.getElementById('logoutBtn');
+    if (userRole === 'directeur_jeu') {
+      navBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const orgSlug = sessionStorage.getItem('orgSlug') || '';
+        sessionStorage.clear();
+        window.location.href = orgSlug ? 'login.html?org=' + orgSlug : 'login.html';
+      });
+    } else {
+      navBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        window.location.href = 'dashboard.html';
+      });
+    }
+
+    function escapeHtml(s) {
+      return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function formatDate(dateStr) {
+      if (!dateStr) return '';
+      const d = new Date(dateStr);
+      return d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    }
+
+    function formatMoyenne(n) {
+      if (n == null || isNaN(n) || n === 0) return '—';
+      return Number(n).toFixed(3).replace('.', ',');
+    }
+
+    async function loadRecap() {
+      try {
+        const resp = await authFetch(`${API_URL}/directeur-jeu/competitions/${compId}/recap`);
+        if (!resp.ok) {
+          const body = await resp.json().catch(() => ({}));
+          throw new Error(body.error || `Erreur serveur (${resp.status})`);
+        }
+        const data = await resp.json();
+        render(data);
+      } catch (err) {
+        console.error('[Recap] load error:', err);
+        document.getElementById('mainContent').innerHTML = `
+          <div class="ddj-empty">
+            <p>${escapeHtml(err.message)}</p>
+            <p style="margin-top: 12px;">
+              <a href="directeur-de-jeu-classement.html?compId=${compId}">← Retour au classement</a>
+            </p>
+          </div>`;
+      }
+    }
+
+    function render(data) {
+      const t = data.tournament;
+      document.getElementById('tournamentTitle').textContent =
+        `${t.mode || ''} ${t.categorie || ''}${t.nom ? ' — ' + t.nom : ''}`.trim();
+      document.getElementById('tournamentMeta').textContent =
+        `${formatDate(t.debut)}${t.lieu ? ' · ' + t.lieu : ''}`;
+
+      const gp = data.game_params || {};
+      const gpStr = (gp.distance || gp.reprises)
+        ? `Distance : ${gp.distance ?? '?'} pts · Reprises max : ${gp.reprises ?? '?'}`
+        : '';
+
+      // Progress state
+      const allPoulesDone = data.poules.length > 0 && data.poules.every(p => p.all_matches_played);
+      const bracketDone = !!(data.bracket.final_places);
+      const consolanteDone = !!(data.consolante.final_places);
+      const isFullyDone = allPoulesDone && bracketDone && (data.consolante.can_start ? consolanteDone : true);
+
+      const progressBanner = isFullyDone ? '' : `
+        <div class="progress-banner no-print">
+          ⚠️ La compétition n'est pas encore terminée. Le récapitulatif ci-dessous reflète l'état actuel — les sections non jouées sont marquées comme telles.
+        </div>
+      `;
+
+      const gpBanner = gpStr ? `
+        <div style="background: #e9f0f8; padding: 8px 14px; border-radius: 6px; margin-bottom: 14px; font-size: 0.88em; color: #1F4788; font-weight: 600; text-align: center;">
+          🎯 ${escapeHtml(gpStr)}
+        </div>
+      ` : '';
+
+      document.getElementById('mainContent').innerHTML = `
+        ${progressBanner}
+        ${gpBanner}
+        ${renderPoulesSection(data.poules)}
+        ${renderBracketSection(data.bracket)}
+        ${renderConsolanteSection(data.consolante)}
+        ${renderOverallSection(data.overall_classement)}
+        <div class="ddj-action-bar no-print">
+          <button class="ddj-btn ddj-btn-secondary" onclick="window.location.href='directeur-de-jeu-classement.html?compId=${compId}'">
+            ← Retour au classement
+          </button>
+          <button class="ddj-btn ddj-btn-print" onclick="window.print()">
+            🖨 Imprimer
+          </button>
+          <button class="ddj-btn ddj-btn-primary" disabled title="Export E2i — en cours de développement">
+            📤 Export E2i (bientôt)
+          </button>
+        </div>
+      `;
+    }
+
+    function renderPoulesSection(poules) {
+      if (!poules || !poules.length) {
+        return `<div class="recap-section"><h3>📋 Poules et matchs</h3><div class="recap-empty">Les poules n'ont pas encore été générées.</div></div>`;
+      }
+      const body = poules.map(p => {
+        const classementRows = (p.classement || []).map((c, i) => `
+          <tr>
+            <td class="num">${i + 1}</td>
+            <td>${escapeHtml(c.player_name)}</td>
+            <td style="color:#666;font-size:0.85em;">${escapeHtml(c.club || '')}</td>
+            <td class="num">${c.match_points ?? '—'}</td>
+            <td class="num">${formatMoyenne(c.moyenne)}</td>
+            <td class="num">${c.best_serie ?? '—'}</td>
+          </tr>
+        `).join('');
+        const classementHtml = classementRows ? `
+          <div class="recap-subsection">
+            <h4>Classement Poule ${p.number}</h4>
+            <table class="recap-table">
+              <thead><tr><th>#</th><th>Joueur</th><th>Club</th><th>PM</th><th>Moy.</th><th>Série</th></tr></thead>
+              <tbody>${classementRows}</tbody>
+            </table>
+          </div>
+        ` : '';
+
+        const matchRows = (p.matches || []).map(m => {
+          const played = m.is_played;
+          const p1w = played && m.p1_points > m.p2_points;
+          const p2w = played && m.p2_points > m.p1_points;
+          const rowCls1 = p1w ? 'winner' : (p2w ? 'loser' : '');
+          const rowCls2 = p2w ? 'winner' : (p1w ? 'loser' : '');
+          return `
+            <tr class="${rowCls1}">
+              <td class="num">${m.match_number ?? '—'}</td>
+              <td>${escapeHtml(m.p1?.player_name || '')}</td>
+              <td class="num">${m.p1_points ?? '—'}</td>
+              <td class="num">${m.p1_reprises ?? '—'}</td>
+              <td class="num">${m.p1_serie ?? '—'}</td>
+              <td class="num">${formatMoyenne(m.p1_points && m.p1_reprises ? m.p1_points / m.p1_reprises : null)}</td>
+              <td class="num">${m.p1_match_points ?? (played ? 0 : '—')}</td>
+            </tr>
+            <tr class="${rowCls2}" style="border-bottom: 2px solid #dee2e6;">
+              <td></td>
+              <td>${escapeHtml(m.p2?.player_name || '')}</td>
+              <td class="num">${m.p2_points ?? '—'}</td>
+              <td class="num">${m.p2_reprises ?? '—'}</td>
+              <td class="num">${m.p2_serie ?? '—'}</td>
+              <td class="num">${formatMoyenne(m.p2_points && m.p2_reprises ? m.p2_points / m.p2_reprises : null)}</td>
+              <td class="num">${m.p2_match_points ?? (played ? 0 : '—')}</td>
+            </tr>
+          `;
+        }).join('');
+        const matchesHtml = matchRows ? `
+          <div class="recap-subsection">
+            <h4>Matchs de la poule</h4>
+            <table class="recap-table">
+              <thead><tr><th>Match</th><th>Joueur</th><th>Pts</th><th>Rep</th><th>Série</th><th>Moy.</th><th>PM</th></tr></thead>
+              <tbody>${matchRows}</tbody>
+            </table>
+          </div>
+        ` : '';
+
+        return `
+          <div class="recap-subsection" style="padding: 12px; background: #f8f9fa; border-radius: 8px; border-left: 3px solid var(--color-primary, #1F4788);">
+            <h4 style="margin-bottom:10px;color:var(--color-primary, #1F4788);font-size:1em;">Poule ${p.number} (${p.size} joueurs)${p.all_matches_played ? ' ✓' : ' — en cours'}</h4>
+            ${classementHtml}
+            ${matchesHtml}
+          </div>
+        `;
+      }).join('');
+      return `<div class="recap-section"><h3>📋 Poules et matchs</h3>${body}</div>`;
+    }
+
+    const BRACKET_PHASE_LABEL = {
+      SF1: 'Demi-finale 1',
+      SF2: 'Demi-finale 2',
+      F: 'Finale',
+      PF: 'Petite finale'
+    };
+
+    function renderBracketSection(bracket) {
+      if (!bracket.can_start) {
+        return `<div class="recap-section"><h3>🏆 Tableau final</h3><div class="recap-empty">Le tableau final n'a pas encore démarré (poules incomplètes).</div></div>`;
+      }
+      const phaseRows = (bracket.phases || []).map(ph => {
+        const label = BRACKET_PHASE_LABEL[ph.phase] || ph.phase;
+        if (!ph.can_enter) {
+          return `<tr><td>${label}</td><td colspan="6" style="color:#888;font-style:italic;">En attente du tour précédent</td></tr>`;
+        }
+        const played = ph.is_played;
+        const p1w = played && ph.p1_points > ph.p2_points;
+        const p2w = played && ph.p2_points > ph.p1_points;
+        return `
+          <tr class="${p1w?'winner':(p2w?'loser':'')}">
+            <td rowspan="2" style="vertical-align:middle;font-weight:700;">${label}</td>
+            <td>${escapeHtml(ph.p1?.player_name || '?')}</td>
+            <td class="num">${ph.p1_points ?? '—'}</td>
+            <td class="num">${ph.p1_reprises ?? '—'}</td>
+            <td class="num">${ph.p1_serie ?? '—'}</td>
+            <td class="num">${formatMoyenne(ph.p1_points && ph.p1_reprises ? ph.p1_points / ph.p1_reprises : null)}</td>
+          </tr>
+          <tr class="${p2w?'winner':(p1w?'loser':'')}" style="border-bottom:2px solid #dee2e6;">
+            <td>${escapeHtml(ph.p2?.player_name || '?')}</td>
+            <td class="num">${ph.p2_points ?? '—'}</td>
+            <td class="num">${ph.p2_reprises ?? '—'}</td>
+            <td class="num">${ph.p2_serie ?? '—'}</td>
+            <td class="num">${formatMoyenne(ph.p2_points && ph.p2_reprises ? ph.p2_points / ph.p2_reprises : null)}</td>
+          </tr>
+        `;
+      }).join('');
+      const tableHtml = `
+        <table class="recap-table">
+          <thead><tr><th>Phase</th><th>Joueur</th><th>Pts</th><th>Rep</th><th>Série</th><th>Moy.</th></tr></thead>
+          <tbody>${phaseRows}</tbody>
+        </table>
+      `;
+      const podiumHtml = bracket.final_places ? `
+        <div class="recap-subsection">
+          <h4>Podium tableau final</h4>
+          <div class="final-grid">
+            ${bracket.final_places.map(p => `
+              <div class="final-row">
+                <div class="place-badge p${p.place}">${p.place}</div>
+                <div><div class="final-name">${escapeHtml(p.name || p.licence)}</div></div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      ` : '';
+      return `<div class="recap-section"><h3>🏆 Tableau final</h3>${tableHtml}${podiumHtml}</div>`;
+    }
+
+    const CONSOLANTE_PHASE_LABEL = {
+      F: 'Finale consolante',
+      SF1: 'Demi-finale 1',
+      SF2: 'Demi-finale 2',
+      QF1: 'Quart 1', QF2: 'Quart 2', QF3: 'Quart 3', QF4: 'Quart 4',
+      R16_1: '1/8 #1', R16_2: '1/8 #2', R16_3: '1/8 #3', R16_4: '1/8 #4',
+      R16_5: '1/8 #5', R16_6: '1/8 #6', R16_7: '1/8 #7', R16_8: '1/8 #8'
+    };
+
+    function renderConsolanteSection(consolante) {
+      if (!consolante.can_start || !consolante.phases.length) {
+        return `<div class="recap-section"><h3>📋 Matchs de classement (Consolante)</h3><div class="recap-empty">La consolante n'a pas encore démarré, ou il n'y a pas assez de non-qualifiés.</div></div>`;
+      }
+      const phaseRows = consolante.phases.map(ph => {
+        const label = CONSOLANTE_PHASE_LABEL[ph.phase] || ph.phase;
+        if (ph.has_bye) {
+          const advancer = ph.p1 || ph.p2;
+          return `<tr><td style="font-weight:700;">${label}</td><td colspan="5" style="color:#0c5460;font-style:italic;">🎟 Bye — ${escapeHtml(advancer?.player_name || '?')} avance automatiquement</td></tr>`;
+        }
+        if (!ph.can_enter) {
+          return `<tr><td style="font-weight:700;">${label}</td><td colspan="5" style="color:#888;font-style:italic;">En attente du tour précédent</td></tr>`;
+        }
+        const played = ph.is_played;
+        const p1w = played && ph.p1_points > ph.p2_points;
+        const p2w = played && ph.p2_points > ph.p1_points;
+        return `
+          <tr class="${p1w?'winner':(p2w?'loser':'')}">
+            <td rowspan="2" style="vertical-align:middle;font-weight:700;">${label}</td>
+            <td>${escapeHtml(ph.p1?.player_name || '?')}</td>
+            <td class="num">${ph.p1_points ?? '—'}</td>
+            <td class="num">${ph.p1_reprises ?? '—'}</td>
+            <td class="num">${ph.p1_serie ?? '—'}</td>
+            <td class="num">${formatMoyenne(ph.p1_points && ph.p1_reprises ? ph.p1_points / ph.p1_reprises : null)}</td>
+          </tr>
+          <tr class="${p2w?'winner':(p1w?'loser':'')}" style="border-bottom:2px solid #dee2e6;">
+            <td>${escapeHtml(ph.p2?.player_name || '?')}</td>
+            <td class="num">${ph.p2_points ?? '—'}</td>
+            <td class="num">${ph.p2_reprises ?? '—'}</td>
+            <td class="num">${ph.p2_serie ?? '—'}</td>
+            <td class="num">${formatMoyenne(ph.p2_points && ph.p2_reprises ? ph.p2_points / ph.p2_reprises : null)}</td>
+          </tr>
+        `;
+      }).join('');
+      const tableHtml = `
+        <table class="recap-table">
+          <thead><tr><th>Phase</th><th>Joueur</th><th>Pts</th><th>Rep</th><th>Série</th><th>Moy.</th></tr></thead>
+          <tbody>${phaseRows}</tbody>
+        </table>
+      `;
+      const placesHtml = consolante.final_places ? `
+        <div class="recap-subsection">
+          <h4>Places 5 et suivantes</h4>
+          <div class="final-grid">
+            ${consolante.final_places.map(p => `
+              <div class="final-row">
+                <div class="place-badge p${p.place}">${p.place}</div>
+                <div><div class="final-name">${escapeHtml(p.name || p.licence)}</div></div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      ` : '';
+      return `<div class="recap-section"><h3>📋 Matchs de classement (Consolante)</h3>${tableHtml}${placesHtml}</div>`;
+    }
+
+    function renderOverallSection(overall) {
+      if (!overall || !overall.length) {
+        return `<div class="recap-section"><h3>🏁 Classement final complet</h3><div class="recap-empty">Le classement final sera disponible une fois toutes les phases terminées.</div></div>`;
+      }
+      const rows = overall.map(p => `
+        <div class="final-row">
+          <div class="place-badge p${p.place}">${p.place}</div>
+          <div><div class="final-name">${escapeHtml(p.name || p.licence)}</div></div>
+        </div>
+      `).join('');
+      return `
+        <div class="recap-section">
+          <h3>🏁 Classement final complet</h3>
+          <div class="final-grid">${rows}</div>
+        </div>
+      `;
+    }
+
+    loadRecap();
+  </script>
+</body>
+</html>

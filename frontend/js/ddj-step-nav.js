@@ -32,7 +32,7 @@
       'directeur-de-jeu-matchs.html',            // 3 - Matchs poules
       'directeur-de-jeu-bracket.html',           // 4 - Tableau final
       'directeur-de-jeu-classement.html',        // 5 - Classement (Consolante)
-      null                                       // 6 - Export E2i (bientôt)
+      'directeur-de-jeu-recap.html'              // 6 - Récapitulatif (includes E2i export)
     ];
 
     const dots = document.querySelectorAll('.ddj-steps .dot');
