@@ -529,6 +529,20 @@
       const activePoule = state.poules.find(p => p.number === state.activeTab);
       const contentHtml = activePoule ? renderPoule(activePoule) : '<p>Poule introuvable</p>';
 
+      // Gate the "passer à la phase finale" button: all poules must be
+      // complete before the DdJ can enter the bracket. The backend also
+      // enforces this, but we disable the button in the UI so it's
+      // visually obvious which step is blocked.
+      const allPoulesPlayed = state.poules.every(p =>
+        p.matches.length > 0 && p.matches.every(m => m.is_played)
+      );
+      const finalBtnAttrs = allPoulesPlayed
+        ? `onclick="window.location.href='directeur-de-jeu-bracket.html?compId=${compId}'"`
+        : `disabled title="Toutes les poules doivent être terminées avant la phase finale"`;
+      const finalBtnLabel = allPoulesPlayed
+        ? 'Passer à la phase finale →'
+        : 'Passer à la phase finale → (poules en cours)';
+
       document.getElementById('mainContent').innerHTML = `
         <div class="ddj-tabs">${tabsHtml}</div>
         ${contentHtml}
@@ -536,8 +550,8 @@
           <button class="ddj-btn ddj-btn-secondary" onclick="window.location.href='directeur-de-jeu-poules.html?compId=${compId}'">
             ← Retour aux poules
           </button>
-          <button class="ddj-btn ddj-btn-primary" disabled title="Étape 4 (phase finale) — arrive prochainement">
-            Passer à la phase finale → (bientôt)
+          <button class="ddj-btn ddj-btn-primary" ${finalBtnAttrs}>
+            ${finalBtnLabel}
           </button>
         </div>
       `;

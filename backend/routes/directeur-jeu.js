@@ -1176,6 +1176,375 @@ router.put('/competitions/:id/poule-matches', authenticateToken, requireDdJ, asy
 });
 
 // ============================================================================
+// STEP 4 — BRACKET (phase finale)
+// ============================================================================
+//
+// Seeding: we pool every poule's classement and apply the FFB tiebreak
+// chain globally (match_points ↓ → moyenne ↓ → best_serie ↓ → licence).
+// Top N qualify for the bracket. bracket_size is an org setting; MVP is
+// hardcoded to 4 here.
+//
+// Bracket for size=4:
+//   SF1: seed 1 vs seed 4
+//   SF2: seed 2 vs seed 3
+//   F  : winner(SF1) vs winner(SF2) → 1st / 2nd
+//   PF : loser(SF1)  vs loser(SF2)  → 3rd / 4th
+//
+// F and PF are rendered "pending" until their upstream SF is saved. The
+// final places 1–4 are derived from the bracket results; places 5+ come
+// from Step 5 (matchs de classement), which is a separate commit.
+//
+// The bracket STRUCTURE is derived at read-time — not persisted. Only
+// the match SCORES live in ddj_bracket_matches. This means: if the DdJ
+// corrects a poule result after the bracket started, the seeding
+// recomputes correctly. (Risk: already-entered bracket scores might now
+// belong to the wrong players. Handled defensively below.)
+// ============================================================================
+
+const BRACKET_SIZE = 4; // MVP: hardcoded until we support QFs (size=8)
+
+/**
+ * Pool all poule classements and pick the top N qualifiers using the
+ * same FFB tiebreak chain used within a poule (match_points, moyenne,
+ * best_serie, then head-to-head — which isn't meaningful across poules
+ * so we fall through to licence for a deterministic tiebreak).
+ *
+ * Returns { qualifiers, non_qualifiers } each as ordered arrays of the
+ * classement-row shape already returned by buildPouleClassement().
+ */
+function computeBracketSeeding(poules, size) {
+  const pool = [];
+  for (const p of poules) {
+    for (const row of p.classement) {
+      pool.push({ ...row, poule_number: p.number });
+    }
+  }
+  pool.sort((a, b) => {
+    if (b.match_points !== a.match_points) return b.match_points - a.match_points;
+    if ((b.moyenne || 0) !== (a.moyenne || 0)) return (b.moyenne || 0) - (a.moyenne || 0);
+    if ((b.best_serie || 0) !== (a.best_serie || 0)) return (b.best_serie || 0) - (a.best_serie || 0);
+    return String(a.licence).localeCompare(String(b.licence));
+  });
+  return {
+    qualifiers: pool.slice(0, size),
+    non_qualifiers: pool.slice(size)
+  };
+}
+
+/**
+ * Given a saved bracket match row (with p1_points etc), derive who won
+ * and who lost, using the same match-points rule as the poule matches.
+ * Returns { winner_licence, loser_licence, outcome } or null if the
+ * match isn't played yet.
+ */
+function deriveBracketOutcome(match) {
+  if (match == null || match.p1_points == null || match.p2_points == null) return null;
+  if (match.p1_points > match.p2_points) {
+    return { winner_licence: match.p1_licence, loser_licence: match.p2_licence, outcome: 'p1_win' };
+  }
+  if (match.p1_points < match.p2_points) {
+    return { winner_licence: match.p2_licence, loser_licence: match.p1_licence, outcome: 'p2_win' };
+  }
+  // Draws don't really exist in a knockout bracket — if it happens, we
+  // keep the current order (p1 "wins" by convention) and flag it so the
+  // UI can hint the DdJ to fix it. In real play this shouldn't occur
+  // since a knockout match MUST have a winner.
+  return { winner_licence: match.p1_licence, loser_licence: match.p2_licence, outcome: 'draw', invalid: true };
+}
+
+/**
+ * Build the full bracket state for a tournament:
+ *  - seeding from poule classements
+ *  - each phase (SF1, SF2, F, PF) with resolved players (or pending if
+ *    the upstream SF isn't done yet)
+ *  - final places 1-4 if F and PF are both saved
+ */
+async function loadBracket(db, orgId, tournoiId) {
+  // Reuse Step 3's loadPouleMatches for classements + game_params
+  const ctx = await loadPouleMatches(db, orgId, tournoiId);
+  if (ctx.error) return ctx;
+
+  const allPoulesPlayed = ctx.poules.every(p => p.all_matches_played);
+  const { qualifiers, non_qualifiers } = computeBracketSeeding(ctx.poules, BRACKET_SIZE);
+
+  // Fetch any saved bracket match rows
+  const savedRows = await new Promise((resolve, reject) => {
+    db.all(
+      `SELECT id, phase, table_number, p1_licence, p2_licence,
+              p1_points, p1_reprises, p1_serie,
+              p2_points, p2_reprises, p2_serie,
+              entered_at
+       FROM ddj_bracket_matches
+       WHERE tournoi_id = $1`,
+      [tournoiId],
+      (err, rs) => err ? reject(err) : resolve(rs || [])
+    );
+  });
+  const savedByPhase = new Map(savedRows.map(r => [r.phase, r]));
+
+  // Helper: find a qualifier by licence (returns the full classement row
+  // with poule_number) so UI can show "Poule 1" alongside the name.
+  const findQualifier = (licNorm) =>
+    qualifiers.find(q => q.licence_normalized === licNorm) || null;
+
+  // Build each phase. Until the bracket can start (not all poules done
+  // or < size qualifiers), everything is "pending" with null players.
+  const canStart = allPoulesPlayed && qualifiers.length >= BRACKET_SIZE;
+  const phases = [];
+
+  const buildPhase = (phase, p1, p2, depends_on = null) => {
+    const saved = savedByPhase.get(phase) || null;
+    const m = {
+      phase,
+      can_enter: !!(p1 && p2),            // both players known
+      depends_on,                          // list of upstream phases
+      p1: p1 || null,
+      p2: p2 || null,
+      table_number: saved ? saved.table_number : null,
+      p1_points: saved ? saved.p1_points : null,
+      p1_reprises: saved ? saved.p1_reprises : null,
+      p1_serie: saved ? saved.p1_serie : null,
+      p2_points: saved ? saved.p2_points : null,
+      p2_reprises: saved ? saved.p2_reprises : null,
+      p2_serie: saved ? saved.p2_serie : null,
+      is_played: !!(saved && saved.p1_points != null && saved.p2_points != null),
+      entered_at: saved ? saved.entered_at : null
+    };
+    // Derive match points + outcome for the UI
+    if (m.is_played) {
+      const mp = computeMatchPoints(m.p1_points, m.p2_points, ctx.settings || {});
+      m.p1_match_points = mp ? mp.p1_mp : null;
+      m.p2_match_points = mp ? mp.p2_mp : null;
+      m.outcome = mp ? mp.outcome : null;
+    } else {
+      m.p1_match_points = null;
+      m.p2_match_points = null;
+      m.outcome = null;
+    }
+    // If the saved row's p1/p2 licences don't match the current expected
+    // ones (because a poule result was edited post-hoc), flag it. UI can
+    // then offer a "refresh" that DELETEs the stale bracket row.
+    if (saved && p1 && p2) {
+      const expected = [p1.licence_normalized, p2.licence_normalized].sort().join('|');
+      const actual = [
+        String(saved.p1_licence || '').replace(/\s+/g, ''),
+        String(saved.p2_licence || '').replace(/\s+/g, '')
+      ].sort().join('|');
+      m.stale = expected !== actual;
+    } else {
+      m.stale = false;
+    }
+    return m;
+  };
+
+  // SF1 / SF2 players come straight from seeding
+  const sf1 = canStart
+    ? buildPhase('SF1', qualifiers[0], qualifiers[3])
+    : buildPhase('SF1', null, null);
+  const sf2 = canStart
+    ? buildPhase('SF2', qualifiers[1], qualifiers[2])
+    : buildPhase('SF2', null, null);
+  phases.push(sf1, sf2);
+
+  // F and PF depend on SF outcomes
+  const sf1_out = deriveBracketOutcome({ ...sf1, p1_licence: sf1.p1?.licence, p2_licence: sf1.p2?.licence });
+  const sf2_out = deriveBracketOutcome({ ...sf2, p1_licence: sf2.p1?.licence, p2_licence: sf2.p2?.licence });
+
+  const winnerSF1 = sf1_out ? findQualifier(String(sf1_out.winner_licence).replace(/\s+/g, '')) : null;
+  const loserSF1  = sf1_out ? findQualifier(String(sf1_out.loser_licence).replace(/\s+/g, '')) : null;
+  const winnerSF2 = sf2_out ? findQualifier(String(sf2_out.winner_licence).replace(/\s+/g, '')) : null;
+  const loserSF2  = sf2_out ? findQualifier(String(sf2_out.loser_licence).replace(/\s+/g, '')) : null;
+
+  const f  = buildPhase('F',  winnerSF1, winnerSF2, ['SF1', 'SF2']);
+  const pf = buildPhase('PF', loserSF1,  loserSF2,  ['SF1', 'SF2']);
+  phases.push(f, pf);
+
+  // Final positions (1st-4th) if F and PF are both played
+  let finalPlaces = null;
+  if (f.is_played && pf.is_played) {
+    const f_out  = deriveBracketOutcome({ ...f,  p1_licence: f.p1?.licence,  p2_licence: f.p2?.licence });
+    const pf_out = deriveBracketOutcome({ ...pf, p1_licence: pf.p1?.licence, p2_licence: pf.p2?.licence });
+    if (f_out && pf_out) {
+      finalPlaces = [
+        { place: 1, licence: f_out.winner_licence,  name: findQualifier(String(f_out.winner_licence).replace(/\s+/g, ''))?.player_name },
+        { place: 2, licence: f_out.loser_licence,   name: findQualifier(String(f_out.loser_licence).replace(/\s+/g, ''))?.player_name },
+        { place: 3, licence: pf_out.winner_licence, name: findQualifier(String(pf_out.winner_licence).replace(/\s+/g, ''))?.player_name },
+        { place: 4, licence: pf_out.loser_licence,  name: findQualifier(String(pf_out.loser_licence).replace(/\s+/g, ''))?.player_name }
+      ];
+    }
+  }
+
+  return {
+    tournament: ctx.tournament,
+    game_params: ctx.game_params,
+    bracket_size: BRACKET_SIZE,
+    can_start: canStart,
+    qualifiers,
+    non_qualifiers,
+    phases,
+    final_places: finalPlaces
+  };
+}
+
+// GET /api/directeur-jeu/competitions/:id/bracket
+router.get('/competitions/:id/bracket', authenticateToken, requireDdJ, async (req, res) => {
+  const db = getDb();
+  const orgId = req.user.organizationId || null;
+  const tournoiId = parseInt(req.params.id, 10);
+  if (!Number.isFinite(tournoiId)) {
+    return res.status(400).json({ error: 'ID tournoi invalide' });
+  }
+
+  try {
+    const result = await loadBracket(db, orgId, tournoiId);
+    if (result.error === 'not_found') {
+      return res.status(404).json({ error: 'Tournoi introuvable' });
+    }
+    res.json(result);
+  } catch (err) {
+    console.error('[DdJ] /bracket GET error:', err);
+    res.status(500).json({ error: 'Erreur lors du chargement du bracket' });
+  }
+});
+
+// PUT /api/directeur-jeu/competitions/:id/bracket
+// Body: { phase, p1_points, p1_reprises, p1_serie, p2_points, p2_reprises, p2_serie, table_number? }
+// UPSERTs the bracket match. Validates that:
+//   - phase is one of SF1/SF2/F/PF
+//   - both upstream SFs (for F and PF) are already played
+//   - scores respect game_params max (same as Step 3)
+router.put('/competitions/:id/bracket', authenticateToken, requireDdJ, async (req, res) => {
+  const db = getDb();
+  const orgId = req.user.organizationId || null;
+  const tournoiId = parseInt(req.params.id, 10);
+  if (!Number.isFinite(tournoiId)) {
+    return res.status(400).json({ error: 'ID tournoi invalide' });
+  }
+
+  const b = req.body || {};
+  const phase = String(b.phase || '').toUpperCase();
+  if (!['SF1', 'SF2', 'F', 'PF'].includes(phase)) {
+    return res.status(400).json({ error: 'Phase invalide' });
+  }
+
+  const scoreFields = ['p1_points', 'p1_reprises', 'p1_serie', 'p2_points', 'p2_reprises', 'p2_serie'];
+  const parsed = {};
+  for (const f of scoreFields) {
+    const v = b[f];
+    if (v === null || v === undefined || v === '') {
+      parsed[f] = null;
+    } else {
+      const n = parseInt(v, 10);
+      if (!Number.isFinite(n) || n < 0) {
+        return res.status(400).json({ error: `${f} doit être un entier positif ou null` });
+      }
+      parsed[f] = n;
+    }
+  }
+
+  try {
+    // Reload bracket state so we know which players the phase is for
+    const ctx = await loadBracket(db, orgId, tournoiId);
+    if (ctx.error === 'not_found') {
+      return res.status(404).json({ error: 'Tournoi introuvable' });
+    }
+    if (!ctx.can_start) {
+      return res.status(400).json({ error: 'Toutes les poules doivent être terminées avant la phase finale' });
+    }
+    const match = ctx.phases.find(p => p.phase === phase);
+    if (!match) {
+      return res.status(400).json({ error: 'Phase inconnue' });
+    }
+    if (!match.can_enter) {
+      return res.status(400).json({
+        error: phase === 'F' || phase === 'PF'
+          ? 'Les demi-finales doivent être terminées avant cette phase'
+          : 'Match pas encore prêt'
+      });
+    }
+
+    // Max validation
+    const gp = ctx.game_params || {};
+    if (gp.distance != null) {
+      if (parsed.p1_points != null && parsed.p1_points > gp.distance)
+        return res.status(400).json({ error: `Points J1 supérieurs à la distance (${gp.distance})` });
+      if (parsed.p2_points != null && parsed.p2_points > gp.distance)
+        return res.status(400).json({ error: `Points J2 supérieurs à la distance (${gp.distance})` });
+    }
+    if (gp.reprises != null) {
+      if (parsed.p1_reprises != null && parsed.p1_reprises > gp.reprises)
+        return res.status(400).json({ error: `Reprises J1 supérieures au maximum (${gp.reprises})` });
+      if (parsed.p2_reprises != null && parsed.p2_reprises > gp.reprises)
+        return res.status(400).json({ error: `Reprises J2 supérieures au maximum (${gp.reprises})` });
+    }
+
+    const tableNumber = b.table_number != null && b.table_number !== ''
+      ? parseInt(b.table_number, 10) || null
+      : null;
+
+    // UPSERT
+    await new Promise((resolve, reject) => {
+      db.run(
+        `INSERT INTO ddj_bracket_matches
+           (tournoi_id, phase, table_number,
+            p1_licence, p2_licence,
+            p1_points, p1_reprises, p1_serie,
+            p2_points, p2_reprises, p2_serie,
+            entered_at, entered_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, CURRENT_TIMESTAMP, $12)
+         ON CONFLICT (tournoi_id, phase)
+         DO UPDATE SET
+           table_number = EXCLUDED.table_number,
+           p1_licence = EXCLUDED.p1_licence,
+           p2_licence = EXCLUDED.p2_licence,
+           p1_points = EXCLUDED.p1_points,
+           p1_reprises = EXCLUDED.p1_reprises,
+           p1_serie = EXCLUDED.p1_serie,
+           p2_points = EXCLUDED.p2_points,
+           p2_reprises = EXCLUDED.p2_reprises,
+           p2_serie = EXCLUDED.p2_serie,
+           entered_at = CURRENT_TIMESTAMP,
+           entered_by = EXCLUDED.entered_by`,
+        [
+          tournoiId, phase, tableNumber,
+          match.p1.licence, match.p2.licence,
+          parsed.p1_points, parsed.p1_reprises, parsed.p1_serie,
+          parsed.p2_points, parsed.p2_reprises, parsed.p2_serie,
+          req.user.userId || null
+        ],
+        (err) => err ? reject(err) : resolve()
+      );
+    });
+
+    // Activity log
+    try {
+      await new Promise((resolve) => {
+        db.run(
+          `INSERT INTO activity_logs
+             (user_name, action_type, action_status, target_type, target_id, target_name, details, app_source)
+           VALUES ($1, 'ddj_bracket_saved', 'success', 'tournament', $2, $3, $4, 'directeur_jeu')`,
+          [
+            req.user.username || 'DdJ',
+            tournoiId,
+            `Tournoi ${tournoiId} / ${phase}`,
+            JSON.stringify({ phase, ...parsed })
+          ],
+          () => resolve()
+        );
+      });
+    } catch (e) { /* non-fatal */ }
+
+    // Reload and return full bracket state so UI reflects cascade
+    // (e.g. saving SF1 populates F's p1 slot)
+    const reload = await loadBracket(db, orgId, tournoiId);
+    res.json({ success: true, bracket: reload });
+  } catch (err) {
+    console.error('[DdJ] /bracket PUT error:', err);
+    res.status(500).json({ error: 'Erreur lors de la sauvegarde du match' });
+  }
+});
+
+// ============================================================================
 // DEV-ONLY: seed spread moyennes for a tournament's convoked players
 // ============================================================================
 //

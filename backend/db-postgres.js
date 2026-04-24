@@ -2346,6 +2346,45 @@ async function initializeDatabase() {
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_ddj_poule_matches_tournoi ON ddj_poule_matches(tournoi_id)`);
 
+    // ------------------------------------------------------------------
+    // DdJ Step 4 — bracket (phase finale) match results.
+    //
+    // Qualifiers and the bracket structure (who meets whom) are DERIVED
+    // at read-time from the poule classements — no snapshot in this
+    // table. Only the match scores live here. That way, if the DdJ goes
+    // back and re-saves a poule match, the bracket recomputes naturally.
+    //
+    // phase values: 'SF1', 'SF2', 'F', 'PF'
+    //   SF1  = seed 1 vs seed 4
+    //   SF2  = seed 2 vs seed 3
+    //   F    = finale (SF winners) → 1st / 2nd
+    //   PF   = petite finale (SF losers) → 3rd / 4th
+    //
+    // bracket_size=4 only for MVP. When we support larger brackets
+    // (QF included), we'll add more phases here.
+    // ------------------------------------------------------------------
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS ddj_bracket_matches (
+        id SERIAL PRIMARY KEY,
+        tournoi_id INTEGER NOT NULL REFERENCES tournoi_ext(tournoi_id) ON DELETE CASCADE,
+        phase VARCHAR(10) NOT NULL,
+        table_number INTEGER,
+        p1_licence TEXT NOT NULL,
+        p2_licence TEXT NOT NULL,
+        p1_points INTEGER,
+        p1_reprises INTEGER,
+        p1_serie INTEGER,
+        p2_points INTEGER,
+        p2_reprises INTEGER,
+        p2_serie INTEGER,
+        entered_at TIMESTAMP,
+        entered_by INTEGER,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(tournoi_id, phase)
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_ddj_bracket_matches_tournoi ON ddj_bracket_matches(tournoi_id)`);
+
     // New columns on tournament_results for match-based imports
     await client.query(`ALTER TABLE tournament_results ADD COLUMN IF NOT EXISTS meilleure_partie REAL`);
     await client.query(`ALTER TABLE tournament_results ADD COLUMN IF NOT EXISTS poule_rank INTEGER`);
