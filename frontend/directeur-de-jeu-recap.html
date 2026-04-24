@@ -346,8 +346,8 @@
           <button class="ddj-btn ddj-btn-print" onclick="window.print()">
             🖨 Imprimer
           </button>
-          <button class="ddj-btn ddj-btn-primary" disabled title="Export E2i — en cours de développement">
-            📤 Export E2i (bientôt)
+          <button class="ddj-btn ddj-btn-primary" onclick="downloadCsvExport()" title="Télécharge le CSV au format FFB (matchs de poule + tableau final + consolante)">
+            📤 Exporter CSV (format FFB)
           </button>
         </div>
       `;
@@ -566,6 +566,38 @@
           <div class="final-grid">${rows}</div>
         </div>
       `;
+    }
+
+    // CSV download — uses auth header via fetch + Blob, because a plain <a href>
+    // download wouldn't carry the JWT. We pull the file as a blob, then
+    // trigger a click on a temp anchor with object URL + filename.
+    async function downloadCsvExport() {
+      try {
+        const resp = await authFetch(`${API_URL}/directeur-jeu/competitions/${compId}/export-csv`);
+        if (!resp.ok) {
+          const body = await resp.json().catch(() => ({}));
+          throw new Error(body.error || `Erreur serveur (${resp.status})`);
+        }
+        // Try to read filename from Content-Disposition
+        let filename = `matchs_competition_${compId}.csv`;
+        const cd = resp.headers.get('Content-Disposition') || '';
+        const m = cd.match(/filename="?([^"]+)"?/i);
+        if (m) filename = m[1];
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => {
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        }, 100);
+      } catch (err) {
+        console.error('[Recap] CSV export error:', err);
+        alert("Erreur lors de l'export CSV : " + err.message);
+      }
     }
 
     loadRecap();

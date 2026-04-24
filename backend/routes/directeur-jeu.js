@@ -1999,6 +1999,214 @@ router.get('/competitions/:id/recap', authenticateToken, requireDdJ, async (req,
 });
 
 // ============================================================================
+// Step 6b — Export CSV (format FFB)
+// ============================================================================
+//
+// Produces the semicolon-separated CSV expected by the FFB match-import flow
+// used by CDB 93-94. Reference sample header (20 columns):
+//   No Phase;Date match;Billard;Poule;Licence J1;Joueur 1;Pts J1;Rep J1;Ser J1;
+//   Pts Match J1;Moy J1;Licence J2;Joueur 2;Pts J2;Rep J2;Ser J2;Pts Match J2;
+//   Moy J2;NOMBD;Mode de jeu
+//
+// Chronological phase ordering (as seen in the CDB 93-94 sample):
+//   1 = Poule matches
+//   2 = Classement 09-10 (our Consolante R16 losers)
+//   3 = G 9-10 - P 7-8     (our Consolante QF level)
+//   4 = G 7-8 - P5-6       (our Consolante SF level)
+//   5 = Classement 05 - 06 (our Consolante Finale)
+//   6 = Demi-finales       (our Bracket SF1/SF2)
+//   7 = Petite finale      (our Bracket PF)
+//   8 = Finale             (our Bracket F)
+//
+// Data shape per row: only PLAYED matches are included (no scheduled-but-empty,
+// no BYEs). Moyenne is comma-decimal with trailing zeros stripped. Licence
+// is passed through as-is (no spaces by our normalization convention).
+//
+// Columns Billard / NOMBD (table type e.g. "2m80") are left empty for now —
+// this is venue-specific and we don't currently capture it in our data model.
+// Adding a per-org setting is a future improvement; users can fill the column
+// post-export in Excel if needed.
+// ============================================================================
+
+const CSV_HEADER_FFB = [
+  'No Phase', 'Date match', 'Billard', 'Poule',
+  'Licence J1', 'Joueur 1', 'Pts J1', 'Rep J1', 'Ser J1', 'Pts Match J1', 'Moy J1',
+  'Licence J2', 'Joueur 2', 'Pts J2', 'Rep J2', 'Ser J2', 'Pts Match J2', 'Moy J2',
+  'NOMBD', 'Mode de jeu'
+].join(';');
+
+// Map our internal mode strings to the FFB-facing labels seen in the sample.
+const MODE_LABEL_FFB = {
+  'LIBRE': 'Libre',
+  'BANDE': '1 Bande',
+  '1BANDE': '1 Bande',
+  '3BANDES': '3 Bandes',
+  '3 BANDES': '3 Bandes',
+  'CADRE': 'Cadre'
+};
+function formatModeFFB(mode) {
+  if (!mode) return '';
+  const key = String(mode).toUpperCase().replace(/\s+/g, '');
+  // Try normalized key first, then with space preserved
+  return MODE_LABEL_FFB[key] || MODE_LABEL_FFB[String(mode).toUpperCase()] || String(mode);
+}
+
+function formatMoyenneFFB(n) {
+  if (n == null || !Number.isFinite(Number(n))) return '';
+  const val = Number(n);
+  let s = val.toFixed(2).replace('.', ',');
+  s = s.replace(/0+$/, '').replace(/,$/, '');
+  return s === '' ? '0' : s;
+}
+
+function formatDateFFB(dateInput) {
+  if (!dateInput) return '';
+  const d = dateInput instanceof Date ? dateInput : new Date(dateInput);
+  if (isNaN(d.getTime())) return '';
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const yyyy = d.getFullYear();
+  return `${dd}/${mm}/${yyyy}`;
+}
+
+// Player name: FFB sample shows "LASTNAME FIRSTNAME" (uppercase). Our stored
+// player_name is typically "First Last" or may already be uppercase. We
+// uppercase as a safe normalization — if it comes from the qualifier/non_qual
+// row it might be "First Last"; match-level player objects vary too.
+function formatPlayerNameFFB(name) {
+  if (!name) return '';
+  return String(name).toUpperCase();
+}
+
+function csvCell(v) {
+  // Replace any inline semicolons with commas; also strip newlines just in case.
+  return String(v ?? '').replace(/;/g, ',').replace(/[\r\n]+/g, ' ').trim();
+}
+
+function matchRow(phaseNo, date, poule, p1, p2, m, mode) {
+  // Compute moyennes from raw data (don't rely on saved field to be up to date)
+  const moy1 = p1 && m.p1_points != null && m.p1_reprises > 0 ? m.p1_points / m.p1_reprises : null;
+  const moy2 = p2 && m.p2_points != null && m.p2_reprises > 0 ? m.p2_points / m.p2_reprises : null;
+
+  // Match points: use the precomputed field if the poule engine set it;
+  // otherwise derive knockout result (2 / 0).
+  let mp1 = m.p1_match_points;
+  let mp2 = m.p2_match_points;
+  if (mp1 == null || mp2 == null) {
+    if (m.p1_points > m.p2_points) { mp1 = 2; mp2 = 0; }
+    else if (m.p2_points > m.p1_points) { mp1 = 0; mp2 = 2; }
+    else { mp1 = 1; mp2 = 1; }
+  }
+
+  const cells = [
+    phaseNo, date, '', poule, // Billard column intentionally blank
+    p1?.licence || '',
+    formatPlayerNameFFB(p1?.player_name),
+    m.p1_points ?? '', m.p1_reprises ?? '', m.p1_serie ?? '',
+    mp1 ?? '', formatMoyenneFFB(moy1),
+    p2?.licence || '',
+    formatPlayerNameFFB(p2?.player_name),
+    m.p2_points ?? '', m.p2_reprises ?? '', m.p2_serie ?? '',
+    mp2 ?? '', formatMoyenneFFB(moy2),
+    '',                      // NOMBD blank (same as Billard)
+    formatModeFFB(mode)
+  ];
+  return cells.map(csvCell).join(';');
+}
+
+// Poule number → letter label: 1 → A, 2 → B, ..., 26 → Z, 27 → AA
+function pouleLabel(n) {
+  if (!Number.isFinite(n) || n < 1) return '?';
+  let label = '';
+  let x = n;
+  while (x > 0) {
+    const rem = (x - 1) % 26;
+    label = String.fromCharCode(65 + rem) + label;
+    x = Math.floor((x - 1) / 26);
+  }
+  return 'POULE ' + label;
+}
+
+// Consolante phase → (phase number, label) mapping.
+// R16 losers fight at level 2, QF at 3, SF at 4, Finale at 5.
+function consolanteExportMeta(phaseCode) {
+  if (phaseCode === 'F') return { no: 5, label: 'Classement 05 - 06' };
+  if (phaseCode === 'SF1') return { no: 4, label: 'Classement — Demi-finale 1 (consolante)' };
+  if (phaseCode === 'SF2') return { no: 4, label: 'Classement — Demi-finale 2 (consolante)' };
+  if (/^QF[1-4]$/.test(phaseCode)) return { no: 3, label: `Classement — Quart ${phaseCode.slice(2)} (consolante)` };
+  if (/^R16_[1-8]$/.test(phaseCode)) return { no: 2, label: `Classement — 1/8 ${phaseCode.slice(4)} (consolante)` };
+  return null;
+}
+
+router.get('/competitions/:id/export-csv', authenticateToken, requireDdJ, async (req, res) => {
+  const db = getDb();
+  const orgId = req.user.organizationId || null;
+  const tournoiId = parseInt(req.params.id, 10);
+  if (!Number.isFinite(tournoiId)) {
+    return res.status(400).json({ error: 'ID tournoi invalide' });
+  }
+  try {
+    const pouleCtx = await loadPouleMatches(db, orgId, tournoiId);
+    if (pouleCtx.error) return res.status(pouleCtx.status || 500).json({ error: pouleCtx.error });
+    const bracketCtx = await loadBracket(db, orgId, tournoiId);
+    const consolanteCtx = await loadConsolante(db, orgId, tournoiId);
+
+    const t = pouleCtx.tournament;
+    const matchDate = formatDateFFB(t.debut);
+    const mode = t.mode;
+    const rows = [];
+
+    // Phase 1: poule matches
+    for (const poule of (pouleCtx.poules || [])) {
+      const label = pouleLabel(poule.number);
+      for (const m of (poule.matches || [])) {
+        if (!m.is_played) continue;
+        rows.push(matchRow(1, matchDate, label, m.p1, m.p2, m, mode));
+      }
+    }
+
+    // Phases 2-5: consolante matches
+    if (consolanteCtx && !consolanteCtx.error && consolanteCtx.phases) {
+      for (const ph of consolanteCtx.phases) {
+        if (!ph.is_played || ph.has_bye) continue;
+        const meta = consolanteExportMeta(ph.phase);
+        if (!meta) continue;
+        rows.push(matchRow(meta.no, matchDate, meta.label, ph.p1, ph.p2, ph, mode));
+      }
+    }
+
+    // Phases 6-8: bracket matches
+    if (bracketCtx && !bracketCtx.error && bracketCtx.phases) {
+      const BRACKET_META = {
+        SF1: { no: 6, label: 'Demi-Finale 1 (01-04)' },
+        SF2: { no: 6, label: 'Demi-Finale 2 (02-03)' },
+        PF:  { no: 7, label: 'PETITE FINALE' },
+        F:   { no: 8, label: 'FINALE' }
+      };
+      // Emit in semantic order (SF1, SF2, PF, F) so the file reads naturally
+      for (const code of ['SF1', 'SF2', 'PF', 'F']) {
+        const ph = bracketCtx.phases.find(p => p.phase === code);
+        if (!ph || !ph.is_played) continue;
+        rows.push(matchRow(BRACKET_META[code].no, matchDate, BRACKET_META[code].label, ph.p1, ph.p2, ph, mode));
+      }
+    }
+
+    // Prepend UTF-8 BOM so Excel opens it with correct accents. CRLF line endings.
+    const csv = '\ufeff' + CSV_HEADER_FFB + '\r\n' + rows.join('\r\n') + (rows.length ? '\r\n' : '');
+
+    const safeName = (t.nom || `tournoi_${tournoiId}`).replace(/[\/\\:*?"<>|]/g, '_');
+    const filename = `matchs_competition_${safeName}.csv`;
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(csv);
+  } catch (err) {
+    console.error('[DdJ] /export-csv error:', err);
+    res.status(500).json({ error: "Erreur lors de l'export CSV" });
+  }
+});
+
+// ============================================================================
 // DEV-ONLY: seed spread moyennes for a tournament's convoked players
 // ============================================================================
 //
