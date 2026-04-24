@@ -737,7 +737,6 @@
           <div style="flex: 1;">
             <div style="font-weight: 700;">${escapeHtml(p.name || p.licence)}</div>
           </div>
-          ${p.ex_aequo ? '<span class="ex-aequo-tag">ex æquo</span>' : ''}
         </div>
       `).join('');
       const bracketHtml = bracketPlaces && bracketPlaces.length ? `
@@ -760,7 +759,7 @@
           <div style="font-size: 0.82em; color: #7a5a00; margin-bottom: 6px; font-weight: 600;">Consolante — places 5 et suivantes</div>
           ${rowsHtml}
           <p style="text-align: center; font-size: 0.78em; color: #7a5a00; margin: 10px 0 0 0;">
-            Les places ex æquo sont départagées par match points → moyenne → meilleure série.
+            Les joueurs éliminés dans le même tour sont départagés par match points → moyenne → meilleure série.
           </p>
         </div>
       `;

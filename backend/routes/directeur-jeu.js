@@ -1786,18 +1786,15 @@ async function loadConsolante(db, orgId, tournoiId) {
 
       const sfLosers = collectLosers(['SF1', 'SF2']);
       sfLosers.forEach((p, i) => ranked.push({
-        place: 7 + i, licence: p.licence, name: p.player_name, ex_aequo: sfLosers.length > 1
-      }));
+        place: 7 + i, licence: p.licence, name: p.player_name      }));
 
       const qfLosers = collectLosers(['QF1', 'QF2', 'QF3', 'QF4']);
       qfLosers.forEach((p, i) => ranked.push({
-        place: 9 + i, licence: p.licence, name: p.player_name, ex_aequo: qfLosers.length > 1
-      }));
+        place: 9 + i, licence: p.licence, name: p.player_name      }));
 
       const r16Losers = collectLosers(['R16_1', 'R16_2', 'R16_3', 'R16_4', 'R16_5', 'R16_6', 'R16_7', 'R16_8']);
       r16Losers.forEach((p, i) => ranked.push({
-        place: 13 + i, licence: p.licence, name: p.player_name, ex_aequo: r16Losers.length > 1
-      }));
+        place: 13 + i, licence: p.licence, name: p.player_name      }));
 
       finalPlaces = ranked;
     }
