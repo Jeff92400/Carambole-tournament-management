@@ -2385,6 +2385,38 @@ async function initializeDatabase() {
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_ddj_bracket_matches_tournoi ON ddj_bracket_matches(tournoi_id)`);
 
+    // ------------------------------------------------------------------
+    // ddj_consolante_matches — Step 5 of the DdJ workflow
+    // Stores match scores for the "Matchs de classement (Consolante)"
+    // single-elimination bracket played by non-qualifiers to determine
+    // overall places 5 to N. Structure mirrors ddj_bracket_matches.
+    // Phase values: F, SF1, SF2, QF1..QF4, R16_1..R16_8
+    // Bracket size is dynamic (2, 4, 8, or 16) based on non-qualifier count.
+    // No petite finale in the consolante — SF/QF/R16 losers are ex-aequo,
+    // departed by poule criteria (match points, moyenne).
+    // ------------------------------------------------------------------
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS ddj_consolante_matches (
+        id SERIAL PRIMARY KEY,
+        tournoi_id INTEGER NOT NULL REFERENCES tournoi_ext(tournoi_id) ON DELETE CASCADE,
+        phase VARCHAR(10) NOT NULL,
+        table_number INTEGER,
+        p1_licence TEXT NOT NULL,
+        p2_licence TEXT NOT NULL,
+        p1_points INTEGER,
+        p1_reprises INTEGER,
+        p1_serie INTEGER,
+        p2_points INTEGER,
+        p2_reprises INTEGER,
+        p2_serie INTEGER,
+        entered_at TIMESTAMP,
+        entered_by INTEGER,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(tournoi_id, phase)
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_ddj_consolante_matches_tournoi ON ddj_consolante_matches(tournoi_id)`);
+
     // New columns on tournament_results for match-based imports
     await client.query(`ALTER TABLE tournament_results ADD COLUMN IF NOT EXISTS meilleure_partie REAL`);
     await client.query(`ALTER TABLE tournament_results ADD COLUMN IF NOT EXISTS poule_rank INTEGER`);

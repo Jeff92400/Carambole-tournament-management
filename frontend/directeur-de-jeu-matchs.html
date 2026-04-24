@@ -538,10 +538,10 @@
       );
       const finalBtnAttrs = allPoulesPlayed
         ? `onclick="window.location.href='directeur-de-jeu-bracket.html?compId=${compId}'"`
-        : `disabled title="Toutes les poules doivent être terminées avant la phase finale"`;
+        : `disabled title="Toutes les poules doivent être terminées avant le tableau final"`;
       const finalBtnLabel = allPoulesPlayed
-        ? 'Passer à la phase finale →'
-        : 'Passer à la phase finale → (poules en cours)';
+        ? 'Passer au tableau final →'
+        : 'Passer au tableau final → (poules en cours)';
 
       document.getElementById('mainContent').innerHTML = `
         <div class="ddj-tabs">${tabsHtml}</div>

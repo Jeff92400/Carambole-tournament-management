@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Directeur de Jeu — Tableau final</title>
+  <title>Directeur de Jeu — Matchs de classement (Consolante)</title>
   <link rel="icon" type="image/png" href="images/FrenchBillard-Icon-small.png">
   <link rel="stylesheet" href="css/styles.css?v=357">
   <script src="js/branding.js?v=197"></script>
@@ -31,26 +31,26 @@
       box-shadow: 0 0 0 4px rgba(31,71,136,0.18);
     }
 
-    /* Qualifier seeding list */
-    .qualifiers-card {
+    /* Non-qualifier seeding list */
+    .seeds-card {
       background: white;
       border: 2px solid var(--color-primary, #1F4788);
       border-radius: 10px;
       padding: 14px;
       margin-bottom: 16px;
     }
-    .qualifiers-card h3 {
+    .seeds-card h3 {
       margin: 0 0 10px 0;
       color: var(--color-primary, #1F4788);
       font-size: 1em;
       font-weight: 700;
     }
-    .qualifiers-grid {
+    .seeds-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
       gap: 10px;
     }
-    .qualifier {
+    .seed-row {
       display: flex;
       align-items: center;
       gap: 10px;
@@ -58,7 +58,7 @@
       background: #f8f9fa;
       border-radius: 8px;
     }
-    .qualifier .seed {
+    .seed-row .seed {
       width: 28px; height: 28px;
       border-radius: 50%;
       display: flex;
@@ -66,15 +66,27 @@
       justify-content: center;
       font-weight: 700;
       flex-shrink: 0;
+      background: #e9ecef;
+      color: #333;
+      font-size: 0.9em;
     }
-    .qualifier .seed-1 { background: #d4a017; color: white; }
-    .qualifier .seed-2 { background: #9fa8b0; color: white; }
-    .qualifier .seed-3 { background: #cd7f32; color: white; }
-    .qualifier .seed-4 { background: var(--color-primary, #1F4788); color: white; }
-    .qualifier .name { font-weight: 600; font-size: 0.92em; }
-    .qualifier .sub { font-size: 0.76em; color: #666; }
+    .seed-row .name { font-weight: 600; font-size: 0.92em; }
+    .seed-row .sub { font-size: 0.76em; color: #666; }
 
-    /* Bracket phases */
+    /* Round groupers */
+    .round-group { margin-bottom: 18px; }
+    .round-title {
+      font-size: 0.95em;
+      font-weight: 800;
+      color: var(--color-primary, #1F4788);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin: 10px 0 8px 0;
+      padding-left: 4px;
+      border-left: 4px solid var(--color-primary, #1F4788);
+    }
+
+    /* Phase cards */
     .phase-card {
       border: 2px solid #e0e0e0;
       border-radius: 10px;
@@ -84,6 +96,7 @@
     .phase-card.pending { opacity: 0.55; background: #f8f9fa; }
     .phase-card.played { border-color: #28a745; background: #f8fff9; }
     .phase-card.stale { border-color: #dc3545; background: #fff5f5; }
+    .phase-card.bye { border-color: #17a2b8; background: #eef9fc; }
 
     .phase-card-header {
       display: flex;
@@ -95,22 +108,24 @@
       border-bottom: 1px solid #e0e0e0;
     }
     .phase-card.played .phase-card-header { background: linear-gradient(90deg, #d4edda, #e7f7eb); }
+    .phase-card.bye .phase-card-header { background: linear-gradient(90deg, #d1ecf1, #e2f3f7); }
 
     .phase-title {
-      font-size: 1.1em;
+      font-size: 1em;
       font-weight: 800;
       color: var(--color-primary, #1F4788);
       display: flex;
       align-items: center;
       gap: 8px;
     }
-    .phase-title .emoji { font-size: 1.3em; }
+    .phase-title .emoji { font-size: 1.2em; }
     .phase-status {
       font-size: 0.85em;
       color: #666;
       font-weight: 600;
     }
     .phase-status.played { color: #28a745; }
+    .phase-status.bye { color: #17a2b8; }
 
     .phase-card-body { padding: 14px; }
 
@@ -147,15 +162,16 @@
     }
     .match-vs { font-size: 1.2em; color: #888; font-weight: bold; }
 
-    .match-pending-msg {
+    .match-pending-msg,
+    .match-bye-msg {
       text-align: center;
-      padding: 20px;
-      color: #888;
-      font-style: italic;
+      padding: 18px;
       font-size: 0.92em;
     }
+    .match-pending-msg { color: #888; font-style: italic; }
+    .match-bye-msg { color: #0c5460; background: #d1ecf1; border-radius: 6px; font-weight: 600; }
 
-    /* Reuse score-input styles from the matchs page */
+    /* Score inputs */
     .score-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
     .score-col {
       background: #f8f9fa;
@@ -217,7 +233,7 @@
     .btn-save:hover { transform: translateY(-1px); box-shadow: 0 4px 8px rgba(31,71,136,0.3); }
     .btn-save:disabled { opacity: 0.5; cursor: not-allowed; }
 
-    /* Final places card */
+    /* Podium card — places 5+ */
     .podium-card {
       background: linear-gradient(135deg, #fef3c7, #fde68a);
       border: 2px solid #d4a017;
@@ -246,14 +262,25 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 1.2em;
+      font-size: 1em;
       font-weight: 800;
       flex-shrink: 0;
+      color: white;
     }
-    .podium-row.p1 .medal { background: #d4a017; color: white; }
-    .podium-row.p2 .medal { background: #9fa8b0; color: white; }
-    .podium-row.p3 .medal { background: #cd7f32; color: white; }
-    .podium-row.p4 .medal { background: #6c757d; color: white; }
+    .podium-row.place-5 .medal { background: #d4a017; }
+    .podium-row.place-6 .medal { background: #b48c14; }
+    .podium-row.place-sf .medal { background: #6c757d; }
+    .podium-row.place-qf .medal { background: #1F4788; }
+    .podium-row.place-r16 .medal { background: #495057; }
+    .podium-row .ex-aequo-tag {
+      font-size: 0.72em;
+      background: #e9ecef;
+      color: #666;
+      padding: 2px 6px;
+      border-radius: 10px;
+      font-weight: 600;
+      margin-left: auto;
+    }
 
     .ddj-action-bar {
       display: flex; gap: 10px; justify-content: space-between;
@@ -306,10 +333,10 @@
   <div class="container">
     <div class="navbar">
       <div>
-        <h2 style="margin-bottom: 0;"><img id="app-header-icon" src="images/FrenchBillard-Icon-small.png" alt="" style="height: 48px; width: 48px; vertical-align: middle; margin-right: 8px;"><span id="app-org-name" data-page-title="Tableau final (DdJ)">CDB</span></h2>
+        <h2 style="margin-bottom: 0;"><img id="app-header-icon" src="images/FrenchBillard-Icon-small.png" alt="" style="height: 48px; width: 48px; vertical-align: middle; margin-right: 8px;"><span id="app-org-name" data-page-title="Matchs de classement (DdJ)">CDB</span></h2>
       </div>
       <div class="nav-links">
-        <a href="#" id="matchsBackBtn">← Matchs</a>
+        <a href="#" id="bracketBackBtn">← Tableau final</a>
         <a href="#" id="logoutBtn" class="nav-logout">Déconnexion</a>
       </div>
     </div>
@@ -325,18 +352,18 @@
       <div class="tournament-meta" id="tournamentParams"></div>
     </div>
 
-    <div class="ddj-steps" title="Étape 4 sur 7 : Tableau final">
+    <div class="ddj-steps" title="Étape 5 sur 7 : Matchs de classement (Consolante)">
+      <div class="dot done"></div>
       <div class="dot done"></div>
       <div class="dot done"></div>
       <div class="dot done"></div>
       <div class="dot done"></div>
       <div class="dot active"></div>
       <div class="dot"></div>
-      <div class="dot"></div>
     </div>
 
     <div id="mainContent">
-      <div class="ddj-loading">Chargement du tableau final…</div>
+      <div class="ddj-loading">Chargement des matchs de classement…</div>
     </div>
   </div>
 
@@ -362,9 +389,9 @@
       throw new Error('No compId in URL');
     }
 
-    document.getElementById('matchsBackBtn').addEventListener('click', (e) => {
+    document.getElementById('bracketBackBtn').addEventListener('click', (e) => {
       e.preventDefault();
-      window.location.href = 'directeur-de-jeu-matchs.html?compId=' + compId;
+      window.location.href = 'directeur-de-jeu-bracket.html?compId=' + compId;
     });
     const navBtn = document.getElementById('logoutBtn');
     if (userRole === 'directeur_jeu') {
@@ -409,71 +436,73 @@
     }
 
     let state = {
-      bracket: null,
+      consolante: null,
       gameParams: { distance: null, reprises: null }
     };
 
-    async function loadBracket() {
+    async function loadConsolante() {
       try {
-        const resp = await authFetch(`${API_URL}/directeur-jeu/competitions/${compId}/bracket`);
+        const resp = await authFetch(`${API_URL}/directeur-jeu/competitions/${compId}/consolante`);
         if (!resp.ok) {
           const body = await resp.json().catch(() => ({}));
           throw new Error(body.error || `Erreur serveur (${resp.status})`);
         }
         const data = await resp.json();
-        state.bracket = data;
+        state.consolante = data;
         state.gameParams = data.game_params || state.gameParams;
         render();
       } catch (err) {
-        console.error('[Bracket] load error:', err);
+        console.error('[Consolante] load error:', err);
         document.getElementById('mainContent').innerHTML = `
           <div class="ddj-empty">
             <p>${escapeHtml(err.message)}</p>
             <p style="margin-top: 12px;">
-              <a href="directeur-de-jeu-matchs.html?compId=${compId}">← Retour aux matchs</a>
+              <a href="directeur-de-jeu-bracket.html?compId=${compId}">← Retour au tableau final</a>
             </p>
           </div>`;
       }
     }
 
     function render() {
-      const b = state.bracket;
-      const t = b.tournament;
+      const c = state.consolante;
+      const t = c.tournament;
 
       document.getElementById('tournamentTitle').textContent =
         `${t.mode || ''} ${t.categorie || ''}${t.nom ? ' — ' + t.nom : ''}`.trim();
       document.getElementById('tournamentMeta').textContent =
         `${formatDate(t.debut)}${t.lieu ? ' · ' + t.lieu : ''}`;
-      document.getElementById('tournamentParams').textContent = 'Étape 4 : Tableau final';
+      document.getElementById('tournamentParams').textContent = 'Étape 5 : Matchs de classement';
 
-      if (!b.can_start) {
+      if (!c.can_start) {
+        const reason = !c.bracket_can_start
+          ? "Il faut d'abord terminer tous les matchs de poule et le tableau final."
+          : (c.non_qualifiers.length < 2
+              ? `Pas assez de joueurs non-qualifiés (${c.non_qualifiers.length}) pour organiser des matchs de classement.`
+              : "Les matchs de classement ne sont pas encore accessibles.");
         document.getElementById('mainContent').innerHTML = `
           <div class="ddj-empty">
-            <p><strong>⚠️ Le tableau final n'est pas encore accessible.</strong></p>
+            <p><strong>⚠️ ${escapeHtml(reason)}</strong></p>
             <p style="margin-top: 12px;">
-              Il faut d'abord terminer tous les matchs de poule (et avoir au moins ${b.bracket_size} joueurs qualifiés).
-            </p>
-            <p style="margin-top: 12px;">
-              <a href="directeur-de-jeu-matchs.html?compId=${compId}">← Retour aux matchs de poule</a>
+              <a href="directeur-de-jeu-bracket.html?compId=${compId}">← Retour au tableau final</a>
             </p>
           </div>`;
         return;
       }
 
-      const qualifiersHtml = renderQualifiers(b.qualifiers);
-      const phasesHtml = b.phases.map(renderPhase).join('');
-      const podiumHtml = b.final_places ? renderPodium(b.final_places) : '';
+      const seedsHtml = renderSeeds(c.non_qualifiers, c.consolante_size);
+      const phasesHtml = renderPhasesByRound(c.phases, c.consolante_size);
+      const podiumHtml = c.final_places ? renderPodium(c.final_places, c.bracket_final_places) : '';
 
       document.getElementById('mainContent').innerHTML = `
-        ${qualifiersHtml}
+        ${seedsHtml}
         ${phasesHtml}
         ${podiumHtml}
         <div class="ddj-action-bar">
-          <button class="ddj-btn ddj-btn-secondary" onclick="window.location.href='directeur-de-jeu-matchs.html?compId=${compId}'">
-            ← Retour aux matchs
+          <button class="ddj-btn ddj-btn-secondary" onclick="window.location.href='directeur-de-jeu-bracket.html?compId=${compId}'">
+            ← Retour au tableau final
           </button>
-          <button class="ddj-btn ddj-btn-primary" onclick="window.location.href='directeur-de-jeu-classement.html?compId=${compId}'">
-            Matchs de classement (Consolante) →
+          <button class="ddj-btn ddj-btn-primary" disabled title="Étape 6 (Export E2i) — arrive prochainement">
+            Export E2i → (bientôt)
           </button>
         </div>
       `;
@@ -495,10 +524,11 @@
       });
     }
 
-    function renderQualifiers(quals) {
-      const rowsHtml = quals.map((q, i) => `
-        <div class="qualifier">
-          <div class="seed seed-${i + 1}">${i + 1}</div>
+    function renderSeeds(nonQuals, size) {
+      if (!nonQuals.length) return '';
+      const rowsHtml = nonQuals.map((q, i) => `
+        <div class="seed-row">
+          <div class="seed">${i + 1}</div>
           <div style="flex: 1; min-width: 0;">
             <div class="name">${escapeHtml(q.player_name)}</div>
             <div class="sub">${escapeHtml(q.club || '')} · Poule ${q.poule_number}</div>
@@ -508,34 +538,94 @@
           </div>
         </div>
       `).join('');
+      const byeCount = Math.max(0, size - nonQuals.length);
+      const byeNote = byeCount > 0
+        ? `<p style="font-size: 0.82em; color: #666; margin: 8px 0 0 0;">
+             ℹ️ ${byeCount} bye${byeCount > 1 ? 's' : ''} — les têtes de série avancent automatiquement au tour suivant.
+           </p>` : '';
       return `
-        <div class="qualifiers-card">
-          <h3>🏆 Qualifiés pour le tableau final (${quals.length} joueurs)</h3>
-          <div class="qualifiers-grid">${rowsHtml}</div>
+        <div class="seeds-card">
+          <h3>📋 Non-qualifiés — tableau de consolante (${nonQuals.length} joueurs${size ? `, bracket de ${size}` : ''})</h3>
+          <div class="seeds-grid">${rowsHtml}</div>
+          ${byeNote}
         </div>
       `;
     }
 
     const PHASE_META = {
-      SF1: { emoji: '⚔️', label: 'Demi-finale 1' },
-      SF2: { emoji: '⚔️', label: 'Demi-finale 2' },
-      F:   { emoji: '🏆', label: 'Finale' },
-      PF:  { emoji: '🥉', label: 'Petite finale' }
+      F:     { emoji: '🏆', label: 'Finale consolante' },
+      SF1:   { emoji: '⚔️', label: 'Demi-finale 1' },
+      SF2:   { emoji: '⚔️', label: 'Demi-finale 2' },
+      QF1:   { emoji: '🎯', label: 'Quart 1' },
+      QF2:   { emoji: '🎯', label: 'Quart 2' },
+      QF3:   { emoji: '🎯', label: 'Quart 3' },
+      QF4:   { emoji: '🎯', label: 'Quart 4' },
+      R16_1: { emoji: '🔸', label: '1/8 — Match 1' },
+      R16_2: { emoji: '🔸', label: '1/8 — Match 2' },
+      R16_3: { emoji: '🔸', label: '1/8 — Match 3' },
+      R16_4: { emoji: '🔸', label: '1/8 — Match 4' },
+      R16_5: { emoji: '🔸', label: '1/8 — Match 5' },
+      R16_6: { emoji: '🔸', label: '1/8 — Match 6' },
+      R16_7: { emoji: '🔸', label: '1/8 — Match 7' },
+      R16_8: { emoji: '🔸', label: '1/8 — Match 8' }
     };
+
+    // Group phases by round for display
+    function renderPhasesByRound(phases, size) {
+      const byName = new Map(phases.map(p => [p.phase, p]));
+      const rounds = [];
+      if (size >= 16) rounds.push({ title: 'Huitièmes de finale', names: ['R16_1','R16_2','R16_3','R16_4','R16_5','R16_6','R16_7','R16_8'] });
+      if (size >= 8)  rounds.push({ title: 'Quarts de finale',    names: ['QF1','QF2','QF3','QF4'] });
+      if (size >= 4)  rounds.push({ title: 'Demi-finales',         names: ['SF1','SF2'] });
+      rounds.push({ title: 'Finale',              names: ['F'] });
+      return rounds.map(r => {
+        const cards = r.names
+          .map(n => byName.get(n))
+          .filter(Boolean)
+          .map(renderPhase)
+          .join('');
+        if (!cards) return '';
+        return `
+          <div class="round-group">
+            <div class="round-title">${escapeHtml(r.title)}</div>
+            ${cards}
+          </div>
+        `;
+      }).join('');
+    }
 
     function renderPhase(phase) {
       const meta = PHASE_META[phase.phase] || { emoji: '•', label: phase.phase };
 
+      // BYE phase: one player auto-advances (no score entry)
+      if (phase.has_bye) {
+        const advancer = phase.p1 || phase.p2;
+        return `
+          <div class="phase-card bye">
+            <div class="phase-card-header">
+              <div class="phase-title"><span class="emoji">${meta.emoji}</span>${meta.label}</div>
+              <div class="phase-status bye">🎟 Bye — avance automatique</div>
+            </div>
+            <div class="phase-card-body">
+              <div class="match-bye-msg">
+                ${escapeHtml(advancer?.player_name || '?')} avance au tour suivant sans jouer (tête de série non appariée).
+              </div>
+            </div>
+          </div>
+        `;
+      }
+
+      // Pending: players not yet determined (upstream phase not done)
       if (!phase.can_enter) {
         return `
           <div class="phase-card pending">
             <div class="phase-card-header">
               <div class="phase-title"><span class="emoji">${meta.emoji}</span>${meta.label}</div>
-              <div class="phase-status">En attente des demi-finales</div>
+              <div class="phase-status">En attente du tour précédent</div>
             </div>
             <div class="phase-card-body">
               <div class="match-pending-msg">
-                Les joueurs seront automatiquement assignés après la fin des demi-finales.
+                Les joueurs seront automatiquement assignés après la fin du tour précédent.
               </div>
             </div>
           </div>
@@ -544,9 +634,7 @@
 
       const playedClass = phase.is_played ? 'played' : '';
       const staleClass = phase.stale ? 'stale' : '';
-      const statusLabel = phase.is_played
-        ? (phase.outcome === 'draw' ? '⚖️ Match nul (à revoir)' : '✓ Terminé')
-        : 'À jouer';
+      const statusLabel = phase.is_played ? '✓ Terminé' : 'À jouer';
       const statusCls = phase.is_played ? 'played' : '';
 
       let col1Class = 'score-col';
@@ -570,7 +658,7 @@
       const maxRep = rep != null ? ` max="${rep}"` : '';
 
       const staleBanner = phase.stale
-        ? `<div class="stale-warning">⚠️ Les joueurs ont changé suite à la modification d'un match de poule. Les scores ci-dessous peuvent ne plus correspondre — veuillez les ressaisir.</div>`
+        ? `<div class="stale-warning">⚠️ Les joueurs ont changé suite à la modification d'un match amont. Les scores ci-dessous peuvent ne plus correspondre — veuillez les ressaisir.</div>`
         : '';
 
       return `
@@ -634,21 +722,45 @@
       `;
     }
 
-    function renderPodium(places) {
+    function renderPodium(places, bracketPlaces) {
+      // Medal class per group
+      const cls = (p) => {
+        if (p.place === 5) return 'place-5';
+        if (p.place === 6) return 'place-6';
+        if (p.place <= 8) return 'place-sf';
+        if (p.place <= 12) return 'place-qf';
+        return 'place-r16';
+      };
       const rowsHtml = places.map(p => `
-        <div class="podium-row p${p.place}">
+        <div class="podium-row ${cls(p)}">
           <div class="medal">${p.place}</div>
           <div style="flex: 1;">
             <div style="font-weight: 700;">${escapeHtml(p.name || p.licence)}</div>
           </div>
+          ${p.ex_aequo ? '<span class="ex-aequo-tag">ex æquo</span>' : ''}
         </div>
       `).join('');
+      const bracketHtml = bracketPlaces && bracketPlaces.length ? `
+        <div style="margin-bottom: 14px; padding-bottom: 14px; border-bottom: 1px dashed #d4a017;">
+          <div style="font-size: 0.82em; color: #7a5a00; margin-bottom: 6px; font-weight: 600;">Rappel — Tableau final</div>
+          ${bracketPlaces.map(p => `
+            <div class="podium-row place-${p.place}" style="background: rgba(255,255,255,0.7);">
+              <div class="medal" style="background: ${p.place===1?'#d4a017':p.place===2?'#9fa8b0':p.place===3?'#cd7f32':'#6c757d'};">${p.place}</div>
+              <div style="flex: 1;">
+                <div style="font-weight: 700;">${escapeHtml(p.name || p.licence)}</div>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      ` : '';
       return `
         <div class="podium-card">
-          <h3>🏆 Classement final — Tableau final</h3>
+          <h3>🏁 Classement final complet</h3>
+          ${bracketHtml}
+          <div style="font-size: 0.82em; color: #7a5a00; margin-bottom: 6px; font-weight: 600;">Consolante — places 5 et suivantes</div>
           ${rowsHtml}
-          <p style="text-align: center; font-size: 0.82em; color: #7a5a00; margin: 10px 0 0 0;">
-            Les places 5 et suivantes seront déterminées par les matchs de classement (Consolante) — étape 5.
+          <p style="text-align: center; font-size: 0.78em; color: #7a5a00; margin: 10px 0 0 0;">
+            Les places ex æquo sont départagées par match points → moyenne → meilleure série.
           </p>
         </div>
       `;
@@ -732,13 +844,12 @@
         showSaveStatus('Renseignez les points des deux joueurs', 'error');
         return;
       }
-      // Knockout sanity: no draws allowed
       if (payload.p1_points != null && payload.p1_points === payload.p2_points) {
-        showSaveStatus('Pas de match nul dans le tableau final', 'error');
+        showSaveStatus('Pas de match nul dans la consolante', 'error');
         return;
       }
       try {
-        const resp = await authFetch(`${API_URL}/directeur-jeu/competitions/${compId}/bracket`, {
+        const resp = await authFetch(`${API_URL}/directeur-jeu/competitions/${compId}/consolante`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
@@ -748,17 +859,17 @@
           throw new Error(body.error || `Erreur ${resp.status}`);
         }
         const data = await resp.json();
-        state.bracket = data.bracket;
-        state.gameParams = data.bracket.game_params || state.gameParams;
+        state.consolante = data.consolante;
+        state.gameParams = data.consolante.game_params || state.gameParams;
         showSaveStatus('Match enregistré ✓');
         render();
       } catch (err) {
-        console.error('[Bracket] save error:', err);
+        console.error('[Consolante] save error:', err);
         showSaveStatus('Erreur — ' + err.message, 'error');
       }
     }
 
-    loadBracket();
+    loadConsolante();
   </script>
 </body>
 </html>

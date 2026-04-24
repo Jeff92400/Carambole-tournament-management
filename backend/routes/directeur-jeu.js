@@ -1377,6 +1377,7 @@ async function loadBracket(db, orgId, tournoiId) {
   return {
     tournament: ctx.tournament,
     game_params: ctx.game_params,
+    settings: ctx.settings,
     bracket_size: BRACKET_SIZE,
     can_start: canStart,
     qualifiers,
@@ -1541,6 +1542,386 @@ router.put('/competitions/:id/bracket', authenticateToken, requireDdJ, async (re
   } catch (err) {
     console.error('[DdJ] /bracket PUT error:', err);
     res.status(500).json({ error: 'Erreur lors de la sauvegarde du match' });
+  }
+});
+
+// ============================================================================
+// Step 5 — Matchs de classement (Consolante)
+// ============================================================================
+//
+// Non-qualifiers (those who didn't make the Tableau final) play a second
+// single-elimination bracket to determine overall places 5 → N. This mirrors
+// the "Consolante" sheet in the CDB 93-94 Excel FDM.
+//
+// Bracket size is dynamic based on non-qualifier count:
+//   N=2       → bracket of 2 (F only)
+//   N=3-4     → bracket of 4 (SF1, SF2, F)
+//   N=5-8     → bracket of 8 (QF1-4, SF1-2, F)
+//   N=9-16    → bracket of 16 (R16_1-8, QF1-4, SF1-2, F)
+// Top seeds get BYEs when N < bracket size (auto-advance, no score needed).
+//
+// NO petite finale in the consolante: SF/QF/R16 losers are ex-aequo and
+// departed by poule criteria (match_points, moyenne).
+//
+// Final overall places (added to the 1-4 from the Tableau final):
+//   F winner  → place 5
+//   F loser   → place 6
+//   SF losers → places 7-8   (ex-aequo, tiebreak on poule perf)
+//   QF losers → places 9-12  (ex-aequo)
+//   R16 losers → places 13-20 (ex-aequo)
+//
+// Like loadBracket, the consolante STRUCTURE is derived at read-time — only
+// match SCORES live in ddj_consolante_matches. Edits to upstream phases
+// cascade via staleness flags.
+// ============================================================================
+
+// Standard knockout pairings (1-indexed seed positions). Top seeds at
+// extremes — the "classic" 1 vs 2 matchup only occurs in the Finale.
+const CONSOLANTE_PAIRINGS = {
+  2:  [[1, 2]],
+  4:  [[1, 4], [2, 3]],
+  8:  [[1, 8], [4, 5], [3, 6], [2, 7]],
+  16: [[1, 16], [8, 9], [4, 13], [5, 12], [3, 14], [6, 11], [2, 15], [7, 10]]
+};
+
+// Phase names per bracket size.
+// round1 = first round (length = size / 2)
+// later  = all subsequent rounds (length = size / 2 - 1), in cascade order,
+//          i.e. winners of later[i*2] and later[i*2+1] feed into the next
+//          slot. Final phase is always 'F' (last element).
+const CONSOLANTE_PHASES = {
+  2:  { round1: ['F'], later: [] },
+  4:  { round1: ['SF1', 'SF2'], later: ['F'] },
+  8:  { round1: ['QF1', 'QF2', 'QF3', 'QF4'], later: ['SF1', 'SF2', 'F'] },
+  16: {
+    round1: ['R16_1', 'R16_2', 'R16_3', 'R16_4', 'R16_5', 'R16_6', 'R16_7', 'R16_8'],
+    later: ['QF1', 'QF2', 'QF3', 'QF4', 'SF1', 'SF2', 'F']
+  }
+};
+
+function pickConsolanteSize(n) {
+  if (n < 2) return 0;
+  if (n <= 2) return 2;
+  if (n <= 4) return 4;
+  if (n <= 8) return 8;
+  return 16; // cap: if N > 16, extra non-qualifiers are dropped (shouldn't happen)
+}
+
+/**
+ * Seeds the consolante first round from the ordered non_qualifiers list.
+ * Returns { size, slots, round1Pairs } where slots are indexed by seed-1
+ * (nulls = BYE auto-advance for top seeds when N < size).
+ */
+function computeConsolanteSeeding(non_qualifiers) {
+  const size = pickConsolanteSize(non_qualifiers.length);
+  if (size === 0) return { size: 0, slots: [], round1Pairs: [] };
+  const slots = Array.from({ length: size }, (_, i) => non_qualifiers[i] || null);
+  const pairings = CONSOLANTE_PAIRINGS[size];
+  const phases = CONSOLANTE_PHASES[size].round1;
+  const round1Pairs = pairings.map((pair, idx) => ({
+    phase: phases[idx],
+    p1: slots[pair[0] - 1],
+    p2: slots[pair[1] - 1]
+  }));
+  return { size, slots, round1Pairs };
+}
+
+/**
+ * Given a phase node (with resolved p1/p2 + scores), returns
+ * { winner, loser, is_played, is_bye } or null if not determinable.
+ * Handles BYE auto-advance (one side null).
+ */
+function deriveConsolanteOutcome(m) {
+  if (!m) return null;
+  if (!m.p1 && !m.p2) return null;
+  if (!m.p1) return { winner: m.p2, loser: null, is_played: true, is_bye: true };
+  if (!m.p2) return { winner: m.p1, loser: null, is_played: true, is_bye: true };
+  if (m.p1_points == null || m.p2_points == null) return null;
+  if (m.p1_points === m.p2_points) return null; // draws invalid
+  return m.p1_points > m.p2_points
+    ? { winner: m.p1, loser: m.p2, is_played: true, is_bye: false }
+    : { winner: m.p2, loser: m.p1, is_played: true, is_bye: false };
+}
+
+async function loadConsolante(db, orgId, tournoiId) {
+  const bracketCtx = await loadBracket(db, orgId, tournoiId);
+  if (bracketCtx.error) return bracketCtx;
+
+  const non_qualifiers = bracketCtx.non_qualifiers || [];
+  const { size, round1Pairs } = computeConsolanteSeeding(non_qualifiers);
+  const canStart = !!bracketCtx.can_start && size >= 2;
+
+  // Fetch saved rows
+  const savedRows = await new Promise((resolve, reject) => {
+    db.all(
+      `SELECT id, phase, table_number, p1_licence, p2_licence,
+              p1_points, p1_reprises, p1_serie,
+              p2_points, p2_reprises, p2_serie, entered_at
+         FROM ddj_consolante_matches
+        WHERE tournoi_id = $1`,
+      [tournoiId],
+      (err, rs) => err ? reject(err) : resolve(rs || [])
+    );
+  });
+  const savedByPhase = new Map(savedRows.map(r => [r.phase, r]));
+
+  const findNonQual = (lic) => {
+    if (!lic) return null;
+    const n = String(lic).replace(/\s+/g, '');
+    return non_qualifiers.find(q => q.licence_normalized === n) || null;
+  };
+
+  const buildPhase = (phase, p1, p2, depends_on = null) => {
+    const saved = savedByPhase.get(phase) || null;
+    const m = {
+      phase,
+      depends_on,
+      p1: p1 || null,
+      p2: p2 || null,
+      can_enter: !!(p1 && p2),
+      has_bye: (!!p1 && !p2) || (!p1 && !!p2),
+      table_number: saved ? saved.table_number : null,
+      p1_points: saved ? saved.p1_points : null,
+      p1_reprises: saved ? saved.p1_reprises : null,
+      p1_serie: saved ? saved.p1_serie : null,
+      p2_points: saved ? saved.p2_points : null,
+      p2_reprises: saved ? saved.p2_reprises : null,
+      p2_serie: saved ? saved.p2_serie : null,
+      is_played: !!(saved && saved.p1_points != null && saved.p2_points != null),
+      entered_at: saved ? saved.entered_at : null,
+      stale: false
+    };
+    if (m.has_bye) m.is_played = true;
+    if (m.is_played && !m.has_bye) {
+      const mp = computeMatchPoints(m.p1_points, m.p2_points, bracketCtx.settings || {});
+      m.p1_match_points = mp ? mp.p1_mp : null;
+      m.p2_match_points = mp ? mp.p2_mp : null;
+      m.outcome = mp ? mp.outcome : null;
+    } else {
+      m.p1_match_points = null;
+      m.p2_match_points = null;
+      m.outcome = null;
+    }
+    if (saved && p1 && p2) {
+      const expected = [p1.licence_normalized, p2.licence_normalized].sort().join('|');
+      const actual = [
+        String(saved.p1_licence || '').replace(/\s+/g, ''),
+        String(saved.p2_licence || '').replace(/\s+/g, '')
+      ].sort().join('|');
+      m.stale = expected !== actual;
+    }
+    return m;
+  };
+
+  if (!canStart || size === 0) {
+    return {
+      tournament: bracketCtx.tournament,
+      game_params: bracketCtx.game_params,
+      bracket_final_places: bracketCtx.final_places || null,
+      can_start: canStart,
+      bracket_can_start: bracketCtx.can_start,
+      non_qualifiers,
+      consolante_size: size,
+      phases: [],
+      final_places: null
+    };
+  }
+
+  // Build phases round by round with cascade
+  const phases = [];
+  const phaseMap = new Map();
+
+  for (const { phase, p1, p2 } of round1Pairs) {
+    const ph = buildPhase(phase, p1, p2);
+    phases.push(ph);
+    phaseMap.set(phase, ph);
+  }
+
+  const laterPhases = CONSOLANTE_PHASES[size].later.slice();
+  let prevRound = CONSOLANTE_PHASES[size].round1.slice();
+  let laterIdx = 0;
+  while (prevRound.length >= 2) {
+    const nextRound = [];
+    for (let i = 0; i < prevRound.length; i += 2) {
+      const upA = phaseMap.get(prevRound[i]);
+      const upB = phaseMap.get(prevRound[i + 1]);
+      const outA = deriveConsolanteOutcome(upA);
+      const outB = deriveConsolanteOutcome(upB);
+      const w1 = outA && outA.winner ? findNonQual(outA.winner.licence) || outA.winner : null;
+      const w2 = outB && outB.winner ? findNonQual(outB.winner.licence) || outB.winner : null;
+      const phaseName = laterPhases[laterIdx++];
+      const ph = buildPhase(phaseName, w1, w2, [prevRound[i], prevRound[i + 1]]);
+      phases.push(ph);
+      phaseMap.set(phaseName, ph);
+      nextRound.push(phaseName);
+    }
+    prevRound = nextRound;
+  }
+
+  // Compute final overall places (5+) from completed phases
+  let finalPlaces = null;
+  const finalPhase = phaseMap.get('F');
+  if (finalPhase && finalPhase.is_played && !finalPhase.has_bye) {
+    const f_out = deriveConsolanteOutcome(finalPhase);
+    if (f_out && f_out.winner && f_out.loser) {
+      const ranked = [];
+      ranked.push({ place: 5, licence: f_out.winner.licence, name: f_out.winner.player_name });
+      ranked.push({ place: 6, licence: f_out.loser.licence, name: f_out.loser.player_name });
+
+      const collectLosers = (phaseNames) => {
+        const losers = [];
+        for (const name of phaseNames) {
+          const ph = phaseMap.get(name);
+          if (!ph) continue;
+          const out = deriveConsolanteOutcome(ph);
+          if (out && out.loser) losers.push(out.loser);
+        }
+        losers.sort((a, b) =>
+          (b.match_points || 0) - (a.match_points || 0) ||
+          (b.moyenne || 0) - (a.moyenne || 0) ||
+          (b.best_serie || 0) - (a.best_serie || 0)
+        );
+        return losers;
+      };
+
+      const sfLosers = collectLosers(['SF1', 'SF2']);
+      sfLosers.forEach((p, i) => ranked.push({
+        place: 7 + i, licence: p.licence, name: p.player_name, ex_aequo: sfLosers.length > 1
+      }));
+
+      const qfLosers = collectLosers(['QF1', 'QF2', 'QF3', 'QF4']);
+      qfLosers.forEach((p, i) => ranked.push({
+        place: 9 + i, licence: p.licence, name: p.player_name, ex_aequo: qfLosers.length > 1
+      }));
+
+      const r16Losers = collectLosers(['R16_1', 'R16_2', 'R16_3', 'R16_4', 'R16_5', 'R16_6', 'R16_7', 'R16_8']);
+      r16Losers.forEach((p, i) => ranked.push({
+        place: 13 + i, licence: p.licence, name: p.player_name, ex_aequo: r16Losers.length > 1
+      }));
+
+      finalPlaces = ranked;
+    }
+  }
+
+  return {
+    tournament: bracketCtx.tournament,
+    game_params: bracketCtx.game_params,
+    bracket_final_places: bracketCtx.final_places || null,
+    can_start: canStart,
+    bracket_can_start: bracketCtx.can_start,
+    non_qualifiers,
+    consolante_size: size,
+    phases,
+    final_places: finalPlaces
+  };
+}
+
+// GET /api/directeur-jeu/competitions/:id/consolante
+router.get('/competitions/:id/consolante', authenticateToken, requireDdJ, async (req, res) => {
+  const db = getDb();
+  const orgId = req.user.organizationId || null;
+  const tournoiId = parseInt(req.params.id, 10);
+  if (!Number.isFinite(tournoiId)) {
+    return res.status(400).json({ error: 'ID tournoi invalide' });
+  }
+  try {
+    const result = await loadConsolante(db, orgId, tournoiId);
+    if (result.error) return res.status(result.status || 500).json({ error: result.error });
+    res.json(result);
+  } catch (err) {
+    console.error('[DdJ] /consolante GET error:', err);
+    res.status(500).json({ error: 'Erreur lors du chargement de la consolante' });
+  }
+});
+
+// PUT /api/directeur-jeu/competitions/:id/consolante
+// Body: { phase, table_number, p1_points, p1_reprises, p1_serie,
+//         p2_points, p2_reprises, p2_serie }
+router.put('/competitions/:id/consolante', authenticateToken, requireDdJ, async (req, res) => {
+  const db = getDb();
+  const orgId = req.user.organizationId || null;
+  const tournoiId = parseInt(req.params.id, 10);
+  const {
+    phase, table_number,
+    p1_points, p1_reprises, p1_serie,
+    p2_points, p2_reprises, p2_serie
+  } = req.body || {};
+
+  if (!Number.isFinite(tournoiId)) {
+    return res.status(400).json({ error: 'ID tournoi invalide' });
+  }
+  if (!phase) {
+    return res.status(400).json({ error: 'Phase manquante' });
+  }
+  if (p1_points != null && p2_points != null && p1_points === p2_points) {
+    return res.status(400).json({ error: 'Pas de match nul dans la consolante' });
+  }
+
+  try {
+    const ctx = await loadConsolante(db, orgId, tournoiId);
+    if (ctx.error) return res.status(ctx.status || 500).json({ error: ctx.error });
+    if (!ctx.can_start) {
+      return res.status(409).json({ error: "La consolante n'est pas encore accessible" });
+    }
+    const target = ctx.phases.find(p => p.phase === phase);
+    if (!target) return res.status(400).json({ error: `Phase ${phase} inconnue` });
+    if (target.has_bye) {
+      return res.status(409).json({ error: 'Cette phase est un bye (auto-avance)' });
+    }
+    if (!target.can_enter) {
+      return res.status(409).json({ error: 'Les joueurs de cette phase ne sont pas encore connus' });
+    }
+
+    await new Promise((resolve, reject) => {
+      db.run(
+        `INSERT INTO ddj_consolante_matches
+           (tournoi_id, phase, table_number, p1_licence, p2_licence,
+            p1_points, p1_reprises, p1_serie,
+            p2_points, p2_reprises, p2_serie,
+            entered_at, entered_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, CURRENT_TIMESTAMP, $12)
+         ON CONFLICT (tournoi_id, phase) DO UPDATE SET
+           table_number = EXCLUDED.table_number,
+           p1_licence   = EXCLUDED.p1_licence,
+           p2_licence   = EXCLUDED.p2_licence,
+           p1_points    = EXCLUDED.p1_points,
+           p1_reprises  = EXCLUDED.p1_reprises,
+           p1_serie     = EXCLUDED.p1_serie,
+           p2_points    = EXCLUDED.p2_points,
+           p2_reprises  = EXCLUDED.p2_reprises,
+           p2_serie     = EXCLUDED.p2_serie,
+           entered_at   = CURRENT_TIMESTAMP,
+           entered_by   = EXCLUDED.entered_by`,
+        [
+          tournoiId, phase, table_number || null,
+          target.p1.licence, target.p2.licence,
+          p1_points ?? null, p1_reprises ?? null, p1_serie ?? null,
+          p2_points ?? null, p2_reprises ?? null, p2_serie ?? null,
+          req.user.userId || null
+        ],
+        (err) => err ? reject(err) : resolve()
+      );
+    });
+
+    // Activity log
+    try {
+      await new Promise((resolve, reject) => {
+        db.run(
+          `INSERT INTO activity_logs
+             (organization_id, action, action_type, entity_type, entity_id, user_id, details, source)
+           VALUES ($1, 'ddj_consolante_saved', 'success', 'tournament', $2, $3, $4, 'directeur_jeu')`,
+          [orgId, tournoiId, req.user.userId || null,
+            JSON.stringify({ phase, p1_points, p2_points })],
+          (err) => err ? reject(err) : resolve()
+        );
+      });
+    } catch (_) { /* non-blocking */ }
+
+    const reload = await loadConsolante(db, orgId, tournoiId);
+    res.json({ success: true, consolante: reload });
+  } catch (err) {
+    console.error('[DdJ] /consolante PUT error:', err);
+    res.status(500).json({ error: 'Erreur lors de la sauvegarde du match de classement' });
   }
 });
 
