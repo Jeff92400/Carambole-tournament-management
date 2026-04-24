@@ -9,15 +9,19 @@ const DEFAULT_ORG_NAME = 'CDB';
  */
 async function initAppBranding() {
   try {
+    // Super Admin pages display platform-level (FFB) branding, not a CDB's.
+    // Skip the per-org logo + name override so the static markup stays intact.
+    const isSuperAdminPage = window.location.pathname.includes('/super-admin');
+
     // Try to load organization logo, fallback to default
-    const logoUrl = await getOrganizationLogoUrl();
+    const logoUrl = isSuperAdminPage ? 'images/FFB.png' : await getOrganizationLogoUrl();
 
     // Update favicon with cache-busting
     updateFavicon(logoUrl);
 
     // Update header icon if element exists
     const headerIcon = document.getElementById('app-header-icon');
-    if (headerIcon) {
+    if (headerIcon && !isSuperAdminPage) {
       headerIcon.src = logoUrl;
       headerIcon.onerror = function() {
         this.src = DEFAULT_LOGO_PATH;
@@ -31,7 +35,7 @@ async function initAppBranding() {
 
     // Update organization name if element exists
     const orgNameEl = document.getElementById('app-org-name');
-    if (orgNameEl) {
+    if (orgNameEl && !isSuperAdminPage) {
       const orgName = await getOrganizationShortName();
       const pageTitle = orgNameEl.getAttribute('data-page-title');
       let html = (orgName || DEFAULT_ORG_NAME) +
