@@ -2157,11 +2157,16 @@ router.get('/competitions/:id/export-csv', authenticateToken, requireDdJ, async 
     const rows = [];
 
     // Phase 1: poule matches
+    // Note: poule matches use flat fields (m.p1_licence, m.p1_name) while
+    // bracket/consolante use nested objects (m.p1.licence). We normalize here
+    // so matchRow() sees a uniform { licence, player_name } shape.
     for (const poule of (pouleCtx.poules || [])) {
       const label = pouleLabel(poule.number);
       for (const m of (poule.matches || [])) {
         if (!m.is_played) continue;
-        rows.push(matchRow(1, matchDate, label, m.p1, m.p2, m, mode));
+        const p1Obj = { licence: m.p1_licence, player_name: m.p1_name };
+        const p2Obj = { licence: m.p2_licence, player_name: m.p2_name };
+        rows.push(matchRow(1, matchDate, label, p1Obj, p2Obj, m, mode));
       }
     }
 
