@@ -2112,7 +2112,7 @@ async function initializeDatabase() {
           pts_rep TEXT,
           locked_by_user BOOLEAN DEFAULT FALSE,
           conflict_flags JSONB DEFAULT '[]'::jsonb,
-          tournoi_ext_id INTEGER REFERENCES tournoi_ext(id) ON DELETE SET NULL,
+          tournoi_ext_id INTEGER REFERENCES tournoi_ext(tournoi_id) ON DELETE SET NULL,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
