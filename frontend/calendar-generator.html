@@ -350,7 +350,7 @@
   <script>
     if (!requireAuth()) { throw new Error('Not authenticated'); }
     const API_URL = '/api';
-    const token = localStorage.getItem('token');
+    const token = sessionStorage.getItem('token');
     const authHeaders = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
 
     let referenceData = { categories: [], clubs: [] };
