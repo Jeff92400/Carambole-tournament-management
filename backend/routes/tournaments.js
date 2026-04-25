@@ -5473,4 +5473,13 @@ router.recomputeAllBonuses = recomputeAllBonuses;
 router.recalculateRankings = recalculateRankings;
 router.getPositionPointsLookup = getPositionPointsLookup;
 
+// Expose internal helpers for the DdJ finalize flow (which mirrors the
+// CSV import pipeline). These are the same functions /import calls after
+// inserting tournament_results — kept attached to the router so the
+// existing `app.use('/api/tournaments', tournamentsRoutes)` mount in
+// server.js doesn't need to change.
+router.recalculatePositions = recalculatePositions;
+router.recomputeAllBonuses = recomputeAllBonuses;
+router.recalculateRankings = recalculateRankings;
+
 module.exports = router;

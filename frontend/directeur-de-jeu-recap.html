@@ -148,6 +148,34 @@
       background: linear-gradient(135deg, var(--color-primary, #1F4788), var(--color-secondary, #667eea));
       color: white;
     }
+    .ddj-btn-export {
+      background: linear-gradient(135deg, #6c757d, #5a6268);
+      color: white;
+    }
+    .ddj-btn-export:hover { transform: translateY(-1px); box-shadow: 0 4px 8px rgba(108,117,125,0.3); }
+
+    /* Finalize confirmation modal */
+    .ddj-modal-backdrop {
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.55);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 9999;
+      animation: ddj-modal-fade 0.18s ease;
+    }
+    @keyframes ddj-modal-fade { from { opacity: 0; } to { opacity: 1; } }
+    .ddj-modal {
+      background: white;
+      border-radius: 14px;
+      padding: 28px 32px;
+      max-width: 540px;
+      width: calc(100% - 40px);
+      box-shadow: 0 20px 60px rgba(0,0,0,0.35);
+      animation: ddj-modal-pop 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    @keyframes ddj-modal-pop {
+      from { transform: translateY(20px) scale(0.95); opacity: 0; }
+      to   { transform: translateY(0) scale(1); opacity: 1; }
+    }
 
     .ddj-loading, .ddj-empty {
       text-align: center; padding: 60px 20px; color: #888;
@@ -346,9 +374,37 @@
           <button class="ddj-btn ddj-btn-print" onclick="window.print()">
             🖨 Imprimer
           </button>
-          <button class="ddj-btn ddj-btn-primary" onclick="downloadCsvExport()" title="Télécharge le CSV au format FFB (matchs de poule + tableau final + consolante)">
-            📤 Exporter CSV (format FFB)
+          <button class="ddj-btn ddj-btn-export" onclick="downloadCsvExport()" title="Télécharge le CSV au format FFB (matchs de poule + tableau final + consolante)">
+            📤 Exporter CSV
           </button>
+          <button id="finalizeBtn" class="ddj-btn ddj-btn-primary"
+                  ${isFullyDone ? '' : 'disabled title="Toutes les phases doivent être terminées avant validation"'}
+                  onclick="openFinalizeModal()">
+            ✅ Valider les résultats
+          </button>
+        </div>
+
+        <!-- Confirmation modal for finalization -->
+        <div id="finalizeModal" class="ddj-modal-backdrop no-print" style="display:none;" onclick="if(event.target===this)closeFinalizeModal()">
+          <div class="ddj-modal">
+            <h3 style="margin:0 0 12px 0;">✅ Valider les résultats du tournoi</h3>
+            <p style="margin:0 0 10px 0;line-height:1.5;">
+              Les résultats vont être <strong>intégrés au classement de la saison</strong>
+              (positions, match points, moyennes, bonus, classements).
+            </p>
+            <p style="margin:0 0 10px 0;line-height:1.5;font-size:0.9em;color:#555;">
+              👥 <strong>${(data.overall_classement || []).length} joueur(s)</strong> seront enregistrés. Vous serez ensuite redirigé vers la page des résultats officiels.
+            </p>
+            <p style="margin:0 0 16px 0;font-size:0.85em;color:#777;">
+              ℹ️ Cette opération est <strong>idempotente</strong> : en cas d'erreur ou de modification ultérieure, vous pourrez re-valider — les résultats existants seront remplacés.
+            </p>
+            <div style="display:flex;gap:10px;justify-content:flex-end;">
+              <button class="ddj-btn ddj-btn-secondary" onclick="closeFinalizeModal()">Annuler</button>
+              <button id="finalizeConfirmBtn" class="ddj-btn ddj-btn-primary" onclick="finalizeResults()">
+                ✅ Confirmer la validation
+              </button>
+            </div>
+          </div>
         </div>
       `;
     }
@@ -597,6 +653,45 @@
       } catch (err) {
         console.error('[Recap] CSV export error:', err);
         alert("Erreur lors de l'export CSV : " + err.message);
+      }
+    }
+
+    // ========================================================================
+    // Finalisation — étape 7 : intègre les résultats au moteur de classement
+    // ========================================================================
+    function openFinalizeModal() {
+      document.getElementById('finalizeModal').style.display = 'flex';
+    }
+    function closeFinalizeModal() {
+      document.getElementById('finalizeModal').style.display = 'none';
+    }
+
+    async function finalizeResults() {
+      const confirmBtn = document.getElementById('finalizeConfirmBtn');
+      const originalLabel = confirmBtn.textContent;
+      confirmBtn.disabled = true;
+      confirmBtn.textContent = '⏳ Validation en cours…';
+      try {
+        const resp = await authFetch(`${API_URL}/directeur-jeu/competitions/${compId}/finalize`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        if (!resp.ok) {
+          const body = await resp.json().catch(() => ({}));
+          throw new Error(body.error || `Erreur serveur (${resp.status})`);
+        }
+        const data = await resp.json();
+        // Show a brief success state then redirect to the official results page
+        confirmBtn.textContent = '✅ Validé — redirection…';
+        confirmBtn.style.background = 'linear-gradient(135deg,#28a745,#218838)';
+        setTimeout(() => {
+          window.location.href = data.redirect_url || `tournament-results.html?id=${data.tournament_id}`;
+        }, 800);
+      } catch (err) {
+        console.error('[Finalize] error:', err);
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = originalLabel;
+        alert("Erreur lors de la validation : " + err.message);
       }
     }
 

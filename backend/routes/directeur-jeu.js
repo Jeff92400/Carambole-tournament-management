@@ -308,6 +308,63 @@ router.put('/competitions/:id/pointage/:licence', authenticateToken, requireDdJ,
       return res.status(404).json({ error: 'Joueur non convoqué pour ce tournoi' });
     }
 
+    // Data-integrity guard: if the DdJ is marking a player FORFAIT *after*
+    // matches have already been entered for this tournament, require
+    // explicit confirmation (force=true). The CSV/Excel-era flow had no
+    // such concept; here, retroactively flipping a player to forfait while
+    // their scores live in ddj_*_matches creates inconsistent state for
+    // the eventual finalization (positions / season ranking). The frontend
+    // catches the 409 below and shows a modal; user-confirmed re-POST
+    // includes `force: true` and proceeds.
+    if (present === false) {
+      const force = req.body && req.body.force === true;
+      if (!force) {
+        const counts = await Promise.all([
+          new Promise((resolve, reject) => {
+            db.get(
+              `SELECT COUNT(*)::int AS n FROM ddj_poule_matches
+               WHERE tournoi_id = $1
+                 AND (REPLACE(p1_licence, ' ', '') = $2 OR REPLACE(p2_licence, ' ', '') = $2)
+                 AND p1_points IS NOT NULL AND p2_points IS NOT NULL`,
+              [tournoiId, licence],
+              (err, row) => err ? reject(err) : resolve(row?.n || 0)
+            );
+          }),
+          new Promise((resolve, reject) => {
+            db.get(
+              `SELECT COUNT(*)::int AS n FROM ddj_bracket_matches
+               WHERE tournoi_id = $1
+                 AND (REPLACE(p1_licence, ' ', '') = $2 OR REPLACE(p2_licence, ' ', '') = $2)
+                 AND p1_points IS NOT NULL AND p2_points IS NOT NULL`,
+              [tournoiId, licence],
+              (err, row) => err ? reject(err) : resolve(row?.n || 0)
+            );
+          }),
+          new Promise((resolve, reject) => {
+            db.get(
+              `SELECT COUNT(*)::int AS n FROM ddj_consolante_matches
+               WHERE tournoi_id = $1
+                 AND (REPLACE(p1_licence, ' ', '') = $2 OR REPLACE(p2_licence, ' ', '') = $2)
+                 AND p1_points IS NOT NULL AND p2_points IS NOT NULL`,
+              [tournoiId, licence],
+              (err, row) => err ? reject(err) : resolve(row?.n || 0)
+            );
+          })
+        ]);
+        const total = counts[0] + counts[1] + counts[2];
+        if (total > 0) {
+          return res.status(409).json({
+            requiresConfirm: true,
+            matches_count: total,
+            poule_matches: counts[0],
+            bracket_matches: counts[1],
+            consolante_matches: counts[2],
+            error: `${total} match(s) déjà saisi(s) pour ce joueur. Confirmer va le marquer forfait mais conserver les scores existants — ils seront pris en compte lors de la finalisation.`
+          });
+        }
+      }
+    }
+
     // Update inscriptions.statut + inscriptions.forfait together so the two
     // legacy columns stay in sync. The SET uses existing CASE conventions
     // documented at the top of this file.
@@ -2208,6 +2265,270 @@ router.get('/competitions/:id/export-csv', authenticateToken, requireDdJ, async 
   } catch (err) {
     console.error('[DdJ] /export-csv error:', err);
     res.status(500).json({ error: "Erreur lors de l'export CSV" });
+  }
+});
+
+// ============================================================================
+// Step 7 — Finalisation : intègre les résultats au moteur de classement
+// ============================================================================
+//
+// Mirrors the CSV /import pipeline so the DdJ workflow plugs into the same
+// downstream machinery (positions, bonuses, season rankings) used by
+// admin-imported results. Idempotent: re-finalizing wipes & re-inserts.
+//
+// Per-player aggregation across ALL their played matches (poule + bracket
+// + consolante; byes excluded since no score was entered):
+//   points       = Σ p[i]_points
+//   reprises     = Σ p[i]_reprises
+//   match_points = Σ p[i]_match_points (uses precomputed value where
+//                  available, falls back to 2/0 derivation in knockouts)
+//   serie        = max p[i]_serie
+//   moyenne      = points / reprises (weighted)
+//   position     = final overall place from bracket (1-4) + consolante (5+)
+//
+// Tournament linkage uses the same (category_id, tournament_number, season)
+// composite key as /import — no new column on `tournaments` needed.
+// ============================================================================
+
+const tournamentsRouter = require('./tournaments');
+const {
+  recalculatePositions: recalcPositions,
+  recomputeAllBonuses: recalcBonuses,
+  recalculateRankings: recalcRankings
+} = tournamentsRouter;
+
+router.post('/competitions/:id/finalize', authenticateToken, requireDdJ, async (req, res) => {
+  const db = getDb();
+  const orgId = req.user.organizationId || null;
+  const tournoiId = parseInt(req.params.id, 10);
+  if (!Number.isFinite(tournoiId)) {
+    return res.status(400).json({ error: 'ID tournoi invalide' });
+  }
+
+  try {
+    // ---- Load full state ---------------------------------------------------
+    const pouleCtx = await loadPouleMatches(db, orgId, tournoiId);
+    if (pouleCtx.error) return res.status(pouleCtx.status || 500).json({ error: pouleCtx.error });
+    const bracketCtx = await loadBracket(db, orgId, tournoiId);
+    if (bracketCtx.error) return res.status(bracketCtx.status || 500).json({ error: bracketCtx.error });
+    const consolanteCtx = await loadConsolante(db, orgId, tournoiId);
+    if (consolanteCtx.error) return res.status(consolanteCtx.status || 500).json({ error: consolanteCtx.error });
+
+    // ---- Validate completion ----------------------------------------------
+    const allPoulesDone = pouleCtx.poules.length > 0 && pouleCtx.poules.every(p => p.all_matches_played);
+    if (!allPoulesDone) {
+      return res.status(409).json({ error: 'Tous les matchs de poule doivent être terminés avant de valider.' });
+    }
+    if (!bracketCtx.final_places || bracketCtx.final_places.length === 0) {
+      return res.status(409).json({ error: 'Le tableau final doit être terminé (Finale + Petite finale).' });
+    }
+    // Consolante is required only if there ARE non-qualifiers (size >= 2).
+    if (consolanteCtx.consolante_size >= 2 && !consolanteCtx.final_places) {
+      return res.status(409).json({ error: 'La consolante doit être terminée (matchs de classement).' });
+    }
+
+    // ---- Aggregate per-player stats ---------------------------------------
+    const t = pouleCtx.tournament;
+    const overallPlaces = [
+      ...(bracketCtx.final_places || []),
+      ...(consolanteCtx.final_places || [])
+    ];
+    const placeByLicence = new Map();
+    overallPlaces.forEach(p => {
+      const key = String(p.licence || '').replace(/\s+/g, '');
+      if (key) placeByLicence.set(key, p.place);
+    });
+
+    const statsByLic = new Map();
+    const ensure = (licNorm, name) => {
+      if (!statsByLic.has(licNorm)) {
+        statsByLic.set(licNorm, {
+          licence: licNorm,
+          player_name: name || '',
+          points: 0, reprises: 0, match_points: 0, best_serie: 0, matches_played: 0
+        });
+      } else if (name && !statsByLic.get(licNorm).player_name) {
+        statsByLic.get(licNorm).player_name = name;
+      }
+      return statsByLic.get(licNorm);
+    };
+
+    // Add a played match's stats. mp1/mp2 may be null in knockouts (then we
+    // derive from points: winner=2, loser=0, no draws expected in KO).
+    const addMatch = (lic1, name1, lic2, name2, m, isKnockout) => {
+      const k1 = String(lic1 || '').replace(/\s+/g, '');
+      const k2 = String(lic2 || '').replace(/\s+/g, '');
+      if (!k1 || !k2) return;
+      if (m.p1_points == null || m.p2_points == null) return;
+      const s1 = ensure(k1, name1);
+      const s2 = ensure(k2, name2);
+      s1.points += m.p1_points || 0;
+      s2.points += m.p2_points || 0;
+      s1.reprises += m.p1_reprises || 0;
+      s2.reprises += m.p2_reprises || 0;
+      s1.best_serie = Math.max(s1.best_serie, m.p1_serie || 0);
+      s2.best_serie = Math.max(s2.best_serie, m.p2_serie || 0);
+      let mp1 = m.p1_match_points;
+      let mp2 = m.p2_match_points;
+      if (mp1 == null || mp2 == null) {
+        if (m.p1_points > m.p2_points) { mp1 = 2; mp2 = 0; }
+        else if (m.p2_points > m.p1_points) { mp1 = 0; mp2 = 2; }
+        else { mp1 = 1; mp2 = 1; }
+      }
+      s1.match_points += mp1;
+      s2.match_points += mp2;
+      s1.matches_played++;
+      s2.matches_played++;
+    };
+
+    // Poule matches (flat shape: m.p1_licence / m.p1_name)
+    for (const poule of (pouleCtx.poules || [])) {
+      for (const m of (poule.matches || [])) {
+        if (!m.is_played) continue;
+        addMatch(m.p1_licence, m.p1_name, m.p2_licence, m.p2_name, m, false);
+      }
+    }
+    // Bracket matches (nested shape: m.p1.licence)
+    for (const ph of (bracketCtx.phases || [])) {
+      if (!ph.is_played) continue;
+      addMatch(ph.p1?.licence, ph.p1?.player_name, ph.p2?.licence, ph.p2?.player_name, ph, true);
+    }
+    // Consolante matches (skip byes — no score was entered)
+    for (const ph of (consolanteCtx.phases || [])) {
+      if (!ph.is_played || ph.has_bye) continue;
+      addMatch(ph.p1?.licence, ph.p1?.player_name, ph.p2?.licence, ph.p2?.player_name, ph, true);
+    }
+
+    if (statsByLic.size === 0) {
+      return res.status(409).json({ error: 'Aucun match joué — rien à finaliser.' });
+    }
+
+    // ---- Resolve category + season ----------------------------------------
+    const categoryRow = await new Promise((resolve, reject) => {
+      db.get(
+        `SELECT id FROM categories
+         WHERE UPPER(REPLACE(game_type, ' ', '')) = UPPER(REPLACE($1, ' ', ''))
+           AND UPPER(level) = UPPER($2)
+           AND ($3::int IS NULL OR organization_id = $3)
+         LIMIT 1`,
+        [t.mode || '', t.categorie || '', orgId],
+        (err, row) => err ? reject(err) : resolve(row)
+      );
+    });
+    if (!categoryRow) {
+      return res.status(400).json({
+        error: `Catégorie introuvable dans la table categories : ${t.mode} / ${t.categorie}`
+      });
+    }
+    const categoryId = categoryRow.id;
+    const tournamentNumber = t.tournament_number || 1;
+    const season = appSettings.getCurrentSeason
+      ? appSettings.getCurrentSeason(t.debut ? new Date(t.debut) : new Date(), orgId)
+      : (() => {
+          // Fallback: rough September-cutoff if helper isn't available
+          const d = t.debut ? new Date(t.debut) : new Date();
+          const y = d.getFullYear();
+          return d.getMonth() + 1 >= 9 ? `${y}-${y + 1}` : `${y - 1}-${y}`;
+        })();
+
+    // ---- UPSERT tournaments row -------------------------------------------
+    await new Promise((resolve, reject) => {
+      db.run(
+        `INSERT INTO tournaments (category_id, tournament_number, season, tournament_date, organization_id, location)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (category_id, tournament_number, season) DO UPDATE SET
+           tournament_date = EXCLUDED.tournament_date,
+           location = COALESCE(EXCLUDED.location, tournaments.location),
+           import_date = CURRENT_TIMESTAMP`,
+        [categoryId, tournamentNumber, season, t.debut || null, orgId, t.lieu || null],
+        (err) => err ? reject(err) : resolve()
+      );
+    });
+    const tournamentRow = await new Promise((resolve, reject) => {
+      db.get(
+        `SELECT id FROM tournaments WHERE category_id=$1 AND tournament_number=$2 AND season=$3`,
+        [categoryId, tournamentNumber, season],
+        (err, row) => err ? reject(err) : resolve(row)
+      );
+    });
+    if (!tournamentRow) {
+      return res.status(500).json({ error: 'Impossible de créer/retrouver le tournoi interne.' });
+    }
+    const tournamentId = tournamentRow.id;
+
+    // ---- Wipe & re-insert tournament_results (idempotent) -----------------
+    await new Promise((resolve, reject) => {
+      db.run(`DELETE FROM tournament_results WHERE tournament_id=$1`, [tournamentId],
+        (err) => err ? reject(err) : resolve());
+    });
+
+    // Ensure each player exists in `players` (CSV import does the same — DdJ
+    // typically operates on already-known players, but we guard anyway).
+    for (const stats of statsByLic.values()) {
+      const parts = (stats.player_name || '').split(' ');
+      const lastName = parts[0] || '';
+      const firstName = parts.slice(1).join(' ') || '';
+      await new Promise((resolve) => {
+        db.run(
+          `INSERT INTO players (licence, first_name, last_name, club, is_active)
+           VALUES ($1, $2, $3, $4, 1)
+           ON CONFLICT (licence) DO NOTHING`,
+          [stats.licence, firstName, lastName, 'Club inconnu'],
+          () => resolve() // non-blocking — duplicate is fine
+        );
+      });
+    }
+
+    let inserted = 0;
+    for (const stats of statsByLic.values()) {
+      const moyenne = stats.reprises > 0 ? (stats.points / stats.reprises) : 0;
+      const position = placeByLicence.get(stats.licence) || 0;
+      await new Promise((resolve, reject) => {
+        db.run(
+          `INSERT INTO tournament_results
+             (tournament_id, licence, player_name, position, match_points, moyenne, serie, points, reprises)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+          [tournamentId, stats.licence, stats.player_name, position,
+            stats.match_points, moyenne, stats.best_serie, stats.points, stats.reprises],
+          (err) => err ? reject(err) : resolve()
+        );
+      });
+      inserted++;
+    }
+
+    // ---- Chain ranking recalculation (same as /import) --------------------
+    await new Promise((resolve) => {
+      recalcPositions(tournamentId, orgId, () => {
+        recalcBonuses(categoryId, season, orgId, () => {
+          recalcRankings(categoryId, season, () => resolve());
+        });
+      });
+    });
+
+    // ---- Audit log --------------------------------------------------------
+    try {
+      await new Promise((resolve) => {
+        db.run(
+          `INSERT INTO activity_logs
+             (organization_id, action, action_type, entity_type, entity_id, user_id, details, source)
+           VALUES ($1, 'ddj_finalize', 'success', 'tournament', $2, $3, $4, 'directeur_jeu')`,
+          [orgId, tournamentId, req.user.userId || null,
+            JSON.stringify({ tournoi_ext_id: tournoiId, players: inserted, season, category_id: categoryId })],
+          () => resolve()
+        );
+      });
+    } catch (_) { /* non-blocking */ }
+
+    res.json({
+      success: true,
+      tournament_id: tournamentId,
+      players_count: inserted,
+      season,
+      redirect_url: `tournament-results.html?id=${tournamentId}`
+    });
+  } catch (err) {
+    console.error('[DdJ] /finalize error:', err);
+    res.status(500).json({ error: 'Erreur lors de la finalisation : ' + (err.message || 'inconnue') });
   }
 });
 

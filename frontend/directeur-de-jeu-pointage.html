@@ -519,9 +519,17 @@
       if (state.pendingByLicence.get(licence)) return;
 
       const newPresent = !player.present;
+      await sendPointage(player, newPresent, false);
+    }
+
+    // Internal: send the PUT request, with optional `force` flag to bypass
+    // the data-integrity guard (when the player already has saved matches).
+    async function sendPointage(player, newPresent, force) {
+      const licence = player.licence_normalized;
       state.pendingByLicence.set(licence, true);
 
       // Optimistic UI — update immediately for touch responsiveness
+      const previous = player.present;
       player.present = newPresent;
       updateRow(player);
       updateSummary();
@@ -532,26 +540,86 @@
           opts.headers = Object.assign({}, opts.headers, { 'Authorization': 'Bearer ' + token });
           return fetch(url, opts);
         };
+        const body = { present: newPresent };
+        if (force) body.force = true;
         const resp = await fetchFn(`${API_URL}/directeur-jeu/competitions/${compId}/pointage/${encodeURIComponent(licence)}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ present: newPresent })
+          body: JSON.stringify(body)
         });
+        if (resp.status === 409) {
+          // Backend signals: matches already exist for this player. Roll back
+          // optimistic UI and ask the DdJ to confirm via modal.
+          const data = await resp.json().catch(() => ({}));
+          if (data.requiresConfirm) {
+            player.present = previous;
+            updateRow(player);
+            updateSummary();
+            state.pendingByLicence.delete(licence);
+            openForfaitConfirmModal(player, data);
+            return;
+          }
+          throw new Error(data.error || 'Conflit (409)');
+        }
         if (!resp.ok) {
-          const body = await resp.json().catch(() => ({}));
-          throw new Error(body.error || `Erreur ${resp.status}`);
+          const errBody = await resp.json().catch(() => ({}));
+          throw new Error(errBody.error || `Erreur ${resp.status}`);
         }
         showSaveStatus(newPresent ? 'Présent ✓' : 'Forfait enregistré');
       } catch (err) {
         console.error('[Pointage] toggle error:', err);
-        // Rollback on failure
-        player.present = !newPresent;
+        player.present = previous;
         updateRow(player);
         updateSummary();
         showSaveStatus('Erreur — non enregistré', true);
       } finally {
         state.pendingByLicence.delete(licence);
       }
+    }
+
+    // Confirmation modal — only triggered when the backend reports existing
+    // saved matches for the player being marked forfait. Confirming re-sends
+    // the PUT with force=true so the inscription flips while the existing
+    // match scores are preserved (the DdJ can decide to clear them later).
+    function openForfaitConfirmModal(player, info) {
+      let modal = document.getElementById('forfaitConfirmModal');
+      if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'forfaitConfirmModal';
+        modal.style.cssText = `
+          position: fixed; top:0; left:0; right:0; bottom:0;
+          background: rgba(0,0,0,0.55);
+          display: flex; align-items: center; justify-content: center;
+          z-index: 9999;`;
+        modal.innerHTML = `
+          <div style="background:white; border-radius:14px; padding:28px 32px; max-width:520px; width:calc(100% - 40px); box-shadow:0 20px 60px rgba(0,0,0,0.35);">
+            <h3 style="margin:0 0 12px 0; color:#dc3545;">⚠️ Matchs déjà saisis</h3>
+            <div id="forfaitConfirmBody" style="line-height:1.55;font-size:0.95em;color:#333;"></div>
+            <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:18px;">
+              <button id="forfaitCancelBtn" class="ddj-btn ddj-btn-secondary">Annuler</button>
+              <button id="forfaitConfirmBtn" class="ddj-btn" style="background:linear-gradient(135deg,#dc3545,#c82333);color:white;">Marquer forfait</button>
+            </div>
+          </div>`;
+        document.body.appendChild(modal);
+      }
+      const lines = [];
+      lines.push(`<p style="margin:0 0 10px 0;"><strong>${escapeHtml(player.player_name)}</strong> a déjà <strong>${info.matches_count} match${info.matches_count > 1 ? 's' : ''}</strong> enregistré${info.matches_count > 1 ? 's' : ''} :</p>`);
+      lines.push('<ul style="margin:0 0 12px 18px; padding:0; color:#555; font-size:0.9em;">');
+      if (info.poule_matches > 0) lines.push(`<li>${info.poule_matches} match(s) de poule</li>`);
+      if (info.bracket_matches > 0) lines.push(`<li>${info.bracket_matches} match(s) du tableau final</li>`);
+      if (info.consolante_matches > 0) lines.push(`<li>${info.consolante_matches} match(s) de consolante</li>`);
+      lines.push('</ul>');
+      lines.push(`<p style="margin:0 0 10px 0;">Le marquer forfait <strong>conservera ces scores</strong> dans la base — ils seront pris en compte lors de la finalisation.</p>`);
+      lines.push(`<p style="margin:0; font-size:0.85em; color:#777;">Si tu veux supprimer les scores, fais-le manuellement aux étapes 3/4/5 avant la finalisation.</p>`);
+      modal.querySelector('#forfaitConfirmBody').innerHTML = lines.join('');
+      modal.style.display = 'flex';
+
+      const close = () => { modal.style.display = 'none'; };
+      modal.querySelector('#forfaitCancelBtn').onclick = close;
+      modal.querySelector('#forfaitConfirmBtn').onclick = async () => {
+        close();
+        await sendPointage(player, false, true);
+      };
     }
 
     function updateRow(player) {
