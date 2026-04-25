@@ -74,7 +74,8 @@ router.post('/brief', authenticateToken, requireAdmin, (req, res) => {
     blackout_dates,
     active_categories,
     active_hosts,
-    final_attribution
+    final_attribution,
+    host_blackouts
   } = req.body;
 
   if (!season || !qualif_day || !final_day || !first_weekend) {
@@ -84,8 +85,8 @@ router.post('/brief', authenticateToken, requireAdmin, (req, res) => {
   db.run(
     `INSERT INTO calendar_brief
        (organization_id, season, qualif_day, final_day, first_weekend,
-        blackout_dates, active_categories, active_hosts, final_attribution, created_by)
-     VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8::jsonb, $9, $10)
+        blackout_dates, active_categories, active_hosts, final_attribution, host_blackouts, created_by)
+     VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8::jsonb, $9, $10::jsonb, $11)
      RETURNING id`,
     [
       orgId,
@@ -97,6 +98,7 @@ router.post('/brief', authenticateToken, requireAdmin, (req, res) => {
       JSON.stringify(active_categories || []),
       JSON.stringify(active_hosts || []),
       final_attribution || 'manual',
+      JSON.stringify(host_blackouts || []),
       userId
     ],
     function(err, result) {
@@ -126,6 +128,7 @@ router.put('/brief/:id', authenticateToken, requireAdmin, (req, res) => {
     active_categories,
     active_hosts,
     final_attribution,
+    host_blackouts,
     status
   } = req.body;
 
@@ -138,9 +141,10 @@ router.put('/brief/:id', authenticateToken, requireAdmin, (req, res) => {
          active_categories = COALESCE($5::jsonb, active_categories),
          active_hosts = COALESCE($6::jsonb, active_hosts),
          final_attribution = COALESCE($7, final_attribution),
-         status = COALESCE($8, status),
+         host_blackouts = COALESCE($8::jsonb, host_blackouts),
+         status = COALESCE($9, status),
          updated_at = CURRENT_TIMESTAMP
-     WHERE id = $9 AND organization_id = $10`,
+     WHERE id = $10 AND organization_id = $11`,
     [
       qualif_day || null,
       final_day || null,
@@ -149,6 +153,7 @@ router.put('/brief/:id', authenticateToken, requireAdmin, (req, res) => {
       active_categories ? JSON.stringify(active_categories) : null,
       active_hosts ? JSON.stringify(active_hosts) : null,
       final_attribution || null,
+      host_blackouts ? JSON.stringify(host_blackouts) : null,
       status || null,
       briefId,
       orgId
@@ -572,6 +577,8 @@ RÈGLES STRICTES (à respecter sans exception) :
 4. Ne cite JAMAIS un club si l'utilisateur ne l'a pas explicitement nommé dans sa phrase.
 5. Si la phrase est trop ambiguë pour choisir une règle, retourne :
    { "error": "Phrase trop ambiguë", "explanation": "<demande de reformulation>" }
+6. CAS PARTICULIER — Indisponibilité d'un club sur une période (ex. "Clichy indispo en décembre", "Courbevoie fermé du X au Y") : ce n'est PAS une règle logique mais une donnée saisonnière. Retourne OBLIGATOIREMENT :
+   { "error": "À saisir dans le Brief", "explanation": "Cette indisponibilité se gère dans l'Étape 1 — Brief, section « Indisponibilités par club »." }
 
 Mieux vaut renvoyer une erreur claire que d'inventer une règle bricolée.`;
 

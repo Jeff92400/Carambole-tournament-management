@@ -2144,6 +2144,9 @@ async function initializeDatabase() {
       await client.query(`ALTER TABLE calendar_brief ADD CONSTRAINT calendar_brief_final_day_check
         CHECK (final_day IN ('monday','tuesday','wednesday','thursday','friday','saturday','sunday'))`);
 
+      // V 2.0.502 — per-host blackout periods (e.g. "Clichy unavailable in December 2026")
+      await client.query(`ALTER TABLE calendar_brief ADD COLUMN IF NOT EXISTS host_blackouts JSONB DEFAULT '[]'::jsonb`);
+
       console.log('[Migration] Seasonal Calendar Generator schema ready');
     } catch (calendarErr) {
       console.error('[Migration] Seasonal Calendar Generator schema FAILED (non-fatal):', calendarErr.message);

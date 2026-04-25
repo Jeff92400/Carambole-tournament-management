@@ -343,6 +343,16 @@
       </div>
       <div class="pill-list" id="blackoutList"></div>
 
+      <h3 class="section-title">Indisponibilités par club (cette saison)</h3>
+      <p class="hint" style="margin-bottom: 6px;">Périodes où un club ne peut pas accueillir de tournoi (travaux, événement, fermeture exceptionnelle...).</p>
+      <table id="hostBlackoutsTable" class="ligue-table" style="margin-top: 6px;">
+        <thead><tr><th>Club</th><th style="width: 160px;">Du</th><th style="width: 160px;">Au</th><th>Motif (optionnel)</th><th style="width: 60px;"></th></tr></thead>
+        <tbody><tr><td colspan="5" style="color: #888;">Aucune indisponibilité.</td></tr></tbody>
+      </table>
+      <div style="margin-top: 8px;">
+        <button type="button" class="btn" id="addHostBlackoutBtn" style="padding: 6px 12px;">+ Ajouter une indisponibilité</button>
+      </div>
+
       <h3 class="section-title">Dates des finales de ligue (par catégorie)</h3>
       <p class="hint" style="margin-bottom: 6px;">Les finales départementales de chaque catégorie devront avoir lieu avant la finale de ligue correspondante. Laissez vide si non applicable.</p>
       <div id="ligueFinalsContainer">
@@ -422,6 +432,7 @@
     let currentBrief = null;
     let blackoutDates = [];
     let ligueFinalDates = {};
+    let hostBlackouts = []; // [{ host_id, start_date, end_date, reason }]
 
     // ----- Season options -----
     function populateSeasons() {
@@ -540,6 +551,43 @@
       });
     }
 
+    // ----- Host blackouts (per-club unavailability for this season) -----
+    document.getElementById('addHostBlackoutBtn').addEventListener('click', () => {
+      hostBlackouts.push({ host_id: '', start_date: '', end_date: '', reason: '' });
+      renderHostBlackouts();
+    });
+
+    function renderHostBlackouts() {
+      const tbody = document.querySelector('#hostBlackoutsTable tbody');
+      const clubs = referenceData.clubs || [];
+      if (!hostBlackouts.length) {
+        tbody.innerHTML = '<tr><td colspan="5" style="color: #888;">Aucune indisponibilité.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = hostBlackouts.map((hb, i) => `
+        <tr>
+          <td>
+            <select class="hb-host" data-idx="${i}" style="padding: 4px 6px; border: 1px solid #c8c5be; border-radius: 4px; min-width: 160px;">
+              <option value="">— Sélectionner —</option>
+              ${clubs.map(c => `<option value="${c.id}" ${String(c.id) === String(hb.host_id) ? 'selected' : ''}>${c.display_name}</option>`).join('')}
+            </select>
+          </td>
+          <td><input type="date" class="hb-start" data-idx="${i}" value="${hb.start_date || ''}" style="padding: 4px 6px; border: 1px solid #c8c5be; border-radius: 4px;"></td>
+          <td><input type="date" class="hb-end" data-idx="${i}" value="${hb.end_date || ''}" style="padding: 4px 6px; border: 1px solid #c8c5be; border-radius: 4px;"></td>
+          <td><input type="text" class="hb-reason" data-idx="${i}" value="${(hb.reason || '').replace(/"/g, '&quot;')}" placeholder="Travaux, événement..." style="padding: 4px 6px; border: 1px solid #c8c5be; border-radius: 4px; width: 100%;"></td>
+          <td><button type="button" class="hb-del" data-idx="${i}" style="background: #b81c1c; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer;">✕</button></td>
+        </tr>
+      `).join('');
+      tbody.querySelectorAll('.hb-host').forEach(el => el.addEventListener('change', e => { hostBlackouts[+e.target.dataset.idx].host_id = e.target.value; }));
+      tbody.querySelectorAll('.hb-start').forEach(el => el.addEventListener('change', e => { hostBlackouts[+e.target.dataset.idx].start_date = e.target.value; }));
+      tbody.querySelectorAll('.hb-end').forEach(el => el.addEventListener('change', e => { hostBlackouts[+e.target.dataset.idx].end_date = e.target.value; }));
+      tbody.querySelectorAll('.hb-reason').forEach(el => el.addEventListener('input', e => { hostBlackouts[+e.target.dataset.idx].reason = e.target.value; }));
+      tbody.querySelectorAll('.hb-del').forEach(el => el.addEventListener('click', e => {
+        hostBlackouts.splice(+e.target.dataset.idx, 1);
+        renderHostBlackouts();
+      }));
+    }
+
     // ----- Ligue final dates -----
     function renderLigueFinalsTable() {
       const container = document.getElementById('ligueFinalsContainer');
@@ -592,6 +640,7 @@
           document.getElementById('firstWeekendInput').value = currentBrief.first_weekend ? currentBrief.first_weekend.split('T')[0] : '';
           document.getElementById('finalAttributionInput').value = currentBrief.final_attribution || 'manual';
           blackoutDates = Array.isArray(currentBrief.blackout_dates) ? [...currentBrief.blackout_dates] : [];
+          hostBlackouts = Array.isArray(currentBrief.host_blackouts) ? [...currentBrief.host_blackouts] : [];
 
           const activeCats = currentBrief.active_categories || [];
           if (activeCats.length) {
@@ -604,6 +653,7 @@
           document.getElementById('nextStepBtn').disabled = false;
         } else {
           blackoutDates = [];
+          hostBlackouts = [];
           document.getElementById('nextStepBtn').disabled = true;
         }
 
@@ -611,6 +661,7 @@
         ligueRows.forEach(r => { ligueFinalDates[r.category_id] = (r.final_date || '').split('T')[0]; });
 
         renderBlackouts();
+        renderHostBlackouts();
         renderLigueFinalsTable();
 
         const status = document.getElementById('saveStatus');
@@ -632,7 +683,15 @@
         final_attribution: document.getElementById('finalAttributionInput').value,
         blackout_dates: blackoutDates,
         active_categories: Array.from(document.querySelectorAll('.cat-cb:checked')).map(cb => parseInt(cb.value, 10)),
-        active_hosts: Array.from(document.querySelectorAll('.club-cb:checked')).map(cb => parseInt(cb.value, 10))
+        active_hosts: Array.from(document.querySelectorAll('.club-cb:checked')).map(cb => parseInt(cb.value, 10)),
+        host_blackouts: hostBlackouts
+          .filter(hb => hb.host_id && hb.start_date && hb.end_date)
+          .map(hb => ({
+            host_id: parseInt(hb.host_id, 10),
+            start_date: hb.start_date,
+            end_date: hb.end_date,
+            reason: (hb.reason || '').trim()
+          }))
       };
       if (!payload.first_weekend) {
         setStatus('Veuillez choisir le premier week-end de compétition', 'error');
