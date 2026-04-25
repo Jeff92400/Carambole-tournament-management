@@ -306,4 +306,34 @@ router.get('/reference-data', authenticateToken, (req, res) => {
     });
 });
 
+// ----------------------------------------------------------------
+// Club preferred start time (inline edit from Step 1)
+// ----------------------------------------------------------------
+
+// PATCH /clubs/:id/start-time — update a club's preferred_start_time
+// Body: { value: 'morning' | 'afternoon' | 'full_day' | null }
+router.patch('/clubs/:id/start-time', authenticateToken, requireAdmin, (req, res) => {
+  const db = getDb();
+  const orgId = req.user.organizationId;
+  const clubId = parseInt(req.params.id, 10);
+  const { value } = req.body;
+
+  const allowed = ['morning', 'afternoon', 'full_day', null, ''];
+  if (!allowed.includes(value)) {
+    return res.status(400).json({ error: 'Invalid value (allowed: morning, afternoon, full_day, null)' });
+  }
+
+  db.run(
+    `UPDATE clubs SET preferred_start_time = $1 WHERE id = $2 AND organization_id = $3`,
+    [value || null, clubId, orgId],
+    function(err) {
+      if (err) {
+        console.error('[calendar-generator] PATCH /clubs/:id/start-time error:', err);
+        return res.status(500).json({ error: err.message });
+      }
+      res.json({ message: 'Préférence horaire enregistrée' });
+    }
+  );
+});
+
 module.exports = router;

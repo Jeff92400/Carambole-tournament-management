@@ -423,12 +423,40 @@
         grid.innerHTML = '<span style="color: #888;">Aucun club enregistré.</span>';
         return;
       }
-      grid.innerHTML = referenceData.clubs.map(c => `
-        <label>
-          <input type="checkbox" class="club-cb" value="${c.id}" checked>
-          <span>${c.display_name}${c.city ? ' (' + c.city + ')' : ''}</span>
-        </label>
-      `).join('');
+      grid.innerHTML = referenceData.clubs.map(c => {
+        const pref = c.preferred_start_time || '';
+        return `
+          <label style="display: flex; align-items: center; gap: 6px;">
+            <input type="checkbox" class="club-cb" value="${c.id}" checked>
+            <span style="flex: 1;">${c.display_name}${c.city ? ' (' + c.city + ')' : ''}</span>
+            <select class="club-time-select" data-club-id="${c.id}" style="font-size: 12px; padding: 2px 4px; border: 1px solid #c8c5be; border-radius: 4px;" title="Horaire préféré">
+              <option value="" ${pref === '' ? 'selected' : ''}>— horaire ?</option>
+              <option value="morning" ${pref === 'morning' ? 'selected' : ''}>Matin (8h30)</option>
+              <option value="afternoon" ${pref === 'afternoon' ? 'selected' : ''}>Après-midi (13h30)</option>
+              <option value="full_day" ${pref === 'full_day' ? 'selected' : ''}>Journée entière (8h30)</option>
+            </select>
+          </label>
+        `;
+      }).join('');
+      grid.querySelectorAll('.club-time-select').forEach(sel => {
+        sel.addEventListener('change', async () => {
+          const clubId = parseInt(sel.dataset.clubId, 10);
+          const value = sel.value || null;
+          try {
+            const res = await fetch(`${API_URL}/calendar-generator/clubs/${clubId}/start-time`, {
+              method: 'PATCH', headers: authHeaders, body: JSON.stringify({ value })
+            });
+            if (!res.ok) throw new Error((await res.json()).error || 'Échec');
+            sel.style.borderColor = '#2c7a4d';
+            setTimeout(() => sel.style.borderColor = '#c8c5be', 800);
+            const club = referenceData.clubs.find(c => c.id === clubId);
+            if (club) club.preferred_start_time = value;
+          } catch (err) {
+            sel.style.borderColor = '#b81c1c';
+            console.error(err);
+          }
+        });
+      });
     }
 
     // ----- Blackout management -----
