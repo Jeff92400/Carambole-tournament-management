@@ -293,7 +293,7 @@ router.get('/reference-data', authenticateToken, (req, res) => {
     }),
     new Promise((resolve, reject) => {
       db.all(
-        `SELECT id, display_name, city FROM clubs WHERE organization_id = $1 ORDER BY display_name`,
+        `SELECT id, display_name, city, preferred_start_time FROM clubs WHERE organization_id = $1 ORDER BY display_name`,
         [orgId],
         (err, rows) => err ? reject(err) : resolve(rows || [])
       );

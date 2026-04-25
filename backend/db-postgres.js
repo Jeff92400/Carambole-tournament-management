@@ -700,103 +700,7 @@ async function initializeDatabase() {
       )
     `);
 
-    // ============================================================
-    // Seasonal Calendar Generator (Phase 1 — schema)
-    // Doc: MECANISME-CALENDRIER-SAISONNIER.html
-    // ============================================================
-
-    // Brief de saison : intention du CDB pour une saison donnée
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS calendar_brief (
-        id SERIAL PRIMARY KEY,
-        organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-        season TEXT NOT NULL,
-        qualif_day TEXT NOT NULL CHECK (qualif_day IN ('saturday','sunday')),
-        final_day TEXT NOT NULL CHECK (final_day IN ('saturday','sunday')),
-        first_weekend DATE NOT NULL,
-        blackout_dates JSONB NOT NULL DEFAULT '[]'::jsonb,
-        active_categories JSONB NOT NULL DEFAULT '[]'::jsonb,
-        active_hosts JSONB NOT NULL DEFAULT '[]'::jsonb,
-        final_attribution TEXT NOT NULL DEFAULT 'manual' CHECK (final_attribution IN ('manual','winner_tbd')),
-        status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','generated','published','archived')),
-        created_by INTEGER REFERENCES users(id),
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE(organization_id, season)
-      )
-    `);
-
-    // Bibliothèque de règles instanciées par CDB (dures + molles)
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS calendar_constraints (
-        id SERIAL PRIMARY KEY,
-        organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-        rule_type TEXT NOT NULL,
-        parameters JSONB NOT NULL DEFAULT '{}'::jsonb,
-        strictness TEXT NOT NULL CHECK (strictness IN ('hard','soft')),
-        weight INTEGER DEFAULT 1,
-        enabled BOOLEAN DEFAULT TRUE,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-    await client.query(`CREATE INDEX IF NOT EXISTS idx_calendar_constraints_org ON calendar_constraints(organization_id) WHERE enabled = TRUE`);
-
-    // Dates des finales de ligue par catégorie (alimente la contrainte final_before_ligue_final)
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS ligue_final_dates (
-        id SERIAL PRIMARY KEY,
-        organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-        season TEXT NOT NULL,
-        category_id INTEGER NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
-        final_date DATE NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE(organization_id, season, category_id)
-      )
-    `);
-    await client.query(`CREATE INDEX IF NOT EXISTS idx_ligue_final_dates_lookup ON ligue_final_dates(organization_id, season)`);
-
-    // Brouillon de calendrier (étapes 3-5 de l'assistant) avant publication
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS calendar_draft (
-        id SERIAL PRIMARY KEY,
-        brief_id INTEGER NOT NULL REFERENCES calendar_brief(id) ON DELETE CASCADE,
-        weekend_date DATE NOT NULL,
-        mode TEXT NOT NULL,
-        category_id INTEGER NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
-        tournament_type TEXT NOT NULL,
-        host_club_id INTEGER REFERENCES clubs(id),
-        pts_rep TEXT,
-        locked_by_user BOOLEAN DEFAULT FALSE,
-        conflict_flags JSONB DEFAULT '[]'::jsonb,
-        tournoi_ext_id INTEGER REFERENCES tournoi_ext(id) ON DELETE SET NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-    await client.query(`CREATE INDEX IF NOT EXISTS idx_calendar_draft_brief ON calendar_draft(brief_id)`);
-
-    // Journal d'audit des publications et synchronisations (étape 6 diff-and-sync)
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS calendar_sync_log (
-        id SERIAL PRIMARY KEY,
-        brief_id INTEGER NOT NULL REFERENCES calendar_brief(id) ON DELETE CASCADE,
-        action TEXT NOT NULL,
-        draft_id INTEGER,
-        tournoi_ext_id INTEGER,
-        details JSONB DEFAULT '{}'::jsonb,
-        performed_by INTEGER REFERENCES users(id),
-        performed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-    await client.query(`CREATE INDEX IF NOT EXISTS idx_calendar_sync_log_brief ON calendar_sync_log(brief_id)`);
-
-    // Métadonnée club : horaire de début préféré (matin/après-midi)
-    await client.query(`ALTER TABLE clubs ADD COLUMN IF NOT EXISTS preferred_start_time TEXT`);
-
-    // ============================================================
-    // End Seasonal Calendar Generator schema
-    // ============================================================
+    // (Seasonal Calendar Generator schema moved to POST-COMMIT block to avoid rolling back the main transaction)
 
     // Invitation PDF storage table (persists across deployments)
     await client.query(`
@@ -2143,6 +2047,97 @@ async function initializeDatabase() {
   // These run outside the main transaction so errors here
   // can NEVER trigger a ROLLBACK on committed schema/data.
   try {
+
+    // ============================================================
+    // Seasonal Calendar Generator schema (post-commit, isolated)
+    // Doc: MECANISME-CALENDRIER-SAISONNIER.html
+    // ============================================================
+    try {
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS calendar_brief (
+          id SERIAL PRIMARY KEY,
+          organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+          season TEXT NOT NULL,
+          qualif_day TEXT NOT NULL CHECK (qualif_day IN ('saturday','sunday')),
+          final_day TEXT NOT NULL CHECK (final_day IN ('saturday','sunday')),
+          first_weekend DATE NOT NULL,
+          blackout_dates JSONB NOT NULL DEFAULT '[]'::jsonb,
+          active_categories JSONB NOT NULL DEFAULT '[]'::jsonb,
+          active_hosts JSONB NOT NULL DEFAULT '[]'::jsonb,
+          final_attribution TEXT NOT NULL DEFAULT 'manual' CHECK (final_attribution IN ('manual','winner_tbd')),
+          status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','generated','published','archived')),
+          created_by INTEGER REFERENCES users(id),
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE(organization_id, season)
+        )
+      `);
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS calendar_constraints (
+          id SERIAL PRIMARY KEY,
+          organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+          rule_type TEXT NOT NULL,
+          parameters JSONB NOT NULL DEFAULT '{}'::jsonb,
+          strictness TEXT NOT NULL CHECK (strictness IN ('hard','soft')),
+          weight INTEGER DEFAULT 1,
+          enabled BOOLEAN DEFAULT TRUE,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      await client.query(`CREATE INDEX IF NOT EXISTS idx_calendar_constraints_org ON calendar_constraints(organization_id) WHERE enabled = TRUE`);
+
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS ligue_final_dates (
+          id SERIAL PRIMARY KEY,
+          organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+          season TEXT NOT NULL,
+          category_id INTEGER NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
+          final_date DATE NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE(organization_id, season, category_id)
+        )
+      `);
+      await client.query(`CREATE INDEX IF NOT EXISTS idx_ligue_final_dates_lookup ON ligue_final_dates(organization_id, season)`);
+
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS calendar_draft (
+          id SERIAL PRIMARY KEY,
+          brief_id INTEGER NOT NULL REFERENCES calendar_brief(id) ON DELETE CASCADE,
+          weekend_date DATE NOT NULL,
+          mode TEXT NOT NULL,
+          category_id INTEGER NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
+          tournament_type TEXT NOT NULL,
+          host_club_id INTEGER REFERENCES clubs(id),
+          pts_rep TEXT,
+          locked_by_user BOOLEAN DEFAULT FALSE,
+          conflict_flags JSONB DEFAULT '[]'::jsonb,
+          tournoi_ext_id INTEGER REFERENCES tournoi_ext(id) ON DELETE SET NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      await client.query(`CREATE INDEX IF NOT EXISTS idx_calendar_draft_brief ON calendar_draft(brief_id)`);
+
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS calendar_sync_log (
+          id SERIAL PRIMARY KEY,
+          brief_id INTEGER NOT NULL REFERENCES calendar_brief(id) ON DELETE CASCADE,
+          action TEXT NOT NULL,
+          draft_id INTEGER,
+          tournoi_ext_id INTEGER,
+          details JSONB DEFAULT '{}'::jsonb,
+          performed_by INTEGER REFERENCES users(id),
+          performed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      await client.query(`CREATE INDEX IF NOT EXISTS idx_calendar_sync_log_brief ON calendar_sync_log(brief_id)`);
+
+      await client.query(`ALTER TABLE clubs ADD COLUMN IF NOT EXISTS preferred_start_time TEXT`);
+      console.log('[Migration] Seasonal Calendar Generator schema ready');
+    } catch (calendarErr) {
+      console.error('[Migration] Seasonal Calendar Generator schema FAILED (non-fatal):', calendarErr.message);
+    }
 
     // Initialize default admin (legacy)
     const adminResult = await client.query('SELECT COUNT(*) as count FROM admin');
