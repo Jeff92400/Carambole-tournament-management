@@ -649,6 +649,14 @@
     <a href="#competitions" class="section-title">Compétitions</a>
     <a href="#generer-poules">Générer les poules</a>
     <a href="#forfaits">Gestion des forfaits</a>
+    <a href="#directeur-de-jeu">Directeur de Jeu</a>
+    <a href="#ddj-workflow" class="sub">Workflow en 7 étapes</a>
+    <a href="#ddj-etape-1" class="sub">Étape 1 — Pointage</a>
+    <a href="#ddj-etape-2" class="sub">Étape 2 — Poules</a>
+    <a href="#ddj-etape-3" class="sub">Étape 3 — Matchs de poule</a>
+    <a href="#ddj-etape-4" class="sub">Étape 4 — Tableau final</a>
+    <a href="#ddj-etape-5" class="sub">Étape 5 — Consolante</a>
+    <a href="#ddj-etape-6" class="sub">Étape 6 — Validation</a>
     <a href="#resultats">Résultats des tournois</a>
     <a href="#resultats-2-modes" class="sub">Les 2 modes de qualification</a>
     <a href="#import-standard" class="sub">Import — Mode Standard</a>
@@ -1552,48 +1560,25 @@
     <h2>🎮 Compétitions &gt; Directeur de Jeu</h2>
 
     <div class="info-card accent">
-      <strong>🎯 Module optionnel — activable par comité.</strong> Le Directeur de Jeu (DdJ) est un espace dédié à la personne qui dirige les compétitions sur site le jour J. L'écran d'accueil est disponible dès aujourd'hui. Le workflow complet de saisie (pointage → export E2i) est prévu pour la saison 2026-27 à la demande du District 93-94.
+      <strong>✅ Module disponible (V 2.0.484).</strong> Le Directeur de Jeu (DdJ) est un espace dédié à la personne qui dirige les compétitions sur site le jour J. Le workflow complet en 7 étapes — de la sélection de la compétition jusqu'à la validation finale qui intègre les résultats au classement saison — est opérationnel.
     </div>
 
-    <h3>Qui est concerné ?</h3>
+    <h3 id="ddj-public">Qui est concerné ?</h3>
     <ul>
       <li><strong>Le directeur de jeu</strong> (bénévole ou arbitre) qui dirige les matchs le jour d'une compétition départementale. Il dispose d'un compte avec le rôle <code>directeur_jeu</code> et est redirigé automatiquement vers son écran dédié après connexion.</li>
       <li><strong>L'administrateur du comité</strong> qui peut aussi accéder à cet espace (pour consulter ou prendre le relais) via le menu <strong>Compétitions &gt; Directeur de Jeu</strong>, lorsque le module est activé pour son CDB.</li>
     </ul>
 
-    <h3>Activer le module pour votre CDB</h3>
+    <h3 id="ddj-activer">Activer le module pour votre CDB</h3>
     <ol class="steps">
-      <li>Aller dans <strong>Paramètres &gt; Espace Joueur</strong></li>
-      <li>Activer l'option <strong>« Module Directeur de Jeu »</strong></li>
-      <li>Créer un compte utilisateur avec le rôle <strong>« Directeur de Jeu »</strong> dans <strong>Paramètres &gt; Utilisateurs</strong></li>
+      <li>Aller dans <strong>Paramètres &gt; Espace Joueur</strong>.</li>
+      <li>Activer l'option <strong>« Module Directeur de Jeu »</strong>.</li>
+      <li>Créer un compte utilisateur avec le rôle <strong>« Directeur de Jeu »</strong> dans <strong>Paramètres &gt; Utilisateurs</strong>.</li>
     </ol>
     <p>Une fois le module activé, un nouveau lien <strong>« Directeur de Jeu »</strong> apparaît dans le menu déroulant <strong>Compétitions ▾</strong> pour les administrateurs.</p>
 
-    <h3>Écran d'accueil du Directeur de Jeu</h3>
-    <p>Après connexion (ou depuis le menu Compétitions pour un administrateur), le DdJ arrive sur une page <strong>épurée et orientée « jour J »</strong> :</p>
-    <ul>
-      <li><strong>Bandeau de bienvenue</strong> avec le nom du DdJ et la date du jour en français</li>
-      <li><strong>Section « Compétitions du jour »</strong> — cartes listant les tournois programmés aujourd'hui avec :
-        <ul>
-          <li>Le nom et la catégorie (ex. « T2 Libre R3 »)</li>
-          <li>La date et le lieu</li>
-          <li>Le nombre de joueurs convoqués</li>
-          <li>Un badge de statut (« À préparer » si des convocations ont été envoyées, « En attente » sinon)</li>
-        </ul>
-      </li>
-      <li><strong>Section « Journées précédentes »</strong> (si applicable) — rappel des dernières compétitions passées</li>
-      <li><strong>État vide</strong> avec le logo du comité quand aucune compétition n'est programmée</li>
-    </ul>
-
-    <h3>Navigation et sécurité</h3>
-    <ul>
-      <li>Un DdJ connecté ne peut accéder qu'à sa page dédiée — il est automatiquement redirigé s'il tente d'accéder à d'autres pages de l'application admin.</li>
-      <li>Un administrateur accédant à la page conserve son rôle et peut naviguer librement via le bouton <strong>« ← Retour »</strong> en haut à droite.</li>
-      <li>Un super-administrateur qui impersonne un CDB voit un bouton <strong>« ← Retour Plateforme »</strong> pour revenir à l'espace SA.</li>
-    </ul>
-
-    <h3>Roadmap — workflow complet en 7 étapes</h3>
-    <p>Le module couvrira progressivement le parcours complet d'une journée de compétition, tel que demandé par le District 93-94. Il remplacera la feuille de match Excel actuelle (40+ onglets) par une interface tactile adaptée au téléphone et à la tablette.</p>
+    <h3 id="ddj-workflow">Le workflow en 7 étapes</h3>
+    <p>Le module remplace la feuille de match Excel (40+ onglets) par une interface tactile optimisée pour téléphone et tablette. Chaque étape est représentée par une <strong>pastille cliquable</strong> en haut de l'écran : on peut revenir à n'importe quelle étape précédente à tout moment (par exemple pour corriger un score saisi).</p>
 
     <table>
       <thead>
@@ -1602,7 +1587,6 @@
           <th>Étape</th>
           <th>Quand</th>
           <th>Action du Directeur de Jeu</th>
-          <th>Statut</th>
         </tr>
       </thead>
       <tbody>
@@ -1610,60 +1594,131 @@
           <td><strong>0</strong></td>
           <td><strong>Sélection de la compétition</strong></td>
           <td>Arrivée sur site</td>
-          <td>Le DdJ voit les compétitions du jour sous forme de cartes et sélectionne celle qu'il gère</td>
-          <td>✅ Disponible</td>
+          <td>Le DdJ voit les compétitions du jour sous forme de cartes et sélectionne celle qu'il gère.</td>
         </tr>
         <tr>
           <td><strong>1</strong></td>
           <td><strong>Pointage</strong></td>
           <td>Avant le tournoi</td>
-          <td>Cocher les joueurs présents, marquer les forfaits</td>
-          <td>⏳ Saison 2026-27</td>
+          <td>Cocher les joueurs présents (case à cocher tactile), marquer les forfaits.</td>
         </tr>
         <tr>
           <td><strong>2</strong></td>
           <td><strong>Génération des poules</strong></td>
           <td>Avant le tournoi</td>
-          <td>Valider les poules proposées (serpentine auto), ajuster si besoin, affecter les tables</td>
-          <td>⏳ Saison 2026-27</td>
+          <td>Valider les poules proposées (serpentin automatique), corriger manuellement si besoin (échange de 2 joueurs entre poules).</td>
         </tr>
         <tr>
           <td><strong>3</strong></td>
-          <td><strong>Matchs de poules</strong></td>
+          <td><strong>Matchs de poule</strong></td>
           <td>Matin</td>
-          <td>Saisir les scores : Points J1 / J2, Reprises, Meilleures séries. PM / MGP / MPART calculés en temps réel</td>
-          <td>⏳ Saison 2026-27</td>
+          <td>Saisir les scores au fur et à mesure (Points J1/J2, reprises, meilleures séries). La moyenne se calcule en direct ; les reprises sont synchronisées entre les deux joueurs d'un même match.</td>
         </tr>
         <tr>
           <td><strong>4</strong></td>
-          <td><strong>Phase finale</strong> (bracket)</td>
+          <td><strong>Tableau final</strong></td>
           <td>Après-midi</td>
-          <td>Saisir les scores des demi-finales, finale, petite finale. Qualifiés et bracket pré-remplis automatiquement</td>
-          <td>⏳ Saison 2026-27</td>
+          <td>Saisir les scores des demi-finales (SF1, SF2), de la finale (F) et de la petite finale (PF). Les 4 qualifiés et les appariements sont pré-remplis automatiquement.</td>
         </tr>
         <tr>
           <td><strong>5</strong></td>
-          <td><strong>Matchs de classement</strong></td>
+          <td><strong>Matchs de classement (Consolante)</strong></td>
           <td>Après-midi</td>
-          <td>Saisir les scores des matchs de classement (tour 2 optionnel avec croisements)</td>
-          <td>⏳ Saison 2026-27</td>
+          <td>Saisir les scores du tableau de consolante pour les non-qualifiés (places 5+).</td>
         </tr>
         <tr>
           <td><strong>6</strong></td>
-          <td><strong>Export E2i</strong></td>
+          <td><strong>Récapitulatif &amp; Validation</strong></td>
           <td>Fin de journée</td>
-          <td>Valider le classement final, générer le fichier CSV E2i automatiquement</td>
-          <td>⏳ Saison 2026-27</td>
+          <td>Vérifier le classement final, télécharger le CSV format FFB si besoin, puis cliquer sur <strong>« Valider les résultats »</strong>.</td>
         </tr>
       </tbody>
     </table>
 
+    <h3 id="ddj-etape-0">Étape 0 — Sélection de la compétition</h3>
+    <p>Après connexion, le DdJ arrive sur une page épurée affichant :</p>
+    <ul>
+      <li>Un bandeau de bienvenue avec son nom et la date du jour.</li>
+      <li>Les <strong>compétitions du jour</strong> sous forme de cartes (nom, catégorie, lieu, nombre de convoqués, badge de statut).</li>
+      <li>Un rappel des <strong>journées précédentes</strong>, qui peuvent être rouvertes pour correction.</li>
+    </ul>
+    <p>Cliquez sur la carte de la compétition à diriger pour démarrer le workflow.</p>
+
+    <h3 id="ddj-etape-1">Étape 1 — Pointage</h3>
+    <ol class="steps">
+      <li>La liste des joueurs convoqués s'affiche, triée par classement.</li>
+      <li>Cochez la case verte à droite pour chaque joueur présent.</li>
+      <li>Pour un forfait, basculez l'étiquette « Présent / Forfait ».</li>
+      <li>Le compteur en haut de l'écran indique « X présents · Y forfaits · Z joueurs en poule ».</li>
+      <li>Cliquez sur <strong>« Continuer »</strong> pour passer à l'étape suivante.</li>
+    </ol>
     <div class="info-card">
-      <strong>💡 Bon à savoir :</strong> l'étape 0 (sélection de la compétition) est déjà disponible aujourd'hui — le DdJ peut se connecter et consulter les compétitions du jour. Le clic sur une carte pour démarrer le pointage (étape 1) n'est pas encore actif : il arrivera avec les 6 étapes suivantes à la saison 2026-27.
+      <strong>⚠️ Forfait rétroactif :</strong> si vous tentez de passer un joueur en forfait alors que des matchs ont déjà été saisis pour lui, une fenêtre de confirmation s'affiche avec le décompte des matchs impactés. Confirmez uniquement si vous comprenez les conséquences.
     </div>
 
+    <h3 id="ddj-etape-2">Étape 2 — Génération des poules</h3>
+    <ol class="steps">
+      <li>L'application répartit automatiquement les joueurs en serpentin (basé sur leur moyenne FFB ou leur classement saison).</li>
+      <li>Vérifiez la composition. Pour échanger 2 joueurs entre 2 poules : cliquez sur le premier, puis sur le second — l'échange est appliqué.</li>
+      <li>Affectez un numéro de billard à chaque poule si nécessaire.</li>
+      <li>Cliquez sur <strong>« Valider les poules »</strong>.</li>
+    </ol>
+
+    <h3 id="ddj-etape-3">Étape 3 — Matchs de poule</h3>
+    <ol class="steps">
+      <li>Chaque poule s'affiche sous forme de carte avec la liste des matchs (round-robin).</li>
+      <li>Tapez sur un match pour ouvrir la saisie : <strong>Points J1, Points J2, Reprises, Meilleure série J1, Meilleure série J2</strong>.</li>
+      <li>Le clavier numérique apparaît automatiquement. La moyenne (PM) se calcule en direct sous chaque score.</li>
+      <li>Les reprises sont partagées entre les deux joueurs d'un même match (un seul champ).</li>
+      <li>Le classement de la poule se met à jour visuellement après chaque match validé (PM &gt; MGP &gt; MS).</li>
+      <li>Quand tous les matchs d'une poule sont saisis, la poule passe en vert et les 2 premiers sont marqués comme qualifiés pour le tableau final.</li>
+    </ol>
+
+    <h3 id="ddj-etape-4">Étape 4 — Tableau final</h3>
+    <p>Cette étape correspond à l'ancien terme « bracket » de la phase finale.</p>
+    <ol class="steps">
+      <li>L'application sélectionne automatiquement les 4 qualifiés et compose le tableau : <strong>SF1 = 1<sup>er</sup> vs 4<sup>e</sup></strong>, <strong>SF2 = 2<sup>e</sup> vs 3<sup>e</sup></strong>.</li>
+      <li>Saisissez les scores des deux demi-finales.</li>
+      <li>Les gagnants sont automatiquement routés vers la <strong>Finale (F)</strong>, les perdants vers la <strong>Petite Finale (PF)</strong>.</li>
+      <li>Saisissez les scores de F et PF pour obtenir les places 1 à 4.</li>
+    </ol>
+
+    <h3 id="ddj-etape-5">Étape 5 — Matchs de classement (Consolante)</h3>
+    <p>Pour les joueurs non qualifiés au tableau final (places 5 et au-delà), un <strong>2<sup>e</sup> arbre à élimination directe</strong> est généré.</p>
+    <ul>
+      <li>La taille du tableau s'adapte automatiquement (2, 4, 8 ou 16 joueurs) avec des <em>byes</em> (qualification automatique au tour suivant) pour les meilleures têtes de série.</li>
+      <li>Saisissez les scores tour par tour.</li>
+      <li><strong>Pas de petite finale en consolante</strong> : les perdants d'un même tour d'élimination sont ex-aequo et départagés par <em>match_points → moyenne → meilleure série</em> (mêmes critères qu'en poule).</li>
+      <li>Places attribuées : <strong>5-6</strong> (finale consolante), <strong>7-8</strong> (perdants demi-finales consolante), <strong>9-12</strong> (perdants quarts), <strong>13-20</strong> (perdants huitièmes).</li>
+    </ul>
+
+    <h3 id="ddj-etape-6">Étape 6 — Récapitulatif &amp; Validation</h3>
+    <p>Cet écran affiche, en lecture seule, le classement final complet (positions 1 à N) avec toutes les statistiques par joueur (PM, Pts, R, MGP, MS, MPART, Clt poule, Clt Finale).</p>
+    <ol class="steps">
+      <li><strong>Imprimez la feuille</strong> si nécessaire pour affichage en salle.</li>
+      <li><strong>Téléchargez le CSV au format FFB</strong> pour archivage ou import dans un système externe (E2i / telemat.org). Le fichier respecte les conventions FFB : 20 colonnes, séparateur <code>;</code>, encodage UTF-8 BOM, fins de ligne CRLF, moyennes avec virgule décimale, noms en majuscules.</li>
+      <li>Cliquez sur <strong>« Valider les résultats »</strong>. L'application :
+        <ul>
+          <li>Agrège les statistiques par joueur sur tous les matchs joués.</li>
+          <li>Met à jour la table <code>tournaments</code> et insère les résultats dans <code>tournament_results</code> (positions, classement de poule, meilleure partie).</li>
+          <li>Recalcule les positions, les bonus et le classement saison.</li>
+        </ul>
+      </li>
+      <li>Vous êtes redirigé vers la page admin habituelle <strong>Résultats du tournoi</strong> — la même vue qu'un administrateur après un import CSV.</li>
+    </ol>
+    <div class="info-card">
+      <strong>💡 Re-finalisation :</strong> si vous repérez une erreur après avoir validé, retournez sur l'étape concernée via la pastille en haut, corrigez le score, puis re-cliquez sur « Valider les résultats ». L'opération est <strong>idempotente</strong> : les anciens résultats sont remplacés et le classement saison recalculé proprement.
+    </div>
+
+    <h3 id="ddj-securite">Navigation et sécurité</h3>
+    <ul>
+      <li>Un DdJ connecté ne peut accéder qu'à ses pages dédiées — toute tentative d'aller sur une autre page admin déclenche une redirection vers son tableau de bord.</li>
+      <li>Un administrateur accédant au module conserve son rôle et peut quitter via le bouton <strong>« ← Retour »</strong> en haut à droite.</li>
+      <li>Un super-administrateur qui impersonne un CDB voit un bouton <strong>« ← Retour Plateforme »</strong> pour revenir à l'espace SA.</li>
+    </ul>
+
     <div class="info-card accent">
-      <strong>🔗 Parité avec Excel :</strong> toutes les données de sortie du fichier Excel actuel seront conservées — PM, Points, Reprises, Meilleure série, MGP, MPART, Classement poule, Points rang, Bonus, etc. Le Directeur de Jeu retrouvera exactement les mêmes résultats, générés automatiquement. L'export E2i à l'étape 6 produit les données brutes (matchs + positions) au format CSV ; le calcul des points saison, bonus moyenne et bonus catégorie mixte reste géré par le système d'import existant de l'App Tournois (aucune duplication de logique).
+      <strong>🔗 Parité avec Excel :</strong> toutes les données calculées dans le fichier Excel FDM sont reproduites — PM, Points, Reprises, Meilleure série, MGP, MPART, Classement poule, Points rang, Bonus, etc. Le DdJ retrouve exactement les mêmes résultats, générés automatiquement, et la validation finale les pousse directement dans le moteur de classement saison de l'App Tournois (aucune duplication de logique).
     </div>
   </section>
 

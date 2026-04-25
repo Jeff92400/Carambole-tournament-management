@@ -1,7 +1,7 @@
 # Guide Utilisateur Complet
 
 > **Note:** Ce document est généré automatiquement depuis le guide HTML.
-> **Dernière mise à jour:** 23/04/2026
+> **Dernière mise à jour:** 25/04/2026
 >
 > **Nouvelles fonctionnalités documentées (Avril 2026):**
 > - **🧭 Navigation refondue — Mega-menu** (23/04/2026, V 2.0.456-458) : La barre de 8-10 liens plats est remplacée par 5 groupes thématiques avec menus déroulants (Accueil, Compétitions ▾, Données ▾, Com joueurs, Paramètres ▾). Navigation préservée par rôle (admin, lecteur, club, DdJ) — muscle memory conservée (cliquer sur un titre ouvre la page principale du groupe). Voir la nouvelle section « Naviguer dans l'application ».
