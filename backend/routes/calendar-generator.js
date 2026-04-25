@@ -795,4 +795,180 @@ router.get('/draft', authenticateToken, (req, res) => {
   );
 });
 
+// GET /draft/export?brief_id=X — download the draft as a .xlsx file
+router.get('/draft/export', authenticateToken, async (req, res) => {
+  const db = getDb();
+  const orgId = req.user.organizationId;
+  const briefId = parseInt(req.query.brief_id, 10);
+  if (!briefId) return res.status(400).json({ error: 'brief_id requis' });
+
+  // Load brief + draft + lookups
+  const fetchAll = (sql, params) => new Promise((resolve, reject) =>
+    db.all(sql, params, (err, rows) => err ? reject(err) : resolve(rows || []))
+  );
+  const fetchOne = (sql, params) => new Promise((resolve, reject) =>
+    db.get(sql, params, (err, row) => err ? reject(err) : resolve(row))
+  );
+
+  try {
+    const brief = await fetchOne(
+      `SELECT id, season FROM calendar_brief WHERE id = $1 AND organization_id = $2`,
+      [briefId, orgId]
+    );
+    if (!brief) return res.status(404).json({ error: 'Brief introuvable' });
+
+    const draft = await fetchAll(
+      `SELECT cd.weekend_date, cd.tournament_type, cd.qualif_date, cd.final_date,
+              c.id AS category_id, c.display_name AS category_label,
+              c.game_type, c.level,
+              cl.id AS host_id, cl.display_name AS host_name
+       FROM calendar_draft cd
+       LEFT JOIN categories c ON c.id = cd.category_id
+       LEFT JOIN clubs cl ON cl.id = cd.host_club_id
+       WHERE cd.brief_id = $1
+       ORDER BY cd.weekend_date ASC`,
+      [briefId]
+    );
+
+    // Note: calendar_draft currently lacks qualif_date / final_date columns
+    // (we store only weekend_date). We'll display weekend_date in the Excel.
+
+    // Order categories canonically (display order)
+    const MODE_ORDER = ['Libre', 'Cadre', 'Bande', '3 Bandes'];
+    const LR = { N1: 1, N2: 2, N3: 3, R1: 4, R2: 5, R3: 6, R4: 7, R5: 8, D1: 9, D2: 10, D3: 11, NC: 99 };
+    const lvlRank = (lvl) => {
+      const k = String(lvl || '').toUpperCase().replace(/\s+/g, '').replace(/GC$/, '');
+      return LR[k] ?? 50;
+    };
+    const modeRank = (m) => {
+      const i = MODE_ORDER.findIndex(x => x.toLowerCase() === String(m || '').toLowerCase());
+      return i === -1 ? 99 : i;
+    };
+
+    // Unique categories present in draft
+    const catMap = new Map();
+    draft.forEach(r => {
+      if (r.category_id && !catMap.has(r.category_id)) {
+        catMap.set(r.category_id, { id: r.category_id, label: r.category_label, mode: r.game_type, level: r.level });
+      }
+    });
+    const cats = [...catMap.values()].sort((a, b) => {
+      const ma = modeRank(a.mode), mb = modeRank(b.mode);
+      if (ma !== mb) return ma - mb;
+      return lvlRank(a.level) - lvlRank(b.level);
+    });
+
+    // Unique hosts (for color mapping)
+    const hostMap = new Map();
+    draft.forEach(r => {
+      if (r.host_id && !hostMap.has(r.host_id)) {
+        hostMap.set(r.host_id, r.host_name);
+      }
+    });
+
+    // Color palette (mild backgrounds)
+    const PALETTE = ['FFFCE4D6', 'FFD9E1F2', 'FFE2EFDA', 'FFFFF2CC', 'FFE4DFEC', 'FFDDEBF7', 'FFFCE4D6', 'FFE7E6E6'];
+    const hostColor = new Map();
+    [...hostMap.keys()].forEach((id, idx) => hostColor.set(id, PALETTE[idx % PALETTE.length]));
+
+    // Unique weekend dates in chronological order
+    const weekends = [...new Set(draft.map(r => String(r.weekend_date).slice(0, 10)))].sort();
+
+    // Index: { catId: { weekend: { type, host_id, host_name } } }
+    const grid = {};
+    draft.forEach(r => {
+      const we = String(r.weekend_date).slice(0, 10);
+      if (!grid[r.category_id]) grid[r.category_id] = {};
+      grid[r.category_id][we] = { type: r.tournament_type, host_id: r.host_id, host_name: r.host_name };
+    });
+
+    // Build workbook
+    const ExcelJS = require('exceljs');
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'Calendrier Saisonnier — Kayros';
+    wb.created = new Date();
+
+    // Sheet 1 — Calendar grid (Excel-style)
+    const ws = wb.addWorksheet(`Calendrier ${brief.season}`, {
+      views: [{ state: 'frozen', xSplit: 1, ySplit: 1 }]
+    });
+    const headerRow = ['Catégorie', ...weekends.map(d => {
+      const dt = new Date(d + 'T00:00:00Z');
+      return dt.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit', timeZone: 'UTC' });
+    })];
+    ws.addRow(headerRow);
+    ws.getRow(1).font = { bold: true };
+    ws.getRow(1).alignment = { horizontal: 'center', vertical: 'middle' };
+    ws.getColumn(1).width = 22;
+    for (let i = 2; i <= headerRow.length; i++) ws.getColumn(i).width = 11;
+
+    cats.forEach(c => {
+      const row = [c.label];
+      weekends.forEach(we => {
+        const cell = grid[c.id]?.[we];
+        if (cell) row.push(`${cell.type}${cell.host_name ? ' / ' + abbreviate(cell.host_name) : ''}`);
+        else row.push('');
+      });
+      const added = ws.addRow(row);
+      // Color cells by host
+      weekends.forEach((we, idx) => {
+        const cell = grid[c.id]?.[we];
+        if (cell?.host_id && hostColor.has(cell.host_id)) {
+          added.getCell(idx + 2).fill = {
+            type: 'pattern', pattern: 'solid',
+            fgColor: { argb: hostColor.get(cell.host_id) }
+          };
+          added.getCell(idx + 2).alignment = { horizontal: 'center', vertical: 'middle' };
+        }
+      });
+    });
+
+    // Sheet 2 — List view (one row per tournament)
+    const wsList = wb.addWorksheet('Liste des tournois');
+    wsList.addRow(['Date WE', 'Mode', 'Catégorie', 'Type', 'Club hôte']);
+    wsList.getRow(1).font = { bold: true };
+    wsList.columns = [
+      { width: 12 }, { width: 10 }, { width: 24 }, { width: 8 }, { width: 32 }
+    ];
+    draft.forEach(r => {
+      wsList.addRow([
+        String(r.weekend_date).slice(0, 10),
+        r.game_type || '',
+        r.category_label || '',
+        r.tournament_type || '',
+        r.host_name || (r.tournament_type === 'Finale' ? 'TBD' : '')
+      ]);
+    });
+
+    // Sheet 3 — Legend
+    const wsLeg = wb.addWorksheet('Légende clubs');
+    wsLeg.addRow(['Club', 'Couleur']);
+    wsLeg.getRow(1).font = { bold: true };
+    wsLeg.getColumn(1).width = 32;
+    wsLeg.getColumn(2).width = 12;
+    [...hostMap.entries()].forEach(([id, name]) => {
+      const r = wsLeg.addRow([name, '']);
+      const colorCell = r.getCell(2);
+      colorCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hostColor.get(id) } };
+    });
+
+    const buf = await wb.xlsx.writeBuffer();
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="Calendrier ${brief.season}.xlsx"`);
+    res.send(Buffer.from(buf));
+  } catch (err) {
+    console.error('[calendar-generator] /draft/export error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+function abbreviate(name) {
+  if (!name) return '';
+  // Take first letters of each significant word, max 4 chars
+  const words = String(name).split(/\s+/).filter(w => w.length > 1);
+  if (!words.length) return name.slice(0, 4).toUpperCase();
+  if (words.length === 1) return words[0].slice(0, 4).toUpperCase();
+  return words.map(w => w[0]).join('').slice(0, 5).toUpperCase();
+}
+
 module.exports = router;

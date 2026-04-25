@@ -442,7 +442,19 @@
 
       <div id="generationStats" style="display: none; padding: 12px; background: #f0f7ff; border: 1px solid #c0d4f0; border-radius: 6px; margin-bottom: 16px;"></div>
       <div id="generationConflicts" style="display: none; margin-bottom: 16px;"></div>
-      <div id="generationGrid"></div>
+
+      <div id="viewSelector" style="display:none; margin-bottom: 12px; display:flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+        <strong style="font-size: 13px; color: #555;">Affichage :</strong>
+        <button type="button" class="view-btn" data-view="seasonal" style="padding: 6px 12px; border: 1px solid #c8c5be; border-radius: 5px; background: #6b3aa3; color: white; cursor: pointer; font-size: 13px;">Calendrier saisonnier</button>
+        <button type="button" class="view-btn" data-view="compact" style="padding: 6px 12px; border: 1px solid #c8c5be; border-radius: 5px; background: white; color: #333; cursor: pointer; font-size: 13px;">Compacte par catégorie</button>
+        <button type="button" class="view-btn" data-view="hosts" style="padding: 6px 12px; border: 1px solid #c8c5be; border-radius: 5px; background: white; color: #333; cursor: pointer; font-size: 13px;">Par club hôte</button>
+        <span style="flex: 1;"></span>
+        <button type="button" id="exportXlsxBtn" style="padding: 6px 12px; border: none; border-radius: 5px; background: #2c7a4d; color: white; cursor: pointer; font-size: 13px; font-weight: 600;">📊 Télécharger Excel</button>
+      </div>
+
+      <div id="viewSeasonal" style="display: none;"></div>
+      <div id="viewCompact" style="display: none;"></div>
+      <div id="viewHosts" style="display: none;"></div>
 
       <div class="actions-bar">
         <div>
@@ -1193,10 +1205,35 @@
       }
     });
 
+    // Color palette for hosts (mild backgrounds)
+    const HOST_PALETTE = ['#fce4d6', '#d9e1f2', '#e2efda', '#fff2cc', '#e4dfec', '#ddebf7', '#fce4d6', '#e7e6e6'];
+    function buildHostColorMap(placements) {
+      const map = new Map();
+      const seen = new Set();
+      placements.forEach(p => {
+        if (p.host_id && !seen.has(p.host_id)) {
+          seen.add(p.host_id);
+          map.set(p.host_id, HOST_PALETTE[(map.size) % HOST_PALETTE.length]);
+        }
+      });
+      return map;
+    }
+
+    function abbreviateHost(name) {
+      if (!name) return '';
+      const w = String(name).split(/\s+/).filter(x => x.length > 1);
+      if (!w.length) return name.slice(0, 4).toUpperCase();
+      if (w.length === 1) return w[0].slice(0, 4).toUpperCase();
+      return w.map(x => x[0]).join('').slice(0, 5).toUpperCase();
+    }
+
+    let _lastResult = null; // cached for view toggling
+    let _activeView = 'seasonal';
+
     function renderGenerationResult(result) {
+      _lastResult = result;
       const stats = document.getElementById('generationStats');
       const conflictsEl = document.getElementById('generationConflicts');
-      const grid = document.getElementById('generationGrid');
 
       // Stats
       stats.style.display = 'block';
@@ -1225,15 +1262,23 @@
         conflictsEl.innerHTML = '';
       }
 
-      // Grid: rows = categories (canonical CDBHS order), columns = T1/T2/T3/Finale
-      // Group placements by (category_id, tournament_type)
+      // Show view selector
+      document.getElementById('viewSelector').style.display = 'flex';
+
+      renderViewCompact(result);
+      renderViewSeasonal(result);
+      renderViewHosts(result);
+      switchView(_activeView);
+    }
+
+    // ----- Vue 1: Compacte par catégorie -----
+    function renderViewCompact(result) {
+      const container = document.getElementById('viewCompact');
       const byCatType = {};
       result.placements.forEach(p => {
         if (!byCatType[p.category_id]) byCatType[p.category_id] = {};
         byCatType[p.category_id][p.tournament_type] = p;
       });
-
-      // Get unique categories present in placements + conflicts
       const allCatIds = new Set([
         ...result.placements.map(p => p.category_id),
         ...result.conflicts.map(c => c.category_id)
@@ -1257,24 +1302,183 @@
         return `<tr><td style="padding: 6px 10px; font-weight: 600;">${escapeHtml(c.name || c.display_name)}</td>${cells}</tr>`;
       }).join('');
 
-      grid.innerHTML = `
-        <h4 style="margin: 12px 0 8px;">Calendrier proposé</h4>
+      container.innerHTML = `
         <div style="overflow-x: auto;">
           <table class="ligue-table" style="width: 100%;">
             <thead>
-              <tr>
-                <th>Catégorie</th>
-                <th>T1</th>
-                <th>T2</th>
-                <th>T3</th>
-                <th>Finale</th>
-              </tr>
+              <tr><th>Catégorie</th><th>T1</th><th>T2</th><th>T3</th><th>Finale</th></tr>
             </thead>
             <tbody>${rows || '<tr><td colspan="5" style="color:#888;">Aucun résultat.</td></tr>'}</tbody>
           </table>
         </div>
       `;
     }
+
+    // ----- Vue 2: Calendrier saisonnier (Excel-like) -----
+    function renderViewSeasonal(result) {
+      const container = document.getElementById('viewSeasonal');
+      const colors = buildHostColorMap(result.placements);
+
+      // Categories in canonical display order
+      const allCatIds = new Set(result.placements.map(p => p.category_id));
+      const cats = (referenceData.categories || []).filter(c => allCatIds.has(c.id));
+      cats.sort((a, b) => {
+        const ma = dispModeRank(a.mode || a.game_type);
+        const mb = dispModeRank(b.mode || b.game_type);
+        if (ma !== mb) return ma - mb;
+        return dispLevelRank(a.level) - dispLevelRank(b.level);
+      });
+
+      // All weekend dates, sorted
+      const weekends = [...new Set(result.placements.map(p => p.weekend_date))].sort();
+
+      // Index by (cat, weekend)
+      const grid = {};
+      result.placements.forEach(p => {
+        if (!grid[p.category_id]) grid[p.category_id] = {};
+        grid[p.category_id][p.weekend_date] = p;
+      });
+
+      // Build header (compact dates DD/MM)
+      const headerCells = weekends.map(we => {
+        const d = new Date(we + 'T00:00:00Z');
+        return `<th style="padding: 4px 6px; font-size: 11px; min-width: 56px; white-space: nowrap;">${d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', timeZone: 'UTC' })}</th>`;
+      }).join('');
+
+      const rows = cats.map(c => {
+        const cells = weekends.map(we => {
+          const p = grid[c.id]?.[we];
+          if (!p) return `<td style="padding: 4px 6px; background: #fafafa;"></td>`;
+          const bg = p.host_id ? colors.get(p.host_id) : '#fff';
+          const tip = `${c.name || c.display_name} ${p.tournament_type}\n${fmtDateFR(p.qualif_date || p.final_date)}\n${p.host_name || 'TBD'}`;
+          return `<td style="padding: 4px 6px; background: ${bg}; text-align: center; font-size: 11px;" title="${escapeHtml(tip)}">
+            <div style="font-weight: 700;">${p.tournament_type === 'Finale' ? 'F' : p.tournament_type}</div>
+            <div style="font-size: 9px; color: #555;">${escapeHtml(abbreviateHost(p.host_name) || (p.host_id == null ? 'TBD' : ''))}</div>
+          </td>`;
+        }).join('');
+        return `<tr><td style="padding: 6px 10px; font-weight: 600; position: sticky; left: 0; background: #fff; z-index: 1; border-right: 2px solid #ccc;">${escapeHtml(c.name || c.display_name)}</td>${cells}</tr>`;
+      }).join('');
+
+      // Legend
+      const legend = [...colors.entries()].map(([id, color]) => {
+        const p = result.placements.find(pp => pp.host_id === id);
+        return `<span style="display:inline-block; padding: 4px 10px; background: ${color}; border-radius: 4px; font-size: 12px; margin: 0 4px 4px 0;">${escapeHtml(p?.host_name || '?')}</span>`;
+      }).join('');
+
+      container.innerHTML = `
+        <div style="overflow-x: auto; max-width: 100%; border: 1px solid #ddd; border-radius: 4px;">
+          <table style="border-collapse: collapse; min-width: 100%;">
+            <thead style="background: linear-gradient(135deg, #6b3aa3, #5a3094); color: white; position: sticky; top: 0; z-index: 2;">
+              <tr>
+                <th style="padding: 6px 10px; text-align: left; position: sticky; left: 0; background: #6b3aa3; z-index: 3; min-width: 160px;">Catégorie</th>
+                ${headerCells}
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+        <div style="margin-top: 10px;">
+          <strong style="font-size: 13px; color: #555;">Légende clubs :</strong> ${legend}
+        </div>
+      `;
+    }
+
+    // ----- Vue 3: Par club hôte -----
+    function renderViewHosts(result) {
+      const container = document.getElementById('viewHosts');
+      // Group by host, then by month
+      const placedWithHost = result.placements.filter(p => p.host_id);
+      if (!placedWithHost.length) {
+        container.innerHTML = '<p style="color: #888;">Aucun tournoi avec club hôte assigné.</p>';
+        return;
+      }
+      const byHost = {};
+      const monthsSet = new Set();
+      placedWithHost.forEach(p => {
+        const m = String(p.weekend_date).slice(0, 7); // YYYY-MM
+        monthsSet.add(m);
+        if (!byHost[p.host_id]) byHost[p.host_id] = { name: p.host_name, months: {} };
+        if (!byHost[p.host_id].months[m]) byHost[p.host_id].months[m] = [];
+        byHost[p.host_id].months[m].push(p);
+      });
+      const months = [...monthsSet].sort();
+      const monthLabel = (m) => {
+        const [y, mm] = m.split('-');
+        return new Date(+y, +mm - 1, 1).toLocaleDateString('fr-FR', { month: 'short', year: '2-digit' });
+      };
+      const hosts = Object.entries(byHost).sort((a, b) => a[1].name.localeCompare(b[1].name));
+
+      const rows = hosts.map(([id, h]) => {
+        const cells = months.map(m => {
+          const items = h.months[m] || [];
+          const total = items.length;
+          const list = items.map(p => `<div style="font-size: 10px; padding: 1px 4px; background: #eee; border-radius: 3px; margin-bottom: 2px;">${escapeHtml(p.category_label || '')} ${p.tournament_type}</div>`).join('');
+          return `<td style="padding: 4px; vertical-align: top; background: ${total > 2 ? '#fff5e6' : '#fff'};">
+            ${total ? `<div style="font-size: 11px; font-weight: 600; color: #6b3aa3;">${total} tournoi(s)</div>${list}` : ''}
+          </td>`;
+        }).join('');
+        const totalForHost = Object.values(h.months).reduce((a, arr) => a + arr.length, 0);
+        return `<tr><td style="padding: 6px 10px; font-weight: 600; vertical-align: top;">${escapeHtml(h.name)}<div style="font-size: 11px; color: #888;">${totalForHost} au total</div></td>${cells}</tr>`;
+      }).join('');
+
+      container.innerHTML = `
+        <div style="overflow-x: auto;">
+          <table class="ligue-table" style="min-width: 100%;">
+            <thead>
+              <tr>
+                <th>Club hôte</th>
+                ${months.map(m => `<th>${monthLabel(m)}</th>`).join('')}
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    function switchView(name) {
+      _activeView = name;
+      ['seasonal', 'compact', 'hosts'].forEach(v => {
+        document.getElementById('view' + v[0].toUpperCase() + v.slice(1)).style.display = (v === name) ? 'block' : 'none';
+      });
+      document.querySelectorAll('.view-btn').forEach(btn => {
+        const active = btn.dataset.view === name;
+        btn.style.background = active ? '#6b3aa3' : 'white';
+        btn.style.color = active ? 'white' : '#333';
+      });
+    }
+
+    // View buttons
+    document.querySelectorAll('.view-btn').forEach(btn => {
+      btn.addEventListener('click', () => switchView(btn.dataset.view));
+    });
+
+    // Excel export
+    document.getElementById('exportXlsxBtn').addEventListener('click', async () => {
+      if (!currentBrief) return;
+      const btn = document.getElementById('exportXlsxBtn');
+      btn.disabled = true; btn.textContent = '⏳ Génération...';
+      try {
+        const res = await fetch(`${API_URL}/calendar-generator/draft/export?brief_id=${currentBrief.id}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!res.ok) {
+          const e = await res.json().catch(() => ({}));
+          throw new Error(e.error || 'Échec export');
+        }
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Calendrier ${currentBrief.season || ''}.xlsx`;
+        document.body.appendChild(a); a.click(); a.remove();
+        URL.revokeObjectURL(url);
+      } catch (err) {
+        alert('Erreur export : ' + err.message);
+      } finally {
+        btn.disabled = false; btn.textContent = '📊 Télécharger Excel';
+      }
+    });
 
     document.getElementById('logoutBtn').addEventListener('click', (e) => {
       e.preventDefault();
