@@ -435,8 +435,22 @@
         Les conflits éventuels sont signalés en bas.
       </p>
 
-      <div style="margin: 16px 0; display: flex; gap: 12px; align-items: center;">
+      <div id="quickTuningPanel" style="margin: 12px 0; padding: 12px 14px; background: #fafafa; border: 1px solid #e0e0e0; border-radius: 6px;">
+        <div style="font-size: 13px; font-weight: 600; color: #444; margin-bottom: 8px;">🎛️ Réglages rapides — modifier sans toucher Étape 2 (mode simulation)</div>
+        <div style="display: flex; gap: 14px; flex-wrap: wrap; align-items: center;">
+          <label style="font-size: 12px;">Sem. min entre tournois (même cat.) <input type="number" id="qt_minSameCat" min="1" max="20" style="width: 50px; padding: 3px 5px; margin-left: 4px;"></label>
+          <label style="font-size: 12px;">Sem. min T3 → Finale <input type="number" id="qt_minT3F" min="1" max="20" style="width: 50px; padding: 3px 5px; margin-left: 4px;"></label>
+          <label style="font-size: 12px;">Sem. min Finale → finale ligue <input type="number" id="qt_minLigue" min="1" max="20" style="width: 50px; padding: 3px 5px; margin-left: 4px;"></label>
+          <label style="font-size: 12px;">Tournois max / week-end <input type="number" id="qt_maxPerWE" min="1" max="20" style="width: 50px; padding: 3px 5px; margin-left: 4px;"></label>
+        </div>
+        <div style="margin-top: 8px; font-size: 11px; color: #888;">
+          Les valeurs ci-dessus sont utilisées <strong>uniquement pour cette simulation</strong> et ne modifient pas vos règles. Cliquez « Sauvegarder ces réglages » pour les rendre permanents.
+        </div>
+      </div>
+
+      <div style="margin: 16px 0; display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
         <button type="button" class="btn" id="runGenerationBtn" style="background: #6b3aa3; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: 600;">⚡ Lancer la génération</button>
+        <button type="button" class="btn" id="saveTuningBtn" style="background: #2c7a4d; color: white; padding: 10px 16px; border: none; border-radius: 5px; cursor: pointer; font-size: 13px;">💾 Sauvegarder ces réglages</button>
         <span id="generationStatus" style="color: #666; font-size: 13px;"></span>
       </div>
 
@@ -800,6 +814,8 @@
       min_weeks_between_tournaments_same_category: { label: '≥ N semaines entre 2 tournois (même catégorie)', paramLabel: 'N (semaines)', paramKey: 'min_weeks', paramType: 'number' },
       min_weeks_between_t3_and_final:            { label: '≥ N semaines entre T3 et Finale',                paramLabel: 'N (semaines)', paramKey: 'min_weeks', paramType: 'number' },
       host_no_double_booking:                    { label: 'Pas deux tournois pour un même club / week-end', paramLabel: '(implicite)', paramKey: null, paramType: 'readonly' },
+      max_tournaments_per_weekend:               { label: 'Tournois max par week-end (toutes catégories)',  paramLabel: 'Max', paramKey: 'max', paramType: 'number' },
+      weekend_spread:                            { label: 'Étalement entre week-ends (anti-clusters)',      paramLabel: '(automatique)', paramKey: null, paramType: 'readonly' },
       host_balanced_load:                        { label: 'Nombre équilibré de tournois par club hôte',     paramLabel: 'Tolérance', paramKey: 'tolerance', paramType: 'number' },
       host_no_consecutive_weekends:              { label: 'Pas d\'hôte deux week-ends consécutifs',         paramLabel: 'Portée', paramKey: 'scope', paramType: 'readonly' },
       category_upgrade_cascade:                  { label: 'T1 catégorie inférieure avant T1 supérieure',    paramLabel: 'Modes', paramKey: 'apply_to_modes', paramType: 'readonly' },
@@ -815,7 +831,8 @@
       min_weeks_between_cdb_and_ligue_final: { min_weeks: 2 },
       min_weeks_between_tournaments_same_category: { min_weeks: 3 },
       min_weeks_between_t3_and_final: { min_weeks: 2 },
-      host_balanced_load: { tolerance: 1 }
+      host_balanced_load: { tolerance: 1 },
+      max_tournaments_per_weekend: { max: 4 }
     };
 
     function paramSummary(rule) {
@@ -824,6 +841,7 @@
       const params = rule.parameters || {};
       if (meta.paramKey === 'min_weeks') return `${params.min_weeks ?? '?'} semaines`;
       if (meta.paramKey === 'tolerance') return `±${params.tolerance ?? 1}`;
+      if (meta.paramKey === 'max') return `${params.max ?? '?'}`;
       if (meta.paramKey === 'first_weekend') return params.first_weekend || '(non défini)';
       if (meta.paramKey === 'dates') return `${(params.dates || []).length} date(s)`;
       if (meta.paramKey === 'scope') return params.scope || 'tous';
@@ -1168,13 +1186,69 @@
       items[1].classList.remove('active'); items[1].classList.add('done');
       items[1].querySelector('.stepper-num').textContent = '✓';
       if (items[2]) items[2].classList.add('active');
+      syncQuickTuningPanel();
       document.getElementById('step3Card').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+
+    // Save the quick-tuning panel values into actual constraints (persists)
+    document.getElementById('saveTuningBtn').addEventListener('click', async () => {
+      const overrides = readQuickTuningOverrides();
+      const btn = document.getElementById('saveTuningBtn');
+      btn.disabled = true; const old = btn.textContent; btn.textContent = '⏳ Sauvegarde...';
+      try {
+        for (const [ruleType, ov] of Object.entries(overrides)) {
+          const existing = constraints.find(c => c.rule_type === ruleType);
+          if (existing) {
+            await fetch(`${API_URL}/calendar-generator/constraints/${existing.id}`, {
+              method: 'PATCH', headers: authHeaders, body: JSON.stringify({ parameters: { ...(existing.parameters || {}), ...ov.parameters } })
+            });
+          } else {
+            await fetch(`${API_URL}/calendar-generator/constraints`, {
+              method: 'POST', headers: authHeaders, body: JSON.stringify({ rule_type: ruleType, parameters: ov.parameters })
+            });
+          }
+        }
+        await loadConstraints();
+        document.getElementById('generationStatus').textContent = '✓ Réglages sauvegardés dans les règles';
+        document.getElementById('generationStatus').style.color = '#2c7a4d';
+      } catch (err) {
+        document.getElementById('generationStatus').textContent = '❌ ' + err.message;
+        document.getElementById('generationStatus').style.color = '#c00';
+      } finally {
+        btn.disabled = false; btn.textContent = old;
+      }
     });
 
     document.getElementById('backToRulesBtn').addEventListener('click', () => {
       document.getElementById('step3Card').style.display = 'none';
       document.getElementById('step2Card').scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
+
+    // Pre-fill quick-tuning panel from current constraints
+    function syncQuickTuningPanel() {
+      const findParam = (rt, key, dflt) => {
+        const c = constraints.find(cc => cc.rule_type === rt);
+        const p = c?.parameters || {};
+        return p[key] ?? DEFAULT_PARAM_VALUES[rt]?.[key] ?? dflt;
+      };
+      document.getElementById('qt_minSameCat').value = findParam('min_weeks_between_tournaments_same_category', 'min_weeks', 3);
+      document.getElementById('qt_minT3F').value     = findParam('min_weeks_between_t3_and_final', 'min_weeks', 2);
+      document.getElementById('qt_minLigue').value   = findParam('min_weeks_between_cdb_and_ligue_final', 'min_weeks', 2);
+      document.getElementById('qt_maxPerWE').value   = findParam('max_tournaments_per_weekend', 'max', 4);
+    }
+
+    function readQuickTuningOverrides() {
+      const overrides = {};
+      const minSC = parseInt(document.getElementById('qt_minSameCat').value, 10);
+      const minT3F = parseInt(document.getElementById('qt_minT3F').value, 10);
+      const minL = parseInt(document.getElementById('qt_minLigue').value, 10);
+      const maxWE = parseInt(document.getElementById('qt_maxPerWE').value, 10);
+      if (!isNaN(minSC)) overrides.min_weeks_between_tournaments_same_category = { parameters: { min_weeks: minSC } };
+      if (!isNaN(minT3F)) overrides.min_weeks_between_t3_and_final = { parameters: { min_weeks: minT3F } };
+      if (!isNaN(minL)) overrides.min_weeks_between_cdb_and_ligue_final = { parameters: { min_weeks: minL } };
+      if (!isNaN(maxWE)) overrides.max_tournaments_per_weekend = { parameters: { max: maxWE } };
+      return overrides;
+    }
 
     document.getElementById('runGenerationBtn').addEventListener('click', async () => {
       if (!currentBrief) {
@@ -1188,8 +1262,10 @@
       btn.textContent = '⏳ Génération en cours...';
       status.textContent = ''; status.style.color = '#666';
       try {
+        const overrides = readQuickTuningOverrides();
         const res = await fetch(`${API_URL}/calendar-generator/generate`, {
-          method: 'POST', headers: authHeaders, body: JSON.stringify({ brief_id: currentBrief.id })
+          method: 'POST', headers: authHeaders,
+          body: JSON.stringify({ brief_id: currentBrief.id, constraint_overrides: overrides })
         });
         const json = await res.json();
         if (!res.ok) throw new Error(json.error || 'Échec');

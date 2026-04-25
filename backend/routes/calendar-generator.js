@@ -333,11 +333,13 @@ const RULES_CATALOG = {
   min_weeks_between_tournaments_same_category: { strictness: 'hard', defaultParams: { min_weeks: 3 } },
   min_weeks_between_t3_and_final:            { strictness: 'hard', defaultParams: { min_weeks: 2 } },
   host_no_double_booking:                    { strictness: 'hard', defaultParams: {} }, // implicit
+  max_tournaments_per_weekend:               { strictness: 'hard', defaultParams: { max: 4 } },
   // Règles molles
   host_balanced_load:                        { strictness: 'soft', defaultWeight: 5, defaultParams: { tolerance: 1 } },
   host_no_consecutive_weekends:              { strictness: 'soft', defaultWeight: 3, defaultParams: { scope: 'all_hosts' } },
   category_upgrade_cascade:                  { strictness: 'soft', defaultWeight: 4, defaultParams: { apply_to_modes: ['*'] } },
-  mode_spread_evenly:                        { strictness: 'soft', defaultWeight: 2, defaultParams: { mode: '*' } }
+  mode_spread_evenly:                        { strictness: 'soft', defaultWeight: 2, defaultParams: { mode: '*' } },
+  weekend_spread:                            { strictness: 'soft', defaultWeight: 5, defaultParams: {} }
 };
 
 // Liste des règles à pré-créer pour un nouveau CDB (instances par défaut)
@@ -347,10 +349,12 @@ const DEFAULT_RULE_INSTANCES = [
   'min_weeks_between_tournaments_same_category',
   'min_weeks_between_t3_and_final',
   'host_no_double_booking',
+  'max_tournaments_per_weekend',
   'host_balanced_load',
   'host_no_consecutive_weekends',
   'category_upgrade_cascade',
-  'mode_spread_evenly'
+  'mode_spread_evenly',
+  'weekend_spread'
 ];
 
 // GET /constraints — list rule instances for the current org
@@ -719,12 +723,37 @@ function loadEngineContext(orgId, briefId, cb) {
 router.post('/generate', authenticateToken, requireAdmin, (req, res) => {
   const orgId = req.user.organizationId;
   const briefId = parseInt(req.body?.brief_id, 10);
+  const overrides = req.body?.constraint_overrides || {}; // { rule_type: { parameters?: {}, weight?: N, enabled?: bool } }
   if (!briefId) return res.status(400).json({ error: 'brief_id requis' });
 
   loadEngineContext(orgId, briefId, (err, ctx) => {
     if (err) {
       console.error('[calendar-generator] /generate context error:', err);
       return res.status(500).json({ error: err.message });
+    }
+
+    // Merge ephemeral overrides into constraints (does NOT persist)
+    if (overrides && typeof overrides === 'object') {
+      for (const ruleType of Object.keys(overrides)) {
+        const ov = overrides[ruleType];
+        let existing = ctx.constraints.find(c => c.rule_type === ruleType);
+        if (!existing) {
+          // Synthesize an ephemeral instance from catalog defaults
+          const meta = RULES_CATALOG[ruleType];
+          if (!meta) continue;
+          existing = {
+            rule_type: ruleType,
+            parameters: { ...(meta.defaultParams || {}) },
+            strictness: meta.strictness,
+            weight: meta.defaultWeight ?? 1,
+            enabled: true
+          };
+          ctx.constraints.push(existing);
+        }
+        if (ov.parameters) existing.parameters = { ...(existing.parameters || {}), ...ov.parameters };
+        if (ov.weight !== undefined) existing.weight = ov.weight;
+        if (ov.enabled !== undefined) existing.enabled = ov.enabled;
+      }
     }
 
     let result;

@@ -338,6 +338,13 @@ function scoreSoft({ cat, ttype, host, date, weekendDate, alreadyPlaced, cmap, b
     if (adjacent) score += w * 10;
   }
 
+  // weekend_spread: penalize crowded weekends (quadratic)
+  if (cmap.weekend_spread) {
+    const w = cmap.weekend_spread.weight ?? 5;
+    const sameWE = alreadyPlaced.filter(p => p.weekend_date === weekendDate).length;
+    score += w * sameWE * sameWE;
+  }
+
   // mode_spread_evenly: penalize clustering of same mode in adjacent weekends
   if (cmap.mode_spread_evenly) {
     const w = cmap.mode_spread_evenly.weight ?? 2;
@@ -396,6 +403,16 @@ function placeOne({ cat, ttype, weekends, hosts, brief, cmap, ligueFinals, alrea
     if (!dateCheck.ok) {
       bumpReason(dateCheck.reason);
       continue;
+    }
+
+    // Hard check: max tournaments per weekend (any host)
+    const maxPerWE = param(cmap.max_tournaments_per_weekend, 'max', null);
+    if (maxPerWE != null) {
+      const sameWE = alreadyPlaced.filter(p => p.weekend_date === wk.weekend_date).length;
+      if (sameWE >= maxPerWE) {
+        bumpReason(`${maxPerWE} tournois déjà sur ce WE (max atteint)`);
+        continue;
+      }
     }
 
     if (isFinale && brief.final_attribution === 'winner_tbd') {
