@@ -631,4 +631,159 @@ Mieux vaut renvoyer une erreur claire que d'inventer une règle bricolée.`;
   }
 });
 
+// ----------------------------------------------------------------
+// Phase 5a — Deterministic generation
+// ----------------------------------------------------------------
+
+const { generateCalendar } = require('../utils/calendar-engine');
+
+// Helper: load full context for the engine (brief + constraints + ligue + categories + clubs)
+function loadEngineContext(orgId, briefId, cb) {
+  const db = getDb();
+  db.get(
+    `SELECT * FROM calendar_brief WHERE id = $1 AND organization_id = $2`,
+    [briefId, orgId],
+    (err, brief) => {
+      if (err) return cb(err);
+      if (!brief) return cb(new Error('Brief introuvable'));
+
+      // Parse JSONB fields if stored as text
+      ['blackout_dates', 'active_categories', 'active_hosts', 'host_blackouts'].forEach(k => {
+        if (typeof brief[k] === 'string') {
+          try { brief[k] = JSON.parse(brief[k]); } catch (_) { brief[k] = []; }
+        }
+        if (!Array.isArray(brief[k])) brief[k] = [];
+      });
+
+      db.all(
+        `SELECT id, rule_type, parameters, strictness, weight, enabled
+         FROM calendar_constraints WHERE organization_id = $1`,
+        [orgId],
+        (err2, constraints) => {
+          if (err2) return cb(err2);
+          (constraints || []).forEach(c => {
+            if (typeof c.parameters === 'string') {
+              try { c.parameters = JSON.parse(c.parameters); } catch (_) { c.parameters = {}; }
+            }
+          });
+
+          db.all(
+            `SELECT category_id, final_date FROM ligue_final_dates
+             WHERE organization_id = $1 AND season = $2`,
+            [orgId, brief.season],
+            (err3, ligueRows) => {
+              if (err3) return cb(err3);
+              const ligueFinals = {};
+              (ligueRows || []).forEach(r => {
+                ligueFinals[r.category_id] = String(r.final_date).slice(0, 10);
+              });
+
+              db.all(
+                `SELECT id, game_type, level, display_name FROM categories
+                 WHERE (organization_id = $1 OR organization_id IS NULL)
+                   AND COALESCE(is_active, TRUE) = TRUE`,
+                [orgId],
+                (err4, categories) => {
+                  if (err4) return cb(err4);
+
+                  db.all(
+                    `SELECT id, display_name FROM clubs
+                     WHERE ($1::int IS NULL OR organization_id = $1)`,
+                    [orgId],
+                    (err5, clubs) => {
+                      if (err5) return cb(err5);
+                      cb(null, { brief, constraints: constraints || [], ligueFinals, categories: categories || [], clubs: clubs || [] });
+                    }
+                  );
+                }
+              );
+            }
+          );
+        }
+      );
+    }
+  );
+}
+
+// POST /generate — body: { brief_id }
+// Runs the engine, replaces calendar_draft for that brief, returns result.
+router.post('/generate', authenticateToken, requireAdmin, (req, res) => {
+  const orgId = req.user.organizationId;
+  const briefId = parseInt(req.body?.brief_id, 10);
+  if (!briefId) return res.status(400).json({ error: 'brief_id requis' });
+
+  loadEngineContext(orgId, briefId, (err, ctx) => {
+    if (err) {
+      console.error('[calendar-generator] /generate context error:', err);
+      return res.status(500).json({ error: err.message });
+    }
+
+    let result;
+    try {
+      result = generateCalendar(ctx);
+    } catch (e) {
+      console.error('[calendar-generator] engine error:', e);
+      return res.status(500).json({ error: 'Erreur moteur : ' + e.message });
+    }
+
+    // Persist draft (delete existing, insert new) — best-effort, non-fatal
+    const db = getDb();
+    db.run(`DELETE FROM calendar_draft WHERE brief_id = $1`, [briefId], (delErr) => {
+      if (delErr) console.warn('[calendar-generator] DELETE draft warning:', delErr.message);
+
+      // Insert each placement
+      const inserts = result.placements.map(p => new Promise((resolve) => {
+        db.run(
+          `INSERT INTO calendar_draft
+             (brief_id, weekend_date, mode, category_id, tournament_type,
+              host_club_id, conflict_flags, locked_by_user)
+           VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, FALSE)`,
+          [briefId, p.weekend_date, ctx.categories.find(c => c.id === p.category_id)?.game_type || null,
+           p.category_id, p.tournament_type, p.host_id, JSON.stringify([])],
+          () => resolve()
+        );
+      }));
+
+      Promise.all(inserts).then(() => {
+        res.json({
+          ...result,
+          // Add display labels for the frontend
+          placements: result.placements.map(p => ({
+            ...p,
+            category_label: ctx.categories.find(c => c.id === p.category_id)?.display_name || `cat#${p.category_id}`,
+            host_name: ctx.clubs.find(c => c.id === p.host_id)?.display_name || null
+          }))
+        });
+      });
+    });
+  });
+});
+
+// GET /draft?brief_id=X — fetch persisted draft
+router.get('/draft', authenticateToken, (req, res) => {
+  const db = getDb();
+  const orgId = req.user.organizationId;
+  const briefId = parseInt(req.query.brief_id, 10);
+  if (!briefId) return res.status(400).json({ error: 'brief_id requis' });
+
+  db.all(
+    `SELECT cd.*, c.display_name AS category_label, c.game_type, c.level,
+            cl.display_name AS host_name
+     FROM calendar_draft cd
+     JOIN calendar_brief cb ON cb.id = cd.brief_id
+     LEFT JOIN categories c ON c.id = cd.category_id
+     LEFT JOIN clubs cl ON cl.id = cd.host_club_id
+     WHERE cd.brief_id = $1 AND cb.organization_id = $2
+     ORDER BY cd.weekend_date ASC, c.display_name ASC`,
+    [briefId, orgId],
+    (err, rows) => {
+      if (err) {
+        console.error('[calendar-generator] GET /draft error:', err);
+        return res.status(500).json({ error: err.message });
+      }
+      res.json(rows || []);
+    }
+  );
+});
+
 module.exports = router;

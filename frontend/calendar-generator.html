@@ -416,7 +416,32 @@
         <span class="save-status" id="rulesStatus"></span>
         <div>
           <button type="button" class="btn" id="backToBriefBtn" style="padding: 10px 20px;">← Retour Brief</button>
-          <button type="button" class="btn" disabled style="background: #c47b00; color: white; padding: 10px 20px; border: none; border-radius: 5px; font-weight: 600; margin-left: 8px;" title="Disponible en Phase 5">Étape suivante : Génération →</button>
+          <button type="button" class="btn" id="goToGenerationBtn" style="background: #c47b00; color: white; padding: 10px 20px; border: none; border-radius: 5px; font-weight: 600; margin-left: 8px;">Étape suivante : Génération →</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ÉTAPE 3 — Génération du calendrier -->
+    <div class="card" id="step3Card" style="display: none;">
+      <h3 style="margin-top: 0;">Étape 3 — Génération du calendrier</h3>
+      <p style="color: #666; font-size: 14px;">
+        Le moteur place chaque tournoi (T1, T2, T3, Finale) de chaque catégorie sur un week-end et chez un club hôte,
+        en respectant les <strong>règles obligatoires</strong> et en optimisant les <strong>règles souhaitées</strong>.
+        Les conflits éventuels sont signalés en bas.
+      </p>
+
+      <div style="margin: 16px 0; display: flex; gap: 12px; align-items: center;">
+        <button type="button" class="btn" id="runGenerationBtn" style="background: #6b3aa3; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: 600;">⚡ Lancer la génération</button>
+        <span id="generationStatus" style="color: #666; font-size: 13px;"></span>
+      </div>
+
+      <div id="generationStats" style="display: none; padding: 12px; background: #f0f7ff; border: 1px solid #c0d4f0; border-radius: 6px; margin-bottom: 16px;"></div>
+      <div id="generationConflicts" style="display: none; margin-bottom: 16px;"></div>
+      <div id="generationGrid"></div>
+
+      <div class="actions-bar">
+        <div>
+          <button type="button" class="btn" id="backToRulesBtn" style="padding: 10px 20px;">← Retour Règles</button>
         </div>
       </div>
     </div>
@@ -1100,6 +1125,149 @@
       await loadConstraints();
       document.getElementById('step2Card').scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
+
+    // ----- Step 3: Generation -----
+    const MODE_DISPLAY_ORDER = ['Libre', 'Cadre', 'Bande', '3 Bandes'];
+    const LEVEL_DISPLAY_RANK = { N1: 1, N2: 2, N3: 3, R1: 4, R2: 5, R3: 6, R4: 7, R5: 8, D1: 9, D2: 10, D3: 11, NC: 99 };
+    function dispLevelRank(lvl) {
+      const k = String(lvl || '').toUpperCase().replace(/\s+/g, '').replace(/GC$/, '');
+      return LEVEL_DISPLAY_RANK[k] ?? 50;
+    }
+    function dispModeRank(m) {
+      const i = MODE_DISPLAY_ORDER.findIndex(x => x.toLowerCase() === String(m || '').toLowerCase());
+      return i === -1 ? 99 : i;
+    }
+    function fmtDateFR(iso) {
+      if (!iso) return '—';
+      const d = new Date(String(iso).slice(0, 10) + 'T00:00:00Z');
+      return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit', timeZone: 'UTC' });
+    }
+
+    document.getElementById('goToGenerationBtn').addEventListener('click', () => {
+      document.getElementById('step3Card').style.display = 'block';
+      const items = document.querySelectorAll('.stepper-item');
+      items[1].classList.remove('active'); items[1].classList.add('done');
+      items[1].querySelector('.stepper-num').textContent = '✓';
+      if (items[2]) items[2].classList.add('active');
+      document.getElementById('step3Card').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+
+    document.getElementById('backToRulesBtn').addEventListener('click', () => {
+      document.getElementById('step3Card').style.display = 'none';
+      document.getElementById('step2Card').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+
+    document.getElementById('runGenerationBtn').addEventListener('click', async () => {
+      if (!currentBrief) {
+        document.getElementById('generationStatus').textContent = '⚠️ Sauvegardez d\'abord le brief.';
+        document.getElementById('generationStatus').style.color = '#c00';
+        return;
+      }
+      const btn = document.getElementById('runGenerationBtn');
+      const status = document.getElementById('generationStatus');
+      btn.disabled = true;
+      btn.textContent = '⏳ Génération en cours...';
+      status.textContent = ''; status.style.color = '#666';
+      try {
+        const res = await fetch(`${API_URL}/calendar-generator/generate`, {
+          method: 'POST', headers: authHeaders, body: JSON.stringify({ brief_id: currentBrief.id })
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || 'Échec');
+        renderGenerationResult(json);
+        status.textContent = `✓ Terminé en ${new Date().toLocaleTimeString('fr-FR')}`;
+        status.style.color = '#2c7a4d';
+      } catch (err) {
+        status.textContent = '❌ ' + err.message;
+        status.style.color = '#c00';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '⚡ Relancer la génération';
+      }
+    });
+
+    function renderGenerationResult(result) {
+      const stats = document.getElementById('generationStats');
+      const conflictsEl = document.getElementById('generationConflicts');
+      const grid = document.getElementById('generationGrid');
+
+      // Stats
+      stats.style.display = 'block';
+      const ok = result.stats.total_placed;
+      const expected = result.stats.total_expected;
+      const conflicts = result.stats.total_conflicts;
+      stats.innerHTML = `
+        <strong>${ok} / ${expected}</strong> tournois placés ·
+        <strong style="color:${conflicts ? '#c00' : '#2c7a4d'};">${conflicts}</strong> conflit${conflicts > 1 ? 's' : ''} ·
+        ${result.stats.total_categories} catégorie${result.stats.total_categories > 1 ? 's' : ''} active${result.stats.total_categories > 1 ? 's' : ''}
+      `;
+
+      // Conflicts
+      if (result.conflicts.length) {
+        conflictsEl.style.display = 'block';
+        conflictsEl.innerHTML = `
+          <div style="padding: 12px; background: #fff5f5; border: 1px solid #fc8181; border-radius: 6px;">
+            <strong style="color: #c00;">⚠️ ${result.conflicts.length} conflit(s) — non placé(s) :</strong>
+            <ul style="margin: 8px 0 0 20px; color: #555; font-size: 13px;">
+              ${result.conflicts.map(c => `<li><strong>${escapeHtml(c.category_label)}</strong> ${escapeHtml(c.tournament_type)} — ${escapeHtml(c.reason)}</li>`).join('')}
+            </ul>
+          </div>
+        `;
+      } else {
+        conflictsEl.style.display = 'none';
+        conflictsEl.innerHTML = '';
+      }
+
+      // Grid: rows = categories (canonical CDBHS order), columns = T1/T2/T3/Finale
+      // Group placements by (category_id, tournament_type)
+      const byCatType = {};
+      result.placements.forEach(p => {
+        if (!byCatType[p.category_id]) byCatType[p.category_id] = {};
+        byCatType[p.category_id][p.tournament_type] = p;
+      });
+
+      // Get unique categories present in placements + conflicts
+      const allCatIds = new Set([
+        ...result.placements.map(p => p.category_id),
+        ...result.conflicts.map(c => c.category_id)
+      ]);
+      const cats = (referenceData.categories || []).filter(c => allCatIds.has(c.id));
+      cats.sort((a, b) => {
+        const ma = dispModeRank(a.mode || a.game_type);
+        const mb = dispModeRank(b.mode || b.game_type);
+        if (ma !== mb) return ma - mb;
+        return dispLevelRank(a.level) - dispLevelRank(b.level);
+      });
+
+      const rows = cats.map(c => {
+        const cells = ['T1', 'T2', 'T3', 'Finale'].map(tt => {
+          const p = byCatType[c.id]?.[tt];
+          if (!p) return `<td style="padding: 6px 10px; color: #c00; background: #fff5f5;">—</td>`;
+          const date = p.qualif_date || p.final_date;
+          const host = p.host_name || (p.host_id == null ? '<em style="color:#888;">TBD</em>' : `#${p.host_id}`);
+          return `<td style="padding: 6px 10px;"><div style="font-weight: 600;">${fmtDateFR(date)}</div><div style="font-size: 11px; color: #666;">${host}</div></td>`;
+        }).join('');
+        return `<tr><td style="padding: 6px 10px; font-weight: 600;">${escapeHtml(c.name || c.display_name)}</td>${cells}</tr>`;
+      }).join('');
+
+      grid.innerHTML = `
+        <h4 style="margin: 12px 0 8px;">Calendrier proposé</h4>
+        <div style="overflow-x: auto;">
+          <table class="ligue-table" style="width: 100%;">
+            <thead>
+              <tr>
+                <th>Catégorie</th>
+                <th>T1</th>
+                <th>T2</th>
+                <th>T3</th>
+                <th>Finale</th>
+              </tr>
+            </thead>
+            <tbody>${rows || '<tr><td colspan="5" style="color:#888;">Aucun résultat.</td></tr>'}</tbody>
+          </table>
+        </div>
+      `;
+    }
 
     document.getElementById('logoutBtn').addEventListener('click', (e) => {
       e.preventDefault();
