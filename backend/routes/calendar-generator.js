@@ -964,74 +964,245 @@ router.get('/draft/export', authenticateToken, async (req, res) => {
       grid[r.category_id][r.weekend_date] = { type: r.tournament_type, host_id: r.host_id, host_name: r.host_name };
     });
 
-    // Build workbook
+    // Build workbook with rich formatting
     const ExcelJS = require('exceljs');
     const wb = new ExcelJS.Workbook();
     wb.creator = 'Calendrier Saisonnier — Kayros';
     wb.created = new Date();
 
-    // Sheet 1 — Calendar grid (Excel-style)
-    const ws = wb.addWorksheet(`Calendrier ${brief.season}`, {
-      views: [{ state: 'frozen', xSplit: 1, ySplit: 1 }]
-    });
-    const headerRow = ['Catégorie', ...weekends.map(d => {
-      const dt = new Date(d + 'T00:00:00Z');
-      return dt.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit', timeZone: 'UTC' });
-    })];
-    ws.addRow(headerRow);
-    ws.getRow(1).font = { bold: true };
-    ws.getRow(1).alignment = { horizontal: 'center', vertical: 'middle' };
-    ws.getColumn(1).width = 22;
-    for (let i = 2; i <= headerRow.length; i++) ws.getColumn(i).width = 11;
+    // ===== Helpers =====
+    const BORDER_THIN = { style: 'thin', color: { argb: 'FFB0B0B0' } };
+    const ALL_BORDERS = { top: BORDER_THIN, bottom: BORDER_THIN, left: BORDER_THIN, right: BORDER_THIN };
+    const TYPE_COLORS = {
+      'T1':     'FFE2EFDA', // light green
+      'T2':     'FFFFF2CC', // light yellow
+      'T3':     'FFFCE4D6', // light orange
+      'Finale': 'FFF8CBAD'  // light red/coral
+    };
+    const HEADER_BG = 'FF6B3AA3';     // purple
+    const HEADER_TEXT_COLOR = 'FFFFFFFF';
+    const ALT_ROW_BG = 'FFF7F7F7';
+    const MONTH_NAMES_FR = ['janv.', 'févr.', 'mars', 'avril', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
+    const monthLabel = (iso) => {
+      const d = new Date(iso + 'T00:00:00Z');
+      return `${MONTH_NAMES_FR[d.getUTCMonth()]} ${String(d.getUTCFullYear()).slice(2)}`;
+    };
 
-    cats.forEach(c => {
-      const row = [c.label];
-      weekends.forEach(we => {
-        const cell = grid[c.id]?.[we];
-        if (cell) row.push(`${cell.type}${cell.host_name ? ' / ' + abbreviate(cell.host_name) : ''}`);
-        else row.push('');
-      });
-      const added = ws.addRow(row);
-      // Color cells by host
+    // ===== Sheet 1: Calendar grid (visual, print-ready) =====
+    const ws = wb.addWorksheet(`Calendrier ${brief.season}`, {
+      views: [{ state: 'frozen', xSplit: 1, ySplit: 3 }],
+      pageSetup: {
+        orientation: 'landscape',
+        paperSize: 8, // A3
+        fitToPage: true,
+        fitToWidth: 1,
+        fitToHeight: 0,
+        margins: { left: 0.4, right: 0.4, top: 0.5, bottom: 0.5, header: 0.2, footer: 0.2 }
+      },
+      properties: { defaultRowHeight: 22 }
+    });
+
+    const totalCols = 1 + weekends.length;
+
+    // Row 1: Title
+    ws.mergeCells(1, 1, 1, totalCols);
+    const titleCell = ws.getCell(1, 1);
+    titleCell.value = `Calendrier saisonnier — Saison ${brief.season}`;
+    titleCell.font = { bold: true, size: 18, color: { argb: HEADER_TEXT_COLOR } };
+    titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+    titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: HEADER_BG } };
+    ws.getRow(1).height = 32;
+
+    // Row 2: Month header (merged across same month)
+    const row2 = ws.getRow(2);
+    row2.height = 22;
+    ws.getCell(2, 1).value = '';
+    ws.getCell(2, 1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: HEADER_BG } };
+    ws.getCell(2, 1).border = ALL_BORDERS;
+    let monthStart = 2;
+    let currentMonth = monthLabel(weekends[0]);
+    weekends.forEach((we, idx) => {
+      const col = idx + 2;
+      const m = monthLabel(we);
+      if (m !== currentMonth) {
+        if (monthStart < col - 1) ws.mergeCells(2, monthStart, 2, col - 1);
+        else ws.mergeCells(2, monthStart, 2, monthStart); // single-cell merge no-op
+        const c = ws.getCell(2, monthStart);
+        c.value = currentMonth;
+        c.font = { bold: true, color: { argb: HEADER_TEXT_COLOR } };
+        c.alignment = { horizontal: 'center', vertical: 'middle' };
+        c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: HEADER_BG } };
+        c.border = ALL_BORDERS;
+        monthStart = col;
+        currentMonth = m;
+      }
+    });
+    // Last month range
+    if (monthStart <= totalCols) {
+      if (monthStart < totalCols) ws.mergeCells(2, monthStart, 2, totalCols);
+      const c = ws.getCell(2, monthStart);
+      c.value = currentMonth;
+      c.font = { bold: true, color: { argb: HEADER_TEXT_COLOR } };
+      c.alignment = { horizontal: 'center', vertical: 'middle' };
+      c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: HEADER_BG } };
+      c.border = ALL_BORDERS;
+    }
+
+    // Row 3: Week-end dates
+    const row3 = ws.getRow(3);
+    row3.height = 24;
+    const r3Header = ws.getCell(3, 1);
+    r3Header.value = 'Catégorie';
+    r3Header.font = { bold: true, color: { argb: HEADER_TEXT_COLOR } };
+    r3Header.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+    r3Header.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: HEADER_BG } };
+    r3Header.border = ALL_BORDERS;
+    weekends.forEach((we, idx) => {
+      const col = idx + 2;
+      const dt = new Date(we + 'T00:00:00Z');
+      const c = ws.getCell(3, col);
+      c.value = dt.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', timeZone: 'UTC' });
+      c.font = { bold: true, color: { argb: HEADER_TEXT_COLOR }, size: 10 };
+      c.alignment = { horizontal: 'center', vertical: 'middle' };
+      c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: HEADER_BG } };
+      c.border = ALL_BORDERS;
+    });
+
+    // Column widths
+    ws.getColumn(1).width = 26;
+    for (let i = 2; i <= totalCols; i++) ws.getColumn(i).width = 8;
+
+    // Data rows
+    cats.forEach((c, rowIdx) => {
+      const r = ws.getRow(4 + rowIdx);
+      r.height = 28;
+      const labelCell = r.getCell(1);
+      labelCell.value = c.label;
+      labelCell.font = { bold: true, size: 11 };
+      labelCell.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+      labelCell.border = ALL_BORDERS;
+      labelCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: rowIdx % 2 === 0 ? 'FFFFFFFF' : ALT_ROW_BG } };
+
       weekends.forEach((we, idx) => {
-        const cell = grid[c.id]?.[we];
-        if (cell?.host_id && hostColor.has(cell.host_id)) {
-          added.getCell(idx + 2).fill = {
-            type: 'pattern', pattern: 'solid',
-            fgColor: { argb: hostColor.get(cell.host_id) }
-          };
-          added.getCell(idx + 2).alignment = { horizontal: 'center', vertical: 'middle' };
+        const col = idx + 2;
+        const cell = r.getCell(col);
+        const placement = grid[c.id]?.[we];
+        cell.border = ALL_BORDERS;
+        if (placement) {
+          // Two-line cell: type / abbreviated host
+          const typeLabel = placement.type;
+          const hostAbbr = placement.host_name ? abbreviate(placement.host_name) : (placement.type === 'Finale' ? 'TBD' : '');
+          cell.value = hostAbbr ? `${typeLabel}\n${hostAbbr}` : typeLabel;
+          cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+          cell.font = { bold: true, size: 10 };
+          // Mix host color (background) and tournament-type color (light tint via top stripe? simulate via cell color)
+          // Use HOST color as primary background (ties to legend), and rely on TEXT styling for type
+          if (placement.host_id && hostColor.has(placement.host_id)) {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hostColor.get(placement.host_id) } };
+          } else if (TYPE_COLORS[typeLabel]) {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: TYPE_COLORS[typeLabel] } };
+          }
+        } else {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: rowIdx % 2 === 0 ? 'FFFFFFFF' : ALT_ROW_BG } };
         }
       });
     });
 
-    // Sheet 2 — List view (one row per tournament)
-    const wsList = wb.addWorksheet('Liste des tournois');
-    wsList.addRow(['Date WE', 'Mode', 'Catégorie', 'Type', 'Club hôte']);
-    wsList.getRow(1).font = { bold: true };
+    // Footer with legend below table
+    const legendStartRow = 4 + cats.length + 2;
+    const legendTitle = ws.getCell(legendStartRow, 1);
+    legendTitle.value = 'Légende clubs';
+    legendTitle.font = { bold: true, size: 12, color: { argb: HEADER_BG } };
+    let legCol = 2;
+    [...hostMap.entries()].forEach(([id, name]) => {
+      const swatch = ws.getCell(legendStartRow, legCol);
+      swatch.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hostColor.get(id) } };
+      swatch.border = ALL_BORDERS;
+      swatch.value = '';
+      const lbl = ws.getCell(legendStartRow, legCol + 1);
+      lbl.value = name;
+      lbl.alignment = { vertical: 'middle' };
+      lbl.font = { size: 10 };
+      legCol += 2;
+    });
+
+    // Type legend below
+    const typeLegendRow = legendStartRow + 2;
+    const tlTitle = ws.getCell(typeLegendRow, 1);
+    tlTitle.value = 'Type';
+    tlTitle.font = { bold: true, size: 12, color: { argb: HEADER_BG } };
+    let tCol = 2;
+    Object.entries(TYPE_COLORS).forEach(([type, color]) => {
+      const sw = ws.getCell(typeLegendRow, tCol);
+      sw.value = type;
+      sw.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: color } };
+      sw.font = { bold: true, size: 10 };
+      sw.alignment = { horizontal: 'center', vertical: 'middle' };
+      sw.border = ALL_BORDERS;
+      tCol += 1;
+    });
+
+    // ===== Sheet 2: List of tournaments (sortable, with auto-filter) =====
+    const wsList = wb.addWorksheet('Liste des tournois', {
+      pageSetup: { orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0 }
+    });
+    const listHeader = wsList.addRow(['Date WE', 'Mode', 'Catégorie', 'Type', 'Club hôte']);
+    listHeader.eachCell(cell => {
+      cell.font = { bold: true, color: { argb: HEADER_TEXT_COLOR } };
+      cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: HEADER_BG } };
+      cell.border = ALL_BORDERS;
+    });
+    listHeader.height = 22;
     wsList.columns = [
-      { width: 12 }, { width: 10 }, { width: 24 }, { width: 8 }, { width: 32 }
+      { width: 14 }, { width: 12 }, { width: 26 }, { width: 10 }, { width: 34 }
     ];
-    draft.forEach(r => {
-      wsList.addRow([
+    draft.forEach((r, idx) => {
+      const row = wsList.addRow([
         r.weekend_date || '',
         r.game_type || '',
         r.category_label || '',
         r.tournament_type || '',
         r.host_name || (r.tournament_type === 'Finale' ? 'TBD' : '')
       ]);
+      row.eachCell((cell, colNumber) => {
+        cell.border = ALL_BORDERS;
+        cell.alignment = { vertical: 'middle' };
+        if (idx % 2 === 1) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: ALT_ROW_BG } };
+        if (colNumber === 4 && TYPE_COLORS[cell.value]) {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: TYPE_COLORS[cell.value] } };
+          cell.alignment = { horizontal: 'center', vertical: 'middle' };
+          cell.font = { bold: true };
+        }
+      });
     });
+    // Auto-filter
+    wsList.autoFilter = { from: 'A1', to: `E${draft.length + 1}` };
+    wsList.views = [{ state: 'frozen', ySplit: 1 }];
 
-    // Sheet 3 — Legend
+    // ===== Sheet 3: Légende clubs (separate, large) =====
     const wsLeg = wb.addWorksheet('Légende clubs');
-    wsLeg.addRow(['Club', 'Couleur']);
-    wsLeg.getRow(1).font = { bold: true };
-    wsLeg.getColumn(1).width = 32;
-    wsLeg.getColumn(2).width = 12;
+    const legHeader = wsLeg.addRow(['Club', 'Couleur']);
+    legHeader.eachCell(c => {
+      c.font = { bold: true, color: { argb: HEADER_TEXT_COLOR } };
+      c.alignment = { horizontal: 'center', vertical: 'middle' };
+      c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: HEADER_BG } };
+      c.border = ALL_BORDERS;
+    });
+    legHeader.height = 22;
+    wsLeg.getColumn(1).width = 36;
+    wsLeg.getColumn(2).width = 18;
     [...hostMap.entries()].forEach(([id, name]) => {
       const r = wsLeg.addRow([name, '']);
-      const colorCell = r.getCell(2);
-      colorCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hostColor.get(id) } };
+      r.height = 24;
+      r.eachCell((c, col) => {
+        c.border = ALL_BORDERS;
+        c.alignment = { vertical: 'middle', indent: 1 };
+        c.font = { size: 11 };
+        if (col === 2) {
+          c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hostColor.get(id) } };
+        }
+      });
     });
 
     const buf = await wb.xlsx.writeBuffer();
