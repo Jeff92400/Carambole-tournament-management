@@ -67,9 +67,26 @@ function orderCategoriesForDisplay(cats) {
   });
 }
 
+function toISODateString(s) {
+  // Normalize any input (Date object, ISO string, "YYYY-MM-DDT...", etc.) to "YYYY-MM-DD"
+  if (s == null) return null;
+  if (s instanceof Date) {
+    if (isNaN(s.getTime())) return null;
+    return s.toISOString().slice(0, 10);
+  }
+  const str = String(s);
+  const m = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  // Fallback: try Date parsing
+  const d = new Date(str);
+  if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+  return null;
+}
+
 function parseISODate(s) {
-  // Accept 'YYYY-MM-DD' or 'YYYY-MM-DDTHH...'
-  return new Date(String(s).slice(0, 10) + 'T00:00:00Z');
+  const iso = toISODateString(s);
+  if (!iso) return null;
+  return new Date(iso + 'T00:00:00Z');
 }
 function fmtISO(d) {
   return d.toISOString().slice(0, 10);
@@ -88,6 +105,7 @@ function weekDiff(dateA, dateB) {
 // A "weekend" carries both the qualif date and the final date based on brief.
 function computeWeekends(brief) {
   const startD = parseISODate(brief.first_weekend);
+  if (!startD) throw new Error('first_weekend invalide ou manquant dans le brief');
   const qualifDayIdx = DAY_INDEX[brief.qualif_day] ?? 6;
   const finalDayIdx = DAY_INDEX[brief.final_day] ?? 6;
 
@@ -98,7 +116,7 @@ function computeWeekends(brief) {
   const firstQualif = addDays(startD, alignDelta);
 
   // We use Saturday-of-the-week as the canonical "weekend_date" key for grouping
-  const blackouts = new Set((brief.blackout_dates || []).map(d => String(d).slice(0, 10)));
+  const blackouts = new Set((brief.blackout_dates || []).map(toISODateString).filter(Boolean));
 
   const weekends = [];
   const cursor = new Date(firstQualif.getTime());
@@ -149,12 +167,12 @@ function isDateAllowed({
   cat, ttype, date, isFinale, brief, cmap, ligueFinals, alreadyPlaced
 }) {
   // 1. Blackout
-  const blackouts = new Set((brief.blackout_dates || []).map(d => String(d).slice(0, 10)));
+  const blackouts = new Set((brief.blackout_dates || []).map(toISODateString).filter(Boolean));
   if (blackouts.has(date)) return { ok: false, reason: 'date en blackout' };
 
   // 2. season_start_after
-  const startAfter = param(cmap.season_start_after, 'first_weekend', brief.first_weekend);
-  if (startAfter && date < String(startAfter).slice(0, 10)) {
+  const startAfter = toISODateString(param(cmap.season_start_after, 'first_weekend', brief.first_weekend));
+  if (startAfter && date < startAfter) {
     return { ok: false, reason: 'avant le premier week-end' };
   }
 
@@ -197,7 +215,8 @@ function isDateAllowed({
   // 6. Finale before ligue final (if defined)
   if (ttype === 'Finale' && ligueFinals && ligueFinals[cat.id]) {
     const minWeeksLigue = param(cmap.min_weeks_between_cdb_and_ligue_final, 'min_weeks', 2);
-    const ligueDate = String(ligueFinals[cat.id]).slice(0, 10);
+    const ligueDate = toISODateString(ligueFinals[cat.id]);
+    if (!ligueDate) return { ok: true };
     if (parseISODate(date) >= parseISODate(ligueDate)) {
       return { ok: false, reason: 'après finale ligue' };
     }
@@ -216,8 +235,9 @@ function isHostAllowed({ host, date, weekendDate, brief, alreadyPlaced }) {
   // host_blackouts (per-club unavailability windows)
   const hostBlackouts = (brief.host_blackouts || []).filter(hb => Number(hb.host_id) === Number(host.id));
   for (const hb of hostBlackouts) {
-    const start = String(hb.start_date).slice(0, 10);
-    const end = String(hb.end_date).slice(0, 10);
+    const start = toISODateString(hb.start_date);
+    const end = toISODateString(hb.end_date);
+    if (!start || !end) continue;
     if (date >= start && date <= end) {
       return { ok: false, reason: `${host.display_name} indispo (${start} → ${end})` };
     }

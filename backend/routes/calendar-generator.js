@@ -675,7 +675,11 @@ function loadEngineContext(orgId, briefId, cb) {
               if (err3) return cb(err3);
               const ligueFinals = {};
               (ligueRows || []).forEach(r => {
-                ligueFinals[r.category_id] = String(r.final_date).slice(0, 10);
+                if (!r.final_date) return;
+                const d = r.final_date instanceof Date
+                  ? r.final_date.toISOString().slice(0, 10)
+                  : String(r.final_date).match(/^\d{4}-\d{2}-\d{2}/)?.[0];
+                if (d) ligueFinals[r.category_id] = d;
               });
 
               db.all(
