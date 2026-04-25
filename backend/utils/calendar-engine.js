@@ -318,7 +318,7 @@ function isHostAllowed({ host, date, weekendDate, brief, alreadyPlaced }) {
 }
 
 // Soft scoring (lower = better)
-function scoreSoft({ cat, host, date, weekendDate, alreadyPlaced, cmap }) {
+function scoreSoft({ cat, ttype, host, date, weekendDate, alreadyPlaced, cmap, brief }) {
   let score = 0;
 
   // host_balanced_load: prefer hosts with fewer tournaments so far
@@ -349,8 +349,34 @@ function scoreSoft({ cat, host, date, weekendDate, alreadyPlaced, cmap }) {
     }
   }
 
-  // Earliness bonus: prefer earlier weekends (deterministic tie-break)
-  score += parseISODate(date).getTime() / 1e12;
+  // T1 strategy — start as early as possible (respecting cascade already enforced as hard).
+  if (ttype === 'T1') {
+    const startISO = toISODateString(brief.first_weekend);
+    if (startISO) {
+      const offsetWeeks = weekDiff(date, startISO);
+      score += 50 * offsetWeeks; // strong push toward earliest valid WE
+    }
+  } else {
+    // T2/T3/Finale strategy — spread evenly across remaining season for this category.
+    // Ideal gap from previous tournament = (last_weekend - lastDate) / (remaining tournaments)
+    const sameCat = alreadyPlaced.filter(p => p.category_id === cat.id);
+    if (sameCat.length) {
+      const last = sameCat[sameCat.length - 1];
+      const lastDate = last.qualif_date || last.final_date;
+      const seasonEnd = toISODateString(brief.last_weekend);
+      if (seasonEnd && lastDate) {
+        const remaining = ({ T2: 3, T3: 2, Finale: 1 })[ttype] || 1;
+        const span = Math.max(0, weekDiff(lastDate, seasonEnd));
+        const idealGap = Math.max(3, span / remaining);
+        const actualGap = weekDiff(date, lastDate);
+        const deviation = Math.abs(actualGap - idealGap);
+        score += 30 * deviation;
+      }
+    }
+  }
+
+  // Earliness tie-break (very small, deterministic)
+  score += parseISODate(date).getTime() / 1e15;
 
   return score;
 }
@@ -375,7 +401,7 @@ function placeOne({ cat, ttype, weekends, hosts, brief, cmap, ligueFinals, alrea
     if (isFinale && brief.final_attribution === 'winner_tbd') {
       candidates.push({
         date, weekendDate: wk.weekend_date, host: null,
-        score: scoreSoft({ cat, host: null, date, weekendDate: wk.weekend_date, alreadyPlaced, cmap })
+        score: scoreSoft({ cat, ttype, host: null, date, weekendDate: wk.weekend_date, alreadyPlaced, cmap, brief })
       });
     } else {
       let anyHostOK = false;
@@ -385,7 +411,7 @@ function placeOne({ cat, ttype, weekends, hosts, brief, cmap, ligueFinals, alrea
         anyHostOK = true;
         candidates.push({
           date, weekendDate: wk.weekend_date, host,
-          score: scoreSoft({ cat, host, date, weekendDate: wk.weekend_date, alreadyPlaced, cmap })
+          score: scoreSoft({ cat, ttype, host, date, weekendDate: wk.weekend_date, alreadyPlaced, cmap, brief })
         });
       }
       if (!anyHostOK) bumpReason('aucun club hôte disponible (tous occupés ou indisponibles)');
