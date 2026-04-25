@@ -176,6 +176,12 @@ function isDateAllowed({
     return { ok: false, reason: 'avant le premier week-end' };
   }
 
+  // 2 bis. season_end_before — last possible competition weekend (built-in, brief-driven)
+  const endBefore = toISODateString(brief.last_weekend);
+  if (endBefore && date > endBefore) {
+    return { ok: false, reason: 'après le dernier week-end de compétition' };
+  }
+
   // 3. min_weeks_between_tournaments_same_category
   const minWeeksSame = param(cmap.min_weeks_between_tournaments_same_category, 'min_weeks', 3);
   const previousSameCat = alreadyPlaced.filter(p => p.category_id === cat.id);

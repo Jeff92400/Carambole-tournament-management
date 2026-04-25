@@ -75,7 +75,8 @@ router.post('/brief', authenticateToken, requireAdmin, (req, res) => {
     active_categories,
     active_hosts,
     final_attribution,
-    host_blackouts
+    host_blackouts,
+    last_weekend
   } = req.body;
 
   if (!season || !qualif_day || !final_day || !first_weekend) {
@@ -85,8 +86,8 @@ router.post('/brief', authenticateToken, requireAdmin, (req, res) => {
   db.run(
     `INSERT INTO calendar_brief
        (organization_id, season, qualif_day, final_day, first_weekend,
-        blackout_dates, active_categories, active_hosts, final_attribution, host_blackouts, created_by)
-     VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8::jsonb, $9, $10::jsonb, $11)
+        blackout_dates, active_categories, active_hosts, final_attribution, host_blackouts, last_weekend, created_by)
+     VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8::jsonb, $9, $10::jsonb, $11, $12)
      RETURNING id`,
     [
       orgId,
@@ -99,6 +100,7 @@ router.post('/brief', authenticateToken, requireAdmin, (req, res) => {
       JSON.stringify(active_hosts || []),
       final_attribution || 'manual',
       JSON.stringify(host_blackouts || []),
+      last_weekend || null,
       userId
     ],
     function(err, result) {
@@ -129,6 +131,7 @@ router.put('/brief/:id', authenticateToken, requireAdmin, (req, res) => {
     active_hosts,
     final_attribution,
     host_blackouts,
+    last_weekend,
     status
   } = req.body;
 
@@ -142,9 +145,10 @@ router.put('/brief/:id', authenticateToken, requireAdmin, (req, res) => {
          active_hosts = COALESCE($6::jsonb, active_hosts),
          final_attribution = COALESCE($7, final_attribution),
          host_blackouts = COALESCE($8::jsonb, host_blackouts),
-         status = COALESCE($9, status),
+         last_weekend = COALESCE($9::date, last_weekend),
+         status = COALESCE($10, status),
          updated_at = CURRENT_TIMESTAMP
-     WHERE id = $10 AND organization_id = $11`,
+     WHERE id = $11 AND organization_id = $12`,
     [
       qualif_day || null,
       final_day || null,
@@ -154,6 +158,7 @@ router.put('/brief/:id', authenticateToken, requireAdmin, (req, res) => {
       active_hosts ? JSON.stringify(active_hosts) : null,
       final_attribution || null,
       host_blackouts ? JSON.stringify(host_blackouts) : null,
+      last_weekend || null,
       status || null,
       briefId,
       orgId

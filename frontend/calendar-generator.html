@@ -315,6 +315,11 @@
           <div class="hint">Date du samedi de la première semaine active</div>
         </div>
         <div class="field">
+          <label for="lastWeekendInput">Dernier week-end de compétition</label>
+          <input type="date" id="lastWeekendInput">
+          <div class="hint">Date butoir au-delà de laquelle plus aucun tournoi (typiquement début juin)</div>
+        </div>
+        <div class="field">
           <label for="finalAttributionInput">Attribution du lieu des finales départementales</label>
           <select id="finalAttributionInput">
             <option value="manual">Manuelle (proposée par le système, validée en réunion)</option>
@@ -662,7 +667,8 @@
         if (currentBrief) {
           document.getElementById('qualifDayInput').value = currentBrief.qualif_day;
           document.getElementById('finalDayInput').value = currentBrief.final_day;
-          document.getElementById('firstWeekendInput').value = currentBrief.first_weekend ? currentBrief.first_weekend.split('T')[0] : '';
+          document.getElementById('firstWeekendInput').value = currentBrief.first_weekend ? String(currentBrief.first_weekend).slice(0, 10) : '';
+          document.getElementById('lastWeekendInput').value = currentBrief.last_weekend ? String(currentBrief.last_weekend).slice(0, 10) : '';
           document.getElementById('finalAttributionInput').value = currentBrief.final_attribution || 'manual';
           blackoutDates = Array.isArray(currentBrief.blackout_dates) ? [...currentBrief.blackout_dates] : [];
           hostBlackouts = Array.isArray(currentBrief.host_blackouts) ? [...currentBrief.host_blackouts] : [];
@@ -705,6 +711,7 @@
         qualif_day: document.getElementById('qualifDayInput').value,
         final_day: document.getElementById('finalDayInput').value,
         first_weekend: document.getElementById('firstWeekendInput').value,
+        last_weekend: document.getElementById('lastWeekendInput').value || null,
         final_attribution: document.getElementById('finalAttributionInput').value,
         blackout_dates: blackoutDates,
         active_categories: Array.from(document.querySelectorAll('.cat-cb:checked')).map(cb => parseInt(cb.value, 10)),

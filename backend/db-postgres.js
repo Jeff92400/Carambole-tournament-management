@@ -2146,6 +2146,8 @@ async function initializeDatabase() {
 
       // V 2.0.502 — per-host blackout periods (e.g. "Clichy unavailable in December 2026")
       await client.query(`ALTER TABLE calendar_brief ADD COLUMN IF NOT EXISTS host_blackouts JSONB DEFAULT '[]'::jsonb`);
+      // V 2.0.505 — last competition weekend (season hard end date)
+      await client.query(`ALTER TABLE calendar_brief ADD COLUMN IF NOT EXISTS last_weekend DATE`);
 
       console.log('[Migration] Seasonal Calendar Generator schema ready');
     } catch (calendarErr) {
