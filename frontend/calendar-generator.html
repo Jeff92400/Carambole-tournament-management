@@ -399,7 +399,7 @@
       <div style="margin-top: 14px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
         <button type="button" class="btn" id="toggleIgnoredBtn" style="background: #999; color: white; padding: 6px 12px; border: none; border-radius: 5px; cursor: pointer; font-size: 13px; display: none;">Voir règles ignorées</button>
         <span style="flex: 1;"></span>
-        <button type="button" class="btn" id="seedDefaultsBtn" style="background: #6b3aa3; color: white; padding: 8px 14px; border: none; border-radius: 5px; cursor: pointer;">Pré-remplir avec la bibliothèque V1</button>
+        <button type="button" class="btn" id="seedDefaultsBtn" style="background: #6b3aa3; color: white; padding: 8px 14px; border: none; border-radius: 5px; cursor: pointer;">Charger et adapter les règles habituelles</button>
       </div>
 
       <div class="actions-bar">
@@ -929,7 +929,7 @@
     });
 
     document.getElementById('seedDefaultsBtn').addEventListener('click', async () => {
-      if (!confirm('Pré-remplir la bibliothèque avec les règles V1 ? (les règles déjà présentes ne sont pas touchées)')) return;
+      if (!confirm('Charger les règles habituelles ? (les règles déjà présentes ne sont pas touchées — vous pourrez les adapter ensuite)')) return;
       try {
         const res = await fetch(`${API_URL}/calendar-generator/constraints/seed-defaults`, {
           method: 'POST', headers: authHeaders
