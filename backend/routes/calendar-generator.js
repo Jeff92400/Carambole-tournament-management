@@ -551,26 +551,29 @@ router.post('/constraints/from-natural-language', authenticateToken, requireAdmi
 CATALOGUE DE RÈGLES DISPONIBLES :
 ${catalogJson}
 
-CLUBS DE CE CDB (utiliser display_name exact si la phrase mentionne un club) :
+CLUBS DE CE CDB (utiliser display_name exact UNIQUEMENT si l'utilisateur cite explicitement le club) :
 ${clubsList || '(aucun)'}
 
 Tu dois retourner UNIQUEMENT un objet JSON valide (pas de markdown, pas d'explication hors JSON) avec cette structure :
 {
-  "rule_type": "<une clé du catalogue>",
-  "parameters": { ... paramètres adaptés à la phrase ... },
+  "rule_type": "<une clé EXACTE du catalogue>",
+  "parameters": { ... paramètres dont les CLÉS sont EXACTEMENT celles de defaultParams de la règle choisie ... },
   "strictness": "hard" | "soft",
-  "weight": <nombre, requis seulement si soft>,
-  "explanation": "<phrase courte expliquant ta traduction, en français>",
+  "weight": <nombre 1-10, requis uniquement si strictness=soft>,
+  "explanation": "<phrase courte en français expliquant ta traduction>",
   "confidence": "high" | "medium" | "low"
 }
 
-Si la phrase ne correspond à AUCUNE règle du catalogue, retourne :
-{ "error": "Aucune règle correspondante", "explanation": "<courte explication>" }
+RÈGLES STRICTES (à respecter sans exception) :
+1. Les clés de "parameters" doivent être EXACTEMENT celles présentes dans defaultParams de la règle choisie. N'invente JAMAIS une clé qui n'y figure pas.
+2. Ne change PAS la valeur de "strictness" — utilise celle déclarée dans le catalogue pour la règle choisie.
+3. Si la phrase mentionne un concept (ex. "max N tournois par mois", "uniquement le matin", "seulement pour la R1") qui n'a PAS de règle correspondante dans le catalogue, retourne OBLIGATOIREMENT :
+   { "error": "Aucune règle correspondante", "explanation": "<explique ce qui manque>" }
+4. Ne cite JAMAIS un club si l'utilisateur ne l'a pas explicitement nommé dans sa phrase.
+5. Si la phrase est trop ambiguë pour choisir une règle, retourne :
+   { "error": "Phrase trop ambiguë", "explanation": "<demande de reformulation>" }
 
-Règles importantes :
-- Si l'utilisateur mentionne un club, utilise son nom exact dans parameters.host_name (ou similaire selon la règle)
-- Pour les règles "soft" non spécifiées, propose un weight raisonnable (1-10)
-- Les paramètres doivent être cohérents avec defaultParams du catalogue (mêmes clés)`;
+Mieux vaut renvoyer une erreur claire que d'inventer une règle bricolée.`;
 
     const message = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
@@ -595,6 +598,24 @@ Règles importantes :
     if (!parsed.rule_type || !RULES_CATALOG[parsed.rule_type]) {
       return res.status(502).json({ error: 'rule_type invalide retourné par l\'IA', received: parsed });
     }
+
+    // Filter out any parameter keys not declared in defaultParams of the chosen rule
+    const meta = RULES_CATALOG[parsed.rule_type];
+    const allowedKeys = Object.keys(meta.defaultParams || {});
+    const incomingParams = parsed.parameters || {};
+    const cleanedParams = {};
+    const droppedKeys = [];
+    for (const k of Object.keys(incomingParams)) {
+      if (allowedKeys.includes(k)) cleanedParams[k] = incomingParams[k];
+      else droppedKeys.push(k);
+    }
+    parsed.parameters = cleanedParams;
+    if (droppedKeys.length) {
+      parsed.warning = `Clés ignorées (hors catalogue) : ${droppedKeys.join(', ')}`;
+      console.warn('[calendar-generator] AI returned out-of-catalog keys for', parsed.rule_type, ':', droppedKeys);
+    }
+    // Force strictness to catalog declaration (AI cannot override)
+    parsed.strictness = meta.strictness;
 
     res.json(parsed);
   } catch (err) {

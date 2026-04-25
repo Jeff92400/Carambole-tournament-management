@@ -690,7 +690,7 @@
     // Catalogue côté frontend : libellés et descriptions des règles V1
     const RULES_CATALOG = {
       blackout_weekend:                          { label: 'Aucun tournoi sur week-end blackout',           paramLabel: 'Dates', paramKey: 'dates', paramType: 'list-dates' },
-      tournament_day_rule:                       { label: 'Jour autorisé par type de tournoi',             paramLabel: 'Type → Jour', paramKey: null, paramType: 'readonly' },
+      tournament_day_rule:                       { label: 'Jour précis pour chaque type de compétition',   paramLabel: 'Type → Jour', paramKey: null, paramType: 'readonly' },
       season_start_after:                        { label: 'Début de saison ≥ date',                        paramLabel: 'Date', paramKey: 'first_weekend', paramType: 'date' },
       final_before_ligue_final:                  { label: 'Finale CDB avant finale ligue (par catégorie)', paramLabel: '(automatique)', paramKey: null, paramType: 'readonly' },
       min_weeks_between_cdb_and_ligue_final:     { label: '≥ N semaines entre finale CDB et finale ligue', paramLabel: 'N (semaines)', paramKey: 'min_weeks', paramType: 'number' },
@@ -980,6 +980,7 @@
             <span style="margin-left:8px; padding:2px 8px; background:${confidenceColor}; color:#fff; border-radius:10px; font-size:11px;">Confiance : ${escapeHtml(json.confidence || 'n/a')}</span>
           </div>
           <div style="margin-bottom:8px; font-size:13px; color:#555;"><em>${escapeHtml(json.explanation || '')}</em></div>
+          ${json.warning ? `<div style="margin-bottom:8px; font-size:12px; color:#c47b00; background:#fff3e0; padding:6px 10px; border-radius:4px;">⚠️ ${escapeHtml(json.warning)}</div>` : ''}
           <div style="margin-bottom:8px; font-size:12px;"><strong>Paramètres :</strong> <code style="background:#f4f0fa; padding:2px 6px; border-radius:4px;">${escapeHtml(JSON.stringify(json.parameters || {}))}</code></div>
           <div style="margin-bottom:8px; font-size:12px;"><strong>Strictness :</strong> ${escapeHtml(json.strictness)}${json.weight !== undefined ? ` · <strong>Poids :</strong> ${json.weight}` : ''}</div>
           <div style="display:flex; gap:8px; margin-top:10px;">
