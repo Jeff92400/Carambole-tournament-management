@@ -2345,7 +2345,13 @@ router.post('/competitions/:id/finalize', authenticateToken, requireDdJ, async (
         statsByLic.set(licNorm, {
           licence: licNorm,
           player_name: name || '',
-          points: 0, reprises: 0, match_points: 0, best_serie: 0, matches_played: 0
+          points: 0, reprises: 0, match_points: 0, best_serie: 0, matches_played: 0,
+          // MPART: best per-match average across all matches played by the player.
+          // Different from MGP = total_points / total_reprises (the overall avg).
+          best_match_moyenne: 0,
+          // Position within the player's poule (1, 2, 3...). Filled in a
+          // post-pass below, since we need the full poule classement to know.
+          poule_rank: null
         });
       } else if (name && !statsByLic.get(licNorm).player_name) {
         statsByLic.get(licNorm).player_name = name;
@@ -2368,6 +2374,14 @@ router.post('/competitions/:id/finalize', authenticateToken, requireDdJ, async (
       s2.reprises += m.p2_reprises || 0;
       s1.best_serie = Math.max(s1.best_serie, m.p1_serie || 0);
       s2.best_serie = Math.max(s2.best_serie, m.p2_serie || 0);
+      // MPART (meilleure partie / best per-match moyenne): track max across
+      // each individual match's points/reprises. Skipped silently if reprises=0.
+      if (m.p1_reprises > 0) {
+        s1.best_match_moyenne = Math.max(s1.best_match_moyenne, m.p1_points / m.p1_reprises);
+      }
+      if (m.p2_reprises > 0) {
+        s2.best_match_moyenne = Math.max(s2.best_match_moyenne, m.p2_points / m.p2_reprises);
+      }
       let mp1 = m.p1_match_points;
       let mp2 = m.p2_match_points;
       if (mp1 == null || mp2 == null) {
@@ -2401,6 +2415,17 @@ router.post('/competitions/:id/finalize', authenticateToken, requireDdJ, async (
 
     if (statsByLic.size === 0) {
       return res.status(409).json({ error: 'Aucun match joué — rien à finaliser.' });
+    }
+
+    // Post-pass: assign poule_rank to each player based on their position
+    // in their poule classement (already computed at Step 3 with the FFB
+    // tiebreak chain: match_points → moyenne → best_serie → h2h → licence).
+    for (const poule of (pouleCtx.poules || [])) {
+      (poule.classement || []).forEach((row, idx) => {
+        const lic = String(row.licence || row.licence_normalized || '').replace(/\s+/g, '');
+        const stats = statsByLic.get(lic);
+        if (stats) stats.poule_rank = idx + 1;
+      });
     }
 
     // ---- Resolve category + season ----------------------------------------
@@ -2486,10 +2511,12 @@ router.post('/competitions/:id/finalize', authenticateToken, requireDdJ, async (
       await new Promise((resolve, reject) => {
         db.run(
           `INSERT INTO tournament_results
-             (tournament_id, licence, player_name, position, match_points, moyenne, serie, points, reprises)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+             (tournament_id, licence, player_name, position, match_points,
+              moyenne, serie, points, reprises, poule_rank, meilleure_partie)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
           [tournamentId, stats.licence, stats.player_name, position,
-            stats.match_points, moyenne, stats.best_serie, stats.points, stats.reprises],
+            stats.match_points, moyenne, stats.best_serie, stats.points,
+            stats.reprises, stats.poule_rank, stats.best_match_moyenne || null],
           (err) => err ? reject(err) : resolve()
         );
       });
