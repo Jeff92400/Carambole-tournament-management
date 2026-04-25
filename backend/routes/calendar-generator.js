@@ -285,7 +285,8 @@ router.get('/reference-data', authenticateToken, (req, res) => {
       db.all(
         `SELECT id, game_type AS mode, level, display_name AS name
          FROM categories
-         WHERE organization_id = $1 OR organization_id IS NULL
+         WHERE (organization_id = $1 OR organization_id IS NULL)
+           AND COALESCE(is_active, TRUE) = TRUE
          ORDER BY game_type, level`,
         [orgId],
         (err, rows) => err ? reject(err) : resolve(rows || [])
