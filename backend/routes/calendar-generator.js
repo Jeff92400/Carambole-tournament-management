@@ -847,7 +847,7 @@ router.get('/draft/export', authenticateToken, async (req, res) => {
     if (!brief) return res.status(404).json({ error: 'Brief introuvable' });
 
     const draft = await fetchAll(
-      `SELECT cd.weekend_date, cd.tournament_type, cd.qualif_date, cd.final_date,
+      `SELECT cd.weekend_date, cd.tournament_type,
               c.id AS category_id, c.display_name AS category_label,
               c.game_type, c.level,
               cl.id AS host_id, cl.display_name AS host_name
