@@ -1180,15 +1180,61 @@
       return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit', timeZone: 'UTC' });
     }
 
-    document.getElementById('goToGenerationBtn').addEventListener('click', () => {
+    document.getElementById('goToGenerationBtn').addEventListener('click', async () => {
       document.getElementById('step3Card').style.display = 'block';
       const items = document.querySelectorAll('.stepper-item');
       items[1].classList.remove('active'); items[1].classList.add('done');
       items[1].querySelector('.stepper-num').textContent = '✓';
       if (items[2]) items[2].classList.add('active');
       syncQuickTuningPanel();
+      // Auto-load last saved draft if any
+      await loadSavedDraft();
       document.getElementById('step3Card').scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
+
+    async function loadSavedDraft() {
+      if (!currentBrief) return;
+      try {
+        const res = await fetch(`${API_URL}/calendar-generator/draft?brief_id=${currentBrief.id}`, { headers: authHeaders });
+        if (!res.ok) return;
+        const rows = await res.json();
+        if (!rows || rows.length === 0) return;
+        // Build a fake "result" object equivalent to what /generate returns
+        const placements = rows.map(r => ({
+          category_id: r.category_id,
+          category_label: r.category_label,
+          tournament_type: r.tournament_type,
+          host_id: r.host_club_id,
+          host_name: r.host_name,
+          weekend_date: r.weekend_date,
+          qualif_date: r.weekend_date,
+          final_date: r.weekend_date,
+          _draft_id: r.id,
+          _locked: !!r.locked_by_user,
+          _comment: r.manual_comment || ''
+        }));
+        const result = {
+          placements,
+          conflicts: [],
+          stats: {
+            total_categories: new Set(placements.map(p => p.category_id)).size,
+            total_placed: placements.length,
+            total_expected: placements.length,
+            total_conflicts: 0
+          }
+        };
+        const status = document.getElementById('generationStatus');
+        const lastModified = rows.reduce((max, r) => {
+          const d = r.modified_at || r.created_at;
+          return (!max || (d && d > max)) ? d : max;
+        }, null);
+        status.innerHTML = `📂 Version chargée (${rows.length} tournois)${lastModified ? ' — dernière modif. ' + new Date(lastModified).toLocaleString('fr-FR') : ''}`;
+        status.style.color = '#666';
+        renderGenerationResult(result);
+      } catch (err) {
+        console.warn('Auto-load draft failed:', err);
+      }
+    }
 
     // Save the quick-tuning panel values into actual constraints (persists)
     document.getElementById('saveTuningBtn').addEventListener('click', async () => {
@@ -1256,6 +1302,9 @@
         document.getElementById('generationStatus').style.color = '#c00';
         return;
       }
+      // Warn if we have manual edits
+      const hasEdits = _lastResult?.placements?.some(p => p._locked || p._comment);
+      if (hasEdits && !confirm('Régénérer effacera vos modifications manuelles. Continuer ?')) return;
       const btn = document.getElementById('runGenerationBtn');
       const status = document.getElementById('generationStatus');
       btn.disabled = true;
@@ -1270,6 +1319,8 @@
         const json = await res.json();
         if (!res.ok) throw new Error(json.error || 'Échec');
         renderGenerationResult(json);
+        // Reload from /draft to populate _draft_id (needed for inline editing)
+        setTimeout(() => loadSavedDraft(), 200);
         status.textContent = `✓ Terminé en ${new Date().toLocaleTimeString('fr-FR')}`;
         status.style.color = '#2c7a4d';
       } catch (err) {
@@ -1426,9 +1477,13 @@
           const p = grid[c.id]?.[we];
           if (!p) return `<td style="padding: 4px 6px; background: #fafafa;"></td>`;
           const bg = p.host_id ? colors.get(p.host_id) : '#fff';
-          const tip = `${c.name || c.display_name} ${p.tournament_type}\n${fmtDateFR(p.qualif_date || p.final_date)}\n${p.host_name || 'TBD'}`;
-          return `<td style="padding: 4px 6px; background: ${bg}; text-align: center; font-size: 11px;" title="${escapeHtml(tip)}">
-            <div style="font-weight: 700;">${p.tournament_type === 'Finale' ? 'F' : p.tournament_type}</div>
+          const lockedBorder = p._locked ? 'border: 2px solid #c47b00;' : '';
+          const editable = p._draft_id ? 'cursor: pointer;' : '';
+          const tip = `${c.name || c.display_name} ${p.tournament_type}\n${fmtDateFR(p.qualif_date || p.final_date)}\n${p.host_name || 'TBD'}${p._comment ? '\n💬 ' + p._comment : ''}${p._draft_id ? '\n(clic pour modifier)' : ''}`;
+          const lockIcon = p._locked ? '🔒 ' : '';
+          const commentIcon = p._comment ? '💬' : '';
+          return `<td class="cell-editable" data-draft-id="${p._draft_id || ''}" data-cat-id="${c.id}" style="padding: 4px 6px; background: ${bg}; text-align: center; font-size: 11px; ${lockedBorder} ${editable}" title="${escapeHtml(tip)}">
+            <div style="font-weight: 700;">${lockIcon}${p.tournament_type === 'Finale' ? 'F' : p.tournament_type}${commentIcon}</div>
             <div style="font-size: 9px; color: #555;">${escapeHtml(abbreviateHost(p.host_name) || (p.host_id == null ? 'TBD' : ''))}</div>
           </td>`;
         }).join('');
@@ -1442,6 +1497,9 @@
       }).join('');
 
       container.innerHTML = `
+        <div style="font-size: 12px; color: #666; margin-bottom: 6px;">
+          💡 Cliquez sur une cellule pour modifier la date / le club / verrouiller. Une cellule verrouillée 🔒 sera préservée à la prochaine régénération (à venir V 2.0.515).
+        </div>
         <div style="overflow-x: auto; max-width: 100%; border: 1px solid #ddd; border-radius: 4px;">
           <table style="border-collapse: collapse; min-width: 100%;">
             <thead style="background: linear-gradient(135deg, #6b3aa3, #5a3094); color: white; position: sticky; top: 0; z-index: 2;">
@@ -1457,6 +1515,79 @@
           <strong style="font-size: 13px; color: #555;">Légende clubs :</strong> ${legend}
         </div>
       `;
+
+      // Attach edit handlers on cells with draft IDs
+      container.querySelectorAll('.cell-editable[data-draft-id]:not([data-draft-id=""])').forEach(td => {
+        td.addEventListener('click', () => openEditPopup(parseInt(td.dataset.draftId, 10)));
+      });
+    }
+
+    // Edit popup (overlay)
+    function openEditPopup(draftId) {
+      if (!_lastResult) return;
+      const p = _lastResult.placements.find(pp => pp._draft_id === draftId);
+      if (!p) return;
+      const cat = (referenceData.categories || []).find(c => c.id === p.category_id);
+      const clubs = (referenceData.clubs || []);
+
+      // Build overlay
+      const ov = document.createElement('div');
+      ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:9999;display:flex;align-items:center;justify-content:center;';
+      ov.innerHTML = `
+        <div style="background:white;padding:24px;border-radius:10px;width:480px;max-width:90vw;box-shadow:0 12px 40px rgba(0,0,0,0.2);">
+          <h3 style="margin:0 0 12px;color:#6b3aa3;">${escapeHtml((cat?.name || cat?.display_name) || '')} — ${p.tournament_type}</h3>
+          <div style="margin-bottom:10px;">
+            <label style="display:block;font-size:12px;color:#555;margin-bottom:4px;">Week-end</label>
+            <input type="date" id="edit_we" value="${p.weekend_date || ''}" style="padding:6px 8px;border:1px solid #ccc;border-radius:4px;width:100%;">
+          </div>
+          <div style="margin-bottom:10px;">
+            <label style="display:block;font-size:12px;color:#555;margin-bottom:4px;">Club hôte</label>
+            <select id="edit_host" style="padding:6px 8px;border:1px solid #ccc;border-radius:4px;width:100%;">
+              <option value="">— TBD —</option>
+              ${clubs.map(c => `<option value="${c.id}" ${c.id === p.host_id ? 'selected' : ''}>${escapeHtml(c.display_name)}</option>`).join('')}
+            </select>
+          </div>
+          <div style="margin-bottom:10px;">
+            <label style="display:flex;align-items:center;font-size:13px;color:#444;gap:6px;">
+              <input type="checkbox" id="edit_locked" ${p._locked ? 'checked' : ''}> 🔒 Verrouiller (préservé à la prochaine régénération)
+            </label>
+          </div>
+          <div style="margin-bottom:14px;">
+            <label style="display:block;font-size:12px;color:#555;margin-bottom:4px;">Commentaire (optionnel)</label>
+            <input type="text" id="edit_comment" value="${escapeHtml(p._comment || '')}" placeholder="ex. décalé suite demande Clichy" style="padding:6px 8px;border:1px solid #ccc;border-radius:4px;width:100%;">
+          </div>
+          <div style="display:flex;gap:8px;justify-content:flex-end;">
+            <button type="button" id="edit_cancel" style="padding:8px 14px;border:1px solid #ccc;background:white;border-radius:5px;cursor:pointer;">Annuler</button>
+            <button type="button" id="edit_save" style="padding:8px 14px;border:none;background:#2c7a4d;color:white;border-radius:5px;cursor:pointer;font-weight:600;">Enregistrer</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(ov);
+
+      const close = () => ov.remove();
+      ov.addEventListener('click', e => { if (e.target === ov) close(); });
+      ov.querySelector('#edit_cancel').addEventListener('click', close);
+      ov.querySelector('#edit_save').addEventListener('click', async () => {
+        const body = {
+          weekend_date: ov.querySelector('#edit_we').value || null,
+          host_club_id: ov.querySelector('#edit_host').value === '' ? null : parseInt(ov.querySelector('#edit_host').value, 10),
+          locked_by_user: ov.querySelector('#edit_locked').checked,
+          manual_comment: ov.querySelector('#edit_comment').value
+        };
+        try {
+          const res = await fetch(`${API_URL}/calendar-generator/draft/${draftId}`, {
+            method: 'PATCH', headers: authHeaders, body: JSON.stringify(body)
+          });
+          if (!res.ok) {
+            const e = await res.json().catch(() => ({}));
+            throw new Error(e.error || 'Échec');
+          }
+          close();
+          await loadSavedDraft();
+        } catch (err) {
+          alert('Erreur : ' + err.message);
+        }
+      });
     }
 
     // ----- Vue 3: Par club hôte -----

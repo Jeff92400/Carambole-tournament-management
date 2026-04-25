@@ -2148,6 +2148,9 @@ async function initializeDatabase() {
       await client.query(`ALTER TABLE calendar_brief ADD COLUMN IF NOT EXISTS host_blackouts JSONB DEFAULT '[]'::jsonb`);
       // V 2.0.505 — last competition weekend (season hard end date)
       await client.query(`ALTER TABLE calendar_brief ADD COLUMN IF NOT EXISTS last_weekend DATE`);
+      // V 2.0.514 — manual edit metadata on draft entries
+      await client.query(`ALTER TABLE calendar_draft ADD COLUMN IF NOT EXISTS manual_comment TEXT`);
+      await client.query(`ALTER TABLE calendar_draft ADD COLUMN IF NOT EXISTS modified_at TIMESTAMP`);
 
       console.log('[Migration] Seasonal Calendar Generator schema ready');
     } catch (calendarErr) {

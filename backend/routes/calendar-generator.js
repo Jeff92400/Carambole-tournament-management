@@ -797,6 +797,40 @@ router.post('/generate', authenticateToken, requireAdmin, (req, res) => {
   });
 });
 
+// PATCH /draft/:id — manually edit one placement (date / host / lock / comment)
+router.patch('/draft/:id', authenticateToken, requireAdmin, (req, res) => {
+  const db = getDb();
+  const orgId = req.user.organizationId;
+  const id = parseInt(req.params.id, 10);
+  const { weekend_date, host_club_id, locked_by_user, manual_comment } = req.body || {};
+  db.run(
+    `UPDATE calendar_draft cd
+     SET weekend_date  = COALESCE($1::date, cd.weekend_date),
+         host_club_id  = CASE WHEN $2::int IS NULL AND $7::bool THEN NULL ELSE COALESCE($2, cd.host_club_id) END,
+         locked_by_user = COALESCE($3::bool, cd.locked_by_user),
+         manual_comment = COALESCE($4, cd.manual_comment),
+         modified_at = CURRENT_TIMESTAMP
+     FROM calendar_brief cb
+     WHERE cd.id = $5 AND cb.id = cd.brief_id AND cb.organization_id = $6`,
+    [
+      weekend_date || null,
+      host_club_id != null ? host_club_id : null,
+      locked_by_user != null ? locked_by_user : null,
+      manual_comment != null ? manual_comment : null,
+      id,
+      orgId,
+      host_club_id === null  // explicit null host (TBD)
+    ],
+    (err) => {
+      if (err) {
+        console.error('[calendar-generator] PATCH /draft error:', err);
+        return res.status(500).json({ error: err.message });
+      }
+      res.json({ ok: true });
+    }
+  );
+});
+
 // GET /draft?brief_id=X — fetch persisted draft
 router.get('/draft', authenticateToken, (req, res) => {
   const db = getDb();
@@ -805,7 +839,10 @@ router.get('/draft', authenticateToken, (req, res) => {
   if (!briefId) return res.status(400).json({ error: 'brief_id requis' });
 
   db.all(
-    `SELECT cd.*, c.display_name AS category_label, c.game_type, c.level,
+    `SELECT cd.id, cd.weekend_date, cd.tournament_type, cd.host_club_id,
+            cd.locked_by_user, cd.manual_comment, cd.modified_at, cd.created_at,
+            cd.category_id,
+            c.display_name AS category_label, c.game_type, c.level,
             cl.display_name AS host_name
      FROM calendar_draft cd
      JOIN calendar_brief cb ON cb.id = cd.brief_id
@@ -819,6 +856,14 @@ router.get('/draft', authenticateToken, (req, res) => {
         console.error('[calendar-generator] GET /draft error:', err);
         return res.status(500).json({ error: err.message });
       }
+      // Normalize dates
+      (rows || []).forEach(r => {
+        if (r.weekend_date instanceof Date) r.weekend_date = r.weekend_date.toISOString().slice(0, 10);
+        else if (r.weekend_date) {
+          const m = String(r.weekend_date).match(/^\d{4}-\d{2}-\d{2}/);
+          r.weekend_date = m ? m[0] : null;
+        }
+      });
       res.json(rows || []);
     }
   );
@@ -859,8 +904,16 @@ router.get('/draft/export', authenticateToken, async (req, res) => {
       [briefId]
     );
 
-    // Note: calendar_draft currently lacks qualif_date / final_date columns
-    // (we store only weekend_date). We'll display weekend_date in the Excel.
+    // Helper to normalize PG DATE / Date / ISO string → 'YYYY-MM-DD'
+    const isoDate = (s) => {
+      if (s == null) return null;
+      if (s instanceof Date) return isNaN(s.getTime()) ? null : s.toISOString().slice(0, 10);
+      const m = String(s).match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+      const d = new Date(s);
+      return isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
+    };
+    draft.forEach(r => { r.weekend_date = isoDate(r.weekend_date); });
 
     // Order categories canonically (display order)
     const MODE_ORDER = ['Libre', 'Cadre', 'Bande', '3 Bandes'];
@@ -901,14 +954,14 @@ router.get('/draft/export', authenticateToken, async (req, res) => {
     [...hostMap.keys()].forEach((id, idx) => hostColor.set(id, PALETTE[idx % PALETTE.length]));
 
     // Unique weekend dates in chronological order
-    const weekends = [...new Set(draft.map(r => String(r.weekend_date).slice(0, 10)))].sort();
+    const weekends = [...new Set(draft.map(r => r.weekend_date).filter(Boolean))].sort();
 
     // Index: { catId: { weekend: { type, host_id, host_name } } }
     const grid = {};
     draft.forEach(r => {
-      const we = String(r.weekend_date).slice(0, 10);
+      if (!r.weekend_date) return;
       if (!grid[r.category_id]) grid[r.category_id] = {};
-      grid[r.category_id][we] = { type: r.tournament_type, host_id: r.host_id, host_name: r.host_name };
+      grid[r.category_id][r.weekend_date] = { type: r.tournament_type, host_id: r.host_id, host_name: r.host_name };
     });
 
     // Build workbook
@@ -961,7 +1014,7 @@ router.get('/draft/export', authenticateToken, async (req, res) => {
     ];
     draft.forEach(r => {
       wsList.addRow([
-        String(r.weekend_date).slice(0, 10),
+        r.weekend_date || '',
         r.game_type || '',
         r.category_label || '',
         r.tournament_type || '',
