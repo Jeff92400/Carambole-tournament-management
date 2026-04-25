@@ -364,21 +364,23 @@ function scoreSoft({ cat, ttype, host, date, weekendDate, alreadyPlaced, cmap, b
       score += 50 * offsetWeeks; // strong push toward earliest valid WE
     }
   } else {
-    // T2/T3/Finale strategy — spread evenly across remaining season for this category.
-    // Ideal gap from previous tournament = (last_weekend - lastDate) / (remaining tournaments)
+    // T2/T3/Finale strategy — uniform ideal gap derived from T1 date, so that
+    // Finale doesn't always converge to the season edge.
+    // idealGap = (last_weekend - T1date) / 3   (3 transitions: T1→T2, T2→T3, T3→Finale)
+    // Each category's Finale ends up at ~T1 + 3 × idealGap, naturally spread
+    // because T1s themselves are spread across the cascade.
     const sameCat = alreadyPlaced.filter(p => p.category_id === cat.id);
-    if (sameCat.length) {
-      const last = sameCat[sameCat.length - 1];
+    const t1 = sameCat.find(p => p.tournament_type === 'T1');
+    const last = sameCat[sameCat.length - 1];
+    const seasonEnd = toISODateString(brief.last_weekend);
+    if (t1 && last && seasonEnd) {
+      const t1Date = t1.qualif_date || t1.final_date;
       const lastDate = last.qualif_date || last.final_date;
-      const seasonEnd = toISODateString(brief.last_weekend);
-      if (seasonEnd && lastDate) {
-        const remaining = ({ T2: 3, T3: 2, Finale: 1 })[ttype] || 1;
-        const span = Math.max(0, weekDiff(lastDate, seasonEnd));
-        const idealGap = Math.max(3, span / remaining);
-        const actualGap = weekDiff(date, lastDate);
-        const deviation = Math.abs(actualGap - idealGap);
-        score += 30 * deviation;
-      }
+      const totalSpan = Math.max(0, weekDiff(t1Date, seasonEnd));
+      const idealGap = Math.max(3, totalSpan / 3);
+      const actualGap = weekDiff(date, lastDate);
+      const deviation = Math.abs(actualGap - idealGap);
+      score += 30 * deviation;
     }
   }
 
