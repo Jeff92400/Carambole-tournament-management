@@ -386,9 +386,18 @@
         <tbody><tr><td colspan="5" style="color: #888;">Chargement...</td></tr></tbody>
       </table>
 
+      <h3 class="section-title">Règles disponibles à ajouter</h3>
+      <p style="color: #666; font-size: 13px; margin-top: 0;">
+        Saisissez le paramètre si nécessaire, puis cliquez <strong>Ajouter</strong>.
+        Cliquez <strong>Ignorer</strong> pour masquer une règle qui ne s'applique pas à votre CDB.
+      </p>
+      <table id="availableRulesTable" class="ligue-table">
+        <thead><tr><th>Règle</th><th>Paramètre</th><th style="width: 220px;">Action</th></tr></thead>
+        <tbody><tr><td colspan="3" style="color: #888;">Chargement...</td></tr></tbody>
+      </table>
+
       <div style="margin-top: 14px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-        <select id="addRuleSelect" style="padding: 8px; border: 1px solid #c8c5be; border-radius: 5px;"></select>
-        <button type="button" class="btn" id="addRuleBtn" style="padding: 8px 14px;">+ Ajouter cette règle</button>
+        <button type="button" class="btn" id="toggleIgnoredBtn" style="background: #999; color: white; padding: 6px 12px; border: none; border-radius: 5px; cursor: pointer; font-size: 13px; display: none;">Voir règles ignorées</button>
         <span style="flex: 1;"></span>
         <button type="button" class="btn" id="seedDefaultsBtn" style="background: #6b3aa3; color: white; padding: 8px 14px; border: none; border-radius: 5px; cursor: pointer;">Pré-remplir avec la bibliothèque V1</button>
       </div>
@@ -695,6 +704,16 @@
     };
 
     let constraints = [];
+    let ignoredRuleTypes = new Set(); // session-only
+    let showingIgnored = false;
+
+    // Valeurs par défaut affichées dans les inputs du tableau "Règles disponibles"
+    const DEFAULT_PARAM_VALUES = {
+      min_weeks_between_cdb_and_ligue_final: { min_weeks: 2 },
+      min_weeks_between_tournaments_same_category: { min_weeks: 3 },
+      min_weeks_between_t3_and_final: { min_weeks: 2 },
+      host_balanced_load: { tolerance: 1 }
+    };
 
     function paramSummary(rule) {
       const meta = RULES_CATALOG[rule.rule_type];
@@ -774,15 +793,103 @@
       }));
       document.querySelectorAll('.rule-delete').forEach(btn => btn.addEventListener('click', () => deleteRule(btn.dataset.ruleId)));
 
-      // Populate "add rule" select with types not already present
-      const addSel = document.getElementById('addRuleSelect');
+      renderAvailableRulesTable();
+    }
+
+    function paramAddEditor(ruleType) {
+      const meta = RULES_CATALOG[ruleType];
+      if (!meta) return '';
+      const dflt = DEFAULT_PARAM_VALUES[ruleType] || {};
+      if (meta.paramType === 'number') {
+        const v = dflt[meta.paramKey] ?? '';
+        return `<input type="number" min="0" max="52" value="${v}" data-rule-type="${ruleType}" data-param-key="${meta.paramKey}" class="add-param-input" style="width: 80px; padding: 4px 6px; border: 1px solid #c8c5be; border-radius: 4px;"> <small style="color:#666;">${meta.paramLabel}</small>`;
+      }
+      if (meta.paramType === 'date') {
+        return `<input type="date" data-rule-type="${ruleType}" data-param-key="${meta.paramKey}" class="add-param-input" style="padding: 4px 6px; border: 1px solid #c8c5be; border-radius: 4px;"> <small style="color:#666;">${meta.paramLabel}</small>`;
+      }
+      if (meta.paramKey === 'dates') {
+        return `<small style="color:#666;">À configurer après ajout</small>`;
+      }
+      return `<small style="color:#666;">${meta.paramLabel}</small>`;
+    }
+
+    function renderAvailableRulesTable() {
       const presentTypes = new Set(constraints.map(c => c.rule_type));
-      const available = Object.keys(RULES_CATALOG).filter(t => !presentTypes.has(t));
-      addSel.innerHTML = available.length
-        ? available.map(t => `<option value="${t}">${RULES_CATALOG[t].label}</option>`).join('')
-        : '<option value="">Toutes les règles sont déjà présentes</option>';
-      addSel.disabled = !available.length;
-      document.getElementById('addRuleBtn').disabled = !available.length;
+      const allTypes = Object.keys(RULES_CATALOG);
+      const tbody = document.querySelector('#availableRulesTable tbody');
+
+      const rows = allTypes.filter(t => !presentTypes.has(t)).filter(t => showingIgnored ? ignoredRuleTypes.has(t) : !ignoredRuleTypes.has(t));
+
+      if (!rows.length) {
+        tbody.innerHTML = `<tr><td colspan="3" style="color: #888;">${showingIgnored ? 'Aucune règle ignorée.' : 'Toutes les règles disponibles ont été ajoutées ou ignorées.'}</td></tr>`;
+      } else {
+        tbody.innerHTML = rows.map(t => {
+          const meta = RULES_CATALOG[t];
+          return `
+            <tr>
+              <td><strong>${meta.label}</strong></td>
+              <td>${paramAddEditor(t)}</td>
+              <td>
+                ${showingIgnored
+                  ? `<button class="rule-restore" data-rule-type="${t}" style="background: #2c7a4d; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 12px;">↩ Restaurer</button>`
+                  : `<button class="rule-add" data-rule-type="${t}" style="background: #2c7a4d; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 12px;">✓ Ajouter</button>
+                     <button class="rule-ignore" data-rule-type="${t}" style="background: #999; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; margin-left: 4px;">Ignorer</button>`
+                }
+              </td>
+            </tr>`;
+        }).join('');
+
+        document.querySelectorAll('.rule-add').forEach(btn => btn.addEventListener('click', () => addAvailableRule(btn.dataset.ruleType)));
+        document.querySelectorAll('.rule-ignore').forEach(btn => btn.addEventListener('click', () => {
+          ignoredRuleTypes.add(btn.dataset.ruleType);
+          updateToggleIgnoredBtn();
+          renderAvailableRulesTable();
+        }));
+        document.querySelectorAll('.rule-restore').forEach(btn => btn.addEventListener('click', () => {
+          ignoredRuleTypes.delete(btn.dataset.ruleType);
+          updateToggleIgnoredBtn();
+          renderAvailableRulesTable();
+        }));
+      }
+      updateToggleIgnoredBtn();
+    }
+
+    function updateToggleIgnoredBtn() {
+      const btn = document.getElementById('toggleIgnoredBtn');
+      if (!btn) return;
+      if (ignoredRuleTypes.size === 0) {
+        btn.style.display = 'none';
+        showingIgnored = false;
+        return;
+      }
+      btn.style.display = 'inline-block';
+      btn.textContent = showingIgnored
+        ? `← Retour aux règles disponibles`
+        : `Voir règles ignorées (${ignoredRuleTypes.size})`;
+    }
+
+    async function addAvailableRule(ruleType) {
+      // Read inline param input if any
+      const input = document.querySelector(`.add-param-input[data-rule-type="${ruleType}"]`);
+      const body = { rule_type: ruleType };
+      if (input && input.value !== '') {
+        const key = input.dataset.paramKey;
+        const v = input.type === 'number' ? parseInt(input.value, 10) : input.value;
+        body.parameters = { [key]: v };
+      }
+      try {
+        const res = await fetch(`${API_URL}/calendar-generator/constraints`, {
+          method: 'POST', headers: authHeaders, body: JSON.stringify(body)
+        });
+        if (!res.ok) {
+          const e = await res.json().catch(() => ({}));
+          throw new Error(e.error || 'Échec ajout');
+        }
+        setRulesStatus(`✓ Règle ajoutée : ${RULES_CATALOG[ruleType].label}`, 'success');
+        await loadConstraints();
+      } catch (err) {
+        setRulesStatus('Erreur : ' + err.message, 'error');
+      }
     }
 
     async function patchRule(id, body) {
@@ -816,19 +923,9 @@
       el.className = 'save-status' + (cls ? ' ' + cls : '');
     }
 
-    document.getElementById('addRuleBtn').addEventListener('click', async () => {
-      const ruleType = document.getElementById('addRuleSelect').value;
-      if (!ruleType) return;
-      try {
-        const res = await fetch(`${API_URL}/calendar-generator/constraints`, {
-          method: 'POST', headers: authHeaders, body: JSON.stringify({ rule_type: ruleType })
-        });
-        if (!res.ok) throw new Error('Échec ajout');
-        setRulesStatus('✓ Règle ajoutée', 'success');
-        await loadConstraints();
-      } catch (err) {
-        setRulesStatus('Erreur : ' + err.message, 'error');
-      }
+    document.getElementById('toggleIgnoredBtn').addEventListener('click', () => {
+      showingIgnored = !showingIgnored;
+      renderAvailableRulesTable();
     });
 
     document.getElementById('seedDefaultsBtn').addEventListener('click', async () => {
