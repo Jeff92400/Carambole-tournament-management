@@ -247,6 +247,25 @@ function isDateAllowed({
     }
   }
 
+  // 4 bis. Cascade rule (T1 only): T1 of a weaker category must be strictly
+  // before T1 of a stronger category within the same mode.
+  // Weaker = higher LEVEL_RANK number (R4=7 > R3=6 > R2=5 > R1=4 > N3=3)
+  if (ttype === 'T1') {
+    const myRank = levelRank(cat.level);
+    const myMode = String(cat.game_type || '').toLowerCase();
+    const weakerT1sSameMode = alreadyPlaced.filter(p =>
+      p.tournament_type === 'T1' &&
+      String(p._mode || '').toLowerCase() === myMode &&
+      p._levelRank > myRank // strictly weaker than current
+    );
+    for (const prev of weakerT1sSameMode) {
+      const prevDate = prev.qualif_date || prev.final_date;
+      if (parseISODate(date) <= parseISODate(prevDate)) {
+        return { ok: false, reason: `cascade T1 : doit être après ${prev._categoryLabel || 'catégorie inférieure'}` };
+      }
+    }
+  }
+
   // 5. Strict ordering T1 < T2 < T3 < Finale within same category
   const ORDER_RANK = { T1: 1, T2: 2, T3: 3, Finale: 4 };
   for (const prev of previousSameCat) {
@@ -395,7 +414,9 @@ function placeOne({ cat, ttype, weekends, hosts, brief, cmap, ligueFinals, alrea
       weekend_date: best.weekendDate,
       qualif_date: isFinale ? null : best.date,
       final_date: isFinale ? best.date : null,
-      _mode: cat.game_type
+      _mode: cat.game_type,
+      _levelRank: levelRank(cat.level),
+      _categoryLabel: cat.display_name
     }
   };
 }
@@ -431,7 +452,7 @@ function generateCalendar({ brief, constraints, ligueFinals, categories, clubs }
 
   return {
     placements: placements.map(p => {
-      const { _mode, ...rest } = p;
+      const { _mode, _levelRank, _categoryLabel, ...rest } = p;
       return rest;
     }),
     conflicts,
