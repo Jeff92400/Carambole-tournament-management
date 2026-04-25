@@ -364,23 +364,16 @@ function scoreSoft({ cat, ttype, host, date, weekendDate, alreadyPlaced, cmap, b
       score += 50 * offsetWeeks; // strong push toward earliest valid WE
     }
   } else {
-    // T2/T3/Finale strategy — uniform ideal gap derived from T1 date, so that
-    // Finale doesn't always converge to the season edge.
-    // idealGap = (last_weekend - T1date) / 3   (3 transitions: T1→T2, T2→T3, T3→Finale)
-    // Each category's Finale ends up at ~T1 + 3 × idealGap, naturally spread
-    // because T1s themselves are spread across the cascade.
+    // T2/T3/Finale — aim at the per-category ideal gap (varies by cascade
+    // position so each category has its own cycle length).
     const sameCat = alreadyPlaced.filter(p => p.category_id === cat.id);
-    const t1 = sameCat.find(p => p.tournament_type === 'T1');
     const last = sameCat[sameCat.length - 1];
-    const seasonEnd = toISODateString(brief.last_weekend);
-    if (t1 && last && seasonEnd) {
-      const t1Date = t1.qualif_date || t1.final_date;
+    if (last && cat._idealGapWeeks) {
       const lastDate = last.qualif_date || last.final_date;
-      const totalSpan = Math.max(0, weekDiff(t1Date, seasonEnd));
-      const idealGap = Math.max(3, totalSpan / 3);
+      const idealGap = cat._idealGapWeeks;
       const actualGap = weekDiff(date, lastDate);
       const deviation = Math.abs(actualGap - idealGap);
-      score += 30 * deviation;
+      score += 50 * deviation; // strong pull toward the per-category cadence
     }
   }
 
@@ -472,6 +465,23 @@ function generateCalendar({ brief, constraints, ligueFinals, categories, clubs }
   const activeCats = categories.filter(c => (brief.active_categories || []).includes(c.id));
   const orderedCats = orderCategoriesForPlacement(activeCats);
   const activeHosts = clubs.filter(c => (brief.active_hosts || []).includes(c.id));
+
+  // Assign each category a personalized cycle length (weeks per gap).
+  // Earlier-placed categories (cascade order) get SHORTER cycles, finishing earlier.
+  // Later-placed get LONGER cycles, finishing near season end.
+  // Result: Finales are evenly distributed across the second half of the season.
+  const startISO = toISODateString(brief.first_weekend);
+  const endISO = toISODateString(brief.last_weekend);
+  if (startISO && endISO && orderedCats.length > 0) {
+    const totalWeeks = weekDiff(startISO, endISO);
+    const minWeeksFloor = param(cmap.min_weeks_between_tournaments_same_category, 'min_weeks', 3);
+    const minGap = Math.max(minWeeksFloor, 4); // shortest cycle = 4 weeks per gap = ~12 weeks total
+    const maxGap = Math.max(minGap + 1, Math.floor(totalWeeks / 3));
+    orderedCats.forEach((cat, i) => {
+      const t = orderedCats.length <= 1 ? 1 : i / (orderedCats.length - 1);
+      cat._idealGapWeeks = Math.round(minGap + t * (maxGap - minGap));
+    });
+  }
 
   const placements = [];
   const conflicts = [];
