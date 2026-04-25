@@ -2058,8 +2058,8 @@ async function initializeDatabase() {
           id SERIAL PRIMARY KEY,
           organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
           season TEXT NOT NULL,
-          qualif_day TEXT NOT NULL CHECK (qualif_day IN ('saturday','sunday')),
-          final_day TEXT NOT NULL CHECK (final_day IN ('saturday','sunday')),
+          qualif_day TEXT NOT NULL CHECK (qualif_day IN ('monday','tuesday','wednesday','thursday','friday','saturday','sunday')),
+          final_day TEXT NOT NULL CHECK (final_day IN ('monday','tuesday','wednesday','thursday','friday','saturday','sunday')),
           first_weekend DATE NOT NULL,
           blackout_dates JSONB NOT NULL DEFAULT '[]'::jsonb,
           active_categories JSONB NOT NULL DEFAULT '[]'::jsonb,
@@ -2134,6 +2134,16 @@ async function initializeDatabase() {
       await client.query(`CREATE INDEX IF NOT EXISTS idx_calendar_sync_log_brief ON calendar_sync_log(brief_id)`);
 
       await client.query(`ALTER TABLE clubs ADD COLUMN IF NOT EXISTS preferred_start_time TEXT`);
+
+      // Migration: relax weekday CHECK constraints from sat/sun-only to all 7 days
+      // (Phase 3 originally allowed only weekend; CDB might play on weekdays)
+      await client.query(`ALTER TABLE calendar_brief DROP CONSTRAINT IF EXISTS calendar_brief_qualif_day_check`);
+      await client.query(`ALTER TABLE calendar_brief DROP CONSTRAINT IF EXISTS calendar_brief_final_day_check`);
+      await client.query(`ALTER TABLE calendar_brief ADD CONSTRAINT calendar_brief_qualif_day_check
+        CHECK (qualif_day IN ('monday','tuesday','wednesday','thursday','friday','saturday','sunday'))`);
+      await client.query(`ALTER TABLE calendar_brief ADD CONSTRAINT calendar_brief_final_day_check
+        CHECK (final_day IN ('monday','tuesday','wednesday','thursday','friday','saturday','sunday'))`);
+
       console.log('[Migration] Seasonal Calendar Generator schema ready');
     } catch (calendarErr) {
       console.error('[Migration] Seasonal Calendar Generator schema FAILED (non-fatal):', calendarErr.message);

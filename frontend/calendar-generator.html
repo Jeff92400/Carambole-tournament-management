@@ -284,7 +284,12 @@
         <div class="field">
           <label for="qualifDayInput">Jour des qualificatifs</label>
           <select id="qualifDayInput">
-            <option value="saturday">Samedi</option>
+            <option value="monday">Lundi</option>
+            <option value="tuesday">Mardi</option>
+            <option value="wednesday">Mercredi</option>
+            <option value="thursday">Jeudi</option>
+            <option value="friday">Vendredi</option>
+            <option value="saturday" selected>Samedi</option>
             <option value="sunday">Dimanche</option>
           </select>
           <div class="hint">T1, T2, T3</div>
@@ -292,7 +297,12 @@
         <div class="field">
           <label for="finalDayInput">Jour des finales départementales</label>
           <select id="finalDayInput">
-            <option value="saturday">Samedi</option>
+            <option value="monday">Lundi</option>
+            <option value="tuesday">Mardi</option>
+            <option value="wednesday">Mercredi</option>
+            <option value="thursday">Jeudi</option>
+            <option value="friday">Vendredi</option>
+            <option value="saturday" selected>Samedi</option>
             <option value="sunday">Dimanche</option>
           </select>
         </div>
@@ -308,7 +318,7 @@
           <label for="finalAttributionInput">Attribution du lieu des finales départementales</label>
           <select id="finalAttributionInput">
             <option value="manual">Manuelle (proposée par le système, validée en réunion)</option>
-            <option value="winner_tbd">Vainqueur des qualifications (TBD jusqu'au T3)</option>
+            <option value="winner_tbd">Vainqueur des qualifications (TBD à l'issue du T3)</option>
           </select>
         </div>
       </div>
@@ -400,7 +410,7 @@
       grid.innerHTML = referenceData.categories.map(c => `
         <label>
           <input type="checkbox" class="cat-cb" value="${c.id}" data-mode="${c.mode || ''}" data-name="${c.name || ''}" checked>
-          <span>${c.mode || ''} ${c.level || c.name || ''}</span>
+          <span>${c.name || (c.mode + ' ' + (c.level || ''))}</span>
         </label>
       `).join('');
       grid.querySelectorAll('.cat-cb').forEach(cb => cb.addEventListener('change', renderLigueFinalsTable));
@@ -454,7 +464,7 @@
       const container = document.getElementById('ligueFinalsContainer');
       const checkedCats = Array.from(document.querySelectorAll('.cat-cb:checked')).map(cb => ({
         id: parseInt(cb.value, 10),
-        label: cb.dataset.mode + ' ' + (cb.dataset.name || '')
+        label: cb.dataset.name || (cb.dataset.mode || '')
       }));
       if (!checkedCats.length) {
         container.innerHTML = '<p style="color: #888;">Cochez d\'abord les catégories actives ci-dessus pour voir cette table.</p>';
