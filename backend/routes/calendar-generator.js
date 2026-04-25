@@ -302,7 +302,7 @@ router.get('/reference-data', authenticateToken, (req, res) => {
     .then(([categories, clubs]) => res.json({ categories, clubs }))
     .catch(err => {
       console.error('[calendar-generator] GET /reference-data error:', err);
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error: err.message, code: err.code, detail: err.detail, hint: err.hint });
     });
 });
 
