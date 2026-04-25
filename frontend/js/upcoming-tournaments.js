@@ -215,6 +215,12 @@
                        document.getElementById('logoutBtn');
     if (!insertBefore) return;
 
+    // Mega-menu compatibility (V 2.0.495): if the reference node is nested
+    // inside a dropdown (not a direct child of .nav-links), the legacy "Tournois
+    // à venir" injection is redundant — that link is already inside the
+    // Compétitions dropdown. Bail out cleanly.
+    if (insertBefore.parentNode !== navLinks) return;
+
     var btn = document.createElement('a');
     btn.href = '#';
     btn.textContent = 'Tournois à venir';
