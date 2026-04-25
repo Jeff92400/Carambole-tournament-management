@@ -182,6 +182,46 @@ function isDateAllowed({
     return { ok: false, reason: 'après le dernier week-end de compétition' };
   }
 
+  // 2 ter. LOOK-AHEAD personal deadline: ensure remaining tournaments of this
+  // category can still fit before the season cap (and before ligue final if any).
+  if (endBefore) {
+    const minWeeksSame = param(cmap.min_weeks_between_tournaments_same_category, 'min_weeks', 3);
+    const minWeeksT3F = param(cmap.min_weeks_between_t3_and_final, 'min_weeks', 2);
+    const remainingWeeks = ({
+      T1: 2 * minWeeksSame + minWeeksT3F, // T2, T3, then Finale
+      T2: 1 * minWeeksSame + minWeeksT3F, // T3, then Finale
+      T3: minWeeksT3F,                    // Finale
+      Finale: 0
+    })[ttype] ?? 0;
+    if (remainingWeeks > 0) {
+      const personalDeadline = addDays(parseISODate(endBefore), -7 * remainingWeeks);
+      if (parseISODate(date) > personalDeadline) {
+        return { ok: false, reason: `trop tard pour caser les ${remainingWeeks / minWeeksSame | 0}+ tournoi(s) restant(s) avant la date butoir` };
+      }
+    }
+  }
+  // Same look-ahead for ligue final (Finale must precede it, T3 must precede Finale, etc.)
+  if (ligueFinals && ligueFinals[cat.id]) {
+    const ligueDate = toISODateString(ligueFinals[cat.id]);
+    if (ligueDate) {
+      const minWeeksLigue = param(cmap.min_weeks_between_cdb_and_ligue_final, 'min_weeks', 2);
+      const minWeeksT3F = param(cmap.min_weeks_between_t3_and_final, 'min_weeks', 2);
+      const minWeeksSame = param(cmap.min_weeks_between_tournaments_same_category, 'min_weeks', 3);
+      const remainingFromLigue = ({
+        T1: 2 * minWeeksSame + minWeeksT3F + minWeeksLigue,
+        T2: 1 * minWeeksSame + minWeeksT3F + minWeeksLigue,
+        T3: minWeeksT3F + minWeeksLigue,
+        Finale: minWeeksLigue
+      })[ttype] ?? 0;
+      if (remainingFromLigue > 0) {
+        const ligueDeadline = addDays(parseISODate(ligueDate), -7 * remainingFromLigue);
+        if (parseISODate(date) > ligueDeadline) {
+          return { ok: false, reason: `trop tard avant la finale ligue (${ligueDate})` };
+        }
+      }
+    }
+  }
+
   // 3. min_weeks_between_tournaments_same_category
   const minWeeksSame = param(cmap.min_weeks_between_tournaments_same_category, 'min_weeks', 3);
   const previousSameCat = alreadyPlaced.filter(p => p.category_id === cat.id);
@@ -299,16 +339,17 @@ function scoreSoft({ cat, host, date, weekendDate, alreadyPlaced, cmap }) {
 function placeOne({ cat, ttype, weekends, hosts, brief, cmap, ligueFinals, alreadyPlaced }) {
   const isFinale = ttype === 'Finale';
   const candidates = [];
-  const dateRejections = []; // for diagnostics
+  const reasonCounts = {}; // { reason: count } for diagnostics
+  const bumpReason = (r) => { reasonCounts[r] = (reasonCounts[r] || 0) + 1; };
 
   for (const wk of weekends) {
     const date = isFinale ? wk.final_date : wk.qualif_date;
     const blackedOut = isFinale ? wk.final_blackout : wk.qualif_blackout;
-    if (blackedOut) continue;
+    if (blackedOut) { bumpReason('week-end blackout'); continue; }
 
     const dateCheck = isDateAllowed({ cat, ttype, date, isFinale, brief, cmap, ligueFinals, alreadyPlaced });
     if (!dateCheck.ok) {
-      dateRejections.push(`${date}: ${dateCheck.reason}`);
+      bumpReason(dateCheck.reason);
       continue;
     }
 
@@ -318,21 +359,27 @@ function placeOne({ cat, ttype, weekends, hosts, brief, cmap, ligueFinals, alrea
         score: scoreSoft({ cat, host: null, date, weekendDate: wk.weekend_date, alreadyPlaced, cmap })
       });
     } else {
+      let anyHostOK = false;
       for (const host of hosts) {
         const hostCheck = isHostAllowed({ host, date, weekendDate: wk.weekend_date, brief, alreadyPlaced });
         if (!hostCheck.ok) continue;
+        anyHostOK = true;
         candidates.push({
           date, weekendDate: wk.weekend_date, host,
           score: scoreSoft({ cat, host, date, weekendDate: wk.weekend_date, alreadyPlaced, cmap })
         });
       }
+      if (!anyHostOK) bumpReason('aucun club hôte disponible (tous occupés ou indisponibles)');
     }
   }
 
   if (!candidates.length) {
-    const reason = dateRejections.length
-      ? `Aucun créneau valide. Dernières exclusions : ${dateRejections.slice(-3).join(' ; ')}`
-      : 'Aucun club hôte disponible';
+    const totalRejected = Object.values(reasonCounts).reduce((a, b) => a + b, 0);
+    const sortedReasons = Object.entries(reasonCounts).sort((a, b) => b[1] - a[1]);
+    const summary = sortedReasons.map(([r, n]) => `${n}× ${r}`).join(' · ');
+    const reason = totalRejected
+      ? `${totalRejected} créneau(x) testé(s), tous rejetés : ${summary}`
+      : 'Aucun créneau disponible (saison vide ?)';
     return { placement: null, reason };
   }
 
