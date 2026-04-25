@@ -444,17 +444,20 @@
           <label style="font-size: 12px;">Tournois max / week-end <input type="number" id="qt_maxPerWE" min="1" max="20" style="width: 50px; padding: 3px 5px; margin-left: 4px;"></label>
         </div>
         <div style="margin-top: 8px; font-size: 11px; color: #888;">
-          Les valeurs ci-dessus sont utilisées <strong>uniquement pour cette simulation</strong> et ne modifient pas vos règles. Cliquez « Sauvegarder ces réglages » pour les rendre permanents.
+          Les valeurs ci-dessus sont utilisées <strong>uniquement pour cette simulation</strong> et ne modifient pas vos règles. Cliquez « Conserver ces réglages... » pour les rendre permanents (les retrouver à la prochaine session, et dans Étape 2).
         </div>
       </div>
 
       <div style="margin: 16px 0; display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
-        <button type="button" class="btn" id="runGenerationBtn" style="background: #6b3aa3; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: 600;">⚡ Lancer la génération</button>
-        <button type="button" class="btn" id="saveTuningBtn" style="background: #2c7a4d; color: white; padding: 10px 16px; border: none; border-radius: 5px; cursor: pointer; font-size: 13px;">💾 Sauvegarder ces réglages</button>
+        <button type="button" class="btn" id="runGenerationBtn" style="background: #6b3aa3; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: 600;" title="Génère un nouveau calendrier et remplace le précédent (sauvegardé automatiquement)">⚡ Lancer la génération (remplace le calendrier précédent)</button>
+        <button type="button" class="btn" id="saveTuningBtn" style="background: #2c7a4d; color: white; padding: 10px 16px; border: none; border-radius: 5px; cursor: pointer; font-size: 13px;">💾 Conserver ces réglages pour les prochaines générations</button>
         <span id="generationStatus" style="color: #666; font-size: 13px;"></span>
       </div>
 
-      <div id="generationStats" style="display: none; padding: 12px; background: #f0f7ff; border: 1px solid #c0d4f0; border-radius: 6px; margin-bottom: 16px;"></div>
+      <div id="generationStats" style="display: none; padding: 12px; background: #f0f7ff; border: 1px solid #c0d4f0; border-radius: 6px; margin-bottom: 8px;"></div>
+      <div id="persistenceBanner" style="display: none; padding: 8px 12px; background: #e8f5e9; border: 1px solid #a5d6a7; border-radius: 6px; margin-bottom: 16px; font-size: 12px; color: #2c5530;">
+        💾 <strong>Sauvegarde automatique active</strong> — le calendrier est enregistré à chaque génération et à chaque modification manuelle d'une cellule. Aucun bouton « Sauvegarder » n'est nécessaire.
+      </div>
       <div id="generationConflicts" style="display: none; margin-bottom: 16px;"></div>
 
       <div id="viewSelector" style="display:none; margin-bottom: 12px; display:flex; gap: 8px; flex-wrap: wrap; align-items: center;">
@@ -1389,8 +1392,9 @@
         conflictsEl.innerHTML = '';
       }
 
-      // Show view selector
+      // Show view selector + persistence banner
       document.getElementById('viewSelector').style.display = 'flex';
+      document.getElementById('persistenceBanner').style.display = 'block';
 
       renderViewCompact(result);
       renderViewSeasonal(result);
