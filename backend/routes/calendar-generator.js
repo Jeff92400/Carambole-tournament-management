@@ -506,4 +506,101 @@ router.patch('/clubs/:id/start-time', authenticateToken, requireAdmin, (req, res
   );
 });
 
+// ----------------------------------------------------------------
+// AI: Natural language → structured rule (Phase 4b)
+// ----------------------------------------------------------------
+
+// POST /constraints/from-natural-language — translate a French sentence into a draft rule
+// Body: { text: "Clichy ne doit jamais accueillir deux week-ends d'affilée" }
+// Response: { rule_type, parameters, strictness, weight, explanation, confidence }
+// Note: This is a DRAFT — admin must validate before saving via POST /constraints.
+router.post('/constraints/from-natural-language', authenticateToken, requireAdmin, async (req, res) => {
+  const { text } = req.body || {};
+  if (!text || typeof text !== 'string' || text.trim().length < 5) {
+    return res.status(400).json({ error: 'Texte requis (au moins 5 caractères).' });
+  }
+  if (text.length > 500) {
+    return res.status(400).json({ error: 'Texte trop long (500 caractères max).' });
+  }
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return res.status(503).json({ error: 'Service IA non configuré (ANTHROPIC_API_KEY manquante).' });
+  }
+
+  try {
+    const Anthropic = require('@anthropic-ai/sdk');
+    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+    // Load clubs list to ground host names if mentioned
+    const db = getDb();
+    const orgId = req.user.organizationId;
+    const clubs = await new Promise((resolve) => {
+      db.all(
+        `SELECT id, display_name FROM clubs
+         WHERE ($1::int IS NULL OR organization_id = $1)
+         ORDER BY display_name`,
+        [orgId],
+        (err, rows) => resolve(err ? [] : (rows || []))
+      );
+    });
+    const clubsList = clubs.map(c => `- ${c.display_name} (id=${c.id})`).join('\n');
+
+    const catalogJson = JSON.stringify(RULES_CATALOG, null, 2);
+
+    const systemPrompt = `Tu es un assistant qui traduit des phrases en français (description d'une contrainte de planification d'un calendrier de tournois de billard) en une règle structurée JSON.
+
+CATALOGUE DE RÈGLES DISPONIBLES :
+${catalogJson}
+
+CLUBS DE CE CDB (utiliser display_name exact si la phrase mentionne un club) :
+${clubsList || '(aucun)'}
+
+Tu dois retourner UNIQUEMENT un objet JSON valide (pas de markdown, pas d'explication hors JSON) avec cette structure :
+{
+  "rule_type": "<une clé du catalogue>",
+  "parameters": { ... paramètres adaptés à la phrase ... },
+  "strictness": "hard" | "soft",
+  "weight": <nombre, requis seulement si soft>,
+  "explanation": "<phrase courte expliquant ta traduction, en français>",
+  "confidence": "high" | "medium" | "low"
+}
+
+Si la phrase ne correspond à AUCUNE règle du catalogue, retourne :
+{ "error": "Aucune règle correspondante", "explanation": "<courte explication>" }
+
+Règles importantes :
+- Si l'utilisateur mentionne un club, utilise son nom exact dans parameters.host_name (ou similaire selon la règle)
+- Pour les règles "soft" non spécifiées, propose un weight raisonnable (1-10)
+- Les paramètres doivent être cohérents avec defaultParams du catalogue (mêmes clés)`;
+
+    const message = await client.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 600,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: text.trim() }]
+    });
+
+    const raw = (message.content?.[0]?.text || '').trim();
+    let parsed;
+    try {
+      // Strip optional ```json fences just in case
+      const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '');
+      parsed = JSON.parse(cleaned);
+    } catch (e) {
+      return res.status(502).json({ error: 'Réponse IA non parsable', raw });
+    }
+
+    if (parsed.error) {
+      return res.status(200).json(parsed);
+    }
+    if (!parsed.rule_type || !RULES_CATALOG[parsed.rule_type]) {
+      return res.status(502).json({ error: 'rule_type invalide retourné par l\'IA', received: parsed });
+    }
+
+    res.json(parsed);
+  } catch (err) {
+    console.error('[calendar-generator] POST /constraints/from-natural-language error:', err);
+    res.status(500).json({ error: err.message || 'Erreur IA' });
+  }
+});
+
 module.exports = router;

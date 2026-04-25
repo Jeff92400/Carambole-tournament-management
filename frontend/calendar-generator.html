@@ -369,8 +369,9 @@
       <div class="ai-box">
         <span class="ai-tag">Assistance IA</span>
         <p><strong>Décrivez une règle en français</strong> — l'IA la traduira en règle structurée.</p>
-        <textarea id="aiRuleInput" placeholder="Exemple : « Clichy ne doit jamais accueillir deux week-ends d'affilée »" disabled></textarea>
-        <button class="btn-ai" id="aiTranslateBtn" disabled style="margin-top: 6px;">🤖 Traduire en règle (bientôt disponible)</button>
+        <textarea id="aiRuleInput" placeholder="Exemple : « Clichy ne doit jamais accueillir deux week-ends d'affilée »"></textarea>
+        <button class="btn-ai" id="aiTranslateBtn" style="margin-top: 6px;">🤖 Traduire en règle</button>
+        <div id="aiSuggestion" style="display:none; margin-top:12px; padding:12px; background:#fff; border:1px solid #d4c5e8; border-radius:6px;"></div>
       </div>
 
       <h3 class="section-title">Règles obligatoires (le moteur refuse de les violer)</h3>
@@ -844,6 +845,88 @@
         setRulesStatus('Erreur : ' + err.message, 'error');
       }
     });
+
+    // ---- AI: traduction langage naturel → règle ----
+    document.getElementById('aiTranslateBtn').addEventListener('click', async () => {
+      const input = document.getElementById('aiRuleInput');
+      const btn = document.getElementById('aiTranslateBtn');
+      const box = document.getElementById('aiSuggestion');
+      const text = (input.value || '').trim();
+      if (text.length < 5) {
+        box.style.display = 'block';
+        box.innerHTML = '<span style="color:#c00;">Tape au moins une phrase complète (5 caractères min).</span>';
+        return;
+      }
+      btn.disabled = true;
+      const originalLabel = btn.textContent;
+      btn.textContent = '⏳ Traduction…';
+      box.style.display = 'block';
+      box.innerHTML = '<span style="color:#666;">L\'IA réfléchit…</span>';
+
+      try {
+        const res = await fetch(`${API_URL}/calendar-generator/constraints/from-natural-language`, {
+          method: 'POST', headers: authHeaders, body: JSON.stringify({ text })
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || 'Échec IA');
+
+        if (json.error) {
+          box.innerHTML = `<strong style="color:#c00;">⚠️ ${escapeHtml(json.error)}</strong><br><span style="color:#666;font-size:13px;">${escapeHtml(json.explanation || '')}</span>`;
+          return;
+        }
+
+        const meta = RULES_CATALOG[json.rule_type] || { label: json.rule_type };
+        const confidenceColor = { high: '#2c7a4d', medium: '#c47b00', low: '#c00' }[json.confidence] || '#666';
+        box.innerHTML = `
+          <div style="margin-bottom:8px;">
+            <strong>Règle proposée :</strong> ${escapeHtml(meta.label)}
+            <span style="margin-left:8px; padding:2px 8px; background:${confidenceColor}; color:#fff; border-radius:10px; font-size:11px;">Confiance : ${escapeHtml(json.confidence || 'n/a')}</span>
+          </div>
+          <div style="margin-bottom:8px; font-size:13px; color:#555;"><em>${escapeHtml(json.explanation || '')}</em></div>
+          <div style="margin-bottom:8px; font-size:12px;"><strong>Paramètres :</strong> <code style="background:#f4f0fa; padding:2px 6px; border-radius:4px;">${escapeHtml(JSON.stringify(json.parameters || {}))}</code></div>
+          <div style="margin-bottom:8px; font-size:12px;"><strong>Strictness :</strong> ${escapeHtml(json.strictness)}${json.weight !== undefined ? ` · <strong>Poids :</strong> ${json.weight}` : ''}</div>
+          <div style="display:flex; gap:8px; margin-top:10px;">
+            <button type="button" id="aiAcceptBtn" class="btn" style="background:#2c7a4d; color:white; padding:6px 14px; border:none; border-radius:5px; cursor:pointer; font-size:13px;">✓ Ajouter cette règle</button>
+            <button type="button" id="aiRejectBtn" class="btn" style="background:#999; color:white; padding:6px 14px; border:none; border-radius:5px; cursor:pointer; font-size:13px;">Annuler</button>
+          </div>
+        `;
+
+        document.getElementById('aiAcceptBtn').addEventListener('click', async () => {
+          try {
+            const r = await fetch(`${API_URL}/calendar-generator/constraints`, {
+              method: 'POST', headers: authHeaders, body: JSON.stringify({
+                rule_type: json.rule_type,
+                parameters: json.parameters,
+                strictness: json.strictness,
+                weight: json.weight
+              })
+            });
+            if (!r.ok) {
+              const e = await r.json().catch(() => ({}));
+              throw new Error(e.error || 'Échec ajout');
+            }
+            setRulesStatus('✓ Règle IA ajoutée', 'success');
+            box.style.display = 'none';
+            input.value = '';
+            await loadConstraints();
+          } catch (err) {
+            setRulesStatus('Erreur : ' + err.message, 'error');
+          }
+        });
+        document.getElementById('aiRejectBtn').addEventListener('click', () => {
+          box.style.display = 'none';
+        });
+      } catch (err) {
+        box.innerHTML = `<span style="color:#c00;">Erreur : ${escapeHtml(err.message)}</span>`;
+      } finally {
+        btn.disabled = false;
+        btn.textContent = originalLabel;
+      }
+    });
+
+    function escapeHtml(s) {
+      return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
 
     document.getElementById('backToBriefBtn').addEventListener('click', () => {
       document.getElementById('step2Card').style.display = 'none';
