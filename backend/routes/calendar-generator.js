@@ -196,7 +196,7 @@ router.get('/ligue-finals', authenticateToken, (req, res) => {
 
   db.all(
     `SELECT lfd.id, lfd.season, lfd.category_id, lfd.final_date,
-            c.mode, c.level, c.name AS category_name
+            c.game_type AS mode, c.level, c.display_name AS category_name
      FROM ligue_final_dates lfd
      JOIN categories c ON c.id = lfd.category_id
      WHERE lfd.organization_id = $1 AND lfd.season = $2
@@ -283,7 +283,10 @@ router.get('/reference-data', authenticateToken, (req, res) => {
   Promise.all([
     new Promise((resolve, reject) => {
       db.all(
-        `SELECT id, mode, level, name FROM categories WHERE organization_id = $1 OR organization_id IS NULL ORDER BY mode, level`,
+        `SELECT id, game_type AS mode, level, display_name AS name
+         FROM categories
+         WHERE organization_id = $1 OR organization_id IS NULL
+         ORDER BY game_type, level`,
         [orgId],
         (err, rows) => err ? reject(err) : resolve(rows || [])
       );
