@@ -1106,21 +1106,27 @@ router.get('/draft/export', authenticateToken, async (req, res) => {
     for (let i = 2; i <= totalCols; i++) ws.getColumn(i).width = 8;
 
     // Data rows
+    const BORDER_THICK_BOTTOM = { style: 'medium', color: { argb: 'FF6B3AA3' } };
     cats.forEach((c, rowIdx) => {
+      const isLast = rowIdx === cats.length - 1;
       const r = ws.getRow(4 + rowIdx);
       r.height = 28;
       const labelCell = r.getCell(1);
       labelCell.value = c.label;
       labelCell.font = { bold: true, size: 11 };
       labelCell.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
-      labelCell.border = ALL_BORDERS;
+      labelCell.border = isLast
+        ? { ...ALL_BORDERS, bottom: BORDER_THICK_BOTTOM }
+        : ALL_BORDERS;
       labelCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: rowIdx % 2 === 0 ? 'FFFFFFFF' : ALT_ROW_BG } };
 
       weekends.forEach((we, idx) => {
         const col = idx + 2;
         const cell = r.getCell(col);
         const placement = grid[c.id]?.[we];
-        cell.border = ALL_BORDERS;
+        cell.border = isLast
+          ? { ...ALL_BORDERS, bottom: BORDER_THICK_BOTTOM }
+          : ALL_BORDERS;
         if (placement) {
           // Two-line cell: type / abbreviated host
           const typeLabel = placement.type;
@@ -1141,39 +1147,45 @@ router.get('/draft/export', authenticateToken, async (req, res) => {
       });
     });
 
-    // Footer with legend below table
+    // Footer with legend below table — VERTICAL layout (one club per row)
     const legendStartRow = 4 + cats.length + 2;
     const legendTitle = ws.getCell(legendStartRow, 1);
     legendTitle.value = 'Légende clubs';
-    legendTitle.font = { bold: true, size: 12, color: { argb: HEADER_BG } };
-    let legCol = 2;
-    [...hostMap.entries()].forEach(([id, name]) => {
-      const swatch = ws.getCell(legendStartRow, legCol);
+    legendTitle.font = { bold: true, size: 13, color: { argb: HEADER_BG } };
+    legendTitle.alignment = { vertical: 'middle' };
+    [...hostMap.entries()].forEach(([id, name], idx) => {
+      const r = ws.getRow(legendStartRow + 1 + idx);
+      r.height = 22;
+      const swatch = r.getCell(2);
       swatch.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hostColor.get(id) } };
       swatch.border = ALL_BORDERS;
       swatch.value = '';
-      const lbl = ws.getCell(legendStartRow, legCol + 1);
+      // Merge cells 3..6 to give plenty of room for the full club name
+      ws.mergeCells(legendStartRow + 1 + idx, 3, legendStartRow + 1 + idx, 7);
+      const lbl = r.getCell(3);
       lbl.value = name;
-      lbl.alignment = { vertical: 'middle' };
-      lbl.font = { size: 10 };
-      legCol += 2;
+      lbl.alignment = { vertical: 'middle', indent: 1 };
+      lbl.font = { size: 11 };
+      lbl.border = ALL_BORDERS;
     });
 
-    // Type legend below
-    const typeLegendRow = legendStartRow + 2;
+    // Type legend below the clubs list
+    const typeLegendRow = legendStartRow + hostMap.size + 3;
     const tlTitle = ws.getCell(typeLegendRow, 1);
     tlTitle.value = 'Type';
-    tlTitle.font = { bold: true, size: 12, color: { argb: HEADER_BG } };
+    tlTitle.font = { bold: true, size: 13, color: { argb: HEADER_BG } };
+    tlTitle.alignment = { vertical: 'middle' };
     let tCol = 2;
     Object.entries(TYPE_COLORS).forEach(([type, color]) => {
       const sw = ws.getCell(typeLegendRow, tCol);
       sw.value = type;
       sw.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: color } };
-      sw.font = { bold: true, size: 10 };
+      sw.font = { bold: true, size: 11 };
       sw.alignment = { horizontal: 'center', vertical: 'middle' };
       sw.border = ALL_BORDERS;
       tCol += 1;
     });
+    ws.getRow(typeLegendRow).height = 22;
 
     // ===== Sheet 2: List of tournaments (sortable, with auto-filter) =====
     const wsList = wb.addWorksheet('Liste des tournois', {
