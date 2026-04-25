@@ -966,9 +966,31 @@ router.get('/draft/export', authenticateToken, async (req, res) => {
 
     // Build workbook with rich formatting
     const ExcelJS = require('exceljs');
+    const { getOrganizationLogoBuffer } = require('../utils/logo-loader');
     const wb = new ExcelJS.Workbook();
     wb.creator = 'Calendrier Saisonnier — Kayros';
     wb.created = new Date();
+
+    // Load organization logo (or fallback billiard icon)
+    let logoImageId = null;
+    try {
+      const logoBuffer = await getOrganizationLogoBuffer(orgId);
+      if (logoBuffer) {
+        logoImageId = wb.addImage({ buffer: logoBuffer, extension: 'png' });
+      }
+    } catch (e) {
+      console.warn('[calendar-generator] logo load skipped:', e.message);
+    }
+
+    // Org short name for the title (best-effort lookup)
+    let orgName = '';
+    try {
+      const orgRow = await fetchOne(
+        `SELECT COALESCE(short_name, name) AS label FROM organizations WHERE id = $1`,
+        [orgId]
+      );
+      orgName = orgRow?.label || '';
+    } catch (_) {}
 
     // ===== Helpers =====
     const BORDER_THIN = { style: 'thin', color: { argb: 'FFB0B0B0' } };
@@ -1004,14 +1026,25 @@ router.get('/draft/export', authenticateToken, async (req, res) => {
 
     const totalCols = 1 + weekends.length;
 
-    // Row 1: Title
+    // Row 1: Title (taller to accommodate logo)
     ws.mergeCells(1, 1, 1, totalCols);
     const titleCell = ws.getCell(1, 1);
-    titleCell.value = `Calendrier saisonnier — Saison ${brief.season}`;
+    const titleParts = ['Calendrier saisonnier'];
+    if (orgName) titleParts.push(orgName);
+    titleParts.push(`Saison ${brief.season}`);
+    titleCell.value = '   ' + titleParts.join('  —  ');
     titleCell.font = { bold: true, size: 18, color: { argb: HEADER_TEXT_COLOR } };
     titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
     titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: HEADER_BG } };
-    ws.getRow(1).height = 32;
+    ws.getRow(1).height = 48;
+
+    // Embed logo at top-left over the title row (covers ~ first 1.5 cells)
+    if (logoImageId !== null) {
+      ws.addImage(logoImageId, {
+        tl: { col: 0.05, row: 0.10 },
+        ext: { width: 56, height: 56 }
+      });
+    }
 
     // Row 2: Month header (merged across same month)
     const row2 = ws.getRow(2);
