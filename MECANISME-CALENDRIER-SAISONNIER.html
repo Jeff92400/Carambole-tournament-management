@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Mécanisme du Calendrier Saisonnier — CDB Tournois</title>
+<style>
+  :root {
+    --bg: #f7f7f5;
+    --card: #ffffff;
+    --ink: #1a1a1a;
+    --muted: #5a5a5a;
+    --accent: #974806;
+    --accent-soft: #fff0e0;
+    --green: #00824a;
+    --green-soft: #e6f4ec;
+    --red: #b81c1c;
+    --red-soft: #fbe7e7;
+    --blue: #1e5fa8;
+    --blue-soft: #e6f0fa;
+    --border: #e4e2dd;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    margin: 0;
+    padding: 40px 20px;
+    line-height: 1.55;
+  }
+  main {
+    max-width: 880px;
+    margin: 0 auto;
+  }
+  header {
+    border-bottom: 3px solid var(--accent);
+    padding-bottom: 20px;
+    margin-bottom: 32px;
+  }
+  h1 { font-size: 28px; margin: 0 0 6px 0; color: var(--accent); }
+  h2 {
+    font-size: 20px;
+    margin: 36px 0 12px 0;
+    color: var(--accent);
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 6px;
+  }
+  h3 { font-size: 16px; margin: 22px 0 8px 0; color: var(--ink); }
+  p, li { font-size: 14.5px; }
+  .meta { color: var(--muted); font-size: 13px; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 18px 22px;
+    margin: 14px 0;
+  }
+  .pill {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+    margin-right: 6px;
+  }
+  .pill-todo { background: var(--red-soft); color: var(--red); }
+  .pill-wip  { background: var(--accent-soft); color: var(--accent); }
+  .pill-done { background: var(--green-soft); color: var(--green); }
+  .pill-info { background: var(--blue-soft); color: var(--blue); }
+
+  .step {
+    display: flex;
+    gap: 16px;
+    margin: 12px 0;
+    padding: 14px 16px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--accent);
+    border-radius: 6px;
+  }
+  .step-num {
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+    background: var(--accent);
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+  }
+  .step-body { flex: 1; }
+  .step-body strong { color: var(--accent); }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0;
+    font-size: 13.5px;
+  }
+  th, td {
+    border: 1px solid var(--border);
+    padding: 8px 10px;
+    text-align: left;
+    vertical-align: top;
+  }
+  th { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  tr:nth-child(even) td { background: #fafaf8; }
+
+  code {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 13px;
+    background: #efece6;
+    padding: 1px 5px;
+    border-radius: 3px;
+  }
+  .callout {
+    border-left: 4px solid var(--blue);
+    background: var(--blue-soft);
+    padding: 12px 16px;
+    margin: 14px 0;
+    border-radius: 0 6px 6px 0;
+  }
+  .callout-warn {
+    border-left-color: var(--accent);
+    background: var(--accent-soft);
+  }
+  .callout strong { color: var(--blue); }
+  .callout-warn strong { color: var(--accent); }
+
+  ul.clean { padding-left: 20px; }
+  ul.clean li { margin-bottom: 4px; }
+
+  footer {
+    margin-top: 50px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 12.5px;
+  }
+</style>
+</head>
+<body>
+<main>
+
+<header>
+  <h1>Mécanisme du Calendrier Saisonnier</h1>
+  <p class="meta">Application : CDB Tournois &middot; Document de conception &middot; Version 0.4 &middot; Avril 2026</p>
+  <p class="meta">Document évolutif &mdash; sera enrichi au fil des décisions de conception et de l'implémentation.</p>
+</header>
+
+<h2>1. Objectif</h2>
+<p>
+  Permettre à un Comité Départemental (CDB) de <strong>générer son calendrier saisonnier complet</strong>
+  directement dans l'application, à partir d'un <em>brief</em> structuré (modes, catégories, contraintes,
+  pool de clubs hôtes), sans avoir à construire manuellement un fichier Excel chaque été.
+</p>
+<p>
+  Le résultat final est la <strong>création automatique de tous les tournois</strong> de la saison
+  dans la table <code>tournoi_ext</code>, prêts à recevoir les inscriptions.
+</p>
+
+<h2>2. Principe directeur</h2>
+<div class="card">
+  <p><strong>Générateur déterministe + assistance IA.</strong></p>
+  <p>
+    Le moteur de génération est <strong>déterministe et reproductible</strong> :
+    règles configurables, contraintes dures et molles, optimisation explicite. L'IA
+    n'est <em>pas</em> chargée de planifier — elle intervient uniquement aux endroits
+    « flous » :
+  </p>
+  <ul class="clean">
+    <li><strong>Porte d'entrée IA</strong> &mdash; extraction d'un brief structuré à partir de notes en texte libre ou d'un calendrier Excel de l'année précédente.</li>
+    <li><strong>Explicateur IA</strong> &mdash; en cas de conflit ou d'échec de génération, explication en français clair de la cause.</li>
+    <li><strong>Suggesteur IA</strong> &mdash; propose des hôtes ou des dates lorsque le moteur déterministe n'a pas de solution unique.</li>
+  </ul>
+  <p class="meta">
+    Pourquoi ce choix : la planification calendaire pilote les convocations et les classements.
+    Elle doit être <strong>reproductible et vérifiable</strong>. Un LLM ne peut pas garantir cela.
+  </p>
+</div>
+
+<h2>3. Flux utilisateur en 6 étapes</h2>
+
+<div class="step">
+  <div class="step-num">1</div>
+  <div class="step-body">
+    <strong>Brief de saison</strong> &mdash;
+    L'admin renseigne (formulaire) ou laisse l'IA pré-remplir à partir du <strong>fichier Excel
+    de la saison N-1 déjà présent sur le serveur</strong> (uploadé via <code>/calendar/upload</code>,
+    nom normalisé <code>Calendrier {org} {season}.{ext}</code>). Aucune action admin requise pour
+    l'accès au fichier &mdash; l'application le lit automatiquement depuis son storage.
+    <br><br>
+    Contenu du brief : saison ciblée, modes à organiser, catégories par mode, pool de clubs hôtes,
+    blackouts (dates FFB nationales, finales de ligue par catégorie), nombre attendu de tournois par mode.
+  </div>
+</div>
+
+<div class="step">
+  <div class="step-num">2</div>
+  <div class="step-body">
+    <strong>Validation des contraintes</strong> &mdash;
+    L'admin confirme/édite les contraintes dures (ex. tous les CDB finals avant la finale de ligue
+    de leur catégorie) et molles (ex. rotation équitable des hôtes, étalement des modes).
+  </div>
+</div>
+
+<div class="step">
+  <div class="step-num">3</div>
+  <div class="step-body">
+    <strong>Génération du brouillon</strong> &mdash;
+    Le moteur déterministe produit un calendrier respectant toutes les contraintes dures et
+    optimisant les molles. Hôtes assignés automatiquement selon la règle de rotation.
+    <br><br>
+    <strong>Format de sortie :</strong>
+    <ul class="clean">
+      <li><em>Stockage</em> &mdash; une ligne par tournoi dans <code>calendar_draft</code> :
+        <code>season, weekend_date, mode, category, host_club_id, type (T1/T2/T3/FD), pts_rep, locked_by_user, conflict_flags (JSON)</code></li>
+      <li><em>Affichage admin &mdash; vue tableau</em> : tri/filtre par mode, catégorie, hôte (similaire à la vue <code>tournoi_ext</code> actuelle)</li>
+      <li><em>Affichage admin &mdash; vue calendrier mensuel</em> : grille week-end par week-end, code couleur par mode, badge club hôte</li>
+    </ul>
+    Pas de format pivot type Excel en interne &mdash; l'Excel n'est qu'une vue d'export à l'étape 6.
+  </div>
+</div>
+
+<div class="step">
+  <div class="step-num">4</div>
+  <div class="step-body">
+    <strong>Revue &amp; édition</strong> &mdash;
+    L'admin visualise le calendrier complet (vue tableau + vue mensuelle), peut <strong>verrouiller</strong>
+    individuellement des tournois (date, hôte, catégorie) et éditer manuellement. Les conflits
+    sont signalés en ligne avec explication IA.
+  </div>
+</div>
+
+<div class="step">
+  <div class="step-num">5</div>
+  <div class="step-body">
+    <strong>Régénération sélective</strong> (optionnel) &mdash;
+    Si l'admin modifie le brief ou ajoute une contrainte, le moteur recalcule
+    <em>uniquement les tournois non verrouillés</em>. Les éditions manuelles validées sont préservées.
+  </div>
+</div>
+
+<div class="step" style="border-left-color: var(--green);">
+  <div class="step-num" style="background: var(--green);">6</div>
+  <div class="step-body">
+    <strong>Publication &mdash; génération du fichier de tournois</strong>
+    <span class="pill pill-info">Étape clé</span><br>
+    Une fois le calendrier approuvé, l'application <strong>crée tous les enregistrements
+    <code>tournoi_ext</code> de la saison</strong> en une seule opération :
+    <ul class="clean">
+      <li>Un enregistrement par tournoi (date, mode, catégorie, club hôte, Pts/Rep, statut)</li>
+      <li>Création automatique des catégories <code>Saison {season}</code> &gt; <code>Convocations {season}</code> et <code>Saison {season}</code> &gt; <code>Résultats {season}</code></li>
+      <li>Initialisation des statuts (à venir, ouvert aux inscriptions, etc.)</li>
+      <li>Export Excel généré en parallèle pour archivage et impression (compatibilité ascendante)</li>
+    </ul>
+    <br>
+    <strong>Mise à jour après publication &mdash; mécanisme <em>diff-and-sync</em> :</strong><br>
+    Si l'admin modifie le calendrier après publication (correction de date, changement d'hôte,
+    ajout d'un tournoi oublié), la republication ne supprime/recrée jamais aveuglément. Le moteur
+    compare <code>calendar_draft</code> ↔ <code>tournoi_ext</code> et classe chaque changement en
+    trois catégories :
+    <ul class="clean">
+      <li><span class="pill pill-done">Sûr</span> Aucune inscription, aucune convocation envoyée &rarr; appliqué directement</li>
+      <li><span class="pill pill-wip">Sensible</span> Inscriptions existantes &rarr; confirmation explicite admin, ligne par ligne</li>
+      <li><span class="pill pill-todo">Bloqué</span> Résultats déjà saisis &rarr; modification refusée, message clair à l'admin</li>
+    </ul>
+    Toute synchronisation est tracée dans <code>calendar_sync_log</code> (qui, quand, quoi).
+  </div>
+</div>
+
+<h2>4. Modèle de données</h2>
+<table>
+  <tr><th>Table</th><th>Rôle</th><th>Statut</th></tr>
+  <tr>
+    <td><code>calendar_brief</code></td>
+    <td>Intention du CDB pour une saison : modes, catégories, pool d'hôtes, contraintes (JSON).</td>
+    <td><span class="pill pill-todo">À créer</span></td>
+  </tr>
+  <tr>
+    <td><code>calendar_constraints</code></td>
+    <td>Règles dures et molles configurables par CDB (jamais en dur dans le code).</td>
+    <td><span class="pill pill-todo">À créer</span></td>
+  </tr>
+  <tr>
+    <td><code>ligue_final_dates</code></td>
+    <td>Dates des finales de ligue par catégorie et saison &mdash; contrainte dure pour les finales CDB.</td>
+    <td><span class="pill pill-todo">À créer</span></td>
+  </tr>
+  <tr>
+    <td><code>calendar_draft</code></td>
+    <td>Brouillon de tournois avant publication, avec un drapeau <code>locked_by_user</code> par ligne.</td>
+    <td><span class="pill pill-todo">À créer</span></td>
+  </tr>
+  <tr>
+    <td><code>tournoi_ext</code></td>
+    <td>Table existante &mdash; cible finale de la publication (étape 6).</td>
+    <td><span class="pill pill-done">Existante</span></td>
+  </tr>
+  <tr>
+    <td><code>clubs</code></td>
+    <td>Table existante &mdash; pool d'hôtes possibles (filtré par CDB via <code>organization_id</code>).</td>
+    <td><span class="pill pill-done">Existante</span></td>
+  </tr>
+</table>
+
+<h2>5. Brief de saison &mdash; champs à saisir</h2>
+<p>
+  Le brief est ce que l'admin fournit à l'application au début de la saison. Il combine
+  les données factuelles (dates, blackouts) et les choix de la saison.
+</p>
+<table>
+  <tr><th>Champ</th><th>Type</th><th>Exemple</th></tr>
+  <tr><td>Saison</td><td>Année (ex. 2026-2027)</td><td>2026-2027</td></tr>
+  <tr><td>Jour des qualificatifs</td><td>Choix : samedi / dimanche</td><td>samedi</td></tr>
+  <tr><td>Jour des finales départementales</td><td>Choix : samedi / dimanche</td><td>samedi</td></tr>
+  <tr><td>1<sup>er</sup> week-end de compétition possible</td><td>Date (samedi)</td><td>2026-09-12</td></tr>
+  <tr><td>Week-ends blackout</td><td>Liste de dates</td><td>2026-12-19, 2026-12-26, 2027-04-10...</td></tr>
+  <tr><td>Dates des finales de ligue</td><td>Table : catégorie &rarr; date</td><td>Libre R1 &rarr; 2027-05-15</td></tr>
+  <tr><td>Clubs hôtes confirmés</td><td>Liste de clubs (cases à cocher)</td><td>Bois-Colombes, Châtillon, Clamart...</td></tr>
+  <tr><td>Attribution lieu des finales départementales</td><td>Choix : manuel / vainqueur quali (TBD)</td><td>manuel</td></tr>
+  <tr><td>Modes &amp; catégories actifs cette saison</td><td>Liste pré-cochée depuis <code>categories</code>, <strong>confirmation ou ajustement requis</strong> chaque saison (un CDB peut ajouter ou retirer des modes/catégories d'une année à l'autre)</td><td>Libre R1-R3, 3 Bandes R1-R2, Cadre suspendu cette saison</td></tr>
+</table>
+
+<div class="callout">
+  <strong>Volume de tournois &mdash; calcul implicite.</strong> Pour chaque (mode × catégorie) actif,
+  l'application génère automatiquement <strong>1 tournoi de chaque type</strong> défini dans la table
+  <code>typologie_tournois</code> (T1 + T2 + T3 + Finale par défaut). Aucune saisie supplémentaire requise.
+  <br><br>
+  <em>Volume total = modes actifs × catégories actives × types de tournoi.</em>
+</div>
+
+<h2>6. Bibliothèque de règles V1</h2>
+<p>
+  Catalogue partagé de types de règles. Chaque CDB instancie celles qu'il souhaite avec ses
+  paramètres propres. Stockées dans <code>calendar_constraints</code>, jamais en dur dans le code.
+</p>
+
+<h3>Règles dures (le moteur refuse de violer)</h3>
+<table>
+  <tr><th>Type</th><th>Paramètres</th><th>Origine (liste constraints)</th></tr>
+  <tr>
+    <td><code>blackout_weekend</code></td>
+    <td><code>{ dates: [...] }</code></td>
+    <td>Liste blackouts</td>
+  </tr>
+  <tr>
+    <td><code>tournament_day_rule</code></td>
+    <td><code>{ tournament_type: "T1|T2|T3", day: "saturday" }</code><br><code>{ tournament_type: "FINALE", day: "saturday" }</code></td>
+    <td>Jour quali / jour finales</td>
+  </tr>
+  <tr>
+    <td><code>season_start_after</code></td>
+    <td><code>{ first_weekend: "2026-09-12" }</code></td>
+    <td>1<sup>er</sup> week-end de compétition</td>
+  </tr>
+  <tr>
+    <td><code>final_before_ligue_final</code></td>
+    <td>(lit <code>ligue_final_dates</code>)</td>
+    <td>Finale CDB avant finale ligue</td>
+  </tr>
+  <tr>
+    <td><code>min_weeks_between_cdb_and_ligue_final</code></td>
+    <td><code>{ min_weeks: 2 }</code></td>
+    <td>≥ N semaines entre finale CDB et finale ligue</td>
+  </tr>
+  <tr>
+    <td><code>min_weeks_between_tournaments_same_category</code></td>
+    <td><code>{ min_weeks: 3 }</code></td>
+    <td>≥ N semaines entre 2 tournois même catégorie</td>
+  </tr>
+  <tr>
+    <td><code>min_weeks_between_t3_and_final</code></td>
+    <td><code>{ min_weeks: 2 }</code></td>
+    <td>≥ N semaines entre T3 et Finale</td>
+  </tr>
+  <tr>
+    <td><code>host_no_double_booking</code></td>
+    <td>(implicite, toujours actif)</td>
+    <td>Un club ne peut pas tenir 2 tournois le même week-end</td>
+  </tr>
+</table>
+
+<h3>Règles molles (optimisées, violation possible avec avertissement)</h3>
+<table>
+  <tr><th>Type</th><th>Paramètres</th><th>Origine (liste constraints)</th></tr>
+  <tr>
+    <td><code>host_balanced_load</code></td>
+    <td><code>{ target: auto, tolerance: 1 }</code><br><em>auto = round(total_tournois / nb_clubs_hôtes)</em></td>
+    <td>Nbre équilibré par club</td>
+  </tr>
+  <tr>
+    <td><code>host_no_consecutive_weekends</code></td>
+    <td><code>{ scope: "all_hosts" }</code></td>
+    <td>Pas d'hôte deux week-ends d'affilée</td>
+  </tr>
+  <tr>
+    <td><code>category_upgrade_cascade</code></td>
+    <td><code>{ apply_to_modes: ["*"] }</code><br><em>T1 catégorie inférieure avant T1 catégorie supérieure, par mode</em></td>
+    <td>Permettre la montée d'un joueur entre T1</td>
+  </tr>
+  <tr>
+    <td><code>mode_spread_evenly</code></td>
+    <td><code>{ mode: "*" }</code></td>
+    <td>Étalement des modes sur la saison</td>
+  </tr>
+</table>
+
+<h3>Métadonnées de club (pas une règle, propriété)</h3>
+<p>
+  Ajout d'un champ <code>preferred_start_time</code> à la table <code>clubs</code> :
+  <em>matin / après-midi</em>. Affiché dans les convocations, mais <strong>non pris en compte
+  par le moteur de planification</strong> (pas une contrainte calendaire).
+</p>
+
+<h3>Format de stockage des règles</h3>
+<p>
+  Pas de prompt en texte libre (non déterministe, non auditable). Les règles sont stockées
+  sous forme de <strong>bibliothèque paramétrée</strong> : un catalogue partagé de <em>types de règles</em>
+  (15 à 20 types prévus à terme), et chaque CDB instancie celles qu'il souhaite avec ses propres paramètres.
+</p>
+
+<table>
+  <tr><th>Type de règle</th><th>Paramètres</th><th>Dureté</th></tr>
+  <tr>
+    <td><code>no_same_weekend_same_mode</code></td>
+    <td><code>{ mode: "*" }</code></td>
+    <td>hard</td>
+  </tr>
+  <tr>
+    <td><code>final_before_ligue_final</code></td>
+    <td>(lit <code>ligue_final_dates</code>)</td>
+    <td>hard</td>
+  </tr>
+  <tr>
+    <td><code>blackout_weekend</code></td>
+    <td><code>{ dates: ["2026-12-20", ...] }</code></td>
+    <td>hard</td>
+  </tr>
+  <tr>
+    <td><code>host_max_per_season</code></td>
+    <td><code>{ max: 3 }</code></td>
+    <td>soft, weight 5</td>
+  </tr>
+  <tr>
+    <td><code>host_no_consecutive_weekends</code></td>
+    <td><code>{ host_id: 12 }</code></td>
+    <td>soft, weight 3</td>
+  </tr>
+  <tr>
+    <td><code>mode_spread_evenly</code></td>
+    <td><code>{ mode: "3 BANDES" }</code></td>
+    <td>soft, weight 2</td>
+  </tr>
+</table>
+
+<h3>Capacité par CDB</h3>
+<ul class="clean">
+  <li><strong>Aucun maximum</strong> de règles par CDB. Chaque CDB possède N lignes dans <code>calendar_constraints</code> (10, 12, 25 &mdash; peu importe).</li>
+  <li>Chaque ligne référence un <em>type</em> de la bibliothèque + ses paramètres + sa dureté + son poids (pour les molles).</li>
+  <li>Le moteur itère sur les règles activées du CDB courant uniquement.</li>
+  <li>Les CDB peuvent évoluer indépendamment : si CDB 93-94 a besoin d'un type de règle non encore présent, on l'ajoute à la bibliothèque partagée et il devient disponible pour tous.</li>
+</ul>
+
+<div class="callout">
+  <strong>Rôle de l'IA ici</strong> &mdash; l'admin peut décrire une règle en langage naturel
+  (ex. « Clichy ne doit jamais accueillir deux week-ends d'affilée »). L'IA traduit en instance
+  structurée (<code>host_no_consecutive_weekends</code> + <code>{host_id: 12}</code>). La règle
+  finale stockée reste <em>structurée</em>, jamais du texte libre.
+</div>
+
+<h2>7. Rôle de l'IA &mdash; trois points de contact</h2>
+<table>
+  <tr><th>Point de contact</th><th>Rôle</th><th>Pourquoi de l'IA ici</th></tr>
+  <tr>
+    <td><strong>Porte d'entrée</strong></td>
+    <td>Extraire un brief structuré depuis du texte libre ou un Excel n-1.</td>
+    <td>Tâche d'extraction non structurée &mdash; l'IA y excelle.</td>
+  </tr>
+  <tr>
+    <td><strong>Explicateur</strong></td>
+    <td>Traduire un échec ou un conflit du moteur en français clair pour l'admin.</td>
+    <td>Génération de texte naturel à partir d'un état formel.</td>
+  </tr>
+  <tr>
+    <td><strong>Suggesteur</strong></td>
+    <td>Proposer des hôtes ou des dates lorsque plusieurs solutions équivalentes existent.</td>
+    <td>Apporte de la souplesse là où le déterminisme strict bloquerait l'admin.</td>
+  </tr>
+</table>
+
+<h2>8. Lecture côté Player App</h2>
+<p>
+  Aujourd'hui le Player App affiche le calendrier sous forme de lien vers l'Excel/PDF uploadé.
+  Avec les données structurées de <code>tournoi_ext</code>, le Player App proposera une expérience native :
+</p>
+<ul class="clean">
+  <li><strong>Vue chronologique mobile</strong> &mdash; liste groupée par mois, une carte par tournoi (date, mode, catégorie, hôte, statut inscription)</li>
+  <li><strong>Filtres</strong> &mdash; par mode, catégorie, club hôte, ou « mes catégories éligibles » selon le classement FFB du joueur</li>
+  <li><strong>Mes tournois à venir</strong> &mdash; section dédiée : tournois inscrits + tournois éligibles avec inscriptions ouvertes</li>
+  <li><strong>Lien direct vers inscription</strong> depuis la carte tournoi</li>
+  <li><strong>Export iCal / Google Calendar</strong> pour les tournois inscrits</li>
+  <li><strong>Repli PDF officiel</strong> &mdash; conservé pour impression</li>
+</ul>
+<div class="callout">
+  <strong>Pas de duplication SQL.</strong> Le Player App lit déjà <code>tournoi_ext</code> via la BDD partagée
+  &mdash; il suffit d'ajouter une vue côté Player App. Pas de twin-app drift à craindre ici.
+</div>
+
+<h3>Rôle « Viewer » &mdash; édition limitée hors admin</h3>
+<p>
+  Pour réduire la charge admin sur les modifications mineures, un rôle <strong>Viewer</strong> dédié
+  permet à des utilisateurs non-admin (présidents de club, secrétaires CDB) de modifier
+  <strong>uniquement la date et le lieu (club hôte)</strong> d'un tournoi.
+</p>
+<table>
+  <tr><th>Champ</th><th>Modifiable par Viewer ?</th></tr>
+  <tr><td>Date / week-end</td><td><span class="pill pill-done">Oui</span></td></tr>
+  <tr><td>Club hôte (lieu)</td><td><span class="pill pill-done">Oui</span></td></tr>
+  <tr><td>Mode</td><td><span class="pill pill-todo">Non &mdash; admin uniquement</span></td></tr>
+  <tr><td>Catégorie</td><td><span class="pill pill-todo">Non &mdash; admin uniquement</span></td></tr>
+  <tr><td>Type (T1/T2/T3/FD)</td><td><span class="pill pill-todo">Non &mdash; admin uniquement</span></td></tr>
+  <tr><td>Points / Réplique</td><td><span class="pill pill-todo">Non &mdash; admin uniquement</span></td></tr>
+</table>
+<p class="meta">
+  Les modifications Viewer passent par le mécanisme diff-and-sync de l'étape 6
+  (catégorie « sensible » si inscriptions existantes &rarr; confirmation admin requise).
+  Workflow de validation à affiner en V2.
+</p>
+
+<h3>Onboarding d'un nouveau CDB</h3>
+<ol class="clean">
+  <li>Admin uploade le fichier Excel du calendrier de la saison passée du CDB</li>
+  <li>L'IA en extrait un brief structuré (modes, catégories, hôtes, rythme)</li>
+  <li>Admin valide / corrige le brief</li>
+  <li>Bibliothèque de règles pré-remplie avec les types les plus courants &mdash; admin ajuste</li>
+  <li>Génération du premier brouillon &mdash; le CDB est opérationnel</li>
+</ol>
+
+<h2>9. Périmètre V1 et calendrier projet</h2>
+<div class="card">
+  <p>
+    <strong>V1 &mdash; CDBHS uniquement</strong>, validée en août/septembre 2026 sur la construction réelle
+    du calendrier 2026-27. CDB 93-94 onboardé en V2 dès la V1 stabilisée (en pratique : août 2026 également,
+    car le besoin est simultané).
+  </p>
+  <p>
+    <strong>Repli Excel</strong> &mdash; conservé comme solution de secours pour les CDB qui auraient déjà
+    un fichier construit. Le code de parsing actuel (<code>backend/routes/calendar.js</code>) reste en place.
+  </p>
+</div>
+
+<h2>10. Statut actuel &mdash; punch list</h2>
+<table>
+  <tr><th>Élément</th><th>Statut</th></tr>
+  <tr><td>Liste exhaustive des contraintes (CDBHS)</td><td><span class="pill pill-wip">En cours &mdash; à fournir</span></td></tr>
+  <tr><td>Modèle de données (4 nouvelles tables)</td><td><span class="pill pill-todo">À spécifier</span></td></tr>
+  <tr><td>Endpoints backend (brief, génération, draft, publication)</td><td><span class="pill pill-todo">À spécifier</span></td></tr>
+  <tr><td>Moteur déterministe (algorithme de planification)</td><td><span class="pill pill-todo">À concevoir</span></td></tr>
+  <tr><td>UI &mdash; assistant 6 étapes</td><td><span class="pill pill-todo">À concevoir</span></td></tr>
+  <tr><td>Intégration IA (3 points de contact)</td><td><span class="pill pill-todo">À spécifier</span></td></tr>
+  <tr><td>Publication &rarr; <code>tournoi_ext</code> + export Excel</td><td><span class="pill pill-todo">À implémenter</span></td></tr>
+  <tr><td>Repli : import Excel actuel</td><td><span class="pill pill-done">Conservé</span></td></tr>
+</table>
+
+<div class="callout callout-warn">
+  <strong>Prochaine action attendue</strong> &mdash; Liste des contraintes fournie et structurée en bibliothèque
+  de règles V1 (section 6). Étape suivante : rédaction du <strong>plan d'implémentation détaillé</strong> &mdash;
+  schéma SQL exact des 4 nouvelles tables, endpoints backend, algorithme du moteur déterministe,
+  wireframes UI de l'assistant 6 étapes, et prompts IA pour les 3 points de contact.
+</div>
+
+<footer>
+  Document généré le 25 avril 2026 &mdash; Version 0.1 &mdash; À enrichir au fil de la conception.
+</footer>
+
+</main>
+</body>
+</html>

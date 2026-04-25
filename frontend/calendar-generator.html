@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Assistant Calendrier - Billard Ranking</title>
+  <link rel="icon" type="image/png" href="images/FrenchBillard-Icon-small.png">
+  <link rel="stylesheet" href="css/styles.css?v=2">
+  <script src="js/branding.js?v=197"></script>
+  <script src="js/auth-utils.js"></script>
+  <style>
+    .stepper {
+      display: flex;
+      gap: 0;
+      margin: 20px 0 30px;
+      background: white;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .stepper-item {
+      flex: 1;
+      padding: 12px 8px;
+      text-align: center;
+      border-right: 1px solid #e0e0e0;
+      font-size: 13px;
+      color: #888;
+    }
+    .stepper-item:last-child { border-right: none; }
+    .stepper-item.active {
+      background: #fff4e6;
+      color: #c47b00;
+      font-weight: 600;
+    }
+    .stepper-item.done { background: #e6f4ec; color: #2c7a4d; }
+    .stepper-num {
+      display: inline-block;
+      width: 22px; height: 22px;
+      border-radius: 50%;
+      background: #ccc;
+      color: white;
+      line-height: 22px;
+      font-weight: 700;
+      margin-right: 5px;
+      font-size: 11px;
+    }
+    .stepper-item.active .stepper-num { background: #c47b00; }
+    .stepper-item.done .stepper-num { background: #2c7a4d; }
+
+    .ai-box {
+      background: #efe6f7;
+      border-left: 4px solid #6b3aa3;
+      border-radius: 0 8px 8px 0;
+      padding: 15px 18px;
+      margin: 15px 0;
+    }
+    .ai-tag {
+      display: inline-block;
+      background: #6b3aa3;
+      color: white;
+      padding: 3px 9px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+    .ai-box p { margin: 5px 0; font-size: 14px; }
+    .btn-ai {
+      background: #6b3aa3;
+      color: white;
+      padding: 8px 16px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .btn-ai:hover { background: #5a2f8e; }
+    .btn-ai:disabled { background: #b0a0c4; cursor: not-allowed; }
+
+    .field-group {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+      margin: 14px 0;
+    }
+    .field-group.three { grid-template-columns: 1fr 1fr 1fr; }
+    .field {
+      margin-bottom: 14px;
+    }
+    .field label {
+      display: block;
+      font-weight: 600;
+      font-size: 14px;
+      margin-bottom: 4px;
+    }
+    .field .hint {
+      font-size: 12px;
+      color: #888;
+      margin-top: 3px;
+    }
+    .field input[type=text],
+    .field input[type=date],
+    .field select {
+      width: 100%;
+      padding: 9px 11px;
+      border: 1px solid #c8c5be;
+      border-radius: 5px;
+      font-size: 14px;
+      box-sizing: border-box;
+    }
+
+    .pill-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 6px;
+    }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      background: #fff0e0;
+      color: #974806;
+      border-radius: 14px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .pill-remove {
+      cursor: pointer;
+      font-weight: 700;
+      color: #b81c1c;
+      margin-left: 2px;
+    }
+    .pill.muted { background: #eee; color: #555; }
+
+    .checkbox-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 6px 14px;
+      margin-top: 6px;
+      max-height: 240px;
+      overflow-y: auto;
+      border: 1px solid #e8e6e0;
+      padding: 10px 14px;
+      border-radius: 6px;
+      background: #fafaf8;
+    }
+    .checkbox-grid label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: 400;
+      font-size: 13.5px;
+      cursor: pointer;
+    }
+
+    .ligue-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 8px;
+      font-size: 13.5px;
+    }
+    .ligue-table th, .ligue-table td {
+      border: 1px solid #e0e0e0;
+      padding: 8px 10px;
+      text-align: left;
+    }
+    .ligue-table th {
+      background: #f7f5ee;
+      color: #555;
+      font-weight: 600;
+    }
+    .ligue-table input[type=date] {
+      width: 100%;
+      padding: 5px 8px;
+      border: 1px solid #c8c5be;
+      border-radius: 4px;
+    }
+
+    .actions-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 24px;
+      padding-top: 18px;
+      border-top: 1px solid #e8e6e0;
+    }
+    .save-status {
+      font-size: 13px;
+      color: #888;
+    }
+    .save-status.success { color: #2c7a4d; }
+    .save-status.error { color: #b81c1c; }
+
+    h3.section-title {
+      margin: 22px 0 8px;
+      padding-bottom: 6px;
+      border-bottom: 2px solid #fff0e0;
+      color: #974806;
+      font-size: 17px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="navbar">
+      <h2><img id="app-header-icon" src="images/FrenchBillard-Icon-small.png" alt="" style="height: 48px; width: 48px; vertical-align: middle; margin-right: 8px;"><span id="app-org-name" data-page-title="Assistant Calendrier">CDB</span></h2>
+      <div class="nav-links">
+        <a href="dashboard.html" class="nav-tooltip" data-tooltip="Tableau de bord">🏠 Accueil</a>
+        <div class="nav-dropdown not-club">
+          <a href="generate-poules.html" class="nav-dropdown-btn active">🏆 Compétitions</a>
+          <div class="nav-dropdown-content">
+            <a href="generate-poules.html"><span class="nav-icon">🎯</span>Générer les poules / Convocations</a>
+            <a href="inscriptions-viewer.html"><span class="nav-icon">📝</span>Inscriptions</a>
+            <a href="tournois-list.html"><span class="nav-icon">📅</span>Tournois à venir</a>
+            <a href="calendar.html"><span class="nav-icon">🗓️</span>Calendrier</a>
+            <a href="calendar-generator.html"><span class="nav-icon">✨</span>Assistant Calendrier</a>
+          </div>
+        </div>
+        <div class="nav-dropdown">
+          <a href="rankings.html" class="nav-dropdown-btn">📊 Données</a>
+          <div class="nav-dropdown-content">
+            <a href="rankings.html"><span class="nav-icon">🏅</span>Classements</a>
+            <a href="statistiques.html"><span class="nav-icon">📈</span>Statistiques</a>
+          </div>
+        </div>
+        <a href="emailing.html" class="not-club nav-tooltip" data-tooltip="Annonces, relances, résultats, convocations">📧 Com joueurs</a>
+        <div class="nav-dropdown admin-only">
+          <a href="settings.html" class="nav-dropdown-btn">⚙️ Paramètres</a>
+          <div class="nav-dropdown-content">
+            <a href="settings-admin.html#organisation"><span class="nav-icon">🏢</span>Organisation</a>
+            <a href="settings-admin.html#utilisateurs"><span class="nav-icon">👥</span>Utilisateurs</a>
+            <a href="settings-admin.html#competitions"><span class="nav-icon">🏆</span>Compétitions</a>
+            <a href="settings-admin.html#espace-joueur"><span class="nav-icon">📱</span>Espace Joueur</a>
+            <a href="settings-admin.html#maintenance"><span class="nav-icon">🔧</span>Maintenance</a>
+            <a href="settings-admin.html#outils"><span class="nav-icon">🛠️</span>Outils</a>
+          </div>
+        </div>
+        <a href="#" id="logoutBtn" class="nav-logout">Déconnexion</a>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top: 0;">✨ Assistant de création du calendrier saisonnier</h3>
+      <p style="color: #666; font-size: 14px;">
+        Construisez le calendrier complet de votre CDB en 6 étapes guidées.
+        À la fin, tous les tournois de la saison seront créés automatiquement.
+      </p>
+
+      <div class="stepper">
+        <div class="stepper-item active"><span class="stepper-num">1</span> Brief</div>
+        <div class="stepper-item"><span class="stepper-num">2</span> Règles</div>
+        <div class="stepper-item"><span class="stepper-num">3</span> Génération</div>
+        <div class="stepper-item"><span class="stepper-num">4</span> Revue</div>
+        <div class="stepper-item"><span class="stepper-num">5</span> Régénération</div>
+        <div class="stepper-item"><span class="stepper-num">6</span> Publication</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top: 0;">Étape 1 — Brief de saison</h3>
+      <p style="color: #666; font-size: 14px;">
+        Saisissez les informations clés de la saison à planifier. Vos choix peuvent être modifiés à tout moment.
+      </p>
+
+      <div class="ai-box">
+        <span class="ai-tag">Assistance IA</span>
+        <p><strong>Pré-remplir depuis le calendrier de la saison passée ?</strong></p>
+        <p style="color: #555;">Si un calendrier Excel d'une saison précédente est déjà disponible sur le serveur, l'IA peut en extraire automatiquement modes, catégories, hôtes et rythme — vous validerez chaque champ.</p>
+        <button class="btn-ai" id="aiExtractBtn" disabled title="Disponible en Phase 4">🤖 Extraire avec l'IA (bientôt disponible)</button>
+      </div>
+
+      <h3 class="section-title">Saison &amp; rythme</h3>
+      <div class="field-group three">
+        <div class="field">
+          <label for="seasonInput">Saison à planifier</label>
+          <select id="seasonInput"></select>
+          <div class="hint">Format : 2026-2027</div>
+        </div>
+        <div class="field">
+          <label for="qualifDayInput">Jour des qualificatifs</label>
+          <select id="qualifDayInput">
+            <option value="saturday">Samedi</option>
+            <option value="sunday">Dimanche</option>
+          </select>
+          <div class="hint">T1, T2, T3</div>
+        </div>
+        <div class="field">
+          <label for="finalDayInput">Jour des finales départementales</label>
+          <select id="finalDayInput">
+            <option value="saturday">Samedi</option>
+            <option value="sunday">Dimanche</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="field-group">
+        <div class="field">
+          <label for="firstWeekendInput">Premier week-end de compétition</label>
+          <input type="date" id="firstWeekendInput">
+          <div class="hint">Date du samedi de la première semaine active</div>
+        </div>
+        <div class="field">
+          <label for="finalAttributionInput">Attribution du lieu des finales départementales</label>
+          <select id="finalAttributionInput">
+            <option value="manual">Manuelle (proposée par le système, validée en réunion)</option>
+            <option value="winner_tbd">Vainqueur des qualifications (TBD jusqu'au T3)</option>
+          </select>
+        </div>
+      </div>
+
+      <h3 class="section-title">Modes &amp; catégories actifs</h3>
+      <p class="hint" style="margin-bottom: 4px;">Pré-cochés depuis vos paramètres — décochez ce qui ne sera pas joué cette saison.</p>
+      <div class="checkbox-grid" id="categoriesGrid">
+        <span style="color: #888;">Chargement...</span>
+      </div>
+
+      <h3 class="section-title">Clubs hôtes confirmés pour cette saison</h3>
+      <p class="hint" style="margin-bottom: 4px;">Cochez les clubs qui accepteront d'organiser des tournois cette saison.</p>
+      <div class="checkbox-grid" id="clubsGrid">
+        <span style="color: #888;">Chargement...</span>
+      </div>
+
+      <h3 class="section-title">Week-ends blackout (sans compétition possible)</h3>
+      <p class="hint" style="margin-bottom: 6px;">Vacances scolaires, finales fédérales nationales, congés... Ajoutez les dates de samedis à exclure.</p>
+      <div style="display: flex; gap: 8px; align-items: center; margin-top: 6px;">
+        <input type="date" id="blackoutInput" style="padding: 8px; border: 1px solid #c8c5be; border-radius: 5px;">
+        <button type="button" class="btn" id="blackoutAddBtn" style="padding: 8px 16px;">+ Ajouter</button>
+      </div>
+      <div class="pill-list" id="blackoutList"></div>
+
+      <h3 class="section-title">Dates des finales de ligue (par catégorie)</h3>
+      <p class="hint" style="margin-bottom: 6px;">Les finales départementales de chaque catégorie devront avoir lieu avant la finale de ligue correspondante. Laissez vide si non applicable.</p>
+      <div id="ligueFinalsContainer">
+        <p style="color: #888;">Cochez d'abord les catégories actives ci-dessus pour voir cette table.</p>
+      </div>
+
+      <div class="actions-bar">
+        <span class="save-status" id="saveStatus"></span>
+        <div>
+          <button type="button" class="btn" id="saveBriefBtn" style="background: #2c7a4d; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: 600;">💾 Sauvegarder le brief</button>
+          <button type="button" class="btn" id="nextStepBtn" disabled style="background: #c47b00; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: 600; margin-left: 8px;" title="Sauvegardez d'abord">Étape suivante : Règles →</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    if (!requireAuth()) { throw new Error('Not authenticated'); }
+    const API_URL = '/api';
+    const token = localStorage.getItem('token');
+    const authHeaders = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+
+    let referenceData = { categories: [], clubs: [] };
+    let currentBrief = null;
+    let blackoutDates = [];
+    let ligueFinalDates = {};
+
+    // ----- Season options -----
+    function populateSeasons() {
+      const sel = document.getElementById('seasonInput');
+      const now = new Date();
+      const cutoffYear = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
+      sel.innerHTML = '';
+      for (let i = -1; i <= 2; i++) {
+        const y = cutoffYear + i;
+        const season = `${y}-${y + 1}`;
+        const opt = document.createElement('option');
+        opt.value = season;
+        opt.textContent = season + (i === 1 ? ' (à venir)' : '');
+        if (i === 1) opt.selected = true;
+        sel.appendChild(opt);
+      }
+    }
+
+    // ----- Load reference data -----
+    async function loadReferenceData() {
+      try {
+        const res = await fetch(`${API_URL}/calendar-generator/reference-data`, { headers: authHeaders });
+        if (!res.ok) throw new Error('Failed to load reference data');
+        referenceData = await res.json();
+        renderCategories();
+        renderClubs();
+      } catch (err) {
+        console.error(err);
+        document.getElementById('categoriesGrid').innerHTML = `<span style="color: #b81c1c;">Erreur de chargement : ${err.message}</span>`;
+      }
+    }
+
+    function renderCategories() {
+      const grid = document.getElementById('categoriesGrid');
+      if (!referenceData.categories.length) {
+        grid.innerHTML = '<span style="color: #888;">Aucune catégorie configurée. Configurez-les dans Paramètres → Compétitions.</span>';
+        return;
+      }
+      grid.innerHTML = referenceData.categories.map(c => `
+        <label>
+          <input type="checkbox" class="cat-cb" value="${c.id}" data-mode="${c.mode || ''}" data-name="${c.name || ''}" checked>
+          <span>${c.mode || ''} ${c.level || c.name || ''}</span>
+        </label>
+      `).join('');
+      grid.querySelectorAll('.cat-cb').forEach(cb => cb.addEventListener('change', renderLigueFinalsTable));
+      renderLigueFinalsTable();
+    }
+
+    function renderClubs() {
+      const grid = document.getElementById('clubsGrid');
+      if (!referenceData.clubs.length) {
+        grid.innerHTML = '<span style="color: #888;">Aucun club enregistré.</span>';
+        return;
+      }
+      grid.innerHTML = referenceData.clubs.map(c => `
+        <label>
+          <input type="checkbox" class="club-cb" value="${c.id}" checked>
+          <span>${c.display_name}${c.city ? ' (' + c.city + ')' : ''}</span>
+        </label>
+      `).join('');
+    }
+
+    // ----- Blackout management -----
+    document.getElementById('blackoutAddBtn').addEventListener('click', () => {
+      const inp = document.getElementById('blackoutInput');
+      if (inp.value && !blackoutDates.includes(inp.value)) {
+        blackoutDates.push(inp.value);
+        blackoutDates.sort();
+        renderBlackouts();
+        inp.value = '';
+      }
+    });
+
+    function renderBlackouts() {
+      const list = document.getElementById('blackoutList');
+      if (!blackoutDates.length) {
+        list.innerHTML = '<span class="pill muted">Aucun blackout</span>';
+        return;
+      }
+      list.innerHTML = blackoutDates.map((d, i) => `
+        <span class="pill">${d}<span class="pill-remove" data-idx="${i}">✕</span></span>
+      `).join('');
+      list.querySelectorAll('.pill-remove').forEach(el => {
+        el.addEventListener('click', () => {
+          blackoutDates.splice(parseInt(el.dataset.idx, 10), 1);
+          renderBlackouts();
+        });
+      });
+    }
+
+    // ----- Ligue final dates -----
+    function renderLigueFinalsTable() {
+      const container = document.getElementById('ligueFinalsContainer');
+      const checkedCats = Array.from(document.querySelectorAll('.cat-cb:checked')).map(cb => ({
+        id: parseInt(cb.value, 10),
+        label: cb.dataset.mode + ' ' + (cb.dataset.name || '')
+      }));
+      if (!checkedCats.length) {
+        container.innerHTML = '<p style="color: #888;">Cochez d\'abord les catégories actives ci-dessus pour voir cette table.</p>';
+        return;
+      }
+      container.innerHTML = `
+        <table class="ligue-table">
+          <thead>
+            <tr><th>Catégorie</th><th style="width: 200px;">Date finale ligue</th></tr>
+          </thead>
+          <tbody>
+            ${checkedCats.map(c => `
+              <tr>
+                <td>${c.label}</td>
+                <td><input type="date" data-cat-id="${c.id}" class="ligue-date-input" value="${ligueFinalDates[c.id] || ''}"></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+      container.querySelectorAll('.ligue-date-input').forEach(inp => {
+        inp.addEventListener('change', () => {
+          const catId = parseInt(inp.dataset.catId, 10);
+          if (inp.value) ligueFinalDates[catId] = inp.value;
+          else delete ligueFinalDates[catId];
+        });
+      });
+    }
+
+    // ----- Load existing brief for selected season -----
+    async function loadBriefForSeason() {
+      const season = document.getElementById('seasonInput').value;
+      try {
+        const [briefRes, ligueRes] = await Promise.all([
+          fetch(`${API_URL}/calendar-generator/brief?season=${encodeURIComponent(season)}`, { headers: authHeaders }),
+          fetch(`${API_URL}/calendar-generator/ligue-finals?season=${encodeURIComponent(season)}`, { headers: authHeaders })
+        ]);
+        currentBrief = briefRes.ok ? await briefRes.json() : null;
+        const ligueRows = ligueRes.ok ? await ligueRes.json() : [];
+
+        if (currentBrief) {
+          document.getElementById('qualifDayInput').value = currentBrief.qualif_day;
+          document.getElementById('finalDayInput').value = currentBrief.final_day;
+          document.getElementById('firstWeekendInput').value = currentBrief.first_weekend ? currentBrief.first_weekend.split('T')[0] : '';
+          document.getElementById('finalAttributionInput').value = currentBrief.final_attribution || 'manual';
+          blackoutDates = Array.isArray(currentBrief.blackout_dates) ? [...currentBrief.blackout_dates] : [];
+
+          const activeCats = currentBrief.active_categories || [];
+          if (activeCats.length) {
+            document.querySelectorAll('.cat-cb').forEach(cb => cb.checked = activeCats.includes(parseInt(cb.value, 10)));
+          }
+          const activeHosts = currentBrief.active_hosts || [];
+          if (activeHosts.length) {
+            document.querySelectorAll('.club-cb').forEach(cb => cb.checked = activeHosts.includes(parseInt(cb.value, 10)));
+          }
+          document.getElementById('nextStepBtn').disabled = false;
+        } else {
+          blackoutDates = [];
+          document.getElementById('nextStepBtn').disabled = true;
+        }
+
+        ligueFinalDates = {};
+        ligueRows.forEach(r => { ligueFinalDates[r.category_id] = (r.final_date || '').split('T')[0]; });
+
+        renderBlackouts();
+        renderLigueFinalsTable();
+
+        const status = document.getElementById('saveStatus');
+        status.textContent = currentBrief ? `Brief existant chargé (${currentBrief.status || 'draft'})` : 'Aucun brief pour cette saison — saisissez et sauvegardez';
+        status.className = 'save-status' + (currentBrief ? ' success' : '');
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    // ----- Save brief -----
+    document.getElementById('saveBriefBtn').addEventListener('click', async () => {
+      const season = document.getElementById('seasonInput').value;
+      const payload = {
+        season,
+        qualif_day: document.getElementById('qualifDayInput').value,
+        final_day: document.getElementById('finalDayInput').value,
+        first_weekend: document.getElementById('firstWeekendInput').value,
+        final_attribution: document.getElementById('finalAttributionInput').value,
+        blackout_dates: blackoutDates,
+        active_categories: Array.from(document.querySelectorAll('.cat-cb:checked')).map(cb => parseInt(cb.value, 10)),
+        active_hosts: Array.from(document.querySelectorAll('.club-cb:checked')).map(cb => parseInt(cb.value, 10))
+      };
+      if (!payload.first_weekend) {
+        setStatus('Veuillez choisir le premier week-end de compétition', 'error');
+        return;
+      }
+      setStatus('Sauvegarde...', '');
+
+      try {
+        let briefId;
+        if (currentBrief) {
+          const res = await fetch(`${API_URL}/calendar-generator/brief/${currentBrief.id}`, {
+            method: 'PUT', headers: authHeaders, body: JSON.stringify(payload)
+          });
+          if (!res.ok) throw new Error((await res.json()).error || 'Échec mise à jour');
+          briefId = currentBrief.id;
+        } else {
+          const res = await fetch(`${API_URL}/calendar-generator/brief`, {
+            method: 'POST', headers: authHeaders, body: JSON.stringify(payload)
+          });
+          if (!res.ok) throw new Error((await res.json()).error || 'Échec création');
+          const json = await res.json();
+          briefId = json.id;
+        }
+
+        // Save ligue final dates
+        const ligueEntries = Object.entries(ligueFinalDates)
+          .filter(([_, d]) => d)
+          .map(([cat, d]) => ({ category_id: parseInt(cat, 10), final_date: d }));
+        await fetch(`${API_URL}/calendar-generator/ligue-finals`, {
+          method: 'POST', headers: authHeaders,
+          body: JSON.stringify({ season, entries: ligueEntries })
+        });
+
+        setStatus('✓ Brief sauvegardé', 'success');
+        document.getElementById('nextStepBtn').disabled = false;
+        await loadBriefForSeason();
+      } catch (err) {
+        console.error(err);
+        setStatus('Erreur : ' + err.message, 'error');
+      }
+    });
+
+    function setStatus(msg, cls) {
+      const el = document.getElementById('saveStatus');
+      el.textContent = msg;
+      el.className = 'save-status' + (cls ? ' ' + cls : '');
+    }
+
+    document.getElementById('seasonInput').addEventListener('change', loadBriefForSeason);
+
+    document.getElementById('nextStepBtn').addEventListener('click', () => {
+      alert('Étape 2 (Règles) — disponible en Phase 4 de l\'implémentation.');
+    });
+
+    document.getElementById('logoutBtn').addEventListener('click', (e) => {
+      e.preventDefault();
+      if (typeof logout === 'function') logout();
+      else { localStorage.removeItem('token'); window.location.href = 'login.html'; }
+    });
+
+    // ----- Init -----
+    (async function init() {
+      populateSeasons();
+      await loadReferenceData();
+      await loadBriefForSeason();
+    })();
+  </script>
+</body>
+</html>

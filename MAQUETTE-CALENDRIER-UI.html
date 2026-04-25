@@ -1,0 +1,966 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Maquette UI — Assistant Calendrier Saisonnier</title>
+<style>
+  :root {
+    --bg: #f7f7f5;
+    --card: #ffffff;
+    --ink: #1a1a1a;
+    --muted: #5a5a5a;
+    --accent: #974806;
+    --accent-soft: #fff0e0;
+    --accent-dark: #6b3404;
+    --green: #00824a;
+    --green-soft: #e6f4ec;
+    --red: #b81c1c;
+    --red-soft: #fbe7e7;
+    --blue: #1e5fa8;
+    --blue-soft: #e6f0fa;
+    --purple: #6b3aa3;
+    --purple-soft: #efe6f7;
+    --border: #e4e2dd;
+    --border-strong: #c8c5be;
+    --shadow: 0 1px 3px rgba(0,0,0,0.06);
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    margin: 0;
+    padding: 30px 20px 60px;
+    line-height: 1.5;
+  }
+  main { max-width: 1100px; margin: 0 auto; }
+  header {
+    border-bottom: 3px solid var(--accent);
+    padding-bottom: 16px;
+    margin-bottom: 24px;
+  }
+  header h1 { color: var(--accent); margin: 0 0 4px; font-size: 26px; }
+  header p { color: var(--muted); margin: 0; font-size: 13.5px; }
+
+  /* Stepper */
+  .stepper {
+    display: flex;
+    gap: 0;
+    margin: 20px 0 30px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+  }
+  .stepper-item {
+    flex: 1;
+    padding: 14px 12px;
+    text-align: center;
+    border-right: 1px solid var(--border);
+    position: relative;
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .stepper-item:last-child { border-right: none; }
+  .stepper-item.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .stepper-item.done { background: var(--green-soft); color: var(--green); }
+  .stepper-num {
+    display: inline-block;
+    width: 24px; height: 24px;
+    border-radius: 50%;
+    background: var(--border);
+    color: white;
+    line-height: 24px;
+    font-weight: 700;
+    margin-right: 6px;
+    font-size: 12px;
+  }
+  .stepper-item.active .stepper-num { background: var(--accent); }
+  .stepper-item.done .stepper-num { background: var(--green); }
+
+  /* Step section */
+  .step-screen {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 32px;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+  .step-header {
+    padding: 16px 22px;
+    background: var(--accent);
+    color: white;
+  }
+  .step-header h2 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+  }
+  .step-header .step-sub {
+    font-size: 13px;
+    opacity: 0.9;
+    margin-top: 2px;
+  }
+  .step-body { padding: 22px; }
+
+  /* Form elements */
+  .field {
+    margin-bottom: 16px;
+  }
+  .field label {
+    display: block;
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--ink);
+    margin-bottom: 4px;
+  }
+  .field .hint {
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+  .field input[type=text],
+  .field input[type=date],
+  .field select {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--border-strong);
+    border-radius: 6px;
+    font-size: 14px;
+    background: white;
+  }
+  .row { display: flex; gap: 16px; }
+  .row > .field { flex: 1; }
+
+  /* Buttons */
+  .btn {
+    padding: 9px 18px;
+    border-radius: 6px;
+    border: none;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+  }
+  .btn-primary { background: var(--accent); color: white; }
+  .btn-secondary { background: white; color: var(--ink); border: 1px solid var(--border-strong); }
+  .btn-success { background: var(--green); color: white; }
+  .btn-ai {
+    background: linear-gradient(135deg, var(--purple) 0%, #8a4ec4 100%);
+    color: white;
+  }
+  .actions {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 24px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+  }
+
+  /* AI box */
+  .ai-box {
+    background: var(--purple-soft);
+    border-left: 4px solid var(--purple);
+    border-radius: 0 8px 8px 0;
+    padding: 14px 18px;
+    margin: 12px 0;
+  }
+  .ai-box .ai-tag {
+    display: inline-block;
+    background: var(--purple);
+    color: white;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .ai-box p { margin: 4px 0; font-size: 13.5px; }
+  .ai-box textarea {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid var(--border-strong);
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 13.5px;
+    resize: vertical;
+    min-height: 60px;
+  }
+
+  /* Tables */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13.5px;
+    margin: 8px 0;
+  }
+  th, td {
+    border: 1px solid var(--border);
+    padding: 8px 10px;
+    text-align: left;
+    vertical-align: middle;
+  }
+  th {
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-weight: 600;
+    font-size: 12.5px;
+  }
+  td .pill {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .pill-hard { background: var(--red-soft); color: var(--red); }
+  .pill-soft { background: var(--blue-soft); color: var(--blue); }
+  .pill-locked { background: var(--accent-soft); color: var(--accent); }
+  .pill-ok { background: var(--green-soft); color: var(--green); }
+  .pill-warn { background: #fff5d6; color: #8a6d00; }
+  .pill-conflict { background: var(--red-soft); color: var(--red); }
+
+  /* Calendar grid (Step 4 monthly view) */
+  .cal-month {
+    margin: 14px 0;
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .cal-month-header {
+    background: #f0ede5;
+    padding: 8px 14px;
+    font-weight: 600;
+    font-size: 13.5px;
+    color: var(--accent);
+  }
+  .cal-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 1px;
+    background: var(--border);
+  }
+  .cal-cell {
+    background: white;
+    padding: 6px 8px;
+    min-height: 56px;
+    font-size: 11.5px;
+  }
+  .cal-cell.dow { background: #f7f5ee; font-weight: 600; text-align: center; padding: 4px; min-height: auto; color: var(--muted); }
+  .cal-cell.empty { background: #fafaf8; }
+  .cal-cell.blackout { background: #fbe7e7; color: var(--red); }
+  .cal-cell .date-num { font-weight: 700; color: var(--ink); }
+  .cal-cell .tournament {
+    margin-top: 3px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    padding: 2px 5px;
+    border-radius: 3px;
+    font-size: 10.5px;
+    font-weight: 600;
+  }
+  .cal-cell .tournament.libre { background: #e6f0fa; color: var(--blue); }
+  .cal-cell .tournament.bandes { background: #efe6f7; color: var(--purple); }
+  .cal-cell .tournament.cadre { background: #fff0e0; color: var(--accent); }
+
+  /* Step 6 publish summary */
+  .summary-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+    margin: 14px 0;
+  }
+  .summary-card {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+    text-align: center;
+  }
+  .summary-card .num {
+    font-size: 30px;
+    font-weight: 700;
+    color: var(--accent);
+    line-height: 1.1;
+  }
+  .summary-card .label {
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+  .summary-card.safe .num { color: var(--green); }
+  .summary-card.sensitive .num { color: #c47b00; }
+  .summary-card.blocked .num { color: var(--red); }
+
+  /* Visual notes */
+  .note {
+    background: var(--blue-soft);
+    border-left: 4px solid var(--blue);
+    padding: 10px 14px;
+    border-radius: 0 6px 6px 0;
+    font-size: 13px;
+    margin: 10px 0;
+    color: var(--ink);
+  }
+
+  /* Section divider */
+  .section-divider {
+    text-align: center;
+    color: var(--muted);
+    font-size: 12px;
+    margin: 40px 0 20px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+  }
+  .section-divider::before, .section-divider::after {
+    content: '';
+    display: inline-block;
+    width: 80px;
+    border-top: 1px solid var(--border-strong);
+    vertical-align: middle;
+    margin: 0 12px;
+  }
+
+  /* Player App preview */
+  .phone-frame {
+    width: 320px;
+    margin: 20px auto;
+    background: #1a1a1a;
+    padding: 16px 8px;
+    border-radius: 28px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+  }
+  .phone-screen {
+    background: white;
+    border-radius: 18px;
+    overflow: hidden;
+  }
+  .phone-header {
+    background: var(--accent);
+    color: white;
+    padding: 12px 14px;
+    font-weight: 600;
+    font-size: 14px;
+  }
+  .phone-tabs {
+    display: flex;
+    background: var(--accent-soft);
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+  }
+  .phone-tab {
+    flex: 1;
+    padding: 8px;
+    text-align: center;
+    color: var(--accent);
+  }
+  .phone-tab.active {
+    background: white;
+    font-weight: 700;
+    border-bottom: 2px solid var(--accent);
+  }
+  .phone-month {
+    padding: 10px 12px 4px;
+    font-weight: 600;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .phone-card {
+    margin: 6px 12px;
+    padding: 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 12px;
+  }
+  .phone-card .card-date {
+    font-weight: 700;
+    color: var(--accent);
+    font-size: 13px;
+  }
+  .phone-card .card-title {
+    font-weight: 600;
+    margin: 2px 0;
+  }
+  .phone-card .card-meta {
+    color: var(--muted);
+    font-size: 11px;
+  }
+  .phone-card .card-status {
+    display: inline-block;
+    margin-top: 6px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: var(--green-soft);
+    color: var(--green);
+    font-size: 10.5px;
+    font-weight: 600;
+  }
+</style>
+</head>
+<body>
+<main>
+
+<header>
+  <h1>Maquette UI &mdash; Assistant Calendrier Saisonnier</h1>
+  <p>CDB Tournois &middot; 6 étapes de la création du calendrier &middot; Version 0.1 &middot; Avril 2026</p>
+</header>
+
+<div class="note">
+  <strong>Comment lire ce document :</strong> chaque écran ci-dessous représente une étape de l'assistant.
+  Les zones violettes signalent les points où l'IA intervient (extraction, traduction, suggestion, explication).
+  Les boutons sont indicatifs. Cette maquette sert de référence visuelle pour l'implémentation, pas de prototype interactif.
+</div>
+
+<!-- ÉTAPE 1 -->
+<div class="stepper">
+  <div class="stepper-item active"><span class="stepper-num">1</span> Brief</div>
+  <div class="stepper-item"><span class="stepper-num">2</span> Contraintes</div>
+  <div class="stepper-item"><span class="stepper-num">3</span> Génération</div>
+  <div class="stepper-item"><span class="stepper-num">4</span> Revue</div>
+  <div class="stepper-item"><span class="stepper-num">5</span> Régénération</div>
+  <div class="stepper-item"><span class="stepper-num">6</span> Publication</div>
+</div>
+
+<div class="step-screen">
+  <div class="step-header">
+    <h2>Étape 1 &mdash; Brief de saison</h2>
+    <div class="step-sub">Saisir ou pré-remplir depuis le calendrier de la saison précédente</div>
+  </div>
+  <div class="step-body">
+
+    <div class="ai-box">
+      <span class="ai-tag">Assistance IA</span>
+      <p><strong>Pré-remplir depuis le calendrier de la saison précédente ?</strong></p>
+      <p>L'application a détecté <code>Calendrier CDBHS 2025-2026.xlsx</code> sur le serveur.
+        L'IA peut en extraire automatiquement modes, catégories, hôtes et rythme. Vous validerez chaque champ.</p>
+      <button class="btn btn-ai">Extraire avec l'IA</button>
+      <button class="btn btn-secondary">Saisie manuelle</button>
+    </div>
+
+    <div class="row">
+      <div class="field">
+        <label>Saison</label>
+        <select><option>2026-2027</option></select>
+      </div>
+      <div class="field">
+        <label>Premier week-end de compétition</label>
+        <input type="date" value="2026-09-12">
+        <div class="hint">Samedi de la première semaine active</div>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="field">
+        <label>Jour des qualificatifs</label>
+        <select><option>Samedi</option><option>Dimanche</option></select>
+      </div>
+      <div class="field">
+        <label>Jour des finales départementales</label>
+        <select><option>Samedi</option><option>Dimanche</option></select>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Modes &amp; catégories actifs cette saison</label>
+      <div class="hint">Pré-cochés depuis vos paramètres &mdash; ajustez si nécessaire pour cette saison.</div>
+      <table style="margin-top: 8px;">
+        <tr><th>Mode</th><th>R1</th><th>R2</th><th>R3</th><th>NC</th></tr>
+        <tr><td>Libre</td><td>☑</td><td>☑</td><td>☑</td><td>☑</td></tr>
+        <tr><td>Bande</td><td>☑</td><td>☑</td><td>☑</td><td>☐</td></tr>
+        <tr><td>3 Bandes</td><td>☑</td><td>☑</td><td>☐</td><td>☐</td></tr>
+        <tr><td>Cadre 47/2</td><td>☐ <em style="color: var(--muted)">(suspendu cette saison)</em></td><td>☐</td><td>☐</td><td>☐</td></tr>
+      </table>
+    </div>
+
+    <div class="field">
+      <label>Clubs hôtes confirmés pour cette saison</label>
+      <div class="hint">5 clubs sélectionnés sur 5</div>
+      <div style="margin-top: 6px;">
+        <span class="pill pill-ok">☑ Bois-Colombes</span>
+        <span class="pill pill-ok">☑ Châtillon</span>
+        <span class="pill pill-ok">☑ Clamart</span>
+        <span class="pill pill-ok">☑ Clichy</span>
+        <span class="pill pill-ok">☑ Courbevoie</span>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Week-ends blackout (FFB nationales, congés, etc.)</label>
+      <div style="margin-top: 6px;">
+        <span class="pill pill-hard">2026-12-19</span>
+        <span class="pill pill-hard">2026-12-26</span>
+        <span class="pill pill-hard">2027-02-13</span>
+        <span class="pill pill-hard">2027-04-10</span>
+        <button class="btn btn-secondary" style="font-size: 12px; padding: 4px 10px;">+ Ajouter</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Dates des finales de ligue (par catégorie)</label>
+      <table>
+        <tr><th>Catégorie</th><th>Date finale ligue</th></tr>
+        <tr><td>Libre R1</td><td><input type="date" value="2027-05-15" style="width: auto;"></td></tr>
+        <tr><td>Libre R2</td><td><input type="date" value="2027-05-22" style="width: auto;"></td></tr>
+        <tr><td>3 Bandes R1</td><td><input type="date" value="2027-06-05" style="width: auto;"></td></tr>
+      </table>
+    </div>
+
+    <div class="field">
+      <label>Attribution du lieu des finales départementales</label>
+      <select>
+        <option>Manuel &mdash; le système propose, l'admin valide en réunion de début de saison</option>
+        <option>Vainqueur des qualifications (TBD jusqu'à l'issue du T3)</option>
+      </select>
+    </div>
+
+    <div class="actions">
+      <button class="btn btn-secondary">Annuler</button>
+      <button class="btn btn-primary">Étape suivante &rarr; Contraintes</button>
+    </div>
+  </div>
+</div>
+
+<!-- ÉTAPE 2 -->
+<div class="stepper">
+  <div class="stepper-item done"><span class="stepper-num">✓</span> Brief</div>
+  <div class="stepper-item active"><span class="stepper-num">2</span> Contraintes</div>
+  <div class="stepper-item"><span class="stepper-num">3</span> Génération</div>
+  <div class="stepper-item"><span class="stepper-num">4</span> Revue</div>
+  <div class="stepper-item"><span class="stepper-num">5</span> Régénération</div>
+  <div class="stepper-item"><span class="stepper-num">6</span> Publication</div>
+</div>
+
+<div class="step-screen">
+  <div class="step-header">
+    <h2>Étape 2 &mdash; Contraintes &amp; règles</h2>
+    <div class="step-sub">Les règles configurées pour votre CDB &mdash; ajustez ou ajoutez selon vos besoins</div>
+  </div>
+  <div class="step-body">
+
+    <div class="ai-box">
+      <span class="ai-tag">Assistance IA</span>
+      <p><strong>Décrivez une nouvelle règle en langage naturel</strong> &mdash; l'IA la traduira en règle structurée.</p>
+      <textarea placeholder="Exemple : « Clichy ne doit jamais accueillir deux week-ends d'affilée »"></textarea>
+      <button class="btn btn-ai" style="margin-top: 6px;">Traduire en règle</button>
+    </div>
+
+    <h3 style="font-size: 15px; margin-top: 18px;">Règles dures (le moteur refuse de les violer)</h3>
+    <table>
+      <tr><th>Règle</th><th>Paramètre</th><th>Statut</th><th></th></tr>
+      <tr>
+        <td>Aucun tournoi sur week-end blackout</td>
+        <td>4 dates blackout</td>
+        <td><span class="pill pill-hard">DURE</span></td>
+        <td>Modifier</td>
+      </tr>
+      <tr>
+        <td>Finale CDB avant finale ligue</td>
+        <td>(automatique)</td>
+        <td><span class="pill pill-hard">DURE</span></td>
+        <td>&mdash;</td>
+      </tr>
+      <tr>
+        <td>≥ N semaines entre finale CDB et finale ligue</td>
+        <td>N = 2 semaines</td>
+        <td><span class="pill pill-hard">DURE</span></td>
+        <td>Modifier</td>
+      </tr>
+      <tr>
+        <td>≥ N semaines entre 2 tournois (même catégorie)</td>
+        <td>N = 3 semaines</td>
+        <td><span class="pill pill-hard">DURE</span></td>
+        <td>Modifier</td>
+      </tr>
+      <tr>
+        <td>≥ N semaines entre T3 et Finale</td>
+        <td>N = 2 semaines</td>
+        <td><span class="pill pill-hard">DURE</span></td>
+        <td>Modifier</td>
+      </tr>
+      <tr>
+        <td>Pas de double tournoi pour un même club / week-end</td>
+        <td>(implicite)</td>
+        <td><span class="pill pill-hard">DURE</span></td>
+        <td>&mdash;</td>
+      </tr>
+      <tr>
+        <td>Jour de la semaine par type de tournoi</td>
+        <td>T1/T2/T3 = samedi, Finale = samedi</td>
+        <td><span class="pill pill-hard">DURE</span></td>
+        <td>Modifier</td>
+      </tr>
+    </table>
+
+    <h3 style="font-size: 15px; margin-top: 18px;">Règles molles (optimisées par le moteur, violation possible avec avertissement)</h3>
+    <table>
+      <tr><th>Règle</th><th>Paramètre</th><th>Poids</th><th></th></tr>
+      <tr>
+        <td>Nombre équilibré de tournois par club hôte</td>
+        <td>Cible auto = total ÷ nb clubs (±1)</td>
+        <td>5</td>
+        <td>Modifier</td>
+      </tr>
+      <tr>
+        <td>Pas d'hôte deux week-ends consécutifs</td>
+        <td>Tous les hôtes</td>
+        <td>3</td>
+        <td>Modifier</td>
+      </tr>
+      <tr>
+        <td>Cascade T1 catégorie inférieure → supérieure</td>
+        <td>Tous modes</td>
+        <td>4</td>
+        <td>Modifier</td>
+      </tr>
+      <tr>
+        <td>Étalement des modes sur la saison</td>
+        <td>Tous modes</td>
+        <td>2</td>
+        <td>Modifier</td>
+      </tr>
+    </table>
+
+    <button class="btn btn-secondary" style="margin-top: 14px;">+ Ajouter une règle depuis la bibliothèque</button>
+
+    <div class="actions">
+      <button class="btn btn-secondary">&larr; Retour Brief</button>
+      <button class="btn btn-primary">Étape suivante &rarr; Génération</button>
+    </div>
+  </div>
+</div>
+
+<!-- ÉTAPE 3 -->
+<div class="stepper">
+  <div class="stepper-item done"><span class="stepper-num">✓</span> Brief</div>
+  <div class="stepper-item done"><span class="stepper-num">✓</span> Contraintes</div>
+  <div class="stepper-item active"><span class="stepper-num">3</span> Génération</div>
+  <div class="stepper-item"><span class="stepper-num">4</span> Revue</div>
+  <div class="stepper-item"><span class="stepper-num">5</span> Régénération</div>
+  <div class="stepper-item"><span class="stepper-num">6</span> Publication</div>
+</div>
+
+<div class="step-screen">
+  <div class="step-header">
+    <h2>Étape 3 &mdash; Génération du brouillon</h2>
+    <div class="step-sub">Le moteur déterministe construit le calendrier complet</div>
+  </div>
+  <div class="step-body">
+
+    <div class="summary-grid">
+      <div class="summary-card">
+        <div class="num">52</div>
+        <div class="label">tournois à planifier</div>
+      </div>
+      <div class="summary-card">
+        <div class="num">11</div>
+        <div class="label">contraintes actives</div>
+      </div>
+      <div class="summary-card">
+        <div class="num">5</div>
+        <div class="label">clubs hôtes</div>
+      </div>
+    </div>
+
+    <div class="note">
+      <strong>Calcul du volume :</strong> 3 modes actifs × en moyenne 3 catégories par mode × 4 types de tournoi (T1+T2+T3+Finale)
+      = 36 à 52 tournois selon les modes/catégories activés.
+    </div>
+
+    <div style="text-align: center; padding: 30px 0;">
+      <button class="btn btn-primary" style="font-size: 16px; padding: 14px 32px;">
+        Lancer la génération
+      </button>
+      <p class="hint" style="margin-top: 8px;">Durée estimée : 3 à 8 secondes</p>
+    </div>
+
+    <div class="ai-box">
+      <span class="ai-tag">Assistance IA</span>
+      <p><strong>En cas d'échec :</strong> si le moteur ne trouve pas de solution respectant toutes les contraintes
+        dures, l'IA explique en français clair quelle contrainte est en conflit et propose des assouplissements ciblés.</p>
+    </div>
+
+    <div class="actions">
+      <button class="btn btn-secondary">&larr; Retour Contraintes</button>
+      <button class="btn btn-primary">Étape suivante &rarr; Revue</button>
+    </div>
+  </div>
+</div>
+
+<!-- ÉTAPE 4 -->
+<div class="stepper">
+  <div class="stepper-item done"><span class="stepper-num">✓</span> Brief</div>
+  <div class="stepper-item done"><span class="stepper-num">✓</span> Contraintes</div>
+  <div class="stepper-item done"><span class="stepper-num">✓</span> Génération</div>
+  <div class="stepper-item active"><span class="stepper-num">4</span> Revue</div>
+  <div class="stepper-item"><span class="stepper-num">5</span> Régénération</div>
+  <div class="stepper-item"><span class="stepper-num">6</span> Publication</div>
+</div>
+
+<div class="step-screen">
+  <div class="step-header">
+    <h2>Étape 4 &mdash; Revue &amp; édition</h2>
+    <div class="step-sub">Visualisation, verrouillage et édition manuelle ligne par ligne</div>
+  </div>
+  <div class="step-body">
+
+    <div style="display: flex; gap: 10px; margin-bottom: 14px;">
+      <button class="btn btn-secondary">📋 Vue tableau</button>
+      <button class="btn btn-primary">📅 Vue calendrier</button>
+      <span style="flex: 1;"></span>
+      <select style="padding: 7px 10px; border-radius: 6px; border: 1px solid var(--border-strong);">
+        <option>Tous les modes</option>
+        <option>Libre</option>
+        <option>Bande</option>
+        <option>3 Bandes</option>
+      </select>
+    </div>
+
+    <div class="cal-month">
+      <div class="cal-month-header">Septembre 2026</div>
+      <div class="cal-grid">
+        <div class="cal-cell dow">Lun</div><div class="cal-cell dow">Mar</div><div class="cal-cell dow">Mer</div>
+        <div class="cal-cell dow">Jeu</div><div class="cal-cell dow">Ven</div><div class="cal-cell dow">Sam</div><div class="cal-cell dow">Dim</div>
+        <div class="cal-cell empty"></div><div class="cal-cell empty"></div><div class="cal-cell"><span class="date-num">2</span></div>
+        <div class="cal-cell"><span class="date-num">3</span></div><div class="cal-cell"><span class="date-num">4</span></div>
+        <div class="cal-cell"><span class="date-num">5</span></div><div class="cal-cell"><span class="date-num">6</span></div>
+        <div class="cal-cell"><span class="date-num">7</span></div><div class="cal-cell"><span class="date-num">8</span></div>
+        <div class="cal-cell"><span class="date-num">9</span></div><div class="cal-cell"><span class="date-num">10</span></div>
+        <div class="cal-cell"><span class="date-num">11</span></div>
+        <div class="cal-cell"><span class="date-num">12</span><div class="tournament libre">T1 Libre R3 — Clichy</div></div>
+        <div class="cal-cell"><span class="date-num">13</span></div>
+        <div class="cal-cell"><span class="date-num">14</span></div><div class="cal-cell"><span class="date-num">15</span></div>
+        <div class="cal-cell"><span class="date-num">16</span></div><div class="cal-cell"><span class="date-num">17</span></div>
+        <div class="cal-cell"><span class="date-num">18</span></div>
+        <div class="cal-cell"><span class="date-num">19</span><div class="tournament bandes">T1 Bande R2 — Châtillon</div></div>
+        <div class="cal-cell"><span class="date-num">20</span></div>
+        <div class="cal-cell"><span class="date-num">21</span></div><div class="cal-cell"><span class="date-num">22</span></div>
+        <div class="cal-cell"><span class="date-num">23</span></div><div class="cal-cell"><span class="date-num">24</span></div>
+        <div class="cal-cell"><span class="date-num">25</span></div>
+        <div class="cal-cell"><span class="date-num">26</span><div class="tournament libre">T1 Libre R2 — Bois-Colombes</div></div>
+        <div class="cal-cell"><span class="date-num">27</span></div>
+      </div>
+    </div>
+
+    <h3 style="font-size: 15px; margin-top: 18px;">Tableau détaillé (extrait)</h3>
+    <table>
+      <tr>
+        <th>Date</th><th>Mode</th><th>Catégorie</th><th>Type</th><th>Hôte</th><th>Statut</th><th></th>
+      </tr>
+      <tr>
+        <td>2026-09-12</td><td>Libre</td><td>R3</td><td>T1</td><td>Clichy</td>
+        <td><span class="pill pill-ok">OK</span></td>
+        <td>🔒 Verrouiller / Éditer</td>
+      </tr>
+      <tr>
+        <td>2026-09-19</td><td>Bande</td><td>R2</td><td>T1</td><td>Châtillon</td>
+        <td><span class="pill pill-ok">OK</span></td>
+        <td>🔓 Verrouiller / Éditer</td>
+      </tr>
+      <tr style="background: #fff5d6;">
+        <td>2026-10-10</td><td>3 Bandes</td><td>R1</td><td>T2</td><td>Clichy</td>
+        <td><span class="pill pill-warn">⚠ Hôte 2x consécutif</span></td>
+        <td>Éditer</td>
+      </tr>
+      <tr>
+        <td>2026-11-14</td><td>Libre</td><td>R1</td><td>T2</td><td>Courbevoie</td>
+        <td><span class="pill pill-locked">🔒 Verrouillé</span></td>
+        <td>Éditer</td>
+      </tr>
+      <tr style="background: var(--red-soft);">
+        <td>2027-04-17</td><td>Libre</td><td>R1</td><td>FINALE</td><td>TBD</td>
+        <td><span class="pill pill-conflict">✗ Trop proche finale ligue</span></td>
+        <td>Éditer</td>
+      </tr>
+    </table>
+
+    <div class="ai-box">
+      <span class="ai-tag">IA &mdash; Explication du conflit</span>
+      <p><strong>Ligne du 17 avril 2027 :</strong> la finale Libre R1 est planifiée 4 semaines avant la finale de ligue (15 mai),
+        mais votre règle exige <em>au moins 2 semaines</em>. Le conflit est en réalité que la finale ligue est avancée cette année.
+        Suggestions : (1) déplacer la finale CDB au 24 avril, (2) assouplir la règle à 1 semaine pour cette catégorie, (3) accepter et marquer comme exception.</p>
+    </div>
+
+    <div class="actions">
+      <button class="btn btn-secondary">&larr; Régénérer</button>
+      <button class="btn btn-primary">Étape suivante &rarr; Régénération sélective</button>
+    </div>
+  </div>
+</div>
+
+<!-- ÉTAPE 5 -->
+<div class="stepper">
+  <div class="stepper-item done"><span class="stepper-num">✓</span> Brief</div>
+  <div class="stepper-item done"><span class="stepper-num">✓</span> Contraintes</div>
+  <div class="stepper-item done"><span class="stepper-num">✓</span> Génération</div>
+  <div class="stepper-item done"><span class="stepper-num">✓</span> Revue</div>
+  <div class="stepper-item active"><span class="stepper-num">5</span> Régénération</div>
+  <div class="stepper-item"><span class="stepper-num">6</span> Publication</div>
+</div>
+
+<div class="step-screen">
+  <div class="step-header">
+    <h2>Étape 5 &mdash; Régénération sélective (optionnelle)</h2>
+    <div class="step-sub">Recalcule uniquement les tournois non verrouillés &mdash; vos éditions manuelles sont préservées</div>
+  </div>
+  <div class="step-body">
+
+    <div class="summary-grid">
+      <div class="summary-card">
+        <div class="num">7</div>
+        <div class="label">tournois verrouillés (préservés)</div>
+      </div>
+      <div class="summary-card">
+        <div class="num">45</div>
+        <div class="label">tournois recalculés</div>
+      </div>
+      <div class="summary-card">
+        <div class="num">2</div>
+        <div class="label">conflits restants</div>
+      </div>
+    </div>
+
+    <div class="note">
+      <strong>Quand utiliser cette étape ?</strong>
+      <ul style="margin: 6px 0 0 20px; padding: 0;">
+        <li>Vous avez ajouté ou modifié une règle dans l'étape 2</li>
+        <li>Vous voulez explorer une autre solution sans perdre les tournois que vous avez déjà figés</li>
+        <li>Une finale de ligue a été déplacée et impacte plusieurs catégories</li>
+      </ul>
+    </div>
+
+    <div style="text-align: center; padding: 20px 0;">
+      <button class="btn btn-primary">Régénérer les tournois non verrouillés</button>
+      <p class="hint" style="margin-top: 8px;">Vous pourrez ensuite revenir à l'étape 4 pour revue.</p>
+    </div>
+
+    <div class="actions">
+      <button class="btn btn-secondary">&larr; Retour Revue</button>
+      <button class="btn btn-success">Sauter cette étape &rarr; Publication</button>
+    </div>
+  </div>
+</div>
+
+<!-- ÉTAPE 6 -->
+<div class="stepper">
+  <div class="stepper-item done"><span class="stepper-num">✓</span> Brief</div>
+  <div class="stepper-item done"><span class="stepper-num">✓</span> Contraintes</div>
+  <div class="stepper-item done"><span class="stepper-num">✓</span> Génération</div>
+  <div class="stepper-item done"><span class="stepper-num">✓</span> Revue</div>
+  <div class="stepper-item done"><span class="stepper-num">✓</span> Régénération</div>
+  <div class="stepper-item active"><span class="stepper-num">6</span> Publication</div>
+</div>
+
+<div class="step-screen">
+  <div class="step-header" style="background: var(--green);">
+    <h2>Étape 6 &mdash; Publication &mdash; Génération du fichier de tournois</h2>
+    <div class="step-sub">Création de tous les enregistrements dans <code>tournoi_ext</code></div>
+  </div>
+  <div class="step-body">
+
+    <h3 style="font-size: 15px;">Aperçu de la synchronisation (mécanisme diff-and-sync)</h3>
+    <div class="summary-grid">
+      <div class="summary-card safe">
+        <div class="num">52</div>
+        <div class="label">Sûr — création directe</div>
+      </div>
+      <div class="summary-card sensitive">
+        <div class="num">0</div>
+        <div class="label">Sensible — confirmation requise</div>
+      </div>
+      <div class="summary-card blocked">
+        <div class="num">0</div>
+        <div class="label">Bloqué — modification refusée</div>
+      </div>
+    </div>
+
+    <div class="note">
+      <strong>Première publication de la saison :</strong> aucun tournoi <code>tournoi_ext</code> n'existe encore pour 2026-2027.
+      Les 52 tournois seront tous créés en une seule opération. Lors d'une republication ultérieure, les tournois ayant
+      des inscriptions ou des résultats seront protégés.
+    </div>
+
+    <h3 style="font-size: 15px; margin-top: 18px;">Actions effectuées par la publication</h3>
+    <table>
+      <tr><th>Action</th><th>Volume</th><th>Statut</th></tr>
+      <tr><td>Création des enregistrements <code>tournoi_ext</code></td><td>52</td><td><span class="pill pill-ok">prêt</span></td></tr>
+      <tr><td>Création des catégories Saison &gt; Convocations</td><td>1 arborescence</td><td><span class="pill pill-ok">prêt</span></td></tr>
+      <tr><td>Création des catégories Saison &gt; Résultats</td><td>1 arborescence</td><td><span class="pill pill-ok">prêt</span></td></tr>
+      <tr><td>Initialisation des statuts (à venir, ouverts...)</td><td>52</td><td><span class="pill pill-ok">prêt</span></td></tr>
+      <tr><td>Export Excel <code>Calendrier CDBHS 2026-2027.xlsx</code></td><td>1 fichier</td><td><span class="pill pill-ok">prêt</span></td></tr>
+      <tr><td>Journal d'audit <code>calendar_sync_log</code></td><td>52 entrées</td><td><span class="pill pill-ok">prêt</span></td></tr>
+    </table>
+
+    <div style="text-align: center; padding: 20px 0; margin-top: 14px; background: var(--green-soft); border-radius: 8px;">
+      <button class="btn btn-success" style="font-size: 16px; padding: 14px 36px;">
+        ✓ Publier le calendrier 2026-2027
+      </button>
+      <p class="hint" style="margin-top: 8px; color: var(--green);">Action irréversible &mdash; un journal complet est conservé.</p>
+    </div>
+
+    <div class="actions">
+      <button class="btn btn-secondary">&larr; Retour Régénération</button>
+      <button class="btn btn-secondary">Télécharger le calendrier en PDF</button>
+    </div>
+  </div>
+</div>
+
+<!-- Player App preview -->
+<div class="section-divider">Vue côté Player App (mobile)</div>
+
+<div class="step-screen">
+  <div class="step-body">
+    <p style="font-size: 13.5px;">
+      Le Player App lit directement <code>tournoi_ext</code> via la base de données partagée &mdash;
+      aucune duplication SQL. La vue mobile remplace l'actuel lien vers le PDF/Excel par une expérience native :
+      cartes par tournoi, filtres, statut d'inscription, export iCal.
+    </p>
+
+    <div class="phone-frame">
+      <div class="phone-screen">
+        <div class="phone-header">📅 Calendrier 2026-2027</div>
+        <div class="phone-tabs">
+          <div class="phone-tab active">Tous</div>
+          <div class="phone-tab">Mes éligibles</div>
+          <div class="phone-tab">Inscrits</div>
+        </div>
+        <div class="phone-month">SEPTEMBRE 2026</div>
+        <div class="phone-card">
+          <div class="card-date">Sam. 12 sept.</div>
+          <div class="card-title">T1 Libre R3</div>
+          <div class="card-meta">Clichy &middot; 14h00</div>
+          <div class="card-status">✓ Inscrit</div>
+        </div>
+        <div class="phone-card">
+          <div class="card-date">Sam. 19 sept.</div>
+          <div class="card-title">T1 Bande R2</div>
+          <div class="card-meta">Châtillon &middot; 14h00</div>
+          <div class="card-status" style="background: var(--blue-soft); color: var(--blue);">Inscriptions ouvertes</div>
+        </div>
+        <div class="phone-card">
+          <div class="card-date">Sam. 26 sept.</div>
+          <div class="card-title">T1 Libre R2</div>
+          <div class="card-meta">Bois-Colombes &middot; 14h00</div>
+          <div class="card-status" style="background: var(--accent-soft); color: var(--accent);">À venir</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="note" style="max-width: 500px; margin: 14px auto;">
+      <strong>Fonctions clés Player App :</strong> filtres par mode/catégorie/club, « mes catégories éligibles » (selon classement FFB),
+      lien direct vers inscription, export iCal pour les tournois inscrits.
+    </div>
+  </div>
+</div>
+
+<footer style="margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--border); color: var(--muted); font-size: 12px;">
+  Maquette UI &mdash; Avril 2026 &mdash; Version 0.1 &mdash; Document de référence pour l'implémentation.
+</footer>
+
+</main>
+</body>
+</html>
