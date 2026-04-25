@@ -357,6 +357,49 @@
         </div>
       </div>
     </div>
+
+    <!-- ÉTAPE 2 — Bibliothèque de règles -->
+    <div class="card" id="step2Card" style="display: none;">
+      <h3 style="margin-top: 0;">Étape 2 — Règles &amp; contraintes</h3>
+      <p style="color: #666; font-size: 14px;">
+        Les règles que le moteur de génération respectera. Les <strong>règles obligatoires</strong> ne peuvent pas être violées.
+        Les <strong>règles souhaitées</strong> sont optimisées par le moteur (un poids plus élevé = plus important).
+      </p>
+
+      <div class="ai-box">
+        <span class="ai-tag">Assistance IA</span>
+        <p><strong>Décrivez une règle en français</strong> — l'IA la traduira en règle structurée.</p>
+        <textarea id="aiRuleInput" placeholder="Exemple : « Clichy ne doit jamais accueillir deux week-ends d'affilée »" disabled></textarea>
+        <button class="btn-ai" id="aiTranslateBtn" disabled style="margin-top: 6px;">🤖 Traduire en règle (bientôt disponible)</button>
+      </div>
+
+      <h3 class="section-title">Règles obligatoires (le moteur refuse de les violer)</h3>
+      <table id="hardRulesTable" class="ligue-table">
+        <thead><tr><th>Règle</th><th>Paramètre</th><th style="width: 90px;">Active</th><th style="width: 80px;"></th></tr></thead>
+        <tbody><tr><td colspan="4" style="color: #888;">Chargement...</td></tr></tbody>
+      </table>
+
+      <h3 class="section-title">Règles souhaitées (optimisées par le moteur)</h3>
+      <table id="softRulesTable" class="ligue-table">
+        <thead><tr><th>Règle</th><th>Paramètre</th><th style="width: 70px;">Poids</th><th style="width: 90px;">Active</th><th style="width: 80px;"></th></tr></thead>
+        <tbody><tr><td colspan="5" style="color: #888;">Chargement...</td></tr></tbody>
+      </table>
+
+      <div style="margin-top: 14px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+        <select id="addRuleSelect" style="padding: 8px; border: 1px solid #c8c5be; border-radius: 5px;"></select>
+        <button type="button" class="btn" id="addRuleBtn" style="padding: 8px 14px;">+ Ajouter cette règle</button>
+        <span style="flex: 1;"></span>
+        <button type="button" class="btn" id="seedDefaultsBtn" style="background: #6b3aa3; color: white; padding: 8px 14px; border: none; border-radius: 5px; cursor: pointer;">Pré-remplir avec la bibliothèque V1</button>
+      </div>
+
+      <div class="actions-bar">
+        <span class="save-status" id="rulesStatus"></span>
+        <div>
+          <button type="button" class="btn" id="backToBriefBtn" style="padding: 10px 20px;">← Retour Brief</button>
+          <button type="button" class="btn" disabled style="background: #c47b00; color: white; padding: 10px 20px; border: none; border-radius: 5px; font-weight: 600; margin-left: 8px;" title="Disponible en Phase 5">Étape suivante : Génération →</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -630,8 +673,192 @@
 
     document.getElementById('seasonInput').addEventListener('change', loadBriefForSeason);
 
-    document.getElementById('nextStepBtn').addEventListener('click', () => {
-      alert('Étape 2 (Règles) — disponible en Phase 4 de l\'implémentation.');
+    // ============================================================
+    // PHASE 4a — Règles (Étape 2)
+    // ============================================================
+
+    // Catalogue côté frontend : libellés et descriptions des règles V1
+    const RULES_CATALOG = {
+      blackout_weekend:                          { label: 'Aucun tournoi sur week-end blackout',           paramLabel: 'Dates', paramKey: 'dates', paramType: 'list-dates' },
+      tournament_day_rule:                       { label: 'Jour autorisé par type de tournoi',             paramLabel: 'Type → Jour', paramKey: null, paramType: 'readonly' },
+      season_start_after:                        { label: 'Début de saison ≥ date',                        paramLabel: 'Date', paramKey: 'first_weekend', paramType: 'date' },
+      final_before_ligue_final:                  { label: 'Finale CDB avant finale ligue (par catégorie)', paramLabel: '(automatique)', paramKey: null, paramType: 'readonly' },
+      min_weeks_between_cdb_and_ligue_final:     { label: '≥ N semaines entre finale CDB et finale ligue', paramLabel: 'N (semaines)', paramKey: 'min_weeks', paramType: 'number' },
+      min_weeks_between_tournaments_same_category: { label: '≥ N semaines entre 2 tournois (même catégorie)', paramLabel: 'N (semaines)', paramKey: 'min_weeks', paramType: 'number' },
+      min_weeks_between_t3_and_final:            { label: '≥ N semaines entre T3 et Finale',                paramLabel: 'N (semaines)', paramKey: 'min_weeks', paramType: 'number' },
+      host_no_double_booking:                    { label: 'Pas deux tournois pour un même club / week-end', paramLabel: '(implicite)', paramKey: null, paramType: 'readonly' },
+      host_balanced_load:                        { label: 'Nombre équilibré de tournois par club hôte',     paramLabel: 'Tolérance', paramKey: 'tolerance', paramType: 'number' },
+      host_no_consecutive_weekends:              { label: 'Pas d\'hôte deux week-ends consécutifs',         paramLabel: 'Portée', paramKey: 'scope', paramType: 'readonly' },
+      category_upgrade_cascade:                  { label: 'T1 catégorie inférieure avant T1 supérieure',    paramLabel: 'Modes', paramKey: 'apply_to_modes', paramType: 'readonly' },
+      mode_spread_evenly:                        { label: 'Étalement des modes sur la saison',              paramLabel: 'Mode', paramKey: 'mode', paramType: 'readonly' }
+    };
+
+    let constraints = [];
+
+    function paramSummary(rule) {
+      const meta = RULES_CATALOG[rule.rule_type];
+      if (!meta) return '';
+      const params = rule.parameters || {};
+      if (meta.paramKey === 'min_weeks') return `${params.min_weeks ?? '?'} semaines`;
+      if (meta.paramKey === 'tolerance') return `±${params.tolerance ?? 1}`;
+      if (meta.paramKey === 'first_weekend') return params.first_weekend || '(non défini)';
+      if (meta.paramKey === 'dates') return `${(params.dates || []).length} date(s)`;
+      if (meta.paramKey === 'scope') return params.scope || 'tous';
+      if (meta.paramKey === 'apply_to_modes') return Array.isArray(params.apply_to_modes) ? params.apply_to_modes.join(', ') : 'tous';
+      if (meta.paramKey === 'mode') return params.mode || 'tous';
+      return '—';
+    }
+
+    function paramEditor(rule) {
+      const meta = RULES_CATALOG[rule.rule_type];
+      if (!meta || meta.paramType === 'readonly') return paramSummary(rule);
+      const params = rule.parameters || {};
+      if (meta.paramType === 'number') {
+        return `<input type="number" min="0" max="52" value="${params[meta.paramKey] ?? ''}" data-rule-id="${rule.id}" data-param-key="${meta.paramKey}" class="rule-param-input" style="width: 70px; padding: 4px 6px; border: 1px solid #c8c5be; border-radius: 4px;">`;
+      }
+      if (meta.paramType === 'date') {
+        return `<input type="date" value="${params[meta.paramKey] || ''}" data-rule-id="${rule.id}" data-param-key="${meta.paramKey}" class="rule-param-input" style="padding: 4px 6px; border: 1px solid #c8c5be; border-radius: 4px;">`;
+      }
+      return paramSummary(rule);
+    }
+
+    async function loadConstraints() {
+      try {
+        const res = await fetch(`${API_URL}/calendar-generator/constraints`, { headers: authHeaders });
+        if (!res.ok) throw new Error('Échec chargement règles');
+        constraints = await res.json();
+        renderRulesTables();
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    function renderRulesTables() {
+      const hard = constraints.filter(c => c.strictness === 'hard');
+      const soft = constraints.filter(c => c.strictness === 'soft');
+
+      document.querySelector('#hardRulesTable tbody').innerHTML = hard.length ? hard.map(r => {
+        const meta = RULES_CATALOG[r.rule_type] || { label: r.rule_type };
+        return `
+          <tr>
+            <td>${meta.label}</td>
+            <td>${paramEditor(r)}</td>
+            <td><label style="cursor:pointer;"><input type="checkbox" class="rule-toggle" data-rule-id="${r.id}" ${r.enabled ? 'checked' : ''}> ${r.enabled ? 'Oui' : 'Non'}</label></td>
+            <td><button class="rule-delete" data-rule-id="${r.id}" style="background: #b81c1c; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px;">✕</button></td>
+          </tr>`;
+      }).join('') : '<tr><td colspan="4" style="color: #888;">Aucune règle obligatoire — cliquez « Pré-remplir » pour démarrer.</td></tr>';
+
+      document.querySelector('#softRulesTable tbody').innerHTML = soft.length ? soft.map(r => {
+        const meta = RULES_CATALOG[r.rule_type] || { label: r.rule_type };
+        return `
+          <tr>
+            <td>${meta.label}</td>
+            <td>${paramEditor(r)}</td>
+            <td><input type="number" min="0" max="10" value="${r.weight}" data-rule-id="${r.id}" class="rule-weight-input" style="width: 50px; padding: 4px 6px; border: 1px solid #c8c5be; border-radius: 4px;"></td>
+            <td><label style="cursor:pointer;"><input type="checkbox" class="rule-toggle" data-rule-id="${r.id}" ${r.enabled ? 'checked' : ''}> ${r.enabled ? 'Oui' : 'Non'}</label></td>
+            <td><button class="rule-delete" data-rule-id="${r.id}" style="background: #b81c1c; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px;">✕</button></td>
+          </tr>`;
+      }).join('') : '<tr><td colspan="5" style="color: #888;">Aucune règle souhaitée — cliquez « Pré-remplir » pour démarrer.</td></tr>';
+
+      // Attach handlers
+      document.querySelectorAll('.rule-toggle').forEach(cb => cb.addEventListener('change', () => patchRule(cb.dataset.ruleId, { enabled: cb.checked })));
+      document.querySelectorAll('.rule-weight-input').forEach(inp => inp.addEventListener('change', () => patchRule(inp.dataset.ruleId, { weight: parseInt(inp.value, 10) })));
+      document.querySelectorAll('.rule-param-input').forEach(inp => inp.addEventListener('change', () => {
+        const rule = constraints.find(c => c.id === parseInt(inp.dataset.ruleId, 10));
+        if (!rule) return;
+        const newParams = { ...(rule.parameters || {}) };
+        const v = inp.type === 'number' ? parseInt(inp.value, 10) : inp.value;
+        newParams[inp.dataset.paramKey] = v;
+        patchRule(inp.dataset.ruleId, { parameters: newParams });
+      }));
+      document.querySelectorAll('.rule-delete').forEach(btn => btn.addEventListener('click', () => deleteRule(btn.dataset.ruleId)));
+
+      // Populate "add rule" select with types not already present
+      const addSel = document.getElementById('addRuleSelect');
+      const presentTypes = new Set(constraints.map(c => c.rule_type));
+      const available = Object.keys(RULES_CATALOG).filter(t => !presentTypes.has(t));
+      addSel.innerHTML = available.length
+        ? available.map(t => `<option value="${t}">${RULES_CATALOG[t].label}</option>`).join('')
+        : '<option value="">Toutes les règles sont déjà présentes</option>';
+      addSel.disabled = !available.length;
+      document.getElementById('addRuleBtn').disabled = !available.length;
+    }
+
+    async function patchRule(id, body) {
+      try {
+        const res = await fetch(`${API_URL}/calendar-generator/constraints/${id}`, {
+          method: 'PATCH', headers: authHeaders, body: JSON.stringify(body)
+        });
+        if (!res.ok) throw new Error('Échec mise à jour');
+        setRulesStatus('✓ Règle mise à jour', 'success');
+        await loadConstraints();
+      } catch (err) {
+        setRulesStatus('Erreur : ' + err.message, 'error');
+      }
+    }
+
+    async function deleteRule(id) {
+      if (!confirm('Supprimer cette règle ?')) return;
+      try {
+        const res = await fetch(`${API_URL}/calendar-generator/constraints/${id}`, { method: 'DELETE', headers: authHeaders });
+        if (!res.ok) throw new Error('Échec suppression');
+        setRulesStatus('✓ Règle supprimée', 'success');
+        await loadConstraints();
+      } catch (err) {
+        setRulesStatus('Erreur : ' + err.message, 'error');
+      }
+    }
+
+    function setRulesStatus(msg, cls) {
+      const el = document.getElementById('rulesStatus');
+      el.textContent = msg;
+      el.className = 'save-status' + (cls ? ' ' + cls : '');
+    }
+
+    document.getElementById('addRuleBtn').addEventListener('click', async () => {
+      const ruleType = document.getElementById('addRuleSelect').value;
+      if (!ruleType) return;
+      try {
+        const res = await fetch(`${API_URL}/calendar-generator/constraints`, {
+          method: 'POST', headers: authHeaders, body: JSON.stringify({ rule_type: ruleType })
+        });
+        if (!res.ok) throw new Error('Échec ajout');
+        setRulesStatus('✓ Règle ajoutée', 'success');
+        await loadConstraints();
+      } catch (err) {
+        setRulesStatus('Erreur : ' + err.message, 'error');
+      }
+    });
+
+    document.getElementById('seedDefaultsBtn').addEventListener('click', async () => {
+      if (!confirm('Pré-remplir la bibliothèque avec les règles V1 ? (les règles déjà présentes ne sont pas touchées)')) return;
+      try {
+        const res = await fetch(`${API_URL}/calendar-generator/constraints/seed-defaults`, {
+          method: 'POST', headers: authHeaders
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || 'Échec');
+        setRulesStatus(`✓ ${json.inserted} règle(s) ajoutée(s) — ${json.skipped} déjà présente(s)`, 'success');
+        await loadConstraints();
+      } catch (err) {
+        setRulesStatus('Erreur : ' + err.message, 'error');
+      }
+    });
+
+    document.getElementById('backToBriefBtn').addEventListener('click', () => {
+      document.getElementById('step2Card').style.display = 'none';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+
+    document.getElementById('nextStepBtn').addEventListener('click', async () => {
+      document.getElementById('step2Card').style.display = 'block';
+      // Update stepper
+      const items = document.querySelectorAll('.stepper-item');
+      items[0].classList.remove('active'); items[0].classList.add('done');
+      items[0].querySelector('.stepper-num').textContent = '✓';
+      items[1].classList.add('active');
+      await loadConstraints();
+      document.getElementById('step2Card').scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
 
     document.getElementById('logoutBtn').addEventListener('click', (e) => {

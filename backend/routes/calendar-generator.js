@@ -308,6 +308,175 @@ router.get('/reference-data', authenticateToken, (req, res) => {
 });
 
 // ----------------------------------------------------------------
+// Calendar Constraints — Phase 4a (rules library CRUD)
+// ----------------------------------------------------------------
+
+// Catalogue V1 des types de règles (utilisé pour validation + seed defaults).
+// Le frontend a sa propre copie dans calendar-rules-catalog.js pour les libellés.
+const RULES_CATALOG = {
+  // Règles dures
+  blackout_weekend:                          { strictness: 'hard', defaultParams: { dates: [] } },
+  tournament_day_rule:                       { strictness: 'hard', defaultParams: { tournament_type: '*', day: 'saturday' } },
+  season_start_after:                        { strictness: 'hard', defaultParams: { first_weekend: null } },
+  final_before_ligue_final:                  { strictness: 'hard', defaultParams: {} }, // auto via ligue_final_dates
+  min_weeks_between_cdb_and_ligue_final:     { strictness: 'hard', defaultParams: { min_weeks: 2 } },
+  min_weeks_between_tournaments_same_category: { strictness: 'hard', defaultParams: { min_weeks: 3 } },
+  min_weeks_between_t3_and_final:            { strictness: 'hard', defaultParams: { min_weeks: 2 } },
+  host_no_double_booking:                    { strictness: 'hard', defaultParams: {} }, // implicit
+  // Règles molles
+  host_balanced_load:                        { strictness: 'soft', defaultWeight: 5, defaultParams: { tolerance: 1 } },
+  host_no_consecutive_weekends:              { strictness: 'soft', defaultWeight: 3, defaultParams: { scope: 'all_hosts' } },
+  category_upgrade_cascade:                  { strictness: 'soft', defaultWeight: 4, defaultParams: { apply_to_modes: ['*'] } },
+  mode_spread_evenly:                        { strictness: 'soft', defaultWeight: 2, defaultParams: { mode: '*' } }
+};
+
+// Liste des règles à pré-créer pour un nouveau CDB (instances par défaut)
+const DEFAULT_RULE_INSTANCES = [
+  'final_before_ligue_final',
+  'min_weeks_between_cdb_and_ligue_final',
+  'min_weeks_between_tournaments_same_category',
+  'min_weeks_between_t3_and_final',
+  'host_no_double_booking',
+  'host_balanced_load',
+  'host_no_consecutive_weekends',
+  'category_upgrade_cascade',
+  'mode_spread_evenly'
+];
+
+// GET /constraints — list rule instances for the current org
+router.get('/constraints', authenticateToken, (req, res) => {
+  const db = getDb();
+  const orgId = req.user.organizationId;
+  db.all(
+    `SELECT id, rule_type, parameters, strictness, weight, enabled, created_at, updated_at
+     FROM calendar_constraints
+     WHERE organization_id = $1
+     ORDER BY strictness DESC, id ASC`,
+    [orgId],
+    (err, rows) => {
+      if (err) {
+        console.error('[calendar-generator] GET /constraints error:', err);
+        return res.status(500).json({ error: err.message });
+      }
+      res.json(rows || []);
+    }
+  );
+});
+
+// POST /constraints — add a rule instance
+router.post('/constraints', authenticateToken, requireAdmin, (req, res) => {
+  const db = getDb();
+  const orgId = req.user.organizationId;
+  const { rule_type, parameters, strictness, weight, enabled } = req.body;
+
+  if (!rule_type || !RULES_CATALOG[rule_type]) {
+    return res.status(400).json({ error: `Unknown rule_type. Allowed: ${Object.keys(RULES_CATALOG).join(', ')}` });
+  }
+  const meta = RULES_CATALOG[rule_type];
+  const finalStrictness = strictness || meta.strictness;
+  const finalParams = { ...(meta.defaultParams || {}), ...(parameters || {}) };
+  const finalWeight = (weight !== undefined ? weight : (meta.defaultWeight || 1));
+
+  db.run(
+    `INSERT INTO calendar_constraints (organization_id, rule_type, parameters, strictness, weight, enabled)
+     VALUES ($1, $2, $3::jsonb, $4, $5, $6)
+     RETURNING id`,
+    [orgId, rule_type, JSON.stringify(finalParams), finalStrictness, finalWeight, enabled !== false],
+    function(err, result) {
+      if (err) {
+        console.error('[calendar-generator] POST /constraints error:', err);
+        return res.status(500).json({ error: err.message });
+      }
+      const id = result?.rows?.[0]?.id || this?.lastID;
+      res.status(201).json({ id, message: 'Règle ajoutée' });
+    }
+  );
+});
+
+// PATCH /constraints/:id — update parameters / weight / enabled
+router.patch('/constraints/:id', authenticateToken, requireAdmin, (req, res) => {
+  const db = getDb();
+  const orgId = req.user.organizationId;
+  const id = parseInt(req.params.id, 10);
+  const { parameters, weight, enabled, strictness } = req.body;
+
+  db.run(
+    `UPDATE calendar_constraints
+     SET parameters = COALESCE($1::jsonb, parameters),
+         weight = COALESCE($2, weight),
+         enabled = COALESCE($3, enabled),
+         strictness = COALESCE($4, strictness),
+         updated_at = CURRENT_TIMESTAMP
+     WHERE id = $5 AND organization_id = $6`,
+    [
+      parameters ? JSON.stringify(parameters) : null,
+      weight !== undefined ? weight : null,
+      enabled !== undefined ? enabled : null,
+      strictness || null,
+      id,
+      orgId
+    ],
+    function(err) {
+      if (err) {
+        console.error('[calendar-generator] PATCH /constraints error:', err);
+        return res.status(500).json({ error: err.message });
+      }
+      res.json({ message: 'Règle mise à jour' });
+    }
+  );
+});
+
+// DELETE /constraints/:id
+router.delete('/constraints/:id', authenticateToken, requireAdmin, (req, res) => {
+  const db = getDb();
+  const orgId = req.user.organizationId;
+  const id = parseInt(req.params.id, 10);
+  db.run(
+    `DELETE FROM calendar_constraints WHERE id = $1 AND organization_id = $2`,
+    [id, orgId],
+    function(err) {
+      if (err) {
+        console.error('[calendar-generator] DELETE /constraints error:', err);
+        return res.status(500).json({ error: err.message });
+      }
+      res.json({ message: 'Règle supprimée' });
+    }
+  );
+});
+
+// POST /constraints/seed-defaults — pre-fill the V1 default library for the org
+// Idempotent: only inserts rule_types that don't already exist for the org.
+router.post('/constraints/seed-defaults', authenticateToken, requireAdmin, async (req, res) => {
+  const db = getDb();
+  const orgId = req.user.organizationId;
+  try {
+    const existing = await new Promise((resolve, reject) => {
+      db.all(
+        `SELECT rule_type FROM calendar_constraints WHERE organization_id = $1`,
+        [orgId],
+        (err, rows) => err ? reject(err) : resolve((rows || []).map(r => r.rule_type))
+      );
+    });
+    const toInsert = DEFAULT_RULE_INSTANCES.filter(t => !existing.includes(t));
+    for (const ruleType of toInsert) {
+      const meta = RULES_CATALOG[ruleType];
+      await new Promise((resolve, reject) => {
+        db.run(
+          `INSERT INTO calendar_constraints (organization_id, rule_type, parameters, strictness, weight, enabled)
+           VALUES ($1, $2, $3::jsonb, $4, $5, TRUE)`,
+          [orgId, ruleType, JSON.stringify(meta.defaultParams || {}), meta.strictness, meta.defaultWeight || 1],
+          (err) => err ? reject(err) : resolve()
+        );
+      });
+    }
+    res.json({ message: 'Bibliothèque pré-remplie', inserted: toInsert.length, skipped: existing.length });
+  } catch (err) {
+    console.error('[calendar-generator] POST /constraints/seed-defaults error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ----------------------------------------------------------------
 // Club preferred start time (inline edit from Step 1)
 // ----------------------------------------------------------------
 
