@@ -557,7 +557,16 @@
         currentSeason,
         nextSeason
       ]);
-      const seasons = [...seasonSet].sort().reverse();
+      let seasons = [...seasonSet].sort().reverse();
+
+      // Non-admins: hide future seasons (drafts not yet officialised)
+      const isAdmin = sessionStorage.getItem('userRole') === 'admin';
+      if (!isAdmin) {
+        seasons = seasons.filter(s => {
+          const m = s.match(/^(\d{4})/);
+          return m && parseInt(m[1], 10) <= curStart;
+        });
+      }
       seasons.forEach(s => {
         const opt = document.createElement('option');
         opt.value = s;
@@ -565,7 +574,9 @@
         globalSel.appendChild(opt);
       });
       // Default = most recent that has data; else current season
-      const defaultSeason = briefs[0]?.season || uploadedSeasons[0] || currentSeason;
+      // For non-admins, ensure the default is one of the visible seasons
+      let defaultSeason = briefs[0]?.season || uploadedSeasons[0] || currentSeason;
+      if (!seasons.includes(defaultSeason)) defaultSeason = seasons[0] || currentSeason;
       globalSel.value = defaultSeason;
 
       // 2. Load reference data (categories + clubs) once for Section A rendering
