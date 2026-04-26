@@ -2157,12 +2157,15 @@ async function buildFFBRanking(db, tournoiId, pouleCtx) {
     else { s1.draws += 1; s2.draws += 1; }
   }
 
-  // Resolve player names + clubs from inscriptions (one shot)
+  // Resolve player names + clubs from convocation_poules (the canonical source
+  // for poule rosters in DdJ). Falls back to player_name from the same table.
   const players = await fetchAll(
-    `SELECT i.licence, COALESCE(p.last_name || ' ' || p.first_name, i.player_name) AS name, i.club
-     FROM inscriptions i
-     LEFT JOIN players p ON REPLACE(p.licence, ' ', '') = REPLACE(i.licence, ' ', '')
-     WHERE i.tournoi_id = $1 AND i.status = 'inscrit'`,
+    `SELECT cp.licence,
+            COALESCE(p.last_name || ' ' || p.first_name, cp.player_name) AS name,
+            cp.club
+     FROM convocation_poules cp
+     LEFT JOIN players p ON REPLACE(p.licence, ' ', '') = REPLACE(cp.licence, ' ', '')
+     WHERE cp.tournoi_id = $1`,
     [tournoiId]
   );
   const meta = new Map();
