@@ -670,6 +670,7 @@
     <a href="#calendrier" class="section-title">Calendrier</a>
     <a href="#calendrier">Calendrier</a>
     <a href="#calendrier-fichier" class="sub">Téléverser le fichier calendrier</a>
+    <a href="#assistant-calendrier" class="sub">✨ Assistant Calendrier (génération auto)</a>
     <a href="#dedoublement" class="sub">Dédoubler un tournoi</a>
     <a href="#repartition-joueurs" class="sub">Répartir les joueurs</a>
     <a href="#import-dedouble" class="sub">Import résultats (dédoublé)</a>
@@ -2155,6 +2156,143 @@
         <li>Une fois le fichier Excel téléversé, vous pouvez enchaîner avec la fonction <a href="#param-generer-saison">Générer les tournois de la saison</a> pour créer automatiquement toutes les compétitions.</li>
       </ul>
     </div>
+  </section>
+
+  <hr>
+
+  <!-- ======================== ASSISTANT CALENDRIER ======================== -->
+  <section id="assistant-calendrier">
+    <h2>✨ Compétitions &gt; Assistant Calendrier (génération automatique)</h2>
+
+    <h3>À quoi sert cet assistant ?</h3>
+    <p>
+      L'<strong>Assistant Calendrier</strong> remplace le travail manuel de construction du calendrier de saison
+      sous Excel. Il produit automatiquement un calendrier complet — tous les tournois (T1, T2, T3, Finale) de
+      toutes les catégories actives, placés sur des week-ends et chez des clubs hôtes — en respectant les contraintes
+      que vous avez définies (espacement, jours autorisés, indisponibilités, équilibre entre clubs, etc.).
+    </p>
+    <p>
+      Le résultat est <strong>modifiable manuellement</strong> et peut être <strong>verrouillé partiellement</strong>
+      pour permettre une régénération en cours de saison sans perdre vos décisions déjà annoncées aux joueurs.
+    </p>
+
+    <div class="info-card">
+      <strong>Réservé aux administrateurs.</strong> Le lien "Assistant Calendrier" dans le menu Compétitions n'est
+      visible qu'aux comptes admin. Les autres rôles (lecteur, viewer, club) n'ont pas accès à l'écran.
+    </div>
+
+    <h3>Workflow en 3 étapes (V1 actuelle)</h3>
+    <ol class="steps">
+      <li><strong>Étape 1 — Brief de saison</strong> : décrire le cadre (saison, dates, catégories actives, clubs hôtes, blackouts...)</li>
+      <li><strong>Étape 2 — Règles &amp; contraintes</strong> : valider/ajuster les règles que le moteur respectera</li>
+      <li><strong>Étape 3 — Génération du calendrier</strong> : lancer le moteur, visualiser, modifier, télécharger</li>
+    </ol>
+
+    <h3 id="ac-etape-1">Étape 1 — Brief de saison</h3>
+    <p>Décrivez la réalité de votre saison. La plupart des champs sont auto-remplis à partir de vos paramètres ; vous n'avez qu'à valider.</p>
+    <ul>
+      <li><strong>Saison à planifier</strong> : ex. <code>2026-2027</code>.</li>
+      <li><strong>Jour des qualificatifs</strong> et <strong>jour des finales départementales</strong> : par défaut samedi et dimanche.</li>
+      <li><strong>Premier week-end de compétition</strong> : la date du samedi de la 1ère semaine active de la saison.</li>
+      <li><strong>Dernier week-end de compétition</strong> (optionnel) : date butoir au-delà de laquelle plus aucun tournoi ne sera placé (typiquement début juin).</li>
+      <li><strong>Attribution du lieu des finales</strong> : "Manuelle" (proposée par le moteur, validée en réunion) ou "Vainqueur des qualifications" (lieu TBD à l'issue du T3).</li>
+      <li><strong>Modes &amp; catégories actifs</strong> : décocher les catégories non jouées cette saison.</li>
+      <li><strong>Clubs hôtes confirmés</strong> : cocher les clubs prêts à organiser des tournois cette saison.</li>
+      <li><strong>Week-ends blackout</strong> : ajouter les samedis exclus (vacances scolaires, finales fédérales nationales).</li>
+      <li><strong>Indisponibilités par club</strong> : période où un club ne peut pas accueillir (travaux, événement, fermeture). Saisir Club + Du + Au + Motif optionnel.</li>
+      <li><strong>Dates des finales de ligue</strong> (par catégorie) : la finale CDB devra avoir lieu avant cette date pour chaque catégorie concernée. Optionnel.</li>
+    </ul>
+    <p>Cliquer <strong>"💾 Sauvegarder le brief"</strong> en bas pour persister, puis <strong>"Étape suivante : Règles →"</strong>.</p>
+
+    <h3 id="ac-etape-2">Étape 2 — Règles &amp; contraintes</h3>
+    <p>
+      C'est l'étape la plus discrète : pour 80&nbsp;% des CDB, un seul clic suffit.
+    </p>
+    <ol class="steps">
+      <li>Cliquer sur <strong>"💾 Charger et adapter les règles habituelles"</strong> en bas de la page. Cela pré-remplit la bibliothèque avec les règles standards V1 (un sous-ensemble pertinent du catalogue).</li>
+      <li>Vous pouvez ensuite ajuster les règles dans deux tableaux :
+        <ul>
+          <li><strong>Règles obligatoires</strong> : le moteur refuse de les violer (ex. "≥ 3 sem. entre 2 tournois d'une même catégorie", "Pas 2 tournois pour un même club / week-end").</li>
+          <li><strong>Règles souhaitées</strong> : optimisées par le moteur avec un poids ajustable (ex. "Nombre équilibré de tournois par club hôte", "Étalement des modes sur la saison").</li>
+        </ul>
+      </li>
+      <li>Toutes les règles disponibles non encore activées s'affichent dans la table <strong>"Règles disponibles à ajouter"</strong>. Cliquer "Ajouter" ou "Ignorer" selon votre choix.</li>
+    </ol>
+
+    <div class="info-card accent">
+      <strong>Assistance IA (optionnelle) :</strong> dans le bloc violet en haut, vous pouvez décrire une règle en français
+      (ex. <em>"Clichy ne doit jamais accueillir deux week-ends d'affilée"</em>) et l'IA la traduira en règle structurée.
+      Vous validez avant ajout — l'IA ne peut rien ajouter sans confirmation.
+    </div>
+
+    <h3 id="ac-etape-3">Étape 3 — Génération du calendrier</h3>
+    <p>Cliquer <strong>"⚡ Tout régénérer"</strong> pour lancer le moteur. Le résultat apparaît en quelques secondes.</p>
+
+    <h4>Trois vues du calendrier</h4>
+    <ul>
+      <li><strong>Vue calendrier</strong> (par défaut, façon Excel) : lignes = catégories, colonnes = tous les week-ends de la saison, cellules colorées par club hôte.</li>
+      <li><strong>Compacte par catégorie</strong> : lignes = catégories, colonnes = T1 / T2 / T3 / Finale (vue chaîne par catégorie).</li>
+      <li><strong>Par club hôte</strong> : lignes = clubs, colonnes = mois (utile pour repérer les déséquilibres).</li>
+    </ul>
+
+    <h4>Réglages rapides (mode simulation)</h4>
+    <p>
+      Le panneau <strong>"🎛️ Réglages rapides"</strong> en haut permet de modifier 4 paramètres clés (nombre de semaines entre tournois,
+      nombre max de tournois par week-end...) <strong>uniquement pour cette simulation</strong> — vos règles permanentes ne sont pas
+      touchées. Cliquer <strong>"💾 Conserver ces réglages..."</strong> pour les sauvegarder définitivement.
+    </p>
+
+    <h4>Modification manuelle d'une cellule</h4>
+    <p>Cliquer sur n'importe quelle cellule remplie de la <strong>Vue calendrier</strong> ouvre un popup permettant de :</p>
+    <ul>
+      <li><strong>Changer la date</strong> du week-end</li>
+      <li><strong>Changer le club hôte</strong> ou le mettre en TBD</li>
+      <li><strong>🔒 Verrouiller</strong> la cellule (sera préservée à la prochaine régénération)</li>
+      <li>Ajouter un <strong>commentaire</strong> (ex. "décalé suite demande Clichy")</li>
+    </ul>
+    <p>Les modifications sont enregistrées immédiatement (pas de bouton "Sauvegarder le calendrier" — la sauvegarde est automatique).</p>
+
+    <h4>Régénération avec verrous (en cours de saison)</h4>
+    <p>Une fois certaines cellules verrouillées 🔒, deux boutons sont disponibles :</p>
+    <ul>
+      <li><strong>"⚡ Tout régénérer"</strong> : remplace TOUT le calendrier (efface aussi les verrous). Demande confirmation si des modifs manuelles existent.</li>
+      <li><strong>"🔒 Régénérer en gardant mes verrous"</strong> : préserve les cellules verrouillées et recalcule uniquement le reste autour. C'est l'usage principal en cours de saison (par ex. la finale ligue change → on verrouille ce qui est déjà annoncé aux joueurs et on relance).</li>
+    </ul>
+
+    <h4>Conflits</h4>
+    <p>Si le moteur n'a pas pu placer un tournoi, un panneau rouge en haut liste les conflits avec un diagnostic chiffré, par exemple :</p>
+    <p style="font-style: italic; color: #555;">⚠️ Libre R1 Finale — 18 créneaux testés, tous rejetés : 12× après le dernier week-end de compétition · 4× &lt; 3 sem. depuis T2 · 2× week-end blackout</p>
+    <p>Vous pouvez alors ajuster un paramètre dans les réglages rapides ou repousser la date butoir, et relancer.</p>
+
+    <h4>Téléchargement Excel</h4>
+    <p>Le bouton <strong>"📊 Télécharger Excel"</strong> produit un fichier <code>.xlsx</code> riche (3 onglets) prêt à imprimer en A3 paysage :</p>
+    <ul>
+      <li><strong>Onglet 1 — Calendrier</strong> : grille visuelle (logo CDB, mois fusionnés, cellules colorées par club, légende, séparateurs).</li>
+      <li><strong>Onglet 2 — Liste des tournois</strong> : un tournoi par ligne avec auto-filtre.</li>
+      <li><strong>Onglet 3 — Légende clubs</strong> : nom complet + pastille couleur.</li>
+    </ul>
+
+    <h3>Cas d'usage concret en cours de saison</h3>
+    <div class="info-card accent">
+      <strong>Exemple :</strong> mi-mars 2027, la finale Bande R1 est annoncée pour le 15/05, convocations envoyées.
+      Le 1er mai, la fédération annonce un changement de date pour la finale ligue Bande R1.
+      <ol style="margin-top: 6px;">
+        <li>Aller sur <strong>Calendrier &gt; Assistant Calendrier &gt; Étape 3</strong>.</li>
+        <li>Cliquer sur les cellules déjà annoncées aux joueurs → 🔒 verrouiller chacune (commentaire optionnel).</li>
+        <li>Aller dans Étape 1 et mettre à jour la date de la finale ligue Bande R1.</li>
+        <li>Retour à Étape 3 et clic sur <strong>"🔒 Régénérer en gardant mes verrous"</strong>.</li>
+        <li>Le moteur préserve toutes les cellules verrouillées et ajuste uniquement les Finales/T3 impactés.</li>
+      </ol>
+    </div>
+
+    <h3>Affichage du calendrier généré pour les joueurs et lecteurs</h3>
+    <p>
+      Le calendrier produit par l'Assistant est consultable par <strong>tous les utilisateurs</strong> via la page
+      <strong>Compétitions &gt; Calendrier</strong>, dans la section <em>"Calendrier généré"</em> en haut.
+      Un sélecteur de saison en haut de page permet de basculer entre saisons. Les non-admins voient uniquement la
+      saison courante et les saisons passées (les drafts en cours de préparation pour les saisons futures sont
+      masqués jusqu'à activation officielle).
+    </p>
   </section>
 
   <hr>

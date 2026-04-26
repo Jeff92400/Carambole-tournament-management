@@ -1,7 +1,9 @@
 # Guide Utilisateur Complet
 
 > **Note:** Ce document est généré automatiquement depuis le guide HTML.
-> **Dernière mise à jour:** 25/04/2026
+> **Dernière mise à jour:** 26/04/2026
+>
+> **Nouvelle section (V 2.0.526) :** Compétitions > Assistant Calendrier (génération automatique du calendrier de saison)
 >
 > **Nouvelles fonctionnalités documentées (Avril 2026):**
 > - **🧭 Navigation refondue — Mega-menu** (23/04/2026, V 2.0.456-458) : La barre de 8-10 liens plats est remplacée par 5 groupes thématiques avec menus déroulants (Accueil, Compétitions ▾, Données ▾, Com joueurs, Paramètres ▾). Navigation préservée par rôle (admin, lecteur, club, DdJ) — muscle memory conservée (cliquer sur un titre ouvre la page principale du groupe). Voir la nouvelle section « Naviguer dans l'application ».
@@ -724,6 +726,80 @@ Un seul calendrier est conservé en base par CDB : **le plus récent**. Lorsqu'u
 > **Bonnes pratiques :**
 > - Téléversez le calendrier de la prochaine saison **avant le 1er septembre** pour éviter l'alerte "saison précédente".
 > - Une fois le fichier Excel téléversé, vous pouvez enchaîner avec la fonction "Générer les tournois de la saison" pour créer automatiquement toutes les compétitions.
+
+---
+
+## ✨ Compétitions > Assistant Calendrier (génération automatique)
+
+### À quoi sert cet assistant ?
+
+L'**Assistant Calendrier** remplace le travail manuel de construction du calendrier de saison sous Excel. Il produit automatiquement un calendrier complet — tous les tournois (T1, T2, T3, Finale) de toutes les catégories actives, placés sur des week-ends et chez des clubs hôtes — en respectant les contraintes que vous avez définies (espacement, jours autorisés, indisponibilités, équilibre entre clubs, etc.).
+
+Le résultat est **modifiable manuellement** et peut être **verrouillé partiellement** pour permettre une régénération en cours de saison sans perdre vos décisions déjà annoncées aux joueurs.
+
+> **Réservé aux administrateurs.** Le lien "Assistant Calendrier" dans le menu Compétitions n'est visible qu'aux comptes admin.
+
+### Workflow en 3 étapes (V1 actuelle)
+
+1. **Étape 1 — Brief de saison** : décrire le cadre (saison, dates, catégories actives, clubs hôtes, blackouts...)
+2. **Étape 2 — Règles & contraintes** : valider/ajuster les règles que le moteur respectera
+3. **Étape 3 — Génération du calendrier** : lancer le moteur, visualiser, modifier, télécharger
+
+### Étape 1 — Brief de saison
+
+Décrivez la réalité de votre saison :
+
+- **Saison à planifier** (ex. 2026-2027), **jour des qualificatifs / des finales**, **premier et dernier week-end de compétition** (date butoir).
+- **Modes & catégories actifs**, **clubs hôtes confirmés**.
+- **Week-ends blackout** (vacances, finales fédérales).
+- **Indisponibilités par club** (travaux, fermeture exceptionnelle) avec dates de début/fin et motif optionnel.
+- **Dates des finales de ligue** par catégorie (optionnel — la finale CDB sera placée avant).
+- **Attribution du lieu des finales** : "Manuelle" ou "Vainqueur des qualifications" (TBD à l'issue du T3).
+
+Cliquer "💾 Sauvegarder le brief" puis "Étape suivante : Règles →".
+
+### Étape 2 — Règles & contraintes
+
+Pour 80 % des CDB, un seul clic suffit : **"💾 Charger et adapter les règles habituelles"**. Cela pré-remplit la bibliothèque V1 (sous-ensemble standard du catalogue).
+
+Deux tableaux à ajuster ensuite :
+
+- **Règles obligatoires** : le moteur refuse de les violer (≥ 3 sem. entre tournois d'une même catégorie, pas 2 tournois pour un même club / week-end, etc.).
+- **Règles souhaitées** : optimisées par le moteur avec un poids ajustable (équilibre entre clubs hôtes, étalement des modes, anti-cluster sur les week-ends).
+
+> **Assistance IA** : un bloc violet permet de décrire une règle en français (ex. "Clichy ne doit jamais accueillir deux week-ends d'affilée"). L'IA traduit en règle structurée et vous validez avant ajout.
+
+### Étape 3 — Génération du calendrier
+
+Cliquer **"⚡ Tout régénérer"** lance le moteur. Le résultat apparaît en quelques secondes.
+
+**Trois vues du calendrier** (boutons en haut) :
+- **Vue calendrier** (par défaut, façon Excel) : lignes = catégories, colonnes = week-ends, cellules colorées par club.
+- **Compacte par catégorie** : lignes = catégories, colonnes = T1/T2/T3/Finale.
+- **Par club hôte** : lignes = clubs, colonnes = mois.
+
+**Réglages rapides** : un panneau permet de modifier 4 paramètres clés (sem. min, max par WE) **uniquement pour cette simulation**. Cliquer "💾 Conserver ces réglages..." pour les sauvegarder définitivement.
+
+**Modification manuelle** : cliquer sur n'importe quelle cellule remplie de la Vue calendrier ouvre un popup pour changer la date, le club hôte, **🔒 verrouiller** la cellule, et ajouter un commentaire. Sauvegarde immédiate.
+
+**Régénération avec verrous (en cours de saison)** :
+- **"⚡ Tout régénérer"** : remplace TOUT le calendrier (efface aussi les verrous).
+- **"🔒 Régénérer en gardant mes verrous"** : préserve les cellules verrouillées et recalcule uniquement le reste.
+
+**Conflits** : si le moteur n'a pas pu placer un tournoi, un panneau rouge liste les conflits avec un diagnostic chiffré (ex. "12× après le dernier week-end · 4× < 3 sem. depuis T2 · 2× blackout").
+
+**Téléchargement Excel** (3 onglets) : Calendrier visuel A3 paysage avec logo CDB, mois fusionnés, cellules colorées par club + Liste des tournois auto-filtrable + Légende clubs.
+
+### Cas d'usage concret en cours de saison
+
+**Exemple :** la finale ligue Bande R1 change après envoi des convocations.
+1. Ouvrir Étape 3, verrouiller 🔒 toutes les cellules déjà annoncées aux joueurs.
+2. Mettre à jour la date de la finale ligue dans Étape 1.
+3. Cliquer "🔒 Régénérer en gardant mes verrous". Le moteur préserve les verrous et ajuste autour.
+
+### Affichage pour joueurs et lecteurs
+
+Le calendrier généré est consultable par tous via **Compétitions > Calendrier**, section "Calendrier généré" en haut. Le sélecteur de saison permet de basculer entre saisons. Les non-admins voient uniquement la saison courante et les saisons passées (les drafts en cours de préparation sont masqués).
 
 ---
 
