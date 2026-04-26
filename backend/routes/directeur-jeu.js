@@ -1467,6 +1467,18 @@ async function loadBracket(db, orgId, tournoiId) {
     }
   }
 
+  // V 2.0.536 — Intermediate post-poule FFB-style ranking for the bracket page.
+  // Same shape as the recap FFB ranking but aggregates only poule matches, so
+  // the DdJ can compare with the FFB sheet right after pointage and detect
+  // any FFB calculation mistake before validating the bracket pairings.
+  let postPouleRanking = [];
+  try {
+    postPouleRanking = await buildFFBRanking(db, tournoiId, ctx, { phases: ['poule'] });
+  } catch (err) {
+    console.error('[DdJ] post_poule_ranking build error:', err);
+    postPouleRanking = [];
+  }
+
   return {
     tournament: ctx.tournament,
     game_params: ctx.game_params,
@@ -1477,7 +1489,8 @@ async function loadBracket(db, orgId, tournoiId) {
     non_qualifiers,
     phases,
     final_places: finalPlaces,
-    seed_override_active: seedOverrideActive
+    seed_override_active: seedOverrideActive,
+    post_poule_ranking: postPouleRanking
   };
 }
 
@@ -2165,36 +2178,30 @@ router.get('/competitions/:id/recap', authenticateToken, requireDdJ, async (req,
  *
  * Sorted by (match_points desc, moyenne desc, best_serie desc) — FFB standard.
  */
-async function buildFFBRanking(db, tournoiId, pouleCtx) {
+async function buildFFBRanking(db, tournoiId, pouleCtx, options = {}) {
   const settings = (pouleCtx && pouleCtx.game_params) || {};
+  // V 2.0.536 — `phases` filter restricts which match tables are aggregated.
+  // Default = all phases (recap view). Pass ['poule'] for the intermediate
+  // post-poule table on the bracket page.
+  const phases = options.phases || ['poule', 'bracket', 'consolante'];
 
   const fetchAll = (sql, params) => new Promise((resolve, reject) =>
     db.all(sql, params, (err, rows) => err ? reject(err) : resolve(rows || []))
   );
 
-  // Pull matches from the 3 phases with consistent column shape
-  const [pouleM, bracketM, consoM] = await Promise.all([
-    fetchAll(
-      `SELECT p1_licence, p2_licence, p1_points, p1_reprises, p1_serie,
-              p2_points, p2_reprises, p2_serie
-       FROM ddj_poule_matches WHERE tournoi_id = $1`,
-      [tournoiId]
-    ),
-    fetchAll(
-      `SELECT p1_licence, p2_licence, p1_points, p1_reprises, p1_serie,
-              p2_points, p2_reprises, p2_serie
-       FROM ddj_bracket_matches WHERE tournoi_id = $1`,
-      [tournoiId]
-    ),
-    fetchAll(
-      `SELECT p1_licence, p2_licence, p1_points, p1_reprises, p1_serie,
-              p2_points, p2_reprises, p2_serie
-       FROM ddj_consolante_matches WHERE tournoi_id = $1`,
-      [tournoiId]
+  const SELECT_COLS = `p1_licence, p2_licence, p1_points, p1_reprises, p1_serie,
+              p2_points, p2_reprises, p2_serie`;
+  const phaseTables = {
+    poule: 'ddj_poule_matches',
+    bracket: 'ddj_bracket_matches',
+    consolante: 'ddj_consolante_matches'
+  };
+  const matchSets = await Promise.all(
+    phases.map(ph =>
+      fetchAll(`SELECT ${SELECT_COLS} FROM ${phaseTables[ph]} WHERE tournoi_id = $1`, [tournoiId])
     )
-  ]);
-
-  const allMatches = [...pouleM, ...bracketM, ...consoM];
+  );
+  const allMatches = matchSets.flat();
 
   // Aggregate per player
   const stats = new Map(); // licence -> { ... }

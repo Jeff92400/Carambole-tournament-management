@@ -462,11 +462,13 @@
       }
 
       const qualifiersHtml = renderQualifiers(b.qualifiers);
+      const postPouleHtml = renderPostPouleRanking(b.post_poule_ranking);
       const phasesHtml = b.phases.map(renderPhase).join('');
       const podiumHtml = b.final_places ? renderPodium(b.final_places) : '';
 
       document.getElementById('mainContent').innerHTML = `
         ${qualifiersHtml}
+        ${postPouleHtml}
         ${phasesHtml}
         ${podiumHtml}
         <div class="ddj-action-bar">
@@ -495,6 +497,57 @@
         btn.addEventListener('click', () => savePhase(btn.dataset.phase));
       });
       attachSeedReorderHandlers();
+    }
+
+    // V 2.0.536 — Intermediate post-poule FFB-style ranking. Same columns as
+    // the recap FFB section but aggregates only poule matches, so the DdJ can
+    // compare with the FFB sheet right after pointage and detect any FFB
+    // calculation mistake before locking in the bracket pairings.
+    function renderPostPouleRanking(ffb) {
+      if (!ffb || !ffb.length) return '';
+      const rows = ffb.map(p => `
+        <tr>
+          <td style="text-align: center; font-weight: 600; padding: 8px 10px;">${p.rank}</td>
+          <td style="padding: 8px 10px;">
+            <div style="font-weight: 600;">${escapeHtml(p.name || p.licence)}</div>
+            ${p.club ? `<div style="font-size: 11px; color: #666;">${escapeHtml(p.club)}</div>` : ''}
+          </td>
+          <td style="text-align: center; padding: 8px 10px;">${p.matches_played}</td>
+          <td style="text-align: center; font-weight: 700; color: #1F4788; padding: 8px 10px;">${p.match_points}</td>
+          <td style="text-align: center; padding: 8px 10px;">${p.win_rate}%</td>
+          <td style="text-align: center; padding: 8px 10px;">${(p.moyenne || 0).toFixed(3)}</td>
+          <td style="text-align: center; padding: 8px 10px;">${p.total_points}</td>
+          <td style="text-align: center; padding: 8px 10px;">${p.total_reprises}</td>
+          <td style="text-align: center; padding: 8px 10px;">${p.best_serie || '—'}</td>
+        </tr>
+      `).join('');
+      return `
+        <div class="qualifiers-card" style="margin-top: 16px;">
+          <h3>📊 Classement FFB après les poules (cumul points match)</h3>
+          <p style="color: #666; font-size: 13px; margin: 0 0 10px;">
+            Vue intermédiaire reprenant <strong>tous les joueurs</strong> (pas uniquement les qualifiés), avec les mêmes colonnes que la fiche FFB.
+            <strong>Cette vue se compare directement avec la fiche FFB officielle</strong> — utile pour repérer une éventuelle erreur de calcul de la FFB avant de réordonner les têtes de série.
+          </p>
+          <div style="overflow-x: auto;">
+            <table style="width: 100%; border-collapse: collapse; font-size: 13px; min-width: 700px;">
+              <thead>
+                <tr style="background: linear-gradient(135deg, #1F4788, #163763); color: white;">
+                  <th style="padding: 8px 10px;">#</th>
+                  <th style="padding: 8px 10px; text-align: left;">Joueur</th>
+                  <th style="padding: 8px 10px;" title="Nombre de matchs joués">Mat.</th>
+                  <th style="padding: 8px 10px;">Pts match</th>
+                  <th style="padding: 8px 10px;" title="Taux de victoire">Vict.</th>
+                  <th style="padding: 8px 10px;">Moyenne</th>
+                  <th style="padding: 8px 10px;">Points</th>
+                  <th style="padding: 8px 10px;">Reprises</th>
+                  <th style="padding: 8px 10px;">Meill. série</th>
+                </tr>
+              </thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+        </div>
+      `;
     }
 
     function renderQualifiers(quals) {
