@@ -1070,9 +1070,8 @@ router.get('/draft/export', authenticateToken, async (req, res) => {
     // Row 1: Title (taller to accommodate logo)
     ws.mergeCells(1, 1, 1, totalCols);
     const titleCell = ws.getCell(1, 1);
-    const titleParts = ['Calendrier saisonnier'];
+    const titleParts = [`Calendrier saison ${brief.season}`];
     if (orgName) titleParts.push(orgName);
-    titleParts.push(`Saison ${brief.season}`);
     titleCell.value = '   ' + titleParts.join('  —  ');
     titleCell.font = { bold: true, size: 18, color: { argb: HEADER_TEXT_COLOR } };
     titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
