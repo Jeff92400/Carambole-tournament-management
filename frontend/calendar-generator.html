@@ -203,6 +203,54 @@
       color: #974806;
       font-size: 17px;
     }
+    /* UX onboarding (V 2.0.527) */
+    .step-header {
+      display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    }
+    .help-btn {
+      background: #f3eefb; color: #6b3aa3; border: 1px solid #d4c5e8;
+      border-radius: 16px; padding: 4px 12px; cursor: pointer; font-size: 12px;
+      font-weight: 600; transition: all 0.15s;
+    }
+    .help-btn:hover { background: #e6d9f5; }
+    .welcome-banner {
+      background: linear-gradient(135deg, #f3eefb, #e6d9f5);
+      border-left: 4px solid #6b3aa3; border-radius: 6px;
+      padding: 12px 16px; margin: 12px 0;
+      display: flex; gap: 14px; align-items: flex-start;
+    }
+    .welcome-banner .wb-content { flex: 1; font-size: 13px; color: #444; line-height: 1.5; }
+    .welcome-banner .wb-content strong { color: #6b3aa3; }
+    .welcome-banner .wb-dismiss {
+      background: white; color: #6b3aa3; border: 1px solid #6b3aa3;
+      border-radius: 5px; padding: 6px 12px; cursor: pointer; font-size: 12px;
+      font-weight: 600; white-space: nowrap;
+    }
+    .welcome-banner .wb-dismiss:hover { background: #6b3aa3; color: white; }
+    .help-modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.4);
+      z-index: 9999; display: flex; align-items: center; justify-content: center;
+    }
+    .help-modal {
+      background: white; padding: 28px; border-radius: 10px;
+      max-width: 640px; width: 90%; max-height: 80vh; overflow-y: auto;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.2);
+    }
+    .help-modal h3 { margin: 0 0 14px; color: #6b3aa3; }
+    .help-modal p { font-size: 14px; line-height: 1.6; color: #444; margin: 0 0 12px; }
+    .help-modal ul { font-size: 14px; line-height: 1.6; color: #444; margin: 0 0 12px 20px; }
+    .help-modal-close {
+      background: #6b3aa3; color: white; border: none; border-radius: 5px;
+      padding: 8px 18px; cursor: pointer; font-weight: 600; float: right;
+    }
+    /* Step 2 collapsed customization */
+    #rulesCustomBlock { transition: opacity 0.2s; }
+    .toggle-custom-rules {
+      background: white; color: #6b3aa3; border: 1px dashed #6b3aa3;
+      border-radius: 6px; padding: 10px 18px; cursor: pointer; font-size: 14px;
+      font-weight: 600; width: 100%; margin-top: 12px;
+    }
+    .toggle-custom-rules:hover { background: #f3eefb; }
   </style>
 </head>
 <body>
@@ -262,10 +310,21 @@
     </div>
 
     <div class="card">
-      <h3 style="margin-top: 0;">Étape 1 — Brief de saison</h3>
-      <p style="color: #666; font-size: 14px;">
+      <div class="step-header">
+        <h3 style="margin: 0;">Étape 1 — Brief de saison</h3>
+        <button type="button" class="help-btn" data-help="step1">❓ Comment ça marche ?</button>
+      </div>
+      <p style="color: #666; font-size: 14px; margin-top: 6px;">
         Saisissez les informations clés de la saison à planifier. Vos choix peuvent être modifiés à tout moment.
       </p>
+      <div class="welcome-banner" data-step="step1">
+        <div class="wb-content">
+          👋 <strong>Bienvenue dans l'Assistant Calendrier !</strong><br>
+          Le Brief décrit la <strong>réalité de la saison</strong> : qui joue (catégories), où (clubs hôtes), quand (premier/dernier WE) et avec quelles indispos.
+          La plupart des champs sont pré-remplis depuis vos paramètres — souvent vous n'avez qu'à valider.
+        </div>
+        <button type="button" class="wb-dismiss" data-step="step1">Compris</button>
+      </div>
 
       <div class="ai-box">
         <span class="ai-tag">Assistance IA</span>
@@ -375,11 +434,21 @@
 
     <!-- ÉTAPE 2 — Bibliothèque de règles -->
     <div class="card" id="step2Card" style="display: none;">
-      <h3 style="margin-top: 0;">Étape 2 — Règles &amp; contraintes</h3>
-      <p style="color: #666; font-size: 14px;">
-        Les règles que le moteur de génération respectera. Les <strong>règles obligatoires</strong> ne peuvent pas être violées.
-        Les <strong>règles souhaitées</strong> sont optimisées par le moteur (un poids plus élevé = plus important).
+      <div class="step-header">
+        <h3 style="margin: 0;">Étape 2 — Règles &amp; contraintes</h3>
+        <button type="button" class="help-btn" data-help="step2">❓ Comment ça marche ?</button>
+      </div>
+      <p style="color: #666; font-size: 14px; margin-top: 6px;">
+        Les règles que le moteur respectera pour placer les tournois.
       </p>
+      <div class="welcome-banner" data-step="step2">
+        <div class="wb-content">
+          💡 <strong>Règles : un seul clic suffit dans 80 % des cas.</strong><br>
+          Cliquez sur <strong>"Charger et adapter les règles habituelles"</strong> ci-dessous — vous obtenez un jeu de règles standard validé pour les CDB.
+          Vous pourrez personnaliser plus tard en cliquant sur "🛠️ Personnaliser les règles".
+        </div>
+        <button type="button" class="wb-dismiss" data-step="step2">Compris</button>
+      </div>
 
       <div class="ai-box">
         <span class="ai-tag">Assistance IA</span>
@@ -389,32 +458,44 @@
         <div id="aiSuggestion" style="display:none; margin-top:12px; padding:12px; background:#fff; border:1px solid #d4c5e8; border-radius:6px;"></div>
       </div>
 
-      <h3 class="section-title">Règles obligatoires (le moteur refuse de les violer)</h3>
-      <table id="hardRulesTable" class="ligue-table">
-        <thead><tr><th>Règle</th><th>Paramètre</th><th style="width: 90px;">Active</th><th style="width: 80px;"></th></tr></thead>
-        <tbody><tr><td colspan="4" style="color: #888;">Chargement...</td></tr></tbody>
-      </table>
+      <!-- Action principale (toujours visible) -->
+      <div style="margin-top: 16px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 14px; background: #f9f6fc; border-radius: 8px;">
+        <button type="button" class="btn" id="seedDefaultsBtn" style="background: #6b3aa3; color: white; padding: 12px 22px; border: none; border-radius: 5px; cursor: pointer; font-weight: 600; font-size: 14px;">💾 Charger et adapter les règles habituelles</button>
+        <span id="rulesCount" style="color: #666; font-size: 13px;"></span>
+      </div>
 
-      <h3 class="section-title">Règles souhaitées (optimisées par le moteur)</h3>
-      <table id="softRulesTable" class="ligue-table">
-        <thead><tr><th>Règle</th><th>Paramètre</th><th style="width: 70px;">Poids</th><th style="width: 90px;">Active</th><th style="width: 80px;"></th></tr></thead>
-        <tbody><tr><td colspan="5" style="color: #888;">Chargement...</td></tr></tbody>
-      </table>
+      <!-- Toggle pour personnaliser -->
+      <button type="button" class="toggle-custom-rules" id="toggleCustomRulesBtn">
+        🛠️ Personnaliser les règles (avancé)
+      </button>
 
-      <h3 class="section-title">Règles disponibles à ajouter</h3>
-      <p style="color: #666; font-size: 13px; margin-top: 0;">
-        Saisissez le paramètre si nécessaire, puis cliquez <strong>Ajouter</strong>.
-        Cliquez <strong>Ignorer</strong> pour masquer une règle qui ne s'applique pas à votre CDB.
-      </p>
-      <table id="availableRulesTable" class="ligue-table">
-        <thead><tr><th>Règle</th><th>Paramètre</th><th style="width: 220px;">Action</th></tr></thead>
-        <tbody><tr><td colspan="3" style="color: #888;">Chargement...</td></tr></tbody>
-      </table>
+      <!-- Bloc personnalisation, caché par défaut -->
+      <div id="rulesCustomBlock" style="display: none;">
+        <h3 class="section-title">Règles obligatoires (le moteur refuse de les violer)</h3>
+        <table id="hardRulesTable" class="ligue-table">
+          <thead><tr><th>Règle</th><th>Paramètre</th><th style="width: 90px;">Active</th><th style="width: 80px;"></th></tr></thead>
+          <tbody><tr><td colspan="4" style="color: #888;">Chargement...</td></tr></tbody>
+        </table>
 
-      <div style="margin-top: 14px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-        <button type="button" class="btn" id="toggleIgnoredBtn" style="background: #999; color: white; padding: 6px 12px; border: none; border-radius: 5px; cursor: pointer; font-size: 13px; display: none;">Voir règles ignorées</button>
-        <span style="flex: 1;"></span>
-        <button type="button" class="btn" id="seedDefaultsBtn" style="background: #6b3aa3; color: white; padding: 8px 14px; border: none; border-radius: 5px; cursor: pointer;">Charger et adapter les règles habituelles</button>
+        <h3 class="section-title">Règles souhaitées (optimisées par le moteur)</h3>
+        <table id="softRulesTable" class="ligue-table">
+          <thead><tr><th>Règle</th><th>Paramètre</th><th style="width: 70px;">Poids</th><th style="width: 90px;">Active</th><th style="width: 80px;"></th></tr></thead>
+          <tbody><tr><td colspan="5" style="color: #888;">Chargement...</td></tr></tbody>
+        </table>
+
+        <h3 class="section-title">Règles disponibles à ajouter</h3>
+        <p style="color: #666; font-size: 13px; margin-top: 0;">
+          Saisissez le paramètre si nécessaire, puis cliquez <strong>Ajouter</strong>.
+          Cliquez <strong>Ignorer</strong> pour masquer une règle qui ne s'applique pas à votre CDB.
+        </p>
+        <table id="availableRulesTable" class="ligue-table">
+          <thead><tr><th>Règle</th><th>Paramètre</th><th style="width: 220px;">Action</th></tr></thead>
+          <tbody><tr><td colspan="3" style="color: #888;">Chargement...</td></tr></tbody>
+        </table>
+
+        <div style="margin-top: 14px;">
+          <button type="button" class="btn" id="toggleIgnoredBtn" style="background: #999; color: white; padding: 6px 12px; border: none; border-radius: 5px; cursor: pointer; font-size: 13px; display: none;">Voir règles ignorées</button>
+        </div>
       </div>
 
       <div class="actions-bar">
@@ -428,12 +509,23 @@
 
     <!-- ÉTAPE 3 — Génération du calendrier -->
     <div class="card" id="step3Card" style="display: none;">
-      <h3 style="margin-top: 0;">Étape 3 — Génération du calendrier</h3>
-      <p style="color: #666; font-size: 14px;">
+      <div class="step-header">
+        <h3 style="margin: 0;">Étape 3 — Génération du calendrier</h3>
+        <button type="button" class="help-btn" data-help="step3">❓ Comment ça marche ?</button>
+      </div>
+      <p style="color: #666; font-size: 14px; margin-top: 6px;">
         Le moteur place chaque tournoi (T1, T2, T3, Finale) de chaque catégorie sur un week-end et chez un club hôte,
         en respectant les <strong>règles obligatoires</strong> et en optimisant les <strong>règles souhaitées</strong>.
         Les conflits éventuels sont signalés en bas.
       </p>
+      <div class="welcome-banner" data-step="step3">
+        <div class="wb-content">
+          🎯 <strong>Mode simulation et édition manuelle.</strong><br>
+          Cliquez <strong>« Tout régénérer »</strong> pour produire un calendrier. Vous pouvez ensuite cliquer sur n'importe quelle cellule pour modifier la date, le club, ajouter un commentaire ou verrouiller 🔒. Les modifications sont sauvegardées automatiquement.
+          En cours de saison, utilisez « Régénérer en gardant mes verrous » pour préserver ce qui est déjà annoncé aux joueurs.
+        </div>
+        <button type="button" class="wb-dismiss" data-step="step3">Compris</button>
+      </div>
 
       <div id="quickTuningPanel" style="margin: 12px 0; padding: 12px 14px; background: #fafafa; border: 1px solid #e0e0e0; border-radius: 6px;">
         <div style="font-size: 13px; font-weight: 600; color: #444; margin-bottom: 8px;">🎛️ Réglages rapides — modifier sans toucher Étape 2 (mode simulation)</div>
@@ -889,6 +981,15 @@
       const hard = constraints.filter(c => c.strictness === 'hard');
       const soft = constraints.filter(c => c.strictness === 'soft');
 
+      // Update the small counter next to the main "Charger..." button
+      const countEl = document.getElementById('rulesCount');
+      if (countEl) {
+        const total = constraints.length;
+        countEl.textContent = total > 0
+          ? `✓ ${total} règle${total > 1 ? 's' : ''} active${total > 1 ? 's' : ''} (${hard.length} obligatoire${hard.length > 1 ? 's' : ''}, ${soft.length} souhaitée${soft.length > 1 ? 's' : ''})`
+          : 'Aucune règle active — cliquez le bouton ci-dessus pour démarrer.';
+      }
+
       document.querySelector('#hardRulesTable tbody').innerHTML = hard.length ? hard.map(r => {
         const meta = RULES_CATALOG[r.rule_type] || { label: r.rule_type };
         return `
@@ -1053,6 +1154,107 @@
       const el = document.getElementById('rulesStatus');
       el.textContent = msg;
       el.className = 'save-status' + (cls ? ' ' + cls : '');
+    }
+
+    // ===== UX onboarding (V 2.0.527) =====
+    // Welcome banners — dismissed via localStorage flag
+    function applyDismissedBanners() {
+      document.querySelectorAll('.welcome-banner[data-step]').forEach(banner => {
+        const step = banner.dataset.step;
+        if (localStorage.getItem(`calgen_banner_${step}_dismissed`) === '1') {
+          banner.style.display = 'none';
+        }
+      });
+    }
+    applyDismissedBanners();
+    document.querySelectorAll('.wb-dismiss').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const step = btn.dataset.step;
+        localStorage.setItem(`calgen_banner_${step}_dismissed`, '1');
+        const banner = document.querySelector(`.welcome-banner[data-step="${step}"]`);
+        if (banner) banner.style.display = 'none';
+      });
+    });
+
+    // Help modals
+    const HELP_CONTENT = {
+      step1: {
+        title: '❓ Étape 1 — Brief de saison',
+        body: `
+          <p>Le <strong>Brief</strong> capture toutes les données factuelles de votre saison. Le moteur s'en sert ensuite pour placer les tournois.</p>
+          <ul>
+            <li><strong>Premier / Dernier week-end</strong> : bornes temporelles. Les tournois ne sortiront jamais de cette fenêtre.</li>
+            <li><strong>Catégories actives</strong> : le moteur ne planifie que celles cochées (typiquement 9 à 13 catégories pour un CDB).</li>
+            <li><strong>Clubs hôtes</strong> : le moteur n'attribue que des clubs cochés. Si un club ne souhaite pas organiser cette saison, décochez-le.</li>
+            <li><strong>Blackouts</strong> : week-ends fermés pour tous (vacances, finales fédérales). Aucun tournoi placé ces jours-là.</li>
+            <li><strong>Indisponibilités par club</strong> : période où un club spécifique ne peut pas accueillir (ex. travaux). Le moteur évite ce club uniquement pendant cette période.</li>
+            <li><strong>Finales ligue</strong> : optionnel. Si saisi, la Finale CDB de la catégorie sera placée avant.</li>
+          </ul>
+          <p>Tous les champs peuvent être modifiés à tout moment, et une régénération les prendra en compte.</p>
+          <button class="help-modal-close">Fermer</button>
+        `
+      },
+      step2: {
+        title: '❓ Étape 2 — Règles & contraintes',
+        body: `
+          <p>Le moteur de génération s'appuie sur deux types de règles :</p>
+          <ul>
+            <li><strong>Règles obligatoires (hard)</strong> : le moteur refuse de les violer (ex. "≥ 3 sem. entre 2 tournois d'une même catégorie", "Pas 2 tournois pour un même club / WE").</li>
+            <li><strong>Règles souhaitées (soft)</strong> : optimisées par le moteur avec un poids ajustable (ex. "équilibre entre clubs", "étalement entre week-ends").</li>
+          </ul>
+          <p><strong>Pour 80 % des CDB :</strong> cliquez "<em>Charger et adapter les règles habituelles</em>" et passez à l'Étape 3. Les valeurs par défaut sont validées pour des CDB de 4 à 6 clubs.</p>
+          <p><strong>Pour personnaliser :</strong> cliquez "🛠️ Personnaliser les règles" pour ajuster les paramètres, retirer des règles ou en ajouter via le tableau "Règles disponibles".</p>
+          <p><strong>IA langage naturel :</strong> tapez une règle en français dans le bloc violet et l'IA la traduira. Vous validez avant ajout — l'IA ne peut rien insérer sans confirmation.</p>
+          <button class="help-modal-close">Fermer</button>
+        `
+      },
+      step3: {
+        title: '❓ Étape 3 — Génération du calendrier',
+        body: `
+          <p>Le moteur place les ~52 tournois de votre saison en quelques secondes en respectant toutes les règles définies.</p>
+          <p><strong>3 vues</strong> du résultat (boutons en haut) :</p>
+          <ul>
+            <li><strong>Vue calendrier</strong> : grille saisonnière façon Excel, lignes = catégories, colonnes = WE.</li>
+            <li><strong>Compacte par catégorie</strong> : table T1/T2/T3/Finale par catégorie.</li>
+            <li><strong>Par club hôte</strong> : charge mensuelle par club, utile pour repérer les déséquilibres.</li>
+          </ul>
+          <p><strong>Modification manuelle :</strong> clic sur une cellule remplie → popup avec date / club / verrou 🔒 / commentaire. Sauvegarde immédiate.</p>
+          <p><strong>Régénération en cours de saison :</strong> verrouillez les cellules déjà annoncées aux joueurs, puis cliquez "🔒 Régénérer en gardant mes verrous". Le moteur préserve les verrous et ajuste autour.</p>
+          <p><strong>Réglages rapides (mode simulation) :</strong> les 4 inputs en haut modifient les paramètres uniquement pour cette simulation. Cliquez "💾 Conserver..." pour les sauvegarder définitivement.</p>
+          <p><strong>Conflits :</strong> si le moteur ne peut pas placer un tournoi, il liste les raisons chiffrées. Ajustez un paramètre et relancez.</p>
+          <p><strong>Excel :</strong> bouton "📊 Télécharger Excel" produit un .xlsx riche A3 paysage (logo CDB, mois fusionnés, légende).</p>
+          <button class="help-modal-close">Fermer</button>
+        `
+      }
+    };
+
+    document.querySelectorAll('.help-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const key = btn.dataset.help;
+        const content = HELP_CONTENT[key];
+        if (!content) return;
+        const ov = document.createElement('div');
+        ov.className = 'help-modal-overlay';
+        ov.innerHTML = `<div class="help-modal"><h3>${content.title}</h3>${content.body}</div>`;
+        document.body.appendChild(ov);
+        const close = () => ov.remove();
+        ov.addEventListener('click', e => { if (e.target === ov) close(); });
+        ov.querySelector('.help-modal-close').addEventListener('click', close);
+      });
+    });
+
+    // Step 2 — Toggle "Personnaliser les règles"
+    const toggleCustomBtn = document.getElementById('toggleCustomRulesBtn');
+    if (toggleCustomBtn) {
+      toggleCustomBtn.addEventListener('click', () => {
+        const block = document.getElementById('rulesCustomBlock');
+        const isHidden = block.style.display === 'none';
+        block.style.display = isHidden ? 'block' : 'none';
+        toggleCustomBtn.textContent = isHidden
+          ? '🔼 Masquer la personnalisation'
+          : '🛠️ Personnaliser les règles (avancé)';
+        if (isHidden) block.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
     }
 
     document.getElementById('toggleIgnoredBtn').addEventListener('click', () => {
