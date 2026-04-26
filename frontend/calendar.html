@@ -480,8 +480,8 @@
       try {
         const sel = document.getElementById('globalSeasonSelect');
         const season = sel ? sel.value : '';
-        const url = season ? `${downloadUrl}?season=${encodeURIComponent(season)}` : downloadUrl;
-        const response = await fetch(url, {
+        const fetchUrl = season ? `${downloadUrl}?season=${encodeURIComponent(season)}` : downloadUrl;
+        const response = await fetch(fetchUrl, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
