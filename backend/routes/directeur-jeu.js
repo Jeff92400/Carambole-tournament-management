@@ -787,10 +787,21 @@ router.put('/competitions/:id/poules', authenticateToken, requireDdJ, async (req
  * Returns array of { match_number, p1_idx, p2_idx } where idx is 1-based
  * into the poule's player order. Simple lexicographic order — fine for
  * poules of 2-5 (which is the realistic range for a CDB competition).
+ *
+ * Special case — poule of 2 players (V 2.0.528) :
+ *   FFB rule for poules of 2 = aller-retour (each player plays the other twice,
+ *   home/away). Match 1 = p1 vs p2, Match 2 = p2 vs p1 (player order swapped).
+ *   Applies whenever N=2, regardless of org setting (the setting governs whether
+ *   2-player poules are allowed; if one exists, it must be played twice).
  */
 function roundRobinSchedule(numPlayers) {
   const out = [];
   let m = 1;
+  if (numPlayers === 2) {
+    out.push({ match_number: m++, p1_idx: 1, p2_idx: 2 });
+    out.push({ match_number: m++, p1_idx: 2, p2_idx: 1 });
+    return out;
+  }
   for (let i = 1; i <= numPlayers; i++) {
     for (let j = i + 1; j <= numPlayers; j++) {
       out.push({ match_number: m++, p1_idx: i, p2_idx: j });
