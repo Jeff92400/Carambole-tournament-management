@@ -494,27 +494,103 @@
       document.querySelectorAll('.btn-save[data-phase]').forEach(btn => {
         btn.addEventListener('click', () => savePhase(btn.dataset.phase));
       });
+      attachSeedReorderHandlers();
     }
 
     function renderQualifiers(quals) {
-      const rowsHtml = quals.map((q, i) => `
-        <div class="qualifier">
+      // Detect if any bracket match has been played — if so, freeze the order
+      // (changing seeds after games would corrupt the bracket history).
+      const anyMatchPlayed = (state.bracket?.phases || []).some(p => p.is_played);
+      const overrideActive = !!state.bracket?.seed_override_active;
+      const rowsHtml = quals.map((q, i) => {
+        const upDisabled = (i === 0 || anyMatchPlayed) ? 'disabled' : '';
+        const downDisabled = (i === quals.length - 1 || anyMatchPlayed) ? 'disabled' : '';
+        return `
+        <div class="qualifier" data-seed="${i + 1}" data-licence="${escapeHtml(q.licence)}">
           <div class="seed seed-${i + 1}">${i + 1}</div>
           <div style="flex: 1; min-width: 0;">
             <div class="name">${escapeHtml(q.player_name)}</div>
             <div class="sub">${escapeHtml(q.club || '')} · Poule ${String.fromCharCode(64 + q.poule_number)}</div>
           </div>
-          <div style="font-size: 0.82em; color: #666; white-space: nowrap;">
+          <div style="font-size: 0.82em; color: #666; white-space: nowrap; margin-right: 6px;">
             ${q.match_points} PM · ${formatMoyenne(q.moyenne)}
           </div>
+          <div style="display: flex; flex-direction: column; gap: 2px;">
+            <button class="seed-arrow" data-direction="up" data-seed="${i + 1}" ${upDisabled} style="border:1px solid #ccc;background:#fff;border-radius:3px;cursor:pointer;font-size:11px;padding:1px 6px;${anyMatchPlayed?'opacity:0.3;cursor:not-allowed;':''}" title="${anyMatchPlayed?'Verrouillé (matchs joués)':'Monter'}">▲</button>
+            <button class="seed-arrow" data-direction="down" data-seed="${i + 1}" ${downDisabled} style="border:1px solid #ccc;background:#fff;border-radius:3px;cursor:pointer;font-size:11px;padding:1px 6px;${anyMatchPlayed?'opacity:0.3;cursor:not-allowed;':''}" title="${anyMatchPlayed?'Verrouillé (matchs joués)':'Descendre'}">▼</button>
+          </div>
         </div>
-      `).join('');
+      `;
+      }).join('');
+      const banner = overrideActive
+        ? `<div style="background:#fff8e1;border:1px solid #ffc107;border-radius:6px;padding:8px 12px;margin-bottom:10px;font-size:13px;color:#7a5400;">
+             ⚠️ <strong>Ordre manuel actif</strong> — l'ordre des qualifiés a été ajusté manuellement (différent du calcul automatique).
+             <button id="resetSeedsBtn" style="margin-left:10px;background:#fff;color:#7a5400;border:1px solid #c47b00;border-radius:4px;padding:3px 10px;cursor:pointer;font-size:12px;${anyMatchPlayed?'opacity:0.4;cursor:not-allowed;':''}" ${anyMatchPlayed?'disabled':''}>↺ Réinitialiser l'ordre</button>
+           </div>`
+        : '';
+      const hint = anyMatchPlayed
+        ? `<p style="font-size:11px;color:#888;margin:6px 0 0;">🔒 L'ordre est verrouillé car des matchs du tableau ont déjà été saisis.</p>`
+        : `<p style="font-size:11px;color:#888;margin:6px 0 0;">💡 Cliquez sur ▲▼ pour réordonner les qualifiés (utile pour comparer avec une fiche FFB qui aurait un classement différent).</p>`;
       return `
         <div class="qualifiers-card">
           <h3>🏆 Qualifiés pour le tableau final (${quals.length} joueurs)</h3>
+          ${banner}
           <div class="qualifiers-grid">${rowsHtml}</div>
+          ${hint}
         </div>
       `;
+    }
+
+    // Wire up the seed reorder buttons after each render
+    function attachSeedReorderHandlers() {
+      document.querySelectorAll('.seed-arrow').forEach(btn => {
+        if (btn.disabled) return;
+        btn.addEventListener('click', async () => {
+          const seed = parseInt(btn.dataset.seed, 10);
+          const direction = btn.dataset.direction;
+          const quals = state.bracket?.qualifiers || [];
+          if (!quals.length) return;
+          const fromIdx = seed - 1;
+          const toIdx = direction === 'up' ? fromIdx - 1 : fromIdx + 1;
+          if (toIdx < 0 || toIdx >= quals.length) return;
+          const reordered = [...quals];
+          [reordered[fromIdx], reordered[toIdx]] = [reordered[toIdx], reordered[fromIdx]];
+          await saveSeedOrder(reordered.map(q => q.licence));
+        });
+      });
+      const resetBtn = document.getElementById('resetSeedsBtn');
+      if (resetBtn) {
+        resetBtn.addEventListener('click', async () => {
+          if (!confirm('Réinitialiser l\'ordre des qualifiés au calcul automatique ?')) return;
+          await resetSeedOrder();
+        });
+      }
+    }
+
+    async function saveSeedOrder(licences) {
+      try {
+        const resp = await authFetch(`${API_URL}/directeur-jeu/competitions/${compId}/bracket-seeds`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ licences })
+        });
+        if (!resp.ok) throw new Error('Échec sauvegarde');
+        await loadBracket(); // refresh display + state
+      } catch (err) {
+        alert('Erreur : ' + err.message);
+      }
+    }
+
+    async function resetSeedOrder() {
+      try {
+        const resp = await authFetch(`${API_URL}/directeur-jeu/competitions/${compId}/bracket-seeds`, {
+          method: 'DELETE'
+        });
+        if (!resp.ok) throw new Error('Échec réinitialisation');
+        await loadBracket();
+      } catch (err) {
+        alert('Erreur : ' + err.message);
+      }
     }
 
     const PHASE_META = {

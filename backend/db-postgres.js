@@ -2161,6 +2161,20 @@ async function initializeDatabase() {
       await client.query(`ALTER TABLE calendar_draft ADD COLUMN IF NOT EXISTS manual_comment TEXT`);
       await client.query(`ALTER TABLE calendar_draft ADD COLUMN IF NOT EXISTS modified_at TIMESTAMP`);
 
+      // V 2.0.535 — manual override for bracket seed order (post-poule ranking).
+      // Allows the DdJ to reorder qualifiers to match a (potentially incorrect)
+      // FFB ranking for like-for-like comparison.
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS ddj_bracket_seed_overrides (
+          tournoi_id INTEGER NOT NULL REFERENCES tournoi_ext(tournoi_id) ON DELETE CASCADE,
+          seed_position INTEGER NOT NULL,
+          licence TEXT NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY (tournoi_id, seed_position)
+        )
+      `);
+      await client.query(`CREATE INDEX IF NOT EXISTS idx_ddj_bracket_seed_overrides_tournoi ON ddj_bracket_seed_overrides(tournoi_id)`);
+
       console.log('[Migration] Seasonal Calendar Generator schema ready');
     } catch (calendarErr) {
       console.error('[Migration] Seasonal Calendar Generator schema FAILED (non-fatal):', calendarErr.message);

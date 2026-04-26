@@ -1333,7 +1333,32 @@ async function loadBracket(db, orgId, tournoiId) {
   if (ctx.error) return ctx;
 
   const allPoulesPlayed = ctx.poules.every(p => p.all_matches_played);
-  const { qualifiers, non_qualifiers } = computeBracketSeeding(ctx.poules, BRACKET_SIZE);
+  let { qualifiers, non_qualifiers } = computeBracketSeeding(ctx.poules, BRACKET_SIZE);
+
+  // V 2.0.535 — Manual seed override: if the DdJ has reordered qualifiers
+  // post-poules to match an external (potentially incorrect) FFB ranking,
+  // apply that order BEFORE deriving SF pairings.
+  let seedOverrideActive = false;
+  const overrideRows = await new Promise((resolve, reject) => {
+    db.all(
+      `SELECT seed_position, licence FROM ddj_bracket_seed_overrides
+       WHERE tournoi_id = $1 ORDER BY seed_position ASC`,
+      [tournoiId],
+      (err, rs) => err ? reject(err) : resolve(rs || [])
+    );
+  });
+  if (overrideRows.length === qualifiers.length && overrideRows.length > 0) {
+    const norm = (s) => String(s || '').replace(/\s+/g, '');
+    const reordered = [];
+    for (const r of overrideRows) {
+      const target = qualifiers.find(q => norm(q.licence) === norm(r.licence));
+      if (target) reordered.push(target);
+    }
+    if (reordered.length === qualifiers.length) {
+      qualifiers = reordered;
+      seedOverrideActive = true;
+    }
+  }
 
   // Fetch any saved bracket match rows
   const savedRows = await new Promise((resolve, reject) => {
@@ -1451,9 +1476,63 @@ async function loadBracket(db, orgId, tournoiId) {
     qualifiers,
     non_qualifiers,
     phases,
-    final_places: finalPlaces
+    final_places: finalPlaces,
+    seed_override_active: seedOverrideActive
   };
 }
+
+// ----------------------------------------------------------------
+// Manual seed reordering for the bracket (post-poules ranking)
+// ----------------------------------------------------------------
+
+// POST /competitions/:id/bracket-seeds — body: { licences: ["123A", "456B", ...] }
+// Replaces the override (or creates it). Bracket recomputes the SF pairings
+// from the new order on next /bracket fetch.
+router.post('/competitions/:id/bracket-seeds', authenticateToken, requireDdJ, async (req, res) => {
+  const db = getDb();
+  const tournoiId = parseInt(req.params.id, 10);
+  const licences = Array.isArray(req.body?.licences) ? req.body.licences : null;
+  if (!Number.isFinite(tournoiId) || !licences || licences.length === 0) {
+    return res.status(400).json({ error: 'tournoi_id et licences[] requis' });
+  }
+  try {
+    await new Promise((resolve, reject) => {
+      db.run(`DELETE FROM ddj_bracket_seed_overrides WHERE tournoi_id = $1`,
+        [tournoiId], (err) => err ? reject(err) : resolve());
+    });
+    for (let i = 0; i < licences.length; i++) {
+      await new Promise((resolve, reject) => {
+        db.run(
+          `INSERT INTO ddj_bracket_seed_overrides (tournoi_id, seed_position, licence)
+           VALUES ($1, $2, $3)`,
+          [tournoiId, i + 1, licences[i]],
+          (err) => err ? reject(err) : resolve()
+        );
+      });
+    }
+    res.json({ ok: true, count: licences.length });
+  } catch (err) {
+    console.error('[DdJ] POST bracket-seeds error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /competitions/:id/bracket-seeds — clear override, revert to auto
+router.delete('/competitions/:id/bracket-seeds', authenticateToken, requireDdJ, (req, res) => {
+  const db = getDb();
+  const tournoiId = parseInt(req.params.id, 10);
+  if (!Number.isFinite(tournoiId)) {
+    return res.status(400).json({ error: 'tournoi_id invalide' });
+  }
+  db.run(`DELETE FROM ddj_bracket_seed_overrides WHERE tournoi_id = $1`,
+    [tournoiId], (err) => {
+      if (err) {
+        console.error('[DdJ] DELETE bracket-seeds error:', err);
+        return res.status(500).json({ error: err.message });
+      }
+      res.json({ ok: true });
+    });
+});
 
 // GET /api/directeur-jeu/competitions/:id/bracket
 router.get('/competitions/:id/bracket', authenticateToken, requireDdJ, async (req, res) => {
