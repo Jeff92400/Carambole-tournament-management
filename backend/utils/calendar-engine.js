@@ -459,12 +459,37 @@ function placeOne({ cat, ttype, weekends, hosts, brief, cmap, ligueFinals, alrea
   };
 }
 
-function generateCalendar({ brief, constraints, ligueFinals, categories, clubs }) {
+function generateCalendar({ brief, constraints, ligueFinals, categories, clubs, lockedPlacements = [] }) {
   const cmap = indexConstraints(constraints);
   const weekends = computeWeekends(brief);
   const activeCats = categories.filter(c => (brief.active_categories || []).includes(c.id));
   const orderedCats = orderCategoriesForPlacement(activeCats);
   const activeHosts = clubs.filter(c => (brief.active_hosts || []).includes(c.id));
+
+  // Pre-populate placements array with locked entries (engine will treat them
+  // as immovable, and skip those (category, tournament_type) pairs in the loop).
+  const lockedKeys = new Set();
+  const initialPlacements = [];
+  lockedPlacements.forEach(lp => {
+    const cat = categories.find(c => c.id === lp.category_id);
+    if (!cat) return;
+    const we = toISODateString(lp.weekend_date);
+    if (!we) return;
+    initialPlacements.push({
+      category_id: lp.category_id,
+      tournament_type: lp.tournament_type,
+      host_id: lp.host_id ?? null,
+      host_name: lp.host_name ?? null,
+      weekend_date: we,
+      qualif_date: we,
+      final_date: we,
+      _mode: cat.game_type,
+      _levelRank: levelRank(cat.level),
+      _categoryLabel: cat.display_name,
+      _locked: true
+    });
+    lockedKeys.add(`${lp.category_id}|${lp.tournament_type}`);
+  });
 
   // Assign each category a personalized cycle length (weeks per gap).
   // Earlier-placed categories (cascade order) get SHORTER cycles, finishing earlier.
@@ -483,12 +508,14 @@ function generateCalendar({ brief, constraints, ligueFinals, categories, clubs }
     });
   }
 
-  const placements = [];
+  const placements = [...initialPlacements];
   const conflicts = [];
   const tournamentTypes = ['T1', 'T2', 'T3', 'Finale'];
 
   for (const cat of orderedCats) {
     for (const ttype of tournamentTypes) {
+      // Skip if this (cat, type) is already locked
+      if (lockedKeys.has(`${cat.id}|${ttype}`)) continue;
       const result = placeOne({
         cat, ttype, weekends, hosts: activeHosts, brief, cmap, ligueFinals, alreadyPlaced: placements
       });

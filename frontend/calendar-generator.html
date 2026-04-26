@@ -449,7 +449,8 @@
       </div>
 
       <div style="margin: 16px 0; display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
-        <button type="button" class="btn" id="runGenerationBtn" style="background: #6b3aa3; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: 600;" title="Génère un nouveau calendrier et remplace le précédent (sauvegardé automatiquement)">⚡ Lancer la génération (remplace le calendrier précédent)</button>
+        <button type="button" class="btn" id="runGenerationBtn" style="background: #6b3aa3; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: 600;" title="Génère un nouveau calendrier et remplace tout le précédent (y compris les cellules verrouillées)">⚡ Tout régénérer (remplace tout)</button>
+        <button type="button" class="btn" id="runRespectLocksBtn" style="background: #c47b00; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: 600;" title="Garde toutes les cellules verrouillées 🔒 et recalcule uniquement les autres">🔒 Régénérer en gardant mes verrous</button>
         <button type="button" class="btn" id="saveTuningBtn" style="background: #2c7a4d; color: white; padding: 10px 16px; border: none; border-radius: 5px; cursor: pointer; font-size: 13px;">💾 Conserver ces réglages pour les prochaines générations</button>
         <span id="generationStatus" style="color: #666; font-size: 13px;"></span>
       </div>
@@ -1299,41 +1300,49 @@
       return overrides;
     }
 
-    document.getElementById('runGenerationBtn').addEventListener('click', async () => {
+    async function runGeneration({ respectLocks }) {
       if (!currentBrief) {
         document.getElementById('generationStatus').textContent = '⚠️ Sauvegardez d\'abord le brief.';
         document.getElementById('generationStatus').style.color = '#c00';
         return;
       }
-      // Warn if we have manual edits
-      const hasEdits = _lastResult?.placements?.some(p => p._locked || p._comment);
-      if (hasEdits && !confirm('Régénérer effacera vos modifications manuelles. Continuer ?')) return;
-      const btn = document.getElementById('runGenerationBtn');
+      // Warn if we have manual edits AND user is doing a full regen
+      if (!respectLocks) {
+        const hasEdits = _lastResult?.placements?.some(p => p._locked || p._comment);
+        if (hasEdits && !confirm('Tout régénérer effacera vos modifications manuelles ET vos verrous 🔒. Continuer ?\n\nAstuce : utilisez « Régénérer en gardant mes verrous » pour préserver vos cellules verrouillées.')) return;
+      }
+      const btnAll = document.getElementById('runGenerationBtn');
+      const btnLocks = document.getElementById('runRespectLocksBtn');
       const status = document.getElementById('generationStatus');
-      btn.disabled = true;
-      btn.textContent = '⏳ Génération en cours...';
+      btnAll.disabled = true; btnLocks.disabled = true;
+      const activeBtn = respectLocks ? btnLocks : btnAll;
+      const original = activeBtn.textContent;
+      activeBtn.textContent = '⏳ Génération en cours...';
       status.textContent = ''; status.style.color = '#666';
       try {
         const overrides = readQuickTuningOverrides();
         const res = await fetch(`${API_URL}/calendar-generator/generate`, {
           method: 'POST', headers: authHeaders,
-          body: JSON.stringify({ brief_id: currentBrief.id, constraint_overrides: overrides })
+          body: JSON.stringify({ brief_id: currentBrief.id, constraint_overrides: overrides, respect_locks: respectLocks })
         });
         const json = await res.json();
         if (!res.ok) throw new Error(json.error || 'Échec');
         renderGenerationResult(json);
-        // Reload from /draft to populate _draft_id (needed for inline editing)
         setTimeout(() => loadSavedDraft(), 200);
-        status.textContent = `✓ Terminé en ${new Date().toLocaleTimeString('fr-FR')}`;
+        const lockMsg = json.locked_count ? ` · ${json.locked_count} verrou(s) préservé(s) 🔒` : '';
+        status.textContent = `✓ Terminé en ${new Date().toLocaleTimeString('fr-FR')}${lockMsg}`;
         status.style.color = '#2c7a4d';
       } catch (err) {
         status.textContent = '❌ ' + err.message;
         status.style.color = '#c00';
       } finally {
-        btn.disabled = false;
-        btn.textContent = '⚡ Relancer la génération';
+        btnAll.disabled = false; btnLocks.disabled = false;
+        activeBtn.textContent = original;
       }
-    });
+    }
+
+    document.getElementById('runGenerationBtn').addEventListener('click', () => runGeneration({ respectLocks: false }));
+    document.getElementById('runRespectLocksBtn').addEventListener('click', () => runGeneration({ respectLocks: true }));
 
     // Color palette for hosts (mild backgrounds)
     const HOST_PALETTE = ['#fce4d6', '#d9e1f2', '#e2efda', '#fff2cc', '#e4dfec', '#ddebf7', '#fce4d6', '#e7e6e6'];
@@ -1502,7 +1511,7 @@
 
       container.innerHTML = `
         <div style="font-size: 13px; color: #2c5530; background: #e8f5e9; border: 1px solid #a5d6a7; padding: 8px 12px; border-radius: 6px; margin-bottom: 8px;">
-          ✏️ <strong>Modification manuelle</strong> : cliquez sur n'importe quelle cellule remplie pour <strong>changer la date, le club hôte, ajouter un commentaire</strong> ou verrouiller la case 🔒. Vos modifications sont enregistrées immédiatement.
+          ✏️ <strong>Modification manuelle</strong> : cliquez sur n'importe quelle cellule remplie pour <strong>changer la date, le club hôte, ajouter un commentaire</strong> ou verrouiller la case 🔒. Une cellule verrouillée est préservée si vous cliquez « Régénérer en gardant mes verrous ». Vos modifications sont enregistrées immédiatement.
         </div>
         <div style="overflow-x: auto; max-width: 100%; border: 1px solid #ddd; border-radius: 4px;">
           <table style="border-collapse: collapse; min-width: 100%;">

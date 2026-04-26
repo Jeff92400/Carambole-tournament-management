@@ -724,6 +724,7 @@ router.post('/generate', authenticateToken, requireAdmin, (req, res) => {
   const orgId = req.user.organizationId;
   const briefId = parseInt(req.body?.brief_id, 10);
   const overrides = req.body?.constraint_overrides || {}; // { rule_type: { parameters?: {}, weight?: N, enabled?: bool } }
+  const respectLocks = req.body?.respect_locks === true;
   if (!briefId) return res.status(400).json({ error: 'brief_id requis' });
 
   loadEngineContext(orgId, briefId, (err, ctx) => {
@@ -756,43 +757,83 @@ router.post('/generate', authenticateToken, requireAdmin, (req, res) => {
       }
     }
 
-    let result;
-    try {
-      result = generateCalendar(ctx);
-    } catch (e) {
-      console.error('[calendar-generator] engine error:', e);
-      return res.status(500).json({ error: 'Erreur moteur : ' + e.message });
-    }
-
-    // Persist draft (delete existing, insert new) — best-effort, non-fatal
     const db = getDb();
-    db.run(`DELETE FROM calendar_draft WHERE brief_id = $1`, [briefId], (delErr) => {
-      if (delErr) console.warn('[calendar-generator] DELETE draft warning:', delErr.message);
 
-      // Insert each placement
-      const inserts = result.placements.map(p => new Promise((resolve) => {
-        db.run(
-          `INSERT INTO calendar_draft
-             (brief_id, weekend_date, mode, category_id, tournament_type,
-              host_club_id, conflict_flags, locked_by_user)
-           VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, FALSE)`,
-          [briefId, p.weekend_date, ctx.categories.find(c => c.id === p.category_id)?.game_type || null,
-           p.category_id, p.tournament_type, p.host_id, JSON.stringify([])],
-          () => resolve()
+    // Helper to load locked placements then run the engine
+    const loadLockedThenGenerate = () => new Promise((resolve, reject) => {
+      if (!respectLocks) return resolve([]);
+      db.all(
+        `SELECT cd.category_id, cd.tournament_type, cd.weekend_date,
+                cd.host_club_id AS host_id,
+                cl.display_name AS host_name
+         FROM calendar_draft cd
+         LEFT JOIN clubs cl ON cl.id = cd.host_club_id
+         WHERE cd.brief_id = $1 AND cd.locked_by_user = TRUE`,
+        [briefId],
+        (e, rows) => {
+          if (e) return reject(e);
+          (rows || []).forEach(r => {
+            if (r.weekend_date instanceof Date) r.weekend_date = r.weekend_date.toISOString().slice(0, 10);
+            else if (typeof r.weekend_date === 'string') {
+              const m = r.weekend_date.match(/^\d{4}-\d{2}-\d{2}/);
+              r.weekend_date = m ? m[0] : null;
+            }
+          });
+          resolve(rows || []);
+        }
+      );
+    });
+
+    loadLockedThenGenerate().then(lockedPlacements => {
+      let result;
+      try {
+        result = generateCalendar({ ...ctx, lockedPlacements });
+      } catch (e) {
+        console.error('[calendar-generator] engine error:', e);
+        return res.status(500).json({ error: 'Erreur moteur : ' + e.message });
+      }
+
+      // Persist: keep locks if respect_locks, wipe everything otherwise
+      const lockedKeySet = new Set(lockedPlacements.map(lp => `${lp.category_id}|${lp.tournament_type}`));
+      const deleteSql = respectLocks
+        ? `DELETE FROM calendar_draft WHERE brief_id = $1 AND locked_by_user = FALSE`
+        : `DELETE FROM calendar_draft WHERE brief_id = $1`;
+
+      db.run(deleteSql, [briefId], (delErr) => {
+        if (delErr) console.warn('[calendar-generator] DELETE draft warning:', delErr.message);
+
+        // Filter out placements that already exist as locks (don't double-insert)
+        const toInsert = result.placements.filter(p =>
+          !lockedKeySet.has(`${p.category_id}|${p.tournament_type}`)
         );
-      }));
 
-      Promise.all(inserts).then(() => {
-        res.json({
-          ...result,
-          // Add display labels for the frontend
-          placements: result.placements.map(p => ({
-            ...p,
-            category_label: ctx.categories.find(c => c.id === p.category_id)?.display_name || `cat#${p.category_id}`,
-            host_name: ctx.clubs.find(c => c.id === p.host_id)?.display_name || null
-          }))
+        const inserts = toInsert.map(p => new Promise((resolve) => {
+          db.run(
+            `INSERT INTO calendar_draft
+               (brief_id, weekend_date, mode, category_id, tournament_type,
+                host_club_id, conflict_flags, locked_by_user)
+             VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, FALSE)`,
+            [briefId, p.weekend_date, ctx.categories.find(c => c.id === p.category_id)?.game_type || null,
+             p.category_id, p.tournament_type, p.host_id, JSON.stringify([])],
+            () => resolve()
+          );
+        }));
+
+        Promise.all(inserts).then(() => {
+          res.json({
+            ...result,
+            placements: result.placements.map(p => ({
+              ...p,
+              category_label: ctx.categories.find(c => c.id === p.category_id)?.display_name || `cat#${p.category_id}`,
+              host_name: ctx.clubs.find(c => c.id === p.host_id)?.display_name || null
+            })),
+            locked_count: lockedPlacements.length
+          });
         });
       });
+    }).catch(e => {
+      console.error('[calendar-generator] generate error:', e);
+      res.status(500).json({ error: e.message });
     });
   });
 });
