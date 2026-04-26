@@ -2040,6 +2040,11 @@ router.get('/competitions/:id/recap', authenticateToken, requireDdJ, async (req,
       ...((consolanteCtx.final_places) || [])
     ];
 
+    // FFB-style ranking — pure match-points cumulative across all phases
+    // (poules + bracket + consolante), with FFB tie-breaks (moyenne, série).
+    // Mirrors what is shown on the FFB website results.
+    const ffbClassement = await buildFFBRanking(db, tournoiId, pouleCtx);
+
     res.json({
       tournament: pouleCtx.tournament,
       game_params: pouleCtx.game_params,
@@ -2058,13 +2063,144 @@ router.get('/competitions/:id/recap', authenticateToken, requireDdJ, async (req,
         phases: consolanteCtx.phases || [],
         final_places: consolanteCtx.final_places || null
       },
-      overall_classement: overall
+      overall_classement: overall,
+      ffb_classement: ffbClassement
     });
   } catch (err) {
     console.error('[DdJ] /recap error:', err);
     res.status(500).json({ error: 'Erreur lors du chargement du récapitulatif' });
   }
 });
+
+/**
+ * Build a FFB-style cumulative ranking from all match results across the 3
+ * phases (poules, bracket, consolante).
+ *
+ * For each player, sums:
+ *   - match_points (win=2 / draw=1 / loss=0)
+ *   - matches_played (only matches with scores entered)
+ *   - wins, draws (for taux victoire)
+ *   - total_points (somme des points scorés)
+ *   - total_reprises
+ *   - best_serie (max across all phases)
+ *
+ * Sorted by (match_points desc, moyenne desc, best_serie desc) — FFB standard.
+ */
+async function buildFFBRanking(db, tournoiId, pouleCtx) {
+  const settings = (pouleCtx && pouleCtx.game_params) || {};
+
+  const fetchAll = (sql, params) => new Promise((resolve, reject) =>
+    db.all(sql, params, (err, rows) => err ? reject(err) : resolve(rows || []))
+  );
+
+  // Pull matches from the 3 phases with consistent column shape
+  const [pouleM, bracketM, consoM] = await Promise.all([
+    fetchAll(
+      `SELECT p1_licence, p2_licence, p1_points, p1_reprises, p1_serie,
+              p2_points, p2_reprises, p2_serie
+       FROM ddj_poule_matches WHERE tournoi_id = $1`,
+      [tournoiId]
+    ),
+    fetchAll(
+      `SELECT p1_licence, p2_licence, p1_points, p1_reprises, p1_serie,
+              p2_points, p2_reprises, p2_serie
+       FROM ddj_bracket_matches WHERE tournoi_id = $1`,
+      [tournoiId]
+    ),
+    fetchAll(
+      `SELECT p1_licence, p2_licence, p1_points, p1_reprises, p1_serie,
+              p2_points, p2_reprises, p2_serie
+       FROM ddj_consolante_matches WHERE tournoi_id = $1`,
+      [tournoiId]
+    )
+  ]);
+
+  const allMatches = [...pouleM, ...bracketM, ...consoM];
+
+  // Aggregate per player
+  const stats = new Map(); // licence -> { ... }
+  const ensure = (lic) => {
+    const k = String(lic || '').replace(/\s+/g, '');
+    if (!stats.has(k)) {
+      stats.set(k, {
+        licence: lic,
+        matches_played: 0,
+        wins: 0,
+        draws: 0,
+        losses: 0,
+        match_points: 0,
+        total_points: 0,
+        total_reprises: 0,
+        best_serie: 0
+      });
+    }
+    return stats.get(k);
+  };
+
+  for (const m of allMatches) {
+    const mp = computeMatchPoints(m.p1_points, m.p2_points, settings);
+    if (!mp) continue; // not played → skip
+    const s1 = ensure(m.p1_licence);
+    const s2 = ensure(m.p2_licence);
+    s1.matches_played += 1;
+    s2.matches_played += 1;
+    s1.match_points += mp.p1_mp;
+    s2.match_points += mp.p2_mp;
+    s1.total_points += (m.p1_points || 0);
+    s2.total_points += (m.p2_points || 0);
+    s1.total_reprises += (m.p1_reprises || 0);
+    s2.total_reprises += (m.p2_reprises || 0);
+    if ((m.p1_serie || 0) > s1.best_serie) s1.best_serie = m.p1_serie;
+    if ((m.p2_serie || 0) > s2.best_serie) s2.best_serie = m.p2_serie;
+    if (mp.outcome === 'p1_win') { s1.wins += 1; s2.losses += 1; }
+    else if (mp.outcome === 'p2_win') { s2.wins += 1; s1.losses += 1; }
+    else { s1.draws += 1; s2.draws += 1; }
+  }
+
+  // Resolve player names + clubs from inscriptions (one shot)
+  const players = await fetchAll(
+    `SELECT i.licence, COALESCE(p.last_name || ' ' || p.first_name, i.player_name) AS name, i.club
+     FROM inscriptions i
+     LEFT JOIN players p ON REPLACE(p.licence, ' ', '') = REPLACE(i.licence, ' ', '')
+     WHERE i.tournoi_id = $1 AND i.status = 'inscrit'`,
+    [tournoiId]
+  );
+  const meta = new Map();
+  players.forEach(p => meta.set(String(p.licence || '').replace(/\s+/g, ''), p));
+
+  // Build output array
+  const arr = [...stats.values()].map(s => {
+    const m = meta.get(String(s.licence || '').replace(/\s+/g, '')) || {};
+    const moyenne = s.total_reprises > 0 ? s.total_points / s.total_reprises : 0;
+    const winRate = s.matches_played > 0 ? Math.round((s.wins / s.matches_played) * 100) : 0;
+    return {
+      licence: s.licence,
+      name: m.name || s.licence,
+      club: m.club || null,
+      matches_played: s.matches_played,
+      wins: s.wins,
+      draws: s.draws,
+      losses: s.losses,
+      match_points: s.match_points,
+      win_rate: winRate,
+      total_points: s.total_points,
+      total_reprises: s.total_reprises,
+      moyenne: Math.round(moyenne * 1000) / 1000,
+      best_serie: s.best_serie || 0
+    };
+  });
+
+  // FFB sort: match_points desc, moyenne desc, best_serie desc
+  arr.sort((a, b) => {
+    if (b.match_points !== a.match_points) return b.match_points - a.match_points;
+    if (b.moyenne !== a.moyenne) return b.moyenne - a.moyenne;
+    return (b.best_serie || 0) - (a.best_serie || 0);
+  });
+
+  // Add 1-based rank
+  arr.forEach((p, i) => { p.rank = i + 1; });
+  return arr;
+}
 
 // ============================================================================
 // Step 6b — Export CSV (format FFB)

@@ -367,6 +367,7 @@
         ${renderBracketSection(data.bracket)}
         ${renderConsolanteSection(data.consolante)}
         ${renderOverallSection(data.overall_classement)}
+        ${renderFfbSection(data.ffb_classement)}
         <div class="ddj-action-bar no-print">
           <button class="ddj-btn ddj-btn-secondary" onclick="window.location.href='directeur-de-jeu-classement.html?compId=${compId}'">
             ← Retour au classement
@@ -604,6 +605,54 @@
         </div>
       ` : '';
       return `<div class="recap-section"><h3>📋 Matchs de classement (Consolante)</h3>${tableHtml}${placesHtml}</div>`;
+    }
+
+    // Classement façon FFB — points match cumulés sur les 3 phases.
+    // Cette vue se compare directement avec la fiche FFB officielle.
+    function renderFfbSection(ffb) {
+      if (!ffb || !ffb.length) {
+        return `<div class="recap-section"><h3>📊 Classement FFB (cumul points match)</h3><div class="recap-empty">Aucun match saisi pour le moment.</div></div>`;
+      }
+      const rows = ffb.map(p => `
+        <tr>
+          <td style="text-align: center; font-weight: 600;">${p.rank}</td>
+          <td><div style="font-weight: 600;">${escapeHtml(p.name || p.licence)}</div>${p.club ? `<div style="font-size: 11px; color: #666;">${escapeHtml(p.club)}</div>` : ''}</td>
+          <td style="text-align: center;">${p.matches_played}</td>
+          <td style="text-align: center; font-weight: 700; color: #1F4788;">${p.match_points}</td>
+          <td style="text-align: center;">${p.win_rate}%</td>
+          <td style="text-align: center;">${p.moyenne.toFixed(3)}</td>
+          <td style="text-align: center;">${p.total_points}</td>
+          <td style="text-align: center;">${p.total_reprises}</td>
+          <td style="text-align: center;">${p.best_serie || '—'}</td>
+        </tr>
+      `).join('');
+      return `
+        <div class="recap-section">
+          <h3>📊 Classement FFB (cumul points match — toutes phases)</h3>
+          <p style="color: #666; font-size: 13px; margin: 0 0 8px;">
+            Classement basé uniquement sur les points match cumulés (poules + tableau + classement), avec départage FFB (moyenne, meilleure série).
+            <strong>Cette vue se compare directement avec la fiche FFB officielle</strong>.
+          </p>
+          <div style="overflow-x: auto;">
+            <table style="width: 100%; border-collapse: collapse; font-size: 13px; min-width: 700px;">
+              <thead>
+                <tr style="background: linear-gradient(135deg, #1F4788, #163763); color: white;">
+                  <th style="padding: 8px 10px;">#</th>
+                  <th style="padding: 8px 10px; text-align: left;">Joueur</th>
+                  <th style="padding: 8px 10px;" title="Nombre de matchs joués">Mat.</th>
+                  <th style="padding: 8px 10px;">Pts match</th>
+                  <th style="padding: 8px 10px;" title="Taux de victoire">Vict.</th>
+                  <th style="padding: 8px 10px;">Moyenne</th>
+                  <th style="padding: 8px 10px;">Points</th>
+                  <th style="padding: 8px 10px;">Reprises</th>
+                  <th style="padding: 8px 10px;">Meill. série</th>
+                </tr>
+              </thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+        </div>
+      `;
     }
 
     function renderOverallSection(overall) {
