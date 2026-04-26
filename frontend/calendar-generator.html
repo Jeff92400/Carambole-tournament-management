@@ -218,7 +218,7 @@
             <a href="inscriptions-viewer.html"><span class="nav-icon">📝</span>Inscriptions</a>
             <a href="tournois-list.html"><span class="nav-icon">📅</span>Tournois à venir</a>
             <a href="calendar.html"><span class="nav-icon">🗓️</span>Calendrier</a>
-            <a href="calendar-generator.html"><span class="nav-icon">✨</span>Assistant Calendrier</a>
+            <a href="calendar-generator.html" class="admin-only"><span class="nav-icon">✨</span>Assistant Calendrier</a>
           </div>
         </div>
         <div class="nav-dropdown">
@@ -486,6 +486,13 @@
     if (!requireAuth()) { throw new Error('Not authenticated'); }
     const API_URL = '/api';
     const token = sessionStorage.getItem('token');
+    // Page reserved to admins
+    const _userRole = sessionStorage.getItem('userRole');
+    if (_userRole && _userRole !== 'admin') {
+      alert('L\'Assistant Calendrier est réservé aux administrateurs.');
+      window.location.href = 'dashboard.html';
+      throw new Error('Not authorized');
+    }
     const authHeaders = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
 
     let referenceData = { categories: [], clubs: [] };

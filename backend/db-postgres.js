@@ -1768,6 +1768,15 @@ async function initializeDatabase() {
     await client.query(`ALTER TABLE calendar ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_calendar_org ON calendar(organization_id)`);
     await client.query(`UPDATE calendar SET organization_id = 1 WHERE organization_id IS NULL`);
+    // V 2.0.521 — multi-season support: 1 calendar document per (org, season)
+    await client.query(`ALTER TABLE calendar ADD COLUMN IF NOT EXISTS season TEXT`);
+    // Backfill season from filename for existing rows (one-shot)
+    await client.query(`
+      UPDATE calendar
+      SET season = SUBSTRING(filename FROM '(\\d{4}-\\d{4})')
+      WHERE season IS NULL AND filename ~ '\\d{4}-\\d{4}'
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_calendar_org_season ON calendar(organization_id, season)`);
 
     await client.query(`ALTER TABLE inscription_email_logs ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_inscription_email_logs_org ON inscription_email_logs(organization_id)`);

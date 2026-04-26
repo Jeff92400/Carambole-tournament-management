@@ -153,15 +153,15 @@ router.post('/upload', authenticateToken, requireAdmin, upload.single('calendar'
   // Build normalized filename
   const normalizedFilename = `Calendrier ${orgShortName} ${season}.${ext}`;
 
-  // Delete existing calendar for this org and insert new one
-  db.run('DELETE FROM calendar WHERE ($1::int IS NULL OR organization_id = $1)', [orgId], (err) => {
+  // Delete only the existing calendar for this (org, season) pair — keep other seasons
+  db.run('DELETE FROM calendar WHERE ($1::int IS NULL OR organization_id = $1) AND season = $2', [orgId, season], (err) => {
     if (err) {
       console.error('Error deleting old calendar:', err);
     }
 
     db.run(
-      'INSERT INTO calendar (filename, content_type, file_data, uploaded_by, organization_id) VALUES ($1, $2, $3, $4, $5)',
-      [normalizedFilename, mimetype, buffer, uploadedBy, orgId],
+      'INSERT INTO calendar (filename, content_type, file_data, uploaded_by, organization_id, season) VALUES ($1, $2, $3, $4, $5, $6)',
+      [normalizedFilename, mimetype, buffer, uploadedBy, orgId, season],
       function(err) {
         if (err) {
           console.error('Error saving calendar:', err);
@@ -179,10 +179,15 @@ router.post('/upload', authenticateToken, requireAdmin, upload.single('calendar'
   });
 });
 
-// View calendar (all authenticated users)
+// View calendar (all authenticated users) — optional ?season=YYYY-YYYY
 router.get('/view', authenticateTokenFlexible, (req, res) => {
   const orgId = req.user.organizationId || null;
-  db.get('SELECT * FROM calendar WHERE ($1::int IS NULL OR organization_id = $1) ORDER BY created_at DESC LIMIT 1', [orgId], (err, row) => {
+  const season = (req.query.season || '').trim() || null;
+  const sql = season
+    ? 'SELECT * FROM calendar WHERE ($1::int IS NULL OR organization_id = $1) AND season = $2 ORDER BY created_at DESC LIMIT 1'
+    : 'SELECT * FROM calendar WHERE ($1::int IS NULL OR organization_id = $1) ORDER BY created_at DESC LIMIT 1';
+  const params = season ? [orgId, season] : [orgId];
+  db.get(sql, params, (err, row) => {
     if (err) {
       console.error('Error fetching calendar:', err);
       return res.status(500).json({ error: 'Database error' });
@@ -201,10 +206,15 @@ router.get('/view', authenticateTokenFlexible, (req, res) => {
   });
 });
 
-// Download calendar
+// Download calendar — optional ?season=YYYY-YYYY
 router.get('/download', authenticateToken, (req, res) => {
   const orgId = req.user.organizationId || null;
-  db.get('SELECT * FROM calendar WHERE ($1::int IS NULL OR organization_id = $1) ORDER BY created_at DESC LIMIT 1', [orgId], (err, row) => {
+  const season = (req.query.season || '').trim() || null;
+  const sql = season
+    ? 'SELECT * FROM calendar WHERE ($1::int IS NULL OR organization_id = $1) AND season = $2 ORDER BY created_at DESC LIMIT 1'
+    : 'SELECT * FROM calendar WHERE ($1::int IS NULL OR organization_id = $1) ORDER BY created_at DESC LIMIT 1';
+  const params = season ? [orgId, season] : [orgId];
+  db.get(sql, params, (err, row) => {
     if (err) {
       console.error('Error fetching calendar:', err);
       return res.status(500).json({ error: 'Database error' });
@@ -282,10 +292,33 @@ router.get('/public', async (req, res) => {
   });
 });
 
-// Check if calendar exists
+// List available seasons (calendars uploaded for this org)
+router.get('/seasons', authenticateToken, (req, res) => {
+  const orgId = req.user.organizationId || null;
+  db.all(
+    `SELECT DISTINCT season FROM calendar
+     WHERE ($1::int IS NULL OR organization_id = $1) AND season IS NOT NULL
+     ORDER BY season DESC`,
+    [orgId],
+    (err, rows) => {
+      if (err) {
+        console.error('Error listing calendar seasons:', err);
+        return res.status(500).json({ error: 'Database error' });
+      }
+      res.json((rows || []).map(r => r.season));
+    }
+  );
+});
+
+// Check if calendar exists — optional ?season=YYYY-YYYY
 router.get('/info', authenticateToken, (req, res) => {
   const orgId = req.user.organizationId || null;
-  db.get('SELECT id, filename, content_type, uploaded_by, created_at FROM calendar WHERE ($1::int IS NULL OR organization_id = $1) ORDER BY created_at DESC LIMIT 1', [orgId], (err, row) => {
+  const season = (req.query.season || '').trim() || null;
+  const sql = season
+    ? 'SELECT id, filename, content_type, uploaded_by, created_at, season FROM calendar WHERE ($1::int IS NULL OR organization_id = $1) AND season = $2 ORDER BY created_at DESC LIMIT 1'
+    : 'SELECT id, filename, content_type, uploaded_by, created_at, season FROM calendar WHERE ($1::int IS NULL OR organization_id = $1) ORDER BY created_at DESC LIMIT 1';
+  const params = season ? [orgId, season] : [orgId];
+  db.get(sql, params, (err, row) => {
     if (err) {
       console.error('Error fetching calendar info:', err);
       return res.status(500).json({ error: 'Database error' });
@@ -300,7 +333,8 @@ router.get('/info', authenticateToken, (req, res) => {
       filename: row.filename,
       contentType: row.content_type,
       uploadedBy: row.uploaded_by,
-      uploadedAt: row.created_at
+      uploadedAt: row.created_at,
+      season: row.season || null
     });
   });
 });

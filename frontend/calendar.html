@@ -73,7 +73,7 @@
             <a href="inscriptions-viewer.html"><span class="nav-icon">📝</span>Inscriptions</a>
             <a href="tournois-list.html"><span class="nav-icon">📅</span>Tournois à venir</a>
             <a href="calendar.html"><span class="nav-icon">🗓️</span>Calendrier</a>
-            <a href="calendar-generator.html"><span class="nav-icon">✨</span>Assistant Calendrier</a>
+            <a href="calendar-generator.html" class="admin-only"><span class="nav-icon">✨</span>Assistant Calendrier</a>
           </div>
         </div>
 
@@ -106,19 +106,21 @@
       </div>
     </div>
 
+    <!-- Global season selector (drives both sections) -->
+    <div class="card" style="display: flex; align-items: center; gap: 12px; padding: 16px 20px;">
+      <strong style="font-size: 16px; color: #1F4788;">📅 Saison :</strong>
+      <select id="globalSeasonSelect" style="padding: 8px 14px; border: 1px solid #c8c5be; border-radius: 5px; font-size: 15px; min-width: 160px;"></select>
+      <span style="flex: 1;"></span>
+      <span style="color: #888; font-size: 12px;">Le calendrier généré et le document importé ci-dessous correspondent à la saison sélectionnée.</span>
+    </div>
+
     <!-- ============================================================ -->
     <!-- Section A: Generated calendar (from Assistant Calendrier)    -->
     <!-- ============================================================ -->
     <div class="card" id="generatedSectionCard">
-      <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; margin-bottom: 12px;">
-        <div>
-          <h3 style="margin: 0 0 4px;">📅 Calendrier généré</h3>
-          <p style="margin: 0; color: #666; font-size: 13px;">Calendrier produit par l'<a href="calendar-generator.html" style="color: #6b3aa3;">Assistant Calendrier</a> — visualisation, modification manuelle et téléchargement.</p>
-        </div>
-        <div style="display: flex; gap: 8px; align-items: center;">
-          <label for="genSeasonSelect" style="font-size: 13px; color: #555;">Saison :</label>
-          <select id="genSeasonSelect" style="padding: 6px 10px; border: 1px solid #c8c5be; border-radius: 5px;"></select>
-        </div>
+      <div style="margin-bottom: 12px;">
+        <h3 style="margin: 0 0 4px;">📅 Calendrier généré</h3>
+        <p style="margin: 0; color: #666; font-size: 13px;">Calendrier produit par l'<a href="calendar-generator.html" style="color: #6b3aa3;">Assistant Calendrier</a> — visualisation, modification manuelle et téléchargement.</p>
       </div>
 
       <div id="genStatus" style="padding: 12px; background: #f0f7ff; border: 1px solid #c0d4f0; border-radius: 6px; font-size: 13px; color: #555;">Chargement...</div>
@@ -333,8 +335,7 @@
       }
     }
 
-    // Ensure everyone (not just admins) gets the filename-based title.
-    loadCalendarInfo();
+    // (loadCalendarInfo is now driven by the global season selector below — no auto-load here)
 
     // Populate the season dropdown in the upload form.
     // Default selection: upcoming season (if we are past March = preparing next
@@ -474,10 +475,13 @@
       }
     }
 
-    // Download calendar function
+    // Download calendar function (uses the globally-selected season)
     async function downloadCalendar() {
       try {
-        const response = await fetch(downloadUrl, {
+        const sel = document.getElementById('globalSeasonSelect');
+        const season = sel ? sel.value : '';
+        const url = season ? `${downloadUrl}?season=${encodeURIComponent(season)}` : downloadUrl;
+        const response = await fetch(url, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
@@ -510,51 +514,61 @@
     document.getElementById('downloadBtn').addEventListener('click', downloadCalendar);
     document.getElementById('downloadBtnPdf').addEventListener('click', downloadCalendar);
 
-    // Initialize the calendar view
-    initializeCalendar();
+    // (initializeCalendar replaced by the global selector flow below)
 
     // ====================================================================
-    // SECTION A: Generated calendar (from Assistant Calendrier)
+    // GLOBAL season selector — drives both sections (A and B)
     // ====================================================================
-    (async function initGeneratedSection() {
+    (async function initCalendarHub() {
       const authHeaders = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+      const globalSel = document.getElementById('globalSeasonSelect');
       const containers = {
         seasonal: document.getElementById('genViewSeasonal'),
         compact:  document.getElementById('genViewCompact'),
         hosts:    document.getElementById('genViewHosts'),
         viewSelector: document.getElementById('genViewSelector')
       };
-      const seasonSel = document.getElementById('genSeasonSelect');
       const statusEl = document.getElementById('genStatus');
       let referenceData = { categories: [], clubs: [] };
-      let currentBriefBySeason = {};
+      let briefBySeason = {};
       let activeBriefId = null;
 
-      // 1. Load all briefs for the org → populate season selector
+      // 1. Collect all available seasons (briefs + uploaded calendars + current/upcoming)
+      let briefs = [];
+      let uploadedSeasons = [];
       try {
-        const r = await fetch(`${API_URL}/calendar-generator/briefs`, { headers: authHeaders });
-        const briefs = r.ok ? await r.json() : [];
-        if (!briefs.length) {
-          statusEl.innerHTML = `Aucun calendrier généré. <a href="calendar-generator.html" style="color: #6b3aa3; font-weight: 600;">→ Aller à l'Assistant Calendrier</a>`;
-          seasonSel.disabled = true;
-          return;
-        }
-        briefs.forEach(b => {
-          currentBriefBySeason[b.season] = b.id;
-          const opt = document.createElement('option');
-          opt.value = b.season;
-          opt.textContent = b.season;
-          seasonSel.appendChild(opt);
-        });
+        const [bRes, sRes] = await Promise.all([
+          fetch(`${API_URL}/calendar-generator/briefs`, { headers: authHeaders }),
+          fetch(`${API_URL}/calendar/seasons`, { headers: authHeaders })
+        ]);
+        briefs = bRes.ok ? await bRes.json() : [];
+        uploadedSeasons = sRes.ok ? await sRes.json() : [];
+      } catch (_) {}
 
-        // Default: most recent (briefs ordered DESC server-side)
-        seasonSel.value = briefs[0].season;
-      } catch (err) {
-        statusEl.textContent = 'Erreur chargement saisons : ' + err.message;
-        return;
-      }
+      briefs.forEach(b => { briefBySeason[b.season] = b.id; });
 
-      // 2. Load reference data (categories + clubs) once
+      // Build season options: union of brief seasons, uploaded seasons, current and next
+      const currentSeason = await SeasonUtils.getCurrentSeason();
+      const [curStart] = currentSeason.split('-').map(Number);
+      const nextSeason = `${curStart + 1}-${curStart + 2}`;
+      const seasonSet = new Set([
+        ...briefs.map(b => b.season),
+        ...uploadedSeasons,
+        currentSeason,
+        nextSeason
+      ]);
+      const seasons = [...seasonSet].sort().reverse();
+      seasons.forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s;
+        opt.textContent = s;
+        globalSel.appendChild(opt);
+      });
+      // Default = most recent that has data; else current season
+      const defaultSeason = briefs[0]?.season || uploadedSeasons[0] || currentSeason;
+      globalSel.value = defaultSeason;
+
+      // 2. Load reference data (categories + clubs) once for Section A rendering
       try {
         const r = await fetch(`${API_URL}/calendar-generator/reference-data`, { headers: authHeaders });
         if (r.ok) {
@@ -566,12 +580,12 @@
         }
       } catch (_) {}
 
-      // 3. Load draft for selected season
-      async function loadDraftForSeason() {
-        const season = seasonSel.value;
-        activeBriefId = currentBriefBySeason[season];
+      // 3. Load Section A (generated calendar) for selected season
+      async function loadSectionA() {
+        const season = globalSel.value;
+        activeBriefId = briefBySeason[season] || null;
         if (!activeBriefId) {
-          statusEl.textContent = 'Pas de brief pour cette saison.';
+          statusEl.innerHTML = `Aucun calendrier généré pour la saison ${season}. <a href="calendar-generator.html" style="color: #6b3aa3; font-weight: 600;">→ Aller à l'Assistant Calendrier</a>`;
           containers.viewSelector.style.display = 'none';
           containers.seasonal.style.display = 'none';
           containers.compact.style.display = 'none';
@@ -583,7 +597,7 @@
           const r = await fetch(`${API_URL}/calendar-generator/draft?brief_id=${activeBriefId}`, { headers: authHeaders });
           const rows = r.ok ? await r.json() : [];
           if (!rows.length) {
-            statusEl.innerHTML = `Aucune génération encore lancée pour la saison ${season}. <a href="calendar-generator.html" style="color: #6b3aa3; font-weight: 600;">→ Lancer la génération</a>`;
+            statusEl.innerHTML = `Brief existant mais aucune génération lancée pour la saison ${season}. <a href="calendar-generator.html" style="color: #6b3aa3; font-weight: 600;">→ Lancer la génération</a>`;
             containers.viewSelector.style.display = 'none';
             containers.seasonal.style.display = 'none';
             containers.compact.style.display = 'none';
@@ -610,7 +624,6 @@
           const lockCount = rows.filter(r => r.locked_by_user).length;
           statusEl.innerHTML = `📂 <strong>${rows.length} tournois</strong> · saison ${season}${lockCount ? ' · ' + lockCount + ' verrouillé(s) 🔒' : ''}${lastModified ? ' · maj ' + new Date(lastModified).toLocaleDateString('fr-FR') : ''}`;
 
-          // Render the 3 views
           CalendarViews.render(containers, { placements }, referenceData, { showEditHint: false });
           containers.viewSelector.style.display = 'flex';
           CalendarViews.switchView(containers, 'seasonal');
@@ -619,7 +632,89 @@
         }
       }
 
-      seasonSel.addEventListener('change', loadDraftForSeason);
+      // 4. Section B: load uploaded document for selected season
+      async function loadSectionB() {
+        const season = globalSel.value;
+        // Hide all Section B sub-cards first
+        document.getElementById('noCalendarContainer').style.display = 'none';
+        document.getElementById('calendarContainer').style.display = 'none';
+        document.getElementById('downloadContainer').style.display = 'none';
+        // Update upload form's season pre-fill
+        const uploadSel = document.getElementById('calendarSeasonSelect');
+        if (uploadSel) {
+          // Add the season as option if not present
+          if (![...uploadSel.options].some(o => o.value === season)) {
+            const opt = document.createElement('option');
+            opt.value = season;
+            opt.textContent = season;
+            uploadSel.appendChild(opt);
+          }
+          uploadSel.value = season;
+        }
+
+        try {
+          // First check info for this season
+          const infoRes = await fetch(`${API_URL}/calendar/info?season=${encodeURIComponent(season)}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (!infoRes.ok) throw new Error('info failed');
+          const info = await infoRes.json();
+          if (!info.exists) {
+            document.getElementById('noCalendarContainer').style.display = 'block';
+            // Update title
+            const orgName = await getOrgName();
+            document.querySelectorAll('.calendar-title').forEach(el => {
+              el.textContent = `Calendrier ${orgName} ${season}`;
+            });
+            // Hide stale warning
+            const warnEl = document.getElementById('calendarStaleWarning');
+            if (warnEl) warnEl.style.display = 'none';
+            // Update admin info card
+            const detailsEl = document.getElementById('calendarDetails');
+            const cardEl = document.getElementById('currentCalendarInfo');
+            if (cardEl) cardEl.style.display = 'none';
+            return;
+          }
+
+          // Update title & admin info
+          const orgName = await getOrgName();
+          document.querySelectorAll('.calendar-title').forEach(el => {
+            el.textContent = `Calendrier ${orgName} ${season}`;
+          });
+          const detailsEl = document.getElementById('calendarDetails');
+          const cardEl = document.getElementById('currentCalendarInfo');
+          if (detailsEl && cardEl) {
+            const uploadDate = new Date(info.uploadedAt);
+            detailsEl.innerHTML = `<strong>${info.filename}</strong><br>Téléversé le ${uploadDate.toLocaleDateString('fr-FR')} à ${uploadDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}<br>Par : ${info.uploadedBy || 'admin'}`;
+            cardEl.style.display = 'block';
+          }
+          // Hide stale warning since the file matches the selected season
+          const warnEl = document.getElementById('calendarStaleWarning');
+          if (warnEl) warnEl.style.display = 'none';
+
+          // Display PDF or Excel
+          const headRes = await fetch(`${API_URL}/calendar/view?season=${encodeURIComponent(season)}`, {
+            method: 'HEAD',
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          const ct = headRes.headers.get('Content-Type');
+          if (ct === 'application/pdf') {
+            document.getElementById('calendarContainer').style.display = 'block';
+            document.getElementById('calendarFrame').src = `${API_URL}/calendar/view?season=${encodeURIComponent(season)}&token=${encodeURIComponent(token)}`;
+          } else {
+            document.getElementById('downloadContainer').style.display = 'block';
+          }
+        } catch (err) {
+          console.error('Section B load error:', err);
+          document.getElementById('noCalendarContainer').style.display = 'block';
+        }
+      }
+
+      // Wire global selector
+      globalSel.addEventListener('change', () => {
+        loadSectionA();
+        loadSectionB();
+      });
 
       // View buttons
       containers.viewSelector.querySelectorAll('[data-view]').forEach(btn => {
@@ -640,7 +735,7 @@
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
-          a.download = `Calendrier ${seasonSel.value}.xlsx`;
+          a.download = `Calendrier ${globalSel.value}.xlsx`;
           document.body.appendChild(a); a.click(); a.remove();
           URL.revokeObjectURL(url);
         } catch (err) {
@@ -650,7 +745,9 @@
         }
       });
 
-      await loadDraftForSeason();
+      // Initial load
+      await loadSectionA();
+      await loadSectionB();
     })();
   </script>
   <script src="js/help-button.js?v=203"></script>
