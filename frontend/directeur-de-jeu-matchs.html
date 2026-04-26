@@ -522,7 +522,7 @@
         if (p.number === state.activeTab) cls.push('active');
         if (allPlayed) cls.push('complete');
         return `<button class="${cls.join(' ')}" data-poule="${p.number}">
-          Poule ${p.number}
+          Poule ${String.fromCharCode(64 + p.number)}
           <span class="pill">${playedCount}/${p.matches.length}</span>
         </button>`;
       }).join('');
@@ -825,7 +825,7 @@
       `).join('');
       return `
         <div class="classement-card">
-          <div class="classement-header">${title} — Poule ${poule.number}</div>
+          <div class="classement-header">${title} — Poule ${String.fromCharCode(64 + poule.number)}</div>
           <table class="classement-table">
             <thead>
               <tr>

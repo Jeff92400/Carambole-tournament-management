@@ -532,7 +532,7 @@
           <div class="seed">${i + 1}</div>
           <div style="flex: 1; min-width: 0;">
             <div class="name">${escapeHtml(q.player_name)}</div>
-            <div class="sub">${escapeHtml(q.club || '')} · Poule ${q.poule_number}</div>
+            <div class="sub">${escapeHtml(q.club || '')} · Poule ${String.fromCharCode(64 + q.poule_number)}</div>
           </div>
           <div style="font-size: 0.82em; color: #666; white-space: nowrap;">
             ${q.match_points} PM · ${formatMoyenne(q.moyenne)}
@@ -675,13 +675,13 @@
               <div class="match-player">
                 <div class="name">${escapeHtml(phase.p1.player_name)}</div>
                 <div class="club">${escapeHtml(phase.p1.club || '')}</div>
-                <span class="seed-tag">Poule ${phase.p1.poule_number}</span>
+                <span class="seed-tag">Poule ${String.fromCharCode(64 + phase.p1.poule_number)}</span>
               </div>
               <div class="match-vs">VS</div>
               <div class="match-player">
                 <div class="name">${escapeHtml(phase.p2.player_name)}</div>
                 <div class="club">${escapeHtml(phase.p2.club || '')}</div>
-                <span class="seed-tag">Poule ${phase.p2.poule_number}</span>
+                <span class="seed-tag">Poule ${String.fromCharCode(64 + phase.p2.poule_number)}</span>
               </div>
             </div>
             <div class="score-grid">

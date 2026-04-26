@@ -420,7 +420,7 @@
         return `
           <div class="ddj-poule-card">
             <div class="ddj-poule-header">
-              <div class="ddj-poule-title">Poule ${pl.number}</div>
+              <div class="ddj-poule-title">Poule ${String.fromCharCode(64 + pl.number)}</div>
               <div class="ddj-poule-size">${pl.size} joueur${pl.size > 1 ? 's' : ''}</div>
             </div>
             ${playersHtml}
