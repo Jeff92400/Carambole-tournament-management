@@ -2598,7 +2598,7 @@ router.post('/competitions/:id/finalize', authenticateToken, requireDdJ, async (
     const categoryId = categoryRow.id;
     const tournamentNumber = t.tournament_number || 1;
     const season = appSettings.getCurrentSeason
-      ? appSettings.getCurrentSeason(t.debut ? new Date(t.debut) : new Date(), orgId)
+      ? await appSettings.getCurrentSeason(t.debut ? new Date(t.debut) : new Date(), orgId)
       : (() => {
           // Fallback: rough September-cutoff if helper isn't available
           const d = t.debut ? new Date(t.debut) : new Date();
