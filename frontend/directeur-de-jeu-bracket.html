@@ -577,7 +577,7 @@
       }).join('');
       const banner = overrideActive
         ? `<div style="background:#fff8e1;border:1px solid #ffc107;border-radius:6px;padding:8px 12px;margin-bottom:10px;font-size:13px;color:#7a5400;">
-             ⚠️ <strong>Ordre manuel actif</strong> — l'ordre des qualifiés a été ajusté manuellement (différent du calcul automatique).
+             ✅ <strong>Ordre manuel validé</strong> — l'ordre des qualifiés a été ajusté manuellement et est désormais utilisé pour les appariements (différent du calcul automatique).
              <button id="resetSeedsBtn" style="margin-left:10px;background:#fff;color:#7a5400;border:1px solid #c47b00;border-radius:4px;padding:3px 10px;cursor:pointer;font-size:12px;${anyMatchPlayed?'opacity:0.4;cursor:not-allowed;':''}" ${anyMatchPlayed?'disabled':''}>↺ Réinitialiser l'ordre</button>
            </div>`
         : '';
@@ -608,6 +608,19 @@
           if (toIdx < 0 || toIdx >= quals.length) return;
           const reordered = [...quals];
           [reordered[fromIdx], reordered[toIdx]] = [reordered[toIdx], reordered[fromIdx]];
+          // V 2.0.537 — Confirm before applying the manual reorder, so the
+          // yellow "Ordre manuel actif" banner is only shown after explicit
+          // validation (it had been mistaken for a confirmation prompt).
+          const overrideAlreadyActive = !!state.bracket?.seed_override_active;
+          if (!overrideAlreadyActive) {
+            const a = quals[fromIdx];
+            const b = quals[toIdx];
+            const msg =
+              `Confirmez-vous le changement manuel de l'ordre des qualifiés ?\n\n` +
+              `Échange : ${a.player_name} (tête ${fromIdx + 1}) ⇄ ${b.player_name} (tête ${toIdx + 1})\n\n` +
+              `Cet ordre remplacera le calcul automatique pour les appariements des demi-finales.`;
+            if (!confirm(msg)) return;
+          }
           await saveSeedOrder(reordered.map(q => q.licence));
         });
       });
