@@ -3358,12 +3358,21 @@ router.post('/competitions/:id/finalize', authenticateToken, requireDdJ, async (
       inserted++;
     }
 
-    // ---- Chain ranking recalculation (same as /import) --------------------
+    // ---- Chain ranking recalculation --------------------------------------
+    // V 2.0.554 — DO NOT call recalcPositions here. That helper sorts by
+    // (match_points DESC, moyenne DESC) and overwrites the position field,
+    // which destroys the FFB phase-weighted positions we JUST stored: a
+    // bracket semifinalist who lost the petite finale (place 4) but has
+    // higher PM/moyenne than a bracket semifinalist who won the petite
+    // finale (place 3) would jump to place 3 because of the naive sort.
+    // Concrete T1 Bande R2 case where this surfaced (27/04/2026): LEMONIER
+    // went to consolante (place 5) but had higher MGP than STOLL (place 3
+    // via bracket); recalcPositions promoted him to 3rd, breaking the
+    // alignment with E2i. Bonuses + rankings recalcs after this point
+    // already preserve existing positions when bracket data is detected.
     await new Promise((resolve) => {
-      recalcPositions(tournamentId, orgId, () => {
-        recalcBonuses(categoryId, season, orgId, () => {
-          recalcRankings(categoryId, season, () => resolve());
-        });
+      recalcBonuses(categoryId, season, orgId, () => {
+        recalcRankings(categoryId, season, () => resolve());
       });
     });
 
