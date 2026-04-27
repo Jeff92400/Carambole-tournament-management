@@ -511,12 +511,14 @@
 
         <div class="ddj-action-bar">
           <button class="ddj-btn ddj-btn-secondary" onclick="window.location.href='directeur-de-jeu.html'">← Accueil</button>
-          <button id="clearRankingsBtn" class="ddj-btn" style="background:linear-gradient(135deg,#fd7e14,#c46410);color:white;" title="Vide uniquement le classement saisonnier de cette catégorie (utile pour effacer des données de tests précédents). Les scores DdJ déjà saisis sont CONSERVÉS.">
-            🧹 Nettoyer le classement
-          </button>
-          <button id="resetAllBtn" class="ddj-btn" style="background:linear-gradient(135deg,#dc3545,#a71d2a);color:white;" title="Effacer toutes les données DdJ pour ce tournoi (pointage, scores, classement). Les inscriptions sont conservées.">
-            🔥 Tout réinitialiser
-          </button>
+          ${(sessionStorage.getItem('userRole') === 'admin') ? `
+            <button id="clearRankingsBtn" class="ddj-btn" style="background:linear-gradient(135deg,#fd7e14,#c46410);color:white;" title="Vide uniquement le classement saisonnier de cette catégorie (utile pour effacer des données de tests précédents). Les scores DdJ déjà saisis sont CONSERVÉS.">
+              🧹 Nettoyer le classement
+            </button>
+            <button id="resetAllBtn" class="ddj-btn" style="background:linear-gradient(135deg,#dc3545,#a71d2a);color:white;" title="Effacer toutes les données DdJ pour ce tournoi (pointage, scores, classement). Les inscriptions sont conservées.">
+              🔥 Tout réinitialiser
+            </button>
+          ` : ''}
           <button class="ddj-btn ddj-btn-primary" onclick="window.location.href='directeur-de-jeu-poules.html?compId=${compId}'">
             Générer les poules →
           </button>
@@ -568,6 +570,7 @@
               `• ${data.tournaments_scanned || 0} tournoi(s) trouvé(s) dans cette catégorie/saison\n` +
               `• ${data.tournamentsDeleted || 0} tournoi(s) finalisé(s) supprimé(s)\n` +
               `• ${data.resultsDeleted || 0} résultat(s) supprimé(s)\n` +
+              `• ${data.rankingsDeleted || 0} ligne(s) du classement supprimée(s)\n` +
               `• Classement reconstruit : ${data.rankingsRefreshed ? 'oui' : 'non'}\n\n` +
               `Vos scores DdJ pour ce tournoi sont intacts. Vous pouvez finaliser quand vous êtes prêt.`);
       } catch (e) {

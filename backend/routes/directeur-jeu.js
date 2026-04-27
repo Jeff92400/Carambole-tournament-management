@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { authenticateToken, requireDdJ } = require('./auth');
+const { authenticateToken, requireDdJ, requireAdmin } = require('./auth');
 const appSettings = require('../utils/app-settings');
 const { getPouleConfigForOrg } = require('../utils/poule-config');
 const getDb = () => require('../db-loader');
@@ -1754,7 +1754,7 @@ router.post('/competitions/:id/reset-bracket', authenticateToken, requireDdJ, as
 //     pointage starts from a clean slate.
 // The tournoi_ext row + the inscriptions themselves are preserved, so
 // the admin only has to redo: poules generation → convocations → DdJ.
-router.post('/competitions/:id/reset-all', authenticateToken, requireDdJ, async (req, res) => {
+router.post('/competitions/:id/reset-all', authenticateToken, requireAdmin, async (req, res) => {
   const db = getDb();
   const orgId = req.user.organizationId || null;
   const tournoiId = parseInt(req.params.id, 10);
@@ -1920,7 +1920,7 @@ router.post('/competitions/:id/reset-all', authenticateToken, requireDdJ, async 
 // seed overrides, convocation poules, inscriptions all stay intact. The
 // admin can re-run finalize on whichever tournaments they want, and the
 // rankings table will be rebuilt from those finalize calls only.
-router.post('/competitions/:id/clear-season-results', authenticateToken, requireDdJ, async (req, res) => {
+router.post('/competitions/:id/clear-season-results', authenticateToken, requireAdmin, async (req, res) => {
   const db = getDb();
   const orgId = req.user.organizationId || null;
   const tournoiId = parseInt(req.params.id, 10);
@@ -1994,6 +1994,20 @@ router.post('/competitions/:id/clear-season-results', authenticateToken, require
       );
     }
 
+    // V 2.0.553 — Explicit rankings wipe. recalculateRankings normally deletes
+    // its own rankings rows before re-inserting, BUT it resolves the orgId by
+    // reading `tournaments.organization_id` — which we just emptied. With
+    // orgId=null the cleanup filter became overly permissive on one path and
+    // overly restrictive on another, leaving aggregate rows (Pts, Total Top 2,
+    // Moy.G saison) orphaned in the rankings table.
+    // We do the wipe here directly with the org we already have, which is
+    // both safer and complete.
+    const rankingsDeleted = await runDelete(
+      `DELETE FROM rankings WHERE category_id = $1 AND season = $2
+        AND ($3::int IS NULL OR organization_id = $3)`,
+      [categoryRow.id, season, orgId]
+    );
+
     let rankingsRefreshed = false;
     try {
       const tournamentsRouter = require('./tournaments');
@@ -2020,6 +2034,7 @@ router.post('/competitions/:id/clear-season-results', authenticateToken, require
               season,
               tournamentsDeleted,
               resultsDeleted,
+              rankingsDeleted,
               rankingsRefreshed
             })],
           (err) => err ? reject(err) : resolve()
@@ -2034,6 +2049,7 @@ router.post('/competitions/:id/clear-season-results', authenticateToken, require
       tournaments_scanned: tournamentRows.length,
       tournamentsDeleted,
       resultsDeleted,
+      rankingsDeleted,
       rankingsRefreshed
     });
   } catch (err) {
