@@ -381,6 +381,16 @@
     // in Step 2 with full org-level rules.
     function describePoules(n) {
       if (n < 2) return 'trop peu de joueurs';
+      // V 2.0.544 — Prefer the server-computed preview, which reflects the
+      // org's actual `allow_poule_of_2` setting. Fallback to the static
+      // hardcoded hint only if the preview isn't available yet.
+      const preview = state && state.poule_preview;
+      if (preview && Array.isArray(preview.sizes) && preview.sizes.length) {
+        const sizes = preview.sizes.slice().sort((a, b) => b - a);
+        const allEqual = sizes.every(s => s === sizes[0]);
+        if (allEqual) return `${sizes.length} poule${sizes.length > 1 ? 's' : ''} de ${sizes[0]}`;
+        return `${sizes.length} poules (${sizes.join('+')})`;
+      }
       if (n === 2) return '1 poule de 2';
       if (n === 3) return '1 poule de 3';
       if (n === 4) return '1 poule de 4';
@@ -419,6 +429,7 @@
         const data = await resp.json();
         state.tournament = data.tournament;
         state.players = data.players || [];
+        state.poule_preview = data.poule_preview || null;
         render();
       } catch (err) {
         console.error('[Pointage] load error:', err);

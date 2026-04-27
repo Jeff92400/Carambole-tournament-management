@@ -242,6 +242,24 @@ router.get('/competitions/:id/pointage', authenticateToken, requireDdJ, async (r
       };
     });
 
+    // V 2.0.544 — Compute the poule structure preview using the org's
+    // actual allow_poule_of_2 setting, so the pointage screen shows the
+    // correct hint (e.g. "3 poules (3+2+2)" instead of "2 poules (3+4)"
+    // when poules of 2 are authorized).
+    let poulePreview = null;
+    try {
+      const presentN = enriched.filter(p => p.present).length;
+      if (presentN >= 2) {
+        const cfg = await getPouleConfigForOrg(presentN, orgId);
+        if (cfg && Array.isArray(cfg.poules) && cfg.poules.length) {
+          poulePreview = {
+            count: cfg.poules.length,
+            sizes: cfg.poules.slice()
+          };
+        }
+      }
+    } catch (e) { /* preview is non-critical */ }
+
     res.json({
       tournament: {
         ...tournament,
@@ -251,7 +269,8 @@ router.get('/competitions/:id/pointage', authenticateToken, requireDdJ, async (r
       players: enriched,
       total: enriched.length,
       present_count: enriched.filter(p => p.present).length,
-      forfait_count: enriched.filter(p => !p.present).length
+      forfait_count: enriched.filter(p => !p.present).length,
+      poule_preview: poulePreview
     });
   } catch (err) {
     console.error('[DdJ] /pointage GET error:', err);
