@@ -243,8 +243,15 @@ async function assignPositionPointsIfJournees(tournamentId, orgId) {
   const qualMode = await appSettings.getOrgSetting(orgId, 'qualification_mode');
   if (qualMode !== 'journees') return;
 
-  // Check if positions were set by bracket engine (import-matches or bracket.js)
-  // Detect data from either tournament_matches (E2i import) or bracket_matches (app bracket engine)
+  // Check if positions were set by bracket engine (import-matches, bracket.js, or DdJ).
+  // Three sources we need to detect:
+  //   - tournament_matches    (E2i CSV import via /import-matches)
+  //   - bracket_matches       (legacy app bracket engine in bracket.js)
+  //   - ddj_bracket_matches   (Directeur de Jeu finalize, V 2.0.555+)
+  // If any of those have rows for this tournament, the position column was
+  // already populated using FFB phase weighting and MUST be preserved here —
+  // otherwise the naive (match_points DESC, moyenne DESC) sort below would
+  // promote a high-MGP consolante player above a low-MGP bracket finalist.
   let hasBracketData = false;
   try {
     const matchRow = await dbGetAsync(
@@ -261,6 +268,25 @@ async function assignPositionPointsIfJournees(tournamentId, orgId) {
       );
       hasBracketData = !!bracketRow;
     } catch (e) { /* table may not exist yet */ }
+  }
+  if (!hasBracketData) {
+    // V 2.0.555 — DdJ finalize stores positions via FFB phase weighting in
+    // tournament_results.position before this helper runs. Rather than
+    // chase every possible source table (ddj_bracket_matches lives in
+    // a different schema than tournament_matches / bracket_matches and is
+    // keyed by tournoi_ext_id, not tournaments.id), use the much simpler
+    // invariant: if any row already has a non-zero position, the writer
+    // already computed FFB-correct positions and we MUST NOT resort by
+    // (match_points, moyenne) below — that destroys phase weighting.
+    try {
+      const positionedRow = await dbGetAsync(
+        `SELECT 1 FROM tournament_results
+         WHERE tournament_id = $1 AND position IS NOT NULL AND position > 0
+         LIMIT 1`,
+        [tournamentId]
+      );
+      hasBracketData = !!positionedRow;
+    } catch (e) { /* shouldn't happen, table always exists */ }
   }
 
   let results;
