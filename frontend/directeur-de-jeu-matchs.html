@@ -339,25 +339,29 @@
       color: #888;
     }
 
+    /* V 2.0.545 — bigger, centered, longer-lived save toast */
     .ddj-save-status {
       position: fixed;
-      top: 20px; right: 20px;
-      padding: 8px 14px;
-      border-radius: 20px;
-      background: rgba(40,167,69,0.95);
+      top: 20px; left: 50%;
+      transform: translate(-50%, -10px);
+      padding: 14px 28px;
+      border-radius: 12px;
+      background: rgba(40,167,69,0.97);
       color: white;
-      font-size: 0.85em;
-      font-weight: 600;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.15);
-      z-index: 1000;
+      font-size: 1.1em;
+      font-weight: 700;
+      box-shadow: 0 8px 24px rgba(40,167,69,0.35), 0 4px 10px rgba(0,0,0,0.15);
+      z-index: 9999;
       opacity: 0;
-      transform: translateY(-10px);
       transition: all 0.25s;
       pointer-events: none;
+      letter-spacing: 0.3px;
+      min-width: 260px;
+      text-align: center;
     }
-    .ddj-save-status.visible { opacity: 1; transform: translateY(0); }
-    .ddj-save-status.error { background: rgba(220,53,69,0.95); }
-    .ddj-save-status.warning { background: rgba(255,193,7,0.98); color: #222; }
+    .ddj-save-status.visible { opacity: 1; transform: translate(-50%, 0); }
+    .ddj-save-status.error   { background: rgba(220,53,69,0.97); box-shadow: 0 8px 24px rgba(220,53,69,0.4); }
+    .ddj-save-status.warning { background: rgba(255,193,7,0.98); color: #222; box-shadow: 0 8px 24px rgba(255,193,7,0.4); }
   </style>
 </head>
 <body>
@@ -454,7 +458,10 @@
       else if (variant === 'warning') el.classList.add('warning');
       el.classList.add('visible');
       if (saveStatusTimer) clearTimeout(saveStatusTimer);
-      saveStatusTimer = setTimeout(() => el.classList.remove('visible'), 2000);
+      // V 2.0.545 — keep visible 4 s (success) so the DdJ has time to confirm
+      // the save before tapping the next match's score field.
+      const ttl = variant === 'success' ? 4000 : 3500;
+      saveStatusTimer = setTimeout(() => el.classList.remove('visible'), ttl);
     }
 
     function escapeHtml(s) {
@@ -883,7 +890,20 @@
         if (idx !== -1 && data.poule) {
           state.poules[idx] = data.poule;
         }
-        showSaveStatus('Match enregistré ✓');
+        // V 2.0.545 — Echo the saved match details so the DdJ can verify at
+        // a glance that the score went to the right player (catches the
+        // aller-retour swap confusion in 2-player poules).
+        let echo = 'Match enregistré ✓';
+        try {
+          const updatedPoule = data.poule;
+          const m = (updatedPoule?.matches || []).find(mm => mm.match_number === matchNumber);
+          if (m && m.p1_points != null && m.p2_points != null) {
+            const n1 = (m.p1_name || m.p1_licence || '').toString().split(' ').slice(-1)[0] || 'J1';
+            const n2 = (m.p2_name || m.p2_licence || '').toString().split(' ').slice(-1)[0] || 'J2';
+            echo = `✅ Match enregistré — ${n1} ${m.p1_points} / ${m.p2_points} ${n2}`;
+          }
+        } catch (_) { /* fall back to the generic message */ }
+        showSaveStatus(echo);
         render();
       } catch (err) {
         console.error('[Matchs] save error:', err);
