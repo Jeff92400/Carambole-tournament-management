@@ -1287,7 +1287,16 @@ function computeBracketSeeding(poules, size) {
       pool.push({ ...row, poule_number: p.number });
     }
   }
+  // V 2.0.538 — FFB rule (CDB 93-94 confirmed 27/04/2026):
+  // Poule rank is a HARD PRIMARY KEY. All 1st-of-poule are taken first,
+  // then 2nd-of-poule, etc. A 2nd-of-poule with better match points than
+  // a 1st-of-poule from another poule does NOT qualify ahead of them.
+  // Within the same poule-rank bucket, the FFB tiebreak chain applies
+  // (match points → moyenne → meilleure série → licence as deterministic
+  // fallback) and the serpentine then runs over the resulting order.
   pool.sort((a, b) => {
+    const ra = a.rank || 99, rb = b.rank || 99;
+    if (ra !== rb) return ra - rb;
     if (b.match_points !== a.match_points) return b.match_points - a.match_points;
     if ((b.moyenne || 0) !== (a.moyenne || 0)) return (b.moyenne || 0) - (a.moyenne || 0);
     if ((b.best_serie || 0) !== (a.best_serie || 0)) return (b.best_serie || 0) - (a.best_serie || 0);
@@ -1467,16 +1476,47 @@ async function loadBracket(db, orgId, tournoiId) {
     }
   }
 
-  // V 2.0.536 — Intermediate post-poule FFB-style ranking for the bracket page.
-  // Same shape as the recap FFB ranking but aggregates only poule matches, so
-  // the DdJ can compare with the FFB sheet right after pointage and detect
-  // any FFB calculation mistake before validating the bracket pairings.
-  let postPouleRanking = [];
+  // V 2.0.536 / V 2.0.538 — Intermediate post-poule FFB-style ranking for
+  // the bracket page. Derived directly from the poule classements (which
+  // carry the within-poule rank), so it respects the FFB primary key on
+  // poule rank: all 1st-of-poule come first, then 2nd-of-poule, etc.
+  // Within each poule-rank bucket, FFB tiebreak (MP → moyenne → série).
+  const postPouleRanking = [];
   try {
-    postPouleRanking = await buildFFBRanking(db, tournoiId, ctx, { phases: ['poule'] });
+    for (const p of ctx.poules || []) {
+      for (const row of p.classement || []) {
+        const matchesPlayed = (row.wins || 0) + (row.draws || 0) + (row.losses || 0);
+        const winRate = matchesPlayed > 0 ? Math.round(((row.wins || 0) / matchesPlayed) * 100) : 0;
+        postPouleRanking.push({
+          licence: row.licence,
+          name: row.player_name,
+          club: row.club,
+          poule_number: p.number,
+          poule_rank: row.rank,
+          matches_played: matchesPlayed,
+          wins: row.wins || 0,
+          draws: row.draws || 0,
+          losses: row.losses || 0,
+          match_points: row.match_points || 0,
+          win_rate: winRate,
+          total_points: row.points_scored || 0,
+          total_reprises: row.reprises || 0,
+          moyenne: Math.round(((row.moyenne) || 0) * 1000) / 1000,
+          best_serie: row.best_serie || 0
+        });
+      }
+    }
+    postPouleRanking.sort((a, b) => {
+      const ra = a.poule_rank || 99, rb = b.poule_rank || 99;
+      if (ra !== rb) return ra - rb;
+      if (b.match_points !== a.match_points) return b.match_points - a.match_points;
+      if (b.moyenne !== a.moyenne) return b.moyenne - a.moyenne;
+      if ((b.best_serie || 0) !== (a.best_serie || 0)) return (b.best_serie || 0) - (a.best_serie || 0);
+      return String(a.licence).localeCompare(String(b.licence));
+    });
+    postPouleRanking.forEach((p, i) => { p.rank = i + 1; });
   } catch (err) {
     console.error('[DdJ] post_poule_ranking build error:', err);
-    postPouleRanking = [];
   }
 
   return {

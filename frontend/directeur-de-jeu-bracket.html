@@ -505,11 +505,16 @@
     // calculation mistake before locking in the bracket pairings.
     function renderPostPouleRanking(ffb) {
       if (!ffb || !ffb.length) return '';
-      const rows = ffb.map(p => `
+      const rows = ffb.map(p => {
+        const pouleLabel = p.poule_number ? String.fromCharCode(64 + p.poule_number) : '';
+        const pouleBadge = p.poule_rank
+          ? `<span style="display:inline-block;background:#1F4788;color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;font-weight:600;margin-right:6px;" title="Classement dans la poule ${pouleLabel}">P${pouleLabel}-${p.poule_rank}</span>`
+          : '';
+        return `
         <tr>
           <td style="text-align: center; font-weight: 600; padding: 8px 10px;">${p.rank}</td>
           <td style="padding: 8px 10px;">
-            <div style="font-weight: 600;">${escapeHtml(p.name || p.licence)}</div>
+            <div style="font-weight: 600;">${pouleBadge}${escapeHtml(p.name || p.licence)}</div>
             ${p.club ? `<div style="font-size: 11px; color: #666;">${escapeHtml(p.club)}</div>` : ''}
           </td>
           <td style="text-align: center; padding: 8px 10px;">${p.matches_played}</td>
@@ -520,13 +525,16 @@
           <td style="text-align: center; padding: 8px 10px;">${p.total_reprises}</td>
           <td style="text-align: center; padding: 8px 10px;">${p.best_serie || '—'}</td>
         </tr>
-      `).join('');
+      `;
+      }).join('');
       return `
         <div class="qualifiers-card" style="margin-top: 16px;">
           <h3>📊 Classement FFB après les poules (cumul points match)</h3>
           <p style="color: #666; font-size: 13px; margin: 0 0 10px;">
-            Vue intermédiaire reprenant <strong>tous les joueurs</strong> (pas uniquement les qualifiés), avec les mêmes colonnes que la fiche FFB.
-            <strong>Cette vue se compare directement avec la fiche FFB officielle</strong> — utile pour repérer une éventuelle erreur de calcul de la FFB avant de réordonner les têtes de série.
+            Vue intermédiaire reprenant <strong>tous les joueurs</strong> (pas uniquement les qualifiés), triée selon la règle FFB :
+            d'abord tous les <strong>1ers de poule</strong> (par performance décroissante), puis tous les <strong>2èmes de poule</strong>, etc.
+            Le badge <span style="background:#1F4788;color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;font-weight:600;">PA-1</span> indique « Poule A, 1er ».
+            <strong>Cette vue se compare directement avec la fiche FFB officielle</strong>.
           </p>
           <div style="overflow-x: auto;">
             <table style="width: 100%; border-collapse: collapse; font-size: 13px; min-width: 700px;">
