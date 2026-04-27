@@ -337,6 +337,7 @@
       </div>
       <div class="nav-links">
         <a href="#" id="bracketBackBtn">← Tableau final</a>
+        <a href="dashboard.html" id="ddj-home-btn" class="nav-link" style="margin-right:8px;">🏠 Tableau de bord</a>
         <a href="#" id="logoutBtn" class="nav-logout">Déconnexion</a>
       </div>
     </div>
@@ -542,11 +543,11 @@
       const byeCount = Math.max(0, size - nonQuals.length);
       const byeNote = byeCount > 0
         ? `<p style="font-size: 0.82em; color: #666; margin: 8px 0 0 0;">
-             ℹ️ ${byeCount} bye${byeCount > 1 ? 's' : ''} — les têtes de série avancent automatiquement au tour suivant.
+             ℹ️ ${byeCount} joueur${byeCount > 1 ? 's' : ''} exempt${byeCount > 1 ? 's' : ''} — les têtes de série les mieux classées avancent automatiquement au tour suivant.
            </p>` : '';
       return `
         <div class="seeds-card">
-          <h3>📋 Non-qualifiés — tableau de consolante (${nonQuals.length} joueurs${size ? `, bracket de ${size}` : ''})</h3>
+          <h3>📋 Non-qualifiés — tableau de classement (${nonQuals.length} joueurs${size ? `, tableau de ${size}` : ''})</h3>
           <div class="seeds-grid">${rowsHtml}</div>
           ${byeNote}
         </div>
@@ -597,6 +598,12 @@
 
     function renderPhase(phase) {
       const meta = PHASE_META[phase.phase] || { emoji: '•', label: phase.phase };
+      // V 2.0.543 — Use FFB-style place range as the visible label when
+      // available (e.g. "Places 05-06", "Place 07"); fallback to internal
+      // emoji + meta label otherwise.
+      const ffbLabel = phase.ffb_label
+        ? `<span style="font-weight: 700;">${escapeHtml(phase.ffb_label)}</span> <span style="color:#888;font-weight:400;font-size:0.88em;">(${escapeHtml(meta.label)})</span>`
+        : `<span class="emoji">${meta.emoji}</span>${meta.label}`;
 
       // BYE phase: one player auto-advances (no score entry)
       if (phase.has_bye) {
@@ -604,12 +611,12 @@
         return `
           <div class="phase-card bye">
             <div class="phase-card-header">
-              <div class="phase-title"><span class="emoji">${meta.emoji}</span>${meta.label}</div>
-              <div class="phase-status bye">🎟 Bye — avance automatique</div>
+              <div class="phase-title">${ffbLabel}</div>
+              <div class="phase-status bye">🎟 Joueur exempt — avance automatique</div>
             </div>
             <div class="phase-card-body">
               <div class="match-bye-msg">
-                ${escapeHtml(advancer?.player_name || '?')} avance au tour suivant sans jouer (tête de série non appariée).
+                ${escapeHtml(advancer?.player_name || '?')} avance au tour suivant sans jouer (tête de série la mieux classée).
               </div>
             </div>
           </div>
@@ -621,7 +628,7 @@
         return `
           <div class="phase-card pending">
             <div class="phase-card-header">
-              <div class="phase-title"><span class="emoji">${meta.emoji}</span>${meta.label}</div>
+              <div class="phase-title">${ffbLabel}</div>
               <div class="phase-status">En attente du tour précédent</div>
             </div>
             <div class="phase-card-body">

@@ -1853,6 +1853,40 @@ const CONSOLANTE_PHASES = {
   }
 };
 
+// V 2.0.543 — FFB-style label per consolante phase, e.g. "Places 05-06",
+// "Place 07", "Places 09-12". Size = bracket size, n = non-qualifier count.
+// Falls back to internal phase name for unrecognised combinations.
+function consolanteFFBLabel(phase, size, n) {
+  const fmt = (a, b) => a === b
+    ? `Place ${String(a).padStart(2, '0')}`
+    : `Places ${String(a).padStart(2, '0')}-${String(b).padStart(2, '0')}`;
+  if (phase === 'F') return fmt(5, 6);
+  if (size === 4) {
+    if (phase === 'SF1' || phase === 'SF2') {
+      const losers = Math.max(0, n - 2);
+      return losers >= 2 ? fmt(7, 8) : fmt(7, 7);
+    }
+  }
+  if (size === 8) {
+    if (phase === 'SF1' || phase === 'SF2') return fmt(7, 8);
+    if (/^QF[1-4]$/.test(phase)) {
+      const losers = Math.max(0, n - 4);
+      const last = 9 + losers - 1;
+      return losers >= 2 ? fmt(9, last) : fmt(9, 9);
+    }
+  }
+  if (size === 16) {
+    if (phase === 'SF1' || phase === 'SF2') return fmt(7, 8);
+    if (/^QF[1-4]$/.test(phase)) return fmt(9, 12);
+    if (/^R16_/.test(phase)) {
+      const losers = Math.max(0, n - 8);
+      const last = 13 + losers - 1;
+      return losers >= 2 ? fmt(13, last) : fmt(13, 13);
+    }
+  }
+  return phase;
+}
+
 function pickConsolanteSize(n) {
   if (n < 2) return 0;
   if (n <= 2) return 2;
@@ -1901,7 +1935,17 @@ async function loadConsolante(db, orgId, tournoiId) {
   const bracketCtx = await loadBracket(db, orgId, tournoiId);
   if (bracketCtx.error) return bracketCtx;
 
-  const non_qualifiers = bracketCtx.non_qualifiers || [];
+  // V 2.0.543 — CDB 93-94 confirmed (27/04/2026): the consolante is seeded
+  // by PURE PERFORMANCE (match_points → moyenne → meilleure série), NOT by
+  // poule rank. Sportingly: the best non-qualifier deserves the bye, the
+  // weakest plays the most matches. Bracket selection still uses poule rank
+  // (V 2.0.538), only consolante seeding differs.
+  const non_qualifiers = (bracketCtx.non_qualifiers || []).slice().sort((a, b) => {
+    if ((b.match_points || 0) !== (a.match_points || 0)) return (b.match_points || 0) - (a.match_points || 0);
+    if ((b.moyenne || 0) !== (a.moyenne || 0)) return (b.moyenne || 0) - (a.moyenne || 0);
+    if ((b.best_serie || 0) !== (a.best_serie || 0)) return (b.best_serie || 0) - (a.best_serie || 0);
+    return String(a.licence || '').localeCompare(String(b.licence || ''));
+  });
   const { size, round1Pairs } = computeConsolanteSeeding(non_qualifiers);
   const canStart = !!bracketCtx.can_start && size >= 2;
 
@@ -1987,6 +2031,7 @@ async function loadConsolante(db, orgId, tournoiId) {
 
   for (const { phase, p1, p2 } of round1Pairs) {
     const ph = buildPhase(phase, p1, p2);
+    ph.ffb_label = consolanteFFBLabel(phase, size, non_qualifiers.length);
     phases.push(ph);
     phaseMap.set(phase, ph);
   }
@@ -2005,6 +2050,7 @@ async function loadConsolante(db, orgId, tournoiId) {
       const w2 = outB && outB.winner ? findNonQual(outB.winner.licence) || outB.winner : null;
       const phaseName = laterPhases[laterIdx++];
       const ph = buildPhase(phaseName, w1, w2, [prevRound[i], prevRound[i + 1]]);
+      ph.ffb_label = consolanteFFBLabel(phaseName, size, non_qualifiers.length);
       phases.push(ph);
       phaseMap.set(phaseName, ph);
       nextRound.push(phaseName);
