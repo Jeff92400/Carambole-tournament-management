@@ -1712,6 +1712,9 @@ router.post('/competitions/:id/reset-all', authenticateToken, requireDdJ, async 
     // category_id match because category was renamed), we skip silently.
     let tournamentResultsDeleted = 0;
     let tournamentRowDeleted = 0;
+    let rankingsRefreshed = false;
+    let resolvedCategoryId = null;
+    let resolvedSeason = null;
     try {
       const categoryRow = await new Promise((resolve, reject) => {
         db.get(
@@ -1725,7 +1728,8 @@ router.post('/competitions/:id/reset-all', authenticateToken, requireDdJ, async 
         );
       });
       if (categoryRow && t.tournament_number) {
-        const season = appSettings.getCurrentSeason
+        resolvedCategoryId = categoryRow.id;
+        resolvedSeason = appSettings.getCurrentSeason
           ? await appSettings.getCurrentSeason(t.debut ? new Date(t.debut) : new Date(), orgId)
           : (() => {
               const d = t.debut ? new Date(t.debut) : new Date();
@@ -1737,7 +1741,7 @@ router.post('/competitions/:id/reset-all', authenticateToken, requireDdJ, async 
             `SELECT id FROM tournaments
              WHERE category_id = $1 AND tournament_number = $2 AND season = $3
                AND ($4::int IS NULL OR organization_id = $4)`,
-            [categoryRow.id, t.tournament_number, season, orgId],
+            [resolvedCategoryId, t.tournament_number, resolvedSeason, orgId],
             (err, row) => err ? reject(err) : resolve(row)
           );
         });
@@ -1754,6 +1758,30 @@ router.post('/competitions/:id/reset-all', authenticateToken, requireDdJ, async 
       }
     } catch (e) {
       console.warn('[DdJ] /reset-all tournaments wipe skipped:', e.message);
+    }
+
+    // V 2.0.549 — Refresh the rankings table so the DdJ serpentin (which
+    // reads `rankings`) doesn't keep using stale season-rank rows from
+    // earlier finalize cycles. recalculateRankings rebuilds from whatever
+    // tournament_results still exist for the (category, season) pair, so:
+    //   - if the user reset only T1 but T2 still has results → rankings
+    //     gets rebuilt with T2 alone (correct)
+    //   - if both T1 and T2 are reset → rankings becomes empty for the
+    //     category/season → DdJ falls through to FFB moyenne, which is
+    //     what the convocation page also uses for journées TQ1.
+    if (resolvedCategoryId && resolvedSeason) {
+      try {
+        const tournamentsRouter = require('./tournaments');
+        const recalcRankings = tournamentsRouter.recalculateRankings;
+        if (typeof recalcRankings === 'function') {
+          await new Promise((resolve) => {
+            recalcRankings(resolvedCategoryId, resolvedSeason, () => resolve());
+          });
+          rankingsRefreshed = true;
+        }
+      } catch (e) {
+        console.warn('[DdJ] /reset-all rankings refresh skipped:', e.message);
+      }
     }
 
     // Reset inscriptions to "inscrit" so a fresh pointage can run cleanly.
@@ -1773,7 +1801,7 @@ router.post('/competitions/:id/reset-all', authenticateToken, requireDdJ, async 
             JSON.stringify({
               pouleDeleted, bracketDeleted, consolanteDeleted, overrideDeleted,
               convocDeleted, tournamentResultsDeleted, tournamentRowDeleted,
-              inscriptionsReset
+              inscriptionsReset, rankingsRefreshed
             })],
           (err) => err ? reject(err) : resolve()
         );
@@ -1784,7 +1812,7 @@ router.post('/competitions/:id/reset-all', authenticateToken, requireDdJ, async 
       ok: true,
       pouleDeleted, bracketDeleted, consolanteDeleted, overrideDeleted,
       convocDeleted, tournamentResultsDeleted, tournamentRowDeleted,
-      inscriptionsReset
+      inscriptionsReset, rankingsRefreshed
     });
   } catch (err) {
     console.error('[DdJ] /reset-all error:', err);
