@@ -73,7 +73,12 @@ router.post('/fix/club-alias', async (req, res) => {
   }
 });
 
-// FIX: Update position field for all tournament results based on match_points ranking
+// FIX: Update position field for tournament results that have NO position yet,
+// based on match_points ranking. V 2.0.555 — added the
+// "tr.position IS NULL OR tr.position = 0" guard so this admin nuke does NOT
+// destroy FFB phase-weighted positions written by the DdJ finalize, the
+// E2i CSV import, or the legacy bracket.js engine. Same invariant the
+// other position-writers use after V 2.0.555.
 router.post('/fix/positions', authenticateToken, async (req, res) => {
   const db = require('../db-loader');
   const orgId = req.user.organizationId || null;
@@ -88,6 +93,7 @@ router.post('/fix/positions', authenticateToken, async (req, res) => {
       FROM tournament_results tr
       JOIN tournaments t ON tr.tournament_id = t.id
       WHERE ($1::int IS NULL OR t.organization_id = $1)
+        AND (tr.position IS NULL OR tr.position = 0)
     ) sub
     WHERE tournament_results.id = sub.id
   `;
