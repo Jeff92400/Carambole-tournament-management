@@ -1905,6 +1905,143 @@ router.post('/competitions/:id/reset-all', authenticateToken, requireDdJ, async 
   }
 });
 
+// POST /competitions/:id/clear-season-results — V 2.0.552
+// Targeted cleanup for the case where the rankings table has stale data
+// from earlier test cycles (old finalize calls) but the DdJ scores for
+// the current cycle are still being entered and MUST be preserved.
+//
+// Resolves the (category_id, season) for this tournament and wipes ALL
+// finalized data within that scope:
+//   - tournament_results for every tournament in this category/season
+//   - the tournaments rows themselves
+// Then calls recalculateRankings to flush the rankings table to empty.
+//
+// Crucially does NOT touch any DdJ data: poule/bracket/consolante matches,
+// seed overrides, convocation poules, inscriptions all stay intact. The
+// admin can re-run finalize on whichever tournaments they want, and the
+// rankings table will be rebuilt from those finalize calls only.
+router.post('/competitions/:id/clear-season-results', authenticateToken, requireDdJ, async (req, res) => {
+  const db = getDb();
+  const orgId = req.user.organizationId || null;
+  const tournoiId = parseInt(req.params.id, 10);
+  if (!Number.isFinite(tournoiId)) {
+    return res.status(400).json({ error: 'tournoi_id invalide' });
+  }
+  try {
+    const t = await new Promise((resolve, reject) => {
+      db.get(
+        `SELECT tournoi_id, mode, categorie, debut, organization_id
+         FROM tournoi_ext
+         WHERE tournoi_id = $1 AND ($2::int IS NULL OR organization_id = $2)`,
+        [tournoiId, orgId],
+        (err, row) => err ? reject(err) : resolve(row)
+      );
+    });
+    if (!t) return res.status(404).json({ error: 'Tournoi introuvable' });
+
+    const categoryRow = await new Promise((resolve, reject) => {
+      db.get(
+        `SELECT id FROM categories
+         WHERE UPPER(REPLACE(game_type, ' ', '')) = UPPER(REPLACE($1, ' ', ''))
+           AND UPPER(level) = UPPER($2)
+           AND ($3::int IS NULL OR organization_id = $3)
+         LIMIT 1`,
+        [t.mode || '', t.categorie || '', orgId],
+        (err, row) => err ? reject(err) : resolve(row)
+      );
+    });
+    if (!categoryRow) {
+      return res.status(400).json({
+        error: `Catégorie introuvable : ${t.mode} / ${t.categorie}`
+      });
+    }
+    const season = appSettings.getCurrentSeason
+      ? await appSettings.getCurrentSeason(t.debut ? new Date(t.debut) : new Date(), orgId)
+      : (() => {
+          const d = t.debut ? new Date(t.debut) : new Date();
+          const y = d.getFullYear();
+          return d.getMonth() + 1 >= 9 ? `${y}-${y + 1}` : `${y - 1}-${y}`;
+        })();
+
+    const runDelete = (sql, params) => new Promise((resolve, reject) => {
+      db.run(sql, params, function (err) {
+        if (err) return reject(err);
+        resolve(this && this.changes != null ? this.changes : 0);
+      });
+    });
+
+    // Find all tournaments in this category/season (T1, T2, T3, finale...)
+    const tournamentRows = await new Promise((resolve, reject) => {
+      db.all(
+        `SELECT id, tournament_number FROM tournaments
+         WHERE category_id = $1 AND season = $2
+           AND ($3::int IS NULL OR organization_id = $3)`,
+        [categoryRow.id, season, orgId],
+        (err, rs) => err ? reject(err) : resolve(rs || [])
+      );
+    });
+
+    let resultsDeleted = 0;
+    let tournamentsDeleted = 0;
+    for (const tr of tournamentRows) {
+      resultsDeleted += await runDelete(
+        `DELETE FROM tournament_results WHERE tournament_id = $1`,
+        [tr.id]
+      );
+      tournamentsDeleted += await runDelete(
+        `DELETE FROM tournaments WHERE id = $1`,
+        [tr.id]
+      );
+    }
+
+    let rankingsRefreshed = false;
+    try {
+      const tournamentsRouter = require('./tournaments');
+      const recalcRankings = tournamentsRouter.recalculateRankings;
+      if (typeof recalcRankings === 'function') {
+        await new Promise((resolve) => {
+          recalcRankings(categoryRow.id, season, () => resolve());
+        });
+        rankingsRefreshed = true;
+      }
+    } catch (e) {
+      console.warn('[DdJ] /clear-season-results rankings refresh skipped:', e.message);
+    }
+
+    try {
+      await new Promise((resolve, reject) => {
+        db.run(
+          `INSERT INTO activity_logs
+             (organization_id, action, action_type, entity_type, entity_id, user_id, details, source)
+           VALUES ($1, 'ddj_clear_season_results', 'success', 'category', $2, $3, $4, 'directeur_jeu')`,
+          [orgId, categoryRow.id, req.user.userId || null,
+            JSON.stringify({
+              category_id: categoryRow.id,
+              season,
+              tournamentsDeleted,
+              resultsDeleted,
+              rankingsRefreshed
+            })],
+          (err) => err ? reject(err) : resolve()
+        );
+      });
+    } catch (_) { /* non-blocking */ }
+
+    res.json({
+      ok: true,
+      category_id: categoryRow.id,
+      season,
+      tournaments_scanned: tournamentRows.length,
+      tournamentsDeleted,
+      resultsDeleted,
+      rankingsRefreshed
+    });
+  } catch (err) {
+    console.error('[DdJ] /clear-season-results error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/directeur-jeu/competitions/:id/bracket
 router.get('/competitions/:id/bracket', authenticateToken, requireDdJ, async (req, res) => {
   const db = getDb();

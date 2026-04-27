@@ -511,6 +511,9 @@
 
         <div class="ddj-action-bar">
           <button class="ddj-btn ddj-btn-secondary" onclick="window.location.href='directeur-de-jeu.html'">← Accueil</button>
+          <button id="clearRankingsBtn" class="ddj-btn" style="background:linear-gradient(135deg,#fd7e14,#c46410);color:white;" title="Vide uniquement le classement saisonnier de cette catégorie (utile pour effacer des données de tests précédents). Les scores DdJ déjà saisis sont CONSERVÉS.">
+            🧹 Nettoyer le classement
+          </button>
           <button id="resetAllBtn" class="ddj-btn" style="background:linear-gradient(135deg,#dc3545,#a71d2a);color:white;" title="Effacer toutes les données DdJ pour ce tournoi (pointage, scores, classement). Les inscriptions sont conservées.">
             🔥 Tout réinitialiser
           </button>
@@ -528,6 +531,48 @@
       // Wire full-reset button
       const resetBtn = document.getElementById('resetAllBtn');
       if (resetBtn) resetBtn.addEventListener('click', handleFullReset);
+
+      // Wire clear-rankings-only button
+      const clearBtn = document.getElementById('clearRankingsBtn');
+      if (clearBtn) clearBtn.addEventListener('click', handleClearRankings);
+    }
+
+    async function handleClearRankings() {
+      const cat = state && state.tournament
+        ? `${state.tournament.mode || ''} ${state.tournament.categorie || ''}`.trim()
+        : 'cette catégorie';
+      const msg = `🧹 Nettoyer le classement saisonnier ?\n\n` +
+                  `Cela va vider toutes les données finalisées (résultats de tournoi + classement) ` +
+                  `pour ${cat} sur la saison en cours.\n\n` +
+                  `Les scores DdJ que vous avez déjà saisis (matchs de poule, tableau, consolante) ` +
+                  `sont CONSERVÉS — vous n'aurez pas à les retaper.\n\n` +
+                  `Utile quand le classement contient des données de tests précédents et que vous ` +
+                  `voulez le rebatir proprement à la finalisation.\n\n` +
+                  `Confirmer ?`;
+      if (!confirm(msg)) return;
+      try {
+        const fetchFn = typeof authFetch === 'function' ? authFetch : (url, opts) => {
+          const token = sessionStorage.getItem('token');
+          return fetch(url, {
+            ...opts,
+            headers: { ...(opts && opts.headers || {}), 'Authorization': `Bearer ${token}` }
+          });
+        };
+        const resp = await fetchFn(`${API_URL}/directeur-jeu/competitions/${compId}/clear-season-results`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || 'Erreur');
+        alert(`✅ Classement nettoyé.\n\n` +
+              `• ${data.tournaments_scanned || 0} tournoi(s) trouvé(s) dans cette catégorie/saison\n` +
+              `• ${data.tournamentsDeleted || 0} tournoi(s) finalisé(s) supprimé(s)\n` +
+              `• ${data.resultsDeleted || 0} résultat(s) supprimé(s)\n` +
+              `• Classement reconstruit : ${data.rankingsRefreshed ? 'oui' : 'non'}\n\n` +
+              `Vos scores DdJ pour ce tournoi sont intacts. Vous pouvez finaliser quand vous êtes prêt.`);
+      } catch (e) {
+        alert(`❌ Erreur : ${e.message}`);
+      }
     }
 
     async function handleFullReset() {
