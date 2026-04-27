@@ -511,6 +511,9 @@
 
         <div class="ddj-action-bar">
           <button class="ddj-btn ddj-btn-secondary" onclick="window.location.href='directeur-de-jeu.html'">← Accueil</button>
+          <button id="resetAllBtn" class="ddj-btn" style="background:linear-gradient(135deg,#dc3545,#a71d2a);color:white;" title="Effacer toutes les données DdJ pour ce tournoi (pointage, scores, classement). Les inscriptions sont conservées.">
+            🔥 Tout réinitialiser
+          </button>
           <button class="ddj-btn ddj-btn-primary" onclick="window.location.href='directeur-de-jeu-poules.html?compId=${compId}'">
             Générer les poules →
           </button>
@@ -521,6 +524,58 @@
       document.querySelectorAll('.ddj-player-row').forEach(row => {
         row.addEventListener('click', () => togglePresence(row.dataset.licence));
       });
+
+      // Wire full-reset button
+      const resetBtn = document.getElementById('resetAllBtn');
+      if (resetBtn) resetBtn.addEventListener('click', handleFullReset);
+    }
+
+    async function handleFullReset() {
+      const tournamentName = state && state.tournament
+        ? `${state.tournament.nom || ''} ${state.tournament.mode || ''} ${state.tournament.categorie || ''}`.trim()
+        : 'ce tournoi';
+      const msg1 = `⚠️ ATTENTION — RÉINITIALISATION COMPLÈTE\n\n` +
+                   `Tout va être effacé pour ${tournamentName} :\n` +
+                   `  • Pointage (tous les joueurs repassent en "inscrit")\n` +
+                   `  • Tous les scores de poule, tableau et consolante\n` +
+                   `  • Le classement final saisi (si finalisé)\n` +
+                   `  • Les compositions de poule (à régénérer)\n\n` +
+                   `Les inscriptions des joueurs sont CONSERVÉES.\n\n` +
+                   `Confirmer ?`;
+      if (!confirm(msg1)) return;
+      const typed = prompt(`Pour confirmer, tapez : RESET`);
+      if (typed !== 'RESET') {
+        alert('Réinitialisation annulée.');
+        return;
+      }
+      try {
+        const fetchFn = typeof authFetch === 'function' ? authFetch : (url, opts) => {
+          const token = sessionStorage.getItem('token');
+          return fetch(url, {
+            ...opts,
+            headers: { ...(opts && opts.headers || {}), 'Authorization': `Bearer ${token}` }
+          });
+        };
+        const resp = await fetchFn(`${API_URL}/directeur-jeu/competitions/${compId}/reset-all`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || 'Erreur');
+        alert(`✅ Tournoi réinitialisé.\n\n` +
+              `• ${data.pouleDeleted || 0} match(s) de poule supprimé(s)\n` +
+              `• ${data.bracketDeleted || 0} match(s) de tableau supprimé(s)\n` +
+              `• ${data.consolanteDeleted || 0} match(s) de consolante supprimé(s)\n` +
+              `• ${data.overrideDeleted || 0} surclassement manuel effacé\n` +
+              `• ${data.convocDeleted || 0} composition(s) de poule effacée(s)\n` +
+              `• ${data.tournamentResultsDeleted || 0} résultat(s) finalisé(s) supprimé(s)\n` +
+              `• ${data.tournamentRowDeleted || 0} entrée(s) de tournoi supprimée(s)\n\n` +
+              `Vous pouvez maintenant relancer la génération des poules + envoi des convocations.`);
+        // Reload to fresh pointage state
+        location.reload();
+      } catch (e) {
+        alert(`❌ Erreur lors de la réinitialisation : ${e.message}`);
+      }
     }
 
     async function togglePresence(licence) {

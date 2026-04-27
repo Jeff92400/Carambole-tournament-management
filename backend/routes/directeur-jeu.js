@@ -1660,6 +1660,138 @@ router.post('/competitions/:id/reset-bracket', authenticateToken, requireDdJ, as
   }
 });
 
+// POST /competitions/:id/reset-all — V 2.0.548
+// Total wipe of every DdJ trace for a tournament. Wipes:
+//   - ddj_poule_matches, ddj_bracket_matches, ddj_consolante_matches
+//   - ddj_bracket_seed_overrides
+//   - convocation_poules (poule compositions — will be re-created when
+//     the admin re-runs the poule generation + sends convocations)
+//   - tournament_results + tournaments row created at finalize time
+//     (looked up via category_id + tournament_number + season — same
+//     compound key the finalize endpoint uses).
+//   - resets inscriptions.statut='inscrit' / forfait=0 so the next
+//     pointage starts from a clean slate.
+// The tournoi_ext row + the inscriptions themselves are preserved, so
+// the admin only has to redo: poules generation → convocations → DdJ.
+router.post('/competitions/:id/reset-all', authenticateToken, requireDdJ, async (req, res) => {
+  const db = getDb();
+  const orgId = req.user.organizationId || null;
+  const tournoiId = parseInt(req.params.id, 10);
+  if (!Number.isFinite(tournoiId)) {
+    return res.status(400).json({ error: 'tournoi_id invalide' });
+  }
+  try {
+    // Fetch tournoi_ext to resolve category + tournament_number + season for
+    // the matching `tournaments` row created at finalize.
+    const t = await new Promise((resolve, reject) => {
+      db.get(
+        `SELECT tournoi_id, mode, categorie, debut, tournament_number, organization_id
+         FROM tournoi_ext
+         WHERE tournoi_id = $1 AND ($2::int IS NULL OR organization_id = $2)`,
+        [tournoiId, orgId],
+        (err, row) => err ? reject(err) : resolve(row)
+      );
+    });
+    if (!t) return res.status(404).json({ error: 'Tournoi introuvable' });
+
+    const runDelete = (sql, params = [tournoiId]) => new Promise((resolve, reject) => {
+      db.run(sql, params, function (err) {
+        if (err) return reject(err);
+        resolve(this && this.changes != null ? this.changes : 0);
+      });
+    });
+
+    const pouleDeleted      = await runDelete(`DELETE FROM ddj_poule_matches      WHERE tournoi_id = $1`);
+    const bracketDeleted    = await runDelete(`DELETE FROM ddj_bracket_matches    WHERE tournoi_id = $1`);
+    const consolanteDeleted = await runDelete(`DELETE FROM ddj_consolante_matches WHERE tournoi_id = $1`);
+    const overrideDeleted   = await runDelete(`DELETE FROM ddj_bracket_seed_overrides WHERE tournoi_id = $1`);
+    const convocDeleted     = await runDelete(`DELETE FROM convocation_poules     WHERE tournoi_id = $1`);
+
+    // Resolve the finalized tournaments row (same lookup as /finalize) and
+    // wipe it + its results. Best-effort: if the lookup fails (e.g. no
+    // category_id match because category was renamed), we skip silently.
+    let tournamentResultsDeleted = 0;
+    let tournamentRowDeleted = 0;
+    try {
+      const categoryRow = await new Promise((resolve, reject) => {
+        db.get(
+          `SELECT id FROM categories
+           WHERE UPPER(REPLACE(game_type, ' ', '')) = UPPER(REPLACE($1, ' ', ''))
+             AND UPPER(name) = UPPER($2)
+             AND ($3::int IS NULL OR organization_id = $3)
+           LIMIT 1`,
+          [t.mode || '', t.categorie || '', orgId],
+          (err, row) => err ? reject(err) : resolve(row)
+        );
+      });
+      if (categoryRow && t.tournament_number) {
+        const season = appSettings.getCurrentSeason
+          ? await appSettings.getCurrentSeason(t.debut ? new Date(t.debut) : new Date(), orgId)
+          : (() => {
+              const d = t.debut ? new Date(t.debut) : new Date();
+              const y = d.getFullYear();
+              return d.getMonth() + 1 >= 9 ? `${y}-${y + 1}` : `${y - 1}-${y}`;
+            })();
+        const tRow = await new Promise((resolve, reject) => {
+          db.get(
+            `SELECT id FROM tournaments
+             WHERE category_id = $1 AND tournament_number = $2 AND season = $3
+               AND ($4::int IS NULL OR organization_id = $4)`,
+            [categoryRow.id, t.tournament_number, season, orgId],
+            (err, row) => err ? reject(err) : resolve(row)
+          );
+        });
+        if (tRow) {
+          tournamentResultsDeleted = await runDelete(
+            `DELETE FROM tournament_results WHERE tournament_id = $1`,
+            [tRow.id]
+          );
+          tournamentRowDeleted = await runDelete(
+            `DELETE FROM tournaments WHERE id = $1`,
+            [tRow.id]
+          );
+        }
+      }
+    } catch (e) {
+      console.warn('[DdJ] /reset-all tournaments wipe skipped:', e.message);
+    }
+
+    // Reset inscriptions to "inscrit" so a fresh pointage can run cleanly.
+    const inscriptionsReset = await runDelete(
+      `UPDATE inscriptions SET statut = 'inscrit', forfait = 0
+       WHERE tournoi_id = $1 AND ($2::int IS NULL OR organization_id = $2)`,
+      [tournoiId, orgId]
+    );
+
+    try {
+      await new Promise((resolve, reject) => {
+        db.run(
+          `INSERT INTO activity_logs
+             (organization_id, action, action_type, entity_type, entity_id, user_id, details, source)
+           VALUES ($1, 'ddj_full_reset', 'success', 'tournament', $2, $3, $4, 'directeur_jeu')`,
+          [orgId, tournoiId, req.user.userId || null,
+            JSON.stringify({
+              pouleDeleted, bracketDeleted, consolanteDeleted, overrideDeleted,
+              convocDeleted, tournamentResultsDeleted, tournamentRowDeleted,
+              inscriptionsReset
+            })],
+          (err) => err ? reject(err) : resolve()
+        );
+      });
+    } catch (_) { /* non-blocking */ }
+
+    res.json({
+      ok: true,
+      pouleDeleted, bracketDeleted, consolanteDeleted, overrideDeleted,
+      convocDeleted, tournamentResultsDeleted, tournamentRowDeleted,
+      inscriptionsReset
+    });
+  } catch (err) {
+    console.error('[DdJ] /reset-all error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/directeur-jeu/competitions/:id/bracket
 router.get('/competitions/:id/bracket', authenticateToken, requireDdJ, async (req, res) => {
   const db = getDb();
