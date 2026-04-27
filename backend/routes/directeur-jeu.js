@@ -493,6 +493,8 @@ async function loadPointageForSerpentine(db, orgId, tournoiId) {
          cp.location_name,
          cp.location_address,
          cp.start_time,
+         cp.poule_number AS convocation_poule_number,
+         cp.player_order AS convocation_player_order,
          p.first_name, p.last_name,
          p.rank_libre, p.rank_cadre, p.rank_bande, p.rank_3bandes,
          i.forfait, i.statut,
@@ -554,6 +556,85 @@ router.post('/competitions/:id/poules/generate', authenticateToken, requireDdJ, 
     if (players.length === 0) {
       return res.status(400).json({ error: 'Aucun joueur présent à répartir (pointage requis)' });
     }
+
+    // V 2.0.550 — Preserve convocation poules when nothing has changed.
+    // The convocation poules are the official ones (sent to players,
+    // displayed in the Player App, printed for the day). If every convoked
+    // player is still present (no forfait) AND every player already has a
+    // valid poule_number from convocation_poules, we reuse that composition
+    // verbatim — including any manual swaps the admin made before sending
+    // convocations. This avoids the DdJ silently re-running the serpentine
+    // and overwriting deliberate edits like "no two players from the same
+    // club in the same poule".
+    const convokedTotal = await new Promise((resolve, reject) => {
+      db.get(
+        `SELECT COUNT(*)::int AS n FROM convocation_poules WHERE tournoi_id = $1`,
+        [tournoiId],
+        (err, row) => err ? reject(err) : resolve(row ? row.n : 0)
+      );
+    });
+    const everyoneHasPoule = players.every(p =>
+      p.convocation_poule_number != null && p.convocation_poule_number > 0
+    );
+    if (convokedTotal > 0 && players.length === convokedTotal && everyoneHasPoule) {
+      // Group by convocation poule_number, preserving in-poule order.
+      const byPoule = new Map();
+      for (const p of players) {
+        const k = p.convocation_poule_number;
+        if (!byPoule.has(k)) byPoule.set(k, []);
+        byPoule.get(k).push(p);
+      }
+      const sortedPouleNumbers = [...byPoule.keys()].sort((a, b) => a - b);
+      let globalRank = 1;
+      const preservedPoules = sortedPouleNumbers.map((num, idx) => {
+        const list = byPoule.get(num);
+        list.sort((a, b) => (a.convocation_player_order || 0) - (b.convocation_player_order || 0));
+        return {
+          number: idx + 1,                 // renumber 1..N for the UI
+          size: list.length,
+          players: list.map(p => ({ ...p, serpentine_rank: globalRank++ }))
+        };
+      });
+      // Reuse the same shape `getPouleConfigForOrg` would produce for
+      // the description / tables count (best-effort, non-blocking).
+      const cfg = await getPouleConfigForOrg(players.length, orgId).catch(() => null);
+      const proposal = {
+        tournament: {
+          id: tournament.tournoi_id,
+          nom: tournament.nom,
+          mode: tournament.mode,
+          categorie: tournament.categorie,
+          debut: tournament.debut,
+          season
+        },
+        seed_source: 'convocation_preserved',
+        total_players: players.length,
+        total_poules: preservedPoules.length,
+        tables_needed: cfg ? cfg.tables : preservedPoules.length,
+        description: cfg ? cfg.description : `${preservedPoules.length} poules`,
+        poules: preservedPoules.map(pl => ({
+          number: pl.number,
+          size: pl.size,
+          players: pl.players.map(p => ({
+            licence: p.licence,
+            licence_normalized: String(p.licence || '').replace(/\s+/g, ''),
+            player_name: p.player_name || `${p.last_name || ''} ${p.first_name || ''}`.trim(),
+            first_name: p.first_name,
+            last_name: p.last_name,
+            club: p.club,
+            season_rank: p.season_rank,
+            moyenne_ffb: p.moyenne_ffb,
+            serpentine_rank: p.serpentine_rank,
+            location_name: p.location_name,
+            location_address: p.location_address,
+            start_time: p.start_time
+          }))
+        }))
+      };
+      return res.json(proposal);
+    }
+    // Otherwise (forfaits, missing poule assignments, or no convocation
+    // sent yet) fall through to the legacy serpentine path below.
 
     // Choose seed source with honest reporting so the UI can tell the DdJ
     // which criterion was used (useful when they ask "why is this player

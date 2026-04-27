@@ -338,14 +338,16 @@
     }
 
     const SEED_LABELS = {
-      season_ranking: '🏅 Classement saison',
+      season_ranking: '🏅 Classement de la saison en cours',
       ffb_moyenne: '📊 Moyenne FFB',
-      insertion_order: '📋 Ordre d\'inscription'
+      insertion_order: '📋 Ordre d\'inscription',
+      convocation_preserved: '📌 Poules de la convocation'
     };
     const SEED_EXPLAIN = {
-      season_ranking: 'Le serpentin utilise le classement saisonnier en cours (issu des résultats des tournois précédents).',
-      ffb_moyenne: 'Pas de classement saisonnier disponible → les joueurs sont seedés selon leur moyenne FFB de début de saison (même critère que pour un T1/TQ1).',
-      insertion_order: 'Ni classement ni moyenne FFB disponibles → l\'ordre d\'inscription est utilisé. Les poules restent déterministes mais ne reflètent pas la hiérarchie des joueurs.'
+      season_ranking: 'Le serpentin utilise le classement de la saison en cours (issu des résultats des tournois précédents).',
+      ffb_moyenne: 'Pas de classement de la saison en cours disponible → les joueurs sont seedés selon leur moyenne FFB de début de saison (même critère que pour un T1/TQ1).',
+      insertion_order: 'Ni classement ni moyenne FFB disponibles → l\'ordre d\'inscription est utilisé. Les poules restent déterministes mais ne reflètent pas la hiérarchie des joueurs.',
+      convocation_preserved: 'Tous les joueurs convoqués sont présents : la composition des poules envoyée dans les convocations est conservée à l\'identique (y compris les permutations manuelles éventuellement effectuées avant l\'envoi).'
     };
 
     // State
