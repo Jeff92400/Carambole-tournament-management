@@ -592,12 +592,23 @@
       const hint = anyMatchPlayed
         ? `<p style="font-size:11px;color:#888;margin:6px 0 0;">🔒 L'ordre est verrouillé car des matchs du tableau ont déjà été saisis.</p>`
         : `<p style="font-size:11px;color:#888;margin:6px 0 0;">💡 Cliquez sur ▲▼ pour réordonner les qualifiés (utile pour comparer avec une fiche FFB qui aurait un classement différent).</p>`;
+      // V 2.0.540 — Always-available escape hatch to rerun Étape 4/5 from
+      // scratch (poule data preserved). Useful after the V 2.0.538/539
+      // ranking fixes to re-simulate a tournament whose bracket was already
+      // saved under the old rules.
+      const resetAllBtn = `
+        <div style="margin-top:10px;text-align:right;">
+          <button id="resetBracketAllBtn" style="background:#fff;color:#a00;border:1px solid #a00;border-radius:6px;padding:5px 12px;cursor:pointer;font-size:12px;font-weight:600;">
+            🗑 Réinitialiser tableau + classement (matchs effacés)
+          </button>
+        </div>`;
       return `
         <div class="qualifiers-card">
           <h3>🏆 Qualifiés pour le tableau final (${quals.length} joueurs)</h3>
           ${banner}
           <div class="qualifiers-grid">${rowsHtml}</div>
           ${hint}
+          ${resetAllBtn}
         </div>
       `;
     }
@@ -637,6 +648,32 @@
         resetBtn.addEventListener('click', async () => {
           if (!confirm('Réinitialiser l\'ordre des qualifiés au calcul automatique ?')) return;
           await resetSeedOrder();
+        });
+      }
+      const resetAllBtn = document.getElementById('resetBracketAllBtn');
+      if (resetAllBtn) {
+        resetAllBtn.addEventListener('click', async () => {
+          const msg =
+            '⚠️ ATTENTION — réinitialisation complète\n\n' +
+            'Cette action va supprimer :\n' +
+            '• Tous les matchs du tableau final saisis (SF, F, PF)\n' +
+            '• Tous les matchs de classement (consolante) saisis\n' +
+            '• L\'ordre manuel des qualifiés\n\n' +
+            'Les poules et leurs matchs ne sont PAS impactés.\n\n' +
+            'Continuer ?';
+          if (!confirm(msg)) return;
+          try {
+            const resp = await authFetch(`${API_URL}/directeur-jeu/competitions/${compId}/reset-bracket`, {
+              method: 'POST'
+            });
+            if (!resp.ok) {
+              const body = await resp.json().catch(() => ({}));
+              throw new Error(body.error || 'Échec réinitialisation');
+            }
+            await loadBracket();
+          } catch (err) {
+            alert('Erreur : ' + err.message);
+          }
         });
       }
     }

@@ -1587,6 +1587,60 @@ router.delete('/competitions/:id/bracket-seeds', authenticateToken, requireDdJ, 
     });
 });
 
+// POST /competitions/:id/reset-bracket — V 2.0.540
+// Escape hatch for re-simulation: wipes saved bracket matches, consolante
+// matches AND the seed override for a tournament, while keeping the poule
+// matches intact. Lets the DdJ rerun Étape 4/5 from scratch under the new
+// rules without losing the pointage and poule scores.
+router.post('/competitions/:id/reset-bracket', authenticateToken, requireDdJ, async (req, res) => {
+  const db = getDb();
+  const orgId = req.user.organizationId || null;
+  const tournoiId = parseInt(req.params.id, 10);
+  if (!Number.isFinite(tournoiId)) {
+    return res.status(400).json({ error: 'tournoi_id invalide' });
+  }
+  // Multi-tenant guard: confirm tournament belongs to this org
+  try {
+    const t = await new Promise((resolve, reject) => {
+      db.get(
+        `SELECT tournoi_id FROM tournoi_ext
+         WHERE tournoi_id = $1 AND ($2::int IS NULL OR organization_id = $2)`,
+        [tournoiId, orgId],
+        (err, row) => err ? reject(err) : resolve(row)
+      );
+    });
+    if (!t) return res.status(404).json({ error: 'Tournoi introuvable' });
+
+    const runDelete = (sql) => new Promise((resolve, reject) => {
+      db.run(sql, [tournoiId], function (err) {
+        if (err) return reject(err);
+        resolve(this && this.changes != null ? this.changes : 0);
+      });
+    });
+    const bracketDeleted = await runDelete(`DELETE FROM ddj_bracket_matches WHERE tournoi_id = $1`);
+    const consolanteDeleted = await runDelete(`DELETE FROM ddj_consolante_matches WHERE tournoi_id = $1`);
+    const overrideDeleted = await runDelete(`DELETE FROM ddj_bracket_seed_overrides WHERE tournoi_id = $1`);
+
+    try {
+      await new Promise((resolve, reject) => {
+        db.run(
+          `INSERT INTO activity_logs
+             (organization_id, action, action_type, entity_type, entity_id, user_id, details, source)
+           VALUES ($1, 'ddj_bracket_reset', 'success', 'tournament', $2, $3, $4, 'directeur_jeu')`,
+          [orgId, tournoiId, req.user.userId || null,
+            JSON.stringify({ bracketDeleted, consolanteDeleted, overrideDeleted })],
+          (err) => err ? reject(err) : resolve()
+        );
+      });
+    } catch (_) { /* non-blocking */ }
+
+    res.json({ ok: true, bracketDeleted, consolanteDeleted, overrideDeleted });
+  } catch (err) {
+    console.error('[DdJ] /reset-bracket error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/directeur-jeu/competitions/:id/bracket
 router.get('/competitions/:id/bracket', authenticateToken, requireDdJ, async (req, res) => {
   const db = getDb();
