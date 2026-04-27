@@ -2050,7 +2050,13 @@ async function loadConsolante(db, orgId, tournoiId) {
 
   for (const { phase, p1, p2 } of round1Pairs) {
     const ph = buildPhase(phase, p1, p2);
-    ph.ffb_label = consolanteFFBLabel(phase, size, non_qualifiers.length);
+    // V 2.0.547 — A bye phase doesn't determine any place: the bye player
+    // advances to the next round (often the consolante final). Stamping a
+    // "Place 07" label on it was misleading. We label it "Tour préliminaire
+    // (exempt)" instead so the FFB place semantics stay accurate.
+    ph.ffb_label = ph.has_bye
+      ? 'Tour préliminaire (exempt)'
+      : consolanteFFBLabel(phase, size, non_qualifiers.length);
     phases.push(ph);
     phaseMap.set(phase, ph);
   }
@@ -2069,7 +2075,9 @@ async function loadConsolante(db, orgId, tournoiId) {
       const w2 = outB && outB.winner ? findNonQual(outB.winner.licence) || outB.winner : null;
       const phaseName = laterPhases[laterIdx++];
       const ph = buildPhase(phaseName, w1, w2, [prevRound[i], prevRound[i + 1]]);
-      ph.ffb_label = consolanteFFBLabel(phaseName, size, non_qualifiers.length);
+      ph.ffb_label = ph.has_bye
+        ? 'Tour préliminaire (exempt)'
+        : consolanteFFBLabel(phaseName, size, non_qualifiers.length);
       phases.push(ph);
       phaseMap.set(phaseName, ph);
       nextRound.push(phaseName);
