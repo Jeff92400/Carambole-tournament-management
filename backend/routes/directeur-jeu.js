@@ -915,7 +915,7 @@ function buildPouleClassement(players, matches, settings) {
 async function loadPouleMatches(db, orgId, tournoiId) {
   const tournament = await new Promise((resolve, reject) => {
     db.get(
-      `SELECT tournoi_id, nom, mode, categorie, debut, lieu
+      `SELECT tournoi_id, nom, mode, categorie, debut, lieu, tournament_number
        FROM tournoi_ext
        WHERE tournoi_id = $1 AND ($2::int IS NULL OR organization_id = $2)`,
       [tournoiId, orgId],
@@ -2801,7 +2801,16 @@ router.post('/competitions/:id/finalize', authenticateToken, requireDdJ, async (
       });
     }
     const categoryId = categoryRow.id;
-    const tournamentNumber = t.tournament_number || 1;
+    // V 2.0.542 — `tournament_number` MUST come from tournoi_ext (T1=1, T2=2,
+    // T3=3, finale=4...). Previous fallback to 1 silently overwrote the T1
+    // tournaments row when finalizing T2 of the same category/season, because
+    // the UPSERT key is (category_id, tournament_number, season).
+    if (!t.tournament_number) {
+      return res.status(500).json({
+        error: 'Numéro de tournoi (T1/T2/T3) introuvable sur tournoi_ext — finalisation annulée pour éviter d\'écraser un autre tournoi.'
+      });
+    }
+    const tournamentNumber = t.tournament_number;
     const season = appSettings.getCurrentSeason
       ? await appSettings.getCurrentSeason(t.debut ? new Date(t.debut) : new Date(), orgId)
       : (() => {
