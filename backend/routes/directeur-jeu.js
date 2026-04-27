@@ -1797,11 +1797,15 @@ router.post('/competitions/:id/reset-all', authenticateToken, requireDdJ, async 
     let resolvedCategoryId = null;
     let resolvedSeason = null;
     try {
+      // V 2.0.551 — Categories table has `level`, not `name`. The previous
+      // SELECT silently matched nothing → reset never wiped tournaments
+      // or tournament_results, so old finalized data kept polluting the
+      // rankings table after each "reset".
       const categoryRow = await new Promise((resolve, reject) => {
         db.get(
           `SELECT id FROM categories
            WHERE UPPER(REPLACE(game_type, ' ', '')) = UPPER(REPLACE($1, ' ', ''))
-             AND UPPER(name) = UPPER($2)
+             AND UPPER(level) = UPPER($2)
              AND ($3::int IS NULL OR organization_id = $3)
            LIMIT 1`,
           [t.mode || '', t.categorie || '', orgId],
