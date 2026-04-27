@@ -611,7 +611,7 @@
     // Cette vue se compare directement avec la fiche FFB officielle.
     function renderFfbSection(ffb) {
       if (!ffb || !ffb.length) {
-        return `<div class="recap-section"><h3>📊 Classement FFB (cumul points match)</h3><div class="recap-empty">Aucun match saisi pour le moment.</div></div>`;
+        return `<div class="recap-section"><h3>📊 Classement final FFB</h3><div class="recap-empty">Aucun match saisi pour le moment.</div></div>`;
       }
       const rows = ffb.map(p => `
         <tr>
@@ -628,7 +628,7 @@
       `).join('');
       return `
         <div class="recap-section">
-          <h3>📊 Classement FFB (cumul points match — toutes phases)</h3>
+          <h3>📊 Classement final FFB (phase atteinte + points match / moyenne / meilleure série)</h3>
           <p style="color: #666; font-size: 13px; margin: 0 0 8px;">
             Classement officiel selon la pondération FFB par <strong>numéro de phase</strong> :
             le perdant de la finale (phase 8) précède le perdant de la petite finale (phase 7),
