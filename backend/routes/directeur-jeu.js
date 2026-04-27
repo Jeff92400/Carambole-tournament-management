@@ -2172,10 +2172,35 @@ router.get('/competitions/:id/recap', authenticateToken, requireDdJ, async (req,
       ...((consolanteCtx.final_places) || [])
     ];
 
-    // FFB-style ranking — pure match-points cumulative across all phases
-    // (poules + bracket + consolante), with FFB tie-breaks (moyenne, série).
-    // Mirrors what is shown on the FFB website results.
+    // FFB-style ranking — cumulative match-points/moyenne/série across all
+    // phases (poules + bracket + consolante), but ORDERED by phase number
+    // (V 2.0.539). CDB 93-94 rule confirmed 27/04/2026: a finale loser
+    // outranks a SF loser even if the SF loser has more cumulative points,
+    // because the phase reached weighs more than raw performance. Concretely
+    // we use overall_classement (places 1-N built from F/PF/Consolante) as
+    // primary key, then poule rank, then performance as tiebreak for any
+    // players that didn't reach a finalized phase yet.
     const ffbClassement = await buildFFBRanking(db, tournoiId, pouleCtx);
+    const placeByLicence = new Map();
+    for (const op of overall) {
+      placeByLicence.set(String(op.licence || '').replace(/\s+/g, ''), op.place);
+    }
+    for (const row of ffbClassement) {
+      const k = String(row.licence || '').replace(/\s+/g, '');
+      row.final_place = placeByLicence.get(k) || null;
+    }
+    ffbClassement.sort((a, b) => {
+      const aHas = a.final_place != null, bHas = b.final_place != null;
+      if (aHas && bHas) return a.final_place - b.final_place;
+      if (aHas) return -1;
+      if (bHas) return 1;
+      // Both still without a final place (tournament not finalized) —
+      // fall back to performance.
+      if (b.match_points !== a.match_points) return b.match_points - a.match_points;
+      if (b.moyenne !== a.moyenne) return b.moyenne - a.moyenne;
+      return (b.best_serie || 0) - (a.best_serie || 0);
+    });
+    ffbClassement.forEach((p, i) => { p.rank = i + 1; });
 
     res.json({
       tournament: pouleCtx.tournament,
