@@ -526,6 +526,7 @@
       </div>
       <div class="modal-footer">
         <button class="btn-sm danger" id="articleDeleteBtn" style="display:none; margin-right: auto;" onclick="deleteArticle()">Supprimer</button>
+        <button class="btn-sm secondary" id="articleRegenerateBtn" style="display:none; background:#fef3c7; color:#92400e; border:1px solid #fcd34d;" onclick="regenerateArticle()" title="Re-générer le contenu de l'article à partir du gabarit auto-publisher (utile pour rafraîchir les articles existants après une mise à jour du gabarit)">🔄 Régénérer</button>
         <button class="btn-sm secondary" onclick="closeArticleModal()">Annuler</button>
         <button class="btn-sm secondary" onclick="saveArticle('draft')">Enregistrer en brouillon</button>
         <button class="btn-sm" onclick="saveArticle('published')">Publier</button>
@@ -1140,6 +1141,9 @@
       const modal = document.getElementById('articleModal');
       const title = document.getElementById('articleModalTitle');
       const deleteBtn = document.getElementById('articleDeleteBtn');
+      const regenBtn = document.getElementById('articleRegenerateBtn');
+      // Default state for regenerate button (toggled per-article below)
+      if (regenBtn) regenBtn.style.display = 'none';
 
       modal.classList.add('visible');
       initEditor();
@@ -1168,6 +1172,12 @@
           relatedPageIds = Array.isArray(a.related_links)
             ? a.related_links.map(r => r.id).filter(Boolean)
             : [];
+          // V 2.0.564 — Show "Régénérer" button only for auto-generated
+          // RESULTS articles. Lets the admin refresh an existing article
+          // to reflect template updates (e.g., new tables added in V 2.0.563).
+          if (regenBtn && a.auto_generated && a.source_type === 'RESULTS') {
+            regenBtn.style.display = '';
+          }
         } catch (err) {
           toast(err.message, 'error');
         }
@@ -1368,6 +1378,48 @@
         await loadArticles();
       } catch (err) {
         toast(err.message, 'error');
+      }
+    }
+
+    // V 2.0.564 — Re-run the auto-publisher template against the live
+    // tournament data. Refreshes the article body without touching the
+    // section, status, or pinned/featured flags. Useful after a template
+    // update (e.g., V 2.0.563 added the season ranking table).
+    async function regenerateArticle() {
+      if (!editingArticleId) return;
+      const msg = '🔄 Régénérer le contenu de cet article ?\n\n'
+        + 'Le titre, le résumé et le corps de l\'article seront recréés à partir '
+        + 'des données actuelles du tournoi (résultats + classement de la saison).\n\n'
+        + 'Le dossier, le statut, les options "À la une" / "Punaise" et les liens '
+        + 'associés sont conservés.\n\n'
+        + 'Continuer ?';
+      if (!confirm(msg)) return;
+
+      const btn = document.getElementById('articleRegenerateBtn');
+      const original = btn ? btn.textContent : '';
+      if (btn) { btn.disabled = true; btn.textContent = '⏳ Régénération…'; }
+      try {
+        const resp = await fetch(`${API_URL}/content/pages/${editingArticleId}/regenerate`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
+        });
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({}));
+          throw new Error(err.error || 'Erreur de régénération');
+        }
+        const data = await resp.json();
+        // Update the modal in place so the admin sees the new body
+        // without having to reopen.
+        document.getElementById('articleTitle').value = data.title || '';
+        document.getElementById('articleExcerpt').value = data.excerpt || '';
+        if (quillEditor) quillEditor.root.innerHTML = data.content_html || '';
+        toast('Article régénéré avec succès');
+        // Refresh the list in the background so the date column updates.
+        loadArticles();
+      } catch (err) {
+        toast(err.message, 'error');
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = original || '🔄 Régénérer'; }
       }
     }
 

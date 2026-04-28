@@ -295,6 +295,7 @@ router.get('/pages/:id', authenticateToken, async (req, res) => {
       `SELECT p.id, p.section_id, s.name AS section_name,
               p.title, p.excerpt, p.content_html, p.content_type, p.status,
               p.is_featured, p.is_pinned, p.cover_image,
+              p.auto_generated, p.source_type, p.source_ref_id,
               p.author_user_id, u.username AS author_name,
               p.published_at, p.created_at, p.updated_at
          FROM content_pages p
@@ -515,6 +516,67 @@ router.put('/pages/:id', authenticateToken, requireAdmin, async (req, res) => {
     res.json(updated);
   } catch (err) {
     console.error('[content] update page error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// V 2.0.564 — POST /api/content/pages/:id/regenerate
+// Re-runs the auto-publisher template against the live data of the
+// underlying source (tournament for RESULTS) and overwrites the
+// article body/title/excerpt. Useful when admins:
+//   1) want to refresh an existing auto-article after tweaking the
+//      template (e.g., V 2.0.563 added the season ranking table —
+//      pre-existing articles need a regenerate to pick it up)
+//   2) want to "preview" the new template without re-importing
+// Only auto-generated RESULTS articles are supported for now; extend
+// to FINALE_QUALIFICATION + NEW_TOURNAMENT when admins ask for it.
+router.post('/pages/:id/regenerate', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const orgId = req.user.organizationId || null;
+    const id = parseInt(req.params.id, 10);
+
+    const page = await dbGet(
+      `SELECT id, auto_generated, source_type, source_ref_id, organization_id, status
+         FROM content_pages
+        WHERE id = $1 AND ($2::int IS NULL OR organization_id = $2)`,
+      [id, orgId]
+    );
+    if (!page) return res.status(404).json({ error: 'Article introuvable' });
+    if (!page.auto_generated) {
+      return res.status(400).json({
+        error: 'Cet article n\'est pas auto-généré et ne peut pas être régénéré automatiquement.'
+      });
+    }
+    if (page.source_type !== 'RESULTS') {
+      return res.status(400).json({
+        error: `Régénération non encore supportée pour le type "${page.source_type}".`
+      });
+    }
+    if (!page.source_ref_id) {
+      return res.status(400).json({ error: 'source_ref_id manquant — impossible de régénérer.' });
+    }
+
+    const { renderResultsArticleForTournament } = require('../utils/news-auto-publisher');
+    const rendered = await renderResultsArticleForTournament(orgId, page.source_ref_id);
+
+    await dbRun(
+      `UPDATE content_pages
+          SET title = $1,
+              excerpt = $2,
+              content_html = $3,
+              updated_at = CURRENT_TIMESTAMP
+        WHERE id = $4`,
+      [rendered.title, rendered.excerpt, rendered.contentHtml, id]
+    );
+
+    res.json({
+      success: true,
+      title: rendered.title,
+      excerpt: rendered.excerpt,
+      content_html: rendered.contentHtml
+    });
+  } catch (err) {
+    console.error('[content] regenerate page error:', err);
     res.status(500).json({ error: err.message });
   }
 });

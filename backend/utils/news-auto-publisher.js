@@ -860,10 +860,57 @@ async function fireResultsArticleDraft(orgId, tournamentId, tournamentInfo, fetc
   }
 }
 
+// V 2.0.564 — Pure render helper for the RESULTS template. Fetches
+// tournament metadata + podium + full results + season ranking,
+// then runs the same template the auto-publisher uses, but does NOT
+// touch content_pages. Used by the admin "Régénérer" button to
+// preview/refresh the article body without going through the full
+// idempotent publish path.
+async function renderResultsArticleForTournament(orgId, tournamentId) {
+  // Pull tournament + category metadata so we can build the payload.
+  const tMeta = await db.query(
+    `SELECT t.id, t.tournament_number, t.tournament_date, t.season,
+            c.game_type, c.level
+       FROM tournaments t
+       LEFT JOIN categories c ON c.id = t.category_id
+      WHERE t.id = $1`,
+    [tournamentId]
+  );
+  if (!tMeta.rows[0]) {
+    throw new Error(`Tournoi ${tournamentId} introuvable`);
+  }
+  const t = tMeta.rows[0];
+  const tournamentLabel = t.tournament_number ? `T${t.tournament_number}` : 'Tournoi';
+  const categoryName = `${t.game_type || ''} ${t.level || ''}`.trim();
+  const tournamentDate = t.tournament_date
+    ? formatLongDate(t.tournament_date)
+    : '';
+
+  const playerAppUrl = await getPlayerAppBaseUrl(orgId);
+  const [podium, totalPlayers, fullResults, seasonData] = await Promise.all([
+    fetchPodium(tournamentId),
+    fetchParticipantCount(tournamentId),
+    fetchTournamentResults(tournamentId),
+    fetchSeasonRanking(tournamentId, orgId)
+  ]);
+  return renderResultsArticle({
+    tournamentLabel,
+    categoryName,
+    tournamentDate,
+    podium,
+    totalPlayers,
+    fullResults,
+    seasonRankings: seasonData.rankings,
+    seasonLabel: seasonData.season,
+    deeplink: buildPlayerAppDeeplink(playerAppUrl, 'stats')
+  });
+}
+
 module.exports = {
   publishAutoArticle,
   promoteDraftOrCreate,
   fireResultsArticleDraft,
+  renderResultsArticleForTournament,
   // Exported for tests / admin UI preview only.
   _internals: {
     EVENT_SECTION_MAP,
