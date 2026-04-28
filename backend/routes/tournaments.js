@@ -2525,12 +2525,25 @@ router.get('/:id/results', authenticateToken, async (req, res) => {
         const nbPlayers = results.length;
         const lookup = await getPositionPointsLookup(orgId, nbPlayers);
         if (Object.keys(lookup).length > 0) {
-          // Check if bracket data exists (positions already set by import-matches)
+          // Check if bracket data exists (positions already set by import-matches,
+          // legacy bracket.js, or DdJ finalize). V 2.0.556 — apply the same
+          // source-agnostic invariant as assignPositionPointsIfJournees: if any
+          // result row already has a non-zero `position`, the writer (CSV
+          // import / bracket.js / DdJ) computed FFB-correct phase-weighted
+          // positions and we MUST NOT resort by (match_points, moyenne) here.
+          // Doing so destroys the phase weighting (e.g. a high-MGP consolante
+          // 1st gets promoted to bracket-3rd points). This is the fourth and
+          // final position-writer path — see V 2.0.555 audit comment.
           let hasBracket = false;
           try {
             const mRow = await dbGetAsync('SELECT 1 FROM tournament_matches WHERE tournament_id = $1 LIMIT 1', [tournamentId]);
             hasBracket = !!mRow;
           } catch (e) { /* table may not exist */ }
+          if (!hasBracket && results && results.length > 0) {
+            // Source-agnostic check: any persisted position > 0 means the
+            // bracket engine already populated this tournament.
+            hasBracket = results.some(r => r && r.position && r.position > 0);
+          }
 
           const degradation = await appSettings.getOrgSetting(orgId, 'position_points_degradation');
 
