@@ -1054,6 +1054,21 @@ async function initializeDatabase() {
     await client.query(`ALTER TABLE content_sections ADD COLUMN IF NOT EXISTS link_type VARCHAR(20) DEFAULT 'section'`);
     await client.query(`ALTER TABLE content_sections ADD COLUMN IF NOT EXISTS link_target VARCHAR(50)`);
 
+    // V 2.0.561 — Seed a default "Général" section per org so manual
+    // articles always have a valid destination "folder", and the
+    // auto-publisher always has a fallback when no per-event-type
+    // mapping is configured. Only inserts for orgs that have ZERO
+    // existing sections, so admins are free to delete Général after
+    // creating their own structure.
+    await client.query(`
+      INSERT INTO content_sections (organization_id, name, sort_order, link_type, icon)
+      SELECT o.id, 'Général', 9999, 'section', '📰'
+        FROM organizations o
+       WHERE NOT EXISTS (
+         SELECT 1 FROM content_sections cs WHERE cs.organization_id = o.id
+       )
+    `);
+
     // Content pages — articles (news, events, results, documents)
     await client.query(`
       CREATE TABLE IF NOT EXISTS content_pages (

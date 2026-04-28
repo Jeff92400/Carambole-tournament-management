@@ -323,11 +323,25 @@ router.get('/pages/:id', authenticateToken, async (req, res) => {
   }
 });
 
+// V 2.0.561 — Resolve a fallback section_id for an org when an article
+// is created without one. Returns the lowest-id existing section. The
+// startup migration in db-postgres.js seeds "Général" for orgs that
+// have zero sections, so this normally finds at least one.
+async function resolveFallbackSectionId(orgId) {
+  const row = await dbGet(
+    `SELECT id FROM content_sections
+      WHERE ($1::int IS NULL OR organization_id = $1)
+      ORDER BY id ASC LIMIT 1`,
+    [orgId]
+  );
+  return row ? row.id : null;
+}
+
 // POST /api/content/pages — create an article
 router.post('/pages', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const orgId = req.user.organizationId || null;
-    const {
+    let {
       section_id = null,
       title,
       content_html = '',
@@ -348,6 +362,13 @@ router.post('/pages', authenticateToken, requireAdmin, async (req, res) => {
     }
     if (!VALID_STATUSES.includes(status)) {
       return res.status(400).json({ error: 'Statut invalide' });
+    }
+
+    // V 2.0.561 — Every article must land in a folder. If the caller
+    // didn't pick one (older API clients, auto-publisher with no
+    // mapping), route to the org's first section (typically "Général").
+    if (!section_id) {
+      section_id = await resolveFallbackSectionId(orgId);
     }
 
     const publishedAt = status === 'published' ? new Date() : null;

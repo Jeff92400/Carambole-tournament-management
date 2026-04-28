@@ -459,26 +459,30 @@
         <button class="modal-close" onclick="closeArticleModal()">&times;</button>
       </div>
       <div class="modal-body">
+        <!-- V 2.0.561 — Dossier first, prominent, required. The article
+             always belongs to a folder (Mon district item on the player
+             landing page). Frontend validates non-empty before save. -->
+        <div class="form-row" style="background: #f0f4ff; border: 1px solid #c7d2fe; border-radius: 10px; padding: 12px 14px;">
+          <label style="font-weight: 600; color: #1F4788; margin-bottom: 6px;">📁 Dossier de destination *</label>
+          <select id="articleSection" style="font-weight: 600;">
+            <option value="">— Choisir un dossier —</option>
+          </select>
+          <div style="font-size: 12px; color: #555; margin-top: 6px;">
+            L'article s'affichera dans ce dossier sur l'app joueur (élément de "Mon district").
+          </div>
+        </div>
         <div class="form-row">
           <label>Titre *</label>
           <input type="text" id="articleTitle" placeholder="Titre de l'article">
         </div>
-        <div class="form-row-inline">
-          <div class="form-row">
-            <label>Section</label>
-            <select id="articleSection">
-              <option value="">(Aucune section)</option>
-            </select>
-          </div>
-          <div class="form-row">
-            <label>Type</label>
-            <select id="articleType">
-              <option value="actualite">Actualité</option>
-              <option value="evenement">Événement</option>
-              <option value="resultat">Résultat</option>
-              <option value="document">Document</option>
-            </select>
-          </div>
+        <div class="form-row">
+          <label>Type</label>
+          <select id="articleType">
+            <option value="actualite">Actualité</option>
+            <option value="evenement">Événement</option>
+            <option value="resultat">Résultat</option>
+            <option value="document">Document</option>
+          </select>
         </div>
         <div class="form-row">
           <label>Résumé court (optionnel)</label>
@@ -1151,7 +1155,18 @@
         title.textContent = 'Nouvel article';
         deleteBtn.style.display = 'none';
         document.getElementById('articleTitle').value = '';
-        document.getElementById('articleSection').value = currentSectionFilter || '';
+        // V 2.0.561 — Default to currently filtered section, or fall
+        // back to the first non-page-link section in the cache. This
+        // way "+ Nouvel article" never lands on a blank dossier.
+        const sectionSel = document.getElementById('articleSection');
+        if (currentSectionFilter) {
+          sectionSel.value = String(currentSectionFilter);
+        } else {
+          const firstSectionalSection = (sectionsCache || [])
+            .filter(s => (s.link_type || 'section') === 'section')
+            .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0) || a.id - b.id)[0];
+          sectionSel.value = firstSectionalSection ? String(firstSectionalSection.id) : '';
+        }
         document.getElementById('articleType').value = 'actualite';
         document.getElementById('articleExcerpt').value = '';
         document.getElementById('articleFeatured').checked = false;
@@ -1263,6 +1278,15 @@
     async function saveArticle(status) {
       const title = document.getElementById('articleTitle').value.trim();
       if (!title) { toast('Le titre est requis', 'error'); return; }
+
+      // V 2.0.561 — Section is now required for manual articles. Every
+      // article must land in a Mon district folder so it shows up on
+      // the player landing page.
+      const sectionVal = document.getElementById('articleSection').value;
+      if (!sectionVal) {
+        toast('Choisissez le dossier de destination', 'error');
+        return;
+      }
 
       const contentHtml = quillEditor.root.innerHTML;
       console.log(`[cover] content_html length: ${contentHtml.length} chars`);
