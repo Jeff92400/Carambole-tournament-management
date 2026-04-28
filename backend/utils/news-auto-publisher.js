@@ -313,6 +313,151 @@ async function fetchParticipantCount(tournamentId) {
   }
 }
 
+// V 2.0.563 — Fetch the full results of a tournament for inclusion in
+// the article body as a table. Sorted by tournament position then by
+// match_points (highest first) as a tiebreaker. The fields returned
+// match what the rankings page shows so admins recognize the layout.
+async function fetchTournamentResults(tournamentId) {
+  try {
+    const result = await db.query(
+      `SELECT tr.position, tr.licence, tr.player_name, tr.match_points,
+              tr.points, tr.reprises, tr.serie, tr.moyenne, tr.position_points,
+              tr.bonus_points, tr.poule_rank,
+              p.first_name, p.last_name, p.club AS club_name
+         FROM tournament_results tr
+         LEFT JOIN players p ON p.licence = tr.licence
+        WHERE tr.tournament_id = $1
+        ORDER BY COALESCE(tr.position, 999) ASC, tr.match_points DESC`,
+      [tournamentId]
+    );
+    return result.rows || [];
+  } catch (err) {
+    console.error('[news-auto-publisher] fetchTournamentResults failed:', err.message);
+    return [];
+  }
+}
+
+// V 2.0.563 — Fetch the season ranking for the same category as the
+// tournament, so the auto-published results article can show both
+// "Classement du Tournoi" and "Classement de la saison" in one place
+// (CDB 93-94 workflow). The query joins category + season from the
+// tournament itself, then pulls all rankings rows for that
+// (category_id, season, organization_id) triple.
+async function fetchSeasonRanking(tournamentId, orgId) {
+  try {
+    const meta = await db.query(
+      `SELECT category_id, season FROM tournaments WHERE id = $1`,
+      [tournamentId]
+    );
+    if (!meta.rows[0]) return { rankings: [], season: null, categoryId: null };
+    const { category_id, season } = meta.rows[0];
+
+    const result = await db.query(
+      `SELECT r.rank_position, r.licence, r.total_match_points, r.avg_moyenne,
+              r.best_serie, r.total_bonus_points,
+              r.tournament_1_points, r.tournament_2_points, r.tournament_3_points,
+              p.first_name, p.last_name, p.club AS club_name
+         FROM rankings r
+         LEFT JOIN players p ON p.licence = r.licence
+        WHERE r.category_id = $1 AND r.season = $2
+        ORDER BY r.rank_position ASC NULLS LAST,
+                 r.total_match_points DESC`,
+      [category_id, season]
+    );
+    return {
+      rankings: result.rows || [],
+      season,
+      categoryId: category_id
+    };
+  } catch (err) {
+    console.error('[news-auto-publisher] fetchSeasonRanking failed:', err.message);
+    return { rankings: [], season: null, categoryId: null };
+  }
+}
+
+// V 2.0.563 — Render an HTML table inside the article body. Designed
+// to look good with the .news-body table CSS in the Player App
+// (zebra rows, primary-colored header). Inline styles are minimal —
+// the Player App's stylesheet does the heavy lifting on hover/borders.
+function renderResultsTable(results) {
+  if (!Array.isArray(results) || results.length === 0) return '';
+  const headerStyle = 'background:linear-gradient(135deg,#1F4788,#667eea);color:white;padding:8px 6px;font-size:12px;font-weight:700;text-align:left;';
+  const rows = results.map(r => {
+    const name = `${r.first_name || ''} ${r.last_name || ''}`.trim() || r.player_name || r.licence;
+    const moyenne = (r.reprises > 0)
+      ? (r.points / r.reprises).toFixed(3)
+      : (r.moyenne ? Number(r.moyenne).toFixed(3) : '—');
+    const matchPoints = r.match_points != null ? r.match_points : '—';
+    const ptsClt = r.position_points != null ? r.position_points : 0;
+    const bonus = r.bonus_points != null ? r.bonus_points : 0;
+    const total = ptsClt + bonus;
+    return `<tr>
+      <td>${esc(r.position ?? '—')}</td>
+      <td><strong>${esc(name)}</strong></td>
+      <td style="font-size:11px;color:#666;">${esc(r.club_name || '')}</td>
+      <td>${esc(matchPoints)}</td>
+      <td>${esc(moyenne)}</td>
+      <td>${esc(r.serie ?? '—')}</td>
+      <td>${esc(ptsClt)}</td>
+      <td>${esc(bonus > 0 ? '+' + bonus : (bonus || '—'))}</td>
+      <td><strong>${esc(total)}</strong></td>
+    </tr>`;
+  }).join('');
+  return `<table>
+    <thead><tr>
+      <th style="${headerStyle}">CLT</th>
+      <th style="${headerStyle}">Joueur</th>
+      <th style="${headerStyle}">Club</th>
+      <th style="${headerStyle}">PM</th>
+      <th style="${headerStyle}">MGP</th>
+      <th style="${headerStyle}">MS</th>
+      <th style="${headerStyle}">Pts clt</th>
+      <th style="${headerStyle}">Bonus</th>
+      <th style="${headerStyle}">Total</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+function renderSeasonRankingTable(rankings) {
+  if (!Array.isArray(rankings) || rankings.length === 0) return '';
+  const headerStyle = 'background:linear-gradient(135deg,#1F4788,#667eea);color:white;padding:8px 6px;font-size:12px;font-weight:700;text-align:left;';
+  const rows = rankings.map(r => {
+    const name = `${r.first_name || ''} ${r.last_name || ''}`.trim() || r.licence;
+    const totalMP = r.total_match_points || 0;
+    const totalBonus = r.total_bonus_points || 0;
+    const total = totalMP + totalBonus;
+    const moyenne = r.avg_moyenne ? Number(r.avg_moyenne).toFixed(3) : '—';
+    return `<tr>
+      <td>${esc(r.rank_position ?? '—')}</td>
+      <td><strong>${esc(name)}</strong></td>
+      <td style="font-size:11px;color:#666;">${esc(r.club_name || '')}</td>
+      <td>${esc(r.tournament_1_points || 0)}</td>
+      <td>${esc(r.tournament_2_points || 0)}</td>
+      <td>${esc(r.tournament_3_points || 0)}</td>
+      <td>${esc(totalMP)}</td>
+      <td>${esc(totalBonus > 0 ? '+' + totalBonus : (totalBonus || '—'))}</td>
+      <td><strong>${esc(total)}</strong></td>
+      <td>${esc(moyenne)}</td>
+    </tr>`;
+  }).join('');
+  return `<table>
+    <thead><tr>
+      <th style="${headerStyle}">CLT</th>
+      <th style="${headerStyle}">Joueur</th>
+      <th style="${headerStyle}">Club</th>
+      <th style="${headerStyle}">T1</th>
+      <th style="${headerStyle}">T2</th>
+      <th style="${headerStyle}">T3</th>
+      <th style="${headerStyle}">Pts</th>
+      <th style="${headerStyle}">Bonus</th>
+      <th style="${headerStyle}">Total</th>
+      <th style="${headerStyle}">MGP</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
 // ---------- Templates ----------
 
 // Each template returns { title, excerpt, contentHtml }. Called after
@@ -322,7 +467,8 @@ async function fetchParticipantCount(tournamentId) {
 function renderResultsArticle(ctx) {
   const {
     tournamentLabel, categoryName, tournamentDate,
-    podium, totalPlayers, deeplink
+    podium, totalPlayers, deeplink,
+    fullResults, seasonRankings, seasonLabel
   } = ctx;
 
   const winner = podium[0];
@@ -355,12 +501,20 @@ function renderResultsArticle(ctx) {
     ? `<p style="color:#6b7280;font-size:14px;">${totalPlayers} joueur${totalPlayers > 1 ? 's' : ''} ont participé à cette compétition.</p>`
     : '';
 
+  // V 2.0.563 — Append the full results table + the season ranking
+  // table so the auto-article matches what the CDB 93-94 admin used
+  // to post manually. Both are no-ops if their data array is empty.
+  const resultsTableHtml = renderResultsTable(fullResults);
+  const rankingTableHtml = renderSeasonRankingTable(seasonRankings);
+
   const contentHtml = `
     <p>Le <strong>${esc(tournamentLabel)}</strong> en catégorie <strong>${esc(categoryName)}</strong> vient de se terminer.</p>
     ${podium.length > 0 ? '<h3>Podium</h3>' : ''}
     ${podiumHtml}
     ${dateLine}
     ${countLine}
+    ${resultsTableHtml ? `<h3 style="margin-top:24px;">Classement du ${esc(tournamentLabel)}</h3>${resultsTableHtml}` : ''}
+    ${rankingTableHtml ? `<h3 style="margin-top:24px;">Classement de la saison${seasonLabel ? ' ' + esc(seasonLabel) : ''}</h3>${rankingTableHtml}` : ''}
     ${ctaButton(deeplink, 'Voir tous les résultats')}
     <p style="color:#9ca3af;font-size:12px;text-align:center;margin-top:20px;">
       Article généré automatiquement par l'application.
@@ -499,10 +653,14 @@ async function publishAutoArticle(eventType, orgId, payload, options = {}) {
     let rendered;
     try {
       if (eventType === 'RESULTS') {
-        // Enrich with podium + participant count.
-        const [podium, totalPlayers] = await Promise.all([
+        // V 2.0.563 — Enrich with podium + count + full results table
+        // + season ranking. All fetches in parallel (cheap, single
+        // database round-trip each, the article render waits for all).
+        const [podium, totalPlayers, fullResults, seasonData] = await Promise.all([
           fetchPodium(payload.tournamentId),
-          fetchParticipantCount(payload.tournamentId)
+          fetchParticipantCount(payload.tournamentId),
+          fetchTournamentResults(payload.tournamentId),
+          fetchSeasonRanking(payload.tournamentId, orgId)
         ]);
         rendered = renderResultsArticle({
           tournamentLabel: payload.tournamentLabel || 'tournoi',
@@ -510,6 +668,9 @@ async function publishAutoArticle(eventType, orgId, payload, options = {}) {
           tournamentDate: payload.tournamentDate || '',
           podium,
           totalPlayers,
+          fullResults,
+          seasonRankings: seasonData.rankings,
+          seasonLabel: seasonData.season,
           deeplink: buildPlayerAppDeeplink(playerAppUrl, 'stats')
         });
       } else if (eventType === 'FINALE_QUALIFICATION') {

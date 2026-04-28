@@ -265,7 +265,7 @@ router.get('/pages', authenticateToken, async (req, res) => {
     if (pinned === 'true') where.push(`p.is_pinned = TRUE`);
 
     const rows = await dbAll(
-      `SELECT p.id, p.section_id, s.name AS section_name,
+      `SELECT p.id, p.section_id, s.name AS section_name, s.icon AS section_icon,
               p.title, p.excerpt, p.content_type, p.status,
               p.is_featured, p.is_pinned,
               p.author_user_id, u.username AS author_name,
