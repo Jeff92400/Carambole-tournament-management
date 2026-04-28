@@ -498,6 +498,15 @@
             <span><strong>Punaise</strong> — épinglé en haut du fil</span>
           </label>
         </div>
+        <div class="form-row">
+          <label>Articles associés <span style="font-weight: normal; color: #888; font-size: 12px;">— liens "À lire aussi" affichés au bas de cet article dans l'app joueur</span></label>
+          <div id="relatedLinksContainer" style="display: flex; flex-wrap: wrap; gap: 6px; min-height: 20px; margin-bottom: 8px;">
+            <span id="relatedLinksEmpty" style="color: #aaa; font-size: 13px; font-style: italic;">Aucun article associé.</span>
+          </div>
+          <select id="relatedLinkPicker" onchange="addRelatedLink(this.value)" style="width: 100%;">
+            <option value="">+ Ajouter un article associé…</option>
+          </select>
+        </div>
       </div>
       <div class="modal-footer">
         <button class="btn-sm danger" id="articleDeleteBtn" style="display:none; margin-right: auto;" onclick="deleteArticle()">Supprimer</button>
@@ -574,6 +583,9 @@
     let editingSectionId = null;
     let sectionsCache = [];
     let quillEditor = null;
+    // Cross-links state for the article modal
+    let relatedPageIds = [];               // ids currently linked
+    let relatedArticlesCache = new Map();  // id → { title, section_name, content_type }
 
     // ---------- Toast ----------
     function toast(msg, type = 'success') {
@@ -946,6 +958,85 @@
       });
     }
 
+    // ---------- Cross-links (Articles associés) ----------
+    // Loads every article in the org into a cache so the picker can offer
+    // the full list (excluding self + already-linked). Re-fetched each time
+    // the modal opens to stay in sync after admin edits.
+    async function loadRelatedArticlesCache() {
+      try {
+        const resp = await fetch(`${API_URL}/content/pages`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!resp.ok) throw new Error('Erreur de chargement');
+        const list = await resp.json();
+        relatedArticlesCache.clear();
+        list.forEach(a => relatedArticlesCache.set(a.id, {
+          title: a.title,
+          section_name: a.section_name || '',
+          content_type: a.content_type
+        }));
+      } catch (_e) {
+        // non-blocking: picker will simply be empty
+      }
+    }
+
+    function renderRelatedChips() {
+      const container = document.getElementById('relatedLinksContainer');
+      const empty = document.getElementById('relatedLinksEmpty');
+      // Remove existing chips (keep the empty placeholder span)
+      Array.from(container.querySelectorAll('.related-chip')).forEach(el => el.remove());
+      if (relatedPageIds.length === 0) {
+        empty.style.display = '';
+        return;
+      }
+      empty.style.display = 'none';
+      relatedPageIds.forEach(id => {
+        const meta = relatedArticlesCache.get(id) || { title: `#${id}`, section_name: '' };
+        const chip = document.createElement('span');
+        chip.className = 'related-chip';
+        chip.style.cssText = 'display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px 4px 10px; background: #eef2ff; color: #1F4788; border-radius: 14px; font-size: 13px; line-height: 1.3;';
+        chip.innerHTML = `
+          <span style="max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">→ ${escapeHtml(meta.title)}${meta.section_name ? ' · ' + escapeHtml(meta.section_name) : ''}</span>
+          <button type="button" title="Retirer ce lien" style="background: none; border: none; color: #1F4788; font-size: 16px; cursor: pointer; padding: 0; line-height: 1;">✕</button>
+        `;
+        chip.querySelector('button').onclick = () => removeRelatedLink(id);
+        container.appendChild(chip);
+      });
+    }
+
+    function refreshRelatedPicker() {
+      const picker = document.getElementById('relatedLinkPicker');
+      const linked = new Set(relatedPageIds);
+      // Sort options by section_name, then title
+      const options = Array.from(relatedArticlesCache.entries())
+        .filter(([id]) => id !== editingArticleId && !linked.has(id))
+        .map(([id, meta]) => ({ id, ...meta }))
+        .sort((a, b) => {
+          const sa = (a.section_name || 'zzz').localeCompare(b.section_name || 'zzz');
+          if (sa !== 0) return sa;
+          return a.title.localeCompare(b.title);
+        });
+      picker.innerHTML = '<option value="">+ Ajouter un article associé…</option>'
+        + options.map(o => `<option value="${o.id}">${o.section_name ? escapeHtml(o.section_name) + ' › ' : ''}${escapeHtml(o.title)}</option>`).join('');
+    }
+
+    function addRelatedLink(rawId) {
+      const id = parseInt(rawId, 10);
+      if (!id || relatedPageIds.includes(id)) return;
+      if (id === editingArticleId) return; // can't link to self
+      relatedPageIds.push(id);
+      renderRelatedChips();
+      refreshRelatedPicker();
+      // Reset select to the placeholder option
+      document.getElementById('relatedLinkPicker').value = '';
+    }
+
+    function removeRelatedLink(id) {
+      relatedPageIds = relatedPageIds.filter(x => x !== id);
+      renderRelatedChips();
+      refreshRelatedPicker();
+    }
+
     async function openArticleModal(id = null) {
       editingArticleId = id;
       const modal = document.getElementById('articleModal');
@@ -954,6 +1045,11 @@
 
       modal.classList.add('visible');
       initEditor();
+
+      // Refresh the cross-links cache every time the modal opens so the
+      // picker reflects newly created/deleted articles.
+      await loadRelatedArticlesCache();
+      relatedPageIds = [];
 
       if (id) {
         title.textContent = "Modifier l'article";
@@ -971,6 +1067,9 @@
           document.getElementById('articleFeatured').checked = !!a.is_featured;
           document.getElementById('articlePinned').checked = !!a.is_pinned;
           quillEditor.root.innerHTML = a.content_html || '';
+          relatedPageIds = Array.isArray(a.related_links)
+            ? a.related_links.map(r => r.id).filter(Boolean)
+            : [];
         } catch (err) {
           toast(err.message, 'error');
         }
@@ -985,6 +1084,8 @@
         document.getElementById('articlePinned').checked = false;
         quillEditor.root.innerHTML = '';
       }
+      renderRelatedChips();
+      refreshRelatedPicker();
     }
 
     function closeArticleModal() {
@@ -1109,6 +1210,7 @@
         cover_image: coverImage,
         is_featured: document.getElementById('articleFeatured').checked,
         is_pinned: document.getElementById('articlePinned').checked,
+        related_page_ids: relatedPageIds.slice(),
         status
       };
 
