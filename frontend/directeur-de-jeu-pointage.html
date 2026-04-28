@@ -512,7 +512,7 @@
         <div class="ddj-action-bar">
           <button class="ddj-btn ddj-btn-secondary" onclick="window.location.href='directeur-de-jeu.html'">← Accueil</button>
           ${(sessionStorage.getItem('userRole') === 'admin') ? `
-            <button id="clearRankingsBtn" class="ddj-btn" style="background:linear-gradient(135deg,#fd7e14,#c46410);color:white;" title="Vide uniquement le classement saisonnier de cette catégorie (utile pour effacer des données de tests précédents). Les scores DdJ déjà saisis sont CONSERVÉS.">
+            <button id="clearRankingsBtn" class="ddj-btn" style="background:linear-gradient(135deg,#fd7e14,#c46410);color:white;" title="Vide uniquement le classement de la saison pour cette catégorie (utile pour effacer des données de tests précédents). Les scores DdJ déjà saisis sont CONSERVÉS.">
               🧹 Nettoyer le classement
             </button>
             <button id="resetAllBtn" class="ddj-btn" style="background:linear-gradient(135deg,#dc3545,#a71d2a);color:white;" title="Effacer toutes les données DdJ pour ce tournoi (pointage, scores, classement). Les inscriptions sont conservées.">
@@ -543,7 +543,7 @@
       const cat = state && state.tournament
         ? `${state.tournament.mode || ''} ${state.tournament.categorie || ''}`.trim()
         : 'cette catégorie';
-      const msg = `🧹 Nettoyer le classement saisonnier ?\n\n` +
+      const msg = `🧹 Nettoyer le classement de la saison ?\n\n` +
                   `Cela va vider toutes les données finalisées (résultats de tournoi + classement) ` +
                   `pour ${cat} sur la saison en cours.\n\n` +
                   `Les scores DdJ que vous avez déjà saisis (matchs de poule, tableau, consolante) ` +

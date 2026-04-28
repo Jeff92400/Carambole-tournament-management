@@ -1398,7 +1398,7 @@ Cliquer sur **"Paramètres" **dans la barre de navigation (visible uniquement po
 Les paramètres d'administration sont organisés en **5 onglets **, chacun contenant des **panneaux repliables (accordéons) **. Chaque panneau affiche un résumé de sa configuration lorsqu'il est fermé — cliquer sur l'en-tête pour le déplier :
   - **Organisation **— Organisation, Identité Visuelle, Configuration des Emails, Configuration de la Saison, Politique de Confidentialité
   - **Utilisateurs **— Mon compte, mot de passe, gestion des utilisateurs
-  - **Compétitions **— Paramètres des épreuves, Délais des compétitions, Qualification pour la finale, Mode de qualification, Types de tournoi, Bonus Moyenne, Barème des points, Classement saisonnier
+  - **Compétitions **— Paramètres des épreuves, Délais des compétitions, Qualification pour la finale, Mode de qualification, Types de tournoi, Bonus Moyenne, Barème des points, Classement de la saison
   - **Espace Joueur **— Comptes Espace Joueur, Planification des emails, Paramètres Espace Joueur
   - **Maintenance **— Outils de maintenance, Logs d'activité
 
@@ -1406,7 +1406,7 @@ Les paramètres d'administration sont organisés en **5 onglets **, chacun conte
 
 Chaque section de paramètres est présentée sous forme de panneau repliable. Lorsqu'un panneau est fermé, un **résumé **de la configuration actuelle est affiché à droite de l'en-tête (par exemple : "4 types définis", "Journées Qualificatives + Dédoublement", "Envoi à 08h00"). Cliquer sur l'en-tête pour ouvrir ou fermer le panneau.
 
-Dans l'onglet **Compétitions **, les 5 derniers panneaux (Mode de qualification à Classement saisonnier) partagent un même bouton "Enregistrer" situé en bas du groupe. Les autres panneaux ont chacun leur propre bouton de sauvegarde.
+Dans l'onglet **Compétitions **, les 5 derniers panneaux (Mode de qualification à Classement de la saison) partagent un même bouton "Enregistrer" situé en bas du groupe. Les autres panneaux ont chacun leur propre bouton de sauvegarde.
 
 ---
 
@@ -1564,7 +1564,7 @@ Configuration du mode de qualification pour les finales et gestion des types de 
 
 ![Types de tournoi et mode de qualification](screenshots/17-param-types-tournoi.png)
 
-#### IMG-17 📷 Paramètres — Types de Tournoi Capture de l'onglet Compétitions avec les panneaux repliables : Mode de qualification, Types de tournoi, Bonus Moyenne, Barème des points, Classement saisonnier Choisir le mode de qualification
+#### IMG-17 📷 Paramètres — Types de Tournoi Capture de l'onglet Compétitions avec les panneaux repliables : Mode de qualification, Types de tournoi, Bonus Moyenne, Barème des points, Classement de la saison Choisir le mode de qualification
 
 Panneau **"Mode de qualification" **. Deux modes disponibles, sélectionnables par carte :
 
@@ -1603,7 +1603,7 @@ Un bandeau d'information affiche les seuils et règles du bonus moyenne en haut 
 
 (Visible dans les deux modes : Standard et Journées)
 
-Permet de ne retenir que les N meilleurs résultats de tournoi pour le classement saisonnier. Par exemple, avec la valeur 2 et 3 tournois joués, seuls les 2 meilleurs scores comptent pour le total des points de match. La moyenne, la meilleure série, les points et reprises restent calculés sur tous les tournois.
+Permet de ne retenir que les N meilleurs résultats de tournoi pour le classement de la saison. Par exemple, avec la valeur 2 et 3 tournois joués, seuls les 2 meilleurs scores comptent pour le total des points de match. La moyenne, la meilleure série, les points et reprises restent calculés sur tous les tournois.
 
 | Paramètre | Description |
 | --- | --- |
@@ -1618,7 +1618,7 @@ Les résultats retenus apparaissent en **gras **dans le classement et l'export E
 | Paramètre | Description |
 | --- | --- |
 | Nombre de journées | Nombre de tournois qualificatifs par saison (défaut: 3) |
-| Bonus Moyenne au classement saisonnier | Ajoute un bonus au classement saisonnier selon la moyenne des meilleurs tournois retenus (utilise le même type Normal/Par paliers que le bonus par tournoi) |
+| Bonus Moyenne au classement de la saison | Ajoute un bonus au classement de la saison selon la moyenne des meilleurs tournois retenus (utilise le même type Normal/Par paliers que le bonus par tournoi) |
 
 #### Points par position
 
@@ -2041,7 +2041,7 @@ Les joueurs peuvent déclarer leur indisponibilité pour une compétition via l'
   2. Cliquer sur la carte "Journées Qualificatives"
   3. Configurer : nombre de journées
   4. Configurer les points par position (tableau en bas)
-  5. (Optionnel) Activer le "Bonus Moyenne au classement saisonnier"
+  5. (Optionnel) Activer le "Bonus Moyenne au classement de la saison"
   6. Cliquer sur "Enregistrer"
   7. Le classement adopte automatiquement le format journées (TQ1/TQ2/TQ3, scores retenus/écartés)
 
@@ -2053,7 +2053,7 @@ Les joueurs peuvent déclarer leur indisponibilité pour une compétition via l'
 | --- | --- |
 | Application Joueur / Espace Joueur | Application permettant aux licenciés de s'inscrire et consulter leurs informations |
 | Barème | Ensemble des règles définissant l'attribution des points de match et des bonus |
-| Bonus Moyenne | Points bonus par tournoi selon la moyenne du joueur par rapport aux seuils min/max de la catégorie. Deux types : Normal (+0/+1/+2) ou Par paliers (+0/+1/+2/+3). Deux périmètres : Poules uniquement (par défaut) ou Journée complète (inclut phases finales et classement). Disponible dans les deux modes (Standard et Journées). En mode Journées, un bonus similaire peut être activé sur le classement saisonnier. |
+| Bonus Moyenne | Points bonus par tournoi selon la moyenne du joueur par rapport aux seuils min/max de la catégorie. Deux types : Normal (+0/+1/+2) ou Par paliers (+0/+1/+2/+3). Deux périmètres : Poules uniquement (par défaut) ou Journée complète (inclut phases finales et classement). Disponible dans les deux modes (Standard et Journées). En mode Journées, un bonus similaire peut être activé sur le classement de la saison. |
 | Catégorie | Combinaison d'un mode de jeu et d'un niveau (ex: "Libre R2", "3 Bandes N3") |
 | CDB | Comité Départemental de Billard — chaque CDB dispose de son propre environnement isolé |
 | Classification FFB | Classement attribué par la FFB à un joueur pour une discipline donnée (ex: R2 en 3 Bandes) |

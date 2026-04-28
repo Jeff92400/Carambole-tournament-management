@@ -927,7 +927,7 @@
         <div style="padding: 20px; background: #f8f9fa; border-radius: 8px; border: 1px solid #e9ecef;">
           <h4 style="margin: 0 0 10px 0; color: #1F4788;">📋 Éligibilité des joueurs</h4>
           <p style="margin: 0 0 15px 0; color: #666; font-size: 14px;">
-            Visualise l'éligibilité des joueurs pour la saison prochaine en fonction de leur moyenne saisonnière et des seuils de catégorie.
+            Visualise l'éligibilité des joueurs pour la saison prochaine en fonction de leur moyenne de la saison et des seuils de catégorie.
           </p>
           <a href="eligibility-report.html" class="btn" style="background: #28a745; width: 100%; text-align: center; text-decoration: none; display: block;">
             Voir les éligibilités
@@ -2058,10 +2058,10 @@
         </div>
       </div>
 
-      <!-- Accordion 6: Classement saisonnier -->
+      <!-- Accordion 6: Classement de la saison -->
       <div class="accordion-panel" id="accordion-ranking">
         <div class="accordion-header" onclick="toggleAccordion('accordion-ranking')">
-          <div class="accordion-title"><span class="accordion-icon">&#9654;</span><strong>Classement saisonnier</strong></div>
+          <div class="accordion-title"><span class="accordion-icon">&#9654;</span><strong>Classement de la saison</strong></div>
           <span class="accordion-summary" id="summary-ranking">Tous les tournois</span>
         </div>
         <div class="accordion-body">
@@ -2086,10 +2086,10 @@
             <div style="margin-bottom: 20px;">
               <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
                 <input type="checkbox" id="averageBonusTiers" style="width: 20px; height: 20px; cursor: pointer;">
-                <span style="font-weight: 500;">Bonus Moyenne au classement saisonnier</span>
+                <span style="font-weight: 500;">Bonus Moyenne au classement de la saison</span>
               </label>
               <p style="margin: 5px 0 0 30px; color: #666; font-size: 13px;">
-                Ajoute un bonus au classement saisonnier selon la moyenne des meilleurs tournois retenus (utilise le même type Normal/Par paliers que le bonus par tournoi ci-dessus).
+                Ajoute un bonus au classement de la saison selon la moyenne des meilleurs tournois retenus (utilise le même type Normal/Par paliers que le bonus par tournoi ci-dessus).
               </p>
             </div>
             <div style="margin-bottom: 20px; padding: 15px; background: #e7f3ff; border-left: 4px solid var(--color-primary, #1F4788); border-radius: 4px;">
@@ -2309,7 +2309,7 @@
           ? `${activeBlocks.length} actif(s) sur ${customBlocks.length}`
           : 'Aucun';
       }
-      // Classement saisonnier
+      // Classement de la saison
       const rankEl = document.getElementById('summary-ranking');
       if (rankEl) {
         const bestOf = document.getElementById('bestOfCount')?.value || '0';

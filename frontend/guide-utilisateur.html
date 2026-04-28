@@ -3158,7 +3158,7 @@
       <strong>⚠️ Différence clé entre les deux portées :</strong>
       <ul style="margin-top: 8px;">
         <li><strong>Tournoi spécifique</strong> : envoie uniquement aux joueurs déjà inscrits à ce tournoi. Idéal pour un rappel de convocation ou un changement concernant un TQ précis.</li>
-        <li><strong>Toute la catégorie</strong> : envoie à tous les joueurs de la catégorie présents dans le fichier joueurs (classement saison en cours + inscriptions de la saison). Idéal pour annoncer une ouverture d'inscriptions ou une information saisonnière.</li>
+        <li><strong>Toute la catégorie</strong> : envoie à tous les joueurs de la catégorie présents dans le fichier joueurs (classement saison en cours + inscriptions de la saison). Idéal pour annoncer une ouverture d'inscriptions ou une information générale de la saison.</li>
       </ul>
     </div>
 
@@ -3255,7 +3255,7 @@
           <td>Message libre</td>
         </tr>
         <tr>
-          <td>Information saisonnière (barèmes, règles, calendrier)</td>
+          <td>Information générale de la saison (barèmes, règles, calendrier)</td>
           <td>Toute la catégorie</td>
           <td>Message libre</td>
         </tr>
@@ -3546,14 +3546,14 @@
     <ul>
       <li><strong>Organisation</strong> — Organisation, Identité Visuelle, Configuration des Emails, Configuration de la Saison, Politique de Confidentialité</li>
       <li><strong>Utilisateurs</strong> — Mon compte, mot de passe, gestion des utilisateurs</li>
-      <li><strong>Compétitions</strong> — Paramètres des épreuves, Délais des compétitions, Qualification pour la finale, Mode de qualification, Typologie des tournois, Bonus Moyenne, Barème des points de match, Classement saisonnier</li>
+      <li><strong>Compétitions</strong> — Paramètres des épreuves, Délais des compétitions, Qualification pour la finale, Mode de qualification, Typologie des tournois, Bonus Moyenne, Barème des points de match, Classement de la saison</li>
       <li><strong>Espace Joueur</strong> — Comptes Espace Joueur, Planification des emails, Paramètres Espace Joueur</li>
       <li><strong>Maintenance</strong> — Outils de maintenance, Logs d'activité</li>
     </ul>
 
     <h3>Navigation par accordéons</h3>
     <p>Chaque section de paramètres est présentée sous forme de panneau repliable. Lorsqu'un panneau est fermé, un <strong>résumé</strong> de la configuration actuelle est affiché à droite de l'en-tête (par exemple : "4 types définis", "Journées Qualificatives + Dédoublement", "Envoi à 08h00"). Cliquer sur l'en-tête pour ouvrir ou fermer le panneau.</p>
-    <p>Dans l'onglet <strong>Compétitions</strong>, les 5 derniers panneaux (Mode de qualification à Classement saisonnier) partagent un même bouton "Enregistrer" situé en bas du groupe. Les autres panneaux ont chacun leur propre bouton de sauvegarde.</p>
+    <p>Dans l'onglet <strong>Compétitions</strong>, les 5 derniers panneaux (Mode de qualification à Classement de la saison) partagent un même bouton "Enregistrer" situé en bas du groupe. Les autres panneaux ont chacun leur propre bouton de sauvegarde.</p>
   </section>
 
   <hr>
@@ -4001,7 +4001,7 @@
       <span class="screenshot-id">IMG-17</span>
       <span class="screenshot-icon">&#128247;</span>
       <span class="screenshot-label">Paramètres — Types de Tournoi</span>
-      <span class="screenshot-desc">Capture de l'onglet Compétitions avec les panneaux repliables : Mode de qualification, Typologie des tournois, Bonus Moyenne, Barème des points de match, Classement saisonnier</span>
+      <span class="screenshot-desc">Capture de l'onglet Compétitions avec les panneaux repliables : Mode de qualification, Typologie des tournois, Bonus Moyenne, Barème des points de match, Classement de la saison</span>
       <img src="screenshots/17-param-types-tournoi.png" alt="Types de tournoi et mode de qualification">
     </div>
 
@@ -4073,7 +4073,7 @@
 
     <h4>Meilleurs résultats retenus</h4>
     <p>(Visible dans les deux modes : Standard et Journées)</p>
-    <p>Permet de ne retenir que les N meilleurs résultats de tournoi pour le classement saisonnier. Par exemple, avec la valeur 2 et 3 tournois joués, seuls les 2 meilleurs scores comptent pour le total des points de match. La moyenne, la meilleure série, les points et reprises restent calculés sur tous les tournois.</p>
+    <p>Permet de ne retenir que les N meilleurs résultats de tournoi pour le classement de la saison. Par exemple, avec la valeur 2 et 3 tournois joués, seuls les 2 meilleurs scores comptent pour le total des points de match. La moyenne, la meilleure série, les points et reprises restent calculés sur tous les tournois.</p>
     <table>
       <thead>
         <tr><th>Paramètre</th><th>Description</th></tr>
@@ -4092,7 +4092,7 @@
       </thead>
       <tbody>
         <tr><td>Nombre de journées</td><td>Nombre de tournois qualificatifs par saison (défaut: 3)</td></tr>
-        <tr><td>Bonus Moyenne au classement saisonnier</td><td>Ajoute un bonus au classement saisonnier selon la moyenne des meilleurs tournois retenus (utilise le même type Normal/Par paliers que le bonus par tournoi)</td></tr>
+        <tr><td>Bonus Moyenne au classement de la saison</td><td>Ajoute un bonus au classement de la saison selon la moyenne des meilleurs tournois retenus (utilise le même type Normal/Par paliers que le bonus par tournoi)</td></tr>
       </tbody>
     </table>
 
@@ -4688,7 +4688,7 @@
       <li>Cliquer sur la carte "Journées Qualificatives"</li>
       <li>Configurer : nombre de journées</li>
       <li>Configurer les points par position (tableau en bas)</li>
-      <li>(Optionnel) Activer le "Bonus Moyenne au classement saisonnier"</li>
+      <li>(Optionnel) Activer le "Bonus Moyenne au classement de la saison"</li>
       <li>Cliquer sur "Enregistrer"</li>
       <li>Le classement adopte automatiquement le format journées (TQ1/TQ2/TQ3, scores retenus/écartés)</li>
     </ol>
@@ -4707,7 +4707,7 @@
       <tbody>
         <tr><td>Application Joueur / Espace Joueur</td><td>Application permettant aux licenciés de s'inscrire et consulter leurs informations</td></tr>
         <tr><td>Barème</td><td>Ensemble des règles définissant l'attribution des points de match et des bonus</td></tr>
-        <tr><td>Bonus Moyenne</td><td>Points bonus par tournoi selon la moyenne du joueur par rapport aux seuils min/max de la catégorie. Deux types : Normal (+0/+1/+2) ou Par paliers (+0/+1/+2/+3). Deux périmètres : Poules uniquement (par défaut) ou Journée complète (inclut phases finales et classement). Disponible dans les deux modes (Standard et Journées). En mode Journées, un bonus similaire peut être activé sur le classement saisonnier.</td></tr>
+        <tr><td>Bonus Moyenne</td><td>Points bonus par tournoi selon la moyenne du joueur par rapport aux seuils min/max de la catégorie. Deux types : Normal (+0/+1/+2) ou Par paliers (+0/+1/+2/+3). Deux périmètres : Poules uniquement (par défaut) ou Journée complète (inclut phases finales et classement). Disponible dans les deux modes (Standard et Journées). En mode Journées, un bonus similaire peut être activé sur le classement de la saison.</td></tr>
         <tr><td>Catégorie</td><td>Combinaison d'un mode de jeu et d'un niveau (ex: "Libre R2", "3 Bandes N3")</td></tr>
         <tr><td>CDB</td><td>Comité Départemental de Billard &mdash; chaque CDB dispose de son propre environnement isolé</td></tr>
         <tr><td>Classification FFB</td><td>Classement attribué par la FFB à un joueur pour une discipline donnée (ex: R2 en 3 Bandes)</td></tr>

@@ -586,7 +586,7 @@ RÈGLES STRICTES (à respecter sans exception) :
 4. Ne cite JAMAIS un club si l'utilisateur ne l'a pas explicitement nommé dans sa phrase.
 5. Si la phrase est trop ambiguë pour choisir une règle, retourne :
    { "error": "Phrase trop ambiguë", "explanation": "<demande de reformulation>" }
-6. CAS PARTICULIER — Indisponibilité d'un club sur une période (ex. "Clichy indispo en décembre", "Courbevoie fermé du X au Y") : ce n'est PAS une règle logique mais une donnée saisonnière. Retourne OBLIGATOIREMENT :
+6. CAS PARTICULIER — Indisponibilité d'un club sur une période (ex. "Clichy indispo en décembre", "Courbevoie fermé du X au Y") : ce n'est PAS une règle logique mais une donnée propre à la saison. Retourne OBLIGATOIREMENT :
    { "error": "À saisir dans le Brief", "explanation": "Cette indisponibilité se gère dans l'Étape 1 — Brief, section « Indisponibilités par club »." }
 
 Mieux vaut renvoyer une erreur claire que d'inventer une règle bricolée.`;
@@ -1009,7 +1009,7 @@ router.get('/draft/export', authenticateToken, async (req, res) => {
     const ExcelJS = require('exceljs');
     const { getOrganizationLogoBuffer } = require('../utils/logo-loader');
     const wb = new ExcelJS.Workbook();
-    wb.creator = 'Calendrier Saisonnier — Kayros';
+    wb.creator = 'Calendrier de la Saison — Kayros';
     wb.created = new Date();
 
     // Load organization logo (or fallback billiard icon)
