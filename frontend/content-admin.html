@@ -530,6 +530,22 @@
           <input type="text" id="sectionName" placeholder="exemple : Actualités, Événements, Résultats">
         </div>
         <div class="form-row">
+          <label>Icône (emoji) <span style="font-weight: normal; color: #888; font-size: 12px;">— affichée dans le menu de l'app joueur. Optionnel.</span></label>
+          <input type="text" id="sectionIcon" maxlength="4" placeholder="🏆" style="width: 80px; text-align: center; font-size: 20px;">
+          <div style="margin-top: 4px; font-size: 12px; color: #888;">
+            Suggestions :
+            <span style="cursor: pointer; padding: 2px 4px;" onclick="document.getElementById('sectionIcon').value='🏛️'">🏛️</span>
+            <span style="cursor: pointer; padding: 2px 4px;" onclick="document.getElementById('sectionIcon').value='🏆'">🏆</span>
+            <span style="cursor: pointer; padding: 2px 4px;" onclick="document.getElementById('sectionIcon').value='📋'">📋</span>
+            <span style="cursor: pointer; padding: 2px 4px;" onclick="document.getElementById('sectionIcon').value='📰'">📰</span>
+            <span style="cursor: pointer; padding: 2px 4px;" onclick="document.getElementById('sectionIcon').value='💬'">💬</span>
+            <span style="cursor: pointer; padding: 2px 4px;" onclick="document.getElementById('sectionIcon').value='📅'">📅</span>
+            <span style="cursor: pointer; padding: 2px 4px;" onclick="document.getElementById('sectionIcon').value='📸'">📸</span>
+            <span style="cursor: pointer; padding: 2px 4px;" onclick="document.getElementById('sectionIcon').value='🎓'">🎓</span>
+            <span style="cursor: pointer; padding: 2px 4px;" onclick="document.getElementById('sectionIcon').value='⚙️'">⚙️</span>
+          </div>
+        </div>
+        <div class="form-row">
           <label>Section parente (optionnel)</label>
           <select id="sectionParent">
             <option value="">(Aucune — section racine)</option>
@@ -674,12 +690,14 @@
         if (!s) return;
         title.textContent = 'Modifier la section';
         document.getElementById('sectionName').value = s.name;
+        document.getElementById('sectionIcon').value = s.icon || '';
         document.getElementById('sectionParent').value = s.parent_id || '';
         document.getElementById('sectionSortOrder').value = s.sort_order || 0;
         deleteBtn.style.display = '';
       } else {
         title.textContent = 'Nouvelle section';
         document.getElementById('sectionName').value = '';
+        document.getElementById('sectionIcon').value = '';
         document.getElementById('sectionParent').value = '';
         document.getElementById('sectionSortOrder').value = '0';
         deleteBtn.style.display = 'none';
@@ -696,6 +714,7 @@
       if (!name) { toast('Le nom est requis', 'error'); return; }
       const parent_id = document.getElementById('sectionParent').value || null;
       const sort_order = parseInt(document.getElementById('sectionSortOrder').value, 10) || 0;
+      const icon = document.getElementById('sectionIcon').value.trim() || null;
 
       try {
         const url = editingSectionId
@@ -705,7 +724,7 @@
         const resp = await fetch(url, {
           method,
           headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, parent_id: parent_id ? parseInt(parent_id, 10) : null, sort_order })
+          body: JSON.stringify({ name, parent_id: parent_id ? parseInt(parent_id, 10) : null, sort_order, icon })
         });
         if (!resp.ok) {
           const err = await resp.json();

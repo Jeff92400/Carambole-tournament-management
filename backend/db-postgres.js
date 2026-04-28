@@ -1035,6 +1035,12 @@ async function initializeDatabase() {
       CREATE INDEX IF NOT EXISTS idx_content_sections_parent ON content_sections(parent_id)
     `);
 
+    // Migration (April 2026): per-section icon (single emoji) for the
+    // Player App sidebar drawer. VARCHAR(8) handles multi-codepoint emojis
+    // (e.g. flag sequences are up to 8 bytes UTF-8). NULL = no icon, the
+    // drawer renders a default 📁 fallback.
+    await client.query(`ALTER TABLE content_sections ADD COLUMN IF NOT EXISTS icon VARCHAR(8)`);
+
     // Content pages — articles (news, events, results, documents)
     await client.query(`
       CREATE TABLE IF NOT EXISTS content_pages (
