@@ -385,6 +385,10 @@
             <option value="draft">Brouillon uniquement (publication manuelle)</option>
             <option value="off">Désactivé</option>
           </select>
+          <div style="margin-top: 8px; font-size: 12px; color: #666;">📁 Dossier de destination</div>
+          <select id="autoPubResultsSection" onchange="saveAutoPublishSetting('news_auto_publish_results_section_id', this.value)" style="margin-top: 4px;">
+            <option value="">— Par défaut (auto-créé)</option>
+          </select>
         </div>
         <div class="auto-publish-item">
           <label>Qualifiés pour la Finale</label>
@@ -394,6 +398,10 @@
             <option value="draft">Créer en brouillon</option>
             <option value="off">Désactivé</option>
           </select>
+          <div style="margin-top: 8px; font-size: 12px; color: #666;">📁 Dossier de destination</div>
+          <select id="autoPubQualificationSection" onchange="saveAutoPublishSetting('news_auto_publish_qualification_section_id', this.value)" style="margin-top: 4px;">
+            <option value="">— Par défaut (auto-créé)</option>
+          </select>
         </div>
         <div class="auto-publish-item">
           <label>Nouveau tournoi ouvert</label>
@@ -402,6 +410,10 @@
             <option value="auto">Publication immédiate</option>
             <option value="draft">Créer en brouillon</option>
             <option value="off">Désactivé</option>
+          </select>
+          <div style="margin-top: 8px; font-size: 12px; color: #666;">📁 Dossier de destination</div>
+          <select id="autoPubNewTournamentSection" onchange="saveAutoPublishSetting('news_auto_publish_new_tournament_section_id', this.value)" style="margin-top: 4px;">
+            <option value="">— Par défaut (auto-créé)</option>
           </select>
         </div>
       </div>
@@ -656,6 +668,12 @@
         sectionsCache = await resp.json();
         renderSections();
         populateSectionDropdowns();
+        // V 2.0.562 — Keep auto-publish section dropdowns in sync when
+        // sections are added / renamed / deleted. Defensive: only runs
+        // if the helper is defined (it lives later in the file).
+        if (typeof populateAutoPublishSectionDropdowns === 'function') {
+          populateAutoPublishSectionDropdowns();
+        }
       } catch (err) {
         console.error(err);
         toast(err.message, 'error');
@@ -1380,6 +1398,34 @@
       news_auto_publish_new_tournament: 'autoPubNewTournament'
     };
 
+    // V 2.0.562 — Per-event section override dropdowns. Maps the event
+    // setting key → the <select> element id. Section dropdowns are
+    // populated from sectionsCache (loaded by loadSections).
+    const AUTO_PUBLISH_SECTION_SELECT_IDS = {
+      news_auto_publish_results_section_id:         'autoPubResultsSection',
+      news_auto_publish_qualification_section_id:   'autoPubQualificationSection',
+      news_auto_publish_new_tournament_section_id:  'autoPubNewTournamentSection'
+    };
+
+    function populateAutoPublishSectionDropdowns() {
+      // Only include real article sections, not page-link shortcuts —
+      // auto-articles need a destination that displays articles.
+      const valid = (sectionsCache || []).filter(s => (s.link_type || 'section') === 'section');
+      const optionsHtml = '<option value="">— Par défaut (auto-créé)</option>'
+        + valid.map(s => {
+            const indent = s.parent_id ? '— ' : '';
+            const label = (s.icon ? s.icon + ' ' : '') + indent + s.name;
+            return `<option value="${s.id}">${escapeHtml(label)}</option>`;
+          }).join('');
+      Object.values(AUTO_PUBLISH_SECTION_SELECT_IDS).forEach(selectId => {
+        const select = document.getElementById(selectId);
+        if (!select) return;
+        const currentValue = select.value;
+        select.innerHTML = optionsHtml;
+        select.value = currentValue; // restore selection if still valid
+      });
+    }
+
     async function loadAutoPublishSettings() {
       try {
         const resp = await fetch(`${API_URL}/settings/app-all`, {
@@ -1387,12 +1433,23 @@
         });
         if (!resp.ok) return;
         const settings = await resp.json();
+        // Mode dropdowns (auto/draft/off)
         Object.entries(AUTO_PUBLISH_SELECT_IDS).forEach(([key, selectId]) => {
           const select = document.getElementById(selectId);
           if (!select) return;
           const value = settings[key];
           const valid = ['auto', 'draft', 'off'].includes(value);
           select.value = valid ? value : AUTO_PUBLISH_DEFAULTS[key];
+        });
+        // V 2.0.562 — Section override dropdowns. Populate options first
+        // (depends on sectionsCache being loaded), then apply saved value.
+        populateAutoPublishSectionDropdowns();
+        Object.entries(AUTO_PUBLISH_SECTION_SELECT_IDS).forEach(([key, selectId]) => {
+          const select = document.getElementById(selectId);
+          if (!select) return;
+          const value = settings[key];
+          // Empty/invalid → default option, otherwise the section id.
+          select.value = (value && /^\d+$/.test(String(value))) ? String(value) : '';
         });
       } catch (err) {
         console.error('loadAutoPublishSettings error:', err);
@@ -1420,10 +1477,15 @@
     }
 
     // ---------- Init ----------
-    enforceNewsMode().then(() => {
-      loadSections();
+    // V 2.0.562 — Sequence loadSections → loadAutoPublishSettings so the
+    // section dropdowns inside the auto-publish panel can show saved
+    // selections on first render (otherwise sectionsCache is empty when
+    // loadAutoPublishSettings runs and the saved section_id has no
+    // matching <option> to select).
+    enforceNewsMode().then(async () => {
+      await loadSections();
       loadArticles();
-      loadAutoPublishSettings();
+      await loadAutoPublishSettings();
     });
   </script>
 </body>

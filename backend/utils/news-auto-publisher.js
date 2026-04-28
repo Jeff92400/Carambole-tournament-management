@@ -56,6 +56,17 @@ const EVENT_SETTING_KEY = {
   NEW_TOURNAMENT:       'news_auto_publish_new_tournament'
 };
 
+// V 2.0.562 — Per-event override for the destination section (Mon
+// district folder). When set, the value is a content_sections.id
+// (integer); when missing/empty, the engine falls back to the named
+// auto-create map (EVENT_SECTION_MAP) and finally to the org's first
+// section. Lets admins decide where each kind of auto-article lands.
+const EVENT_SECTION_SETTING_KEY = {
+  RESULTS:              'news_auto_publish_results_section_id',
+  FINALE_QUALIFICATION: 'news_auto_publish_qualification_section_id',
+  NEW_TOURNAMENT:       'news_auto_publish_new_tournament_section_id'
+};
+
 // content_pages.content_type values — must match VALID_CONTENT_TYPES
 // in backend/routes/content.js. 'resultat' for anything about a past
 // result, 'evenement' for forward-looking happenings.
@@ -134,6 +145,65 @@ async function resolveOrCreateSection(orgId, sectionName) {
     return created.rows[0].id;
   } catch (err) {
     console.error(`[news-auto-publisher] failed to resolve/create section "${sectionName}":`, err.message);
+    return null;
+  }
+}
+
+// V 2.0.562 — Resolve the destination section for an auto-published
+// event. Three-tier resolution, in order:
+//   1. Admin-configured override per event type
+//      (organization_settings.news_auto_publish_<event>_section_id).
+//      Validated against the org so a stale id from a deleted section
+//      falls through to the next tier.
+//   2. Legacy named-section fallback. EVENT_SECTION_MAP gives 'Résultats'
+//      / 'Compétitions' which resolveOrCreateSection auto-creates if
+//      missing. Preserves V 2.0.561 behavior for orgs that haven't set
+//      the new override.
+//   3. Last-resort fallback to the org's first section (typically
+//      "Général" seeded at org creation in V 2.0.561).
+// Returns a section id, or null only if the org has zero sections at all
+// (which would be unexpected since the seed migration runs on boot).
+async function resolveSectionIdForEvent(orgId, eventType) {
+  if (!orgId) return null;
+
+  // Tier 1: explicit per-event override
+  const settingKey = EVENT_SECTION_SETTING_KEY[eventType];
+  if (settingKey) {
+    try {
+      const raw = await appSettings.getOrgSetting(orgId, settingKey);
+      const id = parseInt(raw, 10);
+      if (id > 0) {
+        const r = await db.query(
+          `SELECT id FROM content_sections
+            WHERE id = $1 AND organization_id = $2`,
+          [id, orgId]
+        );
+        if (r.rows[0]) return id;
+        console.warn(`[news-auto-publisher] ${settingKey}=${raw} but section not found in org ${orgId}, falling through`);
+      }
+    } catch (err) {
+      console.error(`[news-auto-publisher] failed to read ${settingKey}:`, err.message);
+    }
+  }
+
+  // Tier 2: legacy named-section auto-create
+  const sectionName = EVENT_SECTION_MAP[eventType];
+  if (sectionName) {
+    const id = await resolveOrCreateSection(orgId, sectionName);
+    if (id) return id;
+  }
+
+  // Tier 3: any section in the org (Général, by seed migration)
+  try {
+    const r = await db.query(
+      `SELECT id FROM content_sections
+        WHERE organization_id = $1
+        ORDER BY id ASC LIMIT 1`,
+      [orgId]
+    );
+    return r.rows[0]?.id || null;
+  } catch (err) {
+    console.error('[news-auto-publisher] final fallback section lookup failed:', err.message);
     return null;
   }
 }
@@ -418,9 +488,10 @@ async function publishAutoArticle(eventType, orgId, payload, options = {}) {
     }
 
     // Build the deeplink base + resolve section.
+    // V 2.0.562 — uses the 3-tier resolver: admin override → named
+    // auto-create → org's first section. See resolveSectionIdForEvent.
     const playerAppUrl = await getPlayerAppBaseUrl(orgId);
-    const sectionName = EVENT_SECTION_MAP[eventType];
-    const sectionId = await resolveOrCreateSection(orgId, sectionName);
+    const sectionId = await resolveSectionIdForEvent(orgId, eventType);
     const contentType = EVENT_CONTENT_TYPE[eventType] || 'actualite';
 
     // Render the template for this event type. If a template throws,
@@ -637,7 +708,9 @@ module.exports = {
     EVENT_SECTION_MAP,
     EVENT_DEFAULT_MODE,
     EVENT_SETTING_KEY,
+    EVENT_SECTION_SETTING_KEY,
     resolveEventMode,
-    resolveOrCreateSection
+    resolveOrCreateSection,
+    resolveSectionIdForEvent
   }
 };
