@@ -47,11 +47,19 @@ const VALID_STATUSES = ['draft', 'published'];
 // ============================================================
 
 // GET /api/content/sections — list all sections for the current org (flat)
+// Curated list of app pages a section can link to (Option B, V 2.0.560).
+// Keep in sync with the dropdown in content-admin.html and the
+// navigateToPage(...) targets in the Player App.
+const VALID_LINK_TARGETS = [
+  'tournaments', 'inscriptions', 'stats', 'calendar', 'profile', 'contact'
+];
+const VALID_LINK_TYPES = ['section', 'page'];
+
 router.get('/sections', authenticateToken, async (req, res) => {
   try {
     const orgId = req.user.organizationId || null;
     const rows = await dbAll(
-      `SELECT id, name, parent_id, sort_order, icon, created_at, updated_at
+      `SELECT id, name, parent_id, sort_order, icon, link_type, link_target, created_at, updated_at
          FROM content_sections
         WHERE ($1::int IS NULL OR organization_id = $1)
         ORDER BY COALESCE(parent_id, 0), sort_order, name`,
@@ -68,7 +76,10 @@ router.get('/sections', authenticateToken, async (req, res) => {
 router.post('/sections', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const orgId = req.user.organizationId || null;
-    const { name, parent_id = null, sort_order = 0, icon = null } = req.body || {};
+    const {
+      name, parent_id = null, sort_order = 0, icon = null,
+      link_type = 'section', link_target = null
+    } = req.body || {};
     if (!name || !String(name).trim()) {
       return res.status(400).json({ error: 'Le nom de la section est requis' });
     }
@@ -88,11 +99,26 @@ router.post('/sections', authenticateToken, requireAdmin, async (req, res) => {
     // Normalize icon: empty string → null, trim, cap at VARCHAR(8) limit.
     const iconValue = icon && String(icon).trim() ? String(icon).trim().slice(0, 8) : null;
 
+    // Validate link_type / link_target. A 'page' section MUST have a
+    // link_target from the curated list; a 'section' section MUST have
+    // link_target = NULL (we ignore any submitted value).
+    const lt = String(link_type || 'section').trim();
+    if (!VALID_LINK_TYPES.includes(lt)) {
+      return res.status(400).json({ error: `link_type invalide (autorisés : ${VALID_LINK_TYPES.join(', ')})` });
+    }
+    let ltVal = null;
+    if (lt === 'page') {
+      if (!link_target || !VALID_LINK_TARGETS.includes(String(link_target))) {
+        return res.status(400).json({ error: `link_target requis et doit être l'un de : ${VALID_LINK_TARGETS.join(', ')}` });
+      }
+      ltVal = String(link_target);
+    }
+
     const row = await dbGet(
-      `INSERT INTO content_sections (organization_id, name, parent_id, sort_order, icon)
-            VALUES ($1, $2, $3, $4, $5)
-         RETURNING id, name, parent_id, sort_order, icon, created_at, updated_at`,
-      [orgId, String(name).trim(), parent_id, Number(sort_order) || 0, iconValue]
+      `INSERT INTO content_sections (organization_id, name, parent_id, sort_order, icon, link_type, link_target)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+         RETURNING id, name, parent_id, sort_order, icon, link_type, link_target, created_at, updated_at`,
+      [orgId, String(name).trim(), parent_id, Number(sort_order) || 0, iconValue, lt, ltVal]
     );
     res.status(201).json(row);
   } catch (err) {
@@ -106,7 +132,7 @@ router.put('/sections/:id', authenticateToken, requireAdmin, async (req, res) =>
   try {
     const orgId = req.user.organizationId || null;
     const id = parseInt(req.params.id, 10);
-    const { name, parent_id, sort_order, icon } = req.body || {};
+    const { name, parent_id, sort_order, icon, link_type, link_target } = req.body || {};
 
     // Ensure section belongs to the current org
     const existing = await dbGet(
@@ -121,40 +147,60 @@ router.put('/sections/:id', authenticateToken, requireAdmin, async (req, res) =>
       return res.status(400).json({ error: 'Une section ne peut pas être son propre parent' });
     }
 
-    // Icon handling: undefined → don't touch, '' → clear, otherwise trim+cap.
-    let iconExpr;
-    let iconParam;
-    if (icon === undefined) {
-      iconExpr = 'icon'; // unchanged
-    } else if (icon === null || String(icon).trim() === '') {
-      iconExpr = 'NULL';
-    } else {
-      iconExpr = `$ICON_PARAM`; // placeholder to be substituted below
-      iconParam = String(icon).trim().slice(0, 8);
+    // Validate link_type / link_target if provided. We treat them as a
+    // pair: if either is in the request body, both go through validation.
+    let lt;       // resolved link_type ('section' / 'page' / undefined)
+    let ltTarget; // resolved link_target string or null
+    if (link_type !== undefined || link_target !== undefined) {
+      lt = String(link_type ?? 'section').trim();
+      if (!VALID_LINK_TYPES.includes(lt)) {
+        return res.status(400).json({ error: `link_type invalide (autorisés : ${VALID_LINK_TYPES.join(', ')})` });
+      }
+      if (lt === 'page') {
+        if (!link_target || !VALID_LINK_TARGETS.includes(String(link_target))) {
+          return res.status(400).json({ error: `link_target requis et doit être l'un de : ${VALID_LINK_TARGETS.join(', ')}` });
+        }
+        ltTarget = String(link_target);
+      } else {
+        ltTarget = null; // 'section' → always clear the target
+      }
     }
 
-    const params = [
-      name ? String(name).trim() : null,
-      parent_id ?? null,
-      sort_order ?? null
-    ];
-    let sql = `UPDATE content_sections
-                  SET name = COALESCE($1, name),
-                      parent_id = $2,
-                      sort_order = COALESCE($3, sort_order),
-                      icon = ${iconExpr},
-                      updated_at = CURRENT_TIMESTAMP
-                WHERE id = $${iconParam !== undefined ? 5 : 4}`;
-    if (iconParam !== undefined) {
-      sql = sql.replace('$ICON_PARAM', '$4');
-      params.push(iconParam);
+    // Build a dynamic UPDATE so we only touch columns actually provided.
+    const sets = [];
+    const params = [];
+    let pi = 1;
+    if (name !== undefined) { sets.push(`name = $${pi++}`); params.push(String(name).trim()); }
+    if (parent_id !== undefined) { sets.push(`parent_id = $${pi++}`); params.push(parent_id); }
+    if (sort_order !== undefined) { sets.push(`sort_order = $${pi++}`); params.push(Number(sort_order) || 0); }
+    if (icon !== undefined) {
+      if (icon === null || String(icon).trim() === '') {
+        sets.push(`icon = NULL`);
+      } else {
+        sets.push(`icon = $${pi++}`);
+        params.push(String(icon).trim().slice(0, 8));
+      }
     }
+    if (lt !== undefined) {
+      sets.push(`link_type = $${pi++}`);
+      params.push(lt);
+      if (ltTarget === null) {
+        sets.push(`link_target = NULL`);
+      } else {
+        sets.push(`link_target = $${pi++}`);
+        params.push(ltTarget);
+      }
+    }
+    sets.push(`updated_at = CURRENT_TIMESTAMP`);
     params.push(id);
 
-    await dbRun(sql, params);
+    await dbRun(
+      `UPDATE content_sections SET ${sets.join(', ')} WHERE id = $${pi}`,
+      params
+    );
 
     const row = await dbGet(
-      `SELECT id, name, parent_id, sort_order, icon, created_at, updated_at
+      `SELECT id, name, parent_id, sort_order, icon, link_type, link_target, created_at, updated_at
          FROM content_sections WHERE id = $1`,
       [id]
     );

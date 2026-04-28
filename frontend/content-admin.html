@@ -546,6 +546,37 @@
           </div>
         </div>
         <div class="form-row">
+          <label>Type d'élément <span style="font-weight: normal; color: #888; font-size: 12px;">— ce qui se passe quand un joueur tape dessus dans l'app.</span></label>
+          <div style="display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; background: #f8f9fa; border-radius: 8px; border: 1px solid #e9ecef;">
+            <label style="display: flex; align-items: flex-start; gap: 8px; cursor: pointer;">
+              <input type="radio" name="sectionLinkType" id="sectionLinkTypeSection" value="section" checked onchange="updateSectionLinkTargetVisibility()" style="margin-top: 3px;">
+              <span>
+                <strong>Section d'articles</strong>
+                <span style="display: block; color: #888; font-size: 12px;">Le joueur voit la liste des articles publiés dans cette section.</span>
+              </span>
+            </label>
+            <label style="display: flex; align-items: flex-start; gap: 8px; cursor: pointer;">
+              <input type="radio" name="sectionLinkType" id="sectionLinkTypePage" value="page" onchange="updateSectionLinkTargetVisibility()" style="margin-top: 3px;">
+              <span>
+                <strong>Lien vers une page de l'app</strong>
+                <span style="display: block; color: #888; font-size: 12px;">Tape ouvre directement une page existante (Calendrier, Contact…). Aucun article n'est listé.</span>
+              </span>
+            </label>
+          </div>
+        </div>
+        <div class="form-row" id="sectionLinkTargetRow" style="display: none;">
+          <label>Page cible *</label>
+          <select id="sectionLinkTarget">
+            <option value="">— Choisir une page —</option>
+            <option value="calendar">📅 Calendrier sportif (Compétitions CDB)</option>
+            <option value="tournaments">🏆 Mon espace joueur (Vos compétitions)</option>
+            <option value="inscriptions">📝 Mes inscriptions</option>
+            <option value="stats">📊 Mes statistiques et résultats</option>
+            <option value="profile">👤 Mon profil</option>
+            <option value="contact">✉️ Contact (formulaire CDB)</option>
+          </select>
+        </div>
+        <div class="form-row">
           <label>Section parente (optionnel)</label>
           <select id="sectionParent">
             <option value="">(Aucune — section racine)</option>
@@ -693,6 +724,9 @@
         document.getElementById('sectionIcon').value = s.icon || '';
         document.getElementById('sectionParent').value = s.parent_id || '';
         document.getElementById('sectionSortOrder').value = s.sort_order || 0;
+        const linkType = s.link_type || 'section';
+        document.getElementById(linkType === 'page' ? 'sectionLinkTypePage' : 'sectionLinkTypeSection').checked = true;
+        document.getElementById('sectionLinkTarget').value = s.link_target || '';
         deleteBtn.style.display = '';
       } else {
         title.textContent = 'Nouvelle section';
@@ -700,13 +734,23 @@
         document.getElementById('sectionIcon').value = '';
         document.getElementById('sectionParent').value = '';
         document.getElementById('sectionSortOrder').value = '0';
+        document.getElementById('sectionLinkTypeSection').checked = true;
+        document.getElementById('sectionLinkTarget').value = '';
         deleteBtn.style.display = 'none';
       }
+      updateSectionLinkTargetVisibility();
       modal.classList.add('visible');
     }
 
     function closeSectionModal() {
       document.getElementById('sectionModal').classList.remove('visible');
+    }
+
+    // Show/hide the link-target dropdown based on the selected radio.
+    function updateSectionLinkTargetVisibility() {
+      const isPage = document.getElementById('sectionLinkTypePage')?.checked;
+      const row = document.getElementById('sectionLinkTargetRow');
+      if (row) row.style.display = isPage ? '' : 'none';
     }
 
     async function saveSection() {
@@ -715,6 +759,14 @@
       const parent_id = document.getElementById('sectionParent').value || null;
       const sort_order = parseInt(document.getElementById('sectionSortOrder').value, 10) || 0;
       const icon = document.getElementById('sectionIcon').value.trim() || null;
+      const link_type = document.getElementById('sectionLinkTypePage').checked ? 'page' : 'section';
+      const link_target = link_type === 'page'
+        ? document.getElementById('sectionLinkTarget').value || null
+        : null;
+      if (link_type === 'page' && !link_target) {
+        toast('Choisissez la page cible', 'error');
+        return;
+      }
 
       try {
         const url = editingSectionId
@@ -724,7 +776,10 @@
         const resp = await fetch(url, {
           method,
           headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, parent_id: parent_id ? parseInt(parent_id, 10) : null, sort_order, icon })
+          body: JSON.stringify({
+            name, parent_id: parent_id ? parseInt(parent_id, 10) : null,
+            sort_order, icon, link_type, link_target
+          })
         });
         if (!resp.ok) {
           const err = await resp.json();

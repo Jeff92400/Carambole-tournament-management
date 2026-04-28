@@ -1041,6 +1041,19 @@ async function initializeDatabase() {
     // drawer renders a default 📁 fallback.
     await client.query(`ALTER TABLE content_sections ADD COLUMN IF NOT EXISTS icon VARCHAR(8)`);
 
+    // Migration (April 2026, V 2.0.560): per-section link type so a Mon
+    // district item can be either a content section (drill into articles)
+    // or a shortcut to an existing app page (calendar, contact, etc.).
+    //   link_type   = 'section' (default, browse articles) | 'page' (jump)
+    //   link_target = NULL when 'section'; otherwise the navigateToPage
+    //                 target string ('tournaments' / 'calendar' / 'contact'
+    //                 / 'inscriptions' / 'stats' / 'profile').
+    // The Player App reads these and either drills in or routes via
+    // navigateToPage. Page-link sections are hidden from the news drawer
+    // (they can't filter articles).
+    await client.query(`ALTER TABLE content_sections ADD COLUMN IF NOT EXISTS link_type VARCHAR(20) DEFAULT 'section'`);
+    await client.query(`ALTER TABLE content_sections ADD COLUMN IF NOT EXISTS link_target VARCHAR(50)`);
+
     // Content pages — articles (news, events, results, documents)
     await client.query(`
       CREATE TABLE IF NOT EXISTS content_pages (
