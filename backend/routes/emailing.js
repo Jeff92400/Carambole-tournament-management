@@ -1956,6 +1956,45 @@ router.post('/send-finale-results', authenticateToken, async (req, res) => {
       }
     }
 
+    // V 2.0.565 — News auto-publisher hook for FINALE results.
+    // Mirrors the /send-results behavior: promote any existing draft
+    // article (created at results-import time via fireResultsArticleDraft)
+    // to 'published' so the article surfaces in the Player App's Mon
+    // district once the participants have been informed via email.
+    //
+    // The label is "Finale" instead of "TN" — that's the only finale-
+    // specific tweak. The V 2.0.563 template still includes both the
+    // results table AND the season ranking table, matching what the
+    // CDB 93-94 admin would post manually.
+    //
+    // Gated internally by news_delivery_mode === 'player_app'. Fire-and-
+    // forget: a failure here must not fail the send-finale-results
+    // response, which has already done its real work.
+    if (!testMode) {
+      (async () => {
+        try {
+          const { promoteDraftOrCreate } = require('../utils/news-auto-publisher');
+          let tournamentDateStr = '';
+          if (tournament.tournament_date) {
+            try {
+              tournamentDateStr = new Date(tournament.tournament_date).toLocaleDateString('fr-FR', {
+                day: 'numeric', month: 'long', year: 'numeric'
+              });
+            } catch (dateErr) { /* non-blocking */ }
+          }
+          await promoteDraftOrCreate('RESULTS', orgId, {
+            sourceRefId: tournamentId,
+            tournamentId,
+            tournamentLabel: 'Finale',
+            categoryName: tournament.display_name,
+            tournamentDate: tournamentDateStr
+          });
+        } catch (promoteErr) {
+          console.error('[FINALE_RESULTS] news-auto-publisher promote error:', promoteErr.message);
+        }
+      })();
+    }
+
     const modeLabel = testMode ? ' (MODE TEST)' : '';
     const summaryLabel = summarySent ? ' + récapitulatif envoyé' : '';
     res.json({
