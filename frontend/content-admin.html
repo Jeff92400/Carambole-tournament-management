@@ -655,6 +655,13 @@
     // Cross-links state for the article modal
     let relatedPageIds = [];               // ids currently linked
     let relatedArticlesCache = new Map();  // id → { title, section_name, content_type }
+    // V 2.0.570 — Track the original content_html so we can skip
+    // sending it on save when the admin didn't actually edit the body.
+    // This prevents Quill from silently stripping <table>/etc. tags it
+    // doesn't natively support when an admin opens an auto-generated
+    // article just to change its status (Brouillon → Publié) or flags
+    // (Punaise / À la une).
+    let articleInitialContentHtml = '';
 
     // ---------- Toast ----------
     function toast(msg, type = 'success') {
@@ -1177,6 +1184,12 @@
           document.getElementById('articleFeatured').checked = !!a.is_featured;
           document.getElementById('articlePinned').checked = !!a.is_pinned;
           quillEditor.root.innerHTML = a.content_html || '';
+          // V 2.0.570 — Snapshot Quill's view of the content AFTER load.
+          // We compare against quillEditor.root.innerHTML at save time
+          // (Quill normalizes the DOM on load, so comparing against the
+          // raw a.content_html would always show "changed" even when
+          // the admin didn't touch the editor).
+          articleInitialContentHtml = quillEditor.root.innerHTML;
           relatedPageIds = Array.isArray(a.related_links)
             ? a.related_links.map(r => r.id).filter(Boolean)
             : [];
@@ -1218,6 +1231,9 @@
         document.getElementById('articleFeatured').checked = false;
         document.getElementById('articlePinned').checked = false;
         quillEditor.root.innerHTML = '';
+        // V 2.0.570 — Fresh article: there's no existing content to
+        // protect, so any save sends content_html.
+        articleInitialContentHtml = '';
       }
       renderRelatedChips();
       refreshRelatedPicker();
@@ -1335,28 +1351,47 @@
       }
 
       const contentHtml = quillEditor.root.innerHTML;
-      console.log(`[cover] content_html length: ${contentHtml.length} chars`);
+      // V 2.0.570 — Determine whether the admin actually edited the
+      // body. If unchanged, we omit content_html (and cover_image,
+      // which is derived from it) from the payload entirely. The
+      // backend leaves those columns intact.
+      //
+      // This protects auto-generated articles (which contain <table>
+      // and other HTML Quill doesn't support) from being silently
+      // stripped when the admin opens them just to flip status or
+      // toggle Punaise / À la une. The actual content_html is what
+      // the auto-publisher rendered server-side, not Quill's
+      // round-tripped version.
+      const contentChanged = contentHtml !== articleInitialContentHtml;
+      console.log(`[cover] content_html length: ${contentHtml.length} chars, changed: ${contentChanged}`);
 
       // Generate a thumbnail from the first image in the article body.
-      // 800 px wide covers mobile (2x) + tablet display without visible
-      // upscaling; JPEG quality 0.75 keeps payload around 50-90 KB.
-      // Resolves to null if there is no image — the card then falls
-      // back to the text-only layout.
-      const coverImage = await generateCoverImageFromHtml(contentHtml, 800, 0.75);
-      console.log(`[cover] will send cover_image: ${coverImage ? (coverImage.length / 1024).toFixed(1) + ' KB' : 'null'}`);
+      // Only when content actually changed — otherwise we keep the
+      // existing cover_image (server-side, unchanged).
+      const coverImage = contentChanged
+        ? await generateCoverImageFromHtml(contentHtml, 800, 0.75)
+        : null;
+      if (contentChanged) {
+        console.log(`[cover] will send cover_image: ${coverImage ? (coverImage.length / 1024).toFixed(1) + ' KB' : 'null'}`);
+      }
 
       const payload = {
         title,
         section_id: parseInt(document.getElementById('articleSection').value, 10) || null,
         content_type: document.getElementById('articleType').value,
         excerpt: document.getElementById('articleExcerpt').value.trim() || null,
-        content_html: contentHtml,
-        cover_image: coverImage,
         is_featured: document.getElementById('articleFeatured').checked,
         is_pinned: document.getElementById('articlePinned').checked,
         related_page_ids: relatedPageIds.slice(),
         status
       };
+      // Only include content_html (and cover_image) when the admin
+      // actually edited the body. Omitting them tells the backend
+      // PUT /pages/:id to leave those columns intact.
+      if (contentChanged) {
+        payload.content_html = contentHtml;
+        payload.cover_image = coverImage;
+      }
 
       try {
         const url = editingArticleId
