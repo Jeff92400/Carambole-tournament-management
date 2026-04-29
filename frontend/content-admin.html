@@ -541,10 +541,10 @@
         <!-- V 2.0.582 — Pièces jointes : photos / PDFs ajoutés séparément
              du corps Quill, pour préserver les tableaux auto-générés. -->
         <div class="form-row">
-          <label>📎 Pièces jointes <span style="font-weight: normal; color: #888; font-size: 12px;">— photos, PDFs ou documents affichés au bas de l'article (max 5 fichiers, 1 Mo chacun)</span></label>
+          <label>📎 Pièces jointes <span style="font-weight: normal; color: #888; font-size: 12px;">— photos, PDFs ou documents affichés au bas de l'article (max 5 fichiers, 5 Mo chacun)</span></label>
           <div id="attachmentsList" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px;"></div>
           <input type="file" id="attachmentInput" accept="image/*,application/pdf" multiple onchange="handleAttachmentUpload(event)" style="font-size: 13px;">
-          <div style="font-size: 11px; color: #888; margin-top: 4px;">Les pièces jointes sont stockées séparément du corps de l'article — ajouter une photo ne supprimera pas les tableaux auto-générés.</div>
+          <div style="font-size: 11px; color: #888; margin-top: 4px;">Les pièces jointes sont stockées séparément du corps de l'article — ajouter une photo ne supprimera pas les tableaux auto-générés. Les photos &gt; 1 Mo sont automatiquement redimensionnées (max 1600 px de large).</div>
         </div>
       </div>
       <div class="modal-footer">
@@ -691,20 +691,54 @@
 
     // ---------- Sections ----------
     // V 2.0.582 — Attachments state for the open article modal.
+    // V 2.0.586 — Per-file cap raised to 5 MB. Photos larger than 1 MB
+    // (or wider than 1600px) are auto-resized client-side via canvas so
+    // the database row stays small. PDFs and other docs are not resized.
     let articleAttachments = [];
-    const ATTACHMENT_MAX_BYTES = 1024 * 1024;     // 1 MB per file
+    const ATTACHMENT_MAX_BYTES = 5 * 1024 * 1024;     // 5 MB per file (raw upload)
+    const ATTACHMENT_RESIZE_THRESHOLD = 1024 * 1024;  // > 1 MB images get resized
+    const ATTACHMENT_MAX_IMAGE_WIDTH = 1600;          // max width after resize
+    const ATTACHMENT_JPEG_QUALITY = 0.82;
     const ATTACHMENT_MAX_COUNT = 5;
     function fileToBase64(file) {
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => {
-          // strip "data:image/png;base64," prefix
           const result = reader.result || '';
           const idx = String(result).indexOf('base64,');
           resolve(idx >= 0 ? String(result).slice(idx + 7) : String(result));
         };
         reader.onerror = reject;
         reader.readAsDataURL(file);
+      });
+    }
+    // V 2.0.586 — Resize an image File via canvas. Returns
+    // { dataBase64, contentType } where dataBase64 is the base64 body
+    // without the "data:...;base64," prefix.
+    function resizeImageFile(file, maxWidth, quality) {
+      return new Promise((resolve, reject) => {
+        const url = URL.createObjectURL(file);
+        const img = new Image();
+        img.onload = () => {
+          try {
+            const ratio = img.width > maxWidth ? maxWidth / img.width : 1;
+            const w = Math.round(img.width * ratio);
+            const h = Math.round(img.height * ratio);
+            const canvas = document.createElement('canvas');
+            canvas.width = w; canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, w, h);
+            const dataUrl = canvas.toDataURL('image/jpeg', quality);
+            URL.revokeObjectURL(url);
+            const idx = dataUrl.indexOf('base64,');
+            resolve({
+              dataBase64: idx >= 0 ? dataUrl.slice(idx + 7) : dataUrl,
+              contentType: 'image/jpeg'
+            });
+          } catch (e) { URL.revokeObjectURL(url); reject(e); }
+        };
+        img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Image load failed')); };
+        img.src = url;
       });
     }
     async function handleAttachmentUpload(ev) {
@@ -716,15 +750,25 @@
           break;
         }
         if (file.size > ATTACHMENT_MAX_BYTES) {
-          toast(`"${file.name}" dépasse 1 Mo (${(file.size / 1024 / 1024).toFixed(1)} Mo)`, 'error');
+          toast(`"${file.name}" dépasse 5 Mo (${(file.size / 1024 / 1024).toFixed(1)} Mo)`, 'error');
           continue;
         }
         try {
-          const data_base64 = await fileToBase64(file);
+          const isImage = (file.type || '').startsWith('image/');
+          let data_base64, content_type;
+          if (isImage && file.size > ATTACHMENT_RESIZE_THRESHOLD) {
+            const resized = await resizeImageFile(file, ATTACHMENT_MAX_IMAGE_WIDTH, ATTACHMENT_JPEG_QUALITY);
+            data_base64 = resized.dataBase64;
+            content_type = resized.contentType;
+            console.log(`[attachments] resized "${file.name}": ${(file.size/1024).toFixed(0)} Ko → ${(data_base64.length*0.75/1024).toFixed(0)} Ko`);
+          } else {
+            data_base64 = await fileToBase64(file);
+            content_type = file.type || 'application/octet-stream';
+          }
           articleAttachments.push({
             label: file.name,
             filename: file.name,
-            content_type: file.type || 'application/octet-stream',
+            content_type,
             data_base64
           });
         } catch (err) {
