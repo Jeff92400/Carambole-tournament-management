@@ -184,6 +184,37 @@
     .history-table th, .history-table td {
       padding: 10px;
     }
+    /* V 2.0.573 — Top-level category pills (5 buckets) above the tab strip */
+    .com-categories {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 14px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    .com-category {
+      padding: 8px 16px;
+      border-radius: 999px;
+      cursor: pointer;
+      background: #f1f5f9;
+      color: #475569;
+      font-weight: 600;
+      font-size: 13px;
+      border: 1.5px solid transparent;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+    }
+    .com-category:hover {
+      background: #e2e8f0;
+      color: #1F4788;
+    }
+    .com-category.active {
+      background: #1F4788;
+      color: #ffffff;
+      border-color: #1F4788;
+      box-shadow: 0 2px 6px rgba(31,71,136,0.25);
+    }
     .tabs {
       display: flex;
       border-bottom: 2px solid #ddd;
@@ -193,6 +224,10 @@
       -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
       padding-right: 20px; /* Prevent last tab from being cut off */
     }
+    /* Hide tabs that don't belong to the active category */
+    .tab[data-category]:not(.cat-visible) {
+      display: none;
+    }
     .tab {
       padding: 10px 8px;
       cursor: pointer;
@@ -201,7 +236,7 @@
       color: #666;
       white-space: nowrap; /* Prevent text wrapping */
       flex-shrink: 0; /* Prevent tab compression */
-      font-size: 12.5px; /* Reduced font size to fit all tabs */
+      font-size: 13.5px; /* Slightly larger now that tabs are filtered per category */
     }
     .tab:hover {
       color: #1F4788;
@@ -519,18 +554,37 @@
     <div id="errorMessage" class="error" style="display: none;"></div>
     <div id="successMessage" class="success" style="display: none;"></div>
 
+    <!-- V 2.0.573 — Top-level category pills. Each pill shows only its
+         own sub-tabs underneath. Articles category is empty for now —
+         it will host article + folder management in Phase 2. -->
+    <div class="com-categories">
+      <div class="com-category active" data-category="push">📲 Push</div>
+      <div class="com-category" data-category="articles">📰 Articles</div>
+      <div class="com-category" data-category="emails">✉️ Emails</div>
+      <div class="com-category" data-category="tools">🛠️ Outils</div>
+      <div class="com-category" data-category="tracking">📜 Suivi</div>
+    </div>
+
     <div class="tabs">
-      <div class="tab active tooltip" data-tab="notifications" data-tooltip="Notifications push vers l'Espace Joueur">🔔 Notifs</div>
-      <div class="tab tooltip" data-tab="announcements" data-tooltip="Annonces affichées dans l'Espace Joueur">Annonces</div>
-      <div class="tab tooltip" data-tab="compose" data-tooltip="Email avec texte libre et destinataires à sélectionner depuis la base joueurs">Composer</div>
-      <div class="tab tooltip" data-tab="relances" data-tooltip="Rappels d'inscription par tournois et finales">Relances</div>
-      <div class="tab tooltip" data-tab="results" data-tooltip="Classement à l'issue de chaque rencontre">Résultats Tournoi</div>
-      <div class="tab tooltip" data-tab="finale-results" data-tooltip="Résultats de la finale avec podium">Résultats Finale</div>
-      <div class="tab tooltip" data-tab="contacts" data-tooltip="Modification infos joueur">Gestion Contacts</div>
-      <div class="tab tooltip" data-tab="templates" data-tooltip="Emails type à composer et à utiliser pour relance et convocation">Templates</div>
-      <div class="tab tooltip" data-tab="history" data-tooltip="Logs d'envois des emails">Historique</div>
-      <div class="tab tooltip" data-tab="scheduled" data-tooltip="Envoi d'emails décalé">Programmés</div>
-      <div class="tab tooltip" data-tab="surveys" data-tooltip="Sondages de satisfaction pour l'Espace Joueur">Sondages</div>
+      <div class="tab active cat-visible tooltip" data-tab="notifications" data-category="push" data-tooltip="Notifications push vers l'Espace Joueur">🔔 Notifs</div>
+      <div class="tab cat-visible tooltip" data-tab="announcements" data-category="push" data-tooltip="Annonces affichées dans l'Espace Joueur">Annonces</div>
+      <div class="tab tooltip" data-tab="compose" data-category="emails" data-tooltip="Email avec texte libre et destinataires à sélectionner depuis la base joueurs">Composer</div>
+      <div class="tab tooltip" data-tab="relances" data-category="emails" data-tooltip="Rappels d'inscription par tournois et finales">Relances</div>
+      <div class="tab tooltip" data-tab="results" data-category="emails" data-tooltip="Classement à l'issue de chaque rencontre">Résultats Tournoi</div>
+      <div class="tab tooltip" data-tab="finale-results" data-category="emails" data-tooltip="Résultats de la finale avec podium">Résultats Finale</div>
+      <div class="tab tooltip" data-tab="scheduled" data-category="emails" data-tooltip="Envoi d'emails décalé">Programmés</div>
+      <div class="tab tooltip" data-tab="templates" data-category="tools" data-tooltip="Emails type à composer et à utiliser pour relance et convocation">Templates</div>
+      <div class="tab tooltip" data-tab="contacts" data-category="tools" data-tooltip="Modification infos joueur">Gestion Contacts</div>
+      <div class="tab tooltip" data-tab="surveys" data-category="tools" data-tooltip="Sondages de satisfaction pour l'Espace Joueur">Sondages</div>
+      <div class="tab tooltip" data-tab="history" data-category="tracking" data-tooltip="Logs d'envois des emails">Historique</div>
+    </div>
+
+    <!-- Empty-state placeholder for the Articles category until Phase 2 -->
+    <div id="cat-articles-placeholder" class="card" style="display:none;text-align:center;padding:40px 20px;color:#64748b;">
+      <div style="font-size:48px;margin-bottom:12px;">📰</div>
+      <div style="font-size:16px;font-weight:600;color:#1F4788;margin-bottom:6px;">Gestion des articles</div>
+      <div style="font-size:14px;">Cette section accueillera bientôt la gestion des articles et des dossiers de l'Espace Joueur.</div>
+      <div style="font-size:13px;margin-top:14px;">En attendant : <a href="settings-admin.html#contentManagementSection" style="color:#1F4788;font-weight:600;">accéder via Paramètres → Gestion du contenu</a></div>
     </div>
 
     <!-- TAB: Notifications -->
@@ -2544,9 +2598,54 @@
       window.location.href = 'login.html';
     });
 
+    // V 2.0.573 — Category pill switching. Each pill controls which
+    // sub-tabs are visible. Clicking a pill activates it and shows its
+    // first sub-tab automatically.
+    function activateCategory(category) {
+      document.querySelectorAll('.com-category').forEach(p => {
+        p.classList.toggle('active', p.dataset.category === category);
+      });
+      document.querySelectorAll('.tab[data-category]').forEach(t => {
+        t.classList.toggle('cat-visible', t.dataset.category === category);
+      });
+      // Articles category has no sub-tabs yet — show the placeholder
+      const placeholder = document.getElementById('cat-articles-placeholder');
+      if (category === 'articles') {
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        if (placeholder) placeholder.style.display = 'block';
+        return;
+      }
+      if (placeholder) placeholder.style.display = 'none';
+      // Activate the first visible tab in the new category
+      const firstTab = document.querySelector(`.tab[data-category="${category}"]`);
+      if (firstTab) firstTab.click();
+    }
+    document.querySelectorAll('.com-category').forEach(pill => {
+      pill.addEventListener('click', () => activateCategory(pill.dataset.category));
+    });
+
     // Tab switching
     document.querySelectorAll('.tab').forEach(tab => {
       tab.addEventListener('click', () => {
+        // V 2.0.573 — If this tab belongs to a different category than
+        // the one currently active, switch the category first so the
+        // tab is actually visible.
+        const tabCategory = tab.dataset.category;
+        if (tabCategory) {
+          const activePill = document.querySelector('.com-category.active');
+          if (!activePill || activePill.dataset.category !== tabCategory) {
+            document.querySelectorAll('.com-category').forEach(p => {
+              p.classList.toggle('active', p.dataset.category === tabCategory);
+            });
+            document.querySelectorAll('.tab[data-category]').forEach(t => {
+              t.classList.toggle('cat-visible', t.dataset.category === tabCategory);
+            });
+            const placeholder = document.getElementById('cat-articles-placeholder');
+            if (placeholder) placeholder.style.display = 'none';
+          }
+        }
+
         document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
         document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
 
