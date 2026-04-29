@@ -785,11 +785,28 @@ async function promoteDraftOrCreate(eventType, orgId, payload) {
 
     const mode = await resolveEventMode(orgId, eventType);
     if (mode === 'off') return { skipped: 'event_disabled' };
-    if (mode === 'draft') return { skipped: 'manual_publish_mode' };
 
     const sourceRefId = payload?.sourceRefId || null;
     if (sourceRefId == null) return { skipped: 'no_source_ref_id' };
 
+    // V 2.0.569 — Mode='draft' previously short-circuited entirely
+    // ("manual_publish_mode" skip), which silently broke the
+    // "Brouillon uniquement (publication manuelle)" UX promise: if the
+    // import path didn't fire fireResultsArticleDraft (e.g., admin
+    // composed manually or imported through a path not yet wired),
+    // NO draft was ever created and the admin saw nothing to review.
+    //
+    // New behavior:
+    //   - mode='draft': ensure a draft exists (create if missing,
+    //                   never promote — admin handles publication)
+    //   - mode='auto':  promote existing draft OR create fresh as
+    //                   published (existing behavior)
+    if (mode === 'draft') {
+      console.log(`[news-auto-publisher] mode='draft', ensuring draft article exists (${eventType}, org=${orgId}, ref=${sourceRefId})`);
+      return await publishAutoArticle(eventType, orgId, payload, { forceStatus: 'draft' });
+    }
+
+    // mode === 'auto' from here on.
     // Look for an existing draft from the save-step hook.
     const existing = await db.query(
       `SELECT id, status FROM content_pages
