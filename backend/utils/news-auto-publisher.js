@@ -375,14 +375,20 @@ async function fetchSeasonRanking(tournamentId, orgId) {
   }
 }
 
-// V 2.0.563 — Render an HTML table inside the article body. Designed
-// to look good with the .news-body table CSS in the Player App
-// (zebra rows, primary-colored header). Inline styles are minimal —
-// the Player App's stylesheet does the heavy lifting on hover/borders.
+// V 2.0.571 — Render an HTML table inside the article body with strong
+// inline borders (horizontal + vertical), zebra striping, and a
+// primary-colored header. All styles are inline so the rendering does
+// not depend on the Player App stylesheet (defensive against editors
+// that strip <style> blocks or scope CSS).
+const TABLE_STYLE = 'border-collapse:collapse;width:100%;font-size:13px;border:2px solid #1F4788;margin:8px 0;';
+const TH_STYLE = 'background:#1F4788;color:#ffffff;padding:8px 6px;font-size:12px;font-weight:700;text-align:left;border:1px solid #1F4788;';
+const TD_STYLE = 'border:1px solid #94a3b8;padding:7px 6px;';
+const TD_CLUB_STYLE = 'border:1px solid #94a3b8;padding:7px 6px;font-size:11px;color:#475569;';
+const ROW_ZEBRA = 'background:#f1f5f9;';
+
 function renderResultsTable(results) {
   if (!Array.isArray(results) || results.length === 0) return '';
-  const headerStyle = 'background:linear-gradient(135deg,#1F4788,#667eea);color:white;padding:8px 6px;font-size:12px;font-weight:700;text-align:left;';
-  const rows = results.map(r => {
+  const rows = results.map((r, idx) => {
     const name = `${r.first_name || ''} ${r.last_name || ''}`.trim() || r.player_name || r.licence;
     const moyenne = (r.reprises > 0)
       ? (r.points / r.reprises).toFixed(3)
@@ -391,29 +397,30 @@ function renderResultsTable(results) {
     const ptsClt = r.position_points != null ? r.position_points : 0;
     const bonus = r.bonus_points != null ? r.bonus_points : 0;
     const total = ptsClt + bonus;
-    return `<tr>
-      <td>${esc(r.position ?? '—')}</td>
-      <td><strong>${esc(name)}</strong></td>
-      <td style="font-size:11px;color:#666;">${esc(r.club_name || '')}</td>
-      <td>${esc(matchPoints)}</td>
-      <td>${esc(moyenne)}</td>
-      <td>${esc(r.serie ?? '—')}</td>
-      <td>${esc(ptsClt)}</td>
-      <td>${esc(bonus > 0 ? '+' + bonus : (bonus || '—'))}</td>
-      <td><strong>${esc(total)}</strong></td>
+    const trStyle = idx % 2 === 1 ? ` style="${ROW_ZEBRA}"` : '';
+    return `<tr${trStyle}>
+      <td style="${TD_STYLE}text-align:center;font-weight:700;">${esc(r.position ?? '—')}</td>
+      <td style="${TD_STYLE}"><strong>${esc(name)}</strong></td>
+      <td style="${TD_CLUB_STYLE}">${esc(r.club_name || '')}</td>
+      <td style="${TD_STYLE}text-align:center;">${esc(matchPoints)}</td>
+      <td style="${TD_STYLE}text-align:center;">${esc(moyenne)}</td>
+      <td style="${TD_STYLE}text-align:center;">${esc(r.serie ?? '—')}</td>
+      <td style="${TD_STYLE}text-align:center;">${esc(ptsClt)}</td>
+      <td style="${TD_STYLE}text-align:center;">${esc(bonus > 0 ? '+' + bonus : (bonus || '—'))}</td>
+      <td style="${TD_STYLE}text-align:center;font-weight:700;">${esc(total)}</td>
     </tr>`;
   }).join('');
-  return `<table>
+  return `<table style="${TABLE_STYLE}">
     <thead><tr>
-      <th style="${headerStyle}">CLT</th>
-      <th style="${headerStyle}">Joueur</th>
-      <th style="${headerStyle}">Club</th>
-      <th style="${headerStyle}">PM</th>
-      <th style="${headerStyle}">MGP</th>
-      <th style="${headerStyle}">MS</th>
-      <th style="${headerStyle}">Pts clt</th>
-      <th style="${headerStyle}">Bonus</th>
-      <th style="${headerStyle}">Total</th>
+      <th style="${TH_STYLE}">CLT</th>
+      <th style="${TH_STYLE}">Joueur</th>
+      <th style="${TH_STYLE}">Club</th>
+      <th style="${TH_STYLE}">PM</th>
+      <th style="${TH_STYLE}">MGP</th>
+      <th style="${TH_STYLE}">MS</th>
+      <th style="${TH_STYLE}">Pts clt</th>
+      <th style="${TH_STYLE}">Bonus</th>
+      <th style="${TH_STYLE}">Total</th>
     </tr></thead>
     <tbody>${rows}</tbody>
   </table>`;
@@ -421,38 +428,38 @@ function renderResultsTable(results) {
 
 function renderSeasonRankingTable(rankings) {
   if (!Array.isArray(rankings) || rankings.length === 0) return '';
-  const headerStyle = 'background:linear-gradient(135deg,#1F4788,#667eea);color:white;padding:8px 6px;font-size:12px;font-weight:700;text-align:left;';
-  const rows = rankings.map(r => {
+  const rows = rankings.map((r, idx) => {
     const name = `${r.first_name || ''} ${r.last_name || ''}`.trim() || r.licence;
     const totalMP = r.total_match_points || 0;
     const totalBonus = r.total_bonus_points || 0;
     const total = totalMP + totalBonus;
     const moyenne = r.avg_moyenne ? Number(r.avg_moyenne).toFixed(3) : '—';
-    return `<tr>
-      <td>${esc(r.rank_position ?? '—')}</td>
-      <td><strong>${esc(name)}</strong></td>
-      <td style="font-size:11px;color:#666;">${esc(r.club_name || '')}</td>
-      <td>${esc(r.tournament_1_points || 0)}</td>
-      <td>${esc(r.tournament_2_points || 0)}</td>
-      <td>${esc(r.tournament_3_points || 0)}</td>
-      <td>${esc(totalMP)}</td>
-      <td>${esc(totalBonus > 0 ? '+' + totalBonus : (totalBonus || '—'))}</td>
-      <td><strong>${esc(total)}</strong></td>
-      <td>${esc(moyenne)}</td>
+    const trStyle = idx % 2 === 1 ? ` style="${ROW_ZEBRA}"` : '';
+    return `<tr${trStyle}>
+      <td style="${TD_STYLE}text-align:center;font-weight:700;">${esc(r.rank_position ?? '—')}</td>
+      <td style="${TD_STYLE}"><strong>${esc(name)}</strong></td>
+      <td style="${TD_CLUB_STYLE}">${esc(r.club_name || '')}</td>
+      <td style="${TD_STYLE}text-align:center;">${esc(r.tournament_1_points || 0)}</td>
+      <td style="${TD_STYLE}text-align:center;">${esc(r.tournament_2_points || 0)}</td>
+      <td style="${TD_STYLE}text-align:center;">${esc(r.tournament_3_points || 0)}</td>
+      <td style="${TD_STYLE}text-align:center;">${esc(totalMP)}</td>
+      <td style="${TD_STYLE}text-align:center;">${esc(totalBonus > 0 ? '+' + totalBonus : (totalBonus || '—'))}</td>
+      <td style="${TD_STYLE}text-align:center;font-weight:700;">${esc(total)}</td>
+      <td style="${TD_STYLE}text-align:center;">${esc(moyenne)}</td>
     </tr>`;
   }).join('');
-  return `<table>
+  return `<table style="${TABLE_STYLE}">
     <thead><tr>
-      <th style="${headerStyle}">CLT</th>
-      <th style="${headerStyle}">Joueur</th>
-      <th style="${headerStyle}">Club</th>
-      <th style="${headerStyle}">T1</th>
-      <th style="${headerStyle}">T2</th>
-      <th style="${headerStyle}">T3</th>
-      <th style="${headerStyle}">Pts</th>
-      <th style="${headerStyle}">Bonus</th>
-      <th style="${headerStyle}">Total</th>
-      <th style="${headerStyle}">MGP</th>
+      <th style="${TH_STYLE}">CLT</th>
+      <th style="${TH_STYLE}">Joueur</th>
+      <th style="${TH_STYLE}">Club</th>
+      <th style="${TH_STYLE}">T1</th>
+      <th style="${TH_STYLE}">T2</th>
+      <th style="${TH_STYLE}">T3</th>
+      <th style="${TH_STYLE}">Pts</th>
+      <th style="${TH_STYLE}">Bonus</th>
+      <th style="${TH_STYLE}">Total</th>
+      <th style="${TH_STYLE}">MGP</th>
     </tr></thead>
     <tbody>${rows}</tbody>
   </table>`;
