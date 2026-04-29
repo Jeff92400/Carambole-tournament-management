@@ -3,14 +3,17 @@
 // CRUD for content_sections, content_pages, content_links
 //
 // All endpoints are org-scoped via req.user.organizationId.
-// Admin-only for writes; reads still require authentication
+// Admin + viewer can write (V 2.0.576+); reads still require authentication
 // (the Player App has its own public read endpoint, mounted elsewhere).
 //
 // Created: April 2026 — for CDBs without a WordPress site
 // ============================================================
 
 const express = require('express');
-const { authenticateToken, requireAdmin } = require('./auth');
+// V 2.0.576 — requireContentEditor allows admin + viewer to manage
+// articles. A future per-CDB setting will replace the hardcoded role
+// list (spawn-task: per-CDB article publication rights config).
+const { authenticateToken, requireAdmin, requireContentEditor } = require('./auth');
 
 const router = express.Router();
 
@@ -73,7 +76,7 @@ router.get('/sections', authenticateToken, async (req, res) => {
 });
 
 // POST /api/content/sections — create a section
-router.post('/sections', authenticateToken, requireAdmin, async (req, res) => {
+router.post('/sections', authenticateToken, requireContentEditor, async (req, res) => {
   try {
     const orgId = req.user.organizationId || null;
     const {
@@ -128,7 +131,7 @@ router.post('/sections', authenticateToken, requireAdmin, async (req, res) => {
 });
 
 // PUT /api/content/sections/:id — update a section
-router.put('/sections/:id', authenticateToken, requireAdmin, async (req, res) => {
+router.put('/sections/:id', authenticateToken, requireContentEditor, async (req, res) => {
   try {
     const orgId = req.user.organizationId || null;
     const id = parseInt(req.params.id, 10);
@@ -214,7 +217,7 @@ router.put('/sections/:id', authenticateToken, requireAdmin, async (req, res) =>
 // DELETE /api/content/sections/:id — delete a section
 // Children are cascade-deleted (FK ON DELETE CASCADE).
 // Articles in this section get section_id = NULL (FK ON DELETE SET NULL).
-router.delete('/sections/:id', authenticateToken, requireAdmin, async (req, res) => {
+router.delete('/sections/:id', authenticateToken, requireContentEditor, async (req, res) => {
   try {
     const orgId = req.user.organizationId || null;
     const id = parseInt(req.params.id, 10);
@@ -340,7 +343,7 @@ async function resolveFallbackSectionId(orgId) {
 }
 
 // POST /api/content/pages — create an article
-router.post('/pages', authenticateToken, requireAdmin, async (req, res) => {
+router.post('/pages', authenticateToken, requireContentEditor, async (req, res) => {
   try {
     const orgId = req.user.organizationId || null;
     let {
@@ -426,7 +429,7 @@ router.post('/pages', authenticateToken, requireAdmin, async (req, res) => {
 });
 
 // PUT /api/content/pages/:id — update an article
-router.put('/pages/:id', authenticateToken, requireAdmin, async (req, res) => {
+router.put('/pages/:id', authenticateToken, requireContentEditor, async (req, res) => {
   try {
     const orgId = req.user.organizationId || null;
     const id = parseInt(req.params.id, 10);
@@ -531,7 +534,7 @@ router.put('/pages/:id', authenticateToken, requireAdmin, async (req, res) => {
 //   2) want to "preview" the new template without re-importing
 // Only auto-generated RESULTS articles are supported for now; extend
 // to FINALE_QUALIFICATION + NEW_TOURNAMENT when admins ask for it.
-router.post('/pages/:id/regenerate', authenticateToken, requireAdmin, async (req, res) => {
+router.post('/pages/:id/regenerate', authenticateToken, requireContentEditor, async (req, res) => {
   try {
     const orgId = req.user.organizationId || null;
     const id = parseInt(req.params.id, 10);
@@ -583,7 +586,7 @@ router.post('/pages/:id/regenerate', authenticateToken, requireAdmin, async (req
 });
 
 // DELETE /api/content/pages/:id — delete an article (and its cross-links)
-router.delete('/pages/:id', authenticateToken, requireAdmin, async (req, res) => {
+router.delete('/pages/:id', authenticateToken, requireContentEditor, async (req, res) => {
   try {
     const orgId = req.user.organizationId || null;
     const id = parseInt(req.params.id, 10);

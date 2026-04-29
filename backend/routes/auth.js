@@ -962,6 +962,20 @@ function requireAdmin(req, res, next) {
   next();
 }
 
+// V 2.0.576 — Middleware for the player communication content module
+// (articles + folders). Admin and viewer roles can both publish; this
+// is a temporary expansion of the viewer role pending the per-CDB
+// publication-rights setting (spawn-task: per-CDB article publication
+// rights config). When that setting lands, this middleware should read
+// the org's `article_management_roles` array instead of hardcoding.
+function requireContentEditor(req, res, next) {
+  const role = req.user && req.user.role;
+  if (role === 'admin' || role === 'viewer' || req.user.admin) {
+    return next();
+  }
+  return res.status(403).json({ error: 'Content editor access required' });
+}
+
 // Middleware to require club or admin role (for player management)
 function requireClubOrAdmin(req, res, next) {
   if (req.user.role === 'admin' || req.user.role === 'club' || req.user.admin) {
@@ -1014,6 +1028,7 @@ function requireDdJ(req, res, next) {
 module.exports = router;
 module.exports.authenticateToken = authenticateToken;
 module.exports.requireAdmin = requireAdmin;
+module.exports.requireContentEditor = requireContentEditor;
 module.exports.requireClubOrAdmin = requireClubOrAdmin;
 module.exports.requireViewer = requireViewer;
 module.exports.requireViewerWrite = requireViewerWrite;

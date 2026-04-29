@@ -215,6 +215,10 @@
       border-color: #1F4788;
       box-shadow: 0 2px 6px rgba(31,71,136,0.25);
     }
+    /* V 2.0.576 — Articles pill is gated to admin + viewer roles via the
+       body.role-<role> class set by auth-utils.js. Default hidden. */
+    body.role-admin .com-category-articles,
+    body.role-viewer .com-category-articles { display: inline-block !important; }
     .tabs {
       display: flex;
       border-bottom: 2px solid #ddd;
@@ -559,10 +563,10 @@
          it will host article + folder management in Phase 2. -->
     <div class="com-categories">
       <div class="com-category active" data-category="push">📲 Push</div>
-      <!-- Articles pill is hidden until Phase 2 moves the article + folder
-           management UI into this page. Showing it now would force users
-           out to Paramètres, which is gated to admins only. -->
-      <div class="com-category" data-category="articles" style="display:none;">📰 Articles</div>
+      <!-- V 2.0.576 (Phase 2) — Articles pill navigates straight to
+           content-admin.html, the dedicated article + folder manager.
+           Visible to admin + viewer roles only (CSS gating below). -->
+      <a id="articlesPillLink" href="content-admin.html" class="com-category com-category-articles" data-category="articles" style="text-decoration:none;display:none;">📰 Articles</a>
       <div class="com-category" data-category="emails">✉️ Emails</div>
       <div class="com-category" data-category="tools">🛠️ Outils</div>
       <div class="com-category" data-category="tracking">📜 Suivi</div>
@@ -582,13 +586,9 @@
       <div class="tab tooltip" data-tab="history" data-category="tracking" data-tooltip="Logs d'envois des emails">Historique</div>
     </div>
 
-    <!-- Empty-state placeholder for the Articles category until Phase 2 -->
-    <div id="cat-articles-placeholder" class="card" style="display:none;text-align:center;padding:40px 20px;color:#64748b;">
-      <div style="font-size:48px;margin-bottom:12px;">📰</div>
-      <div style="font-size:16px;font-weight:600;color:#1F4788;margin-bottom:6px;">Gestion des articles</div>
-      <div style="font-size:14px;">Cette section accueillera bientôt la gestion des articles et des dossiers de l'Espace Joueur.</div>
-      <div style="font-size:13px;margin-top:14px;">En attendant : <a href="settings-admin.html#contentManagementSection" style="color:#1F4788;font-weight:600;">accéder via Paramètres → Gestion du contenu</a></div>
-    </div>
+    <!-- V 2.0.576 — Articles pill is now an <a> link directly to
+         content-admin.html, so no in-page placeholder is needed. -->
+
 
     <!-- TAB: Notifications -->
     <div id="tab-notifications" class="tab-content active">
@@ -2604,6 +2604,9 @@
     // V 2.0.573 — Category pill switching. Each pill controls which
     // sub-tabs are visible. Clicking a pill activates it and shows its
     // first sub-tab automatically.
+    // V 2.0.576 — The Articles pill is an <a> link (navigates to
+    // content-admin.html), so we skip it here and let the browser
+    // handle the navigation natively.
     function activateCategory(category) {
       document.querySelectorAll('.com-category').forEach(p => {
         p.classList.toggle('active', p.dataset.category === category);
@@ -2611,20 +2614,13 @@
       document.querySelectorAll('.tab[data-category]').forEach(t => {
         t.classList.toggle('cat-visible', t.dataset.category === category);
       });
-      // Articles category has no sub-tabs yet — show the placeholder
-      const placeholder = document.getElementById('cat-articles-placeholder');
-      if (category === 'articles') {
-        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-        if (placeholder) placeholder.style.display = 'block';
-        return;
-      }
-      if (placeholder) placeholder.style.display = 'none';
       // Activate the first visible tab in the new category
       const firstTab = document.querySelector(`.tab[data-category="${category}"]`);
       if (firstTab) firstTab.click();
     }
     document.querySelectorAll('.com-category').forEach(pill => {
+      // Skip pills that are <a> links — they navigate natively
+      if (pill.tagName === 'A') return;
       pill.addEventListener('click', () => activateCategory(pill.dataset.category));
     });
 
@@ -2644,8 +2640,6 @@
             document.querySelectorAll('.tab[data-category]').forEach(t => {
               t.classList.toggle('cat-visible', t.dataset.category === tabCategory);
             });
-            const placeholder = document.getElementById('cat-articles-placeholder');
-            if (placeholder) placeholder.style.display = 'none';
           }
         }
 
