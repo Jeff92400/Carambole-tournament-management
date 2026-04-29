@@ -538,6 +538,14 @@
             <option value="">+ Ajouter un article associé…</option>
           </select>
         </div>
+        <!-- V 2.0.582 — Pièces jointes : photos / PDFs ajoutés séparément
+             du corps Quill, pour préserver les tableaux auto-générés. -->
+        <div class="form-row">
+          <label>📎 Pièces jointes <span style="font-weight: normal; color: #888; font-size: 12px;">— photos, PDFs ou documents affichés au bas de l'article (max 5 fichiers, 1 Mo chacun)</span></label>
+          <div id="attachmentsList" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px;"></div>
+          <input type="file" id="attachmentInput" accept="image/*,application/pdf" multiple onchange="handleAttachmentUpload(event)" style="font-size: 13px;">
+          <div style="font-size: 11px; color: #888; margin-top: 4px;">Les pièces jointes sont stockées séparément du corps de l'article — ajouter une photo ne supprimera pas les tableaux auto-générés.</div>
+        </div>
       </div>
       <div class="modal-footer">
         <button class="btn-sm danger" id="articleDeleteBtn" style="display:none; margin-right: auto;" onclick="deleteArticle()">Supprimer</button>
@@ -682,6 +690,78 @@
     }
 
     // ---------- Sections ----------
+    // V 2.0.582 — Attachments state for the open article modal.
+    let articleAttachments = [];
+    const ATTACHMENT_MAX_BYTES = 1024 * 1024;     // 1 MB per file
+    const ATTACHMENT_MAX_COUNT = 5;
+    function fileToBase64(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          // strip "data:image/png;base64," prefix
+          const result = reader.result || '';
+          const idx = String(result).indexOf('base64,');
+          resolve(idx >= 0 ? String(result).slice(idx + 7) : String(result));
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+    async function handleAttachmentUpload(ev) {
+      const files = Array.from(ev.target.files || []);
+      ev.target.value = ''; // reset so same file re-picks
+      for (const file of files) {
+        if (articleAttachments.length >= ATTACHMENT_MAX_COUNT) {
+          toast(`Maximum ${ATTACHMENT_MAX_COUNT} pièces jointes par article`, 'error');
+          break;
+        }
+        if (file.size > ATTACHMENT_MAX_BYTES) {
+          toast(`"${file.name}" dépasse 1 Mo (${(file.size / 1024 / 1024).toFixed(1)} Mo)`, 'error');
+          continue;
+        }
+        try {
+          const data_base64 = await fileToBase64(file);
+          articleAttachments.push({
+            label: file.name,
+            filename: file.name,
+            content_type: file.type || 'application/octet-stream',
+            data_base64
+          });
+        } catch (err) {
+          toast(`Erreur de lecture de ${file.name}`, 'error');
+        }
+      }
+      renderAttachmentsList();
+    }
+    function removeAttachment(idx) {
+      articleAttachments.splice(idx, 1);
+      renderAttachmentsList();
+    }
+    function renderAttachmentsList() {
+      const list = document.getElementById('attachmentsList');
+      if (!list) return;
+      if (articleAttachments.length === 0) {
+        list.innerHTML = '<div style="color:#aaa;font-size:13px;font-style:italic;">Aucune pièce jointe.</div>';
+        return;
+      }
+      list.innerHTML = articleAttachments.map((a, i) => {
+        const isImage = (a.content_type || '').startsWith('image/');
+        const icon = isImage ? '🖼️' : (a.content_type === 'application/pdf' ? '📄' : '📎');
+        const sizeKB = a.data_base64 ? Math.round(a.data_base64.length * 0.75 / 1024) : 0;
+        return `<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:#f5f7fb;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;">
+          <span>${icon}</span>
+          <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtmlAttr(a.label)}</span>
+          <span style="color:#666;font-size:11px;">${sizeKB} Ko</span>
+          <button type="button" onclick="removeAttachment(${i})" style="background:transparent;border:none;color:#dc2626;cursor:pointer;font-size:16px;padding:0 4px;">✕</button>
+        </div>`;
+      }).join('');
+    }
+    function escapeHtmlAttr(s) {
+      return String(s == null ? '' : s)
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+        .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+    }
+
     // V 2.0.581 (Phase D) — One-click creation of 4 sub-folders under the
     // first section whose name contains "Résultat" (case-insensitive). If
     // no such parent exists, fall back to creating them at the top level.
@@ -1262,6 +1342,9 @@
           if (autoBadge && a.auto_generated) {
             autoBadge.style.display = '';
           }
+          // V 2.0.582 — Load attachments
+          articleAttachments = Array.isArray(a.attachments) ? a.attachments.slice() : [];
+          renderAttachmentsList();
         } catch (err) {
           toast(err.message, 'error');
         }
@@ -1289,6 +1372,9 @@
         // V 2.0.570 — Fresh article: there's no existing content to
         // protect, so any save sends content_html.
         articleInitialContentHtml = '';
+        // V 2.0.582 — No attachments on fresh article
+        articleAttachments = [];
+        renderAttachmentsList();
       }
       renderRelatedChips();
       refreshRelatedPicker();
@@ -1438,6 +1524,10 @@
         is_featured: document.getElementById('articleFeatured').checked,
         is_pinned: document.getElementById('articlePinned').checked,
         related_page_ids: relatedPageIds.slice(),
+        // V 2.0.582 — Attachments are stored separately from Quill content,
+        // so they round-trip safely even when content_html is omitted by
+        // the V 2.0.570 protection.
+        attachments: articleAttachments,
         status
       };
       // Only include content_html (and cover_image) when the admin

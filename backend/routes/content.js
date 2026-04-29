@@ -328,6 +328,7 @@ router.get('/pages/:id', authenticateToken, async (req, res) => {
               p.title, p.excerpt, p.content_html, p.content_type, p.status,
               p.is_featured, p.is_pinned, p.cover_image,
               p.auto_generated, p.source_type, p.source_ref_id,
+              p.attachments,
               p.author_user_id, u.username AS author_name,
               p.published_at, p.created_at, p.updated_at
          FROM content_pages p
@@ -509,6 +510,14 @@ router.put('/pages/:id', authenticateToken, requireContentEditor, async (req, re
     if (is_featured !== undefined) { sets.push(`is_featured = $${idx++}`); params.push(!!is_featured); }
     if (is_pinned !== undefined)   { sets.push(`is_pinned = $${idx++}`); params.push(!!is_pinned); }
     if (cover_image !== undefined) { sets.push(`cover_image = $${idx++}`); params.push(cover_image); }
+    // V 2.0.582 — Attachments stored as JSONB. Accept arrays only;
+    // anything else gets coerced to an empty array. Each entry must
+    // have label + filename + content_type + data_base64.
+    if (req.body && req.body.attachments !== undefined) {
+      const arr = Array.isArray(req.body.attachments) ? req.body.attachments : [];
+      sets.push(`attachments = $${idx++}::jsonb`);
+      params.push(JSON.stringify(arr));
+    }
 
     sets.push(`published_at = ${publishedAtExpr}`);
     sets.push(`updated_at = CURRENT_TIMESTAMP`);

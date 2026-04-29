@@ -477,11 +477,43 @@ function renderSeasonRankingTable(rankings) {
 // the per-event mode has been resolved and the section created, so the
 // template itself has zero side effects — pure string assembly.
 
+// V 2.0.582 — Visual podium block (used for finales). Three tiered cards
+// with medal SVGs, taller gold center column, club name underneath. All
+// inline CSS so it survives Quill's normalization and renders the same
+// in the Player App without needing extra stylesheet rules.
+function renderFinalePodiumVisual(podium) {
+  if (!Array.isArray(podium) || podium.length === 0) return '';
+  // Index by position so we can lay them out as silver-gold-bronze
+  const byPos = {};
+  for (const p of podium) byPos[p.position] = p;
+  const card = (p, height, medal, label, bg) => {
+    if (!p) return `<div style="flex:1;"></div>`;
+    const name = `${p.first_name || ''} ${p.last_name || ''}`.trim() || p.licence || '—';
+    const club = p.club_name || '';
+    return `
+      <div style="flex:1;display:flex;flex-direction:column;align-items:center;min-width:0;">
+        <div style="font-size:32px;line-height:1;margin-bottom:4px;">${medal}</div>
+        <div style="background:${bg};color:#ffffff;padding:14px 10px;border-radius:10px 10px 4px 4px;width:100%;text-align:center;min-height:${height}px;display:flex;flex-direction:column;justify-content:flex-end;box-shadow:0 4px 10px rgba(0,0,0,0.12);">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;opacity:0.85;margin-bottom:4px;">${label}</div>
+          <div style="font-weight:800;font-size:14px;line-height:1.2;word-break:break-word;">${esc(name)}</div>
+          ${club ? `<div style="font-size:10px;opacity:0.85;margin-top:4px;line-height:1.2;">${esc(club)}</div>` : ''}
+        </div>
+      </div>`;
+  };
+  return `
+    <div style="display:flex;align-items:flex-end;gap:8px;margin:16px 0 24px;padding:8px;">
+      ${card(byPos[2], 70, '🥈', '2ème', 'linear-gradient(135deg,#9ca3af,#6b7280)')}
+      ${card(byPos[1], 100, '🥇', '1er',  'linear-gradient(135deg,#fbbf24,#d97706)')}
+      ${card(byPos[3], 50, '🥉', '3ème', 'linear-gradient(135deg,#b45309,#78350f)')}
+    </div>`;
+}
+
 function renderResultsArticle(ctx) {
   const {
     tournamentLabel, categoryName, tournamentDate,
     podium, totalPlayers, deeplink,
-    fullResults, seasonRankings, seasonLabel
+    fullResults, seasonRankings, seasonLabel,
+    isFinale
   } = ctx;
 
   const winner = podium[0];
@@ -495,16 +527,21 @@ function renderResultsArticle(ctx) {
     ? `${winnerName} s'impose au ${tournamentLabel} ${categoryName}${totalPlayers ? ` devant ${Math.max(totalPlayers - 1, 0)} autres joueurs` : ''}. Découvrez le classement complet.`
     : `Les résultats du ${tournamentLabel} ${categoryName} sont disponibles. Découvrez le classement complet.`;
 
-  const podiumHtml = podium.length > 0
-    ? `<ol style="padding-left:22px;line-height:1.8;">
+  // V 2.0.582 — Finale articles get a richer visual podium (tiered cards
+  // with medals + colored bars). Qualifying tournaments keep the compact
+  // <ol> list so the article body stays short.
+  const podiumHtml = podium.length === 0
+    ? ''
+    : (isFinale
+      ? renderFinalePodiumVisual(podium)
+      : `<ol style="padding-left:22px;line-height:1.8;">
          ${podium.map(p => {
            const name = `${p.first_name || ''} ${p.last_name || ''}`.trim() || p.licence;
            const club = p.club_name ? ` <span style="color:#6b7280;">— ${esc(p.club_name)}</span>` : '';
            const medal = p.position === 1 ? '🥇 ' : p.position === 2 ? '🥈 ' : p.position === 3 ? '🥉 ' : '';
            return `<li><strong>${medal}${esc(name)}</strong>${club}</li>`;
          }).join('')}
-       </ol>`
-    : '';
+       </ol>`);
 
   const dateLine = tournamentDate
     ? `<p>Compétition jouée le <strong>${esc(tournamentDate)}</strong>.</p>`
@@ -757,7 +794,8 @@ async function publishAutoArticle(eventType, orgId, payload, options = {}) {
           fullResults,
           seasonRankings: seasonData.rankings,
           seasonLabel: seasonData.season,
-          deeplink: buildPlayerAppDeeplink(playerAppUrl, 'stats')
+          deeplink: buildPlayerAppDeeplink(playerAppUrl, 'stats'),
+          isFinale  // V 2.0.582 — drives visual podium rendering
         });
       } else if (eventType === 'FINALE_QUALIFICATION') {
         rendered = renderFinaleQualificationArticle({
@@ -1033,7 +1071,8 @@ async function renderResultsArticleForTournament(orgId, tournamentId) {
     fullResults,
     seasonRankings: seasonData.rankings,
     seasonLabel: seasonData.season,
-    deeplink: buildPlayerAppDeeplink(playerAppUrl, 'stats')
+    deeplink: buildPlayerAppDeeplink(playerAppUrl, 'stats'),
+    isFinale  // V 2.0.582 — drives visual podium when regenerated
   });
 }
 

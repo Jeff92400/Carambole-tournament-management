@@ -1145,6 +1145,11 @@ async function initializeDatabase() {
     await client.query(`ALTER TABLE content_pages ADD COLUMN IF NOT EXISTS game_mode VARCHAR(20)`);
     await client.query(`ALTER TABLE content_pages ADD COLUMN IF NOT EXISTS game_category VARCHAR(20)`);
     await client.query(`ALTER TABLE content_pages ADD COLUMN IF NOT EXISTS archived BOOLEAN DEFAULT FALSE`);
+    // V 2.0.582 — Attachments (photos, PDFs, documents) attached to an
+    // article SEPARATELY from the Quill body, so the auto-generated
+    // tables stay intact when an admin adds a player photo. JSONB array
+    // of {label, filename, content_type, data_base64}.
+    await client.query(`ALTER TABLE content_pages ADD COLUMN IF NOT EXISTS attachments JSONB DEFAULT '[]'::jsonb`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_content_pages_season ON content_pages(organization_id, season)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_content_pages_archived ON content_pages(organization_id, archived)`);
 
