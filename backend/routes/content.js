@@ -604,6 +604,12 @@ router.post('/pages/:id/regenerate', authenticateToken, requireContentEditor, as
     // touches Régénérer.
     const meta = await fetchEventFilterMetadata(page.source_type, page.source_ref_id);
 
+    // V 2.0.589 — If the client passes attachments in the request body,
+    // persist them alongside the regenerate so unsaved photo uploads
+    // are not lost when the admin clicks Régénérer instead of Publier.
+    const hasAttachments = req.body && Array.isArray(req.body.attachments);
+    const attachmentsJson = hasAttachments ? JSON.stringify(req.body.attachments) : null;
+
     await dbRun(
       `UPDATE content_pages
           SET title = $1,
@@ -612,9 +618,10 @@ router.post('/pages/:id/regenerate', authenticateToken, requireContentEditor, as
               season = COALESCE($4, season),
               game_mode = COALESCE($5, game_mode),
               game_category = COALESCE($6, game_category),
+              attachments = COALESCE($7::jsonb, attachments),
               updated_at = CURRENT_TIMESTAMP
-        WHERE id = $7`,
-      [rendered.title, rendered.excerpt, rendered.contentHtml, meta.season, meta.gameMode, meta.gameCategory, id]
+        WHERE id = $8`,
+      [rendered.title, rendered.excerpt, rendered.contentHtml, meta.season, meta.gameMode, meta.gameCategory, attachmentsJson, id]
     );
 
     res.json({

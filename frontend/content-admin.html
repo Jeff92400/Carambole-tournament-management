@@ -1677,9 +1677,12 @@
       const original = btn ? btn.textContent : '';
       if (btn) { btn.disabled = true; btn.textContent = '⏳ Régénération…'; }
       try {
+        // V 2.0.589 — Send current attachments so unsaved uploads are not
+        // lost when the admin clicks Régénérer instead of Publier.
         const resp = await fetch(`${API_URL}/content/pages/${editingArticleId}/regenerate`, {
           method: 'POST',
-          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ attachments: articleAttachments })
         });
         if (!resp.ok) {
           const err = await resp.json().catch(() => ({}));
