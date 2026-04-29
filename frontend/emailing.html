@@ -559,7 +559,10 @@
          it will host article + folder management in Phase 2. -->
     <div class="com-categories">
       <div class="com-category active" data-category="push">📲 Push</div>
-      <div class="com-category" data-category="articles">📰 Articles</div>
+      <!-- Articles pill is hidden until Phase 2 moves the article + folder
+           management UI into this page. Showing it now would force users
+           out to Paramètres, which is gated to admins only. -->
+      <div class="com-category" data-category="articles" style="display:none;">📰 Articles</div>
       <div class="com-category" data-category="emails">✉️ Emails</div>
       <div class="com-category" data-category="tools">🛠️ Outils</div>
       <div class="com-category" data-category="tracking">📜 Suivi</div>
