@@ -1464,6 +1464,10 @@
         document.getElementById('articleTitle').value = data.title || '';
         document.getElementById('articleExcerpt').value = data.excerpt || '';
         if (quillEditor) quillEditor.root.innerHTML = data.content_html || '';
+        // V 2.0.578 — Refresh the snapshot so the next Publier click does
+        // NOT see contentChanged=true (which would re-send the Quill-
+        // stripped HTML and overwrite the freshly regenerated tables).
+        articleInitialContentHtml = quillEditor ? quillEditor.root.innerHTML : '';
         toast('Article régénéré avec succès');
         // Refresh the list in the background so the date column updates.
         loadArticles();
