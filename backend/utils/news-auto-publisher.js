@@ -380,7 +380,13 @@ async function fetchSeasonRanking(tournamentId, orgId) {
 // primary-colored header. All styles are inline so the rendering does
 // not depend on the Player App stylesheet (defensive against editors
 // that strip <style> blocks or scope CSS).
-const TABLE_STYLE = 'border-collapse:collapse;width:100%;font-size:13px;border:2px solid #1F4788;margin:8px 0;';
+// V 2.0.575 — Wrap tables in a horizontally scrollable container so the
+// rendering on small screens (iPhone in the Player App) lets the user
+// pan instead of squashing cells. The table itself has a min-width so
+// it does not collapse below readable width.
+const TABLE_WRAP_OPEN = '<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;margin:8px 0;">';
+const TABLE_WRAP_CLOSE = '</div>';
+const TABLE_STYLE = 'border-collapse:collapse;width:100%;min-width:560px;font-size:13px;border:2px solid #1F4788;';
 const TH_STYLE = 'background:#1F4788;color:#ffffff;padding:8px 6px;font-size:12px;font-weight:700;text-align:left;border:1px solid #1F4788;';
 const TD_STYLE = 'border:1px solid #94a3b8;padding:7px 6px;';
 const TD_CLUB_STYLE = 'border:1px solid #94a3b8;padding:7px 6px;font-size:11px;color:#475569;';
@@ -410,7 +416,7 @@ function renderResultsTable(results) {
       <td style="${TD_STYLE}text-align:center;font-weight:700;">${esc(total)}</td>
     </tr>`;
   }).join('');
-  return `<table style="${TABLE_STYLE}">
+  return `${TABLE_WRAP_OPEN}<table style="${TABLE_STYLE}">
     <thead><tr>
       <th style="${TH_STYLE}">CLT</th>
       <th style="${TH_STYLE}">Joueur</th>
@@ -423,7 +429,7 @@ function renderResultsTable(results) {
       <th style="${TH_STYLE}">Total</th>
     </tr></thead>
     <tbody>${rows}</tbody>
-  </table>`;
+  </table>${TABLE_WRAP_CLOSE}`;
 }
 
 function renderSeasonRankingTable(rankings) {
@@ -448,7 +454,7 @@ function renderSeasonRankingTable(rankings) {
       <td style="${TD_STYLE}text-align:center;">${esc(moyenne)}</td>
     </tr>`;
   }).join('');
-  return `<table style="${TABLE_STYLE}">
+  return `${TABLE_WRAP_OPEN}<table style="${TABLE_STYLE}">
     <thead><tr>
       <th style="${TH_STYLE}">CLT</th>
       <th style="${TH_STYLE}">Joueur</th>
@@ -462,7 +468,7 @@ function renderSeasonRankingTable(rankings) {
       <th style="${TH_STYLE}">MGP</th>
     </tr></thead>
     <tbody>${rows}</tbody>
-  </table>`;
+  </table>${TABLE_WRAP_CLOSE}`;
 }
 
 // ---------- Templates ----------
