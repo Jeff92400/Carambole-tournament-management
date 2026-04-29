@@ -563,13 +563,14 @@
          it will host article + folder management in Phase 2. -->
     <div class="com-categories">
       <div class="com-category active" data-category="push">📲 Push</div>
-      <!-- V 2.0.576 (Phase 2) — Articles pill navigates straight to
-           content-admin.html, the dedicated article + folder manager.
-           Visible to admin + viewer roles only (CSS gating below). -->
-      <a id="articlesPillLink" href="content-admin.html" class="com-category com-category-articles" data-category="articles" style="text-decoration:none;display:none;">📰 Articles</a>
       <div class="com-category" data-category="emails">✉️ Emails</div>
       <div class="com-category" data-category="tools">🛠️ Outils</div>
       <div class="com-category" data-category="tracking">📜 Suivi</div>
+      <!-- V 2.0.576 (Phase 2) — Articles pill navigates straight to
+           content-admin.html. Visible to admin + viewer roles only.
+           V 2.0.580 — pushed to the far right via margin-left:auto so it
+           stands apart visually (it leaves Com Joueurs to a new page). -->
+      <a id="articlesPillLink" href="content-admin.html" class="com-category com-category-articles" data-category="articles" style="text-decoration:none;display:none;margin-left:auto;">📰 Articles</a>
     </div>
 
     <div class="tabs">
