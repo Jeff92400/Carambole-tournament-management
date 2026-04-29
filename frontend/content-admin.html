@@ -1396,7 +1396,11 @@
           document.getElementById('articleExcerpt').value = a.excerpt || '';
           document.getElementById('articleFeatured').checked = !!a.is_featured;
           document.getElementById('articlePinned').checked = !!a.is_pinned;
-          quillEditor.root.innerHTML = a.content_html || '';
+          // V 2.0.588 — Use Quill's API instead of direct innerHTML to
+          // avoid the Quill 1.3.7 emitter race in scroll.js (causes
+          // "Cannot read properties of undefined (reading 'emit')").
+          quillEditor.setText('', 'silent');
+          if (a.content_html) quillEditor.clipboard.dangerouslyPasteHTML(0, a.content_html, 'silent');
           // V 2.0.570 — Snapshot Quill's view of the content AFTER load.
           // We compare against quillEditor.root.innerHTML at save time
           // (Quill normalizes the DOM on load, so comparing against the
@@ -1446,7 +1450,7 @@
         document.getElementById('articleExcerpt').value = '';
         document.getElementById('articleFeatured').checked = false;
         document.getElementById('articlePinned').checked = false;
-        quillEditor.root.innerHTML = '';
+        quillEditor.setText('', 'silent');
         // V 2.0.570 — Fresh article: there's no existing content to
         // protect, so any save sends content_html.
         articleInitialContentHtml = '';
@@ -1686,7 +1690,10 @@
         // without having to reopen.
         document.getElementById('articleTitle').value = data.title || '';
         document.getElementById('articleExcerpt').value = data.excerpt || '';
-        if (quillEditor) quillEditor.root.innerHTML = data.content_html || '';
+        if (quillEditor) {
+          quillEditor.setText('', 'silent');
+          if (data.content_html) quillEditor.clipboard.dangerouslyPasteHTML(0, data.content_html, 'silent');
+        }
         // V 2.0.578 — Refresh the snapshot so the next Publier click does
         // NOT see contentChanged=true (which would re-send the Quill-
         // stripped HTML and overwrite the freshly regenerated tables).
