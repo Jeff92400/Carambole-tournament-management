@@ -467,7 +467,12 @@
   <div class="modal-backdrop" id="articleModal">
     <div class="modal">
       <div class="modal-header">
-        <h2 id="articleModalTitle">Nouvel article</h2>
+        <h2 id="articleModalTitle">
+          Nouvel article
+          <span id="articleAutoBadge" style="display: none; margin-left: 10px; padding: 4px 10px; background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; border-radius: 12px; font-size: 12px; font-weight: 700; vertical-align: middle;" title="Article créé automatiquement par l'application — utilisez le bouton 🔄 Régénérer pour reconstruire son contenu à partir des données actuelles">
+            🤖 Article auto-généré
+          </span>
+        </h2>
         <button class="modal-close" onclick="closeArticleModal()">&times;</button>
       </div>
       <div class="modal-body">
@@ -941,6 +946,7 @@
         <tr onclick="openArticleModal(${a.id})" style="cursor: pointer;">
           <td>
             <strong>${escapeHtml(a.title)}</strong>
+            ${a.auto_generated ? '<span title="Article créé automatiquement par l\'application — bouton 🔄 Régénérer disponible" style="display: inline-block; margin-left: 6px; padding: 2px 7px; background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; border-radius: 10px; font-size: 11px; font-weight: 700;">🤖 Auto</span>' : ''}
             ${a.is_featured ? '<span class="badge badge-featured" style="margin-left: 6px;">À la une</span>' : ''}
             ${a.is_pinned ? '<span class="badge badge-pinned" style="margin-left: 6px;">Punaise</span>' : ''}
             ${a.excerpt ? `<div style="color: #888; font-size: 12px; margin-top: 4px;">${escapeHtml(a.excerpt)}</div>` : ''}
@@ -1142,8 +1148,10 @@
       const title = document.getElementById('articleModalTitle');
       const deleteBtn = document.getElementById('articleDeleteBtn');
       const regenBtn = document.getElementById('articleRegenerateBtn');
-      // Default state for regenerate button (toggled per-article below)
+      const autoBadge = document.getElementById('articleAutoBadge');
+      // Default state for auto-generated UI (toggled per-article below)
       if (regenBtn) regenBtn.style.display = 'none';
+      if (autoBadge) autoBadge.style.display = 'none';
 
       modal.classList.add('visible');
       initEditor();
@@ -1177,6 +1185,14 @@
           // to reflect template updates (e.g., new tables added in V 2.0.563).
           if (regenBtn && a.auto_generated && a.source_type === 'RESULTS') {
             regenBtn.style.display = '';
+          }
+          // V 2.0.568 — Show the "🤖 Article auto-généré" badge in the
+          // modal header for ANY auto-generated article (even types
+          // we don't yet support Régénérer for). Lets admins know they
+          // can recreate the article via the auto-publisher rather
+          // than editing the body manually.
+          if (autoBadge && a.auto_generated) {
+            autoBadge.style.display = '';
           }
         } catch (err) {
           toast(err.message, 'error');

@@ -268,6 +268,7 @@ router.get('/pages', authenticateToken, async (req, res) => {
       `SELECT p.id, p.section_id, s.name AS section_name, s.icon AS section_icon,
               p.title, p.excerpt, p.content_type, p.status,
               p.is_featured, p.is_pinned,
+              p.auto_generated, p.source_type,
               p.author_user_id, u.username AS author_name,
               p.published_at, p.created_at, p.updated_at
          FROM content_pages p
