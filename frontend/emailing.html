@@ -7142,7 +7142,9 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
             const option = document.createElement('option');
             option.value = t.id;
             const date = t.tournament_date ? new Date(t.tournament_date).toLocaleDateString('fr-FR') : '';
-            option.textContent = `${t.display_name} - ${date} (${t.player_count} joueurs)`;
+            const tLabel = t.is_finale ? 'Finale' : (t.tournament_number ? `T${t.tournament_number}` : '');
+            const prefix = tLabel ? `${tLabel} — ` : '';
+            option.textContent = `${prefix}${t.display_name} - ${date} (${t.player_count} joueurs)`;
             option.dataset.tournament = JSON.stringify(t);
             optgroup.appendChild(option);
           });
@@ -7185,7 +7187,9 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
         tournamentResults = data.results || [];
 
         // Update info section
-        document.getElementById('tournamentInfoTitle').textContent = tournament.display_name || '-';
+        const titleLabel = tournament.is_finale ? 'Finale' : (tournament.tournament_number ? `T${tournament.tournament_number}` : '');
+        const titlePrefix = titleLabel ? `${titleLabel} — ` : '';
+        document.getElementById('tournamentInfoTitle').textContent = `${titlePrefix}${tournament.display_name || '-'}`;
         document.getElementById('tournamentInfoDate').textContent = tournament.tournament_date ? new Date(tournament.tournament_date).toLocaleDateString('fr-FR') : '-';
         document.getElementById('tournamentInfoLieu').textContent = (tournament.location || '-') + (tournament.location_2 ? ' / ' + tournament.location_2 : '');
         document.getElementById('tournamentInfoMode').textContent = tournament.game_type || '-';
