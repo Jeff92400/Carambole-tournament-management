@@ -246,7 +246,13 @@ router.delete('/sections/:id', authenticateToken, requireContentEditor, async (r
 router.get('/pages', authenticateToken, async (req, res) => {
   try {
     const orgId = req.user.organizationId || null;
-    const { status, section_id, content_type, featured, pinned } = req.query;
+    // V 2.0.581 — New filters: season, mode, category, archived. NULL
+    // values in those columns mean "always visible" so manual articles
+    // are never filtered out.
+    const {
+      status, section_id, content_type, featured, pinned,
+      season, game_mode, game_category, archived
+    } = req.query;
 
     const where = [`($1::int IS NULL OR p.organization_id = $1)`];
     const params = [orgId];
@@ -267,11 +273,33 @@ router.get('/pages', authenticateToken, async (req, res) => {
     if (featured === 'true') where.push(`p.is_featured = TRUE`);
     if (pinned === 'true') where.push(`p.is_pinned = TRUE`);
 
+    // Season / mode / category — NULL columns are kept (manual articles).
+    if (season) {
+      where.push(`(p.season IS NULL OR p.season = $${idx++})`);
+      params.push(season);
+    }
+    if (game_mode) {
+      where.push(`(p.game_mode IS NULL OR p.game_mode = $${idx++})`);
+      params.push(game_mode);
+    }
+    if (game_category) {
+      where.push(`(p.game_category IS NULL OR p.game_category = $${idx++})`);
+      params.push(game_category);
+    }
+    // Archived: default false. Pass archived=true to include archived
+    // articles, archived=only to fetch only archived.
+    if (archived === 'only') {
+      where.push(`p.archived = TRUE`);
+    } else if (archived !== 'true') {
+      where.push(`(p.archived IS NULL OR p.archived = FALSE)`);
+    }
+
     const rows = await dbAll(
       `SELECT p.id, p.section_id, s.name AS section_name, s.icon AS section_icon,
               p.title, p.excerpt, p.content_type, p.status,
               p.is_featured, p.is_pinned,
               p.auto_generated, p.source_type,
+              p.season, p.game_mode, p.game_category, p.archived,
               p.author_user_id, u.username AS author_name,
               p.published_at, p.created_at, p.updated_at
          FROM content_pages p
@@ -560,17 +588,24 @@ router.post('/pages/:id/regenerate', authenticateToken, requireContentEditor, as
       return res.status(400).json({ error: 'source_ref_id manquant — impossible de régénérer.' });
     }
 
-    const { renderResultsArticleForTournament } = require('../utils/news-auto-publisher');
+    const { renderResultsArticleForTournament, fetchEventFilterMetadata } = require('../utils/news-auto-publisher');
     const rendered = await renderResultsArticleForTournament(orgId, page.source_ref_id);
+    // V 2.0.581 — Backfill filter metadata when regenerating, so older
+    // articles get season/mode/category populated as soon as the admin
+    // touches Régénérer.
+    const meta = await fetchEventFilterMetadata(page.source_type, page.source_ref_id);
 
     await dbRun(
       `UPDATE content_pages
           SET title = $1,
               excerpt = $2,
               content_html = $3,
+              season = COALESCE($4, season),
+              game_mode = COALESCE($5, game_mode),
+              game_category = COALESCE($6, game_category),
               updated_at = CURRENT_TIMESTAMP
-        WHERE id = $4`,
-      [rendered.title, rendered.excerpt, rendered.contentHtml, id]
+        WHERE id = $7`,
+      [rendered.title, rendered.excerpt, rendered.contentHtml, meta.season, meta.gameMode, meta.gameCategory, id]
     );
 
     res.json({

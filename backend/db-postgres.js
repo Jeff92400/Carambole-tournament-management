@@ -1137,6 +1137,17 @@ async function initializeDatabase() {
         WHERE auto_generated = TRUE
     `);
 
+    // V 2.0.581 — Filter columns: season, game_mode, game_category. Auto
+    // populated by news-auto-publisher when the article is generated from a
+    // tournament event; NULL for manual articles (they always show in any
+    // filter). Plus an `archived` flag set by the per-org auto-archive job.
+    await client.query(`ALTER TABLE content_pages ADD COLUMN IF NOT EXISTS season VARCHAR(20)`);
+    await client.query(`ALTER TABLE content_pages ADD COLUMN IF NOT EXISTS game_mode VARCHAR(20)`);
+    await client.query(`ALTER TABLE content_pages ADD COLUMN IF NOT EXISTS game_category VARCHAR(20)`);
+    await client.query(`ALTER TABLE content_pages ADD COLUMN IF NOT EXISTS archived BOOLEAN DEFAULT FALSE`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_content_pages_season ON content_pages(organization_id, season)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_content_pages_archived ON content_pages(organization_id, archived)`);
+
     // Content links — cross-links between articles (related content)
     await client.query(`
       CREATE TABLE IF NOT EXISTS content_links (

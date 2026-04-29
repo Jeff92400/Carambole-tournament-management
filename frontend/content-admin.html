@@ -429,6 +429,16 @@
         <ul class="section-tree" id="sectionsList">
           <li class="active" data-section-id="">Toutes les sections</li>
         </ul>
+        <!-- V 2.0.581 (Phase D) — One-click setup that creates 4 mode
+             sub-sections (Libre / Bande / 3 Bandes / Cadre) under the
+             Résultats parent. Auto-publisher routes results articles to
+             the matching sub-section if it exists. Opt-in. -->
+        <button class="btn-sm secondary" id="quickModeFoldersBtn"
+                onclick="quickCreateModeFolders()"
+                style="margin-top:12px;width:100%;background:#fef3c7;color:#92400e;border:1px solid #fcd34d;font-size:11px;padding:6px;"
+                title="Crée 4 sous-dossiers Libre / Bande / 3 Bandes / Cadre sous Résultats. Les futurs articles auto-générés seront routés vers le bon sous-dossier selon le mode du tournoi.">
+          ✨ Créer les sous-dossiers par mode de jeu
+        </button>
       </div>
 
       <!-- Articles panel -->
@@ -672,6 +682,51 @@
     }
 
     // ---------- Sections ----------
+    // V 2.0.581 (Phase D) — One-click creation of 4 sub-folders under the
+    // first section whose name contains "Résultat" (case-insensitive). If
+    // no such parent exists, fall back to creating them at the top level.
+    // Idempotent: existing sub-folders with the same name are skipped.
+    const MODE_SUBFOLDERS = [
+      { name: 'Libre',     icon: '🎱' },
+      { name: 'Bande',     icon: '🎯' },
+      { name: '3 Bandes',  icon: '🔁' },
+      { name: 'Cadre',     icon: '⬛' }
+    ];
+    async function quickCreateModeFolders() {
+      if (!confirm('Créer 4 sous-dossiers (Libre / Bande / 3 Bandes / Cadre) sous le dossier "Résultats" ?\n\n'
+                 + 'Les articles auto-générés (résultats de tournois) seront ensuite routés automatiquement vers le sous-dossier correspondant au mode de jeu.\n\n'
+                 + 'Si un sous-dossier porte déjà ce nom, il sera ignoré.')) return;
+      const parent = (sectionsCache || []).find(s =>
+        !s.parent_id && /r[ée]sultat/i.test(s.name || '')
+      );
+      const parentId = parent ? parent.id : null;
+      let created = 0;
+      let skipped = 0;
+      for (const sub of MODE_SUBFOLDERS) {
+        // Skip if a section with the same name already exists under this parent
+        const exists = (sectionsCache || []).some(s =>
+          (s.name || '').trim().toLowerCase() === sub.name.toLowerCase() &&
+          (parentId ? s.parent_id === parentId : !s.parent_id)
+        );
+        if (exists) { skipped++; continue; }
+        try {
+          const resp = await fetch(`${API_URL}/content/sections`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name: sub.name,
+              parent_id: parentId,
+              icon: sub.icon,
+              sort_order: created * 10
+            })
+          });
+          if (resp.ok) created++;
+        } catch (e) { /* continue */ }
+      }
+      await loadSections();
+      toast(`Sous-dossiers : ${created} créés, ${skipped} déjà existants`);
+    }
+
     async function loadSections() {
       try {
         const resp = await fetch(`${API_URL}/content/sections`, {

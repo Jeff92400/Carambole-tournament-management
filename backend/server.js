@@ -1986,6 +1986,50 @@ app.listen(PORT, '0.0.0.0', () => {
   }, 3600000); // check every hour
   console.log('[Notification History Cleanup] Scheduler enabled - runs weekly on Sunday 3 AM Paris time (90-day retention)');
 
+  // V 2.0.581 — Auto-archive old articles. Per-org setting
+  // `news_archive_months` (default 6) controls how old an article can be
+  // before it is flipped to archived=TRUE. Manual articles are archived
+  // by the same rule. Runs once at 4 AM Paris time daily.
+  async function runArticleArchiveJob() {
+    try {
+      const appSettings = require('./utils/app-settings');
+      const orgsResult = await db.query(`SELECT id FROM organizations WHERE is_active = TRUE`);
+      let totalArchived = 0;
+      for (const org of orgsResult.rows) {
+        const orgId = org.id;
+        let monthsRaw = await appSettings.getOrgSetting(orgId, 'news_archive_months');
+        const months = parseInt(monthsRaw, 10);
+        // 0 / NaN / negative → archive disabled for this org
+        if (!Number.isFinite(months) || months <= 0) continue;
+        const result = await db.query(
+          `UPDATE content_pages
+              SET archived = TRUE, updated_at = CURRENT_TIMESTAMP
+            WHERE organization_id = $1
+              AND (archived IS NULL OR archived = FALSE)
+              AND COALESCE(published_at, created_at) < NOW() - ($2 || ' months')::interval`,
+          [orgId, String(months)]
+        );
+        if (result.rowCount > 0) {
+          console.log(`[Article Archive] org=${orgId} archived ${result.rowCount} article(s) older than ${months} months`);
+          totalArchived += result.rowCount;
+        }
+      }
+      if (totalArchived === 0) {
+        console.log('[Article Archive] no articles to archive');
+      }
+    } catch (err) {
+      console.error('[Article Archive] job failed:', err.message);
+    }
+  }
+  setInterval(async () => {
+    const now = new Date();
+    const parisNow = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
+    if (parisNow.getHours() === 4 && parisNow.getMinutes() < 60) {
+      await runArticleArchiveJob();
+    }
+  }, 3600000); // hourly tick, fires once at 4 AM Paris
+  console.log('[Article Archive] Scheduler enabled - runs daily at 4 AM Paris time (per-org news_archive_months, default 6)');
+
   // Auto-sync contacts on startup (after a short delay to ensure DB is ready)
   setTimeout(async () => {
     try {

@@ -609,6 +609,47 @@ function renderNewTournamentArticle(ctx) {
 
 // ---------- Main entry point ----------
 
+// V 2.0.581 — Derive season + game_mode + game_category for the article
+// row, used by Player App filters. Best effort: returns nulls on failure
+// so a metadata lookup error never blocks article publication.
+async function fetchEventFilterMetadata(eventType, sourceRefId) {
+  if (!sourceRefId) return { season: null, gameMode: null, gameCategory: null };
+  try {
+    if (eventType === 'RESULTS') {
+      const r = await db.query(
+        `SELECT t.season, c.game_type AS game_mode, c.level AS game_category
+           FROM tournaments t
+           LEFT JOIN categories c ON c.id = t.category_id
+          WHERE t.id = $1`,
+        [sourceRefId]
+      );
+      const row = r.rows[0] || {};
+      return {
+        season: row.season || null,
+        gameMode: row.game_mode || null,
+        gameCategory: row.game_category || null
+      };
+    }
+    if (eventType === 'NEW_TOURNAMENT' || eventType === 'FINALE_QUALIFICATION') {
+      const r = await db.query(
+        `SELECT saison AS season, mode AS game_mode, categorie AS game_category
+           FROM tournoi_ext
+          WHERE tournoi_id = $1`,
+        [sourceRefId]
+      );
+      const row = r.rows[0] || {};
+      return {
+        season: row.season || null,
+        gameMode: row.game_mode || null,
+        gameCategory: row.game_category || null
+      };
+    }
+  } catch (err) {
+    console.error('[news-auto-publisher] fetchEventFilterMetadata failed:', err.message);
+  }
+  return { season: null, gameMode: null, gameCategory: null };
+}
+
 // publishAutoArticle(eventType, orgId, payload, options) — safe,
 // idempotent, fire-and-forget. Returns a small diagnostic object;
 // callers can ignore it entirely.
@@ -657,8 +698,35 @@ async function publishAutoArticle(eventType, orgId, payload, options = {}) {
     // V 2.0.562 — uses the 3-tier resolver: admin override → named
     // auto-create → org's first section. See resolveSectionIdForEvent.
     const playerAppUrl = await getPlayerAppBaseUrl(orgId);
-    const sectionId = await resolveSectionIdForEvent(orgId, eventType);
+    let sectionId = await resolveSectionIdForEvent(orgId, eventType);
     const contentType = EVENT_CONTENT_TYPE[eventType] || 'actualite';
+
+    // V 2.0.581 — Fetch filter metadata once: used both for mode-based
+    // sub-folder routing (Phase D) and for INSERT column population.
+    const filterMeta = await fetchEventFilterMetadata(eventType, sourceRefId);
+
+    // V 2.0.581 (Phase D) — If the resolved parent section has a
+    // sub-section whose name matches the tournament's mode (Libre /
+    // Bande / 3 Bandes / Cadre), route the article there instead. This
+    // is the auto-routing behaviour enabled by the "Créer les sous-
+    // dossiers par mode de jeu" quick setup. Comparison is case- and
+    // space-insensitive ("3 Bandes" vs "3BANDES" both match).
+    try {
+      const mode = (filterMeta.gameMode || '').toUpperCase().replace(/\s+/g, '');
+      if (sectionId && mode) {
+        const subResult = await db.query(
+          `SELECT id, name FROM content_sections
+            WHERE parent_id = $1 AND ($2::int IS NULL OR organization_id = $2)`,
+          [sectionId, orgId]
+        );
+        for (const s of (subResult.rows || [])) {
+          const subNorm = (s.name || '').toUpperCase().replace(/\s+/g, '');
+          if (subNorm === mode) { sectionId = s.id; break; }
+        }
+      }
+    } catch (routingErr) {
+      console.error('[news-auto-publisher] mode-subfolder routing failed:', routingErr.message);
+    }
 
     // Render the template for this event type. If a template throws,
     // we log and bail — no article is better than a broken article.
@@ -738,8 +806,9 @@ async function publishAutoArticle(eventType, orgId, payload, options = {}) {
         `INSERT INTO content_pages
            (organization_id, section_id, title, content_html, excerpt,
             content_type, status, is_featured, is_pinned, author_user_id,
-            published_at, cover_image, auto_generated, source_type, source_ref_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, FALSE, FALSE, NULL, $8, NULL, TRUE, $9, $10)
+            published_at, cover_image, auto_generated, source_type, source_ref_id,
+            season, game_mode, game_category)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, FALSE, FALSE, NULL, $8, NULL, TRUE, $9, $10, $11, $12, $13)
          RETURNING id`,
         [
           orgId,
@@ -751,7 +820,10 @@ async function publishAutoArticle(eventType, orgId, payload, options = {}) {
           status,
           publishedAt,
           eventType,
-          sourceRefId
+          sourceRefId,
+          filterMeta.season,
+          filterMeta.gameMode,
+          filterMeta.gameCategory
         ]
       );
       const articleId = result.rows[0]?.id;
@@ -970,6 +1042,7 @@ module.exports = {
   promoteDraftOrCreate,
   fireResultsArticleDraft,
   renderResultsArticleForTournament,
+  fetchEventFilterMetadata,
   // Exported for tests / admin UI preview only.
   _internals: {
     EVENT_SECTION_MAP,
