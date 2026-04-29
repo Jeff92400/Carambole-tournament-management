@@ -715,7 +715,36 @@
     // V 2.0.586 — Resize an image File via canvas. Returns
     // { dataBase64, contentType } where dataBase64 is the base64 body
     // without the "data:...;base64," prefix.
-    function resizeImageFile(file, maxWidth, quality) {
+    // V 2.0.587 — Use createImageBitmap when available (handles HEIC via
+    // browser pipeline on iOS Safari, more forgiving than <img>). Falls
+    // back to <img> + URL.createObjectURL on older browsers.
+    async function resizeImageFile(file, maxWidth, quality) {
+      let bitmap = null;
+      // Try modern path first
+      if (typeof createImageBitmap === 'function') {
+        try {
+          bitmap = await createImageBitmap(file);
+        } catch (e) {
+          console.warn('[attachments] createImageBitmap failed, falling back to <img>:', e.message);
+          bitmap = null;
+        }
+      }
+      if (bitmap) {
+        try {
+          const ratio = bitmap.width > maxWidth ? maxWidth / bitmap.width : 1;
+          const w = Math.round(bitmap.width * ratio);
+          const h = Math.round(bitmap.height * ratio);
+          const canvas = document.createElement('canvas');
+          canvas.width = w; canvas.height = h;
+          canvas.getContext('2d').drawImage(bitmap, 0, 0, w, h);
+          const dataUrl = canvas.toDataURL('image/jpeg', quality);
+          const idx = dataUrl.indexOf('base64,');
+          return { dataBase64: idx >= 0 ? dataUrl.slice(idx + 7) : dataUrl, contentType: 'image/jpeg' };
+        } finally {
+          bitmap.close && bitmap.close();
+        }
+      }
+      // Fallback path
       return new Promise((resolve, reject) => {
         const url = URL.createObjectURL(file);
         const img = new Image();
@@ -726,18 +755,14 @@
             const h = Math.round(img.height * ratio);
             const canvas = document.createElement('canvas');
             canvas.width = w; canvas.height = h;
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(img, 0, 0, w, h);
+            canvas.getContext('2d').drawImage(img, 0, 0, w, h);
             const dataUrl = canvas.toDataURL('image/jpeg', quality);
             URL.revokeObjectURL(url);
             const idx = dataUrl.indexOf('base64,');
-            resolve({
-              dataBase64: idx >= 0 ? dataUrl.slice(idx + 7) : dataUrl,
-              contentType: 'image/jpeg'
-            });
+            resolve({ dataBase64: idx >= 0 ? dataUrl.slice(idx + 7) : dataUrl, contentType: 'image/jpeg' });
           } catch (e) { URL.revokeObjectURL(url); reject(e); }
         };
-        img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Image load failed')); };
+        img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('format non supporté (HEIC ?)')); };
         img.src = url;
       });
     }
@@ -757,10 +782,18 @@
           const isImage = (file.type || '').startsWith('image/');
           let data_base64, content_type;
           if (isImage && file.size > ATTACHMENT_RESIZE_THRESHOLD) {
-            const resized = await resizeImageFile(file, ATTACHMENT_MAX_IMAGE_WIDTH, ATTACHMENT_JPEG_QUALITY);
-            data_base64 = resized.dataBase64;
-            content_type = resized.contentType;
-            console.log(`[attachments] resized "${file.name}": ${(file.size/1024).toFixed(0)} Ko → ${(data_base64.length*0.75/1024).toFixed(0)} Ko`);
+            try {
+              const resized = await resizeImageFile(file, ATTACHMENT_MAX_IMAGE_WIDTH, ATTACHMENT_JPEG_QUALITY);
+              data_base64 = resized.dataBase64;
+              content_type = resized.contentType;
+              console.log(`[attachments] resized "${file.name}": ${(file.size/1024).toFixed(0)} Ko → ${(data_base64.length*0.75/1024).toFixed(0)} Ko`);
+            } catch (resizeErr) {
+              // V 2.0.587 — If the resize pipeline can't decode (HEIC etc.),
+              // fall back to uploading the raw file IF it's under the cap.
+              console.warn('[attachments] resize failed, uploading raw:', resizeErr);
+              data_base64 = await fileToBase64(file);
+              content_type = file.type || 'application/octet-stream';
+            }
           } else {
             data_base64 = await fileToBase64(file);
             content_type = file.type || 'application/octet-stream';
@@ -772,7 +805,8 @@
             data_base64
           });
         } catch (err) {
-          toast(`Erreur de lecture de ${file.name}`, 'error');
+          console.error('[attachments] upload failed:', err);
+          toast(`${file.name} : ${err && err.message ? err.message : 'erreur de lecture'}`, 'error');
         }
       }
       renderAttachmentsList();
