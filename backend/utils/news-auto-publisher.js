@@ -500,11 +500,13 @@ function renderFinalePodiumVisual(podium) {
         </div>
       </div>`;
   };
+  // Olympic podium: gold tallest in the middle, silver + bronze same
+  // height on either side.
   return `
     <div style="display:flex;align-items:flex-end;gap:8px;margin:16px 0 24px;padding:8px;">
       ${card(byPos[2], 70, '🥈', '2ème', 'linear-gradient(135deg,#9ca3af,#6b7280)')}
-      ${card(byPos[1], 100, '🥇', '1er',  'linear-gradient(135deg,#fbbf24,#d97706)')}
-      ${card(byPos[3], 50, '🥉', '3ème', 'linear-gradient(135deg,#b45309,#78350f)')}
+      ${card(byPos[1], 110, '🥇', '1er',  'linear-gradient(135deg,#fbbf24,#d97706)')}
+      ${card(byPos[3], 70, '🥉', '3ème', 'linear-gradient(135deg,#b45309,#78350f)')}
     </div>`;
 }
 
