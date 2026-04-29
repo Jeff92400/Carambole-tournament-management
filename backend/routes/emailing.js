@@ -1987,7 +1987,8 @@ router.post('/send-finale-results', authenticateToken, async (req, res) => {
             tournamentId,
             tournamentLabel: 'Finale',
             categoryName: tournament.display_name,
-            tournamentDate: tournamentDateStr
+            tournamentDate: tournamentDateStr,
+            isFinale: true
           });
         } catch (promoteErr) {
           console.error('[FINALE_RESULTS] news-auto-publisher promote error:', promoteErr.message);

@@ -903,9 +903,16 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
                             // News auto-publisher — create a draft article for this
                             // tournament in the Player App news feed. Uses the shared
                             // helper so template/logic stays in one place.
+                            // V 2.0.566 — detect finale so the draft uses the correct
+                            // 'Finale' label and skips the season ranking table.
                             (async () => {
                               try {
                                 const { fireResultsArticleDraft } = require('../utils/news-auto-publisher');
+                                let isFinaleArticle = false;
+                                try {
+                                  const finaleNum = await getFinaleTournamentNumber(orgId);
+                                  isFinaleArticle = finaleNum != null && tournamentInfo.tournament_number === finaleNum;
+                                } catch (_e) { /* default to non-finale */ }
                                 await fireResultsArticleDraft(orgId, finalTournamentId, tournamentInfo, async (tId) => {
                                   const row = await new Promise((resolve, reject) => {
                                     db.get(`SELECT tournament_date FROM tournaments WHERE id = $1`, [tId], (e, r) => e ? reject(e) : resolve(r));
@@ -914,7 +921,7 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
                                     return new Date(row.tournament_date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
                                   }
                                   return null;
-                                });
+                                }, isFinaleArticle);
                               } catch (autoArticleErr) {
                                 console.error('[RESULTS] auto-publisher error:', autoArticleErr.message);
                               }
@@ -5152,16 +5159,23 @@ router.post('/import-matches', authenticateToken, upload.array('files', 20), asy
         // News auto-publisher — create a draft article for this tournament
         // in the Player App news feed. Uses the shared helper so template
         // and logic stay in one place.
+        // V 2.0.566 — detect finale so the draft uses 'Finale' label and
+        // skips the season ranking table.
         (async () => {
           try {
             const { fireResultsArticleDraft } = require('../utils/news-auto-publisher');
+            let isFinaleArticle = false;
+            try {
+              const finaleNum = await getFinaleTournamentNumber(orgId);
+              isFinaleArticle = finaleNum != null && tournamentInfo.tournament_number === finaleNum;
+            } catch (_e) { /* default to non-finale */ }
             await fireResultsArticleDraft(orgId, tournamentId, tournamentInfo, async (tId) => {
               const row = await dbGetAsync(`SELECT tournament_date FROM tournaments WHERE id = $1`, [tId]);
               if (row?.tournament_date) {
                 return new Date(row.tournament_date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
               }
               return null;
-            });
+            }, isFinaleArticle);
           } catch (autoArticleErr) {
             console.error('[RESULTS] auto-publisher error (E2i):', autoArticleErr.message);
           }

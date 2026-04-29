@@ -654,13 +654,19 @@ async function publishAutoArticle(eventType, orgId, payload, options = {}) {
     try {
       if (eventType === 'RESULTS') {
         // V 2.0.563 — Enrich with podium + count + full results table
-        // + season ranking. All fetches in parallel (cheap, single
-        // database round-trip each, the article render waits for all).
+        // + season ranking.
+        // V 2.0.566 — payload.isFinale skips the season ranking table:
+        // a finale doesn't extend the season's running totals the same
+        // way the qualifying journées do, so the second table would be
+        // redundant or confusing for finale articles.
+        const isFinale = !!payload.isFinale;
         const [podium, totalPlayers, fullResults, seasonData] = await Promise.all([
           fetchPodium(payload.tournamentId),
           fetchParticipantCount(payload.tournamentId),
           fetchTournamentResults(payload.tournamentId),
-          fetchSeasonRanking(payload.tournamentId, orgId)
+          isFinale
+            ? Promise.resolve({ rankings: [], season: null, categoryId: null })
+            : fetchSeasonRanking(payload.tournamentId, orgId)
         ]);
         rendered = renderResultsArticle({
           tournamentLabel: payload.tournamentLabel || 'tournoi',
@@ -834,11 +840,17 @@ async function promoteDraftOrCreate(eventType, orgId, payload) {
 // helper (legacy uses callback-wrapped db.get, E2i uses dbGetAsync).
 //
 // Returns a diagnostic object; never throws.
-async function fireResultsArticleDraft(orgId, tournamentId, tournamentInfo, fetchDateFn) {
+async function fireResultsArticleDraft(orgId, tournamentId, tournamentInfo, fetchDateFn, isFinale = false) {
   try {
-    const tournamentLabel = tournamentInfo.tournament_number
-      ? `T${tournamentInfo.tournament_number}`
-      : 'Tournoi';
+    // V 2.0.566 — caller passes isFinale=true for finale tournaments so
+    // the article uses 'Finale' as label and skips the season ranking
+    // table. Defaults to false for backward compatibility — existing
+    // callers continue building 'TN' labels for regular qualifying days.
+    const tournamentLabel = isFinale
+      ? 'Finale'
+      : (tournamentInfo.tournament_number
+          ? `T${tournamentInfo.tournament_number}`
+          : 'Tournoi');
 
     let tournamentDate = '';
     if (typeof fetchDateFn === 'function') {
@@ -852,7 +864,8 @@ async function fireResultsArticleDraft(orgId, tournamentId, tournamentInfo, fetc
       tournamentId,
       tournamentLabel,
       categoryName: tournamentInfo.category_name,
-      tournamentDate
+      tournamentDate,
+      isFinale
     }, { forceStatus: 'draft' });
   } catch (err) {
     console.error('[RESULTS] auto-publisher error:', err.message);
@@ -880,7 +893,22 @@ async function renderResultsArticleForTournament(orgId, tournamentId) {
     throw new Error(`Tournoi ${tournamentId} introuvable`);
   }
   const t = tMeta.rows[0];
-  const tournamentLabel = t.tournament_number ? `T${t.tournament_number}` : 'Tournoi';
+
+  // V 2.0.566 — detect finale via the per-org finale tournament_number
+  // setting so Régénérer mirrors the same finale-vs-qualifying behavior
+  // as the auto-publish path.
+  let isFinale = false;
+  try {
+    const { getFinaleTournamentNumber } = require('../routes/settings');
+    const finaleNumber = await getFinaleTournamentNumber(orgId);
+    isFinale = finaleNumber != null && t.tournament_number === finaleNumber;
+  } catch (e) {
+    // Settings helper unavailable — default to non-finale, same as before.
+  }
+
+  const tournamentLabel = isFinale
+    ? 'Finale'
+    : (t.tournament_number ? `T${t.tournament_number}` : 'Tournoi');
   const categoryName = `${t.game_type || ''} ${t.level || ''}`.trim();
   const tournamentDate = t.tournament_date
     ? formatLongDate(t.tournament_date)
@@ -891,7 +919,9 @@ async function renderResultsArticleForTournament(orgId, tournamentId) {
     fetchPodium(tournamentId),
     fetchParticipantCount(tournamentId),
     fetchTournamentResults(tournamentId),
-    fetchSeasonRanking(tournamentId, orgId)
+    isFinale
+      ? Promise.resolve({ rankings: [], season: null, categoryId: null })
+      : fetchSeasonRanking(tournamentId, orgId)
   ]);
   return renderResultsArticle({
     tournamentLabel,
