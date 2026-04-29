@@ -477,36 +477,32 @@ function renderSeasonRankingTable(rankings) {
 // the per-event mode has been resolved and the section created, so the
 // template itself has zero side effects — pure string assembly.
 
-// V 2.0.582 — Visual podium block (used for finales). Three tiered cards
-// with medal SVGs, taller gold center column, club name underneath. All
-// inline CSS so it survives Quill's normalization and renders the same
-// in the Player App without needing extra stylesheet rules.
+// V 2.0.585 — Olympic podium with fixed-height colored bars. Player text
+// (medal, name, club) sits ABOVE the colored bar so long club names do
+// not stretch the bar — preserving the gold-tallest, silver=bronze
+// shape. All 3 columns align at the bottom (flex-end) so the floor is
+// flat.
 function renderFinalePodiumVisual(podium) {
   if (!Array.isArray(podium) || podium.length === 0) return '';
-  // Index by position so we can lay them out as silver-gold-bronze
   const byPos = {};
   for (const p of podium) byPos[p.position] = p;
-  const card = (p, height, medal, label, bg) => {
+  const column = (p, barHeight, medal, label, bg) => {
     if (!p) return `<div style="flex:1;"></div>`;
     const name = `${p.first_name || ''} ${p.last_name || ''}`.trim() || p.licence || '—';
     const club = p.club_name || '';
     return `
-      <div style="flex:1;display:flex;flex-direction:column;align-items:center;min-width:0;">
+      <div style="flex:1;display:flex;flex-direction:column;align-items:center;min-width:0;text-align:center;">
         <div style="font-size:32px;line-height:1;margin-bottom:4px;">${medal}</div>
-        <div style="background:${bg};color:#ffffff;padding:14px 10px;border-radius:10px 10px 4px 4px;width:100%;text-align:center;min-height:${height}px;display:flex;flex-direction:column;justify-content:flex-end;box-shadow:0 4px 10px rgba(0,0,0,0.12);">
-          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;opacity:0.85;margin-bottom:4px;">${label}</div>
-          <div style="font-weight:800;font-size:14px;line-height:1.2;word-break:break-word;">${esc(name)}</div>
-          ${club ? `<div style="font-size:10px;opacity:0.85;margin-top:4px;line-height:1.2;">${esc(club)}</div>` : ''}
-        </div>
+        <div style="font-weight:800;font-size:13px;line-height:1.2;color:#1f2937;padding:0 2px;word-break:break-word;">${esc(name)}</div>
+        <div style="font-size:10px;color:#6b7280;line-height:1.2;min-height:26px;margin:4px 2px 6px;word-break:break-word;">${esc(club)}</div>
+        <div style="background:${bg};color:#ffffff;width:100%;height:${barHeight}px;border-radius:8px 8px 4px 4px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:1.5px;box-shadow:0 4px 10px rgba(0,0,0,0.18);">${label}</div>
       </div>`;
   };
-  // Olympic podium: gold tallest in the middle, silver + bronze same
-  // height on either side.
   return `
-    <div style="display:flex;align-items:flex-end;gap:8px;margin:16px 0 24px;padding:8px;">
-      ${card(byPos[2], 70, '🥈', '2ème', 'linear-gradient(135deg,#9ca3af,#6b7280)')}
-      ${card(byPos[1], 110, '🥇', '1er',  'linear-gradient(135deg,#fbbf24,#d97706)')}
-      ${card(byPos[3], 70, '🥉', '3ème', 'linear-gradient(135deg,#b45309,#78350f)')}
+    <div style="display:flex;align-items:flex-end;gap:8px;margin:18px 0 24px;padding:8px 4px;">
+      ${column(byPos[2], 70,  '🥈', '2ème', 'linear-gradient(135deg,#cbd5e1,#94a3b8)')}
+      ${column(byPos[1], 110, '🥇', '1er',  'linear-gradient(135deg,#fbbf24,#d97706)')}
+      ${column(byPos[3], 70,  '🥉', '3ème', 'linear-gradient(135deg,#d97706,#92400e)')}
     </div>`;
 }
 
