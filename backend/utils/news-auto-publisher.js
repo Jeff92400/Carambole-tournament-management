@@ -528,7 +528,6 @@ function renderResultsArticle(ctx) {
     ${countLine}
     ${resultsTableHtml ? `<h3 style="margin-top:24px;">Classement du ${esc(tournamentLabel)}</h3>${resultsTableHtml}` : ''}
     ${rankingTableHtml ? `<h3 style="margin-top:24px;">Classement de la saison${seasonLabel ? ' ' + esc(seasonLabel) : ''}</h3>${rankingTableHtml}` : ''}
-    ${ctaButton(deeplink, 'Voir tous les résultats')}
     <p style="color:#9ca3af;font-size:12px;text-align:center;margin-top:20px;">
       Article généré automatiquement par l'application.
     </p>
