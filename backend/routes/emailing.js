@@ -2974,9 +2974,22 @@ router.post('/send-results', authenticateToken, async (req, res) => {
       (async () => {
         try {
           const { promoteDraftOrCreate } = require('../utils/news-auto-publisher');
-          const tournamentLabel = tournament.tournament_number
-            ? `T${tournament.tournament_number}`
-            : 'Tournoi';
+          // V 2.0.567 — detect finale so /send-results works correctly
+          // when admins use the "Résultats Tournoi" tab on a finale
+          // (the dropdown lets them pick any tournament, including
+          // finales — they shouldn't have to remember which tab is
+          // for which kind of tournament).
+          let isFinaleTournament = false;
+          try {
+            const { getFinaleTournamentNumber } = require('./settings');
+            const finaleNum = await getFinaleTournamentNumber(orgId);
+            isFinaleTournament = finaleNum != null && tournament.tournament_number === finaleNum;
+          } catch (_e) { /* default non-finale */ }
+          const tournamentLabel = isFinaleTournament
+            ? 'Finale'
+            : (tournament.tournament_number
+                ? `T${tournament.tournament_number}`
+                : 'Tournoi');
           let tournamentDateStr = '';
           if (tournament.tournament_date) {
             try {
@@ -2990,7 +3003,8 @@ router.post('/send-results', authenticateToken, async (req, res) => {
             tournamentId,
             tournamentLabel,
             categoryName: tournament.display_name,
-            tournamentDate: tournamentDateStr
+            tournamentDate: tournamentDateStr,
+            isFinale: isFinaleTournament
           });
         } catch (promoteErr) {
           console.error('[RESULTS] news-auto-publisher promote error:', promoteErr.message);
