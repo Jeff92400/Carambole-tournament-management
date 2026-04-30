@@ -2201,6 +2201,24 @@ async function initializeDatabase() {
       `);
       await client.query(`CREATE INDEX IF NOT EXISTS idx_calendar_sync_log_brief ON calendar_sync_log(brief_id)`);
 
+      // Migration (V 2.0.602) — calendar_sync_log columns added by the
+      // publish endpoint (calendar-generator.js /publish). The original
+      // CREATE TABLE shipped without these because publish was added
+      // later. Idempotent ADD COLUMN IF NOT EXISTS so existing prod
+      // tables get back-filled at boot.
+      await client.query(`ALTER TABLE calendar_sync_log ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)`);
+      await client.query(`ALTER TABLE calendar_sync_log ADD COLUMN IF NOT EXISTS change_type    TEXT`);
+      await client.query(`ALTER TABLE calendar_sync_log ADD COLUMN IF NOT EXISTS summary        TEXT`);
+      await client.query(`ALTER TABLE calendar_sync_log ADD COLUMN IF NOT EXISTS triggered_by   INTEGER REFERENCES users(id)`);
+      // Best-effort backfill of organization_id from the parent brief
+      await client.query(`
+        UPDATE calendar_sync_log csl
+           SET organization_id = cb.organization_id
+          FROM calendar_brief cb
+         WHERE csl.brief_id = cb.id
+           AND csl.organization_id IS NULL
+      `);
+
       await client.query(`ALTER TABLE clubs ADD COLUMN IF NOT EXISTS preferred_start_time TEXT`);
 
       // Migration: relax weekday CHECK constraints from sat/sun-only to all 7 days
