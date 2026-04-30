@@ -2020,8 +2020,26 @@
       const container = document.getElementById('viewSeasonal');
       const colors = buildHostColorMap(result.placements);
 
-      // Categories in canonical display order
-      const allCatIds = new Set(result.placements.map(p => p.category_id));
+      // Inject ligue finals as virtual placements so they appear as
+      // dedicated cells alongside T1/T2/T3/F. They have no host (Ligue
+      // is not a CDB club) and are not editable from the wizard.
+      const ligueFinalPlacements = Object.entries(ligueFinalDates || {})
+        .filter(([, d]) => d)
+        .map(([catId, d]) => ({
+          category_id: parseInt(catId, 10),
+          weekend_date: d,
+          tournament_type: 'LIGUE_FINALE',
+          host_id: null,
+          host_name: 'Ligue',
+          _draft_id: null,
+          _locked: false,
+          _is_ligue_final: true
+        }));
+      const allPlacements = [...result.placements, ...ligueFinalPlacements];
+
+      // Categories in canonical display order — include any cat that has
+      // either a tournament or a ligue final.
+      const allCatIds = new Set(allPlacements.map(p => p.category_id));
       const cats = (referenceData.categories || []).filter(c => allCatIds.has(c.id));
       cats.sort((a, b) => {
         const ma = dispModeRank(a.mode || a.game_type);
@@ -2030,11 +2048,16 @@
         return dispLevelRank(a.level) - dispLevelRank(b.level);
       });
 
-      // All weekend dates, sorted
-      const weekends = [...new Set(result.placements.map(p => p.weekend_date))].sort();
+      // All weekend dates, sorted (include ligue final dates)
+      const weekends = [...new Set(allPlacements.map(p => p.weekend_date))].sort();
 
-      // Index by (cat, weekend)
+      // Index by (cat, weekend) — CDB placements take precedence over
+      // ligue finals if (extremely unlikely) they share a date.
       const grid = {};
+      ligueFinalPlacements.forEach(p => {
+        if (!grid[p.category_id]) grid[p.category_id] = {};
+        grid[p.category_id][p.weekend_date] = p;
+      });
       result.placements.forEach(p => {
         if (!grid[p.category_id]) grid[p.category_id] = {};
         grid[p.category_id][p.weekend_date] = p;
@@ -2079,6 +2102,17 @@
           const leftBorder = monthChange ? 'border-left: 2px solid #5a3094;' : '';
           const p = grid[c.id]?.[we];
           if (!p) return `<td style="padding: 4px 6px; background: #fafafa; ${leftBorder}"></td>`;
+
+          // Ligue final: distinct visual treatment — orange accent,
+          // FL label, no host. Not editable.
+          if (p._is_ligue_final) {
+            const tipLF = `Finale Ligue ${c.name || c.display_name}\n${fmtDateFR(p.weekend_date)}\nLieu : TBD (à renseigner par la Ligue)`;
+            return `<td style="padding: 4px 6px; background: repeating-linear-gradient(135deg, #fff4e0, #fff4e0 6px, #ffe5b8 6px, #ffe5b8 12px); text-align: center; font-size: 11px; border: 1.5px solid #c47b00; ${leftBorder}" title="${escapeHtml(tipLF)}">
+              <div style="font-weight: 700; color: #8a4a00;">FL</div>
+              <div style="font-size: 9px; color: #8a4a00;">Ligue</div>
+            </td>`;
+          }
+
           const bg = p.host_id ? colors.get(p.host_id) : '#fff';
           const lockedBorder = p._locked ? 'border: 2px solid #c47b00;' : '';
           const editable = p._draft_id ? 'cursor: pointer;' : '';
@@ -2119,6 +2153,9 @@
         </div>
         <div style="margin-top: 10px;">
           <strong style="font-size: 13px; color: #555;">Légende clubs :</strong> ${legend}
+          ${ligueFinalPlacements.length ? `
+            <span style="display:inline-block; padding: 4px 10px; background: repeating-linear-gradient(135deg, #fff4e0, #fff4e0 6px, #ffe5b8 6px, #ffe5b8 12px); border: 1.5px solid #c47b00; border-radius: 4px; font-size: 12px; margin: 0 4px 4px 8px; color: #8a4a00; font-weight: 600;">FL — Finale Ligue</span>
+          ` : ''}
         </div>
       `;
 
