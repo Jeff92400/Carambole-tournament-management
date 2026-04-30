@@ -305,7 +305,7 @@
         <div class="stepper-item"><span class="stepper-num">3</span> Génération</div>
         <div class="stepper-item"><span class="stepper-num">4</span> Revue</div>
         <div class="stepper-item"><span class="stepper-num">5</span> Régénération</div>
-        <div class="stepper-item"><span class="stepper-num">6</span> Publication</div>
+        <div class="stepper-item"><span class="stepper-num">6</span> Création des tournois</div>
       </div>
     </div>
 
@@ -596,7 +596,7 @@
       <div class="actions-bar">
         <div>
           <button type="button" class="btn" id="backToRulesBtn" style="padding: 10px 20px;">← Retour Règles</button>
-          <button type="button" class="btn" id="goToPublishBtn" style="background: #c47b00; color: white; padding: 10px 20px; border: none; border-radius: 5px; font-weight: 600; margin-left: 8px;">Étape suivante : Publication →</button>
+          <button type="button" class="btn" id="goToPublishBtn" style="background: #c47b00; color: white; padding: 10px 20px; border: none; border-radius: 5px; font-weight: 600; margin-left: 8px;">Étape suivante : Créer les tournois →</button>
         </div>
       </div>
     </div>
@@ -604,12 +604,12 @@
     <!-- ÉTAPE 6 — Publication (V 2.0.593) -->
     <div class="card" id="step6Card" style="display: none;">
       <div class="step-header">
-        <h3 style="margin: 0;">Étape 6 — Publication du calendrier</h3>
+        <h3 style="margin: 0;">Étape 6 — Création / Mise à jour des tournois</h3>
       </div>
       <p style="color: #666; font-size: 14px; margin-top: 6px;">
-        Publier le calendrier crée les tournois dans la base et déclenche automatiquement les articles
-        d'annonce dans l'app joueur (un article par tournoi, en mode brouillon ou publié selon votre
-        configuration). Les tournois ayant déjà des inscriptions ou des résultats sont protégés.
+        Cette étape crée (ou met à jour) les tournois dans la base et déclenche automatiquement les
+        articles d'annonce dans l'app joueur (un article par tournoi, en mode brouillon ou publié selon
+        votre configuration). Les tournois ayant déjà des inscriptions ou des résultats sont protégés.
       </p>
 
       <div id="publishSummary" style="margin-top: 16px; display: flex; gap: 14px; flex-wrap: wrap;">
@@ -633,7 +633,7 @@
       <div style="margin-top: 16px;">
         <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer;">
           <input type="checkbox" id="forceSensitiveChk">
-          <span>Publier aussi les tournois <strong>sensibles</strong> (avec inscriptions). Risque de doublon — n'utilisez que si vous savez ce que vous faites.</span>
+          <span>Inclure aussi les tournois <strong>sensibles</strong> (avec inscriptions). Risque de doublon — n'utilisez que si vous savez ce que vous faites.</span>
         </label>
       </div>
 
@@ -653,7 +653,7 @@
         <span id="publishStatus" class="save-status"></span>
         <div>
           <button type="button" class="btn" id="backToGenerationBtn" style="padding: 10px 20px;">← Retour Génération</button>
-          <button type="button" class="btn" id="publishCalendarBtn" style="background: #2c7a4d; color: white; padding: 10px 20px; border: none; border-radius: 5px; font-weight: 600; margin-left: 8px;">✓ Publier le calendrier</button>
+          <button type="button" class="btn" id="publishCalendarBtn" style="background: #2c7a4d; color: white; padding: 10px 20px; border: none; border-radius: 5px; font-weight: 600; margin-left: 8px;">🚀 Créer / Mettre à jour les tournois</button>
         </div>
       </div>
     </div>
@@ -1806,13 +1806,13 @@
       const sensitiveCount = parseInt(document.getElementById('publishCountSensitive').textContent, 10) || 0;
       const safeCount = parseInt(document.getElementById('publishCountSafe').textContent, 10) || 0;
       const total = safeCount + (force ? sensitiveCount : 0);
-      const msg = `Publier ${total} tournoi(s) ?\n\n`
+      const msg = `Créer / mettre à jour ${total} tournoi(s) ?\n\n`
         + `Cela créera ou mettra à jour les entrées dans la base et déclenchera l'envoi automatique d'articles d'annonce dans l'app joueur (selon votre configuration).\n\n`
         + (sensitiveCount > 0 && !force ? `${sensitiveCount} tournoi(s) sensible(s) seront ignoré(s).` : '');
       if (!confirm(msg)) return;
       const btn = document.getElementById('publishCalendarBtn');
       btn.disabled = true;
-      btn.textContent = '⏳ Publication…';
+      btn.textContent = '⏳ Création en cours…';
       setPublishStatus('', '');
       try {
         const res = await fetch(`${API_URL}/calendar-generator/publish`, {
@@ -1820,9 +1820,9 @@
           body: JSON.stringify({ brief_id: currentBrief.id, force_sensitive: force })
         });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Échec publication');
+        if (!res.ok) throw new Error(data.error || 'Échec création des tournois');
         setPublishStatus(
-          `✓ Publié : ${data.created} créé(s), ${data.updated} mis à jour, ${data.skipped} ignoré(s). ${data.articles_drafted} article(s) en cours de publication.`,
+          `✓ Terminé : ${data.created} créé(s), ${data.updated} mis à jour, ${data.skipped} ignoré(s). ${data.articles_drafted} article(s) en cours de publication.`,
           'success'
         );
         // Refresh preview to reflect post-publish state.
@@ -1831,7 +1831,7 @@
         setPublishStatus('Erreur : ' + err.message, 'error');
       } finally {
         btn.disabled = false;
-        btn.textContent = '✓ Publier le calendrier';
+        btn.textContent = '🚀 Créer / Mettre à jour les tournois';
       }
     });
 
