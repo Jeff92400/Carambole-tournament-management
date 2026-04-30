@@ -401,11 +401,38 @@
 
       <h3 class="section-title">Week-ends blackout (sans compétition possible)</h3>
       <p class="hint" style="margin-bottom: 6px;">Vacances scolaires, finales fédérales nationales, congés... Ajoutez les dates de samedis à exclure.</p>
-      <div style="display: flex; gap: 8px; align-items: center; margin-top: 6px;">
+      <div style="display: flex; gap: 8px; align-items: center; margin-top: 6px; flex-wrap: wrap;">
         <input type="date" id="blackoutInput" style="padding: 8px; border: 1px solid #c8c5be; border-radius: 5px;">
         <button type="button" class="btn" id="blackoutAddBtn" style="padding: 8px 16px;">+ Ajouter</button>
+        <button type="button" class="btn" id="dateHelperToggleBtn" style="padding: 8px 14px; background: #f3f0ff; color: #4c3a9a; border: 1px solid #c8bfeb;">📅 Suggérer une date</button>
       </div>
       <div class="pill-list" id="blackoutList"></div>
+
+      <!-- Step 2 — Date assistant (Path A + B) -->
+      <div id="dateHelperPanel" style="display: none; margin-top: 12px; padding: 14px; background: #f8f6ff; border: 1px solid #d6cefa; border-radius: 8px;">
+        <h4 style="margin: 0 0 8px 0; font-size: 14px; color: #4c3a9a;">📅 Trouver une date à exclure</h4>
+
+        <!-- Path B — Deterministic French holidays -->
+        <div style="margin-bottom: 14px;">
+          <label style="font-size: 13px; font-weight: 600; color: #333;">Fériés français&nbsp;:</label>
+          <div style="display: flex; gap: 8px; align-items: center; margin-top: 4px; flex-wrap: wrap;">
+            <input type="number" id="holidayYearInput" min="2024" max="2035" style="padding: 6px 10px; width: 90px; border: 1px solid #c8c5be; border-radius: 5px;">
+            <button type="button" class="btn" id="loadHolidaysBtn" style="padding: 6px 12px;">Charger</button>
+            <span id="holidayLoadStatus" style="font-size: 12px; color: #666;"></span>
+          </div>
+          <div id="holidayList" style="margin-top: 8px;"></div>
+        </div>
+
+        <!-- Path A — Free-text LLM -->
+        <div style="border-top: 1px solid #d6cefa; padding-top: 12px;">
+          <label style="font-size: 13px; font-weight: 600; color: #333;">…ou demandez en français&nbsp;:</label>
+          <div style="display: flex; gap: 8px; margin-top: 4px;">
+            <input type="text" id="askDateInput" placeholder='Ex. "Quel est le jour de la fête des pères en 2027 ?"' style="flex: 1; padding: 8px 10px; border: 1px solid #c8c5be; border-radius: 5px;">
+            <button type="button" class="btn" id="askDateBtn" style="padding: 8px 14px; background: #4c3a9a; color: white; border: none; border-radius: 5px;">🤖 Demander</button>
+          </div>
+          <div id="askDateResult" style="margin-top: 8px;"></div>
+        </div>
+      </div>
 
       <h3 class="section-title">Indisponibilités par club (cette saison)</h3>
       <p class="hint" style="margin-bottom: 6px;">Périodes où un club ne peut pas accueillir de tournoi (travaux, événement, fermeture exceptionnelle...).</p>
@@ -781,6 +808,160 @@
         });
       });
     }
+
+    // ----- Date assistant (Path A LLM + Path B French holidays) -----
+    function addWeekendToBlackouts(weekend) {
+      if (!weekend || !weekend.saturday || !weekend.sunday) return 0;
+      let added = 0;
+      [weekend.saturday, weekend.sunday].forEach(d => {
+        if (!blackoutDates.includes(d)) {
+          blackoutDates.push(d);
+          added++;
+        }
+      });
+      blackoutDates.sort();
+      renderBlackouts();
+      return added;
+    }
+
+    document.getElementById('dateHelperToggleBtn').addEventListener('click', () => {
+      const panel = document.getElementById('dateHelperPanel');
+      const opening = panel.style.display === 'none' || !panel.style.display;
+      panel.style.display = opening ? 'block' : 'none';
+      if (opening) {
+        // Pre-fill year from brief season, fallback current year + 1
+        const yi = document.getElementById('holidayYearInput');
+        if (!yi.value) {
+          let yearGuess = new Date().getFullYear() + 1;
+          if (currentBrief && currentBrief.season) {
+            const m = String(currentBrief.season).match(/^(\d{4})/);
+            if (m) yearGuess = parseInt(m[1], 10) + 1; // 2nd half of season
+          }
+          yi.value = yearGuess;
+        }
+      }
+    });
+
+    async function loadHolidays() {
+      const yearVal = parseInt(document.getElementById('holidayYearInput').value, 10);
+      const status = document.getElementById('holidayLoadStatus');
+      const list = document.getElementById('holidayList');
+      if (!yearVal || yearVal < 2024 || yearVal > 2035) {
+        status.textContent = 'Année invalide.';
+        status.style.color = '#b81c1c';
+        return;
+      }
+      status.textContent = 'Chargement…';
+      status.style.color = '#666';
+      list.innerHTML = '';
+      try {
+        const res = await fetch(`${API_URL}/calendar-generator/holidays?year=${yearVal}`, { headers: authHeaders });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.error || 'Erreur chargement');
+        }
+        const data = await res.json();
+        status.textContent = '';
+        list.innerHTML = `
+          <table class="ligue-table" style="margin-top: 4px; font-size: 13px;">
+            <thead><tr><th>Fête</th><th>Date</th><th>Week-end lié</th><th></th></tr></thead>
+            <tbody>
+              ${data.holidays.map((h, i) => {
+                const wkAlready = (blackoutDates.includes(h.weekend.saturday) && blackoutDates.includes(h.weekend.sunday));
+                return `
+                  <tr>
+                    <td>${h.label}</td>
+                    <td>${h.date}</td>
+                    <td style="color: #666;">${h.weekend.saturday} → ${h.weekend.sunday}</td>
+                    <td>
+                      <button type="button" class="btn holiday-add-btn" data-idx="${i}" style="padding: 4px 10px; font-size: 12px;${wkAlready ? ' background: #e6e6e6; color: #888; cursor: default;' : ''}" ${wkAlready ? 'disabled' : ''}>
+                        ${wkAlready ? '✓ Déjà exclu' : '+ Exclure ce WE'}
+                      </button>
+                    </td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>
+        `;
+        list.querySelectorAll('.holiday-add-btn').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const idx = parseInt(btn.dataset.idx, 10);
+            const h = data.holidays[idx];
+            const added = addWeekendToBlackouts(h.weekend);
+            btn.disabled = true;
+            btn.textContent = '✓ Ajouté';
+            btn.style.background = '#e6e6e6';
+            btn.style.color = '#888';
+            if (added === 0) btn.textContent = '✓ Déjà exclu';
+          });
+        });
+      } catch (err) {
+        status.textContent = err.message;
+        status.style.color = '#b81c1c';
+      }
+    }
+    document.getElementById('loadHolidaysBtn').addEventListener('click', loadHolidays);
+
+    async function askDate() {
+      const inp = document.getElementById('askDateInput');
+      const btn = document.getElementById('askDateBtn');
+      const result = document.getElementById('askDateResult');
+      const q = (inp.value || '').trim();
+      if (q.length < 3) {
+        result.innerHTML = '<span style="color: #b81c1c; font-size: 13px;">Question trop courte.</span>';
+        return;
+      }
+      btn.disabled = true;
+      btn.textContent = '⏳ …';
+      result.innerHTML = '<span style="color: #666; font-size: 13px;">L\'IA réfléchit…</span>';
+      try {
+        const res = await fetch(`${API_URL}/calendar-generator/ask-date`, {
+          method: 'POST',
+          headers: { ...authHeaders, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ question: q })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Erreur IA');
+
+        if (data.error) {
+          result.innerHTML = `<div style="color: #c47b00; font-size: 13px;">⚠️ ${data.error} — ${data.explanation || ''}</div>`;
+          return;
+        }
+        const wkAlready = data.weekend && blackoutDates.includes(data.weekend.saturday) && blackoutDates.includes(data.weekend.sunday);
+        const confBadge = data.confidence === 'high' ? '✅' : (data.confidence === 'medium' ? '🟡' : '🟠');
+        result.innerHTML = `
+          <div style="background: white; border: 1px solid #d6cefa; border-radius: 6px; padding: 10px;">
+            <div style="font-size: 14px; font-weight: 600; color: #4c3a9a;">${confBadge} ${data.label || 'Date'} : ${data.date}</div>
+            <div style="font-size: 12px; color: #666; margin-top: 4px;">${data.explanation || ''}</div>
+            ${data.weekend ? `
+              <div style="font-size: 12px; color: #666; margin-top: 6px;">Week-end lié : <strong>${data.weekend.saturday}</strong> → <strong>${data.weekend.sunday}</strong></div>
+              <button type="button" class="btn" id="askDateAcceptBtn" style="margin-top: 8px; padding: 6px 14px; background: #4c3a9a; color: white; border: none; border-radius: 5px; ${wkAlready ? 'opacity: 0.5; cursor: default;' : ''}" ${wkAlready ? 'disabled' : ''}>
+                ${wkAlready ? '✓ Week-end déjà exclu' : '+ Exclure ce week-end'}
+              </button>
+            ` : ''}
+          </div>
+        `;
+        const acceptBtn = document.getElementById('askDateAcceptBtn');
+        if (acceptBtn && !wkAlready) {
+          acceptBtn.addEventListener('click', () => {
+            addWeekendToBlackouts(data.weekend);
+            acceptBtn.disabled = true;
+            acceptBtn.textContent = '✓ Ajouté';
+            acceptBtn.style.opacity = '0.5';
+          });
+        }
+      } catch (err) {
+        result.innerHTML = `<span style="color: #b81c1c; font-size: 13px;">${err.message}</span>`;
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '🤖 Demander';
+      }
+    }
+    document.getElementById('askDateBtn').addEventListener('click', askDate);
+    document.getElementById('askDateInput').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); askDate(); }
+    });
 
     // ----- Host blackouts (per-club unavailability for this season) -----
     document.getElementById('addHostBlackoutBtn').addEventListener('click', () => {

@@ -101,7 +101,7 @@ git push origin main
 
 ## Versioning
 
-**Current Version:** V 2.0.460 04/26
+**Current Version:** V 2.0.594 04/30
 
 Version is displayed at the bottom of the login screen (`frontend/login.html`).
 

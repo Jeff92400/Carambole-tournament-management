@@ -673,6 +673,195 @@ Mieux vaut renvoyer une erreur claire que d'inventer une règle bricolée.`;
 });
 
 // ----------------------------------------------------------------
+// Step 2 — "Quand tombe… ?" date assistant
+// Path B (deterministic): GET /holidays?year=YYYY  → fériés français + fêtes calculées
+// Path A (LLM fallback) : POST /ask-date          → free-text via Claude Haiku
+// In both cases the response includes the (samedi, dimanche) of the ISO
+// week containing the resolved date, so the front-end can offer "Exclure
+// ce week-end" with one click.
+// ----------------------------------------------------------------
+
+// Anonymous Gregorian (Meeus) — returns a UTC Date for Easter Sunday of `year`
+function easterSunday(year) {
+  const a = year % 19;
+  const b = Math.floor(year / 100);
+  const c = year % 100;
+  const d = Math.floor(b / 4);
+  const e = b % 4;
+  const f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4);
+  const k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31);
+  const day = ((h + l - 7 * m + 114) % 31) + 1;
+  return new Date(Date.UTC(year, month - 1, day));
+}
+
+function addDaysUTC(d, n) {
+  const r = new Date(d.getTime());
+  r.setUTCDate(r.getUTCDate() + n);
+  return r;
+}
+function ymd(d) { return d.toISOString().slice(0, 10); }
+
+// Returns the (Sat, Sun) of the ISO week (Mon-Sun) containing dateStr.
+function weekendForDate(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00Z');
+  if (isNaN(d.getTime())) return null;
+  // ISO weekday: Mon=1..Sun=7
+  const isoDow = d.getUTCDay() === 0 ? 7 : d.getUTCDay();
+  const monday = addDaysUTC(d, 1 - isoDow);
+  const saturday = addDaysUTC(monday, 5);
+  const sunday = addDaysUTC(monday, 6);
+  return { saturday: ymd(saturday), sunday: ymd(sunday) };
+}
+
+// Last Sunday of a given month (year, month 0-indexed)
+function lastSundayOfMonth(year, month) {
+  // First day of next month, then walk backward to Sunday
+  const firstNext = new Date(Date.UTC(year, month + 1, 1));
+  const lastDay = addDaysUTC(firstNext, -1);
+  const dow = lastDay.getUTCDay(); // Sun=0
+  return addDaysUTC(lastDay, -dow);
+}
+// Nth Sunday of a given month
+function nthSundayOfMonth(year, month, n) {
+  const first = new Date(Date.UTC(year, month, 1));
+  const dow = first.getUTCDay();
+  const offsetToFirstSunday = (7 - dow) % 7;
+  return addDaysUTC(first, offsetToFirstSunday + 7 * (n - 1));
+}
+
+// Compute the canonical list of French public + folkloric holidays for a year.
+function frenchHolidays(year) {
+  const easter = easterSunday(year);
+  const easterMonday = addDaysUTC(easter, 1);
+  const ascension = addDaysUTC(easter, 39);
+  const pentecost = addDaysUTC(easter, 49);
+  const pentecostMonday = addDaysUTC(easter, 50);
+
+  // Mother's Day (FR): last Sunday of May, BUT if it falls on Pentecost
+  // Sunday → push to first Sunday of June.
+  let mothersDay = lastSundayOfMonth(year, 4); // May = 4
+  if (ymd(mothersDay) === ymd(pentecost)) {
+    mothersDay = nthSundayOfMonth(year, 5, 1); // first Sunday of June
+  }
+  const fathersDay = nthSundayOfMonth(year, 5, 3); // 3rd Sunday of June
+  const grandmothersDay = nthSundayOfMonth(year, 2, 1); // 1st Sunday of March
+
+  return [
+    { key: 'jour_an',           label: 'Jour de l\'An',                date: ymd(new Date(Date.UTC(year, 0, 1))) },
+    { key: 'paques',            label: 'Pâques',                       date: ymd(easter) },
+    { key: 'paques_lundi',      label: 'Lundi de Pâques',              date: ymd(easterMonday) },
+    { key: 'fete_travail',      label: 'Fête du Travail (1er mai)',    date: ymd(new Date(Date.UTC(year, 4, 1))) },
+    { key: 'victoire_1945',     label: 'Victoire 1945 (8 mai)',        date: ymd(new Date(Date.UTC(year, 4, 8))) },
+    { key: 'ascension',         label: 'Ascension',                    date: ymd(ascension) },
+    { key: 'fete_meres',        label: 'Fête des Mères',               date: ymd(mothersDay) },
+    { key: 'pentecote',         label: 'Pentecôte',                    date: ymd(pentecost) },
+    { key: 'pentecote_lundi',   label: 'Lundi de Pentecôte',           date: ymd(pentecostMonday) },
+    { key: 'fete_peres',        label: 'Fête des Pères',               date: ymd(fathersDay) },
+    { key: 'fete_grands_meres', label: 'Fête des Grand-Mères',         date: ymd(grandmothersDay) },
+    { key: 'fete_nationale',    label: 'Fête Nationale (14 juillet)',  date: ymd(new Date(Date.UTC(year, 6, 14))) },
+    { key: 'assomption',        label: 'Assomption (15 août)',         date: ymd(new Date(Date.UTC(year, 7, 15))) },
+    { key: 'toussaint',         label: 'Toussaint (1er novembre)',     date: ymd(new Date(Date.UTC(year, 10, 1))) },
+    { key: 'armistice',         label: 'Armistice (11 novembre)',      date: ymd(new Date(Date.UTC(year, 10, 11))) },
+    { key: 'noel',              label: 'Noël (25 décembre)',           date: ymd(new Date(Date.UTC(year, 11, 25))) }
+  ].map(h => ({ ...h, weekend: weekendForDate(h.date) }));
+}
+
+// GET /holidays?year=2027 — list of French holidays + their associated weekend
+router.get('/holidays', authenticateToken, requireCalendarGenerator, (req, res) => {
+  const year = parseInt(req.query.year, 10);
+  if (!year || year < 1900 || year > 2200) {
+    return res.status(400).json({ error: 'year requis (1900-2200)' });
+  }
+  try {
+    res.json({ year, holidays: frenchHolidays(year) });
+  } catch (err) {
+    console.error('[calendar-generator] GET /holidays error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /ask-date — free-text French question → resolved date + linked weekend
+// Body: { question: "Quel est le jour de Pâques en 2027 ?" }
+// Response: { date, label, year, confidence, explanation, weekend: {saturday, sunday} }
+//        OR { error: "...", explanation: "..." } when the model can't resolve.
+router.post('/ask-date', authenticateToken, requireCalendarGenerator, requireAdmin, async (req, res) => {
+  const { question } = req.body || {};
+  if (!question || typeof question !== 'string' || question.trim().length < 3) {
+    return res.status(400).json({ error: 'Question requise (au moins 3 caractères).' });
+  }
+  if (question.length > 300) {
+    return res.status(400).json({ error: 'Question trop longue (300 caractères max).' });
+  }
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return res.status(503).json({ error: 'Service IA non configuré (ANTHROPIC_API_KEY manquante).' });
+  }
+
+  try {
+    const Anthropic = require('@anthropic-ai/sdk');
+    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    const todayIso = new Date().toISOString().slice(0, 10);
+
+    const systemPrompt = `Tu es un assistant qui résout en français des questions sur des dates (jours fériés, fêtes folkloriques françaises, événements récurrents, dates précises).
+
+Date d'aujourd'hui (référence) : ${todayIso}
+
+Tu dois retourner UNIQUEMENT un objet JSON valide (pas de markdown, pas de texte hors JSON) avec cette structure :
+{
+  "date": "YYYY-MM-DD",
+  "label": "<libellé court de l'événement, ex: 'Pâques 2027'>",
+  "year": <année extraite>,
+  "confidence": "high" | "medium" | "low",
+  "explanation": "<phrase courte qui justifie la date trouvée>"
+}
+
+RÈGLES :
+1. Si l'utilisateur ne précise pas l'année, déduis-la du contexte (saison sportive en cours = septembre→août). Si vraiment ambigu, prends l'année prochaine la plus proche.
+2. Si la question concerne plusieurs dates (ex. "vacances scolaires") ou une période, réponds avec la DATE DE DÉBUT et précise dans "explanation" qu'il s'agit du début de la période.
+3. Si tu ne peux pas répondre avec certitude (date qui dépend de la zone, événement non identifiable), retourne :
+   { "error": "Date introuvable", "explanation": "<raison courte>" }
+4. Pâques, Ascension, Pentecôte, Fête des Mères, Fête des Pères : utilise les règles canoniques françaises (Computus pour Pâques ; Ascension = Pâques + 39 jours ; Fête des Mères = dernier dimanche de mai ou 1er dimanche de juin si Pentecôte ; Fête des Pères = 3e dimanche de juin).
+5. Pour des dates fixes (14 juillet, 25 décembre…), réponds directement.
+
+Réponds avec JSON valide uniquement.`;
+
+    const message = await client.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 300,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: question.trim() }]
+    });
+
+    const raw = (message.content?.[0]?.text || '').trim();
+    let parsed;
+    try {
+      const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '');
+      parsed = JSON.parse(cleaned);
+    } catch (e) {
+      return res.status(502).json({ error: 'Réponse IA non parsable', raw });
+    }
+
+    if (parsed.error) {
+      return res.status(200).json(parsed);
+    }
+    if (!parsed.date || !/^\d{4}-\d{2}-\d{2}$/.test(parsed.date)) {
+      return res.status(502).json({ error: 'Date invalide retournée par l\'IA', received: parsed });
+    }
+
+    parsed.weekend = weekendForDate(parsed.date);
+    res.json(parsed);
+  } catch (err) {
+    console.error('[calendar-generator] POST /ask-date error:', err);
+    res.status(500).json({ error: err.message || 'Erreur IA' });
+  }
+});
+
+// ----------------------------------------------------------------
 // Phase 5a — Deterministic generation
 // ----------------------------------------------------------------
 
