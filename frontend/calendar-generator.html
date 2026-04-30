@@ -27,6 +27,13 @@
       border-right: 1px solid #e0e0e0;
       font-size: 13px;
       color: #888;
+      cursor: pointer;
+      transition: background 0.15s ease, color 0.15s ease;
+      user-select: none;
+    }
+    .stepper-item:hover {
+      background: #f0e8fa;
+      color: #6b3aa3;
     }
     .stepper-item:last-child { border-right: none; }
     .stepper-item.active {
@@ -34,7 +41,9 @@
       color: #c47b00;
       font-weight: 600;
     }
+    .stepper-item.active:hover { background: #ffe6c2; }
     .stepper-item.done { background: #e6f4ec; color: #2c7a4d; }
+    .stepper-item.done:hover { background: #cdebd9; }
     .stepper-num {
       display: inline-block;
       width: 22px; height: 22px;
@@ -300,16 +309,17 @@
       </p>
 
       <div class="stepper">
+        <!-- V 2.0.606 — collapsed from 6 to 4 real steps. "Revue" and
+             "Régénération" were sub-states of Génération (no own card),
+             which made the stepper misleading. -->
         <div class="stepper-item active"><span class="stepper-num">1</span> Brief</div>
         <div class="stepper-item"><span class="stepper-num">2</span> Règles</div>
         <div class="stepper-item"><span class="stepper-num">3</span> Génération</div>
-        <div class="stepper-item"><span class="stepper-num">4</span> Revue</div>
-        <div class="stepper-item"><span class="stepper-num">5</span> Régénération</div>
-        <div class="stepper-item"><span class="stepper-num">6</span> Création des tournois</div>
+        <div class="stepper-item"><span class="stepper-num">4</span> Création des tournois</div>
       </div>
     </div>
 
-    <div class="card">
+    <div class="card" id="step1Card">
       <div class="step-header">
         <h3 style="margin: 0;">Étape 1 — Brief de saison</h3>
         <button type="button" class="help-btn" data-help="step1">❓ Comment ça marche ?</button>
@@ -1164,6 +1174,76 @@
 
     document.getElementById('seasonInput').addEventListener('change', loadBriefForSeason);
 
+    // V 2.0.606 — single source of truth for stepper state. Steps:
+    //   1 = Brief, 2 = Règles, 3 = Génération, 4 = Création des tournois.
+    // Step n is active; steps 1..n-1 are 'done' (with ✓); n+1..end are
+    // inactive. allDone=true marks step n as done too (used after a
+    // successful publish).
+    function setActiveStep(n, { allDone = false } = {}) {
+      const items = document.querySelectorAll('.stepper-item');
+      items.forEach((el, idx) => {
+        const stepIdx = idx + 1;
+        el.classList.remove('active', 'done');
+        const num = el.querySelector('.stepper-num');
+        if (stepIdx < n) {
+          el.classList.add('done');
+          if (num) num.textContent = '✓';
+        } else if (stepIdx === n) {
+          if (allDone) {
+            el.classList.add('done');
+            if (num) num.textContent = '✓';
+          } else {
+            el.classList.add('active');
+            if (num) num.textContent = String(stepIdx);
+          }
+        } else {
+          if (num) num.textContent = String(stepIdx);
+        }
+      });
+    }
+
+    // V 2.0.606 — clickable stepper: each item navigates to the
+    // corresponding card, runs its load function (so data is fresh),
+    // and updates the stepper state. Equivalent to clicking the
+    // bottom navigation buttons but without scrolling to find them.
+    async function navigateToStep(n) {
+      const step1 = document.getElementById('step1Card');
+      const step2 = document.getElementById('step2Card');
+      const step3 = document.getElementById('step3Card');
+      const step4 = document.getElementById('step6Card'); // legacy id; renamed conceptually to Step 4
+      // Hide everything past the destination so the page doesn't show
+      // multiple cards at once (cleaner navigation).
+      if (n < 4 && step4) step4.style.display = 'none';
+      if (n < 3 && step3) step3.style.display = 'none';
+      if (n < 2 && step2) step2.style.display = 'none';
+      let target;
+      if (n === 1) {
+        target = step1;
+      } else if (n === 2) {
+        if (step2) step2.style.display = 'block';
+        target = step2;
+        // Lazy-load constraints if not yet loaded
+        if (!constraints || constraints.length === 0) {
+          try { await loadConstraints(); } catch (_) {}
+        }
+      } else if (n === 3) {
+        if (step3) step3.style.display = 'block';
+        target = step3;
+        try { syncQuickTuningPanel(); } catch (_) {}
+        try { await loadSavedDraft(); } catch (_) {}
+      } else if (n === 4) {
+        if (step4) step4.style.display = 'block';
+        target = step4;
+        try { await loadPublishPreview(); } catch (_) {}
+      }
+      setActiveStep(n);
+      if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    // Attach click handlers once the DOM is ready (script runs at end of body).
+    document.querySelectorAll('.stepper-item').forEach((el, idx) => {
+      el.addEventListener('click', () => navigateToStep(idx + 1));
+    });
+
     // ============================================================
     // PHASE 4a — Règles (Étape 2)
     // ============================================================
@@ -1646,11 +1726,7 @@
 
     document.getElementById('nextStepBtn').addEventListener('click', async () => {
       document.getElementById('step2Card').style.display = 'block';
-      // Update stepper
-      const items = document.querySelectorAll('.stepper-item');
-      items[0].classList.remove('active'); items[0].classList.add('done');
-      items[0].querySelector('.stepper-num').textContent = '✓';
-      items[1].classList.add('active');
+      setActiveStep(2);
       await loadConstraints();
       document.getElementById('step2Card').scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
@@ -1674,10 +1750,7 @@
 
     document.getElementById('goToGenerationBtn').addEventListener('click', async () => {
       document.getElementById('step3Card').style.display = 'block';
-      const items = document.querySelectorAll('.stepper-item');
-      items[1].classList.remove('active'); items[1].classList.add('done');
-      items[1].querySelector('.stepper-num').textContent = '✓';
-      if (items[2]) items[2].classList.add('active');
+      setActiveStep(3);
       syncQuickTuningPanel();
       // Auto-load last saved draft if any
       await loadSavedDraft();
@@ -1759,6 +1832,7 @@
 
     document.getElementById('backToRulesBtn').addEventListener('click', () => {
       document.getElementById('step3Card').style.display = 'none';
+      setActiveStep(2);
       document.getElementById('step2Card').scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
 
@@ -1898,11 +1972,13 @@
     }
     document.getElementById('goToPublishBtn').addEventListener('click', async () => {
       document.getElementById('step6Card').style.display = 'block';
+      setActiveStep(4);
       document.getElementById('step6Card').scrollIntoView({ behavior: 'smooth', block: 'start' });
       await loadPublishPreview();
     });
     document.getElementById('backToGenerationBtn').addEventListener('click', () => {
       document.getElementById('step6Card').style.display = 'none';
+      setActiveStep(3);
       document.getElementById('step3Card').scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
     document.getElementById('publishCalendarBtn').addEventListener('click', async () => {
@@ -1938,6 +2014,8 @@
         else if (created + updated > 0 && errCount > 0) state = 'partial';
         else                                            state = 'failure';
         showPublishOutcome(state, data);
+        // Mark step 4 as fully done in the stepper on a clean run.
+        if (state === 'success') setActiveStep(4, { allDone: true });
 
         // Stash per-row outcomes so the table shows past-tense labels
         // ("Créé" / "Mis à jour" / "Ignoré") instead of the predicted
