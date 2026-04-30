@@ -1825,7 +1825,9 @@
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Échec création des tournois');
         setPublishStatus(
-          `✓ Terminé : ${data.created} créé(s), ${data.updated} mis à jour, ${data.skipped} ignoré(s).`,
+          (data.errors && data.errors.length
+            ? `⚠️ Terminé avec erreurs : ${data.created} créé(s), ${data.updated} mis à jour, ${data.skipped} ignoré(s), ${data.errors.length} échec(s).\n\nPremières erreurs :\n${data.errors.slice(0, 3).map(e => '• ' + e.row + ' → ' + e.error).join('\n')}`
+            : `✓ Terminé : ${data.created} créé(s), ${data.updated} mis à jour, ${data.skipped} ignoré(s).`),
           'success'
         );
         // Refresh preview to reflect post-publish state.

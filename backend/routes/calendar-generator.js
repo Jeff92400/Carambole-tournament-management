@@ -1825,6 +1825,7 @@ router.post('/publish', authenticateToken, requireCalendarGenerator, requireAdmi
     const allRows = [...draft, ...ligueFinalRows];
 
     let createdCount = 0, updatedCount = 0, skippedCount = 0;
+    const rowErrors = []; // diagnostic: per-row failures, returned to client
     // V 2.0.599 — calendar publish is intentionally side-effect-free:
     // it touches tournoi_ext only, never news articles or push
     // notifications. Calendar creation is iterative; the season is
@@ -1843,6 +1844,8 @@ router.post('/publish', authenticateToken, requireCalendarGenerator, requireAdmi
         ? row.weekend_date.toISOString().slice(0, 10)
         : String(row.weekend_date || '').slice(0, 10);
       const nom = tournamentNameForRow(row);
+
+      try {
 
       // Re-classify per row to be safe (preview may be stale).
       // tournoi_ext has no `saison` column — match by date range pulled
@@ -1926,6 +1929,14 @@ router.post('/publish', authenticateToken, requireCalendarGenerator, requireAdmi
           [resultingId, row.id]
         );
       }
+      } catch (rowErr) {
+        // Per-row failure should not abort the whole publish — log it
+        // and surface a structured error to the frontend so the admin
+        // can see exactly which row blew up and why.
+        const ctx = `${nom} (${row.tournament_type}, ${mode}/${categorie}, ${debut}, tnum=${tnum}, ligue=${row._virtual ? 'yes' : 'no'})`;
+        console.error('[calendar-generator] /publish row failed:', ctx, rowErr.message, rowErr.stack);
+        rowErrors.push({ row: ctx, error: rowErr.message });
+      }
     }
 
     // Mark brief as published.
@@ -1941,15 +1952,16 @@ router.post('/publish', authenticateToken, requireCalendarGenerator, requireAdmi
     // The previous NEW_TOURNAMENT auto-article dispatch was removed.
 
     res.json({
-      success: true,
+      success: rowErrors.length === 0,
       created: createdCount,
       updated: updatedCount,
       skipped: skippedCount,
+      errors: rowErrors,
       brief_id: briefId
     });
   } catch (err) {
-    console.error('[calendar-generator] /publish error:', err);
-    res.status(500).json({ error: err.message });
+    console.error('[calendar-generator] /publish error:', err.message, err.stack);
+    res.status(500).json({ error: err.message, stack: (err.stack || '').split('\n').slice(0, 4).join(' | ') });
   }
 });
 
