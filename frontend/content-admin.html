@@ -282,40 +282,94 @@
       color: #6b7280;
       margin-bottom: 14px;
     }
+    /* V 2.0.592 — 4-column grid for the 4 event types, responsive
+       breakpoints to 2 then 1 column. */
     .auto-publish-grid {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
+      grid-template-columns: repeat(4, 1fr);
       gap: 14px;
     }
-    @media (max-width: 768px) {
+    @media (max-width: 1100px) {
+      .auto-publish-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 600px) {
       .auto-publish-grid { grid-template-columns: 1fr; }
     }
+    /* V 2.0.592 — Beautified cards: subtle gradient header strip + icon,
+       lift-on-hover, divider between mode and section dropdowns. */
     .auto-publish-item {
-      background: white;
-      border: 1px solid #e5e7eb;
-      border-radius: 8px;
-      padding: 12px 14px;
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+      position: relative;
+      overflow: hidden;
+    }
+    .auto-publish-item::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, #1F4788, #667eea);
+      opacity: 0.85;
+    }
+    .auto-publish-item:hover {
+      border-color: #93c5fd;
+      box-shadow: 0 6px 18px rgba(31, 71, 136, 0.10);
+      transform: translateY(-2px);
+    }
+    .auto-publish-item .pub-icon {
+      font-size: 22px;
+      line-height: 1;
+      margin-top: 2px;
     }
     .auto-publish-item label {
       display: block;
-      font-weight: 600;
-      font-size: 13px;
+      font-weight: 700;
+      font-size: 14px;
       color: #1F4788;
-      margin-bottom: 4px;
+      margin: 0;
+      letter-spacing: 0.2px;
     }
     .auto-publish-item .desc {
+      font-size: 11.5px;
+      color: #64748b;
+      line-height: 1.45;
+      flex: 1;
+    }
+    .auto-publish-item .field-label {
       font-size: 11px;
-      color: #6b7280;
-      margin-bottom: 8px;
-      line-height: 1.4;
+      color: #64748b;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-top: 4px;
     }
     .auto-publish-item select {
       width: 100%;
-      padding: 8px 10px;
-      border: 1px solid #ddd;
-      border-radius: 6px;
+      padding: 9px 11px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
       font-size: 13px;
-      background: white;
+      background: #ffffff;
+      color: #1f2937;
+      cursor: pointer;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+    .auto-publish-item select:hover { border-color: #1F4788; }
+    .auto-publish-item select:focus {
+      outline: none;
+      border-color: #1F4788;
+      box-shadow: 0 0 0 3px rgba(31, 71, 136, 0.12);
+    }
+    .auto-publish-item .divider {
+      height: 1px;
+      background: #f1f5f9;
+      margin: 4px -16px;
     }
   </style>
 </head>
@@ -378,55 +432,67 @@
       </div>
       <div class="auto-publish-grid">
         <div class="auto-publish-item">
+          <span class="pub-icon" aria-hidden="true">🏆</span>
           <label>Résultats de tournoi</label>
-          <div class="desc">Déclenché après l'import des résultats d'un tournoi (avec podium et nombre de participants). L'article est créé en brouillon à l'import, puis publié automatiquement après l'envoi des emails + notifications aux participants (Com joueurs → Résultats Tournoi) — pour que les joueurs soient informés avant le grand public.</div>
+          <div class="desc">Déclenché à l'import des résultats. L'article est créé en brouillon, puis publié après l'envoi des emails aux joueurs — ils sont informés avant le grand public.</div>
+          <div class="field-label">Mode</div>
           <select id="autoPubResults" onchange="saveAutoPublishSetting('news_auto_publish_results', this.value)">
-            <option value="auto">Activé (publié après envoi aux joueurs)</option>
-            <option value="draft">Brouillon uniquement (publication manuelle)</option>
+            <option value="auto">Publication immédiate</option>
+            <option value="draft">Créer en brouillon</option>
             <option value="off">Désactivé</option>
           </select>
-          <div style="margin-top: 8px; font-size: 12px; color: #666;">📁 Dossier de destination</div>
-          <select id="autoPubResultsSection" onchange="saveAutoPublishSetting('news_auto_publish_results_section_id', this.value)" style="margin-top: 4px;">
+          <div class="divider"></div>
+          <div class="field-label">📁 Dossier de destination</div>
+          <select id="autoPubResultsSection" onchange="saveAutoPublishSetting('news_auto_publish_results_section_id', this.value)">
             <option value="">— Par défaut (auto-créé)</option>
           </select>
         </div>
         <div class="auto-publish-item">
+          <span class="pub-icon" aria-hidden="true">🥇</span>
           <label>Qualifiés pour la Finale</label>
-          <div class="desc">Déclenché après l'import du dernier tournoi qualificatif (liste des qualifiés et date de la finale).</div>
+          <div class="desc">Déclenché à l'import du dernier tournoi qualificatif. L'article liste les qualifiés et la date de la finale.</div>
+          <div class="field-label">Mode</div>
           <select id="autoPubQualification" onchange="saveAutoPublishSetting('news_auto_publish_qualification', this.value)">
             <option value="auto">Publication immédiate</option>
             <option value="draft">Créer en brouillon</option>
             <option value="off">Désactivé</option>
           </select>
-          <div style="margin-top: 8px; font-size: 12px; color: #666;">📁 Dossier de destination</div>
-          <select id="autoPubQualificationSection" onchange="saveAutoPublishSetting('news_auto_publish_qualification_section_id', this.value)" style="margin-top: 4px;">
+          <div class="divider"></div>
+          <div class="field-label">📁 Dossier de destination</div>
+          <select id="autoPubQualificationSection" onchange="saveAutoPublishSetting('news_auto_publish_qualification_section_id', this.value)">
             <option value="">— Par défaut (auto-créé)</option>
           </select>
         </div>
         <div class="auto-publish-item">
+          <span class="pub-icon" aria-hidden="true">📅</span>
           <label>Nouveau tournoi ouvert</label>
-          <div class="desc">Déclenché à la création d'un nouveau tournoi (dates, lieu, date limite d'inscription).</div>
+          <div class="desc">Déclenché à la création d'un tournoi. L'article annonce dates, lieu et date limite d'inscription.</div>
+          <div class="field-label">Mode</div>
           <select id="autoPubNewTournament" onchange="saveAutoPublishSetting('news_auto_publish_new_tournament', this.value)">
             <option value="auto">Publication immédiate</option>
             <option value="draft">Créer en brouillon</option>
             <option value="off">Désactivé</option>
           </select>
-          <div style="margin-top: 8px; font-size: 12px; color: #666;">📁 Dossier de destination</div>
-          <select id="autoPubNewTournamentSection" onchange="saveAutoPublishSetting('news_auto_publish_new_tournament_section_id', this.value)" style="margin-top: 4px;">
+          <div class="divider"></div>
+          <div class="field-label">📁 Dossier de destination</div>
+          <select id="autoPubNewTournamentSection" onchange="saveAutoPublishSetting('news_auto_publish_new_tournament_section_id', this.value)">
             <option value="">— Par défaut (auto-créé)</option>
           </select>
         </div>
         <!-- V 2.0.591 — CONVOCATION event card -->
         <div class="auto-publish-item">
+          <span class="pub-icon" aria-hidden="true">📨</span>
           <label>Convocations envoyées</label>
-          <div class="desc">Déclenché à l'envoi des convocations d'un tournoi (Com Joueurs → générer/envoyer). L'article liste les compositions de poules.</div>
+          <div class="desc">Déclenché à l'envoi des convocations (Com Joueurs → générer / envoyer). L'article liste les compositions de poules.</div>
+          <div class="field-label">Mode</div>
           <select id="autoPubConvocation" onchange="saveAutoPublishSetting('news_auto_publish_convocation', this.value)">
             <option value="auto">Publication immédiate</option>
             <option value="draft">Créer en brouillon</option>
             <option value="off">Désactivé</option>
           </select>
-          <div style="margin-top: 8px; font-size: 12px; color: #666;">📁 Dossier de destination</div>
-          <select id="autoPubConvocationSection" onchange="saveAutoPublishSetting('news_auto_publish_convocation_section_id', this.value)" style="margin-top: 4px;">
+          <div class="divider"></div>
+          <div class="field-label">📁 Dossier de destination</div>
+          <select id="autoPubConvocationSection" onchange="saveAutoPublishSetting('news_auto_publish_convocation_section_id', this.value)">
             <option value="">— Par défaut (auto-créé)</option>
           </select>
         </div>
