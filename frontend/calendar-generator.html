@@ -569,6 +569,64 @@
       <div class="actions-bar">
         <div>
           <button type="button" class="btn" id="backToRulesBtn" style="padding: 10px 20px;">← Retour Règles</button>
+          <button type="button" class="btn" id="goToPublishBtn" style="background: #c47b00; color: white; padding: 10px 20px; border: none; border-radius: 5px; font-weight: 600; margin-left: 8px;">Étape suivante : Publication →</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ÉTAPE 6 — Publication (V 2.0.593) -->
+    <div class="card" id="step6Card" style="display: none;">
+      <div class="step-header">
+        <h3 style="margin: 0;">Étape 6 — Publication du calendrier</h3>
+      </div>
+      <p style="color: #666; font-size: 14px; margin-top: 6px;">
+        Publier le calendrier crée les tournois dans la base et déclenche automatiquement les articles
+        d'annonce dans l'app joueur (un article par tournoi, en mode brouillon ou publié selon votre
+        configuration). Les tournois ayant déjà des inscriptions ou des résultats sont protégés.
+      </p>
+
+      <div id="publishSummary" style="margin-top: 16px; display: flex; gap: 14px; flex-wrap: wrap;">
+        <div class="publish-stat" style="flex: 1; min-width: 150px; padding: 14px; background: #e6f4ec; border: 1px solid #a5d6a7; border-radius: 8px;">
+          <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #2c7a4d; font-weight: 700;">✅ Sûr</div>
+          <div id="publishCountSafe" style="font-size: 28px; font-weight: 800; color: #2c7a4d; margin-top: 4px;">—</div>
+          <div style="font-size: 11px; color: #555;">Création ou mise à jour d'un tournoi vierge</div>
+        </div>
+        <div class="publish-stat" style="flex: 1; min-width: 150px; padding: 14px; background: #fff3cd; border: 1px solid #ffc107; border-radius: 8px;">
+          <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #856404; font-weight: 700;">⚠️ Sensible</div>
+          <div id="publishCountSensitive" style="font-size: 28px; font-weight: 800; color: #856404; margin-top: 4px;">—</div>
+          <div style="font-size: 11px; color: #555;">Tournoi déjà inscrit — confirmation requise</div>
+        </div>
+        <div class="publish-stat" style="flex: 1; min-width: 150px; padding: 14px; background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 8px;">
+          <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #721c24; font-weight: 700;">🚫 Bloqué</div>
+          <div id="publishCountBlocked" style="font-size: 28px; font-weight: 800; color: #721c24; margin-top: 4px;">—</div>
+          <div style="font-size: 11px; color: #555;">Résultats déjà saisis — non touché</div>
+        </div>
+      </div>
+
+      <div style="margin-top: 16px;">
+        <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer;">
+          <input type="checkbox" id="forceSensitiveChk">
+          <span>Publier aussi les tournois <strong>sensibles</strong> (avec inscriptions). Risque de doublon — n'utilisez que si vous savez ce que vous faites.</span>
+        </label>
+      </div>
+
+      <h3 class="section-title" style="margin-top: 20px;">Détail par tournoi</h3>
+      <div style="max-height: 360px; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 6px;">
+        <table id="publishTable" class="ligue-table" style="margin: 0;">
+          <thead style="position: sticky; top: 0; background: #f5f5f5;">
+            <tr>
+              <th>Date</th><th>Type</th><th>Catégorie</th><th>Hôte</th><th>Action</th><th>Statut</th>
+            </tr>
+          </thead>
+          <tbody><tr><td colspan="6" style="color:#888;">Chargement…</td></tr></tbody>
+        </table>
+      </div>
+
+      <div class="actions-bar" style="margin-top: 18px;">
+        <span id="publishStatus" class="save-status"></span>
+        <div>
+          <button type="button" class="btn" id="backToGenerationBtn" style="padding: 10px 20px;">← Retour Génération</button>
+          <button type="button" class="btn" id="publishCalendarBtn" style="background: #2c7a4d; color: white; padding: 10px 20px; border: none; border-radius: 5px; font-weight: 600; margin-left: 8px;">✓ Publier le calendrier</button>
         </div>
       </div>
     </div>
@@ -585,6 +643,20 @@
       window.location.href = 'dashboard.html';
       throw new Error('Not authorized');
     }
+    // V 2.0.593 — Org-level feature flag check. Direct navigation hits
+    // this; the nav link is also hidden when the flag is false.
+    (async () => {
+      try {
+        const r = await fetch('/api/calendar-generator/feature-status', {
+          headers: { 'Authorization': 'Bearer ' + sessionStorage.getItem('token') }
+        });
+        const j = await r.json();
+        if (!j || !j.enabled) {
+          alert('Le générateur de calendrier n\'est pas activé pour votre CDB. Contactez votre administrateur.');
+          window.location.href = 'dashboard.html';
+        }
+      } catch (e) { /* non-blocking */ }
+    })();
     const authHeaders = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
 
     let referenceData = { categories: [], clubs: [] };
@@ -1481,6 +1553,105 @@
     document.getElementById('backToRulesBtn').addEventListener('click', () => {
       document.getElementById('step3Card').style.display = 'none';
       document.getElementById('step2Card').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+
+    // ============================================================
+    // PHASE 7 — Publication (Étape 6) — V 2.0.593
+    // ============================================================
+    function setPublishStatus(msg, cls) {
+      const el = document.getElementById('publishStatus');
+      if (!el) return;
+      el.textContent = msg;
+      el.className = 'save-status' + (cls ? ' ' + cls : '');
+    }
+    function classBadge(cls) {
+      if (cls === 'safe')      return '<span style="display:inline-block;padding:2px 8px;background:#e6f4ec;color:#2c7a4d;border-radius:10px;font-size:11px;font-weight:700;">SÛR</span>';
+      if (cls === 'sensitive') return '<span style="display:inline-block;padding:2px 8px;background:#fff3cd;color:#856404;border-radius:10px;font-size:11px;font-weight:700;">SENSIBLE</span>';
+      if (cls === 'blocked')   return '<span style="display:inline-block;padding:2px 8px;background:#f8d7da;color:#721c24;border-radius:10px;font-size:11px;font-weight:700;">BLOQUÉ</span>';
+      return cls;
+    }
+    function actionBadge(action) {
+      if (action === 'create') return '🆕 Créer';
+      if (action === 'update') return '✏️ Mettre à jour';
+      if (action === 'skip')   return '⏭️ Ignorer';
+      return action;
+    }
+    async function loadPublishPreview() {
+      if (!currentBrief) {
+        setPublishStatus('Aucun brief actif — revenez à l\'Étape 1.', 'error');
+        return;
+      }
+      setPublishStatus('Analyse en cours…', '');
+      try {
+        const res = await fetch(`${API_URL}/calendar-generator/publish/preview?brief_id=${currentBrief.id}`, { headers: authHeaders });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Échec analyse');
+        document.getElementById('publishCountSafe').textContent = data.summary.safe;
+        document.getElementById('publishCountSensitive').textContent = data.summary.sensitive;
+        document.getElementById('publishCountBlocked').textContent = data.summary.blocked;
+        const tbody = document.querySelector('#publishTable tbody');
+        if (!data.items.length) {
+          tbody.innerHTML = '<tr><td colspan="6" style="color:#888;">Aucun tournoi dans le brouillon. Lancez une génération à l\'Étape 3.</td></tr>';
+        } else {
+          tbody.innerHTML = data.items.map(it => `
+            <tr>
+              <td>${it.weekend_date || '—'}</td>
+              <td><strong>${it.tournament_type}</strong></td>
+              <td>${it.category_label || ''}</td>
+              <td>${it.host_name || ''}</td>
+              <td>${actionBadge(it.action)}</td>
+              <td>${classBadge(it.classification)}</td>
+            </tr>
+          `).join('');
+        }
+        const btn = document.getElementById('publishCalendarBtn');
+        btn.disabled = data.summary.safe + data.summary.sensitive === 0;
+        setPublishStatus('', '');
+      } catch (err) {
+        setPublishStatus('Erreur : ' + err.message, 'error');
+      }
+    }
+    document.getElementById('goToPublishBtn').addEventListener('click', async () => {
+      document.getElementById('step6Card').style.display = 'block';
+      document.getElementById('step6Card').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      await loadPublishPreview();
+    });
+    document.getElementById('backToGenerationBtn').addEventListener('click', () => {
+      document.getElementById('step6Card').style.display = 'none';
+      document.getElementById('step3Card').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    document.getElementById('publishCalendarBtn').addEventListener('click', async () => {
+      const force = document.getElementById('forceSensitiveChk').checked;
+      const sensitiveCount = parseInt(document.getElementById('publishCountSensitive').textContent, 10) || 0;
+      const safeCount = parseInt(document.getElementById('publishCountSafe').textContent, 10) || 0;
+      const total = safeCount + (force ? sensitiveCount : 0);
+      const msg = `Publier ${total} tournoi(s) ?\n\n`
+        + `Cela créera ou mettra à jour les entrées dans la base et déclenchera l'envoi automatique d'articles d'annonce dans l'app joueur (selon votre configuration).\n\n`
+        + (sensitiveCount > 0 && !force ? `${sensitiveCount} tournoi(s) sensible(s) seront ignoré(s).` : '');
+      if (!confirm(msg)) return;
+      const btn = document.getElementById('publishCalendarBtn');
+      btn.disabled = true;
+      btn.textContent = '⏳ Publication…';
+      setPublishStatus('', '');
+      try {
+        const res = await fetch(`${API_URL}/calendar-generator/publish`, {
+          method: 'POST', headers: authHeaders,
+          body: JSON.stringify({ brief_id: currentBrief.id, force_sensitive: force })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Échec publication');
+        setPublishStatus(
+          `✓ Publié : ${data.created} créé(s), ${data.updated} mis à jour, ${data.skipped} ignoré(s). ${data.articles_drafted} article(s) en cours de publication.`,
+          'success'
+        );
+        // Refresh preview to reflect post-publish state.
+        setTimeout(loadPublishPreview, 600);
+      } catch (err) {
+        setPublishStatus('Erreur : ' + err.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '✓ Publier le calendrier';
+      }
     });
 
     // Pre-fill quick-tuning panel from current constraints

@@ -56,6 +56,11 @@ async function initAppBranding() {
       injectDdJNavLink();
     }
 
+    // V 2.0.593 — Hide the calendar generator nav link unless the org
+    // has the feature flag turned on. Runs everywhere so the link is
+    // hidden uniformly across all 30+ admin pages.
+    applyCalendarGeneratorVisibility();
+
     // Show persistent test-mode banner if the org has communications test mode on.
     // Important: this runs on every admin page (dashboard, emailing, generate-poules...)
     // so admins cannot forget it's active while sending convocations.
@@ -147,6 +152,25 @@ function injectSAReturnButton() {
  * menu yet (very unlikely now), we fall back to the legacy flat-sibling
  * placement to stay safe.
  */
+// V 2.0.593 — Hide every "Assistant Calendrier" link unless the org's
+// calendar_generator_enabled flag is 'true'. Idempotent + safe on
+// pages with no nav.
+async function applyCalendarGeneratorVisibility() {
+  try {
+    const token = sessionStorage.getItem('token');
+    if (!token) return;
+    const resp = await fetch('/api/settings/org-settings-batch?keys=calendar_generator_enabled', {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+    if (!resp.ok) return;
+    const data = await resp.json();
+    if (String(data.calendar_generator_enabled || '').toLowerCase() === 'true') return;
+    document.querySelectorAll('a[href="calendar-generator.html"]').forEach(a => {
+      a.style.display = 'none';
+    });
+  } catch (e) { /* non-blocking */ }
+}
+
 async function injectDdJNavLink() {
   try {
     // Check if DdJ module is enabled for this org

@@ -11,16 +11,48 @@
 
 const express = require('express');
 const { authenticateToken, requireAdmin } = require('./auth');
+const appSettings = require('../utils/app-settings');
 
 const router = express.Router();
 const getDb = () => require('../db-loader');
+
+// V 2.0.593 — Per-org feature flag. Every endpoint below is gated by a
+// router-level middleware that runs AFTER authenticateToken. We use a
+// param-style middleware injected on the request object via a tiny
+// gate function, then routes call `requireCalendarGenerator` directly
+// in their middleware chain.
+async function requireCalendarGenerator(req, res, next) {
+  try {
+    const orgId = req.user && req.user.organizationId;
+    if (!orgId) return res.status(403).json({ error: 'Org context manquant' });
+    const enabled = await appSettings.getOrgSetting(orgId, 'calendar_generator_enabled');
+    if (String(enabled).toLowerCase() === 'true') return next();
+    return res.status(403).json({ error: 'Le générateur de calendrier n\'est pas activé pour cette CDB.' });
+  } catch (err) {
+    console.error('[calendar-generator] feature flag check failed:', err.message);
+    return res.status(500).json({ error: 'Vérification feature flag échouée' });
+  }
+}
+
+// Public endpoint: lets the frontend check whether the wizard should be
+// surfaced for the current admin without throwing 403 noise.
+router.get('/feature-status', authenticateToken, async (req, res) => {
+  try {
+    const orgId = req.user && req.user.organizationId;
+    if (!orgId) return res.json({ enabled: false });
+    const enabled = await appSettings.getOrgSetting(orgId, 'calendar_generator_enabled');
+    res.json({ enabled: String(enabled).toLowerCase() === 'true' });
+  } catch (err) {
+    res.json({ enabled: false });
+  }
+});
 
 // ----------------------------------------------------------------
 // Brief de saison
 // ----------------------------------------------------------------
 
 // GET /brief?season=2026-2027 — retrieve brief for a season (or null)
-router.get('/brief', authenticateToken, (req, res) => {
+router.get('/brief', authenticateToken, requireCalendarGenerator, (req, res) => {
   const db = getDb();
   const orgId = req.user.organizationId;
   const { season } = req.query;
@@ -41,7 +73,7 @@ router.get('/brief', authenticateToken, (req, res) => {
 });
 
 // GET /briefs — list all briefs for the org
-router.get('/briefs', authenticateToken, (req, res) => {
+router.get('/briefs', authenticateToken, requireCalendarGenerator, (req, res) => {
   const db = getDb();
   const orgId = req.user.organizationId;
 
@@ -62,7 +94,7 @@ router.get('/briefs', authenticateToken, (req, res) => {
 });
 
 // POST /brief — create a new brief
-router.post('/brief', authenticateToken, requireAdmin, (req, res) => {
+router.post('/brief', authenticateToken, requireCalendarGenerator, requireAdmin, (req, res) => {
   const db = getDb();
   const orgId = req.user.organizationId;
   const userId = req.user.userId;
@@ -118,7 +150,7 @@ router.post('/brief', authenticateToken, requireAdmin, (req, res) => {
 });
 
 // PUT /brief/:id — update existing brief
-router.put('/brief/:id', authenticateToken, requireAdmin, (req, res) => {
+router.put('/brief/:id', authenticateToken, requireCalendarGenerator, requireAdmin, (req, res) => {
   const db = getDb();
   const orgId = req.user.organizationId;
   const briefId = parseInt(req.params.id, 10);
@@ -174,7 +206,7 @@ router.put('/brief/:id', authenticateToken, requireAdmin, (req, res) => {
 });
 
 // DELETE /brief/:id — delete a brief (cascade deletes drafts and sync logs)
-router.delete('/brief/:id', authenticateToken, requireAdmin, (req, res) => {
+router.delete('/brief/:id', authenticateToken, requireCalendarGenerator, requireAdmin, (req, res) => {
   const db = getDb();
   const orgId = req.user.organizationId;
   const briefId = parseInt(req.params.id, 10);
@@ -197,7 +229,7 @@ router.delete('/brief/:id', authenticateToken, requireAdmin, (req, res) => {
 // ----------------------------------------------------------------
 
 // GET /ligue-finals?season=2026-2027 — list ligue final dates for a season
-router.get('/ligue-finals', authenticateToken, (req, res) => {
+router.get('/ligue-finals', authenticateToken, requireCalendarGenerator, (req, res) => {
   const db = getDb();
   const orgId = req.user.organizationId;
   const { season } = req.query;
@@ -224,7 +256,7 @@ router.get('/ligue-finals', authenticateToken, (req, res) => {
 
 // POST /ligue-finals — bulk replace ligue final dates for a season
 // Body: { season: "2026-2027", entries: [{ category_id, final_date }, ...] }
-router.post('/ligue-finals', authenticateToken, requireAdmin, async (req, res) => {
+router.post('/ligue-finals', authenticateToken, requireCalendarGenerator, requireAdmin, async (req, res) => {
   const db = getDb();
   const orgId = req.user.organizationId;
   const { season, entries } = req.body;
@@ -262,7 +294,7 @@ router.post('/ligue-finals', authenticateToken, requireAdmin, async (req, res) =
 });
 
 // DELETE /ligue-finals/:id
-router.delete('/ligue-finals/:id', authenticateToken, requireAdmin, (req, res) => {
+router.delete('/ligue-finals/:id', authenticateToken, requireCalendarGenerator, requireAdmin, (req, res) => {
   const db = getDb();
   const orgId = req.user.organizationId;
   const id = parseInt(req.params.id, 10);
@@ -286,7 +318,7 @@ router.delete('/ligue-finals/:id', authenticateToken, requireAdmin, (req, res) =
 
 // GET /reference-data — convenience endpoint returning categories + clubs + tournament types
 // Used by the Step 1 UI to populate dropdowns/checkboxes
-router.get('/reference-data', authenticateToken, (req, res) => {
+router.get('/reference-data', authenticateToken, requireCalendarGenerator, (req, res) => {
   const db = getDb();
   const orgId = req.user.organizationId;
 
@@ -358,7 +390,7 @@ const DEFAULT_RULE_INSTANCES = [
 ];
 
 // GET /constraints — list rule instances for the current org
-router.get('/constraints', authenticateToken, (req, res) => {
+router.get('/constraints', authenticateToken, requireCalendarGenerator, (req, res) => {
   const db = getDb();
   const orgId = req.user.organizationId;
   db.all(
@@ -378,7 +410,7 @@ router.get('/constraints', authenticateToken, (req, res) => {
 });
 
 // POST /constraints — add a rule instance
-router.post('/constraints', authenticateToken, requireAdmin, (req, res) => {
+router.post('/constraints', authenticateToken, requireCalendarGenerator, requireAdmin, (req, res) => {
   const db = getDb();
   const orgId = req.user.organizationId;
   const { rule_type, parameters, strictness, weight, enabled } = req.body;
@@ -408,7 +440,7 @@ router.post('/constraints', authenticateToken, requireAdmin, (req, res) => {
 });
 
 // PATCH /constraints/:id — update parameters / weight / enabled
-router.patch('/constraints/:id', authenticateToken, requireAdmin, (req, res) => {
+router.patch('/constraints/:id', authenticateToken, requireCalendarGenerator, requireAdmin, (req, res) => {
   const db = getDb();
   const orgId = req.user.organizationId;
   const id = parseInt(req.params.id, 10);
@@ -441,7 +473,7 @@ router.patch('/constraints/:id', authenticateToken, requireAdmin, (req, res) => 
 });
 
 // DELETE /constraints/:id
-router.delete('/constraints/:id', authenticateToken, requireAdmin, (req, res) => {
+router.delete('/constraints/:id', authenticateToken, requireCalendarGenerator, requireAdmin, (req, res) => {
   const db = getDb();
   const orgId = req.user.organizationId;
   const id = parseInt(req.params.id, 10);
@@ -460,7 +492,7 @@ router.delete('/constraints/:id', authenticateToken, requireAdmin, (req, res) =>
 
 // POST /constraints/seed-defaults — pre-fill the V1 default library for the org
 // Idempotent: only inserts rule_types that don't already exist for the org.
-router.post('/constraints/seed-defaults', authenticateToken, requireAdmin, async (req, res) => {
+router.post('/constraints/seed-defaults', authenticateToken, requireCalendarGenerator, requireAdmin, async (req, res) => {
   const db = getDb();
   const orgId = req.user.organizationId;
   try {
@@ -496,7 +528,7 @@ router.post('/constraints/seed-defaults', authenticateToken, requireAdmin, async
 
 // PATCH /clubs/:id/start-time — update a club's preferred_start_time
 // Body: { value: 'morning' | 'afternoon' | 'full_day' | null }
-router.patch('/clubs/:id/start-time', authenticateToken, requireAdmin, (req, res) => {
+router.patch('/clubs/:id/start-time', authenticateToken, requireCalendarGenerator, requireAdmin, (req, res) => {
   const db = getDb();
   const orgId = req.user.organizationId;
   const clubId = parseInt(req.params.id, 10);
@@ -528,7 +560,7 @@ router.patch('/clubs/:id/start-time', authenticateToken, requireAdmin, (req, res
 // Body: { text: "Clichy ne doit jamais accueillir deux week-ends d'affilée" }
 // Response: { rule_type, parameters, strictness, weight, explanation, confidence }
 // Note: This is a DRAFT — admin must validate before saving via POST /constraints.
-router.post('/constraints/from-natural-language', authenticateToken, requireAdmin, async (req, res) => {
+router.post('/constraints/from-natural-language', authenticateToken, requireCalendarGenerator, requireAdmin, async (req, res) => {
   const { text } = req.body || {};
   if (!text || typeof text !== 'string' || text.trim().length < 5) {
     return res.status(400).json({ error: 'Texte requis (au moins 5 caractères).' });
@@ -720,7 +752,7 @@ function loadEngineContext(orgId, briefId, cb) {
 
 // POST /generate — body: { brief_id }
 // Runs the engine, replaces calendar_draft for that brief, returns result.
-router.post('/generate', authenticateToken, requireAdmin, (req, res) => {
+router.post('/generate', authenticateToken, requireCalendarGenerator, requireAdmin, (req, res) => {
   const orgId = req.user.organizationId;
   const briefId = parseInt(req.body?.brief_id, 10);
   const overrides = req.body?.constraint_overrides || {}; // { rule_type: { parameters?: {}, weight?: N, enabled?: bool } }
@@ -839,7 +871,7 @@ router.post('/generate', authenticateToken, requireAdmin, (req, res) => {
 });
 
 // PATCH /draft/:id — manually edit one placement (date / host / lock / comment)
-router.patch('/draft/:id', authenticateToken, requireAdmin, (req, res) => {
+router.patch('/draft/:id', authenticateToken, requireCalendarGenerator, requireAdmin, (req, res) => {
   const db = getDb();
   const orgId = req.user.organizationId;
   const id = parseInt(req.params.id, 10);
@@ -873,7 +905,7 @@ router.patch('/draft/:id', authenticateToken, requireAdmin, (req, res) => {
 });
 
 // GET /draft?brief_id=X — fetch persisted draft
-router.get('/draft', authenticateToken, (req, res) => {
+router.get('/draft', authenticateToken, requireCalendarGenerator, (req, res) => {
   const db = getDb();
   const orgId = req.user.organizationId;
   const briefId = parseInt(req.query.brief_id, 10);
@@ -911,7 +943,7 @@ router.get('/draft', authenticateToken, (req, res) => {
 });
 
 // GET /draft/export?brief_id=X — download the draft as a .xlsx file
-router.get('/draft/export', authenticateToken, async (req, res) => {
+router.get('/draft/export', authenticateToken, requireCalendarGenerator, async (req, res) => {
   const db = getDb();
   const orgId = req.user.organizationId;
   const briefId = parseInt(req.query.brief_id, 10);
@@ -1308,5 +1340,339 @@ function abbreviate(name) {
   if (words.length === 1) return words[0].slice(0, 4).toUpperCase();
   return words.map(w => w[0]).join('').slice(0, 5).toUpperCase();
 }
+
+// ----------------------------------------------------------------
+// Phase 7 — Publish
+// ----------------------------------------------------------------
+//
+// Maps calendar_draft.tournament_type → tournoi_ext.tournament_number,
+// matching the heuristic used in the legacy import (db-postgres.js
+// line 525-534). Keep in lock-step with that mapping.
+const TOURNAMENT_TYPE_TO_NUMBER = { T1: 1, T2: 2, T3: 3, FINALE: 4 };
+
+function tournamentNameForRow(row) {
+  // Build the human-friendly name: e.g. "T1 Bande R2", "Finale Cadre 42/2 R1"
+  const prefix = row.tournament_type === 'FINALE' ? 'Finale' : row.tournament_type;
+  const cat = (row.category_label || `${row.game_type || ''} ${row.level || ''}`).trim();
+  return `${prefix} ${cat}`.trim();
+}
+
+// GET /publish/preview?brief_id=X
+//   Returns the per-row classification (safe / sensitive / blocked) without
+//   making any DB changes. The frontend uses this to render the Step 6
+//   summary table BEFORE the admin clicks "Publier".
+//
+// Classification rules:
+//   - blocked   → a tournoi_ext row with same (org, season, mode, categorie,
+//                  tournament_number) already exists AND has tournament_results
+//   - sensitive → same match exists AND has inscriptions (but no results)
+//   - safe      → no existing tournoi_ext row, OR row exists but is empty
+//
+// The match key is (organization_id, season, UPPER(mode), UPPER(categorie),
+// tournament_number). We use case-insensitive matching for safety since
+// data sources sometimes uppercase the mode.
+router.get('/publish/preview', authenticateToken, requireCalendarGenerator, requireAdmin, async (req, res) => {
+  const db = getDb();
+  const orgId = req.user.organizationId;
+  const briefId = parseInt(req.query.brief_id, 10);
+  if (!briefId) return res.status(400).json({ error: 'brief_id requis' });
+
+  const fetchAll = (sql, params) => new Promise((resolve, reject) =>
+    db.all(sql, params, (err, rows) => err ? reject(err) : resolve(rows || []))
+  );
+  const fetchOne = (sql, params) => new Promise((resolve, reject) =>
+    db.get(sql, params, (err, row) => err ? reject(err) : resolve(row))
+  );
+
+  try {
+    const brief = await fetchOne(
+      `SELECT id, season, status, first_weekend, last_weekend FROM calendar_brief WHERE id = $1 AND organization_id = $2`,
+      [briefId, orgId]
+    );
+    if (!brief) return res.status(404).json({ error: 'Brief introuvable' });
+    // Date range for matching existing tournoi_ext rows. Pads ±60 days
+    // around the brief window so adjacent late/early tournaments still
+    // match (rare but cheap).
+    const seasonStart = brief.first_weekend
+      ? new Date(new Date(brief.first_weekend).getTime() - 60 * 86400000).toISOString().slice(0, 10)
+      : `${brief.season.split('-')[0]}-01-01`;
+    const seasonEnd = brief.last_weekend
+      ? new Date(new Date(brief.last_weekend).getTime() + 60 * 86400000).toISOString().slice(0, 10)
+      : `${brief.season.split('-')[1]}-12-31`;
+
+    const draft = await fetchAll(
+      `SELECT cd.id, cd.weekend_date, cd.tournament_type, cd.host_club_id,
+              cd.category_id, cd.tournoi_ext_id,
+              c.display_name AS category_label, c.game_type, c.level,
+              cl.display_name AS host_name
+         FROM calendar_draft cd
+         JOIN calendar_brief cb ON cb.id = cd.brief_id
+         LEFT JOIN categories c  ON c.id  = cd.category_id
+         LEFT JOIN clubs cl      ON cl.id = cd.host_club_id
+        WHERE cd.brief_id = $1 AND cb.organization_id = $2
+        ORDER BY cd.weekend_date ASC`,
+      [briefId, orgId]
+    );
+
+    const items = [];
+    for (const row of draft) {
+      const tnum = TOURNAMENT_TYPE_TO_NUMBER[row.tournament_type] || null;
+      const mode = row.game_type || '';
+      const categorie = row.level || '';
+
+      // Look up an existing tournoi_ext row for the same identity tuple.
+      // tournoi_ext has no `saison` column — we scope by debut date range
+      // pulled from the brief (first_weekend / last_weekend, falling back
+      // to a wide window when missing).
+      const existing = await fetchOne(
+        `SELECT t.tournoi_id,
+                (SELECT COUNT(*) FROM inscriptions i WHERE i.tournoi_id = t.tournoi_id) AS insc_count,
+                (SELECT COUNT(*) FROM tournament_results tr
+                   JOIN tournaments tt ON tt.id = tr.tournament_id
+                  WHERE tt.tournoi_ext_id = t.tournoi_id) AS result_count
+           FROM tournoi_ext t
+          WHERE t.organization_id = $1
+            AND UPPER(t.mode) = UPPER($2)
+            AND UPPER(t.categorie) = UPPER($3)
+            AND t.tournament_number = $4
+            AND t.debut BETWEEN $5 AND $6`,
+        [orgId, mode, categorie, tnum, seasonStart, seasonEnd]
+      ).catch(() => null);
+
+      let classification = 'safe';
+      let existingId = null;
+      if (existing) {
+        existingId = existing.tournoi_id;
+        const r = parseInt(existing.result_count, 10) || 0;
+        const i = parseInt(existing.insc_count, 10) || 0;
+        if (r > 0) classification = 'blocked';
+        else if (i > 0) classification = 'sensitive';
+        else classification = 'safe'; // exists but empty → can be updated in place
+      }
+
+      items.push({
+        draft_id: row.id,
+        tournoi_ext_id: existingId,
+        weekend_date: row.weekend_date instanceof Date
+          ? row.weekend_date.toISOString().slice(0, 10)
+          : (String(row.weekend_date || '').match(/^\d{4}-\d{2}-\d{2}/)?.[0] || null),
+        tournament_type: row.tournament_type,
+        category_label: row.category_label || `${mode} ${categorie}`.trim(),
+        host_name: row.host_name || '',
+        classification,
+        action: existingId ? (classification === 'blocked' ? 'skip' : 'update') : 'create'
+      });
+    }
+
+    const summary = {
+      safe:      items.filter(i => i.classification === 'safe').length,
+      sensitive: items.filter(i => i.classification === 'sensitive').length,
+      blocked:   items.filter(i => i.classification === 'blocked').length,
+      total:     items.length
+    };
+    res.json({ brief, items, summary });
+  } catch (err) {
+    console.error('[calendar-generator] /publish/preview error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /publish
+//   Body: { brief_id, force_sensitive?: boolean }
+//   - force_sensitive=true: also publishes sensitive rows (admin opt-in)
+//   - blocked rows are always skipped
+//
+// For each "create" or "update" action:
+//   - INSERT or UPDATE the tournoi_ext row
+//   - Update calendar_draft.tournoi_ext_id with the resulting id
+//   - Log to calendar_sync_log
+//   - Fire NEW_TOURNAMENT auto-publisher (fire-and-forget; idempotent
+//     via partial unique index on (org, source_type, source_ref_id))
+//
+// At the end, set calendar_brief.status = 'published'.
+router.post('/publish', authenticateToken, requireCalendarGenerator, requireAdmin, async (req, res) => {
+  const db = getDb();
+  const orgId = req.user.organizationId;
+  const briefId = parseInt(req.body.brief_id, 10);
+  const forceSensitive = req.body.force_sensitive === true;
+  if (!briefId) return res.status(400).json({ error: 'brief_id requis' });
+
+  const dbAll = (sql, params) => new Promise((resolve, reject) =>
+    db.all(sql, params, (err, rows) => err ? reject(err) : resolve(rows || []))
+  );
+  const dbGet = (sql, params) => new Promise((resolve, reject) =>
+    db.get(sql, params, (err, row) => err ? reject(err) : resolve(row))
+  );
+  const dbRun = (sql, params) => new Promise((resolve, reject) =>
+    db.run(sql, params, function (err) { err ? reject(err) : resolve(this); })
+  );
+
+  try {
+    const brief = await dbGet(
+      `SELECT id, season, first_weekend, last_weekend FROM calendar_brief WHERE id = $1 AND organization_id = $2`,
+      [briefId, orgId]
+    );
+    if (!brief) return res.status(404).json({ error: 'Brief introuvable' });
+    const seasonStart = brief.first_weekend
+      ? new Date(new Date(brief.first_weekend).getTime() - 60 * 86400000).toISOString().slice(0, 10)
+      : `${brief.season.split('-')[0]}-01-01`;
+    const seasonEnd = brief.last_weekend
+      ? new Date(new Date(brief.last_weekend).getTime() + 60 * 86400000).toISOString().slice(0, 10)
+      : `${brief.season.split('-')[1]}-12-31`;
+
+    // Pull draft rows to publish
+    const draft = await dbAll(
+      `SELECT cd.id, cd.weekend_date, cd.tournament_type, cd.host_club_id,
+              cd.category_id, cd.tournoi_ext_id,
+              c.display_name AS category_label, c.game_type, c.level,
+              cl.display_name AS host_name, cl.city AS host_city
+         FROM calendar_draft cd
+         LEFT JOIN categories c ON c.id = cd.category_id
+         LEFT JOIN clubs cl     ON cl.id = cd.host_club_id
+        WHERE cd.brief_id = $1
+        ORDER BY cd.weekend_date ASC`,
+      [briefId]
+    );
+
+    let createdCount = 0, updatedCount = 0, skippedCount = 0;
+    const articleSourceIds = []; // for fire-and-forget after the loop
+    let nextTournoiId = ((await dbGet(`SELECT MAX(tournoi_id) AS max_id FROM tournoi_ext`))?.max_id || 0);
+
+    for (const row of draft) {
+      const tnum = TOURNAMENT_TYPE_TO_NUMBER[row.tournament_type] || null;
+      const mode = row.game_type || '';
+      const categorie = row.level || '';
+      const lieu = row.host_name + (row.host_city ? ` (${row.host_city})` : '');
+      const debut = row.weekend_date instanceof Date
+        ? row.weekend_date.toISOString().slice(0, 10)
+        : String(row.weekend_date || '').slice(0, 10);
+      const nom = tournamentNameForRow(row);
+
+      // Re-classify per row to be safe (preview may be stale).
+      const existing = await dbGet(
+        `SELECT t.tournoi_id,
+                (SELECT COUNT(*) FROM inscriptions i WHERE i.tournoi_id = t.tournoi_id) AS insc_count,
+                (SELECT COUNT(*) FROM tournament_results tr
+                   JOIN tournaments tt ON tt.id = tr.tournament_id
+                  WHERE tt.tournoi_ext_id = t.tournoi_id) AS result_count
+           FROM tournoi_ext t
+          WHERE t.organization_id = $1
+            AND UPPER(t.mode) = UPPER($2)
+            AND UPPER(t.categorie) = UPPER($3)
+            AND t.tournament_number = $4
+            AND t.saison = $5`,
+        [orgId, mode, categorie, tnum, brief.season]
+      ).catch(() => null);
+
+      const hasResults = existing ? (parseInt(existing.result_count, 10) || 0) > 0 : false;
+      const hasInsc    = existing ? (parseInt(existing.insc_count, 10) || 0) > 0 : false;
+
+      if (existing && hasResults) {
+        skippedCount++;
+        await dbRun(
+          `INSERT INTO calendar_sync_log (organization_id, brief_id, action, tournoi_ext_id, change_type, summary, triggered_by)
+           VALUES ($1, $2, 'skip', $3, 'blocked', $4, $5)`,
+          [orgId, briefId, existing.tournoi_id, `${nom} — résultats existants, non touché`, req.user.userId || null]
+        );
+        continue;
+      }
+      if (existing && hasInsc && !forceSensitive) {
+        skippedCount++;
+        await dbRun(
+          `INSERT INTO calendar_sync_log (organization_id, brief_id, action, tournoi_ext_id, change_type, summary, triggered_by)
+           VALUES ($1, $2, 'skip', $3, 'sensitive', $4, $5)`,
+          [orgId, briefId, existing.tournoi_id, `${nom} — inscriptions existantes, force_sensitive non activé`, req.user.userId || null]
+        );
+        continue;
+      }
+
+      let resultingId;
+      if (existing) {
+        // UPDATE in place — preserves tournoi_id and any downstream FK.
+        resultingId = existing.tournoi_id;
+        await dbRun(
+          `UPDATE tournoi_ext
+              SET nom = $1, debut = $2, lieu = $3, taille = NULL
+            WHERE tournoi_id = $4`,
+          [nom, debut, lieu, resultingId]
+        );
+        updatedCount++;
+        await dbRun(
+          `INSERT INTO calendar_sync_log (organization_id, brief_id, action, tournoi_ext_id, change_type, summary, triggered_by)
+           VALUES ($1, $2, 'update', $3, $4, $5, $6)`,
+          [orgId, briefId, resultingId, hasInsc ? 'sensitive' : 'safe', `${nom} — mis à jour`, req.user.userId || null]
+        );
+      } else {
+        // INSERT new tournoi_ext row.
+        nextTournoiId++;
+        resultingId = nextTournoiId;
+        await dbRun(
+          `INSERT INTO tournoi_ext
+             (tournoi_id, nom, mode, categorie, taille, debut, lieu, tournament_number, organization_id)
+           VALUES ($1, $2, $3, $4, NULL, $5, $6, $7, $8)`,
+          [resultingId, nom, mode, categorie, debut, lieu, tnum, orgId]
+        );
+        createdCount++;
+        await dbRun(
+          `INSERT INTO calendar_sync_log (organization_id, brief_id, action, tournoi_ext_id, change_type, summary, triggered_by)
+           VALUES ($1, $2, 'create', $3, 'safe', $4, $5)`,
+          [orgId, briefId, resultingId, `${nom} — créé`, req.user.userId || null]
+        );
+        articleSourceIds.push({ id: resultingId, nom, mode, categorie, debut, lieu });
+      }
+
+      // Bind draft row → tournoi_ext for traceability.
+      await dbRun(
+        `UPDATE calendar_draft SET tournoi_ext_id = $1 WHERE id = $2`,
+        [resultingId, row.id]
+      );
+    }
+
+    // Mark brief as published.
+    await dbRun(
+      `UPDATE calendar_brief SET status = 'published', updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
+      [briefId]
+    );
+
+    // Fire NEW_TOURNAMENT auto-articles (fire-and-forget). Idempotent
+    // via the partial unique index on (org, source_type, source_ref_id).
+    setImmediate(async () => {
+      try {
+        const { publishAutoArticle } = require('../utils/news-auto-publisher');
+        for (const t of articleSourceIds) {
+          try {
+            const tournamentDateStr = t.debut
+              ? new Date(t.debut).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+              : '';
+            await publishAutoArticle('NEW_TOURNAMENT', orgId, {
+              sourceRefId: t.id,
+              tournamentName: t.nom,
+              categoryLabel: `${t.mode} ${t.categorie}`.trim(),
+              tournamentDate: tournamentDateStr,
+              location: t.lieu || '',
+              closingDate: tournamentDateStr
+            });
+          } catch (e) {
+            console.error('[calendar-generator/publish] auto-article failed for', t.id, e.message);
+          }
+        }
+      } catch (outerErr) {
+        console.error('[calendar-generator/publish] auto-publisher dispatch failed:', outerErr.message);
+      }
+    });
+
+    res.json({
+      success: true,
+      created: createdCount,
+      updated: updatedCount,
+      skipped: skippedCount,
+      articles_drafted: articleSourceIds.length,
+      brief_id: briefId
+    });
+  } catch (err) {
+    console.error('[calendar-generator] /publish error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 module.exports = router;

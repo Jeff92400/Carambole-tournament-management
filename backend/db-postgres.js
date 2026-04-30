@@ -1985,6 +1985,15 @@ async function initializeDatabase() {
       ON CONFLICT (id) DO NOTHING
     `);
 
+    // V 2.0.593 — Activate the calendar generator wizard on the demo
+    // org so we can test the full flow without exposing it to prod.
+    // Idempotent — does nothing if the row already exists with any value.
+    await client.query(`
+      INSERT INTO organization_settings (organization_id, key, value, updated_at)
+      VALUES (2, 'calendar_generator_enabled', 'true', CURRENT_TIMESTAMP)
+      ON CONFLICT (organization_id, key) DO NOTHING
+    `);
+
     // Reset organizations sequence to max id (needed after explicit id inserts)
     await client.query(`SELECT setval(pg_get_serial_sequence('organizations', 'id'), COALESCE((SELECT MAX(id) FROM organizations), 1))`);
 
