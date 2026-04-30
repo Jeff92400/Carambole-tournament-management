@@ -652,6 +652,11 @@
         </table>
       </div>
 
+      <!-- Outcome panel — populated after each create/update run.
+           Stays visible until the admin dismisses it, so the result is
+           never missed. Three states: success / partial / failure. -->
+      <div id="publishOutcome" style="display: none; margin-top: 18px; padding: 16px 20px; border-radius: 10px; border: 2px solid; box-shadow: 0 2px 8px rgba(0,0,0,0.08);"></div>
+
       <div class="actions-bar" style="margin-top: 18px;">
         <span id="publishStatus" class="save-status"></span>
         <div>
@@ -1748,6 +1753,69 @@
       el.textContent = msg;
       el.className = 'save-status' + (cls ? ' ' + cls : '');
     }
+
+    // Renders a prominent, persistent outcome panel after a publish run.
+    // state: 'success' | 'partial' | 'failure' | 'fatal'
+    function showPublishOutcome(state, data, fatalMsg) {
+      const el = document.getElementById('publishOutcome');
+      if (!el) return;
+      const styles = {
+        success: { bg: '#e6f4ec', border: '#2c7a4d', textColor: '#1f5a36', icon: '✅', title: 'Création terminée — tout s\'est bien passé' },
+        partial: { bg: '#fff8e1', border: '#c47b00', textColor: '#7a4a00', icon: '⚠️', title: 'Création terminée — avec quelques erreurs' },
+        failure: { bg: '#fdecea', border: '#b81c1c', textColor: '#7a1212', icon: '❌', title: 'Création échouée — aucun tournoi n\'a été créé' },
+        fatal:   { bg: '#fdecea', border: '#b81c1c', textColor: '#7a1212', icon: '❌', title: 'Erreur serveur' }
+      };
+      const s = styles[state] || styles.success;
+      const created = data?.created ?? 0;
+      const updated = data?.updated ?? 0;
+      const skipped = data?.skipped ?? 0;
+      const errors  = data?.errors || [];
+
+      let body;
+      if (state === 'fatal') {
+        body = `<div style="font-size: 14px; line-height: 1.5;">${escapeHtml(fatalMsg || 'Erreur inconnue')}</div>`;
+      } else {
+        const stats = `
+          <div style="display: flex; gap: 18px; flex-wrap: wrap; margin: 10px 0 4px 0; font-size: 14px;">
+            <span><strong style="font-size: 18px;">${created}</strong> créé${created > 1 ? 's' : ''}</span>
+            <span><strong style="font-size: 18px;">${updated}</strong> mis à jour</span>
+            <span><strong style="font-size: 18px;">${skipped}</strong> ignoré${skipped > 1 ? 's' : ''}</span>
+            ${errors.length ? `<span style="color: #b81c1c;"><strong style="font-size: 18px;">${errors.length}</strong> en erreur</span>` : ''}
+          </div>`;
+        const errorList = errors.length ? `
+          <details style="margin-top: 10px;">
+            <summary style="cursor: pointer; font-weight: 600; font-size: 13px;">Voir les ${errors.length} erreur${errors.length > 1 ? 's' : ''}</summary>
+            <ul style="margin: 8px 0 0 0; padding-left: 20px; font-size: 12px; line-height: 1.5;">
+              ${errors.map(e => `<li><strong>${escapeHtml(e.row || '?')}</strong> — ${escapeHtml(e.error || '?')}</li>`).join('')}
+            </ul>
+          </details>` : '';
+        const next = state === 'success'
+          ? `<div style="margin-top: 12px; font-size: 13px; opacity: 0.85;">Les tournois sont maintenant visibles dans la liste « Tournois ». Vous pouvez relancer cette opération si vous modifiez le calendrier.</div>`
+          : (state === 'partial'
+              ? `<div style="margin-top: 12px; font-size: 13px; opacity: 0.85;">Les tournois en succès sont enregistrés. Corrigez les erreurs ci-dessus puis relancez la création — les rangées en succès seront simplement mises à jour, sans doublon.</div>`
+              : `<div style="margin-top: 12px; font-size: 13px; opacity: 0.85;">Aucun tournoi n'a été enregistré. Consultez les détails ci-dessus, corrigez le problème puis relancez la création.</div>`);
+        body = stats + errorList + next;
+      }
+
+      el.style.background = s.bg;
+      el.style.borderColor = s.border;
+      el.style.color = s.textColor;
+      el.innerHTML = `
+        <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 14px;">
+          <div style="flex: 1;">
+            <div style="font-size: 17px; font-weight: 700; display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 22px;">${s.icon}</span> ${s.title}
+            </div>
+            ${body}
+          </div>
+          <button type="button" id="publishOutcomeClose" style="background: transparent; border: 1px solid currentColor; color: inherit; padding: 6px 14px; border-radius: 5px; cursor: pointer; font-weight: 600; flex-shrink: 0;">Fermer</button>
+        </div>
+      `;
+      el.style.display = 'block';
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const closeBtn = document.getElementById('publishOutcomeClose');
+      if (closeBtn) closeBtn.addEventListener('click', () => { el.style.display = 'none'; });
+    }
     function classBadge(cls) {
       if (cls === 'safe')      return '<span style="display:inline-block;padding:2px 8px;background:#e6f4ec;color:#2c7a4d;border-radius:10px;font-size:11px;font-weight:700;">SÛR</span>';
       if (cls === 'sensitive') return '<span style="display:inline-block;padding:2px 8px;background:#fff3cd;color:#856404;border-radius:10px;font-size:11px;font-weight:700;">SENSIBLE</span>';
@@ -1817,6 +1885,9 @@
       btn.disabled = true;
       btn.textContent = '⏳ Création en cours…';
       setPublishStatus('', '');
+      // Hide any previous outcome before launching.
+      const outcomeEl = document.getElementById('publishOutcome');
+      if (outcomeEl) outcomeEl.style.display = 'none';
       try {
         const res = await fetch(`${API_URL}/calendar-generator/publish`, {
           method: 'POST', headers: authHeaders,
@@ -1824,16 +1895,21 @@
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Échec création des tournois');
-        setPublishStatus(
-          (data.errors && data.errors.length
-            ? `⚠️ Terminé avec erreurs : ${data.created} créé(s), ${data.updated} mis à jour, ${data.skipped} ignoré(s), ${data.errors.length} échec(s).\n\nPremières erreurs :\n${data.errors.slice(0, 3).map(e => '• ' + e.row + ' → ' + e.error).join('\n')}`
-            : `✓ Terminé : ${data.created} créé(s), ${data.updated} mis à jour, ${data.skipped} ignoré(s).`),
-          'success'
-        );
+
+        // Decide outcome state from counts + errors.
+        const created = data.created || 0;
+        const updated = data.updated || 0;
+        const errCount = (data.errors || []).length;
+        let state;
+        if (errCount === 0)                            state = 'success';
+        else if (created + updated > 0 && errCount > 0) state = 'partial';
+        else                                            state = 'failure';
+        showPublishOutcome(state, data);
+
         // Refresh preview to reflect post-publish state.
         setTimeout(loadPublishPreview, 600);
       } catch (err) {
-        setPublishStatus('Erreur : ' + err.message, 'error');
+        showPublishOutcome('fatal', null, err.message);
       } finally {
         btn.disabled = false;
         btn.textContent = '🚀 Créer / Mettre à jour les tournois';
