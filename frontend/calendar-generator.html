@@ -1170,9 +1170,13 @@
 
     // Catalogue côté frontend : libellés et descriptions des règles V1
     const RULES_CATALOG = {
-      blackout_weekend:                          { label: 'Aucun tournoi sur week-end blackout',           paramLabel: 'Dates', paramKey: 'dates', paramType: 'list-dates' },
+      // V 2.0.605 — these two rules are auto-derived from the Étape 1
+      // brief. The rule parameter is no longer editable here to avoid
+      // duplicating data with the brief; the engine reads brief fields
+      // directly. paramSummary surfaces the live value from the brief.
+      blackout_weekend:                          { label: 'Aucun tournoi sur week-end blackout',           paramLabel: '(Étape 1)', paramKey: null, paramType: 'readonly', autoFromBrief: 'blackout_dates' },
       tournament_day_rule:                       { label: 'Jour précis pour chaque type de compétition',   paramLabel: 'Type → Jour', paramKey: null, paramType: 'readonly' },
-      season_start_after:                        { label: 'Début de saison ≥ date',                        paramLabel: 'Date', paramKey: 'first_weekend', paramType: 'date' },
+      season_start_after:                        { label: 'Début de saison ≥ date',                        paramLabel: '(Étape 1)', paramKey: null, paramType: 'readonly', autoFromBrief: 'first_weekend' },
       final_before_ligue_final:                  { label: 'Finale CDB avant finale ligue (par catégorie)', paramLabel: '(automatique)', paramKey: null, paramType: 'readonly' },
       min_weeks_between_cdb_and_ligue_final:     { label: '≥ N semaines entre finale CDB et finale ligue', paramLabel: 'N (semaines)', paramKey: 'min_weeks', paramType: 'number' },
       min_weeks_between_tournaments_same_category: { label: '≥ N semaines entre 2 tournois (même catégorie)', paramLabel: 'N (semaines)', paramKey: 'min_weeks', paramType: 'number' },
@@ -1203,6 +1207,20 @@
       const meta = RULES_CATALOG[rule.rule_type];
       if (!meta) return '';
       const params = rule.parameters || {};
+
+      // Auto-derived rules surface the live value pulled from the brief
+      // (not the rule's own parameter store, which is no longer authoritative).
+      if (meta.autoFromBrief === 'first_weekend') {
+        const v = currentBrief?.first_weekend;
+        return v ? `<span style="color:#2c7a4d;">${v}</span> <span style="color:#888;font-size:11px;">(modifié à l'Étape 1)</span>` : '<span style="color:#888;">(défini à l\'Étape 1)</span>';
+      }
+      if (meta.autoFromBrief === 'blackout_dates') {
+        const n = (currentBrief?.blackout_dates || blackoutDates || []).length;
+        return n
+          ? `<span style="color:#2c7a4d;">${n} date(s)</span> <span style="color:#888;font-size:11px;">(modifié à l'Étape 1)</span>`
+          : '<span style="color:#888;">aucune (défini à l\'Étape 1)</span>';
+      }
+
       if (meta.paramKey === 'min_weeks') return `${params.min_weeks ?? '?'} semaines`;
       if (meta.paramKey === 'tolerance') return `±${params.tolerance ?? 1}`;
       if (meta.paramKey === 'max') return `${params.max ?? '?'}`;

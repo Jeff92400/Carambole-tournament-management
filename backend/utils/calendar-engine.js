@@ -170,8 +170,10 @@ function isDateAllowed({
   const blackouts = new Set((brief.blackout_dates || []).map(toISODateString).filter(Boolean));
   if (blackouts.has(date)) return { ok: false, reason: 'date en blackout' };
 
-  // 2. season_start_after
-  const startAfter = toISODateString(param(cmap.season_start_after, 'first_weekend', brief.first_weekend));
+  // 2. season_start_after — always reads brief.first_weekend (single
+  // source of truth, V 2.0.605). The rule's stored `first_weekend`
+  // parameter is now auto-derived and ignored at evaluation time.
+  const startAfter = toISODateString(brief.first_weekend);
   if (startAfter && date < startAfter) {
     return { ok: false, reason: 'avant le premier week-end' };
   }

@@ -200,10 +200,43 @@ router.put('/brief/:id', authenticateToken, requireCalendarGenerator, requireAdm
         console.error('[calendar-generator] PUT /brief error:', err);
         return res.status(500).json({ error: err.message });
       }
+      // V 2.0.605 — sync auto-derived rules with the brief.
+      // season_start_after.first_weekend and blackout_weekend.dates
+      // are now driven by the brief, but we also keep the rule
+      // parameters in sync so any legacy reader sees the same value.
+      // Fire-and-forget — failure here doesn't break brief save.
+      syncAutoDerivedRulesFromBrief(getDb(), orgId, {
+        first_weekend: first_weekend || null,
+        blackout_dates: blackout_dates || null
+      }).catch(e => console.warn('[calendar-generator] auto-rule sync failed:', e.message));
       res.json({ message: 'Brief mis à jour' });
     }
   );
 });
+
+// Helper — push brief values into the two auto-derived rules' parameters
+// so the DB stays consistent. Idempotent: silently noops if rules don't
+// exist for this org (they will once admin opens Step 2 once).
+async function syncAutoDerivedRulesFromBrief(db, orgId, briefValues) {
+  const updates = [];
+  if (briefValues.first_weekend !== undefined && briefValues.first_weekend !== null) {
+    updates.push({ rule_type: 'season_start_after', params: { first_weekend: briefValues.first_weekend } });
+  }
+  if (briefValues.blackout_dates !== undefined && briefValues.blackout_dates !== null) {
+    updates.push({ rule_type: 'blackout_weekend', params: { dates: Array.isArray(briefValues.blackout_dates) ? briefValues.blackout_dates : [] } });
+  }
+  for (const u of updates) {
+    await new Promise((resolve) => {
+      db.run(
+        `UPDATE calendar_constraints
+            SET parameters = $1::jsonb, updated_at = CURRENT_TIMESTAMP
+          WHERE organization_id = $2 AND rule_type = $3`,
+        [JSON.stringify(u.params), orgId, u.rule_type],
+        () => resolve()
+      );
+    });
+  }
+}
 
 // DELETE /brief/:id — delete a brief (cascade deletes drafts and sync logs)
 router.delete('/brief/:id', authenticateToken, requireCalendarGenerator, requireAdmin, (req, res) => {
