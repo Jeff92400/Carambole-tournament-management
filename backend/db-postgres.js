@@ -1870,15 +1870,20 @@ async function initializeDatabase() {
     await client.query(`CREATE INDEX IF NOT EXISTS idx_tournament_types_org ON tournament_types(organization_id)`);
     // Seed default tournament types for all active orgs that don't have any yet
     const ttOrgs = await client.query(`SELECT id FROM organizations WHERE is_active = true`);
+    // tournament_number = 5 is reserved for ligue-organized finals,
+    // produced by the calendar generator publish endpoint. We seed it
+    // for every active org so the tournament list displays "Finale Ligue"
+    // instead of falling back to the generic "T5" label.
+    const ttDefaults = [
+      [1, 'T1',           'Tournoi 1',             true,  false],
+      [2, 'T2',           'Tournoi 2',             true,  false],
+      [3, 'T3',           'Tournoi 3',             true,  false],
+      [4, 'FINALE',       'Finale Départementale', false, true],
+      [5, 'LIGUE_FINALE', 'Finale Ligue',          false, false]
+    ];
     for (const org of ttOrgs.rows) {
       const ttCheck = await client.query(`SELECT COUNT(*) as count FROM tournament_types WHERE organization_id = $1`, [org.id]);
       if (parseInt(ttCheck.rows[0].count) === 0) {
-        const ttDefaults = [
-          [1, 'T1', 'Tournoi 1', true, false],
-          [2, 'T2', 'Tournoi 2', true, false],
-          [3, 'T3', 'Tournoi 3', true, false],
-          [4, 'FINALE', 'Finale Départementale', false, true]
-        ];
         for (const [num, code, name, ranking, finale] of ttDefaults) {
           await client.query(
             `INSERT INTO tournament_types (tournament_number, code, display_name, include_in_ranking, is_finale, organization_id)
@@ -1886,6 +1891,15 @@ async function initializeDatabase() {
             [num, code, name, ranking, finale, org.id]
           );
         }
+      } else {
+        // Backfill row 5 (Finale Ligue) for orgs seeded before V 2.0.603
+        // — partial-unique index on (tournament_number, organization_id)
+        // makes ON CONFLICT DO NOTHING safe to re-run.
+        await client.query(
+          `INSERT INTO tournament_types (tournament_number, code, display_name, include_in_ranking, is_finale, organization_id)
+           VALUES (5, 'LIGUE_FINALE', 'Finale Ligue', false, false, $1) ON CONFLICT DO NOTHING`,
+          [org.id]
+        );
       }
     }
 
