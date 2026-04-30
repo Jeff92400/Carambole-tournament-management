@@ -637,6 +637,69 @@ router.post('/pages/:id/regenerate', authenticateToken, requireContentEditor, as
 });
 
 // DELETE /api/content/pages/:id — delete an article (and its cross-links)
+// V 2.0.590 — Backfill route: re-organise existing auto-generated
+// articles into mode-matching sub-folders within their current parent.
+// Logic mirrors the live auto-publisher routing (Phase D, V 2.0.581):
+//   - Only auto_generated articles are touched.
+//   - Only articles whose current section has direct children are
+//     candidates (the section is a "parent" with sub-folders).
+//   - We compare the article's game_mode against each child's name with
+//     case + space insensitive normalisation. First match wins.
+//   - Manual articles or articles already in leaf folders are skipped.
+//
+// Idempotent: re-running it produces zero further moves.
+router.post('/reroute-auto-articles', authenticateToken, requireContentEditor, async (req, res) => {
+  try {
+    const orgId = req.user.organizationId || null;
+    const norm = s => (s || '').toUpperCase().replace(/\s+/g, '');
+
+    // Pull all auto-generated articles with their current section_id and mode.
+    const articles = await dbAll(
+      `SELECT id, section_id, game_mode FROM content_pages
+        WHERE auto_generated = TRUE
+          AND game_mode IS NOT NULL
+          AND ($1::int IS NULL OR organization_id = $1)`,
+      [orgId]
+    );
+
+    // Cache children per parent section to avoid N+1 queries.
+    const childrenCache = new Map();
+    async function childrenOf(parentId) {
+      if (childrenCache.has(parentId)) return childrenCache.get(parentId);
+      const rows = await dbAll(
+        `SELECT id, name FROM content_sections
+          WHERE parent_id = $1 AND ($2::int IS NULL OR organization_id = $2)`,
+        [parentId, orgId]
+      );
+      childrenCache.set(parentId, rows);
+      return rows;
+    }
+
+    let moved = 0;
+    const detail = [];
+    for (const a of articles) {
+      if (!a.section_id) continue;
+      const children = await childrenOf(a.section_id);
+      if (children.length === 0) continue; // leaf folder, leave alone
+      const target = children.find(c => norm(c.name) === norm(a.game_mode));
+      if (!target) continue;
+      if (target.id === a.section_id) continue; // already correct (defensive)
+      await dbRun(
+        `UPDATE content_pages SET section_id = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`,
+        [target.id, a.id]
+      );
+      moved++;
+      detail.push({ id: a.id, mode: a.game_mode, into: target.name });
+    }
+
+    console.log(`[content] reroute-auto-articles org=${orgId} moved=${moved}`);
+    res.json({ success: true, moved, total_candidates: articles.length, detail });
+  } catch (err) {
+    console.error('[content] reroute-auto-articles error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.delete('/pages/:id', authenticateToken, requireContentEditor, async (req, res) => {
   try {
     const orgId = req.user.organizationId || null;

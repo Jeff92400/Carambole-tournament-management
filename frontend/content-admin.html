@@ -439,6 +439,15 @@
                 title="Crée 4 sous-dossiers Libre / Bande / 3 Bandes / Cadre sous Résultats. Les futurs articles auto-générés seront routés vers le bon sous-dossier selon le mode du tournoi.">
           ✨ Créer les sous-dossiers par mode de jeu
         </button>
+        <!-- V 2.0.590 — Backfill: re-route existing auto-generated
+             articles into the matching mode sub-folder (within their
+             current parent). Idempotent. -->
+        <button class="btn-sm secondary" id="rerouteAutoBtn"
+                onclick="rerouteAutoArticles()"
+                style="margin-top:6px;width:100%;background:#dbeafe;color:#1e40af;border:1px solid #93c5fd;font-size:11px;padding:6px;"
+                title="Réorganise les articles auto-générés existants vers le sous-dossier correspondant au mode du tournoi (uniquement à l'intérieur de leur dossier parent actuel).">
+          🔀 Réorganiser les articles existants
+        </button>
       </div>
 
       <!-- Articles panel -->
@@ -850,6 +859,28 @@
       { name: '3 Bandes',  icon: '🔁' },
       { name: 'Cadre',     icon: '⬛' }
     ];
+    // V 2.0.590 — One-click backfill that walks all auto-generated
+    // articles and moves each into the mode-matching sub-folder of its
+    // current parent (when such a sub-folder exists). Manual articles
+    // and articles already in leaf folders are not touched.
+    async function rerouteAutoArticles() {
+      if (!confirm('Réorganiser les articles auto-générés existants vers les sous-dossiers correspondant à leur mode de jeu ?\n\n'
+                 + 'Seuls les articles dont le dossier parent contient des sous-dossiers seront déplacés. Les articles manuels et ceux déjà dans un sous-dossier ne sont pas touchés.')) return;
+      try {
+        const resp = await fetch(`${API_URL}/content/reroute-auto-articles`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
+        });
+        if (!resp.ok) throw new Error('Erreur de réorganisation');
+        const data = await resp.json();
+        await loadSections();
+        await loadArticles();
+        toast(`${data.moved} article${data.moved === 1 ? '' : 's'} réorganisé${data.moved === 1 ? '' : 's'} (${data.total_candidates} candidats analysés)`);
+      } catch (err) {
+        toast(err.message, 'error');
+      }
+    }
+
     async function quickCreateModeFolders() {
       if (!confirm('Créer 4 sous-dossiers (Libre / Bande / 3 Bandes / Cadre) sous le dossier "Résultats" ?\n\n'
                  + 'Les articles auto-générés (résultats de tournois) seront ensuite routés automatiquement vers le sous-dossier correspondant au mode de jeu.\n\n'
