@@ -1826,6 +1826,8 @@ router.post('/publish', authenticateToken, requireCalendarGenerator, requireAdmi
 
     let createdCount = 0, updatedCount = 0, skippedCount = 0;
     const rowErrors = []; // diagnostic: per-row failures, returned to client
+    const outcomes  = []; // per-row final state, returned so the frontend
+                          // can flip the action labels to past tense.
     // V 2.0.599 — calendar publish is intentionally side-effect-free:
     // it touches tournoi_ext only, never news articles or push
     // notifications. Calendar creation is iterative; the season is
@@ -1870,6 +1872,7 @@ router.post('/publish', authenticateToken, requireCalendarGenerator, requireAdmi
 
       if (existing && hasResults) {
         skippedCount++;
+        outcomes.push({ draft_id: row._virtual ? null : row.id, status: 'skipped' });
         await dbRun(
           `INSERT INTO calendar_sync_log (organization_id, brief_id, action, tournoi_ext_id, change_type, summary, triggered_by)
            VALUES ($1, $2, 'skip', $3, 'blocked', $4, $5)`,
@@ -1879,6 +1882,7 @@ router.post('/publish', authenticateToken, requireCalendarGenerator, requireAdmi
       }
       if (existing && hasInsc && !forceSensitive) {
         skippedCount++;
+        outcomes.push({ draft_id: row._virtual ? null : row.id, status: 'skipped' });
         await dbRun(
           `INSERT INTO calendar_sync_log (organization_id, brief_id, action, tournoi_ext_id, change_type, summary, triggered_by)
            VALUES ($1, $2, 'skip', $3, 'sensitive', $4, $5)`,
@@ -1898,6 +1902,7 @@ router.post('/publish', authenticateToken, requireCalendarGenerator, requireAdmi
           [nom, debut, lieu, resultingId]
         );
         updatedCount++;
+        outcomes.push({ draft_id: row._virtual ? null : row.id, status: 'updated' });
         await dbRun(
           `INSERT INTO calendar_sync_log (organization_id, brief_id, action, tournoi_ext_id, change_type, summary, triggered_by)
            VALUES ($1, $2, 'update', $3, $4, $5, $6)`,
@@ -1914,6 +1919,7 @@ router.post('/publish', authenticateToken, requireCalendarGenerator, requireAdmi
           [resultingId, nom, mode, categorie, debut, lieu, tnum, orgId]
         );
         createdCount++;
+        outcomes.push({ draft_id: row._virtual ? null : row.id, status: 'created' });
         await dbRun(
           `INSERT INTO calendar_sync_log (organization_id, brief_id, action, tournoi_ext_id, change_type, summary, triggered_by)
            VALUES ($1, $2, 'create', $3, 'safe', $4, $5)`,
@@ -1957,6 +1963,7 @@ router.post('/publish', authenticateToken, requireCalendarGenerator, requireAdmi
       updated: updatedCount,
       skipped: skippedCount,
       errors: rowErrors,
+      outcomes,                 // per-row final state for the frontend
       brief_id: briefId
     });
   } catch (err) {

@@ -1823,11 +1823,20 @@
       return cls;
     }
     function actionBadge(action) {
-      if (action === 'create') return '🆕 Créer';
-      if (action === 'update') return '✏️ Mettre à jour';
-      if (action === 'skip')   return '⏭️ Ignorer';
+      // Future tense (preview state — before publish runs)
+      if (action === 'create')  return '🆕 Créer';
+      if (action === 'update')  return '✏️ Mettre à jour';
+      if (action === 'skip')    return '⏭️ Ignorer';
+      // Past tense (post-publish state — overlaid from /publish outcomes)
+      if (action === 'created') return '<span style="color:#2c7a4d;font-weight:600;">✅ Créé</span>';
+      if (action === 'updated') return '<span style="color:#2c7a4d;font-weight:600;">✅ Mis à jour</span>';
+      if (action === 'skipped') return '<span style="color:#856404;font-weight:600;">⏭️ Ignoré</span>';
+      if (action === 'failed')  return '<span style="color:#b81c1c;font-weight:600;">❌ Échec</span>';
       return action;
     }
+    // Per-draft_id post-publish outcome map. Set after a successful run;
+    // consulted by loadPublishPreview() so the table reflects DONE state.
+    let lastPublishOutcomes = {}; // draft_id → 'created' | 'updated' | 'skipped' | 'failed'
     async function loadPublishPreview() {
       if (!currentBrief) {
         setPublishStatus('Aucun brief actif — revenez à l\'Étape 1.', 'error');
@@ -1845,16 +1854,22 @@
         if (!data.items.length) {
           tbody.innerHTML = '<tr><td colspan="6" style="color:#888;">Aucun tournoi dans le brouillon. Lancez une génération à l\'Étape 3.</td></tr>';
         } else {
-          tbody.innerHTML = data.items.map(it => `
+          tbody.innerHTML = data.items.map(it => {
+            // If this row was finalized by the most recent publish run,
+            // show the past-tense action label.
+            const finalAction = it.draft_id != null && lastPublishOutcomes[it.draft_id]
+              ? lastPublishOutcomes[it.draft_id]
+              : it.action;
+            return `
             <tr>
               <td>${it.weekend_date || '—'}</td>
               <td><strong>${it.tournament_type}</strong></td>
               <td>${it.category_label || ''}</td>
               <td>${it.host_name || ''}</td>
-              <td>${actionBadge(it.action)}</td>
+              <td>${actionBadge(finalAction)}</td>
               <td>${classBadge(it.classification)}</td>
-            </tr>
-          `).join('');
+            </tr>`;
+          }).join('');
         }
         const btn = document.getElementById('publishCalendarBtn');
         btn.disabled = data.summary.safe + data.summary.sensitive === 0;
@@ -1905,6 +1920,14 @@
         else if (created + updated > 0 && errCount > 0) state = 'partial';
         else                                            state = 'failure';
         showPublishOutcome(state, data);
+
+        // Stash per-row outcomes so the table shows past-tense labels
+        // ("Créé" / "Mis à jour" / "Ignoré") instead of the predicted
+        // future-tense "Créer" / "Mettre à jour" / "Ignorer".
+        lastPublishOutcomes = {};
+        (data.outcomes || []).forEach(o => {
+          if (o.draft_id != null) lastPublishOutcomes[o.draft_id] = o.status;
+        });
 
         // Refresh preview to reflect post-publish state.
         setTimeout(loadPublishPreview, 600);
