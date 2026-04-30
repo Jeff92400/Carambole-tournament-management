@@ -416,6 +416,20 @@
             <option value="">— Par défaut (auto-créé)</option>
           </select>
         </div>
+        <!-- V 2.0.591 — CONVOCATION event card -->
+        <div class="auto-publish-item">
+          <label>Convocations envoyées</label>
+          <div class="desc">Déclenché à l'envoi des convocations d'un tournoi (Com Joueurs → générer/envoyer). L'article liste les compositions de poules.</div>
+          <select id="autoPubConvocation" onchange="saveAutoPublishSetting('news_auto_publish_convocation', this.value)">
+            <option value="auto">Publication immédiate</option>
+            <option value="draft">Créer en brouillon</option>
+            <option value="off">Désactivé</option>
+          </select>
+          <div style="margin-top: 8px; font-size: 12px; color: #666;">📁 Dossier de destination</div>
+          <select id="autoPubConvocationSection" onchange="saveAutoPublishSetting('news_auto_publish_convocation_section_id', this.value)" style="margin-top: 4px;">
+            <option value="">— Par défaut (auto-créé)</option>
+          </select>
+        </div>
       </div>
     </div>
 
@@ -1763,12 +1777,14 @@
     const AUTO_PUBLISH_DEFAULTS = {
       news_auto_publish_results: 'auto',
       news_auto_publish_qualification: 'auto',
-      news_auto_publish_new_tournament: 'draft'
+      news_auto_publish_new_tournament: 'draft',
+      news_auto_publish_convocation: 'draft'
     };
     const AUTO_PUBLISH_SELECT_IDS = {
       news_auto_publish_results: 'autoPubResults',
       news_auto_publish_qualification: 'autoPubQualification',
-      news_auto_publish_new_tournament: 'autoPubNewTournament'
+      news_auto_publish_new_tournament: 'autoPubNewTournament',
+      news_auto_publish_convocation: 'autoPubConvocation'
     };
 
     // V 2.0.562 — Per-event section override dropdowns. Maps the event
@@ -1777,7 +1793,8 @@
     const AUTO_PUBLISH_SECTION_SELECT_IDS = {
       news_auto_publish_results_section_id:         'autoPubResultsSection',
       news_auto_publish_qualification_section_id:   'autoPubQualificationSection',
-      news_auto_publish_new_tournament_section_id:  'autoPubNewTournamentSection'
+      news_auto_publish_new_tournament_section_id:  'autoPubNewTournamentSection',
+      news_auto_publish_convocation_section_id:     'autoPubConvocationSection'
     };
 
     function populateAutoPublishSectionDropdowns() {

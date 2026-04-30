@@ -1963,6 +1963,30 @@ router.post('/send-convocations', authenticateToken, async (req, res) => {
   });
 
   const summaryStatus = results.summarySent ? ' + récapitulatif envoyé' : (results.summaryError ? ` (récap: ${results.summaryError})` : '');
+
+  // V 2.0.591 — Auto-publish a CONVOCATION article. Fire-and-forget,
+  // gated internally by news_delivery_mode === 'player_app' and the
+  // per-event mode setting (default 'draft'). One article per (org,
+  // tournoi) — the partial unique index keeps it idempotent if the
+  // admin re-sends convocations for the same tournament.
+  if (tournoiId) {
+    (async () => {
+      try {
+        const { publishAutoArticle } = require('../utils/news-auto-publisher');
+        await publishAutoArticle('CONVOCATION', orgId, {
+          sourceRefId: tournoiId,
+          tournoiId,
+          tournamentLabel: tournamentLabel || `Tournoi ${tournament || ''}`.trim(),
+          categoryName: category?.display_name || '',
+          tournamentDate: tournamentDate || '',
+          location: locations?.location_name || locations?.location || ''
+        });
+      } catch (convErr) {
+        console.error('[CONVOCATION] auto-publisher error:', convErr.message);
+      }
+    })();
+  }
+
   res.json({
     success: true,
     message: `Emails envoyes: ${results.sent.length}, Echecs: ${results.failed.length}, Ignores: ${results.skipped.length}${summaryStatus}`,

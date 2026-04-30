@@ -32,10 +32,14 @@ const appSettings = require('./app-settings');
 // Event-type → section name mapping. Section is auto-created on first
 // publish if the org doesn't have it yet. Names are in French because
 // they're visible to end users on the "Infos" tab.
+// V 2.0.591 — CONVOCATION event added. Same Compétitions parent as
+// NEW_TOURNAMENT so existing mode sub-folders cover it without further
+// setup. Default mode is 'draft' (formal docs, admin glances first).
 const EVENT_SECTION_MAP = {
   RESULTS:              'Résultats',
   FINALE_QUALIFICATION: 'Résultats',
-  NEW_TOURNAMENT:       'Compétitions'
+  NEW_TOURNAMENT:       'Compétitions',
+  CONVOCATION:          'Compétitions'
 };
 
 // Per-event default for the auto-publish mode when no org setting
@@ -44,7 +48,8 @@ const EVENT_SECTION_MAP = {
 const EVENT_DEFAULT_MODE = {
   RESULTS:              'auto',
   FINALE_QUALIFICATION: 'auto',
-  NEW_TOURNAMENT:       'draft'
+  NEW_TOURNAMENT:       'draft',
+  CONVOCATION:          'draft'
 };
 
 // Maps event type → the organization_settings key that overrides the
@@ -53,7 +58,8 @@ const EVENT_DEFAULT_MODE = {
 const EVENT_SETTING_KEY = {
   RESULTS:              'news_auto_publish_results',
   FINALE_QUALIFICATION: 'news_auto_publish_qualification',
-  NEW_TOURNAMENT:       'news_auto_publish_new_tournament'
+  NEW_TOURNAMENT:       'news_auto_publish_new_tournament',
+  CONVOCATION:          'news_auto_publish_convocation'
 };
 
 // V 2.0.562 — Per-event override for the destination section (Mon
@@ -64,7 +70,8 @@ const EVENT_SETTING_KEY = {
 const EVENT_SECTION_SETTING_KEY = {
   RESULTS:              'news_auto_publish_results_section_id',
   FINALE_QUALIFICATION: 'news_auto_publish_qualification_section_id',
-  NEW_TOURNAMENT:       'news_auto_publish_new_tournament_section_id'
+  NEW_TOURNAMENT:       'news_auto_publish_new_tournament_section_id',
+  CONVOCATION:          'news_auto_publish_convocation_section_id'
 };
 
 // content_pages.content_type values — must match VALID_CONTENT_TYPES
@@ -73,7 +80,8 @@ const EVENT_SECTION_SETTING_KEY = {
 const EVENT_CONTENT_TYPE = {
   RESULTS:              'resultat',
   FINALE_QUALIFICATION: 'resultat',
-  NEW_TOURNAMENT:       'evenement'
+  NEW_TOURNAMENT:       'evenement',
+  CONVOCATION:          'evenement'
 };
 
 // ---------- Helpers ----------
@@ -333,6 +341,28 @@ async function fetchTournamentResults(tournamentId) {
     return result.rows || [];
   } catch (err) {
     console.error('[news-auto-publisher] fetchTournamentResults failed:', err.message);
+    return [];
+  }
+}
+
+// V 2.0.591 — Fetch poule compositions for a tournament. Used by the
+// CONVOCATION article template so the news feed shows who plays in
+// which poule. Reads convocation_poules which is populated when
+// /save-poules / /send-convocations runs. Sorted by poule_number then
+// player_order to mirror the convocation PDF layout.
+async function fetchPoules(tournoiId) {
+  if (!tournoiId) return [];
+  try {
+    const result = await db.query(
+      `SELECT poule_number, player_name, club, location_name, start_time, player_order
+         FROM convocation_poules
+        WHERE tournoi_id = $1
+        ORDER BY poule_number ASC, player_order ASC`,
+      [tournoiId]
+    );
+    return result.rows || [];
+  } catch (err) {
+    console.error('[news-auto-publisher] fetchPoules failed:', err.message);
     return [];
   }
 }
@@ -642,6 +672,67 @@ function renderNewTournamentArticle(ctx) {
   return { title, excerpt, contentHtml };
 }
 
+// V 2.0.591 — CONVOCATION template. Title symmetric with the RESULTS
+// article ("Convocations T1 — Bande - R2"). Body lists each poule with
+// its players, club and start time so non-convoked players can also
+// see the day's lineup. The poules array shape comes from fetchPoules
+// (one row per player). Inline styles only so it survives Quill.
+function renderConvocationArticle(ctx) {
+  const {
+    tournamentLabel, categoryName, tournamentDate, location,
+    poules, deeplink
+  } = ctx;
+
+  const title = `Convocations ${tournamentLabel} — ${categoryName}`;
+  const excerpt = `Convocations envoyées pour le ${tournamentLabel} ${categoryName}${tournamentDate ? ` du ${tournamentDate}` : ''}. Découvrez la composition des poules.`;
+
+  // Group rows by poule_number
+  const grouped = {};
+  for (const row of (poules || [])) {
+    const k = row.poule_number || 1;
+    if (!grouped[k]) grouped[k] = [];
+    grouped[k].push(row);
+  }
+  const pouleKeys = Object.keys(grouped).map(n => Number(n)).sort((a, b) => a - b);
+
+  const dateLine = tournamentDate
+    ? `<p>📅 Date : <strong>${esc(tournamentDate)}</strong></p>`
+    : '';
+  const locationLine = location
+    ? `<p>📍 Lieu : <strong>${esc(location)}</strong></p>`
+    : '';
+
+  const poulesHtml = pouleKeys.length === 0
+    ? '<p style="color:#6b7280;font-style:italic;">Aucune composition de poule enregistrée.</p>'
+    : pouleKeys.map(k => {
+        const rows = grouped[k];
+        const startTime = rows[0]?.start_time || '';
+        const locName = rows[0]?.location_name || '';
+        const subTitle = [startTime, locName].filter(Boolean).join(' — ');
+        const items = rows.map(r => {
+          const club = r.club ? ` <span style="color:#6b7280;font-size:12px;">— ${esc(r.club)}</span>` : '';
+          return `<li><strong>${esc(r.player_name || '')}</strong>${club}</li>`;
+        }).join('');
+        return `
+          <h4 style="margin-top:18px;margin-bottom:6px;color:#1F4788;">Poule ${k}${subTitle ? ` <span style="color:#6b7280;font-weight:normal;font-size:13px;">(${esc(subTitle)})</span>` : ''}</h4>
+          <ol style="padding-left:22px;line-height:1.6;margin:0;">${items}</ol>`;
+      }).join('');
+
+  const contentHtml = `
+    <p>Les convocations pour le <strong>${esc(tournamentLabel)}</strong> en catégorie <strong>${esc(categoryName)}</strong> viennent d'être envoyées aux joueurs.</p>
+    ${dateLine}
+    ${locationLine}
+    <h3 style="margin-top:20px;">Composition des poules</h3>
+    ${poulesHtml}
+    ${ctaButton(deeplink, 'Voir mes inscriptions')}
+    <p style="color:#9ca3af;font-size:12px;text-align:center;margin-top:20px;">
+      Article généré automatiquement par l'application.
+    </p>
+  `.trim();
+
+  return { title, excerpt, contentHtml };
+}
+
 // ---------- Main entry point ----------
 
 // V 2.0.581 — Derive season + game_mode + game_category for the article
@@ -665,7 +756,7 @@ async function fetchEventFilterMetadata(eventType, sourceRefId) {
         gameCategory: row.game_category || null
       };
     }
-    if (eventType === 'NEW_TOURNAMENT' || eventType === 'FINALE_QUALIFICATION') {
+    if (eventType === 'NEW_TOURNAMENT' || eventType === 'FINALE_QUALIFICATION' || eventType === 'CONVOCATION') {
       const r = await db.query(
         `SELECT saison AS season, mode AS game_mode, categorie AS game_category
            FROM tournoi_ext
@@ -810,6 +901,19 @@ async function publishAutoArticle(eventType, orgId, payload, options = {}) {
           location: payload.location || '',
           closingDate: payload.closingDate || '',
           deeplink: buildPlayerAppDeeplink(playerAppUrl, 'tournaments')
+        });
+      } else if (eventType === 'CONVOCATION') {
+        // V 2.0.591 — Convocation article: announces convocations sent
+        // for a tournament + lists poule compositions so non-convoked
+        // players can also see who is playing.
+        const poules = await fetchPoules(payload.tournoiId);
+        rendered = renderConvocationArticle({
+          tournamentLabel: payload.tournamentLabel || 'Tournoi',
+          categoryName: payload.categoryName || '',
+          tournamentDate: payload.tournamentDate || '',
+          location: payload.location || '',
+          poules,
+          deeplink: buildPlayerAppDeeplink(playerAppUrl, 'inscriptions')
         });
       } else {
         return { skipped: 'unknown_event_type' };
