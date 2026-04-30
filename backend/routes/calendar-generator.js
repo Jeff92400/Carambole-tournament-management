@@ -1166,6 +1166,36 @@ router.get('/draft/export', authenticateToken, requireCalendarGenerator, async (
       [briefId]
     );
 
+    // Append ligue finals from the brief as virtual draft rows so the
+    // export shows the full season (CDB + Ligue) like the wizard's
+    // Vue Calendrier. They use tournament_type='FL', host_name=null,
+    // and a dedicated colour in the type legend.
+    const ligueFinalRowsRaw = await fetchAll(
+      `SELECT lfd.final_date AS weekend_date,
+              c.id            AS category_id,
+              c.display_name  AS category_label,
+              c.game_type,
+              c.level
+         FROM ligue_final_dates lfd
+         JOIN calendar_brief cb ON cb.organization_id = lfd.organization_id AND cb.season = lfd.season
+         LEFT JOIN categories c ON c.id = lfd.category_id
+        WHERE cb.id = $1 AND cb.organization_id = $2 AND lfd.final_date IS NOT NULL`,
+      [briefId, orgId]
+    ).catch(() => []);
+    ligueFinalRowsRaw.forEach(r => {
+      draft.push({
+        weekend_date: r.weekend_date,
+        tournament_type: 'FL',
+        category_id: r.category_id,
+        category_label: r.category_label,
+        game_type: r.game_type,
+        level: r.level,
+        host_id: null,
+        host_name: null,
+        is_ligue_final: true
+      });
+    });
+
     // Helper to normalize PG DATE / Date / ISO string → 'YYYY-MM-DD'
     const isoDate = (s) => {
       if (s == null) return null;
@@ -1176,6 +1206,8 @@ router.get('/draft/export', authenticateToken, requireCalendarGenerator, async (
       return isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
     };
     draft.forEach(r => { r.weekend_date = isoDate(r.weekend_date); });
+    // Re-sort because we appended at the end
+    draft.sort((a, b) => (a.weekend_date || '').localeCompare(b.weekend_date || ''));
 
     // Order categories canonically (display order)
     const MODE_ORDER = ['Libre', 'Cadre', 'Bande', '3 Bandes'];
@@ -1261,7 +1293,8 @@ router.get('/draft/export', authenticateToken, requireCalendarGenerator, async (
       'T1':     'FFE2EFDA', // light green
       'T2':     'FFFFF2CC', // light yellow
       'T3':     'FFFCE4D6', // light orange
-      'Finale': 'FFF8CBAD'  // light red/coral
+      'Finale': 'FFF8CBAD', // light red/coral
+      'FL':     'FFFFD8B0'  // ligue final — warm orange
     };
     const HEADER_BG = 'FF6B3AA3';     // purple
     const HEADER_TEXT_COLOR = 'FFFFFFFF';
@@ -1391,13 +1424,21 @@ router.get('/draft/export', authenticateToken, requireCalendarGenerator, async (
         if (placement) {
           // Two-line cell: type / abbreviated host
           const typeLabel = placement.type;
-          const hostAbbr = placement.host_name ? abbreviate(placement.host_name) : (placement.type === 'Finale' ? 'TBD' : '');
+          let hostAbbr = '';
+          if (typeLabel === 'FL') {
+            hostAbbr = 'Ligue';
+          } else if (placement.host_name) {
+            hostAbbr = abbreviate(placement.host_name);
+          } else if (typeLabel === 'Finale') {
+            hostAbbr = 'TBD';
+          }
           cell.value = hostAbbr ? `${typeLabel}\n${hostAbbr}` : typeLabel;
           cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
           cell.font = { bold: true, size: 10 };
-          // Mix host color (background) and tournament-type color (light tint via top stripe? simulate via cell color)
-          // Use HOST color as primary background (ties to legend), and rely on TEXT styling for type
-          if (placement.host_id && hostColor.has(placement.host_id)) {
+          // Ligue finals always use the FL type colour (no host swatch).
+          if (typeLabel === 'FL') {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: TYPE_COLORS.FL } };
+          } else if (placement.host_id && hostColor.has(placement.host_id)) {
             cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hostColor.get(placement.host_id) } };
           } else if (TYPE_COLORS[typeLabel]) {
             cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: TYPE_COLORS[typeLabel] } };
@@ -1464,12 +1505,17 @@ router.get('/draft/export', authenticateToken, requireCalendarGenerator, async (
       { width: 14 }, { width: 12 }, { width: 26 }, { width: 10 }, { width: 34 }
     ];
     draft.forEach((r, idx) => {
+      let hostLabel;
+      if (r.tournament_type === 'FL') hostLabel = 'TBD (Ligue)';
+      else if (r.host_name) hostLabel = r.host_name;
+      else if (r.tournament_type === 'Finale') hostLabel = 'TBD';
+      else hostLabel = '';
       const row = wsList.addRow([
         r.weekend_date || '',
         r.game_type || '',
         r.category_label || '',
         r.tournament_type || '',
-        r.host_name || (r.tournament_type === 'Finale' ? 'TBD' : '')
+        hostLabel
       ]);
       row.eachCell((cell, colNumber) => {
         cell.border = ALL_BORDERS;
