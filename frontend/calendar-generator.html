@@ -607,9 +607,12 @@
         <h3 style="margin: 0;">Étape 6 — Création / Mise à jour des tournois</h3>
       </div>
       <p style="color: #666; font-size: 14px; margin-top: 6px;">
-        Cette étape crée (ou met à jour) les tournois dans la base et déclenche automatiquement les
-        articles d'annonce dans l'app joueur (un article par tournoi, en mode brouillon ou publié selon
-        votre configuration). Les tournois ayant déjà des inscriptions ou des résultats sont protégés.
+        Cette étape crée (ou met à jour) les tournois dans la base — c'est tout. <strong>Aucune
+        notification, aucun email et aucun article n'est envoyé aux joueurs à cette étape.</strong>
+        Vous pouvez relancer cette opération autant de fois que nécessaire pendant la préparation
+        de la saison. Les joueurs seront informés <strong>tournoi par tournoi au fil de la saison</strong>,
+        via les flux habituels (convocations, relances, résultats). Les tournois ayant déjà des
+        inscriptions ou des résultats sont protégés contre l'écrasement.
       </p>
 
       <div id="publishSummary" style="margin-top: 16px; display: flex; gap: 14px; flex-wrap: wrap;">
@@ -1807,7 +1810,7 @@
       const safeCount = parseInt(document.getElementById('publishCountSafe').textContent, 10) || 0;
       const total = safeCount + (force ? sensitiveCount : 0);
       const msg = `Créer / mettre à jour ${total} tournoi(s) ?\n\n`
-        + `Cela créera ou mettra à jour les entrées dans la base et déclenchera l'envoi automatique d'articles d'annonce dans l'app joueur (selon votre configuration).\n\n`
+        + `Cela créera ou mettra à jour les entrées dans la base. Aucune notification ne sera envoyée aux joueurs.\n\n`
         + (sensitiveCount > 0 && !force ? `${sensitiveCount} tournoi(s) sensible(s) seront ignoré(s).` : '');
       if (!confirm(msg)) return;
       const btn = document.getElementById('publishCalendarBtn');
@@ -1822,7 +1825,7 @@
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Échec création des tournois');
         setPublishStatus(
-          `✓ Terminé : ${data.created} créé(s), ${data.updated} mis à jour, ${data.skipped} ignoré(s). ${data.articles_drafted} article(s) en cours de publication.`,
+          `✓ Terminé : ${data.created} créé(s), ${data.updated} mis à jour, ${data.skipped} ignoré(s).`,
           'success'
         );
         // Refresh preview to reflect post-publish state.

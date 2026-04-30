@@ -1825,7 +1825,11 @@ router.post('/publish', authenticateToken, requireCalendarGenerator, requireAdmi
     const allRows = [...draft, ...ligueFinalRows];
 
     let createdCount = 0, updatedCount = 0, skippedCount = 0;
-    const articleSourceIds = []; // for fire-and-forget after the loop
+    // V 2.0.599 — calendar publish is intentionally side-effect-free:
+    // it touches tournoi_ext only, never news articles or push
+    // notifications. Calendar creation is iterative; the season is
+    // announced separately through normal channels (email + push + WP)
+    // when admins are ready.
     let nextTournoiId = ((await dbGet(`SELECT MAX(tournoi_id) AS max_id FROM tournoi_ext`))?.max_id || 0);
 
     for (const row of allRows) {
@@ -1912,7 +1916,6 @@ router.post('/publish', authenticateToken, requireCalendarGenerator, requireAdmi
            VALUES ($1, $2, 'create', $3, 'safe', $4, $5)`,
           [orgId, briefId, resultingId, `${nom} — créé`, req.user.userId || null]
         );
-        articleSourceIds.push({ id: resultingId, nom, mode, categorie, debut, lieu });
       }
 
       // Bind draft row → tournoi_ext for traceability. Skip for virtual
@@ -1931,39 +1934,17 @@ router.post('/publish', authenticateToken, requireCalendarGenerator, requireAdmi
       [briefId]
     );
 
-    // Fire NEW_TOURNAMENT auto-articles (fire-and-forget). Idempotent
-    // via the partial unique index on (org, source_type, source_ref_id).
-    setImmediate(async () => {
-      try {
-        const { publishAutoArticle } = require('../utils/news-auto-publisher');
-        for (const t of articleSourceIds) {
-          try {
-            const tournamentDateStr = t.debut
-              ? new Date(t.debut).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
-              : '';
-            await publishAutoArticle('NEW_TOURNAMENT', orgId, {
-              sourceRefId: t.id,
-              tournamentName: t.nom,
-              categoryLabel: `${t.mode} ${t.categorie}`.trim(),
-              tournamentDate: tournamentDateStr,
-              location: t.lieu || '',
-              closingDate: tournamentDateStr
-            });
-          } catch (e) {
-            console.error('[calendar-generator/publish] auto-article failed for', t.id, e.message);
-          }
-        }
-      } catch (outerErr) {
-        console.error('[calendar-generator/publish] auto-publisher dispatch failed:', outerErr.message);
-      }
-    });
+    // V 2.0.599 — NO automatic player-facing side effects from this
+    // endpoint. Calendar creation is iterative and purely a database
+    // operation; the season is announced separately by admins through
+    // their normal channels (email + push + WordPress) when ready.
+    // The previous NEW_TOURNAMENT auto-article dispatch was removed.
 
     res.json({
       success: true,
       created: createdCount,
       updated: updatedCount,
       skipped: skippedCount,
-      articles_drafted: articleSourceIds.length,
       brief_id: briefId
     });
   } catch (err) {
