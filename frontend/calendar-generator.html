@@ -2040,23 +2040,52 @@
         grid[p.category_id][p.weekend_date] = p;
       });
 
-      // Build header (compact dates DD/MM)
-      const headerCells = weekends.map(we => {
+      // Build month-band header: groups consecutive weekends of the same
+      // calendar month under a single label (e.g. "Septembre 2026").
+      const monthGroups = [];
+      weekends.forEach(we => {
         const d = new Date(we + 'T00:00:00Z');
-        return `<th style="padding: 4px 6px; font-size: 11px; min-width: 56px; white-space: nowrap;">${d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', timeZone: 'UTC' })}</th>`;
+        const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+        const label = d.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+        if (!monthGroups.length || monthGroups[monthGroups.length - 1].key !== key) {
+          monthGroups.push({ key, label, count: 1 });
+        } else {
+          monthGroups[monthGroups.length - 1].count++;
+        }
+      });
+      const monthBandCells = monthGroups.map((g, idx) => {
+        // Alternate background tint to make month boundaries pop visually.
+        const tint = idx % 2 === 0 ? '#5a3094' : '#7d52b8';
+        return `<th colspan="${g.count}" style="padding: 5px 6px; font-size: 11px; font-weight: 700; background: ${tint}; color: white; text-transform: capitalize; border-right: 2px solid white; letter-spacing: 0.3px;">${g.label}</th>`;
+      }).join('');
+
+      // Build header (compact dates DD/MM)
+      const headerCells = weekends.map((we, i) => {
+        const d = new Date(we + 'T00:00:00Z');
+        // Add visual divider on month change for the date row too
+        const prev = i > 0 ? new Date(weekends[i - 1] + 'T00:00:00Z') : null;
+        const monthChange = prev && prev.getUTCMonth() !== d.getUTCMonth();
+        const leftBorder = monthChange ? 'border-left: 2px solid #5a3094;' : '';
+        return `<th style="padding: 4px 6px; font-size: 11px; min-width: 56px; white-space: nowrap; ${leftBorder}">${d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', timeZone: 'UTC' })}</th>`;
       }).join('');
 
       const rows = cats.map(c => {
-        const cells = weekends.map(we => {
+        const cells = weekends.map((we, i) => {
+          // Match the month-divider used in the header so columns
+          // visually segment by month in the data area too.
+          const prev = i > 0 ? new Date(weekends[i - 1] + 'T00:00:00Z') : null;
+          const cur = new Date(we + 'T00:00:00Z');
+          const monthChange = prev && prev.getUTCMonth() !== cur.getUTCMonth();
+          const leftBorder = monthChange ? 'border-left: 2px solid #5a3094;' : '';
           const p = grid[c.id]?.[we];
-          if (!p) return `<td style="padding: 4px 6px; background: #fafafa;"></td>`;
+          if (!p) return `<td style="padding: 4px 6px; background: #fafafa; ${leftBorder}"></td>`;
           const bg = p.host_id ? colors.get(p.host_id) : '#fff';
           const lockedBorder = p._locked ? 'border: 2px solid #c47b00;' : '';
           const editable = p._draft_id ? 'cursor: pointer;' : '';
           const tip = `${c.name || c.display_name} ${p.tournament_type}\n${fmtDateFR(p.qualif_date || p.final_date)}\n${p.host_name || 'TBD'}${p._comment ? '\n💬 ' + p._comment : ''}${p._draft_id ? '\n(clic pour modifier)' : ''}`;
           const lockIcon = p._locked ? '🔒 ' : '';
           const commentIcon = p._comment ? '💬' : '';
-          return `<td class="cell-editable" data-draft-id="${p._draft_id || ''}" data-cat-id="${c.id}" style="padding: 4px 6px; background: ${bg}; text-align: center; font-size: 11px; ${lockedBorder} ${editable}" title="${escapeHtml(tip)}">
+          return `<td class="cell-editable" data-draft-id="${p._draft_id || ''}" data-cat-id="${c.id}" style="padding: 4px 6px; background: ${bg}; text-align: center; font-size: 11px; ${lockedBorder} ${leftBorder} ${editable}" title="${escapeHtml(tip)}">
             <div style="font-weight: 700;">${lockIcon}${p.tournament_type === 'Finale' ? 'F' : p.tournament_type}${commentIcon}</div>
             <div style="font-size: 9px; color: #555;">${escapeHtml(abbreviateHost(p.host_name) || (p.host_id == null ? 'TBD' : ''))}</div>
           </td>`;
@@ -2078,7 +2107,10 @@
           <table style="border-collapse: collapse; min-width: 100%;">
             <thead style="background: linear-gradient(135deg, #6b3aa3, #5a3094); color: white; position: sticky; top: 0; z-index: 2;">
               <tr>
-                <th style="padding: 6px 10px; text-align: left; position: sticky; left: 0; background: #6b3aa3; z-index: 3; min-width: 160px;">Catégorie</th>
+                <th rowspan="2" style="padding: 6px 10px; text-align: left; position: sticky; left: 0; background: #6b3aa3; z-index: 3; min-width: 160px; vertical-align: middle;">Catégorie</th>
+                ${monthBandCells}
+              </tr>
+              <tr>
                 ${headerCells}
               </tr>
             </thead>

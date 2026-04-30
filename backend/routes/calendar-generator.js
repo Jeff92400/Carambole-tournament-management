@@ -1537,13 +1537,58 @@ function abbreviate(name) {
 // Maps calendar_draft.tournament_type → tournoi_ext.tournament_number,
 // matching the heuristic used in the legacy import (db-postgres.js
 // line 525-534). Keep in lock-step with that mapping.
-const TOURNAMENT_TYPE_TO_NUMBER = { T1: 1, T2: 2, T3: 3, FINALE: 4 };
+// LIGUE_FINALE = 5 is reserved for ligue-organized finals (visible to
+// players as informational tournoi_ext rows; not subject to inscriptions).
+const TOURNAMENT_TYPE_TO_NUMBER = { T1: 1, T2: 2, T3: 3, FINALE: 4, LIGUE_FINALE: 5 };
 
 function tournamentNameForRow(row) {
-  // Build the human-friendly name: e.g. "T1 Bande R2", "Finale Cadre 42/2 R1"
-  const prefix = row.tournament_type === 'FINALE' ? 'Finale' : row.tournament_type;
+  // Build the human-friendly name: e.g. "T1 Bande R2", "Finale Cadre 42/2 R1",
+  // "Finale Ligue 3 Bandes R2".
   const cat = (row.category_label || `${row.game_type || ''} ${row.level || ''}`).trim();
+  let prefix;
+  if (row.tournament_type === 'FINALE') prefix = 'Finale';
+  else if (row.tournament_type === 'LIGUE_FINALE') prefix = 'Finale Ligue';
+  else prefix = row.tournament_type;
   return `${prefix} ${cat}`.trim();
+}
+
+// Loads the ligue-final dates declared in the brief and returns them as
+// virtual draft rows (same shape as calendar_draft rows used by /publish).
+// These are inserted into tournoi_ext at publish time with lieu='TBD'.
+async function fetchLigueFinalRows(db, briefId, orgId) {
+  const fetchAll = (sql, params) => new Promise((resolve, reject) =>
+    db.all(sql, params, (err, rows) => err ? reject(err) : resolve(rows || []))
+  );
+  const rows = await fetchAll(
+    `SELECT lfd.id           AS lfd_id,
+            lfd.final_date   AS weekend_date,
+            lfd.category_id,
+            c.display_name   AS category_label,
+            c.game_type,
+            c.level
+       FROM ligue_final_dates lfd
+       JOIN calendar_brief cb ON cb.organization_id = lfd.organization_id AND cb.season = lfd.season
+       LEFT JOIN categories c ON c.id = lfd.category_id
+      WHERE cb.id = $1 AND cb.organization_id = $2 AND lfd.final_date IS NOT NULL
+      ORDER BY lfd.final_date ASC`,
+    [briefId, orgId]
+  );
+  return rows.map(r => ({
+    id: `lf-${r.lfd_id}`,           // virtual draft id; never written to calendar_draft
+    weekend_date: r.weekend_date instanceof Date
+      ? r.weekend_date.toISOString().slice(0, 10)
+      : (String(r.weekend_date || '').match(/^\d{4}-\d{2}-\d{2}/)?.[0] || null),
+    tournament_type: 'LIGUE_FINALE',
+    host_club_id: null,
+    category_id: r.category_id,
+    tournoi_ext_id: null,
+    category_label: r.category_label,
+    game_type: r.game_type,
+    level: r.level,
+    host_name: null,
+    host_city: null,
+    _virtual: true                  // marker so /publish doesn't UPDATE calendar_draft
+  }));
 }
 
 // GET /publish/preview?brief_id=X
@@ -1603,8 +1648,13 @@ router.get('/publish/preview', authenticateToken, requireCalendarGenerator, requ
       [briefId, orgId]
     );
 
+    // Ligue finals from the brief — surfaced as virtual rows so the
+    // publish step can emit them as tournoi_ext entries with lieu='TBD'.
+    const ligueFinalRows = await fetchLigueFinalRows(db, briefId, orgId).catch(() => []);
+    const allRows = [...draft, ...ligueFinalRows];
+
     const items = [];
-    for (const row of draft) {
+    for (const row of allRows) {
       const tnum = TOURNAMENT_TYPE_TO_NUMBER[row.tournament_type] || null;
       const mode = row.game_type || '';
       const categorie = row.level || '';
@@ -1647,7 +1697,8 @@ router.get('/publish/preview', authenticateToken, requireCalendarGenerator, requ
           : (String(row.weekend_date || '').match(/^\d{4}-\d{2}-\d{2}/)?.[0] || null),
         tournament_type: row.tournament_type,
         category_label: row.category_label || `${mode} ${categorie}`.trim(),
-        host_name: row.host_name || '',
+        host_name: row.tournament_type === 'LIGUE_FINALE' ? 'TBD' : (row.host_name || ''),
+        is_ligue_final: row.tournament_type === 'LIGUE_FINALE',
         classification,
         action: existingId ? (classification === 'blocked' ? 'skip' : 'update') : 'create'
       });
@@ -1723,21 +1774,29 @@ router.post('/publish', authenticateToken, requireCalendarGenerator, requireAdmi
       [briefId]
     );
 
+    // Append ligue finals as virtual rows (lieu='TBD', no host).
+    const ligueFinalRows = await fetchLigueFinalRows(db, briefId, orgId).catch(() => []);
+    const allRows = [...draft, ...ligueFinalRows];
+
     let createdCount = 0, updatedCount = 0, skippedCount = 0;
     const articleSourceIds = []; // for fire-and-forget after the loop
     let nextTournoiId = ((await dbGet(`SELECT MAX(tournoi_id) AS max_id FROM tournoi_ext`))?.max_id || 0);
 
-    for (const row of draft) {
+    for (const row of allRows) {
       const tnum = TOURNAMENT_TYPE_TO_NUMBER[row.tournament_type] || null;
       const mode = row.game_type || '';
       const categorie = row.level || '';
-      const lieu = row.host_name + (row.host_city ? ` (${row.host_city})` : '');
+      const lieu = row.tournament_type === 'LIGUE_FINALE'
+        ? 'TBD'
+        : (row.host_name || '') + (row.host_city ? ` (${row.host_city})` : '');
       const debut = row.weekend_date instanceof Date
         ? row.weekend_date.toISOString().slice(0, 10)
         : String(row.weekend_date || '').slice(0, 10);
       const nom = tournamentNameForRow(row);
 
       // Re-classify per row to be safe (preview may be stale).
+      // tournoi_ext has no `saison` column — match by date range pulled
+      // from the brief window (same heuristic as /publish/preview).
       const existing = await dbGet(
         `SELECT t.tournoi_id,
                 (SELECT COUNT(*) FROM inscriptions i WHERE i.tournoi_id = t.tournoi_id) AS insc_count,
@@ -1749,8 +1808,8 @@ router.post('/publish', authenticateToken, requireCalendarGenerator, requireAdmi
             AND UPPER(t.mode) = UPPER($2)
             AND UPPER(t.categorie) = UPPER($3)
             AND t.tournament_number = $4
-            AND t.saison = $5`,
-        [orgId, mode, categorie, tnum, brief.season]
+            AND t.debut BETWEEN $5 AND $6`,
+        [orgId, mode, categorie, tnum, seasonStart, seasonEnd]
       ).catch(() => null);
 
       const hasResults = existing ? (parseInt(existing.result_count, 10) || 0) > 0 : false;
@@ -1810,11 +1869,14 @@ router.post('/publish', authenticateToken, requireCalendarGenerator, requireAdmi
         articleSourceIds.push({ id: resultingId, nom, mode, categorie, debut, lieu });
       }
 
-      // Bind draft row → tournoi_ext for traceability.
-      await dbRun(
-        `UPDATE calendar_draft SET tournoi_ext_id = $1 WHERE id = $2`,
-        [resultingId, row.id]
-      );
+      // Bind draft row → tournoi_ext for traceability. Skip for virtual
+      // rows (ligue finals) which never lived in calendar_draft.
+      if (!row._virtual) {
+        await dbRun(
+          `UPDATE calendar_draft SET tournoi_ext_id = $1 WHERE id = $2`,
+          [resultingId, row.id]
+        );
+      }
     }
 
     // Mark brief as published.
