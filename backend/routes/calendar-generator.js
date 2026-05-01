@@ -1899,24 +1899,43 @@ router.post('/resync-from-published', authenticateToken, requireCalendarGenerato
           );
           updated++;
         }
-        // Host drift
-        if (kinds.includes('host_changed') && norm(r.draft_host_name) !== norm(r.ext_lieu)) {
-          let newHostId = null;
-          if (r.ext_lieu && r.ext_lieu.trim()) {
-            const club = await fetchOne(
-              `SELECT id FROM clubs
-                WHERE organization_id = $1
-                  AND UPPER(TRIM(display_name)) = UPPER(TRIM($2))
-                LIMIT 1`,
-              [orgId, r.ext_lieu]
-            );
-            newHostId = club ? club.id : null;
+        // Host drift — V 2.0.628.
+        // The publish step writes lieu as "ClubName (CityName)". Strip
+        // the trailing parenthesised suffix on BOTH sides for the
+        // comparison AND for the clubs.display_name lookup, otherwise
+        // the match always fails and we'd destructively wipe host_club_id
+        // to NULL on every "matching" row.
+        if (kinds.includes('host_changed')) {
+          const stripCity = (s) => String(s == null ? '' : s)
+            .replace(/\s*\([^)]*\)\s*$/, '').trim();
+          const draftHostNorm = norm(stripCity(r.draft_host_name));
+          const extHostNorm   = norm(stripCity(r.ext_lieu));
+          if (draftHostNorm !== extHostNorm) {
+            const cleanLieu = stripCity(r.ext_lieu);
+            let newHostId = null;
+            if (cleanLieu) {
+              const club = await fetchOne(
+                `SELECT id FROM clubs
+                  WHERE organization_id = $1
+                    AND UPPER(TRIM(display_name)) = UPPER(TRIM($2))
+                  LIMIT 1`,
+                [orgId, cleanLieu]
+              );
+              newHostId = club ? club.id : null;
+            }
+            // Safety: if we cannot resolve the lieu to a known club, do
+            // NOT wipe the existing host_club_id — that would destroy
+            // valid data. Skip the row and surface it as a non-error.
+            if (cleanLieu && !newHostId) {
+              skipped++;
+            } else {
+              await run(
+                `UPDATE calendar_draft SET host_club_id = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`,
+                [newHostId, r.draft_id]
+              );
+              updated++;
+            }
           }
-          await run(
-            `UPDATE calendar_draft SET host_club_id = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`,
-            [newHostId, r.draft_id]
-          );
-          updated++;
         }
       } catch (rowErr) {
         errors.push({ draft_id: r.draft_id, error: rowErr.message });
