@@ -1164,6 +1164,118 @@ router.get('/draft', authenticateToken, requireCalendarGenerator, (req, res) => 
   );
 });
 
+// V 2.0.607 — GET /published-grid?brief_id=X
+//   Returns placements shaped exactly like the wizard's `result.placements`
+//   array, but sourced from the **published** tournoi_ext rows (read-only
+//   "Saison publiée" view). Mirrors the date-range scoping used by
+//   /publish/preview so adjacent late/early rows still match.
+//
+//   Response shape:
+//   {
+//     placements: [{ category_id, weekend_date, tournament_type,
+//                    host_id, host_name, tournoi_ext_id,
+//                    _draft_id: null,            // never editable
+//                    _locked: false,
+//                    _is_ligue_final: bool,
+//                    _is_published: true }, ...],
+//     summary:    { total, with_host, tbd },
+//     brief:      { id, season }
+//   }
+router.get('/published-grid', authenticateToken, requireCalendarGenerator, async (req, res) => {
+  const db = getDb();
+  const orgId = req.user.organizationId;
+  const briefId = parseInt(req.query.brief_id, 10);
+  if (!briefId) return res.status(400).json({ error: 'brief_id requis' });
+
+  const fetchAll = (sql, params) => new Promise((resolve, reject) =>
+    db.all(sql, params, (err, rows) => err ? reject(err) : resolve(rows || []))
+  );
+  const fetchOne = (sql, params) => new Promise((resolve, reject) =>
+    db.get(sql, params, (err, row) => err ? reject(err) : resolve(row))
+  );
+
+  try {
+    const brief = await fetchOne(
+      `SELECT id, season, first_weekend, last_weekend
+         FROM calendar_brief
+        WHERE id = $1 AND organization_id = $2`,
+      [briefId, orgId]
+    );
+    if (!brief) return res.status(404).json({ error: 'Brief introuvable' });
+
+    // Wider window (±60 days) — same logic as /publish/preview.
+    const seasonStart = brief.first_weekend
+      ? new Date(new Date(brief.first_weekend).getTime() - 60 * 86400000).toISOString().slice(0, 10)
+      : `${brief.season.split('-')[0]}-01-01`;
+    const seasonEnd = brief.last_weekend
+      ? new Date(new Date(brief.last_weekend).getTime() + 60 * 86400000).toISOString().slice(0, 10)
+      : `${brief.season.split('-')[1]}-12-31`;
+
+    // Pull all tournoi_ext rows for this org in the season window.
+    const rows = await fetchAll(
+      `SELECT t.tournoi_id, t.nom, t.mode, t.categorie, t.debut, t.lieu,
+              t.tournament_number,
+              c.id   AS category_id,
+              c.display_name AS category_label,
+              c.game_type, c.level,
+              cl.id  AS host_id,
+              cl.display_name AS host_name
+         FROM tournoi_ext t
+         LEFT JOIN categories c
+                ON UPPER(c.game_type) = UPPER(t.mode)
+               AND UPPER(c.level)     = UPPER(t.categorie)
+               AND c.organization_id = t.organization_id
+         LEFT JOIN clubs cl
+                ON UPPER(TRIM(cl.display_name)) = UPPER(TRIM(t.lieu))
+               AND cl.organization_id = t.organization_id
+        WHERE t.organization_id = $1
+          AND t.debut BETWEEN $2 AND $3
+        ORDER BY t.debut ASC, c.display_name ASC`,
+      [orgId, seasonStart, seasonEnd]
+    );
+
+    // Reverse mapping: tournament_number → tournament_type label.
+    const NUMBER_TO_TYPE = { 1: 'T1', 2: 'T2', 3: 'T3', 4: 'Finale', 5: 'LIGUE_FINALE' };
+
+    const placements = rows
+      .filter(r => r.category_id != null) // skip rows we can't map to a category
+      .map(r => {
+        const ttype = NUMBER_TO_TYPE[parseInt(r.tournament_number, 10)] || null;
+        const isLF = ttype === 'LIGUE_FINALE';
+        const debutStr = r.debut instanceof Date
+          ? r.debut.toISOString().slice(0, 10)
+          : (String(r.debut || '').match(/^\d{4}-\d{2}-\d{2}/)?.[0] || null);
+        return {
+          category_id: r.category_id,
+          weekend_date: debutStr,
+          tournament_type: ttype,
+          host_id: isLF ? null : r.host_id,
+          host_name: isLF ? 'Ligue' : (r.host_name || r.lieu || null),
+          tournoi_ext_id: r.tournoi_id,
+          _draft_id: null,        // never editable in this view
+          _locked: false,
+          _is_ligue_final: isLF,
+          _is_published: true
+        };
+      })
+      .filter(p => p.tournament_type && p.weekend_date);
+
+    const summary = {
+      total: placements.length,
+      with_host: placements.filter(p => p.host_id).length,
+      tbd: placements.filter(p => !p.host_id && !p._is_ligue_final).length
+    };
+    res.json({
+      brief: { id: brief.id, season: brief.season },
+      placements,
+      summary
+    });
+  } catch (err) {
+    console.error('[calendar-generator] /published-grid error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /draft/export?brief_id=X — download the draft as a .xlsx file
 router.get('/draft/export', authenticateToken, requireCalendarGenerator, async (req, res) => {
   const db = getDb();

@@ -595,6 +595,7 @@
         <button type="button" class="view-btn" data-view="seasonal" style="padding: 6px 12px; border: 1px solid #c8c5be; border-radius: 5px; background: #6b3aa3; color: white; cursor: pointer; font-size: 13px;">Vue calendrier</button>
         <button type="button" class="view-btn" data-view="compact" style="padding: 6px 12px; border: 1px solid #c8c5be; border-radius: 5px; background: white; color: #333; cursor: pointer; font-size: 13px;">Compacte par catégorie</button>
         <button type="button" class="view-btn" data-view="hosts" style="padding: 6px 12px; border: 1px solid #c8c5be; border-radius: 5px; background: white; color: #333; cursor: pointer; font-size: 13px;">Par club hôte</button>
+        <button type="button" class="view-btn" data-view="published" style="padding: 6px 12px; border: 1px solid #c8c5be; border-radius: 5px; background: white; color: #333; cursor: pointer; font-size: 13px;">📅 Saison publiée</button>
         <span style="flex: 1;"></span>
         <button type="button" id="exportXlsxBtn" style="padding: 6px 12px; border: none; border-radius: 5px; background: #2c7a4d; color: white; cursor: pointer; font-size: 13px; font-weight: 600;">📊 Télécharger Excel</button>
       </div>
@@ -602,6 +603,7 @@
       <div id="viewSeasonal" style="display: none;"></div>
       <div id="viewCompact" style="display: none;"></div>
       <div id="viewHosts" style="display: none;"></div>
+      <div id="viewPublished" style="display: none;"></div>
 
       <div class="actions-bar">
         <div>
@@ -2433,6 +2435,168 @@
       });
     }
 
+    // ----- Vue 4: Saison publiée (V 2.0.607 — read-only, from tournoi_ext) -----
+    // Mirrors Vue calendrier visually but is fed from /published-grid
+    // (the actual published rows in tournoi_ext) instead of the wizard
+    // draft. Cells are non-editable (no _draft_id).
+    let _publishedCache = null; // { brief_id, placements, summary, fetched_at }
+
+    async function loadPublishedView(force = false) {
+      const container = document.getElementById('viewPublished');
+      if (!currentBrief) {
+        container.innerHTML = '<div style="padding: 24px; color: #888;">Aucun brief actif.</div>';
+        return;
+      }
+      // Reuse cache if same brief and freshly loaded (last 60s).
+      const fresh = _publishedCache
+                  && _publishedCache.brief_id === currentBrief.id
+                  && (Date.now() - _publishedCache.fetched_at) < 60_000;
+      if (!force && fresh) {
+        renderViewPublished(_publishedCache);
+        return;
+      }
+      container.innerHTML = '<div style="padding: 24px; color: #6b3aa3;">⏳ Chargement des tournois publiés…</div>';
+      try {
+        const res = await fetch(`${API_URL}/calendar-generator/published-grid?brief_id=${currentBrief.id}`, { headers: authHeaders });
+        if (!res.ok) {
+          const e = await res.json().catch(() => ({}));
+          throw new Error(e.error || `HTTP ${res.status}`);
+        }
+        const data = await res.json();
+        _publishedCache = {
+          brief_id: currentBrief.id,
+          placements: data.placements || [],
+          summary: data.summary || { total: 0 },
+          fetched_at: Date.now()
+        };
+        renderViewPublished(_publishedCache);
+      } catch (err) {
+        console.error('[published-view] load failed:', err);
+        container.innerHTML = `<div style="padding: 24px; color: #b81c1c;">Erreur : ${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    function renderViewPublished(payload) {
+      const container = document.getElementById('viewPublished');
+      const placements = payload.placements || [];
+      const colors = buildHostColorMap(placements);
+
+      // Categories present in the published data, in canonical order.
+      const allCatIds = new Set(placements.map(p => p.category_id));
+      const cats = (referenceData.categories || []).filter(c => allCatIds.has(c.id));
+      cats.sort((a, b) => {
+        const ma = dispModeRank(a.mode || a.game_type);
+        const mb = dispModeRank(b.mode || b.game_type);
+        if (ma !== mb) return ma - mb;
+        return dispLevelRank(a.level) - dispLevelRank(b.level);
+      });
+
+      const weekends = [...new Set(placements.map(p => p.weekend_date))].sort();
+
+      const grid = {};
+      placements.forEach(p => {
+        if (!grid[p.category_id]) grid[p.category_id] = {};
+        grid[p.category_id][p.weekend_date] = p;
+      });
+
+      // Month bands (same logic as Vue calendrier).
+      const monthGroups = [];
+      weekends.forEach(we => {
+        const d = new Date(we + 'T00:00:00Z');
+        const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+        const label = d.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+        if (!monthGroups.length || monthGroups[monthGroups.length - 1].key !== key) {
+          monthGroups.push({ key, label, count: 1 });
+        } else {
+          monthGroups[monthGroups.length - 1].count++;
+        }
+      });
+      const monthBandCells = monthGroups.map((g, idx) => {
+        const tint = idx % 2 === 0 ? '#5a3094' : '#7d52b8';
+        return `<th colspan="${g.count}" style="padding: 5px 6px; font-size: 11px; font-weight: 700; background: ${tint}; color: white; text-transform: capitalize; border-right: 2px solid white; letter-spacing: 0.3px;">${g.label}</th>`;
+      }).join('');
+
+      const headerCells = weekends.map((we, i) => {
+        const d = new Date(we + 'T00:00:00Z');
+        const prev = i > 0 ? new Date(weekends[i - 1] + 'T00:00:00Z') : null;
+        const monthChange = prev && prev.getUTCMonth() !== d.getUTCMonth();
+        const leftBorder = monthChange ? 'border-left: 2px solid #5a3094;' : '';
+        return `<th style="padding: 4px 6px; font-size: 11px; min-width: 56px; white-space: nowrap; ${leftBorder}">${d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', timeZone: 'UTC' })}</th>`;
+      }).join('');
+
+      const rows = cats.map(c => {
+        const cells = weekends.map((we, i) => {
+          const prev = i > 0 ? new Date(weekends[i - 1] + 'T00:00:00Z') : null;
+          const cur = new Date(we + 'T00:00:00Z');
+          const monthChange = prev && prev.getUTCMonth() !== cur.getUTCMonth();
+          const leftBorder = monthChange ? 'border-left: 2px solid #5a3094;' : '';
+          const p = grid[c.id]?.[we];
+          if (!p) return `<td style="padding: 4px 6px; background: #fafafa; ${leftBorder}"></td>`;
+
+          if (p._is_ligue_final) {
+            const tipLF = `Finale Ligue ${c.name || c.display_name}\n${fmtDateFR(p.weekend_date)}\nLieu : TBD (à renseigner par la Ligue)`;
+            return `<td style="padding: 4px 6px; background: repeating-linear-gradient(135deg, #fff4e0, #fff4e0 6px, #ffe5b8 6px, #ffe5b8 12px); text-align: center; font-size: 11px; border: 1.5px solid #c47b00; ${leftBorder}" title="${escapeHtml(tipLF)}">
+              <div style="font-weight: 700; color: #8a4a00;">FL</div>
+              <div style="font-size: 9px; color: #8a4a00;">Ligue</div>
+            </td>`;
+          }
+
+          const bg = p.host_id ? colors.get(p.host_id) : '#fff';
+          const tip = `${c.name || c.display_name} ${p.tournament_type}\n${fmtDateFR(p.weekend_date)}\n${p.host_name || 'TBD'}\n(tournoi_ext #${p.tournoi_ext_id})`;
+          return `<td style="padding: 4px 6px; background: ${bg}; text-align: center; font-size: 11px; ${leftBorder}" title="${escapeHtml(tip)}">
+            <div style="font-weight: 700;">${p.tournament_type === 'Finale' ? 'F' : p.tournament_type}</div>
+            <div style="font-size: 9px; color: #555;">${escapeHtml(abbreviateHost(p.host_name) || (p.host_id == null ? 'TBD' : ''))}</div>
+          </td>`;
+        }).join('');
+        return `<tr><td style="padding: 6px 10px; font-weight: 600; position: sticky; left: 0; background: #fff; z-index: 1; border-right: 2px solid #ccc;">${escapeHtml(c.name || c.display_name)}</td>${cells}</tr>`;
+      }).join('');
+
+      const legend = [...colors.entries()].map(([id, color]) => {
+        const p = placements.find(pp => pp.host_id === id);
+        return `<span style="display:inline-block; padding: 4px 10px; background: ${color}; border-radius: 4px; font-size: 12px; margin: 0 4px 4px 0;">${escapeHtml(p?.host_name || '?')}</span>`;
+      }).join('');
+
+      const hasLF = placements.some(p => p._is_ligue_final);
+      const summary = payload.summary || {};
+
+      container.innerHTML = `
+        <div style="font-size: 13px; color: #1a4f7a; background: #e6f2fa; border: 1px solid #8cb6d4; padding: 8px 12px; border-radius: 6px; margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+          <div>
+            🔒 <strong>Lecture seule</strong> — vue de l'état <strong>publié</strong> dans <code>tournoi_ext</code>${summary.total != null ? ` (${summary.total} tournoi${summary.total > 1 ? 's' : ''})` : ''}.
+            Pour modifier, utilisez l'onglet « Vue calendrier » puis « Créer / Mettre à jour les tournois ».
+          </div>
+          <button type="button" id="publishedRefreshBtn" style="padding: 5px 10px; border: 1px solid #1a4f7a; background: white; color: #1a4f7a; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 600; white-space: nowrap;">🔄 Rafraîchir</button>
+        </div>
+        ${placements.length === 0 ? `
+          <div style="padding: 30px; text-align: center; color: #888; background: #fafafa; border-radius: 8px;">
+            Aucun tournoi publié pour cette saison.<br>
+            <span style="font-size: 12px;">Lancez « Créer / Mettre à jour les tournois » depuis la Vue calendrier pour publier le brouillon.</span>
+          </div>
+        ` : `
+          <div style="overflow-x: auto; max-width: 100%; border: 1px solid #ddd; border-radius: 4px;">
+            <table style="border-collapse: collapse; min-width: 100%;">
+              <thead style="background: linear-gradient(135deg, #6b3aa3, #5a3094); color: white; position: sticky; top: 0; z-index: 2;">
+                <tr>
+                  <th rowspan="2" style="padding: 6px 10px; text-align: left; position: sticky; left: 0; background: #6b3aa3; z-index: 3; min-width: 160px; vertical-align: middle;">Catégorie</th>
+                  ${monthBandCells}
+                </tr>
+                <tr>${headerCells}</tr>
+              </thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+          <div style="margin-top: 10px;">
+            <strong style="font-size: 13px; color: #555;">Légende clubs :</strong> ${legend}
+            ${hasLF ? `
+              <span style="display:inline-block; padding: 4px 10px; background: repeating-linear-gradient(135deg, #fff4e0, #fff4e0 6px, #ffe5b8 6px, #ffe5b8 12px); border: 1.5px solid #c47b00; border-radius: 4px; font-size: 12px; margin: 0 4px 4px 8px; color: #8a4a00; font-weight: 600;">FL — Finale Ligue</span>
+            ` : ''}
+          </div>
+        `}
+      `;
+      const refreshBtn = document.getElementById('publishedRefreshBtn');
+      if (refreshBtn) refreshBtn.addEventListener('click', () => loadPublishedView(true));
+    }
+
     // ----- Vue 3: Par club hôte -----
     function renderViewHosts(result) {
       const container = document.getElementById('viewHosts');
@@ -2488,14 +2652,18 @@
 
     function switchView(name) {
       _activeView = name;
-      ['seasonal', 'compact', 'hosts'].forEach(v => {
-        document.getElementById('view' + v[0].toUpperCase() + v.slice(1)).style.display = (v === name) ? 'block' : 'none';
+      ['seasonal', 'compact', 'hosts', 'published'].forEach(v => {
+        const el = document.getElementById('view' + v[0].toUpperCase() + v.slice(1));
+        if (el) el.style.display = (v === name) ? 'block' : 'none';
       });
       document.querySelectorAll('.view-btn').forEach(btn => {
         const active = btn.dataset.view === name;
         btn.style.background = active ? '#6b3aa3' : 'white';
         btn.style.color = active ? 'white' : '#333';
       });
+      // V 2.0.607 — lazy-load the published view on first activation
+      // (avoids fetching tournoi_ext until the user actually wants it).
+      if (name === 'published') loadPublishedView();
     }
 
     // View buttons
