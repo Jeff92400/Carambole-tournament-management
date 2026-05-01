@@ -2217,6 +2217,30 @@
       `;
     }
 
+    // V 2.0.609 — distinct colour per round type (T1, T2, T3, F, FL).
+    // Used as the round-label text colour in both Vue calendrier and
+    // Saison publiée so the round at a glance is independent from the
+    // host-club background colour. FL keeps the orange family it already
+    // uses for the ligue-final stripe pattern.
+    const ROUND_COLOURS = {
+      T1: '#1b5e20',  // dark green
+      T2: '#0d47a1',  // dark blue
+      T3: '#bf360c',  // dark orange
+      F:  '#4a148c',  // dark purple
+      FL: '#8a4a00'   // kept consistent with FL stripe text
+    };
+    function roundColour(tournamentType) {
+      if (!tournamentType) return '#222';
+      if (tournamentType === 'LIGUE_FINALE') return ROUND_COLOURS.FL;
+      if (tournamentType === 'Finale')       return ROUND_COLOURS.F;
+      return ROUND_COLOURS[tournamentType] || '#222';
+    }
+    function roundLabel(tournamentType) {
+      if (tournamentType === 'LIGUE_FINALE') return 'FL';
+      if (tournamentType === 'Finale')       return 'F';
+      return tournamentType || '';
+    }
+
     // V 2.0.608 — enumerate every Saturday between two ISO dates.
     // Used by Vue calendrier + Saison publiée so empty weekends are
     // still rendered as columns (matching the legacy XL file UX).
@@ -2378,7 +2402,7 @@
           const lockIcon = p._locked ? '🔒 ' : '';
           const commentIcon = p._comment ? '💬' : '';
           return `<td class="cell-editable" data-draft-id="${p._draft_id || ''}" data-cat-id="${c.id}" style="padding: 4px 6px; background: ${bg}; text-align: center; font-size: 11px; ${lockedBorder} ${leftBorder} ${editable}" title="${escapeHtml(tip)}">
-            <div style="font-weight: 700;">${lockIcon}${p.tournament_type === 'Finale' ? 'F' : p.tournament_type}${commentIcon}</div>
+            <div style="font-weight: 800; color: ${roundColour(p.tournament_type)};">${lockIcon}${roundLabel(p.tournament_type)}${commentIcon}</div>
             <div style="font-size: 9px; color: #555;">${escapeHtml(abbreviateHost(p.host_name) || (p.host_id == null ? 'TBD' : ''))}</div>
           </td>`;
         }).join('');
@@ -2414,6 +2438,13 @@
           ${ligueFinalPlacements.length ? `
             <span style="display:inline-block; padding: 4px 10px; background: repeating-linear-gradient(135deg, #fff4e0, #fff4e0 6px, #ffe5b8 6px, #ffe5b8 12px); border: 1.5px solid #c47b00; border-radius: 4px; font-size: 12px; margin: 0 4px 4px 8px; color: #8a4a00; font-weight: 600;">FL — Finale Ligue</span>
           ` : ''}
+        </div>
+        <div style="margin-top: 6px;">
+          <strong style="font-size: 13px; color: #555;">Légende tournois :</strong>
+          <span style="display:inline-block; padding: 3px 9px; border-radius: 4px; font-size: 12px; font-weight: 800; margin: 0 4px 4px 0; color: ${ROUND_COLOURS.T1}; border: 1.5px solid ${ROUND_COLOURS.T1}; background: #fff;">T1</span>
+          <span style="display:inline-block; padding: 3px 9px; border-radius: 4px; font-size: 12px; font-weight: 800; margin: 0 4px 4px 0; color: ${ROUND_COLOURS.T2}; border: 1.5px solid ${ROUND_COLOURS.T2}; background: #fff;">T2</span>
+          <span style="display:inline-block; padding: 3px 9px; border-radius: 4px; font-size: 12px; font-weight: 800; margin: 0 4px 4px 0; color: ${ROUND_COLOURS.T3}; border: 1.5px solid ${ROUND_COLOURS.T3}; background: #fff;">T3</span>
+          <span style="display:inline-block; padding: 3px 9px; border-radius: 4px; font-size: 12px; font-weight: 800; margin: 0 4px 4px 0; color: ${ROUND_COLOURS.F}; border: 1.5px solid ${ROUND_COLOURS.F}; background: #fff;">F &nbsp;Finale</span>
         </div>
       `;
 
@@ -2611,7 +2642,7 @@
           const bg = p.host_id ? colors.get(p.host_id) : '#fff';
           const tip = `${c.name || c.display_name} ${p.tournament_type}\n${fmtDateFR(p.weekend_date)}\n${p.host_name || 'TBD'}\n(tournoi_ext #${p.tournoi_ext_id})`;
           return `<td style="padding: 4px 6px; background: ${bg}; text-align: center; font-size: 11px; ${leftBorder}" title="${escapeHtml(tip)}">
-            <div style="font-weight: 700;">${p.tournament_type === 'Finale' ? 'F' : p.tournament_type}</div>
+            <div style="font-weight: 800; color: ${roundColour(p.tournament_type)};">${roundLabel(p.tournament_type)}</div>
             <div style="font-size: 9px; color: #555;">${escapeHtml(abbreviateHost(p.host_name) || (p.host_id == null ? 'TBD' : ''))}</div>
           </td>`;
         }).join('');
@@ -2657,6 +2688,13 @@
             ${hasLF ? `
               <span style="display:inline-block; padding: 4px 10px; background: repeating-linear-gradient(135deg, #fff4e0, #fff4e0 6px, #ffe5b8 6px, #ffe5b8 12px); border: 1.5px solid #c47b00; border-radius: 4px; font-size: 12px; margin: 0 4px 4px 8px; color: #8a4a00; font-weight: 600;">FL — Finale Ligue</span>
             ` : ''}
+          </div>
+          <div style="margin-top: 6px;">
+            <strong style="font-size: 13px; color: #555;">Légende tournois :</strong>
+            <span style="display:inline-block; padding: 3px 9px; border-radius: 4px; font-size: 12px; font-weight: 800; margin: 0 4px 4px 0; color: ${ROUND_COLOURS.T1}; border: 1.5px solid ${ROUND_COLOURS.T1}; background: #fff;">T1</span>
+            <span style="display:inline-block; padding: 3px 9px; border-radius: 4px; font-size: 12px; font-weight: 800; margin: 0 4px 4px 0; color: ${ROUND_COLOURS.T2}; border: 1.5px solid ${ROUND_COLOURS.T2}; background: #fff;">T2</span>
+            <span style="display:inline-block; padding: 3px 9px; border-radius: 4px; font-size: 12px; font-weight: 800; margin: 0 4px 4px 0; color: ${ROUND_COLOURS.T3}; border: 1.5px solid ${ROUND_COLOURS.T3}; background: #fff;">T3</span>
+            <span style="display:inline-block; padding: 3px 9px; border-radius: 4px; font-size: 12px; font-weight: 800; margin: 0 4px 4px 0; color: ${ROUND_COLOURS.F}; border: 1.5px solid ${ROUND_COLOURS.F}; background: #fff;">F &nbsp;Finale</span>
           </div>
         `}
       `;
