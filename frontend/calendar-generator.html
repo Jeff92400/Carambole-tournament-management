@@ -373,6 +373,24 @@
       </div>
     </div>
 
+    <!-- V 2.0.618 — Inbound staleness banner. Shown only when /sync-status
+         reports drift between calendar_draft and tournoi_ext (someone
+         edited a tournament from the regular Tournaments list, deleted
+         a published row, or created one outside the wizard). -->
+    <div id="syncDriftBanner" class="card" style="display: none; padding: 14px 16px; background: linear-gradient(135deg, #fff8e6 0%, #fff0d0 100%); border: 1.5px solid #f0c060; border-radius: 8px; margin-bottom: 16px;">
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
+        <div style="flex: 1; min-width: 240px;">
+          <div style="font-weight: 700; color: #6b4f00; font-size: 14px;">⚠️ <span id="syncDriftHeadline">Le brouillon n'est plus aligné avec les tournois publiés.</span></div>
+          <div style="font-size: 12px; color: #6b4f00; margin-top: 4px;" id="syncDriftSummary"></div>
+        </div>
+        <div style="display: flex; gap: 6px; flex-wrap: nowrap;">
+          <button type="button" id="syncDriftDetailsBtn" style="padding: 6px 12px; border: 1px solid #c47b00; background: white; color: #6b4f00; border-radius: 5px; cursor: pointer; font-size: 12px; font-weight: 600;">Voir le détail</button>
+          <button type="button" id="syncDriftResyncBtn" style="padding: 6px 12px; border: none; background: #c47b00; color: white; border-radius: 5px; cursor: pointer; font-size: 12px; font-weight: 700;">🔄 Resynchroniser le brouillon</button>
+        </div>
+      </div>
+      <div id="syncDriftDetails" style="display: none; margin-top: 12px; padding-top: 12px; border-top: 1px solid #e8c878; max-height: 240px; overflow-y: auto;"></div>
+    </div>
+
     <div class="card" id="step1Card">
       <div class="step-header">
         <h3 style="margin: 0;">Étape 1 — Brief de saison</h3>
@@ -1228,7 +1246,11 @@
       el.className = 'save-status' + (cls ? ' ' + cls : '');
     }
 
-    document.getElementById('seasonInput').addEventListener('change', loadBriefForSeason);
+    document.getElementById('seasonInput').addEventListener('change', async () => {
+      await loadBriefForSeason();
+      // V 2.0.618 — refresh staleness banner whenever the active brief changes.
+      try { await loadSyncStatus(); } catch (_) {}
+    });
 
     // V 2.0.606 — single source of truth for stepper state. Steps:
     //   1 = Brief, 2 = Règles, 3 = Génération, 4 = Création des tournois.
@@ -1813,6 +1835,111 @@
       document.getElementById('step3Card').scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
 
+    // V 2.0.618 — Inbound staleness check. Called on wizard load and
+    // whenever the draft is reloaded so the banner stays in sync.
+    async function loadSyncStatus() {
+      const banner = document.getElementById('syncDriftBanner');
+      if (!banner || !currentBrief) {
+        if (banner) banner.style.display = 'none';
+        return;
+      }
+      try {
+        const res = await fetch(`${API_URL}/calendar-generator/sync-status?brief_id=${currentBrief.id}`, { headers: authHeaders });
+        if (!res.ok) { banner.style.display = 'none'; return; }
+        const data = await res.json();
+        if (!data || (data.drift_count || 0) === 0) {
+          banner.style.display = 'none';
+          return;
+        }
+        renderSyncDriftBanner(data);
+      } catch (e) {
+        console.warn('[sync-status] check failed:', e.message);
+        banner.style.display = 'none';
+      }
+    }
+
+    function renderSyncDriftBanner(data) {
+      const banner = document.getElementById('syncDriftBanner');
+      const headline = document.getElementById('syncDriftHeadline');
+      const summary = document.getElementById('syncDriftSummary');
+      const details = document.getElementById('syncDriftDetails');
+      const detailsBtn = document.getElementById('syncDriftDetailsBtn');
+      const resyncBtn = document.getElementById('syncDriftResyncBtn');
+      const k = data.by_kind || {};
+      const total = data.drift_count;
+
+      headline.textContent = `${total} changement${total > 1 ? 's' : ''} détecté${total > 1 ? 's' : ''} hors-générateur.`;
+      const parts = [];
+      if (k.date_changed) parts.push(`${k.date_changed} date${k.date_changed > 1 ? 's' : ''} modifiée${k.date_changed > 1 ? 's' : ''}`);
+      if (k.host_changed) parts.push(`${k.host_changed} club${k.host_changed > 1 ? 's' : ''} hôte${k.host_changed > 1 ? 's' : ''} modifié${k.host_changed > 1 ? 's' : ''}`);
+      if (k.deleted)      parts.push(`${k.deleted} tournoi${k.deleted > 1 ? 's' : ''} supprimé${k.deleted > 1 ? 's' : ''}`);
+      if (k.external)     parts.push(`${k.external} tournoi${k.external > 1 ? 's' : ''} créé${k.external > 1 ? 's' : ''} hors-générateur`);
+      summary.textContent = parts.join(' · ');
+
+      // Pre-render the details list (hidden by default).
+      const KIND_LABELS = {
+        date_changed: { icon: '📅', label: 'Date modifiée' },
+        host_changed: { icon: '🏛️', label: 'Club hôte modifié' },
+        deleted:      { icon: '🗑️', label: 'Tournoi supprimé' },
+        external:     { icon: '➕', label: 'Tournoi créé hors-générateur' }
+      };
+      const items = (data.items || []).slice(0, 50).map(it => {
+        const k2 = KIND_LABELS[it.kind] || { icon: '•', label: it.kind };
+        let valueLine = '';
+        if (it.draft_value || it.ext_value) {
+          const dv = it.draft_value || '—';
+          const ev = it.ext_value   || '—';
+          valueLine = `<div style="font-size: 11px; color: #6b4f00; margin-top: 2px;">brouillon: <strong>${escapeHtml(dv)}</strong> → publié: <strong>${escapeHtml(ev)}</strong></div>`;
+        }
+        return `<div style="padding: 6px 0; border-bottom: 1px dashed #e8c878;">
+          <div style="font-size: 12px; color: #5a4400;"><span style="font-weight: 700;">${k2.icon} ${k2.label}</span> · ${escapeHtml(it.label || '')}</div>
+          ${valueLine}
+        </div>`;
+      }).join('');
+      details.innerHTML = items + ((data.items || []).length > 50 ? '<div style="font-size: 11px; color: #888; padding-top: 6px;">… liste tronquée à 50 entrées.</div>' : '');
+
+      // Wire up the toggle + resync click handlers (idempotent — replace).
+      detailsBtn.onclick = () => {
+        const open = details.style.display !== 'none';
+        details.style.display = open ? 'none' : 'block';
+        detailsBtn.textContent = open ? 'Voir le détail' : 'Masquer le détail';
+      };
+      resyncBtn.onclick = async () => {
+        if (k.external && !k.date_changed && !k.host_changed && !k.deleted) {
+          // Only "external" rows — nothing to resync inbound.
+          alert(`Les ${k.external} tournoi(s) créés hors-générateur ne peuvent pas être resynchronisés automatiquement.\n\nPour les intégrer au brouillon, utilisez l'import calendrier ou créez les lignes équivalentes via Génération.`);
+          return;
+        }
+        if (!confirm(`Resynchroniser le brouillon depuis l'état publié ?\n\nLes ${(k.date_changed || 0) + (k.host_changed || 0) + (k.deleted || 0)} changement(s) seront tirés vers le brouillon. Vos verrous (🔒) sont préservés.`)) return;
+        resyncBtn.disabled = true;
+        const oldText = resyncBtn.textContent;
+        resyncBtn.textContent = '⏳ Resynchro…';
+        try {
+          const res = await fetch(`${API_URL}/calendar-generator/resync-from-published`, {
+            method: 'POST',
+            headers: { ...authHeaders, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ brief_id: currentBrief.id })
+          });
+          if (!res.ok) {
+            const e = await res.json().catch(() => ({}));
+            throw new Error(e.error || `HTTP ${res.status}`);
+          }
+          const result = await res.json();
+          alert(`✅ Resynchronisation terminée — ${result.updated} ligne(s) mise(s) à jour${result.errors && result.errors.length ? `, ${result.errors.length} erreur(s)` : ''}.`);
+          // Reload the saved draft + sync status so the banner clears
+          // and the views reflect the new draft state.
+          await loadSavedDraft();
+          await loadSyncStatus();
+        } catch (err) {
+          alert('Erreur : ' + err.message);
+        } finally {
+          resyncBtn.disabled = false;
+          resyncBtn.textContent = oldText;
+        }
+      };
+      banner.style.display = 'block';
+    }
+
     async function loadSavedDraft() {
       if (!currentBrief) return;
       try {
@@ -2072,6 +2199,9 @@
         showPublishOutcome(state, data);
         // Mark step 4 as fully done in the stepper on a clean run.
         if (state === 'success') setActiveStep(4, { allDone: true });
+        // V 2.0.618 — recheck inbound drift after publish (clears the
+        // banner if the round-trip pulls the draft back in line).
+        try { await loadSyncStatus(); } catch (_) {}
 
         // Stash per-row outcomes so the table shows past-tense labels
         // ("Créé" / "Mis à jour" / "Ignoré") instead of the predicted
@@ -3036,6 +3166,8 @@
       populateSeasons();
       await loadReferenceData();
       await loadBriefForSeason();
+      // V 2.0.618 — check inbound staleness once the brief is resolved.
+      try { await loadSyncStatus(); } catch (_) {}
     })();
   </script>
 </body>

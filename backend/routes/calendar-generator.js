@@ -1276,6 +1276,287 @@ router.get('/published-grid', authenticateToken, requireCalendarGenerator, async
   }
 });
 
+// V 2.0.618 — bi-directional sync: detect drift between the wizard
+// draft and the published tournoi_ext rows. Returns 4 drift kinds:
+//
+//   date_changed  — tournoi_ext.debut differs from calendar_draft.weekend_date
+//   host_changed  — tournoi_ext.lieu  differs from clubs.display_name of host_club_id
+//   deleted       — calendar_draft.tournoi_ext_id points to a row that no longer exists
+//   external      — a tournoi_ext row in the brief's window is not linked to any draft
+//                   (admin created/imported it outside the calendar generator)
+//
+// Response:
+//   {
+//     drift_count: <int>,
+//     by_kind:    { date_changed, host_changed, deleted, external },
+//     items: [{ draft_id?, tournoi_ext_id?, kind, label,
+//               draft_value?, ext_value? }, …]
+//   }
+router.get('/sync-status', authenticateToken, requireCalendarGenerator, async (req, res) => {
+  const db = getDb();
+  const orgId = req.user.organizationId;
+  const briefId = parseInt(req.query.brief_id, 10);
+  if (!briefId) return res.status(400).json({ error: 'brief_id requis' });
+
+  const fetchAll = (sql, params) => new Promise((resolve, reject) =>
+    db.all(sql, params, (err, rows) => err ? reject(err) : resolve(rows || []))
+  );
+  const fetchOne = (sql, params) => new Promise((resolve, reject) =>
+    db.get(sql, params, (err, row) => err ? reject(err) : resolve(row))
+  );
+
+  try {
+    const brief = await fetchOne(
+      `SELECT id, season, first_weekend, last_weekend
+         FROM calendar_brief
+        WHERE id = $1 AND organization_id = $2`,
+      [briefId, orgId]
+    );
+    if (!brief) return res.status(404).json({ error: 'Brief introuvable' });
+
+    const seasonStart = brief.first_weekend
+      ? new Date(new Date(brief.first_weekend).getTime() - 60 * 86400000).toISOString().slice(0, 10)
+      : `${brief.season.split('-')[0]}-01-01`;
+    const seasonEnd = brief.last_weekend
+      ? new Date(new Date(brief.last_weekend).getTime() + 60 * 86400000).toISOString().slice(0, 10)
+      : `${brief.season.split('-')[1]}-12-31`;
+
+    const isoDate = (s) => {
+      if (s == null) return null;
+      if (s instanceof Date) return isNaN(s.getTime()) ? null : s.toISOString().slice(0, 10);
+      const m = String(s).match(/^(\d{4})-(\d{2})-(\d{2})/);
+      return m ? `${m[1]}-${m[2]}-${m[3]}` : null;
+    };
+    const norm = (s) => String(s == null ? '' : s).trim().toUpperCase();
+
+    // Pull all linked draft rows + their tournoi_ext counterpart.
+    const linked = await fetchAll(
+      `SELECT cd.id AS draft_id,
+              cd.weekend_date AS draft_date,
+              cd.host_club_id AS draft_host_id,
+              cd.tournament_type,
+              cd.tournoi_ext_id,
+              cl.display_name AS draft_host_name,
+              c.display_name AS category_label,
+              c.game_type, c.level,
+              t.tournoi_id AS ext_id,
+              t.debut      AS ext_date,
+              t.lieu       AS ext_lieu,
+              t.mode       AS ext_mode,
+              t.categorie  AS ext_cat
+         FROM calendar_draft cd
+         JOIN calendar_brief cb ON cb.id = cd.brief_id
+         LEFT JOIN clubs cl     ON cl.id = cd.host_club_id
+         LEFT JOIN categories c ON c.id  = cd.category_id
+         LEFT JOIN tournoi_ext t ON t.tournoi_id = cd.tournoi_ext_id
+        WHERE cd.brief_id = $1 AND cb.organization_id = $2
+          AND cd.tournoi_ext_id IS NOT NULL`,
+      [briefId, orgId]
+    );
+
+    // All tournoi_ext rows in window (to detect external rows).
+    const extInWindow = await fetchAll(
+      `SELECT t.tournoi_id, t.nom, t.mode, t.categorie, t.debut, t.lieu,
+              t.tournament_number
+         FROM tournoi_ext t
+        WHERE t.organization_id = $1
+          AND t.debut BETWEEN $2 AND $3`,
+      [orgId, seasonStart, seasonEnd]
+    );
+
+    const linkedExtIds = new Set(linked.map(r => r.tournoi_ext_id).filter(Boolean));
+
+    const items = [];
+    const labelOf = (r) => `${r.game_type || r.ext_mode || ''} ${r.level || r.ext_cat || ''} ${r.tournament_type || ''}`.trim();
+
+    for (const r of linked) {
+      // Deleted: linked to an ext id that no longer exists.
+      if (r.ext_id == null) {
+        items.push({
+          draft_id: r.draft_id,
+          tournoi_ext_id: r.tournoi_ext_id,
+          kind: 'deleted',
+          label: labelOf(r)
+        });
+        continue;
+      }
+      const draftDateStr = isoDate(r.draft_date);
+      const extDateStr   = isoDate(r.ext_date);
+      if (draftDateStr && extDateStr && draftDateStr !== extDateStr) {
+        items.push({
+          draft_id: r.draft_id,
+          tournoi_ext_id: r.ext_id,
+          kind: 'date_changed',
+          label: labelOf(r),
+          draft_value: draftDateStr,
+          ext_value: extDateStr
+        });
+      }
+      // Host comparison: tournoi_ext.lieu is free text → match on
+      // case-insensitive trimmed display_name. A draft with no host
+      // (TBD) is OK as long as ext also has empty/TBD lieu.
+      const draftHost = norm(r.draft_host_name);
+      const extHost   = norm(r.ext_lieu);
+      if (draftHost !== extHost) {
+        items.push({
+          draft_id: r.draft_id,
+          tournoi_ext_id: r.ext_id,
+          kind: 'host_changed',
+          label: labelOf(r),
+          draft_value: r.draft_host_name || '(TBD)',
+          ext_value:   r.ext_lieu || '(TBD)'
+        });
+      }
+    }
+
+    // External rows: in window, same org, but not linked to any draft.
+    // We further restrict to rows whose (mode, categorie, tournament_number)
+    // could plausibly be a calendar tournament — i.e., tournament_number 1..5.
+    for (const t of extInWindow) {
+      if (linkedExtIds.has(t.tournoi_id)) continue;
+      const tnum = parseInt(t.tournament_number, 10);
+      if (!(tnum >= 1 && tnum <= 5)) continue;
+      items.push({
+        draft_id: null,
+        tournoi_ext_id: t.tournoi_id,
+        kind: 'external',
+        label: `${t.mode || ''} ${t.categorie || ''} (T${tnum} · ${t.lieu || 'TBD'})`.trim(),
+        ext_value: isoDate(t.debut)
+      });
+    }
+
+    const by_kind = {
+      date_changed: items.filter(i => i.kind === 'date_changed').length,
+      host_changed: items.filter(i => i.kind === 'host_changed').length,
+      deleted:      items.filter(i => i.kind === 'deleted').length,
+      external:     items.filter(i => i.kind === 'external').length
+    };
+    res.json({ drift_count: items.length, by_kind, items });
+  } catch (err) {
+    console.error('[calendar-generator] /sync-status error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// V 2.0.618 — POST /resync-from-published?brief_id=X
+//   Body: { kinds?: ['date_changed', 'host_changed', 'deleted'] }  // default: all 3
+//   Pulls inbound changes from tournoi_ext into calendar_draft so the
+//   draft becomes the authoritative reflection of the published state.
+//
+//   - date_changed → UPDATE calendar_draft.weekend_date = tournoi_ext.debut
+//   - host_changed → UPDATE calendar_draft.host_club_id = (clubs.id where
+//                     UPPER(TRIM(display_name)) = UPPER(TRIM(tournoi_ext.lieu)))
+//   - deleted      → UPDATE calendar_draft.tournoi_ext_id = NULL (un-link)
+//   - external     → NOT auto-resolved (admin must publish-or-import manually)
+//
+//   Returns { updated, skipped, errors }
+router.post('/resync-from-published', authenticateToken, requireCalendarGenerator, requireAdmin, async (req, res) => {
+  const db = getDb();
+  const orgId = req.user.organizationId;
+  const briefId = parseInt(req.body.brief_id, 10);
+  const kinds = Array.isArray(req.body.kinds) && req.body.kinds.length
+    ? req.body.kinds
+    : ['date_changed', 'host_changed', 'deleted'];
+  if (!briefId) return res.status(400).json({ error: 'brief_id requis' });
+
+  const run = (sql, params) => new Promise((resolve, reject) =>
+    db.run(sql, params, function (err) { err ? reject(err) : resolve(this); })
+  );
+  const fetchAll = (sql, params) => new Promise((resolve, reject) =>
+    db.all(sql, params, (err, rows) => err ? reject(err) : resolve(rows || []))
+  );
+  const fetchOne = (sql, params) => new Promise((resolve, reject) =>
+    db.get(sql, params, (err, row) => err ? reject(err) : resolve(row))
+  );
+
+  try {
+    const brief = await fetchOne(
+      `SELECT id FROM calendar_brief WHERE id = $1 AND organization_id = $2`,
+      [briefId, orgId]
+    );
+    if (!brief) return res.status(404).json({ error: 'Brief introuvable' });
+
+    const linked = await fetchAll(
+      `SELECT cd.id AS draft_id, cd.weekend_date AS draft_date,
+              cd.host_club_id AS draft_host_id,
+              cd.tournoi_ext_id,
+              cl.display_name AS draft_host_name,
+              t.tournoi_id AS ext_id, t.debut AS ext_date, t.lieu AS ext_lieu
+         FROM calendar_draft cd
+         JOIN calendar_brief cb ON cb.id = cd.brief_id
+         LEFT JOIN clubs cl     ON cl.id = cd.host_club_id
+         LEFT JOIN tournoi_ext t ON t.tournoi_id = cd.tournoi_ext_id
+        WHERE cd.brief_id = $1 AND cb.organization_id = $2
+          AND cd.tournoi_ext_id IS NOT NULL`,
+      [briefId, orgId]
+    );
+
+    const isoDate = (s) => {
+      if (s == null) return null;
+      if (s instanceof Date) return isNaN(s.getTime()) ? null : s.toISOString().slice(0, 10);
+      const m = String(s).match(/^(\d{4})-(\d{2})-(\d{2})/);
+      return m ? `${m[1]}-${m[2]}-${m[3]}` : null;
+    };
+    const norm = (s) => String(s == null ? '' : s).trim().toUpperCase();
+
+    let updated = 0;
+    let skipped = 0;
+    const errors = [];
+
+    for (const r of linked) {
+      try {
+        // Deleted handling
+        if (r.ext_id == null) {
+          if (kinds.includes('deleted')) {
+            await run(
+              `UPDATE calendar_draft SET tournoi_ext_id = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
+              [r.draft_id]
+            );
+            updated++;
+          } else { skipped++; }
+          continue;
+        }
+        // Date drift
+        const draftDateStr = isoDate(r.draft_date);
+        const extDateStr   = isoDate(r.ext_date);
+        if (kinds.includes('date_changed') && draftDateStr && extDateStr && draftDateStr !== extDateStr) {
+          await run(
+            `UPDATE calendar_draft SET weekend_date = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`,
+            [extDateStr, r.draft_id]
+          );
+          updated++;
+        }
+        // Host drift
+        if (kinds.includes('host_changed') && norm(r.draft_host_name) !== norm(r.ext_lieu)) {
+          let newHostId = null;
+          if (r.ext_lieu && r.ext_lieu.trim()) {
+            const club = await fetchOne(
+              `SELECT id FROM clubs
+                WHERE organization_id = $1
+                  AND UPPER(TRIM(display_name)) = UPPER(TRIM($2))
+                LIMIT 1`,
+              [orgId, r.ext_lieu]
+            );
+            newHostId = club ? club.id : null;
+          }
+          await run(
+            `UPDATE calendar_draft SET host_club_id = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`,
+            [newHostId, r.draft_id]
+          );
+          updated++;
+        }
+      } catch (rowErr) {
+        errors.push({ draft_id: r.draft_id, error: rowErr.message });
+      }
+    }
+
+    res.json({ updated, skipped, errors });
+  } catch (err) {
+    console.error('[calendar-generator] /resync-from-published error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /draft/export?brief_id=X — download the draft as a .xlsx file
 router.get('/draft/export', authenticateToken, requireCalendarGenerator, async (req, res) => {
   const db = getDb();
