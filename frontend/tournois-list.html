@@ -1400,21 +1400,42 @@
       });
     })();
 
-    // V 2.0.619 — Case-insensitive match between a free-text DB value
-    // and the <option> values in a <select>. Returns the option's
-    // exact value (preserving its case) if found; otherwise the
-    // raw value or an empty string. Prevents the bug where
-    // "Libre" in the DB silently fails to match an "LIBRE" option
-    // and leaves the dropdown blank.
+    // V 2.0.620 — Case-insensitive match between a free-text DB value
+    // and the <option> values in a <select>. If no match is found,
+    // INJECT the raw value as a temporary option so the <select>
+    // can display it AND saving doesn't silently clobber the DB
+    // value with an empty string (the original V 2.0.619 bug —
+    // returning the raw value alone wasn't enough because a <select>
+    // refuses to show a value not present in its <option> list).
+    //
+    // Previously injected options (data-injected="true") are wiped
+    // on each call so they don't accumulate when the modal is
+    // reopened on a different row.
     function matchOptionValue(selectId, raw) {
       const sel = document.getElementById(selectId);
       if (!sel) return raw || '';
-      const target = String(raw || '').trim().toUpperCase();
-      if (!target) return '';
+
+      // Clean up any previous injection.
+      [...sel.options].filter(o => o.dataset && o.dataset.injected === 'true')
+        .forEach(o => o.remove());
+
+      const rawStr = String(raw == null ? '' : raw).trim();
+      if (!rawStr) return '';
+      const target = rawStr.toUpperCase();
+
       for (const opt of sel.options) {
         if (String(opt.value).trim().toUpperCase() === target) return opt.value;
       }
-      return raw || '';
+
+      // No exact match — inject the raw value so the select can
+      // render it. Mark it visually so the admin knows it's a
+      // legacy/free-text value not in the canonical list.
+      const inj = document.createElement('option');
+      inj.value = rawStr;
+      inj.textContent = `${rawStr} (existant — non listé)`;
+      inj.dataset.injected = 'true';
+      sel.appendChild(inj);
+      return rawStr;
     }
 
     // Open edit modal
