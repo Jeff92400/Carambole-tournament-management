@@ -1610,6 +1610,135 @@ router.get('/diag/:briefId', authenticateToken, requireCalendarGenerator, async 
   }
 });
 
+// V 2.0.625 — POST /diag/:briefId/cleanup-orphan-duplicates
+//   Deletes tournoi_ext rows in the brief window that:
+//     1. share (mode, categorie, tournament_number, debut) with another
+//        row in the same window that IS linked to a draft (i.e. the
+//        canonical row), AND
+//     2. are NOT themselves linked to any draft, AND
+//     3. have zero inscriptions and zero tournament_results
+//        (safety guard — never delete a row with player data).
+//   Returns the list of deleted ids and the surviving canonical id per
+//   identity, so the admin can audit the cleanup.
+router.post('/diag/:briefId/cleanup-orphan-duplicates',
+  authenticateToken, requireCalendarGenerator, requireAdmin, async (req, res) => {
+  const db = getDb();
+  const orgId = req.user.organizationId;
+  const briefId = parseInt(req.params.briefId, 10);
+  if (!briefId) return res.status(400).json({ error: 'brief_id requis' });
+
+  const fetchAll = (sql, params) => new Promise((resolve, reject) =>
+    db.all(sql, params, (err, rows) => err ? reject(err) : resolve(rows || []))
+  );
+  const fetchOne = (sql, params) => new Promise((resolve, reject) =>
+    db.get(sql, params, (err, row) => err ? reject(err) : resolve(row))
+  );
+  const dbRun = (sql, params) => new Promise((resolve, reject) =>
+    db.run(sql, params, function (err) { err ? reject(err) : resolve(this); })
+  );
+
+  try {
+    const brief = await fetchOne(
+      `SELECT id, season, first_weekend, last_weekend
+         FROM calendar_brief WHERE id = $1 AND organization_id = $2`,
+      [briefId, orgId]
+    );
+    if (!brief) return res.status(404).json({ error: 'Brief introuvable' });
+
+    const seasonStart = brief.first_weekend
+      ? new Date(new Date(brief.first_weekend).getTime() - 7 * 86400000).toISOString().slice(0, 10)
+      : `${brief.season.split('-')[0]}-09-01`;
+    const seasonEnd = brief.last_weekend
+      ? new Date(new Date(brief.last_weekend).getTime() + 7 * 86400000).toISOString().slice(0, 10)
+      : `${brief.season.split('-')[1]}-06-30`;
+
+    // Pull all ext rows in window with linkage state and counts.
+    const rows = await fetchAll(
+      `SELECT t.tournoi_id, t.mode, t.categorie, t.tournament_number, t.debut, t.lieu,
+              EXISTS(SELECT 1 FROM calendar_draft cd
+                      WHERE cd.tournoi_ext_id = t.tournoi_id) AS is_linked,
+              (SELECT COUNT(*) FROM inscriptions i WHERE i.tournoi_id = t.tournoi_id) AS insc_count,
+              (SELECT COUNT(*) FROM tournament_results tr
+                 JOIN tournaments tt ON tt.id = tr.tournament_id
+                WHERE tt.tournoi_ext_id = t.tournoi_id) AS result_count
+         FROM tournoi_ext t
+        WHERE t.organization_id = $1 AND t.debut BETWEEN $2 AND $3`,
+      [orgId, seasonStart, seasonEnd]
+    );
+
+    const isoDate = (s) => {
+      if (s == null) return '';
+      if (s instanceof Date) return isNaN(s.getTime()) ? '' : s.toISOString().slice(0, 10);
+      return String(s).slice(0, 10);
+    };
+
+    // Group by identity (mode|cat|tnum|date) — duplicates only count
+    // when ALSO sharing the date. Different dates = legitimately
+    // different tournaments even if same identity.
+    const groups = new Map();
+    for (const r of rows) {
+      const key = `${(r.mode || '').toUpperCase()}|${(r.categorie || '').toUpperCase()}|${r.tournament_number || '?'}|${isoDate(r.debut)}`;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(r);
+    }
+
+    const deletions = [];
+    const skipped = [];
+
+    for (const [key, grp] of groups.entries()) {
+      if (grp.length < 2) continue; // no duplicate, nothing to clean
+      // Canonical = the LINKED row (there should be exactly one).
+      // If none are linked, we leave the group alone — that's a
+      // genuine orphan-cluster the admin needs to look at manually.
+      const linked = grp.filter(r => r.is_linked);
+      if (linked.length === 0) {
+        skipped.push({ identity: key, reason: 'no_linked_canonical', tournoi_ids: grp.map(r => r.tournoi_id) });
+        continue;
+      }
+      const canonical = linked[0];
+      const orphans = grp.filter(r => !r.is_linked);
+
+      for (const o of orphans) {
+        const insc = parseInt(o.insc_count, 10) || 0;
+        const resu = parseInt(o.result_count, 10) || 0;
+        if (insc > 0 || resu > 0) {
+          skipped.push({
+            tournoi_id: o.tournoi_id, identity: key,
+            reason: 'has_player_data', insc, resu
+          });
+          continue;
+        }
+        // Safe to delete.
+        await dbRun(`DELETE FROM tournoi_ext WHERE tournoi_id = $1 AND organization_id = $2`,
+          [o.tournoi_id, orgId]);
+        deletions.push({
+          deleted_tournoi_id: o.tournoi_id,
+          canonical_tournoi_id: canonical.tournoi_id,
+          identity: key
+        });
+        // Audit log.
+        await dbRun(
+          `INSERT INTO calendar_sync_log (organization_id, brief_id, action, tournoi_ext_id, change_type, summary, triggered_by)
+           VALUES ($1, $2, 'cleanup', $3, 'orphan_duplicate', $4, $5)`,
+          [orgId, briefId, o.tournoi_id,
+           `Doublon orphelin supprimé (canonique: ${canonical.tournoi_id}) — ${key}`,
+           req.user.userId || null]
+        ).catch(() => {});
+      }
+    }
+
+    res.json({
+      deleted_count: deletions.length,
+      skipped_count: skipped.length,
+      deletions,
+      skipped
+    });
+  } catch (err) {
+    console.error('[calendar-generator] /diag/cleanup-orphan-duplicates error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // V 2.0.618 — POST /resync-from-published?brief_id=X
 //   Body: { kinds?: ['date_changed', 'host_changed', 'deleted'] }  // default: all 3
 //   Pulls inbound changes from tournoi_ext into calendar_draft so the
@@ -2610,22 +2739,42 @@ router.post('/publish', authenticateToken, requireCalendarGenerator, requireAdmi
       try {
 
       // Re-classify per row to be safe (preview may be stale).
-      // tournoi_ext has no `saison` column — match by date range pulled
-      // from the brief window (same heuristic as /publish/preview).
-      const existing = await dbGet(
-        `SELECT t.tournoi_id,
-                (SELECT COUNT(*) FROM inscriptions i WHERE i.tournoi_id = t.tournoi_id) AS insc_count,
-                (SELECT COUNT(*) FROM tournament_results tr
-                   JOIN tournaments tt ON tt.id = tr.tournament_id
-                  WHERE tt.tournoi_ext_id = t.tournoi_id) AS result_count
-           FROM tournoi_ext t
-          WHERE t.organization_id = $1
-            AND UPPER(t.mode) = UPPER($2)
-            AND UPPER(t.categorie) = UPPER($3)
-            AND t.tournament_number = $4
-            AND t.debut BETWEEN $5 AND $6`,
-        [orgId, mode, categorie, tnum, seasonStart, seasonEnd]
-      ).catch(() => null);
+      // V 2.0.625 — Prefer the existing back-link (cd.tournoi_ext_id)
+      // when present. The previous identity+window lookup could MISS a
+      // prior publish if the draft date had shifted by more than the
+      // ±60-day window, causing a duplicate INSERT and leaving the
+      // earlier row as a phantom orphan. Falling back to identity-by-
+      // window only when no back-link exists makes publish truly
+      // idempotent across regenerate/republish cycles.
+      let existing = null;
+      if (!row._virtual && row.tournoi_ext_id) {
+        existing = await dbGet(
+          `SELECT t.tournoi_id,
+                  (SELECT COUNT(*) FROM inscriptions i WHERE i.tournoi_id = t.tournoi_id) AS insc_count,
+                  (SELECT COUNT(*) FROM tournament_results tr
+                     JOIN tournaments tt ON tt.id = tr.tournament_id
+                    WHERE tt.tournoi_ext_id = t.tournoi_id) AS result_count
+             FROM tournoi_ext t
+            WHERE t.tournoi_id = $1 AND t.organization_id = $2`,
+          [row.tournoi_ext_id, orgId]
+        ).catch(() => null);
+      }
+      if (!existing) {
+        existing = await dbGet(
+          `SELECT t.tournoi_id,
+                  (SELECT COUNT(*) FROM inscriptions i WHERE i.tournoi_id = t.tournoi_id) AS insc_count,
+                  (SELECT COUNT(*) FROM tournament_results tr
+                     JOIN tournaments tt ON tt.id = tr.tournament_id
+                    WHERE tt.tournoi_ext_id = t.tournoi_id) AS result_count
+             FROM tournoi_ext t
+            WHERE t.organization_id = $1
+              AND UPPER(t.mode) = UPPER($2)
+              AND UPPER(t.categorie) = UPPER($3)
+              AND t.tournament_number = $4
+              AND t.debut BETWEEN $5 AND $6`,
+          [orgId, mode, categorie, tnum, seasonStart, seasonEnd]
+        ).catch(() => null);
+      }
 
       const hasResults = existing ? (parseInt(existing.result_count, 10) || 0) > 0 : false;
       const hasInsc    = existing ? (parseInt(existing.insc_count, 10) || 0) > 0 : false;
