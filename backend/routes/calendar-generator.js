@@ -1687,15 +1687,20 @@ router.post('/diag/:briefId/cleanup-orphan-duplicates',
     for (const [key, grp] of groups.entries()) {
       if (grp.length < 2) continue; // no duplicate, nothing to clean
       // Canonical = the LINKED row (there should be exactly one).
-      // If none are linked, we leave the group alone — that's a
-      // genuine orphan-cluster the admin needs to look at manually.
+      // V 2.0.627 — when no row is linked (typical of Ligue Finale
+      // virtual rows that don't live in calendar_draft), keep the
+      // lowest tournoi_id as canonical and treat the rest as orphans.
+      // The rows are by-construction identical (same identity + date),
+      // and the lowest id was the original publish.
       const linked = grp.filter(r => r.is_linked);
-      if (linked.length === 0) {
-        skipped.push({ identity: key, reason: 'no_linked_canonical', tournoi_ids: grp.map(r => r.tournoi_id) });
-        continue;
+      let canonical;
+      if (linked.length > 0) {
+        canonical = linked[0];
+      } else {
+        const sorted = [...grp].sort((a, b) => a.tournoi_id - b.tournoi_id);
+        canonical = sorted[0];
       }
-      const canonical = linked[0];
-      const orphans = grp.filter(r => !r.is_linked);
+      const orphans = grp.filter(r => r.tournoi_id !== canonical.tournoi_id && !r.is_linked);
 
       for (const o of orphans) {
         const insc = parseInt(o.insc_count, 10) || 0;
