@@ -1868,11 +1868,21 @@
       const k = data.by_kind || {};
       const total = data.drift_count;
 
-      headline.textContent = `${total} changement${total > 1 ? 's' : ''} détecté${total > 1 ? 's' : ''} hors-générateur.`;
+      // V 2.0.621 — Headline mentions "linkable" separately so a
+      // 119-row backlink situation no longer reads as "119 tournois
+      // créés hors-générateur" (alarming) but as "119 tournois à
+      // reconnecter au brouillon" (silently fixable).
+      const realDrift = (k.date_changed || 0) + (k.host_changed || 0) + (k.deleted || 0) + (k.external || 0);
+      if (realDrift === 0 && k.linkable) {
+        headline.textContent = `${k.linkable} tournoi${k.linkable > 1 ? 's' : ''} à reconnecter au brouillon.`;
+      } else {
+        headline.textContent = `${total} changement${total > 1 ? 's' : ''} détecté${total > 1 ? 's' : ''}.`;
+      }
       const parts = [];
       if (k.date_changed) parts.push(`${k.date_changed} date${k.date_changed > 1 ? 's' : ''} modifiée${k.date_changed > 1 ? 's' : ''}`);
       if (k.host_changed) parts.push(`${k.host_changed} club${k.host_changed > 1 ? 's' : ''} hôte${k.host_changed > 1 ? 's' : ''} modifié${k.host_changed > 1 ? 's' : ''}`);
       if (k.deleted)      parts.push(`${k.deleted} tournoi${k.deleted > 1 ? 's' : ''} supprimé${k.deleted > 1 ? 's' : ''}`);
+      if (k.linkable)     parts.push(`${k.linkable} à reconnecter`);
       if (k.external)     parts.push(`${k.external} tournoi${k.external > 1 ? 's' : ''} créé${k.external > 1 ? 's' : ''} hors-générateur`);
       summary.textContent = parts.join(' · ');
 
@@ -1881,6 +1891,7 @@
         date_changed: { icon: '📅', label: 'Date modifiée' },
         host_changed: { icon: '🏛️', label: 'Club hôte modifié' },
         deleted:      { icon: '🗑️', label: 'Tournoi supprimé' },
+        linkable:     { icon: '🔗', label: 'À reconnecter au brouillon' },
         external:     { icon: '➕', label: 'Tournoi créé hors-générateur' }
       };
       const items = (data.items || []).slice(0, 50).map(it => {
@@ -1905,12 +1916,13 @@
         detailsBtn.textContent = open ? 'Voir le détail' : 'Masquer le détail';
       };
       resyncBtn.onclick = async () => {
-        if (k.external && !k.date_changed && !k.host_changed && !k.deleted) {
+        const fixable = (k.date_changed || 0) + (k.host_changed || 0) + (k.deleted || 0) + (k.linkable || 0);
+        if (k.external && fixable === 0) {
           // Only "external" rows — nothing to resync inbound.
           alert(`Les ${k.external} tournoi(s) créés hors-générateur ne peuvent pas être resynchronisés automatiquement.\n\nPour les intégrer au brouillon, utilisez l'import calendrier ou créez les lignes équivalentes via Génération.`);
           return;
         }
-        if (!confirm(`Resynchroniser le brouillon depuis l'état publié ?\n\nLes ${(k.date_changed || 0) + (k.host_changed || 0) + (k.deleted || 0)} changement(s) seront tirés vers le brouillon. Vos verrous (🔒) sont préservés.`)) return;
+        if (!confirm(`Resynchroniser le brouillon ?\n\n${fixable} ligne(s) seront alignée(s) avec l'état publié${k.linkable ? ` (dont ${k.linkable} reconnexion${k.linkable > 1 ? 's' : ''} silencieuse${k.linkable > 1 ? 's' : ''})` : ''}. Vos verrous (🔒) sont préservés.`)) return;
         resyncBtn.disabled = true;
         const oldText = resyncBtn.textContent;
         resyncBtn.textContent = '⏳ Resynchro…';

@@ -1314,12 +1314,16 @@ router.get('/sync-status', authenticateToken, requireCalendarGenerator, async (r
     );
     if (!brief) return res.status(404).json({ error: 'Brief introuvable' });
 
+    // V 2.0.621 — tight window for "external" detection so we don't
+    // sweep up tournaments from adjacent seasons (the previous ±60d
+    // padding flagged the entire June-of-prior-season + August-of-next
+    // as drift, which is technically out-of-brief).
     const seasonStart = brief.first_weekend
-      ? new Date(new Date(brief.first_weekend).getTime() - 60 * 86400000).toISOString().slice(0, 10)
-      : `${brief.season.split('-')[0]}-01-01`;
+      ? new Date(new Date(brief.first_weekend).getTime() - 7 * 86400000).toISOString().slice(0, 10)
+      : `${brief.season.split('-')[0]}-09-01`;
     const seasonEnd = brief.last_weekend
-      ? new Date(new Date(brief.last_weekend).getTime() + 60 * 86400000).toISOString().slice(0, 10)
-      : `${brief.season.split('-')[1]}-12-31`;
+      ? new Date(new Date(brief.last_weekend).getTime() + 7 * 86400000).toISOString().slice(0, 10)
+      : `${brief.season.split('-')[1]}-06-30`;
 
     const isoDate = (s) => {
       if (s == null) return null;
@@ -1366,6 +1370,31 @@ router.get('/sync-status', authenticateToken, requireCalendarGenerator, async (r
 
     const linkedExtIds = new Set(linked.map(r => r.tournoi_ext_id).filter(Boolean));
 
+    // V 2.0.621 — Pull UNLINKED drafts too. When an admin regenerates
+    // the draft after publishing, the new draft rows lose their
+    // tournoi_ext_id. We then want to match an unlinked tournoi_ext
+    // to an unlinked draft by identity (mode + level + tournament_number)
+    // and classify as 'linkable' (auto-fixable on Resync) rather than
+    // alarmingly flagging hundreds of "tournois créés hors-générateur".
+    const unlinkedDrafts = await fetchAll(
+      `SELECT cd.id AS draft_id, cd.tournament_type,
+              c.game_type, c.level
+         FROM calendar_draft cd
+         JOIN calendar_brief cb ON cb.id = cd.brief_id
+         LEFT JOIN categories c ON c.id = cd.category_id
+        WHERE cd.brief_id = $1 AND cb.organization_id = $2
+          AND cd.tournoi_ext_id IS NULL`,
+      [briefId, orgId]
+    );
+    const TOURNAMENT_TYPE_TO_NUMBER_LOCAL = { T1: 1, T2: 2, T3: 3, FINALE: 4, Finale: 4, LIGUE_FINALE: 5 };
+    const draftsByIdentity = new Map(); // "MODE|LEVEL|TNUM" → draft_id
+    unlinkedDrafts.forEach(d => {
+      const tnum = TOURNAMENT_TYPE_TO_NUMBER_LOCAL[d.tournament_type];
+      if (!tnum) return;
+      const key = `${norm(d.game_type)}|${norm(d.level)}|${tnum}`;
+      if (!draftsByIdentity.has(key)) draftsByIdentity.set(key, d.draft_id);
+    });
+
     const items = [];
     const labelOf = (r) => `${r.game_type || r.ext_mode || ''} ${r.level || r.ext_cat || ''} ${r.tournament_type || ''}`.trim();
 
@@ -1409,26 +1438,48 @@ router.get('/sync-status', authenticateToken, requireCalendarGenerator, async (r
       }
     }
 
-    // External rows: in window, same org, but not linked to any draft.
-    // We further restrict to rows whose (mode, categorie, tournament_number)
-    // could plausibly be a calendar tournament — i.e., tournament_number 1..5.
+    // V 2.0.621 — External / Linkable detection.
+    //
+    // For each tournoi_ext row in the window not linked to any draft:
+    //   1. Try to find an UNLINKED draft matching on (mode, level, tnum)
+    //   2. If found → kind='linkable' (the draft just lost its back-link,
+    //      typically because the user regenerated after publishing)
+    //   3. Otherwise → kind='external' (genuinely created outside)
+    // 'linkable' is silently fixable by Resync (sets tournoi_ext_id);
+    // 'external' is informational and needs admin action.
     for (const t of extInWindow) {
       if (linkedExtIds.has(t.tournoi_id)) continue;
       const tnum = parseInt(t.tournament_number, 10);
       if (!(tnum >= 1 && tnum <= 5)) continue;
-      items.push({
-        draft_id: null,
-        tournoi_ext_id: t.tournoi_id,
-        kind: 'external',
-        label: `${t.mode || ''} ${t.categorie || ''} (T${tnum} · ${t.lieu || 'TBD'})`.trim(),
-        ext_value: isoDate(t.debut)
-      });
+
+      const idKey = `${norm(t.mode)}|${norm(t.categorie)}|${tnum}`;
+      const matchedDraftId = draftsByIdentity.get(idKey);
+      if (matchedDraftId) {
+        items.push({
+          draft_id: matchedDraftId,
+          tournoi_ext_id: t.tournoi_id,
+          kind: 'linkable',
+          label: `${t.mode || ''} ${t.categorie || ''} (T${tnum} · ${t.lieu || 'TBD'})`.trim(),
+          ext_value: isoDate(t.debut)
+        });
+        // Consume the draft so two ext rows don't both claim it.
+        draftsByIdentity.delete(idKey);
+      } else {
+        items.push({
+          draft_id: null,
+          tournoi_ext_id: t.tournoi_id,
+          kind: 'external',
+          label: `${t.mode || ''} ${t.categorie || ''} (T${tnum} · ${t.lieu || 'TBD'})`.trim(),
+          ext_value: isoDate(t.debut)
+        });
+      }
     }
 
     const by_kind = {
       date_changed: items.filter(i => i.kind === 'date_changed').length,
       host_changed: items.filter(i => i.kind === 'host_changed').length,
       deleted:      items.filter(i => i.kind === 'deleted').length,
+      linkable:     items.filter(i => i.kind === 'linkable').length,
       external:     items.filter(i => i.kind === 'external').length
     };
     res.json({ drift_count: items.length, by_kind, items });
@@ -1454,9 +1505,11 @@ router.post('/resync-from-published', authenticateToken, requireCalendarGenerato
   const db = getDb();
   const orgId = req.user.organizationId;
   const briefId = parseInt(req.body.brief_id, 10);
+  // V 2.0.621 — 'linkable' (back-link an unlinked draft to its
+  // matching tournoi_ext) is now part of the default kinds.
   const kinds = Array.isArray(req.body.kinds) && req.body.kinds.length
     ? req.body.kinds
-    : ['date_changed', 'host_changed', 'deleted'];
+    : ['date_changed', 'host_changed', 'deleted', 'linkable'];
   if (!briefId) return res.status(400).json({ error: 'brief_id requis' });
 
   const run = (sql, params) => new Promise((resolve, reject) =>
@@ -1502,6 +1555,73 @@ router.post('/resync-from-published', authenticateToken, requireCalendarGenerato
     let updated = 0;
     let skipped = 0;
     const errors = [];
+
+    // V 2.0.621 — 'linkable' pass: re-link unlinked drafts to existing
+    // tournoi_ext rows when (mode, level, tournament_number) match.
+    if (kinds.includes('linkable')) {
+      try {
+        const brief2 = await fetchOne(
+          `SELECT first_weekend, last_weekend, season FROM calendar_brief WHERE id = $1`,
+          [briefId]
+        );
+        const winStart = brief2 && brief2.first_weekend
+          ? new Date(new Date(brief2.first_weekend).getTime() - 7 * 86400000).toISOString().slice(0, 10)
+          : (brief2 && brief2.season ? `${brief2.season.split('-')[0]}-09-01` : '1900-01-01');
+        const winEnd = brief2 && brief2.last_weekend
+          ? new Date(new Date(brief2.last_weekend).getTime() + 7 * 86400000).toISOString().slice(0, 10)
+          : (brief2 && brief2.season ? `${brief2.season.split('-')[1]}-06-30` : '2100-12-31');
+
+        const unlinkedDrafts2 = await fetchAll(
+          `SELECT cd.id AS draft_id, cd.tournament_type,
+                  c.game_type, c.level
+             FROM calendar_draft cd
+             JOIN calendar_brief cb ON cb.id = cd.brief_id
+             LEFT JOIN categories c ON c.id = cd.category_id
+            WHERE cd.brief_id = $1 AND cb.organization_id = $2
+              AND cd.tournoi_ext_id IS NULL`,
+          [briefId, orgId]
+        );
+        const orphanExt = await fetchAll(
+          `SELECT t.tournoi_id, t.mode, t.categorie, t.tournament_number
+             FROM tournoi_ext t
+             LEFT JOIN calendar_draft cd ON cd.tournoi_ext_id = t.tournoi_id
+            WHERE t.organization_id = $1
+              AND t.debut BETWEEN $2 AND $3
+              AND cd.id IS NULL`,
+          [orgId, winStart, winEnd]
+        );
+
+        const TTYPE_TO_NUM = { T1: 1, T2: 2, T3: 3, FINALE: 4, Finale: 4, LIGUE_FINALE: 5 };
+        const norm2 = (s) => String(s == null ? '' : s).trim().toUpperCase();
+        const draftMap = new Map();
+        unlinkedDrafts2.forEach(d => {
+          const tnum = TTYPE_TO_NUM[d.tournament_type];
+          if (!tnum) return;
+          const k = `${norm2(d.game_type)}|${norm2(d.level)}|${tnum}`;
+          if (!draftMap.has(k)) draftMap.set(k, d.draft_id);
+        });
+
+        for (const t of orphanExt) {
+          const tnum = parseInt(t.tournament_number, 10);
+          if (!(tnum >= 1 && tnum <= 5)) continue;
+          const k = `${norm2(t.mode)}|${norm2(t.categorie)}|${tnum}`;
+          const draftId = draftMap.get(k);
+          if (!draftId) continue;
+          try {
+            await run(
+              `UPDATE calendar_draft SET tournoi_ext_id = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`,
+              [t.tournoi_id, draftId]
+            );
+            updated++;
+            draftMap.delete(k); // consume so two ext rows don't both claim same draft
+          } catch (e) {
+            errors.push({ draft_id: draftId, error: e.message });
+          }
+        }
+      } catch (e) {
+        errors.push({ draft_id: null, error: `linkable pass failed: ${e.message}` });
+      }
+    }
 
     for (const r of linked) {
       try {
