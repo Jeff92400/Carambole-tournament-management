@@ -722,7 +722,10 @@
         // Update season stats (async - fetches from tournaments table)
         await updateSeasonStats();
 
-        displayTournois(allTournois);
+        // V 2.0.623: do NOT call displayTournois(allTournois) here — populateSeasonFilter()
+        // above already invoked applyFilters() which renders the filtered list. Calling
+        // displayTournois(allTournois) afterwards would override the filter with the full
+        // unfiltered list on initial page load.
 
         document.getElementById('loadingTournois').style.display = 'none';
         document.getElementById('tournoisTable').style.display = 'block';
