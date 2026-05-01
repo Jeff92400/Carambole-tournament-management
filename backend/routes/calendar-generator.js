@@ -1241,14 +1241,27 @@ router.get('/published-grid', authenticateToken, requireCalendarGenerator, async
          LEFT JOIN clubs cl
                 ON cl.organization_id = t.organization_id
                AND (
-                     -- "ClubName (City)" shape from the publish step
+                     -- Match 1: "ClubName (City)" shape from the publish step
                      UPPER(TRIM(cl.display_name)) =
                      UPPER(TRIM(REGEXP_REPLACE(COALESCE(t.lieu, ''), '\\s*\\([^)]*\\)\\s*$', '')))
                      OR
-                     -- Legacy CDBHS single-letter calendar code shape
+                     -- Match 2: single-letter calendar_code shape
                      (LENGTH(TRIM(COALESCE(t.lieu, ''))) <= 2
                       AND cl.calendar_code IS NOT NULL
                       AND UPPER(TRIM(cl.calendar_code)) = UPPER(TRIM(COALESCE(t.lieu, ''))))
+                     OR
+                     -- Match 3: city name (most CDBHS legacy data; accent &
+                     -- hyphen/space tolerant so "Châtillon" matches "Chatillon"
+                     -- and "Bois-Colombes" matches "Bois Colombes").
+                     (cl.city IS NOT NULL AND TRIM(cl.city) <> ''
+                      AND LOWER(REPLACE(TRANSLATE(COALESCE(t.lieu, ''),
+                                                  'ÂÊÎÔÛÄËÏÖÜÀÈÌÒÙÉÇâêîôûäëïöüàèìòùéç',
+                                                  'AEIOUAEIOUAEIOUECaeiouaeiouaeiouec'),
+                                        '-', ' '))
+                        = LOWER(REPLACE(TRANSLATE(cl.city,
+                                                  'ÂÊÎÔÛÄËÏÖÜÀÈÌÒÙÉÇâêîôûäëïöüàèìòùéç',
+                                                  'AEIOUAEIOUAEIOUECaeiouaeiouaeiouec'),
+                                        '-', ' ')))
                    )
         WHERE t.organization_id = $1
           AND t.debut BETWEEN $2 AND $3
