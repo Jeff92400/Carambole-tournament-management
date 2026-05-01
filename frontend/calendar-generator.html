@@ -2412,16 +2412,36 @@
       }).join('');
 
       // Build header (compact dates DD/MM)
-      const headerCells = weekends.map((we, i) => {
+      // V 2.0.611 — Saturday + Sunday dual rows, mirroring the legacy
+      // CDBHS XL layout. Day numbers only (the month is already in the
+      // band row above), so columns stay narrow.
+      const satRow = weekends.map((we, i) => {
         const d = new Date(we + 'T00:00:00Z');
-        // Add visual divider on month change for the date row too
         const prev = i > 0 ? new Date(weekends[i - 1] + 'T00:00:00Z') : null;
         const monthChange = prev && prev.getUTCMonth() !== d.getUTCMonth();
         const leftBorder = monthChange ? 'border-left: 2px solid #5a3094;' : '';
-        return `<th style="padding: 4px 6px; font-size: 11px; min-width: 56px; white-space: nowrap; ${leftBorder}">${d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', timeZone: 'UTC' })}</th>`;
+        return `<th style="padding: 3px 6px; font-size: 11px; min-width: 56px; white-space: nowrap; background: #6b3aa3; color: white; ${leftBorder}"><span style="opacity: 0.7; font-weight: 500;">S</span> ${String(d.getUTCDate()).padStart(2,'0')}</th>`;
+      }).join('');
+      const sunRow = weekends.map((we, i) => {
+        const d = new Date(we + 'T00:00:00Z');
+        d.setUTCDate(d.getUTCDate() + 1); // Sunday = Saturday + 1 day
+        const prev = i > 0 ? new Date(weekends[i - 1] + 'T00:00:00Z') : null;
+        const sat = new Date(weekends[i] + 'T00:00:00Z');
+        const monthChange = prev && prev.getUTCMonth() !== sat.getUTCMonth();
+        const leftBorder = monthChange ? 'border-left: 2px solid #5a3094;' : '';
+        return `<th style="padding: 3px 6px; font-size: 11px; min-width: 56px; white-space: nowrap; background: #7d52b8; color: white; font-weight: 500; ${leftBorder}"><span style="opacity: 0.7;">D</span> ${String(d.getUTCDate()).padStart(2,'0')}</th>`;
       }).join('');
 
-      const rows = cats.map(c => {
+      let prevMode = null;
+      const rows = cats.map((c, ci) => {
+        const curMode = c.game_type || c.mode || '';
+        const modeChange = prevMode !== null && prevMode !== curMode;
+        prevMode = curMode;
+        // Stronger horizontal divider on mode change (Libre → Bande → 3 Bandes → Cadre);
+        // thin divider between levels of the same mode.
+        const rowBorder = ci === 0
+          ? ''
+          : (modeChange ? 'border-top: 2px solid #6b3aa3;' : 'border-top: 1px solid #e0e0e0;');
         const cells = weekends.map((we, i) => {
           // Match the month-divider used in the header so columns
           // visually segment by month in the data area too.
@@ -2456,14 +2476,11 @@
             <div style="font-size: 9px; color: #444; font-weight: 600; margin-top: 2px;">${escapeHtml(abbreviateHost(p.host_name) || (p.host_id == null ? 'TBD' : ''))}</div>
           </td>`;
         }).join('');
-        return `<tr><td style="padding: 6px 10px; font-weight: 600; position: sticky; left: 0; background: #fff; z-index: 1; border-right: 2px solid #ccc;">${escapeHtml(c.name || c.display_name)}</td>${cells}</tr>`;
+        return `<tr style="${rowBorder}"><td style="padding: 6px 10px; font-weight: 600; position: sticky; left: 0; background: #fff; z-index: 1; border-right: 2px solid #ccc; ${rowBorder}">${escapeHtml(c.name || c.display_name)}</td>${cells}</tr>`;
       }).join('');
 
-      // Legend
-      const legend = [...colors.entries()].map(([id, color]) => {
-        const p = result.placements.find(pp => pp.host_id === id);
-        return `<span style="display:inline-block; padding: 4px 10px; background: ${color}; border-radius: 4px; font-size: 12px; margin: 0 4px 4px 0;">${escapeHtml(p?.host_name || '?')}</span>`;
-      }).join('');
+      // Legend (kept for backwards compat; no longer rendered).
+      const legend = '';
 
       container.innerHTML = `
         <div style="font-size: 13px; color: #2c5530; background: #e8f5e9; border: 1px solid #a5d6a7; padding: 8px 12px; border-radius: 6px; margin-bottom: 8px;">
@@ -2473,12 +2490,11 @@
           <table style="border-collapse: collapse; min-width: 100%;">
             <thead style="background: linear-gradient(135deg, #6b3aa3, #5a3094); color: white; position: sticky; top: 0; z-index: 2;">
               <tr>
-                <th rowspan="2" style="padding: 6px 10px; text-align: left; position: sticky; left: 0; background: #6b3aa3; z-index: 3; min-width: 160px; vertical-align: middle;">Catégorie</th>
+                <th rowspan="3" style="padding: 6px 10px; text-align: left; position: sticky; left: 0; background: #6b3aa3; z-index: 3; min-width: 160px; vertical-align: middle;">Catégorie</th>
                 ${monthBandCells}
               </tr>
-              <tr>
-                ${headerCells}
-              </tr>
+              <tr>${satRow}</tr>
+              <tr>${sunRow}</tr>
             </thead>
             <tbody>${rows}</tbody>
           </table>
@@ -2659,15 +2675,32 @@
         return `<th colspan="${g.count}" style="padding: 5px 6px; font-size: 11px; font-weight: 700; background: ${tint}; color: white; text-transform: capitalize; border-right: 2px solid white; letter-spacing: 0.3px;">${g.label}</th>`;
       }).join('');
 
-      const headerCells = weekends.map((we, i) => {
+      // V 2.0.611 — Saturday + Sunday dual rows.
+      const satRow = weekends.map((we, i) => {
         const d = new Date(we + 'T00:00:00Z');
         const prev = i > 0 ? new Date(weekends[i - 1] + 'T00:00:00Z') : null;
         const monthChange = prev && prev.getUTCMonth() !== d.getUTCMonth();
         const leftBorder = monthChange ? 'border-left: 2px solid #5a3094;' : '';
-        return `<th style="padding: 4px 6px; font-size: 11px; min-width: 56px; white-space: nowrap; ${leftBorder}">${d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', timeZone: 'UTC' })}</th>`;
+        return `<th style="padding: 3px 6px; font-size: 11px; min-width: 56px; white-space: nowrap; background: #6b3aa3; color: white; ${leftBorder}"><span style="opacity: 0.7; font-weight: 500;">S</span> ${String(d.getUTCDate()).padStart(2,'0')}</th>`;
+      }).join('');
+      const sunRow = weekends.map((we, i) => {
+        const d = new Date(we + 'T00:00:00Z');
+        d.setUTCDate(d.getUTCDate() + 1);
+        const prev = i > 0 ? new Date(weekends[i - 1] + 'T00:00:00Z') : null;
+        const sat = new Date(weekends[i] + 'T00:00:00Z');
+        const monthChange = prev && prev.getUTCMonth() !== sat.getUTCMonth();
+        const leftBorder = monthChange ? 'border-left: 2px solid #5a3094;' : '';
+        return `<th style="padding: 3px 6px; font-size: 11px; min-width: 56px; white-space: nowrap; background: #7d52b8; color: white; font-weight: 500; ${leftBorder}"><span style="opacity: 0.7;">D</span> ${String(d.getUTCDate()).padStart(2,'0')}</th>`;
       }).join('');
 
-      const rows = cats.map(c => {
+      let prevModeP = null;
+      const rows = cats.map((c, ci) => {
+        const curMode = c.game_type || c.mode || '';
+        const modeChange = prevModeP !== null && prevModeP !== curMode;
+        prevModeP = curMode;
+        const rowBorder = ci === 0
+          ? ''
+          : (modeChange ? 'border-top: 2px solid #6b3aa3;' : 'border-top: 1px solid #e0e0e0;');
         const cells = weekends.map((we, i) => {
           const prev = i > 0 ? new Date(weekends[i - 1] + 'T00:00:00Z') : null;
           const cur = new Date(we + 'T00:00:00Z');
@@ -2692,7 +2725,7 @@
             <div style="font-size: 9px; color: #444; font-weight: 600; margin-top: 2px;">${escapeHtml(abbreviateHost(p.host_name) || (p.host_id == null ? 'TBD' : ''))}</div>
           </td>`;
         }).join('');
-        return `<tr><td style="padding: 6px 10px; font-weight: 600; position: sticky; left: 0; background: #fff; z-index: 1; border-right: 2px solid #ccc;">${escapeHtml(c.name || c.display_name)}</td>${cells}</tr>`;
+        return `<tr style="${rowBorder}"><td style="padding: 6px 10px; font-weight: 600; position: sticky; left: 0; background: #fff; z-index: 1; border-right: 2px solid #ccc; ${rowBorder}">${escapeHtml(c.name || c.display_name)}</td>${cells}</tr>`;
       }).join('');
 
       const legend = [...colors.entries()].map(([id, color]) => {
@@ -2721,10 +2754,11 @@
             <table style="border-collapse: collapse; min-width: 100%;">
               <thead style="background: linear-gradient(135deg, #6b3aa3, #5a3094); color: white; position: sticky; top: 0; z-index: 2;">
                 <tr>
-                  <th rowspan="2" style="padding: 6px 10px; text-align: left; position: sticky; left: 0; background: #6b3aa3; z-index: 3; min-width: 160px; vertical-align: middle;">Catégorie</th>
+                  <th rowspan="3" style="padding: 6px 10px; text-align: left; position: sticky; left: 0; background: #6b3aa3; z-index: 3; min-width: 160px; vertical-align: middle;">Catégorie</th>
                   ${monthBandCells}
                 </tr>
-                <tr>${headerCells}</tr>
+                <tr>${satRow}</tr>
+                <tr>${sunRow}</tr>
               </thead>
               <tbody>${rows}</tbody>
             </table>
