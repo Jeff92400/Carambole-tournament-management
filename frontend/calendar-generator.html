@@ -260,6 +260,42 @@
       font-weight: 600; width: 100%; margin-top: 12px;
     }
     .toggle-custom-rules:hover { background: #f3eefb; }
+
+    /* V 2.0.612 — print mode: hide everything except the published grid
+       + its banner + the two legends below it. Triggered by the
+       "🖨️ Imprimer / PDF" button which adds .printing-published to body. */
+    @media print {
+      body.printing-published .navbar,
+      body.printing-published #stepperContainer,
+      body.printing-published #stepNavigator,
+      body.printing-published #step1, body.printing-published #step2,
+      body.printing-published #step3, body.printing-published #step4,
+      body.printing-published #step5, body.printing-published #step6,
+      body.printing-published #step7,
+      body.printing-published #navButtons,
+      body.printing-published #viewSelector,
+      body.printing-published #viewSeasonal,
+      body.printing-published #viewCompact,
+      body.printing-published #viewHosts,
+      body.printing-published #persistenceBanner,
+      body.printing-published #publishedRefreshBtn,
+      body.printing-published #publishedPrintBtn {
+        display: none !important;
+      }
+      body.printing-published #viewPublished {
+        display: block !important;
+      }
+      body.printing-published {
+        background: white !important;
+      }
+      /* Page break hint to keep the grid on one sheet when possible. */
+      body.printing-published table { page-break-inside: avoid; }
+      /* Make sure cell colours print (most browsers obey this). */
+      * {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+    }
   </style>
 </head>
 <body>
@@ -2742,7 +2778,10 @@
             🔒 <strong>Lecture seule</strong> — vue de l'état <strong>publié</strong> dans <code>tournoi_ext</code>${summary.total != null ? ` (${summary.total} tournoi${summary.total > 1 ? 's' : ''})` : ''}.
             Pour modifier, utilisez l'onglet « Vue calendrier » puis « Créer / Mettre à jour les tournois ».
           </div>
-          <button type="button" id="publishedRefreshBtn" style="padding: 5px 10px; border: 1px solid #1a4f7a; background: white; color: #1a4f7a; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 600; white-space: nowrap;">🔄 Rafraîchir</button>
+          <div style="display: flex; gap: 6px; flex-wrap: nowrap;">
+            <button type="button" id="publishedPrintBtn" style="padding: 5px 10px; border: 1px solid #1a4f7a; background: white; color: #1a4f7a; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 600; white-space: nowrap;" title="Ouvre la boîte d'impression. Choisissez « Enregistrer au format PDF » comme imprimante pour générer un PDF posable au mur ou intégrable au site.">🖨️ Imprimer / PDF</button>
+            <button type="button" id="publishedRefreshBtn" style="padding: 5px 10px; border: 1px solid #1a4f7a; background: white; color: #1a4f7a; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 600; white-space: nowrap;">🔄 Rafraîchir</button>
+          </div>
         </div>
         ${placements.length === 0 ? `
           <div style="padding: 30px; text-align: center; color: #888; background: #fafafa; border-radius: 8px;">
@@ -2775,6 +2814,23 @@
       `;
       const refreshBtn = document.getElementById('publishedRefreshBtn');
       if (refreshBtn) refreshBtn.addEventListener('click', () => loadPublishedView(true));
+      // V 2.0.612 — Imprimer / Enregistrer en PDF. Tags <body> with a
+      // class so @media print CSS can hide the rest of the wizard chrome
+      // and only show the published grid + legends. Cleared after the
+      // print dialog closes.
+      const printBtn = document.getElementById('publishedPrintBtn');
+      if (printBtn) {
+        printBtn.addEventListener('click', () => {
+          document.body.classList.add('printing-published');
+          const cleanup = () => {
+            document.body.classList.remove('printing-published');
+            window.removeEventListener('afterprint', cleanup);
+          };
+          window.addEventListener('afterprint', cleanup);
+          // Slight delay so the layout settles before the print dialog opens.
+          setTimeout(() => window.print(), 50);
+        });
+      }
     }
 
     // ----- Vue 3: Par club hôte -----

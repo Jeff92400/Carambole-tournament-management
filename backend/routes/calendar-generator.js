@@ -1293,7 +1293,7 @@ router.get('/draft/export', authenticateToken, requireCalendarGenerator, async (
 
   try {
     const brief = await fetchOne(
-      `SELECT id, season FROM calendar_brief WHERE id = $1 AND organization_id = $2`,
+      `SELECT id, season, first_weekend, last_weekend FROM calendar_brief WHERE id = $1 AND organization_id = $2`,
       [briefId, orgId]
     );
     if (!brief) return res.status(404).json({ error: 'Brief introuvable' });
@@ -1387,13 +1387,43 @@ router.get('/draft/export', authenticateToken, requireCalendarGenerator, async (
       }
     });
 
-    // Color palette (mild backgrounds)
-    const PALETTE = ['FFFCE4D6', 'FFD9E1F2', 'FFE2EFDA', 'FFFFF2CC', 'FFE4DFEC', 'FFDDEBF7', 'FFFCE4D6', 'FFE7E6E6'];
-    const hostColor = new Map();
-    [...hostMap.keys()].forEach((id, idx) => hostColor.set(id, PALETTE[idx % PALETTE.length]));
-
-    // Unique weekend dates in chronological order
-    const weekends = [...new Set(draft.map(r => r.weekend_date).filter(Boolean))].sort();
+    // V 2.0.612 — full season enumeration (every Saturday Sept→June),
+    // matches the HTML view. Empty weekends remain visible as blank
+    // columns (same UX as the legacy CDBHS XL).
+    const enumerateSaturdaysISO = (startISO, endISO) => {
+      if (!startISO || !endISO) return [];
+      const start = new Date(startISO + 'T00:00:00Z');
+      const end   = new Date(endISO   + 'T00:00:00Z');
+      if (isNaN(start) || isNaN(end) || start > end) return [];
+      const cur = new Date(start);
+      while (cur.getUTCDay() !== 6) cur.setUTCDate(cur.getUTCDate() + 1);
+      const out = [];
+      while (cur <= end) {
+        out.push(cur.toISOString().slice(0, 10));
+        cur.setUTCDate(cur.getUTCDate() + 7);
+      }
+      return out;
+    };
+    let winStart = brief.first_weekend ? isoDate(brief.first_weekend) : null;
+    let winEnd   = brief.last_weekend  ? isoDate(brief.last_weekend)  : null;
+    if ((!winStart || !winEnd) && brief.season) {
+      const m = String(brief.season).match(/^(\d{4})-(\d{4})$/);
+      if (m) {
+        if (!winStart) winStart = `${m[1]}-09-01`;
+        if (!winEnd)   winEnd   = `${m[2]}-06-30`;
+      }
+    }
+    let weekends = enumerateSaturdaysISO(winStart, winEnd);
+    // Defensive fallback + include any placement date sitting outside
+    // the enumerated window so the cell is still visible.
+    const placementDates = [...new Set(draft.map(r => r.weekend_date).filter(Boolean))];
+    if (weekends.length === 0) {
+      weekends = placementDates.sort();
+    } else {
+      const set = new Set(weekends);
+      placementDates.forEach(d => { if (!set.has(d)) set.add(d); });
+      weekends = [...set].sort();
+    }
 
     // Index: { catId: { weekend: { type, host_id, host_name } } }
     const grid = {};
@@ -1434,12 +1464,20 @@ router.get('/draft/export', authenticateToken, requireCalendarGenerator, async (
     // ===== Helpers =====
     const BORDER_THIN = { style: 'thin', color: { argb: 'FFB0B0B0' } };
     const ALL_BORDERS = { top: BORDER_THIN, bottom: BORDER_THIN, left: BORDER_THIN, right: BORDER_THIN };
+    // V 2.0.612 — palette aligned with the HTML view (poster-quality).
     const TYPE_COLORS = {
-      'T1':     'FFE2EFDA', // light green
-      'T2':     'FFFFF2CC', // light yellow
-      'T3':     'FFFCE4D6', // light orange
-      'Finale': 'FFF8CBAD', // light red/coral
-      'FL':     'FFFFD8B0'  // ligue final — warm orange
+      'T1':     'FFD4EDDA', // mint     → dark green text
+      'T2':     'FFD4E6F7', // sky      → dark blue
+      'T3':     'FFFCE4D3', // peach    → dark orange
+      'Finale': 'FFE6DCF2', // lavender → dark purple
+      'FL':     'FFFFE5B8'  // orange   → ligue final
+    };
+    const TYPE_TEXT_COLORS = {
+      'T1':     'FF1B5E20',
+      'T2':     'FF0D47A1',
+      'T3':     'FFBF360C',
+      'Finale': 'FF4A148C',
+      'FL':     'FF8A4A00'
     };
     const HEADER_BG = 'FF6B3AA3';     // purple
     const HEADER_TEXT_COLOR = 'FFFFFFFF';
@@ -1451,8 +1489,10 @@ router.get('/draft/export', authenticateToken, requireCalendarGenerator, async (
     };
 
     // ===== Sheet 1: Calendar grid (visual, print-ready) =====
+    // V 2.0.612 — frozen split now covers 4 header rows
+    // (title + month band + Sat dates + Sun dates).
     const ws = wb.addWorksheet(`Calendrier ${brief.season}`, {
-      views: [{ state: 'frozen', xSplit: 1, ySplit: 3 }],
+      views: [{ state: 'frozen', xSplit: 1, ySplit: 4 }],
       pageSetup: {
         orientation: 'landscape',
         paperSize: 8, // A3
@@ -1520,119 +1560,138 @@ router.get('/draft/export', authenticateToken, requireCalendarGenerator, async (
       c.border = ALL_BORDERS;
     }
 
-    // Row 3: Week-end dates
-    const row3 = ws.getRow(3);
-    row3.height = 24;
-    const r3Header = ws.getCell(3, 1);
-    r3Header.value = 'Catégorie';
-    r3Header.font = { bold: true, color: { argb: HEADER_TEXT_COLOR } };
-    r3Header.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
-    r3Header.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: HEADER_BG } };
-    r3Header.border = ALL_BORDERS;
+    // V 2.0.612 — Row 3: Saturday dates ("S NN"), Row 4: Sunday dates ("D NN").
+    // The "Catégorie" label spans rows 3+4 on the left.
+    ws.mergeCells(3, 1, 4, 1);
+    const catHeader = ws.getCell(3, 1);
+    catHeader.value = 'Catégorie';
+    catHeader.font = { bold: true, color: { argb: HEADER_TEXT_COLOR } };
+    catHeader.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+    catHeader.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: HEADER_BG } };
+    catHeader.border = ALL_BORDERS;
+
+    const HEADER_BG_LIGHT = 'FF7D52B8'; // Sunday row — lighter purple
+    const row3 = ws.getRow(3); row3.height = 22;
+    const row4 = ws.getRow(4); row4.height = 22;
     weekends.forEach((we, idx) => {
       const col = idx + 2;
-      const dt = new Date(we + 'T00:00:00Z');
-      const c = ws.getCell(3, col);
-      c.value = dt.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', timeZone: 'UTC' });
-      c.font = { bold: true, color: { argb: HEADER_TEXT_COLOR }, size: 10 };
-      c.alignment = { horizontal: 'center', vertical: 'middle' };
-      c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: HEADER_BG } };
-      c.border = ALL_BORDERS;
+      const sat = new Date(we + 'T00:00:00Z');
+      const sun = new Date(sat); sun.setUTCDate(sat.getUTCDate() + 1);
+
+      const cSat = ws.getCell(3, col);
+      cSat.value = `S ${String(sat.getUTCDate()).padStart(2, '0')}`;
+      cSat.font = { bold: true, color: { argb: HEADER_TEXT_COLOR }, size: 10 };
+      cSat.alignment = { horizontal: 'center', vertical: 'middle' };
+      cSat.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: HEADER_BG } };
+      cSat.border = ALL_BORDERS;
+
+      const cSun = ws.getCell(4, col);
+      cSun.value = `D ${String(sun.getUTCDate()).padStart(2, '0')}`;
+      cSun.font = { color: { argb: HEADER_TEXT_COLOR }, size: 10 };
+      cSun.alignment = { horizontal: 'center', vertical: 'middle' };
+      cSun.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: HEADER_BG_LIGHT } };
+      cSun.border = ALL_BORDERS;
     });
 
     // Column widths
     ws.getColumn(1).width = 26;
     for (let i = 2; i <= totalCols; i++) ws.getColumn(i).width = 8;
 
-    // Data rows
-    const BORDER_THICK_BOTTOM = { style: 'medium', color: { argb: 'FF6B3AA3' } };
+    // V 2.0.612 — data rows start at row 5 (header is now 4 rows tall).
+    // Cells coloured by ROUND TYPE (not host). Mode dividers: thin
+    // bottom border between same-mode levels, thick purple when the
+    // mode changes (Libre → Bande → 3 Bandes → Cadre).
+    const BORDER_THICK = { style: 'medium', color: { argb: 'FF6B3AA3' } };
     cats.forEach((c, rowIdx) => {
+      const next = cats[rowIdx + 1];
+      const modeWillChange = !!next && (String(c.mode || '').toLowerCase() !== String(next.mode || '').toLowerCase());
       const isLast = rowIdx === cats.length - 1;
-      const r = ws.getRow(4 + rowIdx);
-      r.height = 28;
+      const bottomBorder = (isLast || modeWillChange) ? BORDER_THICK : BORDER_THIN;
+      const rowBorders = { top: BORDER_THIN, bottom: bottomBorder, left: BORDER_THIN, right: BORDER_THIN };
+
+      const r = ws.getRow(5 + rowIdx);
+      r.height = 30;
       const labelCell = r.getCell(1);
       labelCell.value = c.label;
       labelCell.font = { bold: true, size: 11 };
       labelCell.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
-      labelCell.border = isLast
-        ? { ...ALL_BORDERS, bottom: BORDER_THICK_BOTTOM }
-        : ALL_BORDERS;
-      labelCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: rowIdx % 2 === 0 ? 'FFFFFFFF' : ALT_ROW_BG } };
+      labelCell.border = rowBorders;
+      labelCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFFFF' } };
 
       weekends.forEach((we, idx) => {
         const col = idx + 2;
         const cell = r.getCell(col);
         const placement = grid[c.id]?.[we];
-        cell.border = isLast
-          ? { ...ALL_BORDERS, bottom: BORDER_THICK_BOTTOM }
-          : ALL_BORDERS;
+        cell.border = rowBorders;
         if (placement) {
-          // Two-line cell: type / abbreviated host
           const typeLabel = placement.type;
           let hostAbbr = '';
-          if (typeLabel === 'FL') {
-            hostAbbr = 'Ligue';
-          } else if (placement.host_name) {
-            hostAbbr = abbreviate(placement.host_name);
-          } else if (typeLabel === 'Finale') {
-            hostAbbr = 'TBD';
-          }
+          if (typeLabel === 'FL')                  hostAbbr = 'Ligue';
+          else if (placement.host_name)             hostAbbr = abbreviate(placement.host_name);
+          else if (typeLabel === 'Finale')          hostAbbr = 'TBD';
           cell.value = hostAbbr ? `${typeLabel}\n${hostAbbr}` : typeLabel;
           cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
-          cell.font = { bold: true, size: 10 };
-          // Ligue finals always use the FL type colour (no host swatch).
-          if (typeLabel === 'FL') {
-            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: TYPE_COLORS.FL } };
-          } else if (placement.host_id && hostColor.has(placement.host_id)) {
-            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hostColor.get(placement.host_id) } };
-          } else if (TYPE_COLORS[typeLabel]) {
+          cell.font = {
+            bold: true,
+            size: 10,
+            color: { argb: TYPE_TEXT_COLORS[typeLabel] || 'FF222222' }
+          };
+          if (TYPE_COLORS[typeLabel]) {
             cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: TYPE_COLORS[typeLabel] } };
           }
         } else {
-          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: rowIdx % 2 === 0 ? 'FFFFFFFF' : ALT_ROW_BG } };
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFFFF' } };
         }
       });
     });
 
-    // Footer with legend below table — VERTICAL layout (one club per row)
-    const legendStartRow = 4 + cats.length + 2;
-    const legendTitle = ws.getCell(legendStartRow, 1);
-    legendTitle.value = 'Légende clubs';
-    legendTitle.font = { bold: true, size: 13, color: { argb: HEADER_BG } };
-    legendTitle.alignment = { vertical: 'middle' };
-    [...hostMap.entries()].forEach(([id, name], idx) => {
-      const r = ws.getRow(legendStartRow + 1 + idx);
-      r.height = 22;
-      const swatch = r.getCell(2);
-      swatch.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hostColor.get(id) } };
-      swatch.border = ALL_BORDERS;
-      swatch.value = '';
-      // Merge cells 3..6 to give plenty of room for the full club name
-      ws.mergeCells(legendStartRow + 1 + idx, 3, legendStartRow + 1 + idx, 7);
-      const lbl = r.getCell(3);
-      lbl.value = name;
-      lbl.alignment = { vertical: 'middle', indent: 1 };
-      lbl.font = { size: 11 };
-      lbl.border = ALL_BORDERS;
-    });
-
-    // Type legend below the clubs list
-    const typeLegendRow = legendStartRow + hostMap.size + 3;
+    // V 2.0.612 — Type legend first (since cells are now coloured by
+    // round type, not by host). Filled pastel pills with matching
+    // text colour, mirroring the HTML view.
+    const typeLegendRow = 5 + cats.length + 2;
     const tlTitle = ws.getCell(typeLegendRow, 1);
-    tlTitle.value = 'Type';
+    tlTitle.value = 'Légende tournois';
     tlTitle.font = { bold: true, size: 13, color: { argb: HEADER_BG } };
     tlTitle.alignment = { vertical: 'middle' };
+    const TYPE_LEGEND_LABELS = { T1: 'T1 — Tournoi 1', T2: 'T2 — Tournoi 2', T3: 'T3 — Tournoi 3', Finale: 'F — Finale', FL: 'FL — Finale Ligue' };
     let tCol = 2;
-    Object.entries(TYPE_COLORS).forEach(([type, color]) => {
+    Object.entries(TYPE_COLORS).forEach(([type, bg]) => {
+      // Each pill spans 3 columns so the label is readable.
+      ws.mergeCells(typeLegendRow, tCol, typeLegendRow, tCol + 2);
       const sw = ws.getCell(typeLegendRow, tCol);
-      sw.value = type;
-      sw.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: color } };
-      sw.font = { bold: true, size: 11 };
+      sw.value = TYPE_LEGEND_LABELS[type] || type;
+      sw.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
+      sw.font = { bold: true, size: 11, color: { argb: TYPE_TEXT_COLORS[type] || 'FF222222' } };
       sw.alignment = { horizontal: 'center', vertical: 'middle' };
       sw.border = ALL_BORDERS;
-      tCol += 1;
+      tCol += 4; // 3 merged + 1 gap
     });
     ws.getRow(typeLegendRow).height = 22;
+
+    // Host legend — textual abbreviation map (no longer colour-coded).
+    const hostLegendRow = typeLegendRow + 2;
+    const hlTitle = ws.getCell(hostLegendRow, 1);
+    hlTitle.value = 'Clubs hôtes';
+    hlTitle.font = { bold: true, size: 13, color: { argb: HEADER_BG } };
+    hlTitle.alignment = { vertical: 'middle' };
+    const hostAbbrPairs = [...hostMap.entries()]
+      .map(([id, name]) => [abbreviate(name), name])
+      .sort((a, b) => a[0].localeCompare(b[0]));
+    hostAbbrPairs.forEach(([ab, name], idx) => {
+      const r = ws.getRow(hostLegendRow + 1 + idx);
+      r.height = 20;
+      const cAb = r.getCell(2);
+      cAb.value = ab;
+      cAb.font = { bold: true, size: 11, color: { argb: HEADER_BG } };
+      cAb.alignment = { horizontal: 'center', vertical: 'middle' };
+      cAb.border = ALL_BORDERS;
+      ws.mergeCells(hostLegendRow + 1 + idx, 3, hostLegendRow + 1 + idx, 8);
+      const cName = r.getCell(3);
+      cName.value = name;
+      cName.alignment = { vertical: 'middle', indent: 1 };
+      cName.font = { size: 11 };
+      cName.border = ALL_BORDERS;
+    });
 
     // ===== Sheet 2: List of tournaments (sortable, with auto-filter) =====
     const wsList = wb.addWorksheet('Liste des tournois', {
@@ -1678,8 +1737,9 @@ router.get('/draft/export', authenticateToken, requireCalendarGenerator, async (
     wsList.views = [{ state: 'frozen', ySplit: 1 }];
 
     // ===== Sheet 3: Légende clubs (separate, large) =====
-    const wsLeg = wb.addWorksheet('Légende clubs');
-    const legHeader = wsLeg.addRow(['Club', 'Couleur']);
+    // V 2.0.612 — Sheet 3: textual abbreviation map (no colour coding).
+    const wsLeg = wb.addWorksheet('Clubs hôtes');
+    const legHeader = wsLeg.addRow(['Abréviation', 'Nom du club']);
     legHeader.eachCell(c => {
       c.font = { bold: true, color: { argb: HEADER_TEXT_COLOR } };
       c.alignment = { horizontal: 'center', vertical: 'middle' };
@@ -1687,18 +1747,17 @@ router.get('/draft/export', authenticateToken, requireCalendarGenerator, async (
       c.border = ALL_BORDERS;
     });
     legHeader.height = 22;
-    wsLeg.getColumn(1).width = 36;
-    wsLeg.getColumn(2).width = 18;
-    [...hostMap.entries()].forEach(([id, name]) => {
-      const r = wsLeg.addRow([name, '']);
-      r.height = 24;
+    wsLeg.getColumn(1).width = 14;
+    wsLeg.getColumn(2).width = 40;
+    hostAbbrPairs.forEach(([ab, name]) => {
+      const r = wsLeg.addRow([ab, name]);
+      r.height = 22;
       r.eachCell((c, col) => {
         c.border = ALL_BORDERS;
-        c.alignment = { vertical: 'middle', indent: 1 };
-        c.font = { size: 11 };
-        if (col === 2) {
-          c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hostColor.get(id) } };
-        }
+        c.alignment = { vertical: 'middle', indent: 1, horizontal: col === 1 ? 'center' : 'left' };
+        c.font = col === 1
+          ? { bold: true, size: 11, color: { argb: HEADER_BG } }
+          : { size: 11 };
       });
     });
 
