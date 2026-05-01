@@ -2217,6 +2217,46 @@
       `;
     }
 
+    // V 2.0.608 — enumerate every Saturday between two ISO dates.
+    // Used by Vue calendrier + Saison publiée so empty weekends are
+    // still rendered as columns (matching the legacy XL file UX).
+    function enumerateSaturdays(startStr, endStr) {
+      if (!startStr || !endStr) return [];
+      const start = new Date(startStr + 'T00:00:00Z');
+      const end   = new Date(endStr   + 'T00:00:00Z');
+      if (isNaN(start) || isNaN(end) || start > end) return [];
+      // Snap start to the first Saturday on or after `start`.
+      const cur = new Date(start);
+      while (cur.getUTCDay() !== 6) cur.setUTCDate(cur.getUTCDate() + 1);
+      const out = [];
+      while (cur <= end) {
+        out.push(cur.toISOString().slice(0, 10));
+        cur.setUTCDate(cur.getUTCDate() + 7);
+      }
+      return out;
+    }
+
+    // Resolve the season window for the column axis. Prefers the
+    // brief's first_weekend / last_weekend; falls back to Sept 1 →
+    // June 30 of the brief's season string. If everything is missing
+    // (shouldn't happen post-Step 1) returns the union of placement
+    // dates so the view never goes blank.
+    function resolveSeasonWindow(brief, placements) {
+      const datesFromPlacements = [...new Set((placements || []).map(p => p.weekend_date).filter(Boolean))].sort();
+      let start = brief && brief.first_weekend ? String(brief.first_weekend).slice(0, 10) : null;
+      let end   = brief && brief.last_weekend  ? String(brief.last_weekend).slice(0, 10)  : null;
+      if ((!start || !end) && brief && brief.season) {
+        const m = String(brief.season).match(/^(\d{4})-(\d{4})$/);
+        if (m) {
+          if (!start) start = `${m[1]}-09-01`;
+          if (!end)   end   = `${m[2]}-06-30`;
+        }
+      }
+      if (!start && datesFromPlacements.length) start = datesFromPlacements[0];
+      if (!end   && datesFromPlacements.length) end   = datesFromPlacements[datesFromPlacements.length - 1];
+      return { start, end };
+    }
+
     // ----- Vue 2: Vue calendrier (Excel-like) -----
     function renderViewSeasonal(result) {
       const container = document.getElementById('viewSeasonal');
@@ -2250,8 +2290,24 @@
         return dispLevelRank(a.level) - dispLevelRank(b.level);
       });
 
-      // All weekend dates, sorted (include ligue final dates)
-      const weekends = [...new Set(allPlacements.map(p => p.weekend_date))].sort();
+      // V 2.0.608 — enumerate ALL Saturdays in the season window so
+      // empty weekends are still rendered as columns (matches the
+      // legacy CDBHS XL file). Falls back gracefully if the brief
+      // is partially populated.
+      const win = resolveSeasonWindow(currentBrief, allPlacements);
+      let weekends = enumerateSaturdays(win.start, win.end);
+      // Defensive: if enumeration produced nothing (e.g. brief missing
+      // window AND no placements yet), fall back to placement dates.
+      if (weekends.length === 0) {
+        weekends = [...new Set(allPlacements.map(p => p.weekend_date).filter(Boolean))].sort();
+      } else {
+        // Make sure any placement date that falls outside the enumerated
+        // window (rare — admin moved a cell to a Sunday or out-of-window
+        // date) is still included so its cell remains visible.
+        const set = new Set(weekends);
+        allPlacements.forEach(p => { if (p.weekend_date && !set.has(p.weekend_date)) set.add(p.weekend_date); });
+        weekends = [...set].sort();
+      }
 
       // Index by (cat, weekend) — CDB placements take precedence over
       // ligue finals if (extremely unlikely) they share a date.
@@ -2491,7 +2547,18 @@
         return dispLevelRank(a.level) - dispLevelRank(b.level);
       });
 
-      const weekends = [...new Set(placements.map(p => p.weekend_date))].sort();
+      // V 2.0.608 — enumerate ALL Saturdays in the season window so
+      // empty weekends are still rendered as columns (matches the
+      // legacy CDBHS XL file).
+      const win = resolveSeasonWindow(currentBrief, placements);
+      let weekends = enumerateSaturdays(win.start, win.end);
+      if (weekends.length === 0) {
+        weekends = [...new Set(placements.map(p => p.weekend_date).filter(Boolean))].sort();
+      } else {
+        const set = new Set(weekends);
+        placements.forEach(p => { if (p.weekend_date && !set.has(p.weekend_date)) set.add(p.weekend_date); });
+        weekends = [...set].sort();
+      }
 
       const grid = {};
       placements.forEach(p => {
