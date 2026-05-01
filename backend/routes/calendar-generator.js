@@ -1424,8 +1424,17 @@ router.get('/sync-status', authenticateToken, requireCalendarGenerator, async (r
       // Host comparison: tournoi_ext.lieu is free text → match on
       // case-insensitive trimmed display_name. A draft with no host
       // (TBD) is OK as long as ext also has empty/TBD lieu.
-      const draftHost = norm(r.draft_host_name);
-      const extHost   = norm(r.ext_lieu);
+      //
+      // V 2.0.624 — the publish step writes lieu as "ClubName (CityName)"
+      // (see line ~2483 of /publish), but the draft side stores only the
+      // bare clubs.display_name. Strip a trailing parenthesised suffix
+      // and any city-suffix variant from BOTH sides before comparing,
+      // otherwise every row with a host gets falsely flagged as drift.
+      const stripCity = (s) => String(s == null ? '' : s)
+        .replace(/\s*\([^)]*\)\s*$/, '')   // drop trailing "(...)"
+        .trim();
+      const draftHost = norm(stripCity(r.draft_host_name));
+      const extHost   = norm(stripCity(r.ext_lieu));
       if (draftHost !== extHost) {
         items.push({
           draft_id: r.draft_id,
@@ -1485,6 +1494,118 @@ router.get('/sync-status', authenticateToken, requireCalendarGenerator, async (r
     res.json({ drift_count: items.length, by_kind, items });
   } catch (err) {
     console.error('[calendar-generator] /sync-status error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// V 2.0.624 — GET /diag/:briefId
+//   Diagnostic endpoint to confirm whether the "external" rows reported
+//   by /sync-status are duplicate tournoi_ext rows from multiple publish
+//   passes (the dominant cause in the demo environment) or genuine
+//   one-off external entries.
+//
+//   Returns:
+//     {
+//       brief: {...},
+//       window: { start, end },
+//       totals: { ext_in_window, drafts, drafts_linked, drafts_unlinked,
+//                 ext_linked, ext_orphan },
+//       duplicates: [{ identity, count, tournoi_ids, dates, lieux }],
+//       orphans_by_identity: [{ identity, count }]
+//     }
+router.get('/diag/:briefId', authenticateToken, requireCalendarGenerator, async (req, res) => {
+  const db = getDb();
+  const orgId = req.user.organizationId;
+  const briefId = parseInt(req.params.briefId, 10);
+  if (!briefId) return res.status(400).json({ error: 'brief_id requis' });
+
+  const fetchAll = (sql, params) => new Promise((resolve, reject) =>
+    db.all(sql, params, (err, rows) => err ? reject(err) : resolve(rows || []))
+  );
+  const fetchOne = (sql, params) => new Promise((resolve, reject) =>
+    db.get(sql, params, (err, row) => err ? reject(err) : resolve(row))
+  );
+
+  try {
+    const brief = await fetchOne(
+      `SELECT id, season, first_weekend, last_weekend
+         FROM calendar_brief WHERE id = $1 AND organization_id = $2`,
+      [briefId, orgId]
+    );
+    if (!brief) return res.status(404).json({ error: 'Brief introuvable' });
+
+    const seasonStart = brief.first_weekend
+      ? new Date(new Date(brief.first_weekend).getTime() - 7 * 86400000).toISOString().slice(0, 10)
+      : `${brief.season.split('-')[0]}-09-01`;
+    const seasonEnd = brief.last_weekend
+      ? new Date(new Date(brief.last_weekend).getTime() + 7 * 86400000).toISOString().slice(0, 10)
+      : `${brief.season.split('-')[1]}-06-30`;
+
+    const ext = await fetchAll(
+      `SELECT t.tournoi_id, t.mode, t.categorie, t.tournament_number,
+              t.debut, t.lieu
+         FROM tournoi_ext t
+        WHERE t.organization_id = $1 AND t.debut BETWEEN $2 AND $3
+        ORDER BY t.mode, t.categorie, t.tournament_number, t.debut`,
+      [orgId, seasonStart, seasonEnd]
+    );
+
+    const drafts = await fetchAll(
+      `SELECT cd.id, cd.tournoi_ext_id, cd.tournament_type,
+              c.game_type, c.level
+         FROM calendar_draft cd
+         LEFT JOIN categories c ON c.id = cd.category_id
+        WHERE cd.brief_id = $1`,
+      [briefId]
+    );
+
+    const linkedExtIds = new Set(drafts.map(d => d.tournoi_ext_id).filter(Boolean));
+
+    // Group ext rows by identity (mode|cat|tnum)
+    const byIdentity = new Map();
+    for (const t of ext) {
+      const key = `${(t.mode || '').toUpperCase()}|${(t.categorie || '').toUpperCase()}|${t.tournament_number || '?'}`;
+      if (!byIdentity.has(key)) byIdentity.set(key, []);
+      byIdentity.get(key).push(t);
+    }
+
+    const duplicates = [];
+    const orphansByIdentity = new Map();
+    for (const [identity, rows] of byIdentity.entries()) {
+      if (rows.length > 1) {
+        duplicates.push({
+          identity,
+          count: rows.length,
+          tournoi_ids: rows.map(r => r.tournoi_id),
+          dates: rows.map(r => (r.debut instanceof Date ? r.debut.toISOString().slice(0, 10) : String(r.debut || '').slice(0, 10))),
+          lieux: rows.map(r => r.lieu || '')
+        });
+      }
+      const orphanCount = rows.filter(r => !linkedExtIds.has(r.tournoi_id)).length;
+      if (orphanCount > 0) orphansByIdentity.set(identity, orphanCount);
+    }
+
+    const draftsLinked = drafts.filter(d => d.tournoi_ext_id != null).length;
+    const extOrphan = ext.filter(t => !linkedExtIds.has(t.tournoi_id)).length;
+
+    res.json({
+      brief: { id: brief.id, season: brief.season, first_weekend: brief.first_weekend, last_weekend: brief.last_weekend },
+      window: { start: seasonStart, end: seasonEnd },
+      totals: {
+        ext_in_window: ext.length,
+        drafts: drafts.length,
+        drafts_linked: draftsLinked,
+        drafts_unlinked: drafts.length - draftsLinked,
+        ext_linked: ext.length - extOrphan,
+        ext_orphan: extOrphan
+      },
+      duplicates: duplicates.sort((a, b) => b.count - a.count),
+      orphans_by_identity: [...orphansByIdentity.entries()]
+        .map(([identity, count]) => ({ identity, count }))
+        .sort((a, b) => b.count - a.count)
+    });
+  } catch (err) {
+    console.error('[calendar-generator] /diag error:', err);
     res.status(500).json({ error: err.message });
   }
 });
