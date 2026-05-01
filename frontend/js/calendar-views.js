@@ -305,14 +305,29 @@
         const hostAbbrev = (p.host_abbrev && String(p.host_abbrev).trim())
           ? String(p.host_abbrev).trim()
           : (p.host_code || abbreviateHost(p.host_name) || (p.host_id == null ? 'TBD' : ''));
+        // V 2.0.635 — pick text colour based on background luminance so
+        // dark club colours stay readable. Returns null when the bg is
+        // light enough that the existing round-text palette is fine.
+        const onBgTxt = (function() {
+          const m = /^#([0-9a-f]{6}|[0-9a-f]{8})$/i.exec(cellBg);
+          if (!m) return null;
+          const hex = m[1];
+          const rC = parseInt(hex.slice(0,2), 16);
+          const gC = parseInt(hex.slice(2,4), 16);
+          const bC = parseInt(hex.slice(4,6), 16);
+          const yiq = (rC*299 + gC*587 + bC*114) / 1000;
+          return yiq >= 150 ? null : '#ffffff';
+        })();
+        const roundColOut = onBgTxt || roundCol;
+        const hostColOut  = onBgTxt || '#444';
         const lockedRing = p._locked ? 'box-shadow: inset 0 0 0 2px #c47b00;' : '';
         const editable = p._draft_id ? 'cursor: pointer;' : '';
         const tip = `${categoryName(c)} ${p.tournament_type}\n${fmtDateFR(p.qualif_date || p.final_date || p.weekend_date)}\n${p.host_name || 'TBD'}${p._comment ? '\n💬 ' + p._comment : ''}${p._draft_id ? '\n(clic pour modifier)' : ''}`;
         const lockIcon = p._locked ? '🔒 ' : '';
         const commentIcon = p._comment ? '💬' : '';
         return `<td class="cv-cell-editable" data-draft-id="${p._draft_id || ''}" data-cat-id="${c.id}" style="padding: 4px 6px; background: ${cellBg}; ${roundBorder} text-align: center; font-size: 11px; ${lockedRing} ${leftBorder} ${editable}" title="${escapeHtml(tip)}">
-          <div style="font-weight: 800; font-size: 12px; color: ${roundCol}; line-height: 1.1;">${lockIcon}${roundLabel(p.tournament_type)}${commentIcon}</div>
-          <div style="font-size: 9px; color: #444; font-weight: 600; margin-top: 2px;">${escapeHtml(hostAbbrev)}</div>
+          <div style="font-weight: 800; font-size: 12px; color: ${roundColOut}; line-height: 1.1;">${lockIcon}${roundLabel(p.tournament_type)}${commentIcon}</div>
+          <div style="font-size: 9px; color: ${hostColOut}; font-weight: 600; margin-top: 2px;">${escapeHtml(hostAbbrev)}</div>
         </td>`;
       }).join('');
       return `<tr style="${rowBorder}"><td style="padding: 6px 10px; font-weight: 600; position: sticky; left: 0; background: #fff; z-index: 1; border-right: 2px solid #ccc; ${rowBorder}">${escapeHtml(categoryName(c))}</td>${cells}</tr>`;

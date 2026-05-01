@@ -611,12 +611,25 @@
     }
 
     // V 2.0.630 — live preview of the calendar cell appearance.
+    // V 2.0.635 — auto-pick black/white text based on background luminance
+    // so dark colours stay readable in the preview AND consistently with
+    // how the grid will render.
+    function pickTextOnBg(hex) {
+      const m = /^#([0-9a-f]{6}|[0-9a-f]{8})$/i.exec(hex || '');
+      if (!m) return '#1a1a1a';
+      const r = parseInt(m[1].slice(0,2), 16);
+      const g = parseInt(m[1].slice(2,4), 16);
+      const b = parseInt(m[1].slice(4,6), 16);
+      const yiq = (r*299 + g*587 + b*114) / 1000;
+      return yiq >= 150 ? '#1a1a1a' : '#ffffff';
+    }
     function updateCalendarPreview() {
       const color  = document.getElementById('editClubCalendarColor').value || '#ffffff';
       const abbrev = (document.getElementById('editClubCalendarAbbrev').value || '').trim();
       const preview = document.getElementById('editClubCalendarPreview');
       if (!preview) return;
       preview.style.background = color;
+      preview.style.color = pickTextOnBg(color);
       preview.textContent = abbrev || '—';
     }
     // Wire preview updates + persist on form submit (separate PATCH so it
