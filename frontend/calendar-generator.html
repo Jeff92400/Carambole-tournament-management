@@ -261,36 +261,20 @@
     }
     .toggle-custom-rules:hover { background: #f3eefb; }
 
-    /* V 2.0.612 — print mode: hide everything except the published grid
-       + its banner + the two legends below it. Triggered by the
-       "🖨️ Imprimer / PDF" button which adds .printing-published to body. */
+    /* V 2.0.612 (rev) — print mode: when the user clicks "🖨️ Imprimer / PDF"
+       a clone of the published grid is moved to body > #calendarPrintRoot.
+       In print, every body child is hidden except that one. This avoids
+       fighting per-page step IDs and keeps the print output clean. */
+    #calendarPrintRoot { display: none; }
     @media print {
-      body.printing-published .navbar,
-      body.printing-published #stepperContainer,
-      body.printing-published #stepNavigator,
-      body.printing-published #step1, body.printing-published #step2,
-      body.printing-published #step3, body.printing-published #step4,
-      body.printing-published #step5, body.printing-published #step6,
-      body.printing-published #step7,
-      body.printing-published #navButtons,
-      body.printing-published #viewSelector,
-      body.printing-published #viewSeasonal,
-      body.printing-published #viewCompact,
-      body.printing-published #viewHosts,
-      body.printing-published #persistenceBanner,
-      body.printing-published #publishedRefreshBtn,
-      body.printing-published #publishedPrintBtn {
-        display: none !important;
-      }
-      body.printing-published #viewPublished {
+      body.printing-published > *:not(#calendarPrintRoot) { display: none !important; }
+      body.printing-published > #calendarPrintRoot {
         display: block !important;
+        padding: 12px !important;
       }
-      body.printing-published {
-        background: white !important;
-      }
-      /* Page break hint to keep the grid on one sheet when possible. */
+      body.printing-published #calendarPrintRoot button { display: none !important; }
+      body.printing-published { background: white !important; }
       body.printing-published table { page-break-inside: avoid; }
-      /* Make sure cell colours print (most browsers obey this). */
       * {
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
@@ -2821,13 +2805,35 @@
       const printBtn = document.getElementById('publishedPrintBtn');
       if (printBtn) {
         printBtn.addEventListener('click', () => {
+          // V 2.0.613 — clone the published grid into a print root at
+          // <body> level so the @media print rules can hide every
+          // sibling cleanly (no need to chase step IDs across pages).
+          const src = document.getElementById('viewPublished');
+          if (!src) return;
+          // Remove any leftover root from a previous (cancelled) print.
+          document.querySelectorAll('#calendarPrintRoot').forEach(n => n.remove());
+          const root = document.createElement('div');
+          root.id = 'calendarPrintRoot';
+          // Title block above the grid (helpful when posted/printed).
+          const orgEl = document.querySelector('#app-org-name');
+          const orgLabel = orgEl ? orgEl.textContent.trim() : '';
+          const seasonLabel = (currentBrief && currentBrief.season) || '';
+          const titleHtml = `<div style="font-size: 18px; font-weight: 700; color: #6b3aa3; margin-bottom: 10px; text-align: center;">
+            Calendrier ${escapeHtml(seasonLabel)}${orgLabel ? ' — ' + escapeHtml(orgLabel) : ''}
+          </div>`;
+          root.innerHTML = titleHtml;
+          // Move the grid (clone, so the live view keeps its handlers).
+          root.appendChild(src.cloneNode(true));
+          document.body.appendChild(root);
+
           document.body.classList.add('printing-published');
           const cleanup = () => {
             document.body.classList.remove('printing-published');
+            const r = document.getElementById('calendarPrintRoot');
+            if (r) r.remove();
             window.removeEventListener('afterprint', cleanup);
           };
           window.addEventListener('afterprint', cleanup);
-          // Slight delay so the layout settles before the print dialog opens.
           setTimeout(() => window.print(), 50);
         });
       }
