@@ -332,6 +332,30 @@
             <small style="color: #666; display: block; margin-top: 4px;">Lettre utilisée dans l'import Excel (A, B, C...)</small>
           </div>
         </div>
+        <!-- V 2.0.630 — Calendar grid styling -->
+        <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin: 15px 0;">
+          <h4 style="margin: 0 0 10px 0; color: #1F4788;">Affichage dans la grille calendrier</h4>
+          <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; align-items: end;">
+            <div class="form-group" style="margin-bottom: 0;">
+              <label for="editClubCalendarColor">Couleur :</label>
+              <input type="color" id="editClubCalendarColor" value="#e6f0ff" style="height: 38px; width: 100%; padding: 2px;">
+              <small style="color: #666; display: block; margin-top: 4px;">Fond des cellules</small>
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+              <label for="editClubCalendarAbbrev">Abréviation :</label>
+              <input type="text" id="editClubCalendarAbbrev" maxlength="8" placeholder="Cla">
+              <small style="color: #666; display: block; margin-top: 4px;">2-3 lettres affichées dans la cellule</small>
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+              <label>Aperçu :</label>
+              <div id="editClubCalendarPreview" style="height: 38px; display: flex; align-items: center; justify-content: center; border: 2px solid #1F4788; border-left-width: 5px; border-radius: 6px; font-weight: 700; font-size: 0.95rem; color: #1a1a1a;">—</div>
+            </div>
+          </div>
+          <div style="margin-top: 8px; display: flex; gap: 8px; align-items: center;">
+            <button type="button" class="btn btn-sm" id="clearCalendarStyle" style="padding: 4px 10px; font-size: 0.85rem;">Effacer</button>
+            <small style="color: #666;">Efface couleur + abréviation pour ce club</small>
+          </div>
+        </div>
         <div class="form-group">
           <label for="editClubLogo">Nouveau logo (optionnel) :</label>
           <input type="file" id="editClubLogo" accept="image/jpeg,image/jpg,image/png,image/gif">
@@ -574,10 +598,63 @@
       document.getElementById('editClubResponsableEmail').value = club.responsable_sportif_email || '';
       document.getElementById('editClubResponsableLicence').value = club.responsable_sportif_licence || '';
       document.getElementById('editClubCalendarCode').value = club.calendar_code || '';
+      // V 2.0.630 — calendar grid styling
+      const colorInput  = document.getElementById('editClubCalendarColor');
+      const abbrevInput = document.getElementById('editClubCalendarAbbrev');
+      colorInput.value  = club.calendar_color || '#e6f0ff';
+      abbrevInput.value = club.calendar_abbrev || '';
+      updateCalendarPreview();
       document.getElementById('editLogoPreview').style.display = 'none';
       document.getElementById('editClubLogo').value = '';
 
       document.getElementById('editModal').style.display = 'block';
+    }
+
+    // V 2.0.630 — live preview of the calendar cell appearance.
+    function updateCalendarPreview() {
+      const color  = document.getElementById('editClubCalendarColor').value || '#ffffff';
+      const abbrev = (document.getElementById('editClubCalendarAbbrev').value || '').trim();
+      const preview = document.getElementById('editClubCalendarPreview');
+      if (!preview) return;
+      preview.style.background = color;
+      preview.textContent = abbrev || '—';
+    }
+    // Wire preview updates + persist on form submit (separate PATCH so it
+    // doesn't go through the multipart PUT).
+    document.addEventListener('input', (e) => {
+      if (e.target && (e.target.id === 'editClubCalendarColor' || e.target.id === 'editClubCalendarAbbrev')) {
+        updateCalendarPreview();
+      }
+    });
+    document.addEventListener('click', (e) => {
+      if (e.target && e.target.id === 'clearCalendarStyle') {
+        document.getElementById('editClubCalendarColor').value  = '#e6f0ff';
+        document.getElementById('editClubCalendarAbbrev').value = '';
+        updateCalendarPreview();
+      }
+    });
+
+    async function saveCalendarStyle(clubId) {
+      const color  = document.getElementById('editClubCalendarColor').value || null;
+      const abbrev = (document.getElementById('editClubCalendarAbbrev').value || '').trim() || null;
+      // Treat the default colour as "not set" only if the abbrev is also empty.
+      const payload = {
+        calendar_color:  abbrev || (color && color !== '#e6f0ff') ? color : null,
+        calendar_abbrev: abbrev
+      };
+      try {
+        const r = await fetch(`${API_URL}/clubs/${clubId}/calendar-style`, {
+          method: 'PATCH',
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (!r.ok) {
+          const e = await r.json().catch(() => ({}));
+          console.warn('calendar-style PATCH failed:', e.error || r.status);
+        }
+      } catch (err) {
+        console.warn('calendar-style PATCH error:', err.message);
+      }
     }
 
     // Close edit modal
@@ -635,6 +712,9 @@
         if (!response.ok) {
           throw new Error(data.error || 'Erreur lors de la modification du club');
         }
+
+        // V 2.0.630 — also persist calendar styling via dedicated PATCH.
+        await saveCalendarStyle(clubId);
 
         showSuccess('Club modifié avec succès !');
         closeEditModal();

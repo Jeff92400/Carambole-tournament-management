@@ -53,7 +53,7 @@ const upload = multer({
 // Get all clubs (exclude logo_data binary to avoid bloating JSON response)
 router.get('/', authenticateToken, (req, res) => {
   const orgId = req.user.organizationId || null;
-  db.all('SELECT id, name, display_name, logo_filename, street, city, zip_code, phone, email, president, president_email, responsable_sportif_name, responsable_sportif_email, responsable_sportif_licence, calendar_code, organization_id, created_at FROM clubs WHERE ($1::int IS NULL OR organization_id = $1) ORDER BY name', [orgId], (err, rows) => {
+  db.all('SELECT id, name, display_name, logo_filename, street, city, zip_code, phone, email, president, president_email, responsable_sportif_name, responsable_sportif_email, responsable_sportif_licence, calendar_code, calendar_color, calendar_abbrev, organization_id, created_at FROM clubs WHERE ($1::int IS NULL OR organization_id = $1) ORDER BY name', [orgId], (err, rows) => {
     if (err) {
       return res.status(500).json({ error: err.message });
     }
@@ -153,7 +153,7 @@ router.get('/resolve/:name', authenticateToken, (req, res) => {
 // Get club by ID (exclude logo_data binary)
 router.get('/:id', authenticateToken, (req, res) => {
   const orgId = req.user.organizationId || null;
-  db.get('SELECT id, name, display_name, logo_filename, street, city, zip_code, phone, email, president, president_email, responsable_sportif_name, responsable_sportif_email, responsable_sportif_licence, calendar_code, organization_id, created_at FROM clubs WHERE id = $1 AND ($2::int IS NULL OR organization_id = $2)', [req.params.id, orgId], (err, row) => {
+  db.get('SELECT id, name, display_name, logo_filename, street, city, zip_code, phone, email, president, president_email, responsable_sportif_name, responsable_sportif_email, responsable_sportif_licence, calendar_code, calendar_color, calendar_abbrev, organization_id, created_at FROM clubs WHERE id = $1 AND ($2::int IS NULL OR organization_id = $2)', [req.params.id, orgId], (err, row) => {
     if (err) {
       return res.status(500).json({ error: err.message });
     }
@@ -226,7 +226,7 @@ router.put('/:id', authenticateToken, upload.single('logo'), (req, res) => {
 
   // Get current club data (exclude logo_data binary)
   const orgId = req.user.organizationId || null;
-  db.get('SELECT id, name, display_name, logo_filename, street, city, zip_code, phone, email, president, president_email, responsable_sportif_name, responsable_sportif_email, responsable_sportif_licence, calendar_code, organization_id, created_at FROM clubs WHERE id = $1 AND ($2::int IS NULL OR organization_id = $2)', [clubId, orgId], (err, club) => {
+  db.get('SELECT id, name, display_name, logo_filename, street, city, zip_code, phone, email, president, president_email, responsable_sportif_name, responsable_sportif_email, responsable_sportif_licence, calendar_code, calendar_color, calendar_abbrev, organization_id, created_at FROM clubs WHERE id = $1 AND ($2::int IS NULL OR organization_id = $2)', [clubId, orgId], (err, club) => {
     if (err) {
       return res.status(500).json({ error: err.message });
     }
@@ -309,6 +309,58 @@ router.put('/:id', authenticateToken, upload.single('logo'), (req, res) => {
       }
     );
   });
+});
+
+// V 2.0.630 — Calendar grid styling (PATCH).
+// Lightweight endpoint to set the per-club color + abbreviation used by
+// the annual calendar grid views. Kept separate from the main PUT to
+// avoid threading two more fields through the existing 16-column update
+// (which already deals with multipart logo upload).
+//
+// Body: { calendar_color?: string|null, calendar_abbrev?: string|null }
+//   - calendar_color   : "#RRGGBB" or "#RRGGBBAA"; null clears it
+//   - calendar_abbrev  : 1–8 chars; null clears it (caller is expected
+//                        to validate length on the UI side)
+router.patch('/:id/calendar-style', authenticateToken, (req, res) => {
+  const orgId = req.user.organizationId || null;
+  const clubId = parseInt(req.params.id, 10);
+  if (!clubId) return res.status(400).json({ error: 'invalid id' });
+
+  const { calendar_color, calendar_abbrev } = req.body || {};
+
+  // Light validation: hex color shape; abbrev length cap.
+  let color = calendar_color;
+  if (color !== undefined && color !== null && color !== '') {
+    if (!/^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(String(color))) {
+      return res.status(400).json({ error: 'calendar_color doit être au format #RRGGBB ou #RRGGBBAA' });
+    }
+  } else {
+    color = null;
+  }
+  let abbrev = calendar_abbrev;
+  if (abbrev !== undefined && abbrev !== null && abbrev !== '') {
+    abbrev = String(abbrev).trim();
+    if (abbrev.length > 8) {
+      return res.status(400).json({ error: 'calendar_abbrev limité à 8 caractères' });
+    }
+  } else {
+    abbrev = null;
+  }
+
+  db.run(
+    `UPDATE clubs
+        SET calendar_color = $1, calendar_abbrev = $2
+      WHERE id = $3
+        AND ($4::int IS NULL OR organization_id = $4)`,
+    [color, abbrev, clubId, orgId],
+    function (err) {
+      if (err) return res.status(500).json({ error: err.message });
+      if (!this || !this.changes) {
+        return res.status(404).json({ error: 'Club introuvable' });
+      }
+      res.json({ id: clubId, calendar_color: color, calendar_abbrev: abbrev });
+    }
+  );
 });
 
 // Delete club (admin only — destructive action)

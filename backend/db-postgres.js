@@ -410,6 +410,17 @@ async function initializeDatabase() {
     await client.query(`ALTER TABLE clubs ADD COLUMN IF NOT EXISTS logo_data BYTEA`);
     await client.query(`ALTER TABLE clubs ADD COLUMN IF NOT EXISTS logo_content_type TEXT`);
 
+    // V 2.0.630 — Calendar grid styling (May 2026)
+    //   calendar_color  : hex color (e.g. "#d4edda") used as cell background
+    //                     in the annual calendar grid views. Per-CDB palette
+    //                     so admins can match their physical calendar.
+    //   calendar_abbrev : 2-3 letter abbreviation displayed inside the cell
+    //                     (overrides the legacy single-letter code which
+    //                     collides for clubs starting with the same letter,
+    //                     e.g. Clamart/Clichy/Courbevoie).
+    await client.query(`ALTER TABLE clubs ADD COLUMN IF NOT EXISTS calendar_color VARCHAR(9)`);
+    await client.query(`ALTER TABLE clubs ADD COLUMN IF NOT EXISTS calendar_abbrev VARCHAR(8)`);
+
     // Initialize default calendar codes for existing clubs
     const defaultCalendarCodes = [
       { name_pattern: '%COURBEVOIE%', code: 'A' },
