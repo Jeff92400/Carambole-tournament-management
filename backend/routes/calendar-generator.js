@@ -1625,6 +1625,12 @@ router.post('/diag/:briefId/cleanup-orphan-duplicates',
   const db = getDb();
   const orgId = req.user.organizationId;
   const briefId = parseInt(req.params.briefId, 10);
+  // V 2.0.629 — opt-in flag to also delete lone singleton orphans
+  // (an ext row in window, not linked to any draft, no other ext row
+  // shares its identity+date). Off by default because in production
+  // a singleton orphan could be a legitimately admin-imported "external"
+  // tournament. Demo-friendly when explicitly turned on.
+  const includeSingletons = req.body && req.body.include_singleton_orphans === true;
   if (!briefId) return res.status(400).json({ error: 'brief_id requis' });
 
   const fetchAll = (sql, params) => new Promise((resolve, reject) =>
@@ -1685,7 +1691,41 @@ router.post('/diag/:briefId/cleanup-orphan-duplicates',
     const skipped = [];
 
     for (const [key, grp] of groups.entries()) {
-      if (grp.length < 2) continue; // no duplicate, nothing to clean
+      // V 2.0.629 — singleton orphan handling.
+      // A group of size 1 with the row UNLINKED and zero inscriptions
+      // is a lone orphan (e.g. a Ligue Finale virtual canonical, or a
+      // stale-date row left behind by a republish). Only delete when
+      // the caller opts in via include_singleton_orphans=true.
+      if (grp.length === 1) {
+        if (!includeSingletons) continue;
+        const r = grp[0];
+        if (r.is_linked) continue;
+        const insc = parseInt(r.insc_count, 10) || 0;
+        if (insc > 0) {
+          skipped.push({
+            tournoi_id: r.tournoi_id, identity: key,
+            reason: 'singleton_with_inscriptions', insc
+          });
+          continue;
+        }
+        await dbRun(`DELETE FROM tournoi_ext WHERE tournoi_id = $1 AND organization_id = $2`,
+          [r.tournoi_id, orgId]);
+        deletions.push({
+          deleted_tournoi_id: r.tournoi_id,
+          canonical_tournoi_id: null,
+          identity: key,
+          kind: 'singleton_orphan'
+        });
+        await dbRun(
+          `INSERT INTO calendar_sync_log (organization_id, brief_id, action, tournoi_ext_id, change_type, summary, triggered_by)
+           VALUES ($1, $2, 'cleanup', $3, 'singleton_orphan', $4, $5)`,
+          [orgId, briefId, r.tournoi_id,
+           `Orphelin singleton supprimé — ${key}`,
+           req.user.userId || null]
+        ).catch(() => {});
+        continue;
+      }
+      if (grp.length < 2) continue; // already handled above
       // Canonical = the LINKED row (there should be exactly one).
       // V 2.0.627 — when no row is linked (typical of Ligue Finale
       // virtual rows that don't live in calendar_draft), keep the
