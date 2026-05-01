@@ -1253,15 +1253,16 @@ router.get('/published-grid', authenticateToken, requireCalendarGenerator, async
                      -- Match 3: city name (most CDBHS legacy data; accent &
                      -- hyphen/space tolerant so "Châtillon" matches "Chatillon"
                      -- and "Bois-Colombes" matches "Bois Colombes").
+                     -- TRIM both sides — DB sometimes carries trailing whitespace.
                      (cl.city IS NOT NULL AND TRIM(cl.city) <> ''
-                      AND LOWER(REPLACE(TRANSLATE(COALESCE(t.lieu, ''),
-                                                  'ÂÊÎÔÛÄËÏÖÜÀÈÌÒÙÉÇâêîôûäëïöüàèìòùéç',
-                                                  'AEIOUAEIOUAEIOUECaeiouaeiouaeiouec'),
-                                        '-', ' '))
-                        = LOWER(REPLACE(TRANSLATE(cl.city,
-                                                  'ÂÊÎÔÛÄËÏÖÜÀÈÌÒÙÉÇâêîôûäëïöüàèìòùéç',
-                                                  'AEIOUAEIOUAEIOUECaeiouaeiouaeiouec'),
-                                        '-', ' ')))
+                      AND LOWER(TRIM(REPLACE(TRANSLATE(COALESCE(t.lieu, ''),
+                                                       'ÂÊÎÔÛÄËÏÖÜÀÈÌÒÙÉÇâêîôûäëïöüàèìòùéç',
+                                                       'AEIOUAEIOUAEIOUECaeiouaeiouaeiouec'),
+                                             '-', ' ')))
+                        = LOWER(TRIM(REPLACE(TRANSLATE(cl.city,
+                                                       'ÂÊÎÔÛÄËÏÖÜÀÈÌÒÙÉÇâêîôûäëïöüàèìòùéç',
+                                                       'AEIOUAEIOUAEIOUECaeiouaeiouaeiouec'),
+                                             '-', ' '))))
                    )
         WHERE t.organization_id = $1
           AND t.debut BETWEEN $2 AND $3
