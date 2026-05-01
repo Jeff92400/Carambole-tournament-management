@@ -1653,14 +1653,13 @@ router.post('/diag/:briefId/cleanup-orphan-duplicates',
       : `${brief.season.split('-')[1]}-06-30`;
 
     // Pull all ext rows in window with linkage state and counts.
+    // V 2.0.626 — `tournaments.tournoi_ext_id` does not exist in the
+    // schema; we rely on inscriptions count as the safety guard.
     const rows = await fetchAll(
       `SELECT t.tournoi_id, t.mode, t.categorie, t.tournament_number, t.debut, t.lieu,
               EXISTS(SELECT 1 FROM calendar_draft cd
                       WHERE cd.tournoi_ext_id = t.tournoi_id) AS is_linked,
-              (SELECT COUNT(*) FROM inscriptions i WHERE i.tournoi_id = t.tournoi_id) AS insc_count,
-              (SELECT COUNT(*) FROM tournament_results tr
-                 JOIN tournaments tt ON tt.id = tr.tournament_id
-                WHERE tt.tournoi_ext_id = t.tournoi_id) AS result_count
+              (SELECT COUNT(*) FROM inscriptions i WHERE i.tournoi_id = t.tournoi_id) AS insc_count
          FROM tournoi_ext t
         WHERE t.organization_id = $1 AND t.debut BETWEEN $2 AND $3`,
       [orgId, seasonStart, seasonEnd]
@@ -1700,11 +1699,10 @@ router.post('/diag/:briefId/cleanup-orphan-duplicates',
 
       for (const o of orphans) {
         const insc = parseInt(o.insc_count, 10) || 0;
-        const resu = parseInt(o.result_count, 10) || 0;
-        if (insc > 0 || resu > 0) {
+        if (insc > 0) {
           skipped.push({
             tournoi_id: o.tournoi_id, identity: key,
-            reason: 'has_player_data', insc, resu
+            reason: 'has_inscriptions', insc
           });
           continue;
         }
@@ -2598,12 +2596,13 @@ router.get('/publish/preview', authenticateToken, requireCalendarGenerator, requ
       // tournoi_ext has no `saison` column — we scope by debut date range
       // pulled from the brief (first_weekend / last_weekend, falling back
       // to a wide window when missing).
+      // V 2.0.626 — `tournaments.tournoi_ext_id` does not exist in the
+      // schema, so the previous result_count subquery always errored
+      // (silenced by .catch). We rely on inscriptions count for the
+      // sensitivity gate, same as /publish.
       const existing = await fetchOne(
         `SELECT t.tournoi_id,
-                (SELECT COUNT(*) FROM inscriptions i WHERE i.tournoi_id = t.tournoi_id) AS insc_count,
-                (SELECT COUNT(*) FROM tournament_results tr
-                   JOIN tournaments tt ON tt.id = tr.tournament_id
-                  WHERE tt.tournoi_ext_id = t.tournoi_id) AS result_count
+                (SELECT COUNT(*) FROM inscriptions i WHERE i.tournoi_id = t.tournoi_id) AS insc_count
            FROM tournoi_ext t
           WHERE t.organization_id = $1
             AND UPPER(t.mode) = UPPER($2)
@@ -2617,10 +2616,8 @@ router.get('/publish/preview', authenticateToken, requireCalendarGenerator, requ
       let existingId = null;
       if (existing) {
         existingId = existing.tournoi_id;
-        const r = parseInt(existing.result_count, 10) || 0;
         const i = parseInt(existing.insc_count, 10) || 0;
-        if (r > 0) classification = 'blocked';
-        else if (i > 0) classification = 'sensitive';
+        if (i > 0) classification = 'sensitive';
         else classification = 'safe'; // exists but empty → can be updated in place
       }
 
@@ -2746,37 +2743,50 @@ router.post('/publish', authenticateToken, requireCalendarGenerator, requireAdmi
       // earlier row as a phantom orphan. Falling back to identity-by-
       // window only when no back-link exists makes publish truly
       // idempotent across regenerate/republish cycles.
+      //
+      // V 2.0.626 — Removed the `tournament_results` count subquery.
+      // The schema has no `tournaments.tournoi_ext_id` column, so that
+      // join always errored and the surrounding `.catch(() => null)`
+      // silently returned null — meaning EVERY publish historically
+      // took the INSERT branch instead of UPDATE. That was the actual
+      // root cause of the phantom-duplicate accumulation in the demo
+      // calendar. We now rely on `inscriptions` count alone as the
+      // sensitivity guard, and surface query errors in logs instead
+      // of swallowing them.
       let existing = null;
+      const lookupErrors = [];
       if (!row._virtual && row.tournoi_ext_id) {
-        existing = await dbGet(
-          `SELECT t.tournoi_id,
-                  (SELECT COUNT(*) FROM inscriptions i WHERE i.tournoi_id = t.tournoi_id) AS insc_count,
-                  (SELECT COUNT(*) FROM tournament_results tr
-                     JOIN tournaments tt ON tt.id = tr.tournament_id
-                    WHERE tt.tournoi_ext_id = t.tournoi_id) AS result_count
-             FROM tournoi_ext t
-            WHERE t.tournoi_id = $1 AND t.organization_id = $2`,
-          [row.tournoi_ext_id, orgId]
-        ).catch(() => null);
+        try {
+          existing = await dbGet(
+            `SELECT t.tournoi_id,
+                    (SELECT COUNT(*) FROM inscriptions i WHERE i.tournoi_id = t.tournoi_id) AS insc_count
+               FROM tournoi_ext t
+              WHERE t.tournoi_id = $1 AND t.organization_id = $2`,
+            [row.tournoi_ext_id, orgId]
+          );
+        } catch (e) { lookupErrors.push(`backlink: ${e.message}`); }
       }
       if (!existing) {
-        existing = await dbGet(
-          `SELECT t.tournoi_id,
-                  (SELECT COUNT(*) FROM inscriptions i WHERE i.tournoi_id = t.tournoi_id) AS insc_count,
-                  (SELECT COUNT(*) FROM tournament_results tr
-                     JOIN tournaments tt ON tt.id = tr.tournament_id
-                    WHERE tt.tournoi_ext_id = t.tournoi_id) AS result_count
-             FROM tournoi_ext t
-            WHERE t.organization_id = $1
-              AND UPPER(t.mode) = UPPER($2)
-              AND UPPER(t.categorie) = UPPER($3)
-              AND t.tournament_number = $4
-              AND t.debut BETWEEN $5 AND $6`,
-          [orgId, mode, categorie, tnum, seasonStart, seasonEnd]
-        ).catch(() => null);
+        try {
+          existing = await dbGet(
+            `SELECT t.tournoi_id,
+                    (SELECT COUNT(*) FROM inscriptions i WHERE i.tournoi_id = t.tournoi_id) AS insc_count
+               FROM tournoi_ext t
+              WHERE t.organization_id = $1
+                AND UPPER(t.mode) = UPPER($2)
+                AND UPPER(t.categorie) = UPPER($3)
+                AND t.tournament_number = $4
+                AND t.debut BETWEEN $5 AND $6`,
+            [orgId, mode, categorie, tnum, seasonStart, seasonEnd]
+          );
+        } catch (e) { lookupErrors.push(`identity: ${e.message}`); }
+      }
+      if (lookupErrors.length) {
+        console.warn('[calendar-generator] /publish lookup warnings:', lookupErrors);
       }
 
-      const hasResults = existing ? (parseInt(existing.result_count, 10) || 0) > 0 : false;
+      const hasResults = false;  // No reliable link from results → tournoi_ext;
+                                  // sensitivity gate is inscriptions-only now.
       const hasInsc    = existing ? (parseInt(existing.insc_count, 10) || 0) > 0 : false;
 
       if (existing && hasResults) {
