@@ -1400,20 +1400,43 @@
       });
     })();
 
+    // V 2.0.619 — Case-insensitive match between a free-text DB value
+    // and the <option> values in a <select>. Returns the option's
+    // exact value (preserving its case) if found; otherwise the
+    // raw value or an empty string. Prevents the bug where
+    // "Libre" in the DB silently fails to match an "LIBRE" option
+    // and leaves the dropdown blank.
+    function matchOptionValue(selectId, raw) {
+      const sel = document.getElementById(selectId);
+      if (!sel) return raw || '';
+      const target = String(raw || '').trim().toUpperCase();
+      if (!target) return '';
+      for (const opt of sel.options) {
+        if (String(opt.value).trim().toUpperCase() === target) return opt.value;
+      }
+      return raw || '';
+    }
+
     // Open edit modal
     function openEditModal(tournoi) {
       document.getElementById('edit_tournoi_id').value = tournoi.tournoi_id;
       document.getElementById('edit_nom').value = tournoi.nom || '';
-      document.getElementById('edit_mode').value = tournoi.mode || 'LIBRE';
+      // V 2.0.619 — mode dropdown options are UPPERCASE; the DB value
+      // can be mixed case ("Libre") so we do a case-insensitive match.
+      document.getElementById('edit_mode').value = matchOptionValue('edit_mode', tournoi.mode || 'LIBRE');
 
-      // Update category dropdown based on selected mode
+      // Update category dropdown based on selected mode, then prefill
+      // category with case-insensitive matching.
       updateCategorieDropdown('edit_mode', 'edit_categorie');
-      document.getElementById('edit_categorie').value = tournoi.categorie || '';
+      document.getElementById('edit_categorie').value = matchOptionValue('edit_categorie', tournoi.categorie || '');
 
       const debutVal = tournoi.debut ? tournoi.debut.split('T')[0] : '';
       document.getElementById('edit_debut').value = debutVal;
-      document.getElementById('edit_lieu').value = tournoi.lieu || '';
-      document.getElementById('edit_lieu_2').value = tournoi.lieu_2 || '';
+      // V 2.0.619 — lieu is a free-text DB column matched against
+      // clubs.display_name options. Use the same case-insensitive
+      // matcher so "cercle billard neuilly" → "Cercle Billard Neuilly".
+      document.getElementById('edit_lieu').value = matchOptionValue('edit_lieu', tournoi.lieu || '');
+      document.getElementById('edit_lieu_2').value = matchOptionValue('edit_lieu_2', tournoi.lieu_2 || '');
       document.getElementById('edit_tournament_number').value = tournoi.tournament_number || '';
       document.getElementById('edit_taille').value = tournoi.taille || '';
       document.getElementById('edit_taille_cadre').value = tournoi.taille_cadre || '';
