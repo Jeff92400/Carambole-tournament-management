@@ -261,20 +261,46 @@
     }
     .toggle-custom-rules:hover { background: #f3eefb; }
 
-    /* V 2.0.612 (rev) — print mode: when the user clicks "🖨️ Imprimer / PDF"
-       a clone of the published grid is moved to body > #calendarPrintRoot.
-       In print, every body child is hidden except that one. This avoids
-       fighting per-page step IDs and keeps the print output clean. */
+    /* V 2.0.615 — print mode: clone the grid into a print root at <body>
+       level, then hide every sibling. Force A3 landscape with tight
+       margins so the ~40-column grid fits on a single sheet. */
     #calendarPrintRoot { display: none; }
+    @page {
+      size: A3 landscape;
+      margin: 8mm;
+    }
     @media print {
       body.printing-published > *:not(#calendarPrintRoot) { display: none !important; }
       body.printing-published > #calendarPrintRoot {
         display: block !important;
-        padding: 12px !important;
+        padding: 0 !important;
       }
       body.printing-published #calendarPrintRoot button { display: none !important; }
+      body.printing-published #calendarPrintRoot > div:first-child {
+        /* "Lecture seule" banner is the first child of viewPublished —
+           hide it for print since the title block already says what
+           the user is looking at. */
+        display: none !important;
+      }
+      body.printing-published #calendarPrintRoot {
+        background: white !important;
+      }
+      body.printing-published #calendarPrintRoot table {
+        font-size: 8.5pt !important;
+        page-break-inside: avoid;
+        width: 100% !important;
+      }
+      body.printing-published #calendarPrintRoot th,
+      body.printing-published #calendarPrintRoot td {
+        padding: 2px 3px !important;
+      }
+      /* Remove the inner "overflow-x: auto" wrapper height limit so the
+         grid renders on one page rather than scrolling out. */
+      body.printing-published #calendarPrintRoot div[style*="overflow-x"] {
+        overflow: visible !important;
+        max-width: 100% !important;
+      }
       body.printing-published { background: white !important; }
-      body.printing-published table { page-break-inside: avoid; }
       * {
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
@@ -2843,11 +2869,27 @@
           const root = document.createElement('div');
           root.id = 'calendarPrintRoot';
           // Title block above the grid (helpful when posted/printed).
-          const orgEl = document.querySelector('#app-org-name');
-          const orgLabel = orgEl ? orgEl.textContent.trim() : '';
+          // V 2.0.615 — read ONLY the org short name, not the subtitle /
+          // page-title spans that app-branding.js injects inside
+          // #app-org-name.
+          const cleanOrgName = (() => {
+            if (typeof window.APP_ORG_SHORT_NAME === 'string' && window.APP_ORG_SHORT_NAME.trim()) {
+              return window.APP_ORG_SHORT_NAME.trim();
+            }
+            const el = document.querySelector('#app-org-name');
+            if (!el) return '';
+            // Grab the first text node only, before any injected child spans.
+            for (const node of el.childNodes) {
+              if (node.nodeType === Node.TEXT_NODE) {
+                const t = (node.nodeValue || '').trim();
+                if (t) return t;
+              }
+            }
+            return '';
+          })();
           const seasonLabel = (currentBrief && currentBrief.season) || '';
           const titleHtml = `<div style="font-size: 18px; font-weight: 700; color: #6b3aa3; margin-bottom: 10px; text-align: center;">
-            Calendrier ${escapeHtml(seasonLabel)}${orgLabel ? ' — ' + escapeHtml(orgLabel) : ''}
+            Calendrier ${escapeHtml(seasonLabel)}${cleanOrgName ? ' — ' + escapeHtml(cleanOrgName) : ''}
           </div>`;
           root.innerHTML = titleHtml;
           // Move the grid (clone, so the live view keeps its handlers).
