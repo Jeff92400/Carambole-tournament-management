@@ -759,6 +759,17 @@
       });
 
       const select = document.getElementById('seasonFilter');
+      const previousValue = select.value; // remember user's manual selection
+      // V 2.0.622 — CLEAR existing options before appending. Without
+      // this, repeated calls (after edit, after re-load) accumulated
+      // stale season options that no longer matched any data — the
+      // dropdown still showed "Saison 2025-2026" even when the current
+      // data had no 2025-2026 rows, and the filter then silently
+      // skipped (line below) leaving the unfiltered displayTournois
+      // call from loadTournois() in place. Result: the table leaked
+      // 2027 tournaments while the dropdown said 2025-2026.
+      select.innerHTML = '<option value="">Toutes les saisons</option>';
+
       // Only show current season and future seasons (not past)
       const sortedSeasons = Array.from(seasons)
         .filter(season => season >= currentSeason)
@@ -771,12 +782,22 @@
         select.appendChild(option);
       });
 
-      // Select current season by default
-
-      if (sortedSeasons.includes(currentSeason)) {
+      // V 2.0.622 — restore user's selection if still valid, otherwise
+      // fall back to current season (if present) or "Toutes les saisons".
+      if (previousValue && [...select.options].some(o => o.value === previousValue)) {
+        select.value = previousValue;
+      } else if (sortedSeasons.includes(currentSeason)) {
         select.value = currentSeason;
-        applyFilters();
+      } else {
+        select.value = '';
       }
+
+      // V 2.0.622 — ALWAYS apply filters after re-populating so the
+      // table reflects the dropdown's actual value (previously this
+      // call was guarded by `if (sortedSeasons.includes(currentSeason))`,
+      // which silently skipped filtering whenever the current season
+      // wasn't represented in the data).
+      applyFilters();
     }
 
     // Populate categorie filter
