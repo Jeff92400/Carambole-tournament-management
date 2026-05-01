@@ -1134,11 +1134,16 @@ router.get('/draft', authenticateToken, requireCalendarGenerator, (req, res) => 
   if (!briefId) return res.status(400).json({ error: 'brief_id requis' });
 
   db.all(
-    `SELECT cd.id, cd.weekend_date, cd.tournament_type, cd.host_club_id,
+    // V 2.0.631 — also expose host_color / host_abbrev / host_code so
+    // the wizard's editable view matches the published view's styling.
+    `SELECT cd.id, cd.weekend_date, cd.tournament_type, cd.host_club_id AS host_id,
             cd.locked_by_user, cd.manual_comment, cd.modified_at, cd.created_at,
             cd.category_id,
             c.display_name AS category_label, c.game_type, c.level,
-            cl.display_name AS host_name
+            cl.display_name AS host_name,
+            cl.calendar_color  AS host_color,
+            cl.calendar_abbrev AS host_abbrev,
+            cl.calendar_code   AS host_code
      FROM calendar_draft cd
      JOIN calendar_brief cb ON cb.id = cd.brief_id
      LEFT JOIN categories c ON c.id = cd.category_id
@@ -1212,6 +1217,11 @@ router.get('/published-grid', authenticateToken, requireCalendarGenerator, async
       : `${brief.season.split('-')[1]}-12-31`;
 
     // Pull all tournoi_ext rows for this org in the season window.
+    // V 2.0.631 — strip the trailing "(City)" suffix from t.lieu before
+    // joining on clubs.display_name. The publish step writes lieu as
+    // "ClubName (CityName)" but display_name is just "ClubName".
+    // Also pulls calendar_color / calendar_abbrev / calendar_code so
+    // the frontend can colour the cells per host club.
     const rows = await fetchAll(
       `SELECT t.tournoi_id, t.nom, t.mode, t.categorie, t.debut, t.lieu,
               t.tournament_number,
@@ -1219,14 +1229,18 @@ router.get('/published-grid', authenticateToken, requireCalendarGenerator, async
               c.display_name AS category_label,
               c.game_type, c.level,
               cl.id  AS host_id,
-              cl.display_name AS host_name
+              cl.display_name AS host_name,
+              cl.calendar_color AS host_color,
+              cl.calendar_abbrev AS host_abbrev,
+              cl.calendar_code   AS host_code
          FROM tournoi_ext t
          LEFT JOIN categories c
                 ON UPPER(c.game_type) = UPPER(t.mode)
                AND UPPER(c.level)     = UPPER(t.categorie)
                AND c.organization_id = t.organization_id
          LEFT JOIN clubs cl
-                ON UPPER(TRIM(cl.display_name)) = UPPER(TRIM(t.lieu))
+                ON UPPER(TRIM(cl.display_name)) =
+                   UPPER(TRIM(REGEXP_REPLACE(COALESCE(t.lieu, ''), '\\s*\\([^)]*\\)\\s*$', '')))
                AND cl.organization_id = t.organization_id
         WHERE t.organization_id = $1
           AND t.debut BETWEEN $2 AND $3
@@ -1251,6 +1265,9 @@ router.get('/published-grid', authenticateToken, requireCalendarGenerator, async
           tournament_type: ttype,
           host_id: isLF ? null : r.host_id,
           host_name: isLF ? 'Ligue' : (r.host_name || r.lieu || null),
+          host_color: isLF ? null : (r.host_color || null),
+          host_abbrev: isLF ? null : (r.host_abbrev || null),
+          host_code:   isLF ? null : (r.host_code   || null),
           tournoi_ext_id: r.tournoi_id,
           _draft_id: null,        // never editable in this view
           _locked: false,

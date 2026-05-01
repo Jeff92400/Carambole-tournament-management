@@ -293,15 +293,26 @@
           </td>`;
         }
 
-        const bg = roundCellBg(p.tournament_type);
+        // V 2.0.631 — host-club styling: cell background = clubs.calendar_color
+        // (falls back to the round-type pastel), left border = round colour
+        // (so T1/T2/T3/F is still recognisable), abbreviation = clubs.calendar_abbrev
+        // → calendar_code → first-letters auto-fallback. This disambiguates
+        // clubs whose names start with the same letter (Clamart/Clichy/Courbevoie).
+        const roundBg = roundCellBg(p.tournament_type);
+        const cellBg  = (p.host_color && p.host_color !== '') ? p.host_color : roundBg;
+        const roundCol= roundColour(p.tournament_type);
+        const roundBorder = `border-left: 4px solid ${ROUND_COLOURS[roundKey(p.tournament_type)]?.border || roundCol};`;
+        const hostAbbrev = (p.host_abbrev && String(p.host_abbrev).trim())
+          ? String(p.host_abbrev).trim()
+          : (p.host_code || abbreviateHost(p.host_name) || (p.host_id == null ? 'TBD' : ''));
         const lockedRing = p._locked ? 'box-shadow: inset 0 0 0 2px #c47b00;' : '';
         const editable = p._draft_id ? 'cursor: pointer;' : '';
         const tip = `${categoryName(c)} ${p.tournament_type}\n${fmtDateFR(p.qualif_date || p.final_date || p.weekend_date)}\n${p.host_name || 'TBD'}${p._comment ? '\n💬 ' + p._comment : ''}${p._draft_id ? '\n(clic pour modifier)' : ''}`;
         const lockIcon = p._locked ? '🔒 ' : '';
         const commentIcon = p._comment ? '💬' : '';
-        return `<td class="cv-cell-editable" data-draft-id="${p._draft_id || ''}" data-cat-id="${c.id}" style="padding: 4px 6px; background: ${bg}; text-align: center; font-size: 11px; ${lockedRing} ${leftBorder} ${editable}" title="${escapeHtml(tip)}">
-          <div style="font-weight: 800; font-size: 12px; color: ${roundColour(p.tournament_type)}; line-height: 1.1;">${lockIcon}${roundLabel(p.tournament_type)}${commentIcon}</div>
-          <div style="font-size: 9px; color: #444; font-weight: 600; margin-top: 2px;">${escapeHtml(abbreviateHost(p.host_name) || (p.host_id == null ? 'TBD' : ''))}</div>
+        return `<td class="cv-cell-editable" data-draft-id="${p._draft_id || ''}" data-cat-id="${c.id}" style="padding: 4px 6px; background: ${cellBg}; ${roundBorder} text-align: center; font-size: 11px; ${lockedRing} ${leftBorder} ${editable}" title="${escapeHtml(tip)}">
+          <div style="font-weight: 800; font-size: 12px; color: ${roundCol}; line-height: 1.1;">${lockIcon}${roundLabel(p.tournament_type)}${commentIcon}</div>
+          <div style="font-size: 9px; color: #444; font-weight: 600; margin-top: 2px;">${escapeHtml(hostAbbrev)}</div>
         </td>`;
       }).join('');
       return `<tr style="${rowBorder}"><td style="padding: 6px 10px; font-weight: 600; position: sticky; left: 0; background: #fff; z-index: 1; border-right: 2px solid #ccc; ${rowBorder}">${escapeHtml(categoryName(c))}</td>${cells}</tr>`;
