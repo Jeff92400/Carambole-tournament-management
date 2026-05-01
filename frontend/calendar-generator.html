@@ -2327,6 +2327,27 @@
       return out;
     }
 
+    // V 2.0.614 — month parity map. For each weekend ISO date, returns
+    // 0 or 1 alternating with each new month — used to tint columns
+    // alternately so month boundaries pop visually (matches the
+    // legacy CDBHS XL).
+    function buildMonthParityMap(weekends) {
+      const map = {};
+      let parity = 0;
+      let lastKey = null;
+      (weekends || []).forEach(we => {
+        const d = new Date(we + 'T00:00:00Z');
+        const k = `${d.getUTCFullYear()}-${d.getUTCMonth()}`;
+        if (lastKey !== null && k !== lastKey) parity = 1 - parity;
+        lastKey = k;
+        map[we] = parity;
+      });
+      return map;
+    }
+    // Pastel monthly tints applied ONLY to empty cells. Light enough to
+    // not steal attention from the round-coloured cells.
+    const MONTH_TINTS = ['#ffffff', '#f0ecf6'];
+
     // Resolve the season window for the column axis. Prefers the
     // brief's first_weekend / last_weekend; falls back to Sept 1 →
     // June 30 of the brief's season string. If everything is missing
@@ -2439,7 +2460,7 @@
         const d = new Date(we + 'T00:00:00Z');
         const prev = i > 0 ? new Date(weekends[i - 1] + 'T00:00:00Z') : null;
         const monthChange = prev && prev.getUTCMonth() !== d.getUTCMonth();
-        const leftBorder = monthChange ? 'border-left: 2px solid #5a3094;' : '';
+        const leftBorder = monthChange ? 'border-left: 3px solid #5a3094;' : '';
         return `<th style="padding: 3px 6px; font-size: 11px; min-width: 56px; white-space: nowrap; background: #6b3aa3; color: white; ${leftBorder}"><span style="opacity: 0.7; font-weight: 500;">S</span> ${String(d.getUTCDate()).padStart(2,'0')}</th>`;
       }).join('');
       const sunRow = weekends.map((we, i) => {
@@ -2448,10 +2469,12 @@
         const prev = i > 0 ? new Date(weekends[i - 1] + 'T00:00:00Z') : null;
         const sat = new Date(weekends[i] + 'T00:00:00Z');
         const monthChange = prev && prev.getUTCMonth() !== sat.getUTCMonth();
-        const leftBorder = monthChange ? 'border-left: 2px solid #5a3094;' : '';
+        const leftBorder = monthChange ? 'border-left: 3px solid #5a3094;' : '';
         return `<th style="padding: 3px 6px; font-size: 11px; min-width: 56px; white-space: nowrap; background: #7d52b8; color: white; font-weight: 500; ${leftBorder}"><span style="opacity: 0.7;">D</span> ${String(d.getUTCDate()).padStart(2,'0')}</th>`;
       }).join('');
 
+      // V 2.0.614 — month parity for alternating column tints.
+      const monthParityMap = buildMonthParityMap(weekends);
       let prevMode = null;
       const rows = cats.map((c, ci) => {
         const curMode = c.game_type || c.mode || '';
@@ -2468,9 +2491,11 @@
           const prev = i > 0 ? new Date(weekends[i - 1] + 'T00:00:00Z') : null;
           const cur = new Date(we + 'T00:00:00Z');
           const monthChange = prev && prev.getUTCMonth() !== cur.getUTCMonth();
-          const leftBorder = monthChange ? 'border-left: 2px solid #5a3094;' : '';
+          // V 2.0.614 — stronger month divider (was 2px → 3px).
+          const leftBorder = monthChange ? 'border-left: 3px solid #5a3094;' : '';
+          const monthBg = MONTH_TINTS[monthParityMap[we] || 0];
           const p = grid[c.id]?.[we];
-          if (!p) return `<td style="padding: 4px 6px; background: #fafafa; ${leftBorder}"></td>`;
+          if (!p) return `<td style="padding: 4px 6px; background: ${monthBg}; ${leftBorder}"></td>`;
 
           // Ligue final: distinct visual treatment — orange accent,
           // FL label, no host. Not editable.
@@ -2700,7 +2725,7 @@
         const d = new Date(we + 'T00:00:00Z');
         const prev = i > 0 ? new Date(weekends[i - 1] + 'T00:00:00Z') : null;
         const monthChange = prev && prev.getUTCMonth() !== d.getUTCMonth();
-        const leftBorder = monthChange ? 'border-left: 2px solid #5a3094;' : '';
+        const leftBorder = monthChange ? 'border-left: 3px solid #5a3094;' : '';
         return `<th style="padding: 3px 6px; font-size: 11px; min-width: 56px; white-space: nowrap; background: #6b3aa3; color: white; ${leftBorder}"><span style="opacity: 0.7; font-weight: 500;">S</span> ${String(d.getUTCDate()).padStart(2,'0')}</th>`;
       }).join('');
       const sunRow = weekends.map((we, i) => {
@@ -2709,10 +2734,12 @@
         const prev = i > 0 ? new Date(weekends[i - 1] + 'T00:00:00Z') : null;
         const sat = new Date(weekends[i] + 'T00:00:00Z');
         const monthChange = prev && prev.getUTCMonth() !== sat.getUTCMonth();
-        const leftBorder = monthChange ? 'border-left: 2px solid #5a3094;' : '';
+        const leftBorder = monthChange ? 'border-left: 3px solid #5a3094;' : '';
         return `<th style="padding: 3px 6px; font-size: 11px; min-width: 56px; white-space: nowrap; background: #7d52b8; color: white; font-weight: 500; ${leftBorder}"><span style="opacity: 0.7;">D</span> ${String(d.getUTCDate()).padStart(2,'0')}</th>`;
       }).join('');
 
+      // V 2.0.614 — month parity for alternating column tints.
+      const monthParityMapP = buildMonthParityMap(weekends);
       let prevModeP = null;
       const rows = cats.map((c, ci) => {
         const curMode = c.game_type || c.mode || '';
@@ -2725,9 +2752,10 @@
           const prev = i > 0 ? new Date(weekends[i - 1] + 'T00:00:00Z') : null;
           const cur = new Date(we + 'T00:00:00Z');
           const monthChange = prev && prev.getUTCMonth() !== cur.getUTCMonth();
-          const leftBorder = monthChange ? 'border-left: 2px solid #5a3094;' : '';
+          const leftBorder = monthChange ? 'border-left: 3px solid #5a3094;' : '';
+          const monthBg = MONTH_TINTS[monthParityMapP[we] || 0];
           const p = grid[c.id]?.[we];
-          if (!p) return `<td style="padding: 4px 6px; background: #fafafa; ${leftBorder}"></td>`;
+          if (!p) return `<td style="padding: 4px 6px; background: ${monthBg}; ${leftBorder}"></td>`;
 
           if (p._is_ligue_final) {
             const tipLF = `Finale Ligue ${c.name || c.display_name}\n${fmtDateFR(p.weekend_date)}\nLieu : TBD (à renseigner par la Ligue)`;

@@ -1560,6 +1560,29 @@ router.get('/draft/export', authenticateToken, requireCalendarGenerator, async (
       c.border = ALL_BORDERS;
     }
 
+    // V 2.0.614 — Per-weekend month parity + left-border flag for the
+    // first column of each new month. Drives alternating column tints
+    // and stronger month dividers throughout the grid (matches the
+    // HTML view and the legacy CDBHS XL).
+    const monthParity = {};
+    const newMonth = {};
+    {
+      let parity = 0;
+      let lastKey = null;
+      weekends.forEach((we, i) => {
+        const d = new Date(we + 'T00:00:00Z');
+        const k = `${d.getUTCFullYear()}-${d.getUTCMonth()}`;
+        const isNew = lastKey !== null && k !== lastKey;
+        if (isNew) parity = 1 - parity;
+        lastKey = k;
+        monthParity[we] = parity;
+        newMonth[i] = isNew;
+      });
+    }
+    const MONTH_TINT_A = 'FFFFFFFF'; // white
+    const MONTH_TINT_B = 'FFF0ECF6'; // very light purple
+    const BORDER_MONTH = { style: 'medium', color: { argb: 'FF5A3094' } };
+
     // V 2.0.612 — Row 3: Saturday dates ("S NN"), Row 4: Sunday dates ("D NN").
     // The "Catégorie" label spans rows 3+4 on the left.
     ws.mergeCells(3, 1, 4, 1);
@@ -1578,19 +1601,24 @@ router.get('/draft/export', authenticateToken, requireCalendarGenerator, async (
       const sat = new Date(we + 'T00:00:00Z');
       const sun = new Date(sat); sun.setUTCDate(sat.getUTCDate() + 1);
 
+      // V 2.0.614 — first-of-month columns get a thick purple left border.
+      const headerBorder = newMonth[idx]
+        ? { ...ALL_BORDERS, left: BORDER_MONTH }
+        : ALL_BORDERS;
+
       const cSat = ws.getCell(3, col);
       cSat.value = `S ${String(sat.getUTCDate()).padStart(2, '0')}`;
       cSat.font = { bold: true, color: { argb: HEADER_TEXT_COLOR }, size: 10 };
       cSat.alignment = { horizontal: 'center', vertical: 'middle' };
       cSat.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: HEADER_BG } };
-      cSat.border = ALL_BORDERS;
+      cSat.border = headerBorder;
 
       const cSun = ws.getCell(4, col);
       cSun.value = `D ${String(sun.getUTCDate()).padStart(2, '0')}`;
       cSun.font = { color: { argb: HEADER_TEXT_COLOR }, size: 10 };
       cSun.alignment = { horizontal: 'center', vertical: 'middle' };
       cSun.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: HEADER_BG_LIGHT } };
-      cSun.border = ALL_BORDERS;
+      cSun.border = headerBorder;
     });
 
     // Column widths
@@ -1622,7 +1650,11 @@ router.get('/draft/export', authenticateToken, requireCalendarGenerator, async (
         const col = idx + 2;
         const cell = r.getCell(col);
         const placement = grid[c.id]?.[we];
-        cell.border = rowBorders;
+        // V 2.0.614 — first-of-month columns get a thick purple left border;
+        // also keep mode-change bottom borders.
+        cell.border = newMonth[idx]
+          ? { ...rowBorders, left: BORDER_MONTH }
+          : rowBorders;
         if (placement) {
           const typeLabel = placement.type;
           let hostAbbr = '';
@@ -1640,7 +1672,9 @@ router.get('/draft/export', authenticateToken, requireCalendarGenerator, async (
             cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: TYPE_COLORS[typeLabel] } };
           }
         } else {
-          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFFFF' } };
+          // Alternating monthly tint for empty cells.
+          const tint = monthParity[we] === 1 ? MONTH_TINT_B : MONTH_TINT_A;
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: tint } };
         }
       });
     });
