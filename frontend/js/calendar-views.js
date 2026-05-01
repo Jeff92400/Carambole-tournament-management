@@ -1,22 +1,37 @@
-// calendar-views.js — shared rendering for the 3 calendar views (Seasonal / Compact / Hosts)
+// calendar-views.js — shared rendering for the calendar views (Seasonal / Compact / Hosts)
 // Used by calendar-generator.html (Step 3) and calendar.html (calendar hub).
 //
-// Public API:
-//   CalendarViews.render(containers, result, referenceData)
-//     containers = { seasonal: el, compact: el, hosts: el, viewSelector: el? }
-//     result     = { placements: [...], conflicts?, stats? }
-//     referenceData = { categories: [{id, mode|game_type, level, display_name|name}] }
-//   CalendarViews.switchView(containers, viewName)
-//   CalendarViews.escapeHtml(s)
-//   CalendarViews.fmtDateFR(iso)
+// V 2.0.616 — Seasonal view fully aligned with the wizard's Saison-publiée look:
+//   round-coloured cells (T1/T2/T3/F/FL pastel + matching dark accent text),
+//   full season enumeration (every Saturday Sept→June),
+//   Sat/Sun dual rows ("S NN" / "D NN"),
+//   alternating monthly column tints + 3px purple month dividers,
+//   thin row dividers (1px) between same-mode levels, thick (2px) on mode change,
+//   filled round-legend pills + textual host abbreviation list.
 //
-// Cells with a `_draft_id` field on the placement are flagged editable
-// (the consumer wires the click handler via `containers.onCellClick`).
+// Public API:
+//   CalendarViews.render(containers, result, referenceData, opts)
+//     containers = { seasonal, compact, hosts, viewSelector? }
+//     result     = { placements: [...], conflicts?, brief? }
+//     referenceData = { categories: [{id, mode|game_type, level, display_name|name}] }
+//     opts       = { showEditHint, onCellClick }
+//   CalendarViews.switchView(containers, viewName)
 
 (function () {
   const MODE_DISPLAY_ORDER = ['Libre', 'Cadre', 'Bande', '3 Bandes'];
   const LEVEL_DISPLAY_RANK = { N1: 1, N2: 2, N3: 3, R1: 4, R2: 5, R3: 6, R4: 7, R5: 8, D1: 9, D2: 10, D3: 11, NC: 99 };
-  const HOST_PALETTE = ['#fce4d6', '#d9e1f2', '#e2efda', '#fff2cc', '#e4dfec', '#ddebf7', '#fce4d6', '#e7e6e6'];
+
+  // Round-type palette (cell bg / border / accent text). Mirrors the
+  // wizard exactly so the two visual tracks stay in sync.
+  const ROUND_COLOURS = {
+    T1: { bg: '#d4edda', border: '#7bc596', text: '#1b5e20' },
+    T2: { bg: '#d4e6f7', border: '#7fb3e0', text: '#0d47a1' },
+    T3: { bg: '#fce4d3', border: '#e8a877', text: '#bf360c' },
+    F:  { bg: '#e6dcf2', border: '#b39bd9', text: '#4a148c' },
+    FL: { bg: 'repeating-linear-gradient(135deg, #fff4e0, #fff4e0 6px, #ffe5b8 6px, #ffe5b8 12px)',
+          border: '#c47b00', text: '#8a4a00' }
+  };
+  const MONTH_TINTS = ['#ffffff', '#f0ecf6'];
 
   function escapeHtml(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -41,20 +56,109 @@
     if (w.length === 1) return w[0].slice(0, 4).toUpperCase();
     return w.map(x => x[0]).join('').slice(0, 5).toUpperCase();
   }
-  function buildHostColorMap(placements) {
-    const map = new Map();
-    placements.forEach(p => {
-      if (p.host_id && !map.has(p.host_id)) {
-        map.set(p.host_id, HOST_PALETTE[map.size % HOST_PALETTE.length]);
-      }
-    });
-    return map;
-  }
-
   function categoryName(c) {
     return c?.name || c?.display_name || '';
   }
 
+  // Round helpers — handle the `Finale` / `LIGUE_FINALE` aliases.
+  function roundKey(t) {
+    if (!t) return null;
+    if (t === 'LIGUE_FINALE') return 'FL';
+    if (t === 'Finale')       return 'F';
+    return t;
+  }
+  function roundCellBg(t)     { const k = roundKey(t); return (k && ROUND_COLOURS[k]) ? ROUND_COLOURS[k].bg : '#fff'; }
+  function roundColour(t)     { const k = roundKey(t); return (k && ROUND_COLOURS[k]) ? ROUND_COLOURS[k].text : '#222'; }
+  function roundLabel(t)      { return roundKey(t) || ''; }
+
+  // Enumerate every Saturday between two ISO dates (inclusive).
+  function enumerateSaturdays(startISO, endISO) {
+    if (!startISO || !endISO) return [];
+    const start = new Date(startISO + 'T00:00:00Z');
+    const end   = new Date(endISO   + 'T00:00:00Z');
+    if (isNaN(start) || isNaN(end) || start > end) return [];
+    const cur = new Date(start);
+    while (cur.getUTCDay() !== 6) cur.setUTCDate(cur.getUTCDate() + 1);
+    const out = [];
+    while (cur <= end) {
+      out.push(cur.toISOString().slice(0, 10));
+      cur.setUTCDate(cur.getUTCDate() + 7);
+    }
+    return out;
+  }
+
+  // Resolve the season window for the column axis. Prefers brief dates;
+  // falls back to Sept 1 → June 30 of the season inferred from the
+  // earliest placement; final fallback is the union of placement dates.
+  function resolveSeasonWindow(brief, placements) {
+    const dates = [...new Set((placements || []).map(p => p.weekend_date).filter(Boolean))].sort();
+    let start = brief && brief.first_weekend ? String(brief.first_weekend).slice(0, 10) : null;
+    let end   = brief && brief.last_weekend  ? String(brief.last_weekend).slice(0, 10)  : null;
+    if (!start || !end) {
+      let y1 = null;
+      if (brief && brief.season) {
+        const m = String(brief.season).match(/^(\d{4})-(\d{4})$/);
+        if (m) y1 = parseInt(m[1], 10);
+      }
+      if (y1 == null && dates.length) {
+        const first = new Date(dates[0] + 'T00:00:00Z');
+        y1 = first.getUTCMonth() >= 8 ? first.getUTCFullYear() : first.getUTCFullYear() - 1;
+      }
+      if (y1 != null) {
+        if (!start) start = `${y1}-09-01`;
+        if (!end)   end   = `${y1 + 1}-06-30`;
+      }
+    }
+    if (!start && dates.length) start = dates[0];
+    if (!end   && dates.length) end   = dates[dates.length - 1];
+    return { start, end };
+  }
+
+  // Map each weekend ISO → 0/1 alternating with each new month.
+  function buildMonthParityMap(weekends) {
+    const map = {};
+    let parity = 0;
+    let lastKey = null;
+    (weekends || []).forEach(we => {
+      const d = new Date(we + 'T00:00:00Z');
+      const k = `${d.getUTCFullYear()}-${d.getUTCMonth()}`;
+      if (lastKey !== null && k !== lastKey) parity = 1 - parity;
+      lastKey = k;
+      map[we] = parity;
+    });
+    return map;
+  }
+
+  function renderRoundLegend(includeFL) {
+    const pill = (key, label) => {
+      const c = ROUND_COLOURS[key];
+      return `<span style="display:inline-block; padding: 4px 12px; border-radius: 14px; font-size: 12px; font-weight: 800; margin: 0 4px 4px 0; color: ${c.text}; border: 1.5px solid ${c.border}; background: ${c.bg};">${label}</span>`;
+    };
+    let html = '';
+    html += pill('T1', 'T1 &nbsp;Tournoi 1');
+    html += pill('T2', 'T2 &nbsp;Tournoi 2');
+    html += pill('T3', 'T3 &nbsp;Tournoi 3');
+    html += pill('F',  'F &nbsp;&nbsp;Finale');
+    if (includeFL) html += pill('FL', 'FL &nbsp;Finale Ligue');
+    return html;
+  }
+
+  function renderHostLegendText(placements) {
+    const seen = new Map();
+    (placements || []).forEach(p => {
+      if (!p.host_name || p._is_ligue_final) return;
+      const ab = abbreviateHost(p.host_name);
+      if (ab && !seen.has(ab)) seen.set(ab, p.host_name);
+    });
+    if (seen.size === 0) return '<span style="font-size: 12px; color: #888; font-style: italic;">Aucun club hôte renseigné.</span>';
+    return [...seen.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([ab, name]) =>
+        `<span style="display:inline-block; padding: 3px 8px; border-radius: 4px; font-size: 12px; margin: 0 6px 4px 0; background: #f4f1fa; border: 1px solid #dcd4ec; color: #3a2e5e;"><strong>${escapeHtml(ab)}</strong> = ${escapeHtml(name)}</span>`
+      ).join('');
+  }
+
+  // ---------- Vue Compacte (unchanged) ----------
   function renderViewCompact(container, result, referenceData) {
     const byCatType = {};
     result.placements.forEach(p => {
@@ -94,9 +198,10 @@
     `;
   }
 
+  // ---------- Vue Calendrier (V 2.0.616 — poster-quality) ----------
   function renderViewSeasonal(container, result, referenceData, opts = {}) {
-    const colors = buildHostColorMap(result.placements);
-    const allCatIds = new Set(result.placements.map(p => p.category_id));
+    const placements = result.placements || [];
+    const allCatIds = new Set(placements.map(p => p.category_id));
     const cats = (referenceData.categories || []).filter(c => allCatIds.has(c.id));
     cats.sort((a, b) => {
       const ma = dispModeRank(a.mode || a.game_type);
@@ -104,38 +209,102 @@
       if (ma !== mb) return ma - mb;
       return dispLevelRank(a.level) - dispLevelRank(b.level);
     });
-    const weekends = [...new Set(result.placements.map(p => p.weekend_date))].sort();
+
+    // Full season enumeration — every Saturday between brief.first_weekend
+    // and brief.last_weekend (or Sept 1 → June 30 fallback).
+    const win = resolveSeasonWindow(result.brief, placements);
+    let weekends = enumerateSaturdays(win.start, win.end);
+    const placementDates = [...new Set(placements.map(p => p.weekend_date).filter(Boolean))];
+    if (weekends.length === 0) {
+      weekends = placementDates.sort();
+    } else {
+      const set = new Set(weekends);
+      placementDates.forEach(d => { if (!set.has(d)) set.add(d); });
+      weekends = [...set].sort();
+    }
+
     const grid = {};
-    result.placements.forEach(p => {
+    placements.forEach(p => {
       if (!grid[p.category_id]) grid[p.category_id] = {};
       grid[p.category_id][p.weekend_date] = p;
     });
-    const headerCells = weekends.map(we => {
+    const monthParityMap = buildMonthParityMap(weekends);
+    const hasLF = placements.some(p => p._is_ligue_final || p.tournament_type === 'LIGUE_FINALE');
+
+    // Month bands.
+    const monthGroups = [];
+    weekends.forEach(we => {
       const d = new Date(we + 'T00:00:00Z');
-      return `<th style="padding: 4px 6px; font-size: 11px; min-width: 56px; white-space: nowrap;">${d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', timeZone: 'UTC' })}</th>`;
+      const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+      const label = d.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+      if (!monthGroups.length || monthGroups[monthGroups.length - 1].key !== key) {
+        monthGroups.push({ key, label, count: 1 });
+      } else {
+        monthGroups[monthGroups.length - 1].count++;
+      }
+    });
+    const monthBandCells = monthGroups.map((g, idx) => {
+      const tint = idx % 2 === 0 ? '#5a3094' : '#7d52b8';
+      return `<th colspan="${g.count}" style="padding: 5px 6px; font-size: 11px; font-weight: 700; background: ${tint}; color: white; text-transform: capitalize; border-right: 2px solid white; letter-spacing: 0.3px;">${escapeHtml(g.label)}</th>`;
     }).join('');
 
-    const rows = cats.map(c => {
-      const cells = weekends.map(we => {
+    // Sat / Sun dual rows.
+    const satRow = weekends.map((we, i) => {
+      const d = new Date(we + 'T00:00:00Z');
+      const prev = i > 0 ? new Date(weekends[i - 1] + 'T00:00:00Z') : null;
+      const monthChange = prev && prev.getUTCMonth() !== d.getUTCMonth();
+      const leftBorder = monthChange ? 'border-left: 3px solid #5a3094;' : '';
+      return `<th style="padding: 3px 6px; font-size: 11px; min-width: 56px; white-space: nowrap; background: #6b3aa3; color: white; ${leftBorder}"><span style="opacity: 0.7; font-weight: 500;">S</span> ${String(d.getUTCDate()).padStart(2,'0')}</th>`;
+    }).join('');
+    const sunRow = weekends.map((we, i) => {
+      const d = new Date(we + 'T00:00:00Z');
+      d.setUTCDate(d.getUTCDate() + 1);
+      const prev = i > 0 ? new Date(weekends[i - 1] + 'T00:00:00Z') : null;
+      const sat = new Date(weekends[i] + 'T00:00:00Z');
+      const monthChange = prev && prev.getUTCMonth() !== sat.getUTCMonth();
+      const leftBorder = monthChange ? 'border-left: 3px solid #5a3094;' : '';
+      return `<th style="padding: 3px 6px; font-size: 11px; min-width: 56px; white-space: nowrap; background: #7d52b8; color: white; font-weight: 500; ${leftBorder}"><span style="opacity: 0.7;">D</span> ${String(d.getUTCDate()).padStart(2,'0')}</th>`;
+    }).join('');
+
+    // Data rows.
+    let prevMode = null;
+    const rows = cats.map((c, ci) => {
+      const curMode = c.game_type || c.mode || '';
+      const modeChange = prevMode !== null && prevMode !== curMode;
+      prevMode = curMode;
+      const rowBorder = ci === 0
+        ? ''
+        : (modeChange ? 'border-top: 2px solid #6b3aa3;' : 'border-top: 1px solid #e0e0e0;');
+      const cells = weekends.map((we, i) => {
+        const prev = i > 0 ? new Date(weekends[i - 1] + 'T00:00:00Z') : null;
+        const cur = new Date(we + 'T00:00:00Z');
+        const monthChange = prev && prev.getUTCMonth() !== cur.getUTCMonth();
+        const leftBorder = monthChange ? 'border-left: 3px solid #5a3094;' : '';
+        const monthBg = MONTH_TINTS[monthParityMap[we] || 0];
         const p = grid[c.id]?.[we];
-        if (!p) return `<td style="padding: 4px 6px; background: #fafafa;"></td>`;
-        const bg = p.host_id ? colors.get(p.host_id) : '#fff';
-        const lockedBorder = p._locked ? 'border: 2px solid #c47b00;' : '';
+        if (!p) return `<td style="padding: 4px 6px; background: ${monthBg}; ${leftBorder}"></td>`;
+
+        // Ligue final cells keep the diagonal-stripe orange treatment.
+        if (p._is_ligue_final || p.tournament_type === 'LIGUE_FINALE') {
+          const tipLF = `Finale Ligue ${categoryName(c)}\n${fmtDateFR(p.weekend_date)}\nLieu : TBD (à renseigner par la Ligue)`;
+          return `<td style="padding: 4px 6px; background: ${ROUND_COLOURS.FL.bg}; text-align: center; font-size: 11px; border: 1.5px solid ${ROUND_COLOURS.FL.border}; ${leftBorder}" title="${escapeHtml(tipLF)}">
+            <div style="font-weight: 800; color: ${ROUND_COLOURS.FL.text};">FL</div>
+            <div style="font-size: 9px; color: ${ROUND_COLOURS.FL.text};">Ligue</div>
+          </td>`;
+        }
+
+        const bg = roundCellBg(p.tournament_type);
+        const lockedRing = p._locked ? 'box-shadow: inset 0 0 0 2px #c47b00;' : '';
         const editable = p._draft_id ? 'cursor: pointer;' : '';
         const tip = `${categoryName(c)} ${p.tournament_type}\n${fmtDateFR(p.qualif_date || p.final_date || p.weekend_date)}\n${p.host_name || 'TBD'}${p._comment ? '\n💬 ' + p._comment : ''}${p._draft_id ? '\n(clic pour modifier)' : ''}`;
         const lockIcon = p._locked ? '🔒 ' : '';
         const commentIcon = p._comment ? '💬' : '';
-        return `<td class="cv-cell-editable" data-draft-id="${p._draft_id || ''}" data-cat-id="${c.id}" style="padding: 4px 6px; background: ${bg}; text-align: center; font-size: 11px; ${lockedBorder} ${editable}" title="${escapeHtml(tip)}">
-          <div style="font-weight: 700;">${lockIcon}${p.tournament_type === 'Finale' ? 'F' : p.tournament_type}${commentIcon}</div>
-          <div style="font-size: 9px; color: #555;">${escapeHtml(abbreviateHost(p.host_name) || (p.host_id == null ? 'TBD' : ''))}</div>
+        return `<td class="cv-cell-editable" data-draft-id="${p._draft_id || ''}" data-cat-id="${c.id}" style="padding: 4px 6px; background: ${bg}; text-align: center; font-size: 11px; ${lockedRing} ${leftBorder} ${editable}" title="${escapeHtml(tip)}">
+          <div style="font-weight: 800; font-size: 12px; color: ${roundColour(p.tournament_type)}; line-height: 1.1;">${lockIcon}${roundLabel(p.tournament_type)}${commentIcon}</div>
+          <div style="font-size: 9px; color: #444; font-weight: 600; margin-top: 2px;">${escapeHtml(abbreviateHost(p.host_name) || (p.host_id == null ? 'TBD' : ''))}</div>
         </td>`;
       }).join('');
-      return `<tr><td style="padding: 6px 10px; font-weight: 600; position: sticky; left: 0; background: #fff; z-index: 1; border-right: 2px solid #ccc;">${escapeHtml(categoryName(c))}</td>${cells}</tr>`;
-    }).join('');
-
-    const legend = [...colors.entries()].map(([id, color]) => {
-      const p = result.placements.find(pp => pp.host_id === id);
-      return `<span style="display:inline-block; padding: 4px 10px; background: ${color}; border-radius: 4px; font-size: 12px; margin: 0 4px 4px 0;">${escapeHtml(p?.host_name || '?')}</span>`;
+      return `<tr style="${rowBorder}"><td style="padding: 6px 10px; font-weight: 600; position: sticky; left: 0; background: #fff; z-index: 1; border-right: 2px solid #ccc; ${rowBorder}">${escapeHtml(categoryName(c))}</td>${cells}</tr>`;
     }).join('');
 
     const editHint = opts.showEditHint
@@ -150,15 +319,22 @@
         <table style="border-collapse: collapse; min-width: 100%;">
           <thead style="background: linear-gradient(135deg, #6b3aa3, #5a3094); color: white; position: sticky; top: 0; z-index: 2;">
             <tr>
-              <th style="padding: 6px 10px; text-align: left; position: sticky; left: 0; background: #6b3aa3; z-index: 3; min-width: 160px;">Catégorie</th>
-              ${headerCells}
+              <th rowspan="3" style="padding: 6px 10px; text-align: left; position: sticky; left: 0; background: #6b3aa3; z-index: 3; min-width: 160px; vertical-align: middle;">Catégorie</th>
+              ${monthBandCells}
             </tr>
+            <tr>${satRow}</tr>
+            <tr>${sunRow}</tr>
           </thead>
           <tbody>${rows}</tbody>
         </table>
       </div>
-      <div style="margin-top: 10px;">
-        <strong style="font-size: 13px; color: #555;">Légende clubs :</strong> ${legend}
+      <div style="margin-top: 12px;">
+        <strong style="font-size: 13px; color: #555;">Légende tournois :</strong>
+        ${renderRoundLegend(hasLF)}
+      </div>
+      <div style="margin-top: 6px;">
+        <strong style="font-size: 13px; color: #555;">Clubs hôtes :</strong>
+        ${renderHostLegendText(placements)}
       </div>
     `;
 
@@ -169,6 +345,7 @@
     }
   }
 
+  // ---------- Vue Hôtes (unchanged) ----------
   function renderViewHosts(container, result) {
     const placedWithHost = result.placements.filter(p => p.host_id);
     if (!placedWithHost.length) {
