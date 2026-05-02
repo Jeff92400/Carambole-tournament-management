@@ -153,11 +153,21 @@ router.post('/upload', authenticateToken, requireAdmin, upload.single('calendar'
   // Build normalized filename
   const normalizedFilename = `Calendrier ${orgShortName} ${season}.${ext}`;
 
-  // Delete only the existing calendar for this (org, season) pair — keep other seasons
-  db.run('DELETE FROM calendar WHERE ($1::int IS NULL OR organization_id = $1) AND season = $2', [orgId, season], (err) => {
-    if (err) {
-      console.error('Error deleting old calendar:', err);
-    }
+  // V 2.0.644 — delete only the previous file of the SAME extension so
+  // that an Excel and a PDF can coexist for the same (org, season). The
+  // broadcast endpoint prefers the Excel (per-club colours), the public
+  // viewer keeps the most recent upload.
+  const sameExtPattern = `%.${ext}`;
+  db.run(
+    `DELETE FROM calendar
+       WHERE ($1::int IS NULL OR organization_id = $1)
+         AND season = $2
+         AND LOWER(filename) LIKE $3`,
+    [orgId, season, sameExtPattern],
+    (err) => {
+      if (err) {
+        console.error('Error deleting old calendar:', err);
+      }
 
     db.run(
       'INSERT INTO calendar (filename, content_type, file_data, uploaded_by, organization_id, season) VALUES ($1, $2, $3, $4, $5, $6)',
@@ -873,14 +883,30 @@ router.post('/announce', authenticateToken, requireAdmin, async (req, res) => {
 
   // ---- Channel 1: email the calendar file to all clubs ------------------
   if (email_clubs) {
-    // Pull the latest calendar file for this org+season.
-    const calendarFile = await dbGet(
+    // V 2.0.644 — prefer the latest Excel (.xlsx/.xls) over the PDF when
+    // both are available for the season. The Excel preserves the per-club
+    // colour coding produced by the wizard; the PDF is a flat preview and
+    // would arrive without colours.
+    let calendarFile = await dbGet(
       `SELECT filename, content_type, file_data
          FROM calendar
-        WHERE ($1::int IS NULL OR organization_id = $1) AND season = $2
+        WHERE ($1::int IS NULL OR organization_id = $1)
+          AND season = $2
+          AND (LOWER(filename) LIKE '%.xlsx' OR LOWER(filename) LIKE '%.xls')
         ORDER BY created_at DESC LIMIT 1`,
       [orgId, season]
     );
+    if (!calendarFile) {
+      // Fallback: any file (typically the PDF) so the feature still works
+      // when only a PDF was uploaded.
+      calendarFile = await dbGet(
+        `SELECT filename, content_type, file_data
+           FROM calendar
+          WHERE ($1::int IS NULL OR organization_id = $1) AND season = $2
+          ORDER BY created_at DESC LIMIT 1`,
+        [orgId, season]
+      );
+    }
     if (!calendarFile) {
       return res.status(404).json({
         error: `Aucun calendrier téléversé pour la saison ${season}. Téléversez-le d'abord.`
