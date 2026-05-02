@@ -727,6 +727,10 @@
         <button type="button" class="view-btn" data-view="published" style="padding: 6px 12px; border: 1px solid #c8c5be; border-radius: 5px; background: white; color: #333; cursor: pointer; font-size: 13px;">📅 Saison publiée</button>
         <span style="flex: 1;"></span>
         <button type="button" id="exportXlsxBtn" style="padding: 6px 12px; border: none; border-radius: 5px; background: #2c7a4d; color: white; cursor: pointer; font-size: 13px; font-weight: 600;">📊 Télécharger Excel</button>
+        <!-- V 2.0.650 — one-click upload of the wizard's coloured Excel
+             to the Calendrier page so the broadcast picks it up
+             automatically (avoids the manual download → re-upload trip). -->
+        <button type="button" id="publishToCalendarBtn" style="padding: 6px 12px; border: none; border-radius: 5px; background: #1F4788; color: white; cursor: pointer; font-size: 13px; font-weight: 600;" title="Téléverse l'Excel généré sur la page Calendrier (utilisé par la diffusion par email)">📤 Publier sur la page Calendrier</button>
       </div>
 
       <div id="viewSeasonal" style="display: none;"></div>
@@ -3678,6 +3682,58 @@
         alert('Erreur export : ' + err.message);
       } finally {
         btn.disabled = false; btn.textContent = '📊 Télécharger Excel';
+      }
+    });
+
+    // V 2.0.650 — one-click "Publier sur la page Calendrier".
+    // Pulls the same Excel export the download button uses and POSTs it
+    // to /calendar/upload, bypassing the manual download → re-upload trip.
+    document.getElementById('publishToCalendarBtn')?.addEventListener('click', async () => {
+      if (!currentBrief) {
+        alert('Aucun brief actif — sauvegardez le brief d\'abord.');
+        return;
+      }
+      const season = currentBrief.season;
+      if (!season) {
+        alert('Saison introuvable sur le brief courant.');
+        return;
+      }
+      if (!confirm(`Publier le calendrier coloré (.xlsx) sur la page Calendrier pour la saison ${season} ?\n\nCela remplace le précédent fichier Excel du même saison/CDB. Le fichier PDF éventuel reste intact.`)) {
+        return;
+      }
+      const btn = document.getElementById('publishToCalendarBtn');
+      const originalLabel = btn.textContent;
+      btn.disabled = true; btn.textContent = '⏳ Publication...';
+      try {
+        // Step 1: fetch the wizard's Excel
+        const expRes = await fetch(`${API_URL}/calendar-generator/draft/export?brief_id=${currentBrief.id}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!expRes.ok) {
+          const e = await expRes.json().catch(() => ({}));
+          throw new Error(e.error || 'Échec génération Excel');
+        }
+        const blob = await expRes.blob();
+        // Step 2: POST it to the calendar upload endpoint
+        const fd = new FormData();
+        fd.append('calendar', blob, `Calendrier ${season}.xlsx`);
+        fd.append('season', season);
+        const upRes = await fetch(`${API_URL}/calendar/upload`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` }, // no Content-Type — let the browser set the multipart boundary
+          body: fd
+        });
+        const upData = await upRes.json().catch(() => ({}));
+        if (!upRes.ok) {
+          throw new Error(upData.error || `Erreur ${upRes.status}`);
+        }
+        btn.textContent = '✅ Publié';
+        setTimeout(() => { btn.textContent = originalLabel; }, 3000);
+      } catch (err) {
+        alert('Erreur publication : ' + err.message);
+        btn.textContent = originalLabel;
+      } finally {
+        btn.disabled = false;
       }
     });
 
