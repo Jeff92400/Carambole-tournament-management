@@ -1960,10 +1960,12 @@ router.post('/cleanup-externals',
     const safe = [];
     const unsafe = [];
     for (const t of externals) {
+      // V 2.0.659 — tournament_relances FK column is tournoi_id (not
+      // tournoi_ext_id). convocation_files uses tournoi_ext_id.
       const [ins, conv, rel] = await Promise.all([
         fetchOne(`SELECT COUNT(*)::int AS n FROM inscriptions WHERE tournoi_id = $1`, [t.tournoi_id]),
         fetchOne(`SELECT COUNT(*)::int AS n FROM convocation_files WHERE tournoi_ext_id = $1`, [t.tournoi_id]),
-        fetchOne(`SELECT COUNT(*)::int AS n FROM tournament_relances WHERE tournoi_ext_id = $1`, [t.tournoi_id])
+        fetchOne(`SELECT COUNT(*)::int AS n FROM tournament_relances WHERE tournoi_id = $1`, [t.tournoi_id])
       ]);
       const children = {
         inscriptions: ins?.n || 0,
@@ -1996,7 +1998,7 @@ router.post('/cleanup-externals',
           // Children with ON DELETE CASCADE go away automatically;
           // others (convocation_files / relances) are explicitly cleaned.
           await runSql(`DELETE FROM convocation_files WHERE tournoi_ext_id = $1`, [id]);
-          await runSql(`DELETE FROM tournament_relances WHERE tournoi_ext_id = $1`, [id]);
+          await runSql(`DELETE FROM tournament_relances WHERE tournoi_id = $1`, [id]);
           await runSql(`DELETE FROM inscriptions WHERE tournoi_id = $1`, [id]);
           const r = await runSql(
             `DELETE FROM tournoi_ext WHERE tournoi_id = $1 AND organization_id = $2`,
