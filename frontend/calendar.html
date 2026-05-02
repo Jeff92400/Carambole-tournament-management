@@ -178,6 +178,40 @@
       </p>
 
       <div id="calendarUploadStatus" style="display: none; margin-top: 15px; padding: 10px; border-radius: 4px;"></div>
+
+      <!-- V 2.0.640 — On-demand calendar broadcast (admin-only). -->
+      <div id="calendarAnnounceSection" style="margin-top: 24px; padding-top: 20px; border-top: 1px solid #e0e0e0;">
+        <h4 style="margin: 0 0 10px;">📣 Diffuser le calendrier</h4>
+        <p style="margin: 0 0 12px; font-size: 13px; color: #666;">
+          Envoyer le calendrier de la saison actuelle aux clubs et/ou notifier les joueurs.
+        </p>
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer;">
+            <input type="checkbox" id="annEmailClubs" style="margin-top: 3px;" checked>
+            <span style="font-size: 14px;">
+              <strong>Email aux clubs</strong> avec le calendrier en pièce jointe
+              <span id="annClubsCountHint" style="display: block; font-size: 12px; color: #888; margin-top: 2px;"></span>
+            </span>
+          </label>
+          <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer;">
+            <input type="checkbox" id="annNotifyPlayers" style="margin-top: 3px;" checked>
+            <span style="font-size: 14px;">
+              <strong>Annonce dans l'Espace Joueur</strong>
+              <span style="display: block; font-size: 12px; color: #888; margin-top: 2px;">
+                Premier envoi : "Calendrier disponible — cliquez ici". Ensuite : "Calendrier mis à jour".
+              </span>
+            </span>
+          </label>
+          <div>
+            <label for="annCustomMessage" style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px;">Message personnalisé (email aux clubs) :</label>
+            <textarea id="annCustomMessage" rows="3" placeholder="Bonjour à tous, voici le calendrier de la saison…" style="width: 100%; padding: 8px 10px; border: 1px solid #ddd; border-radius: 4px; font-family: inherit; font-size: 13px; resize: vertical;"></textarea>
+          </div>
+          <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+            <button type="button" id="btnAnnounceCalendar" class="btn-download" style="padding: 10px 18px;">📣 Diffuser maintenant</button>
+            <span id="annStatus" style="font-size: 13px;"></span>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- No calendar message -->
@@ -434,6 +468,86 @@
       } finally {
         uploadBtn.disabled = false;
         uploadBtn.textContent = 'Téléverser';
+      }
+    });
+
+    // V 2.0.640 — Announce calendar to clubs + players.
+    // Pre-counts the number of distinct club emails so the admin sees
+    // how many recipients the email will hit before clicking the button.
+    async function refreshAnnounceClubsCount() {
+      const hint = document.getElementById('annClubsCountHint');
+      if (!hint) return;
+      try {
+        const r = await fetch(`${API_URL}/clubs`, { headers: { Authorization: `Bearer ${token}` } });
+        if (!r.ok) return;
+        const clubs = await r.json();
+        const seen = new Set();
+        for (const c of clubs) {
+          for (const a of [c.email, c.president_email, c.responsable_sportif_email]) {
+            if (!a) continue;
+            const lower = String(a).trim().toLowerCase();
+            if (/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(lower)) seen.add(lower);
+          }
+        }
+        hint.textContent = `${seen.size} adresse(s) email destinataire(s)`;
+      } catch (e) { /* non-fatal */ }
+    }
+    refreshAnnounceClubsCount();
+
+    document.getElementById('btnAnnounceCalendar')?.addEventListener('click', async () => {
+      const btn = document.getElementById('btnAnnounceCalendar');
+      const status = document.getElementById('annStatus');
+      const emailClubs = document.getElementById('annEmailClubs').checked;
+      const notifyPlayers = document.getElementById('annNotifyPlayers').checked;
+      const message = document.getElementById('annCustomMessage').value.trim();
+
+      // Resolve season — use the same selector the upload form uses,
+      // falling back to the page's active selector.
+      const seasonSel = document.getElementById('calendarSeasonSelect')
+                     || document.getElementById('seasonSelect');
+      const season = seasonSel?.value || (await SeasonUtils.getCurrentSeason?.());
+      if (!season) {
+        status.textContent = 'Saison introuvable.';
+        status.style.color = '#c00';
+        return;
+      }
+      if (!emailClubs && !notifyPlayers) {
+        status.textContent = 'Sélectionnez au moins un canal.';
+        status.style.color = '#c00';
+        return;
+      }
+      if (!confirm(`Diffuser le calendrier de la saison ${season} maintenant ?\n\n` +
+                   (emailClubs ? '☑ Email aux clubs\n' : '') +
+                   (notifyPlayers ? '☑ Annonce dans l\'Espace Joueur\n' : ''))) {
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = 'Diffusion en cours…';
+      status.textContent = '';
+      try {
+        const r = await fetch(`${API_URL}/calendar/announce`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ season, email_clubs: emailClubs, notify_players: notifyPlayers, custom_message: message })
+        });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error || `Erreur ${r.status}`);
+
+        const parts = [];
+        if (emailClubs) parts.push(`${data.email_recipients_count} email(s) envoyé(s)${data.email_errors ? ` (${data.email_errors} erreur(s))` : ''}`);
+        if (notifyPlayers) parts.push(`annonce ${data.was_first_announcement ? 'créée' : 'mise à jour'} (#${data.announcement_id})`);
+        status.textContent = '✅ ' + parts.join(' · ');
+        status.style.color = '#2e7d32';
+      } catch (err) {
+        status.textContent = `❌ ${err.message}`;
+        status.style.color = '#c00';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '📣 Diffuser maintenant';
       }
     });
 

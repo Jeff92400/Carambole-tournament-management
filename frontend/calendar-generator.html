@@ -748,6 +748,33 @@
           <button type="button" class="btn" id="publishCalendarBtn" style="background: #2c7a4d; color: white; padding: 10px 20px; border: none; border-radius: 5px; font-weight: 600; margin-left: 8px;">🚀 Créer / Mettre à jour les tournois</button>
         </div>
       </div>
+
+      <!-- V 2.0.640 — Once the calendar is published, the admin can
+           broadcast it: email clubs (with the calendar file uploaded
+           via /calendar/upload) and/or post an announcement in the
+           Player App. Reuses the same /api/calendar/announce endpoint
+           the Calendrier page button uses. -->
+      <div id="wizardAnnounceBox" style="margin-top: 22px; padding: 16px 18px; border: 1px solid #cfe7d6; background: #f1faf3; border-radius: 8px;">
+        <h4 style="margin: 0 0 6px;">📣 Diffuser le calendrier</h4>
+        <p style="margin: 0 0 10px; font-size: 13px; color: #555;">
+          Envoyer le calendrier (Excel téléversé sur la page Calendrier) aux clubs et/ou notifier les joueurs.
+        </p>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <label style="display: flex; align-items: flex-start; gap: 8px; font-size: 13px;">
+            <input type="checkbox" id="wizAnnEmailClubs" checked style="margin-top: 3px;">
+            Email aux clubs (calendrier en pièce jointe)
+          </label>
+          <label style="display: flex; align-items: flex-start; gap: 8px; font-size: 13px;">
+            <input type="checkbox" id="wizAnnNotifyPlayers" checked style="margin-top: 3px;">
+            Annonce dans l'Espace Joueur
+          </label>
+          <textarea id="wizAnnCustomMessage" rows="2" placeholder="Message personnalisé pour les clubs (optionnel)…" style="padding: 8px 10px; border: 1px solid #c8d8cb; border-radius: 4px; font-family: inherit; font-size: 13px; resize: vertical;"></textarea>
+          <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+            <button type="button" id="wizBtnAnnounce" class="btn" style="background: #1F4788; color: white; border: none; padding: 9px 16px; border-radius: 5px; font-weight: 600;">📣 Diffuser maintenant</button>
+            <span id="wizAnnStatus" style="font-size: 13px;"></span>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -2230,6 +2257,58 @@
       } finally {
         btn.disabled = false;
         btn.textContent = '🚀 Créer / Mettre à jour les tournois';
+      }
+    });
+
+    // V 2.0.640 — Wizard announce broadcast (same backend as the
+    // calendar.html page button). Resolves the season from the brief.
+    document.getElementById('wizBtnAnnounce')?.addEventListener('click', async () => {
+      const btn = document.getElementById('wizBtnAnnounce');
+      const status = document.getElementById('wizAnnStatus');
+      const emailClubs = document.getElementById('wizAnnEmailClubs').checked;
+      const notifyPlayers = document.getElementById('wizAnnNotifyPlayers').checked;
+      const message = document.getElementById('wizAnnCustomMessage').value.trim();
+
+      const season = currentBrief?.season;
+      if (!season) {
+        status.textContent = 'Sauvegardez le brief d\'abord (saison introuvable).';
+        status.style.color = '#c00';
+        return;
+      }
+      if (!emailClubs && !notifyPlayers) {
+        status.textContent = 'Sélectionnez au moins un canal.';
+        status.style.color = '#c00';
+        return;
+      }
+      if (!confirm(`Diffuser le calendrier de la saison ${season} maintenant ?\n\n` +
+                   (emailClubs ? '☑ Email aux clubs (calendrier en pièce jointe)\n' : '') +
+                   (notifyPlayers ? '☑ Annonce dans l\'Espace Joueur\n' : ''))) {
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = 'Diffusion en cours…';
+      status.textContent = '';
+      try {
+        const r = await fetch(`${API_URL}/calendar/announce`, {
+          method: 'POST',
+          headers: authHeaders,
+          body: JSON.stringify({ season, email_clubs: emailClubs, notify_players: notifyPlayers, custom_message: message })
+        });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error || `Erreur ${r.status}`);
+
+        const parts = [];
+        if (emailClubs) parts.push(`${data.email_recipients_count} email(s) envoyé(s)${data.email_errors ? ` (${data.email_errors} erreur(s))` : ''}`);
+        if (notifyPlayers) parts.push(`annonce ${data.was_first_announcement ? 'créée' : 'mise à jour'}`);
+        status.textContent = '✅ ' + parts.join(' · ');
+        status.style.color = '#2c7a4d';
+      } catch (err) {
+        status.textContent = `❌ ${err.message}`;
+        status.style.color = '#c00';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '📣 Diffuser maintenant';
       }
     });
 

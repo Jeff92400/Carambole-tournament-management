@@ -815,4 +815,196 @@ function formatDateStr(date) {
   return `${year}-${month}-${day}`;
 }
 
+// V 2.0.640 — POST /api/calendar/announce
+//   On-demand broadcast of a season's calendar. Two independent channels,
+//   each gated by its own boolean flag in the request body:
+//
+//     1. email_clubs     — emails the calendar's Excel/PDF file as an
+//                          attachment to all clubs (deduplicated union of
+//                          email + president_email + responsable_sportif_email),
+//                          with an admin-supplied custom message.
+//
+//     2. notify_players  — creates an in-app announcement for the org's
+//                          Player App. First time for this season →
+//                          "disponible - cliquez ici" with link to the
+//                          Player App's Calendrier tab. Subsequent times →
+//                          "mis à jour" without link.
+//
+//   Body: { season: 'YYYY-YYYY', email_clubs: bool, notify_players: bool,
+//           custom_message?: string }
+//   Returns: { email_recipients_count, announcement_id, was_first_announcement }
+router.post('/announce', authenticateToken, requireAdmin, async (req, res) => {
+  const orgId = req.user.organizationId || null;
+  const { season, email_clubs, notify_players, custom_message } = req.body || {};
+
+  if (!season || !/^\d{4}-\d{4}$/.test(String(season))) {
+    return res.status(400).json({ error: 'Saison invalide (YYYY-YYYY)' });
+  }
+  if (!email_clubs && !notify_players) {
+    return res.status(400).json({ error: 'Sélectionnez au moins un canal (email ou notification)' });
+  }
+
+  const dbGet = (sql, p) => new Promise((ok, ko) =>
+    db.get(sql, p, (e, r) => e ? ko(e) : ok(r)));
+  const dbAll = (sql, p) => new Promise((ok, ko) =>
+    db.all(sql, p, (e, r) => e ? ko(e) : ok(r || [])));
+  const dbRun = (sql, p) => new Promise((ok, ko) =>
+    db.run(sql, p, function (e) { e ? ko(e) : ok(this); }));
+
+  const result = {
+    email_recipients_count: 0,
+    email_recipients: [],
+    email_errors: 0,
+    announcement_id: null,
+    was_first_announcement: null
+  };
+
+  // ---- Channel 1: email the calendar file to all clubs ------------------
+  if (email_clubs) {
+    // Pull the latest calendar file for this org+season.
+    const calendarFile = await dbGet(
+      `SELECT filename, content_type, file_data
+         FROM calendar
+        WHERE ($1::int IS NULL OR organization_id = $1) AND season = $2
+        ORDER BY created_at DESC LIMIT 1`,
+      [orgId, season]
+    );
+    if (!calendarFile) {
+      return res.status(404).json({
+        error: `Aucun calendrier téléversé pour la saison ${season}. Téléversez-le d'abord.`
+      });
+    }
+
+    // Build the recipients list (dedup union of the 3 club email fields).
+    const clubs = await dbAll(
+      `SELECT id, display_name, email, president_email, responsable_sportif_email
+         FROM clubs
+        WHERE ($1::int IS NULL OR organization_id = $1)`,
+      [orgId]
+    );
+    const seen = new Set();
+    const recipients = [];
+    for (const c of clubs) {
+      for (const addr of [c.email, c.president_email, c.responsable_sportif_email]) {
+        if (!addr) continue;
+        const lower = String(addr).trim().toLowerCase();
+        if (!lower || seen.has(lower) || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(lower)) continue;
+        seen.add(lower);
+        recipients.push({ club_name: c.display_name, address: addr.trim() });
+      }
+    }
+    result.email_recipients = recipients.map(r => r.address);
+    result.email_recipients_count = recipients.length;
+
+    if (recipients.length > 0) {
+      const { sendEmail, buildFromAddress, getEmailTemplateSettings } = require('../utils/email-helpers');
+      const emailSettings = await getEmailTemplateSettings(orgId);
+      const fromAddress = buildFromAddress(emailSettings, 'communication');
+      const orgShortName = (orgId
+        ? await appSettings.getOrgSetting(orgId, 'organization_short_name')
+        : await appSettings.getSetting('organization_short_name')) || 'CDB';
+      const primaryColor = (orgId
+        ? await appSettings.getOrgSetting(orgId, 'primary_color')
+        : await appSettings.getSetting('primary_color')) || '#1F4788';
+
+      const safeMessage = String(custom_message || '')
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/\n/g, '<br>');
+
+      const subject = `Calendrier ${orgShortName} — saison ${season}`;
+      const fileBuffer = calendarFile.file_data;
+      const attachment = {
+        filename: calendarFile.filename,
+        content: Buffer.isBuffer(fileBuffer) ? fileBuffer.toString('base64') : Buffer.from(fileBuffer).toString('base64')
+      };
+
+      // One email per recipient (avoids leaking the recipient list in the To header).
+      for (const r of recipients) {
+        const html = `
+          <div style="font-family: Arial, sans-serif; max-width: 640px; margin: 0 auto; padding: 20px;">
+            <h2 style="color: ${primaryColor}; margin: 0 0 12px;">📅 Calendrier ${orgShortName} — saison ${season}</h2>
+            <p style="color: #333; line-height: 1.5;">Bonjour ${r.club_name || ''},</p>
+            ${safeMessage ? `<div style="color: #333; line-height: 1.6; padding: 12px 0;">${safeMessage}</div>` : ''}
+            <p style="color: #555; line-height: 1.5; font-size: 14px;">
+              Vous trouverez le calendrier de la saison ${season} en pièce jointe (<strong>${calendarFile.filename}</strong>).
+            </p>
+            <p style="color: #888; font-size: 12px; margin-top: 24px;">
+              ${orgShortName}
+            </p>
+          </div>
+        `;
+        try {
+          await sendEmail(
+            {
+              from: fromAddress,
+              to: r.address,
+              subject,
+              html,
+              attachments: [attachment]
+            },
+            {
+              recipientKind: 'admin', // club address — not a player
+              orgId,
+              recipientName: r.club_name,
+              emailType: 'calendar_announce',
+              triggeredByUserId: req.user.userId || null,
+              context: { season, club_name: r.club_name }
+            }
+          );
+        } catch (emailErr) {
+          console.error(`[calendar/announce] email to ${r.address} failed:`, emailErr.message);
+          result.email_errors++;
+        }
+      }
+    }
+  }
+
+  // ---- Channel 2: in-app announcement for the Player App ---------------
+  if (notify_players) {
+    // Detect whether we've already announced this season's calendar so we
+    // can pick the right wording. We tag our announcements with a stable
+    // marker string in the message body so detection survives even if the
+    // admin changed the title later.
+    const MARK = `[calendar-announce:${season}]`;
+    const existing = await dbGet(
+      `SELECT id FROM announcements
+        WHERE ($1::int IS NULL OR organization_id = $1)
+          AND message LIKE $2
+        LIMIT 1`,
+      [orgId, `%${MARK}%`]
+    );
+    result.was_first_announcement = !existing;
+
+    // Build the Player App URL pointing at the Calendrier tab.
+    const playerAppUrl = (orgId
+      ? await appSettings.getOrgSetting(orgId, 'player_app_url')
+      : await appSettings.getSetting('player_app_url')) || '';
+    // Append #calendar so the app lands on the calendar tab on open.
+    // The Player App reads the hash on load to focus the right tab.
+    const calendarLink = playerAppUrl ? `${playerAppUrl}#calendar` : '';
+
+    const title = result.was_first_announcement
+      ? `Calendrier ${season} disponible`
+      : `Calendrier ${season} mis à jour`;
+    let message;
+    if (result.was_first_announcement && calendarLink) {
+      message = `Le calendrier des compétitions de la saison qui commence est disponible — <a href="${calendarLink}">cliquez ici</a>. ${MARK}`;
+    } else if (result.was_first_announcement) {
+      message = `Le calendrier des compétitions de la saison qui commence est disponible. ${MARK}`;
+    } else {
+      message = `Le calendrier des compétitions a été mis à jour. ${MARK}`;
+    }
+
+    const inserted = await dbRun(
+      `INSERT INTO announcements
+         (title, message, type, is_active, expires_at, created_by, organization_id, target_type)
+       VALUES ($1, $2, 'info', TRUE, NULL, $3, $4, 'all')`,
+      [title, message, req.user.username || 'admin', orgId]
+    );
+    result.announcement_id = inserted.lastID || null;
+  }
+
+  res.json({ success: true, ...result });
+});
+
 module.exports = router;
