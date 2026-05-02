@@ -22,21 +22,35 @@
  * + last word's first letter" (CC for Cercle Clichy).
  */
 
-// 12 pastel colors — distinguishable, light enough for black text.
-const DEFAULT_PALETTE = [
-  '#d4edda', // mint
-  '#d4e6f7', // sky
-  '#fce4d3', // peach
-  '#e6dcf2', // lavender
-  '#fff4c2', // light yellow
-  '#ffe0e0', // light pink
-  '#d4f1e8', // seafoam
-  '#fde4f0', // rose
-  '#e0e7ff', // periwinkle
-  '#fff4e0', // cream
-  '#e0f4d4', // light green
-  '#f0d4f0', // light orchid
-];
+// V 2.0.638 — Palette presets. Each is a 12-colour cycle of light
+// backgrounds suitable for black text (auto-contrast logic switches to
+// white text when the YIQ luminance drops, so even saturated values work).
+//
+// Per-CDB choice is stored in organization_settings.club_calendar_palette
+// (default 'pastel'). Admins can switch the active palette in
+// Paramètres → Calendrier; calling backfillDefaults afterwards repaints
+// the gaps in the new palette.
+const PALETTES = {
+  pastel: [
+    '#d4edda', '#d4e6f7', '#fce4d3', '#e6dcf2',
+    '#fff4c2', '#ffe0e0', '#d4f1e8', '#fde4f0',
+    '#e0e7ff', '#fff4e0', '#e0f4d4', '#f0d4f0'
+  ],
+  vif: [
+    // brighter saturation, still light enough for black text
+    '#a8e6cf', '#a0c4ff', '#ffb380', '#c8a2db',
+    '#ffeb99', '#ffb3b3', '#a3e4d7', '#f8b6d2',
+    '#bdb2ff', '#ffd6a5', '#caffbf', '#e0bbf0'
+  ],
+  monochrome: [
+    // shades of the app primary purple, gradient feel
+    '#ece4f5', '#dbcdee', '#cab6e6', '#b89edd',
+    '#a787d4', '#9670cc', '#a787d4', '#cab6e6',
+    '#e3d8ef', '#f1ebf7', '#ddd0ee', '#c3aae0'
+  ]
+};
+// Back-compat alias for any caller still referencing DEFAULT_PALETTE.
+const DEFAULT_PALETTE = PALETTES.pastel;
 
 // Strip extraneous prefix words from billiards club names so the
 // abbreviation reflects the city, not the boilerplate "Billard Club".
@@ -99,12 +113,20 @@ function candidateAbbrev(words, len) {
  * organization. Existing non-null values are preserved as-is; only the
  * gaps are filled.
  *
- * @param {Array<{id, display_name, calendar_color, calendar_abbrev}>} clubs
+ * @param {Array<{id, display_name, calendar_color, calendar_abbrev, calendar_code}>} clubs
+ * @param {object} [opts]
+ * @param {string} [opts.palette='pastel']  one of PALETTES keys
  * @returns {Array<{id, calendar_color, calendar_abbrev}>}  rows that
  *   should be UPDATEd. Clubs that already have both values set are
  *   omitted from the result.
+ *
+ * V 2.0.638 — added palette parameter (Q2).
+ * V 2.0.638 — when calendar_code is set on a club without an abbrev,
+ *   use it as the default rather than computing a new prefix (Q3).
  */
-function computeDefaults(clubs) {
+function computeDefaults(clubs, opts) {
+  const paletteName = (opts && opts.palette) || 'pastel';
+  const palette = PALETTES[paletteName] || PALETTES.pastel;
   // Sort alphabetically by display_name so the colour assignment is
   // stable across runs (same input → same output).
   const sorted = [...clubs].sort((a, b) =>
@@ -129,20 +151,31 @@ function computeDefaults(clubs) {
     // Color: cycle through palette in alphabetical order so the same
     // index always maps to the same colour for that org.
     const color = needsColor
-      ? DEFAULT_PALETTE[paletteIdx % DEFAULT_PALETTE.length]
+      ? palette[paletteIdx % palette.length]
       : club.calendar_color;
     if (needsColor) paletteIdx++;
 
-    // Abbreviation: try 2 letters; if collision, try 3; if still
-    // colliding, fall back to first-letter + last-word-first-letter
-    // pair (covers e.g. two clubs starting with "Billard Club").
+    // Abbreviation strategy (V 2.0.638 — Q3 added):
+    //   1. If calendar_code is set (legacy single-letter A/B/C... from
+    //      the CDBHS Excel import), prefer that — admin already chose
+    //      a meaningful unique code per club.
+    //   2. Otherwise try 2-letter prefix from the display_name.
+    //   3. If 2-letter collides, try 3.
+    //   4. If 3-letter still collides, first + last-word initials.
+    //   5. Last resort: append a digit suffix.
     let abbrev = club.calendar_abbrev;
     if (needsAbbrev) {
-      const words = coreWords(club.display_name || '');
-      let candidate = candidateAbbrev(words, 2);
-      if (taken.has(candidate)) candidate = candidateAbbrev(words, 3);
-      if (taken.has(candidate) && words.length >= 2) {
-        candidate = (words[0].charAt(0) + words[words.length - 1].charAt(0)).toUpperCase();
+      const code = (club.calendar_code || '').trim();
+      let candidate;
+      if (code && code.length <= 8 && !taken.has(code)) {
+        candidate = code;
+      } else {
+        const words = coreWords(club.display_name || '');
+        candidate = candidateAbbrev(words, 2);
+        if (taken.has(candidate)) candidate = candidateAbbrev(words, 3);
+        if (taken.has(candidate) && words.length >= 2) {
+          candidate = (words[0].charAt(0) + words[words.length - 1].charAt(0)).toUpperCase();
+        }
       }
       // Last resort: append digit until unique.
       let suffix = 2;
@@ -170,9 +203,12 @@ function computeDefaults(clubs) {
  * Called once on server startup (db-postgres.js initializeDatabase).
  *
  * Idempotent: a second run produces zero updates.
+ *
+ * V 2.0.638 — reads the per-org club_calendar_palette setting (default
+ * 'pastel') and applies that palette when filling gaps for each org.
+ * Existing values are preserved untouched.
  */
 async function backfillDefaults(db) {
-  // Read existing clubs grouped by organization.
   const dbAll = (sql, params) => new Promise((resolve, reject) =>
     db.all(sql, params, (err, rows) => err ? reject(err) : resolve(rows || []))
   );
@@ -183,7 +219,7 @@ async function backfillDefaults(db) {
   let rows;
   try {
     rows = await dbAll(
-      `SELECT id, organization_id, display_name, calendar_color, calendar_abbrev
+      `SELECT id, organization_id, display_name, calendar_color, calendar_abbrev, calendar_code
          FROM clubs`,
       []
     );
@@ -203,9 +239,24 @@ async function backfillDefaults(db) {
     byOrg.get(k).push(r);
   }
 
+  // Read palette choice per org (best-effort — table may not exist on
+  // a brand-new DB, in which case every org defaults to 'pastel').
+  const paletteByOrg = new Map();
+  try {
+    const settingsRows = await dbAll(
+      `SELECT organization_id, value FROM organization_settings
+        WHERE key = 'club_calendar_palette'`,
+      []
+    );
+    for (const r of settingsRows) {
+      paletteByOrg.set(String(r.organization_id), r.value);
+    }
+  } catch (err) { /* table not ready yet — fine */ }
+
   let totalUpdated = 0;
-  for (const orgClubs of byOrg.values()) {
-    const updates = computeDefaults(orgClubs);
+  for (const [orgKey, orgClubs] of byOrg.entries()) {
+    const palette = paletteByOrg.get(orgKey) || 'pastel';
+    const updates = computeDefaults(orgClubs, { palette });
     for (const u of updates) {
       await dbRun(
         `UPDATE clubs SET calendar_color = $1, calendar_abbrev = $2 WHERE id = $3`,
@@ -229,7 +280,7 @@ async function backfillDefaults(db) {
  *                          display_name + calendar_color + calendar_abbrev)
  * @returns {{calendar_color, calendar_abbrev}}
  */
-function computeForNewClub(newClub, siblings) {
+function computeForNewClub(newClub, siblings, opts) {
   // Reuse the bulk algorithm by including the new club in the list with
   // empty styling, then picking off its computed update.
   const all = [
@@ -238,10 +289,11 @@ function computeForNewClub(newClub, siblings) {
       id: newClub.id,
       display_name: newClub.display_name,
       calendar_color: null,
-      calendar_abbrev: null
+      calendar_abbrev: null,
+      calendar_code: newClub.calendar_code || null
     }
   ];
-  const updates = computeDefaults(all);
+  const updates = computeDefaults(all, opts);
   const mine = updates.find(u => u.id === newClub.id);
   return mine
     ? { calendar_color: mine.calendar_color, calendar_abbrev: mine.calendar_abbrev }
@@ -249,6 +301,7 @@ function computeForNewClub(newClub, siblings) {
 }
 
 module.exports = {
+  PALETTES,
   DEFAULT_PALETTE,
   computeDefaults,
   backfillDefaults,

@@ -225,7 +225,7 @@ router.post('/', authenticateToken, upload.single('logo'), (req, res) => {
       });
 
       db.all(
-        `SELECT id, display_name, calendar_color, calendar_abbrev
+        `SELECT id, display_name, calendar_color, calendar_abbrev, calendar_code
            FROM clubs
           WHERE id <> $1 AND ($2::int IS NULL OR organization_id = $2)`,
         [newClubId, orgId],
@@ -234,28 +234,40 @@ router.post('/', authenticateToken, upload.single('logo'), (req, res) => {
             console.warn('[clubs] auto-style: sibling fetch failed:', sErr.message);
             return respond(null);
           }
-          try {
-            const { computeForNewClub } = require('../utils/club-calendar-defaults');
-            const auto = computeForNewClub(
-              { id: newClubId, display_name },
-              siblings || []
-            );
-            if (!auto.calendar_color && !auto.calendar_abbrev) return respond(null);
-            db.run(
-              `UPDATE clubs SET calendar_color = $1, calendar_abbrev = $2 WHERE id = $3`,
-              [auto.calendar_color, auto.calendar_abbrev, newClubId],
-              (uErr) => {
-                if (uErr) {
-                  console.warn('[clubs] auto-style UPDATE failed:', uErr.message);
-                  return respond(null);
-                }
-                respond(auto);
+          // V 2.0.638 — read the org's chosen palette so the auto-style
+          // matches what the admin picked in Settings → Calendrier.
+          db.get(
+            `SELECT value FROM organization_settings
+              WHERE key = 'club_calendar_palette'
+                AND ($1::int IS NULL OR organization_id = $1)`,
+            [orgId],
+            (pErr, pRow) => {
+              const palette = (pRow && pRow.value) || 'pastel';
+              try {
+                const { computeForNewClub } = require('../utils/club-calendar-defaults');
+                const auto = computeForNewClub(
+                  { id: newClubId, display_name, calendar_code: calendar_code || null },
+                  siblings || [],
+                  { palette }
+                );
+                if (!auto.calendar_color && !auto.calendar_abbrev) return respond(null);
+                db.run(
+                  `UPDATE clubs SET calendar_color = $1, calendar_abbrev = $2 WHERE id = $3`,
+                  [auto.calendar_color, auto.calendar_abbrev, newClubId],
+                  (uErr) => {
+                    if (uErr) {
+                      console.warn('[clubs] auto-style UPDATE failed:', uErr.message);
+                      return respond(null);
+                    }
+                    respond(auto);
+                  }
+                );
+              } catch (e) {
+                console.warn('[clubs] auto-style helper failed:', e.message);
+                respond(null);
               }
-            );
-          } catch (e) {
-            console.warn('[clubs] auto-style helper failed:', e.message);
-            respond(null);
-          }
+            }
+          );
         }
       );
     }
@@ -352,6 +364,74 @@ router.put('/:id', authenticateToken, upload.single('logo'), (req, res) => {
       }
     );
   });
+});
+
+// V 2.0.638 — Palette choice for the per-CDB calendar grid styling (Q2).
+// Reads/writes the `club_calendar_palette` row in organization_settings.
+// PUT accepts an optional `apply: true` flag to re-fill any club whose
+// abbrev/color is missing using the new palette (existing admin choices
+// are still preserved — only NULL gaps get touched).
+router.get('/calendar-palette', authenticateToken, (req, res) => {
+  const orgId = req.user.organizationId || null;
+  const { PALETTES } = require('../utils/club-calendar-defaults');
+  db.get(
+    `SELECT value FROM organization_settings
+      WHERE key = 'club_calendar_palette'
+        AND ($1::int IS NULL OR organization_id = $1)`,
+    [orgId],
+    (err, row) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({
+        palette: (row && row.value) || 'pastel',
+        available: Object.keys(PALETTES),
+        swatches: PALETTES
+      });
+    }
+  );
+});
+
+router.put('/calendar-palette', authenticateToken, async (req, res) => {
+  const orgId = req.user.organizationId || null;
+  const { palette, apply } = req.body || {};
+  const { PALETTES, computeDefaults } = require('../utils/club-calendar-defaults');
+  if (!palette || !PALETTES[palette]) {
+    return res.status(400).json({ error: 'palette inconnue', available: Object.keys(PALETTES) });
+  }
+  const dbRun = (sql, p) => new Promise((ok, ko) =>
+    db.run(sql, p, function (e) { e ? ko(e) : ok(this); }));
+  const dbAll = (sql, p) => new Promise((ok, ko) =>
+    db.all(sql, p, (e, r) => e ? ko(e) : ok(r || [])));
+  try {
+    // Upsert the org-scoped setting.
+    await dbRun(
+      `INSERT INTO organization_settings (organization_id, key, value)
+       VALUES ($1, 'club_calendar_palette', $2)
+       ON CONFLICT (organization_id, key) DO UPDATE SET value = EXCLUDED.value`,
+      [orgId, palette]
+    );
+    let filledCount = 0;
+    if (apply) {
+      // Fill gaps for this org with the new palette.
+      const clubs = await dbAll(
+        `SELECT id, display_name, calendar_color, calendar_abbrev, calendar_code
+           FROM clubs
+          WHERE ($1::int IS NULL OR organization_id = $1)`,
+        [orgId]
+      );
+      const updates = computeDefaults(clubs, { palette });
+      for (const u of updates) {
+        await dbRun(
+          `UPDATE clubs SET calendar_color = $1, calendar_abbrev = $2 WHERE id = $3`,
+          [u.calendar_color, u.calendar_abbrev, u.id]
+        );
+        filledCount++;
+      }
+    }
+    res.json({ palette, applied_to_clubs: filledCount });
+  } catch (err) {
+    console.error('[clubs] PUT /calendar-palette error:', err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // V 2.0.630 — Calendar grid styling (PATCH).

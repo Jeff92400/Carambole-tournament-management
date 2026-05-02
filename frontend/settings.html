@@ -183,7 +183,9 @@
              optional Assistant Calendrier wizard (admin). The previous
              card mixed calendar concerns with tournament/inscription
              lists, which moved to a separate "Tournois et compétitions"
-             card below. -->
+             card below.
+             V 2.0.638 — added palette picker for the calendar grid
+             styling (Q2). -->
         <div class="settings-card">
           <h4><span class="icon">📅</span> Calendrier</h4>
           <p>Calendrier de la saison : visualisation, téléversement et génération assistée.</p>
@@ -192,6 +194,21 @@
             <a href="calendar.html#uploadSection" class="card-link admin-only"><span class="link-icon">📤</span> Téléverser le calendrier saison (PDF/Excel)</a>
             <a href="#" onclick="openSeasonImportModal(); return false;" class="card-link admin-only" style="background: #28a745; color: white;"><span class="link-icon">🗓️</span> Générer tournois depuis Excel CDBHS</a>
             <a href="calendar-generator.html" class="card-link admin-only"><span class="link-icon">✨</span> Assistant Calendrier (générer la saison)</a>
+          </div>
+
+          <!-- Palette picker (admin-only) -->
+          <div class="admin-only" style="margin-top: 14px; padding-top: 14px; border-top: 1px solid #e9e9e9;">
+            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+              <label for="calendarPaletteSelect" style="font-size: 0.85rem; color: #555; font-weight: 600;">🎨 Palette des cellules calendrier :</label>
+              <select id="calendarPaletteSelect" style="padding: 5px 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.85rem;">
+                <option value="pastel">Pastel</option>
+                <option value="vif">Vif</option>
+                <option value="monochrome">Monochrome (violet)</option>
+              </select>
+              <button id="calendarPaletteApply" class="btn btn-sm" style="padding: 5px 12px; font-size: 0.85rem;">Appliquer aux clubs sans couleur</button>
+              <small id="calendarPaletteMsg" style="color: #666; font-size: 0.78rem;"></small>
+            </div>
+            <div id="calendarPaletteSwatches" style="margin-top: 10px; display: flex; gap: 4px; flex-wrap: wrap;"></div>
           </div>
         </div>
 
@@ -450,6 +467,58 @@
       } catch (e) { console.error('Error loading counts:', e); }
     }
     if (userRole === 'admin' || userRole === 'lecteur') loadSettingsCounts();
+
+    // V 2.0.638 — Calendar palette picker (admin only)
+    (async function initCalendarPalette() {
+      if (userRole !== 'admin') return;
+      const sel = document.getElementById('calendarPaletteSelect');
+      const applyBtn = document.getElementById('calendarPaletteApply');
+      const swatches = document.getElementById('calendarPaletteSwatches');
+      const msg = document.getElementById('calendarPaletteMsg');
+      if (!sel || !applyBtn) return;
+
+      const renderSwatches = (palette, available) => {
+        const colors = (available && available[palette]) || [];
+        swatches.innerHTML = colors.map(c =>
+          `<span style="display:inline-block; width:18px; height:18px; border-radius:3px; background:${c}; border:1px solid rgba(0,0,0,0.08);"></span>`
+        ).join('');
+      };
+
+      try {
+        const r = await authFetch(`${API_URL}/clubs/calendar-palette`);
+        if (r.ok) {
+          const d = await r.json();
+          sel.value = d.palette;
+          renderSwatches(d.palette, d.swatches);
+          // Re-render swatches when user changes selector (preview).
+          sel.addEventListener('change', () => renderSwatches(sel.value, d.swatches));
+        }
+      } catch (e) { console.warn('palette load failed:', e); }
+
+      applyBtn.addEventListener('click', async () => {
+        applyBtn.disabled = true;
+        msg.textContent = 'Application…';
+        try {
+          const r = await authFetch(`${API_URL}/clubs/calendar-palette`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ palette: sel.value, apply: true })
+          });
+          const d = await r.json();
+          if (r.ok) {
+            msg.textContent = d.applied_to_clubs > 0
+              ? `${d.applied_to_clubs} club(s) re-stylé(s).`
+              : 'Aucun club n\'avait besoin d\'être re-stylé.';
+          } else {
+            msg.textContent = 'Erreur : ' + (d.error || r.status);
+          }
+        } catch (e) {
+          msg.textContent = 'Erreur réseau';
+        } finally {
+          applyBtn.disabled = false;
+        }
+      });
+    })();
 
     // Populate the season dropdown for calendar import (rolling window around current season)
     (async function populateImportSeasonSelect() {
