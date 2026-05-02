@@ -2054,7 +2054,10 @@ router.get('/draft/export', authenticateToken, requireCalendarGenerator, async (
       `SELECT cd.weekend_date, cd.tournament_type,
               c.id AS category_id, c.display_name AS category_label,
               c.game_type, c.level,
-              cl.id AS host_id, cl.display_name AS host_name
+              cl.id AS host_id, cl.display_name AS host_name,
+              cl.calendar_color  AS host_color,
+              cl.calendar_abbrev AS host_abbrev,
+              cl.calendar_code   AS host_code
        FROM calendar_draft cd
        LEFT JOIN categories c ON c.id = cd.category_id
        LEFT JOIN clubs cl ON cl.id = cd.host_club_id
@@ -2131,11 +2134,17 @@ router.get('/draft/export', authenticateToken, requireCalendarGenerator, async (
       return lvlRank(a.level) - lvlRank(b.level);
     });
 
-    // Unique hosts (for color mapping)
+    // Unique hosts (for color mapping). V 2.0.641 — also keep colour
+    // and abbreviation so the colour-coded legend mirrors the HTML view.
     const hostMap = new Map();
     draft.forEach(r => {
       if (r.host_id && !hostMap.has(r.host_id)) {
-        hostMap.set(r.host_id, r.host_name);
+        hostMap.set(r.host_id, {
+          name: r.host_name,
+          color: r.host_color || null,
+          abbrev: r.host_abbrev || null,
+          code: r.host_code || null
+        });
       }
     });
 
@@ -2182,7 +2191,14 @@ router.get('/draft/export', authenticateToken, requireCalendarGenerator, async (
     draft.forEach(r => {
       if (!r.weekend_date) return;
       if (!grid[r.category_id]) grid[r.category_id] = {};
-      grid[r.category_id][r.weekend_date] = { type: r.tournament_type, host_id: r.host_id, host_name: r.host_name };
+      grid[r.category_id][r.weekend_date] = {
+        type: r.tournament_type,
+        host_id: r.host_id,
+        host_name: r.host_name,
+        host_color: r.host_color || null,
+        host_abbrev: r.host_abbrev || null,
+        host_code: r.host_code || null
+      };
     });
 
     // Build workbook with rich formatting
@@ -2234,6 +2250,30 @@ router.get('/draft/export', authenticateToken, requireCalendarGenerator, async (
     const HEADER_BG = 'FF6B3AA3';     // purple
     const HEADER_TEXT_COLOR = 'FFFFFFFF';
     const ALT_ROW_BG = 'FFF7F7F7';
+
+    // V 2.0.641 — auto-contrast helper. Accepts an ARGB or RRGGBB hex
+    // string (or "#RRGGBB") and returns the ARGB foreground colour
+    // ('FF222222' or 'FFFFFFFF') with the highest readability on it.
+    // Mirrors the YIQ luminance formula used in the HTML calendar.
+    const argbContrast = (hex) => {
+      if (!hex) return 'FF222222';
+      let h = String(hex).replace(/^#/, '').toUpperCase();
+      if (h.length === 8) h = h.slice(2); // strip alpha
+      if (h.length !== 6) return 'FF222222';
+      const r = parseInt(h.slice(0, 2), 16);
+      const g = parseInt(h.slice(2, 4), 16);
+      const b = parseInt(h.slice(4, 6), 16);
+      const yiq = (r * 299 + g * 587 + b * 114) / 1000;
+      return yiq >= 150 ? 'FF222222' : 'FFFFFFFF';
+    };
+    // Normalise a CSS hex (#RRGGBB or RRGGBB) to ExcelJS ARGB.
+    const toArgb = (hex) => {
+      if (!hex) return null;
+      const h = String(hex).replace(/^#/, '').toUpperCase();
+      if (h.length === 8) return h;
+      if (h.length === 6) return 'FF' + h;
+      return null;
+    };
     const MONTH_NAMES_FR = ['janv.', 'févr.', 'mars', 'avril', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
     const monthLabel = (iso) => {
       const d = new Date(iso + 'T00:00:00Z');
@@ -2409,19 +2449,38 @@ router.get('/draft/export', authenticateToken, requireCalendarGenerator, async (
           : rowBorders;
         if (placement) {
           const typeLabel = placement.type;
+          // V 2.0.641 — abbreviation source preference mirrors the
+          // HTML calendar: per-club calendar_code / calendar_abbrev
+          // first (admin-curated), then derived from the club name.
           let hostAbbr = '';
-          if (typeLabel === 'FL')                  hostAbbr = 'Ligue';
-          else if (placement.host_name)             hostAbbr = abbreviate(placement.host_name);
-          else if (typeLabel === 'Finale')          hostAbbr = 'TBD';
+          if (typeLabel === 'FL')                       hostAbbr = 'Ligue';
+          else if (placement.host_code)                  hostAbbr = placement.host_code;
+          else if (placement.host_abbrev)                hostAbbr = placement.host_abbrev;
+          else if (placement.host_name)                  hostAbbr = abbreviate(placement.host_name);
+          else if (typeLabel === 'Finale')               hostAbbr = 'TBD';
           cell.value = hostAbbr ? `${typeLabel}\n${hostAbbr}` : typeLabel;
           cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
-          cell.font = {
-            bold: true,
-            size: 10,
-            color: { argb: TYPE_TEXT_COLORS[typeLabel] || 'FF222222' }
-          };
-          if (TYPE_COLORS[typeLabel]) {
-            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: TYPE_COLORS[typeLabel] } };
+          // V 2.0.641 — cell background = host club colour (per-CDB
+          // palette), text colour = YIQ-auto-contrast. Mirrors the
+          // HTML calendar grid. Falls back to round-type pastel when
+          // no host colour is set (Ligue Finale, TBD, etc.).
+          const hostBgArgb = toArgb(placement.host_color);
+          if (hostBgArgb) {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hostBgArgb } };
+            cell.font = {
+              bold: true,
+              size: 10,
+              color: { argb: argbContrast(hostBgArgb) }
+            };
+          } else {
+            if (TYPE_COLORS[typeLabel]) {
+              cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: TYPE_COLORS[typeLabel] } };
+            }
+            cell.font = {
+              bold: true,
+              size: 10,
+              color: { argb: TYPE_TEXT_COLORS[typeLabel] || 'FF222222' }
+            };
           }
         } else {
           // Alternating monthly tint for empty cells.
@@ -2454,23 +2513,34 @@ router.get('/draft/export', authenticateToken, requireCalendarGenerator, async (
     });
     ws.getRow(typeLegendRow).height = 22;
 
-    // Host legend — textual abbreviation map (no longer colour-coded).
+    // V 2.0.641 — Host legend now colour-coded, mirroring the HTML
+    // calendar: each row shows the abbreviation chip filled with the
+    // club's calendar_color (auto-contrast text), plus the full name.
     const hostLegendRow = typeLegendRow + 2;
     const hlTitle = ws.getCell(hostLegendRow, 1);
     hlTitle.value = 'Clubs hôtes';
     hlTitle.font = { bold: true, size: 13, color: { argb: HEADER_BG } };
     hlTitle.alignment = { vertical: 'middle' };
     const hostAbbrPairs = [...hostMap.entries()]
-      .map(([id, name]) => [abbreviate(name), name])
+      .map(([id, info]) => {
+        const ab = info.code || info.abbrev || abbreviate(info.name);
+        const bg = toArgb(info.color);
+        return [ab, info.name, bg, bg ? argbContrast(bg) : null];
+      })
       .sort((a, b) => a[0].localeCompare(b[0]));
-    hostAbbrPairs.forEach(([ab, name], idx) => {
+    hostAbbrPairs.forEach(([ab, name, bg, fg], idx) => {
       const r = ws.getRow(hostLegendRow + 1 + idx);
       r.height = 20;
       const cAb = r.getCell(2);
       cAb.value = ab;
-      cAb.font = { bold: true, size: 11, color: { argb: HEADER_BG } };
       cAb.alignment = { horizontal: 'center', vertical: 'middle' };
       cAb.border = ALL_BORDERS;
+      if (bg) {
+        cAb.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
+        cAb.font = { bold: true, size: 11, color: { argb: fg } };
+      } else {
+        cAb.font = { bold: true, size: 11, color: { argb: HEADER_BG } };
+      }
       ws.mergeCells(hostLegendRow + 1 + idx, 3, hostLegendRow + 1 + idx, 8);
       const cName = r.getCell(3);
       cName.value = name;
@@ -2535,15 +2605,23 @@ router.get('/draft/export', authenticateToken, requireCalendarGenerator, async (
     legHeader.height = 22;
     wsLeg.getColumn(1).width = 14;
     wsLeg.getColumn(2).width = 40;
-    hostAbbrPairs.forEach(([ab, name]) => {
+    // V 2.0.641 — abbreviation cell on Sheet 3 also gets the club colour.
+    hostAbbrPairs.forEach(([ab, name, bg, fg]) => {
       const r = wsLeg.addRow([ab, name]);
       r.height = 22;
       r.eachCell((c, col) => {
         c.border = ALL_BORDERS;
         c.alignment = { vertical: 'middle', indent: 1, horizontal: col === 1 ? 'center' : 'left' };
-        c.font = col === 1
-          ? { bold: true, size: 11, color: { argb: HEADER_BG } }
-          : { size: 11 };
+        if (col === 1) {
+          if (bg) {
+            c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
+            c.font = { bold: true, size: 11, color: { argb: fg } };
+          } else {
+            c.font = { bold: true, size: 11, color: { argb: HEADER_BG } };
+          }
+        } else {
+          c.font = { size: 11 };
+        }
       });
     });
 
