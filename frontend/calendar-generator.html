@@ -2725,6 +2725,44 @@
       btn.textContent = testMode ? 'Envoi du test…' : 'Diffusion en cours…';
       status.textContent = '';
       try {
+        // V 2.0.655 — auto-publish the wizard's latest coloured Excel
+        // to /calendar.html BEFORE broadcasting (only when emailing
+        // clubs). Without this step the broadcast falls back to
+        // whatever PDF was uploaded historically — usually colourless.
+        if (emailClubs && currentBrief?.id) {
+          status.textContent = '⏳ Publication de l\'Excel coloré…';
+          status.style.color = '#666';
+          try {
+            const expRes = await fetch(`${API_URL}/calendar-generator/draft/export?brief_id=${currentBrief.id}`, {
+              headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (!expRes.ok) {
+              const e = await expRes.json().catch(() => ({}));
+              throw new Error(e.error || `Échec génération Excel (${expRes.status})`);
+            }
+            const blob = await expRes.blob();
+            const fd = new FormData();
+            fd.append('calendar', blob, `Calendrier ${season}.xlsx`);
+            fd.append('season', season);
+            const upRes = await fetch(`${API_URL}/calendar/upload`, {
+              method: 'POST',
+              headers: { 'Authorization': `Bearer ${token}` },
+              body: fd
+            });
+            if (!upRes.ok) {
+              const e = await upRes.json().catch(() => ({}));
+              throw new Error(e.error || `Échec publication (${upRes.status})`);
+            }
+          } catch (pubErr) {
+            // Non-blocking — surface the issue but let the admin choose.
+            console.warn('[Diffuser] auto-publish failed:', pubErr);
+            if (!confirm(`La publication automatique de l'Excel a échoué :\n${pubErr.message}\n\nContinuer la diffusion avec le fichier précédemment téléversé ?`)) {
+              throw new Error('Diffusion annulée');
+            }
+          }
+        }
+
+        status.textContent = testMode ? 'Envoi du test…' : 'Diffusion en cours…';
         const r = await fetch(`${API_URL}/calendar/announce`, {
           method: 'POST',
           headers: authHeaders,
