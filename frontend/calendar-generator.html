@@ -1991,7 +1991,10 @@
           category_id: r.category_id,
           category_label: r.category_label,
           tournament_type: r.tournament_type,
-          host_id: r.host_club_id,
+          // V 2.0.642 — the /draft endpoint already aliases host_club_id
+          // → host_id; reading r.host_club_id gave undefined, which made
+          // « Par club hôte » show "Aucun tournoi avec club hôte assigné".
+          host_id: r.host_id ?? r.host_club_id ?? null,
           host_name: r.host_name,
           weekend_date: r.weekend_date,
           qualif_date: r.weekend_date,
