@@ -3697,14 +3697,16 @@
     });
 
     // V 2.0.650 — one-click "Publier sur la page Calendrier".
-    // Pulls the same Excel export the download button uses and POSTs it
-    // to /calendar/upload, bypassing the manual download → re-upload trip.
+    // V 2.0.653 — verbose logging + explicit success summary so silent
+    // failures stop being silent.
     document.getElementById('publishToCalendarBtn')?.addEventListener('click', async () => {
+      console.log('[Publier] click');
       if (!currentBrief) {
         alert('Aucun brief actif — sauvegardez le brief d\'abord.');
         return;
       }
       const season = currentBrief.season;
+      console.log('[Publier] season =', season, 'brief.id =', currentBrief.id);
       if (!season) {
         alert('Saison introuvable sur le brief courant.');
         return;
@@ -3717,30 +3719,38 @@
       btn.disabled = true; btn.textContent = '⏳ Publication...';
       try {
         // Step 1: fetch the wizard's Excel
+        console.log('[Publier] step 1: GET /draft/export');
         const expRes = await fetch(`${API_URL}/calendar-generator/draft/export?brief_id=${currentBrief.id}`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
+        console.log('[Publier] export status', expRes.status);
         if (!expRes.ok) {
           const e = await expRes.json().catch(() => ({}));
-          throw new Error(e.error || 'Échec génération Excel');
+          throw new Error(e.error || `Échec génération Excel (${expRes.status})`);
         }
         const blob = await expRes.blob();
+        console.log('[Publier] blob bytes:', blob.size, 'type:', blob.type);
         // Step 2: POST it to the calendar upload endpoint
         const fd = new FormData();
         fd.append('calendar', blob, `Calendrier ${season}.xlsx`);
         fd.append('season', season);
+        console.log('[Publier] step 2: POST /calendar/upload');
         const upRes = await fetch(`${API_URL}/calendar/upload`, {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${token}` }, // no Content-Type — let the browser set the multipart boundary
           body: fd
         });
+        console.log('[Publier] upload status', upRes.status);
         const upData = await upRes.json().catch(() => ({}));
+        console.log('[Publier] upload response', upData);
         if (!upRes.ok) {
           throw new Error(upData.error || `Erreur ${upRes.status}`);
         }
         btn.textContent = '✅ Publié';
+        alert(`✅ Publication OK !\n\nFichier stocké : ${upData.filename || 'Calendrier ' + season + '.xlsx'}\n\nLa diffusion par email l'utilisera désormais (préférence Excel sur PDF).`);
         setTimeout(() => { btn.textContent = originalLabel; }, 3000);
       } catch (err) {
+        console.error('[Publier] FAIL', err);
         alert('Erreur publication : ' + err.message);
         btn.textContent = originalLabel;
       } finally {
