@@ -385,7 +385,7 @@
         </div>
         <div style="display: flex; gap: 6px; flex-wrap: nowrap;">
           <button type="button" id="syncDriftDetailsBtn" style="padding: 6px 12px; border: 1px solid #c47b00; background: white; color: #6b4f00; border-radius: 5px; cursor: pointer; font-size: 12px; font-weight: 600;">Voir le détail</button>
-          <button type="button" id="syncDriftCleanupBtn" style="display: none; padding: 6px 12px; border: 1px solid #b81c1c; background: white; color: #b81c1c; border-radius: 5px; cursor: pointer; font-size: 12px; font-weight: 600;" title="Supprime les tournois publiés que la génération actuelle ne reproduit plus (uniquement ceux sans inscriptions ni convocations)">🗑️ Supprimer les orphelins</button>
+          <button type="button" id="syncDriftCleanupBtn" style="display: none; padding: 6px 12px; border: 1px solid #b81c1c; background: white; color: #b81c1c; border-radius: 5px; cursor: pointer; font-size: 12px; font-weight: 600;" title="Supprime les anciens tournois publiés que la génération actuelle ne reproduit plus (les tournois sans inscriptions ni convocations sont supprimés directement)">🗑️ Nettoyer les anciens tournois</button>
           <button type="button" id="syncDriftResyncBtn" style="padding: 6px 12px; border: none; background: #c47b00; color: white; border-radius: 5px; cursor: pointer; font-size: 12px; font-weight: 700;">🔄 Resynchroniser le brouillon</button>
         </div>
       </div>
@@ -2325,13 +2325,13 @@
         const data = await probe.json();
         const { scanned, safe, unsafe } = data;
         if (!scanned) {
-          alert('Aucun orphelin à supprimer.');
+          alert('Aucun ancien tournoi à nettoyer.');
           return;
         }
 
         // Build the confirmation message.
         const lines = [];
-        lines.push(`${scanned} tournoi(s) publié(s) ne sont plus reproduit(s) par la génération actuelle :`);
+        lines.push(`${scanned} ancien(s) tournoi(s) publié(s) ne sont plus reproduit(s) par la génération actuelle :`);
         lines.push('');
         lines.push(`✅ ${safe.length} sans aucune donnée attachée — seront supprimés directement.`);
         if (unsafe.length) {
@@ -2350,7 +2350,7 @@
 
         // Pass 1: confirm safe deletion.
         if (!safe.length && !unsafe.length) return;
-        if (safe.length && !confirm(lines.join('\n') + `\nSupprimer les ${safe.length} orphelins SANS données ?`)) {
+        if (safe.length && !confirm(lines.join('\n') + `\nSupprimer les ${safe.length} anciens tournois SANS données attachées ?`)) {
           return;
         }
 
@@ -2358,9 +2358,9 @@
         let forceIds = [];
         if (unsafe.length) {
           const wantsForce = confirm(
-            `Souhaitez-vous AUSSI supprimer les ${unsafe.length} tournoi(s) avec données attachées ?\n\n` +
+            `Souhaitez-vous AUSSI supprimer les ${unsafe.length} ancien(s) tournoi(s) avec données attachées ?\n\n` +
             `⚠️ Ces données (inscriptions, convocations envoyées, etc.) seront perdues définitivement.\n\n` +
-            `OK = TOUT supprimer · Annuler = ne supprimer que les orphelins sans données`
+            `OK = TOUT supprimer · Annuler = ne supprimer que les tournois sans données`
           );
           if (wantsForce) forceIds = unsafe.map(u => u.tournoi_ext_id);
         }
@@ -2384,7 +2384,7 @@
       } finally {
         if (cleanupBtn) {
           cleanupBtn.disabled = false;
-          cleanupBtn.textContent = '🗑️ Supprimer les orphelins';
+          cleanupBtn.textContent = '🗑️ Nettoyer les anciens tournois';
         }
       }
     }
@@ -2417,7 +2417,7 @@
       if (k.host_changed) parts.push(`${k.host_changed} club${k.host_changed > 1 ? 's' : ''} hôte${k.host_changed > 1 ? 's' : ''} modifié${k.host_changed > 1 ? 's' : ''}`);
       if (k.deleted)      parts.push(`${k.deleted} tournoi${k.deleted > 1 ? 's' : ''} supprimé${k.deleted > 1 ? 's' : ''}`);
       if (k.linkable)     parts.push(`${k.linkable} à reconnecter`);
-      if (k.external)     parts.push(`${k.external} tournoi${k.external > 1 ? 's' : ''} non reproduit${k.external > 1 ? 's' : ''} par la génération actuelle`);
+      if (k.external)     parts.push(`${k.external} ancien${k.external > 1 ? 's' : ''} tournoi${k.external > 1 ? 's' : ''} publié${k.external > 1 ? 's' : ''} à nettoyer (issu${k.external > 1 ? 's' : ''} d'une génération précédente)`);
       summary.textContent = parts.join(' · ');
 
       // Pre-render the details list (hidden by default).
@@ -2426,7 +2426,7 @@
         host_changed: { icon: '🏛️', label: 'Club hôte modifié' },
         deleted:      { icon: '🗑️', label: 'Tournoi supprimé' },
         linkable:     { icon: '🔗', label: 'À reconnecter au brouillon' },
-        external:     { icon: '➕', label: 'Tournoi publié non reproduit par la génération actuelle' }
+        external:     { icon: '🗑️', label: 'Ancien tournoi publié (à nettoyer)' }
       };
       const items = (data.items || []).slice(0, 50).map(it => {
         const k2 = KIND_LABELS[it.kind] || { icon: '•', label: it.kind };
@@ -2460,7 +2460,7 @@
         const fixable = (k.date_changed || 0) + (k.host_changed || 0) + (k.deleted || 0) + (k.linkable || 0);
         if (k.external && fixable === 0) {
           // Only "external" rows — direct admin to the dedicated cleanup flow.
-          alert(`Les ${k.external} tournoi(s) publié(s) ne sont plus reproduit(s) par la génération actuelle.\n\nUtilisez « 🗑️ Supprimer les orphelins » pour les retirer (les tournois sans inscriptions / convocations seront supprimés directement, les autres feront l'objet d'une confirmation).`);
+          alert(`${k.external} ancien(s) tournoi(s) publié(s) ne sont plus reproduit(s) par la génération actuelle.\n\nUtilisez « 🗑️ Nettoyer les anciens tournois » pour les retirer. Les tournois sans inscriptions ni convocations seront supprimés directement ; les autres feront l'objet d'une confirmation.`);
           return;
         }
         if (!confirm(`Resynchroniser le brouillon ?\n\n${fixable} ligne(s) seront alignée(s) avec l'état publié${k.linkable ? ` (dont ${k.linkable} reconnexion${k.linkable > 1 ? 's' : ''} silencieuse${k.linkable > 1 ? 's' : ''})` : ''}. Vos verrous (🔒) sont préservés.`)) return;

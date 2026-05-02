@@ -1917,24 +1917,32 @@ router.post('/cleanup-externals',
     );
     if (!brief) return res.status(404).json({ error: 'Brief introuvable' });
 
-    // Determine the window (same logic as /sync-status).
-    const startISO = brief.first_weekend instanceof Date
+    // Determine the window. tournoi_ext has no `season` column — we
+    // filter by `debut` date range, derived from the brief's first/last
+    // weekend (with fallbacks to the season boundaries).
+    let startISO = brief.first_weekend instanceof Date
       ? brief.first_weekend.toISOString().slice(0, 10)
-      : String(brief.first_weekend || '').slice(0, 10);
-    const endISO = brief.last_weekend instanceof Date
+      : (brief.first_weekend ? String(brief.first_weekend).slice(0, 10) : null);
+    let endISO = brief.last_weekend instanceof Date
       ? brief.last_weekend.toISOString().slice(0, 10)
-      : String(brief.last_weekend || '').slice(0, 10);
+      : (brief.last_weekend ? String(brief.last_weekend).slice(0, 10) : null);
+    if (!startISO || !endISO) {
+      const m = String(brief.season || '').match(/^(\d{4})-(\d{4})$/);
+      if (m) {
+        if (!startISO) startISO = `${m[1]}-09-01`;
+        if (!endISO)   endISO   = `${m[2]}-06-30`;
+      }
+    }
 
-    // 1. All tournoi_ext rows in window for this season.
+    // 1. All tournoi_ext rows in window for this org.
     const extRows = await fetchAll(
       `SELECT te.tournoi_id, te.mode, te.categorie, te.tournament_number,
               te.debut, te.lieu, te.wp_post_id
          FROM tournoi_ext te
         WHERE te.organization_id = $1
-          AND te.season = $2
-          AND ($3::date IS NULL OR te.debut >= $3::date)
-          AND ($4::date IS NULL OR te.debut <= $4::date)`,
-      [orgId, brief.season, startISO || null, endISO || null]
+          AND ($2::date IS NULL OR te.debut >= $2::date)
+          AND ($3::date IS NULL OR te.debut <= $3::date)`,
+      [orgId, startISO || null, endISO || null]
     );
 
     // 2. Set of tournoi_ext_ids that are linked to a draft row.
