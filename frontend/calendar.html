@@ -554,6 +554,43 @@
       btn.textContent = testMode ? 'Envoi du test…' : 'Diffusion en cours…';
       status.textContent = '';
       try {
+        // V 2.0.656 — when an active wizard brief exists for this season,
+        // auto-publish its coloured Excel BEFORE broadcasting so the
+        // email gets the up-to-date file (was previously locked to the
+        // last manual upload, which could be a colourless PDF).
+        if (emailClubs && activeBriefId) {
+          status.textContent = '⏳ Publication de l\'Excel coloré…';
+          status.style.color = '#666';
+          try {
+            const expRes = await fetch(`${API_URL}/calendar-generator/draft/export?brief_id=${activeBriefId}`, {
+              headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (!expRes.ok) {
+              const e = await expRes.json().catch(() => ({}));
+              throw new Error(e.error || `Échec génération Excel (${expRes.status})`);
+            }
+            const blob = await expRes.blob();
+            const fd = new FormData();
+            fd.append('calendar', blob, `Calendrier ${season}.xlsx`);
+            fd.append('season', season);
+            const upRes = await fetch(`${API_URL}/calendar/upload`, {
+              method: 'POST',
+              headers: { 'Authorization': `Bearer ${token}` },
+              body: fd
+            });
+            if (!upRes.ok) {
+              const e = await upRes.json().catch(() => ({}));
+              throw new Error(e.error || `Échec publication (${upRes.status})`);
+            }
+          } catch (pubErr) {
+            console.warn('[Diffuser] auto-publish failed:', pubErr);
+            if (!confirm(`La publication automatique de l'Excel a échoué :\n${pubErr.message}\n\nContinuer la diffusion avec le fichier actuel ?`)) {
+              throw new Error('Diffusion annulée');
+            }
+          }
+        }
+        status.textContent = testMode ? 'Envoi du test…' : 'Diffusion en cours…';
+
         const r = await fetch(`${API_URL}/calendar/announce`, {
           method: 'POST',
           headers: {
