@@ -216,6 +216,33 @@ router.get('/view', authenticateTokenFlexible, (req, res) => {
   });
 });
 
+// V 2.0.652 — diagnostic: list all files in the calendar table for the
+// org (optionally filtered by season). Returns metadata only (no
+// file_data) so it's safe to call from the browser.
+router.get('/files-debug', authenticateToken, (req, res) => {
+  const orgId = req.user.organizationId || null;
+  const season = (req.query.season || '').trim() || null;
+  const sql = season
+    ? `SELECT id, filename, content_type, season, organization_id,
+              uploaded_by, created_at, OCTET_LENGTH(file_data) AS bytes
+         FROM calendar
+        WHERE ($1::int IS NULL OR organization_id = $1) AND season = $2
+        ORDER BY created_at DESC`
+    : `SELECT id, filename, content_type, season, organization_id,
+              uploaded_by, created_at, OCTET_LENGTH(file_data) AS bytes
+         FROM calendar
+        WHERE ($1::int IS NULL OR organization_id = $1)
+        ORDER BY created_at DESC`;
+  const params = season ? [orgId, season] : [orgId];
+  db.all(sql, params, (err, rows) => {
+    if (err) {
+      console.error('[calendar/files-debug] error:', err);
+      return res.status(500).json({ error: err.message });
+    }
+    res.json({ orgId, season, count: (rows || []).length, rows: rows || [] });
+  });
+});
+
 // Download calendar — optional ?season=YYYY-YYYY
 router.get('/download', authenticateToken, (req, res) => {
   const orgId = req.user.organizationId || null;
