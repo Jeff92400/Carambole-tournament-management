@@ -707,6 +707,16 @@
       <div id="persistenceBanner" style="display: none; padding: 8px 12px; background: #e8f5e9; border: 1px solid #a5d6a7; border-radius: 6px; margin-bottom: 16px; font-size: 12px; color: #2c5530;">
         💾 <strong>Sauvegarde automatique active</strong> — le calendrier est enregistré à chaque génération et à chaque modification manuelle d'une cellule. Aucun bouton « Sauvegarder » n'est nécessaire.
       </div>
+
+      <!-- V 2.0.649 — second copy of the capacity widget here (Step 5),
+           right next to the placement summary so the admin sees how the
+           engine's actual count compares to the theoretical capacity. -->
+      <div id="capacityWidgetStep5" style="background: #eef5ff; border: 1px solid #b6cef0; border-radius: 8px; padding: 12px 14px; margin-bottom: 16px; font-size: 13px;">
+        <h3 style="margin: 0 0 8px 0; font-size: 14px; color: #1F4788;">📐 Capacité estimée vs. demande</h3>
+        <div id="capacityWidgetBodyStep5" style="color: #444; line-height: 1.55;">
+          <em>En attente des paramètres de l'étape 1…</em>
+        </div>
+      </div>
       <div id="generationConflicts" style="display: none; margin-bottom: 16px;"></div>
 
       <div id="viewSelector" style="display:none; margin-bottom: 12px; display:flex; gap: 8px; flex-wrap: wrap; align-items: center;">
@@ -868,6 +878,9 @@
     let blackoutDates = [];
     let ligueFinalDates = {};
     let hostBlackouts = []; // [{ host_id, start_date, end_date, reason }]
+    // V 2.0.649 — per-club Compétitions FFB dates, fetched once and reused
+    // by the capacity widget. Map<club_id, [{slot, match_date, label}]>
+    let clubFfbDatesByClub = new Map();
     // V 2.0.646 — JDS Fédérale (3 divisions × 3 journées). Always 9 rows.
     // Shape: { division: 'F2'|'F3'|'F4', round: 1|2|3, date: 'YYYY-MM-DD'|'',
     //          host_club_id: number|null, label: string }
@@ -933,6 +946,23 @@
         console.error(err);
         document.getElementById('categoriesGrid').innerHTML = `<span style="color: #b81c1c;">Erreur de chargement : ${err.message}</span>`;
       }
+      // V 2.0.649 — fetch per-club Compétitions FFB dates so the capacity
+      // widget can decount them. Non-blocking.
+      try {
+        const r = await fetch(`${API_URL}/clubs/ffb-match-dates`, { headers: authHeaders });
+        if (r.ok) {
+          const rows = await r.json();
+          clubFfbDatesByClub = new Map();
+          (rows || []).forEach(row => {
+            if (!row || !row.match_date) return;
+            if (!clubFfbDatesByClub.has(row.club_id)) clubFfbDatesByClub.set(row.club_id, []);
+            clubFfbDatesByClub.get(row.club_id).push({
+              slot: row.slot, match_date: row.match_date, label: row.label
+            });
+          });
+        }
+      } catch (_) { /* non-blocking */ }
+      if (typeof renderCapacityWidget === 'function') renderCapacityWidget();
     }
 
     function renderCategories() {
@@ -1275,25 +1305,81 @@
       monday: 'lundi', tuesday: 'mardi', wednesday: 'mercredi',
       thursday: 'jeudi', friday: 'vendredi', saturday: 'samedi', sunday: 'dimanche'
     };
-    function countDaysOfWeek(startISO, endISO, dow, blackoutSet) {
-      if (!startISO || !endISO) return 0;
+    // V 2.0.649 — enumerate all dates of a given weekday in a range,
+    // honoring the global blackout set. Returns an ARRAY of ISO dates
+    // (not just a count) so we can subtract per-host blackouts later.
+    function listDaysOfWeek(startISO, endISO, dow, blackoutSet) {
+      if (!startISO || !endISO) return [];
       const start = new Date(startISO + 'T00:00:00Z');
       const end   = new Date(endISO   + 'T00:00:00Z');
-      if (isNaN(start) || isNaN(end) || start > end) return 0;
-      // advance to first occurrence of dow on/after start
+      if (isNaN(start) || isNaN(end) || start > end) return [];
       const cur = new Date(start);
       while (cur.getUTCDay() !== dow) cur.setUTCDate(cur.getUTCDate() + 1);
-      let n = 0;
+      const out = [];
       while (cur <= end) {
         const iso = cur.toISOString().slice(0, 10);
-        if (!blackoutSet.has(iso)) n++;
+        if (!blackoutSet.has(iso)) out.push(iso);
         cur.setUTCDate(cur.getUTCDate() + 7);
       }
-      return n;
+      return out;
     }
+
+    // V 2.0.649 — read « max tournois par jour » live from the rule store.
+    // The actual constraint is named max_tournaments_per_weekend (legacy
+    // naming — it's enforced per weekend = per day in practice). Falls
+    // back to 4 if the rule isn't loaded yet.
+    function getMaxPerDayFromRules() {
+      try {
+        const list = (typeof constraints !== 'undefined' && Array.isArray(constraints)) ? constraints : [];
+        const rule = list.find(c => c.rule_type === 'max_tournaments_per_weekend');
+        const params = rule ? (typeof rule.parameters === 'string'
+          ? (() => { try { return JSON.parse(rule.parameters); } catch (_) { return {}; } })()
+          : (rule.parameters || {})) : {};
+        const m = parseInt(params?.max, 10);
+        if (rule && rule.enabled !== false && Number.isFinite(m) && m > 0) return m;
+      } catch (_) { /* fall through */ }
+      return 4;
+    }
+
+    // V 2.0.649 — build a Map<host_id, Set<ISO date>> of unavailability
+    // sources: brief.host_blackouts (multi-day ranges), JDS Fédérale dates
+    // that have a host_club_id, and the per-club Compétitions FFB dates.
+    function buildHostBlackoutMap() {
+      const m = new Map();
+      const add = (hostId, iso) => {
+        if (!hostId || !iso) return;
+        const id = parseInt(hostId, 10);
+        if (!m.has(id)) m.set(id, new Set());
+        m.get(id).add(iso);
+      };
+      (hostBlackouts || []).forEach(hb => {
+        if (!hb?.host_id || !hb.start_date || !hb.end_date) return;
+        const s = new Date(hb.start_date + 'T00:00:00Z');
+        const e = new Date(hb.end_date + 'T00:00:00Z');
+        if (isNaN(s) || isNaN(e) || s > e) return;
+        const cur = new Date(s);
+        while (cur <= e) {
+          add(hb.host_id, cur.toISOString().slice(0, 10));
+          cur.setUTCDate(cur.getUTCDate() + 1);
+        }
+      });
+      (ffbTeamMatches || []).forEach(ftm => {
+        if (ftm?.host_club_id && ftm.date && /^\d{4}-\d{2}-\d{2}$/.test(ftm.date)) {
+          add(ftm.host_club_id, ftm.date);
+        }
+      });
+      (clubFfbDatesByClub || new Map()).forEach((rows, clubId) => {
+        rows.forEach(r => add(clubId, String(r.match_date).slice(0, 10)));
+      });
+      return m;
+    }
+
     function renderCapacityWidget() {
-      const body = document.getElementById('capacityWidgetBody');
-      if (!body) return;
+      // V 2.0.649 — write to both Step 1 and Step 5 panels.
+      const targets = ['capacityWidgetBody', 'capacityWidgetBodyStep5']
+        .map(id => document.getElementById(id))
+        .filter(Boolean);
+      if (!targets.length) return;
       const startISO = document.getElementById('firstWeekendInput')?.value || '';
       const endISO   = document.getElementById('lastWeekendInput')?.value || '';
       const qualifDay = document.getElementById('qualifDayInput')?.value || 'saturday';
@@ -1303,45 +1389,71 @@
       const finalDow  = WEEKDAY_TO_INT[finalDay];
       const sameDay = qualifDow === finalDow;
 
+      const activeClubIds = Array.from(document.querySelectorAll('.club-cb:checked'))
+        .map(cb => parseInt(cb.value, 10))
+        .filter(Number.isFinite);
       const C = document.querySelectorAll('.cat-cb:checked').length;
-      const K = document.querySelectorAll('.club-cb:checked').length;
-      const M = 4; // sensible default
+      const K = activeClubIds.length;
+      const M = getMaxPerDayFromRules();
 
       if (!startISO || !endISO || !C || !K) {
-        body.innerHTML = '<em>Renseignez la saison, les jours, les catégories et les clubs pour voir l\'estimation.</em>';
+        targets.forEach(b => { b.innerHTML = '<em>Renseignez la saison, les jours, les catégories et les clubs pour voir l\'estimation.</em>'; });
         return;
       }
 
-      const dQualif = countDaysOfWeek(startISO, endISO, qualifDow, blackoutSet);
-      const dFinal  = sameDay ? 0 : countDaysOfWeek(startISO, endISO, finalDow, blackoutSet);
-      const slotCap = Math.min(K, M);
+      const qualifDates = listDaysOfWeek(startISO, endISO, qualifDow, blackoutSet);
+      const finalDates  = sameDay ? [] : listDaysOfWeek(startISO, endISO, finalDow, blackoutSet);
+
+      // V 2.0.649 — host-level blackouts (host_blackouts ranges + JDS host
+      // dates + per-club Compétitions FFB). Each blocks one (host, day)
+      // slot rather than the whole day.
+      const hostBlackMap = buildHostBlackoutMap();
+      const slotsForDay = (iso) => {
+        let avail = 0;
+        for (const id of activeClubIds) {
+          if (!hostBlackMap.get(id)?.has(iso)) avail++;
+        }
+        return Math.min(avail, M);
+      };
+
+      // Sum slots per day (so per-host blackouts are properly decounted
+      // and the M-per-day cap is respected).
+      const slotsQualif = qualifDates.reduce((s, d) => s + slotsForDay(d), 0);
+      const slotsFinal  = sameDay ? 0 : finalDates.reduce((s, d) => s + slotsForDay(d), 0);
+
+      // Count how many (host, date) pairs were lost to per-host blackouts
+      // (informational only — same M cap applies whether decounted or not).
+      let lostHostDays = 0;
+      const allDates = sameDay ? qualifDates : qualifDates.concat(finalDates);
+      hostBlackMap.forEach((dateSet, hostId) => {
+        if (!activeClubIds.includes(hostId)) return;
+        for (const iso of allDates) if (dateSet.has(iso)) lostHostDays++;
+      });
+
       const T = 4; // T1+T2+T3+Finale
       let slots, demand, rows;
 
       if (sameDay) {
-        // Single-day regime: one pool of days carries all 4 events.
-        slots = dQualif * slotCap;
+        slots = slotsQualif;
         demand = C * T;
         rows = `
-          <tr><td>Jours de compétition (${WEEKDAY_FR[qualifDay]})</td><td><strong>${dQualif}</strong></td></tr>
-          <tr><td>Capacité totale (jours × min(clubs, ${M}))</td><td><strong>${slots}</strong> créneaux</td></tr>
+          <tr><td>Jours de compétition (${WEEKDAY_FR[qualifDay]})</td><td><strong>${qualifDates.length}</strong></td></tr>
+          <tr><td>Capacité totale (jours × min(clubs dispos, ${M}))</td><td><strong>${slots}</strong> créneaux</td></tr>
           <tr><td>Demande (${C} catégories × ${T} tournois)</td><td><strong>${demand}</strong> tournois</td></tr>
         `;
       } else {
-        // Partitioned regime: qualifier days hold T1+T2+T3, finale days hold Finale.
-        const slotsQualif = dQualif * slotCap;
-        const slotsFinal  = dFinal * slotCap;
         const demandQualif = C * 3;
         const demandFinal  = C * 1;
         slots = slotsQualif + slotsFinal;
         demand = demandQualif + demandFinal;
         rows = `
-          <tr><td>Jours qualif. (${WEEKDAY_FR[qualifDay]})</td><td><strong>${dQualif}</strong></td></tr>
-          <tr><td>Jours finales (${WEEKDAY_FR[finalDay]})</td><td><strong>${dFinal}</strong></td></tr>
+          <tr><td>Jours qualif. (${WEEKDAY_FR[qualifDay]})</td><td><strong>${qualifDates.length}</strong></td></tr>
+          <tr><td>Jours finales (${WEEKDAY_FR[finalDay]})</td><td><strong>${finalDates.length}</strong></td></tr>
           <tr><td>Capacité qualif. (T1+T2+T3)</td><td><strong>${slotsQualif}</strong> créneaux pour <strong>${demandQualif}</strong> tournois</td></tr>
           <tr><td>Capacité finales</td><td><strong>${slotsFinal}</strong> créneaux pour <strong>${demandFinal}</strong> tournois</td></tr>
         `;
       }
+
       const headroom = demand > 0 ? slots / demand : 0;
       let verdict, color;
       if (demand === 0)            { verdict = '—';                       color = '#666'; }
@@ -1350,7 +1462,13 @@
       else if (headroom >= 1.0)    { verdict = '🟠 Tendu';                color = '#e65100'; }
       else                          { verdict = '🔴 Infaisable';          color = '#b71c1c'; }
 
-      body.innerHTML = `
+      const lostLine = lostHostDays > 0
+        ? `<div style="font-size: 11px; color: #8a6d00; margin-top: 4px;">
+             ⚠️ ${lostHostDays} (club × jour) perdus pour cause d'indispos par club / Compétitions FFB.
+           </div>`
+        : '';
+
+      const html = `
         <table style="width: 100%; border-collapse: collapse; margin-bottom: 8px;">
           ${rows}
           <tr style="border-top: 1px solid #c7d6ec;">
@@ -1361,10 +1479,14 @@
           </tr>
         </table>
         <div style="font-size: 11px; color: #666;">
-          Hypothèses : maximum de ${M} tournois par jour, 1 tournoi par club par jour, blackouts saisis pris en compte.
-          Les indispos par club et les Compétitions FFB ne sont pas encore décomptées dans cette estimation.
+          Hypothèses : maximum de <strong>${M}</strong> tournois par jour
+          (lu depuis la règle <em>max_tournaments_per_weekend</em>),
+          1 tournoi par club par jour, blackouts saison + indispos par club +
+          Compétitions FFB pris en compte.
         </div>
+        ${lostLine}
       `;
+      targets.forEach(b => { b.innerHTML = html; });
     }
     // Re-render on every relevant change (both Step 1 inputs and the
     // checkboxes that drive C and K).
@@ -1713,6 +1835,8 @@
         if (!res.ok) throw new Error('Échec chargement règles');
         constraints = await res.json();
         renderRulesTables();
+        // V 2.0.649 — refresh capacity widget so it picks up the live M.
+        if (typeof renderCapacityWidget === 'function') renderCapacityWidget();
       } catch (err) {
         console.error(err);
       }
