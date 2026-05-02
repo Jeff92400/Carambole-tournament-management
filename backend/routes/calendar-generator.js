@@ -108,7 +108,8 @@ router.post('/brief', authenticateToken, requireCalendarGenerator, requireAdmin,
     active_hosts,
     final_attribution,
     host_blackouts,
-    last_weekend
+    last_weekend,
+    ffb_team_matches // V 2.0.645
   } = req.body;
 
   if (!season || !qualif_day || !final_day || !first_weekend) {
@@ -118,8 +119,10 @@ router.post('/brief', authenticateToken, requireCalendarGenerator, requireAdmin,
   db.run(
     `INSERT INTO calendar_brief
        (organization_id, season, qualif_day, final_day, first_weekend,
-        blackout_dates, active_categories, active_hosts, final_attribution, host_blackouts, last_weekend, created_by)
-     VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8::jsonb, $9, $10::jsonb, $11, $12)
+        blackout_dates, active_categories, active_hosts, final_attribution,
+        host_blackouts, last_weekend, ffb_team_matches, created_by)
+     VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8::jsonb, $9,
+             $10::jsonb, $11, $12::jsonb, $13)
      RETURNING id`,
     [
       orgId,
@@ -133,6 +136,7 @@ router.post('/brief', authenticateToken, requireCalendarGenerator, requireAdmin,
       final_attribution || 'manual',
       JSON.stringify(host_blackouts || []),
       last_weekend || null,
+      JSON.stringify(ffb_team_matches || []),
       userId
     ],
     function(err, result) {
@@ -164,7 +168,8 @@ router.put('/brief/:id', authenticateToken, requireCalendarGenerator, requireAdm
     final_attribution,
     host_blackouts,
     last_weekend,
-    status
+    status,
+    ffb_team_matches // V 2.0.645
   } = req.body;
 
   db.run(
@@ -179,8 +184,9 @@ router.put('/brief/:id', authenticateToken, requireCalendarGenerator, requireAdm
          host_blackouts = COALESCE($8::jsonb, host_blackouts),
          last_weekend = COALESCE($9::date, last_weekend),
          status = COALESCE($10, status),
+         ffb_team_matches = COALESCE($11::jsonb, ffb_team_matches),
          updated_at = CURRENT_TIMESTAMP
-     WHERE id = $11 AND organization_id = $12`,
+     WHERE id = $12 AND organization_id = $13`,
     [
       qualif_day || null,
       final_day || null,
@@ -192,6 +198,7 @@ router.put('/brief/:id', authenticateToken, requireCalendarGenerator, requireAdm
       host_blackouts ? JSON.stringify(host_blackouts) : null,
       last_weekend || null,
       status || null,
+      ffb_team_matches !== undefined ? JSON.stringify(ffb_team_matches || []) : null,
       briefId,
       orgId
     ],
@@ -911,12 +918,55 @@ function loadEngineContext(orgId, briefId, cb) {
       if (!brief) return cb(new Error('Brief introuvable'));
 
       // Parse JSONB fields if stored as text
-      ['blackout_dates', 'active_categories', 'active_hosts', 'host_blackouts'].forEach(k => {
+      ['blackout_dates', 'active_categories', 'active_hosts', 'host_blackouts', 'ffb_team_matches'].forEach(k => {
         if (typeof brief[k] === 'string') {
           try { brief[k] = JSON.parse(brief[k]); } catch (_) { brief[k] = []; }
         }
         if (!Array.isArray(brief[k])) brief[k] = [];
       });
+
+      // V 2.0.645 — synthesize host_blackouts from
+      //   (a) JDS Fédérale dates that have a host_club_id (rare — usually
+      //       organised at Ligue level but a CDB club can host)
+      //   (b) per-club FFB match dates (single-day blackout)
+      // Result is merged into brief.host_blackouts before the engine reads
+      // it, so no engine code change is needed.
+      const synthBlackouts = [];
+      (brief.ffb_team_matches || []).forEach(m => {
+        if (m && m.host_club_id && m.date && /^\d{4}-\d{2}-\d{2}$/.test(m.date)) {
+          synthBlackouts.push({
+            host_id: parseInt(m.host_club_id, 10),
+            start_date: m.date,
+            end_date: m.date,
+            reason: `JDS Fédérale ${m.division || ''} J${m.round || ''}`.trim()
+          });
+        }
+      });
+
+      // V 2.0.645 — load per-club FFB match dates and merge into host_blackouts.
+      db.all(
+        `SELECT club_id, slot, match_date, label
+           FROM club_ffb_match_dates
+          WHERE ($1::int IS NULL OR organization_id = $1)
+            AND match_date IS NOT NULL`,
+        [orgId],
+        (errFfb, ffbRows) => {
+          if (!errFfb && Array.isArray(ffbRows)) {
+            ffbRows.forEach(r => {
+              const d = r.match_date instanceof Date
+                ? r.match_date.toISOString().slice(0, 10)
+                : String(r.match_date).match(/^\d{4}-\d{2}-\d{2}/)?.[0];
+              if (!d) return;
+              synthBlackouts.push({
+                host_id: parseInt(r.club_id, 10),
+                start_date: d,
+                end_date: d,
+                reason: r.label || `Compétition FFB (slot ${r.slot})`
+              });
+            });
+          }
+          // Merge synthesized blackouts with the explicit ones.
+          brief.host_blackouts = [...brief.host_blackouts, ...synthBlackouts];
 
       db.all(
         `SELECT id, rule_type, parameters, strictness, weight, enabled
@@ -968,6 +1018,8 @@ function loadEngineContext(orgId, briefId, cb) {
           );
         }
       );
+        }
+      ); // V 2.0.645 — close FFB-dates wrapper
     }
   );
 }

@@ -518,4 +518,99 @@ router.delete('/:id', authenticateToken, requireAdmin, (req, res) => {
   });
 });
 
+// V 2.0.645 — FFB match dates per club.
+//
+// GET  /api/clubs/ffb-match-dates              → all dates for the org,
+//                                                 returned as a flat list.
+// PUT  /api/clubs/:id/ffb-match-dates           → upsert {slot, match_date,
+//                                                 label?} for the club.
+// DELETE /api/clubs/:id/ffb-match-dates/:slot   → clear that slot.
+//
+// The dates are not full weekends — admins record a single date (Sat or Sun).
+// The seasonal calendar generator's engine treats them as host blackouts.
+router.get('/ffb-match-dates', authenticateToken, (req, res) => {
+  const orgId = req.user.organizationId || null;
+  db.all(
+    `SELECT cf.id, cf.club_id, cf.slot, cf.match_date, cf.label,
+            cl.display_name AS club_name
+       FROM club_ffb_match_dates cf
+       JOIN clubs cl ON cl.id = cf.club_id
+      WHERE ($1::int IS NULL OR cf.organization_id = $1)
+      ORDER BY cl.display_name ASC, cf.slot ASC`,
+    [orgId],
+    (err, rows) => {
+      if (err) {
+        console.error('[clubs/ffb-match-dates] list error:', err);
+        return res.status(500).json({ error: err.message });
+      }
+      // Normalise dates to ISO YYYY-MM-DD.
+      (rows || []).forEach(r => {
+        if (r.match_date instanceof Date) r.match_date = r.match_date.toISOString().slice(0, 10);
+        else if (r.match_date) r.match_date = String(r.match_date).slice(0, 10);
+      });
+      res.json(rows || []);
+    }
+  );
+});
+
+router.put('/:id/ffb-match-dates', authenticateToken, requireAdmin, (req, res) => {
+  const clubId = parseInt(req.params.id, 10);
+  const orgId = req.user.organizationId || null;
+  const { slot, match_date, label } = req.body || {};
+  const slotInt = parseInt(slot, 10);
+  if (![1, 2].includes(slotInt)) {
+    return res.status(400).json({ error: 'slot doit être 1 ou 2' });
+  }
+  const dateStr = String(match_date || '').trim();
+  if (dateStr && !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    return res.status(400).json({ error: 'match_date doit être au format YYYY-MM-DD' });
+  }
+  // Verify the club belongs to this org.
+  db.get(
+    'SELECT id FROM clubs WHERE id = $1 AND ($2::int IS NULL OR organization_id = $2)',
+    [clubId, orgId],
+    (err, club) => {
+      if (err) return res.status(500).json({ error: err.message });
+      if (!club) return res.status(404).json({ error: 'Club introuvable' });
+
+      // Upsert on (club_id, slot)
+      db.run(
+        `INSERT INTO club_ffb_match_dates (club_id, organization_id, slot, match_date, label, updated_at)
+         VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
+         ON CONFLICT (club_id, slot)
+         DO UPDATE SET match_date = EXCLUDED.match_date,
+                       label = EXCLUDED.label,
+                       updated_at = CURRENT_TIMESTAMP`,
+        [clubId, orgId, slotInt, dateStr || null, label || null],
+        function(uErr) {
+          if (uErr) {
+            console.error('[clubs/ffb-match-dates] upsert error:', uErr);
+            return res.status(500).json({ error: uErr.message });
+          }
+          res.json({ success: true });
+        }
+      );
+    }
+  );
+});
+
+router.delete('/:id/ffb-match-dates/:slot', authenticateToken, requireAdmin, (req, res) => {
+  const clubId = parseInt(req.params.id, 10);
+  const slotInt = parseInt(req.params.slot, 10);
+  const orgId = req.user.organizationId || null;
+  if (![1, 2].includes(slotInt)) {
+    return res.status(400).json({ error: 'slot doit être 1 ou 2' });
+  }
+  db.run(
+    `DELETE FROM club_ffb_match_dates
+       WHERE club_id = $1 AND slot = $2
+         AND ($3::int IS NULL OR organization_id = $3)`,
+    [clubId, slotInt, orgId],
+    function(err) {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ success: true });
+    }
+  );
+});
+
 module.exports = router;

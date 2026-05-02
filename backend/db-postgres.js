@@ -2297,6 +2297,31 @@ async function initializeDatabase() {
       `);
       await client.query(`CREATE INDEX IF NOT EXISTS idx_ddj_bracket_seed_overrides_tournoi ON ddj_bracket_seed_overrides(tournoi_id)`);
 
+      // V 2.0.645 — FFB team match calendar.
+      //   - calendar_brief.ffb_team_matches: JSON array of
+      //     { division: 'F2'|'F3'|'F4', round: 1|2|3, date: 'YYYY-MM-DD',
+      //       host_club_id: number|null, label: string }
+      //     Informational + injects a host_blackout when host_club_id is set.
+      //   - club_ffb_match_dates: per-club specific dates (not full weekends)
+      //     when the club hosts a national/league match → blocks that club
+      //     as a host on that day. Up to 2 slots per club.
+      await client.query(`ALTER TABLE calendar_brief ADD COLUMN IF NOT EXISTS ffb_team_matches JSONB DEFAULT '[]'::jsonb`);
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS club_ffb_match_dates (
+          id SERIAL PRIMARY KEY,
+          club_id INTEGER NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
+          organization_id INTEGER REFERENCES organizations(id) ON DELETE CASCADE,
+          slot INTEGER NOT NULL CHECK (slot IN (1, 2)),
+          match_date DATE,
+          label TEXT,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE(club_id, slot)
+        )
+      `);
+      await client.query(`CREATE INDEX IF NOT EXISTS idx_club_ffb_match_dates_club ON club_ffb_match_dates(club_id)`);
+      await client.query(`CREATE INDEX IF NOT EXISTS idx_club_ffb_match_dates_org ON club_ffb_match_dates(organization_id)`);
+
       console.log('[Migration] Seasonal Calendar Generator schema ready');
     } catch (calendarErr) {
       console.error('[Migration] Seasonal Calendar Generator schema FAILED (non-fatal):', calendarErr.message);
