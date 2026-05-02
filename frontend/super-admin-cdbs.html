@@ -268,6 +268,22 @@
         <button class="btn-sm btn-primary btn-lg" onclick="sendWelcomeEmail()" id="btnSendWelcome">Envoyer l'email de bienvenue</button>
         <span id="welcomeResult" style="font-size: 13px;"></span>
       </div>
+
+      <!-- V 2.0.639 (Q4) — Auto-styled clubs preview & inline edit. -->
+      <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #e0e0e0;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+          <h4 style="margin: 0; font-size: 14px;">🎨 Couleurs des clubs (calendrier)</h4>
+          <button class="btn-sm btn-outline" onclick="toggleClubColorsPanel()" id="btnToggleClubColors">Afficher</button>
+        </div>
+        <p style="font-size: 12px; color: #666; margin: 0 0 8px;">
+          Couleurs auto-assignées lors de la création. Vous pouvez ajuster avant de notifier le CDB.
+          L'admin du CDB pourra aussi modifier individuellement chaque club par la suite.
+        </p>
+        <div id="clubColorsPanel" style="display: none; margin-top: 10px;">
+          <div id="clubColorsList" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 8px;"></div>
+          <div id="clubColorsMsg" style="margin-top: 10px; font-size: 12px; color: #2e7d32;"></div>
+        </div>
+      </div>
     </div>
 
     <!-- Sync Players with FFB (visible when an org is selected) -->
@@ -551,6 +567,93 @@
       document.getElementById('orgSlug').value = shortName.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
     }
 
+    // ==================== V 2.0.639 — Q4: Club Colours Preview Panel ====================
+    async function toggleClubColorsPanel() {
+      const panel = document.getElementById('clubColorsPanel');
+      const btn   = document.getElementById('btnToggleClubColors');
+      const list  = document.getElementById('clubColorsList');
+      if (!panel || !btn || !currentOrgId) return;
+
+      if (panel.style.display === 'none') {
+        // Lazy-load the clubs the first time we open.
+        btn.textContent = 'Masquer';
+        panel.style.display = 'block';
+        list.innerHTML = '<div style="color:#888; font-size:12px;">Chargement…</div>';
+        try {
+          const res = await authFetch(`${API_URL}/super-admin/organizations/${currentOrgId}/clubs`);
+          const clubs = await res.json();
+          if (!Array.isArray(clubs) || clubs.length === 0) {
+            list.innerHTML = '<div style="color:#888; font-size:12px;">Aucun club pour cette organisation.</div>';
+            return;
+          }
+          list.innerHTML = clubs.map(c => clubColorRowHtml(c)).join('');
+        } catch (err) {
+          list.innerHTML = `<div style="color:#c00;">Erreur: ${err.message}</div>`;
+        }
+      } else {
+        panel.style.display = 'none';
+        btn.textContent = 'Afficher';
+      }
+    }
+
+    function clubColorRowHtml(c) {
+      const color = c.calendar_color || '#e6f0ff';
+      const abbrev = c.calendar_abbrev || '';
+      return `
+        <div style="display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: #fafafa; border: 1px solid #e8e8e8; border-radius: 6px;" data-club-id="${c.id}">
+          <input type="color" value="${color}" data-field="color"
+                 style="height: 28px; width: 36px; padding: 1px; border: 1px solid #ccc; border-radius: 3px; cursor: pointer;">
+          <input type="text" value="${abbrev.replace(/"/g, '&quot;')}" maxlength="8" placeholder="Abrév." data-field="abbrev"
+                 style="width: 60px; padding: 4px 6px; font-size: 12px; border: 1px solid #ccc; border-radius: 3px;">
+          <div style="flex: 1; font-size: 12px; line-height: 1.2; min-width: 0;">
+            <div style="font-weight: 600; color: #333; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(c.display_name || c.name || '')}</div>
+            <div style="color: #888; font-size: 11px;">${escapeHtml(c.city || '')}${c.calendar_code ? ` · code <strong>${c.calendar_code}</strong>` : ''}</div>
+          </div>
+          <button class="btn-sm" onclick="saveClubStyle(${c.id}, this)" style="padding: 3px 10px; font-size: 11px;">💾</button>
+        </div>
+      `;
+    }
+
+    async function saveClubStyle(clubId, btn) {
+      const row = btn.closest('[data-club-id]');
+      if (!row) return;
+      const color  = row.querySelector('[data-field="color"]').value;
+      const abbrev = row.querySelector('[data-field="abbrev"]').value.trim();
+      const msg = document.getElementById('clubColorsMsg');
+      btn.disabled = true; btn.textContent = '…';
+      try {
+        const res = await authFetch(
+          `${API_URL}/super-admin/organizations/${currentOrgId}/clubs/${clubId}/style`,
+          {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ calendar_color: color, calendar_abbrev: abbrev })
+          }
+        );
+        if (res.ok) {
+          msg.textContent = `✅ Sauvegardé — ${row.querySelector('[data-field="abbrev"]').value || '(vide)'}`;
+          msg.style.color = '#2e7d32';
+          btn.textContent = '✅';
+          setTimeout(() => { btn.textContent = '💾'; btn.disabled = false; }, 800);
+        } else {
+          const e = await res.json().catch(() => ({}));
+          msg.textContent = `❌ ${e.error || 'Erreur'}`;
+          msg.style.color = '#c00';
+          btn.disabled = false; btn.textContent = '💾';
+        }
+      } catch (err) {
+        msg.textContent = `❌ ${err.message}`;
+        msg.style.color = '#c00';
+        btn.disabled = false; btn.textContent = '💾';
+      }
+    }
+
+    function escapeHtml(s) {
+      return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
     async function createOrganization() {
       const data = {
         name: document.getElementById('orgName').value.trim(),
@@ -616,6 +719,11 @@
     // ==================== Select Org (show summary + sync sections) ====================
     function selectOrg(orgId, shortName, slug, stats) {
       currentOrgId = orgId;
+      // V 2.0.639 — reset the club colours panel when switching orgs.
+      const cp = document.getElementById('clubColorsPanel');
+      const cb = document.getElementById('btnToggleClubColors');
+      if (cp) cp.style.display = 'none';
+      if (cb) cb.textContent = 'Afficher';
 
       // Show summary section
       const baseUrl = window.location.origin;

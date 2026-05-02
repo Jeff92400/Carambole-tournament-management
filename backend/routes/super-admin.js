@@ -1138,6 +1138,31 @@ router.post('/organizations', async (req, res) => {
       }
     }
 
+    // V 2.0.639 (Q4) — auto-style the freshly seeded clubs so they show
+    // up in the calendar grid views immediately, without waiting for
+    // the next server restart (which is when the global backfill runs).
+    // Best-effort: failures are logged but never block CDB creation.
+    if (clubStats.created > 0) {
+      try {
+        const { computeDefaults } = require('../utils/club-calendar-defaults');
+        const orgClubs = await dbAll(
+          `SELECT id, display_name, calendar_color, calendar_abbrev, calendar_code
+             FROM clubs WHERE organization_id = $1`,
+          [orgId]
+        );
+        const updates = computeDefaults(orgClubs, { palette: 'pastel' });
+        for (const u of updates) {
+          await dbRun(
+            `UPDATE clubs SET calendar_color = $1, calendar_abbrev = $2 WHERE id = $3`,
+            [u.calendar_color, u.calendar_abbrev, u.id]
+          );
+        }
+        console.log(`[CDB Creation] auto-styled ${updates.length} club(s) for org ${orgId}`);
+      } catch (styleErr) {
+        console.error('[CDB Creation] club auto-style failed:', styleErr.message);
+      }
+    }
+
     logAdminAction({
       req,
       action: ACTION_TYPES.USER_CREATED || 'user_created',
@@ -1320,6 +1345,65 @@ router.delete('/organizations/:id', async (req, res) => {
 });
 
 // ==================== PLAYER SEEDING FROM FFB ====================
+
+// V 2.0.639 (Q4) — GET /api/super-admin/organizations/:id/clubs
+// Returns the styled clubs of a specific org so the SA wizard can show
+// a preview/edit panel right after CDB creation. Mirror the regular
+// /api/clubs endpoint but lets the SA target any org by id.
+router.get('/organizations/:id/clubs', async (req, res) => {
+  const orgId = parseInt(req.params.id, 10);
+  if (!orgId) return res.status(400).json({ error: 'invalid org id' });
+  const dbAll = (sql, p) => new Promise((ok, ko) =>
+    db.all(sql, p, (e, r) => e ? ko(e) : ok(r || [])));
+  try {
+    const rows = await dbAll(
+      `SELECT id, name, display_name, city, calendar_code,
+              calendar_color, calendar_abbrev
+         FROM clubs
+        WHERE organization_id = $1
+        ORDER BY display_name`,
+      [orgId]
+    );
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// V 2.0.639 (Q4) — PATCH /api/super-admin/organizations/:id/clubs/:clubId/style
+// Updates calendar_color + calendar_abbrev for a specific club within
+// a specific org. Used by the SA preview panel to tweak auto-assigned
+// styles before notifying the new CDB.
+router.patch('/organizations/:id/clubs/:clubId/style', async (req, res) => {
+  const orgId = parseInt(req.params.id, 10);
+  const clubId = parseInt(req.params.clubId, 10);
+  const { calendar_color, calendar_abbrev } = req.body || {};
+  if (!orgId || !clubId) return res.status(400).json({ error: 'invalid ids' });
+
+  // Same validation as /clubs/:id/calendar-style.
+  let color = calendar_color;
+  if (color !== undefined && color !== null && color !== '') {
+    if (!/^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(String(color))) {
+      return res.status(400).json({ error: 'calendar_color invalide' });
+    }
+  } else { color = null; }
+  let abbrev = calendar_abbrev;
+  if (abbrev !== undefined && abbrev !== null && abbrev !== '') {
+    abbrev = String(abbrev).trim();
+    if (abbrev.length > 8) return res.status(400).json({ error: 'abbrev > 8 chars' });
+  } else { abbrev = null; }
+
+  db.run(
+    `UPDATE clubs SET calendar_color = $1, calendar_abbrev = $2
+      WHERE id = $3 AND organization_id = $4`,
+    [color, abbrev, clubId, orgId],
+    function (err) {
+      if (err) return res.status(500).json({ error: err.message });
+      if (!this || !this.changes) return res.status(404).json({ error: 'club non trouvé pour cet org' });
+      res.json({ id: clubId, calendar_color: color, calendar_abbrev: abbrev });
+    }
+  );
+});
 
 // GET /api/super-admin/organizations/:id/seed-preview — Preview FFB licences for this CDB
 router.get('/organizations/:id/seed-preview', async (req, res) => {
