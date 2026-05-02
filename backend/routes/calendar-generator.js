@@ -926,20 +926,17 @@ function loadEngineContext(orgId, briefId, cb) {
       });
 
       // V 2.0.645 — synthesize host_blackouts from
-      //   (a) JDS Fédérale dates that have a host_club_id (rare — usually
-      //       organised at Ligue level but a CDB club can host)
-      //   (b) per-club FFB match dates (single-day blackout)
-      // Result is merged into brief.host_blackouts before the engine reads
-      // it, so no engine code change is needed.
+      //   per-club FFB match dates (single-day blackout, host-level).
+      //
+      // V 2.0.651 — JDS Fédérale dates promoted to CDB-wide blackouts
+      // (joueurs absents au niveau Ligue → aucun tournoi CDB ces jours).
+      // They're appended to brief.blackout_dates instead of host_blackouts.
       const synthBlackouts = [];
       (brief.ffb_team_matches || []).forEach(m => {
-        if (m && m.host_club_id && m.date && /^\d{4}-\d{2}-\d{2}$/.test(m.date)) {
-          synthBlackouts.push({
-            host_id: parseInt(m.host_club_id, 10),
-            start_date: m.date,
-            end_date: m.date,
-            reason: `JDS Fédérale ${m.division || ''} J${m.round || ''}`.trim()
-          });
+        if (m && m.date && /^\d{4}-\d{2}-\d{2}$/.test(m.date)) {
+          if (!brief.blackout_dates.includes(m.date)) {
+            brief.blackout_dates.push(m.date);
+          }
         }
       });
 

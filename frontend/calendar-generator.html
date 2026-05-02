@@ -1367,11 +1367,9 @@
           cur.setUTCDate(cur.getUTCDate() + 1);
         }
       });
-      (ffbTeamMatches || []).forEach(ftm => {
-        if (ftm?.host_club_id && ftm.date && /^\d{4}-\d{2}-\d{2}$/.test(ftm.date)) {
-          add(ftm.host_club_id, ftm.date);
-        }
-      });
+      // V 2.0.651 — JDS Fédérale dates are now treated as CDB-wide
+      // blackouts (above), not host-level, so we no longer add them
+      // to the host blackout map (avoids double-counting).
       (clubFfbDatesByClub || new Map()).forEach((rows, clubId) => {
         rows.forEach(r => add(clubId, String(r.match_date).slice(0, 10)));
       });
@@ -1388,7 +1386,16 @@
       const endISO   = document.getElementById('lastWeekendInput')?.value || '';
       const qualifDay = document.getElementById('qualifDayInput')?.value || 'saturday';
       const finalDay  = document.getElementById('finalDayInput')?.value || 'sunday';
-      const blackoutSet = new Set(blackoutDates || []);
+      // V 2.0.651 — JDS Fédérale dates count as CDB-wide blackouts
+      // (players are away at Ligue-level matches). Tracked separately so
+      // the breakdown can show what came from where.
+      const seasonBlackoutSet = new Set(blackoutDates || []);
+      const ffbGlobalSet = new Set(
+        (ffbTeamMatches || [])
+          .map(m => m?.date)
+          .filter(d => d && /^\d{4}-\d{2}-\d{2}$/.test(d))
+      );
+      const blackoutSet = new Set([...seasonBlackoutSet, ...ffbGlobalSet]);
       const qualifDow = WEEKDAY_TO_INT[qualifDay];
       const finalDow  = WEEKDAY_TO_INT[finalDay];
       const sameDay = qualifDow === finalDow;
@@ -1485,8 +1492,12 @@
         <div style="font-size: 11px; color: #666;">
           Hypothèses : maximum de <strong>${M}</strong> tournois par jour
           (lu depuis la règle <em>max_tournaments_per_weekend</em>),
-          1 tournoi par club par jour, blackouts saison + indispos par club +
-          Compétitions FFB pris en compte.
+          1 tournoi par club par jour. Décomptés :
+          <strong>${seasonBlackoutSet.size}</strong> blackouts saison,
+          <strong>${ffbGlobalSet.size}</strong> dates JDS Fédérale
+          (CDB-wide — joueurs absents),
+          plus indispos par club + Compétitions FFB
+          (au niveau club).
         </div>
         ${lostLine}
       `;
