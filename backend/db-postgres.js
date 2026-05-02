@@ -2141,6 +2141,26 @@ async function initializeDatabase() {
   // can NEVER trigger a ROLLBACK on committed schema/data.
   try {
 
+    // V 2.0.636 — Backfill calendar_color / calendar_abbrev defaults for
+    // any club lacking styling. Idempotent, safe across deploys, never
+    // overwrites admin-set values. Wraps the helper module so we don't
+    // duplicate the palette / abbreviation logic.
+    try {
+      const { backfillDefaults } = require('./utils/club-calendar-defaults');
+      // Tiny shim around `client` so backfillDefaults can use db.all/run.
+      const shim = {
+        all: (sql, params, cb) => client.query(sql, params)
+          .then(r => cb(null, r.rows))
+          .catch(e => cb(e)),
+        run: (sql, params, cb) => client.query(sql, params)
+          .then(() => cb.call({}, null))
+          .catch(e => cb.call({}, e))
+      };
+      await backfillDefaults(shim);
+    } catch (e) {
+      console.warn('[club-calendar-defaults] backfill skipped:', e.message);
+    }
+
     // ============================================================
     // Seasonal Calendar Generator schema (post-commit, isolated)
     // Doc: MECANISME-CALENDRIER-SAISONNIER.html

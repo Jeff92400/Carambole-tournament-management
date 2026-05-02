@@ -198,8 +198,14 @@ router.post('/', authenticateToken, upload.single('logo'), (req, res) => {
         }
         return res.status(500).json({ error: err.message });
       }
-      res.json({
-        id: this.lastID,
+      const newClubId = this.lastID;
+
+      // V 2.0.636 — auto-style the new club so the calendar grid shows
+      // it nicely out of the box. Reads sibling clubs in the same org
+      // to avoid colour/abbrev collisions. Best-effort, never blocks
+      // the create.
+      const respond = (autoStyle) => res.json({
+        id: newClubId,
         name,
         display_name,
         logo_filename,
@@ -213,8 +219,45 @@ router.post('/', authenticateToken, upload.single('logo'), (req, res) => {
         responsable_sportif_name,
         responsable_sportif_email,
         responsable_sportif_licence,
-        calendar_code
+        calendar_code,
+        calendar_color:  autoStyle?.calendar_color  || null,
+        calendar_abbrev: autoStyle?.calendar_abbrev || null
       });
+
+      db.all(
+        `SELECT id, display_name, calendar_color, calendar_abbrev
+           FROM clubs
+          WHERE id <> $1 AND ($2::int IS NULL OR organization_id = $2)`,
+        [newClubId, orgId],
+        (sErr, siblings) => {
+          if (sErr) {
+            console.warn('[clubs] auto-style: sibling fetch failed:', sErr.message);
+            return respond(null);
+          }
+          try {
+            const { computeForNewClub } = require('../utils/club-calendar-defaults');
+            const auto = computeForNewClub(
+              { id: newClubId, display_name },
+              siblings || []
+            );
+            if (!auto.calendar_color && !auto.calendar_abbrev) return respond(null);
+            db.run(
+              `UPDATE clubs SET calendar_color = $1, calendar_abbrev = $2 WHERE id = $3`,
+              [auto.calendar_color, auto.calendar_abbrev, newClubId],
+              (uErr) => {
+                if (uErr) {
+                  console.warn('[clubs] auto-style UPDATE failed:', uErr.message);
+                  return respond(null);
+                }
+                respond(auto);
+              }
+            );
+          } catch (e) {
+            console.warn('[clubs] auto-style helper failed:', e.message);
+            respond(null);
+          }
+        }
+      );
     }
   );
 });
