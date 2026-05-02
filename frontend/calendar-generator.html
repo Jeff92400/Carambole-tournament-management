@@ -556,6 +556,16 @@
         <p style="color: #888;">Cochez d'abord les catégories actives ci-dessus pour voir cette table.</p>
       </div>
 
+      <!-- V 2.0.648 — Capacité estimée widget. Computes live, in days,
+           how many tournament slots the season can carry vs. how many
+           the active categories require. Pure math, no engine call. -->
+      <div id="capacityWidget" style="background: #eef5ff; border: 1px solid #b6cef0; border-radius: 8px; padding: 14px 16px; margin-top: 22px; font-size: 13px;">
+        <h3 style="margin: 0 0 8px 0; font-size: 15px; color: #1F4788;">📐 Capacité estimée de la saison</h3>
+        <div id="capacityWidgetBody" style="color: #444; line-height: 1.55;">
+          <em>Renseignez la saison, les jours, les catégories et les clubs pour voir l'estimation.</em>
+        </div>
+      </div>
+
       <!-- V 2.0.647 — soft reminder before leaving Step 1: per-club FFB
            dates are stored on the clubs themselves (not the brief), so
            admins must visit /clubs.html to set them. -->
@@ -998,6 +1008,7 @@
       const list = document.getElementById('blackoutList');
       if (!blackoutDates.length) {
         list.innerHTML = '<span class="pill muted">Aucun blackout</span>';
+        if (typeof renderCapacityWidget === 'function') renderCapacityWidget(); // V 2.0.648
         return;
       }
       list.innerHTML = blackoutDates.map((d, i) => `
@@ -1009,6 +1020,7 @@
           renderBlackouts();
         });
       });
+      if (typeof renderCapacityWidget === 'function') renderCapacityWidget(); // V 2.0.648
     }
 
     // ----- Date assistant (Path A LLM + Path B French holidays) -----
@@ -1238,6 +1250,139 @@
       }));
     }
 
+    // V 2.0.648 — Live capacity widget (Étape 1).
+    //
+    //   Days in season are counted by walking from first_weekend to
+    //   last_weekend and counting occurrences of the qualif_day and
+    //   final_day weekdays — minus blackout_dates and minus per-host
+    //   blackouts (averaged).
+    //
+    //   The widget reports two regimes:
+    //     - "Sat/Sun partitionné" when qualif_day != final_day:
+    //         qualifier days carry T1+T2+T3 (3 events × C),
+    //         finale days carry the Finale (1 event × C).
+    //     - "Jour unique" when both days are the same:
+    //         all 4 events compete for the same pool of days.
+    //
+    //   M (max tournaments per day) is hardcoded to 4 as a reasonable
+    //   default; the actual rule is in calendar_constraints but reading
+    //   it would couple this widget to step 2 (rules).
+    const WEEKDAY_TO_INT = {
+      monday: 1, tuesday: 2, wednesday: 3, thursday: 4,
+      friday: 5, saturday: 6, sunday: 0
+    };
+    const WEEKDAY_FR = {
+      monday: 'lundi', tuesday: 'mardi', wednesday: 'mercredi',
+      thursday: 'jeudi', friday: 'vendredi', saturday: 'samedi', sunday: 'dimanche'
+    };
+    function countDaysOfWeek(startISO, endISO, dow, blackoutSet) {
+      if (!startISO || !endISO) return 0;
+      const start = new Date(startISO + 'T00:00:00Z');
+      const end   = new Date(endISO   + 'T00:00:00Z');
+      if (isNaN(start) || isNaN(end) || start > end) return 0;
+      // advance to first occurrence of dow on/after start
+      const cur = new Date(start);
+      while (cur.getUTCDay() !== dow) cur.setUTCDate(cur.getUTCDate() + 1);
+      let n = 0;
+      while (cur <= end) {
+        const iso = cur.toISOString().slice(0, 10);
+        if (!blackoutSet.has(iso)) n++;
+        cur.setUTCDate(cur.getUTCDate() + 7);
+      }
+      return n;
+    }
+    function renderCapacityWidget() {
+      const body = document.getElementById('capacityWidgetBody');
+      if (!body) return;
+      const startISO = document.getElementById('firstWeekendInput')?.value || '';
+      const endISO   = document.getElementById('lastWeekendInput')?.value || '';
+      const qualifDay = document.getElementById('qualifDayInput')?.value || 'saturday';
+      const finalDay  = document.getElementById('finalDayInput')?.value || 'sunday';
+      const blackoutSet = new Set(blackoutDates || []);
+      const qualifDow = WEEKDAY_TO_INT[qualifDay];
+      const finalDow  = WEEKDAY_TO_INT[finalDay];
+      const sameDay = qualifDow === finalDow;
+
+      const C = document.querySelectorAll('.cat-cb:checked').length;
+      const K = document.querySelectorAll('.club-cb:checked').length;
+      const M = 4; // sensible default
+
+      if (!startISO || !endISO || !C || !K) {
+        body.innerHTML = '<em>Renseignez la saison, les jours, les catégories et les clubs pour voir l\'estimation.</em>';
+        return;
+      }
+
+      const dQualif = countDaysOfWeek(startISO, endISO, qualifDow, blackoutSet);
+      const dFinal  = sameDay ? 0 : countDaysOfWeek(startISO, endISO, finalDow, blackoutSet);
+      const slotCap = Math.min(K, M);
+      const T = 4; // T1+T2+T3+Finale
+      let slots, demand, rows;
+
+      if (sameDay) {
+        // Single-day regime: one pool of days carries all 4 events.
+        slots = dQualif * slotCap;
+        demand = C * T;
+        rows = `
+          <tr><td>Jours de compétition (${WEEKDAY_FR[qualifDay]})</td><td><strong>${dQualif}</strong></td></tr>
+          <tr><td>Capacité totale (jours × min(clubs, ${M}))</td><td><strong>${slots}</strong> créneaux</td></tr>
+          <tr><td>Demande (${C} catégories × ${T} tournois)</td><td><strong>${demand}</strong> tournois</td></tr>
+        `;
+      } else {
+        // Partitioned regime: qualifier days hold T1+T2+T3, finale days hold Finale.
+        const slotsQualif = dQualif * slotCap;
+        const slotsFinal  = dFinal * slotCap;
+        const demandQualif = C * 3;
+        const demandFinal  = C * 1;
+        slots = slotsQualif + slotsFinal;
+        demand = demandQualif + demandFinal;
+        rows = `
+          <tr><td>Jours qualif. (${WEEKDAY_FR[qualifDay]})</td><td><strong>${dQualif}</strong></td></tr>
+          <tr><td>Jours finales (${WEEKDAY_FR[finalDay]})</td><td><strong>${dFinal}</strong></td></tr>
+          <tr><td>Capacité qualif. (T1+T2+T3)</td><td><strong>${slotsQualif}</strong> créneaux pour <strong>${demandQualif}</strong> tournois</td></tr>
+          <tr><td>Capacité finales</td><td><strong>${slotsFinal}</strong> créneaux pour <strong>${demandFinal}</strong> tournois</td></tr>
+        `;
+      }
+      const headroom = demand > 0 ? slots / demand : 0;
+      let verdict, color;
+      if (demand === 0)            { verdict = '—';                       color = '#666'; }
+      else if (headroom >= 3)      { verdict = '🟢 Très confortable';     color = '#1b5e20'; }
+      else if (headroom >= 1.5)    { verdict = '🟢 Confortable';          color = '#2e7d32'; }
+      else if (headroom >= 1.0)    { verdict = '🟠 Tendu';                color = '#e65100'; }
+      else                          { verdict = '🔴 Infaisable';          color = '#b71c1c'; }
+
+      body.innerHTML = `
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 8px;">
+          ${rows}
+          <tr style="border-top: 1px solid #c7d6ec;">
+            <td style="padding-top: 6px;"><strong>Marge (capacité ÷ demande)</strong></td>
+            <td style="padding-top: 6px; color: ${color};">
+              <strong>×${headroom.toFixed(2)}</strong> &nbsp;${verdict}
+            </td>
+          </tr>
+        </table>
+        <div style="font-size: 11px; color: #666;">
+          Hypothèses : maximum de ${M} tournois par jour, 1 tournoi par club par jour, blackouts saisis pris en compte.
+          Les indispos par club et les Compétitions FFB ne sont pas encore décomptées dans cette estimation.
+        </div>
+      `;
+    }
+    // Re-render on every relevant change (both Step 1 inputs and the
+    // checkboxes that drive C and K).
+    function wireCapacityWidget() {
+      ['firstWeekendInput','lastWeekendInput','qualifDayInput','finalDayInput']
+        .forEach(id => {
+          const el = document.getElementById(id);
+          if (el) el.addEventListener('change', renderCapacityWidget);
+        });
+      // Delegated listener for category + club checkboxes (re-rendered).
+      document.addEventListener('change', (e) => {
+        if (e.target && (e.target.classList.contains('cat-cb') || e.target.classList.contains('club-cb'))) {
+          renderCapacityWidget();
+        }
+      });
+    }
+    wireCapacityWidget();
+
     // ----- Ligue final dates -----
     function renderLigueFinalsTable() {
       const container = document.getElementById('ligueFinalsContainer');
@@ -1317,6 +1462,7 @@
         renderHostBlackouts();
         renderFfbTeamMatches();
         renderLigueFinalsTable();
+        renderCapacityWidget(); // V 2.0.648
 
         const status = document.getElementById('saveStatus');
         status.textContent = currentBrief ? `Brief existant chargé (${currentBrief.status || 'draft'})` : 'Aucun brief pour cette saison — saisissez et sauvegardez';
