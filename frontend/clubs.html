@@ -356,6 +356,29 @@
             <small style="color: #666;">Efface couleur + abréviation pour ce club</small>
           </div>
         </div>
+        <!-- V 2.0.646 — Compétitions FFB (jusqu'à 2 dates par club).
+             Le club ne pourra pas accueillir de tournoi CDB sur ces
+             dates (host_blackout côté moteur de calendrier). -->
+        <div style="background: #fff8e1; padding: 15px; border-radius: 8px; margin: 15px 0; border: 1px solid #f1c40f;">
+          <h4 style="margin: 0 0 6px 0; color: #8a6d00;">Compétitions FFB</h4>
+          <p style="margin: 0 0 10px; font-size: 12px; color: #555;">
+            Si ce club reçoit un match d'équipe FFB / National sur une date précise,
+            saisissez-la ici. Le générateur de calendrier évitera de programmer
+            un tournoi CDB hosté par ce club ces jours-là (jusqu'à 2 dates).
+          </p>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+            <div class="form-group" style="margin-bottom: 0;">
+              <label for="editClubFfbDate1">Date 1 :</label>
+              <input type="date" id="editClubFfbDate1">
+              <input type="text" id="editClubFfbLabel1" placeholder="Libellé (optionnel)" maxlength="60" style="margin-top: 4px;">
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+              <label for="editClubFfbDate2">Date 2 :</label>
+              <input type="date" id="editClubFfbDate2">
+              <input type="text" id="editClubFfbLabel2" placeholder="Libellé (optionnel)" maxlength="60" style="margin-top: 4px;">
+            </div>
+          </div>
+        </div>
         <div class="form-group">
           <label for="editClubLogo">Nouveau logo (optionnel) :</label>
           <input type="file" id="editClubLogo" accept="image/jpeg,image/jpg,image/png,image/gif">
@@ -389,21 +412,32 @@
 
 
     let allClubs = [];
+    // V 2.0.646 — Map<club_id, [{slot, match_date, label}, ...]>
+    let clubFfbDatesMap = new Map();
 
     // Load clubs
     async function loadClubs() {
       try {
-        const response = await fetch(`${API_URL}/clubs`, {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
+        const [response, ffbRes] = await Promise.all([
+          fetch(`${API_URL}/clubs`, { headers: { 'Authorization': `Bearer ${token}` } }),
+          fetch(`${API_URL}/clubs/ffb-match-dates`, { headers: { 'Authorization': `Bearer ${token}` } })
+        ]);
 
         if (!response.ok) {
           throw new Error('Failed to load clubs');
         }
 
         allClubs = await response.json();
+        // V 2.0.646 — fold FFB dates into a per-club lookup so the card
+        // can display a discreet badge.
+        clubFfbDatesMap = new Map();
+        if (ffbRes.ok) {
+          const rows = await ffbRes.json();
+          (rows || []).forEach(r => {
+            if (!clubFfbDatesMap.has(r.club_id)) clubFfbDatesMap.set(r.club_id, []);
+            clubFfbDatesMap.get(r.club_id).push(r);
+          });
+        }
         displayClubs(allClubs);
 
         document.getElementById('loadingClubs').style.display = 'none';
@@ -462,6 +496,17 @@
           ? `<div style="font-size: 11px; color: #1565c0; margin-bottom: 5px; background: #e3f2fd; padding: 2px 8px; border-radius: 4px; display: inline-block;">📅 Code: <strong>${club.calendar_code}</strong></div>`
           : '';
 
+        // V 2.0.646 — small badge listing the up-to-2 Compétitions FFB dates.
+        const ffbDates = clubFfbDatesMap.get(club.id) || [];
+        const ffbHtml = ffbDates.length
+          ? `<div style="font-size: 11px; color: #8a6d00; margin-bottom: 5px; background: #fff8e1; border: 1px solid #f1c40f; padding: 2px 8px; border-radius: 4px; display: inline-block;">🏆 Compét. FFB : ${
+              ffbDates
+                .filter(d => d.match_date)
+                .map(d => new Date(d.match_date + 'T00:00:00Z').toLocaleDateString('fr-FR'))
+                .join(' · ') || '—'
+            }</div>`
+          : '';
+
         card.innerHTML = `
           ${logoHtml}
           <div class="club-name">${club.name}</div>
@@ -471,6 +516,7 @@
           ${presidentHtml}
           ${responsableHtml}
           ${calendarCodeHtml}
+          ${ffbHtml}
           <div class="club-actions">
             <button class="btn-edit" onclick="openEditModal(${club.id})">✏️ Modifier</button>
             <button class="btn-delete" onclick="deleteClub(${club.id}, '${club.display_name.replace(/'/g, "\\'")}')">🗑️ Supprimer</button>
@@ -607,7 +653,56 @@
       document.getElementById('editLogoPreview').style.display = 'none';
       document.getElementById('editClubLogo').value = '';
 
+      // V 2.0.646 — load FFB match dates for this club
+      ['editClubFfbDate1','editClubFfbDate2','editClubFfbLabel1','editClubFfbLabel2']
+        .forEach(id => { document.getElementById(id).value = ''; });
+      loadClubFfbDates(clubId).catch(() => {});
+
       document.getElementById('editModal').style.display = 'block';
+    }
+
+    // V 2.0.646 — fetch the 2 FFB date slots for a single club.
+    async function loadClubFfbDates(clubId) {
+      try {
+        const r = await fetch(`${API_URL}/clubs/ffb-match-dates`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!r.ok) return;
+        const all = await r.json();
+        const mine = (all || []).filter(x => x.club_id === clubId);
+        mine.forEach(row => {
+          if (row.slot === 1) {
+            document.getElementById('editClubFfbDate1').value = row.match_date || '';
+            document.getElementById('editClubFfbLabel1').value = row.label || '';
+          } else if (row.slot === 2) {
+            document.getElementById('editClubFfbDate2').value = row.match_date || '';
+            document.getElementById('editClubFfbLabel2').value = row.label || '';
+          }
+        });
+      } catch (_) { /* non-blocking */ }
+    }
+
+    // V 2.0.646 — persist (or clear) the 2 FFB slots. Empty date = DELETE.
+    async function saveClubFfbDates(clubId) {
+      const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+      for (const slot of [1, 2]) {
+        const date = document.getElementById(`editClubFfbDate${slot}`).value.trim();
+        const label = document.getElementById(`editClubFfbLabel${slot}`).value.trim();
+        try {
+          if (date) {
+            await fetch(`${API_URL}/clubs/${clubId}/ffb-match-dates`, {
+              method: 'PUT', headers,
+              body: JSON.stringify({ slot, match_date: date, label: label || null })
+            });
+          } else {
+            await fetch(`${API_URL}/clubs/${clubId}/ffb-match-dates/${slot}`, {
+              method: 'DELETE', headers
+            });
+          }
+        } catch (err) {
+          console.warn(`FFB slot ${slot} save failed:`, err.message);
+        }
+      }
     }
 
     // V 2.0.630 — live preview of the calendar cell appearance.
@@ -728,6 +823,8 @@
 
         // V 2.0.630 — also persist calendar styling via dedicated PATCH.
         await saveCalendarStyle(clubId);
+        // V 2.0.646 — persist (or clear) the 2 Compétitions FFB slots.
+        await saveClubFfbDates(parseInt(clubId, 10));
 
         showSuccess('Club modifié avec succès !');
         closeEditModal();
