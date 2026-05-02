@@ -151,9 +151,42 @@ router.get('/resolve/:name', authenticateToken, (req, res) => {
 // ==================== END CLUB ALIASES ====================
 
 // Get club by ID (exclude logo_data binary)
+// V 2.0.654 — IMPORTANT: list-style GET routes must be declared BEFORE
+// /:id otherwise Express matches them as { id: 'ffb-match-dates' } and
+// the SQL fails with "invalid input syntax for type integer".
+router.get('/ffb-match-dates', authenticateToken, (req, res) => {
+  const orgId = req.user.organizationId || null;
+  db.all(
+    `SELECT cf.id, cf.club_id, cf.slot, cf.match_date, cf.label,
+            cl.display_name AS club_name
+       FROM club_ffb_match_dates cf
+       JOIN clubs cl ON cl.id = cf.club_id
+      WHERE ($1::int IS NULL OR cf.organization_id = $1)
+      ORDER BY cl.display_name ASC, cf.slot ASC`,
+    [orgId],
+    (err, rows) => {
+      if (err) {
+        console.error('[clubs/ffb-match-dates] list error:', err);
+        return res.status(500).json({ error: err.message });
+      }
+      (rows || []).forEach(r => {
+        if (r.match_date instanceof Date) r.match_date = r.match_date.toISOString().slice(0, 10);
+        else if (r.match_date) r.match_date = String(r.match_date).slice(0, 10);
+      });
+      res.json(rows || []);
+    }
+  );
+});
+
 router.get('/:id', authenticateToken, (req, res) => {
   const orgId = req.user.organizationId || null;
-  db.get('SELECT id, name, display_name, logo_filename, street, city, zip_code, phone, email, president, president_email, responsable_sportif_name, responsable_sportif_email, responsable_sportif_licence, calendar_code, calendar_color, calendar_abbrev, organization_id, created_at FROM clubs WHERE id = $1 AND ($2::int IS NULL OR organization_id = $2)', [req.params.id, orgId], (err, row) => {
+  // V 2.0.654 — guard against non-integer ids (Express matches sibling
+  // /clubs/<word> paths against this handler and would crash the SQL).
+  const clubIdInt = parseInt(req.params.id, 10);
+  if (!Number.isFinite(clubIdInt)) {
+    return res.status(404).json({ error: 'Club not found' });
+  }
+  db.get('SELECT id, name, display_name, logo_filename, street, city, zip_code, phone, email, president, president_email, responsable_sportif_name, responsable_sportif_email, responsable_sportif_licence, calendar_code, calendar_color, calendar_abbrev, organization_id, created_at FROM clubs WHERE id = $1 AND ($2::int IS NULL OR organization_id = $2)', [clubIdInt, orgId], (err, row) => {
     if (err) {
       return res.status(500).json({ error: err.message });
     }
@@ -518,40 +551,9 @@ router.delete('/:id', authenticateToken, requireAdmin, (req, res) => {
   });
 });
 
-// V 2.0.645 — FFB match dates per club.
-//
-// GET  /api/clubs/ffb-match-dates              → all dates for the org,
-//                                                 returned as a flat list.
-// PUT  /api/clubs/:id/ffb-match-dates           → upsert {slot, match_date,
-//                                                 label?} for the club.
-// DELETE /api/clubs/:id/ffb-match-dates/:slot   → clear that slot.
-//
-// The dates are not full weekends — admins record a single date (Sat or Sun).
-// The seasonal calendar generator's engine treats them as host blackouts.
-router.get('/ffb-match-dates', authenticateToken, (req, res) => {
-  const orgId = req.user.organizationId || null;
-  db.all(
-    `SELECT cf.id, cf.club_id, cf.slot, cf.match_date, cf.label,
-            cl.display_name AS club_name
-       FROM club_ffb_match_dates cf
-       JOIN clubs cl ON cl.id = cf.club_id
-      WHERE ($1::int IS NULL OR cf.organization_id = $1)
-      ORDER BY cl.display_name ASC, cf.slot ASC`,
-    [orgId],
-    (err, rows) => {
-      if (err) {
-        console.error('[clubs/ffb-match-dates] list error:', err);
-        return res.status(500).json({ error: err.message });
-      }
-      // Normalise dates to ISO YYYY-MM-DD.
-      (rows || []).forEach(r => {
-        if (r.match_date instanceof Date) r.match_date = r.match_date.toISOString().slice(0, 10);
-        else if (r.match_date) r.match_date = String(r.match_date).slice(0, 10);
-      });
-      res.json(rows || []);
-    }
-  );
-});
+// V 2.0.654 — GET moved earlier in the file (before /:id) to avoid the
+// route-collision 500. PUT and DELETE below stay here — their /:id/...
+// patterns are not shadowed by /:id.
 
 router.put('/:id/ffb-match-dates', authenticateToken, requireAdmin, (req, res) => {
   const clubId = parseInt(req.params.id, 10);
