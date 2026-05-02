@@ -178,16 +178,31 @@
           </div>
         </div>
 
+        <!-- V 2.0.637 — Dedicated Calendrier card aggregating the 3
+             entry points: view (everyone), upload (admin) and the
+             optional Assistant Calendrier wizard (admin). The previous
+             card mixed calendar concerns with tournament/inscription
+             lists, which moved to a separate "Tournois et compétitions"
+             card below. -->
         <div class="settings-card">
-          <h4><span class="icon">📅</span> Calendrier, Tournois et Compétitions</h4>
-          <p>Calendrier de la saison, tournois, inscriptions et statistiques.</p>
+          <h4><span class="icon">📅</span> Calendrier</h4>
+          <p>Calendrier de la saison : visualisation, téléversement et génération assistée.</p>
           <div class="card-links">
-            <a href="#" onclick="openSeasonImportModal(); return false;" class="card-link" style="background: #28a745; color: white;"><span class="link-icon">🗓️</span> Générer tournois saison</a>
-            <a href="calendar.html" class="card-link"><span class="link-icon">📅</span> Calendrier (vue et téléchargement)</a>
-            <a href="settings-admin.html#timeThresholdsSection" class="card-link"><span class="link-icon">⏱️</span> Alertes, délais pour les compétitions</a>
+            <a href="calendar.html" class="card-link"><span class="link-icon">👁️</span> Voir le calendrier</a>
+            <a href="calendar.html#uploadSection" class="card-link admin-only"><span class="link-icon">📤</span> Téléverser le calendrier saison (PDF/Excel)</a>
+            <a href="#" onclick="openSeasonImportModal(); return false;" class="card-link admin-only" style="background: #28a745; color: white;"><span class="link-icon">🗓️</span> Générer tournois depuis Excel CDBHS</a>
+            <a href="calendar-generator.html" class="card-link admin-only"><span class="link-icon">✨</span> Assistant Calendrier (générer la saison)</a>
+          </div>
+        </div>
+
+        <div class="settings-card">
+          <h4><span class="icon">🏆</span> Tournois et compétitions</h4>
+          <p>Listes de la saison : tournois, inscriptions, compétitions jouées et statistiques.</p>
+          <div class="card-links">
             <a href="tournois-list.html" class="card-link"><span class="link-icon">📋</span> Liste des tournois de la saison <span id="countTournois" class="count-badge"></span></a>
             <a href="inscriptions-list.html" class="card-link"><span class="link-icon">📝</span> Inscriptions de la saison <span id="countInscriptions" class="count-badge"></span></a>
             <a href="tournaments-list.html" class="card-link"><span class="link-icon">🏆</span> Compétitions jouées <span id="countCompetitions" class="count-badge"></span></a>
+            <a href="settings-admin.html#timeThresholdsSection" class="card-link"><span class="link-icon">⏱️</span> Alertes, délais pour les compétitions</a>
             <a href="statistiques.html" class="card-link"><span class="link-icon">📈</span> Statistiques de la saison clubs et joueurs</a>
           </div>
         </div>
