@@ -835,13 +835,24 @@ function formatDateStr(date) {
 //   Returns: { email_recipients_count, announcement_id, was_first_announcement }
 router.post('/announce', authenticateToken, requireAdmin, async (req, res) => {
   const orgId = req.user.organizationId || null;
-  const { season, email_clubs, notify_players, custom_message } = req.body || {};
+  const { season, email_clubs, notify_players, custom_message,
+          test_mode, test_email } = req.body || {};
 
   if (!season || !/^\d{4}-\d{4}$/.test(String(season))) {
     return res.status(400).json({ error: 'Saison invalide (YYYY-YYYY)' });
   }
   if (!email_clubs && !notify_players) {
     return res.status(400).json({ error: 'Sélectionnez au moins un canal (email ou notification)' });
+  }
+  // V 2.0.643 — test mode: send ONE email to a chosen address, skip the
+  // Player App announcement entirely. Mirrors the test-mode UX used in
+  // convocations / relances / results.
+  const isTest = !!test_mode;
+  const testAddress = isTest ? String(test_email || '').trim() : '';
+  if (isTest && email_clubs) {
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(testAddress)) {
+      return res.status(400).json({ error: 'Adresse email de test invalide' });
+    }
   }
 
   const dbGet = (sql, p) => new Promise((ok, ko) =>
@@ -856,7 +867,8 @@ router.post('/announce', authenticateToken, requireAdmin, async (req, res) => {
     email_recipients: [],
     email_errors: 0,
     announcement_id: null,
-    was_first_announcement: null
+    was_first_announcement: null,
+    test_mode: isTest
   };
 
   // ---- Channel 1: email the calendar file to all clubs ------------------
@@ -875,22 +887,29 @@ router.post('/announce', authenticateToken, requireAdmin, async (req, res) => {
       });
     }
 
-    // Build the recipients list (dedup union of the 3 club email fields).
-    const clubs = await dbAll(
-      `SELECT id, display_name, email, president_email, responsable_sportif_email
-         FROM clubs
-        WHERE ($1::int IS NULL OR organization_id = $1)`,
-      [orgId]
-    );
-    const seen = new Set();
-    const recipients = [];
-    for (const c of clubs) {
-      for (const addr of [c.email, c.president_email, c.responsable_sportif_email]) {
-        if (!addr) continue;
-        const lower = String(addr).trim().toLowerCase();
-        if (!lower || seen.has(lower) || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(lower)) continue;
-        seen.add(lower);
-        recipients.push({ club_name: c.display_name, address: addr.trim() });
+    // V 2.0.643 — test mode short-circuits the recipients lookup: a
+    // single email to the admin-supplied address with a [TEST] banner.
+    let recipients;
+    if (isTest) {
+      recipients = [{ club_name: '(Test)', address: testAddress }];
+    } else {
+      // Build the recipients list (dedup union of the 3 club email fields).
+      const clubs = await dbAll(
+        `SELECT id, display_name, email, president_email, responsable_sportif_email
+           FROM clubs
+          WHERE ($1::int IS NULL OR organization_id = $1)`,
+        [orgId]
+      );
+      const seen = new Set();
+      recipients = [];
+      for (const c of clubs) {
+        for (const addr of [c.email, c.president_email, c.responsable_sportif_email]) {
+          if (!addr) continue;
+          const lower = String(addr).trim().toLowerCase();
+          if (!lower || seen.has(lower) || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(lower)) continue;
+          seen.add(lower);
+          recipients.push({ club_name: c.display_name, address: addr.trim() });
+        }
       }
     }
     result.email_recipients = recipients.map(r => r.address);
@@ -906,31 +925,52 @@ router.post('/announce', authenticateToken, requireAdmin, async (req, res) => {
       const primaryColor = (orgId
         ? await appSettings.getOrgSetting(orgId, 'primary_color')
         : await appSettings.getSetting('primary_color')) || '#1F4788';
+      // V 2.0.643 — branded header with the CDB logo, mirroring the
+      // pattern used by every other email (convocations, results,
+      // relances, etc.).
+      const orgSlug = orgId
+        ? (await appSettings.getOrgSetting(orgId, 'org_slug')) || ''
+        : '';
+      const baseUrl = process.env.BASE_URL || 'https://cdbhs-tournament-management-production.up.railway.app';
+      const logoUrl = appSettings.buildLogoUrl(baseUrl, orgSlug);
 
       const safeMessage = String(custom_message || '')
         .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
         .replace(/\n/g, '<br>');
 
-      const subject = `Calendrier ${orgShortName} — saison ${season}`;
+      const subject = (isTest ? '[TEST] ' : '') + `Calendrier ${orgShortName} — saison ${season}`;
       const fileBuffer = calendarFile.file_data;
       const attachment = {
         filename: calendarFile.filename,
         content: Buffer.isBuffer(fileBuffer) ? fileBuffer.toString('base64') : Buffer.from(fileBuffer).toString('base64')
       };
 
+      const testBanner = isTest
+        ? `<div style="background:#fff3cd;border:1px solid #ffc107;color:#856404;padding:10px 14px;border-radius:6px;margin:0 0 16px;font-size:13px;">
+             🧪 <strong>Mode test</strong> — ceci est un envoi de test, aucun club n'a reçu cet email. Destinataire unique : ${testAddress}.
+           </div>`
+        : '';
+
       // One email per recipient (avoids leaking the recipient list in the To header).
       for (const r of recipients) {
         const html = `
-          <div style="font-family: Arial, sans-serif; max-width: 640px; margin: 0 auto; padding: 20px;">
-            <h2 style="color: ${primaryColor}; margin: 0 0 12px;">📅 Calendrier ${orgShortName} — saison ${season}</h2>
-            <p style="color: #333; line-height: 1.5;">Bonjour ${r.club_name || ''},</p>
-            ${safeMessage ? `<div style="color: #333; line-height: 1.6; padding: 12px 0;">${safeMessage}</div>` : ''}
-            <p style="color: #555; line-height: 1.5; font-size: 14px;">
-              Vous trouverez le calendrier de la saison ${season} en pièce jointe (<strong>${calendarFile.filename}</strong>).
-            </p>
-            <p style="color: #888; font-size: 12px; margin-top: 24px;">
-              ${orgShortName}
-            </p>
+          <div style="font-family: Arial, sans-serif; max-width: 640px; margin: 0 auto;">
+            <div style="background: ${primaryColor}; color: white; padding: 20px; text-align: center;">
+              <img src="${logoUrl}" alt="${orgShortName}" style="height: 60px; max-width: 80%; width: auto; margin-bottom: 10px;" onerror="this.style.display='none'">
+              <h1 style="margin: 0; font-size: 22px;">${orgShortName}</h1>
+              <p style="margin: 5px 0 0 0; font-size: 13px; opacity: 0.9;">📅 CALENDRIER ${season}</p>
+            </div>
+            <div style="padding: 20px; background: #f8f9fa;">
+              ${testBanner}
+              <p style="color: #333; line-height: 1.5; margin: 0 0 12px;">Bonjour ${r.club_name || ''},</p>
+              ${safeMessage ? `<div style="color: #333; line-height: 1.6; padding: 4px 0 12px;">${safeMessage}</div>` : ''}
+              <p style="color: #555; line-height: 1.5; font-size: 14px;">
+                Vous trouverez le calendrier de la saison ${season} en pièce jointe (<strong>${calendarFile.filename}</strong>).
+              </p>
+              <p style="color: #888; font-size: 12px; margin-top: 24px; text-align: center;">
+                ${orgShortName}
+              </p>
+            </div>
           </div>
         `;
         try {
@@ -960,7 +1000,9 @@ router.post('/announce', authenticateToken, requireAdmin, async (req, res) => {
   }
 
   // ---- Channel 2: in-app announcement for the Player App ---------------
-  if (notify_players) {
+  // V 2.0.643 — test mode skips the announcement entirely (we don't want
+  // to spam real Player App users during a dry-run).
+  if (notify_players && !isTest) {
     // Detect whether we've already announced this season's calendar so we
     // can pick the right wording. We tag our announcements with a stable
     // marker string in the message body so detection survives even if the
