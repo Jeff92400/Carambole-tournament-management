@@ -1870,6 +1870,150 @@ router.post('/diag/:briefId/cleanup-orphan-duplicates',
   }
 });
 
+// V 2.0.657 — POST /cleanup-externals?brief_id=X
+//   Body: { apply?: bool, force_ids?: [int, ...] }
+//
+//   Scans tournoi_ext rows in the brief's window that are NOT linked to
+//   any draft row (the "external" / "previously-published-but-no-longer-
+//   in-current-generation" case) and classifies each one as SAFE or
+//   UNSAFE based on whether child data is attached:
+//     - inscriptions
+//     - convocation_files
+//     - tournament_relances
+//     - wp_post_id (WordPress article)
+//
+//   With apply=false (default): returns the classification only.
+//   With apply=true: also DELETES the safe ones, plus any tournoi_ext_id
+//                    explicitly listed in force_ids (use with care).
+//
+//   Returns:
+//     { scanned, safe: [...], unsafe: [...], deleted: <int>, errors: [...] }
+router.post('/cleanup-externals',
+  authenticateToken, requireCalendarGenerator, requireAdmin, async (req, res) => {
+  const db = getDb();
+  const orgId = req.user.organizationId;
+  const briefId = parseInt(req.query.brief_id, 10);
+  const apply   = !!(req.body && req.body.apply);
+  const forceIds = (req.body && Array.isArray(req.body.force_ids))
+    ? req.body.force_ids.map(n => parseInt(n, 10)).filter(Number.isFinite)
+    : [];
+  if (!briefId) return res.status(400).json({ error: 'brief_id requis' });
+
+  const fetchAll = (sql, params) => new Promise((resolve, reject) =>
+    db.all(sql, params, (err, rows) => err ? reject(err) : resolve(rows || []))
+  );
+  const fetchOne = (sql, params) => new Promise((resolve, reject) =>
+    db.get(sql, params, (err, row) => err ? reject(err) : resolve(row))
+  );
+  const runSql = (sql, params) => new Promise((resolve, reject) =>
+    db.run(sql, params, function (err) { err ? reject(err) : resolve(this); })
+  );
+
+  try {
+    const brief = await fetchOne(
+      `SELECT id, season, first_weekend, last_weekend FROM calendar_brief
+        WHERE id = $1 AND organization_id = $2`,
+      [briefId, orgId]
+    );
+    if (!brief) return res.status(404).json({ error: 'Brief introuvable' });
+
+    // Determine the window (same logic as /sync-status).
+    const startISO = brief.first_weekend instanceof Date
+      ? brief.first_weekend.toISOString().slice(0, 10)
+      : String(brief.first_weekend || '').slice(0, 10);
+    const endISO = brief.last_weekend instanceof Date
+      ? brief.last_weekend.toISOString().slice(0, 10)
+      : String(brief.last_weekend || '').slice(0, 10);
+
+    // 1. All tournoi_ext rows in window for this season.
+    const extRows = await fetchAll(
+      `SELECT te.tournoi_id, te.mode, te.categorie, te.tournament_number,
+              te.debut, te.lieu, te.wp_post_id
+         FROM tournoi_ext te
+        WHERE te.organization_id = $1
+          AND te.season = $2
+          AND ($3::date IS NULL OR te.debut >= $3::date)
+          AND ($4::date IS NULL OR te.debut <= $4::date)`,
+      [orgId, brief.season, startISO || null, endISO || null]
+    );
+
+    // 2. Set of tournoi_ext_ids that are linked to a draft row.
+    const linked = await fetchAll(
+      `SELECT tournoi_ext_id FROM calendar_draft
+        WHERE brief_id = $1 AND tournoi_ext_id IS NOT NULL`,
+      [briefId]
+    );
+    const linkedSet = new Set(linked.map(r => r.tournoi_ext_id));
+
+    // 3. Externals = ext rows in window not linked to any draft.
+    const externals = extRows.filter(t => !linkedSet.has(t.tournoi_id));
+
+    // 4. Count children per external row.
+    const safe = [];
+    const unsafe = [];
+    for (const t of externals) {
+      const [ins, conv, rel] = await Promise.all([
+        fetchOne(`SELECT COUNT(*)::int AS n FROM inscriptions WHERE tournoi_id = $1`, [t.tournoi_id]),
+        fetchOne(`SELECT COUNT(*)::int AS n FROM convocation_files WHERE tournoi_ext_id = $1`, [t.tournoi_id]),
+        fetchOne(`SELECT COUNT(*)::int AS n FROM tournament_relances WHERE tournoi_ext_id = $1`, [t.tournoi_id])
+      ]);
+      const children = {
+        inscriptions: ins?.n || 0,
+        convocation_files: conv?.n || 0,
+        relances: rel?.n || 0,
+        wp_post: t.wp_post_id ? 1 : 0
+      };
+      const totalChildren = children.inscriptions + children.convocation_files
+                          + children.relances + children.wp_post;
+      const item = {
+        tournoi_ext_id: t.tournoi_id,
+        label: `${t.mode || ''} ${t.categorie || ''} (T${t.tournament_number || '?'} · ${t.lieu || 'TBD'})`.trim(),
+        date: t.debut instanceof Date ? t.debut.toISOString().slice(0, 10) : (t.debut ? String(t.debut).slice(0, 10) : null),
+        children
+      };
+      if (totalChildren === 0) safe.push(item);
+      else unsafe.push(item);
+    }
+
+    let deleted = 0;
+    const errors = [];
+    if (apply) {
+      const idsToDelete = new Set(safe.map(s => s.tournoi_ext_id));
+      // Allow force-delete of unsafe rows the admin explicitly opted in for.
+      forceIds.forEach(id => {
+        if (externals.some(t => t.tournoi_id === id)) idsToDelete.add(id);
+      });
+      for (const id of idsToDelete) {
+        try {
+          // Children with ON DELETE CASCADE go away automatically;
+          // others (convocation_files / relances) are explicitly cleaned.
+          await runSql(`DELETE FROM convocation_files WHERE tournoi_ext_id = $1`, [id]);
+          await runSql(`DELETE FROM tournament_relances WHERE tournoi_ext_id = $1`, [id]);
+          await runSql(`DELETE FROM inscriptions WHERE tournoi_id = $1`, [id]);
+          const r = await runSql(
+            `DELETE FROM tournoi_ext WHERE tournoi_id = $1 AND organization_id = $2`,
+            [id, orgId]
+          );
+          if ((r?.rowCount || r?.changes || 0) > 0) deleted++;
+        } catch (e) {
+          errors.push({ tournoi_ext_id: id, error: e.message });
+        }
+      }
+    }
+
+    res.json({
+      scanned: externals.length,
+      safe,
+      unsafe,
+      deleted,
+      errors
+    });
+  } catch (err) {
+    console.error('[calendar-generator] /cleanup-externals error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // V 2.0.618 — POST /resync-from-published?brief_id=X
 //   Body: { kinds?: ['date_changed', 'host_changed', 'deleted'] }  // default: all 3
 //   Pulls inbound changes from tournoi_ext into calendar_draft so the

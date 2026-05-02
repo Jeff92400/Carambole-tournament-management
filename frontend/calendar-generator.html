@@ -385,6 +385,7 @@
         </div>
         <div style="display: flex; gap: 6px; flex-wrap: nowrap;">
           <button type="button" id="syncDriftDetailsBtn" style="padding: 6px 12px; border: 1px solid #c47b00; background: white; color: #6b4f00; border-radius: 5px; cursor: pointer; font-size: 12px; font-weight: 600;">Voir le détail</button>
+          <button type="button" id="syncDriftCleanupBtn" style="display: none; padding: 6px 12px; border: 1px solid #b81c1c; background: white; color: #b81c1c; border-radius: 5px; cursor: pointer; font-size: 12px; font-weight: 600;" title="Supprime les tournois publiés que la génération actuelle ne reproduit plus (uniquement ceux sans inscriptions ni convocations)">🗑️ Supprimer les orphelins</button>
           <button type="button" id="syncDriftResyncBtn" style="padding: 6px 12px; border: none; background: #c47b00; color: white; border-radius: 5px; cursor: pointer; font-size: 12px; font-weight: 700;">🔄 Resynchroniser le brouillon</button>
         </div>
       </div>
@@ -2301,6 +2302,93 @@
       }
     }
 
+    // V 2.0.657 — cleanup orphan tournoi_ext rows that the current
+    // generation no longer reproduces. Two-pass:
+    //   1. Dry run (apply: false) → server splits safe vs unsafe
+    //   2. Auto-delete safe ones; for unsafe ones, show a modal listing
+    //      child counts and ask for explicit force-delete confirmation.
+    async function runCleanupExternals() {
+      if (!currentBrief?.id) return;
+      const cleanupBtn = document.getElementById('syncDriftCleanupBtn');
+      if (cleanupBtn) { cleanupBtn.disabled = true; cleanupBtn.textContent = '⏳ Analyse…'; }
+      try {
+        // Dry run.
+        const probe = await fetch(`${API_URL}/calendar-generator/cleanup-externals?brief_id=${currentBrief.id}`, {
+          method: 'POST',
+          headers: { ...authHeaders, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ apply: false })
+        });
+        if (!probe.ok) {
+          const e = await probe.json().catch(() => ({}));
+          throw new Error(e.error || `HTTP ${probe.status}`);
+        }
+        const data = await probe.json();
+        const { scanned, safe, unsafe } = data;
+        if (!scanned) {
+          alert('Aucun orphelin à supprimer.');
+          return;
+        }
+
+        // Build the confirmation message.
+        const lines = [];
+        lines.push(`${scanned} tournoi(s) publié(s) ne sont plus reproduit(s) par la génération actuelle :`);
+        lines.push('');
+        lines.push(`✅ ${safe.length} sans aucune donnée attachée — seront supprimés directement.`);
+        if (unsafe.length) {
+          lines.push(`⚠️ ${unsafe.length} avec des données attachées (inscriptions, convocations, article web…) — détail ci-dessous :`);
+          unsafe.forEach(u => {
+            const ch = u.children;
+            const bits = [];
+            if (ch.inscriptions) bits.push(`${ch.inscriptions} inscr.`);
+            if (ch.convocation_files) bits.push(`${ch.convocation_files} conv.`);
+            if (ch.relances) bits.push(`${ch.relances} relances`);
+            if (ch.wp_post) bits.push(`article WP`);
+            lines.push(`  • ${u.label}${u.date ? ' [' + u.date + ']' : ''} — ${bits.join(', ')}`);
+          });
+        }
+        lines.push('');
+
+        // Pass 1: confirm safe deletion.
+        if (!safe.length && !unsafe.length) return;
+        if (safe.length && !confirm(lines.join('\n') + `\nSupprimer les ${safe.length} orphelins SANS données ?`)) {
+          return;
+        }
+
+        // Pass 2: optional force-delete of unsafe ones.
+        let forceIds = [];
+        if (unsafe.length) {
+          const wantsForce = confirm(
+            `Souhaitez-vous AUSSI supprimer les ${unsafe.length} tournoi(s) avec données attachées ?\n\n` +
+            `⚠️ Ces données (inscriptions, convocations envoyées, etc.) seront perdues définitivement.\n\n` +
+            `OK = TOUT supprimer · Annuler = ne supprimer que les orphelins sans données`
+          );
+          if (wantsForce) forceIds = unsafe.map(u => u.tournoi_ext_id);
+        }
+
+        if (cleanupBtn) cleanupBtn.textContent = '⏳ Suppression…';
+        const apply = await fetch(`${API_URL}/calendar-generator/cleanup-externals?brief_id=${currentBrief.id}`, {
+          method: 'POST',
+          headers: { ...authHeaders, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ apply: true, force_ids: forceIds })
+        });
+        if (!apply.ok) {
+          const e = await apply.json().catch(() => ({}));
+          throw new Error(e.error || `HTTP ${apply.status}`);
+        }
+        const result = await apply.json();
+        alert(`✅ ${result.deleted} tournoi(s) supprimé(s)${result.errors?.length ? `, ${result.errors.length} erreur(s)` : ''}.`);
+        await loadSavedDraft();
+        await loadSyncStatus();
+      } catch (err) {
+        alert('Erreur : ' + err.message);
+      } finally {
+        if (cleanupBtn) {
+          cleanupBtn.disabled = false;
+          cleanupBtn.textContent = '🗑️ Supprimer les orphelins';
+        }
+      }
+    }
+
     function renderSyncDriftBanner(data) {
       const banner = document.getElementById('syncDriftBanner');
       const headline = document.getElementById('syncDriftHeadline');
@@ -2315,6 +2403,9 @@
       // 119-row backlink situation no longer reads as "119 tournois
       // créés hors-générateur" (alarming) but as "119 tournois à
       // reconnecter au brouillon" (silently fixable).
+      // V 2.0.657 — "external" renamed to "non reproduits par la
+      // génération actuelle" — clearer for admins who only ever used
+      // the wizard but regenerated several times after publishing.
       const realDrift = (k.date_changed || 0) + (k.host_changed || 0) + (k.deleted || 0) + (k.external || 0);
       if (realDrift === 0 && k.linkable) {
         headline.textContent = `${k.linkable} tournoi${k.linkable > 1 ? 's' : ''} à reconnecter au brouillon.`;
@@ -2326,7 +2417,7 @@
       if (k.host_changed) parts.push(`${k.host_changed} club${k.host_changed > 1 ? 's' : ''} hôte${k.host_changed > 1 ? 's' : ''} modifié${k.host_changed > 1 ? 's' : ''}`);
       if (k.deleted)      parts.push(`${k.deleted} tournoi${k.deleted > 1 ? 's' : ''} supprimé${k.deleted > 1 ? 's' : ''}`);
       if (k.linkable)     parts.push(`${k.linkable} à reconnecter`);
-      if (k.external)     parts.push(`${k.external} tournoi${k.external > 1 ? 's' : ''} créé${k.external > 1 ? 's' : ''} hors-générateur`);
+      if (k.external)     parts.push(`${k.external} tournoi${k.external > 1 ? 's' : ''} non reproduit${k.external > 1 ? 's' : ''} par la génération actuelle`);
       summary.textContent = parts.join(' · ');
 
       // Pre-render the details list (hidden by default).
@@ -2335,7 +2426,7 @@
         host_changed: { icon: '🏛️', label: 'Club hôte modifié' },
         deleted:      { icon: '🗑️', label: 'Tournoi supprimé' },
         linkable:     { icon: '🔗', label: 'À reconnecter au brouillon' },
-        external:     { icon: '➕', label: 'Tournoi créé hors-générateur' }
+        external:     { icon: '➕', label: 'Tournoi publié non reproduit par la génération actuelle' }
       };
       const items = (data.items || []).slice(0, 50).map(it => {
         const k2 = KIND_LABELS[it.kind] || { icon: '•', label: it.kind };
@@ -2358,11 +2449,18 @@
         details.style.display = open ? 'none' : 'block';
         detailsBtn.textContent = open ? 'Voir le détail' : 'Masquer le détail';
       };
+      // V 2.0.657 — show the cleanup button when externals exist.
+      const cleanupBtn = document.getElementById('syncDriftCleanupBtn');
+      if (cleanupBtn) {
+        cleanupBtn.style.display = (k.external && k.external > 0) ? 'inline-block' : 'none';
+        cleanupBtn.onclick = () => runCleanupExternals();
+      }
+
       resyncBtn.onclick = async () => {
         const fixable = (k.date_changed || 0) + (k.host_changed || 0) + (k.deleted || 0) + (k.linkable || 0);
         if (k.external && fixable === 0) {
-          // Only "external" rows — nothing to resync inbound.
-          alert(`Les ${k.external} tournoi(s) créés hors-générateur ne peuvent pas être resynchronisés automatiquement.\n\nPour les intégrer au brouillon, utilisez l'import calendrier ou créez les lignes équivalentes via Génération.`);
+          // Only "external" rows — direct admin to the dedicated cleanup flow.
+          alert(`Les ${k.external} tournoi(s) publié(s) ne sont plus reproduit(s) par la génération actuelle.\n\nUtilisez « 🗑️ Supprimer les orphelins » pour les retirer (les tournois sans inscriptions / convocations seront supprimés directement, les autres feront l'objet d'une confirmation).`);
           return;
         }
         if (!confirm(`Resynchroniser le brouillon ?\n\n${fixable} ligne(s) seront alignée(s) avec l'état publié${k.linkable ? ` (dont ${k.linkable} reconnexion${k.linkable > 1 ? 's' : ''} silencieuse${k.linkable > 1 ? 's' : ''})` : ''}. Vos verrous (🔒) sont préservés.`)) return;
