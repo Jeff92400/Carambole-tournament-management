@@ -1911,7 +1911,7 @@
           <tr>
             <td>${meta.label}</td>
             <td>${paramEditor(r)}</td>
-            <td><input type="number" min="0" max="10" value="${r.weight}" data-rule-id="${r.id}" class="rule-weight-input" style="width: 50px; padding: 4px 6px; border: 1px solid #c8c5be; border-radius: 4px;"></td>
+            <td><input type="number" min="0" max="200" value="${r.weight}" data-rule-id="${r.id}" class="rule-weight-input" style="width: 56px; padding: 4px 6px; border: 1px solid #c8c5be; border-radius: 4px;" title="0 = règle ignorée par le moteur, 50 = pull moyen (défaut historique), 100+ = pull dominant"></td>
             <td><label style="cursor:pointer;"><input type="checkbox" class="rule-toggle" data-rule-id="${r.id}" ${r.enabled ? 'checked' : ''}> ${r.enabled ? 'Oui' : 'Non'}</label></td>
             <td><button class="rule-delete" data-rule-id="${r.id}" style="background: #b81c1c; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px;">✕</button></td>
           </tr>`;
