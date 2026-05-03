@@ -557,15 +557,12 @@
         <p style="color: #888;">Cochez d'abord les catégories actives ci-dessus pour voir cette table.</p>
       </div>
 
-      <!-- V 2.0.648 — Capacité estimée widget. Computes live, in days,
-           how many tournament slots the season can carry vs. how many
-           the active categories require. Pure math, no engine call. -->
-      <div id="capacityWidget" style="background: #eef5ff; border: 1px solid #b6cef0; border-radius: 8px; padding: 14px 16px; margin-top: 22px; font-size: 13px;">
-        <h3 style="margin: 0 0 8px 0; font-size: 15px; color: #1F4788;">📐 Capacité estimée de la saison</h3>
-        <div id="capacityWidgetBody" style="color: #444; line-height: 1.55;">
-          <em>Renseignez la saison, les jours, les catégories et les clubs pour voir l'estimation.</em>
-        </div>
-      </div>
+      <!-- V 2.0.669 — Capacité estimée widget removed: it's a purely
+           arithmetic ratio that ignores cascade / min-weeks / ligue-final
+           constraints and was creating confusion when the engine left
+           rounds unplaced despite a "Très confortable" verdict. The
+           engine's "X / Y placés" report after Génération is the only
+           authoritative feedback. -->
 
       <!-- V 2.0.647 — soft reminder before leaving Step 1: per-club FFB
            dates are stored on the clubs themselves (not the brief), so
@@ -720,15 +717,6 @@
         💾 <strong>Sauvegarde automatique active</strong> — le calendrier est enregistré à chaque génération et à chaque modification manuelle d'une cellule. Aucun bouton « Sauvegarder » n'est nécessaire.
       </div>
 
-      <!-- V 2.0.649 — second copy of the capacity widget here (Step 5),
-           right next to the placement summary so the admin sees how the
-           engine's actual count compares to the theoretical capacity. -->
-      <div id="capacityWidgetStep5" style="background: #eef5ff; border: 1px solid #b6cef0; border-radius: 8px; padding: 12px 14px; margin-bottom: 16px; font-size: 13px;">
-        <h3 style="margin: 0 0 8px 0; font-size: 14px; color: #1F4788;">📐 Capacité estimée vs. demande</h3>
-        <div id="capacityWidgetBodyStep5" style="color: #444; line-height: 1.55;">
-          <em>En attente des paramètres de l'étape 1…</em>
-        </div>
-      </div>
       <div id="generationConflicts" style="display: none; margin-bottom: 16px;"></div>
 
       <div id="viewSelector" style="display:none; margin-bottom: 12px; display:flex; gap: 8px; flex-wrap: wrap; align-items: center;">
