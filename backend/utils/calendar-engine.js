@@ -420,23 +420,27 @@ function scoreSoft({ cat, ttype, host, date, weekendDate, alreadyPlaced, cmap, b
   // logic so categories with NO Ligue Final naturally land their
   // Finale at season end (May/June), and categories WITH a Ligue
   // Final get a tightly-anchored cycle ending right before it.
-  if (cat._targetDates && cat._targetDates[ttype]) {
-    const cadenceW = cmap.category_cadence_weight?.weight ?? 50;
+  // V 2.0.683 — Cadence rules now respect their enabled flag.
+  // Previously a disabled rule fell back to a hardcoded weight 50, which
+  // silently tugged every T1 toward season start regardless of UI state.
+  if (cat._targetDates && cat._targetDates[ttype] && cmap.category_cadence_weight) {
+    const cadenceW = cmap.category_cadence_weight.weight ?? 50;
     const target = cat._targetDates[ttype];
     const deviation = weekDiff(date, target);
     score += cadenceW * deviation;
-  } else if (ttype === 'T1') {
-    // Fallback: legacy T1 earliness (no target date computed —
-    // happens only when first_weekend or last_weekend is missing).
-    const t1W = cmap.t1_earliness_weight?.weight ?? 50;
+  } else if (ttype === 'T1' && cmap.t1_earliness_weight) {
+    // Fallback: T1 earliness (when target dates aren't computed, or as an
+    // alternative way to pull T1s toward start of season).
+    const t1W = cmap.t1_earliness_weight.weight ?? 50;
     const startISO = toISODateString(brief.first_weekend);
     if (startISO) {
       const offsetWeeks = weekDiff(date, startISO);
       score += t1W * offsetWeeks;
     }
-  } else {
-    // Fallback: legacy gap-based cadence.
-    const cadenceW = cmap.category_cadence_weight?.weight ?? 50;
+  } else if (ttype !== 'T1' && cmap.category_cadence_weight) {
+    // Fallback: legacy gap-based cadence (T2/T3/Finale aim for an ideal gap
+    // from previous tournament in same category).
+    const cadenceW = cmap.category_cadence_weight.weight ?? 50;
     const sameCat = alreadyPlaced.filter(p => p.category_id === cat.id);
     const last = sameCat[sameCat.length - 1];
     if (last && cat._idealGapWeeks) {
