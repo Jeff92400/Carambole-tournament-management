@@ -584,9 +584,8 @@ function generateCalendar({ brief, constraints, ligueFinals, categories, clubs, 
     const minGap = Math.max(minWeeksFloor, 4);
     const maxGap = Math.max(minGap + 1, Math.floor(totalWeeks / 3));
 
-    const minWeeksT3F = param(cmap.min_weeks_between_t3_and_final, 'min_weeks', 2);
     orderedCats.forEach((cat, i) => {
-      // 1. Determine the Finale anchor (target for Finale).
+      // 1. Determine the anchor date (target for Finale).
       let anchorDate;
       if (ligueFinals && ligueFinals[cat.id]) {
         const lf = parseISODate(toISODateString(ligueFinals[cat.id]));
@@ -596,24 +595,16 @@ function generateCalendar({ brief, constraints, ligueFinals, categories, clubs, 
       if (anchorDate < startDate) anchorDate = new Date(startDate.getTime());
       if (anchorDate > endDate)   anchorDate = new Date(endDate.getTime());
 
-      // 2. Walk T2/T3 BACKWARDS from the Finale anchor using the actual
-      //    minimum gaps. Previously we evenly spread all 4 tournaments
-      //    over [start, anchor], which over-clamped T1 in short spans
-      //    (categories with an early Ligue Final) and pulled T2/T3 to
-      //    arbitrary midpoints. Walking backwards keeps T1 free to start
-      //    early (cascade already enforces ordering) and packs T2/T3/F
-      //    just tightly enough to clear the deadline.
-      const t3Target  = addDays(anchorDate, -7 * minWeeksT3F);
-      const t2Target  = addDays(t3Target,   -7 * minWeeksFloor);
-      // T1 stays anchored near season start — never let retro-planning
-      // pull it later than t2Target − minWeeksFloor.
-      const t1Latest  = addDays(t2Target,   -7 * minWeeksFloor);
-      const t1Target  = (t1Latest < startDate) ? startDate : startDate;
-
+      // 2. Spread T1/T2/T3/Finale evenly across [start, anchor].
+      //    T1 near start (cascade enforces ordering), Finale at anchor,
+      //    T2/T3 at thirds.
+      const spanDays = Math.max(0, Math.round((anchorDate - startDate) / (24 * 3600 * 1000)));
+      const spanWeeks = Math.max(3, Math.round(spanDays / 7));
+      const gap = spanWeeks / 3;
       cat._targetDates = {
-        T1:     fmtISO(t1Target),
-        T2:     fmtISO(t2Target < startDate ? startDate : t2Target),
-        T3:     fmtISO(t3Target < startDate ? startDate : t3Target),
+        T1:     fmtISO(startDate),
+        T2:     fmtISO(addDays(startDate, Math.round(7 * gap))),
+        T3:     fmtISO(addDays(startDate, Math.round(7 * 2 * gap))),
         Finale: fmtISO(anchorDate)
       };
 
