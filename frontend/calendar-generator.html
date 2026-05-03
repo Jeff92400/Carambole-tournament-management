@@ -3390,9 +3390,48 @@
       // V 2.0.611 — Saturday + Sunday dual rows, mirroring the legacy
       // CDBHS XL layout. Day numbers only (the month is already in the
       // band row above), so columns stay narrow.
-      // V 2.0.673 — header date cells get a 🚫 marker on blackout dates
-      // and a 🏆 marker on FFB team-match dates so the admin can spot at
-      // a glance which weekends the engine cannot use.
+      // V 2.0.673 — blackout / FFB-match overlay: build a per-weekend
+      // status map so empty columns visually communicate WHY no
+      // tournament can land there. Three signals:
+      //   • CDB-wide blackout (admin marked the date in Étape 1)
+      //   • JDS Fédérale / FFB team match date (players away)
+      //   • neither
+      // Saturday and Sunday are checked independently — a weekend is
+      // "fully blocked" only if both days are blacked out, otherwise
+      // the cell is "partial" and we still mark the half-day reason.
+      // V 2.0.674 — declared BEFORE satRow/sunRow to avoid TDZ error.
+      const blackoutSet = new Set(blackoutDates || []);
+      const ffbMatchSet = new Set(
+        (ffbTeamMatches || [])
+          .map(m => m?.date)
+          .filter(d => d && /^\d{4}-\d{2}-\d{2}$/.test(d))
+      );
+      const weekendStatus = {};
+      weekends.forEach(we => {
+        const sat = we;
+        const sun = (() => {
+          const d = new Date(we + 'T00:00:00Z');
+          d.setUTCDate(d.getUTCDate() + 1);
+          return d.toISOString().slice(0, 10);
+        })();
+        const satBO  = blackoutSet.has(sat);
+        const sunBO  = blackoutSet.has(sun);
+        const satFFB = ffbMatchSet.has(sat);
+        const sunFFB = ffbMatchSet.has(sun);
+        const fully  = (satBO || satFFB) && (sunBO || sunFFB);
+        const partial = !fully && (satBO || sunBO || satFFB || sunFFB);
+        const reasons = [];
+        if (satBO || sunBO) reasons.push('blackout CDB');
+        if (satFFB || sunFFB) reasons.push('JDS Fédérale (joueurs absents)');
+        weekendStatus[we] = {
+          satBO, sunBO, satFFB, sunFFB, fully, partial,
+          tooltip: reasons.length ? `${fully ? 'Week-end indisponible' : 'Week-end partiellement indisponible'} — ${reasons.join(' · ')}` : ''
+        };
+      });
+
+      // Header date cells get a 🚫 marker on blackout dates and a 🏆 marker
+      // on FFB team-match dates so the admin can spot at a glance which
+      // weekends the engine cannot use.
       const satRow = weekends.map((we, i) => {
         const d = new Date(we + 'T00:00:00Z');
         const prev = i > 0 ? new Date(weekends[i - 1] + 'T00:00:00Z') : null;
@@ -3418,45 +3457,6 @@
 
       // V 2.0.614 — month parity for alternating column tints.
       const monthParityMap = buildMonthParityMap(weekends);
-
-      // V 2.0.673 — blackout / FFB-match overlay: build a per-weekend
-      // status map so empty columns visually communicate WHY no
-      // tournament can land there. Three signals:
-      //   • CDB-wide blackout (admin marked the date in Étape 1)
-      //   • JDS Fédérale / FFB team match date (players away)
-      //   • neither
-      // Saturday and Sunday are checked independently — a weekend is
-      // "fully blocked" only if both days are blacked out, otherwise
-      // the cell is "partial" and we still mark the half-day reason.
-      const blackoutSet = new Set(blackoutDates || []);
-      const ffbMatchSet = new Set(
-        (ffbTeamMatches || [])
-          .map(m => m?.date)
-          .filter(d => d && /^\d{4}-\d{2}-\d{2}$/.test(d))
-      );
-      const weekendStatus = {}; // { weekendISO: {sat, sun, satFFB, sunFFB, label} }
-      weekends.forEach(we => {
-        const sat = we;
-        const sun = (() => {
-          const d = new Date(we + 'T00:00:00Z');
-          d.setUTCDate(d.getUTCDate() + 1);
-          return d.toISOString().slice(0, 10);
-        })();
-        const satBO  = blackoutSet.has(sat);
-        const sunBO  = blackoutSet.has(sun);
-        const satFFB = ffbMatchSet.has(sat);
-        const sunFFB = ffbMatchSet.has(sun);
-        const fully  = (satBO || satFFB) && (sunBO || sunFFB);
-        const partial = !fully && (satBO || sunBO || satFFB || sunFFB);
-        const reasons = [];
-        if (satBO || sunBO) reasons.push('blackout CDB');
-        if (satFFB || sunFFB) reasons.push('JDS Fédérale (joueurs absents)');
-        weekendStatus[we] = {
-          satBO, sunBO, satFFB, sunFFB, fully, partial,
-          tooltip: reasons.length ? `${fully ? 'Week-end indisponible' : 'Week-end partiellement indisponible'} — ${reasons.join(' · ')}` : ''
-        };
-      });
-
       let prevMode = null;
       const rows = cats.map((c, ci) => {
         const curMode = c.game_type || c.mode || '';
