@@ -100,6 +100,13 @@ function weekDiff(dateA, dateB) {
   const ms = Math.abs(parseISODate(dateA) - parseISODate(dateB));
   return Math.round(ms / (7 * 24 * 3600 * 1000));
 }
+// Day-precise difference (signed-absolute, integer days).
+// Used by hard chain checks where weekDiff's rounding creates a 7-day
+// plateau (two dates 17 days apart should NOT satisfy "≥ 3 weeks apart").
+function dayDiff(dateA, dateB) {
+  const ms = Math.abs(parseISODate(dateA) - parseISODate(dateB));
+  return Math.round(ms / (24 * 3600 * 1000));
+}
 
 // Generate weekends from first_weekend to ~1 year later.
 // A "weekend" carries both the qualif date and the final date based on brief.
@@ -229,7 +236,7 @@ function isDateAllowed({
   const previousSameCat = alreadyPlaced.filter(p => p.category_id === cat.id);
   for (const prev of previousSameCat) {
     const prevDate = prev.qualif_date || prev.final_date;
-    if (weekDiff(date, prevDate) < minWeeksSame) {
+    if (dayDiff(date, prevDate) < minWeeksSame * 7) {
       return { ok: false, reason: `< ${minWeeksSame} sem. depuis ${prev.tournament_type}` };
     }
   }
@@ -240,7 +247,7 @@ function isDateAllowed({
     const t3 = previousSameCat.find(p => p.tournament_type === 'T3');
     if (t3) {
       const t3Date = t3.qualif_date || t3.final_date;
-      if (weekDiff(date, t3Date) < minWeeksT3) {
+      if (dayDiff(date, t3Date) < minWeeksT3 * 7) {
         return { ok: false, reason: `< ${minWeeksT3} sem. depuis T3` };
       }
       if (parseISODate(date) <= parseISODate(t3Date)) {
@@ -287,7 +294,7 @@ function isDateAllowed({
     if (parseISODate(date) >= parseISODate(ligueDate)) {
       return { ok: false, reason: 'après finale ligue' };
     }
-    if (weekDiff(date, ligueDate) < minWeeksLigue) {
+    if (dayDiff(date, ligueDate) < minWeeksLigue * 7) {
       return { ok: false, reason: `< ${minWeeksLigue} sem. avant finale ligue` };
     }
   }
@@ -507,19 +514,33 @@ function generateCalendar({ brief, constraints, ligueFinals, categories, clubs, 
   // as immovable, and skip those (category, tournament_type) pairs in the loop).
   const lockedKeys = new Set();
   const initialPlacements = [];
+  // Compute Saturday-aligned weekend key + per-day qualif/final dates so
+  // chain checks (`min_weeks`, `< Finale`, etc.) compare apples-to-apples
+  // with engine-generated placements. Without this, locked Finales (Sunday)
+  // would land in the weekend_date column on Saturday and skew the soft
+  // scoring + hard look-aheads.
+  const qualifIdx = DAY_INDEX[brief.qualif_day] ?? 6;
+  const finalIdx = DAY_INDEX[brief.final_day] ?? 6;
   lockedPlacements.forEach(lp => {
     const cat = categories.find(c => c.id === lp.category_id);
     if (!cat) return;
-    const we = toISODateString(lp.weekend_date);
-    if (!we) return;
+    const weRaw = toISODateString(lp.weekend_date);
+    if (!weRaw) return;
+    // Normalize to Saturday-of-week.
+    const d = parseISODate(weRaw);
+    const dow = d.getUTCDay();
+    const monday = addDays(d, -((dow + 6) % 7));
+    const we = fmtISO(addDays(monday, 5)); // Saturday
+    const qualif = fmtISO(addDays(monday, (qualifIdx + 6) % 7));
+    const finalD = fmtISO(addDays(monday, (finalIdx + 6) % 7));
     initialPlacements.push({
       category_id: lp.category_id,
       tournament_type: lp.tournament_type,
       host_id: lp.host_id ?? null,
       host_name: lp.host_name ?? null,
       weekend_date: we,
-      qualif_date: we,
-      final_date: we,
+      qualif_date: qualif,
+      final_date: finalD,
       _mode: cat.game_type,
       _levelRank: levelRank(cat.level),
       _categoryLabel: cat.display_name,

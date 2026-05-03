@@ -1328,6 +1328,19 @@ router.get('/published-grid', authenticateToken, requireCalendarGenerator, async
     // Reverse mapping: tournament_number → tournament_type label.
     const NUMBER_TO_TYPE = { 1: 'T1', 2: 'T2', 3: 'T3', 4: 'Finale', 5: 'LIGUE_FINALE' };
 
+    // Normalize any date in a Sat–Sun weekend to its Saturday (the canonical
+    // weekend_date key used by the engine and the frontend grid). Sunday-only
+    // events (e.g. Finales) would otherwise render as phantom Saturday columns.
+    const toSaturdayISO = (iso) => {
+      if (!iso) return null;
+      const d = new Date(iso + 'T00:00:00Z');
+      if (isNaN(d.getTime())) return null;
+      const dow = d.getUTCDay(); // 0=Sun … 6=Sat
+      const offset = dow === 6 ? 0 : (dow === 0 ? -1 : (6 - dow));
+      d.setUTCDate(d.getUTCDate() + offset);
+      return d.toISOString().slice(0, 10);
+    };
+
     const placements = rows
       .filter(r => r.category_id != null) // skip rows we can't map to a category
       .map(r => {
@@ -1338,7 +1351,7 @@ router.get('/published-grid', authenticateToken, requireCalendarGenerator, async
           : (String(r.debut || '').match(/^\d{4}-\d{2}-\d{2}/)?.[0] || null);
         return {
           category_id: r.category_id,
-          weekend_date: debutStr,
+          weekend_date: toSaturdayISO(debutStr),
           tournament_type: ttype,
           host_id: isLF ? null : r.host_id,
           host_name: isLF ? 'Ligue' : (r.host_name || r.lieu || null),
