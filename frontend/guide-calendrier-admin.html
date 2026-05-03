@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Guide Administrateur — Assistant Calendrier</title>
+<style>
+  :root {
+    --primary: #1F4788;
+    --primary-light: #2c5aa8;
+    --accent: #6b3aa3;
+    --accent-light: #f3f0ff;
+    --green: #16a34a;
+    --green-light: #f0fdf4;
+    --orange: #c47b00;
+    --orange-light: #fff8e1;
+    --red: #c00;
+    --red-light: #fff5f5;
+    --grey-bg: #f7f7f7;
+    --grey-line: #e0e0e0;
+    --grey-text: #666;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    color: #222;
+    background: #fafafa;
+    margin: 0;
+    padding: 0;
+    line-height: 1.6;
+  }
+  .container {
+    max-width: 980px;
+    margin: 0 auto;
+    background: white;
+    padding: 40px 50px;
+    box-shadow: 0 0 24px rgba(0,0,0,0.05);
+    min-height: 100vh;
+  }
+  h1 {
+    color: var(--primary);
+    font-size: 28px;
+    margin: 0 0 6px 0;
+    border-bottom: 3px solid var(--primary);
+    padding-bottom: 10px;
+  }
+  .subtitle { color: var(--grey-text); margin-top: 0; font-size: 15px; }
+  h2 {
+    color: var(--primary);
+    font-size: 22px;
+    margin-top: 40px;
+    padding-top: 14px;
+    border-top: 1px solid var(--grey-line);
+  }
+  h3 { color: var(--accent); font-size: 17px; margin-top: 24px; }
+  h4 { font-size: 15px; margin-top: 18px; color: #333; }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 14px 0;
+    font-size: 14px;
+  }
+  th, td {
+    border: 1px solid var(--grey-line);
+    padding: 8px 12px;
+    text-align: left;
+    vertical-align: top;
+  }
+  th { background: var(--grey-bg); font-weight: 600; }
+  code {
+    background: var(--grey-bg);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 13px;
+    color: #b31b00;
+  }
+  .info-card {
+    background: var(--accent-light);
+    border-left: 4px solid var(--accent);
+    padding: 12px 16px;
+    margin: 14px 0;
+    border-radius: 4px;
+  }
+  .info-card.green {
+    background: var(--green-light);
+    border-left-color: var(--green);
+  }
+  .info-card.orange {
+    background: var(--orange-light);
+    border-left-color: var(--orange);
+  }
+  .info-card.red {
+    background: var(--red-light);
+    border-left-color: var(--red);
+  }
+  .info-card strong { color: var(--primary); }
+  .info-card.green strong { color: #14532d; }
+  .info-card.orange strong { color: #5a3500; }
+  .info-card.red strong { color: var(--red); }
+  ul { margin: 10px 0; padding-left: 24px; }
+  ul li { margin: 4px 0; }
+  ol.steps li { margin: 8px 0; }
+  .toc {
+    background: var(--grey-bg);
+    padding: 16px 22px;
+    border-radius: 8px;
+    margin: 20px 0 30px 0;
+  }
+  .toc ul { list-style: none; padding: 0; margin: 0; }
+  .toc li { margin: 4px 0; }
+  .toc a { color: var(--primary); text-decoration: none; font-weight: 500; }
+  .toc a:hover { text-decoration: underline; }
+  .footer {
+    margin-top: 50px;
+    padding-top: 20px;
+    border-top: 1px solid var(--grey-line);
+    color: var(--grey-text);
+    font-size: 13px;
+    text-align: center;
+  }
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+    margin-left: 6px;
+    vertical-align: middle;
+  }
+  .badge.admin { background: #fee2e2; color: #991b1b; }
+  .badge.soft { background: #dbeafe; color: #1e40af; }
+  .badge.hard { background: #fce7f3; color: #9f1239; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>Guide Administrateur — Assistant Calendrier</h1>
+<p class="subtitle">Documentation des fonctions réservées aux administrateurs CDB. Mise à jour : V&nbsp;2.0.690.</p>
+
+<div class="info-card">
+  Ce guide complète le <strong>Guide Utilisateur</strong> (section « Compétitions &gt; Assistant Calendrier ») en couvrant les
+  fonctions accessibles uniquement aux comptes admin : réglages avancés des règles, publication officielle, gestion
+  des cas limites et dépannage du moteur.
+</div>
+
+<div class="toc">
+  <strong>Sommaire</strong>
+  <ul>
+    <li><a href="#vue-ensemble">1. Vue d'ensemble du moteur</a></li>
+    <li><a href="#droits">2. Répartition admin / non-admin</a></li>
+    <li><a href="#reglages-avances">3. Réglages avancés (panneau admin)</a></li>
+    <li><a href="#regles-dures">4. Catalogue des règles dures</a></li>
+    <li><a href="#regles-souhaitees">5. Catalogue des règles souhaitées</a></li>
+    <li><a href="#scoring">6. Comment fonctionne le scoring</a></li>
+    <li><a href="#publish">7. Publication sur la page Calendrier</a></li>
+    <li><a href="#troubleshooting">8. Dépannage : conflits non résolus</a></li>
+    <li><a href="#cas-usage">9. Cas d'usage avancés</a></li>
+    <li><a href="#bonnes-pratiques">10. Bonnes pratiques</a></li>
+  </ul>
+</div>
+
+<h2 id="vue-ensemble">1. Vue d'ensemble du moteur</h2>
+<p>
+  L'Assistant Calendrier remplace la construction Excel manuelle d'un calendrier CDB. Le moteur place automatiquement
+  tous les tournois (T1, T2, T3, Finale) de toutes les catégories actives sur les week-ends éligibles, en respectant
+  les contraintes définies par l'admin.
+</p>
+
+<h3>Algorithme</h3>
+<ul>
+  <li><strong>Greedy round-by-round</strong> : tous les T1 sont placés en premier (toutes catégories), puis les T2, puis les T3, puis les Finales.</li>
+  <li>Pour chaque (catégorie, type), le moteur teste tous les week-ends candidats, élimine ceux qui violent une règle dure, puis choisit celui qui minimise le score des règles souhaitées.</li>
+  <li>Si une étape de chaîne échoue pour une catégorie (ex. T2 non plaçable), les étapes suivantes (T3, Finale) sont automatiquement marquées « chaîne interrompue » plutôt que produire un calendrier incohérent.</li>
+</ul>
+
+<h3>Limites connues</h3>
+<ul>
+  <li><strong>Pas de backtracking</strong> : le moteur ne revient pas sur le placement d'un T1 si un T2 ultérieur échoue. Workaround : verrouillage manuel d'un T1 sur la date qui marche.</li>
+  <li><strong>Pas de capacité par club</strong> : un club avec 4 billards et un avec 1 billard sont traités à égalité pour l'équilibre des charges.</li>
+  <li><strong>Affinités cross-mode heuristiques</strong> : déduites du niveau (R1↔R1, R3↔R4) et non d'une matrice spécifique au CDB.</li>
+</ul>
+
+<h2 id="droits">2. Répartition admin / non-admin</h2>
+<table>
+<thead><tr><th>Action</th><th>Non-admin (rôle Calendrier)</th><th>Admin</th></tr></thead>
+<tbody>
+<tr><td>Étape 1 — Saisir/modifier dates et disponibilités</td><td>✅</td><td>✅</td></tr>
+<tr><td>Étape 2 — Modifier les 3 réglages essentiels</td><td>✅</td><td>✅</td></tr>
+<tr><td>Étape 2 — Charger les règles habituelles (seed)</td><td>✅</td><td>✅</td></tr>
+<tr><td>Étape 2 — Réglages avancés (poids, ajout/suppression de règles)</td><td>❌</td><td>✅</td></tr>
+<tr><td>Étape 3 — Régénérer le calendrier</td><td>✅</td><td>✅</td></tr>
+<tr><td>Étape 3 — Modifier une cellule (date, club, commentaire)</td><td>✅</td><td>✅</td></tr>
+<tr><td>Étape 3 — Verrouiller / déverrouiller une cellule</td><td>✅</td><td>✅</td></tr>
+<tr><td>Étape 3 — Télécharger Excel</td><td>✅</td><td>✅</td></tr>
+<tr><td>Étape 3 — Email aux clubs hôtes</td><td>✅</td><td>✅</td></tr>
+<tr><td>Étape 3 — 📤 Publier sur la page Calendrier</td><td>❌</td><td>✅</td></tr>
+<tr><td>Outils admin (cleanup-orphans, cleanup-externals, resync)</td><td>❌</td><td>✅</td></tr>
+</tbody>
+</table>
+
+<h2 id="reglages-avances">3. Réglages avancés (panneau admin)</h2>
+<p>
+  Le bouton <strong>« 🔧 Réglages avancés (admin) »</strong> sous l'encart vert ouvre la bibliothèque complète de règles.
+  C'est l'outil principal pour ajuster finement le comportement du moteur.
+</p>
+
+<h3>Tables affichées</h3>
+<ul>
+  <li><strong>Règles obligatoires</strong> : le moteur refuse de les violer. Paramètre éditable (ex. min_weeks).</li>
+  <li><strong>Règles souhaitées</strong> : optimisées via un poids modifiable (0&nbsp;= ignorée, 5&nbsp;= léger, 10&nbsp;= moyen, 50+&nbsp;= dominant).</li>
+  <li><strong>Règles disponibles</strong> : règles non encore activées du catalogue. Boutons « Ajouter » ou « Ignorer ».</li>
+</ul>
+
+<h3>Sauvegarde automatique</h3>
+<p>
+  Chaque modification (paramètre, poids, activation, ajout, suppression) est <strong>persistée immédiatement</strong> en base.
+  Aucun bouton « Sauvegarder » n'est requis. Pour appliquer aux placements, lancer <strong>« ⚡ Tout régénérer »</strong>.
+</p>
+
+<h2 id="regles-dures">4. Catalogue des règles dures</h2>
+<p>Une règle dure produit un rejet immédiat du créneau candidat. Aucun poids — la règle s'applique ou est désactivée.</p>
+<table>
+<thead><tr><th>Règle</th><th>Paramètre</th><th>Effet</th></tr></thead>
+<tbody>
+<tr><td>Aucun tournoi sur week-end blackout</td><td>Liste de dates (Étape 1)</td><td>Refuse les samedis/dimanches blackoutés.</td></tr>
+<tr><td>Jour précis pour chaque type de compétition</td><td>(implicite)</td><td>T-Q sur samedi, finales sur dimanche selon brief.</td></tr>
+<tr><td>Début de saison ≥ date</td><td>(Étape 1)</td><td>Aucun tournoi avant <code>first_weekend</code>.</td></tr>
+<tr><td>Finale CDB avant Finale Ligue (par catégorie)</td><td>Auto par catégorie</td><td>Si Ligue Final renseignée, Finale CDB doit la précéder strictement.</td></tr>
+<tr><td>≥ N semaines entre Finale CDB et Finale Ligue</td><td>min_weeks (défaut 3)</td><td>Buffer de respiration. Levier critique pour les catégories à deadline serrée.</td></tr>
+<tr><td>≥ N semaines entre 2 tournois (même catégorie)</td><td>min_weeks (défaut 3)</td><td>S'applique aux paires T1-T2, T2-T3, T3-Finale et toutes les paires de la catégorie.</td></tr>
+<tr><td>≥ N semaines entre T3 et Finale</td><td>min_weeks (défaut 2)</td><td>Règle complémentaire ; le moteur prend le max avec la règle générale.</td></tr>
+<tr><td>Pas deux tournois pour un même club / week-end</td><td>(implicite)</td><td>Un club ne peut héberger plus d'une compétition le même WE.</td></tr>
+<tr><td>Tournois maximum par week-end (toutes catégories)</td><td>max (défaut 3)</td><td>Plafond logistique global.</td></tr>
+<tr><td>T1 catégorie inférieure avant T1 supérieure</td><td>(implicite)</td><td>Cascade de qualification (R4→R3→R2→R1→N3 dans le même mode).</td></tr>
+</tbody>
+</table>
+
+<h2 id="regles-souhaitees">5. Catalogue des règles souhaitées</h2>
+<p>Chaque règle souhaitée ajoute un <strong>score</strong> (pénalité) au créneau candidat. Le moteur choisit le score minimal.</p>
+<table>
+<thead><tr><th>Règle</th><th>Poids défaut</th><th>Effet</th></tr></thead>
+<tbody>
+<tr><td>Étalement entre week-ends (anti-clusters)</td><td>5</td><td>Pénalise les WE déjà chargés <strong>(quadratique : n²)</strong>. Pousse à étaler.</td></tr>
+<tr><td>Nombre équilibré de tournois par club hôte</td><td>5</td><td>Pénalise les clubs déjà très servis (linéaire). Vise une répartition équitable.</td></tr>
+<tr><td>Pas d'hôte deux week-ends consécutifs</td><td>3</td><td>Pénalité fixe (<code>w × 10</code>) si le club a un tournoi le WE −1 ou +1.</td></tr>
+<tr><td>Étalement par mode + affinités de niveau</td><td>5</td><td>Pénalise les paires de catégories corrélées sur même/adjacent WE :
+<ul style="margin: 4px 0;">
+  <li>Même mode : facteur 1.0</li>
+  <li>Modes différents, même niveau (R1↔R1) : facteur 0.8</li>
+  <li>Modes différents, niveau adjacent : facteur 0.4</li>
+</ul></td></tr>
+<tr><td>Charge équilibrée entre les mois</td><td>10</td><td>Pénalise les mois sur-remplis <strong>(quadratique, normalisé par capacité)</strong>. La règle la plus impactante chez la plupart des CDB.</td></tr>
+<tr><td>Respect des dates cibles T2/T3/Finale (rétroplanning)</td><td>10</td><td>Tire chaque tournoi vers sa date cible calculée par rétroplanning depuis la Finale Ligue (ou la fin de saison). Cadre la cascade.</td></tr>
+</tbody>
+</table>
+
+<div class="info-card orange">
+  <strong>Règle masquée :</strong> <code>t1_earliness_weight</code> est conservée en base pour rétro-compatibilité mais non
+  affichée dans l'UI depuis V&nbsp;2.0.686. Elle est redondante avec « Respect des dates cibles ».
+</div>
+
+<h2 id="scoring">6. Comment fonctionne le scoring</h2>
+<p>Pour chaque créneau candidat (date + club hôte), le moteur calcule un score additif :</p>
+<ol class="steps">
+  <li>Toutes les règles dures sont vérifiées en premier. Un échec = rejet immédiat avec une raison stockée pour le diagnostic.</li>
+  <li>Si toutes les règles dures passent, le moteur évalue chaque règle souhaitée et accumule sa contribution dans le score (pénalité × poids).</li>
+  <li>Le créneau au score le plus bas est retenu. En cas d'égalité, le tiebreaker est la date la plus précoce, puis l'ID de catégorie pour le déterminisme.</li>
+</ol>
+
+<h3>Lire les diagnostics</h3>
+<p>Si un tournoi n'est pas placé, l'encart conflits affiche par exemple :</p>
+<p style="font-style: italic; color: #555;">⚠️ Bande N3 Finale — 52 créneaux testés, tous rejetés : 14× trop tard avant la finale ligue · 12× après le dernier WE de compétition · 8× Finale placée avant T3 · 5× WE blackout · 5× &lt; 3 sem. depuis T2 · 3× &lt; 3 sem. depuis T3</p>
+<p>
+  Chaque ligne indique <strong>combien</strong> de WE ont été rejetés pour <strong>quelle</strong> raison. La somme totale = 52 (tous les WE testés).
+  Pour réparer un conflit :
+</p>
+<ul>
+  <li>Si le diagnostic est dominé par « trop tard avant la finale ligue » → la deadline ligue est trop serrée. Vérifier la date saisie en Étape 1, ou réduire <code>min_weeks_between_cdb_and_ligue_final</code>.</li>
+  <li>Si dominé par « &lt; N sem. depuis T2/T3 » → la chaîne précédente s'est terminée trop tard. Verrouillage manuel d'un T1/T2 plus tôt.</li>
+  <li>Si dominé par « max atteint » → assouplir <code>max_tournaments_per_weekend</code> ou activer/renforcer l'anti-cluster.</li>
+</ul>
+
+<h2 id="publish">7. Publication sur la page Calendrier <span class="badge admin">admin</span></h2>
+<p>
+  Le bouton <strong>« 📤 Publier sur la page Calendrier »</strong> pousse les placements du draft vers la table publique
+  <code>tournoi_ext</code>. Conséquences :
+</p>
+<ul>
+  <li>Les tournois deviennent visibles aux <strong>joueurs</strong> via la page Calendrier et l'Application Joueur.</li>
+  <li>Les inscriptions s'ouvrent (si la date d'ouverture est passée).</li>
+  <li>Les emails de relance et notifications push deviennent possibles pour ces tournois.</li>
+</ul>
+
+<div class="info-card red">
+  <strong>Action engageante.</strong> À n'effectuer qu'après validation finale par le bureau du CDB. La modification ultérieure
+  d'une date ou d'un club est possible mais déclenche des notifications aux joueurs déjà inscrits (changement de date / lieu / annulation).
+</div>
+
+<h3>Sync re-publication</h3>
+<p>
+  Si vous re-publiez après une régénération partielle, le moteur fait un <strong>diff</strong> entre le draft et la table
+  <code>tournoi_ext</code> :
+</p>
+<ul>
+  <li><strong>Nouveaux placements</strong> : ajoutés.</li>
+  <li><strong>Dates/clubs modifiés</strong> : mis à jour, avec push notification aux inscrits si applicable.</li>
+  <li><strong>Tournois retirés du draft</strong> : <em>non supprimés</em> automatiquement (trace conservée). Utiliser <code>cleanup-externals</code> si besoin.</li>
+</ul>
+
+<h2 id="troubleshooting">8. Dépannage : conflits non résolus</h2>
+
+<h3>Symptôme : « X / Y placés », X &lt; Y</h3>
+<table>
+<thead><tr><th>Cause probable</th><th>Action</th></tr></thead>
+<tbody>
+<tr><td>Saison trop chargée + max/WE trop bas</td><td>Augmenter <code>max_tournaments_per_weekend</code> à 3 ou 4.</td></tr>
+<tr><td>Trop de blackouts en début de saison</td><td>Réduire le nombre de blackouts ou avancer <code>first_weekend</code>.</td></tr>
+<tr><td>Finale Ligue très tôt + cascade T1 longue</td><td>Verrouiller manuellement T1 de la catégorie problématique sur un WE précoce.</td></tr>
+<tr><td>Indisponibilité club rendant la cascade infaisable</td><td>Élargir la liste des clubs hôtes confirmés en Étape 1.</td></tr>
+</tbody>
+</table>
+
+<h3>Symptôme : « 11 conflits » (massif)</h3>
+<p>
+  Régression engine probable. Vérifier :
+</p>
+<ul>
+  <li>Les défauts du catalogue n'ont pas été modifiés par erreur (ex. <code>category_cadence_weight</code> à 0 ou 50 au lieu de 10).</li>
+  <li>Les règles essentielles sont bien activées.</li>
+  <li>Si le problème persiste après régénération, contacter le développeur.</li>
+</ul>
+
+<h3>Symptôme : T3 sans T2 (ne devrait plus arriver)</h3>
+<p>
+  Depuis V&nbsp;2.0.685, le moteur saute T3/Finale si T2 a échoué et reporte « chaîne interrompue ». Si vous voyez
+  encore un T3 orphelin, c'est un bug à signaler.
+</p>
+
+<h2 id="cas-usage">9. Cas d'usage avancés</h2>
+
+<h3>Verrouillage stratégique avant régénération</h3>
+<div class="info-card green">
+  <strong>Exemple :</strong> mi-mars, la finale Bande R1 est annoncée pour le 15 mai, convocations envoyées.
+  Le 1<sup>er</sup> mai, la fédération annonce un changement de date pour la finale Ligue Bande R1.
+  <ol style="margin-top: 6px;">
+    <li>Étape 3 : cliquer chaque cellule déjà annoncée → 🔒 verrouiller (commentaire optionnel).</li>
+    <li>Étape 1 : mettre à jour la date de la finale Ligue Bande R1.</li>
+    <li>Étape 3 : cliquer <strong>« 🔒 Régénérer en gardant mes verrous »</strong>.</li>
+    <li>Le moteur préserve les cellules verrouillées et ajuste uniquement les Finales/T3 impactés.</li>
+  </ol>
+</div>
+
+<h3>Importer un calendrier existant pour démarrage</h3>
+<p>
+  Pour les CDB qui n'ont pas encore basculé sur le moteur, deux approches :
+</p>
+<ul>
+  <li><strong>Démarrage à zéro</strong> : créer un brief vierge pour la saison N+1, charger les règles habituelles, générer.</li>
+  <li><strong>Import depuis tournoi_ext existant</strong> : si la saison courante a déjà des tournois publiés, ils apparaissent
+  en lecture seule dans la vue « Saison publiée » de l'Étape 3. Servent de référence visuelle.</li>
+</ul>
+
+<h3>Plusieurs cycles de régénération en cours de saison</h3>
+<p>
+  Pattern courant : régénérer à chaque modification structurelle (changement de Ligue Final, indispo nouvelle d'un club,
+  blackout ajouté). Toujours <strong>« 🔒 Régénérer en gardant mes verrous »</strong> pour préserver les engagements joueurs déjà
+  pris.
+</p>
+
+<h2 id="bonnes-pratiques">10. Bonnes pratiques</h2>
+<ul>
+  <li><strong>Saisir l'Étape 1 en premier et complètement</strong> : 80&nbsp;% des conflits viennent d'une donnée brief manquante (Ligue Final non saisie, blackout oublié, club mal coché).</li>
+  <li><strong>Garder les 3 réglages essentiels par défaut</strong> sauf situation atypique. Les valeurs validées : max=3, espacement=3, respiration ligue=3.</li>
+  <li><strong>Régénérer souvent</strong> : le moteur est rapide (&lt; 2&nbsp;s). Tester plusieurs configurations.</li>
+  <li><strong>Verrouiller avant de communiquer</strong> aux joueurs ou aux clubs. Une fois verrouillé, le moteur respecte le placement.</li>
+  <li><strong>Publier en dernier</strong>, après validation officielle. Re-publier après chaque modification majeure pour synchroniser <code>tournoi_ext</code>.</li>
+  <li><strong>Email aux clubs hôtes</strong> en mode preview avant l'envoi réel — vérifier le contenu personnalisé.</li>
+</ul>
+
+<div class="info-card orange">
+  <strong>Conseil pour les nouveaux CDB :</strong> avant la première saison, faire 2–3 régénérations test avec des valeurs
+  extrêmes (max=2 puis max=5) pour comprendre l'impact des règles. Cela donne une intuition pour les saisons suivantes.
+</div>
+
+<div class="footer">
+  Guide Administrateur Calendrier — V&nbsp;2.0.690 — © 2025-26 Jeff R. Tous droits réservés.<br>
+  Logiciel Kayros protégé — Dépôt APP n°IDDN.FR.001.130044.000.S.P.2026.000.42000
+</div>
+
+</div>
+</body>
+</html>

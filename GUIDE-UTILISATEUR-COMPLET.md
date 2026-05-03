@@ -1,7 +1,27 @@
 # Guide Utilisateur Complet
 
 > **Note:** Ce document est généré automatiquement depuis le guide HTML.
-> **Dernière mise à jour:** 26/04/2026
+> **Dernière mise à jour:** 03/05/2026
+>
+> **Mise à jour majeure V 2.0.690 — Assistant Calendrier simplifié :**
+> - Étape 1 « Brief de saison » renommée **« Dates et disponibilités »**.
+> - Hint blackouts : « samedis **et dimanches** à exclure ».
+> - Bouton **« 📅 Suggérer une date »** mis en avant au-dessus du champ « + Ajouter des dates supplémentaires ».
+> - Section **« Dates des finales de ligue »** affichée AVANT « Matchs par équipes FFB ».
+> - Colonne « Indice / libellé » retirée de la table FFB JDS Fédérale.
+> - Étape 2 redessinée : encart vert **« ⚙️ Réglages essentiels »** avec 3 champs (max/WE, espacement min, respiration ligue) couvrant 95 % des cas.
+> - **Réglages avancés** (poids des règles, ajout/suppression) accessibles via un toggle visible aux **administrateurs uniquement**.
+> - Bouton **« 📤 Publier sur la page Calendrier »** réservé aux **administrateurs**.
+> - L'Assistant Calendrier est désormais accessible aux utilisateurs **non-admin** ayant le droit Calendrier.
+> - Fonctionnalités IA retirées (extraction Excel et traduction langage naturel → règle).
+> - Nouveau **Guide Administrateur Calendrier** dédié (`guide-calendrier-admin.html`) couvrant les règles dures/souhaitées, le scoring, la publication et le dépannage.
+>
+> **Mises à jour engine (V 2.0.679–2.0.685) :**
+> - Affinités cross-mode dans la règle « Étalement des modes » (Libre R1 ↔ Cadre R1, etc.).
+> - Look-ahead T3-Finale corrigé pour respecter le max(min_weeks_t3_final, min_weeks_same_category).
+> - Round-by-round placement (T1s avant T2s, etc.) avec saut de la chaîne si une étape échoue (plus de T3 sans T2).
+> - Tiebreaker déterministe entre catégories de même niveau.
+> - Phantom Saturday columns corrigées dans la vue calendrier publiée.
 >
 > **Nouvelle section (V 2.0.526) :** Compétitions > Assistant Calendrier (génération automatique du calendrier de saison)
 >

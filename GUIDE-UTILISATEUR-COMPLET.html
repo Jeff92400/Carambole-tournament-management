@@ -2177,53 +2177,63 @@
     </p>
 
     <div class="info-card">
-      <strong>Réservé aux administrateurs.</strong> Le lien "Assistant Calendrier" dans le menu Compétitions n'est
-      visible qu'aux comptes admin. Les autres rôles (lecteur, viewer, club) n'ont pas accès à l'écran.
+      <strong>Accessible à tous les utilisateurs ayant le droit Calendrier.</strong> Depuis la version V&nbsp;2.0.690, l'Assistant Calendrier
+      est ouvert aux comptes non-admin. Deux actions restent réservées aux administrateurs :
+      <ul style="margin: 6px 0 0 0;">
+        <li>Le panneau <strong>« 🔧 Réglages avancés »</strong> (poids des règles, ajout/suppression de règles).</li>
+        <li>Le bouton <strong>« 📤 Publier sur la page Calendrier »</strong> (publication officielle vers le calendrier visible aux joueurs).</li>
+      </ul>
     </div>
 
-    <h3>Workflow en 3 étapes (V1 actuelle)</h3>
+    <h3>Workflow en 3 étapes</h3>
     <ol class="steps">
-      <li><strong>Étape 1 — Brief de saison</strong> : décrire le cadre (saison, dates, catégories actives, clubs hôtes, blackouts...)</li>
-      <li><strong>Étape 2 — Règles &amp; contraintes</strong> : valider/ajuster les règles que le moteur respectera</li>
+      <li><strong>Étape 1 — Dates et disponibilités</strong> : décrire le cadre (saison, dates, catégories actives, clubs hôtes, blackouts...)</li>
+      <li><strong>Étape 2 — Règles &amp; contraintes</strong> : 3 réglages essentiels suffisent pour 95&nbsp;% des cas</li>
       <li><strong>Étape 3 — Génération du calendrier</strong> : lancer le moteur, visualiser, modifier, télécharger</li>
     </ol>
 
-    <h3 id="ac-etape-1">Étape 1 — Brief de saison</h3>
-    <p>Décrivez la réalité de votre saison. La plupart des champs sont auto-remplis à partir de vos paramètres ; vous n'avez qu'à valider.</p>
+    <h3 id="ac-etape-1">Étape 1 — Dates et disponibilités</h3>
+    <p>Cette étape capture toutes les <strong>données factuelles</strong> de la saison. La plupart des champs sont auto-remplis à partir de vos paramètres ; vous n'avez qu'à valider.</p>
     <ul>
       <li><strong>Saison à planifier</strong> : ex. <code>2026-2027</code>.</li>
       <li><strong>Jour des qualificatifs</strong> et <strong>jour des finales départementales</strong> : par défaut samedi et dimanche.</li>
-      <li><strong>Premier week-end de compétition</strong> : la date du samedi de la 1ère semaine active de la saison.</li>
+      <li><strong>Premier week-end de compétition</strong> : la date du samedi de la 1<sup>re</sup> semaine active de la saison.</li>
       <li><strong>Dernier week-end de compétition</strong> (optionnel) : date butoir au-delà de laquelle plus aucun tournoi ne sera placé (typiquement début juin).</li>
-      <li><strong>Attribution du lieu des finales</strong> : "Manuelle" (proposée par le moteur, validée en réunion) ou "Vainqueur des qualifications" (lieu TBD à l'issue du T3).</li>
+      <li><strong>Attribution du lieu des finales</strong> : « Manuelle » (proposée par le moteur, validée en réunion) ou « Vainqueur des qualifications » (lieu TBD à l'issue du T3).</li>
       <li><strong>Modes &amp; catégories actifs</strong> : décocher les catégories non jouées cette saison.</li>
       <li><strong>Clubs hôtes confirmés</strong> : cocher les clubs prêts à organiser des tournois cette saison.</li>
-      <li><strong>Week-ends blackout</strong> : ajouter les samedis exclus (vacances scolaires, finales fédérales nationales).</li>
+      <li><strong>Week-ends blackout</strong> : ajouter les samedis et dimanches exclus (vacances scolaires, finales fédérales nationales). Le bouton <strong>« 📅 Suggérer une date »</strong> propose les fériés français de l'année et accepte des questions en langage naturel.</li>
       <li><strong>Indisponibilités par club</strong> : période où un club ne peut pas accueillir (travaux, événement, fermeture). Saisir Club + Du + Au + Motif optionnel.</li>
-      <li><strong>Dates des finales de ligue</strong> (par catégorie) : la finale CDB devra avoir lieu avant cette date pour chaque catégorie concernée. Optionnel.</li>
+      <li><strong>Dates des finales de ligue</strong> (par catégorie, listées avant la section FFB) : la finale CDB devra avoir lieu avant cette date pour chaque catégorie concernée. Optionnel.</li>
+      <li><strong>Matchs par équipes FFB</strong> : 9 dates JDS Fédérale (3 divisions × 3 journées). Si un de vos clubs reçoit, le moteur le bloque pour cette date.</li>
     </ul>
-    <p>Cliquer <strong>"💾 Sauvegarder le brief"</strong> en bas pour persister, puis <strong>"Étape suivante : Règles →"</strong>.</p>
+    <p>Cliquer <strong>« 💾 Sauvegarder »</strong> en bas pour persister, puis <strong>« Étape suivante : Règles → »</strong>.</p>
 
     <h3 id="ac-etape-2">Étape 2 — Règles &amp; contraintes</h3>
     <p>
-      C'est l'étape la plus discrète : pour 80&nbsp;% des CDB, un seul clic suffit.
+      Le moteur applique automatiquement un jeu de règles éprouvé. <strong>Trois réglages essentiels</strong> suffisent à couvrir 95&nbsp;% des besoins.
     </p>
+
+    <h4>Premier passage</h4>
     <ol class="steps">
-      <li>Cliquer sur <strong>"💾 Charger et adapter les règles habituelles"</strong> en bas de la page. Cela pré-remplit la bibliothèque avec les règles standards V1 (un sous-ensemble pertinent du catalogue).</li>
-      <li>Vous pouvez ensuite ajuster les règles dans deux tableaux :
-        <ul>
-          <li><strong>Règles obligatoires</strong> : le moteur refuse de les violer (ex. "≥ 3 sem. entre 2 tournois d'une même catégorie", "Pas 2 tournois pour un même club / week-end").</li>
-          <li><strong>Règles souhaitées</strong> : optimisées par le moteur avec un poids ajustable (ex. "Nombre équilibré de tournois par club hôte", "Étalement des modes sur la saison").</li>
-        </ul>
-      </li>
-      <li>Toutes les règles disponibles non encore activées s'affichent dans la table <strong>"Règles disponibles à ajouter"</strong>. Cliquer "Ajouter" ou "Ignorer" selon votre choix.</li>
+      <li>Cliquer <strong>« 💾 Charger les règles habituelles »</strong> pour initialiser le jeu standard.</li>
+      <li>L'encart vert <strong>« ⚙️ Réglages essentiels »</strong> apparaît avec 3 champs. Ajuster si nécessaire.</li>
     </ol>
 
-    <div class="info-card accent">
-      <strong>Assistance IA (optionnelle) :</strong> dans le bloc violet en haut, vous pouvez décrire une règle en français
-      (ex. <em>"Clichy ne doit jamais accueillir deux week-ends d'affilée"</em>) et l'IA la traduira en règle structurée.
-      Vous validez avant ajout — l'IA ne peut rien ajouter sans confirmation.
-    </div>
+    <h4>Les 3 réglages essentiels</h4>
+    <ul>
+      <li><strong>Tournois maximum par week-end</strong> (1–6) : plafond logistique global, toutes catégories confondues. Standard : 3.</li>
+      <li><strong>Espacement minimum entre 2 tournois (sem.)</strong> (2–6) : pour une même catégorie. Standard : 3.</li>
+      <li><strong>Respiration avant Finale Ligue (sem.)</strong> (1–6) : sécurité entre Finale CDB et Finale Ligue. Standard : 3.</li>
+    </ul>
+    <p>Chaque modification est <strong>sauvegardée immédiatement</strong>. Un message « ✓ Sauvegardé — pensez à régénérer » apparaît en confirmation. Pour appliquer les changements au calendrier, cliquer ensuite <strong>« ⚡ Tout régénérer »</strong> à l'Étape 3.</p>
+
+    <h4>Réglages avancés (admin uniquement)</h4>
+    <p>
+      Le bouton <strong>« 🔧 Réglages avancés »</strong> n'apparaît qu'aux comptes admin. Il ouvre la bibliothèque complète de règles
+      (obligatoires + souhaitées avec poids modifiables, ajout/suppression de règles). Documenté dans le
+      <a href="guide-calendrier-admin.html" target="_blank"><strong>Guide Administrateur Calendrier</strong></a> séparé.
+    </p>
 
     <h3 id="ac-etape-3">Étape 3 — Génération du calendrier</h3>
     <p>Cliquer <strong>"⚡ Tout régénérer"</strong> pour lancer le moteur. Le résultat apparaît en quelques secondes.</p>
@@ -2265,12 +2275,28 @@
     <p>Vous pouvez alors ajuster un paramètre dans les réglages rapides ou repousser la date butoir, et relancer.</p>
 
     <h4>Téléchargement Excel</h4>
-    <p>Le bouton <strong>"📊 Télécharger Excel"</strong> produit un fichier <code>.xlsx</code> riche (3 onglets) prêt à imprimer en A3 paysage :</p>
+    <p>Le bouton <strong>« 📊 Télécharger Excel »</strong> produit un fichier <code>.xlsx</code> riche (4 onglets) prêt à imprimer en A3 paysage :</p>
     <ul>
       <li><strong>Onglet 1 — Calendrier</strong> : grille visuelle (logo CDB, mois fusionnés, cellules colorées par club, légende, séparateurs).</li>
       <li><strong>Onglet 2 — Liste des tournois</strong> : un tournoi par ligne avec auto-filtre.</li>
-      <li><strong>Onglet 3 — Légende clubs</strong> : nom complet + pastille couleur.</li>
+      <li><strong>Onglet 3 — Par club hôte</strong> : matrice clubs × mois pour repérer les déséquilibres.</li>
+      <li><strong>Onglet 4 — Légende clubs</strong> : nom complet + pastille couleur.</li>
     </ul>
+
+    <h4>Email aux clubs hôtes</h4>
+    <p>
+      Le bouton <strong>« 📧 Email aux clubs hôtes »</strong> envoie un email personnalisé à chaque club hôte avec le calendrier
+      détaillé de ses tournois pour la saison. Le destinataire principal est le président + le responsable sportif du club. Un mode prévisualisation
+      permet de vérifier le contenu avant envoi.
+    </p>
+
+    <h4>📤 Publier sur la page Calendrier (admin uniquement)</h4>
+    <p>
+      Le bouton <strong>« 📤 Publier sur la page Calendrier »</strong> n'est visible qu'aux administrateurs. Il pousse les tournois
+      vers la table publique des compétitions (<code>tournoi_ext</code>), les rendant visibles aux joueurs sur la page Calendrier
+      et l'Application Joueur. Cette action est <strong>officielle et engageante</strong> — à n'effectuer qu'après validation finale
+      par le bureau du CDB.
+    </p>
 
     <h3>Cas d'usage concret en cours de saison</h3>
     <div class="info-card accent">
