@@ -1514,6 +1514,14 @@
             </td>
           </tr>
         </table>
+        <div style="font-size: 11px; color: #856404; background: #fff8e1; border-left: 3px solid #ffc107; padding: 6px 10px; margin-bottom: 6px; line-height: 1.5;">
+          <strong>⚠️ Indicateur théorique</strong> — ce ratio compte les créneaux <em>bruts</em>
+          (jours × clubs × plafond/jour). Il <strong>ne simule pas</strong> les contraintes
+          d'enchaînement (cascade T1, ≥3 sem. entre tournois d'une même catégorie, ≥2 sem. T3→Finale,
+          ≥2 sem. avant finale ligue, indispos précises des clubs, etc.). Une marge confortable ici
+          <strong>ne garantit pas</strong> que tous les tournois pourront être placés —
+          c'est l'étape Génération qui tranche, et son rapport « X / Y placés » est seul authoritative.
+        </div>
         <div style="font-size: 11px; color: #666;">
           Hypothèses : maximum de <strong>${M}</strong> tournois par jour
           (lu depuis la règle <em>max_tournaments_per_weekend</em>),
@@ -3078,12 +3086,12 @@
           ${allPlaced ? '✅' : '⚠️'} <strong>${ok} / ${expected}</strong> tournois placés au calendrier
           ${allPlaced
             ? ' — toutes les catégories couvertes'
-            : ` — <strong>${missing}</strong> tournoi${missing > 1 ? 's' : ''} sans créneau possible sous le brief + règles actuels`}
+            : ` — <strong>${missing}</strong> tournoi${missing > 1 ? 's' : ''} non placé${missing > 1 ? 's' : ''} (ni date, ni club hôte) sous le brief + règles actuels`}
         </div>
         <div style="font-size: 12px; color: #555; margin-top: 4px;">
           ${cats} catégorie${cats > 1 ? 's' : ''} active${cats > 1 ? 's' : ''} × 4 tours (T1, T2, T3, Finale) = ${expected} tournois attendus
           ${!allPlaced && reasonsLost ? ' · <em style="color:#c47b00;">raisons effacées au rechargement — relancez « Tout régénérer » pour les revoir</em>' : ''}
-          ${!allPlaced && !reasonsLost ? ' · voir détails ci-dessous' : ''}
+          ${!allPlaced && !reasonsLost ? ' · voir le détail des conflits ci-dessous (chaîne d\'enchaînement T1→T2→T3→Finale rompue, finale ligue trop proche, etc.)' : ''}
         </div>
       `;
 
