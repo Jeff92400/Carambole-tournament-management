@@ -366,7 +366,7 @@
         <!-- V 2.0.606 — collapsed from 6 to 4 real steps. "Revue" and
              "Régénération" were sub-states of Génération (no own card),
              which made the stepper misleading. -->
-        <div class="stepper-item active"><span class="stepper-num">1</span> Brief</div>
+        <div class="stepper-item active"><span class="stepper-num">1</span> Dates &amp; disponibilités</div>
         <div class="stepper-item"><span class="stepper-num">2</span> Règles</div>
         <div class="stepper-item"><span class="stepper-num">3</span> Génération</div>
         <div class="stepper-item"><span class="stepper-num">4</span> Création des tournois</div>
@@ -394,7 +394,7 @@
 
     <div class="card" id="step1Card">
       <div class="step-header">
-        <h3 style="margin: 0;">Étape 1 — Brief de saison</h3>
+        <h3 style="margin: 0;">Étape 1 — Dates et disponibilités</h3>
         <button type="button" class="help-btn" data-help="step1">❓ Comment ça marche ?</button>
       </div>
       <p style="color: #666; font-size: 14px; margin-top: 6px;">
@@ -403,7 +403,7 @@
       <div class="welcome-banner" data-step="step1">
         <div class="wb-content">
           👋 <strong>Bienvenue dans l'Assistant Calendrier !</strong><br>
-          Le Brief décrit la <strong>réalité de la saison</strong> : qui joue (catégories), où (clubs hôtes), quand (premier/dernier WE) et avec quelles indispos.
+          Cette étape capture les <strong>données factuelles</strong> de la saison : qui joue (catégories), où (clubs hôtes), quand (premier/dernier WE) et avec quelles indispos.
           La plupart des champs sont pré-remplis depuis vos paramètres — souvent vous n'avez qu'à valider.
         </div>
         <button type="button" class="wb-dismiss" data-step="step1">Compris</button>
@@ -476,11 +476,13 @@
       </div>
 
       <h3 class="section-title">Week-ends blackout (sans compétition possible)</h3>
-      <p class="hint" style="margin-bottom: 6px;">Vacances scolaires, finales fédérales nationales, congés... Ajoutez les dates de samedis à exclure.</p>
-      <div style="display: flex; gap: 8px; align-items: center; margin-top: 6px; flex-wrap: wrap;">
+      <p class="hint" style="margin-bottom: 6px;">Vacances scolaires, finales fédérales nationales, congés... Ajoutez les dates de samedis et dimanches à exclure.</p>
+      <div style="margin-top: 6px;">
+        <button type="button" class="btn" id="dateHelperToggleBtn" style="padding: 10px 18px; background: #4c3a9a; color: white; border: none; border-radius: 5px; font-weight: 600;">📅 Suggérer une date</button>
+      </div>
+      <div style="display: flex; gap: 8px; align-items: center; margin-top: 10px; flex-wrap: wrap;">
         <input type="date" id="blackoutInput" style="padding: 8px; border: 1px solid #c8c5be; border-radius: 5px;">
-        <button type="button" class="btn" id="blackoutAddBtn" style="padding: 8px 16px;">+ Ajouter</button>
-        <button type="button" class="btn" id="dateHelperToggleBtn" style="padding: 8px 14px; background: #f3f0ff; color: #4c3a9a; border: 1px solid #c8bfeb;">📅 Suggérer une date</button>
+        <button type="button" class="btn" id="blackoutAddBtn" style="padding: 8px 16px;">+ Ajouter des dates supplémentaires</button>
       </div>
       <div class="pill-list" id="blackoutList"></div>
 
@@ -520,6 +522,12 @@
         <button type="button" class="btn" id="addHostBlackoutBtn" style="padding: 6px 12px;">+ Ajouter une indisponibilité</button>
       </div>
 
+      <h3 class="section-title">Dates des finales de ligue (par catégorie)</h3>
+      <p class="hint" style="margin-bottom: 6px;">Les finales départementales de chaque catégorie devront avoir lieu avant la finale de ligue correspondante. Laissez vide si non applicable.</p>
+      <div id="ligueFinalsContainer">
+        <p style="color: #888;">Cochez d'abord les catégories actives ci-dessus pour voir cette table.</p>
+      </div>
+
       <!-- V 2.0.646 — JDS Fédérale (matchs par équipes FFB).
            9 dates au total : 3 divisions × 3 journées (J1, J2, J3).
            Si un club hôte est précisé, le moteur le bloque pour cette
@@ -538,17 +546,10 @@
             <th style="width: 70px;">Journée</th>
             <th style="width: 170px;">Date</th>
             <th>Club hôte (optionnel)</th>
-            <th>Indice / libellé</th>
           </tr>
         </thead>
         <tbody></tbody>
       </table>
-
-      <h3 class="section-title">Dates des finales de ligue (par catégorie)</h3>
-      <p class="hint" style="margin-bottom: 6px;">Les finales départementales de chaque catégorie devront avoir lieu avant la finale de ligue correspondante. Laissez vide si non applicable.</p>
-      <div id="ligueFinalsContainer">
-        <p style="color: #888;">Cochez d'abord les catégories actives ci-dessus pour voir cette table.</p>
-      </div>
 
       <!-- V 2.0.669 — Capacité estimée widget removed: it's a purely
            arithmetic ratio that ignores cascade / min-weeks / ligue-final
@@ -577,7 +578,7 @@
       <div class="actions-bar">
         <span class="save-status" id="saveStatus"></span>
         <div>
-          <button type="button" class="btn" id="saveBriefBtn" style="background: #2c7a4d; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: 600;">💾 Sauvegarder le brief</button>
+          <button type="button" class="btn" id="saveBriefBtn" style="background: #2c7a4d; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: 600;">💾 Sauvegarder</button>
           <button type="button" class="btn" id="nextStepBtn" disabled style="background: #c47b00; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: 600; margin-left: 8px;" title="Sauvegardez d'abord">Étape suivante : Règles →</button>
         </div>
       </div>
@@ -651,7 +652,7 @@
       <div class="actions-bar">
         <span class="save-status" id="rulesStatus"></span>
         <div>
-          <button type="button" class="btn" id="backToBriefBtn" style="padding: 10px 20px;">← Retour Brief</button>
+          <button type="button" class="btn" id="backToBriefBtn" style="padding: 10px 20px;">← Retour Dates &amp; disponibilités</button>
           <button type="button" class="btn" id="goToGenerationBtn" style="background: #c47b00; color: white; padding: 10px 20px; border: none; border-radius: 5px; font-weight: 600; margin-left: 8px;">Étape suivante : Génération →</button>
         </div>
       </div>
@@ -728,7 +729,7 @@
            directly under the calendar views, so the user doesn't have
            to scroll back up after editing rules / inspecting results. -->
       <div id="regenerationFooter" style="margin-top: 18px; padding: 14px 16px; background: #faf6ff; border: 1px solid #d6c5f0; border-radius: 8px; display: none;">
-        <div style="font-size: 13px; font-weight: 600; color: #4a2378; margin-bottom: 10px;">🔄 Régénérer le calendrier après modification des règles ou du brief :</div>
+        <div style="font-size: 13px; font-weight: 600; color: #4a2378; margin-bottom: 10px;">🔄 Régénérer le calendrier après modification des règles ou des dates :</div>
         <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
           <button type="button" class="btn" id="runGenerationBtnFooter" style="background: #6b3aa3; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: 600;" title="Génère un nouveau calendrier et remplace tout le précédent (y compris les cellules verrouillées)">⚡ Tout régénérer (remplace tout)</button>
           <button type="button" class="btn" id="runRespectLocksBtnFooter" style="background: #c47b00; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: 600;" title="Garde toutes les cellules verrouillées 🔒 et recalcule uniquement les autres">🔒 Régénérer en gardant mes verrous</button>
@@ -1267,7 +1268,6 @@
               ${clubs.map(c => `<option value="${c.id}" ${String(c.id) === String(m.host_club_id ?? '') ? 'selected' : ''}>${c.display_name}</option>`).join('')}
             </select>
           </td>
-          <td><input type="text" class="ffb-label" data-idx="${i}" value="${(m.label || '').replace(/"/g, '&quot;')}" placeholder="Indice 767..." style="padding: 4px 6px; border: 1px solid #c8c5be; border-radius: 4px; width: 100%;"></td>
         </tr>
       `).join('');
       tbody.querySelectorAll('.ffb-date').forEach(el => el.addEventListener('change', e => {
@@ -1276,9 +1276,6 @@
       tbody.querySelectorAll('.ffb-host').forEach(el => el.addEventListener('change', e => {
         const v = e.target.value;
         ffbTeamMatches[+e.target.dataset.idx].host_club_id = v ? parseInt(v, 10) : null;
-      }));
-      tbody.querySelectorAll('.ffb-label').forEach(el => el.addEventListener('input', e => {
-        ffbTeamMatches[+e.target.dataset.idx].label = e.target.value;
       }));
     }
 
@@ -1678,7 +1675,7 @@
           body: JSON.stringify({ season, entries: ligueEntries })
         });
 
-        setStatus('✓ Brief sauvegardé', 'success');
+        setStatus('✓ Sauvegardé', 'success');
         document.getElementById('nextStepBtn').disabled = false;
         await loadBriefForSeason();
       } catch (err) {
@@ -2088,9 +2085,9 @@
     // Help modals
     const HELP_CONTENT = {
       step1: {
-        title: '❓ Étape 1 — Brief de saison',
+        title: '❓ Étape 1 — Dates et disponibilités',
         body: `
-          <p>Le <strong>Brief</strong> capture toutes les données factuelles de votre saison. Le moteur s'en sert ensuite pour placer les tournois.</p>
+          <p>Cette étape capture toutes les <strong>données factuelles</strong> de votre saison (dates, blackouts, indisponibilités). Le moteur s'en sert ensuite pour placer les tournois.</p>
           <ul>
             <li><strong>Premier / Dernier week-end</strong> : bornes temporelles. Les tournois ne sortiront jamais de cette fenêtre.</li>
             <li><strong>Catégories actives</strong> : le moteur ne planifie que celles cochées (typiquement 9 à 13 catégories pour un CDB).</li>
