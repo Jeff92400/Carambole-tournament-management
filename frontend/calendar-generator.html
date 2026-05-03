@@ -591,26 +591,44 @@
         <button type="button" class="help-btn" data-help="step2">❓ Comment ça marche ?</button>
       </div>
       <p style="color: #666; font-size: 14px; margin-top: 6px;">
-        Les règles que le moteur respectera pour placer les tournois.
+        Le moteur applique automatiquement un jeu de règles éprouvé. Trois réglages essentiels suffisent dans 95 % des cas.
       </p>
-      <div class="welcome-banner" data-step="step2">
-        <div class="wb-content">
-          💡 <strong>Règles : un seul clic suffit dans 80 % des cas.</strong><br>
-          Cliquez sur <strong>"Charger et adapter les règles habituelles"</strong> ci-dessous — vous obtenez un jeu de règles standard validé pour les CDB.
-          Vous pourrez personnaliser plus tard en cliquant sur "🛠️ Personnaliser les règles".
-        </div>
-        <button type="button" class="wb-dismiss" data-step="step2">Compris</button>
-      </div>
 
       <!-- Action principale (toujours visible) -->
       <div style="margin-top: 16px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 14px; background: #f9f6fc; border-radius: 8px;">
-        <button type="button" class="btn" id="seedDefaultsBtn" style="background: #6b3aa3; color: white; padding: 12px 22px; border: none; border-radius: 5px; cursor: pointer; font-weight: 600; font-size: 14px;">💾 Charger et adapter les règles habituelles</button>
+        <button type="button" class="btn" id="seedDefaultsBtn" style="background: #6b3aa3; color: white; padding: 12px 22px; border: none; border-radius: 5px; cursor: pointer; font-weight: 600; font-size: 14px;">💾 Charger les règles habituelles</button>
         <span id="rulesCount" style="color: #666; font-size: 13px;"></span>
       </div>
 
-      <!-- Toggle pour personnaliser -->
-      <button type="button" class="toggle-custom-rules" id="toggleCustomRulesBtn">
-        🛠️ Personnaliser les règles (avancé)
+      <!-- V 2.0.690 — Réglages essentiels : les 3 leviers que l'utilisateur
+           ajuste vraiment. Mappent directement sur 3 règles dures. -->
+      <div id="essentialSettingsBlock" style="display:none; margin-top: 16px; padding: 16px 18px; background: #f0fdf4; border: 1px solid #86efac; border-radius: 8px;">
+        <h3 class="section-title" style="margin-top: 0; color: #166534;">⚙️ Réglages essentiels</h3>
+        <p class="hint" style="margin-bottom: 14px;">Trois leviers principaux. Le reste est géré automatiquement par le moteur.</p>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 18px; margin-bottom: 6px;">
+          <div>
+            <label for="essMaxPerWE" style="display:block; font-size: 13px; font-weight: 600; color: #166534;">Tournois maximum par week-end</label>
+            <p class="hint" style="margin: 4px 0 6px 0;">Plafond logistique global, toutes catégories confondues.</p>
+            <input type="number" id="essMaxPerWE" min="1" max="6" style="width: 80px; padding: 8px 10px; border: 1px solid #86efac; border-radius: 5px;">
+          </div>
+          <div>
+            <label for="essMinWeeksSame" style="display:block; font-size: 13px; font-weight: 600; color: #166534;">Espacement minimum entre 2 tournois (sem.)</label>
+            <p class="hint" style="margin: 4px 0 6px 0;">Pour une même catégorie. Standard : 3 semaines.</p>
+            <input type="number" id="essMinWeeksSame" min="2" max="6" style="width: 80px; padding: 8px 10px; border: 1px solid #86efac; border-radius: 5px;">
+          </div>
+          <div>
+            <label for="essMinWeeksLigue" style="display:block; font-size: 13px; font-weight: 600; color: #166534;">Respiration avant Finale Ligue (sem.)</label>
+            <p class="hint" style="margin: 4px 0 6px 0;">Sécurité entre Finale CDB et Finale Ligue.</p>
+            <input type="number" id="essMinWeeksLigue" min="1" max="6" style="width: 80px; padding: 8px 10px; border: 1px solid #86efac; border-radius: 5px;">
+          </div>
+        </div>
+        <div id="essentialSavedHint" style="font-size: 12px; color: #16a34a; min-height: 16px;"></div>
+      </div>
+
+      <!-- Toggle pour personnaliser — admin uniquement -->
+      <button type="button" class="toggle-custom-rules" id="toggleCustomRulesBtn" style="display: none;">
+        🔧 Réglages avancés (admin)
       </button>
 
       <!-- Bloc personnalisation, caché par défaut -->
@@ -853,13 +871,10 @@
     if (!requireAuth()) { throw new Error('Not authenticated'); }
     const API_URL = '/api';
     const token = sessionStorage.getItem('token');
-    // Page reserved to admins
+    // V 2.0.690 — calendar generator now open to non-admins.
+    // IS_ADMIN gates "advanced" UI (rule customization, publish).
     const _userRole = sessionStorage.getItem('userRole');
-    if (_userRole && _userRole !== 'admin') {
-      alert('L\'Assistant Calendrier est réservé aux administrateurs.');
-      window.location.href = 'dashboard.html';
-      throw new Error('Not authorized');
-    }
+    const IS_ADMIN = _userRole === 'admin';
     // V 2.0.593 — Org-level feature flag check. Direct navigation hits
     // this; the nav link is also hidden when the flag is false.
     (async () => {
@@ -1856,11 +1871,69 @@
         if (!res.ok) throw new Error('Échec chargement règles');
         constraints = await res.json();
         renderRulesTables();
+        renderEssentialSettings();
         // V 2.0.649 — refresh capacity widget so it picks up the live M.
         if (typeof renderCapacityWidget === 'function') renderCapacityWidget();
       } catch (err) {
         console.error(err);
       }
+    }
+
+    // V 2.0.690 — Map the 3 essential inputs to their backing rule
+    // instances (hard rules, integer params).
+    const ESSENTIAL_RULES = [
+      { ruleType: 'max_tournaments_per_weekend',                      paramKey: 'max',       inputId: 'essMaxPerWE' },
+      { ruleType: 'min_weeks_between_tournaments_same_category',      paramKey: 'min_weeks', inputId: 'essMinWeeksSame' },
+      { ruleType: 'min_weeks_between_cdb_and_ligue_final',            paramKey: 'min_weeks', inputId: 'essMinWeeksLigue' }
+    ];
+
+    function renderEssentialSettings() {
+      const block = document.getElementById('essentialSettingsBlock');
+      if (!block) return;
+      // Show only when at least one essential rule already exists.
+      const ruleByType = {};
+      for (const c of constraints) ruleByType[c.rule_type] = c;
+      const ready = ESSENTIAL_RULES.every(es => ruleByType[es.ruleType]);
+      block.style.display = ready ? 'block' : 'none';
+      if (!ready) return;
+      for (const es of ESSENTIAL_RULES) {
+        const rule = ruleByType[es.ruleType];
+        const params = (rule && typeof rule.parameters === 'object') ? rule.parameters : {};
+        const input = document.getElementById(es.inputId);
+        if (!input) continue;
+        const v = params[es.paramKey];
+        if (v != null && document.activeElement !== input) input.value = v;
+      }
+    }
+
+    async function saveEssentialSetting(es) {
+      const input = document.getElementById(es.inputId);
+      if (!input) return;
+      const ruleByType = {};
+      for (const c of constraints) ruleByType[c.rule_type] = c;
+      const rule = ruleByType[es.ruleType];
+      if (!rule) return;
+      const v = parseInt(input.value, 10);
+      if (!Number.isFinite(v)) return;
+      const newParams = { ...(rule.parameters || {}), [es.paramKey]: v };
+      const hint = document.getElementById('essentialSavedHint');
+      try {
+        const r = await fetch(`${API_URL}/calendar-generator/constraints/${rule.id}`, {
+          method: 'PATCH', headers: authHeaders, body: JSON.stringify({ parameters: newParams })
+        });
+        if (!r.ok) throw new Error('Échec sauvegarde');
+        if (hint) hint.textContent = `✓ Sauvegardé — pensez à régénérer le calendrier.`;
+        await loadConstraints();
+        setTimeout(() => { if (hint) hint.textContent = ''; }, 3000);
+      } catch (err) {
+        if (hint) { hint.style.color = '#c00'; hint.textContent = 'Erreur : ' + err.message; }
+      }
+    }
+
+    // Wire essential inputs (debounced on blur/change).
+    for (const es of ESSENTIAL_RULES) {
+      const input = document.getElementById(es.inputId);
+      if (input) input.addEventListener('change', () => saveEssentialSetting(es));
     }
 
     function renderRulesTables() {
@@ -2149,19 +2222,24 @@
       });
     });
 
-    // Step 2 — Toggle "Personnaliser les règles"
+    // Step 2 — Toggle "Réglages avancés" (admin only).
     const toggleCustomBtn = document.getElementById('toggleCustomRulesBtn');
     if (toggleCustomBtn) {
+      // V 2.0.690 — only admins see the advanced toggle.
+      if (IS_ADMIN) toggleCustomBtn.style.display = '';
       toggleCustomBtn.addEventListener('click', () => {
         const block = document.getElementById('rulesCustomBlock');
         const isHidden = block.style.display === 'none';
         block.style.display = isHidden ? 'block' : 'none';
         toggleCustomBtn.textContent = isHidden
-          ? '🔼 Masquer la personnalisation'
-          : '🛠️ Personnaliser les règles (avancé)';
+          ? '🔼 Masquer les réglages avancés'
+          : '🔧 Réglages avancés (admin)';
         if (isHidden) block.scrollIntoView({ behavior: 'smooth', block: 'start' });
       });
     }
+    // Hide publish button for non-admins (publication is admin-only).
+    const publishBtn = document.getElementById('publishToCalendarBtn');
+    if (publishBtn && !IS_ADMIN) publishBtn.style.display = 'none';
 
     document.getElementById('toggleIgnoredBtn').addEventListener('click', () => {
       showingIgnored = !showingIgnored;

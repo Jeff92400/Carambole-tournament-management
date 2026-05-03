@@ -492,7 +492,7 @@ router.post('/constraints', authenticateToken, requireCalendarGenerator, require
 });
 
 // PATCH /constraints/:id — update parameters / weight / enabled
-router.patch('/constraints/:id', authenticateToken, requireCalendarGenerator, requireAdmin, (req, res) => {
+router.patch('/constraints/:id', authenticateToken, requireCalendarGenerator, (req, res) => {
   const db = getDb();
   const orgId = req.user.organizationId;
   const id = parseInt(req.params.id, 10);
@@ -544,7 +544,7 @@ router.delete('/constraints/:id', authenticateToken, requireCalendarGenerator, r
 
 // POST /constraints/seed-defaults — pre-fill the V1 default library for the org
 // Idempotent: only inserts rule_types that don't already exist for the org.
-router.post('/constraints/seed-defaults', authenticateToken, requireCalendarGenerator, requireAdmin, async (req, res) => {
+router.post('/constraints/seed-defaults', authenticateToken, requireCalendarGenerator, async (req, res) => {
   const db = getDb();
   const orgId = req.user.organizationId;
   try {
