@@ -381,14 +381,19 @@ function scoreSoft({ cat, ttype, host, date, weekendDate, alreadyPlaced, cmap, b
 
   // T1 strategy — start as early as possible (respecting cascade already enforced as hard).
   if (ttype === 'T1') {
+    // V 2.0.671 — promoted from a hardcoded magic number (50) to a
+    // tunable soft rule. Lower the weight to spread T1s deeper into
+    // the season instead of clustering them in the first few weekends.
+    const t1W = cmap.t1_earliness_weight?.weight ?? 50;
     const startISO = toISODateString(brief.first_weekend);
     if (startISO) {
       const offsetWeeks = weekDiff(date, startISO);
-      score += 50 * offsetWeeks; // strong push toward earliest valid WE
+      score += t1W * offsetWeeks;
     }
   } else {
     // T2/T3/Finale — aim at the per-category ideal gap (varies by cascade
     // position so each category has its own cycle length).
+    const cadenceW = cmap.category_cadence_weight?.weight ?? 50;
     const sameCat = alreadyPlaced.filter(p => p.category_id === cat.id);
     const last = sameCat[sameCat.length - 1];
     if (last && cat._idealGapWeeks) {
@@ -396,7 +401,7 @@ function scoreSoft({ cat, ttype, host, date, weekendDate, alreadyPlaced, cmap, b
       const idealGap = cat._idealGapWeeks;
       const actualGap = weekDiff(date, lastDate);
       const deviation = Math.abs(actualGap - idealGap);
-      score += 50 * deviation; // strong pull toward the per-category cadence
+      score += cadenceW * deviation;
     }
   }
 

@@ -412,7 +412,9 @@ const RULES_CATALOG = {
   category_upgrade_cascade:                  { strictness: 'soft', defaultWeight: 4, defaultParams: { apply_to_modes: ['*'] } },
   mode_spread_evenly:                        { strictness: 'soft', defaultWeight: 2, defaultParams: { mode: '*' } },
   weekend_spread:                            { strictness: 'soft', defaultWeight: 5, defaultParams: {} },
-  month_balanced_load:                       { strictness: 'soft', defaultWeight: 10, defaultParams: {} }
+  month_balanced_load:                       { strictness: 'soft', defaultWeight: 10, defaultParams: {} },
+  t1_earliness_weight:                       { strictness: 'soft', defaultWeight: 50, defaultParams: {} },
+  category_cadence_weight:                   { strictness: 'soft', defaultWeight: 50, defaultParams: {} }
 };
 
 // Liste des règles à pré-créer pour un nouveau CDB (instances par défaut)
@@ -428,7 +430,9 @@ const DEFAULT_RULE_INSTANCES = [
   'category_upgrade_cascade',
   'mode_spread_evenly',
   'weekend_spread',
-  'month_balanced_load'
+  'month_balanced_load',
+  't1_earliness_weight',
+  'category_cadence_weight'
 ];
 
 // GET /constraints — list rule instances for the current org
