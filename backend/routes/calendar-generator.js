@@ -94,7 +94,7 @@ router.get('/briefs', authenticateToken, requireCalendarGenerator, (req, res) =>
 });
 
 // POST /brief — create a new brief
-router.post('/brief', authenticateToken, requireCalendarGenerator, requireAdmin, (req, res) => {
+router.post('/brief', authenticateToken, requireCalendarGenerator, (req, res) => {
   const db = getDb();
   const orgId = req.user.organizationId;
   const userId = req.user.userId;
@@ -154,7 +154,7 @@ router.post('/brief', authenticateToken, requireCalendarGenerator, requireAdmin,
 });
 
 // PUT /brief/:id — update existing brief
-router.put('/brief/:id', authenticateToken, requireCalendarGenerator, requireAdmin, (req, res) => {
+router.put('/brief/:id', authenticateToken, requireCalendarGenerator, (req, res) => {
   const db = getDb();
   const orgId = req.user.organizationId;
   const briefId = parseInt(req.params.id, 10);
@@ -246,7 +246,7 @@ async function syncAutoDerivedRulesFromBrief(db, orgId, briefValues) {
 }
 
 // DELETE /brief/:id — delete a brief (cascade deletes drafts and sync logs)
-router.delete('/brief/:id', authenticateToken, requireCalendarGenerator, requireAdmin, (req, res) => {
+router.delete('/brief/:id', authenticateToken, requireCalendarGenerator, (req, res) => {
   const db = getDb();
   const orgId = req.user.organizationId;
   const briefId = parseInt(req.params.id, 10);
@@ -296,7 +296,7 @@ router.get('/ligue-finals', authenticateToken, requireCalendarGenerator, (req, r
 
 // POST /ligue-finals — bulk replace ligue final dates for a season
 // Body: { season: "2026-2027", entries: [{ category_id, final_date }, ...] }
-router.post('/ligue-finals', authenticateToken, requireCalendarGenerator, requireAdmin, async (req, res) => {
+router.post('/ligue-finals', authenticateToken, requireCalendarGenerator, async (req, res) => {
   const db = getDb();
   const orgId = req.user.organizationId;
   const { season, entries } = req.body;
@@ -334,7 +334,7 @@ router.post('/ligue-finals', authenticateToken, requireCalendarGenerator, requir
 });
 
 // DELETE /ligue-finals/:id
-router.delete('/ligue-finals/:id', authenticateToken, requireCalendarGenerator, requireAdmin, (req, res) => {
+router.delete('/ligue-finals/:id', authenticateToken, requireCalendarGenerator, (req, res) => {
   const db = getDb();
   const orgId = req.user.organizationId;
   const id = parseInt(req.params.id, 10);
@@ -580,7 +580,7 @@ router.post('/constraints/seed-defaults', authenticateToken, requireCalendarGene
 
 // PATCH /clubs/:id/start-time — update a club's preferred_start_time
 // Body: { value: 'morning' | 'afternoon' | 'full_day' | null }
-router.patch('/clubs/:id/start-time', authenticateToken, requireCalendarGenerator, requireAdmin, (req, res) => {
+router.patch('/clubs/:id/start-time', authenticateToken, requireCalendarGenerator, (req, res) => {
   const db = getDb();
   const orgId = req.user.organizationId;
   const clubId = parseInt(req.params.id, 10);
@@ -733,7 +733,7 @@ router.get('/holidays', authenticateToken, requireCalendarGenerator, (req, res) 
 // Body: { question: "Quel est le jour de Pâques en 2027 ?" }
 // Response: { date, label, year, confidence, explanation, weekend: {saturday, sunday} }
 //        OR { error: "...", explanation: "..." } when the model can't resolve.
-router.post('/ask-date', authenticateToken, requireCalendarGenerator, requireAdmin, async (req, res) => {
+router.post('/ask-date', authenticateToken, requireCalendarGenerator, async (req, res) => {
   const { question } = req.body || {};
   if (!question || typeof question !== 'string' || question.trim().length < 3) {
     return res.status(400).json({ error: 'Question requise (au moins 3 caractères).' });
@@ -926,7 +926,7 @@ function loadEngineContext(orgId, briefId, cb) {
 
 // POST /generate — body: { brief_id }
 // Runs the engine, replaces calendar_draft for that brief, returns result.
-router.post('/generate', authenticateToken, requireCalendarGenerator, requireAdmin, (req, res) => {
+router.post('/generate', authenticateToken, requireCalendarGenerator, (req, res) => {
   const orgId = req.user.organizationId;
   const briefId = parseInt(req.body?.brief_id, 10);
   const overrides = req.body?.constraint_overrides || {}; // { rule_type: { parameters?: {}, weight?: N, enabled?: bool } }
@@ -1045,7 +1045,7 @@ router.post('/generate', authenticateToken, requireCalendarGenerator, requireAdm
 });
 
 // PATCH /draft/:id — manually edit one placement (date / host / lock / comment)
-router.patch('/draft/:id', authenticateToken, requireCalendarGenerator, requireAdmin, (req, res) => {
+router.patch('/draft/:id', authenticateToken, requireCalendarGenerator, (req, res) => {
   const db = getDb();
   const orgId = req.user.organizationId;
   const id = parseInt(req.params.id, 10);
@@ -2851,7 +2851,7 @@ router.get('/draft/export', authenticateToken, requireCalendarGenerator, async (
 //   Sends one email per host club listing the tournaments they will host.
 //   Recipients = president_email + responsable_sportif_email (both, when set).
 //   dry_run=true returns a per-club preview without sending.
-router.post('/draft/email-clubs', authenticateToken, requireCalendarGenerator, requireAdmin, async (req, res) => {
+router.post('/draft/email-clubs', authenticateToken, requireCalendarGenerator, async (req, res) => {
   const db = getDb();
   const orgId = req.user.organizationId;
   const briefId = parseInt(req.query.brief_id, 10);
