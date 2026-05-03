@@ -647,13 +647,21 @@ function generateCalendar({ brief, constraints, ligueFinals, categories, clubs, 
   const tournamentTypes = ['T1', 'T2', 'T3', 'Finale'];
 
   // Round-by-round: place all T1s first (across all cats), then T2s, etc.
-  // Previously we placed all 4 tournaments of cat A before touching cat B,
-  // which let cat A's Finale grab a slot that cat B's T1 actually needed.
-  // Round-by-round gives every category a fair chance at its earliest
-  // tournament before any later tournament competes for the same weekend.
+  // V 2.0.685 — When a category fails at any round, skip its remaining
+  // rounds so we don't produce nonsense like "T3 without T2".
+  const brokenChain = new Set();
   for (const ttype of tournamentTypes) {
     for (const cat of orderedCats) {
       if (lockedKeys.has(`${cat.id}|${ttype}`)) continue;
+      if (brokenChain.has(cat.id)) {
+        conflicts.push({
+          category_id: cat.id,
+          category_label: cat.display_name,
+          tournament_type: ttype,
+          reason: 'chaîne interrompue (un tournoi précédent de la même catégorie n\'a pas pu être placé)'
+        });
+        continue;
+      }
       const result = placeOne({
         cat, ttype, weekends, hosts: activeHosts, brief, cmap, ligueFinals, alreadyPlaced: placements
       });
@@ -666,6 +674,7 @@ function generateCalendar({ brief, constraints, ligueFinals, categories, clubs, 
           tournament_type: ttype,
           reason: result.reason
         });
+        brokenChain.add(cat.id);
       }
     }
   }
