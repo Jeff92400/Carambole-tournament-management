@@ -383,14 +383,33 @@ function scoreSoft({ cat, ttype, host, date, weekendDate, alreadyPlaced, cmap, b
     score += w * (sameMonth * sameMonth) / cap;
   }
 
-  // mode_spread_evenly: penalize clustering of same mode in adjacent weekends
+  // mode_spread_evenly: penalize clustering of correlated categories on
+  // same / adjacent weekends. V 2.0.682 — extended beyond same-mode to
+  // cover cross-mode level affinities (e.g. Libre R1 ↔ Cadre R1), since
+  // a player typically practises several disciplines at the same level.
+  //
+  // Affinity heuristic (level-based, no config required):
+  //   • Same mode                                  → 1.0
+  //   • Different mode, same level (R1↔R1, N3↔N3) → 0.8
+  //   • Different mode, adjacent level (±1 rank)  → 0.4
+  //   • Else                                       → 0 (skipped)
   if (cmap.mode_spread_evenly) {
     const w = cmap.mode_spread_evenly.weight ?? 2;
-    const sameMode = alreadyPlaced.filter(p => p._mode === cat.game_type);
-    for (const p of sameMode) {
+    const myMode = cat.game_type;
+    const myLevel = levelRank(cat.level);
+    for (const p of alreadyPlaced) {
+      let affinity = 0;
+      if (p._mode === myMode) {
+        affinity = 1.0;
+      } else {
+        const dl = Math.abs((p._levelRank ?? 50) - myLevel);
+        if (dl === 0)      affinity = 0.8;
+        else if (dl === 1) affinity = 0.4;
+      }
+      if (affinity === 0) continue;
       const d = weekDiff(p.weekend_date, weekendDate);
-      if (d === 0) score += w * 5;
-      else if (d === 1) score += w * 2;
+      if (d === 0)      score += w * 5 * affinity;
+      else if (d === 1) score += w * 2 * affinity;
     }
   }
 
