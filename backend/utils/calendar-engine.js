@@ -320,7 +320,7 @@ function isHostAllowed({ host, date, weekendDate, brief, alreadyPlaced }) {
 }
 
 // Soft scoring (lower = better)
-function scoreSoft({ cat, ttype, host, date, weekendDate, alreadyPlaced, cmap, brief }) {
+function scoreSoft({ cat, ttype, host, date, weekendDate, alreadyPlaced, cmap, brief, weekends }) {
   let score = 0;
 
   // host_balanced_load: prefer hosts with fewer tournaments so far
@@ -345,6 +345,27 @@ function scoreSoft({ cat, ttype, host, date, weekendDate, alreadyPlaced, cmap, b
     const w = cmap.weekend_spread.weight ?? 5;
     const sameWE = alreadyPlaced.filter(p => p.weekend_date === weekendDate).length;
     score += w * sameWE * sameWE;
+  }
+
+  // month_balanced_load: penalize crowded calendar months (quadratic),
+  // normalized by each month's *capacity* (number of eligible weekends in
+  // the season window). Targets equal density per weekend, NOT equal raw
+  // count per month — otherwise short months (e.g. September truncated by
+  // first_weekend) get overcrowded vs full months.
+  if (cmap.month_balanced_load) {
+    const w = cmap.month_balanced_load.weight ?? 10;
+    const monthKey = String(date).slice(0, 7); // "YYYY-MM"
+    const sameMonth = alreadyPlaced.filter(p => {
+      const d = p.qualif_date || p.final_date;
+      return d && String(d).slice(0, 7) === monthKey;
+    }).length;
+    const weekendsInMonth = weekends
+      ? weekends.filter(wk => String(wk.qualif_date || wk.weekend_date || '').slice(0, 7) === monthKey).length
+      : 1;
+    const cap = Math.max(1, weekendsInMonth);
+    // Density-aware: a 3-WE month gets ~5/3× the penalty of a 5-WE month
+    // for the same count, so the engine targets ~equal tournaments-per-WE.
+    score += w * (sameMonth * sameMonth) / cap;
   }
 
   // mode_spread_evenly: penalize clustering of same mode in adjacent weekends
@@ -415,7 +436,7 @@ function placeOne({ cat, ttype, weekends, hosts, brief, cmap, ligueFinals, alrea
     if (isFinale && brief.final_attribution === 'winner_tbd') {
       candidates.push({
         date, weekendDate: wk.weekend_date, host: null,
-        score: scoreSoft({ cat, ttype, host: null, date, weekendDate: wk.weekend_date, alreadyPlaced, cmap, brief })
+        score: scoreSoft({ cat, ttype, host: null, date, weekendDate: wk.weekend_date, alreadyPlaced, cmap, brief, weekends })
       });
     } else {
       let anyHostOK = false;
@@ -425,7 +446,7 @@ function placeOne({ cat, ttype, weekends, hosts, brief, cmap, ligueFinals, alrea
         anyHostOK = true;
         candidates.push({
           date, weekendDate: wk.weekend_date, host,
-          score: scoreSoft({ cat, ttype, host, date, weekendDate: wk.weekend_date, alreadyPlaced, cmap, brief })
+          score: scoreSoft({ cat, ttype, host, date, weekendDate: wk.weekend_date, alreadyPlaced, cmap, brief, weekends })
         });
       }
       if (!anyHostOK) bumpReason('aucun club hôte disponible (tous occupés ou indisponibles)');

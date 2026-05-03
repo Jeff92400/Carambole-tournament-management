@@ -736,6 +736,7 @@
              to the Calendrier page so the broadcast picks it up
              automatically (avoids the manual download → re-upload trip). -->
         <button type="button" id="publishToCalendarBtn" style="padding: 6px 12px; border: none; border-radius: 5px; background: #1F4788; color: white; cursor: pointer; font-size: 13px; font-weight: 600;" title="Téléverse l'Excel généré sur la page Calendrier (utilisé par la diffusion par email)">📤 Publier sur la page Calendrier</button>
+        <button type="button" id="emailClubsBtn" style="padding: 6px 12px; border: none; border-radius: 5px; background: #c47b00; color: white; cursor: pointer; font-size: 13px; font-weight: 600;" title="Envoie un email personnalisé à chaque club hôte avec la liste de ses tournois">📧 Email aux clubs hôtes</button>
       </div>
 
       <div id="viewSeasonal" style="display: none;"></div>
@@ -1791,7 +1792,8 @@
       host_balanced_load:                        { label: 'Nombre équilibré de tournois par club hôte',     paramLabel: 'Tolérance', paramKey: 'tolerance', paramType: 'number' },
       host_no_consecutive_weekends:              { label: 'Pas d\'hôte deux week-ends consécutifs',         paramLabel: 'Portée', paramKey: 'scope', paramType: 'readonly' },
       category_upgrade_cascade:                  { label: 'T1 catégorie inférieure avant T1 supérieure',    paramLabel: 'Modes', paramKey: 'apply_to_modes', paramType: 'readonly' },
-      mode_spread_evenly:                        { label: 'Étalement des modes sur la saison',              paramLabel: 'Mode', paramKey: 'mode', paramType: 'readonly' }
+      mode_spread_evenly:                        { label: 'Étalement des modes sur la saison',              paramLabel: 'Mode', paramKey: 'mode', paramType: 'readonly' },
+      month_balanced_load:                       { label: 'Charge équilibrée entre les mois',              paramLabel: 'Poids', paramKey: 'weight', paramType: 'number' }
     };
 
     let constraints = [];
@@ -3835,6 +3837,103 @@
         btn.disabled = false; btn.textContent = '📊 Télécharger Excel';
       }
     });
+
+    // V 2.0.664 — Email aux clubs hôtes (preview + confirm + send).
+    document.getElementById('emailClubsBtn')?.addEventListener('click', async () => {
+      if (!currentBrief) { alert('Aucun brief actif.'); return; }
+      const btn = document.getElementById('emailClubsBtn');
+      btn.disabled = true; btn.textContent = '⏳ Préparation...';
+      try {
+        const previewRes = await fetch(`${API_URL}/calendar-generator/draft/email-clubs?brief_id=${currentBrief.id}`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ dry_run: true })
+        });
+        if (!previewRes.ok) {
+          const e = await previewRes.json().catch(() => ({}));
+          throw new Error(e.error || 'Échec aperçu');
+        }
+        const preview = await previewRes.json();
+        showEmailClubsModal(preview);
+      } catch (err) {
+        alert('Erreur : ' + err.message);
+      } finally {
+        btn.disabled = false; btn.textContent = '📧 Email aux clubs hôtes';
+      }
+    });
+
+    function showEmailClubsModal(preview) {
+      const existing = document.getElementById('emailClubsModal');
+      if (existing) existing.remove();
+
+      const modal = document.createElement('div');
+      modal.id = 'emailClubsModal';
+      modal.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:9999; display:flex; align-items:center; justify-content:center; padding:20px;';
+
+      const sendable = preview.clubs.filter(c => !c.missing_emails);
+      const missing  = preview.clubs.filter(c => c.missing_emails);
+
+      const clubsHtml = preview.clubs.map(c => {
+        const recipientsHtml = c.missing_emails
+          ? '<span style="color:#c0392b; font-style:italic;">aucune adresse email — sera ignoré</span>'
+          : c.recipients.map(r => `<span style="display:inline-block; background:#e8f4f8; padding:2px 8px; border-radius:10px; margin:2px 4px 2px 0; font-size:12px;">${r.role} : ${r.email}</span>`).join('');
+        return `
+          <div style="border:1px solid #ddd; border-radius:6px; padding:10px 12px; margin-bottom:8px; background:${c.missing_emails ? '#fff5f5' : '#fafafa'};">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
+              <strong>${c.host_name || '—'}</strong>
+              <span style="font-size:13px; color:#666;">${c.tournament_count} tournoi(s)</span>
+            </div>
+            <div style="margin-top:6px;">${recipientsHtml}</div>
+          </div>`;
+      }).join('');
+
+      modal.innerHTML = `
+        <div style="background:white; max-width:780px; width:100%; max-height:90vh; overflow:auto; border-radius:10px; padding:24px; box-shadow:0 12px 40px rgba(0,0,0,0.3);">
+          <h3 style="margin:0 0 6px 0;">📧 Envoi du calendrier aux clubs hôtes</h3>
+          <p style="color:#666; font-size:13px; margin:0 0 14px 0;">Saison <strong>${preview.season}</strong> — ${sendable.length} club(s) recevront un email, ${missing.length} sans adresse.</p>
+
+          <label style="font-size:13px; font-weight:600; display:block; margin-bottom:6px;">Texte d'introduction (optionnel)</label>
+          <textarea id="emailClubsCustomIntro" rows="4" style="width:100%; padding:8px 10px; border:1px solid #ccc; border-radius:5px; font-family:inherit; font-size:13px; box-sizing:border-box;" placeholder="Laissez vide pour utiliser le texte par défaut..."></textarea>
+
+          <div style="margin-top:14px; max-height:380px; overflow:auto;">${clubsHtml}</div>
+
+          <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:18px;">
+            <button type="button" id="emailClubsCancel" style="padding:8px 16px; border:1px solid #ccc; background:white; border-radius:5px; cursor:pointer;">Annuler</button>
+            <button type="button" id="emailClubsConfirm" style="padding:8px 18px; border:none; background:#c47b00; color:white; border-radius:5px; cursor:pointer; font-weight:600;" ${sendable.length === 0 ? 'disabled' : ''}>🚀 Envoyer à ${sendable.length} club(s)</button>
+          </div>
+        </div>`;
+
+      document.body.appendChild(modal);
+      document.getElementById('emailClubsCancel').addEventListener('click', () => modal.remove());
+      modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+
+      document.getElementById('emailClubsConfirm').addEventListener('click', async () => {
+        const intro = document.getElementById('emailClubsCustomIntro').value.trim();
+        if (!confirm(`Confirmer l'envoi à ${sendable.length} club(s) hôte(s) ?`)) return;
+        const confirmBtn = document.getElementById('emailClubsConfirm');
+        confirmBtn.disabled = true; confirmBtn.textContent = '⏳ Envoi en cours...';
+        try {
+          const res = await fetch(`${API_URL}/calendar-generator/draft/email-clubs?brief_id=${currentBrief.id}`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ dry_run: false, custom_intro: intro })
+          });
+          if (!res.ok) {
+            const e = await res.json().catch(() => ({}));
+            throw new Error(e.error || 'Échec envoi');
+          }
+          const out = await res.json();
+          modal.remove();
+          let msg = `✅ ${out.sent_count} email(s) envoyé(s).`;
+          if (out.skipped_count) msg += `\n⚠️ ${out.skipped_count} club(s) ignoré(s) (sans adresse email).`;
+          if (out.failed_count)  msg += `\n❌ ${out.failed_count} échec(s) — voir les logs.`;
+          alert(msg);
+        } catch (err) {
+          alert('Erreur envoi : ' + err.message);
+          confirmBtn.disabled = false; confirmBtn.textContent = `🚀 Envoyer à ${sendable.length} club(s)`;
+        }
+      });
+    }
 
     // V 2.0.650 — one-click "Publier sur la page Calendrier".
     // V 2.0.653 — verbose logging + explicit success summary so silent

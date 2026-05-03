@@ -411,7 +411,8 @@ const RULES_CATALOG = {
   host_no_consecutive_weekends:              { strictness: 'soft', defaultWeight: 3, defaultParams: { scope: 'all_hosts' } },
   category_upgrade_cascade:                  { strictness: 'soft', defaultWeight: 4, defaultParams: { apply_to_modes: ['*'] } },
   mode_spread_evenly:                        { strictness: 'soft', defaultWeight: 2, defaultParams: { mode: '*' } },
-  weekend_spread:                            { strictness: 'soft', defaultWeight: 5, defaultParams: {} }
+  weekend_spread:                            { strictness: 'soft', defaultWeight: 5, defaultParams: {} },
+  month_balanced_load:                       { strictness: 'soft', defaultWeight: 10, defaultParams: {} }
 };
 
 // Liste des règles à pré-créer pour un nouveau CDB (instances par défaut)
@@ -426,7 +427,8 @@ const DEFAULT_RULE_INSTANCES = [
   'host_no_consecutive_weekends',
   'category_upgrade_cascade',
   'mode_spread_evenly',
-  'weekend_spread'
+  'weekend_spread',
+  'month_balanced_load'
 ];
 
 // GET /constraints — list rule instances for the current org
@@ -2828,12 +2830,302 @@ router.get('/draft/export', authenticateToken, requireCalendarGenerator, async (
       });
     });
 
+    // ===== Sheet 4: Par club hôte (matrix clubs × months) =====
+    // Mirrors the "Par club hôte" view in the HTML wizard: one row per
+    // active host, one column per month of the season; each cell lists
+    // the tournaments that host runs that month, with a "X au total"
+    // line under the club name.
+    const wsHost = wb.addWorksheet('Par club hôte', {
+      pageSetup: { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 }
+    });
+
+    // Distinct months in order (e.g. ["2026-09", "2026-10", ...]).
+    const monthKeys = [];
+    {
+      const seen = new Set();
+      weekends.forEach(we => {
+        const k = we.slice(0, 7);
+        if (!seen.has(k)) { seen.add(k); monthKeys.push(k); }
+      });
+    }
+    const monthLabelFromKey = (key) => {
+      const [y, mm] = key.split('-');
+      return `${MONTH_NAMES_FR[parseInt(mm, 10) - 1]} ${y.slice(2)}`;
+    };
+
+    // Rows = hosts that appear in the draft (have at least one placement).
+    const hostsArr = [...hostMap.entries()]
+      .map(([id, info]) => ({ id, ...info }))
+      .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'fr'));
+
+    // Header row
+    const hostHeader = wsHost.addRow(['Club hôte', ...monthKeys.map(monthLabelFromKey)]);
+    hostHeader.height = 24;
+    hostHeader.eachCell(cell => {
+      cell.font = { bold: true, color: { argb: HEADER_TEXT_COLOR } };
+      cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: HEADER_BG } };
+      cell.border = ALL_BORDERS;
+    });
+    wsHost.getColumn(1).width = 30;
+    for (let i = 2; i <= 1 + monthKeys.length; i++) wsHost.getColumn(i).width = 22;
+
+    // Index draft by host_id + month
+    const hostMonthIndex = new Map(); // key = `${host_id}|${YYYY-MM}` → array of {label}
+    draft.forEach(r => {
+      if (!r.host_id || !r.weekend_date) return;
+      const key = `${r.host_id}|${r.weekend_date.slice(0, 7)}`;
+      const cat = (r.category_label || `${r.game_type || ''} ${r.level || ''}`).trim();
+      const label = `${cat} ${r.tournament_type === 'FINALE' ? 'Finale' : r.tournament_type}`;
+      if (!hostMonthIndex.has(key)) hostMonthIndex.set(key, []);
+      hostMonthIndex.get(key).push(label);
+    });
+
+    hostsArr.forEach((h, idx) => {
+      const total = draft.filter(r => r.host_id === h.id).length;
+      const row = wsHost.addRow([
+        `${h.name || ''}\n${total} au total`,
+        ...monthKeys.map(k => {
+          const items = hostMonthIndex.get(`${h.id}|${k}`) || [];
+          if (!items.length) return '';
+          return `${items.length} tournoi(s)\n${items.join('\n')}`;
+        })
+      ]);
+      // Row height proportional to the densest cell (max items in any month for this host).
+      const maxItems = monthKeys.reduce((m, k) => {
+        const n = (hostMonthIndex.get(`${h.id}|${k}`) || []).length;
+        return Math.max(m, n);
+      }, 1);
+      row.height = Math.max(40, 16 * (maxItems + 1) + 8);
+
+      const hostBgArgb = toArgb(h.color);
+      row.eachCell((cell, colNumber) => {
+        cell.border = ALL_BORDERS;
+        cell.alignment = { vertical: 'middle', wrapText: true, horizontal: colNumber === 1 ? 'left' : 'center', indent: colNumber === 1 ? 1 : 0 };
+        if (colNumber === 1) {
+          if (hostBgArgb) {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hostBgArgb } };
+            cell.font = { bold: true, size: 11, color: { argb: argbContrast(hostBgArgb) } };
+          } else {
+            cell.font = { bold: true, size: 11 };
+            if (idx % 2 === 1) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: ALT_ROW_BG } };
+          }
+        } else {
+          cell.font = { size: 10 };
+          if (cell.value) {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEDE7F6' } };
+          } else if (idx % 2 === 1) {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: ALT_ROW_BG } };
+          }
+        }
+      });
+    });
+    wsHost.views = [{ state: 'frozen', xSplit: 1, ySplit: 1 }];
+
     const buf = await wb.xlsx.writeBuffer();
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="Calendrier ${brief.season}.xlsx"`);
     res.send(Buffer.from(buf));
   } catch (err) {
     console.error('[calendar-generator] /draft/export error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /draft/email-clubs?brief_id=X
+//   Body: { dry_run?: bool, custom_intro?: string }
+//   Sends one email per host club listing the tournaments they will host.
+//   Recipients = president_email + responsable_sportif_email (both, when set).
+//   dry_run=true returns a per-club preview without sending.
+router.post('/draft/email-clubs', authenticateToken, requireCalendarGenerator, requireAdmin, async (req, res) => {
+  const db = getDb();
+  const orgId = req.user.organizationId;
+  const briefId = parseInt(req.query.brief_id, 10);
+  if (!briefId) return res.status(400).json({ error: 'brief_id requis' });
+  const dryRun = req.body?.dry_run !== false; // default to dry-run for safety
+  const customIntro = (req.body?.custom_intro || '').toString().trim();
+
+  const fetchAll = (sql, params) => new Promise((resolve, reject) =>
+    db.all(sql, params, (err, rows) => err ? reject(err) : resolve(rows || []))
+  );
+  const fetchOne = (sql, params) => new Promise((resolve, reject) =>
+    db.get(sql, params, (err, row) => err ? reject(err) : resolve(row))
+  );
+
+  try {
+    const brief = await fetchOne(
+      `SELECT id, season FROM calendar_brief WHERE id = $1 AND organization_id = $2`,
+      [briefId, orgId]
+    );
+    if (!brief) return res.status(404).json({ error: 'Brief introuvable' });
+
+    const rows = await fetchAll(
+      `SELECT cd.weekend_date, cd.tournament_type,
+              c.display_name AS category_label, c.game_type, c.level,
+              cl.id AS host_id, cl.display_name AS host_name,
+              cl.president, cl.president_email,
+              cl.responsable_sportif_name, cl.responsable_sportif_email
+         FROM calendar_draft cd
+         LEFT JOIN categories c ON c.id = cd.category_id
+         LEFT JOIN clubs cl ON cl.id = cd.host_club_id
+        WHERE cd.brief_id = $1 AND cl.id IS NOT NULL
+        ORDER BY cd.weekend_date ASC`,
+      [briefId]
+    );
+
+    const isoDate = (s) => {
+      if (s == null) return null;
+      if (s instanceof Date) return isNaN(s.getTime()) ? null : s.toISOString().slice(0, 10);
+      const m = String(s).match(/^(\d{4})-(\d{2})-(\d{2})/);
+      return m ? `${m[1]}-${m[2]}-${m[3]}` : null;
+    };
+    const fmtFR = (iso) => {
+      const d = isoDate(iso);
+      if (!d) return '';
+      const [y, m, dd] = d.split('-');
+      return `${dd}/${m}/${y}`;
+    };
+    const typeLabel = (t) => (t === 'FINALE' ? 'Finale' : t);
+
+    // Group by host
+    const byHost = new Map();
+    for (const r of rows) {
+      if (!byHost.has(r.host_id)) {
+        byHost.set(r.host_id, {
+          host_id: r.host_id,
+          host_name: r.host_name,
+          president: r.president,
+          president_email: r.president_email,
+          responsable_sportif_name: r.responsable_sportif_name,
+          responsable_sportif_email: r.responsable_sportif_email,
+          tournaments: []
+        });
+      }
+      byHost.get(r.host_id).tournaments.push({
+        weekend_date: isoDate(r.weekend_date),
+        date_fr: fmtFR(r.weekend_date),
+        category_label: r.category_label || `${r.game_type || ''} ${r.level || ''}`.trim(),
+        tournament_type: typeLabel(r.tournament_type)
+      });
+    }
+
+    // Sort each club's tournaments by date
+    for (const c of byHost.values()) {
+      c.tournaments.sort((a, b) => String(a.weekend_date || '').localeCompare(String(b.weekend_date || '')));
+    }
+
+    // Build per-club summary
+    const summary = [...byHost.values()]
+      .sort((a, b) => String(a.host_name || '').localeCompare(String(b.host_name || ''), 'fr'))
+      .map(c => {
+        const recipients = [];
+        if (c.president_email) recipients.push({ name: c.president || 'Président', email: c.president_email, role: 'Président' });
+        if (c.responsable_sportif_email) recipients.push({ name: c.responsable_sportif_name || 'Responsable sportif', email: c.responsable_sportif_email, role: 'Responsable sportif' });
+        return {
+          host_id: c.host_id,
+          host_name: c.host_name,
+          tournament_count: c.tournaments.length,
+          tournaments: c.tournaments,
+          recipients,
+          missing_emails: !recipients.length
+        };
+      });
+
+    if (dryRun) {
+      return res.json({
+        dry_run: true,
+        season: brief.season,
+        clubs: summary,
+        total_clubs: summary.length,
+        clubs_without_email: summary.filter(c => c.missing_emails).length
+      });
+    }
+
+    // ===== Real send =====
+    const { sendEmail, getEmailTemplateSettings, buildFromAddress } = require('../utils/email-helpers');
+    const settings = await getEmailTemplateSettings(orgId);
+    const fromAddress = buildFromAddress(settings, 'communication');
+    const orgName = settings.organization_name || settings.organization_short_name || '';
+    const primary = settings.primary_color || '#1F4788';
+    const contactEmail = settings.email_communication || settings.email_noreply || '';
+    const introHtml = customIntro
+      ? `<p style="margin: 0 0 14px 0;">${customIntro.replace(/\n/g, '<br>')}</p>`
+      : `<p style="margin: 0 0 14px 0;">Bonjour,</p>
+         <p style="margin: 0 0 14px 0;">Veuillez trouver ci-dessous la liste des tournois que votre club est appelé à organiser pour la saison <strong>${brief.season}</strong>.</p>
+         <p style="margin: 0 0 14px 0;">Merci de bien vouloir prendre connaissance de ces dates et nous signaler toute difficulté éventuelle.</p>`;
+
+    const sent = [];
+    const skipped = [];
+    const failed = [];
+
+    for (const club of summary) {
+      if (club.missing_emails) { skipped.push({ host_id: club.host_id, host_name: club.host_name, reason: 'aucune adresse email' }); continue; }
+      const to = club.recipients.map(r => r.email);
+      const tableRows = club.tournaments.map((t, i) => `
+        <tr style="background: ${i % 2 ? '#f7f7f7' : '#ffffff'};">
+          <td style="padding: 8px 12px; border: 1px solid #ddd;">${t.date_fr}</td>
+          <td style="padding: 8px 12px; border: 1px solid #ddd;">${t.category_label}</td>
+          <td style="padding: 8px 12px; border: 1px solid #ddd; text-align: center; font-weight: 600;">${t.tournament_type}</td>
+        </tr>`).join('');
+
+      const html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; color: #222; max-width: 720px; margin: 0 auto; padding: 20px;">
+  <div style="background: ${primary}; color: white; padding: 18px 22px; border-radius: 8px 8px 0 0;">
+    <h2 style="margin: 0; font-size: 20px;">Calendrier saison ${brief.season} — ${club.host_name}</h2>
+    ${orgName ? `<div style="font-size: 13px; opacity: 0.9; margin-top: 4px;">${orgName}</div>` : ''}
+  </div>
+  <div style="background: #fff; border: 1px solid #ddd; border-top: none; padding: 22px; border-radius: 0 0 8px 8px;">
+    ${introHtml}
+    <p style="margin: 0 0 8px 0;"><strong>${club.tournament_count} tournoi(s) à organiser :</strong></p>
+    <table style="border-collapse: collapse; width: 100%; margin: 8px 0 18px 0; font-size: 14px;">
+      <thead>
+        <tr style="background: ${primary}; color: white;">
+          <th style="padding: 9px 12px; border: 1px solid #ddd; text-align: left;">Date</th>
+          <th style="padding: 9px 12px; border: 1px solid #ddd; text-align: left;">Catégorie</th>
+          <th style="padding: 9px 12px; border: 1px solid #ddd; text-align: center;">Type</th>
+        </tr>
+      </thead>
+      <tbody>${tableRows}</tbody>
+    </table>
+    ${contactEmail ? `<p style="margin-top: 16px; padding: 10px; background: #e8f4f8; border-left: 3px solid ${primary}; font-size: 13px;">Pour toute question : <a href="mailto:${contactEmail}" style="color: ${primary};">${contactEmail}</a></p>` : ''}
+    <p style="margin-top: 18px; color: #888; font-size: 12px;">Sportivement,<br>${orgName || ''}</p>
+  </div>
+</body></html>`;
+
+      try {
+        await sendEmail(
+          {
+            from: fromAddress,
+            to,
+            subject: `Calendrier saison ${brief.season} — vos tournois à organiser`,
+            html
+          },
+          {
+            recipientKind: 'admin',
+            orgId,
+            recipientName: club.host_name,
+            emailType: 'calendar_club_share',
+            triggeredByUserId: req.user?.userId || null,
+            context: { brief_id: briefId, host_id: club.host_id, tournament_count: club.tournament_count }
+          }
+        );
+        sent.push({ host_id: club.host_id, host_name: club.host_name, recipients: to });
+      } catch (e) {
+        console.error('[calendar-generator] email-clubs send failed for host', club.host_id, e.message);
+        failed.push({ host_id: club.host_id, host_name: club.host_name, error: e.message });
+      }
+    }
+
+    res.json({
+      dry_run: false,
+      season: brief.season,
+      sent_count: sent.length,
+      skipped_count: skipped.length,
+      failed_count: failed.length,
+      sent, skipped, failed
+    });
+  } catch (err) {
+    console.error('[calendar-generator] /draft/email-clubs error:', err);
     res.status(500).json({ error: err.message });
   }
 });
