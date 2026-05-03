@@ -1809,8 +1809,8 @@
       category_upgrade_cascade:                  { label: 'T1 catégorie inférieure avant T1 supérieure',    paramLabel: 'Modes', paramKey: 'apply_to_modes', paramType: 'readonly' },
       mode_spread_evenly:                        { label: 'Étalement des modes sur la saison',              paramLabel: 'Mode', paramKey: 'mode', paramType: 'readonly' },
       month_balanced_load:                       { label: 'Charge équilibrée entre les mois',              paramLabel: 'Poids', paramKey: 'weight', paramType: 'number' },
-      t1_earliness_weight:                       { label: 'T1 placés au plus tôt (50 = fort, 0 = libre)',  paramLabel: 'Poids', paramKey: 'weight', paramType: 'number' },
-      category_cadence_weight:                   { label: 'Respect de la cadence T2/T3/Finale par cat.',   paramLabel: 'Poids', paramKey: 'weight', paramType: 'number' }
+      t1_earliness_weight:                       { label: 'T1 placés au plus tôt (uniquement le poids — 50 fort, 0 libre)',  paramLabel: '(poids ci-contre)', paramKey: null, paramType: 'readonly' },
+      category_cadence_weight:                   { label: 'Respect des dates cibles T2/T3/Finale (rétroplanning)',           paramLabel: '(poids ci-contre)', paramKey: null, paramType: 'readonly' }
     };
 
     let constraints = [];
