@@ -632,6 +632,13 @@
 
       <!-- Bloc personnalisation, caché par défaut -->
       <div id="rulesCustomBlock" style="display: none;">
+        <div style="margin: 10px 0 16px 0; padding: 12px 14px; background: #e8f5e9; border-left: 4px solid #2c7a4d; border-radius: 4px; font-size: 13px; color: #1f4a2a; display: flex; align-items: center; gap: 10px;">
+          <span style="font-size: 18px;">💾</span>
+          <div>
+            <strong>Sauvegarde automatique :</strong> chaque modification (paramètre, poids, activation, ajout, suppression) est enregistrée immédiatement en base. Aucun bouton « Sauvegarder » n'est nécessaire. Une confirmation « ✓ Règle mise à jour » s'affiche en bas après chaque changement réussi.
+            <br><strong style="color: #c47b00;">⚠️ Pour appliquer vos changements au calendrier</strong>, cliquez ensuite sur <strong>Génération → ⚡ Tout régénérer</strong> (ou « 🔒 Régénérer en gardant mes verrous »).
+          </div>
+        </div>
         <h3 class="section-title">Règles obligatoires (le moteur refuse de les violer)</h3>
         <table id="hardRulesTable" class="ligue-table">
           <thead><tr><th>Règle</th><th>Paramètre</th><th style="width: 90px;">Active</th><th style="width: 80px;"></th></tr></thead>
@@ -743,6 +750,18 @@
       <div id="viewCompact" style="display: none;"></div>
       <div id="viewHosts" style="display: none;"></div>
       <div id="viewPublished" style="display: none;"></div>
+
+      <!-- V 2.0.665 — second copy of the regenerate buttons placed
+           directly under the calendar views, so the user doesn't have
+           to scroll back up after editing rules / inspecting results. -->
+      <div id="regenerationFooter" style="margin-top: 18px; padding: 14px 16px; background: #faf6ff; border: 1px solid #d6c5f0; border-radius: 8px; display: none;">
+        <div style="font-size: 13px; font-weight: 600; color: #4a2378; margin-bottom: 10px;">🔄 Régénérer le calendrier après modification des règles ou du brief :</div>
+        <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+          <button type="button" class="btn" id="runGenerationBtnFooter" style="background: #6b3aa3; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: 600;" title="Génère un nouveau calendrier et remplace tout le précédent (y compris les cellules verrouillées)">⚡ Tout régénérer (remplace tout)</button>
+          <button type="button" class="btn" id="runRespectLocksBtnFooter" style="background: #c47b00; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: 600;" title="Garde toutes les cellules verrouillées 🔒 et recalcule uniquement les autres">🔒 Régénérer en gardant mes verrous</button>
+          <span id="generationStatusFooter" style="color: #666; font-size: 13px;"></span>
+        </div>
+      </div>
 
       <div class="actions-bar">
         <div>
@@ -2041,6 +2060,23 @@
       const el = document.getElementById('rulesStatus');
       el.textContent = msg;
       el.className = 'save-status' + (cls ? ' ' + cls : '');
+      // V 2.0.665 — also show a floating toast so the user clearly sees
+      // that auto-save happened (the inline status was easy to miss).
+      let toast = document.getElementById('rulesSaveToast');
+      if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'rulesSaveToast';
+        toast.style.cssText = 'position:fixed; top:80px; right:24px; z-index:9999; padding:12px 18px; border-radius:8px; box-shadow:0 6px 24px rgba(0,0,0,0.18); font-weight:600; font-size:14px; transition:opacity 0.3s; opacity:0; pointer-events:none;';
+        document.body.appendChild(toast);
+      }
+      const isError = cls === 'error';
+      toast.style.background = isError ? '#fdecea' : '#e8f5e9';
+      toast.style.border = isError ? '2px solid #c0392b' : '2px solid #2c7a4d';
+      toast.style.color = isError ? '#7a1d12' : '#1f4a2a';
+      toast.textContent = msg;
+      toast.style.opacity = '1';
+      clearTimeout(window._rulesToastTimer);
+      window._rulesToastTimer = setTimeout(() => { toast.style.opacity = '0'; }, 2500);
     }
 
     // ===== UX onboarding (V 2.0.527) =====
@@ -2943,12 +2979,19 @@
       }
       const btnAll = document.getElementById('runGenerationBtn');
       const btnLocks = document.getElementById('runRespectLocksBtn');
+      const btnAllFooter = document.getElementById('runGenerationBtnFooter');
+      const btnLocksFooter = document.getElementById('runRespectLocksBtnFooter');
       const status = document.getElementById('generationStatus');
-      btnAll.disabled = true; btnLocks.disabled = true;
+      const statusFooter = document.getElementById('generationStatusFooter');
+      [btnAll, btnLocks, btnAllFooter, btnLocksFooter].forEach(b => { if (b) b.disabled = true; });
       const activeBtn = respectLocks ? btnLocks : btnAll;
+      const activeBtnFooter = respectLocks ? btnLocksFooter : btnAllFooter;
       const original = activeBtn.textContent;
+      const originalFooter = activeBtnFooter ? activeBtnFooter.textContent : null;
       activeBtn.textContent = '⏳ Génération en cours...';
+      if (activeBtnFooter) activeBtnFooter.textContent = '⏳ Génération en cours...';
       status.textContent = ''; status.style.color = '#666';
+      if (statusFooter) { statusFooter.textContent = ''; statusFooter.style.color = '#666'; }
       try {
         const overrides = readQuickTuningOverrides();
         const res = await fetch(`${API_URL}/calendar-generator/generate`, {
@@ -2960,19 +3003,23 @@
         renderGenerationResult(json);
         setTimeout(() => loadSavedDraft(), 200);
         const lockMsg = json.locked_count ? ` · ${json.locked_count} verrou(s) préservé(s) 🔒` : '';
-        status.textContent = `✓ Terminé en ${new Date().toLocaleTimeString('fr-FR')}${lockMsg}`;
-        status.style.color = '#2c7a4d';
+        const okMsg = `✓ Terminé en ${new Date().toLocaleTimeString('fr-FR')}${lockMsg}`;
+        status.textContent = okMsg; status.style.color = '#2c7a4d';
+        if (statusFooter) { statusFooter.textContent = okMsg; statusFooter.style.color = '#2c7a4d'; }
       } catch (err) {
-        status.textContent = '❌ ' + err.message;
-        status.style.color = '#c00';
+        status.textContent = '❌ ' + err.message; status.style.color = '#c00';
+        if (statusFooter) { statusFooter.textContent = '❌ ' + err.message; statusFooter.style.color = '#c00'; }
       } finally {
-        btnAll.disabled = false; btnLocks.disabled = false;
+        [btnAll, btnLocks, btnAllFooter, btnLocksFooter].forEach(b => { if (b) b.disabled = false; });
         activeBtn.textContent = original;
+        if (activeBtnFooter && originalFooter) activeBtnFooter.textContent = originalFooter;
       }
     }
 
     document.getElementById('runGenerationBtn').addEventListener('click', () => runGeneration({ respectLocks: false }));
     document.getElementById('runRespectLocksBtn').addEventListener('click', () => runGeneration({ respectLocks: true }));
+    document.getElementById('runGenerationBtnFooter')?.addEventListener('click', () => runGeneration({ respectLocks: false }));
+    document.getElementById('runRespectLocksBtnFooter')?.addEventListener('click', () => runGeneration({ respectLocks: true }));
 
     // Color palette for hosts (mild backgrounds)
     const HOST_PALETTE = ['#fce4d6', '#d9e1f2', '#e2efda', '#fff2cc', '#e4dfec', '#ddebf7', '#fce4d6', '#e7e6e6'];
@@ -3031,9 +3078,11 @@
         conflictsEl.innerHTML = '';
       }
 
-      // Show view selector + persistence banner
+      // Show view selector + persistence banner + regeneration footer
       document.getElementById('viewSelector').style.display = 'flex';
       document.getElementById('persistenceBanner').style.display = 'block';
+      const regenFooter = document.getElementById('regenerationFooter');
+      if (regenFooter) regenFooter.style.display = 'block';
 
       renderViewCompact(result);
       renderViewSeasonal(result);
