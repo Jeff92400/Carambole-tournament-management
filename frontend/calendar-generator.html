@@ -3390,12 +3390,18 @@
       // V 2.0.611 — Saturday + Sunday dual rows, mirroring the legacy
       // CDBHS XL layout. Day numbers only (the month is already in the
       // band row above), so columns stay narrow.
+      // V 2.0.673 — header date cells get a 🚫 marker on blackout dates
+      // and a 🏆 marker on FFB team-match dates so the admin can spot at
+      // a glance which weekends the engine cannot use.
       const satRow = weekends.map((we, i) => {
         const d = new Date(we + 'T00:00:00Z');
         const prev = i > 0 ? new Date(weekends[i - 1] + 'T00:00:00Z') : null;
         const monthChange = prev && prev.getUTCMonth() !== d.getUTCMonth();
         const leftBorder = monthChange ? 'border-left: 3px solid #5a3094;' : '';
-        return `<th style="padding: 3px 6px; font-size: 11px; min-width: 56px; white-space: nowrap; background: #6b3aa3; color: white; ${leftBorder}"><span style="opacity: 0.7; font-weight: 500;">S</span> ${String(d.getUTCDate()).padStart(2,'0')}</th>`;
+        const st = weekendStatus[we] || {};
+        const marker = st.satBO ? ' <span title="Blackout CDB">🚫</span>' : (st.satFFB ? ' <span title="JDS Fédérale">🏆</span>' : '');
+        const bg = st.satBO ? '#9e3a3a' : (st.satFFB ? '#3a6a9e' : '#6b3aa3');
+        return `<th style="padding: 3px 6px; font-size: 11px; min-width: 56px; white-space: nowrap; background: ${bg}; color: white; ${leftBorder}"><span style="opacity: 0.7; font-weight: 500;">S</span> ${String(d.getUTCDate()).padStart(2,'0')}${marker}</th>`;
       }).join('');
       const sunRow = weekends.map((we, i) => {
         const d = new Date(we + 'T00:00:00Z');
@@ -3404,11 +3410,53 @@
         const sat = new Date(weekends[i] + 'T00:00:00Z');
         const monthChange = prev && prev.getUTCMonth() !== sat.getUTCMonth();
         const leftBorder = monthChange ? 'border-left: 3px solid #5a3094;' : '';
-        return `<th style="padding: 3px 6px; font-size: 11px; min-width: 56px; white-space: nowrap; background: #7d52b8; color: white; font-weight: 500; ${leftBorder}"><span style="opacity: 0.7;">D</span> ${String(d.getUTCDate()).padStart(2,'0')}</th>`;
+        const st = weekendStatus[we] || {};
+        const marker = st.sunBO ? ' <span title="Blackout CDB">🚫</span>' : (st.sunFFB ? ' <span title="JDS Fédérale">🏆</span>' : '');
+        const bg = st.sunBO ? '#b04a4a' : (st.sunFFB ? '#4a7ab0' : '#7d52b8');
+        return `<th style="padding: 3px 6px; font-size: 11px; min-width: 56px; white-space: nowrap; background: ${bg}; color: white; font-weight: 500; ${leftBorder}"><span style="opacity: 0.7;">D</span> ${String(d.getUTCDate()).padStart(2,'0')}${marker}</th>`;
       }).join('');
 
       // V 2.0.614 — month parity for alternating column tints.
       const monthParityMap = buildMonthParityMap(weekends);
+
+      // V 2.0.673 — blackout / FFB-match overlay: build a per-weekend
+      // status map so empty columns visually communicate WHY no
+      // tournament can land there. Three signals:
+      //   • CDB-wide blackout (admin marked the date in Étape 1)
+      //   • JDS Fédérale / FFB team match date (players away)
+      //   • neither
+      // Saturday and Sunday are checked independently — a weekend is
+      // "fully blocked" only if both days are blacked out, otherwise
+      // the cell is "partial" and we still mark the half-day reason.
+      const blackoutSet = new Set(blackoutDates || []);
+      const ffbMatchSet = new Set(
+        (ffbTeamMatches || [])
+          .map(m => m?.date)
+          .filter(d => d && /^\d{4}-\d{2}-\d{2}$/.test(d))
+      );
+      const weekendStatus = {}; // { weekendISO: {sat, sun, satFFB, sunFFB, label} }
+      weekends.forEach(we => {
+        const sat = we;
+        const sun = (() => {
+          const d = new Date(we + 'T00:00:00Z');
+          d.setUTCDate(d.getUTCDate() + 1);
+          return d.toISOString().slice(0, 10);
+        })();
+        const satBO  = blackoutSet.has(sat);
+        const sunBO  = blackoutSet.has(sun);
+        const satFFB = ffbMatchSet.has(sat);
+        const sunFFB = ffbMatchSet.has(sun);
+        const fully  = (satBO || satFFB) && (sunBO || sunFFB);
+        const partial = !fully && (satBO || sunBO || satFFB || sunFFB);
+        const reasons = [];
+        if (satBO || sunBO) reasons.push('blackout CDB');
+        if (satFFB || sunFFB) reasons.push('JDS Fédérale (joueurs absents)');
+        weekendStatus[we] = {
+          satBO, sunBO, satFFB, sunFFB, fully, partial,
+          tooltip: reasons.length ? `${fully ? 'Week-end indisponible' : 'Week-end partiellement indisponible'} — ${reasons.join(' · ')}` : ''
+        };
+      });
+
       let prevMode = null;
       const rows = cats.map((c, ci) => {
         const curMode = c.game_type || c.mode || '';
@@ -3429,7 +3477,24 @@
           const leftBorder = monthChange ? 'border-left: 3px solid #5a3094;' : '';
           const monthBg = MONTH_TINTS[monthParityMap[we] || 0];
           const p = grid[c.id]?.[we];
-          if (!p) return `<td style="padding: 4px 6px; background: ${monthBg}; ${leftBorder}"></td>`;
+          if (!p) {
+            // V 2.0.673 — empty-cell visual hint when the weekend is
+            // blacked out (CDB) or hosts an FFB team match. Diagonal
+            // stripes make it obvious the engine cannot use that column.
+            const st = weekendStatus[we] || {};
+            if (st.fully) {
+              const bg = `repeating-linear-gradient(135deg, #f1d4d4, #f1d4d4 5px, #e8b8b8 5px, #e8b8b8 10px)`;
+              return `<td style="padding: 4px 6px; background: ${bg}; ${leftBorder}" title="${escapeHtml(st.tooltip)}"></td>`;
+            }
+            if (st.partial) {
+              const ffbOnly = (st.satFFB || st.sunFFB) && !(st.satBO || st.sunBO);
+              const bg = ffbOnly
+                ? `repeating-linear-gradient(135deg, #d4e1f1, #d4e1f1 5px, #b8c8e8 5px, #b8c8e8 10px)`
+                : `repeating-linear-gradient(135deg, #f3dede, #f3dede 5px, #e8c5c5 5px, #e8c5c5 10px)`;
+              return `<td style="padding: 4px 6px; background: ${bg}; ${leftBorder}" title="${escapeHtml(st.tooltip)}"></td>`;
+            }
+            return `<td style="padding: 4px 6px; background: ${monthBg}; ${leftBorder}"></td>`;
+          }
 
           // Ligue final: distinct visual treatment — orange accent,
           // FL label, no host. Not editable.
@@ -3485,6 +3550,17 @@
         <div style="margin-top: 6px;">
           <strong style="font-size: 13px; color: #555;">Clubs hôtes :</strong>
           ${renderHostLegendText(allPlacements)}
+        </div>
+        <div style="margin-top: 6px; font-size: 12px; color: #555; display: flex; gap: 14px; flex-wrap: wrap; align-items: center;">
+          <strong>Disponibilité week-ends :</strong>
+          <span style="display: inline-flex; align-items: center; gap: 6px;">
+            <span style="display: inline-block; width: 22px; height: 14px; background: repeating-linear-gradient(135deg, #f1d4d4, #f1d4d4 4px, #e8b8b8 4px, #e8b8b8 8px); border: 1px solid #c0808066;"></span>
+            🚫 Blackout CDB (week-end indisponible)
+          </span>
+          <span style="display: inline-flex; align-items: center; gap: 6px;">
+            <span style="display: inline-block; width: 22px; height: 14px; background: repeating-linear-gradient(135deg, #d4e1f1, #d4e1f1 4px, #b8c8e8 4px, #b8c8e8 8px); border: 1px solid #6088c066;"></span>
+            🏆 JDS Fédérale (joueurs absents)
+          </span>
         </div>
       `;
 
