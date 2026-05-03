@@ -224,10 +224,15 @@ function isDateAllowed({
       const minWeeksLigue = param(cmap.min_weeks_between_cdb_and_ligue_final, 'min_weeks', 2);
       const minWeeksT3F = param(cmap.min_weeks_between_t3_and_final, 'min_weeks', 2);
       const minWeeksSame = param(cmap.min_weeks_between_tournaments_same_category, 'min_weeks', 3);
+      // V 2.0.684 — T3↔Finale gap is the MAX of the dedicated T3-Finale
+      // rule and the general same-category rule (both apply). Previously
+      // the look-ahead used only minWeeksT3F, which let T3 land too late
+      // and the Finale couldn't fit before the Ligue Final.
+      const t3FinaleGap = Math.max(minWeeksT3F, minWeeksSame);
       const remainingFromLigue = ({
-        T1: 2 * minWeeksSame + minWeeksT3F + minWeeksLigue,
-        T2: 1 * minWeeksSame + minWeeksT3F + minWeeksLigue,
-        T3: minWeeksT3F + minWeeksLigue,
+        T1: 2 * minWeeksSame + t3FinaleGap + minWeeksLigue,
+        T2: 1 * minWeeksSame + t3FinaleGap + minWeeksLigue,
+        T3: t3FinaleGap + minWeeksLigue,
         Finale: minWeeksLigue
       })[ttype] ?? 0;
       if (remainingFromLigue > 0) {
