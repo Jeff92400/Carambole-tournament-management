@@ -2568,6 +2568,7 @@
         const result = {
           placements,
           conflicts: [],
+          _fromReload: true, // V 2.0.675 — let the renderer restore conflicts from localStorage
           _missing_unknown_reasons: missing, // signal renderer that conflict reasons were lost
           stats: {
             total_categories: (currentBrief?.active_categories?.length) || new Set(placements.map(p => p.category_id)).size,
@@ -3100,14 +3101,32 @@
         </div>
       `;
 
-      // Conflicts
-      if (result.conflicts.length) {
+      // Conflicts — V 2.0.675 persist them in localStorage so they
+      // remain visible after reload (the backend doesn't store them
+      // since they're a per-run diagnostic). Restored by loadSavedDraft.
+      const conflictsKey = `cal_conflicts_${currentBrief?.id || 'none'}`;
+      let conflictsToShow = result.conflicts || [];
+      if (conflictsToShow.length) {
+        try { localStorage.setItem(conflictsKey, JSON.stringify(conflictsToShow)); } catch (_) {}
+      } else if (result._fromReload) {
+        // On reload, fall back to the last persisted conflicts.
+        try {
+          const saved = localStorage.getItem(conflictsKey);
+          if (saved) conflictsToShow = JSON.parse(saved);
+        } catch (_) {}
+      } else {
+        // Successful regenerate with zero conflicts → clear stale ones.
+        try { localStorage.removeItem(conflictsKey); } catch (_) {}
+      }
+
+      if (conflictsToShow.length) {
         conflictsEl.style.display = 'block';
+        const stale = result._fromReload ? '<span style="font-size: 11px; color: #c47b00; font-style: italic; margin-left: 8px;">(diagnostic du dernier calcul — relancez « Tout régénérer » pour rafraîchir)</span>' : '';
         conflictsEl.innerHTML = `
           <div style="padding: 12px; background: #fff5f5; border: 1px solid #fc8181; border-radius: 6px;">
-            <strong style="color: #c00;">⚠️ ${result.conflicts.length} conflit(s) — non placé(s) :</strong>
+            <strong style="color: #c00;">⚠️ ${conflictsToShow.length} conflit(s) — non placé(s) :</strong>${stale}
             <ul style="margin: 8px 0 0 20px; color: #555; font-size: 13px;">
-              ${result.conflicts.map(c => `<li><strong>${escapeHtml(c.category_label)}</strong> ${escapeHtml(c.tournament_type)} — ${escapeHtml(c.reason)}</li>`).join('')}
+              ${conflictsToShow.map(c => `<li><strong>${escapeHtml(c.category_label)}</strong> ${escapeHtml(c.tournament_type)} — ${escapeHtml(c.reason)}</li>`).join('')}
             </ul>
           </div>
         `;
