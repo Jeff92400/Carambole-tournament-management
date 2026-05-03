@@ -53,7 +53,13 @@ function orderCategoriesForPlacement(cats) {
     const ma = modeRank(a.game_type);
     const mb = modeRank(b.game_type);
     if (ma !== mb) return ma - mb;
-    return levelRank(b.level) - levelRank(a.level); // descending
+    const dl = levelRank(b.level) - levelRank(a.level); // descending
+    if (dl !== 0) return dl;
+    // Deterministic tiebreaker: same mode + same level (e.g. Cadre 47/2 R3
+    // vs Cadre 47/1 R3) → fall back to category id so two runs always
+    // place categories in the same order. Without this, JS sort stability
+    // depends on the input array order from the DB.
+    return (a.id ?? 0) - (b.id ?? 0);
   });
 }
 
@@ -63,7 +69,9 @@ function orderCategoriesForDisplay(cats) {
     const ma = modeRank(a.game_type);
     const mb = modeRank(b.game_type);
     if (ma !== mb) return ma - mb;
-    return levelRank(a.level) - levelRank(b.level); // ascending (N3 before R1)
+    const dl = levelRank(a.level) - levelRank(b.level); // ascending (N3 before R1)
+    if (dl !== 0) return dl;
+    return (a.id ?? 0) - (b.id ?? 0);
   });
 }
 
@@ -576,41 +584,40 @@ function generateCalendar({ brief, constraints, ligueFinals, categories, clubs, 
     const minGap = Math.max(minWeeksFloor, 4);
     const maxGap = Math.max(minGap + 1, Math.floor(totalWeeks / 3));
 
+    const minWeeksT3F = param(cmap.min_weeks_between_t3_and_final, 'min_weeks', 2);
     orderedCats.forEach((cat, i) => {
-      // 1. Determine the anchor date (target for Finale).
+      // 1. Determine the Finale anchor (target for Finale).
       let anchorDate;
       if (ligueFinals && ligueFinals[cat.id]) {
         const lf = parseISODate(toISODateString(ligueFinals[cat.id]));
-        if (lf) {
-          anchorDate = addDays(lf, -7 * minWeeksLigue);
-        }
+        if (lf) anchorDate = addDays(lf, -7 * minWeeksLigue);
       }
-      if (!anchorDate) {
-        // No Ligue Final → use season end as anchor.
-        anchorDate = new Date(endDate.getTime());
-      }
-      // Clamp anchor inside the season.
+      if (!anchorDate) anchorDate = new Date(endDate.getTime());
       if (anchorDate < startDate) anchorDate = new Date(startDate.getTime());
       if (anchorDate > endDate)   anchorDate = new Date(endDate.getTime());
 
-      // 2. Total span available for this category (days, then weeks).
-      const spanDays = Math.max(0, Math.round((anchorDate - startDate) / (24 * 3600 * 1000)));
-      const spanWeeks = Math.max(3, Math.round(spanDays / 7));
+      // 2. Walk T2/T3 BACKWARDS from the Finale anchor using the actual
+      //    minimum gaps. Previously we evenly spread all 4 tournaments
+      //    over [start, anchor], which over-clamped T1 in short spans
+      //    (categories with an early Ligue Final) and pulled T2/T3 to
+      //    arbitrary midpoints. Walking backwards keeps T1 free to start
+      //    early (cascade already enforces ordering) and packs T2/T3/F
+      //    just tightly enough to clear the deadline.
+      const t3Target  = addDays(anchorDate, -7 * minWeeksT3F);
+      const t2Target  = addDays(t3Target,   -7 * minWeeksFloor);
+      // T1 stays anchored near season start — never let retro-planning
+      // pull it later than t2Target − minWeeksFloor.
+      const t1Latest  = addDays(t2Target,   -7 * minWeeksFloor);
+      const t1Target  = (t1Latest < startDate) ? startDate : startDate;
 
-      // 3. Distribute T1, T2, T3, Finale across the span.
-      //    T1 goes near start (cascade enforces ordering anyway).
-      //    Finale goes at anchor.
-      //    T2 and T3 are evenly spread between.
-      const gap = spanWeeks / 3; // 3 gaps: T1→T2, T2→T3, T3→Finale
       cat._targetDates = {
-        T1:     fmtISO(startDate),
-        T2:     fmtISO(addDays(startDate, Math.round(7 * gap))),
-        T3:     fmtISO(addDays(startDate, Math.round(7 * 2 * gap))),
+        T1:     fmtISO(t1Target),
+        T2:     fmtISO(t2Target < startDate ? startDate : t2Target),
+        T3:     fmtISO(t3Target < startDate ? startDate : t3Target),
         Finale: fmtISO(anchorDate)
       };
 
-      // Legacy fallback (still used as a soft hint when target deviation
-      // can't be computed for some reason).
+      // Legacy fallback (soft hint when target deviation can't be computed).
       const t = orderedCats.length <= 1 ? 1 : i / (orderedCats.length - 1);
       cat._idealGapWeeks = Math.round(minGap + t * (maxGap - minGap));
     });
@@ -620,9 +627,13 @@ function generateCalendar({ brief, constraints, ligueFinals, categories, clubs, 
   const conflicts = [];
   const tournamentTypes = ['T1', 'T2', 'T3', 'Finale'];
 
-  for (const cat of orderedCats) {
-    for (const ttype of tournamentTypes) {
-      // Skip if this (cat, type) is already locked
+  // Round-by-round: place all T1s first (across all cats), then T2s, etc.
+  // Previously we placed all 4 tournaments of cat A before touching cat B,
+  // which let cat A's Finale grab a slot that cat B's T1 actually needed.
+  // Round-by-round gives every category a fair chance at its earliest
+  // tournament before any later tournament competes for the same weekend.
+  for (const ttype of tournamentTypes) {
+    for (const cat of orderedCats) {
       if (lockedKeys.has(`${cat.id}|${ttype}`)) continue;
       const result = placeOne({
         cat, ttype, weekends, hosts: activeHosts, brief, cmap, ligueFinals, alreadyPlaced: placements
