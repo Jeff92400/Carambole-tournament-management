@@ -1804,13 +1804,13 @@
       host_no_double_booking:                    { label: 'Pas deux tournois pour un même club / week-end', paramLabel: '(implicite)', paramKey: null, paramType: 'readonly' },
       max_tournaments_per_weekend:               { label: 'Tournois max par week-end (toutes catégories)',  paramLabel: 'Max', paramKey: 'max', paramType: 'number' },
       weekend_spread:                            { label: 'Étalement entre week-ends (anti-clusters)',      paramLabel: '(automatique)', paramKey: null, paramType: 'readonly' },
-      host_balanced_load:                        { label: 'Nombre équilibré de tournois par club hôte',     paramLabel: 'Tolérance', paramKey: 'tolerance', paramType: 'number' },
-      host_no_consecutive_weekends:              { label: 'Pas d\'hôte deux week-ends consécutifs',         paramLabel: 'Portée', paramKey: 'scope', paramType: 'readonly' },
-      category_upgrade_cascade:                  { label: 'T1 catégorie inférieure avant T1 supérieure',    paramLabel: 'Modes', paramKey: 'apply_to_modes', paramType: 'readonly' },
-      mode_spread_evenly:                        { label: 'Étalement par mode + affinités de niveau',       paramLabel: 'Mode', paramKey: 'mode', paramType: 'readonly' },
-      month_balanced_load:                       { label: 'Charge équilibrée entre les mois',              paramLabel: 'Poids', paramKey: 'weight', paramType: 'number' },
-      t1_earliness_weight:                       { label: 'T1 placés au plus tôt (uniquement le poids — 50 fort, 0 libre)',  paramLabel: '(poids ci-contre)', paramKey: null, paramType: 'readonly' },
-      category_cadence_weight:                   { label: 'Respect des dates cibles T2/T3/Finale (rétroplanning)',           paramLabel: '(poids ci-contre)', paramKey: null, paramType: 'readonly' }
+      host_balanced_load:                        { label: 'Nombre équilibré de tournois par club hôte',     paramLabel: '—', paramKey: null, paramType: 'readonly' },
+      host_no_consecutive_weekends:              { label: 'Pas d\'hôte deux week-ends consécutifs',         paramLabel: '—', paramKey: null, paramType: 'readonly' },
+      category_upgrade_cascade:                  { label: 'T1 catégorie inférieure avant T1 supérieure',    paramLabel: '(implicite)', paramKey: null, paramType: 'readonly' },
+      mode_spread_evenly:                        { label: 'Étalement par mode + affinités de niveau',       paramLabel: '—', paramKey: null, paramType: 'readonly' },
+      month_balanced_load:                       { label: 'Charge équilibrée entre les mois',              paramLabel: '—', paramKey: null, paramType: 'readonly' },
+      t1_earliness_weight:                       { label: 'T1 placés au plus tôt (legacy — utiliser plutôt « Respect des dates cibles »)', paramLabel: '—', paramKey: null, paramType: 'readonly', hidden: true },
+      category_cadence_weight:                   { label: 'Respect des dates cibles T2/T3/Finale (rétroplanning)',           paramLabel: '—', paramKey: null, paramType: 'readonly' }
     };
 
     let constraints = [];
@@ -1882,8 +1882,10 @@
     }
 
     function renderRulesTables() {
-      const hard = constraints.filter(c => c.strictness === 'hard');
-      const soft = constraints.filter(c => c.strictness === 'soft');
+      // V 2.0.686 — drop legacy/hidden rules (e.g. `t1_earliness_weight`).
+      const isHidden = (c) => (RULES_CATALOG[c.rule_type] || {}).hidden === true;
+      const hard = constraints.filter(c => c.strictness === 'hard' && !isHidden(c));
+      const soft = constraints.filter(c => c.strictness === 'soft' && !isHidden(c));
 
       // Update the small counter next to the main "Charger..." button
       const countEl = document.getElementById('rulesCount');
@@ -1952,7 +1954,8 @@
 
     function renderAvailableRulesTable() {
       const presentTypes = new Set(constraints.map(c => c.rule_type));
-      const allTypes = Object.keys(RULES_CATALOG);
+      // V 2.0.686 — never offer hidden rules in the "Ajouter" picker.
+      const allTypes = Object.keys(RULES_CATALOG).filter(t => !RULES_CATALOG[t].hidden);
       const tbody = document.querySelector('#availableRulesTable tbody');
 
       const rows = allTypes.filter(t => !presentTypes.has(t)).filter(t => showingIgnored ? ignoredRuleTypes.has(t) : !ignoredRuleTypes.has(t));

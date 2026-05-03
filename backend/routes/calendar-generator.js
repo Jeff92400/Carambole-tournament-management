@@ -405,19 +405,26 @@ const RULES_CATALOG = {
   min_weeks_between_tournaments_same_category: { strictness: 'hard', defaultParams: { min_weeks: 3 } },
   min_weeks_between_t3_and_final:            { strictness: 'hard', defaultParams: { min_weeks: 2 } },
   host_no_double_booking:                    { strictness: 'hard', defaultParams: {} }, // implicit
-  max_tournaments_per_weekend:               { strictness: 'hard', defaultParams: { max: 4 } },
+  max_tournaments_per_weekend:               { strictness: 'hard', defaultParams: { max: 3 } },
+  // V 2.0.686 — Cascade T1 was always enforced in isDateAllowed but listed
+  // as soft in the UI. Now correctly classified as hard.
+  category_upgrade_cascade:                  { strictness: 'hard', defaultParams: {} },
   // Règles molles
-  host_balanced_load:                        { strictness: 'soft', defaultWeight: 5, defaultParams: { tolerance: 1 } },
-  host_no_consecutive_weekends:              { strictness: 'soft', defaultWeight: 3, defaultParams: { scope: 'all_hosts' } },
-  category_upgrade_cascade:                  { strictness: 'soft', defaultWeight: 4, defaultParams: { apply_to_modes: ['*'] } },
-  mode_spread_evenly:                        { strictness: 'soft', defaultWeight: 2, defaultParams: { mode: '*' } },
+  host_balanced_load:                        { strictness: 'soft', defaultWeight: 5, defaultParams: {} },
+  host_no_consecutive_weekends:              { strictness: 'soft', defaultWeight: 3, defaultParams: {} },
+  mode_spread_evenly:                        { strictness: 'soft', defaultWeight: 5, defaultParams: {} },
   weekend_spread:                            { strictness: 'soft', defaultWeight: 5, defaultParams: {} },
   month_balanced_load:                       { strictness: 'soft', defaultWeight: 10, defaultParams: {} },
-  t1_earliness_weight:                       { strictness: 'soft', defaultWeight: 50, defaultParams: {} },
-  category_cadence_weight:                   { strictness: 'soft', defaultWeight: 50, defaultParams: {} }
+  // V 2.0.686 — t1_earliness_weight is legacy; category_cadence_weight
+  // covers it and more. Kept in the catalog for backward compatibility
+  // with existing rule instances but no longer pre-created for new orgs.
+  t1_earliness_weight:                       { strictness: 'soft', defaultWeight: 0, defaultParams: {}, hidden: true },
+  category_cadence_weight:                   { strictness: 'soft', defaultWeight: 10, defaultParams: {} }
 };
 
-// Liste des règles à pré-créer pour un nouveau CDB (instances par défaut)
+// Liste des règles à pré-créer pour un nouveau CDB (instances par défaut).
+// V 2.0.686 — `t1_earliness_weight` retirée (redondante avec
+// `category_cadence_weight`).
 const DEFAULT_RULE_INSTANCES = [
   'final_before_ligue_final',
   'min_weeks_between_cdb_and_ligue_final',
@@ -425,13 +432,12 @@ const DEFAULT_RULE_INSTANCES = [
   'min_weeks_between_t3_and_final',
   'host_no_double_booking',
   'max_tournaments_per_weekend',
+  'category_upgrade_cascade',
   'host_balanced_load',
   'host_no_consecutive_weekends',
-  'category_upgrade_cascade',
   'mode_spread_evenly',
   'weekend_spread',
   'month_balanced_load',
-  't1_earliness_weight',
   'category_cadence_weight'
 ];
 
