@@ -380,10 +380,20 @@ function scoreSoft({ cat, ttype, host, date, weekendDate, alreadyPlaced, cmap, b
   }
 
   // T1 strategy — start as early as possible (respecting cascade already enforced as hard).
-  if (ttype === 'T1') {
-    // V 2.0.671 — promoted from a hardcoded magic number (50) to a
-    // tunable soft rule. Lower the weight to spread T1s deeper into
-    // the season instead of clustering them in the first few weekends.
+  // V 2.0.672 — Pull each tournament toward its per-category target
+  // date computed by retro-planning from the category's deadline
+  // (Ligue Final or season end). This replaces the legacy gap-based
+  // logic so categories with NO Ligue Final naturally land their
+  // Finale at season end (May/June), and categories WITH a Ligue
+  // Final get a tightly-anchored cycle ending right before it.
+  if (cat._targetDates && cat._targetDates[ttype]) {
+    const cadenceW = cmap.category_cadence_weight?.weight ?? 50;
+    const target = cat._targetDates[ttype];
+    const deviation = weekDiff(date, target);
+    score += cadenceW * deviation;
+  } else if (ttype === 'T1') {
+    // Fallback: legacy T1 earliness (no target date computed —
+    // happens only when first_weekend or last_weekend is missing).
     const t1W = cmap.t1_earliness_weight?.weight ?? 50;
     const startISO = toISODateString(brief.first_weekend);
     if (startISO) {
@@ -391,8 +401,7 @@ function scoreSoft({ cat, ttype, host, date, weekendDate, alreadyPlaced, cmap, b
       score += t1W * offsetWeeks;
     }
   } else {
-    // T2/T3/Finale — aim at the per-category ideal gap (varies by cascade
-    // position so each category has its own cycle length).
+    // Fallback: legacy gap-based cadence.
     const cadenceW = cmap.category_cadence_weight?.weight ?? 50;
     const sameCat = alreadyPlaced.filter(p => p.category_id === cat.id);
     const last = sameCat[sameCat.length - 1];
@@ -519,18 +528,68 @@ function generateCalendar({ brief, constraints, ligueFinals, categories, clubs, 
     lockedKeys.add(`${lp.category_id}|${lp.tournament_type}`);
   });
 
-  // Assign each category a personalized cycle length (weeks per gap).
-  // Earlier-placed categories (cascade order) get SHORTER cycles, finishing earlier.
-  // Later-placed get LONGER cycles, finishing near season end.
-  // Result: Finales are evenly distributed across the second half of the season.
+  // V 2.0.672 — RETRO-PLANNING per category.
+  //
+  // Each category now gets explicit target dates for T2/T3/Finale,
+  // computed by working BACKWARDS from the category's deadline:
+  //   • If the category has a Ligue Final:
+  //       anchor = ligue_final − min_weeks_between_cdb_and_ligue_final
+  //   • Otherwise:
+  //       anchor = season's last_weekend
+  // Then T2/T3 are evenly spread between first_weekend and that anchor.
+  // Categories with no Ligue Final naturally finish near season end
+  // (May/June) — exactly what the user pointed out: there's no reason
+  // to compress them into the first half of the season.
+  //
+  // The legacy `_idealGapWeeks` is kept as a fallback for categories
+  // without a clear anchor, but the new `_targetDates` is preferred
+  // by scoreSoft when available.
   const startISO = toISODateString(brief.first_weekend);
   const endISO = toISODateString(brief.last_weekend);
   if (startISO && endISO && orderedCats.length > 0) {
-    const totalWeeks = weekDiff(startISO, endISO);
     const minWeeksFloor = param(cmap.min_weeks_between_tournaments_same_category, 'min_weeks', 3);
-    const minGap = Math.max(minWeeksFloor, 4); // shortest cycle = 4 weeks per gap = ~12 weeks total
+    const minWeeksLigue = param(cmap.min_weeks_between_cdb_and_ligue_final, 'min_weeks', 2);
+    const startDate = parseISODate(startISO);
+    const endDate = parseISODate(endISO);
+    const totalWeeks = weekDiff(startISO, endISO);
+    const minGap = Math.max(minWeeksFloor, 4);
     const maxGap = Math.max(minGap + 1, Math.floor(totalWeeks / 3));
+
     orderedCats.forEach((cat, i) => {
+      // 1. Determine the anchor date (target for Finale).
+      let anchorDate;
+      if (ligueFinals && ligueFinals[cat.id]) {
+        const lf = parseISODate(toISODateString(ligueFinals[cat.id]));
+        if (lf) {
+          anchorDate = addDays(lf, -7 * minWeeksLigue);
+        }
+      }
+      if (!anchorDate) {
+        // No Ligue Final → use season end as anchor.
+        anchorDate = new Date(endDate.getTime());
+      }
+      // Clamp anchor inside the season.
+      if (anchorDate < startDate) anchorDate = new Date(startDate.getTime());
+      if (anchorDate > endDate)   anchorDate = new Date(endDate.getTime());
+
+      // 2. Total span available for this category (days, then weeks).
+      const spanDays = Math.max(0, Math.round((anchorDate - startDate) / (24 * 3600 * 1000)));
+      const spanWeeks = Math.max(3, Math.round(spanDays / 7));
+
+      // 3. Distribute T1, T2, T3, Finale across the span.
+      //    T1 goes near start (cascade enforces ordering anyway).
+      //    Finale goes at anchor.
+      //    T2 and T3 are evenly spread between.
+      const gap = spanWeeks / 3; // 3 gaps: T1→T2, T2→T3, T3→Finale
+      cat._targetDates = {
+        T1:     fmtISO(startDate),
+        T2:     fmtISO(addDays(startDate, Math.round(7 * gap))),
+        T3:     fmtISO(addDays(startDate, Math.round(7 * 2 * gap))),
+        Finale: fmtISO(anchorDate)
+      };
+
+      // Legacy fallback (still used as a soft hint when target deviation
+      // can't be computed for some reason).
       const t = orderedCats.length <= 1 ? 1 : i / (orderedCats.length - 1);
       cat._idealGapWeeks = Math.round(minGap + t * (maxGap - minGap));
     });
