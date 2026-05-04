@@ -217,6 +217,26 @@
     .btn-save:hover { transform: translateY(-1px); box-shadow: 0 4px 8px rgba(31,71,136,0.3); }
     .btn-save:disabled { opacity: 0.5; cursor: not-allowed; }
 
+    /* V 2.0.698 — "Match commencé" zone */
+    .match-start-zone {
+      display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
+      margin: 0 0 12px 0; padding: 10px 14px;
+      background: #fff8e1; border: 1px dashed #f0c060;
+      border-radius: 8px; font-size: 0.92em;
+    }
+    .match-start-zone.in-progress {
+      background: linear-gradient(90deg, #fff3cd, #ffe69c);
+      border: 1px solid #f0a020; color: #5c3d00;
+    }
+    .btn-start-match {
+      padding: 8px 18px; border: 0; border-radius: 6px;
+      background: linear-gradient(135deg, #f0a020, #e67e22);
+      color: white; font-weight: 700; font-size: 0.92em; cursor: pointer;
+      box-shadow: 0 2px 6px rgba(240,160,32,0.35);
+    }
+    .btn-start-match:hover { filter: brightness(1.08); transform: translateY(-1px); }
+    .btn-start-match:disabled { opacity: 0.6; cursor: progress; }
+
     /* Final places card */
     .podium-card {
       background: linear-gradient(135deg, #fef3c7, #fde68a);
@@ -536,6 +556,29 @@
       document.querySelectorAll('.btn-save[data-phase]').forEach(btn => {
         btn.addEventListener('click', () => savePhase(btn.dataset.phase));
       });
+
+      // V 2.0.698 — Wire "Match commencé" buttons for bracket phases.
+      document.querySelectorAll('.btn-start-match[data-phase]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const ph = btn.dataset.phase;
+          btn.disabled = true;
+          btn.textContent = '…';
+          try {
+            if (typeof DjV3 !== 'undefined' && DjV3.startMatch) {
+              await DjV3.startMatch('bracket', { phase: ph, table_number: null });
+            }
+            await loadBracket();
+            if (typeof DjV3 !== 'undefined' && DjV3.guideMessage) {
+              DjV3.guideMessage(`▶ ${(PHASE_META[ph] || {label: ph}).label} démarrée.`, 'info');
+            }
+          } catch (e) {
+            console.error('start bracket phase failed', e);
+            btn.disabled = false;
+            btn.textContent = '▶ Match commencé';
+            alert('Erreur — impossible de démarrer le match.');
+          }
+        });
+      });
       // V 2.0.692 — DdJ V3 : referee autocomplete on every phase card
       document.querySelectorAll('.match-referee[data-phase-ref]').forEach(refSection => {
         const nameInput = refSection.querySelector('[data-field="referee_name"]');
@@ -809,6 +852,21 @@
         ? `<div class="stale-warning">⚠️ Les joueurs ont changé suite à la modification d'un match de poule. Les scores ci-dessous peuvent ne plus correspondre — veuillez les ressaisir.</div>`
         : '';
 
+      // V 2.0.698 — "Match commencé" zone (mirrors the matchs page).
+      const isStarted = !!phase.started_at;
+      const isFinished = !!phase.is_played;
+      const startTime = phase.started_at ? new Date(phase.started_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '';
+      const startZone = isFinished
+        ? ''
+        : (isStarted
+            ? `<div class="match-start-zone in-progress">⏳ <strong>En cours</strong> depuis ${startTime}</div>`
+            : `<div class="match-start-zone">
+                 <button type="button" class="btn-start-match" data-phase="${phase.phase}">
+                   ▶ Match commencé
+                 </button>
+                 <span style="font-size:0.78em;color:#888;margin-left:10px;">cliquez quand le match débute physiquement</span>
+               </div>`);
+
       return `
         <div class="phase-card ${playedClass} ${staleClass}" data-phase="${phase.phase}">
           <div class="phase-card-header">
@@ -818,6 +876,7 @@
           <div class="phase-card-body">
             ${staleBanner}
             ${paramStrip}
+            ${startZone}
             <div class="match-players">
               <div class="match-player">
                 <div class="name">${escapeHtml(phase.p1.player_name)}</div>

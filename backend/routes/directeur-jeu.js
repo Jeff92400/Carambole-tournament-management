@@ -1519,12 +1519,14 @@ async function loadBracket(db, orgId, tournoiId) {
   }
 
   // Fetch any saved bracket match rows
+  // V 2.0.698 — also pull started_at / finished_at so the UI can show the
+  // "▶ Match commencé" button vs "⏳ En cours" badge vs "✓ Terminé".
   const savedRows = await new Promise((resolve, reject) => {
     db.all(
       `SELECT id, phase, table_number, p1_licence, p2_licence,
               p1_points, p1_reprises, p1_serie,
               p2_points, p2_reprises, p2_serie,
-              entered_at
+              entered_at, started_at, finished_at
        FROM ddj_bracket_matches
        WHERE tournoi_id = $1`,
       [tournoiId],
@@ -1559,7 +1561,10 @@ async function loadBracket(db, orgId, tournoiId) {
       p2_reprises: saved ? saved.p2_reprises : null,
       p2_serie: saved ? saved.p2_serie : null,
       is_played: !!(saved && saved.p1_points != null && saved.p2_points != null),
-      entered_at: saved ? saved.entered_at : null
+      entered_at: saved ? saved.entered_at : null,
+      // V 2.0.698 — start/finish timestamps for the "Match commencé" UX
+      started_at: saved ? saved.started_at : null,
+      finished_at: saved ? saved.finished_at : null
     };
     // Derive match points + outcome for the UI
     if (m.is_played) {
@@ -2429,11 +2434,13 @@ async function loadConsolante(db, orgId, tournoiId) {
   const canStart = !!bracketCtx.can_start && size >= 2;
 
   // Fetch saved rows
+  // V 2.0.698 — pull started_at / finished_at for the "Match commencé" UX
   const savedRows = await new Promise((resolve, reject) => {
     db.all(
       `SELECT id, phase, table_number, p1_licence, p2_licence,
               p1_points, p1_reprises, p1_serie,
-              p2_points, p2_reprises, p2_serie, entered_at
+              p2_points, p2_reprises, p2_serie,
+              entered_at, started_at, finished_at
          FROM ddj_consolante_matches
         WHERE tournoi_id = $1`,
       [tournoiId],
@@ -2466,6 +2473,9 @@ async function loadConsolante(db, orgId, tournoiId) {
       p2_serie: saved ? saved.p2_serie : null,
       is_played: !!(saved && saved.p1_points != null && saved.p2_points != null),
       entered_at: saved ? saved.entered_at : null,
+      // V 2.0.698 — start/finish timestamps for the "Match commencé" UX
+      started_at: saved ? saved.started_at : null,
+      finished_at: saved ? saved.finished_at : null,
       stale: false
     };
     if (m.has_bye) m.is_played = true;

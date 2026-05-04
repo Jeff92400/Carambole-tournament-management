@@ -254,6 +254,36 @@
     .btn-save:disabled { opacity: 0.5; cursor: not-allowed; }
     .btn-save:disabled:hover { transform: none; box-shadow: none; }
 
+    /* V 2.0.698 — "Match commencé" button + in-progress badge */
+    .match-start-zone {
+      display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
+      margin: 0 0 12px 0;
+      padding: 10px 14px;
+      background: #fff8e1;
+      border: 1px dashed #f0c060;
+      border-radius: 8px;
+      font-size: 0.92em;
+    }
+    .match-start-zone.in-progress {
+      background: linear-gradient(90deg, #fff3cd, #ffe69c);
+      border: 1px solid #f0a020;
+      color: #5c3d00;
+      font-size: 0.95em;
+    }
+    .btn-start-match {
+      padding: 8px 18px;
+      border: 0;
+      border-radius: 6px;
+      background: linear-gradient(135deg, #f0a020, #e67e22);
+      color: white;
+      font-weight: 700;
+      font-size: 0.92em;
+      cursor: pointer;
+      box-shadow: 0 2px 6px rgba(240,160,32,0.35);
+    }
+    .btn-start-match:hover { filter: brightness(1.08); transform: translateY(-1px); }
+    .btn-start-match:disabled { opacity: 0.6; cursor: progress; }
+
     /* Classement */
     .classement-card {
       border: 2px solid #dee2e6;
@@ -587,6 +617,41 @@
         });
       });
 
+      // V 2.0.698 — Wire "Match commencé" buttons. The DdJ clicks this when
+      // the players physically start playing. We POST to the .../start
+      // endpoint, then reload the schedule so the button flips to the
+      // "⏳ En cours depuis HH:MM" badge.
+      document.querySelectorAll('.btn-start-match').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const pn = parseInt(btn.dataset.poule, 10);
+          const mn = parseInt(btn.dataset.match, 10);
+          const poule = state.poules.find(p => p.number === pn);
+          const match = poule && (poule.matches || []).find(mm => mm.match_number === mn);
+          if (!match) return;
+          // Inherit the table from the match itself, or from the poule
+          // assignment (étape 2 / auto-assign), or null if neither set.
+          const tableNum = match.table_number || (poule && poule.table_number) || null;
+          btn.disabled = true;
+          btn.textContent = '…';
+          try {
+            if (typeof DjV3 !== 'undefined' && DjV3.startMatch) {
+              await DjV3.startMatch('poule', { poule_number: pn, match_number: mn, table_number: tableNum });
+            }
+            // Reload the data so the started_at flows back into render()
+            await loadAll();
+            if (typeof DjV3 !== 'undefined' && DjV3.guideMessage) {
+              const tlbl = tableNum ? ` Table ${tableNum}` : '';
+              DjV3.guideMessage(`▶ Match démarré${tlbl}.`, 'info');
+            }
+          } catch (e) {
+            console.error('start match failed', e);
+            btn.disabled = false;
+            btn.textContent = '▶ Match commencé';
+            alert('Erreur — impossible de démarrer le match. Réessayez.');
+          }
+        });
+      });
+
       // V 2.0.692 — DdJ V3 : wire referee autocomplete on every match card
       // (each match has its own referee). The DjV3 helper handles the
       // network call + filling both name + licence fields.
@@ -768,6 +833,26 @@
       const maxPts = dist != null ? ` max="${dist}"` : '';
       const maxRep = rep != null ? ` max="${rep}"` : '';
 
+      // V 2.0.698 — "Match commencé" button or in-progress badge.
+      // The DdJ doesn't enter scores progressively — they wait for the match
+      // to finish before typing anything. Without an explicit start signal,
+      // we couldn't tell apart "table free" from "match running silently".
+      // Now: not_started → button "▶ Match commencé"; started → badge with
+      // start time; finished → existing "✓ Terminé" handled by statusLabel.
+      const isStarted = !!m.started_at;
+      const isFinished = !!m.is_played;
+      const startTime = m.started_at ? new Date(m.started_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '';
+      const startZone = isFinished
+        ? ''
+        : (isStarted
+            ? `<div class="match-start-zone in-progress">⏳ <strong>En cours</strong> depuis ${startTime}</div>`
+            : `<div class="match-start-zone">
+                 <button type="button" class="btn-start-match" data-poule="${pouleNumber}" data-match="${m.match_number}">
+                   ▶ Match commencé
+                 </button>
+                 <span style="font-size:0.78em;color:#888;margin-left:10px;">cliquez quand le match débute physiquement</span>
+               </div>`);
+
       return `
         <div class="match-card ${playedClass}" data-match="${m.match_number}">
           <div class="match-card-header">
@@ -776,6 +861,7 @@
           </div>
           <div class="match-card-body">
             ${paramStrip}
+            ${startZone}
             <div class="match-players">
               <div class="match-player">
                 <div class="name">${escapeHtml(m.p1_name)}</div>
