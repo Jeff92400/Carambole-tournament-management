@@ -20,7 +20,25 @@ This registration information is displayed on both login screens:
 - Tournament Management App: `frontend/login.html` (line 42-44)
 - Player App: `frontend/index.html` (line 489-490)
 
-## Documentation OneDrive
+## Documentation — règles d'emplacement
+
+**⚠️ TOUTE nouvelle documentation externe (mockups HTML autonomes, guides spécifiques, notes de configuration, captures, prototypes one-shot, exports) DOIT être créée dans :**
+
+```
+/Users/jeffrallet/Personal App/Documentation - communication/
+```
+
+**Ne JAMAIS créer de doc à la racine du repo, dans le dossier home, ou dans un sous-dossier ad-hoc** — la doc s'éparpille et devient introuvable.
+
+**Exceptions (restent dans le repo car servies par l'app) :**
+- `frontend/guide-utilisateur.html` (guide intégré dans l'app)
+- `frontend/guide-calendrier-admin.html` (guide admin intégré)
+- `frontend/CLAUDE.md`, `backend/CLAUDE.md` (instructions Claude Code)
+- `GUIDE-UTILISATEUR-COMPLET.html` / `.md` à la racine (copies miroir versionnées avec le code)
+
+Quand un doc serait utile à la fois dans l'app ET hors app, le mettre dans `frontend/` et synchroniser une copie dans `/Users/jeffrallet/Personal App/Documentation - communication/`.
+
+## Documentation OneDrive (archive historique)
 
 **Localisation:** `/Users/jeffrallet/Library/CloudStorage/OneDrive-Personal/Billard/Projet Tournois management FFB/Documentations CDB/`
 
