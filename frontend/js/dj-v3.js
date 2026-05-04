@@ -310,18 +310,35 @@
     modal.className = 'djv3-modal';
     modal.style.maxWidth = '560px';
     modal.addEventListener('click', e => e.stopPropagation());
+    // V 2.0.700 — QR code: scan with the TV's camera or share with a club
+    // member's phone, who can then open the link on the TV. SVG so it scales
+    // perfectly on any display.
+    const qrSrc = `/api/public/dj/qr?text=${encodeURIComponent(tvUrl)}&size=240`;
+
     modal.innerHTML = `
       <h3>📺 Affichage TV publique</h3>
-      <p style="color:#444;margin:8px 0 14px 0;">Affichez l'avancement du tournoi sur une TV ou tablette dans la salle. Aucune authentification — n'importe quel navigateur peut afficher cette page.</p>
+      <p style="color:#444;margin:8px 0 14px 0;">Affichez l'avancement du tournoi sur une TV ou tablette dans la salle. Aucune authentification.</p>
 
-      <label>Lien direct (recommandé)</label>
+      <div style="display:flex;gap:18px;align-items:center;flex-wrap:wrap;background:#f8f9fa;border-radius:10px;padding:14px;margin-bottom:14px;">
+        <img src="${qrSrc}" alt="QR code TV" width="160" height="160"
+             style="background:white;border-radius:8px;padding:6px;box-shadow:0 2px 6px rgba(0,0,0,0.08);flex-shrink:0;">
+        <div style="flex:1;min-width:220px;">
+          <div style="font-weight:700;color:#1a5276;font-size:14px;margin-bottom:6px;">📱 Scannez ce QR code</div>
+          <div style="font-size:13px;color:#555;line-height:1.5;">
+            Avec l'appareil photo d'un smartphone (ou de la TV connectée si elle a une caméra), pointez le QR.
+            Le lien s'ouvre directement — plus besoin de taper l'URL.
+          </div>
+        </div>
+      </div>
+
+      <label>Lien direct (à copier)</label>
       <div style="display:flex;gap:6px;margin-bottom:6px;">
         <input id="djv3-tv-url" type="text" value="${tvUrl}" readonly
                style="flex:1;padding:10px;border:1px solid #ddd;border-radius:6px;font-family:monospace;font-size:13px;background:#fafafa;">
         <button type="button" id="djv3-tv-copy" class="djv3-btn-primary"
                 style="padding:10px 14px;border:0;border-radius:6px;background:#1a5276;color:white;font-weight:600;cursor:pointer;">Copier</button>
       </div>
-      <p style="font-size:12px;color:#888;margin-bottom:18px;">À ouvrir une seule fois sur la TV. La page se rafraîchit automatiquement toutes les 5 secondes.</p>
+      <p style="font-size:12px;color:#888;margin-bottom:18px;">Pour rafraîchissement auto toutes les 5 secondes.</p>
 
       <label>Lien court (sans numéro de tournoi)</label>
       <div style="display:flex;gap:6px;margin-bottom:6px;">
@@ -330,7 +347,7 @@
         <button type="button" id="djv3-tv-copy-short" class="djv3-btn-primary"
                 style="padding:10px 14px;border:0;border-radius:6px;background:#1a5276;color:white;font-weight:600;cursor:pointer;">Copier</button>
       </div>
-      <p style="font-size:12px;color:#888;margin-bottom:18px;">Plus simple à dicter à un membre du club. La page liste les tournois du jour — il suffit de cliquer sur le bon.</p>
+      <p style="font-size:12px;color:#888;margin-bottom:18px;">Plus simple à dicter. La page liste les tournois du jour — il suffit de cliquer sur le bon.</p>
 
       <div class="djv3-modal-actions">
         <button class="djv3-btn-secondary" id="djv3-tv-close">Fermer</button>

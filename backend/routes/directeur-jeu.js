@@ -1336,7 +1336,12 @@ router.put('/competitions/:id/poule-matches', authenticateToken, requireDdJ, asy
                  CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
          ON CONFLICT (tournoi_id, poule_number, match_number)
          DO UPDATE SET
-           table_number = EXCLUDED.table_number,
+           -- V 2.0.700 — preserve the existing table_number when the
+           -- caller didn't specify one (e.g. saveMatch payload omits it).
+           -- Was: table_number = EXCLUDED.table_number — which wiped the
+           -- auto-assigned table on every score save, leading to "Table ?"
+           -- in the post-save guidance message.
+           table_number = COALESCE(EXCLUDED.table_number, ddj_poule_matches.table_number),
            p1_points = EXCLUDED.p1_points,
            p1_reprises = EXCLUDED.p1_reprises,
            p1_serie = EXCLUDED.p1_serie,
@@ -2228,7 +2233,8 @@ router.put('/competitions/:id/bracket', authenticateToken, requireDdJ, async (re
                  CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
          ON CONFLICT (tournoi_id, phase)
          DO UPDATE SET
-           table_number = EXCLUDED.table_number,
+           -- V 2.0.700 — preserve existing table_number (see poule PUT comment)
+           table_number = COALESCE(EXCLUDED.table_number, ddj_bracket_matches.table_number),
            p1_licence = EXCLUDED.p1_licence,
            p2_licence = EXCLUDED.p2_licence,
            p1_points = EXCLUDED.p1_points,
@@ -2683,7 +2689,8 @@ router.put('/competitions/:id/consolante', authenticateToken, requireDdJ, async 
                  CURRENT_TIMESTAMP, $12, $13, $14,
                  CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
          ON CONFLICT (tournoi_id, phase) DO UPDATE SET
-           table_number = EXCLUDED.table_number,
+           -- V 2.0.700 — preserve existing table_number (see poule PUT comment)
+           table_number = COALESCE(EXCLUDED.table_number, ddj_consolante_matches.table_number),
            p1_licence   = EXCLUDED.p1_licence,
            p2_licence   = EXCLUDED.p2_licence,
            p1_points    = EXCLUDED.p1_points,

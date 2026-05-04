@@ -18,6 +18,7 @@
 const express = require('express');
 const router = express.Router();
 const getDb = () => require('../db-loader');
+const QRCode = require('qrcode');
 
 // Reduce a player name to "First L." for public display.
 function sanitizeName(firstName, lastName) {
@@ -285,6 +286,36 @@ router.get('/active-today', async (req, res) => {
   } catch (err) {
     console.error('[DdJ public active-today] error:', err);
     res.status(500).json({ error: 'Erreur lors de la lecture des sessions actives' });
+  }
+});
+
+// V 2.0.700 — Generate a QR code for any TV URL.
+// Returns SVG (lightweight, scales perfectly on a TV / smart-display).
+// No auth: the QR is a wrapper around a public URL anyway.
+//
+// Query params:
+//   ?text=<url>   the URL to encode (required)
+//   ?size=<n>     pixel size hint (defaults to 240, capped at 640)
+router.get('/qr', async (req, res) => {
+  const text = String(req.query.text || '').trim();
+  if (!text || text.length > 500) {
+    return res.status(400).send('Bad text param');
+  }
+  const size = Math.min(640, Math.max(120, parseInt(req.query.size, 10) || 240));
+  try {
+    const svg = await QRCode.toString(text, {
+      type: 'svg',
+      errorCorrectionLevel: 'M',
+      margin: 2,
+      width: size,
+      color: { dark: '#1a5276', light: '#ffffff' }
+    });
+    res.set('Content-Type', 'image/svg+xml');
+    res.set('Cache-Control', 'public, max-age=300');
+    res.send(svg);
+  } catch (err) {
+    console.error('[DdJ public qr] error:', err);
+    res.status(500).send('QR generation failed');
   }
 });
 
