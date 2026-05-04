@@ -83,6 +83,62 @@
     /* Legacy badge — kept for backwards-compat but visually neutral now */
     .djv3-badge { display: none; }
 
+    /* V 2.0.696 — Planning du jour */
+    .djv3-pl-section { margin-top: 18px; }
+    .djv3-pl-section:first-of-type { margin-top: 6px; }
+    .djv3-pl-title {
+      font-size: 14px; text-transform: uppercase; letter-spacing: 0.6px;
+      color: #1a5276; margin: 0 0 8px 0; padding-bottom: 4px;
+      border-bottom: 2px solid #2e86c1;
+    }
+    .djv3-pl-poule { margin-bottom: 10px; }
+    .djv3-pl-poule-h {
+      font-weight: 700; color: #1a5276; font-size: 14px;
+      padding: 6px 0; margin-bottom: 4px;
+    }
+    .djv3-pl-poule-h .djv3-pl-table { font-weight: 500; color: #888; font-size: 13px; }
+    .djv3-pl-match {
+      display: grid;
+      grid-template-columns: 50px 50px 1fr auto auto;
+      gap: 8px; align-items: center;
+      padding: 6px 8px; border-bottom: 1px solid #f0f0f0;
+      font-size: 13px;
+    }
+    .djv3-pl-match:last-child { border-bottom: 0; }
+    .djv3-pl-mn { font-weight: 700; color: #555; }
+    .djv3-pl-table-tag {
+      background: #e8f4fd; color: #1a5276;
+      padding: 2px 8px; border-radius: 10px;
+      font-size: 12px; font-weight: 700;
+      text-align: center;
+    }
+    .djv3-pl-players { color: #333; font-weight: 500; }
+    .djv3-pl-score { color: #1a5276; font-weight: 700; min-width: 40px; text-align: right; }
+    .djv3-pl-pill {
+      padding: 2px 8px; border-radius: 10px;
+      font-size: 11px; font-weight: 700; white-space: nowrap;
+    }
+    .djv3-pl-pill.done       { background: #d4edda; color: #155724; }
+    .djv3-pl-pill.in-progress { background: #fff3cd; color: #856404; }
+    .djv3-pl-pill.pending    { background: #e9ecef; color: #6c757d; }
+    .djv3-pl-empty {
+      text-align: center; color: #888; font-style: italic;
+      padding: 14px; background: #fafafa; border-radius: 6px;
+    }
+    .djv3-pl-empty-sub { padding: 8px; font-size: 13px; }
+    @media (max-width: 600px) {
+      .djv3-pl-match {
+        grid-template-columns: 50px 50px 1fr;
+        grid-template-areas: "mn table players" ". score status";
+        row-gap: 4px;
+      }
+      .djv3-pl-mn      { grid-area: mn; }
+      .djv3-pl-table-tag { grid-area: table; }
+      .djv3-pl-players { grid-area: players; }
+      .djv3-pl-score   { grid-area: score; text-align: left; }
+      .djv3-pl-pill    { grid-area: status; justify-self: end; }
+    }
+
     .djv3-modal-backdrop {
       position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 9000;
       display: flex; align-items: center; justify-content: center;
@@ -205,6 +261,7 @@
         <span class="djv3-sb-text">Session non configurée</span>
       </div>
       <div class="djv3-sb-actions">
+        <button type="button" class="djv3-sb-btn djv3-sb-btn-secondary" data-action="planning">📋 Planning</button>
         <button type="button" class="djv3-sb-btn djv3-sb-btn-secondary" data-action="drawer">État</button>
         <button type="button" class="djv3-sb-btn djv3-sb-btn-primary" data-action="edit">Modifier</button>
       </div>
@@ -217,6 +274,10 @@
       if (fallback === document.body) document.body.insertBefore(bar, document.body.firstChild);
       else fallback.parentNode.insertBefore(bar, fallback);
     }
+    bar.querySelector('[data-action="planning"]').addEventListener('click', (e) => {
+      e.stopPropagation();
+      openPlanningModal();
+    });
     bar.querySelector('[data-action="drawer"]').addEventListener('click', (e) => {
       e.stopPropagation();
       openTablesDrawer();
@@ -278,6 +339,146 @@
     const b = document.getElementById('djv3-drawer-backdrop');
     if (b) b.remove();
     state.drawerOpen = false;
+  }
+
+  // -------------------------------------------------------------------------
+  // V 2.0.696 — "Planning du jour" modal
+  //
+  // Aggregates matches from the 3 phases (poules, bracket, consolante) into
+  // one read-only view. Useful when:
+  //   - A player asks the DdJ "when is my match?"
+  //   - The DdJ wants to check the day's progress at a glance
+  //   - Switching between étapes 4 and 5 in parallel (delta A workflow)
+  //
+  // Data source: 3 existing GET endpoints called in parallel.
+  // We tolerate failures (e.g. bracket not yet startable returns 200 with
+  // can_start=false; consolante similarly) — the modal just shows what's
+  // available and labels missing sections clearly.
+  // -------------------------------------------------------------------------
+  async function openPlanningModal() {
+    if (!state.tournoiId) return;
+
+    // Show a loading shell immediately so the click feels responsive.
+    let backdrop = document.getElementById('djv3-planning-backdrop');
+    if (backdrop) return; // already open
+    backdrop = document.createElement('div');
+    backdrop.id = 'djv3-planning-backdrop';
+    backdrop.className = 'djv3-drawer-backdrop';
+    backdrop.addEventListener('click', (e) => {
+      if (e.target === backdrop) closePlanningModal();
+    });
+    const modal = document.createElement('div');
+    modal.id = 'djv3-planning';
+    modal.className = 'djv3-drawer';
+    modal.innerHTML = `<h3>📋 Planning du jour <span class="djv3-close">×</span></h3>
+                       <p style="color:#888;text-align:center;padding:30px;">Chargement…</p>`;
+    backdrop.appendChild(modal);
+    document.body.appendChild(backdrop);
+    modal.querySelector('.djv3-close').addEventListener('click', closePlanningModal);
+
+    // Fetch the 3 phases in parallel; ignore failures gracefully.
+    const base = `/api/directeur-jeu/competitions/${state.tournoiId}`;
+    const safe = (p) => p.then(r => r && r.ok ? r.json() : null).catch(() => null);
+    const [poulesData, bracketData, consoData] = await Promise.all([
+      safe(authFetch(`${base}/poule-matches`)),
+      safe(authFetch(`${base}/bracket`)),
+      safe(authFetch(`${base}/consolante`))
+    ]);
+
+    modal.innerHTML = renderPlanningHtml(poulesData, bracketData, consoData);
+    modal.querySelector('.djv3-close').addEventListener('click', closePlanningModal);
+  }
+
+  function closePlanningModal() {
+    const b = document.getElementById('djv3-planning-backdrop');
+    if (b) b.remove();
+  }
+
+  function renderPlanningHtml(poulesData, bracketData, consoData) {
+    let html = `<h3>📋 Planning du jour <span class="djv3-close">×</span></h3>`;
+
+    // ----- Phase 1 : poules -----
+    if (poulesData && Array.isArray(poulesData.poules) && poulesData.poules.length > 0) {
+      html += `<div class="djv3-pl-section"><h4 class="djv3-pl-title">Poules</h4>`;
+      for (const poule of poulesData.poules) {
+        const tableLbl = poule.table_number ? `Table ${poule.table_number}` : 'Table non assignée';
+        const pouleLetter = String.fromCharCode(64 + poule.number);
+        html += `<div class="djv3-pl-poule">
+          <div class="djv3-pl-poule-h">Poule ${pouleLetter} <span class="djv3-pl-table">· ${escapeHtml(tableLbl)}</span></div>`;
+        for (const m of (poule.matches || [])) {
+          html += renderPlanningMatchRow(m, poule.table_number);
+        }
+        html += `</div>`;
+      }
+      html += `</div>`;
+    } else {
+      html += `<div class="djv3-pl-empty">Poules pas encore générées.</div>`;
+    }
+
+    // ----- Phase 2 : tableau final -----
+    if (bracketData && bracketData.bracket && bracketData.bracket.can_start && Array.isArray(bracketData.bracket.phases)) {
+      html += `<div class="djv3-pl-section"><h4 class="djv3-pl-title">Tableau final</h4>`;
+      for (const ph of bracketData.bracket.phases) {
+        if (!ph.can_enter && !ph.is_played) continue; // skip phases whose players aren't known yet
+        html += renderPlanningPhaseRow(ph, 'bracket');
+      }
+      html += `</div>`;
+    } else {
+      html += `<div class="djv3-pl-section"><h4 class="djv3-pl-title">Tableau final</h4>
+        <div class="djv3-pl-empty djv3-pl-empty-sub">Disponible une fois les poules terminées.</div></div>`;
+    }
+
+    // ----- Phase 3 : consolante -----
+    if (consoData && consoData.consolante && consoData.consolante.can_start && Array.isArray(consoData.consolante.phases)) {
+      html += `<div class="djv3-pl-section"><h4 class="djv3-pl-title">Matchs de classement (Consolante)</h4>`;
+      for (const ph of consoData.consolante.phases) {
+        if (!ph.can_enter && !ph.is_played) continue;
+        if (ph.bye) continue; // skip auto-advance byes (no actual match played)
+        html += renderPlanningPhaseRow(ph, 'consolante');
+      }
+      html += `</div>`;
+    } else {
+      html += `<div class="djv3-pl-section"><h4 class="djv3-pl-title">Matchs de classement (Consolante)</h4>
+        <div class="djv3-pl-empty djv3-pl-empty-sub">Disponible une fois les poules terminées.</div></div>`;
+    }
+
+    return html;
+  }
+
+  function statusBadge(matchObj) {
+    if (matchObj.is_played) return `<span class="djv3-pl-pill done">✓ Terminé</span>`;
+    const partial = (matchObj.p1_points != null) || (matchObj.p2_points != null);
+    if (partial) return `<span class="djv3-pl-pill in-progress">⏳ En cours</span>`;
+    return `<span class="djv3-pl-pill pending">À jouer</span>`;
+  }
+
+  function renderPlanningMatchRow(m, fallbackTable) {
+    const t = m.table_number || fallbackTable;
+    const tableTxt = t ? `T${t}` : '—';
+    const score = m.is_played ? `${m.p1_points}–${m.p2_points}` : '';
+    return `<div class="djv3-pl-match">
+      <span class="djv3-pl-mn">M${m.match_number}</span>
+      <span class="djv3-pl-table-tag">${escapeHtml(tableTxt)}</span>
+      <span class="djv3-pl-players">${escapeHtml(m.p1_name || '')} vs ${escapeHtml(m.p2_name || '')}</span>
+      <span class="djv3-pl-score">${score}</span>
+      ${statusBadge(m)}
+    </div>`;
+  }
+
+  function renderPlanningPhaseRow(ph, kind) {
+    const label = ph.label || ph.phase || '';
+    const t = ph.table_number;
+    const tableTxt = t ? `T${t}` : '—';
+    const p1Name = (ph.p1 && ph.p1.player_name) || '';
+    const p2Name = (ph.p2 && ph.p2.player_name) || '';
+    const score = ph.is_played ? `${ph.p1_points}–${ph.p2_points}` : '';
+    return `<div class="djv3-pl-match">
+      <span class="djv3-pl-mn">${escapeHtml(label)}</span>
+      <span class="djv3-pl-table-tag">${escapeHtml(tableTxt)}</span>
+      <span class="djv3-pl-players">${escapeHtml(p1Name)} vs ${escapeHtml(p2Name)}</span>
+      <span class="djv3-pl-score">${score}</span>
+      ${statusBadge(ph)}
+    </div>`;
   }
 
   function renderDrawerHtml() {
@@ -607,6 +808,8 @@
     openSessionModal,
     openTablesDrawer,
     closeTablesDrawer,
+    openPlanningModal,
+    closePlanningModal,
     guideMessage,
     refereeAutocomplete,
     startMatch,
