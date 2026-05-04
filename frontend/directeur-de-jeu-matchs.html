@@ -586,16 +586,49 @@
           saveMatch(pn, mn);
         });
       });
+
+      // V 2.0.692 — DdJ V3 : wire referee autocomplete on every match card
+      // (each match has its own referee). The DjV3 helper handles the
+      // network call + filling both name + licence fields.
+      document.querySelectorAll('.match-referee').forEach(refSection => {
+        const matchNum = refSection.dataset.matchRef;
+        // We need both inputs' IDs. They are per-poule unique (built from
+        // pouleNumber + matchNumber) so we look them up via the section.
+        const nameInput = refSection.querySelector('[data-field="referee_name"]');
+        const licInput  = refSection.querySelector('[data-field="referee_licence"]');
+        if (typeof DjV3 !== 'undefined' && DjV3.refereeAutocomplete && nameInput && licInput) {
+          DjV3.refereeAutocomplete(nameInput.id, licInput.id);
+        }
+      });
+
       // Per-match input wiring: clamping to max, reprises sync between
       // players, live moyenne update, and winner/draw shading.
       document.querySelectorAll('.match-card').forEach(card => {
         const inputs = card.querySelectorAll('.score-input');
+        // V 2.0.692 — DdJ V3 : flip table to "busy" the first time the
+        // DdJ types into a score input. Done once per card via the
+        // _v3Started flag so we don't spam the start endpoint.
+        const fireStart = () => {
+          if (card._v3Started) return;
+          card._v3Started = true;
+          if (typeof DjV3 === 'undefined' || !DjV3.startMatch) return;
+          const matchNumber = parseInt(card.dataset.match, 10);
+          const poule = state.poules.find(p => (p.matches || []).some(m => m.match_number === matchNumber));
+          const match = poule && (poule.matches || []).find(m => m.match_number === matchNumber);
+          if (!poule || !match || match.is_played) return;
+          DjV3.startMatch('poule', {
+            poule_number: poule.number,
+            match_number: matchNumber,
+            table_number: match.table_number || null
+          });
+        };
         inputs.forEach(i => {
           i.addEventListener('input', () => {
             clampInput(i);
             autoCopyReprises(card, i);
             updateMatchVisualState(card);
             updateLiveMoyennes(card);
+            fireStart();
           });
         });
       });
@@ -796,6 +829,27 @@
               </div>
             </div>
 
+            <!-- V 2.0.692 — DdJ V3 : champs arbitre (optionnels) -->
+            <div class="match-referee" data-match-ref="${m.match_number}" style="margin-top:12px;padding:10px;background:#f8f9fa;border-radius:6px;font-size:0.85em;">
+              <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;">
+                <div style="flex:1;min-width:180px;">
+                  <label style="display:block;font-size:0.78em;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px;">Arbitre (optionnel)</label>
+                  <input type="text" class="ref-input" data-field="referee_name" data-match="${m.match_number}"
+                         id="ref-name-${pouleNumber}-${m.match_number}"
+                         placeholder="Tapez un nom ou une licence…"
+                         value="${escapeHtml(m.referee_name || '')}"
+                         style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:4px;font-size:0.9em;">
+                </div>
+                <div style="width:120px;">
+                  <label style="display:block;font-size:0.78em;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px;">Licence</label>
+                  <input type="text" class="ref-input" data-field="referee_licence" data-match="${m.match_number}"
+                         id="ref-lic-${pouleNumber}-${m.match_number}"
+                         value="${escapeHtml(m.referee_licence || '')}"
+                         style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:4px;font-size:0.9em;">
+                </div>
+              </div>
+            </div>
+
             <div class="match-actions">
               <span class="match-status ${statusCls}" data-role="match-summary">${m.is_played
                 ? `PM : ${m.p1_match_points} - ${m.p2_match_points}`
@@ -872,6 +926,16 @@
         payload[f] = input.value === '' ? null : parseInt(input.value, 10);
       });
 
+      // V 2.0.692 — DdJ V3 : referee fields + table_number (re-sent so the
+      // back-end keeps the assignment when nothing else has changed)
+      const refSection = document.querySelector(`.match-referee[data-match-ref="${matchNumber}"]`);
+      if (refSection) {
+        const refName = refSection.querySelector('[data-field="referee_name"]');
+        const refLic  = refSection.querySelector('[data-field="referee_licence"]');
+        if (refName && refName.value.trim()) payload.referee_name = refName.value.trim();
+        if (refLic && refLic.value.trim())   payload.referee_licence = refLic.value.trim();
+      }
+
       // Validation: either all six fields are filled or none are (allow saving a partial draft is useful,
       // but for MVP we require at minimum that p1_points and p2_points both have values — reprises needed
       // for moyenne). Partial entry is accepted: server stores nulls.
@@ -907,6 +971,27 @@
             const n1 = (m.p1_name || m.p1_licence || '').toString().split(' ').slice(-1)[0] || 'J1';
             const n2 = (m.p2_name || m.p2_licence || '').toString().split(' ').slice(-1)[0] || 'J2';
             echo = `✅ Match enregistré — ${n1} ${m.p1_points} / ${m.p2_points} ${n2}`;
+
+            // V 2.0.692 — DdJ V3 : guidance message + refresh tables drawer.
+            // Find the next match that's not yet played and suggest calling
+            // those players. Across all poules, take the first un-played
+            // match in match_order. Also nudge the dashboard to refresh.
+            try {
+              const tableNum = m.table_number || '?';
+              if (typeof DjV3 !== 'undefined' && DjV3.guideMessage) {
+                let nextMsg = `Match terminé Table ${tableNum}.`;
+                const allMatches = (state.poules || []).flatMap(p => (p.matches || []).map(mm => ({ ...mm, _poule: p.number })));
+                const nextMatch = allMatches.find(mm => !mm.is_played && mm.match_number !== matchNumber);
+                if (nextMatch) {
+                  const next1 = (nextMatch.p1_name || '').split(' ').slice(-1)[0] || 'J1';
+                  const next2 = (nextMatch.p2_name || '').split(' ').slice(-1)[0] || 'J2';
+                  nextMsg += ` Appeler ${next1} et ${next2} (Poule ${nextMatch._poule}, match ${nextMatch.match_number}).`;
+                  DjV3.guideMessage(nextMsg, 'action');
+                } else {
+                  DjV3.guideMessage(nextMsg + ' Tous les matchs de poule sont saisis !', 'success');
+                }
+              }
+            } catch (_) { /* never let guidance block the save flow */ }
           }
         } catch (_) { /* fall back to the generic message */ }
         showSaveStatus(echo);

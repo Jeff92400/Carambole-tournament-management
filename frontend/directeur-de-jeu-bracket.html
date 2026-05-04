@@ -321,6 +321,12 @@
     <div id="errorMessage" class="error" style="display: none;"></div>
     <div id="saveStatus" class="ddj-save-status">Enregistré ✓</div>
 
+    <!-- V 2.0.692 — DdJ V3 : info parallélisme phase finale + consolante -->
+    <div id="v3ParallelHint" style="display:none;background:linear-gradient(90deg,#e8f4fd,#f0f9ff);border-left:4px solid #2e86c1;border-radius:4px;padding:10px 14px;margin:0 auto 16px;max-width:860px;font-size:0.92em;color:#1a5276;">
+      💡 <strong>Phase finale en parallèle :</strong> vous pouvez saisir le tableau final ET les matchs de classement (consolante) en parallèle, selon les tables qui se libèrent.
+      <a href="#" id="goToConsolanteBtn" style="margin-left:8px;color:#1a5276;font-weight:700;text-decoration:underline;">→ Aller à la Consolante</a>
+    </div>
+
     <div class="ddj-welcome-bar">
       <div>
         <div class="tournament-title" id="tournamentTitle">Chargement…</div>
@@ -457,6 +463,20 @@
         `${formatDate(t.debut)}${t.lieu ? ' · ' + t.lieu : ''}`;
       document.getElementById('tournamentParams').textContent = 'Étape 4 : Tableau final';
 
+      // V 2.0.692 — DdJ V3 : show parallelism hint when phase finale is ready
+      const v3hint = document.getElementById('v3ParallelHint');
+      if (v3hint) {
+        v3hint.style.display = b.can_start ? 'block' : 'none';
+        const link = document.getElementById('goToConsolanteBtn');
+        if (link && !link._v3Wired) {
+          link._v3Wired = true;
+          link.addEventListener('click', (e) => {
+            e.preventDefault();
+            window.location.href = 'directeur-de-jeu-classement.html?compId=' + compId;
+          });
+        }
+      }
+
       if (!b.can_start) {
         document.getElementById('mainContent').innerHTML = `
           <div class="ddj-empty">
@@ -493,18 +513,36 @@
 
       // Wire inputs
       document.querySelectorAll('.phase-card[data-phase]').forEach(card => {
+        const phaseId = card.dataset.phase;
         const inputs = card.querySelectorAll('.score-input');
+        // V 2.0.692 — DdJ V3 : start the match on first score input.
+        const fireStart = () => {
+          if (card._v3Started) return;
+          card._v3Started = true;
+          if (typeof DjV3 !== 'undefined' && DjV3.startMatch) {
+            DjV3.startMatch('bracket', { phase: phaseId, table_number: null });
+          }
+        };
         inputs.forEach(i => {
           i.addEventListener('input', () => {
             clampInput(i);
             autoCopyReprises(card, i);
             updateMatchVisualState(card);
             updateLiveMoyennes(card);
+            fireStart();
           });
         });
       });
       document.querySelectorAll('.btn-save[data-phase]').forEach(btn => {
         btn.addEventListener('click', () => savePhase(btn.dataset.phase));
+      });
+      // V 2.0.692 — DdJ V3 : referee autocomplete on every phase card
+      document.querySelectorAll('.match-referee[data-phase-ref]').forEach(refSection => {
+        const nameInput = refSection.querySelector('[data-field="referee_name"]');
+        const licInput  = refSection.querySelector('[data-field="referee_licence"]');
+        if (typeof DjV3 !== 'undefined' && DjV3.refereeAutocomplete && nameInput && licInput) {
+          DjV3.refereeAutocomplete(nameInput.id, licInput.id);
+        }
       });
       attachSeedReorderHandlers();
     }
@@ -821,6 +859,27 @@
                 <div class="match-moyenne" data-role="moyenne-p2">Moyenne : <span class="val">${formatMoyenne(m2)}</span></div>
               </div>
             </div>
+            <!-- V 2.0.692 — DdJ V3 : champs arbitre (optionnels) -->
+            <div class="match-referee" data-phase-ref="${phase.phase}" style="margin-top:12px;padding:10px;background:#f8f9fa;border-radius:6px;font-size:0.85em;">
+              <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;">
+                <div style="flex:1;min-width:180px;">
+                  <label style="display:block;font-size:0.78em;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px;">Arbitre (optionnel)</label>
+                  <input type="text" class="ref-input" data-field="referee_name"
+                         id="ref-name-bracket-${phase.phase}"
+                         placeholder="Tapez un nom ou une licence…"
+                         value="${escapeHtml(phase.referee_name || '')}"
+                         style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:4px;font-size:0.9em;">
+                </div>
+                <div style="width:120px;">
+                  <label style="display:block;font-size:0.78em;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px;">Licence</label>
+                  <input type="text" class="ref-input" data-field="referee_licence"
+                         id="ref-lic-bracket-${phase.phase}"
+                         value="${escapeHtml(phase.referee_licence || '')}"
+                         style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:4px;font-size:0.9em;">
+                </div>
+              </div>
+            </div>
+
             <div class="match-actions">
               <span class="phase-status ${statusCls}">${phase.is_played
                 ? `PM : ${phase.p1_match_points} - ${phase.p2_match_points}`
@@ -935,6 +994,14 @@
         showSaveStatus('Pas de match nul dans le tableau final', 'error');
         return;
       }
+      // V 2.0.692 — DdJ V3 : carry referee fields
+      const refSection = document.querySelector(`.match-referee[data-phase-ref="${phase}"]`);
+      if (refSection) {
+        const refName = refSection.querySelector('[data-field="referee_name"]');
+        const refLic  = refSection.querySelector('[data-field="referee_licence"]');
+        if (refName && refName.value.trim()) payload.referee_name = refName.value.trim();
+        if (refLic && refLic.value.trim())   payload.referee_licence = refLic.value.trim();
+      }
       try {
         const resp = await authFetch(`${API_URL}/directeur-jeu/competitions/${compId}/bracket`, {
           method: 'PUT',
@@ -949,6 +1016,17 @@
         state.bracket = data.bracket;
         state.gameParams = data.bracket.game_params || state.gameParams;
         showSaveStatus('Match enregistré ✓');
+        // V 2.0.692 — DdJ V3 : guidance message + suggest next bracket phase
+        if (typeof DjV3 !== 'undefined' && DjV3.guideMessage) {
+          const meta = PHASE_META[phase] || { label: phase };
+          const next = (data.bracket && data.bracket.phases || []).find(p => !p.is_played && p.can_enter);
+          if (next) {
+            const nextMeta = PHASE_META[next.phase] || { label: next.phase };
+            DjV3.guideMessage(`${meta.label} terminée. Prochain : ${nextMeta.label} — appeler ${next.p1.player_name.split(' ').slice(-1)[0]} et ${next.p2.player_name.split(' ').slice(-1)[0]}.`, 'action');
+          } else {
+            DjV3.guideMessage(`🏆 Tableau final terminé !`, 'success');
+          }
+        }
         render();
       } catch (err) {
         console.error('[Bracket] save error:', err);
