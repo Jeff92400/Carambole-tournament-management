@@ -263,6 +263,7 @@
       <div class="djv3-sb-actions">
         <button type="button" class="djv3-sb-btn djv3-sb-btn-secondary" data-action="planning">📋 Planning</button>
         <button type="button" class="djv3-sb-btn djv3-sb-btn-secondary" data-action="drawer">État</button>
+        <button type="button" class="djv3-sb-btn djv3-sb-btn-secondary" data-action="tv">📺 TV</button>
         <button type="button" class="djv3-sb-btn djv3-sb-btn-primary" data-action="edit">Modifier</button>
       </div>
     `;
@@ -282,11 +283,86 @@
       e.stopPropagation();
       openTablesDrawer();
     });
+    bar.querySelector('[data-action="tv"]').addEventListener('click', (e) => {
+      e.stopPropagation();
+      openTvDialog();
+    });
     bar.querySelector('[data-action="edit"]').addEventListener('click', (e) => {
       e.stopPropagation();
       openSessionModal();
     });
     return bar;
+  }
+
+  // V 2.0.699 — TV dialog: shows the URL + a copy button + a direct
+  // "Open in new tab" link. The QR code is left for a future iteration
+  // (would need a small QR library or a server-side endpoint).
+  function openTvDialog() {
+    if (!state.tournoiId) return;
+    const tvUrl = `${window.location.origin}/dj-public.html?id=${state.tournoiId}`;
+    const tvShort = `${window.location.origin}/tv`;
+
+    const backdrop = document.createElement('div');
+    backdrop.className = 'djv3-modal-backdrop';
+    backdrop.addEventListener('click', () => backdrop.remove());
+
+    const modal = document.createElement('div');
+    modal.className = 'djv3-modal';
+    modal.style.maxWidth = '560px';
+    modal.addEventListener('click', e => e.stopPropagation());
+    modal.innerHTML = `
+      <h3>📺 Affichage TV publique</h3>
+      <p style="color:#444;margin:8px 0 14px 0;">Affichez l'avancement du tournoi sur une TV ou tablette dans la salle. Aucune authentification — n'importe quel navigateur peut afficher cette page.</p>
+
+      <label>Lien direct (recommandé)</label>
+      <div style="display:flex;gap:6px;margin-bottom:6px;">
+        <input id="djv3-tv-url" type="text" value="${tvUrl}" readonly
+               style="flex:1;padding:10px;border:1px solid #ddd;border-radius:6px;font-family:monospace;font-size:13px;background:#fafafa;">
+        <button type="button" id="djv3-tv-copy" class="djv3-btn-primary"
+                style="padding:10px 14px;border:0;border-radius:6px;background:#1a5276;color:white;font-weight:600;cursor:pointer;">Copier</button>
+      </div>
+      <p style="font-size:12px;color:#888;margin-bottom:18px;">À ouvrir une seule fois sur la TV. La page se rafraîchit automatiquement toutes les 5 secondes.</p>
+
+      <label>Lien court (sans numéro de tournoi)</label>
+      <div style="display:flex;gap:6px;margin-bottom:6px;">
+        <input id="djv3-tv-short" type="text" value="${tvShort}" readonly
+               style="flex:1;padding:10px;border:1px solid #ddd;border-radius:6px;font-family:monospace;font-size:13px;background:#fafafa;">
+        <button type="button" id="djv3-tv-copy-short" class="djv3-btn-primary"
+                style="padding:10px 14px;border:0;border-radius:6px;background:#1a5276;color:white;font-weight:600;cursor:pointer;">Copier</button>
+      </div>
+      <p style="font-size:12px;color:#888;margin-bottom:18px;">Plus simple à dicter à un membre du club. La page liste les tournois du jour — il suffit de cliquer sur le bon.</p>
+
+      <div class="djv3-modal-actions">
+        <button class="djv3-btn-secondary" id="djv3-tv-close">Fermer</button>
+        <button class="djv3-btn-primary" id="djv3-tv-open">Ouvrir dans un nouvel onglet</button>
+      </div>
+    `;
+    backdrop.appendChild(modal);
+    document.body.appendChild(backdrop);
+
+    const copyHandler = (inputId, btnId) => {
+      document.getElementById(btnId).addEventListener('click', () => {
+        const input = document.getElementById(inputId);
+        input.select();
+        try {
+          navigator.clipboard.writeText(input.value);
+          const btn = document.getElementById(btnId);
+          const originalText = btn.textContent;
+          btn.textContent = '✓ Copié';
+          setTimeout(() => { btn.textContent = originalText; }, 1500);
+        } catch (_) {
+          // Fallback: keep the value selected so user can Cmd+C
+        }
+      });
+    };
+    copyHandler('djv3-tv-url', 'djv3-tv-copy');
+    copyHandler('djv3-tv-short', 'djv3-tv-copy-short');
+
+    document.getElementById('djv3-tv-close').addEventListener('click', () => backdrop.remove());
+    document.getElementById('djv3-tv-open').addEventListener('click', () => {
+      window.open(tvUrl, '_blank', 'noopener');
+      backdrop.remove();
+    });
   }
 
   function updateSessionBar() {

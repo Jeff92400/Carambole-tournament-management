@@ -249,4 +249,43 @@ router.get('/:tournoi_id/feed', async (req, res) => {
   }
 });
 
+// V 2.0.699 — Active sessions today, used by the public /tv landing page.
+// Lets a TV in the playing hall pick from the day's tournaments without
+// having to type the tournoi_id manually. Same sanitisation as /feed.
+router.get('/active-today', async (req, res) => {
+  const db = getDb();
+  try {
+    const rows = await new Promise((resolve, reject) => {
+      db.all(
+        `SELECT s.tournoi_id, s.table_count, s.ddj_name, s.started_at,
+                t.nom, t.debut, t.lieu, t.organization_id,
+                o.short_name AS org_short_name, o.name AS org_name
+           FROM ddj_session s
+           JOIN tournoi_ext t ON t.tournoi_id = s.tournoi_id
+      LEFT JOIN organizations o ON o.id = t.organization_id
+          WHERE s.started_at >= NOW() - INTERVAL '24 hours'
+            AND s.ended_at IS NULL
+          ORDER BY s.started_at DESC`,
+        [],
+        (err, rs) => err ? reject(err) : resolve(rs || [])
+      );
+    });
+    res.json({
+      sessions: rows.map(r => ({
+        tournoi_id: r.tournoi_id,
+        name: r.nom,
+        date: r.debut,
+        location: r.lieu || null,
+        ddj_name: r.ddj_name,
+        table_count: r.table_count,
+        organization: r.org_short_name || r.org_name || null,
+        started_at: r.started_at
+      }))
+    });
+  } catch (err) {
+    console.error('[DdJ public active-today] error:', err);
+    res.status(500).json({ error: 'Erreur lors de la lecture des sessions actives' });
+  }
+});
+
 module.exports = router;

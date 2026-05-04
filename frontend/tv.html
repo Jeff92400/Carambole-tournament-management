@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tournois en direct — TV</title>
+<style>
+  /* V 2.0.699 — Public landing page for the TV display.
+     Lists today's active DdJ sessions with big clickable cards so a
+     non-technical user (a club member operating the TV) can pick the
+     right tournament without ever needing to type a tournoi_id. */
+  :root {
+    --bg: #0d1117;
+    --bg-card: #161b22;
+    --bg-card-hover: #1f2a37;
+    --border: #30363d;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --accent: #f0a020;
+    --accent-soft: #f0c060;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 30px;
+  }
+  header {
+    text-align: center;
+    margin-bottom: 36px;
+    border-bottom: 2px solid var(--accent);
+    padding-bottom: 18px;
+  }
+  header h1 {
+    font-size: 36px;
+    color: var(--accent);
+    margin-bottom: 6px;
+  }
+  header .sub {
+    font-size: 18px;
+    color: var(--muted);
+  }
+
+  .grid {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+    gap: 20px;
+  }
+  .card {
+    background: var(--bg-card);
+    border: 2px solid var(--border);
+    border-radius: 14px;
+    padding: 26px 30px;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s, transform 0.15s;
+    text-decoration: none;
+    color: inherit;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .card:hover {
+    background: var(--bg-card-hover);
+    border-color: var(--accent);
+    transform: translateY(-2px);
+  }
+  .card .name {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--accent);
+  }
+  .card .meta {
+    font-size: 16px;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+  .card .meta strong { color: var(--text); }
+  .card .arrow {
+    font-size: 20px;
+    color: var(--accent);
+    align-self: flex-end;
+    margin-top: auto;
+  }
+
+  .empty {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--muted);
+    font-size: 20px;
+  }
+  .empty img { height: 80px; opacity: 0.4; margin-bottom: 18px; }
+  .error {
+    text-align: center;
+    color: #ff7b72;
+    padding: 30px;
+    font-size: 18px;
+  }
+
+  footer {
+    text-align: center;
+    color: var(--muted);
+    font-size: 14px;
+    margin-top: 40px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>📺 Tournois en direct</h1>
+  <div class="sub">Cliquez sur un tournoi pour afficher l'avancement en temps réel</div>
+</header>
+
+<div id="content" class="grid">
+  <div class="empty">Chargement…</div>
+</div>
+
+<footer>
+  La page se rafraîchit automatiquement toutes les 30 secondes pour détecter les nouveaux tournois.
+</footer>
+
+<script>
+  // Fetch and render the list. No auth.
+  async function load() {
+    try {
+      const r = await fetch('/api/public/dj/active-today', { cache: 'no-store' });
+      if (!r.ok) {
+        document.getElementById('content').innerHTML = '<div class="error">Impossible de charger les tournois en cours.</div>';
+        return;
+      }
+      const data = await r.json();
+      render(data.sessions || []);
+    } catch (e) {
+      console.error(e);
+      document.getElementById('content').innerHTML = '<div class="error">Erreur réseau. Vérifiez la connexion internet.</div>';
+    }
+  }
+
+  function fmtDate(iso) {
+    if (!iso) return '';
+    try {
+      return new Date(iso).toLocaleDateString('fr-FR', {
+        weekday: 'long', day: 'numeric', month: 'long'
+      });
+    } catch { return ''; }
+  }
+  function escapeHtml(s) {
+    return String(s == null ? '' : s)
+      .replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
+  }
+
+  function render(sessions) {
+    const root = document.getElementById('content');
+    if (sessions.length === 0) {
+      root.innerHTML = `
+        <div class="empty" style="grid-column: 1 / -1;">
+          <img src="images/FrenchBillard-Icon-small.png" alt="">
+          <div>Aucun tournoi en cours actuellement.</div>
+          <div style="font-size:15px;margin-top:10px;">La page se rafraîchira automatiquement dès qu'un tournoi démarrera.</div>
+        </div>`;
+      return;
+    }
+    root.innerHTML = sessions.map(s => `
+      <a class="card" href="/dj-public.html?id=${s.tournoi_id}">
+        <div class="name">${escapeHtml(s.name || 'Tournoi')}</div>
+        <div class="meta">
+          ${s.organization ? `<strong>${escapeHtml(s.organization)}</strong> · ` : ''}${fmtDate(s.date)}
+          ${s.location ? `<br>${escapeHtml(s.location)}` : ''}
+          <br>Directeur de Jeu : <strong>${escapeHtml(s.ddj_name)}</strong>
+          <br>${s.table_count} table${s.table_count > 1 ? 's' : ''}
+        </div>
+        <div class="arrow">▶ Afficher</div>
+      </a>
+    `).join('');
+  }
+
+  load();
+  // Refresh every 30 s in case a new tournament starts
+  setInterval(load, 30000);
+</script>
+
+</body>
+</html>

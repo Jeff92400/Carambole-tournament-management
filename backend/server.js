@@ -349,6 +349,17 @@ app.get('/public/:orgSlug/tournament/:id', (req, res) => {
   res.sendFile(path.join(frontendPath, 'public-tournament.html'));
 });
 
+// V 2.0.699 — Short URL for the TV landing page. Allows non-technical
+// users to type just `<base>/tv` instead of `/tv.html` or `/dj-public.html?id=…`.
+// If a query `?id=N` is provided, redirect to the full feed page.
+app.get('/tv', (req, res) => {
+  const id = parseInt(req.query.id, 10);
+  if (Number.isFinite(id)) {
+    return res.redirect(302, `/dj-public.html?id=${id}`);
+  }
+  res.sendFile(path.join(frontendPath, 'tv.html'));
+});
+
 // ─── Public API: tournament data for public page (no auth) ──────────────────
 app.get('/api/public/:orgSlug/tournament/:id', async (req, res) => {
   const dbLoader = require('./db-loader');
