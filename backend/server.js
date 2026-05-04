@@ -61,6 +61,7 @@ const wordpressRoutes = require('./routes/wordpress');
 const pushRoutes = require('./routes/push');
 const testModeRoutes = require('./routes/test-mode');
 const directeurJeuRoutes = require('./routes/directeur-jeu');
+const djPublicRoutes = require('./routes/dj-public'); // V 2.0.595 — DdJ V3 public TV feed (no auth)
 const calendarGeneratorRoutes = require('./routes/calendar-generator');
 
 
@@ -320,6 +321,10 @@ app.use('/api/player/push', apiLimiter, pushRoutes);
 app.use('/api/push', apiLimiter, pushRoutes); // Admin test endpoint
 app.use('/api/test-mode', apiLimiter, testModeRoutes);
 app.use('/api/directeur-jeu', apiLimiter, directeurJeuRoutes);
+// V 2.0.595 — DdJ V3 public TV feed. NO authentication: anyone with the
+// URL can read the (sanitised) live state. Used by the TV display in
+// the playing hall.
+app.use('/api/public/dj', apiLimiter, djPublicRoutes);
 app.use('/api/calendar-generator', apiLimiter, calendarGeneratorRoutes);
 
 

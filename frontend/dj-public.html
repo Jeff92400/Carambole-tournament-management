@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tournoi en direct</title>
+<style>
+  /* =====================================================================
+     V 2.0.595 — DdJ V3 public TV display
+     =====================================================================
+     Standalone HTML for the playing-hall TV / tablet. NO authentication.
+     Reads the public feed at /api/public/dj/:tournoi_id/feed every 5s.
+
+     Design:
+       - Dark mode (scoreboard look, comfortable in low light)
+       - Full-screen, generous typography (readable from 5-10m)
+       - Read-only — no buttons, no inputs
+       - Layout: header + 4 (or N) table cards + upcoming queue + progress bar
+
+     The tournoi_id is read from the URL, e.g.:
+       /dj-public.html?id=123
+     The route is also exposed as /dj/public/:id by server.js (see below).
+     ===================================================================== */
+  :root {
+    --bg: #0d1117;
+    --bg-card: #161b22;
+    --bg-card-busy: #1f1015;
+    --bg-card-free: #0f1f15;
+    --border: #30363d;
+    --border-busy: #c9302c;
+    --border-free: #2ea043;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --accent: #f0a020;
+    --score-blue: #58a6ff;
+    --score-red: #ff7b72;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    overflow: hidden;
+  }
+  .frame {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    padding: 24px 32px;
+  }
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 16px;
+    border-bottom: 2px solid var(--accent);
+  }
+  header h1 { font-size: 30px; color: var(--accent); }
+  header .meta { font-size: 18px; color: var(--muted); text-align: right; }
+  header .meta strong { color: var(--text); }
+  header .clock { font-size: 22px; color: var(--text); font-variant-numeric: tabular-nums; }
+
+  .tables {
+    flex: 1;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+    gap: 20px;
+    padding: 20px 0;
+    align-content: start;
+  }
+  .table-card {
+    background: var(--bg-card);
+    border: 3px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    min-height: 220px;
+  }
+  .table-card.busy { border-color: var(--border-busy); background: var(--bg-card-busy); }
+  .table-card.free { border-color: var(--border-free); background: var(--bg-card-free); }
+  .table-card .tname {
+    font-size: 18px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text);
+  }
+  .table-card .tphase {
+    font-size: 13px;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+  .table-card .tplayers {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 14px;
+    margin: 16px 0;
+  }
+  .table-card .player-line {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 28px;
+    font-weight: 700;
+  }
+  .table-card .player-line .pname { color: var(--text); }
+  .table-card .player-line .pscore {
+    font-size: 40px;
+    color: var(--score-blue);
+    font-variant-numeric: tabular-nums;
+    min-width: 80px;
+    text-align: right;
+  }
+  .table-card.free .next-up {
+    text-align: center;
+    color: var(--muted);
+    font-size: 16px;
+  }
+  .table-card.free .next-up .next-label {
+    text-transform: uppercase;
+    font-size: 12px;
+    letter-spacing: 1px;
+    color: var(--accent);
+    margin-bottom: 8px;
+  }
+  .table-card.free .next-up .next-name {
+    font-size: 22px;
+    color: var(--text);
+    margin-top: 4px;
+  }
+  .table-card .tfooter {
+    font-size: 12px;
+    color: var(--muted);
+    text-align: right;
+    border-top: 1px solid var(--border);
+    padding-top: 8px;
+  }
+
+  .queue {
+    border-top: 1px solid var(--border);
+    padding-top: 14px;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 18px;
+    align-items: center;
+  }
+  .queue .qlabel {
+    font-size: 14px;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-weight: 700;
+  }
+  .queue .qlist {
+    display: flex;
+    gap: 22px;
+    overflow: hidden;
+    font-size: 18px;
+  }
+  .queue .qlist .qitem {
+    color: var(--text);
+    white-space: nowrap;
+  }
+  .queue .qlist .qitem .qmeta {
+    color: var(--muted);
+    font-size: 14px;
+    margin-left: 6px;
+  }
+  .queue .progress {
+    width: 220px;
+    height: 24px;
+    background: var(--bg-card);
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    position: relative;
+  }
+  .queue .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #2ea043, #56d364);
+    transition: width 0.5s ease-out;
+  }
+  .queue .progress-label {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700; color: white;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+  }
+
+  .empty {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    color: var(--muted);
+    font-size: 22px;
+    text-align: center;
+  }
+  .empty img { height: 80px; margin-bottom: 20px; opacity: 0.4; }
+
+  .error {
+    color: var(--score-red);
+    text-align: center;
+    padding: 40px;
+    font-size: 18px;
+  }
+</style>
+</head>
+<body>
+<div class="frame" id="frame">
+  <header>
+    <div>
+      <h1 id="t-name">Chargement…</h1>
+      <div id="t-meta" class="meta" style="text-align:left;font-size:14px;margin-top:4px;"></div>
+    </div>
+    <div>
+      <div class="clock" id="t-clock"></div>
+      <div class="meta" id="t-ddj"></div>
+    </div>
+  </header>
+
+  <div class="tables" id="t-tables">
+    <div class="empty">
+      <img src="images/FrenchBillard-Icon-small.png" alt="">
+      <div>En attente de démarrage…</div>
+    </div>
+  </div>
+
+  <div class="queue" id="t-queue" style="display:none;">
+    <div class="qlabel">Prochains matchs</div>
+    <div class="qlist" id="t-qlist"></div>
+    <div class="progress">
+      <div class="progress-fill" id="t-pfill" style="width:0%"></div>
+      <div class="progress-label" id="t-plabel">0 / 0</div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // -------------------------------------------------------------------
+  // V 2.0.595 — DdJ V3 public TV polling
+  // -------------------------------------------------------------------
+  const params = new URLSearchParams(window.location.search);
+  const tournoiId = parseInt(params.get('id'), 10);
+  const POLL_MS = 5000;
+
+  function $(id) { return document.getElementById(id); }
+  function escapeHtml(s) {
+    return String(s == null ? '' : s)
+      .replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
+  }
+  function fmtClock() {
+    const d = new Date();
+    return d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  }
+  function fmtDate(iso) {
+    if (!iso) return '';
+    try {
+      return new Date(iso).toLocaleDateString('fr-FR', {
+        weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+      });
+    } catch { return ''; }
+  }
+  function fmtTimeShort(iso) {
+    if (!iso) return '';
+    try {
+      return new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    } catch { return ''; }
+  }
+
+  function tickClock() { $('t-clock').textContent = fmtClock(); }
+  setInterval(tickClock, 1000);
+  tickClock();
+
+  if (!Number.isFinite(tournoiId)) {
+    $('t-tables').innerHTML = '<div class="error">URL invalide. Format attendu : /dj-public.html?id=&lt;tournoiId&gt;</div>';
+  } else {
+    poll();
+    setInterval(poll, POLL_MS);
+  }
+
+  async function poll() {
+    try {
+      const r = await fetch(`/api/public/dj/${tournoiId}/feed`, { cache: 'no-store' });
+      if (!r.ok) {
+        if (r.status === 404) {
+          $('t-tables').innerHTML = '<div class="error">Tournoi introuvable.</div>';
+        }
+        return;
+      }
+      const data = await r.json();
+      render(data);
+    } catch (err) {
+      console.error('feed error', err);
+    }
+  }
+
+  function render(data) {
+    // Header
+    $('t-name').textContent = (data.tournament && data.tournament.name) || 'Tournoi';
+    const meta = data.tournament || {};
+    $('t-meta').innerHTML = [
+      meta.date ? fmtDate(meta.date) : '',
+      meta.location ? `· ${escapeHtml(meta.location)}` : ''
+    ].filter(Boolean).join(' ');
+    $('t-ddj').textContent = data.session && data.session.ddj_name
+      ? `Directeur de Jeu : ${data.session.ddj_name}`
+      : '';
+
+    // Tables — only if a session is active
+    const tablesEl = $('t-tables');
+    if (!data.session || !data.tables || data.tables.length === 0) {
+      tablesEl.innerHTML = `
+        <div class="empty">
+          <img src="images/FrenchBillard-Icon-small.png" alt="">
+          <div>En attente du démarrage de la journée…</div>
+        </div>`;
+      $('t-queue').style.display = 'none';
+      return;
+    }
+
+    tablesEl.innerHTML = data.tables.map(renderTable).join('');
+
+    // Queue + progress
+    const queue = data.upcoming || [];
+    if (queue.length === 0 && (!data.progress || data.progress.total === 0)) {
+      $('t-queue').style.display = 'none';
+    } else {
+      $('t-queue').style.display = 'grid';
+      $('t-qlist').innerHTML = queue.length > 0
+        ? queue.map(q =>
+            `<div class="qitem">${escapeHtml(q.p1_name)} vs ${escapeHtml(q.p2_name)}<span class="qmeta">Poule ${q.poule_number}</span></div>`
+          ).join('')
+        : '<div class="qitem" style="color:var(--muted)">Aucun match en attente</div>';
+      const pct = (data.progress && data.progress.percent) || 0;
+      $('t-pfill').style.width = pct + '%';
+      $('t-plabel').textContent = `${data.progress.done} / ${data.progress.total}  (${pct}%)`;
+    }
+  }
+
+  function renderTable(t) {
+    if (t.status === 'busy' && t.match) {
+      const p1Score = t.match.p1_points != null ? t.match.p1_points : '—';
+      const p2Score = t.match.p2_points != null ? t.match.p2_points : '—';
+      const phaseLabel = t.match.phase_kind === 'poule'
+        ? `Poule ${t.match.phase_label}`
+        : (t.match.phase_kind === 'bracket' ? `Phase finale · ${t.match.phase_label}` : `Classement · ${t.match.phase_label}`);
+      return `
+        <div class="table-card busy">
+          <div class="tname">Table ${t.table_number}</div>
+          <div class="tphase">${escapeHtml(phaseLabel)}</div>
+          <div class="tplayers">
+            <div class="player-line">
+              <span class="pname">${escapeHtml(t.match.p1_name)}</span>
+              <span class="pscore">${p1Score}</span>
+            </div>
+            <div class="player-line">
+              <span class="pname">${escapeHtml(t.match.p2_name)}</span>
+              <span class="pscore">${p2Score}</span>
+            </div>
+          </div>
+          <div class="tfooter">Démarré à ${fmtTimeShort(t.match.started_at)}</div>
+        </div>`;
+    }
+    return `
+      <div class="table-card free">
+        <div class="tname">Table ${t.table_number}</div>
+        <div class="tphase">Libre</div>
+        <div class="next-up" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+          <div class="next-label">Prête pour le prochain match</div>
+        </div>
+      </div>`;
+  }
+</script>
+</body>
+</html>

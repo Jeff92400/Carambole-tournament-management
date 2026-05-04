@@ -294,6 +294,7 @@
   <script src="js/auth-utils.js?v=197"></script>
   <script src="js/app-branding.js?v=216"></script>
   <script src="js/ddj-step-nav.js?v=3"></script>
+  <script src="js/dj-v3.js?v=1"></script>
   <script>
     const API_URL = '/api';
 
@@ -319,6 +320,11 @@
       document.getElementById('errorMessage').style.display = 'block';
       setTimeout(() => window.location.href = 'directeur-de-jeu.html', 2000);
       throw new Error('No compId in URL');
+    }
+
+    // V 2.0.595 — DdJ V3 : badge tables, drawer, session modal, polling 10s
+    if (typeof DjV3 !== 'undefined') {
+      DjV3.init(compId);
     }
 
     // Logout behavior: same semantics as landing page (real logout for DdJ user,

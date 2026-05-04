@@ -2698,6 +2698,56 @@ async function initializeDatabase() {
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_ddj_consolante_matches_tournoi ON ddj_consolante_matches(tournoi_id)`);
 
+    // ------------------------------------------------------------------
+    // V 2.0.595 — DdJ V3 evolution (May 2026)
+    //
+    // Adds: ddj_session (one row per tournoi day) + tracking columns on
+    // the 3 match tables to support:
+    //   - Real-time table state (free/busy/waiting) — derived from
+    //     started_at IS NOT NULL AND finished_at IS NULL
+    //   - User-configurable number of physical billiards (table_count)
+    //   - DdJ identity persisted at session level (combined with users.id)
+    //   - Referee identity persisted PER MATCH (each match can have a
+    //     different referee, while the DdJ stays the same all day)
+    //   - Public TV display (read-only feed driven from ddj_session +
+    //     the 3 match tables)
+    //
+    // Design notes:
+    //   - No new tournament_tables table: physical billiards are just
+    //     integers 1..table_count. Status is computed on-the-fly.
+    //   - DdJ identity lives ONLY in ddj_session (one row per day).
+    //     We do NOT duplicate director_name/licence on each match —
+    //     entered_by (user_id) is enough for the audit trail.
+    //   - Referee fields are PER MATCH because the referee can rotate
+    //     between matches (typically another player who's free).
+    // ------------------------------------------------------------------
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS ddj_session (
+        tournoi_id INTEGER PRIMARY KEY REFERENCES tournoi_ext(tournoi_id) ON DELETE CASCADE,
+        table_count INTEGER NOT NULL,
+        ddj_user_id INTEGER REFERENCES users(id),
+        ddj_name TEXT NOT NULL,
+        ddj_licence TEXT,
+        started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        ended_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Tracking columns on the 3 ddj match tables (idempotent).
+    // started_at = match physically begun on a billiard table.
+    // finished_at = score saved (currently entered_at carries similar
+    //   meaning, but we keep finished_at as a clear semantic marker for
+    //   the V3 state machine).
+    // referee_name / referee_licence = added per match.
+    for (const tableName of ['ddj_poule_matches', 'ddj_bracket_matches', 'ddj_consolante_matches']) {
+      await client.query(`ALTER TABLE ${tableName} ADD COLUMN IF NOT EXISTS started_at TIMESTAMP`);
+      await client.query(`ALTER TABLE ${tableName} ADD COLUMN IF NOT EXISTS finished_at TIMESTAMP`);
+      await client.query(`ALTER TABLE ${tableName} ADD COLUMN IF NOT EXISTS referee_name TEXT`);
+      await client.query(`ALTER TABLE ${tableName} ADD COLUMN IF NOT EXISTS referee_licence TEXT`);
+    }
+    // End V 2.0.595 — DdJ V3
+
     // New columns on tournament_results for match-based imports
     await client.query(`ALTER TABLE tournament_results ADD COLUMN IF NOT EXISTS meilleure_partie REAL`);
     await client.query(`ALTER TABLE tournament_results ADD COLUMN IF NOT EXISTS poule_rank INTEGER`);

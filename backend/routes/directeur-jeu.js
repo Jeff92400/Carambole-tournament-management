@@ -1280,6 +1280,18 @@ router.put('/competitions/:id/poule-matches', authenticateToken, requireDdJ, asy
       ? parseInt(b.table_number, 10) || null
       : null;
 
+    // V3 referee fields (optional). When the DdJ submits via the V3 form,
+    // these are filled. Older callers can omit them and we just store NULL.
+    const refereeName = (b.referee_name || '').trim() || null;
+    const refereeLicence = (b.referee_licence || '').trim() || null;
+
+    // V3 timestamps:
+    //   - started_at : preserved if already set (the DdJ may have called
+    //     POST .../start when opening the score page). If NULL, we fall
+    //     back to NOW() so the row always has a coherent start time.
+    //   - finished_at : set to NOW() whenever a score is saved. The
+    //     match is considered "in progress" if started_at IS NOT NULL
+    //     AND finished_at IS NULL (see tables-status endpoint).
     // UPSERT the match
     await new Promise((resolve, reject) => {
       db.run(
@@ -1288,8 +1300,12 @@ router.put('/competitions/:id/poule-matches', authenticateToken, requireDdJ, asy
             p1_licence, p2_licence,
             p1_points, p1_reprises, p1_serie,
             p2_points, p2_reprises, p2_serie,
-            entered_at, entered_by)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, CURRENT_TIMESTAMP, $13)
+            entered_at, entered_by,
+            referee_name, referee_licence,
+            started_at, finished_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
+                 CURRENT_TIMESTAMP, $13, $14, $15,
+                 CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
          ON CONFLICT (tournoi_id, poule_number, match_number)
          DO UPDATE SET
            table_number = EXCLUDED.table_number,
@@ -1300,13 +1316,18 @@ router.put('/competitions/:id/poule-matches', authenticateToken, requireDdJ, asy
            p2_reprises = EXCLUDED.p2_reprises,
            p2_serie = EXCLUDED.p2_serie,
            entered_at = CURRENT_TIMESTAMP,
-           entered_by = EXCLUDED.entered_by`,
+           entered_by = EXCLUDED.entered_by,
+           referee_name = EXCLUDED.referee_name,
+           referee_licence = EXCLUDED.referee_licence,
+           started_at = COALESCE(ddj_poule_matches.started_at, CURRENT_TIMESTAMP),
+           finished_at = CURRENT_TIMESTAMP`,
         [
           tournoiId, pn, mn, tableNumber,
           match.p1_licence, match.p2_licence,
           parsed.p1_points, parsed.p1_reprises, parsed.p1_serie,
           parsed.p2_points, parsed.p2_reprises, parsed.p2_serie,
-          req.user.userId || null
+          req.user.userId || null,
+          refereeName, refereeLicence
         ],
         (err) => err ? reject(err) : resolve()
       );
@@ -2154,6 +2175,10 @@ router.put('/competitions/:id/bracket', authenticateToken, requireDdJ, async (re
       ? parseInt(b.table_number, 10) || null
       : null;
 
+    // V3: optional referee fields + started_at/finished_at lifecycle.
+    const refereeName = (b.referee_name || '').trim() || null;
+    const refereeLicence = (b.referee_licence || '').trim() || null;
+
     // UPSERT
     await new Promise((resolve, reject) => {
       db.run(
@@ -2162,8 +2187,12 @@ router.put('/competitions/:id/bracket', authenticateToken, requireDdJ, async (re
             p1_licence, p2_licence,
             p1_points, p1_reprises, p1_serie,
             p2_points, p2_reprises, p2_serie,
-            entered_at, entered_by)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, CURRENT_TIMESTAMP, $12)
+            entered_at, entered_by,
+            referee_name, referee_licence,
+            started_at, finished_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
+                 CURRENT_TIMESTAMP, $12, $13, $14,
+                 CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
          ON CONFLICT (tournoi_id, phase)
          DO UPDATE SET
            table_number = EXCLUDED.table_number,
@@ -2176,13 +2205,18 @@ router.put('/competitions/:id/bracket', authenticateToken, requireDdJ, async (re
            p2_reprises = EXCLUDED.p2_reprises,
            p2_serie = EXCLUDED.p2_serie,
            entered_at = CURRENT_TIMESTAMP,
-           entered_by = EXCLUDED.entered_by`,
+           entered_by = EXCLUDED.entered_by,
+           referee_name = EXCLUDED.referee_name,
+           referee_licence = EXCLUDED.referee_licence,
+           started_at = COALESCE(ddj_bracket_matches.started_at, CURRENT_TIMESTAMP),
+           finished_at = CURRENT_TIMESTAMP`,
         [
           tournoiId, phase, tableNumber,
           match.p1.licence, match.p2.licence,
           parsed.p1_points, parsed.p1_reprises, parsed.p1_serie,
           parsed.p2_points, parsed.p2_reprises, parsed.p2_serie,
-          req.user.userId || null
+          req.user.userId || null,
+          refereeName, refereeLicence
         ],
         (err) => err ? reject(err) : resolve()
       );
@@ -2594,14 +2628,22 @@ router.put('/competitions/:id/consolante', authenticateToken, requireDdJ, async 
       return res.status(409).json({ error: 'Les joueurs de cette phase ne sont pas encore connus' });
     }
 
+    // V3: optional referee fields + started_at/finished_at lifecycle.
+    const refereeName = (req.body && req.body.referee_name || '').trim() || null;
+    const refereeLicence = (req.body && req.body.referee_licence || '').trim() || null;
+
     await new Promise((resolve, reject) => {
       db.run(
         `INSERT INTO ddj_consolante_matches
            (tournoi_id, phase, table_number, p1_licence, p2_licence,
             p1_points, p1_reprises, p1_serie,
             p2_points, p2_reprises, p2_serie,
-            entered_at, entered_by)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, CURRENT_TIMESTAMP, $12)
+            entered_at, entered_by,
+            referee_name, referee_licence,
+            started_at, finished_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
+                 CURRENT_TIMESTAMP, $12, $13, $14,
+                 CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
          ON CONFLICT (tournoi_id, phase) DO UPDATE SET
            table_number = EXCLUDED.table_number,
            p1_licence   = EXCLUDED.p1_licence,
@@ -2613,13 +2655,18 @@ router.put('/competitions/:id/consolante', authenticateToken, requireDdJ, async 
            p2_reprises  = EXCLUDED.p2_reprises,
            p2_serie     = EXCLUDED.p2_serie,
            entered_at   = CURRENT_TIMESTAMP,
-           entered_by   = EXCLUDED.entered_by`,
+           entered_by   = EXCLUDED.entered_by,
+           referee_name = EXCLUDED.referee_name,
+           referee_licence = EXCLUDED.referee_licence,
+           started_at  = COALESCE(ddj_consolante_matches.started_at, CURRENT_TIMESTAMP),
+           finished_at = CURRENT_TIMESTAMP`,
         [
           tournoiId, phase, table_number || null,
           target.p1.licence, target.p2.licence,
           p1_points ?? null, p1_reprises ?? null, p1_serie ?? null,
           p2_points ?? null, p2_reprises ?? null, p2_serie ?? null,
-          req.user.userId || null
+          req.user.userId || null,
+          refereeName, refereeLicence
         ],
         (err) => err ? reject(err) : resolve()
       );
@@ -3530,6 +3577,405 @@ router.post('/dev/seed-moyennes/:id', authenticateToken, async (req, res) => {
   } catch (err) {
     console.error('[DdJ dev/seed-moyennes] error:', err);
     res.status(500).json({ error: 'Erreur lors du seeding' });
+  }
+});
+
+// ============================================================
+// V 2.0.595 — DdJ V3 evolution endpoints (May 2026)
+// ============================================================
+
+// ----- DdJ session : table_count + DdJ identity -----
+//
+// One row per (tournoi_id) day. Stores the number of physical billiards
+// available + the DdJ's name and FFB licence. Used by:
+//   - the score pages (auto-display the DdJ name)
+//   - the tables-status endpoint (knows how many tables to enumerate)
+//   - the public TV feed
+//
+// Pre-fill behaviour: if the same user has previously run a DdJ session,
+// GET returns last name/licence used so the DdJ doesn't re-type them.
+
+router.get('/competitions/:id/ddj-session', authenticateToken, requireDdJ, async (req, res) => {
+  const db = getDb();
+  const orgId = req.user.organizationId || null;
+  const tournoiId = parseInt(req.params.id, 10);
+  if (!Number.isFinite(tournoiId)) {
+    return res.status(400).json({ error: 'ID tournoi invalide' });
+  }
+
+  try {
+    // Verify the tournament belongs to caller's org
+    const tournament = await new Promise((resolve, reject) => {
+      db.get(
+        `SELECT tournoi_id FROM tournoi_ext
+         WHERE tournoi_id = $1 AND ($2::int IS NULL OR organization_id = $2)`,
+        [tournoiId, orgId],
+        (err, row) => err ? reject(err) : resolve(row)
+      );
+    });
+    if (!tournament) return res.status(404).json({ error: 'Tournoi introuvable' });
+
+    const session = await new Promise((resolve, reject) => {
+      db.get(
+        `SELECT tournoi_id, table_count, ddj_user_id, ddj_name, ddj_licence,
+                started_at, ended_at
+           FROM ddj_session
+          WHERE tournoi_id = $1`,
+        [tournoiId],
+        (err, row) => err ? reject(err) : resolve(row)
+      );
+    });
+
+    // If no session yet, propose pre-fill from this user's last session
+    let prefill = null;
+    if (!session) {
+      prefill = await new Promise((resolve, reject) => {
+        db.get(
+          `SELECT ddj_name, ddj_licence
+             FROM ddj_session
+            WHERE ddj_user_id = $1
+            ORDER BY started_at DESC
+            LIMIT 1`,
+          [req.user.userId],
+          (err, row) => err ? reject(err) : resolve(row || null)
+        );
+      });
+    }
+
+    res.json({ session: session || null, prefill });
+  } catch (err) {
+    console.error('[DdJ ddj-session GET] error:', err);
+    res.status(500).json({ error: 'Erreur lors de la lecture de la session DdJ' });
+  }
+});
+
+router.post('/competitions/:id/ddj-session', authenticateToken, requireDdJ, async (req, res) => {
+  const db = getDb();
+  const orgId = req.user.organizationId || null;
+  const tournoiId = parseInt(req.params.id, 10);
+  if (!Number.isFinite(tournoiId)) {
+    return res.status(400).json({ error: 'ID tournoi invalide' });
+  }
+
+  const b = req.body || {};
+  const tableCount = parseInt(b.table_count, 10);
+  const ddjName = (b.ddj_name || '').trim();
+  const ddjLicence = (b.ddj_licence || '').trim() || null;
+
+  if (!Number.isFinite(tableCount) || tableCount < 1 || tableCount > 20) {
+    return res.status(400).json({ error: 'Nombre de tables invalide (1-20)' });
+  }
+  if (!ddjName) {
+    return res.status(400).json({ error: 'Nom du Directeur de Jeu requis' });
+  }
+
+  try {
+    // Verify the tournament belongs to caller's org
+    const tournament = await new Promise((resolve, reject) => {
+      db.get(
+        `SELECT tournoi_id FROM tournoi_ext
+         WHERE tournoi_id = $1 AND ($2::int IS NULL OR organization_id = $2)`,
+        [tournoiId, orgId],
+        (err, row) => err ? reject(err) : resolve(row)
+      );
+    });
+    if (!tournament) return res.status(404).json({ error: 'Tournoi introuvable' });
+
+    // UPSERT — 1 session per tournament. Re-saving updates table_count
+    // and DdJ identity (can happen if the DdJ realises they got the
+    // count wrong, or hands over to another DdJ mid-day).
+    await new Promise((resolve, reject) => {
+      db.run(
+        `INSERT INTO ddj_session
+           (tournoi_id, table_count, ddj_user_id, ddj_name, ddj_licence)
+         VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (tournoi_id) DO UPDATE SET
+           table_count = EXCLUDED.table_count,
+           ddj_user_id = EXCLUDED.ddj_user_id,
+           ddj_name = EXCLUDED.ddj_name,
+           ddj_licence = EXCLUDED.ddj_licence`,
+        [tournoiId, tableCount, req.user.userId || null, ddjName, ddjLicence],
+        (err) => err ? reject(err) : resolve()
+      );
+    });
+
+    res.json({ ok: true, table_count: tableCount, ddj_name: ddjName, ddj_licence: ddjLicence });
+  } catch (err) {
+    console.error('[DdJ ddj-session POST] error:', err);
+    res.status(500).json({ error: 'Erreur lors de la sauvegarde de la session DdJ' });
+  }
+});
+
+// ----- Tables status : computed on-the-fly from the 3 match tables -----
+//
+// Returns one entry per physical table (1..table_count from ddj_session),
+// with status = 'busy' if a match is currently in progress on it,
+// otherwise 'free'. Polled by the DdJ dashboard drawer (and the public
+// TV feed).
+
+router.get('/competitions/:id/tables-status', authenticateToken, requireDdJ, async (req, res) => {
+  const db = getDb();
+  const orgId = req.user.organizationId || null;
+  const tournoiId = parseInt(req.params.id, 10);
+  if (!Number.isFinite(tournoiId)) {
+    return res.status(400).json({ error: 'ID tournoi invalide' });
+  }
+
+  try {
+    // Org check + load table_count from session
+    const session = await new Promise((resolve, reject) => {
+      db.get(
+        `SELECT s.table_count
+           FROM ddj_session s
+           JOIN tournoi_ext t ON t.tournoi_id = s.tournoi_id
+          WHERE s.tournoi_id = $1
+            AND ($2::int IS NULL OR t.organization_id = $2)`,
+        [tournoiId, orgId],
+        (err, row) => err ? reject(err) : resolve(row)
+      );
+    });
+    if (!session) {
+      return res.json({ table_count: 0, tables: [] });
+    }
+
+    // Find all matches currently in progress (started, not finished)
+    // across the 3 tables. Same shape for each, UNIONed.
+    const inProgress = await new Promise((resolve, reject) => {
+      db.all(
+        `SELECT 'poule'      AS phase_kind, table_number, p1_licence, p2_licence,
+                started_at, poule_number AS phase_label, match_number AS phase_index
+           FROM ddj_poule_matches
+          WHERE tournoi_id = $1 AND started_at IS NOT NULL AND finished_at IS NULL
+            AND table_number IS NOT NULL
+         UNION ALL
+         SELECT 'bracket'    AS phase_kind, table_number, p1_licence, p2_licence,
+                started_at, phase AS phase_label, NULL AS phase_index
+           FROM ddj_bracket_matches
+          WHERE tournoi_id = $1 AND started_at IS NOT NULL AND finished_at IS NULL
+            AND table_number IS NOT NULL
+         UNION ALL
+         SELECT 'consolante' AS phase_kind, table_number, p1_licence, p2_licence,
+                started_at, phase AS phase_label, NULL AS phase_index
+           FROM ddj_consolante_matches
+          WHERE tournoi_id = $1 AND started_at IS NOT NULL AND finished_at IS NULL
+            AND table_number IS NOT NULL`,
+        [tournoiId],
+        (err, rows) => err ? reject(err) : resolve(rows || [])
+      );
+    });
+
+    // Index by table_number
+    const byTable = new Map();
+    for (const m of inProgress) byTable.set(m.table_number, m);
+
+    const tables = [];
+    for (let n = 1; n <= session.table_count; n++) {
+      const m = byTable.get(n);
+      tables.push({
+        table_number: n,
+        status: m ? 'busy' : 'free',
+        match: m ? {
+          phase_kind: m.phase_kind,
+          phase_label: String(m.phase_label),
+          p1_licence: m.p1_licence,
+          p2_licence: m.p2_licence,
+          started_at: m.started_at
+        } : null
+      });
+    }
+
+    res.json({ table_count: session.table_count, tables });
+  } catch (err) {
+    console.error('[DdJ tables-status] error:', err);
+    res.status(500).json({ error: 'Erreur lors du calcul du statut des tables' });
+  }
+});
+
+// ----- Referee search : autocomplete over org's player base -----
+//
+// Used by the score-entry form. The DdJ types a name fragment or
+// a licence prefix and we suggest matching players (limit 10).
+// Selecting a suggestion fills both referee_name and referee_licence
+// on the form.
+
+router.get('/referees/search', authenticateToken, requireDdJ, async (req, res) => {
+  const db = getDb();
+  const orgId = req.user.organizationId || null;
+  const q = (req.query.q || '').trim();
+  if (q.length < 2) {
+    return res.json({ results: [] });
+  }
+
+  try {
+    // ILIKE on first_name, last_name (concatenated either order),
+    // OR on licence prefix. Excludes test accounts.
+    const pattern = `%${q}%`;
+    const liccPattern = `${q.replace(/\s+/g, '')}%`;
+    const rows = await new Promise((resolve, reject) => {
+      db.all(
+        `SELECT licence, first_name, last_name, club
+           FROM players
+          WHERE ($1::int IS NULL OR organization_id = $1)
+            AND is_active = 1
+            AND UPPER(licence) NOT LIKE 'TEST%'
+            AND (
+                  (first_name || ' ' || last_name) ILIKE $2
+               OR (last_name || ' ' || first_name) ILIKE $2
+               OR REPLACE(licence, ' ', '') ILIKE $3
+                )
+          ORDER BY last_name, first_name
+          LIMIT 10`,
+        [orgId, pattern, liccPattern],
+        (err, rs) => err ? reject(err) : resolve(rs || [])
+      );
+    });
+
+    res.json({
+      results: rows.map(r => ({
+        licence: r.licence,
+        name: `${r.first_name} ${r.last_name}`.trim(),
+        club: r.club || null
+      }))
+    });
+  } catch (err) {
+    console.error('[DdJ referees/search] error:', err);
+    res.status(500).json({ error: 'Erreur lors de la recherche d\'arbitres' });
+  }
+});
+
+// ----- Match start endpoints (V3) -----
+//
+// Lightweight POST endpoints called by the front-end when the DdJ
+// taps a match to open the scoring page. They create the underlying
+// row with started_at=NOW(), p1/p2 licences and table_number set,
+// but scores still NULL — making the match "in progress" so the
+// table flips to "busy" on the dashboard.
+//
+// Idempotent: if the match was already started (or already finished),
+// we just update the table_number and never overwrite an existing
+// started_at.
+
+router.post('/competitions/:id/poule-matches/start', authenticateToken, requireDdJ, async (req, res) => {
+  const db = getDb();
+  const orgId = req.user.organizationId || null;
+  const tournoiId = parseInt(req.params.id, 10);
+  if (!Number.isFinite(tournoiId)) return res.status(400).json({ error: 'ID tournoi invalide' });
+
+  const b = req.body || {};
+  const pn = parseInt(b.poule_number, 10);
+  const mn = parseInt(b.match_number, 10);
+  const tableNumber = b.table_number != null && b.table_number !== ''
+    ? parseInt(b.table_number, 10) || null
+    : null;
+  if (!Number.isFinite(pn) || !Number.isFinite(mn)) {
+    return res.status(400).json({ error: 'poule_number et match_number requis' });
+  }
+
+  try {
+    const ctx = await loadPouleMatches(db, orgId, tournoiId);
+    if (ctx.error) return res.status(404).json({ error: 'Tournoi introuvable' });
+    const poule = ctx.poules.find(p => p.number === pn);
+    if (!poule) return res.status(400).json({ error: 'Poule inconnue' });
+    const match = poule.matches.find(m => m.match_number === mn);
+    if (!match) return res.status(400).json({ error: 'Match inconnu' });
+
+    await new Promise((resolve, reject) => {
+      db.run(
+        `INSERT INTO ddj_poule_matches
+           (tournoi_id, poule_number, match_number, table_number,
+            p1_licence, p2_licence, started_at)
+         VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)
+         ON CONFLICT (tournoi_id, poule_number, match_number)
+         DO UPDATE SET
+           table_number = COALESCE(EXCLUDED.table_number, ddj_poule_matches.table_number),
+           started_at = COALESCE(ddj_poule_matches.started_at, CURRENT_TIMESTAMP)`,
+        [tournoiId, pn, mn, tableNumber, match.p1_licence, match.p2_licence],
+        (err) => err ? reject(err) : resolve()
+      );
+    });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[DdJ poule-matches/start] error:', err);
+    res.status(500).json({ error: 'Erreur lors du démarrage du match' });
+  }
+});
+
+router.post('/competitions/:id/bracket/start', authenticateToken, requireDdJ, async (req, res) => {
+  const db = getDb();
+  const orgId = req.user.organizationId || null;
+  const tournoiId = parseInt(req.params.id, 10);
+  if (!Number.isFinite(tournoiId)) return res.status(400).json({ error: 'ID tournoi invalide' });
+
+  const b = req.body || {};
+  const phase = String(b.phase || '').toUpperCase();
+  if (!['SF1', 'SF2', 'F', 'PF'].includes(phase)) {
+    return res.status(400).json({ error: 'Phase invalide' });
+  }
+  const tableNumber = b.table_number != null && b.table_number !== ''
+    ? parseInt(b.table_number, 10) || null
+    : null;
+
+  try {
+    const ctx = await loadBracket(db, orgId, tournoiId);
+    if (ctx.error === 'not_found') return res.status(404).json({ error: 'Tournoi introuvable' });
+    const match = ctx.phases && ctx.phases.find(p => p.phase === phase);
+    if (!match || !match.can_enter) return res.status(409).json({ error: 'Match pas encore prêt' });
+
+    await new Promise((resolve, reject) => {
+      db.run(
+        `INSERT INTO ddj_bracket_matches
+           (tournoi_id, phase, table_number, p1_licence, p2_licence, started_at)
+         VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
+         ON CONFLICT (tournoi_id, phase)
+         DO UPDATE SET
+           table_number = COALESCE(EXCLUDED.table_number, ddj_bracket_matches.table_number),
+           started_at = COALESCE(ddj_bracket_matches.started_at, CURRENT_TIMESTAMP)`,
+        [tournoiId, phase, tableNumber, match.p1.licence, match.p2.licence],
+        (err) => err ? reject(err) : resolve()
+      );
+    });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[DdJ bracket/start] error:', err);
+    res.status(500).json({ error: 'Erreur lors du démarrage du match' });
+  }
+});
+
+router.post('/competitions/:id/consolante/start', authenticateToken, requireDdJ, async (req, res) => {
+  const db = getDb();
+  const orgId = req.user.organizationId || null;
+  const tournoiId = parseInt(req.params.id, 10);
+  if (!Number.isFinite(tournoiId)) return res.status(400).json({ error: 'ID tournoi invalide' });
+
+  const b = req.body || {};
+  const phase = String(b.phase || '').toUpperCase();
+  const tableNumber = b.table_number != null && b.table_number !== ''
+    ? parseInt(b.table_number, 10) || null
+    : null;
+
+  try {
+    const ctx = await loadConsolante(db, orgId, tournoiId);
+    if (ctx.error === 'not_found') return res.status(404).json({ error: 'Tournoi introuvable' });
+    const match = ctx.phases && ctx.phases.find(p => p.phase === phase);
+    if (!match || !match.can_enter) return res.status(409).json({ error: 'Match pas encore prêt' });
+
+    await new Promise((resolve, reject) => {
+      db.run(
+        `INSERT INTO ddj_consolante_matches
+           (tournoi_id, phase, table_number, p1_licence, p2_licence, started_at)
+         VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
+         ON CONFLICT (tournoi_id, phase)
+         DO UPDATE SET
+           table_number = COALESCE(EXCLUDED.table_number, ddj_consolante_matches.table_number),
+           started_at = COALESCE(ddj_consolante_matches.started_at, CURRENT_TIMESTAMP)`,
+        [tournoiId, phase, tableNumber, match.p1.licence, match.p2.licence],
+        (err) => err ? reject(err) : resolve()
+      );
+    });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[DdJ consolante/start] error:', err);
+    res.status(500).json({ error: 'Erreur lors du démarrage du match' });
   }
 });
 
