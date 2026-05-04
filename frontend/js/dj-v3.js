@@ -44,25 +44,44 @@
   // CSS — injected once on init. Keeps each page lean.
   // -------------------------------------------------------------------------
   const CSS = `
-    .djv3-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 4px 12px;
-      background: rgba(255,255,255,0.18);
-      border: 1px solid rgba(255,255,255,0.32);
-      border-radius: 14px;
-      color: white;
-      font-size: 13px;
-      font-weight: 600;
-      cursor: pointer;
-      user-select: none;
-      margin-left: 8px;
-      transition: background 0.15s;
+    /* V 2.0.694 — persistent session info bar (replaces the unreliable
+       navbar badge). Sits below the step indicator on every DdJ page. */
+    .djv3-session-bar {
+      display: flex; align-items: center; justify-content: space-between;
+      flex-wrap: wrap; gap: 10px;
+      padding: 10px 16px;
+      margin: 12px auto;
+      max-width: 900px;
+      background: linear-gradient(90deg, #fff5e6, #fef3c7);
+      border: 1px solid #fde68a;
+      border-radius: 8px;
+      font-size: 14px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
     }
-    .djv3-badge:hover { background: rgba(255,255,255,0.28); }
-    .djv3-badge img { height: 16px; width: 16px; }
-    .djv3-badge .djv3-badge-num { font-variant-numeric: tabular-nums; }
+    .djv3-session-bar.configured {
+      background: linear-gradient(90deg, #e8f4fd, #f0f9ff);
+      border-color: #bae6fd;
+    }
+    .djv3-session-bar .djv3-sb-info {
+      display: flex; align-items: center; gap: 10px;
+      color: #1a5276; flex: 1; min-width: 200px;
+    }
+    .djv3-session-bar .djv3-sb-icon { height: 20px; width: 20px; flex-shrink: 0; }
+    .djv3-session-bar .djv3-sb-text { line-height: 1.3; }
+    .djv3-session-bar .djv3-sb-busy { color: #d97706; font-weight: 600; }
+    .djv3-session-bar.configured .djv3-sb-busy { color: #b45309; }
+    .djv3-session-bar .djv3-sb-actions { display: flex; gap: 8px; }
+    .djv3-session-bar .djv3-sb-btn {
+      padding: 6px 14px; border: 0; border-radius: 5px;
+      font-size: 13px; font-weight: 600; cursor: pointer;
+      transition: filter 0.12s;
+    }
+    .djv3-session-bar .djv3-sb-btn:hover { filter: brightness(1.08); }
+    .djv3-session-bar .djv3-sb-btn-primary { background: #1a5276; color: white; }
+    .djv3-session-bar .djv3-sb-btn-secondary { background: #fff; color: #1a5276; border: 1px solid #cbd5e1; }
+
+    /* Legacy badge — kept for backwards-compat but visually neutral now */
+    .djv3-badge { display: none; }
 
     .djv3-modal-backdrop {
       position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 9000;
@@ -153,31 +172,74 @@
   }
 
   // -------------------------------------------------------------------------
-  // Header badge — small "Tables N/M" next to the page title
+  // Persistent session info bar — injected just under the step indicator,
+  // visible on every DdJ page from étape 1 onwards. Replaces the navbar
+  // badge (which was unreliable because the existing DdJ pages don't have
+  // a uniform navbar anchor).
+  //
+  // Bar content:
+  //   🎯 4 tables · 1 occupée · DdJ : Sylvain Vullien   [État]  [Modifier]
+  //
+  // Tap on the bar (anywhere except the buttons) → no-op.
+  // Tap "État"     → opens the table-status drawer.
+  // Tap "Modifier" → re-opens the configuration modal.
   // -------------------------------------------------------------------------
-  function ensureBadge() {
-    let badge = document.getElementById('djv3-badge');
-    if (badge) return badge;
-    badge = document.createElement('span');
-    badge.id = 'djv3-badge';
-    badge.className = 'djv3-badge';
-    badge.title = 'État des tables — tap pour ouvrir';
-    badge.innerHTML = '<img src="images/FrenchBillard-Icon-small.png" alt=""><span class="djv3-badge-num">—</span>';
-    badge.addEventListener('click', openTablesDrawer);
-    // Try to dock the badge into the navbar's user area, fallback to body.
-    const dock = document.querySelector('.navbar-user, .navbar-info, .navbar') || document.body;
-    dock.appendChild(badge);
-    return badge;
+  function ensureSessionBar() {
+    let bar = document.getElementById('djv3-session-bar');
+    if (bar) return bar;
+    // Inject after the step indicator if present, otherwise at top of body.
+    const stepIndicator = document.querySelector('.ddj-steps');
+    bar = document.createElement('div');
+    bar.id = 'djv3-session-bar';
+    bar.className = 'djv3-session-bar';
+    bar.innerHTML = `
+      <div class="djv3-sb-info">
+        <img src="images/FrenchBillard-Icon-small.png" alt="" class="djv3-sb-icon">
+        <span class="djv3-sb-text">Session non configurée</span>
+      </div>
+      <div class="djv3-sb-actions">
+        <button type="button" class="djv3-sb-btn djv3-sb-btn-secondary" data-action="drawer">État</button>
+        <button type="button" class="djv3-sb-btn djv3-sb-btn-primary" data-action="edit">Modifier</button>
+      </div>
+    `;
+    if (stepIndicator && stepIndicator.parentNode) {
+      stepIndicator.parentNode.insertBefore(bar, stepIndicator.nextSibling);
+    } else {
+      // Fallback: insert at the very top of the main content if any.
+      const fallback = document.getElementById('mainContent') || document.body.firstElementChild || document.body;
+      if (fallback === document.body) document.body.insertBefore(bar, document.body.firstChild);
+      else fallback.parentNode.insertBefore(bar, fallback);
+    }
+    bar.querySelector('[data-action="drawer"]').addEventListener('click', (e) => {
+      e.stopPropagation();
+      openTablesDrawer();
+    });
+    bar.querySelector('[data-action="edit"]').addEventListener('click', (e) => {
+      e.stopPropagation();
+      openSessionModal();
+    });
+    return bar;
   }
 
-  function updateBadge() {
-    const b = document.getElementById('djv3-badge');
-    if (!b || !state.session) return;
+  function updateSessionBar() {
+    const bar = document.getElementById('djv3-session-bar');
+    if (!bar) return;
+    const text = bar.querySelector('.djv3-sb-text');
+    if (!state.session) {
+      text.innerHTML = '<strong>Session non configurée</strong> — tap "Modifier" pour démarrer';
+      bar.classList.remove('configured');
+      return;
+    }
     const busy = state.tables.filter(t => t.status === 'busy').length;
     const total = state.session.table_count;
-    const span = b.querySelector('.djv3-badge-num');
-    if (span) span.textContent = `${busy}/${total}`;
+    text.innerHTML = `<strong>${total} table${total > 1 ? 's' : ''}</strong> · <span class="djv3-sb-busy">${busy} occupée${busy > 1 ? 's' : ''}</span> · DdJ : <strong>${escapeHtml(state.session.ddj_name)}</strong>`;
+    bar.classList.add('configured');
   }
+
+  // Backwards-compat shims for existing call sites (no-op now that the
+  // navbar badge has been replaced by the session bar).
+  function ensureBadge() { ensureSessionBar(); }
+  function updateBadge() { updateSessionBar(); }
 
   // -------------------------------------------------------------------------
   // Tables drawer
