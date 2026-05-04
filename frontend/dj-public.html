@@ -170,6 +170,15 @@
     font-size: 14px;
     margin-left: 6px;
   }
+  /* V 2.0.703 — Derniers résultats band, similar look but green accent */
+  .queue.results .qlabel { color: #56d364; }
+  .queue.results .qlist .qitem { color: var(--text); }
+  .queue.results .qlist .qitem .pscore-r {
+    color: #56d364;
+    font-weight: 700;
+    margin: 0 6px;
+  }
+  .queue.results .qlist .qitem .qmeta { color: var(--muted); }
   .queue .progress {
     width: 220px;
     height: 24px;
@@ -229,6 +238,12 @@
       <img src="images/FrenchBillard-Icon-small.png" alt="">
       <div>En attente de démarrage…</div>
     </div>
+  </div>
+
+  <div class="queue results" id="t-results" style="display:none;">
+    <div class="qlabel">Derniers résultats</div>
+    <div class="qlist" id="t-rlist"></div>
+    <div></div>
   </div>
 
   <div class="queue" id="t-queue" style="display:none;">
@@ -321,10 +336,27 @@
           <div>En attente du démarrage de la journée…</div>
         </div>`;
       $('t-queue').style.display = 'none';
+      $('t-results').style.display = 'none';
       return;
     }
 
     tablesEl.innerHTML = data.tables.map(renderTable).join('');
+
+    // V 2.0.703 — Recent results band (top 5 finished matches)
+    const recent = data.recent || [];
+    if (recent.length === 0) {
+      $('t-results').style.display = 'none';
+    } else {
+      $('t-results').style.display = 'grid';
+      $('t-rlist').innerHTML = recent.map(r => {
+        const phase = r.phase_kind === 'poule'
+          ? `Poule ${r.phase_label}`
+          : (r.phase_kind === 'bracket' ? `Phase finale · ${r.phase_label}` : `Classement · ${r.phase_label}`);
+        const s1 = r.p1_points != null ? r.p1_points : '—';
+        const s2 = r.p2_points != null ? r.p2_points : '—';
+        return `<div class="qitem">${escapeHtml(r.p1_name)}<span class="pscore-r">${s1} — ${s2}</span>${escapeHtml(r.p2_name)}<span class="qmeta">${escapeHtml(phase)}</span></div>`;
+      }).join('');
+    }
 
     // Queue + progress
     const queue = data.upcoming || [];

@@ -140,15 +140,45 @@ router.get('/:tournoi_id/feed', async (req, res) => {
       );
     });
 
+    // 4b. V 2.0.703 — Recently finished matches (last 5, all phases) with
+    //     scores. Lets the TV display a "Derniers résultats" band so
+    //     spectators can see what just happened.
+    const recent = await new Promise((resolve, reject) => {
+      db.all(
+        `SELECT 'poule' AS phase_kind, poule_number::text AS phase_label,
+                p1_licence, p2_licence, p1_points, p2_points, finished_at
+           FROM ddj_poule_matches
+          WHERE tournoi_id = $1 AND finished_at IS NOT NULL
+         UNION ALL
+         SELECT 'bracket' AS phase_kind, phase::text AS phase_label,
+                p1_licence, p2_licence, p1_points, p2_points, finished_at
+           FROM ddj_bracket_matches
+          WHERE tournoi_id = $1 AND finished_at IS NOT NULL
+         UNION ALL
+         SELECT 'consolante' AS phase_kind, phase::text AS phase_label,
+                p1_licence, p2_licence, p1_points, p2_points, finished_at
+           FROM ddj_consolante_matches
+          WHERE tournoi_id = $1 AND finished_at IS NOT NULL
+          ORDER BY finished_at DESC
+          LIMIT 5`,
+        [tournoiId],
+        (err, rows) => err ? reject(err) : resolve(rows || [])
+      );
+    });
+
     // 5. Resolve all licences to (first_name, last_name) via players
     //    table. We do ONE query for all distinct licences appearing
-    //    in inProgress + upcoming, and build a lookup map.
+    //    in inProgress + upcoming + recent, and build a lookup map.
     const licenceSet = new Set();
     for (const m of inProgress) {
       if (m.p1_licence) licenceSet.add(m.p1_licence);
       if (m.p2_licence) licenceSet.add(m.p2_licence);
     }
     for (const m of upcoming) {
+      if (m.p1_licence) licenceSet.add(m.p1_licence);
+      if (m.p2_licence) licenceSet.add(m.p2_licence);
+    }
+    for (const m of recent) {
       if (m.p1_licence) licenceSet.add(m.p1_licence);
       if (m.p2_licence) licenceSet.add(m.p2_licence);
     }
@@ -241,6 +271,15 @@ router.get('/:tournoi_id/feed', async (req, res) => {
         match_number: m.match_number,
         p1_name: lookupName(m.p1_licence),
         p2_name: lookupName(m.p2_licence)
+      })),
+      recent: recent.map(m => ({
+        phase_kind: m.phase_kind,
+        phase_label: String(m.phase_label),
+        p1_name: lookupName(m.p1_licence),
+        p2_name: lookupName(m.p2_licence),
+        p1_points: m.p1_points,
+        p2_points: m.p2_points,
+        finished_at: m.finished_at
       })),
       progress: { done, total, percent }
     });
