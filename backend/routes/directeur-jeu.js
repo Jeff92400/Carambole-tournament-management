@@ -1097,13 +1097,16 @@ async function loadPouleMatches(db, orgId, tournoiId) {
   });
 
   // Saved matches (may be empty if DdJ hasn't entered anything yet)
+  // V 2.0.697 — also pull started_at / finished_at so the front-end can
+  // tell apart "not started" / "in progress" / "finished" without relying
+  // solely on score presence.
   const savedRows = await new Promise((resolve, reject) => {
     db.all(
       `SELECT id, poule_number, match_number, table_number,
               p1_licence, p2_licence,
               p1_points, p1_reprises, p1_serie,
               p2_points, p2_reprises, p2_serie,
-              entered_at
+              entered_at, started_at, finished_at
        FROM ddj_poule_matches
        WHERE tournoi_id = $1
        ORDER BY poule_number, match_number`,
@@ -1163,6 +1166,12 @@ async function loadPouleMatches(db, orgId, tournoiId) {
         p2_reprises: saved ? saved.p2_reprises : null,
         p2_serie: saved ? saved.p2_serie : null,
         entered_at: saved ? saved.entered_at : null,
+        // V 2.0.697 — explicit start/finish timestamps, so the UI can tell:
+        //   started_at == null               → "À jouer" (button "Démarrer")
+        //   started_at && !finished_at       → "En cours" (badge with start time)
+        //   finished_at                      → "Terminé" (existing path)
+        started_at: saved ? saved.started_at : null,
+        finished_at: saved ? saved.finished_at : null,
         is_played: saved && saved.p1_points != null && saved.p2_points != null
       };
       // Convenience: derive match points + outcome for UI
@@ -3906,6 +3915,78 @@ router.get('/referees/search', authenticateToken, requireDdJ, async (req, res) =
 // Idempotent: if the match was already started (or already finished),
 // we just update the table_number and never overwrite an existing
 // started_at.
+
+// V 2.0.697 — Auto-assign physical tables to poules.
+//
+// After the DdJ has set up the session (table_count + table_numbers) and
+// the poules have been generated (étape 2), the DdJ is offered an option
+// to auto-assign tables: Poule A → table_numbers[0], Poule B → table_numbers[1],
+// etc. This UPSERTs every match in every poule with just its table_number
+// set (no scores, no started_at), so when the matchs page loads, every
+// match already shows "Match 1 · Table 6".
+//
+// Idempotent: re-calling overwrites the assignment (useful if the DdJ
+// changes the table count or rearranges poules later).
+router.post('/competitions/:id/auto-assign-tables', authenticateToken, requireDdJ, async (req, res) => {
+  const db = getDb();
+  const orgId = req.user.organizationId || null;
+  const tournoiId = parseInt(req.params.id, 10);
+  if (!Number.isFinite(tournoiId)) return res.status(400).json({ error: 'ID tournoi invalide' });
+
+  try {
+    // Load session to get the actual table numbers
+    const session = await new Promise((resolve, reject) => {
+      db.get(
+        `SELECT s.table_count, s.table_numbers
+           FROM ddj_session s
+           JOIN tournoi_ext t ON t.tournoi_id = s.tournoi_id
+          WHERE s.tournoi_id = $1
+            AND ($2::int IS NULL OR t.organization_id = $2)`,
+        [tournoiId, orgId],
+        (err, row) => err ? reject(err) : resolve(row)
+      );
+    });
+    if (!session) return res.status(404).json({ error: 'Session DdJ introuvable — configurez d\'abord la journée.' });
+    const tableNumbers = parseTableNumbers(session.table_numbers, session.table_count);
+
+    // Reload the schedule via loadPouleMatches: it gives us the canonical
+    // poule list + each match's player licences (via convocation_poules).
+    const ctx = await loadPouleMatches(db, orgId, tournoiId);
+    if (ctx.error) return res.status(404).json({ error: 'Tournoi introuvable' });
+    if (!ctx.poules || ctx.poules.length === 0) {
+      return res.status(409).json({ error: 'Les poules ne sont pas encore générées.' });
+    }
+
+    // Cycle through table numbers if there are more poules than tables.
+    let assigned = 0;
+    for (let i = 0; i < ctx.poules.length; i++) {
+      const poule = ctx.poules[i];
+      const tableNum = tableNumbers[i % tableNumbers.length];
+      for (const match of poule.matches || []) {
+        await new Promise((resolve, reject) => {
+          db.run(
+            `INSERT INTO ddj_poule_matches
+               (tournoi_id, poule_number, match_number, table_number,
+                p1_licence, p2_licence)
+             VALUES ($1, $2, $3, $4, $5, $6)
+             ON CONFLICT (tournoi_id, poule_number, match_number)
+             DO UPDATE SET
+               table_number = EXCLUDED.table_number`,
+            [tournoiId, poule.number, match.match_number, tableNum,
+             match.p1_licence, match.p2_licence],
+            (err) => err ? reject(err) : resolve()
+          );
+        });
+        assigned++;
+      }
+    }
+
+    res.json({ ok: true, assigned, table_numbers: tableNumbers });
+  } catch (err) {
+    console.error('[DdJ auto-assign-tables] error:', err);
+    res.status(500).json({ error: 'Erreur lors de l\'allocation automatique' });
+  }
+});
 
 router.post('/competitions/:id/poule-matches/start', authenticateToken, requireDdJ, async (req, res) => {
   const db = getDb();

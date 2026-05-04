@@ -488,7 +488,18 @@
               <button class="djv3-btn-primary" style="padding:10px 18px;border:0;border-radius:6px;color:white;background:#1a5276;cursor:pointer;font-weight:600;"
                 onclick="DjV3.openSessionModal()">⚙️ Configurer la session DdJ</button>`;
     }
-    const cards = (state.tables || []).map(t => {
+    // V 2.0.697 — Defensive fallback: if state.tables is empty (e.g. the
+    // tables-status endpoint failed silently or returned an unexpected
+    // shape), still show the configured tables as "free" so the DdJ has
+    // a usable view instead of an empty drawer.
+    let renderTables = state.tables || [];
+    if (renderTables.length === 0 && state.session) {
+      const fallbackNumbers = (state.session.table_numbers && state.session.table_numbers.length)
+        ? state.session.table_numbers
+        : Array.from({ length: state.session.table_count || 0 }, (_, i) => i + 1);
+      renderTables = fallbackNumbers.map(n => ({ table_number: n, status: 'free', match: null }));
+    }
+    const cards = renderTables.map(t => {
       const matchHtml = t.match
         ? `<div class="djv3-tmatch">${escapeHtml(t.match.phase_kind)} · ${escapeHtml(t.match.phase_label)}<br>${formatTime(t.match.started_at)}</div>`
         : '<div class="djv3-tmatch">prête</div>';
@@ -610,9 +621,62 @@
         await loadSession();
         await loadTablesStatus();
         guideMessage(`Session démarrée. ${tc} tables : ${tableNumbers.join(', ')}.`, 'success');
+
+        // V 2.0.697 — After the session is saved, propose to auto-assign
+        // the configured tables to the poules. The DdJ can opt out and do
+        // it manually in étape 2 (Poules) instead.
+        offerAutoAssignTables(tableNumbers);
       } catch (e) {
         console.error(e);
         alert('Erreur réseau');
+      }
+    });
+  }
+
+  // V 2.0.697 — Confirmation dialog: auto-assign poules → tables, or do it manually?
+  function offerAutoAssignTables(tableNumbers) {
+    const backdrop = document.createElement('div');
+    backdrop.className = 'djv3-modal-backdrop';
+    const modal = document.createElement('div');
+    modal.className = 'djv3-modal';
+    modal.addEventListener('click', e => e.stopPropagation());
+    modal.innerHTML = `
+      <h3>📋 Allocation des tables aux poules</h3>
+      <p style="color:#444;margin:10px 0 16px 0;">Voulez-vous une <strong>allocation automatique</strong> des tables aux poules (Poule A → Table ${tableNumbers[0]}, Poule B → Table ${tableNumbers[1] || tableNumbers[0]}, etc.) ou souhaitez-vous le faire <strong>manuellement</strong> sur l'écran des poules ?</p>
+      <p style="color:#888;font-size:13px;margin-bottom:18px;">L'allocation manuelle reste possible à tout moment depuis l'étape 2 (Poules).</p>
+      <div class="djv3-modal-actions">
+        <button class="djv3-btn-secondary" id="djv3-aa-manual">Manuelle</button>
+        <button class="djv3-btn-primary" id="djv3-aa-auto">Allocation auto</button>
+      </div>
+    `;
+    backdrop.appendChild(modal);
+    backdrop.addEventListener('click', () => backdrop.remove());
+    document.body.appendChild(backdrop);
+
+    document.getElementById('djv3-aa-manual').addEventListener('click', () => backdrop.remove());
+    document.getElementById('djv3-aa-auto').addEventListener('click', async () => {
+      try {
+        const r = await authFetch(`/api/directeur-jeu/competitions/${state.tournoiId}/auto-assign-tables`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}'
+        });
+        if (!r.ok) {
+          const err = await r.json().catch(() => ({}));
+          if (r.status === 409) {
+            alert(err.error || 'Les poules ne sont pas encore générées. Vous pourrez relancer l\'allocation auto plus tard depuis le bouton Modifier.');
+          } else {
+            alert(err.error || 'Erreur allocation auto');
+          }
+          backdrop.remove();
+          return;
+        }
+        const data = await r.json();
+        backdrop.remove();
+        guideMessage(`Allocation auto effectuée : ${data.assigned} matchs sur les tables ${tableNumbers.join(', ')}.`, 'success');
+        await loadTablesStatus();
+      } catch (e) {
+        console.error('auto-assign error', e);
+        alert('Erreur réseau');
+        backdrop.remove();
       }
     });
   }
