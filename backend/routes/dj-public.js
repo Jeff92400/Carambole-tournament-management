@@ -57,16 +57,28 @@ router.get('/:tournoi_id/feed', async (req, res) => {
       return res.status(404).json({ error: 'Tournoi introuvable' });
     }
 
-    // 2. DdJ session (table_count, started_at)
+    // 2. DdJ session (table_count, table_numbers, started_at)
     const session = await new Promise((resolve, reject) => {
       db.get(
-        `SELECT table_count, ddj_name, started_at
+        `SELECT table_count, table_numbers, ddj_name, started_at
            FROM ddj_session
           WHERE tournoi_id = $1`,
         [tournoiId],
         (err, row) => err ? reject(err) : resolve(row)
       );
     });
+    // Parse custom table numbers — fall back to [1..table_count] for legacy rows
+    const tableNumbers = (() => {
+      if (!session) return [];
+      if (!session.table_numbers) return Array.from({ length: session.table_count }, (_, i) => i + 1);
+      try {
+        const arr = JSON.parse(session.table_numbers);
+        if (!Array.isArray(arr) || arr.length === 0) return Array.from({ length: session.table_count }, (_, i) => i + 1);
+        return arr.map(n => parseInt(n, 10)).filter(Number.isFinite);
+      } catch (_) {
+        return Array.from({ length: session.table_count }, (_, i) => i + 1);
+      }
+    })();
 
     // No session yet → return a minimal "not started" payload
     if (!session) {
@@ -165,14 +177,14 @@ router.get('/:tournoi_id/feed', async (req, res) => {
       return e ? e.name : 'Joueur';
     };
 
-    // 6. Build per-table status array
+    // 6. Build per-table status array — iterate over the actual physical
+    //    numbers (e.g. [6,7,8,9]) so the TV displays "Table 6" etc.
     const inProgressByTable = new Map();
     for (const m of inProgress) inProgressByTable.set(m.table_number, m);
 
-    const tables = [];
-    for (let n = 1; n <= session.table_count; n++) {
+    const tables = tableNumbers.map((n) => {
       const m = inProgressByTable.get(n);
-      tables.push({
+      return {
         table_number: n,
         status: m ? 'busy' : 'free',
         match: m ? {
@@ -184,8 +196,8 @@ router.get('/:tournoi_id/feed', async (req, res) => {
           p2_points: m.p2_points,
           started_at: m.started_at
         } : null
-      });
-    }
+      };
+    });
 
     // 7. Progress: count finished matches vs total expected
     //    For simplicity we only count what's already in the 3 tables.

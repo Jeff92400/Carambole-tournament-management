@@ -5,6 +5,25 @@ const appSettings = require('../utils/app-settings');
 const { getPouleConfigForOrg } = require('../utils/poule-config');
 const getDb = () => require('../db-loader');
 
+// V 2.0.695 — Parse the JSON-encoded table_numbers column.
+// Returns an integer array of length === expectedCount.
+//   raw === null / undefined / empty / unparseable → fallback to [1..expectedCount]
+//   raw is a JSON array of integers → return it as-is, padded/truncated to expectedCount
+// Always defensive: never throws, always returns a valid array.
+function parseTableNumbers(raw, expectedCount) {
+  const fallback = () => Array.from({ length: expectedCount }, (_, i) => i + 1);
+  if (raw == null || raw === '') return fallback();
+  let parsed;
+  try { parsed = typeof raw === 'string' ? JSON.parse(raw) : raw; }
+  catch (_) { return fallback(); }
+  if (!Array.isArray(parsed)) return fallback();
+  const ints = parsed.map(n => parseInt(n, 10)).filter(n => Number.isFinite(n) && n > 0);
+  if (ints.length === 0) return fallback();
+  // Pad with sequential numbers if too short, truncate if too long
+  while (ints.length < expectedCount) ints.push(ints.length + 1);
+  return ints.slice(0, expectedCount);
+}
+
 // ============================================================================
 // Serpentine distribution — same algorithm as the admin flow
 // (inscriptions.js distributeSimulationSerpentine). Duplicated here rather
@@ -3617,7 +3636,7 @@ router.get('/competitions/:id/ddj-session', authenticateToken, requireDdJ, async
 
     const session = await new Promise((resolve, reject) => {
       db.get(
-        `SELECT tournoi_id, table_count, ddj_user_id, ddj_name, ddj_licence,
+        `SELECT tournoi_id, table_count, table_numbers, ddj_user_id, ddj_name, ddj_licence,
                 started_at, ended_at
            FROM ddj_session
           WHERE tournoi_id = $1`,
@@ -3626,12 +3645,17 @@ router.get('/competitions/:id/ddj-session', authenticateToken, requireDdJ, async
       );
     });
 
+    // Parse table_numbers JSON (legacy rows have it null → fall back to 1..N)
+    if (session) {
+      session.table_numbers = parseTableNumbers(session.table_numbers, session.table_count);
+    }
+
     // If no session yet, propose pre-fill from this user's last session
     let prefill = null;
     if (!session) {
       prefill = await new Promise((resolve, reject) => {
         db.get(
-          `SELECT ddj_name, ddj_licence
+          `SELECT ddj_name, ddj_licence, table_numbers
              FROM ddj_session
             WHERE ddj_user_id = $1
             ORDER BY started_at DESC
@@ -3640,6 +3664,9 @@ router.get('/competitions/:id/ddj-session', authenticateToken, requireDdJ, async
           (err, row) => err ? reject(err) : resolve(row || null)
         );
       });
+      if (prefill && prefill.table_numbers) {
+        try { prefill.table_numbers = JSON.parse(prefill.table_numbers); } catch (_) { prefill.table_numbers = null; }
+      }
     }
 
     res.json({ session: session || null, prefill });
@@ -3669,6 +3696,22 @@ router.post('/competitions/:id/ddj-session', authenticateToken, requireDdJ, asyn
     return res.status(400).json({ error: 'Nom du Directeur de Jeu requis' });
   }
 
+  // V 2.0.695 — Custom physical table numbers (e.g. [6,7,8,9] for clubs
+  // whose tables aren't numbered 1..N). Optional — if missing, the back
+  // end stores NULL and clients fall back to [1..tableCount].
+  let tableNumbersJson = null;
+  if (Array.isArray(b.table_numbers) && b.table_numbers.length > 0) {
+    const ints = b.table_numbers.map(n => parseInt(n, 10)).filter(n => Number.isFinite(n) && n > 0 && n < 1000);
+    if (ints.length !== tableCount) {
+      return res.status(400).json({ error: 'Le nombre de numéros de tables doit correspondre au nombre de tables' });
+    }
+    // Reject duplicates — same table number twice doesn't make physical sense.
+    if (new Set(ints).size !== ints.length) {
+      return res.status(400).json({ error: 'Les numéros de tables doivent être uniques' });
+    }
+    tableNumbersJson = JSON.stringify(ints);
+  }
+
   try {
     // Verify the tournament belongs to caller's org
     const tournament = await new Promise((resolve, reject) => {
@@ -3687,19 +3730,26 @@ router.post('/competitions/:id/ddj-session', authenticateToken, requireDdJ, asyn
     await new Promise((resolve, reject) => {
       db.run(
         `INSERT INTO ddj_session
-           (tournoi_id, table_count, ddj_user_id, ddj_name, ddj_licence)
-         VALUES ($1, $2, $3, $4, $5)
+           (tournoi_id, table_count, table_numbers, ddj_user_id, ddj_name, ddj_licence)
+         VALUES ($1, $2, $3, $4, $5, $6)
          ON CONFLICT (tournoi_id) DO UPDATE SET
            table_count = EXCLUDED.table_count,
+           table_numbers = EXCLUDED.table_numbers,
            ddj_user_id = EXCLUDED.ddj_user_id,
            ddj_name = EXCLUDED.ddj_name,
            ddj_licence = EXCLUDED.ddj_licence`,
-        [tournoiId, tableCount, req.user.userId || null, ddjName, ddjLicence],
+        [tournoiId, tableCount, tableNumbersJson, req.user.userId || null, ddjName, ddjLicence],
         (err) => err ? reject(err) : resolve()
       );
     });
 
-    res.json({ ok: true, table_count: tableCount, ddj_name: ddjName, ddj_licence: ddjLicence });
+    res.json({
+      ok: true,
+      table_count: tableCount,
+      table_numbers: tableNumbersJson ? JSON.parse(tableNumbersJson) : parseTableNumbers(null, tableCount),
+      ddj_name: ddjName,
+      ddj_licence: ddjLicence
+    });
   } catch (err) {
     console.error('[DdJ ddj-session POST] error:', err);
     res.status(500).json({ error: 'Erreur lors de la sauvegarde de la session DdJ' });
@@ -3722,10 +3772,10 @@ router.get('/competitions/:id/tables-status', authenticateToken, requireDdJ, asy
   }
 
   try {
-    // Org check + load table_count from session
+    // Org check + load table_count + table_numbers from session
     const session = await new Promise((resolve, reject) => {
       db.get(
-        `SELECT s.table_count
+        `SELECT s.table_count, s.table_numbers
            FROM ddj_session s
            JOIN tournoi_ext t ON t.tournoi_id = s.tournoi_id
           WHERE s.tournoi_id = $1
@@ -3735,8 +3785,9 @@ router.get('/competitions/:id/tables-status', authenticateToken, requireDdJ, asy
       );
     });
     if (!session) {
-      return res.json({ table_count: 0, tables: [] });
+      return res.json({ table_count: 0, table_numbers: [], tables: [] });
     }
+    const tableNumbers = parseTableNumbers(session.table_numbers, session.table_count);
 
     // Find all matches currently in progress (started, not finished)
     // across the 3 tables. Same shape for each, UNIONed.
@@ -3768,10 +3819,11 @@ router.get('/competitions/:id/tables-status', authenticateToken, requireDdJ, asy
     const byTable = new Map();
     for (const m of inProgress) byTable.set(m.table_number, m);
 
-    const tables = [];
-    for (let n = 1; n <= session.table_count; n++) {
+    // Iterate over the *actual* physical table numbers (e.g. [6,7,8,9]),
+    // not 1..N — so the response order matches the DdJ's mental model.
+    const tables = tableNumbers.map((n) => {
       const m = byTable.get(n);
-      tables.push({
+      return {
         table_number: n,
         status: m ? 'busy' : 'free',
         match: m ? {
@@ -3781,10 +3833,10 @@ router.get('/competitions/:id/tables-status', authenticateToken, requireDdJ, asy
           p2_licence: m.p2_licence,
           started_at: m.started_at
         } : null
-      });
-    }
+      };
+    });
 
-    res.json({ table_count: session.table_count, tables });
+    res.json({ table_count: session.table_count, table_numbers: tableNumbers, tables });
   } catch (err) {
     console.error('[DdJ tables-status] error:', err);
     res.status(500).json({ error: 'Erreur lors du calcul du statut des tables' });

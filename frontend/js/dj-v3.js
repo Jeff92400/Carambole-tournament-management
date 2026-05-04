@@ -105,14 +105,21 @@
     .djv3-modal .djv3-btn-secondary { background: #e0e0e0; color: #333; }
 
     .djv3-drawer-backdrop {
-      position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 8000;
+      position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 9500;
+      display: flex; align-items: flex-start; justify-content: center;
+      padding: 80px 16px 16px 16px;
+      overflow-y: auto;
     }
+    /* V 2.0.695 — Centered modal-style overlay (was top-anchored, which
+       overlapped the MODE TEST banner and the navbar on mobile/PC). */
     .djv3-drawer {
-      position: fixed; top: 0; left: 0; right: 0;
-      background: white; padding: 20px;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.2);
-      max-height: 85vh; overflow-y: auto;
-      z-index: 8001;
+      position: relative;
+      background: white; padding: 20px 24px;
+      border-radius: 12px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.35);
+      max-height: calc(100vh - 100px); overflow-y: auto;
+      z-index: 9501;
+      width: min(640px, 100%);
       animation: djv3-slidein 0.2s ease-out;
     }
     @keyframes djv3-slidein {
@@ -251,24 +258,24 @@
     const backdrop = document.createElement('div');
     backdrop.className = 'djv3-drawer-backdrop';
     backdrop.id = 'djv3-drawer-backdrop';
-    backdrop.addEventListener('click', closeTablesDrawer);
+    backdrop.addEventListener('click', (e) => {
+      // Only close if click is on backdrop itself, not on the drawer
+      if (e.target === backdrop) closeTablesDrawer();
+    });
 
     const drawer = document.createElement('div');
     drawer.className = 'djv3-drawer';
     drawer.id = 'djv3-drawer';
-    drawer.addEventListener('click', (e) => e.stopPropagation());
     drawer.innerHTML = renderDrawerHtml();
+    backdrop.appendChild(drawer);
 
     document.body.appendChild(backdrop);
-    document.body.appendChild(drawer);
 
     drawer.querySelector('.djv3-close').addEventListener('click', closeTablesDrawer);
   }
 
   function closeTablesDrawer() {
-    const d = document.getElementById('djv3-drawer');
     const b = document.getElementById('djv3-drawer-backdrop');
-    if (d) d.remove();
     if (b) b.remove();
     state.drawerOpen = false;
   }
@@ -315,14 +322,21 @@
     const initName    = (state.session && state.session.ddj_name)    || (prefill && prefill.ddj_name)    || '';
     const initLicence = (state.session && state.session.ddj_licence) || (prefill && prefill.ddj_licence) || '';
     const initCount   = (state.session && state.session.table_count) || 4;
+    // V 2.0.695 — actual physical table numbers (clubs may have e.g. [6,7,8,9])
+    const initNumbers = (state.session && state.session.table_numbers)
+      || (prefill && prefill.table_numbers)
+      || Array.from({ length: initCount }, (_, i) => i + 1);
 
     modal.innerHTML = `
       <h3>⚙️ Configuration de la journée</h3>
-      <p style="color:#666;font-size:13px;">Saisissez le nombre de tables disponibles + votre identité de Directeur de Jeu.</p>
+      <p style="color:#666;font-size:13px;">Saisissez le nombre de tables disponibles, leur numéro physique dans le club, et votre identité de Directeur de Jeu.</p>
       <label>Nombre de tables disponibles</label>
       <input type="number" id="djv3-tc" min="1" max="20" value="${initCount}" />
+      <label style="margin-top:14px;">Numéros physiques des tables dans votre club</label>
+      <p style="color:#666;font-size:12px;margin:0 0 6px 0;">Si vos billards sont numérotés 6, 7, 8, 9 par exemple, indiquez-le ici. Sinon, laissez 1, 2, 3, 4.</p>
+      <div id="djv3-tn-grid" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;"></div>
       <label>Nom du Directeur de Jeu</label>
-      <input type="text" id="djv3-name" value="${escapeAttr(initName)}" placeholder="Sylvain Vullien" />
+      <input type="text" id="djv3-name" value="${escapeAttr(initName)}" placeholder="Jean DUPONT" />
       <label>N° de licence FFB (optionnel)</label>
       <input type="text" id="djv3-licence" value="${escapeAttr(initLicence)}" placeholder="9412345" />
       <div class="djv3-modal-actions">
@@ -334,6 +348,34 @@
     backdrop.addEventListener('click', () => backdrop.remove());
     document.body.appendChild(backdrop);
 
+    // V 2.0.695 — Build the table-number inputs grid and re-render it
+    // whenever the count changes. Existing inputs preserve their values
+    // so the DdJ doesn't lose what they typed when bumping the count up.
+    function renderTableNumbersGrid() {
+      const tcEl = document.getElementById('djv3-tc');
+      const tc = Math.max(1, Math.min(20, parseInt(tcEl.value, 10) || 1));
+      const grid = document.getElementById('djv3-tn-grid');
+      // Read current values from existing inputs (so we don't reset what
+      // the user already typed when the count just changed by 1).
+      const current = Array.from(grid.querySelectorAll('input')).map(i => parseInt(i.value, 10));
+      const next = [];
+      for (let i = 0; i < tc; i++) {
+        if (Number.isFinite(current[i])) next.push(current[i]);
+        else if (Number.isFinite(initNumbers[i])) next.push(initNumbers[i]);
+        else next.push(i + 1);
+      }
+      grid.innerHTML = next.map((v, i) => `
+        <div style="display:flex;align-items:center;gap:4px;background:#f0f4fa;padding:4px 8px;border-radius:6px;">
+          <span style="font-size:12px;color:#666;font-weight:600;">T${i + 1} →</span>
+          <input type="number" min="1" max="999" value="${v}"
+                 class="djv3-tn-input" data-idx="${i}"
+                 style="width:60px;padding:6px;border:1px solid #ddd;border-radius:4px;font-size:14px;text-align:center;">
+        </div>
+      `).join('');
+    }
+    renderTableNumbersGrid();
+    document.getElementById('djv3-tc').addEventListener('input', renderTableNumbersGrid);
+
     document.getElementById('djv3-cancel').addEventListener('click', () => backdrop.remove());
     document.getElementById('djv3-save').addEventListener('click', async () => {
       const tc = parseInt(document.getElementById('djv3-tc').value, 10);
@@ -341,11 +383,23 @@
       const lic  = document.getElementById('djv3-licence').value.trim();
       if (!Number.isFinite(tc) || tc < 1) return alert('Nombre de tables invalide');
       if (!name) return alert('Nom du DdJ requis');
+
+      // Read the actual physical table numbers from the grid.
+      const tableNumbers = Array.from(document.querySelectorAll('.djv3-tn-input'))
+        .map(i => parseInt(i.value, 10))
+        .filter(n => Number.isFinite(n) && n > 0);
+      if (tableNumbers.length !== tc) {
+        return alert('Veuillez renseigner un numéro pour chaque table.');
+      }
+      if (new Set(tableNumbers).size !== tableNumbers.length) {
+        return alert('Les numéros de tables doivent être uniques (pas deux fois le même).');
+      }
+
       try {
         const r = await authFetch(`/api/directeur-jeu/competitions/${state.tournoiId}/ddj-session`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ table_count: tc, ddj_name: name, ddj_licence: lic })
+          body: JSON.stringify({ table_count: tc, table_numbers: tableNumbers, ddj_name: name, ddj_licence: lic })
         });
         if (!r.ok) {
           const err = await r.json().catch(() => ({}));
@@ -354,7 +408,7 @@
         backdrop.remove();
         await loadSession();
         await loadTablesStatus();
-        guideMessage(`Session démarrée. ${tc} tables disponibles.`, 'success');
+        guideMessage(`Session démarrée. ${tc} tables : ${tableNumbers.join(', ')}.`, 'success');
       } catch (e) {
         console.error(e);
         alert('Erreur réseau');

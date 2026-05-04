@@ -406,7 +406,7 @@
   <script src="js/auth-utils.js?v=197"></script>
   <script src="js/app-branding.js?v=216"></script>
   <script src="js/ddj-step-nav.js?v=3"></script>
-  <script src="js/dj-v3.js?v=2"></script>
+  <script src="js/dj-v3.js?v=3"></script>
   <script>
     const API_URL = '/api';
 
@@ -977,15 +977,27 @@
             // those players. Across all poules, take the first un-played
             // match in match_order. Also nudge the dashboard to refresh.
             try {
-              const tableNum = m.table_number || '?';
+              // V 2.0.695 — Resolve the table number with a fall-back chain:
+              //   match.table_number → poule.table_number (assigned at étape 2)
+              //   → '?' as a last resort. The "Table ?" symptom is now gone
+              //   for tournaments where the poules page has assigned tables.
+              const finishedPoule = (state.poules || []).find(p => p.number === pouleNumber);
+              const tableNum = m.table_number
+                || (updatedPoule && updatedPoule.table_number)
+                || (finishedPoule && finishedPoule.table_number)
+                || '?';
               if (typeof DjV3 !== 'undefined' && DjV3.guideMessage) {
                 let nextMsg = `Match terminé Table ${tableNum}.`;
-                const allMatches = (state.poules || []).flatMap(p => (p.matches || []).map(mm => ({ ...mm, _poule: p.number })));
+                const allMatches = (state.poules || []).flatMap(p =>
+                  (p.matches || []).map(mm => ({ ...mm, _poule: p.number, _poule_table: p.table_number }))
+                );
                 const nextMatch = allMatches.find(mm => !mm.is_played && mm.match_number !== matchNumber);
                 if (nextMatch) {
                   const next1 = (nextMatch.p1_name || '').split(' ').slice(-1)[0] || 'J1';
                   const next2 = (nextMatch.p2_name || '').split(' ').slice(-1)[0] || 'J2';
-                  nextMsg += ` Appeler ${next1} et ${next2} (Poule ${nextMatch._poule}, match ${nextMatch.match_number}).`;
+                  const nextTable = nextMatch.table_number || nextMatch._poule_table;
+                  const tableHint = nextTable ? ` sur Table ${nextTable}` : '';
+                  nextMsg += ` Appeler ${next1} et ${next2}${tableHint} (Poule ${nextMatch._poule}, match ${nextMatch.match_number}).`;
                   DjV3.guideMessage(nextMsg, 'action');
                 } else {
                   DjV3.guideMessage(nextMsg + ' Tous les matchs de poule sont saisis !', 'success');

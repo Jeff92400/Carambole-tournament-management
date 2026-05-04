@@ -2733,6 +2733,10 @@ async function initializeDatabase() {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
+    // V 2.0.695 — Custom physical table numbers per club (some clubs have
+    // tables numbered 6-9 instead of 1-4, etc.). Stored as a JSON array of
+    // integers, e.g. '[6,7,8,9]'. NULL or empty => fall back to [1..table_count].
+    await client.query(`ALTER TABLE ddj_session ADD COLUMN IF NOT EXISTS table_numbers TEXT`);
 
     // Tracking columns on the 3 ddj match tables (idempotent).
     // started_at = match physically begun on a billiard table.
