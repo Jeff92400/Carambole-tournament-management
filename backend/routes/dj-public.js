@@ -102,21 +102,21 @@ router.get('/:tournoi_id/feed', async (req, res) => {
       db.all(
         `SELECT 'poule' AS phase_kind, table_number, p1_licence, p2_licence,
                 p1_points, p2_points, started_at,
-                poule_number AS phase_label, match_number AS phase_index
+                poule_number::text AS phase_label, match_number AS phase_index
            FROM ddj_poule_matches
           WHERE tournoi_id = $1 AND started_at IS NOT NULL AND finished_at IS NULL
             AND table_number IS NOT NULL
          UNION ALL
          SELECT 'bracket' AS phase_kind, table_number, p1_licence, p2_licence,
                 p1_points, p2_points, started_at,
-                phase AS phase_label, NULL AS phase_index
+                phase::text AS phase_label, NULL::int AS phase_index
            FROM ddj_bracket_matches
           WHERE tournoi_id = $1 AND started_at IS NOT NULL AND finished_at IS NULL
             AND table_number IS NOT NULL
          UNION ALL
          SELECT 'consolante' AS phase_kind, table_number, p1_licence, p2_licence,
                 p1_points, p2_points, started_at,
-                phase AS phase_label, NULL AS phase_index
+                phase::text AS phase_label, NULL::int AS phase_index
            FROM ddj_consolante_matches
           WHERE tournoi_id = $1 AND started_at IS NOT NULL AND finished_at IS NULL
             AND table_number IS NOT NULL`,
