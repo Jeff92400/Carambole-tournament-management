@@ -405,15 +405,19 @@
   // -------------------------------------------------------------------------
   // Tables drawer
   // -------------------------------------------------------------------------
-  function openTablesDrawer() {
+  async function openTablesDrawer() {
     if (state.drawerOpen) return;
     state.drawerOpen = true;
+
+    // V 2.0.701 — force a fresh fetch before rendering so the drawer never
+    // shows stale data (the 10s poll could otherwise lag behind a match
+    // that was just started or finished).
+    await loadTablesStatus();
 
     const backdrop = document.createElement('div');
     backdrop.className = 'djv3-drawer-backdrop';
     backdrop.id = 'djv3-drawer-backdrop';
     backdrop.addEventListener('click', (e) => {
-      // Only close if click is on backdrop itself, not on the drawer
       if (e.target === backdrop) closeTablesDrawer();
     });
 
