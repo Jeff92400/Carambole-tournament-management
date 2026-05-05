@@ -5706,24 +5706,29 @@ router.get('/:id/export-finale-ligue', authenticateToken, async (req, res) => {
     cDate.alignment = { horizontal: 'center', vertical: 'middle' };
     cDate.border = { top: { style: 'thin' }, bottom: { style: 'thin' } };
 
-    // Row 3: Mode | Catégorie | Distance | Reprises (each with a label cell + value cell)
+    // Row 3: Mode | Catégorie | Distance | Reprises — each label/value
+    // pair is merged across 1-2 columns so French labels ("Catégorie :",
+    // "Distance :", "Reprises :") fit without truncation. Total = 13
+    // columns (A-M) distributed across 8 merged blocks.
     const r3 = ws.getRow(3);
     r3.height = 22;
     const params = [
-      { lbl: 'Mode de jeu :',  val: (tournament.game_type || '').toLowerCase(), labelRange: 'A3:A3', valueRange: 'B3:D3' },
-      { lbl: 'Catégorie :',    val: tournament.level || '',                      labelRange: 'E3:E3', valueRange: 'F3:G3' },
-      { lbl: 'Distance :',     val: distance,                                    labelRange: 'H3:H3', valueRange: 'I3:J3' },
-      { lbl: 'Reprises :',     val: reprises,                                    labelRange: 'K3:K3', valueRange: 'L3:M3' }
+      { lbl: 'Mode de jeu :', val: (tournament.game_type || '').toLowerCase(), labelRange: 'A3:B3', valueRange: 'C3:D3' },
+      { lbl: 'Catégorie :',   val: tournament.level || '',                     labelRange: 'E3:F3', valueRange: 'G3:G3' },
+      { lbl: 'Distance :',    val: distance,                                   labelRange: 'H3:I3', valueRange: 'J3:J3' },
+      { lbl: 'Reprises :',    val: reprises,                                   labelRange: 'K3:L3', valueRange: 'M3:M3' }
     ];
     for (const p of params) {
-      if (p.labelRange.split(':')[0] !== p.labelRange.split(':')[1]) ws.mergeCells(p.labelRange);
-      ws.mergeCells(p.valueRange);
-      const lc = ws.getCell(p.labelRange.split(':')[0]);
+      const [lblStart, lblEnd] = p.labelRange.split(':');
+      const [valStart, valEnd] = p.valueRange.split(':');
+      if (lblStart !== lblEnd) ws.mergeCells(p.labelRange);
+      if (valStart !== valEnd) ws.mergeCells(p.valueRange);
+      const lc = ws.getCell(lblStart);
       lc.value = p.lbl;
       lc.font = { bold: true, color: { argb: 'FF1F4E79' } };
       lc.alignment = { horizontal: 'right', vertical: 'middle' };
       lc.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: beige } };
-      const vc = ws.getCell(p.valueRange.split(':')[0]);
+      const vc = ws.getCell(valStart);
       vc.value = p.val;
       vc.font = { bold: true, color: { argb: 'FFC00000' } };
       vc.alignment = { horizontal: 'center', vertical: 'middle' };
@@ -5812,10 +5817,9 @@ router.get('/:id/export-finale-ligue', authenticateToken, async (req, res) => {
           dc.border = allBorders;
           dc.alignment = { horizontal: 'center', vertical: 'middle' };
 
-          // V 2.0.719 — embed club logo (BYTEA from clubs.logo_data)
-          // ExcelJS uses 0-indexed col/row in the {tl, br} form. The
-          // diagonal spans 2 cols × 3 rows; we inset by ~0.15 cells on
-          // each side so the logo doesn't bleed into the borders.
+          // V 2.0.720 — embed club logo (BYTEA from clubs.logo_data) with
+          // a tighter inset (0.05 → ~5% margin per side) so the logo fills
+          // most of the diagonal cell instead of looking lost in beige.
           if (player.club_logo_data) {
             try {
               const buf = Buffer.isBuffer(player.club_logo_data)
@@ -5825,12 +5829,11 @@ router.get('/:id/export-finale-ligue', authenticateToken, async (req, res) => {
               const ext = ct.includes('jpeg') || ct.includes('jpg') ? 'jpeg'
                         : ct.includes('gif') ? 'gif' : 'png';
               const imgId = workbook.addImage({ buffer: buf, extension: ext });
-              // Column letter to 0-indexed: B=1, C=2, D=3, E=4, F=5, G=6, H=7, I=8
-              const colIdx = c1.charCodeAt(0) - 'A'.charCodeAt(0); // tl col
+              const colIdx = c1.charCodeAt(0) - 'A'.charCodeAt(0); // tl col (0-indexed)
               const colIdxEnd = c2.charCodeAt(0) - 'A'.charCodeAt(0) + 1; // br col (exclusive)
               ws.addImage(imgId, {
-                tl: { col: colIdx + 0.15, row: (topRow - 1) + 0.15 },
-                br: { col: colIdxEnd - 0.15, row: botRow - 0.15 },
+                tl: { col: colIdx + 0.05, row: (topRow - 1) + 0.05 },
+                br: { col: colIdxEnd - 0.05, row: botRow - 0.05 },
                 editAs: 'oneCell'
               });
             } catch (logoErr) {
