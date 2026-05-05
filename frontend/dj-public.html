@@ -197,11 +197,20 @@
     text-align: center;
   }
   .match-row .players { color: var(--text); }
+  .match-row .players .winner {
+    color: var(--score-green);
+    font-weight: 800;
+  }
+  .match-row .players .loser {
+    color: var(--muted);
+  }
   .match-row .pscore {
     font-variant-numeric: tabular-nums;
     color: var(--score-green);
     font-weight: 700;
   }
+  .match-row .pscore .winner-score { color: var(--score-green); font-weight: 800; }
+  .match-row .pscore .loser-score  { color: var(--muted); }
   .match-row .ptable {
     color: var(--accent);
     font-size: 0.85em;
@@ -330,12 +339,15 @@
     font-size: 0.78em;
     margin-left: 4px;
   }
+  .bmatch .bp-line.winner .bp-name { color: var(--score-green); font-weight: 800; }
+  .bmatch .bp-line.loser  .bp-name { color: var(--muted); }
   .bmatch .bp-score {
     font-variant-numeric: tabular-nums;
     font-weight: 800;
     font-size: var(--fs-score);
     color: var(--score-green);
   }
+  .bmatch .bp-line.loser .bp-score { color: var(--muted); }
   .bmatch.empty .bp-line .bp-name { color: var(--muted); font-style: italic; }
   .bmatch.empty .bp-score { display: none; }
 
@@ -561,7 +573,7 @@
         <div class="col-body">${renderBracket(data.bracket)}</div>
       </div>
       <div class="col">
-        <div class="col-title">Consolante</div>
+        <div class="col-title">Matchs de classement</div>
         <div class="col-body">${renderConsolante(data.consolante)}</div>
       </div>`;
 
@@ -605,10 +617,17 @@
 
   function renderPouleMatch(m) {
     const icon = m.status === 'finished' ? '✓' : (m.status === 'in_progress' ? '🔴' : '•');
-    const players = `${escapeHtml(m.p1_name)} vs ${escapeHtml(m.p2_name)}`;
+    // V 2.0.705 — bold-green the winner, dim the loser when the match is
+    // finished. Tie → both stay neutral.
+    let p1cls = '', p2cls = '', s1cls = '', s2cls = '';
+    if (m.status === 'finished' && m.p1_points != null && m.p2_points != null) {
+      if (m.p1_points > m.p2_points)      { p1cls = 'winner'; p2cls = 'loser'; s1cls = 'winner-score'; s2cls = 'loser-score'; }
+      else if (m.p2_points > m.p1_points) { p2cls = 'winner'; p1cls = 'loser'; s2cls = 'winner-score'; s1cls = 'loser-score'; }
+    }
+    const players = `<span class="${p1cls}">${escapeHtml(m.p1_name)}</span> vs <span class="${p2cls}">${escapeHtml(m.p2_name)}</span>`;
     let scoreCell = '';
     if (m.status === 'finished') {
-      scoreCell = `<span class="pscore">${m.p1_points ?? '—'} — ${m.p2_points ?? '—'}</span>`;
+      scoreCell = `<span class="pscore"><span class="${s1cls}">${m.p1_points ?? '—'}</span> — <span class="${s2cls}">${m.p2_points ?? '—'}</span></span>`;
     } else if (m.status === 'in_progress') {
       scoreCell = `<span class="live-badge">LIVE</span>`;
     }
@@ -656,6 +675,12 @@
     const scoreL = m.status === 'finished' ? (m.p1_points ?? '') : '';
     const scoreR = m.status === 'finished' ? (m.p2_points ?? '') : '';
     const live = m.status === 'in_progress' ? '<span class="live-badge">LIVE</span>' : '';
+    // V 2.0.705 — winner/loser classes when the match is finished
+    let p1Line = '', p2Line = '';
+    if (m.status === 'finished' && m.p1_points != null && m.p2_points != null) {
+      if (m.p1_points > m.p2_points)      { p1Line = 'winner'; p2Line = 'loser'; }
+      else if (m.p2_points > m.p1_points) { p2Line = 'winner'; p1Line = 'loser'; }
+    }
     const p1 = m.p1_name
       ? `${escapeHtml(m.p1_name)}${m.p1_poule ? `<span class="bp-poule">P${m.p1_poule}</span>` : ''}`
       : '<em>?</em>';
@@ -665,8 +690,8 @@
     return `
       <div class="bmatch ${cls}">
         <div class="bphase">${phaseLbl}${live ? ' ' + live : ''}</div>
-        <div class="bp-line"><span class="bp-name">${p1}</span>${scoreL !== '' ? `<span class="bp-score">${scoreL}</span>` : ''}</div>
-        <div class="bp-line"><span class="bp-name">${p2}</span>${scoreR !== '' ? `<span class="bp-score">${scoreR}</span>` : ''}</div>
+        <div class="bp-line ${p1Line}"><span class="bp-name">${p1}</span>${scoreL !== '' ? `<span class="bp-score">${scoreL}</span>` : ''}</div>
+        <div class="bp-line ${p2Line}"><span class="bp-name">${p2}</span>${scoreR !== '' ? `<span class="bp-score">${scoreR}</span>` : ''}</div>
       </div>`;
   }
 
