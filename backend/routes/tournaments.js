@@ -5510,6 +5510,414 @@ router.get('/:id/matches', authenticateToken, async (req, res) => {
   }
 });
 
+/**
+ * GET /:id/export-finale-ligue
+ *
+ * Ligue-format finale results sheet (XLSX). Mirrors the layout of the
+ * Excel sheet the Ligue requires alongside the in-app results.
+ *
+ * 4-player round-robin matrix:
+ *   - Rows/cols: the 4 finalists
+ *   - Each match cell: top = points|reprises, bottom = moyenne|série
+ *     (moyenne shown only if the player REACHED the distance)
+ *   - Aggregate columns: Points match, Résultats (totals + best avg + best
+ *     série), Classement
+ *
+ * Always emits "DISTANCE REDUITE: NON" per the Ligue convention.
+ * Header reads "FINALE <organization_short_name>".
+ */
+router.get('/:id/export-finale-ligue', authenticateToken, async (req, res) => {
+  const tournamentId = parseInt(req.params.id, 10);
+  if (!tournamentId || Number.isNaN(tournamentId)) {
+    return res.status(400).json({ error: 'Invalid tournament id' });
+  }
+  const ExcelJS = require('exceljs');
+  const orgId = req.user.organizationId || null;
+
+  const dbAllAsync = (sql, params) => new Promise((resolve, reject) => {
+    db.all(sql, params, (err, rows) => err ? reject(err) : resolve(rows || []));
+  });
+  const dbGetAsync = (sql, params) => new Promise((resolve, reject) => {
+    db.get(sql, params, (err, row) => err ? reject(err) : resolve(row || null));
+  });
+
+  try {
+    // 1. Tournament + category info
+    const tournament = await dbGetAsync(
+      `SELECT t.id, t.tournament_number, t.season, t.tournament_date, t.location,
+              t.category_id, c.game_type, c.level, c.display_name AS category_name
+         FROM tournaments t
+         JOIN categories c ON t.category_id = c.id
+        WHERE t.id = $1`,
+      [tournamentId]
+    );
+    if (!tournament) return res.status(404).json({ error: 'Tournament not found' });
+
+    // 2. Organization short name (for "FINALE <short>")
+    let orgShort = 'CDB';
+    if (orgId) {
+      const org = await dbGetAsync(
+        `SELECT name, short_name FROM organizations WHERE id = $1`, [orgId]
+      );
+      if (org) orgShort = org.short_name || org.name || 'CDB';
+    }
+
+    // 3. Distance / reprises from game_parameters
+    const gp = await dbGetAsync(
+      `SELECT distance_normale, reprises FROM game_parameters
+        WHERE UPPER(REPLACE(mode, ' ', '')) = UPPER(REPLACE($1, ' ', ''))
+          AND UPPER(categorie) = UPPER($2)
+          AND ($3::int IS NULL OR organization_id = $3)`,
+      [tournament.game_type, tournament.level, orgId]
+    );
+    const distance = gp ? gp.distance_normale : 0;
+    const reprises = gp ? gp.reprises : 0;
+
+    // 4. Finalists ordered by position (expect exactly 4)
+    const results = await dbAllAsync(
+      `SELECT tr.licence, tr.player_name, tr.position, tr.match_points,
+              tr.points, tr.reprises, tr.moyenne, tr.serie,
+              p.first_name, p.last_name, p.club AS club_name
+         FROM tournament_results tr
+         LEFT JOIN players p ON REPLACE(tr.licence, ' ', '') = REPLACE(p.licence, ' ', '')
+        WHERE tr.tournament_id = $1
+        ORDER BY tr.position ASC, tr.match_points DESC`,
+      [tournamentId]
+    );
+    if (results.length !== 4) {
+      return res.status(400).json({
+        error: `Cet export Ligue ne s'applique qu'aux finales à 4 joueurs (trouvé : ${results.length}).`
+      });
+    }
+
+    // 5. Per-match data (round-robin = 6 matches)
+    const matches = await dbAllAsync(
+      `SELECT player1_licence, player1_points, player1_reprises, player1_serie,
+              player2_licence, player2_points, player2_reprises, player2_serie
+         FROM tournament_matches
+        WHERE tournament_id = $1`,
+      [tournamentId]
+    );
+    if (matches.length === 0) {
+      return res.status(400).json({
+        error: 'Aucun détail de match trouvé. Importez les résultats au format match-par-match.'
+      });
+    }
+
+    // Build a quick lookup: matrix[i][j] = { points, reprises, serie, won } where i,j are seat indices
+    const seatByLicence = {};
+    results.forEach((r, idx) => { seatByLicence[String(r.licence).replace(/\s/g, '')] = idx; });
+
+    const matrix = [[null,null,null,null],[null,null,null,null],[null,null,null,null],[null,null,null,null]];
+    for (const m of matches) {
+      const i = seatByLicence[String(m.player1_licence).replace(/\s/g, '')];
+      const j = seatByLicence[String(m.player2_licence).replace(/\s/g, '')];
+      if (i == null || j == null || i === j) continue;
+      const p1Reached = distance > 0 && m.player1_points >= distance;
+      const p2Reached = distance > 0 && m.player2_points >= distance;
+      matrix[i][j] = { points: m.player1_points, reprises: m.player1_reprises, serie: m.player1_serie, reached: p1Reached };
+      matrix[j][i] = { points: m.player2_points, reprises: m.player2_reprises, serie: m.player2_serie, reached: p2Reached };
+    }
+
+    // ── Build workbook ───────────────────────────────────────────────
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'CDBHS Tournament Management';
+    const ws = workbook.addWorksheet('Finale', {
+      pageSetup: { paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 1 }
+    });
+
+    // Column widths — A names, B-I match cells (2 cols × 4 players), J pts match, K-L Résultats, M classement
+    ws.columns = [
+      { width: 22 }, // A names
+      { width: 7 }, { width: 7 }, // B-C player 1
+      { width: 7 }, { width: 7 }, // D-E player 2
+      { width: 7 }, { width: 7 }, // F-G player 3
+      { width: 7 }, { width: 7 }, // H-I player 4
+      { width: 9 },  // J Points match
+      { width: 9 }, { width: 9 }, // K-L Résultats
+      { width: 12 }  // M Classement
+    ];
+
+    const thinBorder = { style: 'thin', color: { argb: 'FF555555' } };
+    const allBorders = { top: thinBorder, left: thinBorder, bottom: thinBorder, right: thinBorder };
+
+    const peach = 'FFFBE5D6';
+    const beige = 'FFFFF2CC';
+    const headerBlue = 'FFD9E1F2';
+    const goldYellow = 'FFFFE699';
+    const greenWin = 'FFD8E4BC';
+    const redLost = 'FFE6B8B7';
+
+    // Row 1: Host club (A:B big blue underlined) + Finale CDB (J:M big red underlined)
+    ws.mergeCells('A1:D1');
+    ws.mergeCells('I1:M1');
+    const rowHost = ws.getRow(1);
+    rowHost.height = 32;
+    const cellHost = ws.getCell('A1');
+    cellHost.value = (tournament.location || '').toUpperCase();
+    cellHost.font = { name: 'Calibri', size: 22, bold: true, underline: true, color: { argb: 'FF1F4E79' } };
+    cellHost.alignment = { horizontal: 'left', vertical: 'middle' };
+    const cellFinale = ws.getCell('I1');
+    cellFinale.value = `FINALE ${orgShort}`;
+    cellFinale.font = { name: 'Calibri', size: 20, bold: true, italic: true, underline: true, color: { argb: 'FFC00000' } };
+    cellFinale.alignment = { horizontal: 'right', vertical: 'middle' };
+
+    // Row 2: DISTANCE REDUITE | NON ... | season | date
+    const r2 = ws.getRow(2);
+    r2.height = 22;
+    ws.mergeCells('A2:B2');
+    const cR2A = ws.getCell('A2');
+    cR2A.value = 'DISTANCE REDUITE';
+    cR2A.font = { bold: true, italic: true, color: { argb: 'FFC00000' }, underline: true };
+    cR2A.alignment = { horizontal: 'right', vertical: 'middle' };
+
+    ws.mergeCells('C2:D2');
+    const cR2N = ws.getCell('C2');
+    cR2N.value = 'NON';
+    cR2N.font = { bold: true, italic: true };
+    cR2N.alignment = { horizontal: 'center', vertical: 'middle' };
+    cR2N.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFFFF' } };
+    cR2N.border = { bottom: { style: 'medium', color: { argb: 'FFC00000' } } };
+
+    // Season and date
+    const seasonStr = tournament.season ? tournament.season.replace(/-/, '/') : '';
+    const dateObj = tournament.tournament_date ? new Date(tournament.tournament_date) : null;
+    const dateStr = dateObj ? `${String(dateObj.getDate()).padStart(2,'0')}/${String(dateObj.getMonth()+1).padStart(2,'0')}/${dateObj.getFullYear()}` : '';
+
+    ws.mergeCells('J2:K2');
+    const cSeason = ws.getCell('J2');
+    cSeason.value = seasonStr;
+    cSeason.font = { bold: true, italic: true, color: { argb: 'FFC00000' }, underline: true, size: 12 };
+    cSeason.alignment = { horizontal: 'center', vertical: 'middle' };
+
+    ws.mergeCells('L2:M2');
+    const cDate = ws.getCell('L2');
+    cDate.value = dateStr;
+    cDate.font = { bold: true, color: { argb: 'FF000000' }, size: 11 };
+    cDate.alignment = { horizontal: 'center', vertical: 'middle' };
+    cDate.border = { top: { style: 'thin' }, bottom: { style: 'thin' } };
+
+    // Row 3: Mode | Catégorie | Distance | Reprises (each with a label cell + value cell)
+    const r3 = ws.getRow(3);
+    r3.height = 22;
+    const params = [
+      { lbl: 'Mode de jeu :',  val: (tournament.game_type || '').toLowerCase(), labelRange: 'A3:A3', valueRange: 'B3:D3' },
+      { lbl: 'Catégorie :',    val: tournament.level || '',                      labelRange: 'E3:E3', valueRange: 'F3:G3' },
+      { lbl: 'Distance :',     val: distance,                                    labelRange: 'H3:H3', valueRange: 'I3:J3' },
+      { lbl: 'Reprises :',     val: reprises,                                    labelRange: 'K3:K3', valueRange: 'L3:M3' }
+    ];
+    for (const p of params) {
+      if (p.labelRange.split(':')[0] !== p.labelRange.split(':')[1]) ws.mergeCells(p.labelRange);
+      ws.mergeCells(p.valueRange);
+      const lc = ws.getCell(p.labelRange.split(':')[0]);
+      lc.value = p.lbl;
+      lc.font = { bold: true, color: { argb: 'FF1F4E79' } };
+      lc.alignment = { horizontal: 'right', vertical: 'middle' };
+      lc.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: beige } };
+      const vc = ws.getCell(p.valueRange.split(':')[0]);
+      vc.value = p.val;
+      vc.font = { bold: true, color: { argb: 'FFC00000' } };
+      vc.alignment = { horizontal: 'center', vertical: 'middle' };
+      vc.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: beige } };
+    }
+
+    // Row 4: header — NOMS | <P1 name> | <P2> | <P3> | <P4> | Points match | Résultats | Classement
+    const r4 = ws.getRow(4);
+    r4.height = 24;
+    ws.getCell('A4').value = 'NOMS';
+    ws.getCell('A4').font = { bold: true };
+    ws.getCell('A4').alignment = { horizontal: 'center', vertical: 'middle' };
+    ws.getCell('A4').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: peach } };
+    ws.getCell('A4').border = allBorders;
+
+    const colsForPlayer = [['B','C'],['D','E'],['F','G'],['H','I']];
+    results.forEach((r, idx) => {
+      const [c1, c2] = colsForPlayer[idx];
+      ws.mergeCells(`${c1}4:${c2}4`);
+      const cell = ws.getCell(`${c1}4`);
+      const lastName = (r.last_name || (r.player_name || '').split(' ').slice(-1)[0] || '').toUpperCase();
+      cell.value = lastName;
+      cell.font = { bold: true };
+      cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: peach } };
+      cell.border = allBorders;
+      ws.getCell(`${c2}4`).border = allBorders;
+    });
+
+    ws.getCell('J4').value = 'Points\nmatch';
+    ws.mergeCells('K4:L4');
+    ws.getCell('K4').value = 'Résultats';
+    ws.getCell('M4').value = 'Classement';
+    ['J4','K4','M4'].forEach(addr => {
+      const c = ws.getCell(addr);
+      c.font = { bold: true, color: { argb: 'FF1F4E79' } };
+      c.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+      c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: peach } };
+      c.border = allBorders;
+    });
+    ws.getCell('L4').border = allBorders;
+
+    // Player blocks (3 rows each, starting at row 5)
+    const blockHeights = [22, 14, 22];
+    const positionFills = { 1: goldYellow, 2: 'FFE2EFDA', 3: 'FFFFE699', 4: 'FFFCE4D6' };
+
+    results.forEach((player, rowIdx) => {
+      const topRow = 5 + rowIdx * 3;
+      const midRow = topRow + 1;
+      const botRow = topRow + 2;
+
+      ws.getRow(topRow).height = blockHeights[0];
+      ws.getRow(midRow).height = blockHeights[1];
+      ws.getRow(botRow).height = blockHeights[2];
+
+      // Names column (A) — last name (top), first name (mid), club (bot)
+      const ln = (player.last_name || (player.player_name || '').split(' ').slice(-1)[0] || '').toUpperCase();
+      const fn = (player.first_name || (player.player_name || '').split(' ').slice(0,-1).join(' ') || '').toUpperCase();
+      const club = (player.club_name || '').toUpperCase();
+
+      const cLn = ws.getCell(`A${topRow}`);
+      cLn.value = ln;
+      cLn.font = { bold: true, size: 12 };
+      cLn.alignment = { horizontal: 'center', vertical: 'middle' };
+      cLn.border = { top: thinBorder, left: thinBorder, right: thinBorder };
+
+      const cFn = ws.getCell(`A${midRow}`);
+      cFn.value = fn;
+      cFn.font = { bold: true, size: 9 };
+      cFn.alignment = { horizontal: 'center', vertical: 'middle' };
+      cFn.border = { left: thinBorder, right: thinBorder };
+
+      const cCl = ws.getCell(`A${botRow}`);
+      cCl.value = club;
+      cCl.font = { bold: true, size: 10, color: { argb: 'FFC00000' } };
+      cCl.alignment = { horizontal: 'center', vertical: 'middle' };
+      cCl.border = { bottom: thinBorder, left: thinBorder, right: thinBorder };
+
+      // Match cells for each opponent
+      colsForPlayer.forEach(([c1, c2], oppIdx) => {
+        // Diagonal: merge & fill
+        if (oppIdx === rowIdx) {
+          ws.mergeCells(`${c1}${topRow}:${c2}${botRow}`);
+          const dc = ws.getCell(`${c1}${topRow}`);
+          dc.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF2CC' } };
+          dc.border = allBorders;
+          dc.alignment = { horizontal: 'center', vertical: 'middle' };
+          return;
+        }
+        const m = matrix[rowIdx][oppIdx];
+        const top1 = ws.getCell(`${c1}${topRow}`); // points
+        const top2 = ws.getCell(`${c2}${topRow}`); // reprises
+        const mid1 = ws.getCell(`${c1}${midRow}`);
+        const mid2 = ws.getCell(`${c2}${midRow}`);
+        const bot1 = ws.getCell(`${c1}${botRow}`); // moyenne
+        const bot2 = ws.getCell(`${c2}${botRow}`); // série
+
+        if (m) {
+          top1.value = m.points;
+          top2.value = m.reprises;
+          if (m.reached) {
+            const moy = m.reprises > 0 ? (m.points / m.reprises) : 0;
+            bot1.value = Math.round(moy * 100) / 100;
+            bot1.numFmt = '0.00';
+          }
+          bot2.value = m.serie || 0;
+
+          // Color the middle decorative row: green if reached distance, light red otherwise
+          const midColor = m.reached ? greenWin : redLost;
+          mid1.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: midColor } };
+          mid2.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: midColor } };
+        }
+        [top1, top2, mid1, mid2, bot1, bot2].forEach(c => {
+          c.alignment = { horizontal: 'center', vertical: 'middle' };
+          c.border = allBorders;
+          c.font = c.font || { size: 10 };
+        });
+        top1.font = { bold: true, size: 11 };
+        top2.font = { bold: true, size: 11 };
+        bot1.font = { size: 9, italic: true };
+        bot2.font = { bold: true, size: 10 };
+      });
+
+      // J: Points match (merged across 3 rows)
+      ws.mergeCells(`J${topRow}:J${botRow}`);
+      const cMP = ws.getCell(`J${topRow}`);
+      cMP.value = player.match_points || 0;
+      cMP.font = { bold: true, size: 18 };
+      cMP.alignment = { horizontal: 'center', vertical: 'middle' };
+      cMP.border = allBorders;
+
+      // K-L Résultats: top = totals, mid = overall avg (merged), bot = best moy reached | best série
+      const totalPts = player.points || 0;
+      const totalRep = player.reprises || 0;
+      const overall = totalRep > 0 ? (totalPts / totalRep) : 0;
+      // Best moyenne among matches where player REACHED distance
+      let bestMoyReached = null;
+      let bestSerie = 0;
+      for (let opp = 0; opp < 4; opp++) {
+        const m = matrix[rowIdx][opp];
+        if (!m) continue;
+        if (m.reached && m.reprises > 0) {
+          const mv = m.points / m.reprises;
+          if (bestMoyReached == null || mv > bestMoyReached) bestMoyReached = mv;
+        }
+        if ((m.serie || 0) > bestSerie) bestSerie = m.serie || 0;
+      }
+
+      const kTop = ws.getCell(`K${topRow}`);
+      const lTop = ws.getCell(`L${topRow}`);
+      kTop.value = totalPts;
+      lTop.value = totalRep;
+
+      ws.mergeCells(`K${midRow}:L${midRow}`);
+      const midRes = ws.getCell(`K${midRow}`);
+      midRes.value = Math.round(overall * 1000) / 1000;
+      midRes.numFmt = '0.000';
+
+      const kBot = ws.getCell(`K${botRow}`);
+      const lBot = ws.getCell(`L${botRow}`);
+      if (bestMoyReached != null) {
+        kBot.value = Math.round(bestMoyReached * 1000) / 1000;
+        kBot.numFmt = '0.000';
+      }
+      lBot.value = bestSerie;
+
+      [kTop, lTop, midRes, kBot, lBot].forEach(c => {
+        c.alignment = { horizontal: 'center', vertical: 'middle' };
+        c.border = allBorders;
+      });
+      kTop.font = { bold: true, size: 12 };
+      lTop.font = { bold: true, size: 12 };
+      midRes.font = { bold: true, size: 13 };
+      kBot.font = { italic: true, size: 10 };
+      lBot.font = { bold: true, size: 11 };
+
+      // M Classement (merged across 3 rows, colored by position)
+      ws.mergeCells(`M${topRow}:M${botRow}`);
+      const cClass = ws.getCell(`M${topRow}`);
+      cClass.value = player.position || (rowIdx + 1);
+      cClass.font = { bold: true, size: 28 };
+      cClass.alignment = { horizontal: 'center', vertical: 'middle' };
+      cClass.border = allBorders;
+      const fillColor = positionFills[player.position] || 'FFFFFFFF';
+      cClass.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fillColor } };
+    });
+
+    // Send file
+    const safeCat = `${tournament.game_type || 'Mode'}_${tournament.level || 'Cat'}`.replace(/[^A-Za-z0-9_]+/g, '');
+    const safeSeason = (tournament.season || '').replace(/[^A-Za-z0-9_-]+/g, '');
+    const filename = `Resultats_Finale_${safeSeason}_${safeCat}.xlsx`;
+
+    res.setHeader('Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    console.error('[export-finale-ligue]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 /** Helper to cleanup uploaded files */
 function cleanupFiles(files) {
   for (const file of files) {

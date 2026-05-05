@@ -250,6 +250,9 @@
         <button class="btn btn-success" id="exportExcelBtn">
           📊 Exporter en Excel
         </button>
+        <button class="btn" id="exportLigueBtn" style="background: #c0392b; color: white; margin-left: 10px; display: none;" title="Génère la feuille de résultats au format demandé par la Ligue (finales à 4 joueurs uniquement).">
+          🏆 Export Ligue (Finale)
+        </button>
         <button class="btn admin-only" id="recomputeBtn" style="background: #6c757d; margin-left: 10px; display: none;">
           Recalculer bonus & classements
         </button>
@@ -464,6 +467,11 @@
         // Show podium for finale
         if (isFinale && data.results.length >= 3) {
           displayPodium(data.results.slice(0, 3), hasPositionPoints);
+        }
+
+        // V 2.0.716 — Ligue export button only for finales with exactly 4 finalists
+        if (isFinale && data.results.length === 4) {
+          document.getElementById('exportLigueBtn').style.display = 'inline-block';
         }
 
         // Set table title based on tournament type
@@ -789,6 +797,42 @@
         console.error('Error loading match details:', error);
       }
     }
+
+    // V 2.0.716 — Ligue finale export (XLSX, 4-player round-robin matrix)
+    document.getElementById('exportLigueBtn').addEventListener('click', async () => {
+      const btn = document.getElementById('exportLigueBtn');
+      const oldLabel = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = '⏳ Génération...';
+      try {
+        const response = await fetch(`${API_URL}/tournaments/${tournamentId}/export-finale-ligue`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!response.ok) {
+          let msg = 'Erreur lors de l\'export Ligue';
+          try { const j = await response.json(); if (j.error) msg = j.error; } catch (_) {}
+          throw new Error(msg);
+        }
+        const cd = response.headers.get('Content-Disposition');
+        let filename = `Resultats_Finale_Ligue_${tournamentId}.xlsx`;
+        if (cd) {
+          const m = /filename="([^"]+)"/.exec(cd);
+          if (m && m[1]) filename = m[1];
+        }
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = filename;
+        document.body.appendChild(a); a.click();
+        window.URL.revokeObjectURL(url); document.body.removeChild(a);
+      } catch (error) {
+        console.error('Error exporting Ligue finale:', error);
+        alert(error.message || 'Erreur lors de l\'export Ligue');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = oldLabel;
+      }
+    });
 
     // Export to Excel
     document.getElementById('exportExcelBtn').addEventListener('click', async () => {
