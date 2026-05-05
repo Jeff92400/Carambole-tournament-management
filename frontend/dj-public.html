@@ -248,15 +248,21 @@
     gap: 0;
     min-height: 0;
   }
+  /* V 2.0.725 — SF cards GROW to fill their half of the SF column.
+     Previously `flex: 0 0 auto` + `space-between` parked the cards at
+     the column's top and bottom edges, putting their centers near
+     ~10% / ~90% — the connector lines at 25% / 75% missed them.
+     With each SF flex:1, they each occupy 50% of the column and
+     their vertical centers land at exactly 25% / 75%, aligning with
+     the connector horizontals. */
   .b-col-sf {
     flex: 1;
     display: flex;
     flex-direction: column;
-    justify-content: space-between;
     gap: 12px;
     min-width: 0;
   }
-  .b-col-sf .bmatch { flex: 0 0 auto; }
+  .b-col-sf .bmatch { flex: 1 1 0; }
   .b-col-conn {
     width: 60px;
     position: relative;
@@ -290,9 +296,14 @@
     align-items: center;
     min-width: 0;
   }
-  .b-col-f .bmatch { flex: 1 1 auto; }
+  /* width: 100% forces the F card to fill its column instead of
+     shrinking to its content (~280px). */
+  .b-col-f .bmatch { flex: 1 1 auto; width: 100%; }
 
+  /* V 2.0.725 — Petite finale card kept narrow (matches F card width)
+     and centered, so it doesn't visually dominate the column. */
   .b-pf { margin-top: 8px; }
+  .b-pf .bmatch { max-width: 50%; margin-left: auto; margin-right: auto; }
   .b-pf .b-pf-label {
     font-size: var(--fs-h2);
     color: var(--muted);
