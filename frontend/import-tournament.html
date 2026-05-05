@@ -135,6 +135,12 @@
           Sélectionnez la catégorie, le numéro du tournoi et la saison, puis importez le fichier CSV des résultats.
         </p>
 
+        <!-- V 2.0.718 — auto-detect mismatched CSV format -->
+        <div id="csvFormatBanner_std" style="display: none; background: #fff8e1; border-left: 4px solid #f6b73c; padding: 12px 16px; margin-bottom: 16px; border-radius: 4px; font-size: 14px; color: #5d4a00;">
+          ⚠️ <strong>Ce fichier semble être un fichier de matchs E2i</strong> (colonnes <code>Licence J1</code> / <code>Licence J2</code> détectées). L'onglet « Import Classements E2i » attend un fichier de classements.
+          <button type="button" onclick="switchImportTab('matches'); document.getElementById('csvFormatBanner_std').style.display='none';" style="margin-left: 12px; padding: 6px 14px; background: #f6b73c; color: #5d4a00; border: 0; border-radius: 4px; font-weight: 700; cursor: pointer;">→ Basculer vers « Import Matchs E2i »</button>
+        </div>
+
         <form id="importForm">
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
             <div class="form-group">
@@ -203,6 +209,12 @@
         </p>
         <div style="background: #fff8e1; border-left: 4px solid #f6b73c; padding: 10px 14px; margin-bottom: 20px; font-size: 14px; color: #5d4a00; border-radius: 4px;">
           💡 <strong>Recommandé pour les finales :</strong> l'import par matchs est indispensable pour générer la feuille de résultats au format Ligue (export XLSX disponible sur la page des résultats). À partir de 2026-27, ce sera le mode d'import par défaut pour tous les tournois (T1, T2, T3, Finale).
+        </div>
+
+        <!-- V 2.0.718 — auto-detect mismatched CSV format -->
+        <div id="csvFormatBanner_mtc" style="display: none; background: #fff8e1; border-left: 4px solid #f6b73c; padding: 12px 16px; margin-bottom: 16px; border-radius: 4px; font-size: 14px; color: #5d4a00;">
+          ⚠️ <strong>Ce fichier semble être un fichier de classements E2i</strong> (pas de colonnes <code>Licence J1</code> / <code>Licence J2</code>). L'onglet « Import Matchs E2i » attend un fichier de matchs individuels.
+          <button type="button" onclick="switchImportTab('standard'); document.getElementById('csvFormatBanner_mtc').style.display='none';" style="margin-left: 12px; padding: 6px 14px; background: #f6b73c; color: #5d4a00; border: 0; border-radius: 4px; font-weight: 700; cursor: pointer;">→ Basculer vers « Import Classements E2i »</button>
         </div>
 
         <form id="matchImportForm" onsubmit="return false;">
@@ -618,8 +630,53 @@
       if (fileInput.files.length > 0) {
         fileName.textContent = fileInput.files[0].name;
         fileName.style.display = 'block';
+        maybeSuggestSwitch(fileInput.files[0], 'standard');
       }
     });
+
+    // V 2.0.718 — Auto-detect CSV format and suggest tab switch when
+    // the dropped file doesn't match the active tab. Reads only the
+    // first 600 bytes (the header line is enough) so this is cheap
+    // even for multi-MB files.
+    async function detectCsvFormat(file) {
+      if (!file) return 'unknown';
+      try {
+        const slice = file.slice(0, 600);
+        const text = await slice.text();
+        const firstLine = (text.split(/\r?\n/)[0] || '').toLowerCase();
+        const cols = firstLine.split(';').map(s => s.trim());
+        const hasJ1 = cols.some(c => /licence\s*j1/.test(c));
+        const hasJ2 = cols.some(c => /licence\s*j2/.test(c));
+        if (hasJ1 && hasJ2) return 'matches';
+        // Classement CSVs have a "classement" column and a single licence column,
+        // never the J1/J2 split.
+        if (cols.some(c => /^classement/.test(c)) && cols.some(c => /licence/.test(c))) {
+          return 'classements';
+        }
+        // Filename heuristic fallback (E2i naming convention)
+        const name = (file.name || '').toLowerCase();
+        if (name.includes('matchs_competition') || name.startsWith('matchs_')) return 'matches';
+        if (name.startsWith('classement') || name.startsWith('resultat') || name.startsWith('résultat')) return 'classements';
+        return 'unknown';
+      } catch (_e) {
+        return 'unknown';
+      }
+    }
+
+    async function maybeSuggestSwitch(file, currentTab) {
+      const fmt = await detectCsvFormat(file);
+      const bannerStd = document.getElementById('csvFormatBanner_std');
+      const bannerMtc = document.getElementById('csvFormatBanner_mtc');
+      if (bannerStd) bannerStd.style.display = 'none';
+      if (bannerMtc) bannerMtc.style.display = 'none';
+      if (fmt === 'unknown') return;
+      if (currentTab === 'standard' && fmt === 'matches' && bannerStd) {
+        bannerStd.style.display = 'block';
+      } else if (currentTab === 'matches' && fmt === 'classements' && bannerMtc) {
+        bannerMtc.style.display = 'block';
+      }
+    }
+    window.maybeSuggestSwitch = maybeSuggestSwitch;
 
     // Global variables for import
     let clubs = [];
@@ -1135,6 +1192,7 @@
           <button onclick="removeSplitFile('${label}')">✕</button>
         </div>
       `;
+      if (typeof maybeSuggestSwitch === 'function') maybeSuggestSwitch(file, 'matches');
     }
 
     function removeSplitFile(label) {
@@ -1222,6 +1280,7 @@
           <button onclick="removeSingleFile()">✕</button>
         </div>
       `;
+      if (typeof maybeSuggestSwitch === 'function') maybeSuggestSwitch(file, 'matches');
     }
 
     function removeSingleFile() {

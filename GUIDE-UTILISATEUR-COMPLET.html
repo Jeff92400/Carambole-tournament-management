@@ -650,13 +650,18 @@
     <a href="#generer-poules">Générer les poules</a>
     <a href="#forfaits">Gestion des forfaits</a>
     <a href="#directeur-de-jeu">Directeur de Jeu</a>
-    <a href="#ddj-workflow" class="sub">Workflow en 7 étapes</a>
+    <a href="#ddj-workflow" class="sub">Vue d'ensemble du flux journée</a>
+    <a href="#ddj-config" class="sub">Configuration de la session (V3.5)</a>
     <a href="#ddj-etape-1" class="sub">Étape 1 — Pointage</a>
-    <a href="#ddj-etape-2" class="sub">Étape 2 — Poules</a>
+    <a href="#ddj-etape-2" class="sub">Étape 2 — Poules + tables</a>
     <a href="#ddj-etape-3" class="sub">Étape 3 — Matchs de poule</a>
+    <a href="#ddj-classement-poules" class="sub">→ Classement à l'issue des poules</a>
     <a href="#ddj-etape-4" class="sub">Étape 4 — Tableau final</a>
-    <a href="#ddj-etape-5" class="sub">Étape 5 — Consolante</a>
-    <a href="#ddj-etape-6" class="sub">Étape 6 — Validation</a>
+    <a href="#ddj-etape-5" class="sub">Étape 5 — Matchs de classement</a>
+    <a href="#ddj-classement-final" class="sub">→ Classement final (avant intégration)</a>
+    <a href="#ddj-etape-6" class="sub">Étape 6 — Validation &amp; intégration</a>
+    <a href="#ddj-tools" class="sub">Outils permanents (V3.5)</a>
+    <a href="#ddj-tv" class="sub">Écran TV public (V3.5)</a>
     <a href="#resultats">Résultats des tournois</a>
     <a href="#resultats-2-modes" class="sub">Les 2 modes de qualification</a>
     <a href="#import-standard" class="sub">Import — Mode Standard</a>
@@ -1560,8 +1565,8 @@
   <section id="directeur-de-jeu">
     <h2>🎮 Compétitions &gt; Directeur de Jeu</h2>
 
-    <div class="info-card accent">
-      <strong>✅ Module disponible (V 2.0.484).</strong> Le Directeur de Jeu (DdJ) est un espace dédié à la personne qui dirige les compétitions sur site le jour J. Le workflow complet en 7 étapes — de la sélection de la compétition jusqu'à la validation finale qui intègre les résultats au classement saison — est opérationnel.
+    <div class="info-card green">
+      <strong>✅ Module à jour V3.5 (mai 2026).</strong> Le Directeur de Jeu (DdJ) est un espace dédié à la personne qui dirige les compétitions sur site le jour J. Le module remplace intégralement la feuille de match Excel (FDM 40+ onglets) par une interface tactile, et la <strong>validation finale intègre directement les résultats dans le classement saison</strong> de l'App — sans aucun import CSV manuel.
     </div>
 
     <h3 id="ddj-public">Qui est concerné ?</h3>
@@ -1578,8 +1583,8 @@
     </ol>
     <p>Une fois le module activé, un nouveau lien <strong>« Directeur de Jeu »</strong> apparaît dans le menu déroulant <strong>Compétitions ▾</strong> pour les administrateurs.</p>
 
-    <h3 id="ddj-workflow">Le workflow en 7 étapes</h3>
-    <p>Le module remplace la feuille de match Excel (40+ onglets) par une interface tactile optimisée pour téléphone et tablette. Chaque étape est représentée par une <strong>pastille cliquable</strong> en haut de l'écran : on peut revenir à n'importe quelle étape précédente à tout moment (par exemple pour corriger un score saisi).</p>
+    <h3 id="ddj-workflow">Vue d'ensemble du flux journée</h3>
+    <p>Une journée DdJ se déroule du matin (arrivée des joueurs) au soir (validation finale qui intègre tout dans le classement saison). Chaque étape majeure se conclut par un <strong>classement</strong> consultable en lecture seule, qui sert d'entrée à l'étape suivante.</p>
 
     <table>
       <thead>
@@ -1588,54 +1593,91 @@
           <th>Étape</th>
           <th>Quand</th>
           <th>Action du Directeur de Jeu</th>
+          <th>Sortie</th>
         </tr>
       </thead>
       <tbody>
         <tr>
-          <td><strong>0</strong></td>
-          <td><strong>Sélection de la compétition</strong></td>
+          <td><strong>—</strong></td>
+          <td><strong>Configuration de la session</strong> <span style="color:#28a745;font-size:12px;">(V3.5)</span></td>
           <td>Arrivée sur site</td>
-          <td>Le DdJ voit les compétitions du jour sous forme de cartes et sélectionne celle qu'il gère.</td>
+          <td>Saisir : nombre de tables, numéros réels (6, 7, 8, 9…), identité du DdJ.</td>
+          <td>Session prête</td>
         </tr>
         <tr>
           <td><strong>1</strong></td>
           <td><strong>Pointage</strong></td>
-          <td>Avant le tournoi</td>
-          <td>Cocher les joueurs présents (case à cocher tactile), marquer les forfaits.</td>
+          <td>30 min avant le tournoi</td>
+          <td>Cocher les joueurs présents, marquer les forfaits.</td>
+          <td>Liste des joueurs effectifs</td>
         </tr>
         <tr>
           <td><strong>2</strong></td>
           <td><strong>Génération des poules</strong></td>
           <td>Avant le tournoi</td>
-          <td>Valider les poules proposées (serpentin automatique), corriger manuellement si besoin (échange de 2 joueurs entre poules).</td>
+          <td>Valider la composition serpentine, échanger des joueurs si besoin, attribuer une table à chaque poule (auto ou manuel).</td>
+          <td>Poules + tables</td>
         </tr>
         <tr>
           <td><strong>3</strong></td>
           <td><strong>Matchs de poule</strong></td>
           <td>Matin</td>
-          <td>Saisir les scores au fur et à mesure (Points J1/J2, reprises, meilleures séries). La moyenne se calcule en direct ; les reprises sont synchronisées entre les deux joueurs d'un même match.</td>
+          <td>Démarrer chaque match (▶), saisir l'arbitre, saisir les scores en fin de match.</td>
+          <td><strong>Classement après poules</strong> → 4 qualifiés pour le tableau final</td>
         </tr>
         <tr>
           <td><strong>4</strong></td>
           <td><strong>Tableau final</strong></td>
           <td>Après-midi</td>
-          <td>Saisir les scores des demi-finales (SF1, SF2), de la finale (F) et de la petite finale (PF). Les 4 qualifiés et les appariements sont pré-remplis automatiquement.</td>
+          <td>Demi-finales, finale, petite finale. Peut tourner en parallèle avec l'étape 5.</td>
+          <td>Places 1 à 4</td>
         </tr>
         <tr>
           <td><strong>5</strong></td>
-          <td><strong>Matchs de classement (Consolante)</strong></td>
+          <td><strong>Matchs de classement</strong></td>
           <td>Après-midi</td>
-          <td>Saisir les scores du tableau de consolante pour les non-qualifiés (places 5+).</td>
+          <td>Arbre à élimination directe pour les places 5 et au-delà.</td>
+          <td>Places 5 à N</td>
+        </tr>
+        <tr>
+          <td><strong>—</strong></td>
+          <td><strong>Classement final complet</strong></td>
+          <td>Fin de journée</td>
+          <td>Vue de synthèse — toutes les statistiques par joueur, prêtes à intégrer.</td>
+          <td>Tableau final 1 à N</td>
         </tr>
         <tr>
           <td><strong>6</strong></td>
-          <td><strong>Récapitulatif &amp; Validation</strong></td>
+          <td><strong>Validation &amp; intégration</strong></td>
           <td>Fin de journée</td>
-          <td>Vérifier le classement final, télécharger le CSV format FFB si besoin, puis cliquer sur <strong>« Valider les résultats »</strong>.</td>
+          <td>Cliquer sur <strong>« Valider les résultats »</strong> : l'App pousse les résultats dans le classement saison.</td>
+          <td>Saison mise à jour</td>
         </tr>
       </tbody>
     </table>
 
+    <p>Le DdJ peut <strong>revenir à n'importe quelle étape précédente</strong> via le stepper en haut de chaque page (pastilles cliquables). En complément, des <strong>outils permanents</strong> (barre d'info, État des tables, Planning du jour, écran TV public) accompagnent la journée — voir <a href="#ddj-tools">Outils permanents</a>.</p>
+
+    <!-- =================== CONFIG SESSION (V3.5) =================== -->
+    <h3 id="ddj-config">Configuration de la session <span style="color:#28a745;font-size:14px;font-weight:normal;">(nouveau V3.5)</span></h3>
+    <p>À l'arrivée du DdJ sur n'importe quelle page du module, une fenêtre s'ouvre automatiquement pour saisir la configuration de la journée. Une fois validée, l'information vit dans une <strong>barre bleue permanente</strong> visible sur tous les écrans.</p>
+
+    <ol class="steps">
+      <li><strong>Nombre de tables disponibles</strong> ce jour-là (par exemple <code>4</code>).</li>
+      <li><strong>Numéros réels des tables</strong> — si votre club numérote ses billards 6, 7, 8, 9 (et non 1, 2, 3, 4), saisissez ces valeurs. Elles seront affichées partout (écrans, messages, TV publique).</li>
+      <li><strong>Nom du Directeur de Jeu</strong> + numéro de licence FFB (optionnel).</li>
+      <li>Validez. Un message vert confirme : <em>« Session démarrée. 4 tables disponibles. »</em></li>
+    </ol>
+
+    <div class="info-card">
+      <strong>🎯 Allocation des tables aux poules</strong> — juste après la validation, l'application demande comment vous voulez attribuer les tables aux poules : <strong>Automatique</strong> (1 table par poule, dans l'ordre) ou <strong>Manuel</strong> (vous choisissez). Si vous avez plus de poules que de tables, l'allocation automatique fait tourner.
+    </div>
+
+    <div class="info-card warning">
+      <strong>Erreur en cours de journée ?</strong> Une table en panne, le DdJ change ? Cliquez sur <strong>« Modifier »</strong> dans la barre bleue — la même fenêtre se rouvre et vous corrigez. La modification est immédiate sur tous les écrans connectés.
+    </div>
+
+    <!-- =================== ETAPE 0 SELECTION =================== -->
     <h3 id="ddj-etape-0">Étape 0 — Sélection de la compétition</h3>
     <p>Après connexion, le DdJ arrive sur une page épurée affichant :</p>
     <ul>
@@ -1643,8 +1685,9 @@
       <li>Les <strong>compétitions du jour</strong> sous forme de cartes (nom, catégorie, lieu, nombre de convoqués, badge de statut).</li>
       <li>Un rappel des <strong>journées précédentes</strong>, qui peuvent être rouvertes pour correction.</li>
     </ul>
-    <p>Cliquez sur la carte de la compétition à diriger pour démarrer le workflow.</p>
+    <p>Cliquez sur la carte de la compétition à diriger pour démarrer le workflow. La fenêtre de configuration de session (ci-dessus) s'ouvre alors automatiquement.</p>
 
+    <!-- =================== ETAPE 1 POINTAGE =================== -->
     <h3 id="ddj-etape-1">Étape 1 — Pointage</h3>
     <ol class="steps">
       <li>La liste des joueurs convoqués s'affiche, triée par classement.</li>
@@ -1653,48 +1696,125 @@
       <li>Le compteur en haut de l'écran indique « X présents · Y forfaits · Z joueurs en poule ».</li>
       <li>Cliquez sur <strong>« Continuer »</strong> pour passer à l'étape suivante.</li>
     </ol>
-    <div class="info-card">
+    <div class="info-card warning">
       <strong>⚠️ Forfait rétroactif :</strong> si vous tentez de passer un joueur en forfait alors que des matchs ont déjà été saisis pour lui, une fenêtre de confirmation s'affiche avec le décompte des matchs impactés. Confirmez uniquement si vous comprenez les conséquences.
     </div>
 
-    <h3 id="ddj-etape-2">Étape 2 — Génération des poules</h3>
+    <!-- =================== ETAPE 2 POULES =================== -->
+    <h3 id="ddj-etape-2">Étape 2 — Génération des poules + attribution des tables</h3>
     <ol class="steps">
       <li>L'application répartit automatiquement les joueurs en serpentin (basé sur leur moyenne FFB ou leur classement saison).</li>
       <li>Vérifiez la composition. Pour échanger 2 joueurs entre 2 poules : cliquez sur le premier, puis sur le second — l'échange est appliqué.</li>
-      <li>Affectez un numéro de billard à chaque poule si nécessaire.</li>
+      <li><strong>Attribuez une table à chaque poule</strong> — soit via le prompt automatique de la configuration de session, soit en cliquant manuellement sur le numéro à côté de chaque poule. Les numéros affichés sont ceux saisis en configuration (ex. 6, 7, 8, 9).</li>
       <li>Cliquez sur <strong>« Valider les poules »</strong>.</li>
     </ol>
 
+    <!-- =================== ETAPE 3 MATCHS POULES =================== -->
     <h3 id="ddj-etape-3">Étape 3 — Matchs de poule</h3>
+    <p>Cœur de la matinée. Chaque poule s'affiche avec sa liste de matchs (round-robin), son numéro de table, et un mini-classement live qui se met à jour à chaque match enregistré.</p>
+
+    <h4>Cycle de vie d'un match (V3.5)</h4>
+    <p>Chaque match passe par <strong>3 états</strong> visibles sur la carte :</p>
     <ol class="steps">
-      <li>Chaque poule s'affiche sous forme de carte avec la liste des matchs (round-robin).</li>
-      <li>Tapez sur un match pour ouvrir la saisie : <strong>Points J1, Points J2, Reprises, Meilleure série J1, Meilleure série J2</strong>.</li>
-      <li>Le clavier numérique apparaît automatiquement. La moyenne (PM) se calcule en direct sous chaque score.</li>
-      <li>Les reprises sont partagées entre les deux joueurs d'un même match (un seul champ).</li>
-      <li>Le classement de la poule se met à jour visuellement après chaque match validé (PM &gt; MGP &gt; MS).</li>
-      <li>Quand tous les matchs d'une poule sont saisis, la poule passe en vert et les 2 premiers sont marqués comme qualifiés pour le tableau final.</li>
+      <li><strong>À jouer</strong> — un bouton vert <strong>▶ Match commencé</strong> est affiché. Le DdJ clique dessus quand les joueurs prennent place et démarrent.</li>
+      <li><strong>En cours</strong> — un badge orange <em>⏳ En cours depuis 14:25</em> remplace le bouton. La table apparaît occupée sur la barre d'info, sur l'écran TV public, et dans l'écran « État des tables ».</li>
+      <li><strong>Terminé</strong> — quand le match est fini, le DdJ tape sur la carte pour saisir : <strong>Points J1, Points J2, Reprises, Meilleures séries</strong>. La moyenne (PM) se calcule en direct. Les reprises sont synchronisées entre les deux joueurs.</li>
     </ol>
 
+    <h4>Champs supplémentaires sur la carte de match (V3.5)</h4>
+    <ul>
+      <li><strong>Numéro de table</strong> — affiché en haut de chaque carte (« Match 1 · Table 6 »).</li>
+      <li><strong>Arbitre (optionnel) + Licence</strong> — autocomplétion à partir de la base joueurs : tapez les premières lettres du nom, l'application propose les correspondances (nom + licence + club). Cliquez pour remplir les deux champs.</li>
+    </ul>
+
+    <h4>Comportement du classement de poule</h4>
+    <ul>
+      <li>Le classement live d'une poule (1<sup>er</sup>, 2<sup>e</sup>, 3<sup>e</sup>) se met à jour visuellement après chaque match validé.</li>
+      <li>Tri : <strong>Match Points (MP) &gt; Moyenne (MGP) &gt; Meilleure Série (MS)</strong>, puis tête-à-tête en cas d'égalité parfaite.</li>
+      <li>Quand <strong>tous les matchs d'une poule sont saisis</strong>, la poule passe en vert et les 2 premiers sont marqués comme <strong>qualifiés pour le tableau final</strong>.</li>
+    </ul>
+
+    <!-- =================== CLASSEMENT POULES =================== -->
+    <h3 id="ddj-classement-poules">→ Classement à l'issue des poules</h3>
+    <p>Quand toutes les poules sont closes, l'application calcule un <strong>classement consolidé inter-poules</strong> qui détermine les 4 qualifiés au tableau final (top 1 et top 2 de chaque poule, départagés par MP, MGP, MS si nécessaire).</p>
+
+    <div style="background:#f8f9fa;border:1px solid #e2e8f0;border-radius:8px;padding:14px;margin:14px 0;font-size:14px;">
+      <strong style="color:#1a5276;">Aperçu — classement après poules</strong>
+      <table style="margin-top:10px;font-size:13px;">
+        <thead>
+          <tr style="background:#1a5276;color:white;"><th>Rang</th><th>Joueur</th><th>Poule</th><th>MP</th><th>MGP</th><th>MS</th><th>Statut</th></tr>
+        </thead>
+        <tbody>
+          <tr style="background:#d4edda;"><td>1</td><td>Jean DUPONT</td><td>A</td><td>4</td><td>0,720</td><td>9</td><td>🏆 Qualifié finale</td></tr>
+          <tr style="background:#d4edda;"><td>2</td><td>Paul BERNARD</td><td>A</td><td>4</td><td>0,680</td><td>8</td><td>🏆 Qualifié finale</td></tr>
+          <tr style="background:#d4edda;"><td>3</td><td>Marc HERNANDEZ</td><td>B</td><td>4</td><td>0,650</td><td>7</td><td>🏆 Qualifié finale</td></tr>
+          <tr style="background:#d4edda;"><td>4</td><td>Henri MARTIN</td><td>B</td><td>2</td><td>0,710</td><td>9</td><td>🏆 Qualifié finale</td></tr>
+          <tr><td>5</td><td>Thierry LEFEBVRE</td><td>A</td><td>2</td><td>0,520</td><td>5</td><td>Matchs de classement</td></tr>
+          <tr><td>6</td><td>Magali SIMON</td><td>B</td><td>2</td><td>0,490</td><td>4</td><td>Matchs de classement</td></tr>
+          <tr><td>…</td><td>…</td><td>…</td><td>…</td><td>…</td><td>…</td><td>…</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>Les 4 qualifiés alimentent l'étape 4. Les autres alimentent l'étape 5. <strong>Les deux étapes peuvent tourner en parallèle</strong> si vous avez assez de tables — gros gain de temps en fin de journée.</p>
+
+    <!-- =================== ETAPE 4 TABLEAU FINAL =================== -->
     <h3 id="ddj-etape-4">Étape 4 — Tableau final</h3>
     <p>Cette étape correspond à l'ancien terme « bracket » de la phase finale.</p>
     <ol class="steps">
       <li>L'application sélectionne automatiquement les 4 qualifiés et compose le tableau : <strong>SF1 = 1<sup>er</sup> vs 4<sup>e</sup></strong>, <strong>SF2 = 2<sup>e</sup> vs 3<sup>e</sup></strong>.</li>
-      <li>Saisissez les scores des deux demi-finales.</li>
+      <li>Saisissez les scores des deux demi-finales (avec le même cycle ▶ Match commencé / score / arbitre que pour les poules).</li>
       <li>Les gagnants sont automatiquement routés vers la <strong>Finale (F)</strong>, les perdants vers la <strong>Petite Finale (PF)</strong>.</li>
       <li>Saisissez les scores de F et PF pour obtenir les places 1 à 4.</li>
     </ol>
+    <div class="info-card green">
+      <strong>💡 Parallélisme V3.5 :</strong> en haut de l'écran « Tableau final », un bandeau bleu indique que vous pouvez basculer vers les <strong>Matchs de classement</strong> via un lien <em>« → Aller aux Matchs de classement »</em>. Vous pouvez ainsi lancer SF1 sur Table 6, SF2 sur Table 7, et un match de classement sur Table 8 — sans attendre.
+    </div>
 
-    <h3 id="ddj-etape-5">Étape 5 — Matchs de classement (Consolante)</h3>
-    <p>Pour les joueurs non qualifiés au tableau final (places 5 et au-delà), un <strong>2<sup>e</sup> arbre à élimination directe</strong> est généré.</p>
+    <!-- =================== ETAPE 5 MATCHS CLASSEMENT =================== -->
+    <h3 id="ddj-etape-5">Étape 5 — Matchs de classement</h3>
+    <p>Pour les joueurs non qualifiés au tableau final (places 5 et au-delà), un <strong>2<sup>e</sup> arbre à élimination directe</strong> est généré. (Anciennement appelé « Consolante » — cette terminologie a été abandonnée en V3.5 au profit du nom plus explicite « Matchs de classement ».)</p>
     <ul>
       <li>La taille du tableau s'adapte automatiquement (2, 4, 8 ou 16 joueurs) avec des <em>byes</em> (qualification automatique au tour suivant) pour les meilleures têtes de série.</li>
-      <li>Saisissez les scores tour par tour.</li>
-      <li><strong>Pas de petite finale en consolante</strong> : les perdants d'un même tour d'élimination sont ex-aequo et départagés par <em>match_points → moyenne → meilleure série</em> (mêmes critères qu'en poule).</li>
-      <li>Places attribuées : <strong>5-6</strong> (finale consolante), <strong>7-8</strong> (perdants demi-finales consolante), <strong>9-12</strong> (perdants quarts), <strong>13-20</strong> (perdants huitièmes).</li>
+      <li>Saisissez les scores tour par tour, avec le même cycle ▶ / score / arbitre que pour les autres phases.</li>
+      <li><strong>Pas de petite finale dans les matchs de classement</strong> : les perdants d'un même tour d'élimination sont ex-aequo et départagés par <em>match_points → moyenne → meilleure série</em> (mêmes critères qu'en poule).</li>
+      <li>Places attribuées : <strong>5-6</strong> (finale des matchs de classement), <strong>7-8</strong> (perdants demi-finales), <strong>9-12</strong> (perdants quarts), <strong>13-20</strong> (perdants huitièmes).</li>
     </ul>
 
+    <!-- =================== CLASSEMENT FINAL =================== -->
+    <h3 id="ddj-classement-final">→ Classement final complet (avant intégration)</h3>
+    <p>Quand le tableau final ET les matchs de classement sont tous saisis, l'application affiche un <strong>tableau final consolidé</strong> qui agrège toutes les statistiques par joueur, sur tous les matchs de la journée.</p>
+
+    <div style="background:#f8f9fa;border:1px solid #e2e8f0;border-radius:8px;padding:14px;margin:14px 0;font-size:14px;">
+      <strong style="color:#1a5276;">Aperçu — classement final du tournoi</strong>
+      <table style="margin-top:10px;font-size:13px;">
+        <thead>
+          <tr style="background:#1a5276;color:white;"><th>Place</th><th>Joueur</th><th>Club</th><th>MP</th><th>Pts</th><th>MGP</th><th>MS</th><th>Phase finale</th></tr>
+        </thead>
+        <tbody>
+          <tr style="background:#fff8dc;"><td><strong>1</strong> 🥇</td><td>Jean DUPONT</td><td>BC Municipal</td><td>10</td><td>180</td><td>0,800</td><td>11</td><td>Vainqueur F</td></tr>
+          <tr style="background:#f5f5f5;"><td><strong>2</strong> 🥈</td><td>Henri MARTIN</td><td>BC Municipal</td><td>8</td><td>165</td><td>0,750</td><td>10</td><td>Finaliste F</td></tr>
+          <tr style="background:#fff5e6;"><td><strong>3</strong> 🥉</td><td>Paul BERNARD</td><td>BC Municipal</td><td>7</td><td>155</td><td>0,720</td><td>9</td><td>Vainqueur PF</td></tr>
+          <tr><td>4</td><td>Marc HERNANDEZ</td><td>BC Municipal</td><td>6</td><td>140</td><td>0,690</td><td>8</td><td>Perdant PF</td></tr>
+          <tr><td>5</td><td>Thierry LEFEBVRE</td><td>BC Municipal</td><td>5</td><td>130</td><td>0,580</td><td>7</td><td>Vainqueur classement</td></tr>
+          <tr><td>6</td><td>Magali SIMON</td><td>BC Municipal</td><td>4</td><td>120</td><td>0,540</td><td>6</td><td>Finaliste classement</td></tr>
+          <tr><td>7-8</td><td>Véronique LANG</td><td>BC Municipal</td><td>3</td><td>105</td><td>0,510</td><td>5</td><td>Demi-classement</td></tr>
+          <tr><td>7-8</td><td>Gérard FOUCHER</td><td>BC Municipal</td><td>3</td><td>100</td><td>0,490</td><td>4</td><td>Demi-classement</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>Cet écran est en <strong>lecture seule</strong> et sert d'ultime vérification avant la validation. Vérifiez surtout :</p>
+    <ul>
+      <li>Que <strong>toutes les positions de 1 à N sont bien attribuées</strong> (pas de trou).</li>
+      <li>Que le top 4 correspond aux résultats du tableau final.</li>
+      <li>Que les ex-aequo (typiquement 7-8, 9-12, 13-20) sont conformes à vos attentes.</li>
+    </ul>
+    <p>Si vous repérez une anomalie : retournez sur l'étape concernée via le stepper, corrigez le score, revenez ici. La mise à jour est immédiate.</p>
+
+    <!-- =================== ETAPE 6 VALIDATION =================== -->
     <h3 id="ddj-etape-6">Étape 6 — Récapitulatif &amp; Validation</h3>
-    <p>Cet écran affiche, en lecture seule, le classement final complet (positions 1 à N) avec toutes les statistiques par joueur (PM, Pts, R, MGP, MS, MPART, Clt poule, Clt Finale).</p>
+    <p>Cet écran reprend le classement final complet ci-dessus, avec en plus les <strong>3 actions de fin de journée</strong> :</p>
     <ol class="steps">
       <li><strong>Imprimez la feuille</strong> si nécessaire pour affichage en salle.</li>
       <li><strong>Téléchargez le CSV au format FFB</strong> pour archivage ou import dans un système externe (E2i / telemat.org). Le fichier respecte les conventions FFB : 20 colonnes, séparateur <code>;</code>, encodage UTF-8 BOM, fins de ligne CRLF, moyennes avec virgule décimale, noms en majuscules.</li>
@@ -1702,15 +1822,59 @@
         <ul>
           <li>Agrège les statistiques par joueur sur tous les matchs joués.</li>
           <li>Met à jour la table <code>tournaments</code> et insère les résultats dans <code>tournament_results</code> (positions, classement de poule, meilleure partie).</li>
-          <li>Recalcule les positions, les bonus et le classement saison.</li>
+          <li><strong>Recalcule le classement saison</strong> : les positions, les bonus de moyenne et le ranking de la catégorie sont mis à jour pour tous les joueurs ayant participé. Les joueurs voient leur nouvelle position dans l'App Joueur dès le rafraîchissement suivant.</li>
         </ul>
       </li>
-      <li>Vous êtes redirigé vers la page admin habituelle <strong>Résultats du tournoi</strong> — la même vue qu'un administrateur après un import CSV.</li>
+      <li>Vous êtes redirigé vers la page admin habituelle <strong>Résultats du tournoi</strong> — la même vue qu'un administrateur après un import CSV. À partir de ce moment, le DdJ a fini sa journée.</li>
     </ol>
     <div class="info-card">
-      <strong>💡 Re-finalisation :</strong> si vous repérez une erreur après avoir validé, retournez sur l'étape concernée via la pastille en haut, corrigez le score, puis re-cliquez sur « Valider les résultats ». L'opération est <strong>idempotente</strong> : les anciens résultats sont remplacés et le classement saison recalculé proprement.
+      <strong>💡 Re-finalisation :</strong> si vous repérez une erreur après avoir validé, retournez sur l'étape concernée via le stepper en haut, corrigez le score, puis re-cliquez sur « Valider les résultats ». L'opération est <strong>idempotente</strong> : les anciens résultats sont remplacés et le classement saison recalculé proprement.
     </div>
 
+    <!-- =================== OUTILS PERMANENTS =================== -->
+    <h3 id="ddj-tools">Outils permanents (V3.5)</h3>
+    <p>Indépendamment des étapes du flux, le DdJ dispose en permanence de 4 outils accessibles via la <strong>barre bleue d'information</strong> en haut de chaque écran.</p>
+
+    <h4>1. Barre d'information</h4>
+    <p>Format : <code>🎯 4 tables · 1 occupée · DdJ : Jean DUPONT &nbsp; [📋 Planning] [État] [📺 TV] [Modifier]</code></p>
+    <p>La mention « 1 occupée » est mise à jour en temps réel — dès qu'un match est démarré (▶ ou première saisie de score), la table compte comme occupée. Dès que le score final est enregistré, la table redevient libre.</p>
+
+    <h4>2. Bouton « État » — vue détaillée des tables</h4>
+    <p>Ouvre une fenêtre centrée avec une carte par table : <strong>libre</strong> (verte) ou <strong>occupée</strong> (rouge), avec le label de la phase + match en cours et l'heure de début. Pratique pour voir d'un coup d'œil quel match va se libérer en premier. Mise à jour automatique toutes les 10 secondes.</p>
+
+    <h4>3. Bouton « 📋 Planning » — Planning du jour</h4>
+    <p>Vue agrégée de toutes les phases (poules + tableau final + matchs de classement) avec, pour chaque match, son statut (à venir / en cours / terminé), son numéro de table, et son score s'il est terminé. Sert de tableau de bord global pour le DdJ qui veut anticiper la suite de la journée.</p>
+
+    <h4>4. Bouton « Modifier »</h4>
+    <p>Rouvre la fenêtre de configuration de session pour corriger : nombre de tables, numéros de tables, identité du DdJ. La modification est répercutée immédiatement sur tous les écrans connectés.</p>
+
+    <!-- =================== ECRAN TV PUBLIC =================== -->
+    <h3 id="ddj-tv">Écran TV public — vue Roland-Garros (V3.5)</h3>
+    <p>Si la salle de jeu dispose d'une <strong>télévision</strong>, d'une tablette ou d'un grand écran, le DdJ peut y afficher l'avancement complet du tournoi en temps réel pour les joueurs et le public. <strong>Aucune authentification</strong> — la page est volontairement publique mais aucune donnée sensible (licence, email, téléphone) n'est exposée. Les noms sont sanitisés au format <em>« Prénom L. »</em>.</p>
+
+    <h4>Contenu affiché</h4>
+    <p>Layout en 3 colonnes (auto-ajustement de la typographie selon la taille de l'écran) :</p>
+    <ul>
+      <li><strong>Colonne 1 — Poules</strong> : pour chaque poule, le numéro de table + le mini-classement live (1<sup>er</sup>, 2<sup>e</sup>, 3<sup>e</sup> avec MP/V-D) + la liste des matchs avec leur statut (✓ terminé + score, 🔴 LIVE en cours, • à venir + n° de table).</li>
+      <li><strong>Colonne 2 — Phase finale</strong> : bracket visuel avec connecteurs CSS (SF1 + SF2 → Finale, plus Petite Finale en dessous). « En attente de la fin des poules… » tant que l'étape 4 n'est pas démarrée.</li>
+      <li><strong>Colonne 3 — Matchs de classement</strong> : liste des matchs de classement avec scores et tables. Même message d'attente avant démarrage.</li>
+      <li><strong>Footer</strong> : barre de progression globale (matchs terminés / total) + 5 prochains matchs avec n° de table (« MARC H. vs JEAN P. · Poule 2 · T7 »).</li>
+    </ul>
+    <p>Les <strong>gagnants</strong> des matchs terminés apparaissent en <strong style="color:#28a745;">vert gras</strong>, les perdants en gris atténué — visible de loin dans la salle.</p>
+
+    <h4>Comment l'afficher</h4>
+    <ol class="steps">
+      <li>Sur la TV / tablette / écran, ouvrez un navigateur et allez sur :
+        <p style="font-family:monospace;background:#f8f9fa;padding:8px 12px;border-radius:4px;border:1px solid #e2e8f0;">cdbhs-tournament-management-production.up.railway.app/tv</p>
+      </li>
+      <li>La page liste tous les tournois actifs aujourd'hui. Cliquez sur le vôtre.</li>
+      <li>Passez en plein écran (<kbd>F11</kbd> ou bouton plein écran du navigateur). Mise à jour automatique toutes les 5 secondes.</li>
+    </ol>
+
+    <h4>Méthode plus simple — QR code</h4>
+    <p>Dans la barre bleue d'info, cliquez sur le bouton <strong>📺 TV</strong> : une fenêtre s'ouvre avec un <strong>QR code</strong> qui pointe directement sur l'écran TV de votre tournoi. Scannez-le avec votre téléphone et envoyez le lien sur la TV via AirPlay / Chromecast / partage d'écran. Pas d'URL à taper, pas d'ID à recopier.</p>
+
+    <!-- =================== SECURITE =================== -->
     <h3 id="ddj-securite">Navigation et sécurité</h3>
     <ul>
       <li>Un DdJ connecté ne peut accéder qu'à ses pages dédiées — toute tentative d'aller sur une autre page admin déclenche une redirection vers son tableau de bord.</li>
@@ -1734,6 +1898,10 @@
 
     <h3>Description</h3>
     <p>Import des résultats des tournois terminés pour mise à jour des classements. La page d'import comporte <strong>2 onglets</strong> : « Import Classements E2i » (import d'un fichier CSV récapitulatif) et « Import Matchs E2i » (import des fichiers de matchs individuels par phase).</p>
+
+    <div class="info-card accent">
+      <strong>🆕 Depuis V 2.0.717 :</strong> les deux onglets sont visibles pour <strong>tous les CDB</strong> (auparavant l'onglet « Import Matchs E2i » n'apparaissait qu'en mode journées). L'import par matchs est <strong>indispensable pour générer la feuille de résultats au format Ligue</strong> sur les finales (export XLSX disponible sur la page des résultats — voir section <a href="#export-ligue-finale">Export Ligue (Finale)</a>). À partir de la saison 2026-27, l'import par matchs deviendra le mode par défaut pour tous les tournois (T1, T2, T3, Finale).
+    </div>
 
     <div class="info-card accent">
       <strong>🧪 Onboarding d'un nouveau CDB ?</strong> L'import de résultats déclenche automatiquement l'envoi d'emails et de notifications push aux participants. Pour tester le flux sans envoyer de vrais messages, activez le <a href="#param-mode-silencieux">Mode Test — Blocage des communications joueurs</a>.
@@ -1960,9 +2128,36 @@
     <h4>Boutons d'action</h4>
     <ul>
       <li><strong>Voir le classement de la catégorie :</strong> Lien direct vers le classement saison de la catégorie</li>
-      <li><strong>Exporter en Excel :</strong> Télécharge les résultats au format Excel</li>
+      <li><strong>Exporter en Excel :</strong> Télécharge les résultats au format Excel (toutes compétitions).</li>
+      <li><strong>🏆 Export Ligue (Finale) :</strong> <em>Bouton rouge, finales à 4 joueurs uniquement, depuis V 2.0.716.</em> Télécharge la feuille de résultats au format demandé par la Ligue (voir section dédiée ci-dessous).</li>
       <li><strong>Recalculer bonus &amp; classements :</strong> Force le recalcul de tous les bonus et du classement saison (utile après modification de paramètres)</li>
     </ul>
+
+    <h4 id="export-ligue-finale">Export Ligue (Finale) — XLSX au format Ligue (depuis V 2.0.716)</h4>
+    <p>Génère la feuille de résultats Excel exigée par la <strong>Ligue</strong> en complément des résultats internes. Le fichier reproduit le format officiel de la Ligue : matrice round-robin 4 × 4 avec en-tête « FINALE [nom court du CDB] », date, saison, mode, catégorie, distance et reprises.</p>
+
+    <p><strong>Conditions d'apparition du bouton :</strong></p>
+    <ul>
+      <li>Le tournoi est une <strong>finale</strong> (numéro de tournoi marqué <em>finale</em> dans Paramètres &gt; Types de Tournoi).</li>
+      <li>Exactement <strong>4 finalistes</strong> dans le classement.</li>
+      <li>Les <strong>matchs détaillés sont disponibles</strong> en base : la finale doit avoir été importée via l'onglet <strong>« Import Matchs E2i »</strong> (voir section Import). Si elle a été importée via le récapitulatif (onglet 1), réimportez-la d'abord avec le CSV de matchs E2i.</li>
+    </ul>
+
+    <p><strong>Contenu du fichier exporté :</strong></p>
+    <ul>
+      <li><strong>Matrice 4 × 4</strong> : chaque cellule de match affiche en haut <code>points | reprises</code> et en bas <code>moyenne | meilleure série</code>. La moyenne n'est affichée que si le joueur a <strong>atteint la distance</strong> dans le match (convention carambole).</li>
+      <li><strong>Cellule diagonale</strong> : zone neutre (un joueur ne joue pas contre lui-même).</li>
+      <li><strong>Colonne « Points match »</strong> : total des points de match (2 par match gagné), fusionnée sur les trois lignes du joueur.</li>
+      <li><strong>Colonne « Résultats »</strong> : ligne du haut = total points / total reprises ; ligne médiane = moyenne générale (3 décimales) ; ligne du bas = meilleure moyenne sur un match où la distance a été atteinte (vide sinon) | meilleure série du tournoi.</li>
+      <li><strong>Colonne « Classement »</strong> : position finale (1 à 4), couleur de fond selon la position (or, vert clair, jaune, pêche).</li>
+      <li><strong>« DISTANCE REDUITE : NON »</strong> : forcé à NON par convention Ligue.</li>
+    </ul>
+
+    <p><strong>Fichier produit :</strong> <code>Resultats_Finale_2025-2026_LIBRE_R2.xlsx</code> (le nom contient la saison et la catégorie). À envoyer tel quel à la Ligue après chaque finale départementale.</p>
+
+    <div class="info-card accent">
+      <strong>Disponible pour tous les CDB.</strong> L'export utilise le nom court de votre organisation (ex. « FINALE CDBHS », « FINALE CDB9394 ») et fonctionne quel que soit le mode de qualification (standard ou journées).
+    </div>
   </section>
 
   <hr>

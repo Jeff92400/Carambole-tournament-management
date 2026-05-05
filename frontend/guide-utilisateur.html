@@ -1900,6 +1900,10 @@
     <p>Import des résultats des tournois terminés pour mise à jour des classements. La page d'import comporte <strong>2 onglets</strong> : « Import Classements E2i » (import d'un fichier CSV récapitulatif) et « Import Matchs E2i » (import des fichiers de matchs individuels par phase).</p>
 
     <div class="info-card accent">
+      <strong>🆕 Depuis V 2.0.717 :</strong> les deux onglets sont visibles pour <strong>tous les CDB</strong> (auparavant l'onglet « Import Matchs E2i » n'apparaissait qu'en mode journées). L'import par matchs est <strong>indispensable pour générer la feuille de résultats au format Ligue</strong> sur les finales (export XLSX disponible sur la page des résultats — voir section <a href="#export-ligue-finale">Export Ligue (Finale)</a>). À partir de la saison 2026-27, l'import par matchs deviendra le mode par défaut pour tous les tournois (T1, T2, T3, Finale).
+    </div>
+
+    <div class="info-card accent">
       <strong>🧪 Onboarding d'un nouveau CDB ?</strong> L'import de résultats déclenche automatiquement l'envoi d'emails et de notifications push aux participants. Pour tester le flux sans envoyer de vrais messages, activez le <a href="#param-mode-silencieux">Mode Test — Blocage des communications joueurs</a>.
     </div>
 
@@ -2124,9 +2128,36 @@
     <h4>Boutons d'action</h4>
     <ul>
       <li><strong>Voir le classement de la catégorie :</strong> Lien direct vers le classement saison de la catégorie</li>
-      <li><strong>Exporter en Excel :</strong> Télécharge les résultats au format Excel</li>
+      <li><strong>Exporter en Excel :</strong> Télécharge les résultats au format Excel (toutes compétitions).</li>
+      <li><strong>🏆 Export Ligue (Finale) :</strong> <em>Bouton rouge, finales à 4 joueurs uniquement, depuis V 2.0.716.</em> Télécharge la feuille de résultats au format demandé par la Ligue (voir section dédiée ci-dessous).</li>
       <li><strong>Recalculer bonus &amp; classements :</strong> Force le recalcul de tous les bonus et du classement saison (utile après modification de paramètres)</li>
     </ul>
+
+    <h4 id="export-ligue-finale">Export Ligue (Finale) — XLSX au format Ligue (depuis V 2.0.716)</h4>
+    <p>Génère la feuille de résultats Excel exigée par la <strong>Ligue</strong> en complément des résultats internes. Le fichier reproduit le format officiel de la Ligue : matrice round-robin 4 × 4 avec en-tête « FINALE [nom court du CDB] », date, saison, mode, catégorie, distance et reprises.</p>
+
+    <p><strong>Conditions d'apparition du bouton :</strong></p>
+    <ul>
+      <li>Le tournoi est une <strong>finale</strong> (numéro de tournoi marqué <em>finale</em> dans Paramètres &gt; Types de Tournoi).</li>
+      <li>Exactement <strong>4 finalistes</strong> dans le classement.</li>
+      <li>Les <strong>matchs détaillés sont disponibles</strong> en base : la finale doit avoir été importée via l'onglet <strong>« Import Matchs E2i »</strong> (voir section Import). Si elle a été importée via le récapitulatif (onglet 1), réimportez-la d'abord avec le CSV de matchs E2i.</li>
+    </ul>
+
+    <p><strong>Contenu du fichier exporté :</strong></p>
+    <ul>
+      <li><strong>Matrice 4 × 4</strong> : chaque cellule de match affiche en haut <code>points | reprises</code> et en bas <code>moyenne | meilleure série</code>. La moyenne n'est affichée que si le joueur a <strong>atteint la distance</strong> dans le match (convention carambole).</li>
+      <li><strong>Cellule diagonale</strong> : zone neutre (un joueur ne joue pas contre lui-même).</li>
+      <li><strong>Colonne « Points match »</strong> : total des points de match (2 par match gagné), fusionnée sur les trois lignes du joueur.</li>
+      <li><strong>Colonne « Résultats »</strong> : ligne du haut = total points / total reprises ; ligne médiane = moyenne générale (3 décimales) ; ligne du bas = meilleure moyenne sur un match où la distance a été atteinte (vide sinon) | meilleure série du tournoi.</li>
+      <li><strong>Colonne « Classement »</strong> : position finale (1 à 4), couleur de fond selon la position (or, vert clair, jaune, pêche).</li>
+      <li><strong>« DISTANCE REDUITE : NON »</strong> : forcé à NON par convention Ligue.</li>
+    </ul>
+
+    <p><strong>Fichier produit :</strong> <code>Resultats_Finale_2025-2026_LIBRE_R2.xlsx</code> (le nom contient la saison et la catégorie). À envoyer tel quel à la Ligue après chaque finale départementale.</p>
+
+    <div class="info-card accent">
+      <strong>Disponible pour tous les CDB.</strong> L'export utilise le nom court de votre organisation (ex. « FINALE CDBHS », « FINALE CDB9394 ») et fonctionne quel que soit le mode de qualification (standard ou journées).
+    </div>
   </section>
 
   <hr>
