@@ -1186,9 +1186,21 @@ async function loadPouleMatches(db, orgId, tournoiId) {
 
     const classement = buildPouleClassement(playersArr, matches, settings);
 
+    // V 2.0.708 — expose a "home table" at the poule level so the Planning
+    // panel can show "Poule 1 · Table 6" instead of "Table non assignée".
+    // Pick the first match that has a table_number (auto-assigned at the
+    // generate-poules step) — they're typically all the same per poule.
+    const pouleTable = (() => {
+      for (const m of matches) {
+        if (m.table_number) return m.table_number;
+      }
+      return null;
+    })();
+
     poules.push({
       number: pn,
       size: playersArr.length,
+      table_number: pouleTable,
       players: playersArr,
       matches,
       classement,
@@ -1486,6 +1498,65 @@ function deriveBracketOutcome(match) {
 }
 
 /**
+ * V 2.0.708 — Auto-assign tables to phases that don't yet have one.
+ *
+ * Lazy-persistent: when the DdJ first opens the bracket / matchs de
+ * classement page after the poules are done, this is called as part of
+ * loadBracket / loadConsolante. For each phase that's ready to play
+ * (`can_enter`) but doesn't have a saved table_number yet, we pick one
+ * from the session.table_numbers rotation and INSERT a stub row
+ * (table_number only, no scores, no started_at). The stub becomes
+ * visible on the public TV and the planning panel.
+ *
+ * If the DdJ later overrides the table by clicking ▶ Match commencé
+ * with a different table, the COALESCE in the /start endpoint preserves
+ * the override (since started_at is what gates "match commenced").
+ *
+ * @param {object} db
+ * @param {number} tournoiId
+ * @param {string} tableName  'ddj_bracket_matches' | 'ddj_consolante_matches'
+ * @param {Array}  phases     mutated in place: phases without table_number
+ *                            get a default assigned
+ */
+async function autoAssignPhaseTables(db, tournoiId, tableName, phases) {
+  if (!Array.isArray(phases) || phases.length === 0) return;
+
+  // Read session
+  const session = await new Promise((resolve) => {
+    db.get(
+      `SELECT table_count, table_numbers FROM ddj_session WHERE tournoi_id = $1`,
+      [tournoiId],
+      (err, row) => resolve(err ? null : row)
+    );
+  });
+  if (!session) return;
+  const tables = parseTableNumbers(session.table_numbers, session.table_count);
+  if (!tables.length) return;
+
+  // Cycle through the configured tables for phases that need one. Phases
+  // already started or already with a table are skipped.
+  let cursor = 0;
+  for (const ph of phases) {
+    if (!ph.can_enter) continue;
+    if (ph.table_number) continue;
+    if (ph.started_at) continue;
+    const t = tables[cursor % tables.length];
+    cursor++;
+    await new Promise((resolve) => {
+      db.run(
+        `INSERT INTO ${tableName} (tournoi_id, phase, table_number)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (tournoi_id, phase) DO UPDATE SET
+           table_number = COALESCE(${tableName}.table_number, EXCLUDED.table_number)`,
+        [tournoiId, ph.phase, t],
+        () => resolve()
+      );
+    });
+    ph.table_number = t;
+  }
+}
+
+/**
  * Build the full bracket state for a tournament:
  *  - seeding from poule classements
  *  - each phase (SF1, SF2, F, PF) with resolved players (or pending if
@@ -1624,6 +1695,12 @@ async function loadBracket(db, orgId, tournoiId) {
   const f  = buildPhase('F',  winnerSF1, winnerSF2, ['SF1', 'SF2']);
   const pf = buildPhase('PF', loserSF1,  loserSF2,  ['SF1', 'SF2']);
   phases.push(f, pf);
+
+  // V 2.0.708 — auto-assign tables to phases that don't have one yet.
+  // Lazy-persistent (see autoAssignPhaseTables doc).
+  if (canStart) {
+    await autoAssignPhaseTables(db, tournoiId, 'ddj_bracket_matches', phases);
+  }
 
   // Final positions (1st-4th) if F and PF are both played
   let finalPlaces = null;
@@ -2567,6 +2644,13 @@ async function loadConsolante(db, orgId, tournoiId) {
       nextRound.push(phaseName);
     }
     prevRound = nextRound;
+  }
+
+  // V 2.0.708 — auto-assign tables to consolante phases too, same lazy
+  // persistent pattern as bracket. Only phases that can_enter, don't yet
+  // have a table, and aren't started.
+  if (canStart) {
+    await autoAssignPhaseTables(db, tournoiId, 'ddj_consolante_matches', phases);
   }
 
   // Compute final overall places (5+) from completed phases

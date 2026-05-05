@@ -513,10 +513,16 @@
     }
 
     // ----- Phase 2 : tableau final -----
-    if (bracketData && bracketData.bracket && bracketData.bracket.can_start && Array.isArray(bracketData.bracket.phases)) {
+    // V 2.0.708 — backend /bracket returns the data flat (can_start + phases
+    // at the top level), NOT wrapped in a `bracket` field. The TV public feed
+    // wraps it but the DdJ-private endpoint doesn't. Old check looked for
+    // `bracketData.bracket.can_start` and silently fell through to the empty
+    // state, hiding the bracket from the planning panel even after the poules
+    // were complete.
+    if (bracketData && bracketData.can_start && Array.isArray(bracketData.phases)) {
       html += `<div class="djv3-pl-section"><h4 class="djv3-pl-title">Tableau final</h4>`;
-      for (const ph of bracketData.bracket.phases) {
-        if (!ph.can_enter && !ph.is_played) continue; // skip phases whose players aren't known yet
+      for (const ph of bracketData.phases) {
+        if (!ph.can_enter && !ph.is_played) continue;
         html += renderPlanningPhaseRow(ph, 'bracket');
       }
       html += `</div>`;
@@ -525,12 +531,12 @@
         <div class="djv3-pl-empty djv3-pl-empty-sub">Disponible une fois les poules terminées.</div></div>`;
     }
 
-    // ----- Phase 3 : consolante -----
-    if (consoData && consoData.consolante && consoData.consolante.can_start && Array.isArray(consoData.consolante.phases)) {
+    // ----- Phase 3 : matchs de classement -----
+    if (consoData && consoData.can_start && Array.isArray(consoData.phases)) {
       html += `<div class="djv3-pl-section"><h4 class="djv3-pl-title">Matchs de classement</h4>`;
-      for (const ph of consoData.consolante.phases) {
+      for (const ph of consoData.phases) {
         if (!ph.can_enter && !ph.is_played) continue;
-        if (ph.bye) continue; // skip auto-advance byes (no actual match played)
+        if (ph.bye) continue;
         html += renderPlanningPhaseRow(ph, 'consolante');
       }
       html += `</div>`;
