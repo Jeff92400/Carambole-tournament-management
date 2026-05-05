@@ -535,8 +535,12 @@
     if (consoData && consoData.can_start && Array.isArray(consoData.phases)) {
       html += `<div class="djv3-pl-section"><h4 class="djv3-pl-title">Matchs de classement</h4>`;
       for (const ph of consoData.phases) {
+        // V 2.0.709 — the field is `has_bye`, not `bye`. The old typo let
+        // bye phases through; they were rendered as "Terminé null–null"
+        // because is_played gets force-set to true on byes (player
+        // auto-advances). Now they're correctly hidden from the planning.
+        if (ph.has_bye) continue;
         if (!ph.can_enter && !ph.is_played) continue;
-        if (ph.bye) continue;
         html += renderPlanningPhaseRow(ph, 'consolante');
       }
       html += `</div>`;

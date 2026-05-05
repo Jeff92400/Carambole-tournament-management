@@ -1518,7 +1518,7 @@ function deriveBracketOutcome(match) {
  * @param {Array}  phases     mutated in place: phases without table_number
  *                            get a default assigned
  */
-async function autoAssignPhaseTables(db, tournoiId, tableName, phases) {
+async function autoAssignPhaseTables(db, tournoiId, tableName, phases, excludeTables = []) {
   if (!Array.isArray(phases) || phases.length === 0) return;
 
   // Read session
@@ -1530,16 +1530,45 @@ async function autoAssignPhaseTables(db, tournoiId, tableName, phases) {
     );
   });
   if (!session) return;
-  const tables = parseTableNumbers(session.table_numbers, session.table_count);
-  if (!tables.length) return;
+  const allTables = parseTableNumbers(session.table_numbers, session.table_count);
+  if (!allTables.length) return;
 
-  // Cycle through the configured tables for phases that need one. Phases
-  // already started or already with a table are skipped.
+  // V 2.0.709 — Filter out tables already used by another phase group
+  // (typically: when allocating Matchs de classement, we exclude the
+  // tables used by the bracket so the two phases don't claim the same
+  // billard while running in parallel). If the exclusion would leave us
+  // with zero usable tables (small clubs with only 2 tables for both
+  // bracket and classement), fall back to the full rotation — better to
+  // double-book on the TV than to show no table at all.
+  const excluded = new Set(excludeTables);
+  let tables = allTables.filter(t => !excluded.has(t));
+  if (!tables.length) tables = allTables;
+
+  // Cycle through the available tables. Skip phases that already have a
+  // table, are started, or are byes (bye phases auto-advance — there's
+  // no actual game to assign a table to).
   let cursor = 0;
   for (const ph of phases) {
+    if (ph.has_bye) continue;
     if (!ph.can_enter) continue;
-    if (ph.table_number) continue;
     if (ph.started_at) continue;
+
+    // V 2.0.709 self-heal: if the existing allocation conflicts with the
+    // exclusion list (typically: a previous deploy allocated the same
+    // table to bracket and matchs de classement), reset it to NULL in DB
+    // so the upsert below can pick a non-conflicting one.
+    if (ph.table_number && excluded.has(ph.table_number)) {
+      await new Promise((resolve) => {
+        db.run(
+          `UPDATE ${tableName} SET table_number = NULL
+           WHERE tournoi_id = $1 AND phase = $2 AND started_at IS NULL`,
+          [tournoiId, ph.phase],
+          () => resolve()
+        );
+      });
+      ph.table_number = null;
+    }
+    if (ph.table_number) continue;
     const t = tables[cursor % tables.length];
     cursor++;
     await new Promise((resolve) => {
@@ -2646,11 +2675,16 @@ async function loadConsolante(db, orgId, tournoiId) {
     prevRound = nextRound;
   }
 
-  // V 2.0.708 — auto-assign tables to consolante phases too, same lazy
-  // persistent pattern as bracket. Only phases that can_enter, don't yet
-  // have a table, and aren't started.
+  // V 2.0.709 — auto-assign tables, excluding those already used by the
+  // bracket so the two phases don't claim the same billard in parallel.
   if (canStart) {
-    await autoAssignPhaseTables(db, tournoiId, 'ddj_consolante_matches', phases);
+    const bracketTables = (bracketCtx.phases || [])
+      .map(ph => ph.table_number)
+      .filter(Boolean);
+    await autoAssignPhaseTables(
+      db, tournoiId, 'ddj_consolante_matches', phases,
+      [...new Set(bracketTables)]
+    );
   }
 
   // Compute final overall places (5+) from completed phases
