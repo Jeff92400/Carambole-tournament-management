@@ -522,7 +522,9 @@
     if (bracketData && bracketData.can_start && Array.isArray(bracketData.phases)) {
       html += `<div class="djv3-pl-section"><h4 class="djv3-pl-title">Tableau final</h4>`;
       for (const ph of bracketData.phases) {
-        if (!ph.can_enter && !ph.is_played) continue;
+        // V 2.0.710 — show all bracket phases (including F/PF with not yet
+        // resolved players) so the planning displays their pre-allocated
+        // tables. Render handles unresolved players gracefully.
         html += renderPlanningPhaseRow(ph, 'bracket');
       }
       html += `</div>`;
@@ -535,12 +537,13 @@
     if (consoData && consoData.can_start && Array.isArray(consoData.phases)) {
       html += `<div class="djv3-pl-section"><h4 class="djv3-pl-title">Matchs de classement</h4>`;
       for (const ph of consoData.phases) {
-        // V 2.0.709 — the field is `has_bye`, not `bye`. The old typo let
-        // bye phases through; they were rendered as "Terminé null–null"
-        // because is_played gets force-set to true on byes (player
-        // auto-advances). Now they're correctly hidden from the planning.
-        if (ph.has_bye) continue;
-        if (!ph.can_enter && !ph.is_played) continue;
+        // V 2.0.710 — skip only TRUE round-1 byes (has_bye AND no
+        // depends_on, i.e. one player auto-advances and there's no
+        // opponent coming from upstream). Cascaded byes (has_bye AND
+        // depends_on non-empty, i.e. waiting on an upstream result) are
+        // real matches and stay visible with their pre-allocated table.
+        const isPureBye = ph.has_bye && (!Array.isArray(ph.depends_on) || ph.depends_on.length === 0);
+        if (isPureBye) continue;
         html += renderPlanningPhaseRow(ph, 'consolante');
       }
       html += `</div>`;
@@ -576,8 +579,10 @@
     const label = ph.label || ph.phase || '';
     const t = ph.table_number;
     const tableTxt = t ? `T${t}` : '—';
-    const p1Name = (ph.p1 && ph.p1.player_name) || '';
-    const p2Name = (ph.p2 && ph.p2.player_name) || '';
+    // V 2.0.710 — fall back to "à venir" when a player isn't resolved yet
+    // (downstream phases waiting on an upstream result).
+    const p1Name = (ph.p1 && ph.p1.player_name) || 'à venir';
+    const p2Name = (ph.p2 && ph.p2.player_name) || 'à venir';
     const score = ph.is_played ? `${ph.p1_points}–${ph.p2_points}` : '';
     return `<div class="djv3-pl-match">
       <span class="djv3-pl-mn">${escapeHtml(label)}</span>

@@ -1544,13 +1544,21 @@ async function autoAssignPhaseTables(db, tournoiId, tableName, phases, excludeTa
   let tables = allTables.filter(t => !excluded.has(t));
   if (!tables.length) tables = allTables;
 
-  // Cycle through the available tables. Skip phases that already have a
-  // table, are started, or are byes (bye phases auto-advance — there's
-  // no actual game to assign a table to).
+  // Cycle through the available tables. Skip:
+  //   - true round-1 byes (has_bye AND no depends_on → no opponent ever)
+  //   - phases that already have a table
+  //   - phases that are already started
+  //
+  // V 2.0.710 — Do NOT skip phases on `!can_enter` anymore. Downstream
+  // phases (Finale, Petite finale, consolante F, …) need a table even
+  // before their upstream is resolved, so the TV can show
+  // 'FINALE · T6' as soon as the day starts. Cascaded byes (has_bye=true
+  // but depends_on non-empty) are real matches once the upstream resolves
+  // → they get a table too.
   let cursor = 0;
   for (const ph of phases) {
-    if (ph.has_bye) continue;
-    if (!ph.can_enter) continue;
+    const isPureBye = ph.has_bye && (!Array.isArray(ph.depends_on) || ph.depends_on.length === 0);
+    if (isPureBye) continue;
     if (ph.started_at) continue;
 
     // V 2.0.709 self-heal: if the existing allocation conflicts with the
