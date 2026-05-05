@@ -260,14 +260,18 @@
   }
   .bracket .b-c1 { grid-area: c1; }
   .bracket .b-c2 { grid-area: c2; }
-  /* Connectors: extend by -6px on each side so the lines visually
-     touch the SF and F cards (the 6px gap was leaving a hole). */
+  /* V 2.0.723 — connectors extended by -12px on each side (instead of
+     -6px = exact gap width) so the lines OVERLAP the SF/F card borders
+     by 6px on each side. With sub-pixel rendering at exact-touch
+     boundaries, the bracket looked disconnected. The overlap guarantees
+     visual continuity even on retina iPads. Line thickness bumped from
+     2px to 3px for better legibility on the TV view. */
   .bracket .b-c1::before,
   .bracket .b-c2::before {
     content: '';
     position: absolute;
-    left: -6px; right: -6px;
-    height: 2px;
+    left: -12px; right: -12px;
+    height: 3px;
     background: var(--border-pending);
   }
   .bracket .b-c1::before { top: 50%; }
@@ -275,19 +279,19 @@
   .bracket .b-c1::after {
     content: '';
     position: absolute;
-    right: -6px;
+    right: -12px;
     top: 50%;
     bottom: -50%;
-    width: 2px;
+    width: 3px;
     background: var(--border-pending);
   }
   .bracket .b-c2::after {
     content: '';
     position: absolute;
-    right: -6px;
+    right: -12px;
     bottom: 50%;
     top: -50%;
-    width: 2px;
+    width: 3px;
     background: var(--border-pending);
   }
 
