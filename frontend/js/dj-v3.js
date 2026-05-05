@@ -83,6 +83,37 @@
     .djv3-session-bar .djv3-sb-btn-danger { background: #c0392b; color: white; }
     .djv3-session-bar .djv3-sb-btn-danger:hover { background: #a32e22; }
 
+    /* V 2.0.715 — mobile adaptation. The 6-button bar overflows on phones;
+       below 640px we collapse the info line to full width and lay the
+       actions out as a 3-column grid so 6 buttons fit cleanly on 2 rows. */
+    @media (max-width: 640px) {
+      .djv3-session-bar {
+        padding: 10px 12px;
+        gap: 8px;
+      }
+      .djv3-session-bar .djv3-sb-info {
+        flex-basis: 100%;
+        min-width: 0;
+        font-size: 13px;
+        line-height: 1.35;
+      }
+      .djv3-session-bar .djv3-sb-actions {
+        width: 100%;
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 6px;
+      }
+      .djv3-session-bar .djv3-sb-btn {
+        width: 100%;
+        padding: 9px 4px;
+        font-size: 12px;
+        text-align: center;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+    }
+
     /* Legacy badge — kept for backwards-compat but visually neutral now */
     .djv3-badge { display: none; }
 

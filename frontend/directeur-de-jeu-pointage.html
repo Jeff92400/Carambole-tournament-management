@@ -188,6 +188,40 @@
       flex-wrap: wrap;
       padding-top: 10px;
     }
+    /* V 2.0.715 — group destructive admin tools into a discreet sub-bar
+       so the bottom of the pointage screen is dominated by the two main
+       actions (Accueil / Générer les poules). */
+    .ddj-admin-tools {
+      flex-basis: 100%;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      padding: 8px 12px;
+      margin-top: 4px;
+      background: #fff8f0;
+      border: 1px dashed #ffc107;
+      border-radius: 8px;
+    }
+    .ddj-admin-tools-label {
+      color: #856404;
+      font-weight: 600;
+      font-size: 0.82em;
+      margin-right: 4px;
+    }
+    .ddj-btn-mini {
+      padding: 7px 12px !important;
+      font-size: 0.85em !important;
+      font-weight: 600 !important;
+    }
+    @media (max-width: 600px) {
+      .ddj-action-bar .ddj-btn-secondary,
+      .ddj-action-bar .ddj-btn-primary {
+        flex: 1 1 calc(50% - 6px);
+        min-width: 0;
+      }
+      .ddj-admin-tools-label { flex-basis: 100%; }
+    }
     .ddj-btn {
       padding: 12px 20px;
       border-radius: 8px;
@@ -294,7 +328,7 @@
   <script src="js/auth-utils.js?v=197"></script>
   <script src="js/app-branding.js?v=216"></script>
   <script src="js/ddj-step-nav.js?v=3"></script>
-  <script src="js/dj-v3.js?v=8"></script>
+  <script src="js/dj-v3.js?v=9"></script>
   <script>
     const API_URL = '/api';
 
@@ -517,17 +551,20 @@
 
         <div class="ddj-action-bar">
           <button class="ddj-btn ddj-btn-secondary" onclick="window.location.href='directeur-de-jeu.html'">← Accueil</button>
-          ${(sessionStorage.getItem('userRole') === 'admin') ? `
-            <button id="clearRankingsBtn" class="ddj-btn" style="background:linear-gradient(135deg,#fd7e14,#c46410);color:white;" title="Vide uniquement le classement de la saison pour cette catégorie (utile pour effacer des données de tests précédents). Les scores DdJ déjà saisis sont CONSERVÉS.">
-              🧹 Nettoyer le classement
-            </button>
-            <button id="resetAllBtn" class="ddj-btn" style="background:linear-gradient(135deg,#dc3545,#a71d2a);color:white;" title="Effacer toutes les données DdJ pour ce tournoi (pointage, scores, classement). Les inscriptions sont conservées.">
-              🔥 Tout réinitialiser
-            </button>
-          ` : ''}
           <button class="ddj-btn ddj-btn-primary" onclick="window.location.href='directeur-de-jeu-poules.html?compId=${compId}'">
             Générer les poules →
           </button>
+          ${(sessionStorage.getItem('userRole') === 'admin') ? `
+            <div class="ddj-admin-tools">
+              <span class="ddj-admin-tools-label">⚠️ Outils admin :</span>
+              <button id="clearRankingsBtn" class="ddj-btn ddj-btn-mini" style="background:linear-gradient(135deg,#fd7e14,#c46410);color:white;" title="Vide uniquement le classement de la saison pour cette catégorie (utile pour effacer des données de tests précédents). Les scores DdJ déjà saisis sont CONSERVÉS.">
+                🧹 Nettoyer classement
+              </button>
+              <button id="resetAllBtn" class="ddj-btn ddj-btn-mini" style="background:linear-gradient(135deg,#dc3545,#a71d2a);color:white;" title="Effacer toutes les données DdJ pour ce tournoi (pointage, scores, classement). Les inscriptions sont conservées.">
+                🔥 Réinitialiser DdJ
+              </button>
+            </div>
+          ` : ''}
         </div>
       `;
 
