@@ -198,9 +198,12 @@
       <!-- ===== MATCHES E2i IMPORT TAB ===== -->
       <div id="tabMatches" style="display: none;">
         <h3>Import des matchs depuis E2i</h3>
-        <p style="color: #666; margin-bottom: 20px;">
+        <p style="color: #666; margin-bottom: 12px;">
           Importez les fichiers CSV de matchs exportés depuis E2i/telemat.org. Déposez chaque fichier dans la zone correspondant à sa phase.
         </p>
+        <div style="background: #fff8e1; border-left: 4px solid #f6b73c; padding: 10px 14px; margin-bottom: 20px; font-size: 14px; color: #5d4a00; border-radius: 4px;">
+          💡 <strong>Recommandé pour les finales :</strong> l'import par matchs est indispensable pour générer la feuille de résultats au format Ligue (export XLSX disponible sur la page des résultats). À partir de 2026-27, ce sera le mode d'import par défaut pour tous les tournois (T1, T2, T3, Finale).
+        </div>
 
         <form id="matchImportForm" onsubmit="return false;">
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
@@ -1573,16 +1576,19 @@
             grid.style.gridTemplateColumns = '1fr 1fr';
           }
 
-          // Show only the relevant import tab for the CDB's mode
+          // V 2.0.717 — Both import paths are now available to every CDB.
+          // Backend was already mode-agnostic for /import-matches; only the
+          // frontend was hiding the tab. Default to the most relevant tab
+          // for the org's mode but keep the other tab reachable so admins
+          // can use match-based imports for finales (required for the
+          // Ligue XLSX export) and prepare for the 2026-27 match-only flow.
           const tabStandard = document.querySelector('.import-tab[data-tab="standard"]');
           const tabMatches = document.querySelector('.import-tab[data-tab="matches"]');
+          tabStandard.style.display = '';
+          tabMatches.style.display = '';
           if (isJournees) {
-            tabStandard.style.display = 'none';
-            tabMatches.style.display = '';
             switchImportTab('matches');
           } else {
-            tabMatches.style.display = 'none';
-            tabStandard.style.display = '';
             switchImportTab('standard');
           }
         }
