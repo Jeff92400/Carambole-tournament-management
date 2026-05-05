@@ -556,7 +556,14 @@
   }
 
   function statusBadge(matchObj) {
-    if (matchObj.is_played) return `<span class="djv3-pl-pill done">✓ Terminé</span>`;
+    // V 2.0.712 — On the consolante side, buildPhase force-sets
+    // is_played=true on cascaded byes (a phase whose upstream had a bye
+    // and whose opponent isn't yet resolved). They look "Terminé" even
+    // though no real match was played. Treat is_played=true with both
+    // scores null as "À jouer" instead.
+    const reallyPlayed = matchObj.is_played
+      && (matchObj.p1_points != null || matchObj.p2_points != null);
+    if (reallyPlayed) return `<span class="djv3-pl-pill done">✓ Terminé</span>`;
     const partial = (matchObj.p1_points != null) || (matchObj.p2_points != null);
     if (partial) return `<span class="djv3-pl-pill in-progress">⏳ En cours</span>`;
     return `<span class="djv3-pl-pill pending">À jouer</span>`;
@@ -583,7 +590,11 @@
     // (downstream phases waiting on an upstream result).
     const p1Name = (ph.p1 && ph.p1.player_name) || 'à venir';
     const p2Name = (ph.p2 && ph.p2.player_name) || 'à venir';
-    const score = ph.is_played ? `${ph.p1_points}–${ph.p2_points}` : '';
+    // V 2.0.712 — only render a score if the match was really played
+    // (both points present). Cascaded byes have is_played=true but
+    // null scores → render empty, not "null–null".
+    const reallyPlayed = ph.is_played && ph.p1_points != null && ph.p2_points != null;
+    const score = reallyPlayed ? `${ph.p1_points}–${ph.p2_points}` : '';
     return `<div class="djv3-pl-match">
       <span class="djv3-pl-mn">${escapeHtml(label)}</span>
       <span class="djv3-pl-table-tag">${escapeHtml(tableTxt)}</span>
