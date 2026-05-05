@@ -5772,7 +5772,10 @@ router.get('/:id/export-finale-ligue', authenticateToken, async (req, res) => {
     ws.getCell('L4').border = allBorders;
 
     // Player blocks (3 rows each, starting at row 5)
-    const blockHeights = [22, 14, 22];
+    // V 2.0.721 — heights bumped from 22/14/22 → 30/18/30 so the diagonal
+    // block (3 rows × 2 cols) is closer to square and portrait-format
+    // club logos fill the cell instead of leaving large beige margins.
+    const blockHeights = [30, 18, 30];
     const positionFills = { 1: goldYellow, 2: 'FFE2EFDA', 3: 'FFFFE699', 4: 'FFFCE4D6' };
 
     results.forEach((player, rowIdx) => {
@@ -5817,9 +5820,12 @@ router.get('/:id/export-finale-ligue', authenticateToken, async (req, res) => {
           dc.border = allBorders;
           dc.alignment = { horizontal: 'center', vertical: 'middle' };
 
-          // V 2.0.720 — embed club logo (BYTEA from clubs.logo_data) with
-          // a tighter inset (0.05 → ~5% margin per side) so the logo fills
-          // most of the diagonal cell instead of looking lost in beige.
+          // V 2.0.721 — Embed club logo (BYTEA from clubs.logo_data).
+          // Inset removed: tl/br use the exact cell corners so the
+          // bounding box equals the full merged diagonal area (2 cols
+          // × 3 rows). ExcelJS preserves aspect ratio inside that box,
+          // so portrait logos fit to height and landscape logos fit to
+          // width — both without wasted margin.
           if (player.club_logo_data) {
             try {
               const buf = Buffer.isBuffer(player.club_logo_data)
@@ -5832,9 +5838,8 @@ router.get('/:id/export-finale-ligue', authenticateToken, async (req, res) => {
               const colIdx = c1.charCodeAt(0) - 'A'.charCodeAt(0); // tl col (0-indexed)
               const colIdxEnd = c2.charCodeAt(0) - 'A'.charCodeAt(0) + 1; // br col (exclusive)
               ws.addImage(imgId, {
-                tl: { col: colIdx + 0.05, row: (topRow - 1) + 0.05 },
-                br: { col: colIdxEnd - 0.05, row: botRow - 0.05 },
-                editAs: 'oneCell'
+                tl: { col: colIdx, row: topRow - 1 },
+                br: { col: colIdxEnd, row: botRow }
               });
             } catch (logoErr) {
               console.warn('[export-finale-ligue] Could not embed club logo:', logoErr.message);
