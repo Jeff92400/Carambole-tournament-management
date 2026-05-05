@@ -1401,6 +1401,27 @@ router.put('/competitions/:id/poule-matches', authenticateToken, requireDdJ, asy
     // Reload the poule so classement is correct after the new write
     const reload = await loadPouleMatches(db, orgId, tournoiId);
     const updatedPoule = reload.poules.find(p => p.number === pn);
+
+    // V 2.0.711 — Option α: when this save was the last poule match of
+    // the day (all poules now complete), eagerly allocate tables to the
+    // bracket and the matchs de classement so the TV / Planning show the
+    // full afternoon plan as soon as the poules end. loadBracket and
+    // loadConsolante trigger autoAssignPhaseTables internally; we just
+    // call them and discard the result. Fire-and-forget — the response
+    // to the DdJ is already shaped from the poule reload above.
+    const allDone = (reload.poules || []).length > 0
+      && reload.poules.every(p => p.all_matches_played);
+    if (allDone) {
+      try {
+        await loadBracket(db, orgId, tournoiId);
+        await loadConsolante(db, orgId, tournoiId);
+      } catch (e) {
+        console.error('[DdJ] post-poule auto-allocation failed:', e);
+        // non-fatal — lazy allocation still kicks in next time the
+        // bracket / classement page is opened
+      }
+    }
+
     res.json({
       success: true,
       poule: updatedPoule
@@ -1518,8 +1539,9 @@ function deriveBracketOutcome(match) {
  * @param {Array}  phases     mutated in place: phases without table_number
  *                            get a default assigned
  */
-async function autoAssignPhaseTables(db, tournoiId, tableName, phases, excludeTables = []) {
+async function autoAssignPhaseTables(db, tournoiId, tableName, phases, options = {}) {
   if (!Array.isArray(phases) || phases.length === 0) return;
+  const { excludeTables = [], maxTables = null } = options;
 
   // Read session
   const session = await new Promise((resolve) => {
@@ -1533,39 +1555,35 @@ async function autoAssignPhaseTables(db, tournoiId, tableName, phases, excludeTa
   const allTables = parseTableNumbers(session.table_numbers, session.table_count);
   if (!allTables.length) return;
 
-  // V 2.0.709 — Filter out tables already used by another phase group
-  // (typically: when allocating Matchs de classement, we exclude the
-  // tables used by the bracket so the two phases don't claim the same
-  // billard while running in parallel). If the exclusion would leave us
-  // with zero usable tables (small clubs with only 2 tables for both
-  // bracket and classement), fall back to the full rotation — better to
-  // double-book on the TV than to show no table at all.
+  // V 2.0.711 — Determine the rotation of tables this phase group is
+  // allowed to use. Two cap mechanisms:
+  //   - excludeTables: filter out tables used by another phase group
+  //     (e.g. consolante excludes the bracket's tables so the two run
+  //     in parallel without claiming the same billard).
+  //   - maxTables: cap the rotation length, so the bracket reserves only
+  //     2 tables (SF1+SF2 in parallel, then F+PF reuse the same 2) and
+  //     the remaining tables go to the consolante.
+  // If both filters leave zero usable tables (very small clubs), fall
+  // back to the full rotation — degraded mode is better than no table.
   const excluded = new Set(excludeTables);
   let tables = allTables.filter(t => !excluded.has(t));
+  if (maxTables && tables.length > maxTables) tables = tables.slice(0, maxTables);
   if (!tables.length) tables = allTables;
+  const allowed = new Set(tables);
 
-  // Cycle through the available tables. Skip:
+  // V 2.0.711 — Cycle through the allowed tables. Skip:
   //   - true round-1 byes (has_bye AND no depends_on → no opponent ever)
-  //   - phases that already have a table
-  //   - phases that are already started
-  //
-  // V 2.0.710 — Do NOT skip phases on `!can_enter` anymore. Downstream
-  // phases (Finale, Petite finale, consolante F, …) need a table even
-  // before their upstream is resolved, so the TV can show
-  // 'FINALE · T6' as soon as the day starts. Cascaded byes (has_bye=true
-  // but depends_on non-empty) are real matches once the upstream resolves
-  // → they get a table too.
+  //   - phases that are already started (DdJ has begun playing)
+  // Generalised self-heal: reset any existing allocation that's NOT in
+  // the allowed set (covers both 'table conflict with another phase
+  // group' and 'pre-V711 over-allocation that claimed too many tables').
   let cursor = 0;
   for (const ph of phases) {
     const isPureBye = ph.has_bye && (!Array.isArray(ph.depends_on) || ph.depends_on.length === 0);
     if (isPureBye) continue;
     if (ph.started_at) continue;
 
-    // V 2.0.709 self-heal: if the existing allocation conflicts with the
-    // exclusion list (typically: a previous deploy allocated the same
-    // table to bracket and matchs de classement), reset it to NULL in DB
-    // so the upsert below can pick a non-conflicting one.
-    if (ph.table_number && excluded.has(ph.table_number)) {
+    if (ph.table_number && !allowed.has(ph.table_number)) {
       await new Promise((resolve) => {
         db.run(
           `UPDATE ${tableName} SET table_number = NULL
@@ -1733,10 +1751,12 @@ async function loadBracket(db, orgId, tournoiId) {
   const pf = buildPhase('PF', loserSF1,  loserSF2,  ['SF1', 'SF2']);
   phases.push(f, pf);
 
-  // V 2.0.708 — auto-assign tables to phases that don't have one yet.
-  // Lazy-persistent (see autoAssignPhaseTables doc).
+  // V 2.0.711 — auto-assign tables. Bracket reserves only the first 2
+  // tables (SF1+SF2 in parallel, then F+PF reuse the same 2). The
+  // remaining tables are left for the Matchs de classement which run
+  // in parallel during the afternoon.
   if (canStart) {
-    await autoAssignPhaseTables(db, tournoiId, 'ddj_bracket_matches', phases);
+    await autoAssignPhaseTables(db, tournoiId, 'ddj_bracket_matches', phases, { maxTables: 2 });
   }
 
   // Final positions (1st-4th) if F and PF are both played
@@ -2683,15 +2703,16 @@ async function loadConsolante(db, orgId, tournoiId) {
     prevRound = nextRound;
   }
 
-  // V 2.0.709 — auto-assign tables, excluding those already used by the
-  // bracket so the two phases don't claim the same billard in parallel.
+  // V 2.0.711 — auto-assign tables, excluding those used by the bracket
+  // so bracket and matchs de classement run in parallel without
+  // claiming the same billard. Pass via the new options object.
   if (canStart) {
     const bracketTables = (bracketCtx.phases || [])
       .map(ph => ph.table_number)
       .filter(Boolean);
     await autoAssignPhaseTables(
       db, tournoiId, 'ddj_consolante_matches', phases,
-      [...new Set(bracketTables)]
+      { excludeTables: [...new Set(bracketTables)] }
     );
   }
 
