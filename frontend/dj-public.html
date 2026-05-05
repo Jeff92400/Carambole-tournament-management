@@ -6,269 +6,478 @@
 <title>Tournoi en direct</title>
 <style>
   /* =====================================================================
-     V 2.0.595 — DdJ V3 public TV display
+     V 2.0.704 — DdJ V3 public TV display, Roland-Garros layout
      =====================================================================
      Standalone HTML for the playing-hall TV / tablet. NO authentication.
      Reads the public feed at /api/public/dj/:tournoi_id/feed every 5s.
 
-     Design:
-       - Dark mode (scoreboard look, comfortable in low light)
-       - Full-screen, generous typography (readable from 5-10m)
-       - Read-only — no buttons, no inputs
-       - Layout: header + 4 (or N) table cards + upcoming queue + progress bar
-
-     The tournoi_id is read from the URL, e.g.:
-       /dj-public.html?id=123
-     The route is also exposed as /dj/public/:id by server.js (see below).
+     Layout (full-screen grid):
+       header
+       main : 3 columns — POULES | PHASE FINALE | CONSOLANTE
+       footer : progress bar + next matches with table numbers
      ===================================================================== */
   :root {
     --bg: #0d1117;
     --bg-card: #161b22;
-    --bg-card-busy: #1f1015;
-    --bg-card-free: #0f1f15;
+    --bg-card-busy: #2a1212;
+    --bg-card-finished: #102a17;
+    --bg-card-pending: #131922;
     --border: #30363d;
-    --border-busy: #c9302c;
-    --border-free: #2ea043;
+    --border-busy: #ff4d4d;
+    --border-finished: #2ea043;
+    --border-pending: #444c56;
     --text: #e6edf3;
     --muted: #8b949e;
     --accent: #f0a020;
     --score-blue: #58a6ff;
+    --score-green: #56d364;
     --score-red: #ff7b72;
+    /* Auto-scaling font baseline — clamp keeps things readable from 24"
+       laptop to 65" TV without ever spilling outside the viewport. */
+    --fs-base: clamp(12px, 0.95vw, 18px);
+    --fs-h1:   clamp(20px, 1.8vw, 34px);
+    --fs-h2:   clamp(13px, 0.95vw, 18px);
+    --fs-name: clamp(13px, 0.95vw, 18px);
+    --fs-score: clamp(15px, 1.3vw, 24px);
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  html, body { height: 100%; }
+  html, body { height: 100%; width: 100%; }
   body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     background: var(--bg);
     color: var(--text);
     overflow: hidden;
+    font-size: var(--fs-base);
   }
+
   .frame {
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-rows: auto 1fr auto;
     height: 100vh;
-    padding: 24px 32px;
+    padding: 14px 18px;
+    gap: 12px;
   }
-  header {
+
+  /* ---- HEADER ---- */
+  header.top {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding-bottom: 16px;
+    padding: 0 4px 10px 4px;
     border-bottom: 2px solid var(--accent);
   }
-  header h1 { font-size: 30px; color: var(--accent); }
-  header .meta { font-size: 18px; color: var(--muted); text-align: right; }
-  header .meta strong { color: var(--text); }
-  header .clock { font-size: 22px; color: var(--text); font-variant-numeric: tabular-nums; }
+  header.top h1 { font-size: var(--fs-h1); color: var(--accent); font-weight: 800; }
+  header.top .meta { color: var(--muted); font-size: var(--fs-h2); margin-top: 2px; }
+  header.top .right { text-align: right; }
+  header.top .clock { font-size: var(--fs-h1); font-variant-numeric: tabular-nums; color: var(--text); }
+  header.top .ddj { font-size: var(--fs-h2); color: var(--muted); }
+  header.top .ddj strong { color: var(--text); }
 
-  .tables {
-    flex: 1;
+  /* ---- MAIN GRID — 3 COLUMNS ---- */
+  .main {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
-    gap: 20px;
-    padding: 20px 0;
-    align-content: start;
+    grid-template-columns: 1.7fr 1.3fr 1.2fr;
+    gap: 14px;
+    overflow: hidden;
+    min-height: 0;
   }
-  .table-card {
-    background: var(--bg-card);
-    border: 3px solid var(--border);
-    border-radius: 12px;
-    padding: 20px;
+  @media (max-width: 1100px) {
+    .main { grid-template-columns: 1fr; overflow: auto; }
+  }
+  .col {
     display: flex;
     flex-direction: column;
-    min-height: 220px;
+    gap: 10px;
+    min-height: 0;
+    overflow: hidden;
   }
-  .table-card.busy { border-color: var(--border-busy); background: var(--bg-card-busy); }
-  .table-card.free { border-color: var(--border-free); background: var(--bg-card-free); }
-  .table-card .tname {
-    font-size: 18px;
-    font-weight: 700;
+  .col-title {
+    font-size: var(--fs-h2);
+    font-weight: 800;
     text-transform: uppercase;
-    letter-spacing: 1px;
+    letter-spacing: 1.5px;
+    color: var(--accent);
+    border-bottom: 1px dashed var(--border);
+    padding-bottom: 4px;
+    flex-shrink: 0;
+  }
+  .col-body {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  /* ---- POULE CARD ---- */
+  .poule {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .poule-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 4px;
+  }
+  .poule-head .pname {
+    font-weight: 800;
+    color: var(--text);
+    font-size: var(--fs-name);
+    letter-spacing: 0.5px;
+  }
+  .poule-head .ptable {
+    color: var(--muted);
+    font-size: var(--fs-h2);
+  }
+  .poule-head .ptable strong { color: var(--accent); }
+
+  .classement {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .crow {
+    display: grid;
+    grid-template-columns: 18px 1fr auto;
+    gap: 8px;
+    font-size: var(--fs-name);
+    align-items: center;
     color: var(--text);
   }
-  .table-card .tphase {
-    font-size: 13px;
-    color: var(--muted);
-    margin-top: 2px;
+  .crow .pos {
+    color: var(--accent);
+    font-weight: 700;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
   }
-  .table-card .tplayers {
+  .crow .stats {
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+    font-size: 0.9em;
+  }
+
+  .matches {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    border-top: 1px dashed var(--border);
+    padding-top: 6px;
+  }
+  .match-row {
+    display: grid;
+    grid-template-columns: 22px 1fr auto auto;
+    gap: 8px;
+    align-items: center;
+    font-size: calc(var(--fs-name) * 0.92);
+    padding: 3px 6px;
+    border-radius: 6px;
+  }
+  .match-row.finished { color: var(--muted); }
+  .match-row.pending { color: var(--text); }
+  .match-row.in_progress {
+    background: var(--bg-card-busy);
+    border: 1px solid var(--border-busy);
+    color: var(--text);
+    font-weight: 700;
+    animation: pulse 2s ease-in-out infinite;
+  }
+  .match-row .icon {
+    font-size: 1em;
+    text-align: center;
+  }
+  .match-row .players { color: var(--text); }
+  .match-row .pscore {
+    font-variant-numeric: tabular-nums;
+    color: var(--score-green);
+    font-weight: 700;
+  }
+  .match-row .ptable {
+    color: var(--accent);
+    font-size: 0.85em;
+    font-weight: 600;
+  }
+  .match-row.in_progress .ptable { color: var(--score-red); }
+  .live-badge {
+    display: inline-block;
+    background: var(--border-busy);
+    color: white;
+    font-size: 0.75em;
+    padding: 1px 6px;
+    border-radius: 8px;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    margin-left: 4px;
+  }
+
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(255, 77, 77, 0.4); }
+    50%      { box-shadow: 0 0 12px 2px rgba(255, 77, 77, 0.55); }
+  }
+
+  /* ---- BRACKET (Roland-Garros style) ---- */
+  .bracket {
     flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 32px 1fr;
+    grid-template-rows: 1fr 1fr 0.4fr 1fr;
+    grid-template-areas:
+      "sf1 c1  ."
+      "sf1 c1  f"
+      "sf2 c2  f"
+      "sf2 c2  .";
+    gap: 6px;
+    min-height: 0;
+    align-items: stretch;
+  }
+  .bracket .b-sf1 { grid-area: sf1; }
+  .bracket .b-sf2 { grid-area: sf2; }
+  .bracket .b-f   { grid-area: f; align-self: center; }
+  .bracket .b-c1, .bracket .b-c2 {
+    position: relative;
+  }
+  .bracket .b-c1 { grid-area: c1; }
+  .bracket .b-c2 { grid-area: c2; }
+  /* Connectors: top & bottom horizontal pieces + a vertical bar, in CSS */
+  .bracket .b-c1::before,
+  .bracket .b-c2::before {
+    content: '';
+    position: absolute;
+    left: 0; right: 0;
+    height: 2px;
+    background: var(--border-pending);
+  }
+  .bracket .b-c1::before { top: 50%; }
+  .bracket .b-c2::before { top: 50%; }
+  .bracket .b-c1::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    top: 50%;
+    bottom: -50%;
+    width: 2px;
+    background: var(--border-pending);
+  }
+  .bracket .b-c2::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    bottom: 50%;
+    top: -50%;
+    width: 2px;
+    background: var(--border-pending);
+  }
+
+  .b-pf { margin-top: 14px; }
+  .b-pf .b-pf-label {
+    font-size: var(--fs-h2);
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 4px;
+    text-align: center;
+  }
+
+  .bmatch {
+    background: var(--bg-card);
+    border: 2px solid var(--border-pending);
+    border-radius: 10px;
+    padding: 8px 10px;
     display: flex;
     flex-direction: column;
     justify-content: center;
-    gap: 14px;
-    margin: 16px 0;
+    gap: 4px;
+    min-height: 70px;
   }
-  .table-card .player-line {
+  .bmatch.finished  { border-color: var(--border-finished); background: var(--bg-card-finished); }
+  .bmatch.in_progress { border-color: var(--border-busy); background: var(--bg-card-busy); animation: pulse 2s ease-in-out infinite; }
+  .bmatch.empty { opacity: 0.55; border-style: dashed; }
+  .bmatch .bphase {
+    font-size: 0.78em;
+    color: var(--muted);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
     display: flex;
     justify-content: space-between;
-    align-items: center;
-    font-size: 28px;
-    font-weight: 700;
   }
-  .table-card .player-line .pname { color: var(--text); }
-  .table-card .player-line .pscore {
-    font-size: 40px;
-    color: var(--score-blue);
-    font-variant-numeric: tabular-nums;
-    min-width: 80px;
-    text-align: right;
-  }
-  .table-card.free .next-up {
-    text-align: center;
-    color: var(--muted);
-    font-size: 16px;
-  }
-  .table-card.free .next-up .next-label {
-    text-transform: uppercase;
-    font-size: 12px;
-    letter-spacing: 1px;
-    color: var(--accent);
-    margin-bottom: 8px;
-  }
-  .table-card.free .next-up .next-name {
-    font-size: 22px;
+  .bmatch .bphase .btable { color: var(--accent); }
+  .bmatch .bp-line {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-size: var(--fs-name);
     color: var(--text);
-    margin-top: 4px;
+    gap: 8px;
   }
-  .table-card .tfooter {
-    font-size: 12px;
+  .bmatch .bp-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .bmatch .bp-name .bp-poule {
     color: var(--muted);
-    text-align: right;
-    border-top: 1px solid var(--border);
-    padding-top: 8px;
+    font-size: 0.78em;
+    margin-left: 4px;
+  }
+  .bmatch .bp-score {
+    font-variant-numeric: tabular-nums;
+    font-weight: 800;
+    font-size: var(--fs-score);
+    color: var(--score-green);
+  }
+  .bmatch.empty .bp-line .bp-name { color: var(--muted); font-style: italic; }
+  .bmatch.empty .bp-score { display: none; }
+
+  .bracket-empty,
+  .conso-empty {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--muted);
+    font-size: var(--fs-h2);
+    text-align: center;
+    padding: 20px;
+    border: 1px dashed var(--border);
+    border-radius: 10px;
   }
 
-  .queue {
-    border-top: 1px solid var(--border);
-    padding-top: 14px;
+  /* ---- CONSOLANTE (simple stacked list of matches) ---- */
+  .conso-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    overflow: hidden;
+    flex: 1;
+    min-height: 0;
+  }
+
+  /* ---- FOOTER ---- */
+  footer.bottom {
     display: grid;
     grid-template-columns: auto 1fr auto;
     gap: 18px;
     align-items: center;
+    padding: 10px 12px 4px 12px;
+    border-top: 1px solid var(--border);
   }
-  .queue .qlabel {
-    font-size: 14px;
+  footer.bottom .qlabel {
+    font-size: var(--fs-h2);
     color: var(--accent);
     text-transform: uppercase;
-    letter-spacing: 1px;
-    font-weight: 700;
+    letter-spacing: 1.5px;
+    font-weight: 800;
   }
-  .queue .qlist {
+  footer.bottom .qlist {
     display: flex;
     gap: 22px;
     overflow: hidden;
-    font-size: 18px;
-  }
-  .queue .qlist .qitem {
+    font-size: var(--fs-h2);
     color: var(--text);
-    white-space: nowrap;
   }
-  .queue .qlist .qitem .qmeta {
-    color: var(--muted);
-    font-size: 14px;
+  footer.bottom .qitem { white-space: nowrap; }
+  footer.bottom .qitem .qmeta { color: var(--muted); margin-left: 6px; }
+  footer.bottom .qitem .qtable {
+    color: var(--accent);
+    font-weight: 700;
     margin-left: 6px;
   }
-  /* V 2.0.703 — Derniers résultats band, similar look but green accent */
-  .queue.results .qlabel { color: #56d364; }
-  .queue.results .qlist .qitem { color: var(--text); }
-  .queue.results .qlist .qitem .pscore-r {
-    color: #56d364;
-    font-weight: 700;
-    margin: 0 6px;
-  }
-  .queue.results .qlist .qitem .qmeta { color: var(--muted); }
-  .queue .progress {
-    width: 220px;
-    height: 24px;
+  footer.bottom .progress {
+    width: 240px;
+    height: 22px;
     background: var(--bg-card);
     border-radius: 12px;
     overflow: hidden;
     border: 1px solid var(--border);
     position: relative;
   }
-  .queue .progress-fill {
+  footer.bottom .progress-fill {
     height: 100%;
     background: linear-gradient(90deg, #2ea043, #56d364);
     transition: width 0.5s ease-out;
   }
-  .queue .progress-label {
+  footer.bottom .progress-label {
     position: absolute; inset: 0;
     display: flex; align-items: center; justify-content: center;
-    font-size: 12px; font-weight: 700; color: white;
-    text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+    font-size: 11px; font-weight: 700; color: white;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.6);
   }
 
-  .empty {
-    flex: 1;
+  /* ---- EMPTY STATE ---- */
+  .full-empty {
+    grid-column: 1 / -1;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
-    flex-direction: column;
     color: var(--muted);
-    font-size: 22px;
+    font-size: var(--fs-h1);
     text-align: center;
+    gap: 14px;
   }
-  .empty img { height: 80px; margin-bottom: 20px; opacity: 0.4; }
+  .full-empty img { height: 80px; opacity: 0.4; }
 
   .error {
     color: var(--score-red);
     text-align: center;
     padding: 40px;
-    font-size: 18px;
+    font-size: var(--fs-h2);
   }
 </style>
 </head>
 <body>
 <div class="frame" id="frame">
-  <header>
+  <header class="top">
     <div>
       <h1 id="t-name">Chargement…</h1>
-      <div id="t-meta" class="meta" style="text-align:left;font-size:14px;margin-top:4px;"></div>
+      <div class="meta" id="t-meta"></div>
     </div>
-    <div>
+    <div class="right">
       <div class="clock" id="t-clock"></div>
-      <div class="meta" id="t-ddj"></div>
+      <div class="ddj" id="t-ddj"></div>
     </div>
   </header>
 
-  <div class="tables" id="t-tables">
-    <div class="empty">
+  <div class="main" id="t-main">
+    <div class="full-empty">
       <img src="images/FrenchBillard-Icon-small.png" alt="">
       <div>En attente de démarrage…</div>
     </div>
   </div>
 
-  <div class="queue results" id="t-results" style="display:none;">
-    <div class="qlabel">Derniers résultats</div>
-    <div class="qlist" id="t-rlist"></div>
-    <div></div>
-  </div>
-
-  <div class="queue" id="t-queue" style="display:none;">
+  <footer class="bottom" id="t-footer" style="display:none;">
     <div class="qlabel">Prochains matchs</div>
     <div class="qlist" id="t-qlist"></div>
     <div class="progress">
       <div class="progress-fill" id="t-pfill" style="width:0%"></div>
       <div class="progress-label" id="t-plabel">0 / 0</div>
     </div>
-  </div>
+  </footer>
 </div>
 
 <script>
   // -------------------------------------------------------------------
-  // V 2.0.595 — DdJ V3 public TV polling
+  // V 2.0.704 — DdJ V3 public TV polling, Roland-Garros layout
   // -------------------------------------------------------------------
   const params = new URLSearchParams(window.location.search);
   const tournoiId = parseInt(params.get('id'), 10);
   const POLL_MS = 5000;
 
-  function $(id) { return document.getElementById(id); }
-  function escapeHtml(s) {
-    return String(s == null ? '' : s)
-      .replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
-  }
+  const $ = (id) => document.getElementById(id);
+  const escapeHtml = (s) => String(s == null ? '' : s)
+    .replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
+
   function fmtClock() {
     const d = new Date();
     return d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
@@ -293,7 +502,7 @@
   tickClock();
 
   if (!Number.isFinite(tournoiId)) {
-    $('t-tables').innerHTML = '<div class="error">URL invalide. Format attendu : /dj-public.html?id=&lt;tournoiId&gt;</div>';
+    $('t-main').innerHTML = '<div class="error">URL invalide. Format attendu : /dj-public.html?id=&lt;tournoiId&gt;</div>';
   } else {
     poll();
     setInterval(poll, POLL_MS);
@@ -304,7 +513,7 @@
       const r = await fetch(`/api/public/dj/${tournoiId}/feed`, { cache: 'no-store' });
       if (!r.ok) {
         if (r.status === 404) {
-          $('t-tables').innerHTML = '<div class="error">Tournoi introuvable.</div>';
+          $('t-main').innerHTML = '<div class="error">Tournoi introuvable.</div>';
         }
         return;
       }
@@ -315,6 +524,9 @@
     }
   }
 
+  // ----------------------------------------------------------------
+  // Render
+  // ----------------------------------------------------------------
   function render(data) {
     // Header
     $('t-name').textContent = (data.tournament && data.tournament.name) || 'Tournoi';
@@ -323,90 +535,147 @@
       meta.date ? fmtDate(meta.date) : '',
       meta.location ? `· ${escapeHtml(meta.location)}` : ''
     ].filter(Boolean).join(' ');
-    $('t-ddj').textContent = data.session && data.session.ddj_name
-      ? `Directeur de Jeu : ${data.session.ddj_name}`
+    $('t-ddj').innerHTML = data.session && data.session.ddj_name
+      ? `Directeur de Jeu : <strong>${escapeHtml(data.session.ddj_name)}</strong>`
       : '';
 
-    // Tables — only if a session is active
-    const tablesEl = $('t-tables');
-    if (!data.session || !data.tables || data.tables.length === 0) {
-      tablesEl.innerHTML = `
-        <div class="empty">
+    // Empty state — no session yet
+    if (!data.session || !data.poules || data.poules.length === 0) {
+      $('t-main').innerHTML = `
+        <div class="full-empty">
           <img src="images/FrenchBillard-Icon-small.png" alt="">
           <div>En attente du démarrage de la journée…</div>
         </div>`;
-      $('t-queue').style.display = 'none';
-      $('t-results').style.display = 'none';
+      $('t-footer').style.display = 'none';
       return;
     }
 
-    tablesEl.innerHTML = data.tables.map(renderTable).join('');
+    // Build the 3-column layout
+    $('t-main').innerHTML = `
+      <div class="col">
+        <div class="col-title">Poules</div>
+        <div class="col-body">${(data.poules || []).map(renderPoule).join('')}</div>
+      </div>
+      <div class="col">
+        <div class="col-title">Phase finale</div>
+        <div class="col-body">${renderBracket(data.bracket)}</div>
+      </div>
+      <div class="col">
+        <div class="col-title">Consolante</div>
+        <div class="col-body">${renderConsolante(data.consolante)}</div>
+      </div>`;
 
-    // V 2.0.703 — Recent results band (top 5 finished matches)
-    const recent = data.recent || [];
-    if (recent.length === 0) {
-      $('t-results').style.display = 'none';
-    } else {
-      $('t-results').style.display = 'grid';
-      $('t-rlist').innerHTML = recent.map(r => {
-        const phase = r.phase_kind === 'poule'
-          ? `Poule ${r.phase_label}`
-          : (r.phase_kind === 'bracket' ? `Phase finale · ${r.phase_label}` : `Classement · ${r.phase_label}`);
-        const s1 = r.p1_points != null ? r.p1_points : '—';
-        const s2 = r.p2_points != null ? r.p2_points : '—';
-        return `<div class="qitem">${escapeHtml(r.p1_name)}<span class="pscore-r">${s1} — ${s2}</span>${escapeHtml(r.p2_name)}<span class="qmeta">${escapeHtml(phase)}</span></div>`;
-      }).join('');
-    }
-
-    // Queue + progress
+    // Footer — upcoming + progress
+    $('t-footer').style.display = 'grid';
     const queue = data.upcoming || [];
-    if (queue.length === 0 && (!data.progress || data.progress.total === 0)) {
-      $('t-queue').style.display = 'none';
-    } else {
-      $('t-queue').style.display = 'grid';
-      $('t-qlist').innerHTML = queue.length > 0
-        ? queue.map(q =>
-            `<div class="qitem">${escapeHtml(q.p1_name)} vs ${escapeHtml(q.p2_name)}<span class="qmeta">Poule ${q.poule_number}</span></div>`
-          ).join('')
-        : '<div class="qitem" style="color:var(--muted)">Aucun match en attente</div>';
-      const pct = (data.progress && data.progress.percent) || 0;
-      $('t-pfill').style.width = pct + '%';
-      $('t-plabel').textContent = `${data.progress.done} / ${data.progress.total}  (${pct}%)`;
-    }
+    $('t-qlist').innerHTML = queue.length > 0
+      ? queue.map(q => {
+          const tbl = q.table_number ? `<span class="qtable">T${q.table_number}</span>` : '';
+          return `<div class="qitem">${escapeHtml(q.p1_name)} vs ${escapeHtml(q.p2_name)}<span class="qmeta">Poule ${q.poule_number}</span>${tbl}</div>`;
+        }).join('')
+      : '<div class="qitem" style="color:var(--muted)">Aucun match en attente</div>';
+
+    const pct = (data.progress && data.progress.percent) || 0;
+    $('t-pfill').style.width = pct + '%';
+    $('t-plabel').textContent = `${data.progress.done} / ${data.progress.total}  (${pct}%)`;
   }
 
-  function renderTable(t) {
-    if (t.status === 'busy' && t.match) {
-      const p1Score = t.match.p1_points != null ? t.match.p1_points : '—';
-      const p2Score = t.match.p2_points != null ? t.match.p2_points : '—';
-      const phaseLabel = t.match.phase_kind === 'poule'
-        ? `Poule ${t.match.phase_label}`
-        : (t.match.phase_kind === 'bracket' ? `Phase finale · ${t.match.phase_label}` : `Classement · ${t.match.phase_label}`);
-      return `
-        <div class="table-card busy">
-          <div class="tname">Table ${t.table_number}</div>
-          <div class="tphase">${escapeHtml(phaseLabel)}</div>
-          <div class="tplayers">
-            <div class="player-line">
-              <span class="pname">${escapeHtml(t.match.p1_name)}</span>
-              <span class="pscore">${p1Score}</span>
-            </div>
-            <div class="player-line">
-              <span class="pname">${escapeHtml(t.match.p2_name)}</span>
-              <span class="pscore">${p2Score}</span>
-            </div>
-          </div>
-          <div class="tfooter">Démarré à ${fmtTimeShort(t.match.started_at)}</div>
-        </div>`;
-    }
+  // ---- POULE ----
+  function renderPoule(p) {
+    const classement = (p.players || []).map(pl => `
+      <div class="crow">
+        <span class="pos">${pl.position}.</span>
+        <span class="name">${escapeHtml(pl.name)}</span>
+        <span class="stats">${pl.wins}-${pl.losses}${pl.draws ? '-' + pl.draws : ''}</span>
+      </div>`).join('');
+
+    const matches = (p.matches || []).map(renderPouleMatch).join('');
+
+    const tableLbl = p.table_number ? `Table <strong>${p.table_number}</strong>` : '';
     return `
-      <div class="table-card free">
-        <div class="tname">Table ${t.table_number}</div>
-        <div class="tphase">Libre</div>
-        <div class="next-up" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;">
-          <div class="next-label">Prête pour le prochain match</div>
+      <div class="poule">
+        <div class="poule-head">
+          <div class="pname">Poule ${p.number}</div>
+          <div class="ptable">${tableLbl}</div>
         </div>
+        <div class="classement">${classement}</div>
+        <div class="matches">${matches}</div>
       </div>`;
+  }
+
+  function renderPouleMatch(m) {
+    const icon = m.status === 'finished' ? '✓' : (m.status === 'in_progress' ? '🔴' : '•');
+    const players = `${escapeHtml(m.p1_name)} vs ${escapeHtml(m.p2_name)}`;
+    let scoreCell = '';
+    if (m.status === 'finished') {
+      scoreCell = `<span class="pscore">${m.p1_points ?? '—'} — ${m.p2_points ?? '—'}</span>`;
+    } else if (m.status === 'in_progress') {
+      scoreCell = `<span class="live-badge">LIVE</span>`;
+    }
+    const tableCell = m.table_number ? `<span class="ptable">T${m.table_number}</span>` : '';
+    return `
+      <div class="match-row ${m.status}">
+        <span class="icon">${icon}</span>
+        <span class="players">${players}</span>
+        ${scoreCell}
+        ${tableCell}
+      </div>`;
+  }
+
+  // ---- BRACKET ----
+  function renderBracket(b) {
+    if (!b || !b.phases || b.phases.length === 0 || !b.available) {
+      return `<div class="bracket-empty">En attente de la fin des poules…</div>`;
+    }
+    const byPhase = {};
+    for (const ph of b.phases) byPhase[ph.phase] = ph;
+    const sf1 = byPhase['SF1'];
+    const sf2 = byPhase['SF2'];
+    const f   = byPhase['F'];
+    const pf  = byPhase['PF'];
+    return `
+      <div class="bracket">
+        <div class="b-sf1">${renderBmatch(sf1, '½ Finale 1')}</div>
+        <div class="b-c1"></div>
+        <div class="b-f">${renderBmatch(f, 'Finale')}</div>
+        <div class="b-sf2">${renderBmatch(sf2, '½ Finale 2')}</div>
+        <div class="b-c2"></div>
+      </div>
+      <div class="b-pf">
+        <div class="b-pf-label">Petite finale (3ᵉ place)</div>
+        ${renderBmatch(pf, 'Petite finale')}
+      </div>`;
+  }
+
+  function renderBmatch(m, label) {
+    if (!m) return `<div class="bmatch empty"><div class="bphase">${escapeHtml(label)}</div><div class="bp-line"><span class="bp-name">à venir</span></div></div>`;
+    const empty = !m.p1_name || !m.p2_name;
+    const cls = empty ? 'empty' : (m.status || 'pending');
+    const tableLbl = m.table_number ? `<span class="btable">T${m.table_number}</span>` : '';
+    const phaseLbl = `<span>${escapeHtml(label)}</span>${tableLbl}`;
+    const scoreL = m.status === 'finished' ? (m.p1_points ?? '') : '';
+    const scoreR = m.status === 'finished' ? (m.p2_points ?? '') : '';
+    const live = m.status === 'in_progress' ? '<span class="live-badge">LIVE</span>' : '';
+    const p1 = m.p1_name
+      ? `${escapeHtml(m.p1_name)}${m.p1_poule ? `<span class="bp-poule">P${m.p1_poule}</span>` : ''}`
+      : '<em>?</em>';
+    const p2 = m.p2_name
+      ? `${escapeHtml(m.p2_name)}${m.p2_poule ? `<span class="bp-poule">P${m.p2_poule}</span>` : ''}`
+      : '<em>?</em>';
+    return `
+      <div class="bmatch ${cls}">
+        <div class="bphase">${phaseLbl}${live ? ' ' + live : ''}</div>
+        <div class="bp-line"><span class="bp-name">${p1}</span>${scoreL !== '' ? `<span class="bp-score">${scoreL}</span>` : ''}</div>
+        <div class="bp-line"><span class="bp-name">${p2}</span>${scoreR !== '' ? `<span class="bp-score">${scoreR}</span>` : ''}</div>
+      </div>`;
+  }
+
+  // ---- CONSOLANTE ----
+  function renderConsolante(c) {
+    if (!c || !c.phases || c.phases.length === 0 || !c.available) {
+      return `<div class="conso-empty">En attente de la fin des poules…</div>`;
+    }
+    return `<div class="conso-list">${c.phases.map(ph => renderBmatch(ph, ph.phase)).join('')}</div>`;
   }
 </script>
 </body>

@@ -4130,3 +4130,9 @@ router.post('/competitions/:id/consolante/start', authenticateToken, requireDdJ,
 });
 
 module.exports = router;
+// V 2.0.704 — expose loaders for the public TV feed (dj-public.js).
+// They accept orgId=null to skip the org filter (the public route does
+// its own org check via tournoi_ext).
+module.exports.loadPouleMatches = loadPouleMatches;
+module.exports.loadBracket = loadBracket;
+module.exports.loadConsolante = loadConsolante;

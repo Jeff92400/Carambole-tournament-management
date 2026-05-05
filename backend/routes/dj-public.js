@@ -19,6 +19,10 @@ const express = require('express');
 const router = express.Router();
 const getDb = () => require('../db-loader');
 const QRCode = require('qrcode');
+// V 2.0.704 — loaders exported by directeur-jeu.js for the Roland-Garros
+// style TV view. They return the full poules / bracket / consolante state
+// already merged with saved scores + started_at/finished_at lifecycle.
+const directeurJeu = require('./directeur-jeu');
 
 // Reduce a player name to "First L." for public display.
 function sanitizeName(firstName, lastName) {
@@ -28,6 +32,16 @@ function sanitizeName(firstName, lastName) {
   if (!ln) return fn;
   return `${fn} ${ln.charAt(0).toUpperCase()}.`;
 }
+
+// Derive a status from started_at / finished_at + p*_points presence.
+function deriveStatus(m) {
+  if (m.finished_at || m.is_played) return 'finished';
+  if (m.started_at) return 'in_progress';
+  return 'pending';
+}
+
+// Normalize licence (strip spaces) for map lookups.
+const normLic = (s) => String(s || '').replace(/\s+/g, '');
 
 // GET /api/public/dj/:tournoi_id/feed
 //
@@ -44,7 +58,8 @@ router.get('/:tournoi_id/feed', async (req, res) => {
   }
 
   try {
-    // 1. Tournament identity
+    // 1. Tournament identity (also serves as the org check — the loaders
+    //    are called with orgId=null since we already validated here).
     const tournament = await new Promise((resolve, reject) => {
       db.get(
         `SELECT t.tournoi_id, t.nom, t.debut, t.lieu, t.organization_id
@@ -58,7 +73,7 @@ router.get('/:tournoi_id/feed', async (req, res) => {
       return res.status(404).json({ error: 'Tournoi introuvable' });
     }
 
-    // 2. DdJ session (table_count, table_numbers, started_at)
+    // 2. DdJ session
     const session = await new Promise((resolve, reject) => {
       db.get(
         `SELECT table_count, table_numbers, ddj_name, started_at
@@ -68,7 +83,6 @@ router.get('/:tournoi_id/feed', async (req, res) => {
         (err, row) => err ? reject(err) : resolve(row)
       );
     });
-    // Parse custom table numbers — fall back to [1..table_count] for legacy rows
     const tableNumbers = (() => {
       if (!session) return [];
       if (!session.table_numbers) return Array.from({ length: session.table_count }, (_, i) => i + 1);
@@ -81,7 +95,6 @@ router.get('/:tournoi_id/feed', async (req, res) => {
       }
     })();
 
-    // No session yet → return a minimal "not started" payload
     if (!session) {
       return res.json({
         tournament: {
@@ -90,101 +103,44 @@ router.get('/:tournoi_id/feed', async (req, res) => {
           location: tournament.lieu || null
         },
         session: null,
-        tables: [],
-        upcoming: [],
-        progress: { done: 0, total: 0, percent: 0 }
+        poules: [], bracket: null, consolante: null,
+        upcoming: [], progress: { done: 0, total: 0, percent: 0 }
       });
     }
 
-    // 3. In-progress matches (started_at NOT NULL, finished_at NULL)
-    //    across the 3 phases. Same shape, UNIONed.
-    const inProgress = await new Promise((resolve, reject) => {
-      db.all(
-        `SELECT 'poule' AS phase_kind, table_number, p1_licence, p2_licence,
-                p1_points, p2_points, started_at,
-                poule_number::text AS phase_label, match_number AS phase_index
-           FROM ddj_poule_matches
-          WHERE tournoi_id = $1 AND started_at IS NOT NULL AND finished_at IS NULL
-            AND table_number IS NOT NULL
-         UNION ALL
-         SELECT 'bracket' AS phase_kind, table_number, p1_licence, p2_licence,
-                p1_points, p2_points, started_at,
-                phase::text AS phase_label, NULL::int AS phase_index
-           FROM ddj_bracket_matches
-          WHERE tournoi_id = $1 AND started_at IS NOT NULL AND finished_at IS NULL
-            AND table_number IS NOT NULL
-         UNION ALL
-         SELECT 'consolante' AS phase_kind, table_number, p1_licence, p2_licence,
-                p1_points, p2_points, started_at,
-                phase::text AS phase_label, NULL::int AS phase_index
-           FROM ddj_consolante_matches
-          WHERE tournoi_id = $1 AND started_at IS NOT NULL AND finished_at IS NULL
-            AND table_number IS NOT NULL`,
-        [tournoiId],
-        (err, rows) => err ? reject(err) : resolve(rows || [])
-      );
-    });
+    // 3. Load full poules / bracket / consolante via the DdJ helpers.
+    //    orgId=null skips the org filter (we did our own check above).
+    const pouleCtx = await directeurJeu.loadPouleMatches(db, null, tournoiId);
+    if (pouleCtx.error) {
+      return res.status(404).json({ error: 'Tournoi introuvable' });
+    }
+    let bracketCtx = null;
+    let consolanteCtx = null;
+    try { bracketCtx = await directeurJeu.loadBracket(db, null, tournoiId); } catch (e) { console.error('[feed] loadBracket', e); }
+    try { consolanteCtx = await directeurJeu.loadConsolante(db, null, tournoiId); } catch (e) { console.error('[feed] loadConsolante', e); }
 
-    // 4. Upcoming poule matches (top 3 not started). The bracket/
-    //    consolante upcoming matches are skipped here for simplicity —
-    //    the TV doesn't need the full queue, just a flavour.
-    const upcoming = await new Promise((resolve, reject) => {
-      db.all(
-        `SELECT poule_number, match_number, p1_licence, p2_licence
-           FROM ddj_poule_matches
-          WHERE tournoi_id = $1 AND started_at IS NULL
-          ORDER BY poule_number, match_number
-          LIMIT 3`,
-        [tournoiId],
-        (err, rows) => err ? reject(err) : resolve(rows || [])
-      );
-    });
-
-    // 4b. V 2.0.703 — Recently finished matches (last 5, all phases) with
-    //     scores. Lets the TV display a "Derniers résultats" band so
-    //     spectators can see what just happened.
-    const recent = await new Promise((resolve, reject) => {
-      db.all(
-        `SELECT 'poule' AS phase_kind, poule_number::text AS phase_label,
-                p1_licence, p2_licence, p1_points, p2_points, finished_at
-           FROM ddj_poule_matches
-          WHERE tournoi_id = $1 AND finished_at IS NOT NULL
-         UNION ALL
-         SELECT 'bracket' AS phase_kind, phase::text AS phase_label,
-                p1_licence, p2_licence, p1_points, p2_points, finished_at
-           FROM ddj_bracket_matches
-          WHERE tournoi_id = $1 AND finished_at IS NOT NULL
-         UNION ALL
-         SELECT 'consolante' AS phase_kind, phase::text AS phase_label,
-                p1_licence, p2_licence, p1_points, p2_points, finished_at
-           FROM ddj_consolante_matches
-          WHERE tournoi_id = $1 AND finished_at IS NOT NULL
-          ORDER BY finished_at DESC
-          LIMIT 5`,
-        [tournoiId],
-        (err, rows) => err ? reject(err) : resolve(rows || [])
-      );
-    });
-
-    // 5. Resolve all licences to (first_name, last_name) via players
-    //    table. We do ONE query for all distinct licences appearing
-    //    in inProgress + upcoming + recent, and build a lookup map.
+    // 4. Collect every licence appearing anywhere → ONE players query →
+    //    sanitized name map ("First L."). Names come back as "Last First"
+    //    from the loaders so we'd need to flip them, but it's cleaner to
+    //    re-resolve from the players table.
     const licenceSet = new Set();
-    for (const m of inProgress) {
-      if (m.p1_licence) licenceSet.add(m.p1_licence);
-      if (m.p2_licence) licenceSet.add(m.p2_licence);
+    for (const p of (pouleCtx.poules || [])) {
+      for (const pl of (p.players || [])) if (pl.licence) licenceSet.add(pl.licence);
     }
-    for (const m of upcoming) {
-      if (m.p1_licence) licenceSet.add(m.p1_licence);
-      if (m.p2_licence) licenceSet.add(m.p2_licence);
+    if (bracketCtx && bracketCtx.phases) {
+      for (const ph of bracketCtx.phases) {
+        if (ph.p1 && ph.p1.licence) licenceSet.add(ph.p1.licence);
+        if (ph.p2 && ph.p2.licence) licenceSet.add(ph.p2.licence);
+      }
     }
-    for (const m of recent) {
-      if (m.p1_licence) licenceSet.add(m.p1_licence);
-      if (m.p2_licence) licenceSet.add(m.p2_licence);
+    if (consolanteCtx && consolanteCtx.phases) {
+      for (const ph of consolanteCtx.phases) {
+        if (ph.p1 && ph.p1.licence) licenceSet.add(ph.p1.licence);
+        if (ph.p2 && ph.p2.licence) licenceSet.add(ph.p2.licence);
+      }
     }
-
     const licenceList = [...licenceSet];
-    let nameMap = new Map();
+    const nameMap = new Map();
     if (licenceList.length > 0) {
       const placeholders = licenceList.map((_, i) => `$${i + 1}`).join(',');
       const rows = await new Promise((resolve, reject) => {
@@ -197,63 +153,136 @@ router.get('/:tournoi_id/feed', async (req, res) => {
         );
       });
       for (const r of rows) {
-        nameMap.set(r.licence, {
+        nameMap.set(normLic(r.licence), {
           name: sanitizeName(r.first_name, r.last_name),
           club: r.club || null
         });
       }
     }
     const lookupName = (licence) => {
-      const e = nameMap.get(licence);
+      const e = nameMap.get(normLic(licence));
       return e ? e.name : 'Joueur';
     };
+    const lookupClub = (licence) => {
+      const e = nameMap.get(normLic(licence));
+      return e ? e.club : null;
+    };
 
-    // 6. Build per-table status array — iterate over the actual physical
-    //    numbers (e.g. [6,7,8,9]) so the TV displays "Table 6" etc.
-    const inProgressByTable = new Map();
-    for (const m of inProgress) inProgressByTable.set(m.table_number, m);
-
-    const tables = tableNumbers.map((n) => {
-      const m = inProgressByTable.get(n);
-      return {
-        table_number: n,
-        status: m ? 'busy' : 'free',
-        match: m ? {
-          phase_kind: m.phase_kind,
-          phase_label: String(m.phase_label),
-          p1_name: lookupName(m.p1_licence),
-          p2_name: lookupName(m.p2_licence),
-          p1_points: m.p1_points,
-          p2_points: m.p2_points,
-          started_at: m.started_at
-        } : null
-      };
+    // 5. Build sanitized poules — composition + classement (live wins/
+    //    losses) + matches with status (pending/in_progress/finished).
+    const poulesOut = (pouleCtx.poules || []).map(p => {
+      const classementByLic = new Map();
+      for (const c of (p.classement || [])) {
+        classementByLic.set(normLic(c.licence), c);
+      }
+      // Players ordered by classement (live ranking) so "1st" appears at
+      // the top of the poule card on the TV.
+      const players = (p.classement || []).map((c, idx) => ({
+        position: idx + 1,
+        name: lookupName(c.licence),
+        club: lookupClub(c.licence),
+        wins: c.wins || 0,
+        draws: c.draws || 0,
+        losses: c.losses || 0,
+        played: (c.wins || 0) + (c.draws || 0) + (c.losses || 0),
+        match_points: c.match_points || 0
+      }));
+      const matches = (p.matches || []).map(m => ({
+        match_number: m.match_number,
+        table_number: m.table_number || null,
+        p1_name: lookupName(m.p1_licence),
+        p2_name: lookupName(m.p2_licence),
+        p1_points: m.p1_points,
+        p2_points: m.p2_points,
+        status: deriveStatus(m),
+        started_at: m.started_at,
+        finished_at: m.finished_at
+      }));
+      // Pick a "home table" for the poule: the table where its first
+      // pending/in_progress match is scheduled, or the most recent one.
+      const homeTable = (() => {
+        const next = matches.find(mm => mm.status !== 'finished' && mm.table_number);
+        if (next) return next.table_number;
+        const last = [...matches].reverse().find(mm => mm.table_number);
+        return last ? last.table_number : null;
+      })();
+      return { number: p.number, table_number: homeTable, players, matches };
     });
 
-    // 7. Progress: count finished matches vs total expected
-    //    For simplicity we only count what's already in the 3 tables.
-    //    The "total expected" includes all poule matches (they're all
-    //    pre-known once poules are generated) + the bracket and
-    //    consolante phases (4 + N for consolante, but we count actual
-    //    rows, which is fine — the TV doesn't need precision).
-    const progress = await new Promise((resolve, reject) => {
-      db.get(
-        `SELECT
-            (SELECT COUNT(*) FROM ddj_poule_matches WHERE tournoi_id = $1) +
-            (SELECT COUNT(*) FROM ddj_bracket_matches WHERE tournoi_id = $1) +
-            (SELECT COUNT(*) FROM ddj_consolante_matches WHERE tournoi_id = $1) AS total,
-            (SELECT COUNT(*) FROM ddj_poule_matches WHERE tournoi_id = $1 AND finished_at IS NOT NULL) +
-            (SELECT COUNT(*) FROM ddj_bracket_matches WHERE tournoi_id = $1 AND finished_at IS NOT NULL) +
-            (SELECT COUNT(*) FROM ddj_consolante_matches WHERE tournoi_id = $1 AND finished_at IS NOT NULL) AS done`,
-        [tournoiId],
-        (err, row) => err ? reject(err) : resolve(row || { total: 0, done: 0 })
-      );
+    // 6. Build sanitized bracket (4 phases: SF1, SF2, F, PF).
+    const buildBracketPhase = (ph) => ({
+      phase: ph.phase,
+      p1_name: ph.p1 ? lookupName(ph.p1.licence) : null,
+      p2_name: ph.p2 ? lookupName(ph.p2.licence) : null,
+      p1_poule: ph.p1 ? ph.p1.poule_number : null,
+      p2_poule: ph.p2 ? ph.p2.poule_number : null,
+      table_number: ph.table_number || null,
+      p1_points: ph.p1_points,
+      p2_points: ph.p2_points,
+      status: deriveStatus(ph),
+      started_at: ph.started_at,
+      finished_at: ph.finished_at
     });
-    const total = parseInt(progress.total, 10) || 0;
-    const done = parseInt(progress.done, 10) || 0;
+    const bracketOut = bracketCtx
+      ? {
+          available: !!bracketCtx.can_start,
+          phases: (bracketCtx.phases || []).map(buildBracketPhase)
+        }
+      : { available: false, phases: [] };
+
+    // 7. Build sanitized consolante.
+    const consolanteOut = consolanteCtx
+      ? {
+          available: !!consolanteCtx.can_start,
+          phases: (consolanteCtx.phases || []).map(ph => ({
+            phase: ph.phase,
+            p1_name: ph.p1 ? lookupName(ph.p1.licence) : null,
+            p2_name: ph.p2 ? lookupName(ph.p2.licence) : null,
+            table_number: ph.table_number || null,
+            p1_points: ph.p1_points,
+            p2_points: ph.p2_points,
+            status: deriveStatus(ph),
+            started_at: ph.started_at,
+            finished_at: ph.finished_at
+          }))
+        }
+      : { available: false, phases: [] };
+
+    // 8. Upcoming queue — next 3 pending poule matches across all poules,
+    //    flat list with table_number so the footer can show e.g. "Table 7".
+    const upcoming = [];
+    for (const p of poulesOut) {
+      for (const m of p.matches) {
+        if (m.status === 'pending') {
+          upcoming.push({
+            poule_number: p.number,
+            match_number: m.match_number,
+            p1_name: m.p1_name,
+            p2_name: m.p2_name,
+            table_number: m.table_number
+          });
+        }
+      }
+    }
+    upcoming.sort((a, b) => a.poule_number - b.poule_number || a.match_number - b.match_number);
+    const upcomingTop = upcoming.slice(0, 5);
+
+    // 9. Progress — count finished vs known total across the 3 phases.
+    let total = 0, done = 0;
+    for (const p of poulesOut) {
+      total += p.matches.length;
+      done += p.matches.filter(m => m.status === 'finished').length;
+    }
+    for (const ph of bracketOut.phases) {
+      total += 1;
+      if (ph.status === 'finished') done += 1;
+    }
+    for (const ph of consolanteOut.phases) {
+      total += 1;
+      if (ph.status === 'finished') done += 1;
+    }
     const percent = total > 0 ? Math.round((done / total) * 100) : 0;
 
-    // 8. Compose response
     res.json({
       tournament: {
         name: tournament.nom,
@@ -262,25 +291,14 @@ router.get('/:tournoi_id/feed', async (req, res) => {
       },
       session: {
         table_count: session.table_count,
+        table_numbers: tableNumbers,
         ddj_name: session.ddj_name,
         started_at: session.started_at
       },
-      tables,
-      upcoming: upcoming.map(m => ({
-        poule_number: m.poule_number,
-        match_number: m.match_number,
-        p1_name: lookupName(m.p1_licence),
-        p2_name: lookupName(m.p2_licence)
-      })),
-      recent: recent.map(m => ({
-        phase_kind: m.phase_kind,
-        phase_label: String(m.phase_label),
-        p1_name: lookupName(m.p1_licence),
-        p2_name: lookupName(m.p2_licence),
-        p1_points: m.p1_points,
-        p2_points: m.p2_points,
-        finished_at: m.finished_at
-      })),
+      poules: poulesOut,
+      bracket: bracketOut,
+      consolante: consolanteOut,
+      upcoming: upcomingTop,
       progress: { done, total, percent }
     });
   } catch (err) {
