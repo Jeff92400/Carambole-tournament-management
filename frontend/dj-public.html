@@ -296,9 +296,34 @@
     align-items: center;
     min-width: 0;
   }
-  /* width: 100% forces the F card to fill its column instead of
-     shrinking to its content (~280px). */
-  .b-col-f .bmatch { flex: 1 1 auto; width: 100%; }
+  /* V 2.0.726 — Finale is the focal point of the bracket: larger
+     padding, bigger fonts, and a subtle glow to make it visually
+     dominant over the SF cards that feed into it. */
+  .b-col-f .bmatch {
+    flex: 1 1 auto;
+    width: 100%;
+    padding: 14px 16px;
+    border-width: 3px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  }
+  .b-col-f .bmatch .bphase { font-size: 0.95em; }
+  .b-col-f .bmatch .bp-line { font-size: 1.15em; }
+  .b-col-f .bmatch .bp-score { font-size: 1.3em; }
+
+  /* Champion celebration — gold border + glow once the Finale is played. */
+  .b-col-f .bmatch.finished {
+    border-color: #f5c542;
+    background: linear-gradient(135deg, #2a1f08 0%, #1b1308 100%);
+    box-shadow:
+      0 0 0 1px rgba(245, 197, 66, 0.35),
+      0 6px 24px rgba(245, 197, 66, 0.25);
+  }
+  .b-col-f .bmatch.finished .bp-line.winner .bp-name { color: #ffd966; }
+  .b-col-f .bmatch.finished .bp-line.winner .bp-score { color: #ffd966; }
+  .b-col-f .bmatch.finished .bphase { color: #f5c542; }
+
+  /* SF cards stay readable but visually subordinate to the Finale. */
+  .b-col-sf .bmatch { font-size: 0.92em; }
 
   /* V 2.0.725 — Petite finale card kept narrow (matches F card width)
      and centered, so it doesn't visually dominate the column. */
