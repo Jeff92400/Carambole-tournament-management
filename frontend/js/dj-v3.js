@@ -79,6 +79,9 @@
     .djv3-session-bar .djv3-sb-btn:hover { filter: brightness(1.08); }
     .djv3-session-bar .djv3-sb-btn-primary { background: #1a5276; color: white; }
     .djv3-session-bar .djv3-sb-btn-secondary { background: #fff; color: #1a5276; border: 1px solid #cbd5e1; }
+    /* V 2.0.713 — admin-only "Effacer tous les scores" button */
+    .djv3-session-bar .djv3-sb-btn-danger { background: #c0392b; color: white; }
+    .djv3-session-bar .djv3-sb-btn-danger:hover { background: #a32e22; }
 
     /* Legacy badge — kept for backwards-compat but visually neutral now */
     .djv3-badge { display: none; }
@@ -264,6 +267,10 @@
         <button type="button" class="djv3-sb-btn djv3-sb-btn-secondary" data-action="planning">📋 Planning</button>
         <button type="button" class="djv3-sb-btn djv3-sb-btn-secondary" data-action="drawer">État</button>
         <button type="button" class="djv3-sb-btn djv3-sb-btn-secondary" data-action="tv">📺 TV</button>
+        <button type="button" class="djv3-sb-btn djv3-sb-btn-secondary" data-action="help">❓ Aide</button>
+        ${(sessionStorage.getItem('userRole') === 'admin')
+          ? '<button type="button" class="djv3-sb-btn djv3-sb-btn-danger" data-action="reset">🧨 Effacer</button>'
+          : ''}
         <button type="button" class="djv3-sb-btn djv3-sb-btn-primary" data-action="edit">Modifier</button>
       </div>
     `;
@@ -287,11 +294,106 @@
       e.stopPropagation();
       openTvDialog();
     });
+    // V 2.0.713 — Aide: open the dedicated DdJ guide in a new tab.
+    bar.querySelector('[data-action="help"]').addEventListener('click', (e) => {
+      e.stopPropagation();
+      window.open('guide-utilisateur-ddj.html', '_blank', 'noopener');
+    });
+    // V 2.0.713 — Reset all scores (admin only). Strong confirmation.
+    const resetBtn = bar.querySelector('[data-action="reset"]');
+    if (resetBtn) {
+      resetBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openResetConfirmModal();
+      });
+    }
     bar.querySelector('[data-action="edit"]').addEventListener('click', (e) => {
       e.stopPropagation();
       openSessionModal();
     });
     return bar;
+  }
+
+  // V 2.0.713 — Strong-confirmation modal before wiping all DdJ scores.
+  // Admin-only feature: useful in dev/test to restart a tournament from
+  // scratch without bothering with manual SQL. The DdJ session config
+  // (table count, names) is preserved — only match data is cleared.
+  function openResetConfirmModal() {
+    const existing = document.getElementById('djv3-reset-backdrop');
+    if (existing) return;
+    const backdrop = document.createElement('div');
+    backdrop.id = 'djv3-reset-backdrop';
+    backdrop.className = 'djv3-modal-backdrop';
+    const modal = document.createElement('div');
+    modal.className = 'djv3-modal';
+    modal.style.maxWidth = '500px';
+    modal.innerHTML = `
+      <h3 style="color:#c0392b;">🧨 Effacer tous les scores</h3>
+      <p style="color:#444;margin:12px 0;">
+        Cette action <strong>supprime définitivement</strong> tous les scores saisis
+        pour ce tournoi : matchs de poule, tableau final et matchs de classement.
+      </p>
+      <p style="color:#444;margin:12px 0;">
+        La configuration de la journée (tables, DdJ) est conservée.
+        Les inscriptions et la composition des poules ne sont pas touchées.
+      </p>
+      <div style="background:#fde8e8;border:1px solid #c0392b;border-radius:8px;padding:12px 14px;margin:14px 0;color:#7a1f1c;">
+        <strong>⚠️ Action irréversible.</strong> Les scores ne pourront pas être restaurés.
+      </div>
+      <label style="display:block;font-size:13px;font-weight:600;color:#444;margin-top:8px;">
+        Tapez <strong>EFFACER</strong> en majuscules pour confirmer :
+      </label>
+      <input type="text" id="djv3-reset-confirm-input" placeholder="EFFACER"
+             autocomplete="off" autocapitalize="characters"
+             style="width:100%;padding:10px 12px;font-size:15px;border:2px solid #ddd;border-radius:6px;margin-top:6px;">
+      <div class="djv3-modal-actions" style="margin-top:18px;">
+        <button type="button" class="djv3-btn-secondary" id="djv3-reset-cancel">Annuler</button>
+        <button type="button" id="djv3-reset-confirm" disabled
+                style="padding:10px 18px;border:0;border-radius:6px;font-size:14px;font-weight:600;background:#c0392b;color:white;opacity:0.4;cursor:not-allowed;">
+          🧨 Effacer définitivement
+        </button>
+      </div>
+    `;
+    backdrop.appendChild(modal);
+    document.body.appendChild(backdrop);
+
+    const input = document.getElementById('djv3-reset-confirm-input');
+    const okBtn = document.getElementById('djv3-reset-confirm');
+    const close = () => { backdrop.remove(); };
+    document.getElementById('djv3-reset-cancel').addEventListener('click', close);
+    backdrop.addEventListener('click', (e) => { if (e.target === backdrop) close(); });
+    input.focus();
+    input.addEventListener('input', () => {
+      const ok = input.value.trim() === 'EFFACER';
+      okBtn.disabled = !ok;
+      okBtn.style.opacity = ok ? '1' : '0.4';
+      okBtn.style.cursor = ok ? 'pointer' : 'not-allowed';
+    });
+    okBtn.addEventListener('click', async () => {
+      okBtn.disabled = true;
+      okBtn.textContent = 'Effacement…';
+      try {
+        const r = await authFetch(
+          `/api/directeur-jeu/competitions/${state.tournoiId}/reset-all-scores`,
+          { method: 'POST' }
+        );
+        if (!r.ok) {
+          const err = await r.json().catch(() => ({}));
+          alert('Échec : ' + (err.error || 'erreur serveur'));
+          okBtn.disabled = false;
+          okBtn.textContent = '🧨 Effacer définitivement';
+          return;
+        }
+        close();
+        guideMessage('✅ Tous les scores ont été effacés. La page va se recharger.', 'success');
+        setTimeout(() => window.location.reload(), 1500);
+      } catch (e) {
+        console.error('reset error', e);
+        alert('Erreur de connexion au serveur.');
+        okBtn.disabled = false;
+        okBtn.textContent = '🧨 Effacer définitivement';
+      }
+    });
   }
 
   // V 2.0.699 — TV dialog: shows the URL + a copy button + a direct

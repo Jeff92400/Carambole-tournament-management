@@ -4284,6 +4284,87 @@ router.post('/competitions/:id/consolante/start', authenticateToken, requireDdJ,
   }
 });
 
+// ============================================================================
+// V 2.0.713 — Admin-only: wipe ALL scores for a tournament
+// ============================================================================
+//
+// Useful in dev / re-test scenarios: an admin can reset a tournament to
+// "poules already generated, no scores yet" without manual SQL. Deletes
+// every row in the 4 ddj_*_matches tables for the tournoi, and any seed
+// override. Keeps:
+//   - ddj_session       (day config: tables, DdJ name, etc.)
+//   - convocation_poules (poule lineup — admin can still re-seed if wanted)
+//
+// Strict admin-only (requireAdmin); the frontend hides the trigger
+// button for non-admins, and the middleware enforces it server-side.
+// ============================================================================
+router.post('/competitions/:id/reset-all-scores',
+  authenticateToken, requireAdmin, async (req, res) => {
+    const db = getDb();
+    const orgId = req.user.organizationId || null;
+    const tournoiId = parseInt(req.params.id, 10);
+    if (!Number.isFinite(tournoiId)) {
+      return res.status(400).json({ error: 'ID tournoi invalide' });
+    }
+
+    try {
+      // Org check — make sure the admin can only reset tournois in their CDB
+      const t = await new Promise((resolve, reject) => {
+        db.get(
+          `SELECT tournoi_id FROM tournoi_ext
+            WHERE tournoi_id = $1 AND ($2::int IS NULL OR organization_id = $2)`,
+          [tournoiId, orgId],
+          (err, row) => err ? reject(err) : resolve(row)
+        );
+      });
+      if (!t) return res.status(404).json({ error: 'Tournoi introuvable' });
+
+      // Wipe in dependency order. seed_overrides reference bracket structure;
+      // bracket / consolante reference players from poules; poule_matches
+      // are independent. All scoped to tournoi_id — no cascading deletes
+      // beyond this competition.
+      const tables = [
+        'ddj_bracket_seed_overrides',
+        'ddj_consolante_matches',
+        'ddj_bracket_matches',
+        'ddj_poule_matches'
+      ];
+      for (const tbl of tables) {
+        await new Promise((resolve, reject) => {
+          db.run(
+            `DELETE FROM ${tbl} WHERE tournoi_id = $1`,
+            [tournoiId],
+            (err) => err ? reject(err) : resolve()
+          );
+        });
+      }
+
+      // Audit trail — admin actions of this magnitude must be logged.
+      try {
+        await new Promise((resolve) => {
+          db.run(
+            `INSERT INTO activity_logs
+               (user_name, action_type, action_status, target_type, target_id, target_name, details, app_source)
+             VALUES ($1, 'ddj_scores_wiped', 'success', 'tournament', $2, $3, $4, 'directeur_jeu')`,
+            [
+              req.user.username || 'admin',
+              tournoiId,
+              `Tournoi ${tournoiId}`,
+              JSON.stringify({ wiped_tables: tables })
+            ],
+            () => resolve()
+          );
+        });
+      } catch (e) { /* non-fatal */ }
+
+      res.json({ ok: true, message: 'Tous les scores ont été effacés.' });
+    } catch (err) {
+      console.error('[DdJ reset-all-scores] error:', err);
+      res.status(500).json({ error: 'Erreur lors de la suppression des scores' });
+    }
+  }
+);
+
 module.exports = router;
 // V 2.0.704 — expose loaders for the public TV feed (dj-public.js).
 // They accept orgId=null to skip the org filter (the public route does
