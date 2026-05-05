@@ -5574,15 +5574,24 @@ router.get('/:id/export-finale-ligue', authenticateToken, async (req, res) => {
     const reprises = gp ? gp.reprises : 0;
 
     // 4. Finalists ordered by position (expect exactly 4)
+    //    LEFT JOIN clubs to fetch logo BYTEA — same normalization the
+    //    existing /export endpoint uses (UPPER + strip spaces/dots/dashes)
+    //    so a player's free-text club name matches the canonical clubs.name.
     const results = await dbAllAsync(
       `SELECT tr.licence, tr.player_name, tr.position, tr.match_points,
               tr.points, tr.reprises, tr.moyenne, tr.serie,
-              p.first_name, p.last_name, p.club AS club_name
+              p.first_name, p.last_name, p.club AS club_name,
+              cl.logo_data AS club_logo_data,
+              cl.logo_content_type AS club_logo_type
          FROM tournament_results tr
          LEFT JOIN players p ON REPLACE(tr.licence, ' ', '') = REPLACE(p.licence, ' ', '')
+         LEFT JOIN clubs cl
+           ON REPLACE(REPLACE(REPLACE(UPPER(p.club), ' ', ''), '.', ''), '-', '')
+            = REPLACE(REPLACE(REPLACE(UPPER(cl.name), ' ', ''), '.', ''), '-', '')
+          AND ($2::int IS NULL OR cl.organization_id = $2)
         WHERE tr.tournament_id = $1
         ORDER BY tr.position ASC, tr.match_points DESC`,
-      [tournamentId]
+      [tournamentId, orgId]
     );
     if (results.length !== 4) {
       return res.status(400).json({
@@ -5795,13 +5804,39 @@ router.get('/:id/export-finale-ligue', authenticateToken, async (req, res) => {
 
       // Match cells for each opponent
       colsForPlayer.forEach(([c1, c2], oppIdx) => {
-        // Diagonal: merge & fill
+        // Diagonal: merge, fill, and embed the club logo if available
         if (oppIdx === rowIdx) {
           ws.mergeCells(`${c1}${topRow}:${c2}${botRow}`);
           const dc = ws.getCell(`${c1}${topRow}`);
           dc.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF2CC' } };
           dc.border = allBorders;
           dc.alignment = { horizontal: 'center', vertical: 'middle' };
+
+          // V 2.0.719 — embed club logo (BYTEA from clubs.logo_data)
+          // ExcelJS uses 0-indexed col/row in the {tl, br} form. The
+          // diagonal spans 2 cols × 3 rows; we inset by ~0.15 cells on
+          // each side so the logo doesn't bleed into the borders.
+          if (player.club_logo_data) {
+            try {
+              const buf = Buffer.isBuffer(player.club_logo_data)
+                ? player.club_logo_data
+                : Buffer.from(player.club_logo_data);
+              const ct = (player.club_logo_type || 'image/png').toLowerCase();
+              const ext = ct.includes('jpeg') || ct.includes('jpg') ? 'jpeg'
+                        : ct.includes('gif') ? 'gif' : 'png';
+              const imgId = workbook.addImage({ buffer: buf, extension: ext });
+              // Column letter to 0-indexed: B=1, C=2, D=3, E=4, F=5, G=6, H=7, I=8
+              const colIdx = c1.charCodeAt(0) - 'A'.charCodeAt(0); // tl col
+              const colIdxEnd = c2.charCodeAt(0) - 'A'.charCodeAt(0) + 1; // br col (exclusive)
+              ws.addImage(imgId, {
+                tl: { col: colIdx + 0.15, row: (topRow - 1) + 0.15 },
+                br: { col: colIdxEnd - 0.15, row: botRow - 0.15 },
+                editAs: 'oneCell'
+              });
+            } catch (logoErr) {
+              console.warn('[export-finale-ligue] Could not embed club logo:', logoErr.message);
+            }
+          }
           return;
         }
         const m = matrix[rowIdx][oppIdx];
