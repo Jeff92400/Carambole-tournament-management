@@ -1106,6 +1106,7 @@ async function loadPouleMatches(db, orgId, tournoiId) {
               p1_licence, p2_licence,
               p1_points, p1_reprises, p1_serie,
               p2_points, p2_reprises, p2_serie,
+              referee_name, referee_licence,
               entered_at, started_at, finished_at
        FROM ddj_poule_matches
        WHERE tournoi_id = $1
@@ -1165,11 +1166,12 @@ async function loadPouleMatches(db, orgId, tournoiId) {
         p2_points: saved ? saved.p2_points : null,
         p2_reprises: saved ? saved.p2_reprises : null,
         p2_serie: saved ? saved.p2_serie : null,
+        // V 2.0.707 — expose persisted referee so the UI can pre-fill the
+        // input on reload (was being saved but never read back, which
+        // looked like a "not persisted" bug to the DdJ).
+        referee_name: saved ? saved.referee_name : null,
+        referee_licence: saved ? saved.referee_licence : null,
         entered_at: saved ? saved.entered_at : null,
-        // V 2.0.697 — explicit start/finish timestamps, so the UI can tell:
-        //   started_at == null               → "À jouer" (button "Démarrer")
-        //   started_at && !finished_at       → "En cours" (badge with start time)
-        //   finished_at                      → "Terminé" (existing path)
         started_at: saved ? saved.started_at : null,
         finished_at: saved ? saved.finished_at : null,
         is_played: saved && saved.p1_points != null && saved.p2_points != null
@@ -1531,6 +1533,7 @@ async function loadBracket(db, orgId, tournoiId) {
       `SELECT id, phase, table_number, p1_licence, p2_licence,
               p1_points, p1_reprises, p1_serie,
               p2_points, p2_reprises, p2_serie,
+              referee_name, referee_licence,
               entered_at, started_at, finished_at
        FROM ddj_bracket_matches
        WHERE tournoi_id = $1`,
@@ -1565,9 +1568,11 @@ async function loadBracket(db, orgId, tournoiId) {
       p2_points: saved ? saved.p2_points : null,
       p2_reprises: saved ? saved.p2_reprises : null,
       p2_serie: saved ? saved.p2_serie : null,
+      // V 2.0.707 — expose persisted referee for UI pre-fill
+      referee_name: saved ? saved.referee_name : null,
+      referee_licence: saved ? saved.referee_licence : null,
       is_played: !!(saved && saved.p1_points != null && saved.p2_points != null),
       entered_at: saved ? saved.entered_at : null,
-      // V 2.0.698 — start/finish timestamps for the "Match commencé" UX
       started_at: saved ? saved.started_at : null,
       finished_at: saved ? saved.finished_at : null
     };
@@ -2446,6 +2451,7 @@ async function loadConsolante(db, orgId, tournoiId) {
       `SELECT id, phase, table_number, p1_licence, p2_licence,
               p1_points, p1_reprises, p1_serie,
               p2_points, p2_reprises, p2_serie,
+              referee_name, referee_licence,
               entered_at, started_at, finished_at
          FROM ddj_consolante_matches
         WHERE tournoi_id = $1`,
@@ -2477,9 +2483,11 @@ async function loadConsolante(db, orgId, tournoiId) {
       p2_points: saved ? saved.p2_points : null,
       p2_reprises: saved ? saved.p2_reprises : null,
       p2_serie: saved ? saved.p2_serie : null,
+      // V 2.0.707 — expose persisted referee for UI pre-fill
+      referee_name: saved ? saved.referee_name : null,
+      referee_licence: saved ? saved.referee_licence : null,
       is_played: !!(saved && saved.p1_points != null && saved.p2_points != null),
       entered_at: saved ? saved.entered_at : null,
-      // V 2.0.698 — start/finish timestamps for the "Match commencé" UX
       started_at: saved ? saved.started_at : null,
       finished_at: saved ? saved.finished_at : null,
       stale: false
