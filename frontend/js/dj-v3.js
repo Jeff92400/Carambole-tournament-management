@@ -527,7 +527,7 @@
 
     // ----- Phase 3 : consolante -----
     if (consoData && consoData.consolante && consoData.consolante.can_start && Array.isArray(consoData.consolante.phases)) {
-      html += `<div class="djv3-pl-section"><h4 class="djv3-pl-title">Matchs de classement (Consolante)</h4>`;
+      html += `<div class="djv3-pl-section"><h4 class="djv3-pl-title">Matchs de classement</h4>`;
       for (const ph of consoData.consolante.phases) {
         if (!ph.can_enter && !ph.is_played) continue;
         if (ph.bye) continue; // skip auto-advance byes (no actual match played)
@@ -535,7 +535,7 @@
       }
       html += `</div>`;
     } else {
-      html += `<div class="djv3-pl-section"><h4 class="djv3-pl-title">Matchs de classement (Consolante)</h4>
+      html += `<div class="djv3-pl-section"><h4 class="djv3-pl-title">Matchs de classement</h4>
         <div class="djv3-pl-empty djv3-pl-empty-sub">Disponible une fois les poules terminées.</div></div>`;
     }
 

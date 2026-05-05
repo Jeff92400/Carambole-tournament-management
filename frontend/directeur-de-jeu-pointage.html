@@ -552,7 +552,7 @@
       const msg = `🧹 Nettoyer le classement de la saison ?\n\n` +
                   `Cela va vider toutes les données finalisées (résultats de tournoi + classement) ` +
                   `pour ${cat} sur la saison en cours.\n\n` +
-                  `Les scores DdJ que vous avez déjà saisis (matchs de poule, tableau, consolante) ` +
+                  `Les scores DdJ que vous avez déjà saisis (matchs de poule, tableau, classement) ` +
                   `sont CONSERVÉS — vous n'aurez pas à les retaper.\n\n` +
                   `Utile quand le classement contient des données de tests précédents et que vous ` +
                   `voulez le rebatir proprement à la finalisation.\n\n` +
@@ -591,7 +591,7 @@
       const msg1 = `⚠️ ATTENTION — RÉINITIALISATION COMPLÈTE\n\n` +
                    `Tout va être effacé pour ${tournamentName} :\n` +
                    `  • Pointage (tous les joueurs repassent en "inscrit")\n` +
-                   `  • Tous les scores de poule, tableau et consolante\n` +
+                   `  • Tous les scores de poule, tableau et matchs de classement\n` +
                    `  • Le classement final saisi (si finalisé)\n` +
                    `  • Les compositions de poule (à régénérer)\n\n` +
                    `Les inscriptions des joueurs sont CONSERVÉES.\n\n` +
@@ -619,7 +619,7 @@
         alert(`✅ Tournoi réinitialisé.\n\n` +
               `• ${data.pouleDeleted || 0} match(s) de poule supprimé(s)\n` +
               `• ${data.bracketDeleted || 0} match(s) de tableau supprimé(s)\n` +
-              `• ${data.consolanteDeleted || 0} match(s) de consolante supprimé(s)\n` +
+              `• ${data.consolanteDeleted || 0} match(s) de classement supprimé(s)\n` +
               `• ${data.overrideDeleted || 0} surclassement manuel effacé\n` +
               `• ${data.convocDeleted || 0} composition(s) de poule effacée(s)\n` +
               `• ${data.tournamentResultsDeleted || 0} résultat(s) finalisé(s) supprimé(s)\n` +
@@ -728,7 +728,7 @@
       lines.push('<ul style="margin:0 0 12px 18px; padding:0; color:#555; font-size:0.9em;">');
       if (info.poule_matches > 0) lines.push(`<li>${info.poule_matches} match(s) de poule</li>`);
       if (info.bracket_matches > 0) lines.push(`<li>${info.bracket_matches} match(s) du tableau final</li>`);
-      if (info.consolante_matches > 0) lines.push(`<li>${info.consolante_matches} match(s) de consolante</li>`);
+      if (info.consolante_matches > 0) lines.push(`<li>${info.consolante_matches} match(s) de classement</li>`);
       lines.push('</ul>');
       lines.push(`<p style="margin:0 0 10px 0;">Le marquer forfait <strong>conservera ces scores</strong> dans la base — ils seront pris en compte lors de la finalisation.</p>`);
       lines.push(`<p style="margin:0; font-size:0.85em; color:#777;">Si tu veux supprimer les scores, fais-le manuellement aux étapes 3/4/5 avant la finalisation.</p>`);

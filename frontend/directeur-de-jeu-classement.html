@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Directeur de Jeu — Matchs de classement (Consolante)</title>
+  <title>Directeur de Jeu — Matchs de classement</title>
   <link rel="icon" type="image/png" href="images/FrenchBillard-Icon-small.png">
   <link rel="stylesheet" href="css/styles.css?v=357">
   <script src="js/branding.js?v=197"></script>
@@ -382,7 +382,7 @@
       <div class="tournament-meta" id="tournamentParams"></div>
     </div>
 
-    <div class="ddj-steps" title="Étape 5 sur 7 : Matchs de classement (Consolante)">
+    <div class="ddj-steps" title="Étape 5 sur 7 : Matchs de classement">
       <div class="dot done"></div>
       <div class="dot done"></div>
       <div class="dot done"></div>
@@ -596,7 +596,7 @@
             }
             await loadConsolante();
             if (typeof DjV3 !== 'undefined' && DjV3.guideMessage) {
-              DjV3.guideMessage(`▶ Match consolante ${ph} démarré.`, 'info');
+              DjV3.guideMessage(`▶ Match de classement ${ph} démarré.`, 'info');
             }
           } catch (e) {
             console.error('start consolante phase failed', e);
@@ -646,7 +646,7 @@
     }
 
     const PHASE_META = {
-      F:     { emoji: '🏆', label: 'Finale consolante' },
+      F:     { emoji: '🏆', label: 'Finale matchs de classement' },
       SF1:   { emoji: '⚔️', label: 'Demi-finale 1' },
       SF2:   { emoji: '⚔️', label: 'Demi-finale 2' },
       QF1:   { emoji: '🎯', label: 'Quart 1' },
@@ -892,7 +892,7 @@
         <div class="podium-card">
           <h3>🏁 Classement final complet</h3>
           ${bracketHtml}
-          <div style="font-size: 0.82em; color: #7a5a00; margin-bottom: 6px; font-weight: 600;">Consolante — places 5 et suivantes</div>
+          <div style="font-size: 0.82em; color: #7a5a00; margin-bottom: 6px; font-weight: 600;">Matchs de classement — places 5 et suivantes</div>
           ${rowsHtml}
           <p style="text-align: center; font-size: 0.78em; color: #7a5a00; margin: 10px 0 0 0;">
             Les joueurs éliminés dans le même tour sont départagés par match points → moyenne → meilleure série.
@@ -980,7 +980,7 @@
         return;
       }
       if (payload.p1_points != null && payload.p1_points === payload.p2_points) {
-        showSaveStatus('Pas de match nul dans la consolante', 'error');
+        showSaveStatus('Pas de match nul dans les matchs de classement', 'error');
         return;
       }
       // V 2.0.692 — DdJ V3 : carry referee fields
@@ -1011,7 +1011,7 @@
           if (next && next.p1 && next.p2) {
             const n1 = (next.p1.player_name || '').split(' ').slice(-1)[0];
             const n2 = (next.p2.player_name || '').split(' ').slice(-1)[0];
-            DjV3.guideMessage(`Match consolante terminé. Prochain : appeler ${n1} et ${n2}.`, 'action');
+            DjV3.guideMessage(`Match de classement terminé. Prochain : appeler ${n1} et ${n2}.`, 'action');
           } else {
             DjV3.guideMessage('Tous les matchs de classement sont saisis.', 'success');
           }

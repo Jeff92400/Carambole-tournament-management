@@ -550,7 +550,7 @@
     }
 
     const CONSOLANTE_PHASE_LABEL = {
-      F: 'Finale consolante',
+      F: 'Finale matchs de classement',
       SF1: 'Demi-finale 1',
       SF2: 'Demi-finale 2',
       QF1: 'Quart 1', QF2: 'Quart 2', QF3: 'Quart 3', QF4: 'Quart 4',
@@ -560,7 +560,7 @@
 
     function renderConsolanteSection(consolante) {
       if (!consolante.can_start || !consolante.phases.length) {
-        return `<div class="recap-section"><h3>📋 Matchs de classement (Consolante)</h3><div class="recap-empty">La consolante n'a pas encore démarré, ou il n'y a pas assez de non-qualifiés.</div></div>`;
+        return `<div class="recap-section"><h3>📋 Matchs de classement</h3><div class="recap-empty">La consolante n'a pas encore démarré, ou il n'y a pas assez de non-qualifiés.</div></div>`;
       }
       const phaseRows = consolante.phases.map(ph => {
         const label = CONSOLANTE_PHASE_LABEL[ph.phase] || ph.phase;
@@ -611,7 +611,7 @@
           </div>
         </div>
       ` : '';
-      return `<div class="recap-section"><h3>📋 Matchs de classement (Consolante)</h3>${tableHtml}${placesHtml}</div>`;
+      return `<div class="recap-section"><h3>📋 Matchs de classement</h3>${tableHtml}${placesHtml}</div>`;
     }
 
     // Classement façon FFB — points match cumulés sur les 3 phases.
