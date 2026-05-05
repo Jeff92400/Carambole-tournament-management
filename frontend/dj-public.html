@@ -235,65 +235,62 @@
   }
 
   /* ---- BRACKET (Roland-Garros style) ---- */
-  /* V 2.0.722 — tighter middle row + smaller PF margin so the petite
-     finale card stays visible on iPad (the bottom card was getting
-     clipped under the footer in landscape). */
+  /* V 2.0.724 — flex-based layout (replaces the grid-area approach
+     of V714-V723 which mis-sized columns on iPad). Three flex children:
+     SF column (left, 1fr), connector strip (60px fixed), F column
+     (right, 1fr). Connector lines use absolute positioning relative
+     to the connector strip with known dimensions, so they reach the
+     adjacent cards reliably across all viewports. */
   .bracket {
     flex: 1;
-    display: grid;
-    grid-template-columns: 1fr 32px 1fr;
-    grid-template-rows: 1fr 1fr 0.2fr 1fr;
-    grid-template-areas:
-      "sf1 c1  ."
-      "sf1 c1  f"
-      "sf2 c2  f"
-      "sf2 c2  .";
-    gap: 6px;
-    min-height: 0;
+    display: flex;
     align-items: stretch;
+    gap: 0;
+    min-height: 0;
   }
-  .bracket .b-sf1 { grid-area: sf1; }
-  .bracket .b-sf2 { grid-area: sf2; }
-  .bracket .b-f   { grid-area: f; align-self: center; }
-  .bracket .b-c1, .bracket .b-c2 {
+  .b-col-sf {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 12px;
+    min-width: 0;
+  }
+  .b-col-sf .bmatch { flex: 0 0 auto; }
+  .b-col-conn {
+    width: 60px;
     position: relative;
+    flex-shrink: 0;
   }
-  .bracket .b-c1 { grid-area: c1; }
-  .bracket .b-c2 { grid-area: c2; }
-  /* V 2.0.723 — connectors extended by -12px on each side (instead of
-     -6px = exact gap width) so the lines OVERLAP the SF/F card borders
-     by 6px on each side. With sub-pixel rendering at exact-touch
-     boundaries, the bracket looked disconnected. The overlap guarantees
-     visual continuity even on retina iPads. Line thickness bumped from
-     2px to 3px for better legibility on the TV view. */
-  .bracket .b-c1::before,
-  .bracket .b-c2::before {
+  /* Two horizontal lines (one per SF center) + a vertical bar on the
+     right side joining them. Lines extend by -6px on each side so they
+     overlap the SF cards (left) and F card (right) for a clean join. */
+  .b-col-conn::before,
+  .b-col-conn::after {
     content: '';
     position: absolute;
-    left: -12px; right: -12px;
     height: 3px;
+    left: -6px;
+    right: -6px;
     background: var(--border-pending);
   }
-  .bracket .b-c1::before { top: 50%; }
-  .bracket .b-c2::before { top: 50%; }
-  .bracket .b-c1::after {
-    content: '';
+  .b-col-conn::before { top: 25%; }   /* aligned with SF1 vertical center */
+  .b-col-conn::after  { top: 75%; }   /* aligned with SF2 vertical center */
+  .b-col-conn .b-vert {
     position: absolute;
-    right: -12px;
-    top: 50%;
-    bottom: -50%;
     width: 3px;
     background: var(--border-pending);
+    right: -6px;
+    top: 25%;
+    bottom: 25%;
   }
-  .bracket .b-c2::after {
-    content: '';
-    position: absolute;
-    right: -12px;
-    bottom: 50%;
-    top: -50%;
-    width: 3px;
-    background: var(--border-pending);
+  .b-col-f {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    min-width: 0;
   }
+  .b-col-f .bmatch { flex: 1 1 auto; }
 
   .b-pf { margin-top: 8px; }
   .b-pf .b-pf-label {
@@ -660,13 +657,17 @@
     const sf2 = byPhase['SF2'];
     const f   = byPhase['F'];
     const pf  = byPhase['PF'];
+    // V 2.0.724 — flex layout: SF column | connector strip | F column.
     return `
       <div class="bracket">
-        <div class="b-sf1">${renderBmatch(sf1, '½ Finale 1')}</div>
-        <div class="b-c1"></div>
-        <div class="b-f">${renderBmatch(f, 'Finale')}</div>
-        <div class="b-sf2">${renderBmatch(sf2, '½ Finale 2')}</div>
-        <div class="b-c2"></div>
+        <div class="b-col-sf">
+          ${renderBmatch(sf1, '½ Finale 1')}
+          ${renderBmatch(sf2, '½ Finale 2')}
+        </div>
+        <div class="b-col-conn"><div class="b-vert"></div></div>
+        <div class="b-col-f">
+          ${renderBmatch(f, 'Finale')}
+        </div>
       </div>
       <div class="b-pf">
         <div class="b-pf-label">Petite finale (3ᵉ place)</div>
