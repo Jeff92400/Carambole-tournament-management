@@ -235,11 +235,14 @@
   }
 
   /* ---- BRACKET (Roland-Garros style) ---- */
+  /* V 2.0.722 — tighter middle row + smaller PF margin so the petite
+     finale card stays visible on iPad (the bottom card was getting
+     clipped under the footer in landscape). */
   .bracket {
     flex: 1;
     display: grid;
     grid-template-columns: 1fr 32px 1fr;
-    grid-template-rows: 1fr 1fr 0.4fr 1fr;
+    grid-template-rows: 1fr 1fr 0.2fr 1fr;
     grid-template-areas:
       "sf1 c1  ."
       "sf1 c1  f"
@@ -257,12 +260,13 @@
   }
   .bracket .b-c1 { grid-area: c1; }
   .bracket .b-c2 { grid-area: c2; }
-  /* Connectors: top & bottom horizontal pieces + a vertical bar, in CSS */
+  /* Connectors: extend by -6px on each side so the lines visually
+     touch the SF and F cards (the 6px gap was leaving a hole). */
   .bracket .b-c1::before,
   .bracket .b-c2::before {
     content: '';
     position: absolute;
-    left: 0; right: 0;
+    left: -6px; right: -6px;
     height: 2px;
     background: var(--border-pending);
   }
@@ -271,7 +275,7 @@
   .bracket .b-c1::after {
     content: '';
     position: absolute;
-    right: 0;
+    right: -6px;
     top: 50%;
     bottom: -50%;
     width: 2px;
@@ -280,14 +284,14 @@
   .bracket .b-c2::after {
     content: '';
     position: absolute;
-    right: 0;
+    right: -6px;
     bottom: 50%;
     top: -50%;
     width: 2px;
     background: var(--border-pending);
   }
 
-  .b-pf { margin-top: 14px; }
+  .b-pf { margin-top: 8px; }
   .b-pf .b-pf-label {
     font-size: var(--fs-h2);
     color: var(--muted);
@@ -700,7 +704,10 @@
     if (!c || !c.phases || c.phases.length === 0 || !c.available) {
       return `<div class="conso-empty">En attente de la fin des poules…</div>`;
     }
-    return `<div class="conso-list">${c.phases.map(ph => renderBmatch(ph, ph.phase)).join('')}</div>`;
+    // V 2.0.722 — Use the FFB place label ("Place 09", "Places 11-12")
+    // exactly like the admin app. Falls back to the internal phase code
+    // (QF1, SF1, …) only if the backend hasn't sent ffb_label.
+    return `<div class="conso-list">${c.phases.map(ph => renderBmatch(ph, ph.ffb_label || ph.phase)).join('')}</div>`;
   }
 </script>
 </body>

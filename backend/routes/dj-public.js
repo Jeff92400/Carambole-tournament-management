@@ -236,6 +236,10 @@ router.get('/:tournoi_id/feed', async (req, res) => {
           available: !!consolanteCtx.can_start,
           phases: (consolanteCtx.phases || []).map(ph => ({
             phase: ph.phase,
+            // V 2.0.722 — expose the FFB place label ("Place 09", "Places 11-12")
+            // so the TV view matches the admin app instead of showing internal
+            // codes (QF1/QF2/SF1/...).
+            ffb_label: ph.ffb_label || null,
             p1_name: ph.p1 ? lookupName(ph.p1.licence) : null,
             p2_name: ph.p2 ? lookupName(ph.p2.licence) : null,
             table_number: ph.table_number || null,
