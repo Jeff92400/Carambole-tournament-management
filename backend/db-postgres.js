@@ -969,6 +969,15 @@ async function initializeDatabase() {
     // Add push notification preference to player_accounts (migration - March 2026)
     await client.query(`ALTER TABLE player_accounts ADD COLUMN IF NOT EXISTS push_enabled BOOLEAN DEFAULT true`);
 
+    // V 2.0.274 (Phase 3 Étape E) — Per-player opt-in to receive push
+    // notifications for ANY published article of type 'resultat'. Default
+    // FALSE so the broadcast matrix stays at "results don't notify by
+    // default". Players who explicitly want immediate result notifications
+    // can flip this in Profil > Notifications. Used by content.js when
+    // publishing a 'resultat' article without notify_push: an extra push
+    // is fired to the opt-in subset.
+    await client.query(`ALTER TABLE player_accounts ADD COLUMN IF NOT EXISTS push_results_optin BOOLEAN DEFAULT false`);
+
     // Add organization_id to player_accounts for multi-CDB support (migration)
     await client.query(`ALTER TABLE player_accounts ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)`);
 

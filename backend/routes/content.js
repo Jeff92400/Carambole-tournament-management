@@ -480,6 +480,14 @@ router.post('/pages', authenticateToken, requireContentEditor, async (req, res) 
       maybeBroadcastArticleNotification(created, excerpt, orgId).catch(err => {
         console.error('[content] broadcast push (POST) failed:', err.message);
       });
+    } else if (status === 'published' && content_type === 'resultat') {
+      // V 2.0.274 (Phase 3 Étape E) — Even without notify_push, a result
+      // article still pushes to players who flipped the per-player opt-in
+      // in their Profil. Skipped automatically when notify_push is true
+      // (the broadcast above already covered everyone).
+      maybeBroadcastResultArticleToOptedIn(created, excerpt, orgId).catch(err => {
+        console.error('[content] broadcast results-optin (POST) failed:', err.message);
+      });
     }
 
     res.status(201).json(created);
@@ -619,6 +627,18 @@ router.put('/pages/:id', authenticateToken, requireContentEditor, async (req, re
     if (notify_push && updated.status === 'published') {
       maybeBroadcastArticleNotification(updated, updated.excerpt, orgId).catch(err => {
         console.error('[content] broadcast push (PUT) failed:', err.message);
+      });
+    } else if (
+      updated.status === 'published' &&
+      updated.content_type === 'resultat' &&
+      existing.status !== 'published'
+    ) {
+      // V 2.0.274 (Phase 3 Étape E) — Result article transitioning to
+      // published without notify_push: fire push only to the opted-in
+      // subset. The `existing.status !== 'published'` guard avoids
+      // re-pushing on subsequent edits of an already-published article.
+      maybeBroadcastResultArticleToOptedIn(updated, updated.excerpt, orgId).catch(err => {
+        console.error('[content] broadcast results-optin (PUT) failed:', err.message);
       });
     }
 
@@ -841,4 +861,56 @@ async function maybeBroadcastArticleNotification(article, excerpt, orgId) {
   }
 }
 
+// V 2.0.274 (Phase 3 Étape E) — Broadcast push to the opted-in subset only.
+// Used when an article of type 'resultat' is published WITHOUT the admin's
+// notify_push flag — the broadcast matrix says "results don't notify by
+// default", but engaged players who flipped push_results_optin = true in
+// their Profil page do want the immediate notification. Fire-and-forget.
+async function maybeBroadcastResultArticleToOptedIn(article, excerpt, orgId) {
+  try {
+    if (!article || !article.id || !orgId) return;
+
+    const { buildNotification } = require('../notification-messages');
+    const { sendPushToPlayers } = require('./push');
+
+    // Same query as the standard broadcast, plus the opt-in filter. The
+    // additional condition shrinks the audience to engaged players only.
+    const recipients = await dbAll(
+      `SELECT DISTINCT pa.licence
+         FROM player_accounts pa
+         INNER JOIN push_subscriptions ps ON ps.player_account_id = pa.id
+        WHERE ($1::int IS NULL OR pa.organization_id = $1)
+          AND pa.push_enabled = true
+          AND pa.push_results_optin = true`,
+      [orgId]
+    );
+    const licences = (recipients || []).map(r => r.licence).filter(Boolean);
+
+    if (licences.length === 0) {
+      console.log(
+        `[content broadcast results-optin] no opted-in players for org ${orgId}, skipping`
+      );
+      return;
+    }
+
+    const notification = buildNotification('CONTENT_ARTICLE_PUBLISHED', {
+      title: article.title,
+      excerpt: excerpt || article.excerpt || null,
+      articleId: article.id
+    });
+
+    const result = await sendPushToPlayers(licences, orgId, notification);
+    console.log(
+      `[content broadcast results-optin] article ${article.id} (org ${orgId}): ` +
+      `pushed to ${result.total_sent}/${licences.length} opted-in player(s)`
+    );
+  } catch (err) {
+    console.error('[content broadcast results-optin] error:', err.message);
+  }
+}
+
 module.exports = router;
+// V 2.0.274 (Phase 3 Étape E) — Expose the opted-in broadcaster so
+// news-auto-publisher.js can fire it after auto-creating a 'resultat'
+// article (CSV import path that bypasses the POST endpoint).
+module.exports.maybeBroadcastResultArticleToOptedIn = maybeBroadcastResultArticleToOptedIn;

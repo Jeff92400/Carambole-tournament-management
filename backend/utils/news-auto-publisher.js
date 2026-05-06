@@ -977,6 +977,30 @@ async function publishAutoArticle(eventType, orgId, payload, options = {}) {
       );
       const articleId = result.rows[0]?.id;
       console.log(`[news-auto-publisher] ${status} article id=${articleId} (${eventType}, org=${orgId}, ref=${sourceRefId})`);
+
+      // V 2.0.274 (Phase 3 Étape E) — When a RESULTS article is auto-
+      // published (not a draft), fire a push to the per-player opt-in
+      // subset so engaged players get the immediate alert that used to
+      // happen automatically before the broadcast matrix moved 'resultat'
+      // to push-default-off. Fire-and-forget; never blocks the import
+      // flow that called us.
+      if (eventType === 'RESULTS' && shouldPublish && articleId) {
+        try {
+          const { maybeBroadcastResultArticleToOptedIn } = require('../routes/content');
+          if (typeof maybeBroadcastResultArticleToOptedIn === 'function') {
+            maybeBroadcastResultArticleToOptedIn(
+              { id: articleId, title: rendered.title, excerpt: rendered.excerpt },
+              rendered.excerpt,
+              orgId
+            ).catch(err => {
+              console.error('[news-auto-publisher] results-optin push failed:', err.message);
+            });
+          }
+        } catch (pushErr) {
+          console.error('[news-auto-publisher] results-optin require failed:', pushErr.message);
+        }
+      }
+
       return { created: true, articleId, status };
     } catch (insertErr) {
       // Unique violation on the partial index — another call beat us to it.
