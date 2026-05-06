@@ -380,23 +380,31 @@
     justify-content: space-between;
   }
   .bmatch .bphase .btable { color: var(--accent); }
+  /* V 2.0.729 — bp-line uses flex with margin-left:auto on the score
+     so the score always sits at the right edge regardless of how many
+     items precede it (name, medal, poule). The name is the only
+     shrinkable item; medal and poule never shrink so they stay visible
+     on narrow cards (notably the petite finale). */
   .bmatch .bp-line {
     display: flex;
-    justify-content: space-between;
     align-items: baseline;
     font-size: var(--fs-name);
     color: var(--text);
-    gap: 8px;
+    gap: 6px;
   }
   .bmatch .bp-name {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    min-width: 0;
+    flex: 0 1 auto;
   }
-  .bmatch .bp-name .bp-poule {
+  .bmatch .bp-medal { flex: 0 0 auto; font-size: 0.95em; }
+  .bmatch .bp-score { margin-left: auto; flex: 0 0 auto; }
+  .bmatch .bp-poule {
     color: var(--muted);
     font-size: 0.78em;
-    margin-left: 4px;
+    flex: 0 0 auto;
   }
   .bmatch .bp-line.winner .bp-name { color: var(--score-green); font-weight: 800; }
   .bmatch .bp-line.loser  .bp-name { color: var(--muted); }
@@ -750,11 +758,15 @@
      // at vertical center 25% and PF at 75% — exactly where the existing
      // connector horizontals are positioned, so PF gets a connector "for
      // free" without adding any new geometry.
+    // V 2.0.729 — Medals only on the podium-deciding cards (Finale +
+     // Petite Finale). SF cards stay clean: a SF winner who later wins
+     // the F shouldn't show 🥇 in their SF cell (misleading — the SF
+     // didn't decide gold).
     return `
       <div class="bracket">
         <div class="b-col-sf">
-          ${renderBmatch(sf1, '½ Finale 1')}
-          ${renderBmatch(sf2, '½ Finale 2')}
+          ${renderBmatch(sf1, '½ Finale 1', { showMedals: false })}
+          ${renderBmatch(sf2, '½ Finale 2', { showMedals: false })}
         </div>
         <div class="b-col-conn"><div class="b-vert"></div></div>
         <div class="b-col-f">
@@ -767,7 +779,8 @@
       </div>`;
   }
 
-  function renderBmatch(m, label) {
+  function renderBmatch(m, label, opts) {
+    const showMedals = !opts || opts.showMedals !== false;
     if (!m) return `<div class="bmatch empty"><div class="bphase">${escapeHtml(label)}</div><div class="bp-line"><span class="bp-name">à venir</span></div></div>`;
     const empty = !m.p1_name || !m.p2_name;
     const cls = empty ? 'empty' : (m.status || 'pending');
@@ -782,17 +795,27 @@
       if (m.p1_points > m.p2_points)      { p1Line = 'winner'; p2Line = 'loser'; }
       else if (m.p2_points > m.p1_points) { p2Line = 'winner'; p1Line = 'loser'; }
     }
-    const p1 = m.p1_name
-      ? `${escapeHtml(m.p1_name)}${medalFor(m.p1_name)}${m.p1_poule ? `<span class="bp-poule">P${m.p1_poule}</span>` : ''}`
-      : '<em>?</em>';
-    const p2 = m.p2_name
-      ? `${escapeHtml(m.p2_name)}${medalFor(m.p2_name)}${m.p2_poule ? `<span class="bp-poule">P${m.p2_poule}</span>` : ''}`
-      : '<em>?</em>';
+    // V 2.0.729 — medal kept in its own span (outside .bp-name) so it
+     // never gets ellipsised when the card is narrow. .bp-poule moves
+     // out for the same reason.
+    const p1Medal = (m.p1_name && showMedals) ? medalFor(m.p1_name) : '';
+    const p2Medal = (m.p2_name && showMedals) ? medalFor(m.p2_name) : '';
+    const p1Name = m.p1_name ? escapeHtml(m.p1_name) : '<em>?</em>';
+    const p2Name = m.p2_name ? escapeHtml(m.p2_name) : '<em>?</em>';
+    const p1Poule = m.p1_name && m.p1_poule ? `<span class="bp-poule">P${m.p1_poule}</span>` : '';
+    const p2Poule = m.p2_name && m.p2_poule ? `<span class="bp-poule">P${m.p2_poule}</span>` : '';
+    const renderLine = (cls, name, medal, poule, score) => `
+      <div class="bp-line ${cls}">
+        <span class="bp-name">${name}</span>
+        ${medal ? `<span class="bp-medal">${medal}</span>` : ''}
+        ${poule}
+        ${score !== '' ? `<span class="bp-score">${score}</span>` : ''}
+      </div>`;
     return `
       <div class="bmatch ${cls}">
         <div class="bphase">${phaseLbl}${live ? ' ' + live : ''}</div>
-        <div class="bp-line ${p1Line}"><span class="bp-name">${p1}</span>${scoreL !== '' ? `<span class="bp-score">${scoreL}</span>` : ''}</div>
-        <div class="bp-line ${p2Line}"><span class="bp-name">${p2}</span>${scoreR !== '' ? `<span class="bp-score">${scoreR}</span>` : ''}</div>
+        ${renderLine(p1Line, p1Name, p1Medal, p1Poule, scoreL)}
+        ${renderLine(p2Line, p2Name, p2Medal, p2Poule, scoreR)}
       </div>`;
   }
 
