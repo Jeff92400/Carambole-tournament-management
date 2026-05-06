@@ -735,7 +735,9 @@
     const token = sessionStorage.getItem('token');
 
     // Page guard: this page is only available when the CDB has activated
-    // the "player_app" communication mode in Paramètres.
+    // a communication mode that includes the in-app News module —
+    // either 'player_app' (CDB 93-94) or 'wordpress+player_app' (CDBHS
+    // hybrid since V 2.0.732).
     async function enforceNewsMode() {
       try {
         const resp = await fetch(`${API_URL}/settings/app-all`, {
@@ -744,7 +746,8 @@
         if (!resp.ok) return; // settings not reachable, stay on page
         const settings = await resp.json();
         const mode = settings.news_delivery_mode || 'wordpress';
-        if (mode !== 'player_app') {
+        const isNewsModuleEnabled = (mode === 'player_app' || mode === 'wordpress+player_app');
+        if (!isNewsModuleEnabled) {
           alert("Le module News intégré n'est pas activé pour votre CDB.\n\nPour l'activer, allez dans Paramètres → Option de communication News.");
           window.location.href = 'dashboard.html';
         }

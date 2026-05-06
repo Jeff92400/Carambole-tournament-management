@@ -683,8 +683,10 @@
 
     // ---------- News module shortcut visibility ----------
     // Show the "Gérer les articles (News)" link in the Espace Joueur card
-    // only when the CDB has selected "Module News intégré à l'App Joueur"
-    // as its news delivery mode. CDBHS (wordpress mode) never sees it.
+    // only when the in-app News module is active for this CDB:
+    // - 'player_app' mode (CDB 93-94, app-only)
+    // - 'wordpress+player_app' mode (CDBHS hybrid, since V 2.0.732)
+    // Pure 'wordpress' mode never sees the shortcut.
     async function initNewsModuleShortcut() {
       const link = document.getElementById('newsModuleShortcutLink');
       if (!link) return;
@@ -692,7 +694,8 @@
         const resp = await authFetch(`${API_URL}/settings/app-all`);
         if (!resp.ok) return;
         const settings = await resp.json();
-        if (settings?.news_delivery_mode === 'player_app') {
+        const mode = settings?.news_delivery_mode;
+        if (mode === 'player_app' || mode === 'wordpress+player_app') {
           link.style.display = '';
         }
       } catch (err) {
