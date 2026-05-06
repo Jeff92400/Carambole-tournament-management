@@ -220,6 +220,11 @@
        body.role-<role> class set by auth-utils.js. Default hidden. */
     body.role-admin .com-category-articles,
     body.role-viewer .com-category-articles { display: inline-block !important; }
+    /* V 2.0.734 (Phase 2) — when the CDB is in pure 'wordpress' news mode,
+       the articles management UI doesn't apply. We add this class at runtime
+       to hide the pill regardless of role, since clicking it would only
+       redirect to dashboard with an alert. */
+    .com-category-articles-disabled { display: none !important; }
     .tabs {
       display: flex;
       border-bottom: 2px solid #ddd;
@@ -9611,15 +9616,34 @@ Le Comité Départemental de Billard des Hauts-de-Seine`
 
     // Update character counters and preview
     document.addEventListener('DOMContentLoaded', async function() {
-      // Load Player App URL from organization settings for notification URLs
+      // V 2.0.734 (Phase 2) — load Player App URL + news delivery mode in
+      // a single call. Previously called the non-existent endpoint
+      // /api/settings/org/player_app_url (404) — now uses the working
+      // /api/settings/org-settings-batch which returns multiple keys.
+      // Side benefit: lets us hide the "📰 Articles" pill when this CDB
+      // is in pure 'wordpress' news mode (no in-app news module).
       try {
-        const response = await authFetch(`${API_URL}/settings/org/player_app_url`);
-        if (response.ok) {
-          const data = await response.json();
-          window.cachedPlayerAppUrl = data.value || 'https://cdbhs-player-app-production.up.railway.app';
+        const resp = await authFetch(
+          `${API_URL}/settings/org-settings-batch?keys=player_app_url,news_delivery_mode`
+        );
+        if (resp.ok) {
+          const data = await resp.json();
+          window.cachedPlayerAppUrl = data.player_app_url
+            || 'https://cdbhs-player-app-production.up.railway.app';
+          // Hide the Articles pill if the in-app news module is not active
+          // for this CDB (only 'player_app' or 'wordpress+player_app' show
+          // article-management UI).
+          const mode = data.news_delivery_mode || 'wordpress';
+          const isNewsModuleEnabled = (mode === 'player_app' || mode === 'wordpress+player_app');
+          const articlesPill = document.getElementById('articlesPillLink');
+          if (articlesPill && !isNewsModuleEnabled) {
+            articlesPill.style.display = 'none';
+            // Also override the role-based CSS rule that would force show.
+            articlesPill.classList.add('com-category-articles-disabled');
+          }
         }
       } catch (error) {
-        console.warn('Could not load player_app_url, using default:', error);
+        // Silent fallback — page still works without these settings.
         window.cachedPlayerAppUrl = 'https://cdbhs-player-app-production.up.railway.app';
       }
 

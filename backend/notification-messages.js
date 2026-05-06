@@ -117,6 +117,20 @@ const NOTIFICATION_MESSAGES = {
     corps: (variables) =>
       `Félicitations ! Vous êtes qualifié(e) pour la Finale ${variables.tournoiName}. Rendez-vous le ${variables.finaleDate}.`,
     url: '/stats'
+  },
+
+  // ==================== 11. CONTENT ARTICLE PUBLISHED (Phase 2) ====================
+  // Generic notification for any article published from content-admin.html
+  // when the admin checks "🔔 Notification push". URL uses the deep-link
+  // convention defined in Phase 1c so the tap lands directly on the article
+  // detail screen, not just the news home.
+  CONTENT_ARTICLE_PUBLISHED: {
+    titre: (variables) => `📰 ${variables.title || 'Nouvel article'}`,
+    corps: (variables) =>
+      variables.excerpt
+        ? String(variables.excerpt).slice(0, 150)
+        : `Un nouvel article vient d'être publié. Appuyez pour le lire.`,
+    url: (variables) => `?page=news&article=${variables.articleId}`
   }
 };
 

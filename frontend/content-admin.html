@@ -604,6 +604,18 @@
           <label>Résumé court (optionnel)</label>
           <textarea id="articleExcerpt" rows="2" placeholder="Phrase d'accroche affichée dans la liste d'articles"></textarea>
         </div>
+        <!-- V 2.0.734 (Phase 2) — External URL for hybrid mode CDBs.
+             When the article has a public web counterpart (typically on
+             cdbhs.fr), put the URL here. The Player App will show a "Lire
+             la suite" CTA opening this URL in the device browser. Empty
+             = no external link, the article lives only in the app. -->
+        <div class="form-row">
+          <label>🌐 Lien externe (optionnel)</label>
+          <input type="url" id="articleExternalUrl" placeholder="https://cdbhs.fr/articles/..." pattern="https://.*">
+          <div style="font-size: 12px; color: #666; margin-top: 4px;">
+            Si l'article a une page sur votre site web (cdbhs.fr ou autre), collez l'URL ici. Un bouton "Lire la suite" apparaîtra dans l'app joueur. URL en <code>https://</code> uniquement.
+          </div>
+        </div>
         <div class="form-row">
           <label>Contenu</label>
           <div id="articleEditor"></div>
@@ -617,6 +629,26 @@
             <input type="checkbox" id="articlePinned">
             <span><strong>Punaise</strong> — épinglé en haut du fil</span>
           </label>
+        </div>
+        <!-- V 2.0.734 (Phase 2) — Channels & smart defaults per content_type.
+             📰 Fil app is implicit (every published article appears in the
+             feed). The push toggle defaults ON for "Annonce officielle" and
+             OFF for "Résultat" / "Document" — admin can override per article. -->
+        <div class="form-row" style="background: #fffbf0; border: 1px solid #fde68a; border-radius: 10px; padding: 12px 14px;">
+          <label style="font-weight: 600; color: #92400e; margin-bottom: 8px;">📡 Canaux de diffusion</label>
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <label class="form-checkbox" style="cursor: not-allowed; opacity: 0.85;">
+              <input type="checkbox" checked disabled>
+              <span><strong>📰 Fil de l'app Player</strong> — toujours actif (tout article publié apparaît dans le fil)</span>
+            </label>
+            <label class="form-checkbox">
+              <input type="checkbox" id="articleNotifyPush">
+              <span><strong>🔔 Notification push</strong> — envoie une notif à tous les joueurs avec push activé. Le tap ouvre directement la fiche article.</span>
+            </label>
+          </div>
+          <div style="font-size: 12px; color: #92400e; margin-top: 8px; padding-top: 8px; border-top: 1px dashed #fde68a;">
+            💡 Le défaut « push » est ajusté automatiquement selon le type d'article. Vous pouvez toujours forcer.
+          </div>
         </div>
         <div class="form-row">
           <label>Articles associés <span style="font-weight: normal; color: #888; font-size: 12px;">— liens "À lire aussi" affichés au bas de cet article dans l'app joueur</span></label>
@@ -1309,6 +1341,37 @@
         </table>`;
     }
 
+    // V 2.0.734 (Phase 2) — Smart push defaults per article type.
+    // Annonces officielles + événements → push ON (mérite une notif).
+    // Résultats + documents → push OFF (volume élevé / consultation à la
+    // demande). Admin can always override the checkbox manually.
+    function getDefaultPushForType(contentType) {
+      switch (contentType) {
+        case 'actualite':  // Annonce officielle
+        case 'evenement':  // Événement
+          return true;
+        case 'resultat':   // Résultat de tournoi (souvent auto-généré)
+        case 'document':   // Document (statuts, règlements, etc.)
+        default:
+          return false;
+      }
+    }
+
+    // Wire the type <select> so changing it auto-adjusts the push default
+    // — but only when the admin hasn't manually flipped the checkbox yet.
+    // Tracked via a data attribute set when the user clicks the box.
+    document.addEventListener('DOMContentLoaded', () => {
+      const typeSel = document.getElementById('articleType');
+      const pushCb = document.getElementById('articleNotifyPush');
+      if (typeSel && pushCb) {
+        pushCb.addEventListener('change', () => { pushCb.dataset.userTouched = '1'; });
+        typeSel.addEventListener('change', () => {
+          if (pushCb.dataset.userTouched === '1') return;
+          pushCb.checked = getDefaultPushForType(typeSel.value);
+        });
+      }
+    });
+
     function initEditor() {
       if (quillEditor) return;
       quillEditor = new Quill('#articleEditor', {
@@ -1495,6 +1558,12 @@
       await loadRelatedArticlesCache();
       relatedPageIds = [];
 
+      // V 2.0.734 (Phase 2) — clear the "user touched the push checkbox"
+      // marker so the smart-default-per-type kicks in again for this
+      // editing session.
+      const pushCbReset = document.getElementById('articleNotifyPush');
+      if (pushCbReset) delete pushCbReset.dataset.userTouched;
+
       if (id) {
         title.textContent = "Modifier l'article";
         deleteBtn.style.display = '';
@@ -1508,6 +1577,12 @@
           document.getElementById('articleSection').value = a.section_id || '';
           document.getElementById('articleType').value = a.content_type || 'actualite';
           document.getElementById('articleExcerpt').value = a.excerpt || '';
+          // V 2.0.734 (Phase 2) — pre-fill external URL if present + apply
+          // smart push default for this article's type (admin will see the
+          // recommended state when re-opening; can override before saving).
+          document.getElementById('articleExternalUrl').value = a.external_url || '';
+          document.getElementById('articleNotifyPush').checked =
+            getDefaultPushForType(a.content_type || 'actualite');
           document.getElementById('articleFeatured').checked = !!a.is_featured;
           document.getElementById('articlePinned').checked = !!a.is_pinned;
           // V 2.0.588 — Use Quill's API instead of direct innerHTML to
@@ -1562,6 +1637,11 @@
         }
         document.getElementById('articleType').value = 'actualite';
         document.getElementById('articleExcerpt').value = '';
+        // V 2.0.734 (Phase 2) — reset external URL + apply smart push default
+        // for the initial type (actualite → push ON).
+        document.getElementById('articleExternalUrl').value = '';
+        document.getElementById('articleNotifyPush').checked =
+          getDefaultPushForType('actualite');
         document.getElementById('articleFeatured').checked = false;
         document.getElementById('articlePinned').checked = false;
         quillEditor.setText('', 'silent');
@@ -1717,6 +1797,8 @@
         section_id: parseInt(document.getElementById('articleSection').value, 10) || null,
         content_type: document.getElementById('articleType').value,
         excerpt: document.getElementById('articleExcerpt').value.trim() || null,
+        // V 2.0.734 (Phase 2) — external_url for hybrid mode (cdbhs.fr link)
+        external_url: (document.getElementById('articleExternalUrl').value || '').trim() || null,
         is_featured: document.getElementById('articleFeatured').checked,
         is_pinned: document.getElementById('articlePinned').checked,
         related_page_ids: relatedPageIds.slice(),
@@ -1724,7 +1806,11 @@
         // so they round-trip safely even when content_html is omitted by
         // the V 2.0.570 protection.
         attachments: articleAttachments,
-        status
+        status,
+        // V 2.0.734 (Phase 2) — request a push notification on publish.
+        // The backend only acts on this flag if status === 'published';
+        // saving as 'draft' never triggers a push.
+        notify_push: !!document.getElementById('articleNotifyPush').checked
       };
       // Only include content_html (and cover_image) when the admin
       // actually edited the body. Omitting them tells the backend

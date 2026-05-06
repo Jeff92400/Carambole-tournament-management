@@ -328,7 +328,7 @@ router.get('/pages/:id', authenticateToken, async (req, res) => {
               p.title, p.excerpt, p.content_html, p.content_type, p.status,
               p.is_featured, p.is_pinned, p.cover_image,
               p.auto_generated, p.source_type, p.source_ref_id,
-              p.attachments,
+              p.attachments, p.external_url,
               p.author_user_id, u.username AS author_name,
               p.published_at, p.created_at, p.updated_at
          FROM content_pages p
@@ -385,8 +385,29 @@ router.post('/pages', authenticateToken, requireContentEditor, async (req, res) 
       is_featured = false,
       is_pinned = false,
       cover_image = null,
-      related_page_ids = []
+      related_page_ids = [],
+      // V 2.0.734 (Phase 2) — optional external URL (e.g. cdbhs.fr counterpart).
+      external_url = null,
+      // V 2.0.734 (Phase 2) — admin opted into broadcasting a push notif
+      // when this article is published. Ignored on draft saves.
+      notify_push = false
     } = req.body || {};
+
+    // Validate external_url: must be https or null. Reject everything else
+    // so we never end up with javascript: or http: links rendered in the
+    // Player App "Lire la suite" CTA. Empty string is normalized to null.
+    if (external_url !== null && external_url !== undefined) {
+      const trimmed = String(external_url).trim();
+      if (trimmed === '') {
+        external_url = null;
+      } else if (!/^https:\/\//i.test(trimmed) || trimmed.length > 500) {
+        return res.status(400).json({
+          error: 'Lien externe invalide. URLs en https:// uniquement, max 500 caractères.'
+        });
+      } else {
+        external_url = trimmed;
+      }
+    }
 
     if (!title || !String(title).trim()) {
       return res.status(400).json({ error: 'Le titre est requis' });
@@ -411,10 +432,11 @@ router.post('/pages', authenticateToken, requireContentEditor, async (req, res) 
       `INSERT INTO content_pages
          (organization_id, section_id, title, content_html, excerpt,
           content_type, status, is_featured, is_pinned, author_user_id,
-          published_at, cover_image)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+          published_at, cover_image, external_url)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
        RETURNING id, section_id, title, excerpt, content_type, status,
-                 is_featured, is_pinned, published_at, created_at, updated_at`,
+                 is_featured, is_pinned, published_at, created_at, updated_at,
+                 external_url`,
       [
         orgId,
         section_id,
@@ -427,7 +449,8 @@ router.post('/pages', authenticateToken, requireContentEditor, async (req, res) 
         !!is_pinned,
         req.user.userId || null,
         publishedAt,
-        cover_image
+        cover_image,
+        external_url
       ]
     );
 
@@ -448,6 +471,15 @@ router.post('/pages', authenticateToken, requireContentEditor, async (req, res) 
           );
         }
       }
+    }
+
+    // V 2.0.734 (Phase 2) — Fire-and-forget push to all subscribed players
+    // when the admin opted in AND the article is published right away.
+    // Drafts never trigger pushes (saved for later, no audience yet).
+    if (notify_push && status === 'published') {
+      maybeBroadcastArticleNotification(created, excerpt, orgId).catch(err => {
+        console.error('[content] broadcast push (POST) failed:', err.message);
+      });
     }
 
     res.status(201).json(created);
@@ -480,7 +512,12 @@ router.put('/pages/:id', authenticateToken, requireContentEditor, async (req, re
       is_featured,
       is_pinned,
       cover_image,
-      related_page_ids
+      related_page_ids,
+      // V 2.0.734 (Phase 2) — external URL (cdbhs.fr counterpart, etc.)
+      external_url,
+      // V 2.0.734 (Phase 2) — admin opted into broadcasting a push notif
+      // on this update. Only fires when the article reaches 'published'.
+      notify_push = false
     } = req.body || {};
 
     if (content_type && !VALID_CONTENT_TYPES.includes(content_type)) {
@@ -488,6 +525,23 @@ router.put('/pages/:id', authenticateToken, requireContentEditor, async (req, re
     }
     if (status && !VALID_STATUSES.includes(status)) {
       return res.status(400).json({ error: 'Statut invalide' });
+    }
+    // Validate external_url. Same rules as POST: https only, max 500 chars,
+    // empty string normalized to null. undefined = "leave existing column
+    // value untouched", null/'' = "clear the link".
+    let normalizedExternalUrl;
+    if (external_url !== undefined) {
+      if (external_url === null || String(external_url).trim() === '') {
+        normalizedExternalUrl = null;
+      } else {
+        const trimmed = String(external_url).trim();
+        if (!/^https:\/\//i.test(trimmed) || trimmed.length > 500) {
+          return res.status(400).json({
+            error: 'Lien externe invalide. URLs en https:// uniquement, max 500 caractères.'
+          });
+        }
+        normalizedExternalUrl = trimmed;
+      }
     }
 
     // If transitioning draft → published, stamp published_at
@@ -510,6 +564,7 @@ router.put('/pages/:id', authenticateToken, requireContentEditor, async (req, re
     if (is_featured !== undefined) { sets.push(`is_featured = $${idx++}`); params.push(!!is_featured); }
     if (is_pinned !== undefined)   { sets.push(`is_pinned = $${idx++}`); params.push(!!is_pinned); }
     if (cover_image !== undefined) { sets.push(`cover_image = $${idx++}`); params.push(cover_image); }
+    if (external_url !== undefined) { sets.push(`external_url = $${idx++}`); params.push(normalizedExternalUrl); }
     // V 2.0.582 — Attachments stored as JSONB. Accept arrays only;
     // anything else gets coerced to an empty array. Each entry must
     // have label + filename + content_type + data_base64.
@@ -550,10 +605,23 @@ router.put('/pages/:id', authenticateToken, requireContentEditor, async (req, re
 
     const updated = await dbGet(
       `SELECT id, section_id, title, excerpt, content_type, status,
-              is_featured, is_pinned, published_at, created_at, updated_at
+              is_featured, is_pinned, published_at, created_at, updated_at,
+              external_url
          FROM content_pages WHERE id = $1`,
       [id]
     );
+
+    // V 2.0.734 (Phase 2) — Fire push notification only when the admin
+    // opted in AND this update transitions the article TO 'published'
+    // (or republishes it after edits). Edits to an already-published
+    // article also re-fire when the admin re-checks the box, allowing
+    // a "resend notification" workflow if needed.
+    if (notify_push && updated.status === 'published') {
+      maybeBroadcastArticleNotification(updated, updated.excerpt, orgId).catch(err => {
+        console.error('[content] broadcast push (PUT) failed:', err.message);
+      });
+    }
+
     res.json(updated);
   } catch (err) {
     console.error('[content] update page error:', err);
@@ -720,5 +788,57 @@ router.delete('/pages/:id', authenticateToken, requireContentEditor, async (req,
     res.status(500).json({ error: err.message });
   }
 });
+
+// V 2.0.734 (Phase 2) — Broadcast a push notification to every player in
+// the org who has push enabled, using the CONTENT_ARTICLE_PUBLISHED
+// template. Fire-and-forget — caller does NOT await this. Errors are
+// swallowed (and logged) so they never fail the parent request.
+//
+// The deep-link URL uses the ?page=news&article=<id> convention from
+// Phase 1c so a tap on the notification opens the article detail.
+async function maybeBroadcastArticleNotification(article, excerpt, orgId) {
+  try {
+    if (!article || !article.id || !orgId) {
+      console.log('[content broadcast] missing article id or orgId, skipping');
+      return;
+    }
+
+    const { buildNotification } = require('../notification-messages');
+    const { sendPushToPlayers } = require('./push');
+
+    // Pull every push-subscribed licence in this org. Using the same query
+    // as GET /api/push/subscribed-licences so the audience matches what the
+    // admin sees in the bulk-send UI.
+    const recipients = await dbAll(
+      `SELECT DISTINCT pa.licence
+         FROM player_accounts pa
+         INNER JOIN push_subscriptions ps ON ps.player_account_id = pa.id
+        WHERE ($1::int IS NULL OR pa.organization_id = $1)
+          AND pa.push_enabled = true`,
+      [orgId]
+    );
+    const licences = (recipients || []).map(r => r.licence).filter(Boolean);
+
+    if (licences.length === 0) {
+      console.log(`[content broadcast] no push-subscribed players for org ${orgId}, skipping`);
+      return;
+    }
+
+    const notification = buildNotification('CONTENT_ARTICLE_PUBLISHED', {
+      title: article.title,
+      excerpt: excerpt || article.excerpt || null,
+      articleId: article.id
+    });
+
+    const result = await sendPushToPlayers(licences, orgId, notification);
+    console.log(
+      `[content broadcast] article ${article.id} (org ${orgId}): ` +
+      `pushed to ${result.total_sent}/${licences.length} player(s)`
+    );
+  } catch (err) {
+    console.error('[content broadcast] error:', err.message);
+    // Swallow — never fail the parent request because of a push issue.
+  }
+}
 
 module.exports = router;
