@@ -571,13 +571,6 @@ async function sendPushToPlayer(licence, orgId, notification, options = {}) {
       }
     }
 
-    // Send copy to admin if enabled (fire-and-forget, skip if this IS the admin copy)
-    if (!options.skipAdminCopy && sent > 0) {
-      sendAdminCopyIfEnabled(orgId, licence, notification).catch(err => {
-        console.error('[ADMIN COPY] Failed to send admin copy:', err.message);
-      });
-    }
-
     return { success: sent > 0, sent, failed };
 
   } catch (error) {
@@ -643,14 +636,6 @@ async function sendPushToPlayers(licences, orgId, notification) {
       totalSent += r.sent || 0;
       totalFailed += r.failed || 0;
     }
-  }
-
-  // Send ONE admin copy after all players have been notified
-  // BUT: skip if admin is already in the recipient list (normalize licences for comparison)
-  if (totalSent > 0) {
-    sendAdminCopyForBulk(orgId, totalSent, notification, licences).catch(err => {
-      console.error('[ADMIN COPY BULK] Failed to send admin copy:', err.message);
-    });
   }
 
   return {
@@ -1129,114 +1114,6 @@ router.delete('/history', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Erreur lors de la suppression de l\'historique' });
   }
 });
-
-/**
- * HELPER FUNCTION: Send copy of notification to admin if enabled
- * @param {number} orgId - Organization ID
- * @param {string} playerLicence - Player licence who received the notification
- * @param {object} notification - { title, body, url }
- */
-async function sendAdminCopyIfEnabled(orgId, playerLicence, notification) {
-  try {
-    const appSettings = require('../utils/app-settings');
-
-    // Check if admin copy is enabled
-    const isEnabled = await appSettings.getOrgSetting(orgId, 'push_admin_copy_enabled');
-
-    if (isEnabled !== 'true' && isEnabled !== true) {
-      return; // Feature disabled
-    }
-
-    // Get the admin's licence from organization settings or users table
-    const adminLicence = await appSettings.getOrgSetting(orgId, 'push_admin_licence');
-
-    if (!adminLicence) {
-      logger.log('[ADMIN COPY] No admin licence configured for org', orgId);
-      return;
-    }
-
-    // Get player name for the copy notification
-    const player = await new Promise((resolve, reject) => {
-      db.get(
-        'SELECT first_name, last_name FROM players WHERE REPLACE(licence, \' \', \'\') = $1 AND ($2::int IS NULL OR organization_id = $2)',
-        [playerLicence.replace(/\s/g, ''), orgId],
-        (err, row) => {
-          if (err) reject(err);
-          else resolve(row);
-        }
-      );
-    });
-
-    const playerName = player ? `${player.first_name} ${player.last_name}` : playerLicence;
-
-    // Modify notification for admin
-    const adminNotification = {
-      title: `[Copie Admin] ${notification.title}`,
-      body: `📬 Notification envoyée à ${playerName}\n\n${notification.body}`,
-      url: notification.url
-    };
-
-    // Send to admin with skipAdminCopy flag to prevent infinite loop
-    logger.log(`[ADMIN COPY] Sending copy to admin (licence: ${adminLicence})`);
-    await sendPushToPlayer(adminLicence, orgId, adminNotification, { skipAdminCopy: true });
-
-  } catch (error) {
-    console.error('[ADMIN COPY] Error:', error.message);
-    // Don't throw - this is fire-and-forget
-  }
-}
-
-/**
- * HELPER FUNCTION: Send ONE admin copy for bulk notifications
- * @param {number} orgId - Organization ID
- * @param {number} playerCount - Number of players who received the notification
- * @param {object} notification - { title, body, url }
- * @param {string[]} recipientLicences - Array of licences who received the notification
- */
-async function sendAdminCopyForBulk(orgId, playerCount, notification, recipientLicences = []) {
-  try {
-    const appSettings = require('../utils/app-settings');
-
-    // Check if admin copy is enabled
-    const isEnabled = await appSettings.getOrgSetting(orgId, 'push_admin_copy_enabled');
-
-    if (isEnabled !== 'true' && isEnabled !== true) {
-      return; // Feature disabled
-    }
-
-    // Get the admin's licence from organization settings
-    const adminLicence = await appSettings.getOrgSetting(orgId, 'push_admin_licence');
-
-    if (!adminLicence) {
-      logger.log('[ADMIN COPY BULK] No admin licence configured for org', orgId);
-      return;
-    }
-
-    // Skip admin copy if admin is already in the recipient list
-    const normalizedAdminLicence = adminLicence.replace(/\s/g, '').toUpperCase();
-    const normalizedRecipients = recipientLicences.map(l => l.replace(/\s/g, '').toUpperCase());
-
-    if (normalizedRecipients.includes(normalizedAdminLicence)) {
-      logger.log(`[ADMIN COPY BULK] Admin (${adminLicence}) is in recipient list - skipping admin copy to avoid duplicate`);
-      return;
-    }
-
-    // Create admin summary notification (just the count, not the full message)
-    const adminNotification = {
-      title: `📬 Notification envoyée`,
-      body: `✅ ${playerCount} joueur(s) ont reçu:\n"${notification.title}"`,
-      url: notification.url
-    };
-
-    // Send to admin with skipAdminCopy flag to prevent infinite loop
-    logger.log(`[ADMIN COPY BULK] Sending copy to admin (licence: ${adminLicence}) for ${playerCount} player(s)`);
-    await sendPushToPlayer(adminLicence, orgId, adminNotification, { skipAdminCopy: true });
-
-  } catch (error) {
-    console.error('[ADMIN COPY BULK] Error:', error.message);
-    // Don't throw - this is fire-and-forget
-  }
-}
 
 // Export router and helper functions
 module.exports = router;
