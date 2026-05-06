@@ -74,9 +74,13 @@
   header.top .ddj strong { color: var(--text); }
 
   /* ---- MAIN GRID — 3 COLUMNS ---- */
+  /* V 2.0.730 — Poules column slimmed (1.7fr → 1.3fr) and Phase finale
+     column widened (1.3fr → 1.7fr) so SF / F / PF cards have more
+     horizontal room — easier to read at TV-distance and gives the
+     champion celebration on the F card the prominence it deserves. */
   .main {
     display: grid;
-    grid-template-columns: 1.7fr 1.3fr 1.2fr;
+    grid-template-columns: 1.3fr 1.7fr 1.2fr;
     gap: 14px;
     overflow: hidden;
     min-height: 0;
@@ -695,10 +699,12 @@
 
   // ---- POULE ----
   function renderPoule(p) {
+    // V 2.0.730 — medals removed from poule classement (kept only on
+    // the Finale + Petite Finale cards, per field feedback).
     const classement = (p.players || []).map(pl => `
       <div class="crow">
         <span class="pos">${pl.position}.</span>
-        <span class="name">${escapeHtml(pl.name)}${medalFor(pl.name)}</span>
+        <span class="name">${escapeHtml(pl.name)}</span>
         <span class="stats">${pl.wins}-${pl.losses}${pl.draws ? '-' + pl.draws : ''}</span>
       </div>`).join('');
 
