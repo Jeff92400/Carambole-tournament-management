@@ -248,21 +248,20 @@
     gap: 0;
     min-height: 0;
   }
-  /* V 2.0.725 — SF cards GROW to fill their half of the SF column.
-     Previously `flex: 0 0 auto` + `space-between` parked the cards at
-     the column's top and bottom edges, putting their centers near
-     ~10% / ~90% — the connector lines at 25% / 75% missed them.
-     With each SF flex:1, they each occupy 50% of the column and
-     their vertical centers land at exactly 25% / 75%, aligning with
-     the connector horizontals. */
+  /* V 2.0.727 — SF cards keep their natural content height (no longer
+     stretched to fill 50% of the column) so they don't visually
+     dominate the Finale. justify-content: space-around centers each
+     SF inside its half, which mathematically places their vertical
+     centers at exactly 25% / 75% — same as the connector horizontals,
+     so alignment is preserved. */
   .b-col-sf {
     flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    justify-content: space-around;
     min-width: 0;
   }
-  .b-col-sf .bmatch { flex: 1 1 0; }
+  .b-col-sf .bmatch { flex: 0 0 auto; }
   .b-col-conn {
     width: 60px;
     position: relative;
@@ -296,14 +295,16 @@
     align-items: center;
     min-width: 0;
   }
-  /* V 2.0.726 — Finale is the focal point of the bracket: larger
-     padding, bigger fonts, and a subtle glow to make it visually
-     dominant over the SF cards that feed into it. */
+  /* V 2.0.726/727 — Finale is the focal point of the bracket: larger
+     padding, bigger fonts, generous min-height (so it now reads as
+     the biggest card on the bracket once SFs are at natural height),
+     and a subtle glow to make it visually dominant. */
   .b-col-f .bmatch {
     flex: 1 1 auto;
     width: 100%;
-    padding: 14px 16px;
+    padding: 18px 18px;
     border-width: 3px;
+    min-height: 130px;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
   }
   .b-col-f .bmatch .bphase { font-size: 0.95em; }
