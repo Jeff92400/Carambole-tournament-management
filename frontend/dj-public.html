@@ -289,11 +289,37 @@
     top: 25%;
     bottom: 25%;
   }
+  /* V 2.0.728 — Right column now stacks F (top) and PF (bottom).
+     justify-content: space-around centers F at 25% and PF at 75% —
+     same vertical positions as SF1 and SF2 in the left column, so
+     the existing connector horizontals at top:25% / top:75% reach
+     each pair naturally. */
   .b-col-f {
     flex: 1;
     display: flex;
+    flex-direction: column;
+    justify-content: space-around;
     align-items: center;
     min-width: 0;
+  }
+  .b-pf-wrap {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .b-pf-wrap .b-pf-label {
+    font-size: 0.85em;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    text-align: center;
+    margin-bottom: 0;
+  }
+  .b-pf-wrap .bmatch {
+    width: 100%;
+    font-size: 0.92em;
+    min-height: 70px;
   }
   /* V 2.0.726/727 — Finale is the focal point of the bracket: larger
      padding, bigger fonts, generous min-height (so it now reads as
@@ -326,18 +352,9 @@
   /* SF cards stay readable but visually subordinate to the Finale. */
   .b-col-sf .bmatch { font-size: 0.92em; }
 
-  /* V 2.0.725 — Petite finale card kept narrow (matches F card width)
-     and centered, so it doesn't visually dominate the column. */
-  .b-pf { margin-top: 8px; }
-  .b-pf .bmatch { max-width: 50%; margin-left: auto; margin-right: auto; }
-  .b-pf .b-pf-label {
-    font-size: var(--fs-h2);
-    color: var(--muted);
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    margin-bottom: 4px;
-    text-align: center;
-  }
+  /* V 2.0.728 — old .b-pf / .b-pf .b-pf-label rules removed: the
+     petite finale now lives inside the bracket flex (.b-pf-wrap inside
+     .b-col-f) so the standalone-block styles are no longer needed. */
 
   .bmatch {
     background: var(--bg-card);
@@ -579,9 +596,43 @@
   }
 
   // ----------------------------------------------------------------
+  // V 2.0.728 — Medals on top 3 once Finale + Petite Finale are played.
+  // _currentMedals is rebuilt before each render() and consulted by
+  // renderPoule() and renderBmatch() to append 🥇/🥈/🥉 after names.
+  // ----------------------------------------------------------------
+  let _currentMedals = {};
+  function computeMedals(bracket) {
+    _currentMedals = {};
+    if (!bracket || !bracket.phases) return;
+    const byPhase = {};
+    for (const ph of bracket.phases) byPhase[ph.phase] = ph;
+    const f = byPhase['F'];
+    const pf = byPhase['PF'];
+    if (f && f.status === 'finished' && f.p1_name && f.p2_name &&
+        f.p1_points != null && f.p2_points != null) {
+      if (f.p1_points > f.p2_points) {
+        _currentMedals[f.p1_name] = '🥇';
+        _currentMedals[f.p2_name] = '🥈';
+      } else if (f.p2_points > f.p1_points) {
+        _currentMedals[f.p2_name] = '🥇';
+        _currentMedals[f.p1_name] = '🥈';
+      }
+    }
+    if (pf && pf.status === 'finished' && pf.p1_name && pf.p2_name &&
+        pf.p1_points != null && pf.p2_points != null) {
+      if (pf.p1_points > pf.p2_points) _currentMedals[pf.p1_name] = '🥉';
+      else if (pf.p2_points > pf.p1_points) _currentMedals[pf.p2_name] = '🥉';
+    }
+  }
+  function medalFor(name) {
+    return name && _currentMedals[name] ? ' ' + _currentMedals[name] : '';
+  }
+
+  // ----------------------------------------------------------------
   // Render
   // ----------------------------------------------------------------
   function render(data) {
+    computeMedals(data.bracket);
     // Header
     $('t-name').textContent = (data.tournament && data.tournament.name) || 'Tournoi';
     const meta = data.tournament || {};
@@ -639,7 +690,7 @@
     const classement = (p.players || []).map(pl => `
       <div class="crow">
         <span class="pos">${pl.position}.</span>
-        <span class="name">${escapeHtml(pl.name)}</span>
+        <span class="name">${escapeHtml(pl.name)}${medalFor(pl.name)}</span>
         <span class="stats">${pl.wins}-${pl.losses}${pl.draws ? '-' + pl.draws : ''}</span>
       </div>`).join('');
 
@@ -694,7 +745,11 @@
     const sf2 = byPhase['SF2'];
     const f   = byPhase['F'];
     const pf  = byPhase['PF'];
-    // V 2.0.724 — flex layout: SF column | connector strip | F column.
+    // V 2.0.728 — Petite finale moved INSIDE the bracket (right column,
+     // below F). With justify-content: space-around on .b-col-f, F lands
+     // at vertical center 25% and PF at 75% — exactly where the existing
+     // connector horizontals are positioned, so PF gets a connector "for
+     // free" without adding any new geometry.
     return `
       <div class="bracket">
         <div class="b-col-sf">
@@ -704,11 +759,11 @@
         <div class="b-col-conn"><div class="b-vert"></div></div>
         <div class="b-col-f">
           ${renderBmatch(f, 'Finale')}
+          <div class="b-pf-wrap">
+            <div class="b-pf-label">Petite finale (3ᵉ place)</div>
+            ${renderBmatch(pf, 'Petite finale')}
+          </div>
         </div>
-      </div>
-      <div class="b-pf">
-        <div class="b-pf-label">Petite finale (3ᵉ place)</div>
-        ${renderBmatch(pf, 'Petite finale')}
       </div>`;
   }
 
@@ -728,10 +783,10 @@
       else if (m.p2_points > m.p1_points) { p2Line = 'winner'; p1Line = 'loser'; }
     }
     const p1 = m.p1_name
-      ? `${escapeHtml(m.p1_name)}${m.p1_poule ? `<span class="bp-poule">P${m.p1_poule}</span>` : ''}`
+      ? `${escapeHtml(m.p1_name)}${medalFor(m.p1_name)}${m.p1_poule ? `<span class="bp-poule">P${m.p1_poule}</span>` : ''}`
       : '<em>?</em>';
     const p2 = m.p2_name
-      ? `${escapeHtml(m.p2_name)}${m.p2_poule ? `<span class="bp-poule">P${m.p2_poule}</span>` : ''}`
+      ? `${escapeHtml(m.p2_name)}${medalFor(m.p2_name)}${m.p2_poule ? `<span class="bp-poule">P${m.p2_poule}</span>` : ''}`
       : '<em>?</em>';
     return `
       <div class="bmatch ${cls}">
