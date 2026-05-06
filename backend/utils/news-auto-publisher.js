@@ -100,6 +100,14 @@ async function getNewsDeliveryMode(orgId) {
   }
 }
 
+// V 2.0.732 (Phase 1b) — Hybrid mode helper.
+// The auto-publisher should run for any mode that includes the player_app
+// channel: 'player_app' (legacy CDB 93-94) or 'wordpress+player_app'
+// (hybrid CDBHS). 'wordpress' alone short-circuits.
+function isPlayerAppEnabled(deliveryMode) {
+  return deliveryMode === 'player_app' || deliveryMode === 'wordpress+player_app';
+}
+
 // Resolve the per-event publish mode ('auto' | 'draft' | 'off') for an
 // org, honoring the per-event override stored in organization_settings
 // and falling back to EVENT_DEFAULT_MODE on any miss.
@@ -793,9 +801,10 @@ async function publishAutoArticle(eventType, orgId, payload, options = {}) {
     if (!orgId) return { skipped: 'no_org' };
     if (!EVENT_SECTION_MAP[eventType]) return { skipped: 'unknown_event_type' };
 
-    // Hard gate: only orgs in 'player_app' news mode get auto-articles.
+    // Hard gate: only orgs whose news mode includes the player_app channel
+    // get auto-articles. Accepts 'player_app' OR 'wordpress+player_app'.
     const deliveryMode = await getNewsDeliveryMode(orgId);
-    if (deliveryMode !== 'player_app') return { skipped: 'news_mode_not_player_app' };
+    if (!isPlayerAppEnabled(deliveryMode)) return { skipped: 'news_mode_not_player_app' };
 
     // Soft gate: per-event opt-out.
     const mode = await resolveEventMode(orgId, eventType);
@@ -1005,7 +1014,7 @@ async function promoteDraftOrCreate(eventType, orgId, payload) {
     if (!EVENT_SECTION_MAP[eventType]) return { skipped: 'unknown_event_type' };
 
     const deliveryMode = await getNewsDeliveryMode(orgId);
-    if (deliveryMode !== 'player_app') return { skipped: 'news_mode_not_player_app' };
+    if (!isPlayerAppEnabled(deliveryMode)) return { skipped: 'news_mode_not_player_app' };
 
     const mode = await resolveEventMode(orgId, eventType);
     if (mode === 'off') return { skipped: 'event_disabled' };

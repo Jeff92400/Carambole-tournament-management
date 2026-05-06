@@ -1164,6 +1164,13 @@ async function initializeDatabase() {
     await client.query(`CREATE INDEX IF NOT EXISTS idx_content_pages_season ON content_pages(organization_id, season)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_content_pages_archived ON content_pages(organization_id, archived)`);
 
+    // V 2.0.732 (Phase 1b) — external_url for hybrid mode (CDBHS).
+    // When the news module runs in 'wordpress+player_app' mode, an article
+    // published in the app can carry a deep-link to its companion WordPress
+    // page on cdbhs.fr (or any external https URL). NULL for articles that
+    // live only in the app, or articles without a public web counterpart.
+    await client.query(`ALTER TABLE content_pages ADD COLUMN IF NOT EXISTS external_url VARCHAR(500)`);
+
     // Content links — cross-links between articles (related content)
     await client.query(`
       CREATE TABLE IF NOT EXISTS content_links (

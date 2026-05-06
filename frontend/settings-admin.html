@@ -1227,6 +1227,13 @@
               <div style="font-size: 13px; color: #666; margin-top: 2px;">Pour les comités sans site web : publiez directement dans l'Espace Joueur (articles, sections, mise en avant).</div>
             </div>
           </label>
+          <label style="display: flex; align-items: flex-start; gap: 10px; padding: 12px; background: white; border: 2px solid #e1e8ed; border-radius: 6px; cursor: pointer;" id="newsModeHybridLabel">
+            <input type="radio" name="newsDeliveryMode" id="newsModeHybrid" value="wordpress+player_app" style="margin-top: 3px;" onchange="updateNewsDeliveryMode()">
+            <div style="flex: 1;">
+              <div style="font-weight: 600; color: #333;">🔵 Hybride — WordPress + App Joueur <span style="display: inline-block; padding: 1px 7px; background: #1F4788; color: white; border-radius: 8px; font-size: 10px; font-weight: 700; margin-left: 4px; vertical-align: middle;">NOUVEAU</span> <span id="newsModeHybridActiveBadge" style="display: none; padding: 2px 8px; background: #28a745; color: white; border-radius: 10px; font-size: 11px; font-weight: 600; margin-left: 6px;">✓ ACTIF</span></div>
+              <div style="font-size: 13px; color: #666; margin-top: 2px;">Diffusion simultanée : publication WordPress automatique <strong>et</strong> apparition dans le fil d'infos de l'App Joueur. Idéal pour les comités qui ont déjà un site web et veulent toucher aussi les utilisateurs de l'app.</div>
+            </div>
+          </label>
         </div>
       </div>
 
@@ -4536,9 +4543,11 @@
           const newsMode = settings.news_delivery_mode || 'wordpress';
           const wpRadio = document.getElementById('newsModeWp');
           const paRadio = document.getElementById('newsModePlayerApp');
+          const hybridRadio = document.getElementById('newsModeHybrid');
           if (wpRadio && paRadio) {
             wpRadio.checked = (newsMode === 'wordpress');
             paRadio.checked = (newsMode === 'player_app');
+            if (hybridRadio) hybridRadio.checked = (newsMode === 'wordpress+player_app');
             updateNewsDeliveryMode();
             updateNewsDeliveryActiveBadge(newsMode);
           }
@@ -4566,26 +4575,39 @@
       }
     }
 
-    // Toggle visibility of WordPress vs Player App News blocks based on selected mode
+    // Toggle visibility of WordPress vs Player App News blocks based on selected mode.
+    // V 2.0.732 — 3 modes: 'wordpress', 'player_app', 'wordpress+player_app' (hybrid).
+    // Hybrid shows BOTH config blocks (WP credentials + Player App info) since both
+    // channels are active.
     function updateNewsDeliveryMode() {
       const wpRadio = document.getElementById('newsModeWp');
       const paRadio = document.getElementById('newsModePlayerApp');
+      const hybridRadio = document.getElementById('newsModeHybrid');
       const wpBlock = document.getElementById('newsOptionWordpress');
       const paBlock = document.getElementById('newsOptionPlayerApp');
       const wpLabel = document.getElementById('newsModeWpLabel');
       const paLabel = document.getElementById('newsModePlayerAppLabel');
+      const hybridLabel = document.getElementById('newsModeHybridLabel');
       if (!wpRadio || !paRadio || !wpBlock || !paBlock) return;
 
       const isWp = wpRadio.checked;
-      wpBlock.style.display = isWp ? '' : 'none';
-      paBlock.style.display = isWp ? 'none' : '';
+      const isPa = paRadio.checked;
+      const isHybrid = hybridRadio && hybridRadio.checked;
+
+      // WP block: visible in 'wordpress' OR 'wordpress+player_app'
+      wpBlock.style.display = (isWp || isHybrid) ? '' : 'none';
+      // PlayerApp block: visible in 'player_app' OR 'wordpress+player_app'
+      paBlock.style.display = (isPa || isHybrid) ? '' : 'none';
 
       // Highlight selected card
       if (wpLabel) wpLabel.style.borderColor = isWp ? '#1F4788' : '#e1e8ed';
-      if (paLabel) paLabel.style.borderColor = isWp ? '#e1e8ed' : '#1F4788';
+      if (paLabel) paLabel.style.borderColor = isPa ? '#1F4788' : '#e1e8ed';
+      if (hybridLabel) hybridLabel.style.borderColor = isHybrid ? '#1F4788' : '#e1e8ed';
     }
 
     function getSelectedNewsDeliveryMode() {
+      const hybridRadio = document.getElementById('newsModeHybrid');
+      if (hybridRadio && hybridRadio.checked) return 'wordpress+player_app';
       const paRadio = document.getElementById('newsModePlayerApp');
       return (paRadio && paRadio.checked) ? 'player_app' : 'wordpress';
     }
@@ -4594,8 +4616,10 @@
     function updateNewsDeliveryActiveBadge(savedMode) {
       const wpBadge = document.getElementById('newsModeWpActiveBadge');
       const paBadge = document.getElementById('newsModePlayerAppActiveBadge');
+      const hybridBadge = document.getElementById('newsModeHybridActiveBadge');
       if (wpBadge) wpBadge.style.display = (savedMode === 'wordpress') ? '' : 'none';
       if (paBadge) paBadge.style.display = (savedMode === 'player_app') ? '' : 'none';
+      if (hybridBadge) hybridBadge.style.display = (savedMode === 'wordpress+player_app') ? '' : 'none';
     }
 
     // Feedback writer that works regardless of which mode block is visible
@@ -4645,7 +4669,9 @@
           const mode = getSelectedNewsDeliveryMode();
           const successText = mode === 'player_app'
             ? '✅ Mode "Module News intégré" activé — vous pouvez maintenant gérer vos articles et sections.'
-            : '✅ Paramètres WordPress enregistrés';
+            : mode === 'wordpress+player_app'
+              ? '✅ Mode "Hybride — WordPress + App Joueur" activé — diffusion simultanée sur le site web et dans le fil d\'infos de l\'app.'
+              : '✅ Paramètres WordPress enregistrés';
 
           // Write to mode-agnostic message div (always visible)
           showNewsDeliveryMessage(successText, 'success');
