@@ -1325,6 +1325,60 @@
         </div>
       </div>
 
+      <!-- V 2.0.736 (Phase 3 Étape F) — Hero "À la une" fallback configuration.
+           Visible only in hybrid mode ('wordpress+player_app'). Lets the
+           admin define a default hero card shown on the Player App home
+           when no article is currently flagged is_featured, so the home
+           never starts with a visual gap. -->
+      <div id="newsOptionHybridHero" style="display: none; margin-top: 18px;">
+        <div style="padding: 22px; background: linear-gradient(135deg, #fff8e1 0%, #fff3c4 100%); border: 1px solid #fbc02d; border-radius: 10px;">
+          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 10px;">
+            <span style="font-size: 28px;">⭐</span>
+            <div>
+              <div style="font-size: 15px; font-weight: 600; color: #8a6d00;">Hero « À la une » par défaut</div>
+              <div style="font-size: 12px; color: #6d6033;">Affiché sur la home de l'app quand aucun article n'est épinglé en À la une.</div>
+            </div>
+          </div>
+          <p style="color: #555; margin: 0 0 14px; line-height: 1.55; font-size: 13px;">
+            Quand un article est marqué <strong>« À la une »</strong> (case à cocher dans l'éditeur d'article), c'est lui qui s'affiche dans le bandeau bleu de la home. Sinon, ce hero par défaut le remplace — utile pour un mot d'accueil permanent. Les 3 champs ci-dessous sont indépendants et peuvent être laissés vides (le hero est alors masqué jusqu'à publication d'un article épinglé).
+          </p>
+          <div style="display: grid; grid-template-columns: 1fr; gap: 12px;">
+            <div>
+              <label style="display: block; font-weight: 600; color: #555; margin-bottom: 4px; font-size: 13px;">Titre court</label>
+              <input type="text" id="hybridHeroFallbackTitle"
+                     placeholder="Ex : Bienvenue sur l'app du Comité"
+                     maxlength="120"
+                     style="width: 100%; padding: 9px 11px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+            </div>
+            <div>
+              <label style="display: block; font-weight: 600; color: #555; margin-bottom: 4px; font-size: 13px;">Phrase d'accroche (optionnel)</label>
+              <textarea id="hybridHeroFallbackBody"
+                        rows="2"
+                        maxlength="200"
+                        placeholder="Une ligne ou deux, max 200 caractères. Affichée sous le titre dans le bandeau bleu."
+                        style="width: 100%; padding: 9px 11px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; font-family: inherit; resize: vertical;"></textarea>
+            </div>
+            <div>
+              <label style="display: block; font-weight: 600; color: #555; margin-bottom: 4px; font-size: 13px;">Lien externe (optionnel)</label>
+              <input type="url" id="hybridHeroFallbackUrl"
+                     placeholder="https://cdbhs.fr/page-d-accueil"
+                     maxlength="500"
+                     style="width: 100%; padding: 9px 11px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+              <div style="font-size: 11px; color: #777; margin-top: 4px;">URL en https:// uniquement. Si renseignée, taper le hero ouvre cette page dans le navigateur.</div>
+            </div>
+          </div>
+          <div style="display: flex; gap: 10px; margin-top: 16px;">
+            <button onclick="saveHybridHeroFallback()" class="btn" style="background: #28a745; padding: 9px 18px;">
+              💾 Enregistrer le hero par défaut
+            </button>
+            <button onclick="clearHybridHeroFallback()" class="btn" style="background: #fff; color: #c0392b; border: 1px solid #c0392b; padding: 9px 18px;">
+              🗑️ Effacer
+            </button>
+          </div>
+          <div id="hybridHeroFallbackMessage" style="display: none; margin-top: 12px; padding: 10px 12px; border-radius: 6px; font-size: 13px;"></div>
+        </div>
+      </div>
+
       </div>
     </div>
 
@@ -4552,6 +4606,12 @@
             updateNewsDeliveryActiveBadge(newsMode);
           }
 
+          // V 2.0.736 — Pre-fill the hero fallback editor when in hybrid
+          // mode. Hidden in other modes (gated by updateNewsDeliveryMode).
+          if (newsMode === 'wordpress+player_app') {
+            loadHybridHeroFallback();
+          }
+
           const enabled = settings.wp_enabled === 'true';
           document.getElementById('wpEnabled').checked = enabled;
           // Update toggle visual
@@ -4579,12 +4639,15 @@
     // V 2.0.732 — 3 modes: 'wordpress', 'player_app', 'wordpress+player_app' (hybrid).
     // Hybrid shows BOTH config blocks (WP credentials + Player App info) since both
     // channels are active.
+    // V 2.0.736 — Hybrid mode also reveals the Hero À la une fallback editor
+    // (newsOptionHybridHero), only relevant for the condensed hybrid home.
     function updateNewsDeliveryMode() {
       const wpRadio = document.getElementById('newsModeWp');
       const paRadio = document.getElementById('newsModePlayerApp');
       const hybridRadio = document.getElementById('newsModeHybrid');
       const wpBlock = document.getElementById('newsOptionWordpress');
       const paBlock = document.getElementById('newsOptionPlayerApp');
+      const heroBlock = document.getElementById('newsOptionHybridHero');
       const wpLabel = document.getElementById('newsModeWpLabel');
       const paLabel = document.getElementById('newsModePlayerAppLabel');
       const hybridLabel = document.getElementById('newsModeHybridLabel');
@@ -4598,11 +4661,83 @@
       wpBlock.style.display = (isWp || isHybrid) ? '' : 'none';
       // PlayerApp block: visible in 'player_app' OR 'wordpress+player_app'
       paBlock.style.display = (isPa || isHybrid) ? '' : 'none';
+      // Hero fallback editor: hybrid mode only.
+      if (heroBlock) heroBlock.style.display = isHybrid ? '' : 'none';
 
       // Highlight selected card
       if (wpLabel) wpLabel.style.borderColor = isWp ? '#1F4788' : '#e1e8ed';
       if (paLabel) paLabel.style.borderColor = isPa ? '#1F4788' : '#e1e8ed';
       if (hybridLabel) hybridLabel.style.borderColor = isHybrid ? '#1F4788' : '#e1e8ed';
+    }
+
+    // V 2.0.736 (Phase 3 Étape F) — Load + persist the per-org hero
+    // fallback (3 settings stored in organization_settings via the
+    // existing org-settings-batch endpoint). Idempotent: empty values
+    // become null in the backend and effectively clear the fallback.
+    async function loadHybridHeroFallback() {
+      try {
+        const resp = await fetch(
+          `${API_URL}/settings/org-settings-batch?keys=hybrid_home_hero_fallback_title,hybrid_home_hero_fallback_body,hybrid_home_hero_fallback_url`,
+          { headers: { 'Authorization': `Bearer ${token}` } }
+        );
+        if (!resp.ok) return;
+        const data = await resp.json();
+        const titleEl = document.getElementById('hybridHeroFallbackTitle');
+        const bodyEl  = document.getElementById('hybridHeroFallbackBody');
+        const urlEl   = document.getElementById('hybridHeroFallbackUrl');
+        if (titleEl) titleEl.value = data.hybrid_home_hero_fallback_title || '';
+        if (bodyEl)  bodyEl.value  = data.hybrid_home_hero_fallback_body  || '';
+        if (urlEl)   urlEl.value   = data.hybrid_home_hero_fallback_url   || '';
+      } catch (e) {
+        // Silent — empty fields will simply mean "no fallback".
+      }
+    }
+
+    function showHybridHeroFallbackMessage(text, type) {
+      const el = document.getElementById('hybridHeroFallbackMessage');
+      if (!el) return;
+      el.textContent = text;
+      el.style.background = type === 'success' ? '#d4edda' : (type === 'error' ? '#f8d7da' : '#fff3cd');
+      el.style.color      = type === 'success' ? '#155724' : (type === 'error' ? '#721c24' : '#856404');
+      el.style.border     = '1px solid ' + (type === 'success' ? '#c3e6cb' : (type === 'error' ? '#f5c6cb' : '#ffeeba'));
+      el.style.display = 'block';
+      clearTimeout(el._t);
+      el._t = setTimeout(() => { el.style.display = 'none'; }, 3500);
+    }
+
+    async function saveHybridHeroFallback() {
+      const title = (document.getElementById('hybridHeroFallbackTitle').value || '').trim();
+      const body  = (document.getElementById('hybridHeroFallbackBody').value  || '').trim();
+      const url   = (document.getElementById('hybridHeroFallbackUrl').value   || '').trim();
+      if (url && !/^https:\/\//i.test(url)) {
+        showHybridHeroFallbackMessage('⚠️ Le lien doit commencer par https://', 'error');
+        return;
+      }
+      try {
+        const resp = await fetch(`${API_URL}/settings/org-settings-batch`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            hybrid_home_hero_fallback_title: title,
+            hybrid_home_hero_fallback_body:  body,
+            hybrid_home_hero_fallback_url:   url
+          })
+        });
+        if (!resp.ok) throw new Error('save failed');
+        showHybridHeroFallbackMessage('✅ Hero par défaut enregistré', 'success');
+      } catch (e) {
+        showHybridHeroFallbackMessage('⚠️ Erreur — réessayez plus tard', 'error');
+      }
+    }
+
+    function clearHybridHeroFallback() {
+      document.getElementById('hybridHeroFallbackTitle').value = '';
+      document.getElementById('hybridHeroFallbackBody').value  = '';
+      document.getElementById('hybridHeroFallbackUrl').value   = '';
+      saveHybridHeroFallback();
     }
 
     function getSelectedNewsDeliveryMode() {
