@@ -15,25 +15,12 @@ const { buildRsvpButtonsHtml } = require('./rsvp');
 
 const router = express.Router();
 
-// Configure multer for email image uploads
-const imageStorage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    const uploadDir = path.join(__dirname, '../../frontend/images/uploads');
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-    cb(null, uploadDir);
-  },
-  filename: function (req, file, cb) {
-    // Generate unique filename with timestamp
-    const timestamp = Date.now();
-    const ext = path.extname(file.originalname).toLowerCase() || '.png';
-    cb(null, `email-image-${timestamp}${ext}`);
-  }
-});
-
+// Configure multer for email image uploads.
+// V 2.0.739 — switched from diskStorage to memoryStorage so we can
+// persist the buffer to BOTH the filesystem (fast serving) AND the
+// database (survives Railway's ephemeral filesystem wipes on redeploy).
 const imageUpload = multer({
-  storage: imageStorage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB max
   fileFilter: function (req, file, cb) {
     const filetypes = /jpeg|jpg|png|gif|webp/;
@@ -84,21 +71,58 @@ function parseDateSafe(dateStr) {
   return null;
 }
 
-// Upload image for email (supports pasted screenshots)
-router.post('/upload-image', authenticateToken, imageUpload.single('image'), (req, res) => {
+// Upload image for email (supports pasted screenshots).
+// V 2.0.739 — persist in both filesystem (fast) and database (survives
+// Railway redeploys). The /images/uploads/* middleware in server.js
+// serves from filesystem first, falls back to DB.
+router.post('/upload-image', authenticateToken, imageUpload.single('image'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'Aucune image fournie' });
     }
 
+    // Generate the canonical filename (timestamp + extension)
+    const timestamp = Date.now();
+    const ext = path.extname(req.file.originalname).toLowerCase() || '.png';
+    const filename = `email-image-${timestamp}${ext}`;
+    const buffer = req.file.buffer;
+    const contentType = req.file.mimetype || 'image/png';
+    const orgId = req.user?.organizationId || null;
+    const uploadedBy = req.user?.username || null;
+
+    // 1) Write to filesystem (fast path for hot serves on the same dyno)
+    const uploadDir = path.join(__dirname, '../../frontend/images/uploads');
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    const fsPath = path.join(uploadDir, filename);
+    try {
+      fs.writeFileSync(fsPath, buffer);
+    } catch (fsErr) {
+      // Filesystem write failure is non-fatal — we still have the DB copy.
+      console.warn('[upload-image] Filesystem write failed (will rely on DB):', fsErr.message);
+    }
+
+    // 2) Persist to DB (survives Railway redeploys)
+    const db = require('../db-loader');
+    await new Promise((resolve, reject) => {
+      db.run(
+        `INSERT INTO email_uploaded_images
+           (filename, file_data, content_type, organization_id, uploaded_by, size_bytes)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [filename, buffer, contentType, orgId, uploadedBy, buffer.length],
+        (err) => err ? reject(err) : resolve()
+      );
+    });
+
     // Build the public URL for the uploaded image
     const baseUrl = process.env.BASE_URL || 'https://cdbhs-tournament-management-production.up.railway.app';
-    const imageUrl = `${baseUrl}/images/uploads/${req.file.filename}`;
+    const imageUrl = `${baseUrl}/images/uploads/${filename}`;
 
     res.json({
       success: true,
       url: imageUrl,
-      filename: req.file.filename
+      filename
     });
   } catch (error) {
     console.error('Error uploading image:', error);

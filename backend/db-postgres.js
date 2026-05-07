@@ -858,6 +858,25 @@ async function initializeDatabase() {
     await client.query(`ALTER TABLE email_campaigns ADD COLUMN IF NOT EXISTS sent_by TEXT`);
     await client.query(`ALTER TABLE email_campaigns ADD COLUMN IF NOT EXISTS test_mode BOOLEAN DEFAULT FALSE`);
 
+    // V 2.0.739 — Persistent storage for email composer image uploads.
+    // Railway's filesystem is ephemeral: files in /frontend/images/uploads
+    // are wiped on every redeploy. Without DB persistence, image URLs
+    // baked into already-sent emails return 404 after the next deploy.
+    // Mirrors the pattern used for clubs.logo_data + filesystem.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS email_uploaded_images (
+        id SERIAL PRIMARY KEY,
+        filename TEXT NOT NULL UNIQUE,
+        file_data BYTEA NOT NULL,
+        content_type TEXT NOT NULL,
+        organization_id INTEGER REFERENCES organizations(id),
+        uploaded_by TEXT,
+        size_bytes INTEGER,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_email_uploaded_images_filename ON email_uploaded_images(filename)`);
+
     // Scheduled emails table - for future email sending
     await client.query(`
       CREATE TABLE IF NOT EXISTS scheduled_emails (

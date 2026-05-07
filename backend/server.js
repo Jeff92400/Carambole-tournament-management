@@ -209,6 +209,53 @@ app.use('/images/clubs', (req, res, next) => {
   );
 });
 
+// V 2.0.739 — Email composer image uploads (/images/uploads/*).
+// Two issues fixed here:
+//   1) Email clients (Gmail, Outlook proxy, Resend) are blocked from
+//      loading the image because helmet sets CORP=same-origin by
+//      default — visible as a broken-image '?' in the rendered email.
+//      Fix: explicit CORP=cross-origin + permissive CORS for GET.
+//   2) Railway's ephemeral filesystem wipes /frontend/images/uploads on
+//      every redeploy, so URLs baked into already-sent emails 404 a
+//      few hours/days later. Fix: fallback to email_uploaded_images
+//      (BYTEA in Postgres) when the file is missing on disk.
+app.use('/images/uploads', (req, res, next) => {
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Vary', 'Origin');
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
+  // Filesystem first (fast path for the lifetime of the current dyno)
+  const filePath = path.join(frontendPath, 'images', 'uploads', req.path);
+  if (fs.existsSync(filePath)) {
+    return next();
+  }
+
+  // Filesystem miss — try the DB fallback. The filename is the basename
+  // of req.path (no nested folders under /images/uploads/).
+  const filename = req.path.replace(/^\//, '');
+  if (!filename || filename.includes('/') || filename.includes('..')) {
+    return next(); // malformed — let express.static 404
+  }
+  db.get(
+    'SELECT file_data, content_type FROM email_uploaded_images WHERE filename = $1 LIMIT 1',
+    [filename],
+    (err, row) => {
+      if (err || !row || !row.file_data) {
+        return next(); // 404 via express.static
+      }
+      res.set('Content-Type', row.content_type || 'image/png');
+      res.set('Cache-Control', 'public, max-age=86400');
+      const buf = Buffer.isBuffer(row.file_data) ? row.file_data : Buffer.from(row.file_data);
+      res.send(buf);
+    }
+  );
+});
+
 app.use(express.static(frontendPath, {
   setHeaders: (res, filePath) => {
     if (filePath.endsWith('.html')) {
