@@ -428,12 +428,23 @@ router.post('/pages', authenticateToken, requireContentEditor, async (req, res) 
 
     const publishedAt = status === 'published' ? new Date() : null;
 
+    // V 2.0.737 (PDF empty article fix) — POST regression: the INSERT
+    // never included the attachments column, so a fresh article saved
+    // with PDF/photo upload always lost them on first save (the file
+    // only "stuck" on the second save through the PUT path, which DOES
+    // handle attachments). Reported by Jeff after V 2.0.582 had
+    // introduced the column; the fix landed only on PUT and was missed
+    // on POST. We accept the same JSONB array the PUT route does.
+    const attachmentsArr = (req.body && Array.isArray(req.body.attachments))
+      ? req.body.attachments
+      : [];
+
     const created = await dbGet(
       `INSERT INTO content_pages
          (organization_id, section_id, title, content_html, excerpt,
           content_type, status, is_featured, is_pinned, author_user_id,
-          published_at, cover_image, external_url)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+          published_at, cover_image, external_url, attachments)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb)
        RETURNING id, section_id, title, excerpt, content_type, status,
                  is_featured, is_pinned, published_at, created_at, updated_at,
                  external_url`,
@@ -450,7 +461,8 @@ router.post('/pages', authenticateToken, requireContentEditor, async (req, res) 
         req.user.userId || null,
         publishedAt,
         cover_image,
-        external_url
+        external_url,
+        JSON.stringify(attachmentsArr)
       ]
     );
 
