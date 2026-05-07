@@ -701,6 +701,7 @@
     <a href="#param-clubs">Clubs</a>
     <a href="#param-reference">Données de référence</a>
     <a href="#param-wordpress">Site Web / WordPress</a>
+    <a href="#param-news-mode-hybride">Mode Hybride (WP + App Joueur)</a>
     <a href="#param-confidentialite">Politique de Confidentialité</a>
     <a href="#param-logs">Logs d'activité</a>
     <a href="#param-admin-logs">Logs Administrateur</a>
@@ -4172,6 +4173,52 @@
 
     <div class="info-card">
       <strong>Permissions WordPress :</strong> Pour que les catégories soient créées automatiquement, le compte WordPress doit avoir le rôle <strong>Éditeur</strong> ou <strong>Administrateur</strong>. Si le compte a un rôle inférieur (ex: Auteur), les articles seront publiés sans catégorie &mdash; vous pourrez les classer manuellement depuis WordPress.
+    </div>
+
+    <hr>
+
+    <h3 id="param-news-mode-hybride">Mode Hybride &mdash; WordPress + App Joueur</h3>
+    <p>Le mode <strong>Hybride</strong> (option <em>« 🔵 Hybride &mdash; WordPress + App Joueur »</em> dans le panneau <strong>Option de communication News</strong>) permet de diffuser <strong>simultanément</strong> sur le site WordPress du comité <em>et</em> dans le fil d'infos de l'App Joueur, sans double saisie. Disponible pour <strong>tous les comités</strong>.</p>
+
+    <h4>Quand l'utiliser ?</h4>
+    <p>Pour un comité qui dispose déjà d'un site WordPress (vitrine publique, référencement) <em>et</em> qui souhaite également toucher ses joueurs licenciés via l'App Joueur (notifications push, fil d'infos personnalisé). Aucun choix à faire entre les deux canaux : chaque article est publié aux deux endroits.</p>
+
+    <h4>Comment l'activer ?</h4>
+    <ol class="steps">
+      <li>Ouvrir <strong>Paramètres &gt; Organisation</strong></li>
+      <li>Déplier le panneau <strong>« Option de communication News »</strong></li>
+      <li>Cocher l'option <strong>« 🔵 Hybride &mdash; WordPress + App Joueur »</strong></li>
+      <li>Renseigner les identifiants WordPress (URL du site, identifiant, mot de passe d'application, statut par défaut) &mdash; mêmes champs qu'en mode WordPress seul</li>
+      <li>Cliquer sur <strong>Enregistrer</strong></li>
+    </ol>
+
+    <h4>Ce qui se passe automatiquement</h4>
+    <p>Une fois le mode hybride activé :</p>
+    <ul>
+      <li>Chaque <strong>convocation</strong> envoyée est publiée sur WordPress <em>et</em> apparaît dans le fil d'infos de l'App Joueur</li>
+      <li>Chaque <strong>article de résultats</strong> est publié sur WordPress <em>et</em> apparaît dans le fil d'infos de l'App Joueur</li>
+      <li>Aucun double-effort éditorial : un seul envoi, deux canaux de diffusion</li>
+    </ul>
+
+    <h4>Cases « À la une » et « Punaise » dans l'éditeur d'article</h4>
+    <p>L'éditeur d'article (Com joueurs &gt; 📰 Articles) propose deux cases à cocher qui contrôlent la mise en avant dans l'App Joueur :</p>
+    <ul>
+      <li><strong>⭐ À la une</strong> : l'article apparaît dans le bandeau <em>hero</em> bleu en haut de la page d'accueil de l'App Joueur. Si plusieurs articles sont marqués « À la une », ils défilent automatiquement (ticker continu) dans le bandeau, et le joueur peut aussi balayer manuellement.</li>
+      <li><strong>📌 Punaise</strong> : l'article reste épinglé en tête du fil d'infos, indépendamment de sa date de publication.</li>
+      <li>Les deux cases peuvent être cochées simultanément : l'article est alors à la fois dans le hero et épinglé en tête du fil.</li>
+    </ul>
+
+    <h4>Hero « À la une » par défaut</h4>
+    <p>Un éditeur supplémentaire <strong>visible uniquement en mode hybride</strong> permet de définir un message d'accueil <em>permanent</em> dans le bandeau hero, affiché tant qu'aucun article n'est marqué « À la une ». Trois champs optionnels :</p>
+    <ul>
+      <li><strong>Titre court</strong> (max. 120 caractères)</li>
+      <li><strong>Phrase d'accroche</strong> (max. 200 caractères, optionnelle)</li>
+      <li><strong>URL</strong> de destination quand le joueur tape sur le bandeau (optionnelle)</li>
+    </ul>
+    <p>Si les trois champs sont laissés vides, le bandeau hero est masqué jusqu'à la publication d'un article épinglé en « À la une ». Pratique pour afficher un mot de bienvenue durable sans devoir publier un faux article.</p>
+
+    <div class="info-card">
+      <strong>💡 Astuce :</strong> Le mode hybride est idéal pour les comités en transition : le site WordPress reste la vitrine publique pour les non-licenciés et le référencement, tandis que l'App Joueur devient le canal direct vers les compétiteurs (avec notifications push instantanées).
     </div>
   </section>
 

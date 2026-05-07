@@ -1,7 +1,16 @@
 # Guide Utilisateur Complet
 
 > **Note:** Ce document est généré automatiquement depuis le guide HTML.
-> **Dernière mise à jour:** 03/05/2026
+> **Dernière mise à jour:** 26/05/2026
+>
+> **Mise à jour V 2.0.738 — Mode Hybride WordPress + App Joueur :**
+> - Nouveau mode de diffusion des news **« 🔵 Hybride — WordPress + App Joueur »** documenté dans la section *Paramètres &gt; Site Web / WordPress &gt; Mode Hybride*.
+> - Disponible pour **tous les comités** : publication simultanée d'une convocation ou d'un article de résultats sur le site WordPress **et** dans le fil d'infos de l'App Joueur, sans double saisie.
+> - Cases **⭐ « À la une »** (bandeau hero de l'App Joueur, ticker auto si plusieurs articles à la une) et **📌 « Punaise »** (épinglage en tête du fil d'infos) documentées dans l'éditeur d'article.
+> - Nouvel éditeur **Hero « À la une » par défaut** (visible uniquement en mode hybride) : 3 champs optionnels (Titre court, Phrase d'accroche, URL) pour un message d'accueil permanent quand aucun article n'est mis en avant.
+> - Pour la version la plus à jour, consulter `GUIDE-UTILISATEUR-COMPLET.html`.
+>
+> ---
 >
 > **Mise à jour majeure V 2.0.690 — Assistant Calendrier simplifié :**
 > - Étape 1 « Brief de saison » renommée **« Dates et disponibilités »**.
