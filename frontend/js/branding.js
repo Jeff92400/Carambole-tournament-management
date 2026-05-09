@@ -188,6 +188,12 @@
   window.isCsvImportsEnabled = isCsvImportsEnabled;
 
   // ============= COPYRIGHT MARK =============
+  // V 2.0.740 — Prepends the running version (e.g. "V 2.0.740 · JR ©")
+  // so admins can confirm at a glance which version is loaded without
+  // visiting the login screen. Version is fetched from a public
+  // endpoint that parses it from login.html on startup (single source
+  // of truth = the version div Jeff updates per release). Falls back
+  // to plain "JR ©" if the fetch fails.
   function addCopyrightMark() {
     if (document.getElementById('jr-copyright')) return;
     const mark = document.createElement('div');
@@ -195,6 +201,16 @@
     mark.textContent = 'JR ©';
     mark.style.cssText = 'position:fixed;top:8px;right:12px;font-size:10px;color:#fff;opacity:0.6;pointer-events:none;z-index:9999;font-family:sans-serif;';
     document.body.appendChild(mark);
+    // Fire-and-forget version fetch — never block the mark from
+    // rendering if the endpoint is slow or unreachable.
+    fetch('/api/app-version', { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data && data.version) {
+          mark.textContent = 'V ' + data.version + ' · JR ©';
+        }
+      })
+      .catch(() => { /* keep plain JR © */ });
   }
 
   if (document.readyState === 'loading') {

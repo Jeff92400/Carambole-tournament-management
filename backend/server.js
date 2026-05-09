@@ -382,6 +382,25 @@ app.get('/api/version', (req, res) => {
   res.json({ version: APP_VERSION });
 });
 
+// V 2.0.740 — Expose the app version (read once at startup from
+// login.html, the single source of truth Jeff updates per release) so
+// the JR © corner mark on every admin page can prefix it. Avoids
+// duplicating the version string across multiple files. Public
+// endpoint, no auth — the version is already visible on the login
+// screen anyway.
+let APP_VERSION = '';
+try {
+  const loginHtmlPath = path.join(frontendPath, 'login.html');
+  const loginHtml = fs.readFileSync(loginHtmlPath, 'utf8');
+  const m = loginHtml.match(/V\s*(\d+\.\d+\.\d+)/);
+  if (m) APP_VERSION = m[1];
+} catch (e) {
+  console.warn('[app-version] failed to parse login.html:', e?.message || e);
+}
+app.get('/api/app-version', (req, res) => {
+  res.json({ version: APP_VERSION });
+});
+
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({
