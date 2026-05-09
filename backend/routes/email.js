@@ -154,6 +154,48 @@ function generateFinaleMatchScheduleHtml(numPlayers, players, primaryColor = '#1
         <td style="padding: 8px; border: 1px solid #ddd;">${getPlayerName(m.p2)}</td>
       </tr>
     `).join('');
+  } else if (numPlayers === 5) {
+    // V 2.0.742 — 5-player finale (e.g. 1 of 6 finalists absent and not
+    // replaced). Round-robin = 10 matches over 5 rounds, 2 tables in
+    // parallel, one player resting each round (Berger schedule).
+    // Twin: Player App player-api.js buildFinaleMatchSchedule.
+    tableInfo = '2 tables';
+    const rounds = [
+      { rest: 1, matches: [{ p1: 2, p2: 5 }, { p1: 3, p2: 4 }] },
+      { rest: 4, matches: [{ p1: 1, p2: 5 }, { p1: 2, p2: 3 }] },
+      { rest: 2, matches: [{ p1: 1, p2: 4 }, { p1: 3, p2: 5 }] },
+      { rest: 5, matches: [{ p1: 1, p2: 3 }, { p1: 2, p2: 4 }] },
+      { rest: 3, matches: [{ p1: 1, p2: 2 }, { p1: 4, p2: 5 }] }
+    ];
+    const buildRoundHtml = (round, idx) => `
+      <div style="margin-bottom: 12px; border: 1px solid #ddd; border-radius: 6px; overflow: hidden;">
+        <div style="background: ${primaryColor}; color: white; padding: 6px 10px; font-weight: bold; font-size: 12px;">
+          Tour ${idx + 1}
+        </div>
+        <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+          ${round.matches.map((m, mi) => `
+            <tr style="background: ${mi % 2 === 0 ? 'white' : '#f8f9fa'};">
+              <td style="padding: 6px; border-bottom: 1px solid #eee; width: 60px; color: #888; font-size: 11px;">Table ${mi + 1}</td>
+              <td style="padding: 6px; border-bottom: 1px solid #eee;">${getPlayerName(m.p1)}</td>
+              <td style="padding: 6px; border-bottom: 1px solid #eee; text-align: center; color: #999;">vs</td>
+              <td style="padding: 6px; border-bottom: 1px solid #eee;">${getPlayerName(m.p2)}</td>
+            </tr>
+          `).join('')}
+          <tr style="background: rgba(0,0,0,0.03);">
+            <td colspan="4" style="padding: 5px 10px; font-size: 11px; font-style: italic; color: #888;">
+              💤 ${getPlayerName(round.rest)} — repos
+            </td>
+          </tr>
+        </table>
+      </div>
+    `;
+    return `
+      <div style="margin: 20px 0; padding: 15px; background: white; border-radius: 8px; border: 1px solid #ddd;">
+        <h3 style="margin: 0 0 10px 0; color: ${primaryColor};">🏆 Programme des Matchs (${tableInfo})</h3>
+        <p style="margin: 0 0 15px 0; font-size: 13px; color: #666;">Tous contre tous — 5 tours, un joueur au repos par tour</p>
+        ${rounds.map((r, idx) => buildRoundHtml(r, idx)).join('')}
+      </div>
+    `;
   } else if (numPlayers >= 6) {
     // 6 players on 3 tables - show by table
     tableInfo = '3 tables';
