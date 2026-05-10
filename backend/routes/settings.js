@@ -1863,10 +1863,41 @@ router.get('/archive-status', authenticateToken, async (req, res) => {
       }
     }
 
+    // V 2.0.743 — `is_near_end` flag: true once today has reached the
+    // 2nd-to-last tournament of the season (the "avant-dernier" trigger
+    // Jeff asked for, in place of the old June-August calendar window).
+    // Lets the dashboard suppress the "Fin de saison proche" banner
+    // until the season is actually almost over, regardless of month.
+    let is_near_end = false;
+    try {
+      const db = getDb();
+      const tournaments = await new Promise((resolve, reject) => {
+        db.all(
+          `SELECT debut FROM tournoi_ext
+           WHERE saison = $1
+             AND ($2::int IS NULL OR organization_id = $2)
+             AND debut IS NOT NULL
+           ORDER BY debut ASC`,
+          [season, orgId],
+          (err, rows) => err ? reject(err) : resolve(rows || [])
+        );
+      });
+      if (tournaments.length >= 2) {
+        // Trigger date = start of the avant-dernier tournament.
+        const triggerDate = new Date(tournaments[tournaments.length - 2].debut);
+        is_near_end = Date.now() >= triggerDate.getTime();
+      } else if (tournaments.length === 1) {
+        is_near_end = Date.now() >= new Date(tournaments[0].debut).getTime();
+      }
+    } catch (e) {
+      console.warn('[Archive Status] is_near_end check failed:', e.message);
+    }
+
     res.json({
       season,
       is_archived: archivedSeasons.includes(season),
-      archived_seasons: archivedSeasons
+      archived_seasons: archivedSeasons,
+      is_near_end
     });
   } catch (error) {
     console.error('[Archive Status] Error:', error);

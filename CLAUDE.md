@@ -20,65 +20,135 @@ This registration information is displayed on both login screens:
 - Tournament Management App: `frontend/login.html` (line 42-44)
 - Player App: `frontend/index.html` (line 489-490)
 
-## Documentation — règles d'emplacement
+## Documentation — règles d'emplacement (mise à jour 2026-05-10)
 
-**⚠️ TOUTE nouvelle documentation externe (mockups HTML autonomes, guides spécifiques, notes de configuration, captures, prototypes one-shot, exports) DOIT être créée dans :**
+**⚠️ TOUTE nouvelle documentation externe (mockups HTML autonomes, guides spécifiques, notes de configuration, captures, prototypes one-shot, exports) DOIT être créée sur OneDrive :**
 
 ```
-/Users/jeffrallet/Personal App/Documentation - communication/
+/Users/jeffrallet/Library/CloudStorage/OneDrive-Personal/Billard/
+  Projet Tournois management FFB/
 ```
 
-**Ne JAMAIS créer de doc à la racine du repo, dans le dossier home, ou dans un sous-dossier ad-hoc** — la doc s'éparpille et devient introuvable.
+**Ne JAMAIS créer de doc à la racine du repo, dans le dossier home, dans `/Users/jeffrallet/Documents/`, ou dans un sous-dossier ad-hoc** — la doc s'éparpille et devient introuvable.
 
-**Exceptions (restent dans le repo car servies par l'app) :**
+**Le dossier `Personal App/Documentation - communication/` (Mac) a été supprimé le 2026-05-10** — son contenu a été migré sur OneDrive.
+
+**Exceptions (restent dans le repo car servies par l'app ou versionnées avec le code) :**
 - `frontend/guide-utilisateur.html` (guide intégré dans l'app)
 - `frontend/guide-calendrier-admin.html` (guide admin intégré)
+- `frontend/guide-utilisateur-ddj.html` (guide DdJ intégré)
 - `frontend/CLAUDE.md`, `backend/CLAUDE.md` (instructions Claude Code)
-- `GUIDE-UTILISATEUR-COMPLET.html` / `.md` à la racine (copies miroir versionnées avec le code)
+- `GUIDE-UTILISATEUR-COMPLET.html` / `.md` à la racine (copies miroir versionnées)
+- `TIMELINES-AUDIT.html`, `MECANISME-CALENDRIER-SAISONNIER.html`, `mockup-dashboard-kpis.html` à la racine (artefacts de développement liés au repo)
 
-Quand un doc serait utile à la fois dans l'app ET hors app, le mettre dans `frontend/` et synchroniser une copie dans `/Users/jeffrallet/Personal App/Documentation - communication/`.
+Quand un doc serait utile à la fois dans l'app ET hors app, le mettre dans `frontend/` et synchroniser une copie sur OneDrive (`Documentations Applications Carambole FFB/Guides-Utilisateur/` selon le cas).
 
-## Documentation OneDrive (archive historique)
+## Structure OneDrive — source de vérité documentaire
 
-**Localisation:** `/Users/jeffrallet/Library/CloudStorage/OneDrive-Personal/Billard/Projet Tournois management FFB/Documentations CDB/`
+**Racine :** `/Users/jeffrallet/Library/CloudStorage/OneDrive-Personal/Billard/Projet Tournois management FFB/`
 
-**Structure organisée (30 mars 2026):**
 ```
-/Documentations CDB/
-├── CLAUDE.md (source de vérité - synchronisé depuis ce fichier)
-├── CLAUDE-Player-App.md (synchronisé depuis Player App repo)
-├── README.md (guide d'utilisation de la documentation)
-├── INDEX.md
-├── sync-from-repos.sh (script de synchronisation automatique)
-├── REORGANISATION-PROPOSITION.md (historique de la réorganisation)
+Projet Tournois management FFB/
+├── 📂 Planification/                              ← ⭐ LA source de vérité pour les TÂCHES & PLANS
+│   ├── Calendriers (saisons en cours et à venir)
+│   ├── Plans d'implémentation (NOTIFICATION_IMPLEMENTATION_PLAN, RBAC, etc.)
+│   ├── Audits temporels (TIMELINES-AUDIT.html)
+│   ├── Tâches inter-saison (Taches-Avant-Saison-2026-27.html)
+│   ├── Évaluations stratégiques (Modele-Economique-Multi-CDB, Evaluation-WhatsApp)
+│   └── Roadmap et chantiers à venir
 │
-├── 📂 Sources Github/
-│   ├── Carambole-player-app-main.zip (archive dépôt APP officiel)
-│   ├── Dowload Gitlab.zip (archive dépôt APP officiel)
-│   └── README.md (explication des archives)
+├── 📂 Documentations Applications Carambole FFB/  ← LA source de vérité doc
+│   ├── CLAUDE.md, CLAUDE-Player-App.md            (synchronisés depuis repos)
+│   ├── INDEX.md, README.md
+│   ├── Guide-Passation-Plateforme.html            (transmission opérationnelle)
+│   ├── 📂 Guides-Utilisateur/                     (HTML guides versionnés pour les utilisateurs)
+│   ├── 📂 Guides-Technique/                       (DDL, format CSV, configuration Railway, etc.)
+│   ├── 📂 Guides-Developpement/                   (architecture, audits, investigations)
+│   ├── 📂 Audit/                                  (Audits Phase 1-6)
+│   ├── 📂 Plaquettes/                             (présentations, communications externes)
+│   │   └── 📂 CDBHS-Interne/                      (docs spécifiques CDBHS)
+│   ├── 📂 Sources Github/                         (archives légales APP/IDDN — ne pas toucher)
+│   ├── 📂 Final Guides/                           (guides de configuration consolidés)
+│   └── 📂 Médias/                                 (logos, screenshots, vidéos — voir 'Médias' ci-dessous)
 │
-├── 📂 Guides-Utilisateur/
-│   ├── GUIDE-UTILISATEUR-COMPLET.html (guide actuel)
-│   ├── GUIDE-UTILISATEUR-COMPLET.md
-│   └── Guides d'installation (comité, joueur)
+├── 📂 Initiatives/                                ← projets/sous-initiatives
+│   ├── 📂 Quilles/                                (intégration Quilles LBIF)
+│   ├── 📂 Directeur-de-Jeu/                       (module DdJ)
+│   ├── 📂 Plan-Integration-FFB/                   (plans intégration FFB)
+│   ├── 📂 Compétition-par-Équipe/                 (5Q D1/D2 et autres)
+│   ├── 📂 Ligue-IDF/                              (artefacts Ligue IDF)
+│   └── 📂 Systèmes-des-Qualifications/
 │
-├── 📂 Guides-Technique/
-│   ├── CSV_FORMAT_GUIDE.md
-│   ├── Schema-Base-Donnees.sql
-│   └── Références techniques
+├── 📂 Données-FFB/                                ← données externes FFB
+│   ├── 📂 Fichiers-FFB/                           (licences, clubs nationaux)
+│   └── 📂 CSV-FFB-Val-de-Marne/
 │
-└── 📂 Planification/
-    ├── Taches-Avant-Saison-2026-27.html (TODO list)
-    └── Mode "Journées Qualificatives" V7.html
+├── 📂 Règlements/                                 (règlements sportifs de référence)
+├── 📂 CDBSM/                                      (dossier CDB Saint-Maur)
+├── 📂 Fichiers divers tests/                      (fichiers de test ad-hoc)
+└── 📂 Claude Clean Up/                            (quarantaine — voir MANIFEST.md)
 ```
 
-**Principe:** 1 fichier = 1 source de vérité (aucune duplication)
+## ⭐ Règle pour les tâches et plans à enregistrer
 
-**Synchronisation:**
-```bash
-cd "/Users/jeffrallet/Library/CloudStorage/OneDrive-Personal/Billard/Projet Tournois management FFB/Documentations CDB"
-./sync-from-repos.sh
+**Toute nouvelle tâche, plan d'implémentation, roadmap, audit temporel, évaluation
+stratégique ou tout autre document de planification DOIT être créé dans :**
+
 ```
+/Users/jeffrallet/Library/CloudStorage/OneDrive-Personal/Billard/
+  Projet Tournois management FFB/Planification/
+```
+
+**Ce dossier `Planification/` est volontairement à la RACINE du projet** (pas
+imbriqué dans `Documentations.../`) parce qu'il représente l'état vivant du
+projet : ce qui doit être fait, dans quel ordre, avec quelles dépendances. Il
+mérite un accès direct, sans navigation profonde.
+
+**Format recommandé pour un nouveau plan ou une nouvelle tâche :**
+- HTML autonome (style cohérent avec les autres documents de planification)
+- ou Markdown pour les notes techniques rapides
+- Toujours daté dans le contenu (pas seulement par le filesystem)
+- Statut explicite : "à démarrer", "en cours", "terminé", "abandonné"
+
+**Lien avec les Initiatives :** quand un plan se concrétise en projet livrable
+avec ses propres artefacts (specs, mockups, exports), créer un dossier dédié
+dans `Initiatives/`. Le plan original reste dans `Planification/` comme trace
+historique.
+
+**Principe :** 1 fichier = 1 source de vérité (aucune duplication).
+
+## Médias — emplacement unique
+
+**Tous les médias** (logos, screenshots, vidéos) ont leur source de vérité maître dans :
+
+```
+Documentations Applications Carambole FFB/Médias/
+├── 📂 Logos-Plateforme/      logos applicatifs (FFB, Kayros, billard, CDBs, LBIF, Argos, CDBDD)
+├── 📂 Logos-Clubs/
+│   ├── 📂 cdbhs/             5 logos clubs CDBHS
+│   ├── 📂 cdb9493/           logos CDB 93-94
+│   └── 📂 cdbidf/            logos Ligue IDF
+├── 📂 Screenshots/
+│   ├── 📂 Tournament-App/    captures de l'app de gestion
+│   ├── 📂 Player-App/        captures de l'app joueur
+│   ├── 📂 Configuration-Technique/   DNS, Railway, etc.
+│   └── 📂 Divers/            captures non encore classées
+├── 📂 Tournament-App-Video/  vidéos de démo de l'app de gestion
+└── 📂 Player-App-Video/      vidéos de démo de l'app joueur
+```
+
+**⚠️ Règle pour les logos de clubs (pattern dual storage) :**
+Les logos de clubs sont stockés en **trois endroits** par design :
+1. **Master archive** : OneDrive `Médias/Logos-Clubs/{orgSlug}/`
+2. **Repo filesystem** : `frontend/images/clubs/{orgSlug}/{filename}.png` (servi en runtime)
+3. **Base de données** : `clubs.logo_data` BYTEA (fallback en cas de redéploiement Railway qui réinitialise le filesystem)
+
+Quand on **ajoute ou met à jour un logo de club** :
+- Placer la nouvelle image dans OneDrive `Médias/Logos-Clubs/{orgSlug}/` (master)
+- Uploader via l'admin UI (qui met à jour la DB BYTEA et le filesystem temporaire)
+- Pour la persistance entre redéploiements Railway : commiter aussi dans le repo `frontend/images/clubs/{orgSlug}/`
+
+**Pour les autres médias** (logos plateforme non liés à un club, screenshots, vidéos) : Médias/ est l'unique source de vérité, pas de duplication.
 
 ## Deployment Workflow
 

@@ -84,7 +84,10 @@
       </div>
     </div>
 
-    <!-- Season Archive Reminder - Admin Only (June-August only) -->
+    <!-- Season Archive Reminder - Admin Only.
+         V 2.0.743 — visible only when season is near end (avant-dernier
+         tournament reached) AND not yet archived. -->
+
     <div id="archiveReminderCard" class="admin-only" style="display: none; background: #e7f3ff; border-left: 3px solid #1F4788; margin-bottom: 10px; padding: 12px 15px; border-radius: 4px;">
       <div style="display: flex; align-items: flex-start; gap: 10px;">
         <span style="font-size: 20px; flex-shrink: 0;">📊</span>
@@ -836,21 +839,20 @@
       URL.revokeObjectURL(url);
     }
 
-    // Check if archive reminder should be shown (June-August only)
+    // Check if archive reminder should be shown.
+    // V 2.0.743 — Trigger is now season-progress based (driven by the
+    // `is_near_end` flag computed by the backend: today >= avant-dernier
+    // tournament's debut date) instead of the old June-August calendar
+    // window. Per Jeff: the banner felt too early when CDBs are still
+    // mid-season in spring.
     async function checkArchiveReminder() {
       try {
-        // Check if we're in June-August (months 5-7, 0-indexed)
-        const currentMonth = new Date().getMonth();
-        if (currentMonth < 5 || currentMonth > 7) {
-          return; // Not in reminder period
-        }
-
         // Check if reminder was dismissed this session
         if (sessionStorage.getItem('archive_reminder_dismissed')) {
           return;
         }
 
-        // Check archive status from backend
+        // Check archive status + season progress from backend
         const response = await fetch(`${API_URL}/settings/archive-status`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -859,8 +861,8 @@
 
         const data = await response.json();
 
-        // Show reminder if current season is not archived
-        if (!data.is_archived) {
+        // Show reminder only when season is near its end AND not archived
+        if (data.is_near_end && !data.is_archived) {
           const card = document.getElementById('archiveReminderCard');
           const seasonName = document.getElementById('archiveSeasonName');
 
