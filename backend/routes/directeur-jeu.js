@@ -965,14 +965,22 @@ const FFB_MATCH_TABLES = {
     { p1_idx: 3, p2_idx: 4 }
   ],
   5: [
-    { p1_idx: 3, p2_idx: 4 },  // M1
-    { p1_idx: 2, p2_idx: 5 },  // M2
+    // Corrected V 2.0.757 — order verified against CDB9394 official FDM spreadsheet.
+    // Within each round two matches run simultaneously; the CDB assigns them to
+    // specific tables, so the intra-round ordering matters for table allocation.
+    // Round 1: { p1_idx: 2, p2_idx: 5 } on T1, { p1_idx: 3, p2_idx: 4 } on T2
+    // Round 2: { p1_idx: 2, p2_idx: 3 } on T1, { p1_idx: 1, p2_idx: 5 } on T2
+    // Round 3: { p1_idx: 1, p2_idx: 4 } on T1, { p1_idx: 3, p2_idx: 5 } on T2
+    // Round 4: { p1_idx: 1, p2_idx: 3 } on T1, { p1_idx: 2, p2_idx: 4 } on T2
+    // Round 5: { p1_idx: 4, p2_idx: 5 } on T1, { p1_idx: 1, p2_idx: 2 } on T2
+    { p1_idx: 2, p2_idx: 5 },  // M1
+    { p1_idx: 3, p2_idx: 4 },  // M2
     { p1_idx: 2, p2_idx: 3 },  // M3
     { p1_idx: 1, p2_idx: 5 },  // M4
-    { p1_idx: 3, p2_idx: 5 },  // M5
-    { p1_idx: 1, p2_idx: 4 },  // M6
-    { p1_idx: 2, p2_idx: 4 },  // M7
-    { p1_idx: 1, p2_idx: 3 },  // M8
+    { p1_idx: 1, p2_idx: 4 },  // M5
+    { p1_idx: 3, p2_idx: 5 },  // M6
+    { p1_idx: 1, p2_idx: 3 },  // M7
+    { p1_idx: 2, p2_idx: 4 },  // M8
     { p1_idx: 4, p2_idx: 5 },  // M9
     { p1_idx: 1, p2_idx: 2 }   // M10
   ]

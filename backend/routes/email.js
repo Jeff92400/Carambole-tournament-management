@@ -400,10 +400,12 @@ function generateMatchSchedule(pouleSize) {
 // V 2.0.756 — FFB-prescribed match sequences for single-poule round-robin
 // (article 6.2.09 Code Sportif). Used when the tournament has a single poule
 // so that the convocation lists all n*(n-1)/2 matches with actual player names.
+// V 2.0.757 — 5-player order verified against CDB9394 official FDM spreadsheet.
+// Within each round the two simultaneous matches are ordered by table assignment.
 const FFB_ROUND_ROBIN_TABLES = {
   3: [{p1:2,p2:3},{p1:1,p2:3},{p1:1,p2:2}],
   4: [{p1:1,p2:4},{p1:2,p2:3},{p1:1,p2:3},{p1:2,p2:4},{p1:1,p2:2},{p1:3,p2:4}],
-  5: [{p1:3,p2:4},{p1:2,p2:5},{p1:2,p2:3},{p1:1,p2:5},{p1:3,p2:5},{p1:1,p2:4},{p1:2,p2:4},{p1:1,p2:3},{p1:4,p2:5},{p1:1,p2:2}]
+  5: [{p1:2,p2:5},{p1:3,p2:4},{p1:2,p2:3},{p1:1,p2:5},{p1:1,p2:4},{p1:3,p2:5},{p1:1,p2:3},{p1:2,p2:4},{p1:4,p2:5},{p1:1,p2:2}]
 };
 
 // Build and sort finale matches: same-club matches are placed first
