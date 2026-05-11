@@ -624,17 +624,30 @@
     if (b) b.remove();
   }
 
+  // V 2.0.748 — renderPlanningHtml now reads poulesData.mode to adapt the
+  // planning layout for single_poule tournaments:
+  //   • Table label: hidden when no table is assigned (poule unique typically
+  //     rotates matches across all available tables without a fixed allocation)
+  //   • Tableau final + Matchs de classement sections: omitted entirely
+  //     (they don't exist in single_poule — ranking is determined directly
+  //     from the round-robin results)
   function renderPlanningHtml(poulesData, bracketData, consoData) {
+    const isSinglePoule = poulesData && poulesData.mode === 'single_poule';
     let html = `<h3>📋 Planning du jour <span class="djv3-close">×</span></h3>`;
 
     // ----- Phase 1 : poules -----
     if (poulesData && Array.isArray(poulesData.poules) && poulesData.poules.length > 0) {
-      html += `<div class="djv3-pl-section"><h4 class="djv3-pl-title">Poules</h4>`;
+      html += `<div class="djv3-pl-section"><h4 class="djv3-pl-title">${isSinglePoule ? 'Poule unique' : 'Poules'}</h4>`;
       for (const poule of poulesData.poules) {
-        const tableLbl = poule.table_number ? `Table ${poule.table_number}` : 'Table non assignée';
         const pouleLetter = String.fromCharCode(64 + poule.number);
+        // In single_poule mode, matches rotate across tables — no fixed table per poule.
+        // Only show the table label when one is actually assigned.
+        const tablePart = poule.table_number
+          ? ` <span class="djv3-pl-table">· Table ${poule.table_number}</span>`
+          : '';
+        const pouleTitle = isSinglePoule ? `Poule unique` : `Poule ${pouleLetter}`;
         html += `<div class="djv3-pl-poule">
-          <div class="djv3-pl-poule-h">Poule ${pouleLetter} <span class="djv3-pl-table">· ${escapeHtml(tableLbl)}</span></div>`;
+          <div class="djv3-pl-poule-h">${pouleTitle}${tablePart}</div>`;
         for (const m of (poule.matches || [])) {
           html += renderPlanningMatchRow(m, poule.table_number);
         }
@@ -644,6 +657,9 @@
     } else {
       html += `<div class="djv3-pl-empty">Poules pas encore générées.</div>`;
     }
+
+    // ----- Phases 2 & 3 : not applicable in single_poule mode -----
+    if (isSinglePoule) return html;
 
     // ----- Phase 2 : tableau final -----
     // V 2.0.708 — backend /bracket returns the data flat (can_start + phases
