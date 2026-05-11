@@ -1011,15 +1011,21 @@ function getFFBMatchOrder(numPlayers, players) {
     }
   }
 
-  // Same-club rule: swap same-club pair to position 0
+  // Same-club rule: promote same-club pair to Round 1 only when it would otherwise
+  // appear in a later round. Intra-Round-1 swaps must NOT be applied — they only
+  // change table assignment and override the FFB-prescribed order (article 6.2.09).
+  // tablesPerRound = floor(numPlayers / 2): pairs at indices 0..tablesPerRound-1
+  // are all simultaneous (Round 1), so any same-club pair already there needs no move.
   if (players && players.length === numPlayers) {
+    const tablesPerRound = Math.floor(numPlayers / 2);
     const isSameClub = (p1i, p2i) => {
       const c1 = (players[p1i - 1]?.club || '').trim().toLowerCase();
       const c2 = (players[p2i - 1]?.club || '').trim().toLowerCase();
       return c1 && c1 === c2;
     };
     const scIdx = pairs.findIndex(p => isSameClub(p.p1_idx, p.p2_idx));
-    if (scIdx > 0) {
+    // Only promote if same-club pair is NOT already in Round 1
+    if (scIdx >= tablesPerRound) {
       [pairs[0], pairs[scIdx]] = [pairs[scIdx], pairs[0]];
     }
   }
@@ -1029,7 +1035,8 @@ function getFFBMatchOrder(numPlayers, players) {
 
 /**
  * Build a flat match list using FFB canonical order (article 6.2.09).
- * Same-club pair is promoted to match_number 1 when club data is available.
+ * Same-club pair is promoted to Round 1 only when it would otherwise appear
+ * in a later round (intra-Round-1 swaps are never applied).
  *
  * @param {number} numPlayers
  * @param {Array|null} players
