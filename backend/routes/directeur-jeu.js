@@ -235,8 +235,13 @@ router.get('/competitions/:id/pointage', authenticateToken, requireDdJ, async (r
 
     // Normalize: compute a single `present` boolean per player from the two
     // legacy columns. The front-end should only ever see/send booleans.
+    // V 2.0.754 — Also treat 'désinscrit' and 'indisponible' as absent: a
+    // player who cancelled via the Player App (désinscrit) or was marked
+    // unavailable (indisponible) must not be counted toward poule generation,
+    // just like a last-minute forfait.
+    const NON_PARTICIPATING_STATUTS = new Set(['forfait', 'désinscrit', 'indisponible']);
     const enriched = players.map(p => {
-      const isForfait = p.statut === 'forfait' || p.forfait === 1;
+      const isForfait = NON_PARTICIPATING_STATUTS.has(p.statut) || p.forfait === 1;
       return {
         licence: p.licence,
         licence_normalized: normLicence(p.licence),
@@ -542,9 +547,10 @@ async function loadPointageForSerpentine(db, orgId, tournoiId) {
          AND REPLACE(r.licence, ' ', '') = REPLACE(cp.licence, ' ', '')
        WHERE cp.tournoi_id = $1
          AND UPPER(cp.licence) NOT LIKE 'TEST%'
-         -- Exclude forfaits (statut='forfait' OR forfait=1). COALESCE so
-         -- players with no inscription row (rare) default to "present".
-         AND COALESCE(i.statut, 'inscrit') != 'forfait'
+         -- V 2.0.754 — Exclude all non-participating statuses: forfait,
+         -- désinscrit (cancelled via Player App) and indisponible. COALESCE
+         -- so players with no inscription row (rare) default to "present".
+         AND COALESCE(i.statut, 'inscrit') NOT IN ('forfait', 'désinscrit', 'indisponible')
          AND COALESCE(i.forfait, 0) = 0
        ORDER BY cp.player_order NULLS LAST, cp.licence`,
       [tournoiId, orgId, tournament.mode || '', season, tournament.categorie || ''],
