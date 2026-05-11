@@ -23,7 +23,9 @@
 function computeTablesNeeded(pouleSizes) {
   return pouleSizes.reduce((total, size) => {
     if (size <= 3) return total + 1;
-    return total + Math.ceil(size / 2);
+    // For a round-robin of n players, the maximum simultaneous matches per round
+    // is floor(n/2) — using ceil overestimates for odd n (e.g. 5 → 2, not 3).
+    return total + Math.floor(size / 2);
   }, 0);
 }
 

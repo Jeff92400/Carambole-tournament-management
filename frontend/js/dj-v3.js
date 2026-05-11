@@ -167,6 +167,10 @@
       padding: 14px; background: #fafafa; border-radius: 6px;
     }
     .djv3-pl-empty-sub { padding: 8px; font-size: 13px; }
+    .djv3-pl-ffb-note {
+      margin: 10px 0 0; font-size: 11px; color: #888; font-style: italic;
+      padding: 6px 8px; border-left: 2px solid #ccc; line-height: 1.4;
+    }
     @media (max-width: 600px) {
       .djv3-pl-match {
         grid-template-columns: 50px 50px 1fr;
@@ -674,6 +678,8 @@
         }
         html += `</div>`;
       }
+      html += `</div>`;
+      html += `<p class="djv3-pl-ffb-note">L'ordre des matchs est conforme à l'article 6.2.09 du Code Sportif FFB qui prescrit des tableaux d'ordre de matchs fixes pour chaque taille de poules.</p>`;
       html += `</div>`;
     } else {
       html += `<div class="djv3-pl-empty">Poules pas encore générées.</div>`;

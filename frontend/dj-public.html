@@ -145,6 +145,11 @@
     border-top: 1px solid rgba(255,255,255,0.1);
   }
   .sp-round-h:first-child { border-top: none; padding-top: 0; }
+  .sp-ffb-note {
+    margin: 8px 0 0; font-size: 10px; color: rgba(255,255,255,0.4);
+    font-style: italic; line-height: 1.4; padding-top: 6px;
+    border-top: 1px solid rgba(255,255,255,0.08);
+  }
 
   /* ---- POULE CARD ---- */
   .poule {
@@ -828,6 +833,8 @@
       matchList = allMatches.map(renderPouleMatch).join('');
     }
 
+    const ffbNote = `<p class="sp-ffb-note">Ordre des matchs conforme à l'article 6.2.09 du Code Sportif FFB.</p>`;
+
     return `
       <div class="col col-sp-standing">
         <div class="col-title">Classement — Poule unique</div>
@@ -835,7 +842,7 @@
       </div>
       <div class="col col-sp-matches">
         <div class="col-title">Matchs</div>
-        <div class="col-body"><div class="matches">${matchList}</div></div>
+        <div class="col-body"><div class="matches">${matchList}</div>${ffbNote}</div>
       </div>`;
   }
 

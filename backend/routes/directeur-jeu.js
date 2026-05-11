@@ -935,132 +935,130 @@ router.put('/competitions/:id/poules', authenticateToken, requireDdJ, async (req
  * @param {Array|null} players - Optional player objects with a `.club` field
  *   (1-based index matches idx in the returned schedule).
  */
-function roundRobinSchedule(numPlayers, players = null) {
-  if (numPlayers === 2) {
-    return [
-      { match_number: 1, p1_idx: 1, p2_idx: 2 },
-      { match_number: 2, p1_idx: 2, p2_idx: 1 }
-    ];
-  }
+// ─── FFB Code Sportif Article 6.2.09 — Tableaux d'ordre de matchs ──────────
+// Fixed match sequences per poule size, as prescribed by the FFB.
+// p1_idx / p2_idx are 1-based player positions within the poule (serpentine order).
+// 5-player table: confirmed from Code Sportif FFB Carambole 2025-2026.
+// 3/4-player tables: standard balanced round-robin (pending FFB verification).
+const FFB_MATCH_TABLES = {
+  2: [
+    { p1_idx: 1, p2_idx: 2 },
+    { p1_idx: 2, p2_idx: 1 }   // play each other twice
+  ],
+  3: [
+    { p1_idx: 1, p2_idx: 2 },
+    { p1_idx: 1, p2_idx: 3 },
+    { p1_idx: 2, p2_idx: 3 }
+  ],
+  4: [
+    { p1_idx: 1, p2_idx: 4 },
+    { p1_idx: 2, p2_idx: 3 },
+    { p1_idx: 1, p2_idx: 3 },
+    { p1_idx: 2, p2_idx: 4 },
+    { p1_idx: 1, p2_idx: 2 },
+    { p1_idx: 3, p2_idx: 4 }
+  ],
+  5: [
+    { p1_idx: 3, p2_idx: 4 },  // M1
+    { p1_idx: 2, p2_idx: 5 },  // M2
+    { p1_idx: 2, p2_idx: 3 },  // M3
+    { p1_idx: 1, p2_idx: 5 },  // M4
+    { p1_idx: 3, p2_idx: 5 },  // M5
+    { p1_idx: 1, p2_idx: 4 },  // M6
+    { p1_idx: 2, p2_idx: 4 },  // M7
+    { p1_idx: 1, p2_idx: 3 },  // M8
+    { p1_idx: 4, p2_idx: 5 },  // M9
+    { p1_idx: 1, p2_idx: 2 }   // M10
+  ]
+};
 
-  // Build all pairs in lexicographic order
-  const pairs = [];
-  for (let i = 1; i <= numPlayers; i++) {
-    for (let j = i + 1; j <= numPlayers; j++) {
-      pairs.push({ p1_idx: i, p2_idx: j });
+/**
+ * Build the canonical FFB match order for a poule of numPlayers.
+ * Applies same-club rule (art. 6.2.09 §9): if a same-club pair exists it is
+ * promoted to match_number 1 (swap with the pair currently in position 0).
+ * For sizes not covered by FFB_MATCH_TABLES, falls back to lexicographic order.
+ *
+ * @param {number}   numPlayers
+ * @param {Array}    players    - player objects with .club (1-based index order); may be null
+ * @returns {Array}  [{match_number, p1_idx, p2_idx}, ...]
+ */
+function getFFBMatchOrder(numPlayers, players) {
+  let pairs;
+
+  if (FFB_MATCH_TABLES[numPlayers]) {
+    pairs = FFB_MATCH_TABLES[numPlayers].map(p => ({ ...p }));
+  } else {
+    // Fallback: lexicographic order for sizes not yet in the FFB table
+    pairs = [];
+    for (let i = 1; i <= numPlayers; i++) {
+      for (let j = i + 1; j <= numPlayers; j++) {
+        pairs.push({ p1_idx: i, p2_idx: j });
+      }
     }
   }
 
-  // If we have club data, stable-sort same-club pairs to the front
+  // Same-club rule: swap same-club pair to position 0
   if (players && players.length === numPlayers) {
-    const sameClub = (pair) => {
-      const c1 = (players[pair.p1_idx - 1].club || '').trim().toLowerCase();
-      const c2 = (players[pair.p2_idx - 1].club || '').trim().toLowerCase();
+    const isSameClub = (p1i, p2i) => {
+      const c1 = (players[p1i - 1]?.club || '').trim().toLowerCase();
+      const c2 = (players[p2i - 1]?.club || '').trim().toLowerCase();
       return c1 && c1 === c2;
     };
-    // Stable partition: same-club first, cross-club after
-    const sc = pairs.filter(p => sameClub(p));
-    const cc = pairs.filter(p => !sameClub(p));
-    pairs.length = 0;
-    pairs.push(...sc, ...cc);
+    const scIdx = pairs.findIndex(p => isSameClub(p.p1_idx, p.p2_idx));
+    if (scIdx > 0) {
+      [pairs[0], pairs[scIdx]] = [pairs[scIdx], pairs[0]];
+    }
   }
 
   return pairs.map((p, i) => ({ match_number: i + 1, ...p }));
 }
 
 /**
- * Build Berger round-robin rounds for n players.
- * Returns array of rounds, each round = array of {p1_idx, p2_idx} (1-based).
- * Odd n: n rounds of floor(n/2) matches (1 player rests/round).
- * Even n: n-1 rounds of n/2 matches.
+ * Build a flat match list using FFB canonical order (article 6.2.09).
+ * Same-club pair is promoted to match_number 1 when club data is available.
+ *
+ * @param {number} numPlayers
+ * @param {Array|null} players
+ * @returns {Array} [{match_number, p1_idx, p2_idx}, ...]
  */
-function bergerRounds(n) {
-  if (n < 2) return [];
-  if (n === 2) return [
-    [{ p1_idx: 1, p2_idx: 2 }],
-    [{ p1_idx: 2, p2_idx: 1 }]
-  ];
-  // For odd n: insert ghost player (0) to make count even
-  const pool = n % 2 === 1
-    ? [0, ...Array.from({ length: n }, (_, i) => i + 1)]
-    : Array.from({ length: n }, (_, i) => i + 1);
-  const m = pool.length; // always even
-  const rounds = [];
-  for (let r = 0; r < m - 1; r++) {
-    const round = [];
-    for (let i = 0; i < m / 2; i++) {
-      const p1 = pool[i];
-      const p2 = pool[m - 1 - i];
-      if (p1 !== 0 && p2 !== 0) round.push({ p1_idx: p1, p2_idx: p2 });
-    }
-    if (round.length > 0) rounds.push(round);
-    // Rotate: fix pool[0], rotate pool[1..m-1] right by 1
-    const last = pool[m - 1];
-    for (let i = m - 1; i > 1; i--) pool[i] = pool[i - 1];
-    pool[1] = last;
-  }
-  return rounds;
+function roundRobinSchedule(numPlayers, players = null) {
+  return getFFBMatchOrder(numPlayers, players);
 }
 
 /**
- * V 2.0.749 — Generate a Berger round-robin match schedule with table allocation.
- * Same-club pairs are promoted to the earliest round by swapping rounds.
- * Within each round, same-club pairs appear first.
+ * V 2.0.752 — Generate a round-robin match schedule with table allocation
+ * following FFB article 6.2.09 match tables.
  *
- * @param {Array} players  - Player objects with .club property (1-based index order)
- * @param {number[]} tableNumbers - Actual table numbers from ddj_session (e.g. [3, 5, 7])
- * @returns {Array} Flat match list: {match_number, round_number, table_number, p1_idx, p2_idx}
+ * Matches are ordered by the FFB canonical sequence (same-club pair first when
+ * applicable). They are then grouped into simultaneous rounds of tc matches
+ * (tc = number of available tables). Consecutive pairs in the FFB sequence are
+ * guaranteed to have no player overlap, so any tc consecutive matches can run
+ * simultaneously.
+ *
+ * @param {Array}    players      - player objects with .club (1-based index order)
+ * @param {number[]} tableNumbers - physical table numbers from ddj_session
+ * @returns {Array} Flat list: {match_number, round_number, table_number, p1_idx, p2_idx}
  */
 function roundRobinRoundsWithTables(players, tableNumbers) {
   const n = players.length;
   const tc = tableNumbers.length;
+  if (n < 2 || tc < 1) return [];
 
-  if (n < 2) return [];
+  const ordered = getFFBMatchOrder(n, players);
 
-  // Special case: 2 players play each other twice
-  if (n === 2) return [
-    { match_number: 1, round_number: 1, table_number: tableNumbers[0], p1_idx: 1, p2_idx: 2 },
-    { match_number: 2, round_number: 2, table_number: tableNumbers[0], p1_idx: 2, p2_idx: 1 }
-  ];
-
-  const rounds = bergerRounds(n);
-
-  const isSameClub = (p1i, p2i) => {
-    const c1 = (players[p1i - 1]?.club || '').trim().toLowerCase();
-    const c2 = (players[p2i - 1]?.club || '').trim().toLowerCase();
-    return c1 && c1 === c2;
-  };
-
-  // Move the first round that contains a same-club pair to position 0
-  const scRoundIdx = rounds.findIndex(r =>
-    r.some(({ p1_idx, p2_idx }) => isSameClub(p1_idx, p2_idx))
-  );
-  if (scRoundIdx > 0) {
-    [rounds[0], rounds[scRoundIdx]] = [rounds[scRoundIdx], rounds[0]];
+  const result = [];
+  for (let i = 0; i < ordered.length; i++) {
+    const roundNumber = Math.floor(i / tc) + 1;
+    const posInRound = i % tc;
+    result.push({
+      match_number: ordered[i].match_number,
+      round_number: roundNumber,
+      table_number: tableNumbers[posInRound],
+      p1_idx: ordered[i].p1_idx,
+      p2_idx: ordered[i].p2_idx
+    });
   }
-
-  // Within each round, sort same-club pairs first
-  for (const round of rounds) {
-    round.sort((a, b) =>
-      (isSameClub(a.p1_idx, a.p2_idx) ? 0 : 1) - (isSameClub(b.p1_idx, b.p2_idx) ? 0 : 1)
-    );
-  }
-
-  // Flatten to match list, cycling through tableNumbers within each round
-  const matches = [];
-  let matchNum = 1;
-  for (let ri = 0; ri < rounds.length; ri++) {
-    for (let mi = 0; mi < rounds[ri].length; mi++) {
-      matches.push({
-        match_number: matchNum++,
-        round_number: ri + 1,
-        table_number: tableNumbers[mi % tc],
-        p1_idx: rounds[ri][mi].p1_idx,
-        p2_idx: rounds[ri][mi].p2_idx
-      });
-    }
-  }
-  return matches;
+  return result;
 }
 
 /**
