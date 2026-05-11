@@ -397,6 +397,15 @@ function generateMatchSchedule(pouleSize) {
   return [];
 }
 
+// V 2.0.756 — FFB-prescribed match sequences for single-poule round-robin
+// (article 6.2.09 Code Sportif). Used when the tournament has a single poule
+// so that the convocation lists all n*(n-1)/2 matches with actual player names.
+const FFB_ROUND_ROBIN_TABLES = {
+  3: [{p1:2,p2:3},{p1:1,p2:3},{p1:1,p2:2}],
+  4: [{p1:1,p2:4},{p1:2,p2:3},{p1:1,p2:3},{p1:2,p2:4},{p1:1,p2:2},{p1:3,p2:4}],
+  5: [{p1:3,p2:4},{p1:2,p2:5},{p1:2,p2:3},{p1:1,p2:5},{p1:3,p2:5},{p1:1,p2:4},{p1:2,p2:4},{p1:1,p2:3},{p1:4,p2:5},{p1:1,p2:2}]
+};
+
 // Build and sort finale matches: same-club matches are placed first
 function buildFinaleMatches(pouleSize, poule) {
   let matches = [];
@@ -690,8 +699,37 @@ async function generatePlayerConvocationPDF(player, tournamentInfo, allPoules, l
              .text("Les joueurs d'un même club jouent en priorité entre eux en début de finale.", 40, y, { width: pageWidth, align: 'center' });
           y += 12;
 
+        } else if (allPoules.length === 1 && !isFinale && FFB_ROUND_ROBIN_TABLES[pouleSize]) {
+          // V 2.0.756 — Single poule = round-robin (tous contre tous).
+          // Show ALL n*(n-1)/2 matches with actual player names using the
+          // FFB-prescribed order (article 6.2.09 Code Sportif).
+          const rrMatches = FFB_ROUND_ROBIN_TABLES[pouleSize];
+          y += 8;
+          const matchScheduleHeight = 22 + (rrMatches.length * 14);
+          if (y + matchScheduleHeight > doc.page.height - 60) {
+            doc.addPage();
+            y = 40;
+          }
+          doc.rect(40, y, pageWidth, 18).fill('#E8E8E8');
+          doc.fillColor('#333333').fontSize(9).font('Helvetica-Bold')
+             .text(`ORDRE DES MATCHS - Tous contre tous (${rrMatches.length} matchs)`, 50, y + 4);
+          y += 20;
+          rrMatches.forEach((match, idx) => {
+            const bgColor = idx % 2 === 0 ? '#FFFFFF' : '#F5F5F5';
+            doc.rect(40, y, pageWidth, 14).fill(bgColor);
+            const p1 = poule.players[match.p1 - 1];
+            const p2 = poule.players[match.p2 - 1];
+            const p1Name = p1 ? `${p1.first_name || ''} ${(p1.last_name || '').toUpperCase()}`.trim() : `Joueur ${match.p1}`;
+            const p2Name = p2 ? `${p2.first_name || ''} ${(p2.last_name || '').toUpperCase()}`.trim() : `Joueur ${match.p2}`;
+            doc.fillColor('#666666').fontSize(8).font('Helvetica')
+               .text(`Match ${idx + 1}:`, 50, y + 3, { width: 50 });
+            doc.font('Helvetica').fillColor('#333333')
+               .text(`${p1Name}  vs  ${p2Name}`, 105, y + 3, { width: 400 });
+            y += 14;
+          });
+
         } else if (pouleSize === 4 || pouleSize === 5) {
-          // Regular tournament: knockout-style matches
+          // Multi-poule journées mode: bracket-style matches
           const matches = generateMatchSchedule(pouleSize);
           if (matches.length > 0) {
             y += 8;
@@ -1026,8 +1064,37 @@ async function generateSummaryConvocationPDF(tournamentInfo, allPoules, location
              .text("Les joueurs d'un même club jouent en priorité entre eux en début de finale.", 40, y, { width: pageWidth, align: 'center' });
           y += 12;
 
+        } else if (allPoules.length === 1 && !isFinale && FFB_ROUND_ROBIN_TABLES[pouleSize]) {
+          // V 2.0.756 — Single poule = round-robin (tous contre tous).
+          // Show ALL n*(n-1)/2 matches with actual player names using the
+          // FFB-prescribed order (article 6.2.09 Code Sportif).
+          const rrMatches = FFB_ROUND_ROBIN_TABLES[pouleSize];
+          y += 8;
+          const matchScheduleHeight = 22 + (rrMatches.length * 14);
+          if (y + matchScheduleHeight > doc.page.height - 60) {
+            doc.addPage();
+            y = 40;
+          }
+          doc.rect(40, y, pageWidth, 18).fill('#E8E8E8');
+          doc.fillColor('#333333').fontSize(9).font('Helvetica-Bold')
+             .text(`ORDRE DES MATCHS - Tous contre tous (${rrMatches.length} matchs)`, 50, y + 4);
+          y += 20;
+          rrMatches.forEach((match, idx) => {
+            const bgColor = idx % 2 === 0 ? '#FFFFFF' : '#F5F5F5';
+            doc.rect(40, y, pageWidth, 14).fill(bgColor);
+            const p1 = poule.players[match.p1 - 1];
+            const p2 = poule.players[match.p2 - 1];
+            const p1Name = p1 ? `${p1.first_name || ''} ${(p1.last_name || '').toUpperCase()}`.trim() : `Joueur ${match.p1}`;
+            const p2Name = p2 ? `${p2.first_name || ''} ${(p2.last_name || '').toUpperCase()}`.trim() : `Joueur ${match.p2}`;
+            doc.fillColor('#666666').fontSize(8).font('Helvetica')
+               .text(`Match ${idx + 1}:`, 50, y + 3, { width: 50 });
+            doc.font('Helvetica').fillColor('#333333')
+               .text(`${p1Name}  vs  ${p2Name}`, 105, y + 3, { width: 400 });
+            y += 14;
+          });
+
         } else if (pouleSize === 4 || pouleSize === 5) {
-          // Regular tournament: knockout-style matches
+          // Multi-poule journées mode: bracket-style matches
           const matches = generateMatchSchedule(pouleSize);
           if (matches.length > 0) {
             y += 8;
