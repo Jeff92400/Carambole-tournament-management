@@ -1892,6 +1892,21 @@
               </div>
             </label>
           </div>
+
+          <!-- Seuil poule unique — visible uniquement en mode Journées -->
+          <div id="singlePouleThresholdSection" style="display: none; margin-top: 16px; padding: 16px; background: #e8f4fd; border-radius: 8px; border-left: 4px solid #2e86c1;">
+            <div style="display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-start;">
+              <div style="flex: 0 0 auto; min-width: 200px; max-width: 260px;">
+                <label for="singlePouleThreshold" style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px; color: #1a5276;">Seuil poule unique :</label>
+                <input type="number" id="singlePouleThreshold" value="6" min="2" max="20"
+                       style="width: 100%; padding: 12px; border: 1px solid #b0d4ed; border-radius: 6px; font-size: 15px; font-weight: 700; text-align: center;">
+              </div>
+              <div style="flex: 1; min-width: 200px; padding-top: 4px; color: #555; font-size: 13px; line-height: 1.6;">
+                Si le nombre de joueurs inscrits est <strong>strictement inférieur</strong> à cette valeur, une <strong>poule unique</strong> est créée (round-robin sans tableau final).<br>
+                <span style="color: #888;">Valeur par défaut : 6. Exemple : avec 5 joueurs et un seuil à 6, une seule poule de 5 est formée.</span>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -2081,11 +2096,6 @@
               <div style="flex: 1; min-width: 180px;">
                 <label style="display: block; margin-bottom: 8px; font-weight: 500;">Nombre de journées :</label>
                 <input type="number" id="journeesCount" value="3" min="1" max="10" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
-              </div>
-              <div style="flex: 1; min-width: 180px;">
-                <label style="display: block; margin-bottom: 8px; font-weight: 500;">Seuil poule unique :</label>
-                <input type="number" id="singlePouleThreshold" value="6" min="2" max="20" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
-                <p style="margin: 6px 0 0; color: #666; font-size: 12px;">En dessous de ce nombre de joueurs inscrits, une seule poule est créée (sans tableau final).</p>
               </div>
             </div>
             <div style="margin-bottom: 20px;">
@@ -5835,14 +5845,14 @@
       const journeesCard = document.getElementById('modeCard-journees');
       const primaryColor = getComputedStyle(document.documentElement).getPropertyValue('--color-primary').trim() || '#1F4788';
 
-      if (mode === 'journees') {
+      const isJournees = mode === 'journees';
+      if (isJournees) {
         journeesCard.style.borderColor = primaryColor;
         journeesCard.style.background = '#e7f3ff';
         journeesCard.style.boxShadow = '0 2px 8px rgba(31, 71, 136, 0.15)';
         standardCard.style.borderColor = '#ddd';
         standardCard.style.background = 'white';
         standardCard.style.boxShadow = 'none';
-        document.getElementById('journeesSettings').style.display = 'block';
       } else {
         standardCard.style.borderColor = primaryColor;
         standardCard.style.background = '#e7f3ff';
@@ -5850,8 +5860,11 @@
         journeesCard.style.borderColor = '#ddd';
         journeesCard.style.background = 'white';
         journeesCard.style.boxShadow = 'none';
-        document.getElementById('journeesSettings').style.display = 'none';
       }
+      const journeesSettingsEl = document.getElementById('journeesSettings');
+      if (journeesSettingsEl) journeesSettingsEl.style.display = isJournees ? 'block' : 'none';
+      const thresholdSection = document.getElementById('singlePouleThresholdSection');
+      if (thresholdSection) thresholdSection.style.display = isJournees ? 'block' : 'none';
     }
 
     // Keep for backward compatibility
