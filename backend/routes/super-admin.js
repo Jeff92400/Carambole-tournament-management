@@ -8,6 +8,10 @@ const { authenticateToken, requireSuperAdmin, JWT_SECRET } = require('./auth');
 const { logAdminAction, ACTION_TYPES } = require('../utils/admin-logger');
 const { sendEmail } = require('../utils/email-helpers');
 
+// Platform-level sender name for emails sent by the super-admin (CDB welcome, etc.)
+// Intentionally NOT read from org settings — this is a platform email, not a CDB email.
+const PLATFORM_SENDER_NAME = 'Kayros';
+
 // Logo upload config (memory storage, same pattern as settings.js)
 const logoUpload = multer({
   storage: multer.memoryStorage(),
@@ -1843,6 +1847,7 @@ router.post('/email-templates/cdb_welcome/test', async (req, res) => {
       organization_name: sampleData.name || 'Comité Départemental de Billard Exemple',
       organization_short_name: sampleData.short_name || 'CDB00',
       login_url: `${baseUrl}/login.html?org=${sampleSlug}`,
+      player_app_url: `https://cdbhs-player-app-production.up.railway.app/?org=${sampleSlug}`,
       username: sampleData.admin_username || 'admin_exemple',
       player_count: sampleData.player_count || '250'
     };
@@ -1858,10 +1863,9 @@ router.post('/email-templates/cdb_welcome/test', async (req, res) => {
     }
 
     const senderEmail = await appSettings.getSetting('email_noreply') || 'noreply@cdbhs.net';
-    const senderName = await appSettings.getSetting('email_sender_name') || 'CDB Tournois';
 
     await sendEmail({
-      from: `${senderName} <${senderEmail}>`,
+      from: `${PLATFORM_SENDER_NAME} <${senderEmail}>`,
       to: [recipientEmail],
       subject: `[TEST] ${subject}`,
       html: body
@@ -2016,12 +2020,11 @@ router.post('/organizations/:id/send-welcome', async (req, res) => {
       body = body.replace(htmlRegex, value);
     }
 
-    // Send email to CDB admin
+    // Send email to CDB admin — sender is the platform (Kayros), not the org
     const senderEmail = await appSettings.getSetting('email_noreply') || 'noreply@cdbhs.net';
-    const senderName = await appSettings.getSetting('email_sender_name') || 'CDB Tournois';
 
     await sendEmail({
-      from: `${senderName} <${senderEmail}>`,
+      from: `${PLATFORM_SENDER_NAME} <${senderEmail}>`,
       to: [orgAdmin.email],
       subject,
       html: body
