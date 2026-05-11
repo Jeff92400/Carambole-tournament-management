@@ -904,29 +904,55 @@ router.put('/competitions/:id/poules', authenticateToken, requireDdJ, async (req
 /**
  * Generate a round-robin match schedule for N players.
  * Returns array of { match_number, p1_idx, p2_idx } where idx is 1-based
- * into the poule's player order. Simple lexicographic order — fine for
- * poules of 2-5 (which is the realistic range for a CDB competition).
+ * into the poule's player order.
+ *
+ * Ordering rule: same-club matches are placed first (so players who share a
+ * club face each other at the start of the session and can leave together).
+ * Within each group (same-club / cross-club) the lexicographic order is
+ * preserved. If no players array is provided the rule cannot be applied and
+ * the plain lexicographic order is used.
  *
  * Special case — poule of 2 players (V 2.0.528) :
  *   FFB rule for poules of 2 = aller-retour (each player plays the other twice,
  *   home/away). Match 1 = p1 vs p2, Match 2 = p2 vs p1 (player order swapped).
  *   Applies whenever N=2, regardless of org setting (the setting governs whether
  *   2-player poules are allowed; if one exists, it must be played twice).
+ *
+ * @param {number} numPlayers
+ * @param {Array|null} players - Optional player objects with a `.club` field
+ *   (1-based index matches idx in the returned schedule).
  */
-function roundRobinSchedule(numPlayers) {
-  const out = [];
-  let m = 1;
+function roundRobinSchedule(numPlayers, players = null) {
   if (numPlayers === 2) {
-    out.push({ match_number: m++, p1_idx: 1, p2_idx: 2 });
-    out.push({ match_number: m++, p1_idx: 2, p2_idx: 1 });
-    return out;
+    return [
+      { match_number: 1, p1_idx: 1, p2_idx: 2 },
+      { match_number: 2, p1_idx: 2, p2_idx: 1 }
+    ];
   }
+
+  // Build all pairs in lexicographic order
+  const pairs = [];
   for (let i = 1; i <= numPlayers; i++) {
     for (let j = i + 1; j <= numPlayers; j++) {
-      out.push({ match_number: m++, p1_idx: i, p2_idx: j });
+      pairs.push({ p1_idx: i, p2_idx: j });
     }
   }
-  return out;
+
+  // If we have club data, stable-sort same-club pairs to the front
+  if (players && players.length === numPlayers) {
+    const sameClub = (pair) => {
+      const c1 = (players[pair.p1_idx - 1].club || '').trim().toLowerCase();
+      const c2 = (players[pair.p2_idx - 1].club || '').trim().toLowerCase();
+      return c1 && c1 === c2;
+    };
+    // Stable partition: same-club first, cross-club after
+    const sc = pairs.filter(p => sameClub(p));
+    const cc = pairs.filter(p => !sameClub(p));
+    pairs.length = 0;
+    pairs.push(...sc, ...cc);
+  }
+
+  return pairs.map((p, i) => ({ match_number: i + 1, ...p }));
 }
 
 /**
@@ -1143,7 +1169,7 @@ async function loadPouleMatches(db, orgId, tournoiId) {
 
   const poules = [];
   for (const [pn, playersArr] of [...byPoule.entries()].sort((a, b) => a[0] - b[0])) {
-    const schedule = roundRobinSchedule(playersArr.length);
+    const schedule = roundRobinSchedule(playersArr.length, playersArr);
     const matches = schedule.map(sch => {
       const p1 = playersArr[sch.p1_idx - 1];
       const p2 = playersArr[sch.p2_idx - 1];
