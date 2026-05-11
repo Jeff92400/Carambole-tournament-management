@@ -520,7 +520,8 @@
       tournament: null,
       poules: [],
       gameParams: { distance: null, distance_reduite: null, reprises: null, moyenne_mini: null, moyenne_maxi: null },
-      activeTab: 1 // poule number currently displayed
+      activeTab: 1, // poule number currently displayed
+      mode: 'bracket' // V 2.0.745 — 'single_poule' | 'bracket', loaded from API
     };
 
     async function loadAll() {
@@ -534,10 +535,13 @@
         state.tournament = data.tournament;
         state.poules = data.poules;
         state.gameParams = data.game_params || state.gameParams;
+        state.mode = data.mode || 'bracket'; // V 2.0.745
         // Default to first poule if activeTab isn't valid
         if (!state.poules.find(p => p.number === state.activeTab)) {
           state.activeTab = state.poules[0]?.number || 1;
         }
+        // Inform the step navigator so it can grey steps 4 & 5 if needed
+        if (typeof window.ddjSetMode === 'function') window.ddjSetMode(state.mode);
         render();
       } catch (err) {
         console.error('[Matchs] load error:', err);
@@ -574,19 +578,24 @@
       const activePoule = state.poules.find(p => p.number === state.activeTab);
       const contentHtml = activePoule ? renderPoule(activePoule) : '<p>Poule introuvable</p>';
 
-      // Gate the "passer à la phase finale" button: all poules must be
-      // complete before the DdJ can enter the bracket. The backend also
-      // enforces this, but we disable the button in the UI so it's
-      // visually obvious which step is blocked.
+      // V 2.0.745 — Two branches depending on mode:
+      //   single_poule → "Classement final" goes directly to recap (no bracket)
+      //   bracket      → "Tableau final" goes to bracket page (existing flow)
       const allPoulesPlayed = state.poules.every(p =>
         p.matches.length > 0 && p.matches.every(m => m.is_played)
       );
+      const isSinglePoule = state.mode === 'single_poule';
+      const nextPage = isSinglePoule
+        ? `directeur-de-jeu-recap.html?compId=${compId}`
+        : `directeur-de-jeu-bracket.html?compId=${compId}`;
       const finalBtnAttrs = allPoulesPlayed
-        ? `onclick="window.location.href='directeur-de-jeu-bracket.html?compId=${compId}'"`
-        : `disabled title="Toutes les poules doivent être terminées avant le tableau final"`;
+        ? `onclick="window.location.href='${nextPage}'"`
+        : `disabled title="${isSinglePoule
+            ? 'Tous les matchs de la poule doivent être terminés'
+            : 'Toutes les poules doivent être terminées avant le tableau final'}"`;
       const finalBtnLabel = allPoulesPlayed
-        ? 'Passer au tableau final →'
-        : 'Passer au tableau final → (poules en cours)';
+        ? (isSinglePoule ? 'Classement final →' : 'Passer au tableau final →')
+        : (isSinglePoule ? 'Classement final → (matchs en cours)' : 'Passer au tableau final → (poules en cours)');
 
       document.getElementById('mainContent').innerHTML = `
         <div class="ddj-tabs">${tabsHtml}</div>

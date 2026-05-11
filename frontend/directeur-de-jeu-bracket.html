@@ -399,6 +399,22 @@
       DjV3.init(compId);
     }
 
+    // V 2.0.745 — Single-poule guard: if this tournament has fewer players than
+    // the threshold, there is no bracket phase. Redirect to recap immediately.
+    (async function checkMode() {
+      try {
+        const r = await authFetch(`${API_URL}/directeur-jeu/competitions/${compId}/bracket`);
+        if (r.ok) {
+          const d = await r.json();
+          if (d.mode === 'single_poule') {
+            window.location.replace(`directeur-de-jeu-recap.html?compId=${compId}`);
+            return;
+          }
+          if (typeof window.ddjSetMode === 'function') window.ddjSetMode(d.mode);
+        }
+      } catch (_) { /* non-blocking — main loadBracket() will surface any real error */ }
+    })();
+
     document.getElementById('matchsBackBtn').addEventListener('click', (e) => {
       e.preventDefault();
       window.location.href = 'directeur-de-jeu-matchs.html?compId=' + compId;

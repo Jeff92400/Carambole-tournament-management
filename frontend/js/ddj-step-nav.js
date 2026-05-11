@@ -159,4 +159,29 @@
   } else {
     wireDdjSteps();
   }
+
+  /**
+   * V 2.0.745 — Called by pages once they know the DdJ mode.
+   * In 'single_poule' mode, steps 4 (Tableau final) and 5 (Classement)
+   * are greyed out and made non-clickable; clicking either redirects
+   * directly to the Récapitulatif page instead.
+   */
+  window.ddjSetMode = function ddjSetMode(mode) {
+    if (mode !== 'single_poule') return;
+    const compId = new URLSearchParams(window.location.search).get('compId');
+    const dots = document.querySelectorAll('.ddj-steps .dot');
+    [4, 5].forEach(idx => {
+      const dot = dots[idx];
+      if (!dot) return;
+      dot.style.opacity = '0.3';
+      dot.style.cursor = 'not-allowed';
+      dot.title = 'Non applicable — poule unique';
+      dot.setAttribute('data-step-name', (STEP_LABELS[idx] || '') + ' (non applicable)');
+      // Replace the node to strip previous click/keyboard listeners
+      const fresh = dot.cloneNode(true);
+      fresh.style.opacity = '0.3';
+      fresh.style.cursor = 'not-allowed';
+      dot.parentNode.replaceChild(fresh, dot);
+    });
+  };
 })();

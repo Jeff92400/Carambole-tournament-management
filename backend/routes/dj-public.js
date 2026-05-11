@@ -223,12 +223,15 @@ router.get('/:tournoi_id/feed', async (req, res) => {
       started_at: ph.started_at,
       finished_at: ph.finished_at
     });
+    // V 2.0.745 — include mode so TV frontend can branch layout
+    const feedMode = (bracketCtx && bracketCtx.mode) || 'bracket';
     const bracketOut = bracketCtx
       ? {
+          mode: feedMode,
           available: !!bracketCtx.can_start,
           phases: (bracketCtx.phases || []).map(buildBracketPhase)
         }
-      : { available: false, phases: [] };
+      : { mode: feedMode, available: false, phases: [] };
 
     // 7. Build sanitized consolante.
     const consolanteOut = consolanteCtx
@@ -288,6 +291,7 @@ router.get('/:tournoi_id/feed', async (req, res) => {
     const percent = total > 0 ? Math.round((done / total) * 100) : 0;
 
     res.json({
+      mode: feedMode,
       tournament: {
         name: tournament.nom,
         date: tournament.debut,

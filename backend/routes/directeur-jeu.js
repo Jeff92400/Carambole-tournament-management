@@ -1235,7 +1235,17 @@ async function loadPouleMatches(db, orgId, tournoiId) {
     });
   }
 
-  return { tournament, poules, settings, game_params: gameParams };
+  // V 2.0.745 — Determine mode: 'single_poule' when total players < threshold,
+  // 'bracket' otherwise. Propagated to every consumer (TV feed, matchs page,
+  // bracket loader) so all UI branches on a single authoritative value.
+  const singlePouleThreshold =
+    parseInt(await appSettings.getOrgSetting(orgId, 'single_poule_threshold')) || 6;
+  const totalPlayers = poules.reduce((sum, p) => sum + p.players.length, 0);
+  const mode = totalPlayers > 0 && totalPlayers < singlePouleThreshold
+    ? 'single_poule'
+    : 'bracket';
+
+  return { tournament, poules, settings, game_params: gameParams, mode };
 }
 
 // GET /api/directeur-jeu/competitions/:id/poule-matches
@@ -1649,6 +1659,26 @@ async function loadBracket(db, orgId, tournoiId) {
   const ctx = await loadPouleMatches(db, orgId, tournoiId);
   if (ctx.error) return ctx;
 
+  // V 2.0.745 — Single-poule guard: when the tournament is below the threshold
+  // (e.g. 5 players) there is no bracket phase. Return a clean "no bracket"
+  // context so all consumers (admin pages + TV feed) know to skip steps 4 & 5.
+  if (ctx.mode === 'single_poule') {
+    return {
+      tournament: ctx.tournament,
+      game_params: ctx.game_params,
+      settings: ctx.settings,
+      bracket_size: BRACKET_SIZE,
+      can_start: false,
+      mode: 'single_poule',
+      qualifiers: [],
+      non_qualifiers: [],
+      phases: [],
+      final_places: [],
+      seed_override_active: false,
+      post_poule_ranking: []
+    };
+  }
+
   const allPoulesPlayed = ctx.poules.every(p => p.all_matches_played);
   let { qualifiers, non_qualifiers } = computeBracketSeeding(ctx.poules, BRACKET_SIZE);
 
@@ -1849,6 +1879,7 @@ async function loadBracket(db, orgId, tournoiId) {
     settings: ctx.settings,
     bracket_size: BRACKET_SIZE,
     can_start: canStart,
+    mode: 'bracket',
     qualifiers,
     non_qualifiers,
     phases,
