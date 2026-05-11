@@ -825,8 +825,8 @@ async function generatePlayerConvocationPDF(player, tournamentInfo, allPoules, l
       }
 
       if (!isFinale) {
-        doc.fillColor('#666666').fontSize(9).font('Helvetica-Oblique')
-           .text("Les joueurs d'un même club jouent ensemble au 1er tour", 40, y, { width: pageWidth, align: 'center' });
+        doc.fillColor('#666666').fontSize(8).font('Helvetica-Oblique')
+           .text("L'ordre des matchs est conforme à l'article 6.2.09 du Code Sportif FFB qui prescrit des tableaux d'ordre de matchs fixes pour chaque taille de poules.", 40, y, { width: pageWidth, align: 'center' });
         y += 25;
       }
 
@@ -1190,8 +1190,8 @@ async function generateSummaryConvocationPDF(tournamentInfo, allPoules, location
       }
 
       if (!isFinale) {
-        doc.fillColor('#666666').fontSize(9).font('Helvetica-Oblique')
-           .text("Les joueurs d'un même club jouent ensemble au 1er tour", 40, y, { width: pageWidth, align: 'center' });
+        doc.fillColor('#666666').fontSize(8).font('Helvetica-Oblique')
+           .text("L'ordre des matchs est conforme à l'article 6.2.09 du Code Sportif FFB qui prescrit des tableaux d'ordre de matchs fixes pour chaque taille de poules.", 40, y, { width: pageWidth, align: 'center' });
         y += 25;
       }
 
