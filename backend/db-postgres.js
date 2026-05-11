@@ -3493,6 +3493,22 @@ Sportivement,
       console.error('Error resetting stale position_points:', resetErr);
     }
 
+    // V 2.0.751 — Org documents table (règlement sportif FFB, etc.)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS org_documents (
+        id SERIAL PRIMARY KEY,
+        doc_type VARCHAR(50) NOT NULL,
+        filename VARCHAR(200),
+        content_type VARCHAR(100),
+        file_data BYTEA,
+        file_size INTEGER,
+        uploaded_by VARCHAR(100),
+        uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        organization_id INTEGER REFERENCES organizations(id),
+        UNIQUE(doc_type, organization_id)
+      )
+    `);
+
   } catch (err) {
     // Post-commit error — NO ROLLBACK here (transaction already committed)
     console.error('Error in post-commit initialization (schema is safe):', err);

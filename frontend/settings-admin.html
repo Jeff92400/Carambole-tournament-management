@@ -2082,6 +2082,11 @@
                 <label style="display: block; margin-bottom: 8px; font-weight: 500;">Nombre de journées :</label>
                 <input type="number" id="journeesCount" value="3" min="1" max="10" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
               </div>
+              <div style="flex: 1; min-width: 180px;">
+                <label style="display: block; margin-bottom: 8px; font-weight: 500;">Seuil poule unique :</label>
+                <input type="number" id="singlePouleThreshold" value="6" min="2" max="20" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+                <p style="margin: 6px 0 0; color: #666; font-size: 12px;">En dessous de ce nombre de joueurs inscrits, une seule poule est créée (sans tableau final).</p>
+              </div>
             </div>
             <div style="margin-bottom: 20px;">
               <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
@@ -2157,6 +2162,55 @@
       </div>
     </div>
 
+
+    <!-- Règlement Sportif FFB Section - Admin Only -->
+    <div class="accordion-panel admin-only" id="reglementSportifSection" data-settings-tab="organisation">
+      <div class="accordion-header" onclick="toggleAccordion('reglementSportifSection')">
+        <div class="accordion-title"><span class="accordion-icon">&#9654;</span><strong>Règlement Sportif FFB</strong></div>
+        <span class="accordion-summary" id="summary-reglement">Non configuré</span>
+      </div>
+      <div class="accordion-body">
+        <p style="margin-bottom: 20px; color: #666;">
+          Téléversez le Code Sportif FFB Carambole (PDF). Le document sera accessible aux joueurs depuis l'Espace Joueur et aux arbitres depuis le module Directeur de Jeu.
+        </p>
+
+        <!-- Current document status -->
+        <div id="reglementDocInfo" style="display: none; margin-bottom: 20px; padding: 14px 16px; background: #e8f4fd; border-left: 4px solid #2e86c1; border-radius: 4px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+            <div>
+              <strong id="reglementDocFilename" style="color: #1a5276;"></strong>
+              <div style="margin-top: 4px; font-size: 12px; color: #666;">
+                <span id="reglementDocSize"></span> · Téléversé par <span id="reglementDocUploadedBy"></span> le <span id="reglementDocDate"></span>
+              </div>
+            </div>
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+              <a id="reglementDocViewLink" href="#" target="_blank" class="btn" style="padding: 8px 16px; font-size: 13px; background: #1F4788; text-decoration: none;">
+                📄 Consulter
+              </a>
+              <button onclick="deleteReglementDoc()" class="btn btn-danger" style="padding: 8px 16px; font-size: 13px;">
+                🗑️ Supprimer
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div id="reglementNoDoc" style="margin-bottom: 20px; padding: 12px 16px; background: #fff3cd; border-left: 4px solid #ffc107; border-radius: 4px; font-size: 13px; color: #856404;">
+          Aucun règlement sportif configuré.
+        </div>
+
+        <!-- Upload form -->
+        <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
+          <input type="file" id="reglementPdfInput" accept=".pdf,application/pdf"
+                 style="flex: 1; min-width: 220px; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px;">
+          <button onclick="uploadReglementDoc()" class="btn" style="background: #28a745; padding: 10px 20px; font-size: 14px; white-space: nowrap;">
+            ⬆️ Téléverser le PDF
+          </button>
+        </div>
+        <p style="margin: 8px 0 0; color: #888; font-size: 12px;">Format PDF uniquement — taille maximale : 20 Mo.</p>
+
+        <div id="reglementMessage" style="display: none; margin-top: 14px; padding: 10px 14px; border-radius: 6px; font-size: 13px;"></div>
+      </div>
+    </div>
 
     <!-- Activity Logs Section - Admin Only -->
     <div class="accordion-panel admin-only" id="activityLogsSection" data-settings-tab="maintenance">
@@ -2350,6 +2404,11 @@
       if (privEl) {
         const lastUpdate = document.getElementById('privacyPolicyLastUpdate')?.textContent;
         privEl.textContent = lastUpdate || 'Non configurée';
+      }
+      const reglEl = document.getElementById('summary-reglement');
+      if (reglEl) {
+        const filename = document.getElementById('reglementDocFilename')?.textContent?.trim();
+        reglEl.textContent = filename || 'Non configuré';
       }
 
       // --- Espace Joueur tab ---
@@ -5627,6 +5686,98 @@
 
     // ============= END PRIVACY POLICY SETTINGS =============
 
+    // ============= RÈGLEMENT SPORTIF FFB =============
+    async function loadReglementDocInfo() {
+      try {
+        const r = await authFetch(`${API_URL}/settings/org-document/reglement_ffb/info`);
+        if (!r.ok) return;
+        const data = await r.json();
+        const infoDiv = document.getElementById('reglementDocInfo');
+        const noDocDiv = document.getElementById('reglementNoDoc');
+        if (data.exists) {
+          document.getElementById('reglementDocFilename').textContent = data.filename || 'Règlement FFB';
+          const sizeMb = data.file_size ? (data.file_size / 1048576).toFixed(1) + ' Mo' : '';
+          document.getElementById('reglementDocSize').textContent = sizeMb;
+          document.getElementById('reglementDocUploadedBy').textContent = data.uploaded_by || '—';
+          const d = data.uploaded_at ? new Date(data.uploaded_at).toLocaleDateString('fr-FR') : '—';
+          document.getElementById('reglementDocDate').textContent = d;
+          document.getElementById('reglementDocViewLink').href = `${API_URL}/settings/org-document/reglement_ffb`;
+          if (infoDiv) infoDiv.style.display = 'block';
+          if (noDocDiv) noDocDiv.style.display = 'none';
+        } else {
+          if (infoDiv) infoDiv.style.display = 'none';
+          if (noDocDiv) noDocDiv.style.display = 'block';
+        }
+        updateAccordionSummaries();
+      } catch (e) {
+        console.error('loadReglementDocInfo:', e);
+      }
+    }
+
+    async function uploadReglementDoc() {
+      const input = document.getElementById('reglementPdfInput');
+      const msgDiv = document.getElementById('reglementMessage');
+      if (!input.files || input.files.length === 0) {
+        msgDiv.textContent = 'Veuillez sélectionner un fichier PDF.';
+        msgDiv.style.background = '#f8d7da';
+        msgDiv.style.color = '#721c24';
+        msgDiv.style.display = 'block';
+        return;
+      }
+      const file = input.files[0];
+      const formData = new FormData();
+      formData.append('document', file);
+      try {
+        msgDiv.textContent = 'Téléversement en cours…';
+        msgDiv.style.background = '#fff3cd';
+        msgDiv.style.color = '#856404';
+        msgDiv.style.display = 'block';
+        const r = await fetch(`${API_URL}/settings/org-document/reglement_ffb`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` },
+          body: formData
+        });
+        const data = await r.json();
+        if (r.ok) {
+          msgDiv.textContent = '✅ Document téléversé avec succès.';
+          msgDiv.style.background = '#d4edda';
+          msgDiv.style.color = '#155724';
+          input.value = '';
+          await loadReglementDocInfo();
+        } else {
+          msgDiv.textContent = '❌ ' + (data.error || 'Erreur lors du téléversement');
+          msgDiv.style.background = '#f8d7da';
+          msgDiv.style.color = '#721c24';
+        }
+      } catch (e) {
+        msgDiv.textContent = '❌ Erreur de connexion au serveur.';
+        msgDiv.style.background = '#f8d7da';
+        msgDiv.style.color = '#721c24';
+      }
+      setTimeout(() => { msgDiv.style.display = 'none'; }, 5000);
+    }
+
+    async function deleteReglementDoc() {
+      const msgDiv = document.getElementById('reglementMessage');
+      if (!confirm('Supprimer le règlement sportif FFB ? Cette action est irréversible.')) return;
+      try {
+        const r = await authFetch(`${API_URL}/settings/org-document/reglement_ffb`, { method: 'DELETE' });
+        if (r.ok) {
+          await loadReglementDocInfo();
+          msgDiv.textContent = '✅ Document supprimé.';
+          msgDiv.style.background = '#d4edda';
+          msgDiv.style.color = '#155724';
+          msgDiv.style.display = 'block';
+          setTimeout(() => { msgDiv.style.display = 'none'; }, 3000);
+        }
+      } catch (e) {
+        console.error('deleteReglementDoc:', e);
+      }
+    }
+
+    loadReglementDocInfo();
+    // ============= END RÈGLEMENT SPORTIF FFB =============
+
     // ============= ACTIVITY LOGS QUICK STATS =============
     async function loadLogsQuickStats() {
       try {
@@ -6306,6 +6457,7 @@
           const settings = await response.json();
           document.getElementById('journeesCount').value = settings.journees_count || '3';
           document.getElementById('bestOfCount').value = settings.best_of_count || '2';
+          document.getElementById('singlePouleThreshold').value = settings.single_poule_threshold || '6';
           document.getElementById('averageBonusTiers').checked = settings.average_bonus_tiers === 'true';
 
           // Bonus Moyenne (common)
@@ -6404,6 +6556,7 @@
             qualification_mode: document.getElementById('qualificationMode').value,
             journees_count: document.getElementById('journeesCount').value,
             best_of_count: document.getElementById('bestOfCount').value,
+            single_poule_threshold: document.getElementById('singlePouleThreshold').value,
             average_bonus_tiers: document.getElementById('averageBonusTiers').checked ? 'true' : 'false',
             bonus_moyenne_enabled: document.getElementById('bonusMoyenneEnabled').checked ? 'true' : 'false',
             bonus_moyenne_type: document.querySelector('input[name="bonusMoyenneType"]:checked').value,

@@ -63,6 +63,7 @@ Projet Tournois management FFB/
 │   ├── Guide-Passation-Plateforme.html            (transmission opérationnelle)
 │   ├── 📂 Guides-Utilisateur/                     (HTML guides versionnés pour les utilisateurs)
 │   ├── 📂 Guides-Technique/                       (DDL, format CSV, configuration Railway, etc.)
+│   │   └── 📂 Passation/                          (Guide-Passation-Plateforme + Passation-Admin-CDBHS)
 │   ├── 📂 Guides-Developpement/                   (architecture, audits, investigations)
 │   ├── 📂 Audit/                                  (Audits Phase 1-6)
 │   ├── 📂 Plaquettes/                             (présentations, communications externes)
@@ -74,17 +75,25 @@ Projet Tournois management FFB/
 ├── 📂 Initiatives/                                ← projets/sous-initiatives
 │   ├── 📂 Quilles/                                (intégration Quilles LBIF)
 │   ├── 📂 Directeur-de-Jeu/                       (module DdJ)
+│   ├── 📂 Calendar-Generator/                     (module de génération calendrier saison)
+│   ├── 📂 Module-Communication-Joueurs/           (annonces, push, communication ciblée)
+│   ├── 📂 Mockup-Dashboard-KPIs/                  (mockup KPI dashboard customizable, V3.0)
 │   ├── 📂 Plan-Integration-FFB/                   (plans intégration FFB)
 │   ├── 📂 Compétition-par-Équipe/                 (5Q D1/D2 et autres)
 │   ├── 📂 Ligue-IDF/                              (artefacts Ligue IDF)
 │   └── 📂 Systèmes-des-Qualifications/
+│
+├── 📂 CDBs/                                       ← données et communications par CDB (non-code)
+│   ├── 📂 CDBHS/                                  (Hauts-de-Seine — communications, plaquettes, attestations)
+│   ├── 📂 CDB9394/                                (Seine-Saint-Denis + Val-de-Marne)
+│   ├── 📂 CDBSM/                                  (Saint-Maur)
+│   └── 📂 CDB Démo/                               (environnement démo)
 │
 ├── 📂 Données-FFB/                                ← données externes FFB
 │   ├── 📂 Fichiers-FFB/                           (licences, clubs nationaux)
 │   └── 📂 CSV-FFB-Val-de-Marne/
 │
 ├── 📂 Règlements/                                 (règlements sportifs de référence)
-├── 📂 CDBSM/                                      (dossier CDB Saint-Maur)
 ├── 📂 Fichiers divers tests/                      (fichiers de test ad-hoc)
 └── 📂 Claude Clean Up/                            (quarantaine — voir MANIFEST.md)
 ```
@@ -189,7 +198,7 @@ git push origin main
 
 ## Versioning
 
-**Current Version:** V 2.0.594 04/30
+**Current Version:** V 2.0.743 05/26 (synchronisée depuis `frontend/login.html` le 2026-05-10)
 
 Version is displayed at the bottom of the login screen (`frontend/login.html`).
 
@@ -362,6 +371,7 @@ To give each CDB a branded sender domain (e.g., `cdb9493@ffbcarambole-gestion.fr
 ## Development Notes
 
 - **User Guide Maintenance:** The source of truth is `frontend/guide-utilisateur.html` (served in the app). It MUST be updated whenever a **new feature** is implemented (new page, new setting, changed functionality). Add/update the relevant sections, update the glossary if new terms are introduced, and keep the same structure and writing style (French, formal, step-by-step). Include the guide update in the same commit as the feature. Bug fixes do NOT require guide updates. **After every guide update, sync the two other copies:** copy `frontend/guide-utilisateur.html` → `GUIDE-UTILISATEUR-COMPLET.html` (root), and regenerate `GUIDE-UTILISATEUR-COMPLET.md` from the HTML content. Always include these synced files in the same commit.
+- **OneDrive sync (script automatique) :** après tout déploiement (push sur main → Railway), lancer `bash scripts/sync-guides-to-onedrive.sh` pour propager les guides à jour vers le dépôt maître OneDrive (`Documentations.../Guides-Utilisateur/`). Le script détecte la version courante depuis `frontend/login.html` (et `index.html` Player App), met les anciennes versions en quarantaine dans `Claude Clean Up/Doublons-AAAA-MM/Guides-Anciennes-Versions/`, et nomme les fichiers OneDrive avec le numéro de version (ex. `Guide-Admin-Tournament-V2.0.743.html`). Mode `--dry-run` disponible pour simuler.
 - **User Guide Search Feature:** The guide includes a keyword search feature (`frontend/guide-utilisateur.html` lines 108-222 CSS, lines 539-561 HTML, lines 1474-1679 JavaScript). Search is accent-insensitive (e.g., "résultats" matches "resultats"), debounced (300ms), and builds an index on page load covering h2, h3, and h4 headings. Results show section paths (e.g., "Compétitions → Générer les poules → Forfaits") and click to scroll. Minimum 2 characters required to search.
 - All text is in **French**
 - Dates: Paris timezone, displayed as DD/MM/YYYY

@@ -19,6 +19,18 @@ const logoUpload = multer({
   }
 });
 
+// Configure multer for org document uploads (PDF only, 20 MB max)
+const docUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 20 * 1024 * 1024 },
+  fileFilter: function (req, file, cb) {
+    if (file.mimetype === 'application/pdf') {
+      return cb(null, true);
+    }
+    cb(new Error('Seuls les fichiers PDF sont acceptés'));
+  }
+});
+
 // Get database connection
 const getDb = () => require('../db-loader');
 
@@ -2457,6 +2469,136 @@ router.delete('/test-mode-log', authenticateToken, requireAdmin, async (req, res
   } catch (error) {
     console.error('[test-mode-log] Error wiping:', error);
     res.status(500).json({ error: 'Erreur lors de la purge du journal' });
+  }
+});
+
+// ==================== ORG DOCUMENTS (règlement FFB, etc.) ====================
+
+// GET /api/settings/org-document/:docType/info — metadata only (no binary)
+router.get('/org-document/:docType/info', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const db = getDb();
+    const orgId = req.user?.organizationId || null;
+    const { docType } = req.params;
+    const rows = await new Promise((resolve, reject) => {
+      db.all(
+        `SELECT id, doc_type, filename, content_type, file_size, uploaded_by, uploaded_at
+           FROM org_documents
+          WHERE doc_type = $1 AND ($2::int IS NULL OR organization_id = $2)`,
+        [docType, orgId],
+        (err, r) => err ? reject(err) : resolve(r)
+      );
+    });
+    if (!rows || rows.length === 0) {
+      return res.json({ exists: false });
+    }
+    const doc = rows[0];
+    return res.json({
+      exists: true,
+      filename: doc.filename,
+      content_type: doc.content_type,
+      file_size: doc.file_size,
+      uploaded_by: doc.uploaded_by,
+      uploaded_at: doc.uploaded_at
+    });
+  } catch (error) {
+    console.error('[org-document] Error fetching info:', error);
+    res.status(500).json({ error: 'Erreur lors de la récupération des informations' });
+  }
+});
+
+// GET /api/settings/org-document/:docType — serve the PDF file
+router.get('/org-document/:docType', authenticateToken, async (req, res) => {
+  try {
+    const db = getDb();
+    const orgId = req.user?.organizationId || null;
+    const { docType } = req.params;
+    const rows = await new Promise((resolve, reject) => {
+      db.all(
+        `SELECT filename, content_type, file_data FROM org_documents
+          WHERE doc_type = $1 AND ($2::int IS NULL OR organization_id = $2)`,
+        [docType, orgId],
+        (err, r) => err ? reject(err) : resolve(r)
+      );
+    });
+    if (!rows || rows.length === 0) {
+      return res.status(404).json({ error: 'Document introuvable' });
+    }
+    const doc = rows[0];
+    const safeFilename = encodeURIComponent(doc.filename || `${docType}.pdf`);
+    res.setHeader('Content-Type', doc.content_type || 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="${safeFilename}"`);
+    res.setHeader('Cross-Origin-Resource-Policy', 'same-site');
+    const buffer = doc.file_data instanceof Buffer ? doc.file_data : Buffer.from(doc.file_data);
+    res.send(buffer);
+  } catch (error) {
+    console.error('[org-document] Error serving:', error);
+    res.status(500).json({ error: 'Erreur lors du chargement du document' });
+  }
+});
+
+// POST /api/settings/org-document/:docType — upload/replace a document
+router.post('/org-document/:docType', authenticateToken, requireAdmin, docUpload.single('document'), async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: 'Aucun fichier fourni' });
+  }
+  const db = getDb();
+  const { docType } = req.params;
+  const orgId = req.user?.organizationId || null;
+  const uploadedBy = req.user?.username || 'admin';
+  const { originalname, mimetype, buffer, size } = req.file;
+
+  const safeFilename = (originalname || `${docType}.pdf`)
+    .replace(/^.*[\\/]/, '')
+    .replace(/[\x00-\x1f\x7f]/g, '') // eslint-disable-line no-control-regex
+    .replace(/[^\w\-. ]+/g, '_')
+    .slice(0, 200) || `${docType}.pdf`;
+
+  try {
+    await new Promise((resolve, reject) => {
+      db.run(
+        `INSERT INTO org_documents (doc_type, filename, content_type, file_data, file_size, uploaded_by, organization_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         ON CONFLICT (doc_type, organization_id) DO UPDATE
+           SET filename = EXCLUDED.filename,
+               content_type = EXCLUDED.content_type,
+               file_data = EXCLUDED.file_data,
+               file_size = EXCLUDED.file_size,
+               uploaded_by = EXCLUDED.uploaded_by,
+               uploaded_at = CURRENT_TIMESTAMP`,
+        [docType, safeFilename, mimetype, buffer, size, uploadedBy, orgId],
+        (err) => err ? reject(err) : resolve()
+      );
+    });
+    res.json({
+      success: true,
+      message: 'Document téléversé avec succès',
+      filename: safeFilename,
+      size
+    });
+  } catch (error) {
+    console.error('[org-document] Error uploading:', error);
+    res.status(500).json({ error: 'Erreur lors de l\'enregistrement du document' });
+  }
+});
+
+// DELETE /api/settings/org-document/:docType — remove a document
+router.delete('/org-document/:docType', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const db = getDb();
+    const orgId = req.user?.organizationId || null;
+    const { docType } = req.params;
+    await new Promise((resolve, reject) => {
+      db.run(
+        `DELETE FROM org_documents WHERE doc_type = $1 AND ($2::int IS NULL OR organization_id = $2)`,
+        [docType, orgId],
+        (err) => err ? reject(err) : resolve()
+      );
+    });
+    res.json({ success: true });
+  } catch (error) {
+    console.error('[org-document] Error deleting:', error);
+    res.status(500).json({ error: 'Erreur lors de la suppression du document' });
   }
 });
 
