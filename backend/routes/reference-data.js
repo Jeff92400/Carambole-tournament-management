@@ -729,23 +729,39 @@ router.get('/time-slots', authenticateToken, (req, res) => {
 
 // ==================== POULE CONFIGURATIONS (auto-computed) ====================
 
-const { computePouleConfiguration } = require('../utils/poule-config');
+const { computePouleConfiguration, computeTablesNeeded } = require('../utils/poule-config');
 const appSettings = require('../utils/app-settings');
 
 // Get computed poule configuration preview for all player counts
 router.get('/poule-config-preview', authenticateToken, async (req, res) => {
   try {
     const orgId = req.user?.organizationId || null;
-    const raw = orgId
-      ? await appSettings.getOrgSetting(orgId, 'allow_poule_of_2')
-      : await appSettings.getSetting('allow_poule_of_2');
+
+    // V 2.0.754 — Read both settings together so the threshold is respected
+    // when building the per-player-count lookup table used by generate-poules.html.
+    const [raw, rawThreshold] = await Promise.all([
+      orgId ? appSettings.getOrgSetting(orgId, 'allow_poule_of_2') : appSettings.getSetting('allow_poule_of_2'),
+      orgId ? appSettings.getOrgSetting(orgId, 'single_poule_threshold') : appSettings.getSetting('single_poule_threshold')
+    ]);
     const allowPouleOf2 = raw === 'true';
+    const singlePouleThreshold = parseInt(rawThreshold) || 6;
     const minPlayers = allowPouleOf2 ? 2 : 3;
     const maxPlayers = parseInt(req.query.max) || 30;
 
     const configurations = {};
     for (let n = minPlayers; n <= maxPlayers; n++) {
-      configurations[n] = computePouleConfiguration(n, allowPouleOf2);
+      if (n < singlePouleThreshold) {
+        // Below threshold: force a single poule regardless of allow_poule_of_2
+        const poules = [n];
+        configurations[n] = {
+          poules,
+          tables: computeTablesNeeded(poules),
+          minPlayers,
+          description: `1 poule : ${n}`
+        };
+      } else {
+        configurations[n] = computePouleConfiguration(n, allowPouleOf2);
+      }
     }
 
     res.json({ allow_poule_of_2: allowPouleOf2, min_players: minPlayers, configurations });
