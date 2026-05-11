@@ -969,6 +969,101 @@ function roundRobinSchedule(numPlayers, players = null) {
 }
 
 /**
+ * Build Berger round-robin rounds for n players.
+ * Returns array of rounds, each round = array of {p1_idx, p2_idx} (1-based).
+ * Odd n: n rounds of floor(n/2) matches (1 player rests/round).
+ * Even n: n-1 rounds of n/2 matches.
+ */
+function bergerRounds(n) {
+  if (n < 2) return [];
+  if (n === 2) return [
+    [{ p1_idx: 1, p2_idx: 2 }],
+    [{ p1_idx: 2, p2_idx: 1 }]
+  ];
+  // For odd n: insert ghost player (0) to make count even
+  const pool = n % 2 === 1
+    ? [0, ...Array.from({ length: n }, (_, i) => i + 1)]
+    : Array.from({ length: n }, (_, i) => i + 1);
+  const m = pool.length; // always even
+  const rounds = [];
+  for (let r = 0; r < m - 1; r++) {
+    const round = [];
+    for (let i = 0; i < m / 2; i++) {
+      const p1 = pool[i];
+      const p2 = pool[m - 1 - i];
+      if (p1 !== 0 && p2 !== 0) round.push({ p1_idx: p1, p2_idx: p2 });
+    }
+    if (round.length > 0) rounds.push(round);
+    // Rotate: fix pool[0], rotate pool[1..m-1] right by 1
+    const last = pool[m - 1];
+    for (let i = m - 1; i > 1; i--) pool[i] = pool[i - 1];
+    pool[1] = last;
+  }
+  return rounds;
+}
+
+/**
+ * V 2.0.749 — Generate a Berger round-robin match schedule with table allocation.
+ * Same-club pairs are promoted to the earliest round by swapping rounds.
+ * Within each round, same-club pairs appear first.
+ *
+ * @param {Array} players  - Player objects with .club property (1-based index order)
+ * @param {number[]} tableNumbers - Actual table numbers from ddj_session (e.g. [3, 5, 7])
+ * @returns {Array} Flat match list: {match_number, round_number, table_number, p1_idx, p2_idx}
+ */
+function roundRobinRoundsWithTables(players, tableNumbers) {
+  const n = players.length;
+  const tc = tableNumbers.length;
+
+  if (n < 2) return [];
+
+  // Special case: 2 players play each other twice
+  if (n === 2) return [
+    { match_number: 1, round_number: 1, table_number: tableNumbers[0], p1_idx: 1, p2_idx: 2 },
+    { match_number: 2, round_number: 2, table_number: tableNumbers[0], p1_idx: 2, p2_idx: 1 }
+  ];
+
+  const rounds = bergerRounds(n);
+
+  const isSameClub = (p1i, p2i) => {
+    const c1 = (players[p1i - 1]?.club || '').trim().toLowerCase();
+    const c2 = (players[p2i - 1]?.club || '').trim().toLowerCase();
+    return c1 && c1 === c2;
+  };
+
+  // Move the first round that contains a same-club pair to position 0
+  const scRoundIdx = rounds.findIndex(r =>
+    r.some(({ p1_idx, p2_idx }) => isSameClub(p1_idx, p2_idx))
+  );
+  if (scRoundIdx > 0) {
+    [rounds[0], rounds[scRoundIdx]] = [rounds[scRoundIdx], rounds[0]];
+  }
+
+  // Within each round, sort same-club pairs first
+  for (const round of rounds) {
+    round.sort((a, b) =>
+      (isSameClub(a.p1_idx, a.p2_idx) ? 0 : 1) - (isSameClub(b.p1_idx, b.p2_idx) ? 0 : 1)
+    );
+  }
+
+  // Flatten to match list, cycling through tableNumbers within each round
+  const matches = [];
+  let matchNum = 1;
+  for (let ri = 0; ri < rounds.length; ri++) {
+    for (let mi = 0; mi < rounds[ri].length; mi++) {
+      matches.push({
+        match_number: matchNum++,
+        round_number: ri + 1,
+        table_number: tableNumbers[mi % tc],
+        p1_idx: rounds[ri][mi].p1_idx,
+        p2_idx: rounds[ri][mi].p2_idx
+      });
+    }
+  }
+  return matches;
+}
+
+/**
  * Compute match points for a single match given player scores.
  * Returns { p1_mp, p2_mp, outcome } where outcome ∈ 'p1_win' | 'p2_win' | 'draw'.
  * Null scores ⇒ match not played ⇒ returns null.
@@ -1260,16 +1355,46 @@ async function loadPouleMatches(db, orgId, tournoiId) {
 
   // V 2.0.746 — Expose when poules were last saved so étape 3 can warn
   // if the composition predates today (stale after last-minute forfaits).
+  // V 2.0.749 — Also fetch table_count + table_numbers for single_poule
+  // round/table allocation (computed on-the-fly from ddj_session).
   const sessionRow = await new Promise((resolve) => {
     db.get(
-      `SELECT poules_saved_at FROM ddj_session WHERE tournoi_id = $1`,
+      `SELECT poules_saved_at, table_count, table_numbers FROM ddj_session WHERE tournoi_id = $1`,
       [tournoiId],
       (err, row) => resolve(err ? null : row)
     );
   });
   const poulesSavedAt = sessionRow ? sessionRow.poules_saved_at : null;
 
-  return { tournament, poules, settings, game_params: gameParams, mode, poules_saved_at: poulesSavedAt };
+  // V 2.0.749 — In single_poule mode, rebuild each poule's match schedule
+  // using Berger rounds + table allocation from the DdJ session.
+  let sessionTableCount = 0;
+  let sessionTableNumbers = null;
+  if (mode === 'single_poule' && sessionRow && sessionRow.table_count) {
+    sessionTableCount = parseInt(sessionRow.table_count) || 0;
+    if (sessionTableCount > 0) {
+      sessionTableNumbers = parseTableNumbers(sessionRow.table_numbers, sessionTableCount);
+      // Recompute each poule's matches with round + table info
+      for (const poule of poules) {
+        const roundedSchedule = roundRobinRoundsWithTables(poule.players, sessionTableNumbers);
+        for (const m of poule.matches) {
+          const rs = roundedSchedule.find(s => s.match_number === m.match_number);
+          if (rs) {
+            m.round_number = rs.round_number;
+            m.table_number = rs.table_number;
+          }
+        }
+      }
+    }
+  }
+
+  return {
+    tournament, poules, settings, game_params: gameParams,
+    mode, poules_saved_at: poulesSavedAt,
+    // V 2.0.749 — Table allocation metadata for single_poule mode
+    table_count: mode === 'single_poule' ? sessionTableCount : null,
+    table_numbers: mode === 'single_poule' ? sessionTableNumbers : null
+  };
 }
 
 // GET /api/directeur-jeu/competitions/:id/poule-matches

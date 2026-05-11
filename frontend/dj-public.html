@@ -138,6 +138,13 @@
   .sp-club-sub { font-size: var(--fs-sm); color: var(--muted); font-weight: 400; }
   .sp-pm   { font-weight: 800; text-align: center; }
   .sp-wdl  { color: var(--muted); font-size: var(--fs-sm); text-align: center; }
+  .sp-round-h {
+    font-size: 11px; font-weight: 800; text-transform: uppercase;
+    letter-spacing: 1px; color: #f0a020;
+    padding: 6px 0 2px; margin-top: 4px;
+    border-top: 1px solid rgba(255,255,255,0.1);
+  }
+  .sp-round-h:first-child { border-top: none; padding-top: 0; }
 
   /* ---- POULE CARD ---- */
   .poule {
@@ -807,8 +814,19 @@
         <tbody>${rows}</tbody>
       </table>`;
 
-    // Matches panel
-    const matchList = (p.matches || []).map(renderPouleMatch).join('');
+    // Matches panel — group by round_number when table allocation is active
+    const allMatches = p.matches || [];
+    const hasRounds = allMatches.some(m => m.round_number != null);
+    let matchList;
+    if (hasRounds) {
+      const roundNums = [...new Set(allMatches.map(m => m.round_number))].sort((a, b) => a - b);
+      matchList = roundNums.map(rn => {
+        const roundMatches = allMatches.filter(m => m.round_number === rn);
+        return `<div class="sp-round-h">Tour ${rn}</div>` + roundMatches.map(renderPouleMatch).join('');
+      }).join('');
+    } else {
+      matchList = allMatches.map(renderPouleMatch).join('');
+    }
 
     return `
       <div class="col col-sp-standing">

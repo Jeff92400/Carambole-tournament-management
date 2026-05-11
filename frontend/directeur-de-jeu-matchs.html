@@ -393,6 +393,28 @@
     .ddj-save-status.error   { background: rgba(220,53,69,0.97); box-shadow: 0 8px 24px rgba(220,53,69,0.4); }
     .ddj-save-status.warning { background: rgba(255,193,7,0.98); color: #222; box-shadow: 0 8px 24px rgba(255,193,7,0.4); }
 
+    /* V 2.0.749 — Single-poule info banner: table count + tour count + Modifier link */
+    #spInfoBanner {
+      display: none;
+      align-items: center;
+      gap: 10px;
+      background: #e8f4fd;
+      border: 1px solid #2e86c1;
+      border-left: 5px solid #1a5276;
+      border-radius: 8px;
+      padding: 10px 16px;
+      margin-bottom: 10px;
+      font-size: 0.88em;
+      color: #1a5276;
+      font-weight: 600;
+    }
+    #spInfoBanner a {
+      color: #1a5276;
+      font-weight: 700;
+      text-decoration: underline;
+      cursor: pointer;
+    }
+
     /* V 2.0.746 — Stale-poules warning banner */
     #stalePoulesBanner {
       display: none;
@@ -448,6 +470,11 @@
       <div class="dot"></div>
       <div class="dot"></div>
       <div class="dot"></div>
+    </div>
+
+    <!-- V 2.0.749 — Single-poule info: table count + tour count -->
+    <div id="spInfoBanner">
+      📋 <span id="spInfoText"></span> — <a id="spInfoModifier">Modifier les tables</a>
     </div>
 
     <!-- V 2.0.746 — Stale-poules warning: shown when poules were saved before today -->
@@ -562,7 +589,8 @@
       gameParams: { distance: null, distance_reduite: null, reprises: null, moyenne_mini: null, moyenne_maxi: null },
       activeTab: 1,        // poule number currently displayed
       mode: 'bracket',     // V 2.0.745 — 'single_poule' | 'bracket', loaded from API
-      poulesSavedAt: null  // V 2.0.746 — timestamp of last poule validation
+      poulesSavedAt: null, // V 2.0.746 — timestamp of last poule validation
+      tableCount: 0        // V 2.0.749 — number of tables from ddj_session
     };
 
     // V 2.0.746 — Show a warning banner if poules were validated before today
@@ -583,6 +611,39 @@
       }
     }
 
+    // V 2.0.749 — Show/update the single-poule info banner (table count + tour count).
+    // Reads state.mode, state.tableCount and state.poules.
+    function updateSpInfoBanner() {
+      const banner = document.getElementById('spInfoBanner');
+      if (!banner) return;
+      if (state.mode !== 'single_poule' || !state.tableCount) {
+        banner.style.display = 'none';
+        return;
+      }
+      const n = state.poules[0]?.players?.length || 0;
+      const numRounds = n > 0 ? (n % 2 === 0 ? n - 1 : n) : 0;
+      const matchesPerRound = Math.floor(n / 2);
+      const tc = state.tableCount;
+      const tableLabel = tc === 1 ? '1 table' : `${tc} tables`;
+      const tourLabel = numRounds === 1 ? '1 tour' : `${numRounds} tours`;
+      const matchLabel = matchesPerRound === 1 ? '1 match' : `${matchesPerRound} matchs`;
+      document.getElementById('spInfoText').textContent =
+        `Poule unique · ${tableLabel} · ${tourLabel} de ${matchLabel}`;
+      banner.style.display = 'flex';
+
+      // Wire modifier link to open the DjV3 session modal
+      const modifierLink = document.getElementById('spInfoModifier');
+      if (modifierLink && !modifierLink._wired) {
+        modifierLink._wired = true;
+        modifierLink.addEventListener('click', (e) => {
+          e.preventDefault();
+          if (typeof DjV3 !== 'undefined' && typeof DjV3.openSessionModal === 'function') {
+            DjV3.openSessionModal();
+          }
+        });
+      }
+    }
+
     async function loadAll() {
       try {
         const resp = await authFetch(`${API_URL}/directeur-jeu/competitions/${compId}/poule-matches`);
@@ -596,6 +657,8 @@
         state.gameParams = data.game_params || state.gameParams;
         state.mode = data.mode || 'bracket';           // V 2.0.745
         state.poulesSavedAt = data.poules_saved_at || null; // V 2.0.746
+        state.tableCount = data.table_count || 0;  // V 2.0.749
+        updateSpInfoBanner();
         // Default to first poule if activeTab isn't valid
         if (!state.poules.find(p => p.number === state.activeTab)) {
           state.activeTab = state.poules[0]?.number || 1;

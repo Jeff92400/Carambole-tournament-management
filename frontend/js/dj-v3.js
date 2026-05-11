@@ -131,6 +131,13 @@
       padding: 6px 0; margin-bottom: 4px;
     }
     .djv3-pl-poule-h .djv3-pl-table { font-weight: 500; color: #888; font-size: 13px; }
+    .djv3-pl-round { margin-bottom: 6px; }
+    .djv3-pl-round-h {
+      font-size: 12px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.5px; color: #2e86c1;
+      padding: 4px 8px; margin: 6px 0 2px;
+      background: #eaf4fb; border-radius: 4px;
+    }
     .djv3-pl-match {
       display: grid;
       grid-template-columns: 50px 50px 1fr auto auto;
@@ -640,16 +647,30 @@
       html += `<div class="djv3-pl-section"><h4 class="djv3-pl-title">${isSinglePoule ? 'Poule unique' : 'Poules'}</h4>`;
       for (const poule of poulesData.poules) {
         const pouleLetter = String.fromCharCode(64 + poule.number);
-        // In single_poule mode, matches rotate across tables — no fixed table per poule.
-        // Only show the table label when one is actually assigned.
         const tablePart = poule.table_number
           ? ` <span class="djv3-pl-table">· Table ${poule.table_number}</span>`
           : '';
         const pouleTitle = isSinglePoule ? `Poule unique` : `Poule ${pouleLetter}`;
         html += `<div class="djv3-pl-poule">
           <div class="djv3-pl-poule-h">${pouleTitle}${tablePart}</div>`;
-        for (const m of (poule.matches || [])) {
-          html += renderPlanningMatchRow(m, poule.table_number);
+
+        const allMatches = poule.matches || [];
+        const hasRounds = allMatches.some(m => m.round_number != null);
+        if (isSinglePoule && hasRounds) {
+          // Group by round for single_poule with table allocation
+          const roundNums = [...new Set(allMatches.map(m => m.round_number))].sort((a, b) => a - b);
+          for (const rn of roundNums) {
+            const roundMatches = allMatches.filter(m => m.round_number === rn);
+            html += `<div class="djv3-pl-round"><div class="djv3-pl-round-h">Tour ${rn}</div>`;
+            for (const m of roundMatches) {
+              html += renderPlanningMatchRow(m, null);
+            }
+            html += `</div>`;
+          }
+        } else {
+          for (const m of allMatches) {
+            html += renderPlanningMatchRow(m, poule.table_number);
+          }
         }
         html += `</div>`;
       }
